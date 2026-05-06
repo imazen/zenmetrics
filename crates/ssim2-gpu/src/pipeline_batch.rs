@@ -128,6 +128,11 @@ pub struct Ssim2Batch<R: Runtime> {
     /// bytes, image-1 bytes, … image-{N-1} bytes — each `n_pixels × 3`
     /// bytes). Re-uploaded per `compute_batch`.
     src_u8_batch: cubecl::server::Handle,
+    /// Persistent host-side packing scratch sized to `n_pixels × 3 ×
+    /// batch_size` u32s. Reused on every `compute_batch` upload to
+    /// avoid per-call `Vec<u32>` alloc churn (matches the per-instance
+    /// pack_scratch in `Ssim2`).
+    pack_scratch: Vec<u32>,
     /// Stage-1 partials scratch — never read by the host.
     /// `batch_size × num_slots × PARTIALS_PER_REDUCTION` floats.
     partials: cubecl::server::Handle,
@@ -169,11 +174,12 @@ impl<R: Runtime> Ssim2Batch<R> {
         // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
         // has no u8 storage type, so we keep all platforms on a u32
         // path (CUDA happily handles either).
-        let src_u8_batch =
-            client.create_from_slice(u32::as_bytes(&vec![
-                0_u32;
-                n_full * 3 * (batch_size as usize)
-            ]));
+        let total_u32 = n_full
+            .checked_mul(3)
+            .and_then(|n| n.checked_mul(batch_size as usize))
+            .expect("n_full × 3 × batch_size overflows usize");
+        let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_u32]));
+        let pack_scratch = vec![0_u32; total_u32];
         let partials = client.create_from_slice(f32::as_bytes(&vec![
             0.0_f32;
             PARTIALS_PER_IMAGE_FLOATS
@@ -190,6 +196,7 @@ impl<R: Runtime> Ssim2Batch<R> {
             batch_size,
             bscales,
             src_u8_batch,
+            pack_scratch,
             partials,
             sums,
         })
@@ -282,10 +289,14 @@ impl<R: Runtime> Ssim2Batch<R> {
         }
 
         // Upload + sRGB → linear into bscales[0].dis_lin. Bytes are
-        // widened to u32 for cross-vendor (wgpu) compatibility.
+        // widened to u32 for cross-vendor (wgpu) compatibility, into
+        // the persistent `pack_scratch` to avoid per-call alloc churn.
         let client = self.inner.client().clone();
-        let widened: Vec<u32> = packed.iter().map(|&b| b as u32).collect();
-        self.src_u8_batch = client.create_from_slice(u32::as_bytes(&widened));
+        debug_assert_eq!(self.pack_scratch.len(), packed.len());
+        for (dst, &src) in self.pack_scratch.iter_mut().zip(packed.iter()) {
+            *dst = src as u32;
+        }
+        self.src_u8_batch = client.create_from_slice(u32::as_bytes(&self.pack_scratch));
         let n_total_full = n_full * (self.batch_size as usize);
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(

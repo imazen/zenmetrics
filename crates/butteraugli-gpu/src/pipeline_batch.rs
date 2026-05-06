@@ -79,6 +79,11 @@ struct BatchBuffers<R: Runtime> {
     batch_n: usize,
 
     src_u8_batch: cubecl::server::Handle,
+    /// Persistent host-side packing scratch sized to `total × 3` bytes.
+    /// Reused on every `run_batch_pipeline` upload to avoid per-call
+    /// `Vec<u32>` alloc churn (matches the per-instance pack_scratch in
+    /// `Butteraugli` / `Ssim2` / `Dssim`).
+    pack_scratch: Vec<u32>,
     lin_b_batch: [cubecl::server::Handle; 3],
     blur_b_batch: [cubecl::server::Handle; 3],
     freq_b_batch: [[cubecl::server::Handle; 3]; 4],
@@ -113,13 +118,15 @@ impl<R: Runtime> BatchBuffers<R> {
             .expect("plane × batch_n overflows usize");
         // sRGB bytes uploaded as u32 — see colors.rs / pipeline.rs
         // for the wgpu Array<u8> caveat.
-        let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total * 3]));
+        let total_bytes = total.checked_mul(3).expect("total × 3 overflows usize");
+        let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_bytes]));
         Self {
             width,
             height,
             plane,
             batch_n,
             src_u8_batch,
+            pack_scratch: vec![0_u32; total_bytes],
             lin_b_batch: alloc_b3(client, total),
             blur_b_batch: alloc_b3(client, total),
             freq_b_batch: [
@@ -275,9 +282,16 @@ impl<R: Runtime> ButteraugliBatch<R> {
             "batch length mismatch"
         );
         assert!(self.inner.has_cached_reference(), "set_reference first");
-        // Widen each byte to u32 so wgpu/Metal can read it natively.
-        let widened: Vec<u32> = dist_batch.iter().map(|&b| b as u32).collect();
-        self.full.src_u8_batch = self.client.create_from_slice(u32::as_bytes(&widened));
+        // Widen each byte into the persistent `pack_scratch` instead of
+        // allocating a fresh `Vec<u32>` per upload (WGSL has no u8
+        // storage type, so the widening can't be skipped).
+        debug_assert_eq!(self.full.pack_scratch.len(), dist_batch.len());
+        for (dst, &src) in self.full.pack_scratch.iter_mut().zip(dist_batch.iter()) {
+            *dst = src as u32;
+        }
+        self.full.src_u8_batch = self
+            .client
+            .create_from_slice(u32::as_bytes(&self.full.pack_scratch));
 
         // Phase 1: sRGB → linear; downsample linear before opsin
         // overwrites lin_b_batch with XYB.
