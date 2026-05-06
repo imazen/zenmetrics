@@ -39,14 +39,14 @@ fn main() {
             dist_batch.extend_from_slice(&ref_rgb);
         }
         let mut bu_batch = ButteraugliBatch::<Backend>::new(client.clone(), w, h, n);
-        bu_batch.set_reference(&ref_rgb);
+        bu_batch.set_reference(&ref_rgb).unwrap();
         let scores = bu_batch.compute_batch_with_reference(&dist_batch);
         println!("identical-image sanity, n={}: {:?}", n, scores);
 
         // Same with single-image cached path for comparison.
         let mut bu_single = Butteraugli::<Backend>::new_multires(client.clone(), w, h);
-        bu_single.set_reference(&ref_rgb);
-        let r = bu_single.compute_with_reference(&ref_rgb);
+        bu_single.set_reference(&ref_rgb).unwrap();
+        let r = bu_single.compute_with_reference(&ref_rgb).unwrap();
         println!(
             "identical-image, single cached: score={}, pnorm_3={}",
             r.score, r.pnorm_3
@@ -63,12 +63,12 @@ fn main() {
             dist_batch.extend_from_slice(&flat);
         }
         let mut bu_batch = ButteraugliBatch::<Backend>::new(client.clone(), w, h, n);
-        bu_batch.set_reference(&flat);
+        bu_batch.set_reference(&flat).unwrap();
         let scores = bu_batch.compute_batch_with_reference(&dist_batch);
         println!("flat-128 sanity, n={}: {:?}", n, scores);
         let mut bu_single = Butteraugli::<Backend>::new_multires(client.clone(), w, h);
-        bu_single.set_reference(&flat);
-        let r = bu_single.compute_with_reference(&flat);
+        bu_single.set_reference(&flat).unwrap();
+        let r = bu_single.compute_with_reference(&flat).unwrap();
         println!(
             "flat-128 single cached: score={}, pnorm_3={}",
             r.score, r.pnorm_3
@@ -88,12 +88,12 @@ fn main() {
 
         // Reference: per-image cached_with_reference.
         let mut bu_single = Butteraugli::<Backend>::new_multires(client.clone(), w, h);
-        bu_single.set_reference(&ref_rgb);
+        bu_single.set_reference(&ref_rgb).unwrap();
         let mut single_scores = Vec::with_capacity(n);
         let t = Instant::now();
         for i in 0..n {
             let dist = &dist_batch[i * bytes_per..(i + 1) * bytes_per];
-            let r = bu_single.compute_with_reference(dist);
+            let r = bu_single.compute_with_reference(dist).unwrap();
             single_scores.push(r.score);
         }
         let single_ms = t.elapsed().as_secs_f64() * 1000.0;
@@ -102,13 +102,13 @@ fn main() {
         let mut single_pnorms = Vec::with_capacity(n);
         for i in 0..n {
             let dist = &dist_batch[i * bytes_per..(i + 1) * bytes_per];
-            let r = bu_single.compute_with_reference(dist);
+            let r = bu_single.compute_with_reference(dist).unwrap();
             single_pnorms.push(r.pnorm_3);
         }
 
         // Batched
         let mut bu_batch = ButteraugliBatch::<Backend>::new(client.clone(), w, h, n);
-        bu_batch.set_reference(&ref_rgb);
+        bu_batch.set_reference(&ref_rgb).unwrap();
         // warm-up
         let _ = bu_batch.compute_batch_with_reference(&dist_batch);
         let t = Instant::now();

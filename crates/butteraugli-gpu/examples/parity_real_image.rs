@@ -74,7 +74,7 @@ fn main() {
     let mut gpu_single = Butteraugli::<Backend>::new(client.clone(), width, height);
     let mut gpu_multi = Butteraugli::<Backend>::new_multires(client.clone(), width, height);
     let mut gpu_ref = Butteraugli::<Backend>::new_multires(client, width, height);
-    gpu_ref.set_reference(&ref_rgb);
+    gpu_ref.set_reference(&ref_rgb).unwrap();
 
     println!("\n--- single-resolution mode (CPU.with_single_resolution(true)) ---");
     for &mag in &[1_i32, 4, 12, 32] {
@@ -83,7 +83,7 @@ fn main() {
         let dist_img = rgb_buf_to_imgvec(&dist_rgb, width, height);
         let params = ButteraugliParams::default().with_single_resolution(true);
         let cpu = butteraugli(ref_img.as_ref(), dist_img.as_ref(), &params).unwrap();
-        let g = gpu_single.compute(&ref_rgb, &dist_rgb);
+        let g = gpu_single.compute(&ref_rgb, &dist_rgb).unwrap();
         let rel = (g.score as f64 - cpu.score) / cpu.score * 100.0;
         let rel_p = (g.pnorm_3 as f64 - cpu.pnorm_3) / cpu.pnorm_3 * 100.0;
         println!(
@@ -99,8 +99,8 @@ fn main() {
         let dist_img = rgb_buf_to_imgvec(&dist_rgb, width, height);
         let params = ButteraugliParams::default();
         let cpu = butteraugli(ref_img.as_ref(), dist_img.as_ref(), &params).unwrap();
-        let g_full = gpu_multi.compute(&ref_rgb, &dist_rgb);
-        let g_cached = gpu_ref.compute_with_reference(&dist_rgb);
+        let g_full = gpu_multi.compute(&ref_rgb, &dist_rgb).unwrap();
+        let g_cached = gpu_ref.compute_with_reference(&dist_rgb).unwrap();
         let rel = (g_full.score as f64 - cpu.score) / cpu.score * 100.0;
         let rel_p = (g_full.pnorm_3 as f64 - cpu.pnorm_3) / cpu.pnorm_3 * 100.0;
         let cache_drift =

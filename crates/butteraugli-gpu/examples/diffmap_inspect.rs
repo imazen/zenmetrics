@@ -89,7 +89,7 @@ fn main() {
         )
         .unwrap();
         let mut g0 = Butteraugli::<Backend>::new(client.clone(), width, height);
-        let g0_res = g0.compute(&ref_rgb, &ref_rgb);
+        let g0_res = g0.compute(&ref_rgb, &ref_rgb).unwrap();
         println!(
             "[identical-image sanity] CPU score={:.6}  GPU score={:.6}  GPU pnorm={:.6}",
             cpu_zero.score, g0_res.score, g0_res.pnorm_3,
@@ -110,7 +110,7 @@ fn main() {
 
     // GPU
     let mut gpu = Butteraugli::<Backend>::new(client, width, height);
-    let gres = gpu.compute(&ref_rgb, &dist_rgb);
+    let gres = gpu.compute(&ref_rgb, &dist_rgb).unwrap();
     let gpu_dm = gpu.copy_diffmap();
 
     // Extract CPU diffmap (ImgVec is contiguous when produced by butteraugli)

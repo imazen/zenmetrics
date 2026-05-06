@@ -95,10 +95,19 @@ fn run<R: Runtime>(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<(f64, f64), Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "butteraugli-gpu: reference ({}×{}) and distorted ({}×{}) differ in size",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
     let client = R::client(&Default::default());
     let mut b =
         butteraugli_gpu::Butteraugli::<R>::new_multires(client, reference.width, reference.height);
-    let result = b.compute(&reference.pixels, &distorted.pixels);
+    let result = b
+        .compute(&reference.pixels, &distorted.pixels)
+        .map_err(|e| format!("butteraugli-gpu: {e}"))?;
     let max = result.score as f64;
     let pnorm3 = result.pnorm_3 as f64;
     if !max.is_finite() {

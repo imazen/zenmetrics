@@ -49,15 +49,15 @@ fn main() {
     }
 
     println!("\n--- clear_reference ---");
-    bu.set_reference(&r);
-    let s1 = bu.compute_with_reference(&d).score;
+    bu.set_reference(&r).unwrap();
+    let s1 = bu.compute_with_reference(&d).unwrap().score;
     bu.clear_reference();
     assert!(!bu.has_cached_reference());
-    let err = bu.try_compute_with_reference(&d).unwrap_err();
+    let err = bu.compute_with_reference(&d).unwrap_err();
     assert!(matches!(err, Error::NoCachedReference));
-    println!("  cleared, then try_compute_with_reference → {:?} ✓", err);
-    bu.set_reference(&r);
-    let s2 = bu.compute_with_reference(&d).score;
+    println!("  cleared, then compute_with_reference → {:?} ✓", err);
+    bu.set_reference(&r).unwrap();
+    let s2 = bu.compute_with_reference(&d).unwrap().score;
     println!(
         "  re-cached, score before={:.4} after={:.4}  diff={:.2e}",
         s1,

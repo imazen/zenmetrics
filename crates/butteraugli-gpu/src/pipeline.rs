@@ -327,9 +327,15 @@ impl<R: Runtime> Butteraugli<R> {
     /// the full-res diffmap before reduction (matches CPU butteraugli's
     /// default mode). With [`Butteraugli::new`] the call is single-
     /// resolution only.
-    pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> GpuButteraugliResult {
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input length
+    /// doesn't match `width × height × 3`.
+    pub fn compute(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuButteraugliResult> {
         self.compute_with_options(ref_srgb, dist_srgb, &ButteraugliParams::default())
-            .expect("default params + matching dimensions never fail")
     }
 
     /// `compute` with runtime-tunable [`ButteraugliParams`] (HDR
@@ -360,9 +366,11 @@ impl<R: Runtime> Butteraugli<R> {
     /// of times with different distorted images; each one skips the
     /// reference-side ~half of the pipeline (sRGB→linear→opsin→
     /// frequency separation → reference mask blur).
-    pub fn set_reference(&mut self, ref_srgb: &[u8]) {
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `ref_srgb.len()` doesn't
+    /// match `width × height × 3`.
+    pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.set_reference_with_options(ref_srgb, &ButteraugliParams::default())
-            .expect("default params + matching dimensions never fail");
     }
 
     /// Cache the reference image with a specific [`ButteraugliParams`].
@@ -408,16 +416,19 @@ impl<R: Runtime> Butteraugli<R> {
     /// compared to [`compute`] when iterating many distorted images
     /// against a fixed reference (encoder rate-distortion search).
     ///
-    /// # Panics
-    ///
-    /// If [`set_reference`] has not yet been called.
-    pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> GpuButteraugliResult {
+    /// Returns [`Error::NoCachedReference`] if [`set_reference`] hasn't
+    /// been called, or [`Error::DimensionMismatch`] if `dist_srgb.len()`
+    /// doesn't match `width × height × 3`.
+    pub fn compute_with_reference(
+        &mut self,
+        dist_srgb: &[u8],
+    ) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
-            .expect("matching dimensions + cached reference never fail")
     }
 
-    /// `compute_with_reference` returning `Result` — the only error
-    /// surface is `Error::DimensionMismatch` and `Error::NoCachedReference`.
+    /// Deprecated alias for [`compute_with_reference`]. Kept for
+    /// source-compat with callers that imported the old `try_*` name.
+    #[deprecated(since = "0.0.2", note = "use compute_with_reference (now Result-typed)")]
     pub fn try_compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
     }

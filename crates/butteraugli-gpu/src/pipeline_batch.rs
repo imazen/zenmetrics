@@ -191,8 +191,8 @@ impl<R: Runtime> ButteraugliBatch<R> {
         (self.width, self.height)
     }
 
-    pub fn set_reference(&mut self, ref_srgb: &[u8]) {
-        self.inner.set_reference(ref_srgb);
+    pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        self.inner.set_reference(ref_srgb)
     }
 
     /// Cache the reference image with custom [`ButteraugliParams`].
