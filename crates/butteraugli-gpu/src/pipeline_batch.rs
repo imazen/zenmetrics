@@ -102,8 +102,15 @@ fn alloc_b3<R: Runtime>(client: &ComputeClient<R>, n: usize) -> [cubecl::server:
 
 impl<R: Runtime> BatchBuffers<R> {
     fn new(client: &ComputeClient<R>, width: u32, height: u32, batch_n: usize) -> Self {
-        let plane = (width * height) as usize;
-        let total = plane * batch_n;
+        // Widen to usize before the multiply (matches Butteraugli::new). A bare
+        // `(width * height) as usize` wraps the u32 product on huge dimensions
+        // in release and produces silently-under-allocated batch buffers.
+        let plane = (width as usize)
+            .checked_mul(height as usize)
+            .expect("width × height overflows usize");
+        let total = plane
+            .checked_mul(batch_n)
+            .expect("plane × batch_n overflows usize");
         // sRGB bytes uploaded as u32 — see colors.rs / pipeline.rs
         // for the wgpu Array<u8> caveat.
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total * 3]));
@@ -221,7 +228,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
         reduction::reduce_batched::<R>(
             &self.client,
             self.full.diffmap_batch.clone(),
-            self.width * self.height,
+            self.plane_stride_u32(),
             self.batch_size as u32,
         )
     }
@@ -238,16 +245,30 @@ impl<R: Runtime> ButteraugliBatch<R> {
         reduction::reduce_batched_with_pnorm::<R>(
             &self.client,
             self.full.diffmap_batch.clone(),
-            self.width * self.height,
+            self.plane_stride_u32(),
             self.batch_size as u32,
         )
+    }
+
+    /// `width × height` as a `u32`, panicking if it overflows. The kernel
+    /// `plane_stride` argument is u32-typed (GPU index space), so this
+    /// caps `Butteraugli`'s usable image area at `u32::MAX` pixels per
+    /// plane regardless of host pointer width.
+    fn plane_stride_u32(&self) -> u32 {
+        self.width
+            .checked_mul(self.height)
+            .expect("width × height overflows u32 (kernel plane_stride argument)")
     }
 
     /// Internal: run everything from sRGB upload through the final
     /// full-res diffmap_batch. Both reduction variants share this.
     fn run_batch_pipeline(&mut self, dist_batch: &[u8]) {
         let n = self.batch_size;
-        let bytes_per_image = (self.width * self.height * 3) as usize;
+        // Widen to usize before the multiply (mirrors Butteraugli::new H1).
+        let bytes_per_image = (self.width as usize)
+            .checked_mul(self.height as usize)
+            .and_then(|n| n.checked_mul(3))
+            .expect("width × height × 3 overflows usize");
         assert_eq!(
             dist_batch.len(),
             n * bytes_per_image,

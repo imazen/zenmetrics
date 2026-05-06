@@ -222,9 +222,24 @@ fn alloc_3<R: Runtime>(client: &ComputeClient<R>, n: usize) -> [cubecl::server::
 
 impl<R: Runtime> Butteraugli<R> {
     /// Allocate all per-instance buffers for `width × height` images.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `width × height × 3` overflows `usize`. Callers passing
+    /// untrusted dimensions should pre-validate with the same upper bound
+    /// the sibling pipelines use (e.g. reject anything where
+    /// `width.checked_mul(height).is_none()`).
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Self {
-        let n = (width * height) as usize;
-        let n_bytes = n * 3;
+        // Widen to usize before the multiply: a single `(width * height) as usize`
+        // wraps the u32-typed product silently on huge dimensions in release,
+        // producing under-allocated GPU buffers and garbage scores. Sibling
+        // pipelines (ssim2-gpu, dssim-gpu, zensim-gpu) already widen first.
+        let n = (width as usize)
+            .checked_mul(height as usize)
+            .expect("width × height overflows usize");
+        let n_bytes = n
+            .checked_mul(3)
+            .expect("width × height × 3 overflows usize");
         // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
         // has no u8 storage type, so we keep all platforms on a u32
         // path (CUDA happily handles either).
