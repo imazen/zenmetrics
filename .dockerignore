@@ -1,0 +1,12 @@
+# Dockerfile.sweep build context — exclude bulk dirs
+target/
+.git/
+.jj/
+.github/
+docs/
+scripts/sweep/Dockerfile.sweep
+scripts/sweep/onstart_v2.sh
+scripts/sweep/Dockerfile*
+.workongoing
+*.log
+.DS_Store
