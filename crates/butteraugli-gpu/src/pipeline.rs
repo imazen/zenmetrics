@@ -517,7 +517,10 @@ impl<R: Runtime> Butteraugli<R> {
     /// scales by `intensity_multiplier=80`.
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
-        assert_eq!(srgb.len(), n_bytes, "input length mismatch");
+        // Defense-in-depth check: every public caller goes through
+        // `check_dims` first, so a release-mode panic here would only
+        // fire on a buggy internal caller. Demoted to debug_assert.
+        debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
         // Widen each sRGB byte to a u32 so wgpu/Metal can read it
         // natively (WGSL has no u8 storage type).
         let widened: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
