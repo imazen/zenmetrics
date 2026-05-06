@@ -19,7 +19,7 @@ use crate::{Butteraugli, ButteraugliParams, Result};
 
 const SIGMA_LF: f32 = 7.155_933_4;
 const SIGMA_OPSIN: f32 = 1.2;
-const SIGMA_HF: f32 = 3.224_899_0;
+const SIGMA_HF: f32 = 3.224_899;
 const SIGMA_UHF: f32 = 1.564_163_3;
 const REMOVE_MF_RANGE: f32 = 0.29;
 const ADD_MF_RANGE: f32 = 0.1;
@@ -221,7 +221,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
         reduction::reduce_batched::<R>(
             &self.client,
             self.full.diffmap_batch.clone(),
-            (self.width * self.height) as u32,
+            self.width * self.height,
             self.batch_size as u32,
         )
     }
@@ -238,7 +238,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
         reduction::reduce_batched_with_pnorm::<R>(
             &self.client,
             self.full.diffmap_batch.clone(),
-            (self.width * self.height) as u32,
+            self.width * self.height,
             self.batch_size as u32,
         )
     }
@@ -323,7 +323,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             colors::opsin_dynamics_planar_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.lin_b_batch[0].clone(), total),
                 ArrayArg::from_raw_parts(buf.lin_b_batch[1].clone(), total),
                 ArrayArg::from_raw_parts(buf.lin_b_batch[2].clone(), total),
@@ -374,7 +374,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             colors::opsin_dynamics_planar_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(half.lin_b_batch[0].clone(), total),
                 ArrayArg::from_raw_parts(half.lin_b_batch[1].clone(), total),
                 ArrayArg::from_raw_parts(half.lin_b_batch[2].clone(), total),
@@ -405,7 +405,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 downscale::downsample_2x_batched_kernel::launch_unchecked::<R>(
                     &self.client,
                     dim.clone(),
-                    block.clone(),
+                    block,
                     ArrayArg::from_raw_parts(self.full.lin_b_batch[ch].clone(), self.full.total()),
                     ArrayArg::from_raw_parts(half.lin_b_batch[ch].clone(), total),
                     self.width,
@@ -444,7 +444,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
     // ─── helpers ───
 
     fn cube_count(&self, total: usize) -> CubeCount {
-        let cubes = ((total as u32) + 255) / 256;
+        let cubes = (total as u32).div_ceil(256);
         CubeCount::Static(cubes, 1, 1)
     }
 
@@ -477,7 +477,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             blur::horizontal_blur_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(src.clone(), total),
                 ArrayArg::from_raw_parts(scratch.clone(), total),
                 w,
@@ -519,7 +519,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 frequency::subtract_arrays_kernel::launch_unchecked::<R>(
                     &self.client,
                     dim.clone(),
-                    block.clone(),
+                    block,
                     ArrayArg::from_raw_parts(buf.lin_b_batch[ch].clone(), total),
                     ArrayArg::from_raw_parts(buf.freq_b_batch[3][ch].clone(), total),
                     ArrayArg::from_raw_parts(buf.freq_b_batch[2][ch].clone(), total),
@@ -530,7 +530,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::xyb_low_freq_to_vals_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[3][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[3][1].clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[3][2].clone(), total),
@@ -552,7 +552,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::split_band_remove_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[2][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.temp1_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
@@ -573,7 +573,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::split_band_amplify_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[2][1].clone(), total),
                 ArrayArg::from_raw_parts(buf.temp1_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][1].clone(), total),
@@ -594,14 +594,14 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::copy_plane_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.temp1_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[2][2].clone(), total),
             );
             frequency::suppress_x_by_y_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][1].clone(), total),
                 SUPPRESS_XY,
@@ -622,7 +622,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::split_uhf_hf_x_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.temp1_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[0][0].clone(), total),
@@ -633,7 +633,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::copy_plane_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.temp2_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
             );
@@ -652,7 +652,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             frequency::split_uhf_hf_y_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][1].clone(), total),
                 ArrayArg::from_raw_parts(buf.temp1_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[0][1].clone(), total),
@@ -681,7 +681,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
         let total = buf.total();
         let dim_total = self.cube_count(total);
         let block = CubeDim::new_1d(256);
-        let cube_count_2d = CubeCount::Static((buf.width + 15) / 16, (buf.height + 15) / 16, n);
+        let cube_count_2d = CubeCount::Static(buf.width.div_ceil(16), buf.height.div_ceil(16), n);
         let cube_dim_2d = CubeDim::new_2d(16, 16);
 
         // ── 6 batched Malta calls (broadcast reference) ──
@@ -728,7 +728,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
                     malta::malta_diff_map_lf_batched_kernel::launch_unchecked::<R>(
                         &self.client,
                         cube_count_2d.clone(),
-                        cube_dim_2d.clone(),
+                        cube_dim_2d,
                         ArrayArg::from_raw_parts(ref_h, buf.plane),
                         ArrayArg::from_raw_parts(dis, total),
                         ArrayArg::from_raw_parts(acc, total),
@@ -743,7 +743,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
                     malta::malta_diff_map_hf_batched_kernel::launch_unchecked::<R>(
                         &self.client,
                         cube_count_2d.clone(),
-                        cube_dim_2d.clone(),
+                        cube_dim_2d,
                         ArrayArg::from_raw_parts(ref_h, buf.plane),
                         ArrayArg::from_raw_parts(dis, total),
                         ArrayArg::from_raw_parts(acc, total),
@@ -764,7 +764,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             diffmap::l2_asym_diff_broadcast_batched_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(cached_inner.cached_freq(1, 0).clone(), buf.plane),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.block_diff_ac_batch[0].clone(), total),
@@ -776,7 +776,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             diffmap::l2_asym_diff_broadcast_batched_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(cached_inner.cached_freq(1, 1).clone(), buf.plane),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][1].clone(), total),
                 ArrayArg::from_raw_parts(buf.block_diff_ac_batch[1].clone(), total),
@@ -788,7 +788,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             diffmap::l2_diff_broadcast_batched_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(cached_inner.cached_freq(2, 0).clone(), buf.plane),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[2][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.block_diff_ac_batch[0].clone(), total),
@@ -799,7 +799,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             diffmap::l2_diff_broadcast_batched_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(cached_inner.cached_freq(2, 1).clone(), buf.plane),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[2][1].clone(), total),
                 ArrayArg::from_raw_parts(buf.block_diff_ac_batch[1].clone(), total),
@@ -834,7 +834,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
                 diffmap::l2_diff_write_broadcast_batched_kernel::launch_unchecked::<R>(
                     &self.client,
                     dim_total.clone(),
-                    block.clone(),
+                    block,
                     ArrayArg::from_raw_parts(cached_inner.cached_freq(3, ch).clone(), buf.plane),
                     ArrayArg::from_raw_parts(buf.freq_b_batch[3][ch].clone(), total),
                     ArrayArg::from_raw_parts(buf.block_diff_dc_batch[ch].clone(), total),
@@ -854,7 +854,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[0][0].clone(), total),
                 ArrayArg::from_raw_parts(buf.freq_b_batch[1][1].clone(), total),
@@ -864,7 +864,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             masking::diff_precompute_kernel::launch_unchecked::<R>(
                 &self.client,
                 dim_total.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(buf.mask_scratch_batch.clone(), total),
                 ArrayArg::from_raw_parts(buf.temp2_batch.clone(), total),
             );

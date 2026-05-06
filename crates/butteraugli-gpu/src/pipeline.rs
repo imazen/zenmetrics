@@ -42,7 +42,7 @@ const SIGMA_LF: f32 = 7.155_933_4;
 /// pixel's apparent contrast by ~12 % on tiny perturbations and
 /// roughly doubles the diffmap when one bright pixel is involved.
 const SIGMA_OPSIN: f32 = 1.2;
-const SIGMA_HF: f32 = 3.224_899_0;
+const SIGMA_HF: f32 = 3.224_899;
 const SIGMA_UHF: f32 = 1.564_163_3;
 const REMOVE_MF_RANGE: f32 = 0.29;
 const ADD_MF_RANGE: f32 = 0.1;
@@ -192,7 +192,7 @@ fn populate_half_res_linear<R: Runtime>(full: &Butteraugli<R>, half: &Butteraugl
         (&full.lin_b, &half.lin_b)
     };
     const TPB: u32 = 256;
-    let cubes = ((half.n as u32) + TPB - 1) / TPB;
+    let cubes = (half.n as u32).div_ceil(TPB);
     let dim = CubeCount::Static(cubes, 1, 1);
     let block = CubeDim::new_1d(TPB);
     for ch in 0..3 {
@@ -200,7 +200,7 @@ fn populate_half_res_linear<R: Runtime>(full: &Butteraugli<R>, half: &Butteraugl
             downscale::downsample_2x_kernel::launch_unchecked::<R>(
                 &full.client,
                 dim.clone(),
-                block.clone(),
+                block,
                 ArrayArg::from_raw_parts(full_lin[ch].clone(), full.n),
                 ArrayArg::from_raw_parts(half_lin[ch].clone(), half.n),
                 full.width,
@@ -494,7 +494,7 @@ impl<R: Runtime> Butteraugli<R> {
 
     fn cube_count_1d(&self) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = ((self.n as u32) + TPB - 1) / TPB;
+        let cubes = (self.n as u32).div_ceil(TPB);
         CubeCount::Static(cubes, 1, 1)
     }
 
@@ -503,8 +503,8 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     fn cube_count_2d(&self) -> CubeCount {
-        let bx = (self.width + 15) / 16;
-        let by = (self.height + 15) / 16;
+        let bx = self.width.div_ceil(16);
+        let by = self.height.div_ceil(16);
         CubeCount::Static(bx, by, 1)
     }
 

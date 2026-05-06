@@ -421,14 +421,14 @@ impl<R: Runtime> Ssim2<R> {
 
     fn cube_count_1d(n: usize) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = ((n as u32) + TPB - 1) / TPB;
+        let cubes = (n as u32).div_ceil(TPB);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
     fn cube_dim_1d() -> CubeDim {
         CubeDim::new_1d(256)
     }
     fn blur_cube_count(width: u32) -> CubeCount {
-        let cubes = (width + blur::BLOCK_WIDTH - 1) / blur::BLOCK_WIDTH;
+        let cubes = width.div_ceil(blur::BLOCK_WIDTH);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
     fn blur_cube_dim() -> CubeDim {

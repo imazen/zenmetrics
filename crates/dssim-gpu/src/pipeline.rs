@@ -153,8 +153,8 @@ impl<R: Runtime> Dssim<R> {
         let mut h = height;
         for _ in 0..NUM_SCALES {
             dims.push((w, h));
-            w = (w + 1) / 2;
-            h = (h + 1) / 2;
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
             if w < 8 {
                 w = 8;
             }
@@ -173,7 +173,7 @@ impl<R: Runtime> Dssim<R> {
         let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
 
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
-        let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
+        let sums = client.create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
 
         Ok(Self {
             client,
@@ -347,7 +347,7 @@ impl<R: Runtime> Dssim<R> {
 
     fn cube_count_1d(n: usize) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = ((n as u32) + TPB - 1) / TPB;
+        let cubes = (n as u32).div_ceil(TPB);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
     fn cube_dim_1d() -> CubeDim {
@@ -639,7 +639,7 @@ impl<R: Runtime> Dssim<R> {
             .create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
         self.sums = self
             .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
+            .create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
     }
 
     fn read_sums(&mut self) -> Vec<f32> {

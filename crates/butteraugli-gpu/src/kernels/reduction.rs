@@ -272,8 +272,8 @@ mod portable {
         threads_per_image: u32,
     ) {
         let batch_idx = CUBE_POS_Y;
-        let tid_in_plane = UNIT_POS_X + CUBE_POS_X * (CUBE_DIM_X as u32);
-        let stride_per_plane = CUBE_COUNT_X as u32 * (CUBE_DIM_X as u32);
+        let tid_in_plane = UNIT_POS_X + CUBE_POS_X * CUBE_DIM_X;
+        let stride_per_plane = CUBE_COUNT_X * CUBE_DIM_X;
         let plane_off = (batch_idx * plane_stride) as usize;
         let plane_us = plane_stride as usize;
 
@@ -504,8 +504,8 @@ fn batched_max_reduce_kernel(
     plane_stride: u32,
 ) {
     let batch_idx = CUBE_POS_Y;
-    let tid_in_plane = UNIT_POS_X + CUBE_POS_X * (CUBE_DIM_X as u32);
-    let stride_per_plane = CUBE_COUNT_X as u32 * (CUBE_DIM_X as u32);
+    let tid_in_plane = UNIT_POS_X + CUBE_POS_X * CUBE_DIM_X;
+    let stride_per_plane = CUBE_COUNT_X * CUBE_DIM_X;
     let plane_off = (batch_idx * plane_stride) as usize;
     let plane_us = plane_stride as usize;
 

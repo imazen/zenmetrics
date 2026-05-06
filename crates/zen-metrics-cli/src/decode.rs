@@ -14,6 +14,10 @@ use std::path::Path;
 
 /// Owned decoded image in flat sRGB RGB8 layout (`width * height * 3` bytes).
 pub struct Rgb8Image {
+    // `pixels` is consumed by metric backends (cpu-metrics + every
+    // gpu-* feature). When the CLI is built with no metrics enabled
+    // the field looks unused — annotate so clippy doesn't fail CI.
+    #[allow(dead_code)]
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,

@@ -151,8 +151,8 @@ pub enum GpuRuntime {
 /// from a single `compute()` call so callers don't pay twice.
 pub fn run_metric(
     kind: MetricKind,
-    reference: &Rgb8Image,
-    distorted: &Rgb8Image,
+    _reference: &Rgb8Image,
+    _distorted: &Rgb8Image,
     #[cfg_attr(
         not(any(
             feature = "gpu-butteraugli",

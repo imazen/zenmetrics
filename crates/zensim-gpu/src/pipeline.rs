@@ -33,10 +33,19 @@ use cubecl::prelude::*;
 
 use crate::kernels::{color, downscale, fused, reduce};
 use crate::{
-    BLUR_RADIUS, Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_PEAKS, Result, SCALES,
+    Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_PEAKS, Result, SCALES,
     TOTAL_FEATURES, simd_padded_width,
 };
 
+// Some fields here (`logical_w`, the per-channel `h_mu1..h_sigma12`
+// buffers, `partials_*_per_scale` sizes) were used by the older
+// pre-fused-kernel pipeline; the tile-fused `fused_features_kernel`
+// allocates its working set in shared memory instead and only reads
+// `padded_w / h / n_padded / n_strips / partials_*_off`. Keeping the
+// allocations + bookkeeping around so future tooling (e.g. the
+// in-progress per-channel intermediate dump for debugging) can land
+// without reshaping the struct.
+#[allow(dead_code)]
 struct Scale {
     logical_w: u32,
     padded_w: u32,
@@ -217,9 +226,9 @@ impl<R: Runtime> Zensim<R> {
                 break;
             }
             plan.push((logical_w, padded_w, h));
-            logical_w = (logical_w + 1) / 2;
+            logical_w = logical_w.div_ceil(2);
             padded_w /= 2;
-            h = (h + 1) / 2;
+            h = h.div_ceil(2);
         }
         let mut partials_f64_total: usize = 0;
         let mut partials_max_total: usize = 0;
@@ -374,13 +383,9 @@ impl<R: Runtime> Zensim<R> {
                 let final_f64_base = (s * 3 + ch) * 17;
                 let final_max_base = (s * 3 + ch) * 3;
                 let mut sums = [0.0_f64; 17];
-                for i in 0..17 {
-                    sums[i] = finals_f64[final_f64_base + i];
-                }
+                sums.copy_from_slice(&finals_f64[final_f64_base..final_f64_base + 17]);
                 let mut peaks = [0.0_f32; 3];
-                for i in 0..3 {
-                    peaks[i] = finals_max[final_max_base + i];
-                }
+                peaks.copy_from_slice(&finals_max[final_max_base..final_max_base + 3]);
 
                 let pad_w = self.scales[s].padded_w as usize;
                 let h_dim = self.scales[s].h as usize;
@@ -465,7 +470,7 @@ impl<R: Runtime> Zensim<R> {
 
     fn cube_count_1d(n: usize) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = ((n as u32) + TPB - 1) / TPB;
+        let cubes = (n as u32).div_ceil(TPB);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
     fn cube_dim_1d() -> CubeDim {
@@ -566,7 +571,7 @@ impl<R: Runtime> Zensim<R> {
         let s = &self.scales[scale];
         let pad_total = s.n_padded;
 
-        let cube_x = ((s.padded_w + TX - 1) / TX).max(1);
+        let cube_x = s.padded_w.div_ceil(TX).max(1);
         let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
         let cube_dim = CubeDim::new_3d(TX, 1, 1);
         unsafe {
@@ -611,7 +616,7 @@ impl<R: Runtime> Zensim<R> {
                 reduce::reduce_scale_kernel::launch_unchecked::<R>(
                     &self.client,
                     cube_count,
-                    cube_dim.clone(),
+                    cube_dim,
                     ArrayArg::from_raw_parts(self.partials_f64.clone(), self.partials_f64_len),
                     ArrayArg::from_raw_parts(self.partials_max.clone(), self.partials_max_len),
                     ArrayArg::from_raw_parts(self.finals_f64.clone(), n_finals_f64),

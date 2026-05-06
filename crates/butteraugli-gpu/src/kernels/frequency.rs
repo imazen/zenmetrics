@@ -69,8 +69,8 @@ pub fn xyb_low_freq_to_vals_kernel(
     let x = x_plane[idx];
     let y = y_plane[idx];
     let mut b = b_plane[idx];
-    b = b + Y_TO_B_MULI * y;
-    b = b * BMULI;
+    b += Y_TO_B_MULI * y;
+    b *= BMULI;
     x_plane[idx] = x * XMULI;
     y_plane[idx] = y * YMULI;
     b_plane[idx] = b;
@@ -132,10 +132,10 @@ pub fn separate_hf_uhf_kernel(hf: &mut Array<f32>, uhf: &mut Array<f32>) {
     let mut h = hf[idx];
     let mut u = uhf[idx];
     h = maximum_clamp(h, KMAXCLAMP_HF);
-    u = u - h;
+    u -= h;
     u = maximum_clamp(u, KMAXCLAMP_UHF);
-    u = u * UHF_MUL;
-    h = h * HF_MUL;
+    u *= UHF_MUL;
+    h *= HF_MUL;
     h = amplify_range_around_zero(h, HF_AMPLIFY);
     hf[idx] = h;
     uhf[idx] = u;

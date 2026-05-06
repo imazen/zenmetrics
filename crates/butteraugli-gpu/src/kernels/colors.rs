@@ -9,12 +9,12 @@
 
 use cubecl::prelude::*;
 
-const OPSIN_BIAS_X: f32 = 1.7557483643287353;
-const OPSIN_BIAS_Y: f32 = 1.7557483643287353;
-const OPSIN_BIAS_B: f32 = 12.226454707163354;
-const GAMMA_MUL: f32 = 19.245013259874995;
-const GAMMA_ADD: f32 = 9.971063576929914;
-const GAMMA_SUB: f32 = 23.16046239805755;
+const OPSIN_BIAS_X: f32 = 1.755_748_4;
+const OPSIN_BIAS_Y: f32 = 1.755_748_4;
+const OPSIN_BIAS_B: f32 = 12.226_455;
+const GAMMA_MUL: f32 = 19.245_014;
+const GAMMA_ADD: f32 = 9.971_064;
+const GAMMA_SUB: f32 = 23.160_463;
 
 /// Per-element sRGB → linear RGB. `src` holds `n_pixels × 3` bytes
 /// widened to `u32` on the host (WGSL has no `u8` storage type, so
@@ -124,15 +124,15 @@ fn gamma(v: f32) -> f32 {
 /// added; if `clamp` is set, each component is clamped to its bias floor.
 #[cube]
 fn opsin_absorbance(r: f32, g: f32, b: f32, clamp: bool) -> (f32, f32, f32) {
-    let mut x = 0.299565503400583_19 * r
-        + 0.633730878338259_36 * g
-        + 0.077705617820981_97 * b
+    let mut x = 0.299_565_5 * r
+        + 0.633_730_9 * g
+        + 0.077_705_614 * b
         + OPSIN_BIAS_X;
 
     let mut y =
-        0.221586911045747_74 * r + 0.693913880441161_42 * g + 0.0987313588422 * b + OPSIN_BIAS_Y;
+        0.221_586_91 * r + 0.693_913_9 * g + 0.098_731_36 * b + OPSIN_BIAS_Y;
 
-    let mut z = 0.02 * r + 0.02 * g + 0.204801290410261_29 * b + OPSIN_BIAS_B;
+    let mut z = 0.02 * r + 0.02 * g + 0.204_801_29 * b + OPSIN_BIAS_B;
 
     if clamp {
         x = f32::max(x, OPSIN_BIAS_X);

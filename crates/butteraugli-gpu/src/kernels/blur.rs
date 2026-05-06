@@ -20,7 +20,7 @@ use cubecl::prelude::*;
 /// Kernel-extent multiplier — matches libjxl's `M = 2.25`.
 const M: f32 = 2.25;
 /// log₂(e) for the powf-based exp substitution.
-const LOG2_E: f32 = 1.442_695_040_888_963_4;
+const LOG2_E: f32 = std::f32::consts::LOG2_E;
 
 /// `exp(x)` for f32 via `2^(x · log₂(e))`. See module docs.
 #[cube]

@@ -256,8 +256,8 @@ mod portable {
         image_stride: u32,
         slot_offset: u32,
     ) {
-        let tid_in_plane = UNIT_POS_X + CUBE_POS_X * (CUBE_DIM_X as u32);
-        let stride_per_image = CUBE_COUNT_X as u32 * (CUBE_DIM_X as u32);
+        let tid_in_plane = UNIT_POS_X + CUBE_POS_X * CUBE_DIM_X;
+        let stride_per_image = CUBE_COUNT_X * CUBE_DIM_X;
         let batch_idx = CUBE_POS_Y;
         let plane_us = plane_stride as usize;
         let plane_off = (batch_idx * plane_stride) as usize;

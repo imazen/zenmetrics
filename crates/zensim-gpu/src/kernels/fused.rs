@@ -47,12 +47,12 @@
 //!    a. Compute V-blur outputs `mu1 = sum_m1 / DIAM` etc.
 //!    b. Read `sv = src[y, col]`, `dv = dst[y, col]` direct from DRAM.
 //!    c. Run the SSIM / artifact / detail / HF / MSE math, accumulate
-//!       into per-thread `a0..a16` (f64) and `peak0..peak2` (f32 max).
+//!      into per-thread `a0..a16` (f64) and `peak0..peak2` (f32 max).
 //!    d. **Slide:** read the slot's old H-blur values; cooperatively
-//!       load `src_row` / `dst_row` for `mirror(y + R + 1)`; compute
-//!       this thread's H-blur for the new row; update sliding sums
-//!       (`sum += new − old`); write new H-blur to the same slot;
-//!       advance `slot`.
+//!      load `src_row` / `dst_row` for `mirror(y + R + 1)`; compute
+//!      this thread's H-blur for the new row; update sliding sums
+//!      (`sum += new − old`); write new H-blur to the same slot;
+//!      advance `slot`.
 //!
 //! 3. **Write partials.** If `col < padded_w`, write the per-thread
 //!    accumulator state into the shared `partials_f64` /
@@ -66,10 +66,15 @@
 //! `width ≥ R + 1` and `height ≥ R + 1`, true for zensim's smallest
 //! scale (`min_dim = 8`).
 
+// The docstring above uses sub-list indentation that clippy's
+// `doc_overindented_list_items` lint disagrees with — the alternative
+// it suggests would visually misalign continuations. Keep the
+// human-readable layout.
+#![allow(clippy::doc_overindented_list_items)]
+
 use cubecl::prelude::*;
 
 const TX: u32 = 64;
-const TX_US: usize = 64;
 const R: u32 = 5;
 const DIAM: u32 = 11;
 const TILE_COLS: u32 = TX + 2u32 * R;
@@ -177,24 +182,26 @@ pub fn fused_features_kernel(
                 period_x - raw_x
             };
             let off = (y_in as usize) * w + (gx as usize);
-            // Channel switch.
-            let mut s_val = 0.0_f32;
-            let mut d_val = 0.0_f32;
-            if channel == 0u32 {
-                s_val = src_a[off];
-                d_val = dst_a[off];
+            // Channel switch — `let v = if … else …` form keeps cubecl
+            // happy without the `let mut v = 0.0; v = …` dance that
+            // tripped a `needless_late_init` clippy warning previously.
+            let s_val = if channel == 0u32 {
+                src_a[off]
+            } else if channel == 1u32 {
+                src_b[off]
             } else {
-                if channel == 1u32 {
-                    s_val = src_b[off];
-                    d_val = dst_b[off];
-                } else {
-                    s_val = src_c[off];
-                    d_val = dst_c[off];
-                }
-            }
+                src_c[off]
+            };
+            let d_val = if channel == 0u32 {
+                dst_a[off]
+            } else if channel == 1u32 {
+                dst_b[off]
+            } else {
+                dst_c[off]
+            };
             src_row[load_x as usize] = s_val;
             dst_row[load_x as usize] = d_val;
-            i = i + 1u32;
+            i += 1u32;
         }
         sync_cube();
 
@@ -214,10 +221,10 @@ pub fn fused_features_kernel(
             s12 = fma(s, d, s12);
             j += 1u32;
         }
-        m1 = m1 * INV_DIAM;
-        m2 = m2 * INV_DIAM;
-        sq = sq * INV_DIAM;
-        s12 = s12 * INV_DIAM;
+        m1 *= INV_DIAM;
+        m2 *= INV_DIAM;
+        sq *= INV_DIAM;
+        s12 *= INV_DIAM;
 
         let buf_idx = (k * TX + tx) as usize;
         buf_mu1[buf_idx] = m1;
@@ -343,23 +350,23 @@ pub fn fused_features_kernel(
                 period_x - raw_x
             };
             let off2 = (y_in as usize) * w + (gx as usize);
-            let mut s_val = 0.0_f32;
-            let mut d_val = 0.0_f32;
-            if channel == 0u32 {
-                s_val = src_a[off2];
-                d_val = dst_a[off2];
+            let s_val = if channel == 0u32 {
+                src_a[off2]
+            } else if channel == 1u32 {
+                src_b[off2]
             } else {
-                if channel == 1u32 {
-                    s_val = src_b[off2];
-                    d_val = dst_b[off2];
-                } else {
-                    s_val = src_c[off2];
-                    d_val = dst_c[off2];
-                }
-            }
+                src_c[off2]
+            };
+            let d_val = if channel == 0u32 {
+                dst_a[off2]
+            } else if channel == 1u32 {
+                dst_b[off2]
+            } else {
+                dst_c[off2]
+            };
             src_row[load_x as usize] = s_val;
             dst_row[load_x as usize] = d_val;
-            i = i + 1u32;
+            i += 1u32;
         }
         sync_cube();
 
@@ -377,10 +384,10 @@ pub fn fused_features_kernel(
             ns12 = fma(s, d, ns12);
             j += 1u32;
         }
-        nm1 = nm1 * INV_DIAM;
-        nm2 = nm2 * INV_DIAM;
-        nsq = nsq * INV_DIAM;
-        ns12 = ns12 * INV_DIAM;
+        nm1 *= INV_DIAM;
+        nm2 *= INV_DIAM;
+        nsq *= INV_DIAM;
+        ns12 *= INV_DIAM;
 
         sum_m1 = sum_m1 + nm1 - old_m1;
         sum_m2 = sum_m2 + nm2 - old_m2;

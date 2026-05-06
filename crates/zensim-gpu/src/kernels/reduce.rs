@@ -47,8 +47,8 @@ pub fn reduce_scale_kernel(
         let mut sum = 0.0_f64;
         let mut i = tid;
         while i < n_partials_per_ch {
-            sum = sum + partials_f64[f64_ch_off + (i as usize) * 17 + inner];
-            i = i + 256u32;
+            sum += partials_f64[f64_ch_off + (i as usize) * 17 + inner];
+            i += 256u32;
         }
         shared[tid_us] = sum;
         let mut step: u32 = 128u32;
@@ -59,7 +59,7 @@ pub fn reduce_scale_kernel(
                 let rhs = shared[tid_us + (step as usize)];
                 shared[tid_us] = lhs + rhs;
             }
-            step = step / 2u32;
+            step /= 2u32;
         }
         sync_cube();
         if tid == 0u32 {
@@ -80,7 +80,7 @@ pub fn reduce_scale_kernel(
             if v > peak {
                 peak = v;
             }
-            i = i + 256u32;
+            i += 256u32;
         }
         shared[tid_us] = peak;
         let mut step: u32 = 128u32;
@@ -91,7 +91,7 @@ pub fn reduce_scale_kernel(
                 let rhs = shared[tid_us + (step as usize)];
                 shared[tid_us] = if lhs > rhs { lhs } else { rhs };
             }
-            step = step / 2u32;
+            step /= 2u32;
         }
         sync_cube();
         if tid == 0u32 {

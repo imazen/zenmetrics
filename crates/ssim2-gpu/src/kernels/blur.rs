@@ -10,10 +10,12 @@
 //!
 //! Each kernel invocation does a single top-to-bottom column walk
 //! ("vertical pass"). To get a 2D blur the host runs:
-//!   1. `blur_pass_kernel` on the source (walks columns) → `_v`.
-//!   2. Transpose `_v` → `_vt`.
-//!   3. `blur_pass_kernel` on `_vt` (walks columns of the transposed —
-//!      i.e. rows of the original).
+//!
+//! 1. `blur_pass_kernel` on the source (walks columns) → `_v`.
+//! 2. Transpose `_v` → `_vt`.
+//! 3. `blur_pass_kernel` on `_vt` (walks columns of the transposed —
+//!    i.e. rows of the original).
+//!
 //! The output stays in transposed coords, which suits the rest of the
 //! pipeline (compute_error_maps + reduction are orientation-agnostic).
 //!
@@ -110,7 +112,7 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
         let y_emit = i + 1 >= RADIUS_U32; // y >= 0  <=>  i + 1 >= N
 
         let right_val = if right < h {
-            src[(right as usize) * w + (x as usize)]
+            src[(right as usize) * w + x]
         } else {
             f32::new(0.0)
         };
@@ -130,16 +132,16 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
         let mut out_3 = sum * consts::MUL_IN_3;
         let mut out_5 = sum * consts::MUL_IN_5;
 
-        out_1 = consts::MUL_PREV2_1 * prev2_1 + out_1;
-        out_3 = consts::MUL_PREV2_3 * prev2_3 + out_3;
-        out_5 = consts::MUL_PREV2_5 * prev2_5 + out_5;
+        out_1 += consts::MUL_PREV2_1 * prev2_1;
+        out_3 += consts::MUL_PREV2_3 * prev2_3;
+        out_5 += consts::MUL_PREV2_5 * prev2_5;
         prev2_1 = prev_1;
         prev2_3 = prev_3;
         prev2_5 = prev_5;
 
-        out_1 = consts::MUL_PREV_1 * prev_1 + out_1;
-        out_3 = consts::MUL_PREV_3 * prev_3 + out_3;
-        out_5 = consts::MUL_PREV_5 * prev_5 + out_5;
+        out_1 += consts::MUL_PREV_1 * prev_1;
+        out_3 += consts::MUL_PREV_3 * prev_3;
+        out_5 += consts::MUL_PREV_5 * prev_5;
         prev_1 = out_1;
         prev_3 = out_3;
         prev_5 = out_5;
@@ -150,7 +152,7 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
             // extra iterations after the last input row.
             let y = i + 1 - RADIUS_U32;
             if y < h {
-                dst[(y as usize) * w + (x as usize)] = out_1 + out_3 + out_5;
+                dst[(y as usize) * w + x] = out_1 + out_3 + out_5;
             }
         }
 
@@ -188,7 +190,7 @@ pub fn blur_pass_batched_kernel(
     plane_stride: u32,
 ) {
     let batch_idx = CUBE_POS_Y;
-    let x = UNIT_POS_X + CUBE_POS_X * (CUBE_DIM_X as u32);
+    let x = UNIT_POS_X + CUBE_POS_X * CUBE_DIM_X;
     if x >= width {
         terminate!();
     }
@@ -240,16 +242,16 @@ pub fn blur_pass_batched_kernel(
         let mut out_3 = sum * consts::MUL_IN_3;
         let mut out_5 = sum * consts::MUL_IN_5;
 
-        out_1 = consts::MUL_PREV2_1 * prev2_1 + out_1;
-        out_3 = consts::MUL_PREV2_3 * prev2_3 + out_3;
-        out_5 = consts::MUL_PREV2_5 * prev2_5 + out_5;
+        out_1 += consts::MUL_PREV2_1 * prev2_1;
+        out_3 += consts::MUL_PREV2_3 * prev2_3;
+        out_5 += consts::MUL_PREV2_5 * prev2_5;
         prev2_1 = prev_1;
         prev2_3 = prev_3;
         prev2_5 = prev_5;
 
-        out_1 = consts::MUL_PREV_1 * prev_1 + out_1;
-        out_3 = consts::MUL_PREV_3 * prev_3 + out_3;
-        out_5 = consts::MUL_PREV_5 * prev_5 + out_5;
+        out_1 += consts::MUL_PREV_1 * prev_1;
+        out_3 += consts::MUL_PREV_3 * prev_3;
+        out_5 += consts::MUL_PREV_5 * prev_5;
         prev_1 = out_1;
         prev_3 = out_3;
         prev_5 = out_5;

@@ -59,8 +59,8 @@ pub struct GpuButteraugliResult {
 pub struct ButteraugliParams {
     /// Asymmetry between the two error directions. 1.0 = symmetric;
     /// > 1.0 penalises distorted < reference (artifact penalty
-    /// stronger than blur penalty); < 1.0 penalises distorted >
-    /// reference more.
+    /// > stronger than blur penalty); < 1.0 penalises distorted >
+    /// > reference more.
     pub hf_asymmetry: f32,
     /// Display intensity multiplier in nits. Default 80.0 for an
     /// 80-nit SDR display; HDR encoders typically set this to 250+

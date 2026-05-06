@@ -136,17 +136,5 @@ jobs:
           shared-key: zenmetrics-lint
       - name: Format check
         run: cargo fmt --all -- --check
-      # Clippy is informational at the moment — the codebase has a
-      # large backlog of stylistic lints (doc_lazy_continuation on
-      # ASCII-art comments, excessive_precision on kernel constants
-      # that are deliberately precise, manual_div_ceil from before
-      # MSRV bumped, etc.) that aren't bugs but trip `-D warnings`.
-      # Tracked as a follow-up; for now we surface lints without
-      # gating CI on them.
-      - name: Clippy (advisory)
-        continue-on-error: true
-        run: |
-          cargo clippy -p butteraugli-gpu --no-default-features --features wgpu
-          cargo clippy -p ssim2-gpu       --no-default-features --features wgpu
-          cargo clippy -p dssim-gpu       --no-default-features --features wgpu
-          cargo clippy -p zensim-gpu      --no-default-features --features wgpu
+      - name: Clippy (-D warnings, workspace-wide)
+        run: cargo clippy --workspace --no-default-features --features wgpu -- -D warnings
