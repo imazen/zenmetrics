@@ -61,7 +61,9 @@ fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| {
         // Default to a workspace test image so CI can run this without args.
         let manifest = env!("CARGO_MANIFEST_DIR");
-        zenmetrics_corpus::source_png().to_string_lossy().to_string()
+        zenmetrics_corpus::source_png()
+            .to_string_lossy()
+            .to_string()
     });
     let (ref_rgb, width, height) = load_rgb8(&path);
     println!("Loaded {} ({}×{})", path, width, height);
