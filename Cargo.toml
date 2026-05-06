@@ -61,5 +61,14 @@ codegen-units = 1
 # zensim 0.2.8 isn't on crates.io yet — pin to the main-branch commit
 # that adds `compute_extended_features` (needed by the sweep
 # subcommand's --feature-output sidecar). Drop this once 0.2.8 ships.
+#
+# jxl-encoder 0.3.2 (imazen/jxl-encoder#30 — two OOB index DoS
+# fixes in entropy_coding/lz77.rs and vardct/patches.rs) is also
+# not on crates.io yet — pinning to the main-branch commit that
+# contains the merged fix so sweep workers stop crashing at the
+# ~17% rate observed in v08/v09/v11. Drop this patch once 0.3.2
+# publishes. Same patch applies transitively to zenjxl, which
+# pulls jxl-encoder via Cargo.toml.
 [patch.crates-io]
 zensim = { git = "https://github.com/imazen/zensim", rev = "e295d7fb4098" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cb5d9e4" }
