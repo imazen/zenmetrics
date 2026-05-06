@@ -124,13 +124,9 @@ fn gamma(v: f32) -> f32 {
 /// added; if `clamp` is set, each component is clamped to its bias floor.
 #[cube]
 fn opsin_absorbance(r: f32, g: f32, b: f32, clamp: bool) -> (f32, f32, f32) {
-    let mut x = 0.299_565_5 * r
-        + 0.633_730_9 * g
-        + 0.077_705_614 * b
-        + OPSIN_BIAS_X;
+    let mut x = 0.299_565_5 * r + 0.633_730_9 * g + 0.077_705_614 * b + OPSIN_BIAS_X;
 
-    let mut y =
-        0.221_586_91 * r + 0.693_913_9 * g + 0.098_731_36 * b + OPSIN_BIAS_Y;
+    let mut y = 0.221_586_91 * r + 0.693_913_9 * g + 0.098_731_36 * b + OPSIN_BIAS_Y;
 
     let mut z = 0.02 * r + 0.02 * g + 0.204_801_29 * b + OPSIN_BIAS_B;
 
