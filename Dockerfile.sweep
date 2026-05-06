@@ -1,0 +1,112 @@
+# Dockerfile.sweep — vast.ai-deployable image for zen-metrics sweep workers.
+#
+# Bakes the patched zen-metrics binary (with the jxl-encoder LZ77 + patches.rs
+# OOB DoS fixes from imazen/jxl-encoder#30 active via [patch.crates-io])
+# plus s5cmd / jq / mc + the onstart_v3.sh worker into a slim runtime image.
+# Workers pull this once and start work in seconds rather than 60+s of
+# apt-get + curl + tar at boot.
+#
+# Build:
+#   cd ~/work/zen/zenmetrics
+#   docker build -f Dockerfile.sweep -t ghcr.io/imazen/zen-metrics-sweep:0.6.1 .
+#
+# Push (requires gh auth + write:packages scope):
+#   gh auth token | docker login ghcr.io -u lilithriver --password-stdin
+#   docker push ghcr.io/imazen/zen-metrics-sweep:0.6.1
+#
+# Run on vast.ai:
+#   vastai create instance <offer_id> \
+#       --image ghcr.io/imazen/zen-metrics-sweep:0.6.1 \
+#       --disk 40 \
+#       --env "-e R2_ACCOUNT_ID=… -e R2_ACCESS_KEY_ID=… -e R2_SECRET_ACCESS_KEY=… \
+#              -e SWEEP_RUN_ID=sweep-vXX-YYYY-MM-DD"
+#
+# The image's ENTRYPOINT is the worker script; vast.ai's --onstart-cmd
+# is NOT needed when this image is used directly.
+#
+# Required runtime env (see scripts/sweep/onstart_v3.sh):
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#   SWEEP_RUN_ID
+# Optional:
+#   WORKER_ID, WORKER_PARALLEL, SWEEP_GPU_RUNTIME, STATS_INTERVAL_SEC
+
+# ── Stage 1: build zen-metrics-cli with the [patch.crates-io] active ──
+FROM rust:1.93-slim-bookworm AS builder
+
+# Native build deps for our crates (libssl, pkg-config for openssl-sys; git
+# for the [patch.crates-io] git fetches; cmake for archmage's build).
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates pkg-config libssl-dev cmake git \
+        clang lld build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# Copy whole workspace; .dockerignore prunes target/, .git/, etc.
+COPY . .
+
+# Build the sweep binary. `--features sweep` enables the chunk processor
+# + feature parquet sidecar + the safety-mask training output.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build -p zen-metrics-cli --release --features sweep && \
+    cp /src/target/release/zen-metrics /usr/local/bin/zen-metrics && \
+    chmod +x /usr/local/bin/zen-metrics && \
+    /usr/local/bin/zen-metrics --version
+
+# ── Stage 2: fetch static helper binaries (s5cmd, jq, mc) ──
+FROM debian:bookworm-slim AS helpers
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/bin
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz && \
+    tar xzf /tmp/s5cmd.tgz -C /opt/bin s5cmd && \
+    rm /tmp/s5cmd.tgz && \
+    chmod +x /opt/bin/s5cmd && \
+    /opt/bin/s5cmd version
+
+RUN curl -fsSL -o /opt/bin/jq \
+        "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" && \
+    chmod +x /opt/bin/jq && \
+    /opt/bin/jq --version
+
+RUN curl -fsSL -o /opt/bin/mc \
+        "https://dl.min.io/client/mc/release/linux-amd64/mc" && \
+    chmod +x /opt/bin/mc && \
+    /opt/bin/mc --version
+
+# ── Stage 3: final runtime ──
+FROM ubuntu:24.04
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker for vast.ai (binary baked, jxl-encoder DoS fix active)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Binaries from earlier stages
+COPY --from=builder /usr/local/bin/zen-metrics /usr/local/bin/zen-metrics
+COPY --from=helpers /opt/bin/s5cmd /usr/local/bin/s5cmd
+COPY --from=helpers /opt/bin/jq    /usr/local/bin/jq
+COPY --from=helpers /opt/bin/mc    /usr/local/bin/mc
+
+# Worker script + scripts dir
+COPY scripts/sweep/onstart_v3.sh /usr/local/bin/zen-metrics-worker
+COPY scripts/sweep/generate_jobspecs_v06.py /opt/sweep/generate_jobspecs_v06.py
+RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
+
+WORKDIR /workspace/sweep
+ENV WORKDIR=/workspace/sweep \
+    SWEEP_GPU_RUNTIME=cpu
+
+# vast.ai expects the image to behave like a long-running service. The
+# onstart script handles its own heartbeat + final-state on exit; we
+# trust it as ENTRYPOINT.
+ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]
