@@ -33,8 +33,8 @@ use cubecl::prelude::*;
 
 use crate::kernels::{color, downscale, fused, reduce};
 use crate::{
-    Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_PEAKS, Result, SCALES,
-    TOTAL_FEATURES, simd_padded_width,
+    Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_PEAKS, Result, SCALES, TOTAL_FEATURES,
+    simd_padded_width,
 };
 
 // Some fields here (`logical_w`, the per-channel `h_mu1..h_sigma12`
