@@ -202,8 +202,6 @@ fn clear_reference_drops_cache() {
 
 // ───────────────────────── corpus parity ─────────────────────────
 
-const CORPUS_DIR: &str = "../dssim-cuda/test_data";
-
 fn load_png(path: &std::path::Path) -> (Vec<u8>, u32, u32) {
     let img = image::open(path).expect("decode png").to_rgb8();
     let (w, h) = img.dimensions();
@@ -218,7 +216,7 @@ fn jpeg_to_rgb_at_size(jpeg_path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
 
 #[test]
 fn jpeg_corpus_q70_q90() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CORPUS_DIR);
+    let dir = zenmetrics_corpus::corpus_dir();
     let src = dir.join("source.png");
     if !src.exists() {
         eprintln!("skipping: corpus dir absent at {}", dir.display());

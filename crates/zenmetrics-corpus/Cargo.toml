@@ -1,0 +1,13 @@
+[package]
+name = "zenmetrics-corpus"
+version = "0.1.0"
+description = "Test image corpus shared by the zenmetrics -gpu parity tests. JPEG quality grid (q1..q90) plus the original PNG source from `imazen/dssim-cuda`."
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+
+[lib]
+path = "src/lib.rs"

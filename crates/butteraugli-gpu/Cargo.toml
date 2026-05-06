@@ -6,8 +6,8 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-license = "MIT"
-rust-version = "1.92"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
 publish = false
 
 [features]
@@ -21,38 +21,14 @@ cpu = ["cubecl/cpu"]
 # disable when targeting Metal:
 #   cargo build -p butteraugli-gpu --no-default-features --features wgpu
 fast-reduction = []
-# Bench-only feature: pulls in the CUDA-only `butteraugli-cuda` and
-# `cudarse-*` workspace crates so `bench_three_way` can compare against
-# them. Off by default so non-CUDA hosts (macOS / Windows wgpu CI)
-# don't try to build CUDA SDK bindings.
-bench-cuda = ["dep:butteraugli-cuda", "dep:cudarse-driver", "dep:cudarse-npp"]
 
 [dependencies]
-cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"] }
+cubecl = { workspace = true }
 
 [dev-dependencies]
-butteraugli = "0.9.2"
-bytemuck = "1"
-imgref = "1"
-rgb = "0.8"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-
-# CUDA-only dev-deps, gated behind `bench-cuda` (used by
-# `bench_three_way` only). Kept as optional regular deps so cargo
-# feature resolution can drop them on non-CUDA hosts.
-[dependencies.butteraugli-cuda]
-path = "../butteraugli-cuda"
-optional = true
-[dependencies.cudarse-driver]
-workspace = true
-optional = true
-[dependencies.cudarse-npp]
-workspace = true
-features = ["isu", "ial", "idei", "if", "ist"]
-optional = true
-
-# bench_three_way uses butteraugli-cuda for direct comparison. Skip the
-# example unless `bench-cuda` is enabled.
-[[example]]
-name = "bench_three_way"
-required-features = ["bench-cuda"]
+butteraugli = { workspace = true }
+bytemuck = { workspace = true }
+imgref = { workspace = true }
+rgb = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+zenmetrics-corpus = { workspace = true }

@@ -40,7 +40,7 @@ fn cpu_dssim(ref_data: &[u8], dis_data: &[u8], w: usize, h: usize) -> f64 {
 }
 
 fn main() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dssim-cuda/test_data");
+    let dir = zenmetrics_corpus::corpus_dir();
     let src_path = dir.join("source.png");
     if !src_path.exists() {
         eprintln!("corpus missing: {}", src_path.display());

@@ -14,7 +14,7 @@ type Backend = cubecl::wgpu::WgpuRuntime;
 use ssim2_gpu::Ssim2;
 use ssimulacra2::{ColorPrimaries, Rgb, TransferCharacteristic, Xyb};
 
-const CORPUS_DIR: &str = "../dssim-cuda/test_data";
+// Corpus path provided by zenmetrics-corpus.
 
 fn load_rgb8(path: &str) -> (Vec<u8>, u32, u32) {
     let img = image::open(path).unwrap_or_else(|e| panic!("open {path}: {e}"));
@@ -49,7 +49,7 @@ fn srgb_u8_to_xyb(bytes: &[u8], width: usize, height: usize) -> Xyb {
 
 fn main() {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let dir = std::path::Path::new(manifest).join(CORPUS_DIR);
+    let dir = zenmetrics_corpus::corpus_dir();
 
     let (src_bytes, w, h) = load_rgb8(dir.join("source.png").to_str().unwrap());
     println!("source: {}×{}", w, h);

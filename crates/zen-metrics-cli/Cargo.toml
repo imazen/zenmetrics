@@ -6,8 +6,8 @@ authors = ["Lilith River <support@imazen.io>"]
 homepage.workspace = true
 repository.workspace = true
 edition.workspace = true
-license = "AGPL-3.0-or-later"
-rust-version = "1.92"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
 publish = false
 
 [[bin]]

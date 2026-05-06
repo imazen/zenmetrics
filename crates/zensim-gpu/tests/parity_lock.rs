@@ -186,11 +186,9 @@ fn no_cached_reference_rejected() {
 
 // ───────────────────────── corpus parity ─────────────────────────
 
-const CORPUS_DIR: &str = "../dssim-cuda/test_data";
-
 #[test]
 fn jpeg_corpus_q70_q90() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CORPUS_DIR);
+    let dir = zenmetrics_corpus::corpus_dir();
     let src_path = dir.join("source.png");
     if !src_path.exists() {
         eprintln!("skipping: corpus dir absent at {}", dir.display());

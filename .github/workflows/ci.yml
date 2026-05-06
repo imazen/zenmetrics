@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Workspace-wide compile check across the platforms CLAUDE.md mandates:
+  # linux-x86_64, windows-11-arm, macos-15-intel, macos-26-intel.
+  # We compile with the WGPU backend (no system CUDA needed) so this works
+  # on every runner without per-OS toolchain setup.
+  compile:
+    name: Compile (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest        # linux-x86_64
+          - windows-latest       # windows-x86_64
+          - windows-11-arm       # windows-arm64 (per CLAUDE.md)
+          - macos-15-intel       # macos-x86_64
+          - macos-26-intel       # macos-x86_64 (newer image)
+          - macos-latest         # macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-${{ matrix.os }}
+      - name: Build workspace (wgpu + cpu, build-only)
+        run: cargo build --workspace --no-default-features --features cuda --release --all-targets
+        if: matrix.os == 'ubuntu-latest' && false
+      - name: Build all -gpu crates (wgpu only)
+        run: |
+          cargo build -p butteraugli-gpu --no-default-features --features wgpu --release
+          cargo build -p ssim2-gpu       --no-default-features --features wgpu --release
+          cargo build -p dssim-gpu       --no-default-features --features wgpu --release
+          cargo build -p zensim-gpu      --no-default-features --features wgpu --release
+      - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
+        run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
+
+  # i686-unknown-linux-gnu cross-compilation per CLAUDE.md ("i686 is a
+  # primary target — 32-bit correctness matters for WASM compatibility
+  # and catching pointer-width bugs"). cubecl 0.10's CUDA backend pulls
+  # in 64-bit-only deps, so we restrict to wgpu-only on i686.
+  i686-cross:
+    name: i686 cross-compile (wgpu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cross
+        run: cargo install --locked cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-i686
+      - name: Cross-compile (wgpu)
+        run: |
+          cross build --target i686-unknown-linux-gnu \
+            -p butteraugli-gpu \
+            -p ssim2-gpu \
+            -p dssim-gpu \
+            -p zensim-gpu \
+            -p zenmetrics-corpus \
+            --no-default-features --features wgpu --release
+
+  # Runtime parity tests on macOS via Metal (the only CI-available GPU
+  # runtime). Disable `fast-reduction` everywhere — Metal silently
+  # no-ops Atomic<f32>::fetch_add (gotcha G3.x); the portable two-stage
+  # reduction is what actually works.
+  metal-tests:
+    name: Metal tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-26-intel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-metal-${{ matrix.os }}
+      - name: GPU info
+        run: system_profiler SPDisplaysDataType | head -40 || true
+      - name: butteraugli-gpu parity
+        if: always()
+        run: cargo test -p butteraugli-gpu --no-default-features --features wgpu --release
+      - name: ssim2-gpu parity
+        if: always()
+        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release
+      - name: dssim-gpu parity
+        if: always()
+        run: cargo test -p dssim-gpu --no-default-features --features wgpu --release
+      - name: zensim-gpu parity
+        if: always()
+        run: cargo test -p zensim-gpu --no-default-features --features wgpu --release
+
+  # Compile-only doctest pass — catches the doc examples in lib.rs that
+  # reference `WgpuRuntime` etc. CUDA-only environments would skip these,
+  # so we run them on macOS.
+  doctests:
+    name: Doctests (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-doctests
+      - name: Run doctests
+        run: cargo test --workspace --no-default-features --features wgpu --doc --release
+
+  # Linting + formatting.
+  lint:
+    name: Lint (clippy + fmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-lint
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy (-gpu crates only — CLI has many feature combos)
+        run: |
+          cargo clippy -p butteraugli-gpu --no-default-features --features wgpu -- -D warnings
+          cargo clippy -p ssim2-gpu       --no-default-features --features wgpu -- -D warnings
+          cargo clippy -p dssim-gpu       --no-default-features --features wgpu -- -D warnings
+          cargo clippy -p zensim-gpu      --no-default-features --features wgpu -- -D warnings

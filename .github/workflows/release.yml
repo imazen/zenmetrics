@@ -1,0 +1,85 @@
+name: Release
+
+# Tag-driven per-crate publish. Tag format: `<crate>-v<version>`, e.g.
+#   git tag butteraugli-gpu-v0.1.0
+#   git push origin butteraugli-gpu-v0.1.0
+#
+# All crates are `publish = false` today (the cubecl 0.10.0-pre.4 dep
+# blocks crates.io publish anyway). This workflow is the placeholder
+# scaffold — flip `publish = true` per crate and uncomment the
+# `cargo publish` step once cubecl 1.0 ships.
+
+on:
+  push:
+    tags:
+      - "*-v*"
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: "Crate name (e.g. butteraugli-gpu)"
+        required: true
+      version:
+        description: "Version (e.g. 0.1.0)"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-gate:
+    name: Release gate (compile + tests must pass first)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-release-gate
+      - name: Workspace check (wgpu)
+        run: cargo check --workspace --no-default-features --features wgpu --release
+
+  github-release:
+    name: GitHub release
+    runs-on: ubuntu-latest
+    needs: release-gate
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract crate + version from tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          CRATE="${TAG%-v*}"
+          VERSION="${TAG#${CRATE}-v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "crate=$CRATE" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.parse.outputs.tag }}" \
+            --title "${{ steps.parse.outputs.crate }} v${{ steps.parse.outputs.version }}" \
+            --generate-notes
+
+  # Per-crate publish to crates.io. Disabled today (publish = false in
+  # every crate's Cargo.toml — see the workflow header). Uncomment once
+  # cubecl 1.0 lands and you flip `publish = true` per crate you want
+  # on crates.io.
+  #
+  # crates-io-publish:
+  #   name: crates.io publish
+  #   runs-on: ubuntu-latest
+  #   needs: github-release
+  #   if: startsWith(github.ref, 'refs/tags/')
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - name: Publish
+  #       env:
+  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+  #       run: |
+  #         CRATE="${{ steps.parse.outputs.crate }}"
+  #         cargo publish -p "$CRATE"

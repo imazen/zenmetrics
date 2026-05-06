@@ -9,4 +9,6 @@
 *.ptx
 *.rlib
 /target
+**/target
 .workongoing
+.DS_Store

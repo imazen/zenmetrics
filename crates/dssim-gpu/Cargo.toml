@@ -6,8 +6,11 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-license = "MIT"
-rust-version = "1.92"
+# Note: dssim-gpu has a SEPARATE commercial track from the rest of the
+# zenmetrics workspace because the underlying DSSIM algorithm is
+# upstream-licensed by Pornel. See COMMERCIAL.md at the repo root.
+license = "AGPL-3.0-only OR LicenseRef-Imazen-DSSIM-Commercial"
+rust-version.workspace = true
 publish = false
 
 [features]
@@ -28,11 +31,12 @@ cpu  = ["cubecl/cpu"]
 fast-reduction = []
 
 [dependencies]
-cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"] }
+cubecl = { workspace = true }
 
 [dev-dependencies]
 dssim-core = { workspace = true }
-imgref = "1"
-rgb = "0.8"
-bytemuck = "1"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+imgref = { workspace = true }
+rgb = { workspace = true }
+bytemuck = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+zenmetrics-corpus = { workspace = true }

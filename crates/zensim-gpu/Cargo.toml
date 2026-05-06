@@ -6,8 +6,8 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-license = "MIT"
-rust-version = "1.92"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
 publish = false
 
 [features]
@@ -25,9 +25,10 @@ cpu  = ["cubecl/cpu"]
 fast-reduction = []
 
 [dependencies]
-cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"] }
+cubecl = { workspace = true }
 
 [dev-dependencies]
 zensim = { workspace = true }
-bytemuck = "1"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+bytemuck = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+zenmetrics-corpus = { workspace = true }

@@ -33,8 +33,6 @@ compile_error!(
 );
 use ssimulacra2::{ColorPrimaries, Rgb, TransferCharacteristic, Xyb};
 
-const CORPUS_DIR: &str = "../dssim-cuda/test_data";
-
 // ───────────────────────── helpers ─────────────────────────
 
 fn load_rgb8(path: &std::path::Path) -> (Vec<u8>, u32, u32) {
@@ -69,7 +67,7 @@ fn srgb_u8_to_xyb(bytes: &[u8], w: usize, h: usize) -> Xyb {
 }
 
 fn corpus_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CORPUS_DIR)
+    zenmetrics_corpus::corpus_dir()
 }
 
 /// Build a synthetic reference + distorted pair with deterministic content.

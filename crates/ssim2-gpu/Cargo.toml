@@ -6,8 +6,8 @@ edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-license = "MIT"
-rust-version = "1.92"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
 publish = false
 
 [features]
@@ -36,15 +36,16 @@ cpu = ["cubecl/cpu"]
 fast-reduction = []
 
 [dependencies]
-cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"] }
+cubecl = { workspace = true }
 
 [build-dependencies]
-nalgebra = { workspace = true }
+nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-ssimulacra2 = "0.5.1"
+ssimulacra2 = { workspace = true }
 yuvxyb = "0.5.0"
-bytemuck = "1"
-imgref = "1"
-rgb = "0.8"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+bytemuck = { workspace = true }
+imgref = { workspace = true }
+rgb = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+zenmetrics-corpus = { workspace = true }
