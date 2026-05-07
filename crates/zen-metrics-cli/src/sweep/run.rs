@@ -154,7 +154,45 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
             .collect();
 
         cells.par_iter().for_each(|(q, tuple)| {
-            let outcome = compute_cell(cfg, src_path, &source, *q, tuple, zensim_in_metrics);
+            // Wrap each cell in catch_unwind so a panic in encode/decode/
+            // metric scoring doesn't abort sibling cells. Without this,
+            // a single bad knob combo would tear down a chunk's worth of
+            // good rows mid-flight.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                compute_cell(cfg, src_path, &source, *q, tuple, zensim_in_metrics)
+            }))
+            .unwrap_or_else(|panic_payload| {
+                let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "<non-string panic payload>".to_string()
+                };
+                eprintln!(
+                    "[sweep] cell panicked: {} q={q} knobs={}: {msg}",
+                    src_path.display(),
+                    tuple.to_canonical_json(),
+                );
+                // Emit a row with blank score columns so the panic is
+                // visible in downstream tooling (rather than silently
+                // dropped). Treat as a decode failure for stat-counting.
+                let mut row: Vec<String> = vec![
+                    src_path.display().to_string(),
+                    cfg.codec.name().to_string(),
+                    q.to_string(),
+                    tuple.to_canonical_json(),
+                    "".to_string(), // encoded_bytes
+                    "".to_string(), // encode_ms
+                    "".to_string(), // decode_ms
+                ];
+                for m in &cfg.metrics {
+                    for _ in m.column_names() {
+                        row.push("".to_string());
+                    }
+                }
+                CellOutcome::DecodeFailed { row }
+            });
             // Emit row + feature row + update stats. The `wtr` lock is
             // held for the duration of one TSV record; `feature_writer`
             // for one parquet push.
