@@ -34,4 +34,4 @@ pub mod run;
 pub use encode::CodecKind;
 #[allow(unused_imports)]
 pub use grid::{KnobGrid, KnobTuple, parse_knob_grid, parse_q_grid};
-pub use run::{SweepConfig, run_sweep};
+pub use run::{SweepConfig, run_sweep, try_init_thread_pool};

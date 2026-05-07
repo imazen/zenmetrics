@@ -4,17 +4,48 @@
 //! each cell, decode-back, score against the source for every selected
 //! metric, and write a Pareto TSV.
 //!
-//! The runner is intentionally serial. CPU metrics already use rayon
-//! internally where they care to; GPU metrics serialize through one
-//! CubeCL stream and parallel encode would only fight them for memory.
-//! Adding a `--jobs` knob to fan out per source image is a separate
-//! follow-up — the harness prints a progress line per cell so callers
-//! can pipe a chunk through `parallel` if they want a hand-rolled fan
-//! out.
+//! ## Concurrency model
+//!
+//! - **Outer loop** (over source images) is **serial** by design. Each
+//!   image is decoded once into an `Rgb8Image` shared across all of its
+//!   cells via `&Rgb8Image`. Holding only one source's pixels in memory
+//!   at a time keeps peak RAM at `1× source + N_threads × decoded_cell`,
+//!   which is the bound that lets us run on 12-vCPU vast.ai boxes with
+//!   modest memory.
+//! - **Inner loop** (over `q × knob_tuple` for the current source) is
+//!   **parallel** via rayon. Each rayon task encodes the cell, decodes
+//!   it back, scores every metric, and emits a row through a `Mutex<csv
+//!   Writer>` plus a `Mutex<FeatureParquetWriter>`. Rows land out-of-
+//!   order; downstream tools group by `(image_path, q, knob_tuple)` and
+//!   don't depend on order.
+//! - **Thread budget** is set by `cfg.jobs` (or rayon's default = num
+//!   cpus when `jobs = 0`). The setter is `try_init_thread_pool`, called
+//!   exactly once per process from `cmd_sweep`.
+//!
+//! ## RAM
+//!
+//! At any moment in flight we hold:
+//!   - 1 × source `Rgb8Image` (decoded once per image)
+//!   - up to `N_threads` × `(encoded_bytes + decoded_cell + metric scratch)`
+//!
+//! The encoded bytes are short-lived (KB), the decoded cell is a `Vec<u8>`
+//! the same size as the source. We deliberately **do not** pre-collect
+//! per-cell results into a `Vec<CellOutcome>` before writing — the rayon
+//! `for_each` walks one cell at a time per thread and emits immediately.
+//!
+//! ## Failure isolation
+//!
+//! A panic or error in one cell only invalidates that row; surrounding
+//! cells continue. Stat counters use `AtomicU64`, so multiple parallel
+//! failures don't lose increments to torn writes.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+use rayon::prelude::*;
 
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
 use crate::metrics::{GpuRuntime, MetricKind, run_metric, run_zensim_with_features};
@@ -42,35 +73,62 @@ pub struct SweepConfig {
     /// is created but receives no rows; we don't auto-add zensim because
     /// callers may have explicit reasons for the metric set they passed.
     pub feature_output: Option<PathBuf>,
+    /// Number of CPU threads for the per-image inner cell loop. `0`
+    /// defers to rayon's default (one per logical core). `1` runs cells
+    /// serially, useful for debugging.
+    pub jobs: usize,
 }
 
-/// Drive the sweep end-to-end. The function streams TSV rows to disk as
-/// they are produced — even if a later cell panics or runs out of memory,
-/// the rows that landed are durable.
+/// Initialise the global rayon thread pool. Safe to call multiple times
+/// — the first call wins. Returns `Ok` regardless because subsequent
+/// initialisations from the same process are a no-op for rayon.
+pub fn try_init_thread_pool(jobs: usize) -> Result<(), Box<dyn Error>> {
+    if jobs == 0 {
+        return Ok(()); // let rayon pick `num_cpus`
+    }
+    // `build_global` errors if already-initialised; we silently swallow
+    // because the harness is run as a one-shot binary — nobody else has
+    // initialised the global pool.
+    let _ = rayon::ThreadPoolBuilder::new()
+        .num_threads(jobs)
+        .build_global();
+    Ok(())
+}
+
+/// Drive the sweep end-to-end. Outer loop over sources is serial (one
+/// decoded image in memory at a time); inner cell loop is parallel via
+/// rayon, with row writes funnelled through a `Mutex`.
 pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
+    // Honour the configured thread budget. No-op if the rayon global
+    // pool is already initialised; first call wins.
+    try_init_thread_pool(cfg.jobs)?;
+
     let mut wtr = csv::WriterBuilder::new()
         .delimiter(b'\t')
         .from_path(&cfg.output)?;
-
     write_header(&mut wtr, &cfg.metrics)?;
 
-    let mut feature_writer = match &cfg.feature_output {
+    let zensim_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::Zensim);
+    let feature_writer_inner = match &cfg.feature_output {
         Some(path) => Some(FeatureParquetWriter::create(path)?),
         None => None,
     };
-    let zensim_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::Zensim);
 
-    let mut stats = SweepStats {
-        cells_total: cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count(),
-        cells_emitted: 0,
-        cells_failed_encode: 0,
-        cells_failed_decode: 0,
-        cells_failed_score: 0,
-    };
+    let cells_total =
+        (cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64;
+    let stats = AtomicSweepStats::new(cells_total);
+
+    // Wrap writers in Mutex so rayon tasks can flush rows under a lock.
+    // Lock contention is dominated by encode/decode/score work — order
+    // of milliseconds — so the critical section is tiny in comparison.
+    let wtr = Mutex::new(wtr);
+    let feature_writer = Mutex::new(feature_writer_inner);
 
     for src_path in &cfg.sources {
         // Decode the source once per image so we don't re-PNG-decode for
-        // every cell. The bytes are freed when we move to the next image.
+        // every cell. The bytes are freed when we move to the next image
+        // (drops at the end of this loop iteration). This is the entire
+        // RAM-discipline knob: one source resident at a time.
         let source = match decode_image_to_rgb8(src_path) {
             Ok(img) => img,
             Err(e) => {
@@ -78,47 +136,117 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                     "[sweep] skipping {} (decode failed: {e})",
                     src_path.display()
                 );
-                stats.cells_failed_decode += cfg.q_grid.len() * cfg.knob_grid.cell_count();
+                stats.add_failed_decode(
+                    (cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64,
+                );
                 continue;
             }
         };
 
-        for &q in &cfg.q_grid {
-            for tuple in cfg.knob_grid.iter_tuples() {
-                run_one_cell(
-                    cfg,
-                    &mut wtr,
-                    feature_writer.as_mut(),
-                    zensim_in_metrics,
-                    src_path,
-                    &source,
-                    q,
-                    &tuple,
-                    &mut stats,
-                );
+        // Build a flat list of (q, knob_tuple) pairs for rayon to walk.
+        // Cell count is bounded (≤ a few thousand per image typically),
+        // so the Vec is cheap. The tuples are small (`Vec<KnobValue>`
+        // owned per tuple); we don't clone the source.
+        let cells: Vec<(u32, KnobTuple)> = cfg
+            .q_grid
+            .iter()
+            .flat_map(|&q| cfg.knob_grid.iter_tuples().map(move |t| (q, t)))
+            .collect();
+
+        cells.par_iter().for_each(|(q, tuple)| {
+            let outcome = compute_cell(cfg, src_path, &source, *q, tuple, zensim_in_metrics);
+            // Emit row + feature row + update stats. The `wtr` lock is
+            // held for the duration of one TSV record; `feature_writer`
+            // for one parquet push.
+            match outcome {
+                CellOutcome::Ok {
+                    row,
+                    feature,
+                    score_failed,
+                } => {
+                    if let Ok(mut w) = wtr.lock() {
+                        if w.write_record(&row).is_ok() {
+                            stats.add_emitted();
+                        } else {
+                            eprintln!("[sweep] write_record failed");
+                        }
+                    }
+                    if let Some((image, codec, q_, knob_json, score, features)) = feature {
+                        if let Ok(mut fw_guard) = feature_writer.lock() {
+                            if let Some(fw) = fw_guard.as_mut() {
+                                if let Err(e) = fw.push_row(
+                                    &image, codec, q_, &knob_json, score, &features,
+                                ) {
+                                    eprintln!(
+                                        "[sweep] feature_writer push failed: {} q={q_}: {e}",
+                                        image,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if score_failed {
+                        stats.add_failed_score();
+                    }
+                }
+                CellOutcome::EncodeFailed { row } => {
+                    if let Ok(mut w) = wtr.lock() {
+                        let _ = w.write_record(&row);
+                    }
+                    stats.add_failed_encode();
+                }
+                CellOutcome::DecodeFailed { row } => {
+                    if let Ok(mut w) = wtr.lock() {
+                        let _ = w.write_record(&row);
+                    }
+                    stats.add_failed_decode(1);
+                }
             }
-        }
+        });
     }
 
+    // Drop locks and finalize.
+    let mut wtr = wtr.into_inner().map_err(|e| format!("wtr lock poisoned: {e}"))?;
     wtr.flush()?;
-    if let Some(fw) = feature_writer {
+    if let Some(fw) = feature_writer
+        .into_inner()
+        .map_err(|e| format!("feature_writer lock poisoned: {e}"))?
+    {
         fw.finish()?;
     }
-    Ok(stats)
+    Ok(stats.snapshot())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_one_cell(
+/// Per-cell outcome — pure result type, written to disk by the caller.
+enum CellOutcome {
+    Ok {
+        row: Vec<String>,
+        /// `(image_path, codec, q, knob_json, zensim_score, features)`
+        feature: Option<(String, &'static str, u32, String, f32, Vec<f64>)>,
+        score_failed: bool,
+    },
+    EncodeFailed {
+        row: Vec<String>,
+    },
+    DecodeFailed {
+        row: Vec<String>,
+    },
+}
+
+/// Pure per-cell compute — no shared mutable state. Allocations:
+///   - encoded bytes (small, dropped before scoring returns)
+///   - decoded `Rgb8Image` (≈ source dimensions × 3 bytes; held during
+///     metric scoring then dropped)
+///   - row `Vec<String>` (small)
+///   - optional feature `Vec<f64>` (300 entries when zensim_features_wanted)
+fn compute_cell(
     cfg: &SweepConfig,
-    wtr: &mut csv::Writer<std::fs::File>,
-    feature_writer: Option<&mut FeatureParquetWriter>,
-    zensim_in_metrics: bool,
     src_path: &Path,
     source: &Rgb8Image,
     q: u32,
     tuple: &KnobTuple,
-    stats: &mut SweepStats,
-) {
+    zensim_in_metrics: bool,
+) -> CellOutcome {
     let knob_json = tuple.to_canonical_json();
     let mut row: Vec<String> = vec![
         src_path.display().to_string(),
@@ -135,10 +263,6 @@ fn run_one_cell(
                 "[sweep] encode failed: {} q={q} knobs={knob_json}: {e}",
                 src_path.display()
             );
-            stats.cells_failed_encode += 1;
-            // Emit a row with blank score columns so downstream tooling
-            // can see the cell was attempted. Pad one blank per emitted
-            // metric column (butteraugli emits two).
             row.push("".to_string()); // encoded_bytes
             row.push("".to_string()); // encode_ms
             row.push("".to_string()); // decode_ms
@@ -147,19 +271,15 @@ fn run_one_cell(
                     row.push("".to_string());
                 }
             }
-            let _ = wtr.write_record(&row);
-            return;
+            return CellOutcome::EncodeFailed { row };
         }
     };
 
     row.push(cell.bytes.len().to_string());
     row.push(format!("{:.3}", cell.encode_ms));
 
-    // Decode-back. We must round-trip through the same decoder the metric
-    // crates would see in production. `decode_bytes_to_rgb8` doesn't
-    // exist as a public helper today, so we write to a tempfile and
-    // re-use the existing path-based decoder. The tempfile pattern keeps
-    // the format-sniffing logic identical.
+    // Decode-back through the path-based decoder for format-sniff parity
+    // with production. Tempfile lifetime ends when this function returns.
     let decode_start = Instant::now();
     let decoded = match decode_encoded_bytes(&cell.bytes, cfg.codec) {
         Ok(d) => d,
@@ -168,24 +288,20 @@ fn run_one_cell(
                 "[sweep] decode-back failed: {} q={q} knobs={knob_json}: {e}",
                 src_path.display()
             );
-            stats.cells_failed_decode += 1;
             row.push("".to_string()); // decode_ms
             for m in &cfg.metrics {
                 for _ in m.column_names() {
                     row.push("".to_string());
                 }
             }
-            let _ = wtr.write_record(&row);
-            return;
+            return CellOutcome::DecodeFailed { row };
         }
     };
     let decode_ms = decode_start.elapsed().as_secs_f64() * 1000.0;
     row.push(format!("{decode_ms:.3}"));
 
-    // Dimension check — codecs that pad odd dimensions should still
-    // round-trip the original size; mismatch usually means a chroma
-    // upsampling bug or a wrong pixel-format conversion. Either way we
-    // skip scoring rather than ship a misleading number.
+    // Dimension check — skip scoring on size mismatch (chroma upsampling
+    // bug or wrong pixel-format conversion).
     if decoded.width != source.width || decoded.height != source.height {
         eprintln!(
             "[sweep] dimension mismatch: {} q={q} src={}x{} decoded={}x{}",
@@ -195,28 +311,20 @@ fn run_one_cell(
             decoded.width,
             decoded.height,
         );
-        stats.cells_failed_decode += 1;
         for m in &cfg.metrics {
             for _ in m.column_names() {
                 row.push("".to_string());
             }
         }
-        let _ = wtr.write_record(&row);
-        return;
+        return CellOutcome::DecodeFailed { row };
     }
 
     // Score every selected metric.
-    //
-    // When the user passed `--feature-output` AND the metric list includes
-    // zensim, we route the zensim call through the feature-extracting path.
-    // The numeric score is identical (extra features have zero weight), so
-    // the TSV `score_zensim` column is unchanged. The 300-feature vector is
-    // captured here and persisted to parquet at the end of the loop.
     let mut any_score_failed = false;
-    let zensim_features_wanted = feature_writer.is_some() && zensim_in_metrics;
+    let zensim_features_wanted = cfg.feature_output.is_some() && zensim_in_metrics;
     let mut zensim_features: Option<(f32, Vec<f64>)> = None;
     for &metric in &cfg.metrics {
-        let result: Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>> =
+        let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> =
             if metric == MetricKind::Zensim && zensim_features_wanted {
                 match run_zensim_with_features(source, &decoded) {
                     Ok((score, features)) => {
@@ -240,7 +348,6 @@ fn run_one_cell(
                     metric.name(),
                     src_path.display()
                 );
-                // One blank cell per column the metric would have emitted.
                 for _ in metric.column_names() {
                     row.push("".to_string());
                 }
@@ -248,42 +355,31 @@ fn run_one_cell(
             }
         }
     }
-    if any_score_failed {
-        stats.cells_failed_score += 1;
-    }
 
-    // Persist the feature vector after the row was written-or-skipped to
-    // disk. We deliberately allow the parquet to land even when other
-    // metrics failed — the zensim value is independent.
-    if let (Some(fw), Some((zensim_score, features))) = (feature_writer, zensim_features) {
-        if let Err(e) = fw.push_row(
-            &src_path.display().to_string(),
+    let feature = zensim_features.map(|(score, features)| {
+        (
+            src_path.display().to_string(),
             cfg.codec.name(),
             q,
-            &knob_json,
-            zensim_score,
-            &features,
-        ) {
-            eprintln!(
-                "[sweep] feature_writer push failed: {} q={q}: {e}",
-                src_path.display()
-            );
-        }
-    }
+            knob_json.clone(),
+            score,
+            features,
+        )
+    });
 
-    if let Err(e) = wtr.write_record(&row) {
-        eprintln!("[sweep] write_record failed: {e}");
-    } else {
-        stats.cells_emitted += 1;
+    CellOutcome::Ok {
+        row,
+        feature,
+        score_failed: any_score_failed,
     }
 }
 
 fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box<dyn Error>> {
-    // The path-based decode_image_to_rgb8 sniffs format and dispatches
-    // through the per-codec decoder. We write to a tempfile to reuse it
-    // unchanged. Performance: write+read is on the order of microseconds
-    // for typical encoded sizes (10 KB - 1 MB) and dominates neither
-    // encode nor decode wall time, so we don't optimize this away.
+    // Path-based decode_image_to_rgb8 sniffs format and dispatches through
+    // the per-codec decoder. We write to a tempfile to reuse it unchanged.
+    // Performance: write+read is on the order of microseconds for
+    // typical encoded sizes (10 KB - 1 MB) and dominates neither encode
+    // nor decode wall time, so we don't optimize this away.
     let suffix = match codec {
         CodecKind::Zenpng => ".png",
         CodecKind::Zenjpeg => ".jpg",
@@ -334,4 +430,49 @@ pub struct SweepStats {
     pub cells_failed_encode: usize,
     pub cells_failed_decode: usize,
     pub cells_failed_score: usize,
+}
+
+/// Atomic counters used during the parallel sweep. Snapshotted into a
+/// plain `SweepStats` once the sweep finishes.
+struct AtomicSweepStats {
+    cells_total: u64,
+    cells_emitted: AtomicU64,
+    cells_failed_encode: AtomicU64,
+    cells_failed_decode: AtomicU64,
+    cells_failed_score: AtomicU64,
+}
+
+impl AtomicSweepStats {
+    fn new(cells_total: u64) -> Self {
+        Self {
+            cells_total,
+            cells_emitted: AtomicU64::new(0),
+            cells_failed_encode: AtomicU64::new(0),
+            cells_failed_decode: AtomicU64::new(0),
+            cells_failed_score: AtomicU64::new(0),
+        }
+    }
+
+    fn add_emitted(&self) {
+        self.cells_emitted.fetch_add(1, Ordering::Relaxed);
+    }
+    fn add_failed_encode(&self) {
+        self.cells_failed_encode.fetch_add(1, Ordering::Relaxed);
+    }
+    fn add_failed_decode(&self, n: u64) {
+        self.cells_failed_decode.fetch_add(n, Ordering::Relaxed);
+    }
+    fn add_failed_score(&self) {
+        self.cells_failed_score.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> SweepStats {
+        SweepStats {
+            cells_total: self.cells_total as usize,
+            cells_emitted: self.cells_emitted.load(Ordering::Relaxed) as usize,
+            cells_failed_encode: self.cells_failed_encode.load(Ordering::Relaxed) as usize,
+            cells_failed_decode: self.cells_failed_decode.load(Ordering::Relaxed) as usize,
+            cells_failed_score: self.cells_failed_score.load(Ordering::Relaxed) as usize,
+        }
+    }
 }

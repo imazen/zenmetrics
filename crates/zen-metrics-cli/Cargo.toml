@@ -134,6 +134,11 @@ serde = { workspace = true, features = ["derive"] }
 # keys (reference → variant → scores), matching the documented schema.
 serde_json = { workspace = true, features = ["preserve_order"] }
 csv = { workspace = true }
+# Inner-loop parallelism in the sweep runner. CPU metrics already use
+# rayon internally for SIMD; we add per-cell rayon at the outer level so
+# one zen-metrics process saturates all cores natively, replacing the
+# `xargs -P` shell-level fan-out used in earlier sweeps.
+rayon = "1"
 
 # zen image decoders
 zenpng = { version = "0.1.4", optional = true }
