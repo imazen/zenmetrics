@@ -155,6 +155,13 @@ pub struct Butteraugli<R: Runtime> {
     /// are valid and `compute_with_reference` may skip recomputing them.
     has_cached_reference: bool,
 
+    /// Persistent host-side packing scratch for sRGB → u32 widening
+    /// (one u32 per byte; WGSL has no `Array<u8>` storage type). Sized
+    /// to `n × 3` at construction; reused across uploads instead of
+    /// allocating a fresh `Vec<u32>` per `populate_linear_from_srgb`.
+    /// Same shape as zensim-gpu's `pack_scratch`.
+    pack_scratch: Vec<u32>,
+
     /// Active comparison parameters. Overwritten by
     /// `compute_with_options` and `set_reference_with_options`; the
     /// non-`_with_options` entry points use [`ButteraugliParams::default`].
@@ -222,9 +229,24 @@ fn alloc_3<R: Runtime>(client: &ComputeClient<R>, n: usize) -> [cubecl::server::
 
 impl<R: Runtime> Butteraugli<R> {
     /// Allocate all per-instance buffers for `width × height` images.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `width × height × 3` overflows `usize`. Callers passing
+    /// untrusted dimensions should pre-validate with the same upper bound
+    /// the sibling pipelines use (e.g. reject anything where
+    /// `width.checked_mul(height).is_none()`).
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Self {
-        let n = (width * height) as usize;
-        let n_bytes = n * 3;
+        // Widen to usize before the multiply: a single `(width * height) as usize`
+        // wraps the u32-typed product silently on huge dimensions in release,
+        // producing under-allocated GPU buffers and garbage scores. Sibling
+        // pipelines (ssim2-gpu, dssim-gpu, zensim-gpu) already widen first.
+        let n = (width as usize)
+            .checked_mul(height as usize)
+            .expect("width × height overflows usize");
+        let n_bytes = n
+            .checked_mul(3)
+            .expect("width × height × 3 overflows usize");
         // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
         // has no u8 storage type, so we keep all platforms on a u32
         // path (CUDA happily handles either).
@@ -282,6 +304,7 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             has_cached_reference: false,
+            pack_scratch: vec![0_u32; n_bytes],
             params: ButteraugliParams::default(),
         }
     }
@@ -312,9 +335,11 @@ impl<R: Runtime> Butteraugli<R> {
     /// the full-res diffmap before reduction (matches CPU butteraugli's
     /// default mode). With [`Butteraugli::new`] the call is single-
     /// resolution only.
-    pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> GpuButteraugliResult {
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input length
+    /// doesn't match `width × height × 3`.
+    pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_options(ref_srgb, dist_srgb, &ButteraugliParams::default())
-            .expect("default params + matching dimensions never fail")
     }
 
     /// `compute` with runtime-tunable [`ButteraugliParams`] (HDR
@@ -345,9 +370,11 @@ impl<R: Runtime> Butteraugli<R> {
     /// of times with different distorted images; each one skips the
     /// reference-side ~half of the pipeline (sRGB→linear→opsin→
     /// frequency separation → reference mask blur).
-    pub fn set_reference(&mut self, ref_srgb: &[u8]) {
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `ref_srgb.len()` doesn't
+    /// match `width × height × 3`.
+    pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.set_reference_with_options(ref_srgb, &ButteraugliParams::default())
-            .expect("default params + matching dimensions never fail");
     }
 
     /// Cache the reference image with a specific [`ButteraugliParams`].
@@ -393,16 +420,19 @@ impl<R: Runtime> Butteraugli<R> {
     /// compared to [`compute`] when iterating many distorted images
     /// against a fixed reference (encoder rate-distortion search).
     ///
-    /// # Panics
-    ///
-    /// If [`set_reference`] has not yet been called.
-    pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> GpuButteraugliResult {
+    /// Returns [`Error::NoCachedReference`] if [`set_reference`] hasn't
+    /// been called, or [`Error::DimensionMismatch`] if `dist_srgb.len()`
+    /// doesn't match `width × height × 3`.
+    pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
-            .expect("matching dimensions + cached reference never fail")
     }
 
-    /// `compute_with_reference` returning `Result` — the only error
-    /// surface is `Error::DimensionMismatch` and `Error::NoCachedReference`.
+    /// Deprecated alias for [`compute_with_reference`]. Kept for
+    /// source-compat with callers that imported the old `try_*` name.
+    #[deprecated(
+        since = "0.0.2",
+        note = "use compute_with_reference (now Result-typed)"
+    )]
     pub fn try_compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
     }
@@ -517,14 +547,23 @@ impl<R: Runtime> Butteraugli<R> {
     /// scales by `intensity_multiplier=80`.
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
-        assert_eq!(srgb.len(), n_bytes, "input length mismatch");
-        // Widen each sRGB byte to a u32 so wgpu/Metal can read it
-        // natively (WGSL has no u8 storage type).
-        let widened: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
+        // Defense-in-depth check: every public caller goes through
+        // `check_dims` first, so a release-mode panic here would only
+        // fire on a buggy internal caller. Demoted to debug_assert.
+        debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
+        // Widen each sRGB byte to a u32 in the persistent `pack_scratch`
+        // vec instead of allocating a fresh `Vec<u32>` per upload. Same
+        // 4× host memory cost as before, but no per-call alloc churn.
+        // (WGSL has no `Array<u8>` storage type, hence the widening.)
+        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
+        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
+            *dst = src as u32;
+        }
+        let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_a = self.client.create_from_slice(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_b = self.client.create_from_slice(bytes);
         }
         unsafe {
             self.launch_srgb_to_linear(is_a);

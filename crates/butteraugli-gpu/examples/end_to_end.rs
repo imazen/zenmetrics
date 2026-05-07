@@ -36,7 +36,7 @@ fn main() {
         .collect();
 
     let mut bu = Butteraugli::<Backend>::new(client, width, height);
-    let r = bu.compute(&ref_rgb, &dist_rgb);
+    let r = bu.compute(&ref_rgb, &dist_rgb).unwrap();
 
     println!(
         "[{w}×{h}] GPU butteraugli: score={:.6}  pnorm_3={:.6}",

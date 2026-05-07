@@ -98,7 +98,7 @@ fn main() {
 
             // GPU butteraugli
             let mut gpu = Butteraugli::<Backend>::new(client.clone(), width, height);
-            let g = gpu.compute(&ref_rgb, &dist_rgb);
+            let g = gpu.compute(&ref_rgb, &dist_rgb).unwrap();
 
             let cpu_score = cpu.score;
             let cpu_pnorm = cpu.pnorm_3;
