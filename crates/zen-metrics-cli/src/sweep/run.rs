@@ -285,6 +285,8 @@ fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box
     // for typical encoded sizes (10 KB - 1 MB) and dominates neither
     // encode nor decode wall time, so we don't optimize this away.
     let suffix = match codec {
+        CodecKind::Zenpng => ".png",
+        CodecKind::Zenjpeg => ".jpg",
         CodecKind::Zenwebp => ".webp",
         CodecKind::Zenavif => ".avif",
         CodecKind::Zenjxl => ".jxl",
