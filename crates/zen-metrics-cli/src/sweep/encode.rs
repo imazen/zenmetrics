@@ -10,6 +10,45 @@
 //!
 //! Knob coverage per codec (zen-metrics-cli 0.3.0):
 //!
+//! ## zenpng 0.1.4 (lossless; no `__expert` gate — all knobs are public)
+//! `q` is ignored (PNG is lossless; for lossy-ish behaviour use
+//! `near_lossless_bits`). Public builders: `compression` (u32 effort 0..=200,
+//! or named preset string `"none"|"fastest"|"turbo"|"fast"|"balanced"|
+//! "thorough"|"high"|"aggressive"|"intense"|"crush"|"maniac"|"brag"|
+//! "minutes"`), `near_lossless_bits` (u8 0..=4 — rounds N LSBs per sample),
+//! `parallel` (bool — multi-thread screening + refinement), `max_threads`
+//! (u64; `0` = no limit, `1` = fully single-threaded). `filter` only has
+//! one variant (`Auto`) so it isn't exposed.
+//!
+//! ## zenjpeg 0.8.4 (`__expert` + `trellis` enabled, path dep on sibling repo)
+//! Public builders: `subsampling` (`"444"` / `"422"` / `"420"` / `"440"`),
+//! `progressive` (bool), `sharp_yuv` (bool), `effort` (u8, clamped to
+//! 0..=2 by zenjpeg's generic-effort API). Quality is fed through
+//! `with_generic_quality(q as f32)` so cross-codec sweeps see calibrated
+//! quality on the same scale as the other zen codecs.
+//!
+//! Expert (via `EncoderConfig::with_internal_params`):
+//! `optimize_huffman` (bool), `aq_enabled` (bool), `deringing` (bool),
+//! `auto_optimize` (bool, trellis-feature), `chroma_distance_scale` (f32,
+//! clamped 0.1..=5.0 by builder), `pre_blur` (f32 sigma),
+//! `quant_source` (string: `"jpegli"` / `"mozjpeg_default"`),
+//! `progressive_mode` (string: `"baseline"` / `"progressive"` /
+//! `"progressive_mozjpeg"` / `"progressive_search"` — richer alternative
+//! to the bool `progressive` knob, kept for back-compat),
+//! `huffman` (string: `"optimize"` / `"fixed"` / `"fixed_annex_k"` —
+//! richer than `optimize_huffman`),
+//! `tiny_file_mode` (string: `"auto"` / `"off"` / `"force"`),
+//! `downsampling_method` (string: `"box"` / `"gamma_aware"` /
+//! `"gamma_aware_iterative"`),
+//! `restart_mcu_rows` (u16, 0 disables),
+//! `chroma_quality` (u64 → `Some(Some(q as u8))`, null clears),
+//! `optimization` (string preset: `"jpegli_baseline"` /
+//! `"jpegli_progressive"` / `"mozjpeg_baseline"` / `"mozjpeg_progressive"` /
+//! `"mozjpeg_max_compression"` / `"hybrid_baseline"` /
+//! `"hybrid_progressive"` / `"hybrid_max_compression"`),
+//! `hybrid` (bool, trellis-feature — enables hybrid AQ+trellis with
+//! default `HybridConfig`).
+//!
 //! ## zenwebp 0.4.5 (`__expert` enabled)
 //! Public builders: `method`, `segments`, `sns_strength`, `filter_strength`,
 //! `lossless`. Expert (via `LossyConfig::with_internal_params`):
@@ -47,6 +86,10 @@ use std::time::Instant;
 /// Codec selector for the sweep CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum CodecKind {
+    /// `zenpng` lossless PNG encoder.
+    Zenpng,
+    /// `zenjpeg` JPEG encoder (jpegli-style).
+    Zenjpeg,
     /// `zenwebp` lossy/lossless WebP encoder.
     Zenwebp,
     /// `zenavif` AV1-still encoder via ravif.
@@ -58,6 +101,8 @@ pub enum CodecKind {
 impl CodecKind {
     pub fn name(self) -> &'static str {
         match self {
+            CodecKind::Zenpng => "zenpng",
+            CodecKind::Zenjpeg => "zenjpeg",
             CodecKind::Zenwebp => "zenwebp",
             CodecKind::Zenavif => "zenavif",
             CodecKind::Zenjxl => "zenjxl",
@@ -81,10 +126,389 @@ pub fn encode(
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     match codec {
+        CodecKind::Zenpng => encode_png(source, q, knobs),
+        CodecKind::Zenjpeg => encode_jpeg(source, q, knobs),
         CodecKind::Zenwebp => encode_webp(source, q, knobs),
         CodecKind::Zenavif => encode_avif(source, q, knobs),
         CodecKind::Zenjxl => encode_jxl(source, q, knobs),
     }
+}
+
+// ── zenpng ──────────────────────────────────────────────────────────────
+
+#[cfg(all(feature = "sweep", feature = "png"))]
+fn encode_png(
+    source: &Rgb8Image,
+    _q: u32,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    use enough::Unstoppable;
+    use imgref::ImgRef;
+    use zenpng::{Compression, EncodeConfig};
+
+    // PNG is lossless — `q` is ignored. For lossy-ish behaviour, use the
+    // `near_lossless_bits` knob (rounds N LSBs per sample, 0..=4).
+
+    let mut cfg = EncodeConfig::default();
+
+    // Compression: accepts a numeric effort (0..=200) or one of the named
+    // presets. Numeric form is preferred for sweep grids since it's
+    // continuous; the preset strings are accepted for grid readability.
+    if let Some(v) = knobs.get("compression") {
+        let comp = match v {
+            Value::Number(n) => Compression::Effort(n.as_u64().unwrap_or(13).min(200) as u32),
+            Value::String(s) => match s.as_str() {
+                "none" => Compression::None,
+                "fastest" => Compression::Fastest,
+                "turbo" => Compression::Turbo,
+                "fast" => Compression::Fast,
+                "balanced" => Compression::Balanced,
+                "thorough" => Compression::Thorough,
+                "high" => Compression::High,
+                "aggressive" => Compression::Aggressive,
+                "intense" => Compression::Intense,
+                "crush" => Compression::Crush,
+                "maniac" => Compression::Maniac,
+                "brag" => Compression::Brag,
+                "minutes" => Compression::Minutes,
+                other => {
+                    return Err(format!(
+                        "zenpng compression must be a 0..=200 effort or one of \
+                         none|fastest|turbo|fast|balanced|thorough|high|aggressive|\
+                         intense|crush|maniac|brag|minutes; got {other:?}"
+                    )
+                    .into());
+                }
+            },
+            _ => {
+                return Err(
+                    "zenpng compression must be a number (0..=200) or preset string".into(),
+                );
+            }
+        };
+        cfg = cfg.with_compression(comp);
+    }
+
+    if let Some(b) = knobs.get("near_lossless_bits").and_then(Value::as_u64) {
+        cfg = cfg.with_near_lossless_bits(b.min(4) as u8);
+    }
+    if let Some(b) = knobs.get("parallel").and_then(Value::as_bool) {
+        cfg = cfg.with_parallel(b);
+    }
+    if let Some(t) = knobs.get("max_threads").and_then(Value::as_u64) {
+        cfg.max_threads = t as usize;
+    }
+
+    // Build an ImgRef<Rgb<u8>> over the source buffer without copying.
+    let pixels: &[rgb::Rgb<u8>] = bytemuck_cast_rgb(&source.pixels);
+    let img = ImgRef::new(pixels, source.width as usize, source.height as usize);
+
+    let start = Instant::now();
+    let bytes = zenpng::encode_rgb8(img, None, &cfg, &Unstoppable, &Unstoppable)
+        .map_err(|e| format!("zenpng encode failed: {e}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell { bytes, encode_ms })
+}
+
+#[cfg(not(all(feature = "sweep", feature = "png")))]
+fn encode_png(
+    _source: &Rgb8Image,
+    _q: u32,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    Err("zenpng encode is disabled (rebuild with `--features sweep,png`)".into())
+}
+
+// ── zenjpeg ─────────────────────────────────────────────────────────────
+
+#[cfg(all(feature = "sweep", feature = "jpeg"))]
+fn encode_jpeg(
+    source: &Rgb8Image,
+    q: u32,
+    knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    use zencodec::encode::{EncodeJob as _, Encoder as _, EncoderConfig as _};
+    use zenjpeg::JpegEncoderConfig;
+    use zenjpeg::encode::encoder_types::QuantTableSource;
+    use zenjpeg::encoder::{
+        ChromaSubsampling, DownsamplingMethod, EncoderConfig as ZenEncoderConfig,
+        HuffmanStrategy, InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout,
+        ProgressiveScanMode, TinyFileMode,
+    };
+    use zenpixels::{PixelDescriptor, PixelSlice};
+
+    // Quality flows through the cross-codec generic scale so the sweep
+    // grid produces comparable-looking output across zen codecs.
+    let mut cfg = JpegEncoderConfig::new().with_generic_quality(q as f32);
+
+    // ── Public builders (applied first; internal params can override). ──
+
+    // Subsampling — accept the four ratio strings zenjpeg supports.
+    if let Some(s) = knobs.get("subsampling").and_then(Value::as_str) {
+        let sub = match s {
+            "444" | "4:4:4" => ChromaSubsampling::None,
+            "422" | "4:2:2" => ChromaSubsampling::HalfHorizontal,
+            "420" | "4:2:0" => ChromaSubsampling::Quarter,
+            "440" | "4:4:0" => ChromaSubsampling::HalfVertical,
+            other => {
+                return Err(format!(
+                    "zenjpeg subsampling must be one of 444|422|420|440; got {other:?}"
+                )
+                .into());
+            }
+        };
+        cfg = cfg.with_subsampling(sub);
+    }
+
+    if let Some(b) = knobs.get("progressive").and_then(Value::as_bool) {
+        cfg = cfg.with_progressive(b);
+    }
+    if let Some(b) = knobs.get("sharp_yuv").and_then(Value::as_bool) {
+        cfg = cfg.with_sharp_yuv(b);
+    }
+    if let Some(e) = knobs.get("effort").and_then(Value::as_u64) {
+        // zenjpeg's `with_effort_range(0, 2)` clamps internally, but we
+        // mirror the pattern used by the other codecs and apply the
+        // clamp here for clarity in the sweep grid.
+        cfg = cfg.with_generic_effort(e.min(2) as i32);
+    }
+
+    // ── Expert knobs (InternalParams). Build only when at least one is
+    // present, so the default codepath is exercised as-is when absent.
+
+    let mut params = InternalParams::default();
+    let mut any_internal = false;
+
+    if let Some(b) = knobs.get("optimize_huffman").and_then(Value::as_bool) {
+        params.optimize_huffman = Some(b);
+        any_internal = true;
+    }
+    if let Some(b) = knobs.get("aq_enabled").and_then(Value::as_bool) {
+        params.aq_enabled = Some(b);
+        any_internal = true;
+    }
+    if let Some(b) = knobs.get("deringing").and_then(Value::as_bool) {
+        params.deringing = Some(b);
+        any_internal = true;
+    }
+    #[cfg(feature = "sweep")]
+    if let Some(b) = knobs.get("auto_optimize").and_then(Value::as_bool) {
+        // Trellis feature is a hard transitive enable in
+        // zen-metrics-cli's sweep feature, so this field exists.
+        params.auto_optimize = Some(b);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("chroma_distance_scale").and_then(Value::as_f64) {
+        params.chroma_distance_scale = Some(s as f32);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("pre_blur").and_then(Value::as_f64) {
+        params.pre_blur = Some(s as f32);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("quant_source").and_then(Value::as_str) {
+        let qs = match s {
+            "jpegli" => QuantTableSource::Jpegli,
+            "mozjpeg_default" | "mozjpeg" => QuantTableSource::MozjpegDefault,
+            other => {
+                return Err(format!(
+                    "zenjpeg quant_source must be \"jpegli\" or \"mozjpeg_default\"; got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.quant_source = Some(qs);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("progressive_mode").and_then(Value::as_str) {
+        let mode = match s {
+            "baseline" => ProgressiveScanMode::Baseline,
+            "progressive" => ProgressiveScanMode::Progressive,
+            "progressive_mozjpeg" | "two_scan" | "mozjpeg" => {
+                ProgressiveScanMode::ProgressiveMozjpeg
+            }
+            "progressive_search" | "search" => ProgressiveScanMode::ProgressiveSearch,
+            other => {
+                return Err(format!(
+                    "zenjpeg progressive_mode must be one of \
+                     baseline|progressive|progressive_mozjpeg|progressive_search; \
+                     got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.progressive = Some(mode);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("huffman").and_then(Value::as_str) {
+        let h = match s {
+            "optimize" => HuffmanStrategy::Optimize,
+            "fixed" => HuffmanStrategy::Fixed,
+            "fixed_annex_k" | "annex_k" => HuffmanStrategy::FixedAnnexK,
+            other => {
+                return Err(format!(
+                    "zenjpeg huffman must be one of optimize|fixed|fixed_annex_k; \
+                     got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.huffman = Some(h);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("tiny_file_mode").and_then(Value::as_str) {
+        let m = match s {
+            "auto" => TinyFileMode::Auto,
+            "off" => TinyFileMode::Off,
+            "force" => TinyFileMode::Force,
+            other => {
+                return Err(format!(
+                    "zenjpeg tiny_file_mode must be one of auto|off|force; got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.tiny_file_mode = Some(m);
+        any_internal = true;
+    }
+    if let Some(s) = knobs.get("downsampling_method").and_then(Value::as_str) {
+        let m = match s {
+            "box" => DownsamplingMethod::Box,
+            "gamma_aware" => DownsamplingMethod::GammaAware,
+            "gamma_aware_iterative" | "iterative" => DownsamplingMethod::GammaAwareIterative,
+            other => {
+                return Err(format!(
+                    "zenjpeg downsampling_method must be one of \
+                     box|gamma_aware|gamma_aware_iterative; got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.downsampling_method = Some(m);
+        any_internal = true;
+    }
+    if let Some(n) = knobs.get("restart_mcu_rows").and_then(Value::as_u64) {
+        params.restart_mcu_rows = Some(n.min(u16::MAX as u64) as u16);
+        any_internal = true;
+    }
+    if let Some(v) = knobs.get("chroma_quality") {
+        match v {
+            Value::Null => {
+                // explicit null → clear override (revert to luma quality)
+                params.chroma_quality = Some(None);
+                any_internal = true;
+            }
+            Value::Number(n) => {
+                if let Some(q) = n.as_u64() {
+                    params.chroma_quality = Some(Some(q.min(100) as u8));
+                    any_internal = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = knobs.get("optimization").and_then(Value::as_str) {
+        let preset = match s {
+            "jpegli_baseline" => OptimizationPreset::JpegliBaseline,
+            "jpegli_progressive" => OptimizationPreset::JpegliProgressive,
+            #[cfg(feature = "sweep")]
+            "mozjpeg_baseline" => OptimizationPreset::MozjpegBaseline,
+            #[cfg(feature = "sweep")]
+            "mozjpeg_progressive" => OptimizationPreset::MozjpegProgressive,
+            #[cfg(feature = "sweep")]
+            "mozjpeg_max_compression" => OptimizationPreset::MozjpegMaxCompression,
+            #[cfg(feature = "sweep")]
+            "hybrid_baseline" => OptimizationPreset::HybridBaseline,
+            #[cfg(feature = "sweep")]
+            "hybrid_progressive" => OptimizationPreset::HybridProgressive,
+            #[cfg(feature = "sweep")]
+            "hybrid_max_compression" => OptimizationPreset::HybridMaxCompression,
+            other => {
+                return Err(format!(
+                    "zenjpeg optimization must be one of \
+                     jpegli_baseline|jpegli_progressive|mozjpeg_baseline|\
+                     mozjpeg_progressive|mozjpeg_max_compression|\
+                     hybrid_baseline|hybrid_progressive|hybrid_max_compression; \
+                     got {other:?}"
+                )
+                .into());
+            }
+        };
+        params.optimization = Some(preset);
+        any_internal = true;
+    }
+    #[cfg(feature = "sweep")]
+    if let Some(b) = knobs.get("hybrid").and_then(Value::as_bool)
+        && b
+    {
+        // Trellis-feature: enable hybrid AQ+trellis with default config.
+        // Sweep just toggles it on; finer control lives behind direct
+        // `EncoderConfig::hybrid_config` calls if needed later.
+        params.hybrid = Some(zenjpeg::encode::trellis::HybridConfig::default());
+        any_internal = true;
+    }
+
+    if any_internal {
+        // `JpegEncoderConfig::encode` applies an effort-derived
+        // `OptimizationPreset` at encode time, which clobbers fields like
+        // `optimization`, `progressive`, `huffman`, `aq_enabled`,
+        // `deringing`, and `quant_table_config`. To preserve every
+        // expert knob the caller set, drop down to the inner
+        // `EncoderConfig` and call `encode_bytes` directly. The 4 public
+        // wrapper knobs (subsampling / progressive / sharp_yuv / effort)
+        // were already mirrored into `cfg.inner()` by the wrapper's
+        // builder methods, so we clone that as the starting point.
+        let mut inner: ZenEncoderConfig = cfg.inner().clone();
+        inner = inner.with_internal_params(params);
+
+        let start = Instant::now();
+        let bytes = inner
+            .encode_bytes(
+                &source.pixels,
+                source.width,
+                source.height,
+                ZenPixelLayout::Rgb8Srgb,
+            )
+            .map_err(|e| format!("zenjpeg expert encode failed: {e}"))?;
+        let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+        return Ok(EncodedCell { bytes, encode_ms });
+    }
+
+    let stride = (source.width as usize) * 3;
+    let slice = PixelSlice::new(
+        &source.pixels,
+        source.width,
+        source.height,
+        stride,
+        PixelDescriptor::RGB8_SRGB,
+    )
+    .map_err(|e| format!("zenjpeg: pixel slice construction failed: {e}"))?;
+
+    let start = Instant::now();
+    let encoder = cfg
+        .job()
+        .encoder()
+        .map_err(|e| format!("zenjpeg encoder construction failed: {e}"))?;
+    let output = encoder
+        .encode(slice)
+        .map_err(|e| format!("zenjpeg encode failed: {e}"))?;
+    let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    Ok(EncodedCell {
+        bytes: output.into_vec(),
+        encode_ms,
+    })
+}
+
+#[cfg(not(all(feature = "sweep", feature = "jpeg")))]
+fn encode_jpeg(
+    _source: &Rgb8Image,
+    _q: u32,
+    _knobs: &Map<String, Value>,
+) -> Result<EncodedCell, Box<dyn Error>> {
+    Err("zenjpeg encode is disabled (rebuild with `--features sweep,jpeg`)".into())
 }
 
 // ── zenwebp ─────────────────────────────────────────────────────────────
