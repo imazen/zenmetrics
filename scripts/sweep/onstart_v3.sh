@@ -154,31 +154,52 @@ heartbeat() {
         2>/dev/null || true
 }
 
-# ── Step 2: pre-built zen-metrics binary ───────────────────────────
-BIN="$WORKDIR/zen-metrics"
-if [[ ! -x "$BIN" ]]; then
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64)  pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-x86_64.tar.gz" ;;
-        aarch64) pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-aarch64.tar.gz" ;;
-        *) log "FATAL: unsupported arch $arch"; final_state failed ;;
-    esac
-    URL="${SWEEP_BIN_OVERRIDE:-https://github.com/imazen/turbo-metrics/releases/download/${SWEEP_BIN_VERSION}/${pkg}}"
-    if [[ "$URL" == s3://* ]]; then
-        log "fetching $URL via s5cmd"
-        R2 cp "$URL" /tmp/zm.bin
-        cp /tmp/zm.bin "$BIN"
-        chmod +x "$BIN"
-    elif [[ "$URL" == *.tar.gz || "$URL" == *.tgz ]]; then
-        log "downloading $URL"
-        curl -fsSL "$URL" -o /tmp/zm.tgz
-        tar xzf /tmp/zm.tgz -C "$WORKDIR" --strip-components=1 \
-            "$(tar tzf /tmp/zm.tgz | grep -E '/zen-metrics$' | head -1)"
-        chmod +x "$BIN"
-    else
-        log "downloading raw binary $URL"
-        curl -fsSL "$URL" -o "$BIN"
-        chmod +x "$BIN"
+# ── Step 2: locate or download zen-metrics binary ───────────────────
+# Order of preference:
+#   1. $SWEEP_BIN_PATH if set explicitly
+#   2. /usr/local/bin/zen-metrics (baked into the docker image at build time)
+#   3. $WORKDIR/zen-metrics (downloaded from a previous run, persisted on disk)
+#   4. Download from $SWEEP_BIN_OVERRIDE (s3://, http://, https://)
+#   5. Fall back to GitHub release tarball for $SWEEP_BIN_VERSION
+#
+# The image-baked path (#2) is the new default for the
+# `ghcr.io/imazen/zen-metrics-sweep` image — without it, this script
+# would fall through to (#5) and fetch a stale `zen-metrics-v0.3.0`
+# binary from the legacy turbo-metrics release page that lacks the
+# `--feature-output` flag the sweep driver below uses, causing every
+# chunk to fail at the clap argument-parse stage.
+if [[ -n "${SWEEP_BIN_PATH:-}" && -x "$SWEEP_BIN_PATH" ]]; then
+    BIN="$SWEEP_BIN_PATH"
+    log "using SWEEP_BIN_PATH=$BIN"
+elif [[ -x /usr/local/bin/zen-metrics ]]; then
+    BIN=/usr/local/bin/zen-metrics
+    log "using image-baked $BIN"
+else
+    BIN="$WORKDIR/zen-metrics"
+    if [[ ! -x "$BIN" ]]; then
+        arch=$(uname -m)
+        case "$arch" in
+            x86_64)  pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-x86_64.tar.gz" ;;
+            aarch64) pkg="zen-metrics-${SWEEP_BIN_VERSION#zen-metrics-v}-linux-aarch64.tar.gz" ;;
+            *) log "FATAL: unsupported arch $arch"; final_state failed ;;
+        esac
+        URL="${SWEEP_BIN_OVERRIDE:-https://github.com/imazen/turbo-metrics/releases/download/${SWEEP_BIN_VERSION}/${pkg}}"
+        if [[ "$URL" == s3://* ]]; then
+            log "fetching $URL via s5cmd"
+            R2 cp "$URL" /tmp/zm.bin
+            cp /tmp/zm.bin "$BIN"
+            chmod +x "$BIN"
+        elif [[ "$URL" == *.tar.gz || "$URL" == *.tgz ]]; then
+            log "downloading $URL"
+            curl -fsSL "$URL" -o /tmp/zm.tgz
+            tar xzf /tmp/zm.tgz -C "$WORKDIR" --strip-components=1 \
+                "$(tar tzf /tmp/zm.tgz | grep -E '/zen-metrics$' | head -1)"
+            chmod +x "$BIN"
+        else
+            log "downloading raw binary $URL"
+            curl -fsSL "$URL" -o "$BIN"
+            chmod +x "$BIN"
+        fi
     fi
 fi
 "$BIN" --version
