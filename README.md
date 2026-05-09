@@ -46,5 +46,5 @@ normalized so higher = better):
 
 Dual-licensed: AGPL-3.0-only (see [`LICENSE-AGPL3`](LICENSE-AGPL3)) or
 Imazen commercial (see [`COMMERCIAL.md`](COMMERCIAL.md)). `dssim-gpu`'s
-commercial track threads through Pornel's upstream DSSIM licensing —
-see `COMMERCIAL.md`.
+commercial track requires Kornel's upstream DSSIM licensing —
+see `COMMERCIAL.md`, but this crate is neither maintained nor warrantied by him.
