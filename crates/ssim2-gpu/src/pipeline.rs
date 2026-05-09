@@ -150,6 +150,11 @@ pub struct Ssim2<R: Runtime> {
     src_u8_a: cubecl::server::Handle,
     src_u8_b: cubecl::server::Handle,
 
+    /// Persistent host-side packing scratch for sRGB → u32 widening.
+    /// Sized to `n × 3` at construction; reused on every upload to
+    /// avoid per-call `Vec<u32>` alloc churn. Same shape as zensim-gpu.
+    pack_scratch: Vec<u32>,
+
     /// Per-scale buffer sets.
     scales: Vec<Scale>,
 
@@ -226,6 +231,7 @@ impl<R: Runtime> Ssim2<R> {
             n,
             src_u8_a,
             src_u8_b,
+            pack_scratch: vec![0_u32; n_bytes],
             scales,
             partials,
             sums,
@@ -437,13 +443,19 @@ impl<R: Runtime> Ssim2<R> {
 
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
-        // Widen each sRGB byte to a u32 so wgpu/Metal can read it
-        // natively (WGSL has no u8 storage type).
-        let widened: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
+        debug_assert_eq!(srgb.len(), n_bytes);
+        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
+        // Widen each sRGB byte into the persistent `pack_scratch`
+        // instead of allocating a fresh `Vec<u32>` per upload (WGSL has
+        // no u8 storage type, so the widening can't be skipped).
+        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
+            *dst = src as u32;
+        }
+        let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_a = self.client.create_from_slice(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_b = self.client.create_from_slice(bytes);
         }
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.scales[0].ref_lin)

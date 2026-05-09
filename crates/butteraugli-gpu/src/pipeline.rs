@@ -155,6 +155,13 @@ pub struct Butteraugli<R: Runtime> {
     /// are valid and `compute_with_reference` may skip recomputing them.
     has_cached_reference: bool,
 
+    /// Persistent host-side packing scratch for sRGB → u32 widening
+    /// (one u32 per byte; WGSL has no `Array<u8>` storage type). Sized
+    /// to `n × 3` at construction; reused across uploads instead of
+    /// allocating a fresh `Vec<u32>` per `populate_linear_from_srgb`.
+    /// Same shape as zensim-gpu's `pack_scratch`.
+    pack_scratch: Vec<u32>,
+
     /// Active comparison parameters. Overwritten by
     /// `compute_with_options` and `set_reference_with_options`; the
     /// non-`_with_options` entry points use [`ButteraugliParams::default`].
@@ -297,6 +304,7 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             has_cached_reference: false,
+            pack_scratch: vec![0_u32; n_bytes],
             params: ButteraugliParams::default(),
         }
     }
@@ -330,11 +338,7 @@ impl<R: Runtime> Butteraugli<R> {
     ///
     /// Returns [`Error::DimensionMismatch`] if either input length
     /// doesn't match `width × height × 3`.
-    pub fn compute(
-        &mut self,
-        ref_srgb: &[u8],
-        dist_srgb: &[u8],
-    ) -> Result<GpuButteraugliResult> {
+    pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_options(ref_srgb, dist_srgb, &ButteraugliParams::default())
     }
 
@@ -419,16 +423,16 @@ impl<R: Runtime> Butteraugli<R> {
     /// Returns [`Error::NoCachedReference`] if [`set_reference`] hasn't
     /// been called, or [`Error::DimensionMismatch`] if `dist_srgb.len()`
     /// doesn't match `width × height × 3`.
-    pub fn compute_with_reference(
-        &mut self,
-        dist_srgb: &[u8],
-    ) -> Result<GpuButteraugliResult> {
+    pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
     }
 
     /// Deprecated alias for [`compute_with_reference`]. Kept for
     /// source-compat with callers that imported the old `try_*` name.
-    #[deprecated(since = "0.0.2", note = "use compute_with_reference (now Result-typed)")]
+    #[deprecated(
+        since = "0.0.2",
+        note = "use compute_with_reference (now Result-typed)"
+    )]
     pub fn try_compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         self.compute_with_reference_inner(dist_srgb)
     }
@@ -547,13 +551,19 @@ impl<R: Runtime> Butteraugli<R> {
         // `check_dims` first, so a release-mode panic here would only
         // fire on a buggy internal caller. Demoted to debug_assert.
         debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
-        // Widen each sRGB byte to a u32 so wgpu/Metal can read it
-        // natively (WGSL has no u8 storage type).
-        let widened: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
+        // Widen each sRGB byte to a u32 in the persistent `pack_scratch`
+        // vec instead of allocating a fresh `Vec<u32>` per upload. Same
+        // 4× host memory cost as before, but no per-call alloc churn.
+        // (WGSL has no `Array<u8>` storage type, hence the widening.)
+        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
+        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
+            *dst = src as u32;
+        }
+        let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_a = self.client.create_from_slice(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(u32::as_bytes(&widened));
+            self.src_u8_b = self.client.create_from_slice(bytes);
         }
         unsafe {
             self.launch_srgb_to_linear(is_a);
