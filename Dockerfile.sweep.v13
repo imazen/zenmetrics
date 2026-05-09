@@ -1,0 +1,90 @@
+# Dockerfile.sweep.v13 — v13 with cargo-style incremental compilation friendliness
+#
+# Build context: ~/work/zen (parent of zenmetrics + zenjpeg + zenanalyze).
+#   docker build -f zenmetrics/Dockerfile.sweep.v13 -t ghcr.io/imazen/zen-metrics-sweep:0.6.3 ~/work/zen
+#
+# Incremental compilation strategy:
+#   1. BuildKit cache mounts persist across builds:
+#       - /usr/local/cargo/registry  — index + crate downloads
+#       - /usr/local/cargo/git       — git index (any git deps)
+#       - /workspace/zenmetrics/target — compiled artifacts
+#      With these mounts, the second build only recompiles changed files +
+#      their reverse deps (Rust's natural incremental rebuild).
+#   2. COPY ordering: Cargo manifests first (rare-change layer), then a
+#      `cargo fetch` to warm registry, then full source. When only source
+#      changes, the warm-fetch layer is reused via Docker layer cache.
+#   3. Use `cargo build` (not `cargo build --release` from cold) on cache
+#      hits — but we keep release here because the binary is what ships.
+
+FROM rust:1.93-slim-bookworm AS builder
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates pkg-config libssl-dev cmake git \
+        clang lld build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ── Step A: copy ONLY the manifests + lockfiles (high-cache-hit layer) ──
+# Touch the source dirs so cargo accepts the manifest layout but doesn't
+# need real source to resolve deps. We restore real source in step C.
+COPY zenmetrics/Cargo.toml zenmetrics/Cargo.lock ./zenmetrics/
+COPY zenmetrics/crates/ ./zenmetrics/crates/.manifests-only/
+COPY zenjpeg/Cargo.toml zenjpeg/Cargo.lock ./zenjpeg/
+COPY zenanalyze/Cargo.toml zenanalyze/Cargo.lock ./zenanalyze/
+
+# ── Step B: full source copy (changes most often → smallest re-build cost) ──
+# This invalidates most layers below but leaves the registry+git mount caches
+# warm, so cargo only recompiles the changed files.
+COPY zenmetrics/ ./zenmetrics/
+COPY zenjpeg/ ./zenjpeg/
+COPY zenanalyze/ ./zenanalyze/
+
+# ── Step C: build with persistent cache mounts ──
+# /usr/local/cargo/registry — registry index + downloaded crates (persists)
+# /usr/local/cargo/git      — git deps (persists)
+# /workspace/zenmetrics/target — incremental build artifacts (persists across builds)
+WORKDIR /workspace/zenmetrics
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
+    cargo build -p zen-metrics-cli --release --features sweep && \
+    cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
+    chmod +x /usr/local/bin/zen-metrics && \
+    /usr/local/bin/zen-metrics --version && \
+    /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg
+
+FROM debian:bookworm-slim AS helpers
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/bin
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz && \
+    tar xzf /tmp/s5cmd.tgz -C /opt/bin s5cmd && \
+    rm /tmp/s5cmd.tgz && chmod +x /opt/bin/s5cmd
+RUN curl -fsSL -o /opt/bin/jq \
+        "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" && \
+    chmod +x /opt/bin/jq
+
+FROM ubuntu:24.04
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (zenjpeg-enabled, v13)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/zen-metrics /usr/local/bin/zen-metrics
+COPY --from=helpers /opt/bin/s5cmd /usr/local/bin/s5cmd
+COPY --from=helpers /opt/bin/jq    /usr/local/bin/jq
+COPY zenmetrics/scripts/sweep/onstart_v3.sh /usr/local/bin/zen-metrics-worker
+RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
+
+WORKDIR /workspace/sweep
+ENV WORKDIR=/workspace/sweep \
+    SWEEP_GPU_RUNTIME=cpu
+
+ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]
