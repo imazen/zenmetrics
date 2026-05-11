@@ -47,6 +47,72 @@ pub fn downsample_2x_kernel(
     dst[idx] = sum / count;
 }
 
+/// 3-channel fused 2× downsample. Each thread averages one 2×2 src
+/// region per channel; same per-thread arithmetic, fewer launches.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn downsample_2x_3ch_kernel(
+    src_x: &Array<f32>,
+    src_y: &Array<f32>,
+    src_b: &Array<f32>,
+    dst_x: &mut Array<f32>,
+    dst_y: &mut Array<f32>,
+    dst_b: &mut Array<f32>,
+    src_width: u32,
+    src_height: u32,
+    dst_width: u32,
+    dst_height: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (dst_width * dst_height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let dw = dst_width as usize;
+    let dh = dst_height as usize;
+    let sw = src_width as usize;
+    let sh = src_height as usize;
+    let _ = dh;
+
+    let y = idx / dw;
+    let x = idx - y * dw;
+    let sx = x * 2;
+    let sy = y * 2;
+
+    let i00 = sy * sw + sx;
+    let mut sum_x = src_x[i00];
+    let mut sum_y = src_y[i00];
+    let mut sum_b = src_b[i00];
+    let mut count = 1.0f32;
+
+    if sx + 1 < sw {
+        let i = sy * sw + sx + 1;
+        sum_x += src_x[i];
+        sum_y += src_y[i];
+        sum_b += src_b[i];
+        count += 1.0;
+    }
+    if sy + 1 < sh {
+        let i = (sy + 1) * sw + sx;
+        sum_x += src_x[i];
+        sum_y += src_y[i];
+        sum_b += src_b[i];
+        count += 1.0;
+    }
+    if sx + 1 < sw && sy + 1 < sh {
+        let i = (sy + 1) * sw + sx + 1;
+        sum_x += src_x[i];
+        sum_y += src_y[i];
+        sum_b += src_b[i];
+        count += 1.0;
+    }
+
+    // sum/count (NOT sum*(1/count)) — bit-exact with single-channel.
+    dst_x[idx] = sum_x / count;
+    dst_y[idx] = sum_y / count;
+    dst_b[idx] = sum_b / count;
+}
+
 /// Add 2× nearest-neighbour-upsampled `src` into `dst` with libjxl's
 /// `K_HEURISTIC_MIXING = 0.3` blend:
 ///   dst[i] = dst[i] · (1 − 0.3·scale) + scale · src[upsampled]

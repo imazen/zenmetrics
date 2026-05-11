@@ -21,6 +21,17 @@ cpu = ["cubecl/cpu"]
 # disable when targeting Metal:
 #   cargo build -p butteraugli-gpu --no-default-features --features wgpu
 fast-reduction = []
+# Internals escape hatch (mirrors the CPU `butteraugli` crate's
+# `internals` feature). Exposes `compute_with_reference_from_linear_planes`
+# — accepts caller-supplied GPU `Handle`s for the distorted side's
+# planar linear RGB, skipping the sRGB upload + sRGB→linear convert.
+# Used by encoder-side rate-distortion search where the encoder
+# already has the reconstructed image as planar linear-RGB GPU planes
+# (e.g. jxl-encoder-gpu's recon planes) and wants to avoid the
+# recon-download → sRGB-host-convert → re-upload boundary work.
+# Off by default; not stable; signature may shift with internal kernel
+# refactors.
+internals = []
 
 [dependencies]
 cubecl = { workspace = true }

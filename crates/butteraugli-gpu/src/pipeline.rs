@@ -202,20 +202,24 @@ fn populate_half_res_linear<R: Runtime>(full: &Butteraugli<R>, half: &Butteraugl
     let cubes = (half.n as u32).div_ceil(TPB);
     let dim = CubeCount::Static(cubes, 1, 1);
     let block = CubeDim::new_1d(TPB);
-    for ch in 0..3 {
-        unsafe {
-            downscale::downsample_2x_kernel::launch_unchecked::<R>(
-                &full.client,
-                dim.clone(),
-                block,
-                ArrayArg::from_raw_parts(full_lin[ch].clone(), full.n),
-                ArrayArg::from_raw_parts(half_lin[ch].clone(), half.n),
-                full.width,
-                full.height,
-                half.width,
-                half.height,
-            );
-        }
+    // Fused 3-channel downsample (1 launch instead of 3). Bit-exact
+    // with the single-channel kernel (sum/count, not sum*(1/count)).
+    unsafe {
+        downscale::downsample_2x_3ch_kernel::launch_unchecked::<R>(
+            &full.client,
+            dim,
+            block,
+            ArrayArg::from_raw_parts(full_lin[0].clone(), full.n),
+            ArrayArg::from_raw_parts(full_lin[1].clone(), full.n),
+            ArrayArg::from_raw_parts(full_lin[2].clone(), full.n),
+            ArrayArg::from_raw_parts(half_lin[0].clone(), half.n),
+            ArrayArg::from_raw_parts(half_lin[1].clone(), half.n),
+            ArrayArg::from_raw_parts(half_lin[2].clone(), half.n),
+            full.width,
+            full.height,
+            half.width,
+            half.height,
+        );
     }
 }
 
@@ -437,6 +441,61 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_with_reference_inner(dist_srgb)
     }
 
+    /// Compute butteraugli against the cached reference, taking the
+    /// distorted side as **3 already-uploaded planar f32 GPU handles**
+    /// in linear-RGB space (each `width × height × 4` bytes, in `[0, 1]`
+    /// pre-opsin). Skips the sRGB-bytes upload + sRGB→linear GPU
+    /// conversion that [`compute_with_reference`] does internally.
+    ///
+    /// The provided handles' contents are **mutated in place** by the
+    /// opsin / frequency separation kernels (which write back into
+    /// `lin_b` per the existing pipeline). If the caller wants to keep
+    /// them intact, clone the handles before calling — cubecl `Handle`
+    /// is reference-counted so a clone is cheap, but the underlying
+    /// GPU buffer will then be allocated separately by the next
+    /// downstream consumer.
+    ///
+    /// **Use case**: encoder rate-distortion search where the encoder
+    /// already produces the reconstructed image as planar linear-RGB
+    /// GPU planes (e.g. jxl-encoder-gpu's recon planes). Eliminates the
+    /// recon-download → host sRGB-convert → re-upload boundary work
+    /// (~30-60 ms per iter at 1 MP, scales linearly with size — at
+    /// 16 MP this can save several hundred ms per refinement iter).
+    ///
+    /// Each caller-supplied plane MUST hold exactly `width × height`
+    /// f32 values in row-major order, contiguous, no padding.
+    ///
+    /// Gated behind the `internals` cargo feature (mirrors the existing
+    /// CPU `butteraugli` crate's `internals` escape hatch). Not part of
+    /// the stable API; field layout / kernel order may shift with
+    /// internal pipeline refactors.
+    #[cfg(feature = "internals")]
+    pub fn compute_with_reference_from_linear_planes(
+        &mut self,
+        dist_r: cubecl::server::Handle,
+        dist_g: cubecl::server::Handle,
+        dist_b: cubecl::server::Handle,
+    ) -> Result<GpuButteraugliResult> {
+        if !self.has_cached_reference {
+            return Err(Error::NoCachedReference);
+        }
+        // Replace the distorted-side linear-RGB plane handles. The
+        // existing apply_opsin / separate_frequencies / mask kernels
+        // overwrite these in-place — see this struct's pipeline
+        // documentation for the chain.
+        self.lin_b[0] = dist_r;
+        self.lin_b[1] = dist_g;
+        self.lin_b[2] = dist_b;
+        // do_a=false: reference side cached; do_b=true: distorted side
+        // needs full opsin / frequency / mask / diff pipeline run.
+        self.run_pipeline_from_linear(false, true);
+        Ok(reduction::reduce::<R>(
+            &self.client,
+            self.diffmap_buf.clone(),
+            self.n,
+        ))
+    }
+
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
@@ -578,9 +637,21 @@ impl<R: Runtime> Butteraugli<R> {
         } else {
             (&self.lin_b, &self.blur_b)
         };
-        for ch in 0..3 {
-            self.blur_plane(&lin[ch].clone(), &bl[ch].clone(), SIGMA_OPSIN);
-        }
+        // Fused 3-channel blur (2 launches instead of 6). Uses temp1,
+        // temp2, mask_scratch as the H→V scratches; all 3 are written
+        // here in full and not relied on across this call.
+        self.blur_3ch_via(
+            &lin[0].clone(),
+            &lin[1].clone(),
+            &lin[2].clone(),
+            &bl[0].clone(),
+            &bl[1].clone(),
+            &bl[2].clone(),
+            &self.temp1.clone(),
+            &self.temp2.clone(),
+            &self.mask_scratch.clone(),
+            SIGMA_OPSIN,
+        );
         unsafe {
             self.launch_opsin(is_a);
         }
@@ -688,6 +759,56 @@ impl<R: Runtime> Butteraugli<R> {
         }
     }
 
+    /// 3-channel fused variant of [`Self::blur_plane_via`]. Uses the
+    /// same scratch buffer pair (temp1/temp2 typed; here we need 3
+    /// distinct H→V scratches per channel — caller must supply).
+    /// Two launches total instead of six.
+    #[allow(clippy::too_many_arguments)]
+    fn blur_3ch_via(
+        &self,
+        src_x: &cubecl::server::Handle,
+        src_y: &cubecl::server::Handle,
+        src_b: &cubecl::server::Handle,
+        dst_x: &cubecl::server::Handle,
+        dst_y: &cubecl::server::Handle,
+        dst_b: &cubecl::server::Handle,
+        scratch_x: &cubecl::server::Handle,
+        scratch_y: &cubecl::server::Handle,
+        scratch_b: &cubecl::server::Handle,
+        sigma: f32,
+    ) {
+        unsafe {
+            crate::kernels::blur_3ch::horizontal_blur_3ch_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(src_x.clone(), self.n),
+                ArrayArg::from_raw_parts(src_y.clone(), self.n),
+                ArrayArg::from_raw_parts(src_b.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                self.width,
+                self.height,
+                sigma,
+            );
+            crate::kernels::blur_3ch::vertical_blur_3ch_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_x.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_y.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_b.clone(), self.n),
+                self.width,
+                self.height,
+                sigma,
+            );
+        }
+    }
+
     fn copy_plane(&self, src: &cubecl::server::Handle, dst: &cubecl::server::Handle) {
         unsafe {
             frequency::copy_plane_kernel::launch_unchecked::<R>(
@@ -743,10 +864,22 @@ impl<R: Runtime> Butteraugli<R> {
         let freq = if is_a { &self.freq_a } else { &self.freq_b };
 
         // ── Step 1: LF (low-pass) and MF = XYB − LF ──
+        // Fused 3-channel LF blur (2 launches instead of 6). Uses
+        // temp1/temp2/mask_scratch as H→V scratches.
+        self.blur_3ch_via(
+            &lin[0],
+            &lin[1],
+            &lin[2],
+            &freq[3][0],
+            &freq[3][1],
+            &freq[3][2],
+            &self.temp1.clone(),
+            &self.temp2.clone(),
+            &self.mask_scratch.clone(),
+            SIGMA_LF,
+        );
+        // MF = XYB − LF (still per-channel; small kernel).
         for ch in 0..3 {
-            // Blur into freq[3][ch] using temp1 as the H→V scratch.
-            self.blur_plane_via(&lin[ch], &freq[3][ch], &self.temp1, SIGMA_LF);
-            // MF = XYB − LF
             self.subtract_arrays(&lin[ch], &freq[3][ch], &freq[2][ch]);
         }
         // xyb_low_freq_to_vals on LF — CPU `xyb_low_freq_to_vals`.
