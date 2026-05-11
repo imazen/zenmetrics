@@ -437,6 +437,61 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_with_reference_inner(dist_srgb)
     }
 
+    /// Compute butteraugli against the cached reference, taking the
+    /// distorted side as **3 already-uploaded planar f32 GPU handles**
+    /// in linear-RGB space (each `width × height × 4` bytes, in `[0, 1]`
+    /// pre-opsin). Skips the sRGB-bytes upload + sRGB→linear GPU
+    /// conversion that [`compute_with_reference`] does internally.
+    ///
+    /// The provided handles' contents are **mutated in place** by the
+    /// opsin / frequency separation kernels (which write back into
+    /// `lin_b` per the existing pipeline). If the caller wants to keep
+    /// them intact, clone the handles before calling — cubecl `Handle`
+    /// is reference-counted so a clone is cheap, but the underlying
+    /// GPU buffer will then be allocated separately by the next
+    /// downstream consumer.
+    ///
+    /// **Use case**: encoder rate-distortion search where the encoder
+    /// already produces the reconstructed image as planar linear-RGB
+    /// GPU planes (e.g. jxl-encoder-gpu's recon planes). Eliminates the
+    /// recon-download → host sRGB-convert → re-upload boundary work
+    /// (~30-60 ms per iter at 1 MP, scales linearly with size — at
+    /// 16 MP this can save several hundred ms per refinement iter).
+    ///
+    /// Each caller-supplied plane MUST hold exactly `width × height`
+    /// f32 values in row-major order, contiguous, no padding.
+    ///
+    /// Gated behind the `internals` cargo feature (mirrors the existing
+    /// CPU `butteraugli` crate's `internals` escape hatch). Not part of
+    /// the stable API; field layout / kernel order may shift with
+    /// internal pipeline refactors.
+    #[cfg(feature = "internals")]
+    pub fn compute_with_reference_from_linear_planes(
+        &mut self,
+        dist_r: cubecl::server::Handle,
+        dist_g: cubecl::server::Handle,
+        dist_b: cubecl::server::Handle,
+    ) -> Result<GpuButteraugliResult> {
+        if !self.has_cached_reference {
+            return Err(Error::NoCachedReference);
+        }
+        // Replace the distorted-side linear-RGB plane handles. The
+        // existing apply_opsin / separate_frequencies / mask kernels
+        // overwrite these in-place — see this struct's pipeline
+        // documentation for the chain.
+        self.lin_b[0] = dist_r;
+        self.lin_b[1] = dist_g;
+        self.lin_b[2] = dist_b;
+        // do_a=false: reference side cached; do_b=true: distorted side
+        // needs full opsin / frequency / mask / diff pipeline run.
+        self.run_pipeline_from_linear(false, true);
+        Ok(reduction::reduce::<R>(
+            &self.client,
+            self.diffmap_buf.clone(),
+            self.n,
+        ))
+    }
+
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
