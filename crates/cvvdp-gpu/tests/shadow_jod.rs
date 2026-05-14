@@ -3,38 +3,26 @@
 //! still-image cvvdp chain (color → pyramid → CSF → masking →
 //! pooling → JOD) at the standard_4k display config.
 //!
-//! This test does NOT yet assert tight pycvvdp parity. Observed
-//! shadow on the v1 corpus (standard_4k, per-pixel L_bkg + log10
-//! contract + CH_GAIN + PU blur):
+//! After tick 25 (Weber pyramid + band_mul = 2.0 + baseband bypass)
+//! the host-scalar shadow matches the v1 R2 manifest values
+//! (standard_4k display) within ~0.01 JOD across all 6 q-levels:
 //!
 //! ```text
-//!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~8.4   (overshoots)
-//!   5    8.89               ~9.3   (overshoots)
-//!   20   9.71               ~9.8
-//!   45   9.83               ~9.9
-//!   70   9.89               ~9.96
-//!   90   9.99               ~10.0
+//!   q    pycvvdp manifest   shadow scalar   |diff|
+//!   1    7.6536             7.6476          0.006
+//!   5    8.8889             8.8912          0.002
+//!   20   9.7076             9.7089          0.001
+//!   45   9.8273             9.8296          0.002
+//!   70   9.8915             9.8945          0.003
+//!   90   9.9930             9.9929          0.000
 //! ```
 //!
-//! Shadow now sits 0–0.7 JOD ABOVE pycvvdp's manifest values.
-//! Likely causes of the overshoot (each their own next chunk):
-//! - **`band_mul = 2.0`** for non-edge Laplacian bands (cvvdp's
-//!   `lpyr.get_band` applies this; our Weber pyramid output doesn't).
-//! - **Baseband bypass formula** (`|T_f - R_f| * S`, no masking).
-//!
-//! Both produce a JOD that broadly increases with q, but the
-//! shadow's absolute scale is ~2-3 JOD lower. The non-monotone
-//! q20→q45 dip reflects JPEG's near-flat RD curve in that range
-//! amplified by the simplifications.
-//!
-//! The assertions enforce:
-//!
+//! Test assertions:
 //! - JOD is finite and in `[0, 10]`.
-//! - `JOD(q90) - JOD(q1) > 1` (overall trend captures the q range).
-//! - At least 4 of 5 adjacent (q_lo, q_hi) pairs are monotonic.
-//!
-//! Tight parity is the work that closes the documented gaps.
+//! - Each shadow JOD is within 0.05 of the pycvvdp manifest value
+//!   (loose tol to absorb f32 accumulation across the pipeline +
+//!   any future minor refactor).
+//! - JOD is monotonic non-decreasing across q.
 
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
@@ -63,9 +51,18 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
-    let qs = [1u32, 5, 20, 45, 70, 90];
-    let mut jods = Vec::with_capacity(qs.len());
-    for q in qs {
+    // (q, pycvvdp_manifest_jod) captured 2026-05-14 from
+    // build_goldens.py over the v1 corpus at standard_4k.
+    let cases: &[(u32, f32)] = &[
+        (1, 7.6536),
+        (5, 8.8889),
+        (20, 9.7076),
+        (45, 9.8273),
+        (70, 9.8915),
+        (90, 9.9930),
+    ];
+    let mut jods = Vec::with_capacity(cases.len());
+    for &(q, expected) in cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod = predict_jod_still_3ch(
             &ref_bytes,
@@ -75,37 +72,29 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
             display,
             ppd,
         );
-        eprintln!("q={q:>2}: shadow JOD = {jod:.4}");
-        jods.push((q, jod));
+        let diff = (jod - expected).abs();
+        eprintln!(
+            "q={q:>2}: shadow JOD = {jod:.4} (pycvvdp {expected:.4}, |diff| {diff:.4})"
+        );
         assert!(jod.is_finite(), "q={q}: JOD = {jod} (not finite)");
         assert!(
             (0.0..=10.0).contains(&jod),
             "q={q}: JOD = {jod} out of [0, 10]"
         );
+        assert!(
+            diff < 0.05,
+            "q={q}: shadow JOD {jod:.4} diverges from pycvvdp manifest {expected:.4} by {diff:.4} > 0.05"
+        );
+        jods.push((q, jod));
     }
 
-    // Allow at most 1 of 5 adjacent pairs to flip — JPEG's RD curve
-    // has near-flat regions in the q20-q45 range that the
-    // simplifications amplify.
-    let mut flips = 0;
-    for w in jods.windows(2) {
-        let (q_lo, j_lo) = w[0];
-        let (q_hi, j_hi) = w[1];
-        if j_hi + 1e-3 < j_lo {
-            flips += 1;
-            eprintln!("flip at q{q_lo}→q{q_hi}: {j_lo:.4} → {j_hi:.4}");
-        }
+    // Monotone non-decreasing across q.
+    for win in jods.windows(2) {
+        let (q_lo, j_lo) = win[0];
+        let (q_hi, j_hi) = win[1];
+        assert!(
+            j_hi + 1e-3 >= j_lo,
+            "non-monotone: q={q_lo} JOD={j_lo:.4} > q={q_hi} JOD={j_hi:.4}"
+        );
     }
-    assert!(
-        flips <= 1,
-        "expected ≤1 non-monotone flip in q-sweep; got {flips}"
-    );
-
-    let &(_, jod_q1) = jods.first().unwrap();
-    let &(_, jod_q90) = jods.last().unwrap();
-    assert!(
-        jod_q90 - jod_q1 > 1.0,
-        "expected JOD(q90) - JOD(q1) > 1.0 (broad trend captured); \
-         got q1={jod_q1:.3} q90={jod_q90:.3}"
-    );
 }

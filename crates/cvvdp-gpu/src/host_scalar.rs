@@ -100,16 +100,22 @@ pub fn predict_jod_still_3ch(
     // Laplacian + log10(gauss) for L_bkg). Documented in PORT_STATUS.
     let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
     for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        // cvvdp's `lpyr.get_band` applies a band-readout gain of
+        // 2.0 to all non-edge bands (first = 0, last = n-1 keep
+        // 1.0). Mirror that here at the band-consumption site so
+        // the underlying Weber pyramid data stays canonical.
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+
         let bw = ref_weber[0].bands[k].w;
         let bh = ref_weber[0].bands[k].h;
         let n_px = bw * bh;
         let rho = freqs[k];
-        // Reference's per-pixel log10 L_bkg from the achromatic
-        // weber pyramid — same field used to weight all 3 channels.
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
         debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
-        // T_p, R_p: Weber-contrast band * S(rho, log_L_bkg[i], cc) * CH_GAIN.
+        // T_p, R_p: band_mul * Weber-contrast * S(rho, log_L_bkg[i], cc) * CH_GAIN.
         let mut t_p_per_ch: [Vec<f32>; 3] =
             [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
         let mut r_p_per_ch: [Vec<f32>; 3] =
@@ -119,15 +125,40 @@ pub fn predict_jod_still_3ch(
             let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);
             let s_rg = sensitivity_corrected_scalar(rho, log_l, channels[1]);
             let s_vy = sensitivity_corrected_scalar(rho, log_l, channels[2]);
-            t_p_per_ch[0][i] = dis_weber[0].bands[k].data[i] * s_a * CH_GAIN[0];
-            t_p_per_ch[1][i] = dis_weber[1].bands[k].data[i] * s_rg * CH_GAIN[1];
-            t_p_per_ch[2][i] = dis_weber[2].bands[k].data[i] * s_vy * CH_GAIN[2];
-            r_p_per_ch[0][i] = ref_weber[0].bands[k].data[i] * s_a * CH_GAIN[0];
-            r_p_per_ch[1][i] = ref_weber[1].bands[k].data[i] * s_rg * CH_GAIN[1];
-            r_p_per_ch[2][i] = ref_weber[2].bands[k].data[i] * s_vy * CH_GAIN[2];
+            t_p_per_ch[0][i] = band_mul * dis_weber[0].bands[k].data[i] * s_a * CH_GAIN[0];
+            t_p_per_ch[1][i] = band_mul * dis_weber[1].bands[k].data[i] * s_rg * CH_GAIN[1];
+            t_p_per_ch[2][i] = band_mul * dis_weber[2].bands[k].data[i] * s_vy * CH_GAIN[2];
+            r_p_per_ch[0][i] = band_mul * ref_weber[0].bands[k].data[i] * s_a * CH_GAIN[0];
+            r_p_per_ch[1][i] = band_mul * ref_weber[1].bands[k].data[i] * s_rg * CH_GAIN[1];
+            r_p_per_ch[2][i] = band_mul * ref_weber[2].bands[k].data[i] * s_vy * CH_GAIN[2];
         }
 
-        let d_per_ch = mult_mutual_band(&t_p_per_ch, &r_p_per_ch, bw, bh);
+        // Baseband bypass: cvvdp uses D = |T_f - R_f| * S for the
+        // coarsest band (no masking model, no clamp). Other bands
+        // run the full mult-mutual + xchannel + PU-blur pipeline.
+        // With Weber-contrast band magnitudes the |T - R| * S form
+        // produces values in the same range as cvvdp's pre-pool D.
+        let d_per_ch = if is_baseband {
+            // T_f - R_f here means the *unweighted* Weber bands times
+            // the CSF S (no CH_GAIN for baseband — cvvdp's apply_masking_model
+            // is what applies CH_GAIN; baseband bypasses it entirely).
+            let mut out: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            for i in 0..n_px {
+                let log_l = log_l_bkg_band[i];
+                let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);
+                let s_rg = sensitivity_corrected_scalar(rho, log_l, channels[1]);
+                let s_vy = sensitivity_corrected_scalar(rho, log_l, channels[2]);
+                let diff_a = dis_weber[0].bands[k].data[i] - ref_weber[0].bands[k].data[i];
+                let diff_rg = dis_weber[1].bands[k].data[i] - ref_weber[1].bands[k].data[i];
+                let diff_vy = dis_weber[2].bands[k].data[i] - ref_weber[2].bands[k].data[i];
+                out[0][i] = diff_a.abs() * s_a;
+                out[1][i] = diff_rg.abs() * s_rg;
+                out[2][i] = diff_vy.abs() * s_vy;
+            }
+            out
+        } else {
+            mult_mutual_band(&t_p_per_ch, &r_p_per_ch, bw, bh)
+        };
 
         // Spatial pool per channel (RMS = beta_spatial).
         let mut q_band = [0.0_f32; 3];

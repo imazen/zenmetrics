@@ -14,7 +14,7 @@ Tracking faithful-port progress against the Python reference
 | Contrast masking   | `kernels/masking`      | scalar mult-mutual + PU σ=3 blur + CH_GAIN| 4×4×3 small-band <1e-3 rel; whole-image    |
 | Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
-| Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | bounded, broadly monotone (gap vs pycvvdp)|
+| Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | <0.01 JOD vs pycvvdp v1 manifest          |
 
 ## Reference version pin
 
@@ -50,18 +50,16 @@ The cvvdp parameter JSON gets vendored into
   (was 1.4–1.7 before this tick). The shadow now slightly
   *overshoots* pycvvdp at low q — see `band_mul = 2.0` below.
 
-- **`lpyr.get_band` multiplies non-edge Laplacian bands by 2.0**
-  (cvvdp's `lpyr_dec.get_band` does `band_mul = 2.0` for
-  `0 < bb < n-1`, else 1.0). Our port doesn't replicate this gain
-  on the band readout. Affects masking input magnitudes by 2× on
-  bands 1..n-2.
+- **(Resolved tick 25)** `lpyr.get_band` multiplies non-edge
+  Laplacian bands by 2.0. Applied at the host_scalar consumption
+  site as a `band_mul` scaling — keeps the Weber-pyramid storage
+  canonical, mirrors cvvdp's readout pattern.
 
-- **cvvdp's baseband uses `|T_f - R_f| * S` (no masking model)**
-  with `rho_band[last] = 0.1` clamp before the CSF lookup. Trivial
-  to wire once weber_contrast_pyr brings the baseband magnitudes
-  into the same units cvvdp's Q_per_ch[last] reflects (~6.88 for
-  VY in the v1 manifest; vanilla Laplacian + |T-R|*S gives ~712,
-  the 100× discrepancy that defeated tick 23's attempt).
+- **(Resolved tick 25)** Baseband bypass formula
+  (`|T_f - R_f| * S`, no masking, no CH_GAIN). Wired in
+  host_scalar; the Weber-pyramid magnitudes work cleanly with this
+  formula (no 100× blow-up the tick-23 vanilla-Laplacian attempt
+  hit).
 
 - **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
   of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks
