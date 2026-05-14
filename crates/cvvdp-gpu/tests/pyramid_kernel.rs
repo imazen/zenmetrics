@@ -18,8 +18,8 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::pyramid::{
     downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar, subtract_kernel,
-    upscale_h_kernel, upscale_v_kernel, weber_contrast_compute_3ch_kernel,
-    weber_contrast_compute_kernel,
+    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
+    weber_contrast_compute_3ch_kernel, weber_contrast_compute_kernel,
 };
 
 #[cfg(feature = "cuda")]
@@ -315,6 +315,123 @@ fn weber_contrast_compute_3ch_kernel_matches_per_channel_kernel() {
             lbkg[i]
         );
     }
+}
+
+#[test]
+fn subtract_weber_3ch_kernel_matches_subtract_then_weber() {
+    // Fused subtract + 3-channel Weber-contrast — verifies that
+    // `band[c] = clamp((fine[c] - upscaled[c]) / max(L_bkg, 0.01))`
+    // matches doing subtract then weber separately, AND that the
+    // shared log_l_bkg field matches log10(max(L_bkg, 0.01)).
+    //
+    // Distinct per-channel `fine` AND `upscaled` arrays so a
+    // "wrong-channel" bug in the fused kernel is detectable.
+    // Edge-case L_bkg coverage matches the single-channel weber
+    // parity test.
+    let client = Backend::client(&Default::default());
+
+    let lbkg: Vec<f32> = vec![
+        1.0, 1.0, 1.0, 10.0, 100.0, 0.5, 0.005, 0.5, 0.001, 50.0, 50.0, 1.0, 0.001, 0.001,
+    ];
+    let n = lbkg.len();
+
+    let fine_a: Vec<f32> = (0..n).map(|i| (i as f32) * 0.7 + 1.0).collect();
+    let fine_rg: Vec<f32> = (0..n).map(|i| (i as f32) * -0.3 + 5.0).collect();
+    let fine_vy: Vec<f32> = (0..n).map(|i| (i as f32) * 1.1 - 4.0).collect();
+
+    // Cover both the upper and lower clamp on the resulting contrast
+    // for at least one channel — pick upscaled_a so a few rows
+    // produce |layer/L_bkg| > 1000.
+    let upsc_a: Vec<f32> = vec![
+        0.0, 0.0, 1001.0, 5.0, -5005.0, 50.0, -50.0, 500.0, -500.0, 1.0e5, -1.0e5, 0.001, -0.001,
+        0.0,
+    ];
+    let upsc_rg: Vec<f32> = (0..n).map(|i| (i as f32) * 0.15 - 1.2).collect();
+    let upsc_vy: Vec<f32> = (0..n).map(|i| (i as f32) * 0.42 + 0.7).collect();
+
+    let fine_a_h = client.create_from_slice(f32::as_bytes(&fine_a));
+    let fine_rg_h = client.create_from_slice(f32::as_bytes(&fine_rg));
+    let fine_vy_h = client.create_from_slice(f32::as_bytes(&fine_vy));
+    let upsc_a_h = client.create_from_slice(f32::as_bytes(&upsc_a));
+    let upsc_rg_h = client.create_from_slice(f32::as_bytes(&upsc_rg));
+    let upsc_vy_h = client.create_from_slice(f32::as_bytes(&upsc_vy));
+    let lbkg_h = client.create_from_slice(f32::as_bytes(&lbkg));
+    let c_a_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let c_rg_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let c_vy_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let log_l_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        subtract_weber_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(fine_a_h, n),
+            ArrayArg::from_raw_parts(fine_rg_h, n),
+            ArrayArg::from_raw_parts(fine_vy_h, n),
+            ArrayArg::from_raw_parts(upsc_a_h, n),
+            ArrayArg::from_raw_parts(upsc_rg_h, n),
+            ArrayArg::from_raw_parts(upsc_vy_h, n),
+            ArrayArg::from_raw_parts(lbkg_h, n),
+            ArrayArg::from_raw_parts(c_a_h.clone(), n),
+            ArrayArg::from_raw_parts(c_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(c_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(log_l_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let c_a_gpu_b = client.read_one(c_a_h).expect("read c_a");
+    let c_rg_gpu_b = client.read_one(c_rg_h).expect("read c_rg");
+    let c_vy_gpu_b = client.read_one(c_vy_h).expect("read c_vy");
+    let log_l_gpu_b = client.read_one(log_l_h).expect("read log_l");
+    let c_a_gpu: &[f32] = f32::from_bytes(&c_a_gpu_b);
+    let c_rg_gpu: &[f32] = f32::from_bytes(&c_rg_gpu_b);
+    let c_vy_gpu: &[f32] = f32::from_bytes(&c_vy_gpu_b);
+    let log_l_gpu: &[f32] = f32::from_bytes(&log_l_gpu_b);
+
+    let fines = [fine_a.as_slice(), fine_rg.as_slice(), fine_vy.as_slice()];
+    let upscs = [upsc_a.as_slice(), upsc_rg.as_slice(), upsc_vy.as_slice()];
+    let gpus = [c_a_gpu, c_rg_gpu, c_vy_gpu];
+
+    let mut saw_upper_clamp = false;
+    let mut saw_lower_clamp = false;
+    for c in 0..3 {
+        for i in 0..n {
+            let l = lbkg[i].max(0.01);
+            let layer = fines[c][i] - upscs[c][i];
+            let exp = (layer / l).clamp(-1000.0, 1000.0);
+            if (exp - 1000.0).abs() < 1e-3 {
+                saw_upper_clamp = true;
+            }
+            if (exp + 1000.0).abs() < 1e-3 {
+                saw_lower_clamp = true;
+            }
+            assert!(
+                (gpus[c][i] - exp).abs() < 1e-4 * exp.abs().max(1e-3),
+                "channel {c} pixel {i}: got {} expected {} (fine={} upsc={} lbkg={})",
+                gpus[c][i],
+                exp,
+                fines[c][i],
+                upscs[c][i],
+                lbkg[i],
+            );
+        }
+    }
+    for i in 0..n {
+        let exp_log = lbkg[i].max(0.01).log10();
+        assert!(
+            (log_l_gpu[i] - exp_log).abs() < 1e-5,
+            "log_l_bkg[{i}]: got {} expected {} (lbkg={})",
+            log_l_gpu[i],
+            exp_log,
+            lbkg[i],
+        );
+    }
+    assert!(saw_upper_clamp, "test inputs failed to exercise upper clamp");
+    assert!(saw_lower_clamp, "test inputs failed to exercise lower clamp");
 }
 
 #[test]

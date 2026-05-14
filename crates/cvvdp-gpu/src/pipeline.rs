@@ -58,8 +58,8 @@ use crate::kernels::masking::{
 };
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
-    band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
-    weber_contrast_compute_3ch_kernel,
+    band_frequencies, downscale_kernel, subtract_kernel, subtract_weber_3ch_kernel,
+    upscale_h_kernel, upscale_v_kernel,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
@@ -107,9 +107,9 @@ fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::s
 }
 
 /// Per-level scratch buffers reused by `compute_dkl_weber_pyramid`.
-/// At 12 MP the function would otherwise allocate ~176 MB of
+/// At 12 MP the function would otherwise allocate ~140 MB of
 /// transient GPU buffers per call (l_bkg_fine, vscratch_a, log_l_bkg
-/// per level + vscratch_c/upscaled_c/layer_c per (level, channel)).
+/// per level + vscratch_c/upscaled_c per (level, channel)).
 /// Called twice per `compute_dkl_d_bands` so doubled per d_bands call.
 ///
 /// `coarse_w * fine_h` shape (n_v) is the vertical-pass scratch for
@@ -122,10 +122,12 @@ struct WeberScratch {
     vscratch_a: cubecl::server::Handle,
     /// Per-pixel log10(L_bkg) plane (n_fine). Re-used for both sides.
     log_l_bkg: cubecl::server::Handle,
-    /// Per-channel vertical/horizontal expand scratch (n_v, n_fine, n_fine).
+    /// Per-channel vertical/horizontal expand scratch (n_v, n_fine).
+    /// The previous `layer_c` intermediate is gone — tick 91 fuses
+    /// `subtract + weber` into a single 3-channel kernel that reads
+    /// `fine` + `upscaled_c` directly.
     vscratch_c: [cubecl::server::Handle; N_CHANNELS],
     upscaled_c: [cubecl::server::Handle; N_CHANNELS],
-    layer_c: [cubecl::server::Handle; N_CHANNELS],
 }
 
 fn build_weber_scratch<R: Runtime>(
@@ -153,11 +155,6 @@ fn build_weber_scratch<R: Runtime>(
                 alloc_zeros_f32(client, n_v),
             ],
             upscaled_c: [
-                alloc_zeros_f32(client, n_fine),
-                alloc_zeros_f32(client, n_fine),
-                alloc_zeros_f32(client, n_fine),
-            ],
-            layer_c: [
                 alloc_zeros_f32(client, n_fine),
                 alloc_zeros_f32(client, n_fine),
                 alloc_zeros_f32(client, n_fine),
@@ -799,19 +796,16 @@ impl<R: Runtime> Cvvdp<R> {
                 );
             }
 
-            // Per channel: build the Laplacian-style layer (upscale +
-            // subtract). Weber-contrast compute is hoisted out of the
-            // channel loop and run as a single 3-channel fused launch
-            // (tick 89) — eliminates 2 redundant log10(L_bkg) writes
-            // per pixel per level + drops 3 kernel launches to 1.
+            // Per channel: upscale coarse → fine (separable v + h).
+            // Subtract + Weber-contrast + log_l_bkg are fused into a
+            // single 3-channel launch (tick 91) below — eliminates 3
+            // subtract_kernel launches per level + the `layer_c`
+            // intermediate Vec materialization step.
             let log_l_bkg = log_l_bkg_dest[k].clone();
             for c in 0..N_CHANNELS {
                 let coarse = self.gauss_ref[k + 1].planes[c].clone();
-                let fine = self.gauss_ref[k].planes[c].clone();
-
                 let vscratch_c = scratch.vscratch_c[c].clone();
                 let upscaled_c = scratch.upscaled_c[c].clone();
-                let layer_c = scratch.layer_c[c].clone();
 
                 unsafe {
                     upscale_v_kernel::launch::<R>(
@@ -829,39 +823,36 @@ impl<R: Runtime> Cvvdp<R> {
                         count_fine.clone(),
                         cube_dim,
                         ArrayArg::from_raw_parts(vscratch_c, n_v),
-                        ArrayArg::from_raw_parts(upscaled_c.clone(), n_fine),
+                        ArrayArg::from_raw_parts(upscaled_c, n_fine),
                         coarse_w,
                         fine_w,
                         fine_h,
                     );
-                    subtract_kernel::launch::<R>(
-                        &self.client,
-                        count_fine.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(fine, n_fine),
-                        ArrayArg::from_raw_parts(upscaled_c, n_fine),
-                        ArrayArg::from_raw_parts(layer_c, n_fine),
-                        n_fine as u32,
-                    );
                 }
             }
-            // 3-channel fused weber-contrast compute. One launch
-            // instead of three; log_l_bkg computed once per pixel
-            // instead of three times.
-            let layer_a = scratch.layer_c[0].clone();
-            let layer_rg = scratch.layer_c[1].clone();
-            let layer_vy = scratch.layer_c[2].clone();
+            // Fused subtract + 3-channel weber-contrast. One launch
+            // does `band[c] = clamp((fine[c] - upscaled[c]) / L_bkg)`
+            // for all three channels plus the shared log_l_bkg.
+            let fine_a = self.gauss_ref[k].planes[0].clone();
+            let fine_rg = self.gauss_ref[k].planes[1].clone();
+            let fine_vy = self.gauss_ref[k].planes[2].clone();
+            let upsc_a = scratch.upscaled_c[0].clone();
+            let upsc_rg = scratch.upscaled_c[1].clone();
+            let upsc_vy = scratch.upscaled_c[2].clone();
             let band_a = self.bands_ref[k].planes[0].clone();
             let band_rg = self.bands_ref[k].planes[1].clone();
             let band_vy = self.bands_ref[k].planes[2].clone();
             unsafe {
-                weber_contrast_compute_3ch_kernel::launch::<R>(
+                subtract_weber_3ch_kernel::launch::<R>(
                     &self.client,
                     count_fine.clone(),
                     cube_dim,
-                    ArrayArg::from_raw_parts(layer_a, n_fine),
-                    ArrayArg::from_raw_parts(layer_rg, n_fine),
-                    ArrayArg::from_raw_parts(layer_vy, n_fine),
+                    ArrayArg::from_raw_parts(fine_a, n_fine),
+                    ArrayArg::from_raw_parts(fine_rg, n_fine),
+                    ArrayArg::from_raw_parts(fine_vy, n_fine),
+                    ArrayArg::from_raw_parts(upsc_a, n_fine),
+                    ArrayArg::from_raw_parts(upsc_rg, n_fine),
+                    ArrayArg::from_raw_parts(upsc_vy, n_fine),
                     ArrayArg::from_raw_parts(l_bkg_fine, n_fine),
                     ArrayArg::from_raw_parts(band_a, n_fine),
                     ArrayArg::from_raw_parts(band_rg, n_fine),
