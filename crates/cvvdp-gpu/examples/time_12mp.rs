@@ -58,22 +58,63 @@ fn main() {
         .expect("warm-up");
     eprintln!("warm-up: {:?}", t0.elapsed());
 
-    let mut times = Vec::with_capacity(ITERS);
+    let mut jod_times = Vec::with_capacity(ITERS);
+    let mut d_bands_times = Vec::with_capacity(ITERS);
+    let mut weber_times = Vec::with_capacity(ITERS);
     for i in 0..ITERS {
+        // Phase 1: weber pyramid only (one side).
+        let t = Instant::now();
+        let (w_b, w_l) = cvvdp
+            .compute_dkl_weber_pyramid(&ref_bytes)
+            .expect("weber");
+        let dt_weber = t.elapsed();
+        black_box((w_b, w_l));
+
+        // Phase 2: full D-bands (color + 2× weber + CSF + masking + readback).
+        let t = Instant::now();
+        let d = cvvdp
+            .compute_dkl_d_bands(&ref_bytes, &dist_bytes, ppd)
+            .expect("d_bands");
+        let dt_d = t.elapsed();
+        black_box(d);
+
+        // Phase 3: full JOD (D bands + host pool + Minkowski + met2jod).
         let t = Instant::now();
         let jod = cvvdp
             .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
             .expect("compute_dkl_jod");
-        let dt = t.elapsed();
+        let dt_jod = t.elapsed();
         black_box(jod);
-        eprintln!("iter {i}: {dt:?}");
-        times.push(dt);
+
+        eprintln!("iter {i}: weber={dt_weber:?} d_bands={dt_d:?} jod={dt_jod:?}");
+        weber_times.push(dt_weber);
+        d_bands_times.push(dt_d);
+        jod_times.push(dt_jod);
     }
-    times.sort();
-    let median = times[times.len() / 2];
+    weber_times.sort();
+    d_bands_times.sort();
+    jod_times.sort();
     let total_pixels = (W as u64) * (H as u64);
-    let ns_per_px = median.as_nanos() as f64 / total_pixels as f64;
-    println!("\n12 MP ({W}×{H}) GPU compute_dkl_jod:");
-    println!("  median: {median:?}");
-    println!("  per-pixel: {ns_per_px:.1} ns/px");
+    let mid = ITERS / 2;
+    println!("\n12 MP ({W}×{H}) per-phase medians:");
+    let w = weber_times[mid];
+    let d = d_bands_times[mid];
+    let j = jod_times[mid];
+    println!(
+        "  weber_pyramid (1 side):  {w:?}  → {:.1} ns/px",
+        w.as_nanos() as f64 / total_pixels as f64
+    );
+    println!(
+        "  d_bands (full GPU):       {d:?}  → {:.1} ns/px",
+        d.as_nanos() as f64 / total_pixels as f64
+    );
+    println!(
+        "  jod (full + host pool):   {j:?}  → {:.1} ns/px",
+        j.as_nanos() as f64 / total_pixels as f64
+    );
+    println!("  jod - d_bands (host pool): {:?}", j.saturating_sub(d));
+    println!(
+        "  d_bands - 2*weber (CSF+mask+IO): {:?}",
+        d.saturating_sub(w * 2)
+    );
 }
