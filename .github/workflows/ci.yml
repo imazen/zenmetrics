@@ -47,6 +47,7 @@ jobs:
           cargo build -p ssim2-gpu       --no-default-features --features wgpu --release
           cargo build -p dssim-gpu       --no-default-features --features wgpu --release
           cargo build -p zensim-gpu      --no-default-features --features wgpu --release
+          cargo build -p cvvdp-gpu       --no-default-features --features wgpu --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
         run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
 
@@ -72,6 +73,7 @@ jobs:
             -p ssim2-gpu \
             -p dssim-gpu \
             -p zensim-gpu \
+            -p cvvdp-gpu \
             -p zenmetrics-corpus \
             --no-default-features --features wgpu --release
 
