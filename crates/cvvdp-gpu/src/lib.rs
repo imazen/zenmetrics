@@ -42,6 +42,7 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 
+pub mod host_scalar;
 pub mod kernels;
 pub mod params;
 pub mod pipeline;

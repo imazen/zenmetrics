@@ -13,6 +13,7 @@ Tracking faithful-port progress against the Python reference
 | Contrast masking   | `kernels/masking`      | host scalar mult-mutual (no PU blur)     | 4×4×3 pycvvdp parity <1e-3 rel            |
 | Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
+| Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | bounded, broadly monotone (gap vs pycvvdp)|
 
 ## Reference version pin
 
