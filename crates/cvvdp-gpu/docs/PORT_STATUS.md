@@ -10,7 +10,7 @@ Tracking faithful-port progress against the Python reference
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
 | Weber-contrast pyr | `kernels/pyramid`      | host scalar + weber_contrast_compute_kernel | scalar via shadow_jod; kernel 14-pt parity |
-| CSF weighting      | `kernels/csf`          | scalar (log10 L_bkg) + kernel + table     | 60 pts vs pycvvdp + GPU scale parity      |
+| CSF weighting      | `kernels/csf`          | scalar + csf_apply_per_pixel_kernel + table | scalar parity + per-pixel kernel <1e-3 rel|
 | Contrast masking   | `kernels/masking`      | scalar + no-blur kernel + PU blur kernels | scalar + no-blur + PU σ=3 blur all parity |
 | Per-band pooling   | `kernels/pool`         | host scalar + pool_band_kernel (atomic)  | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |

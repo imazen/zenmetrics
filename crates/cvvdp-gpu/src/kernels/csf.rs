@@ -122,6 +122,89 @@ pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) ->
     s * correction
 }
 
+/// Host helper: precompute the `logs_row` 32-entry array that
+/// `csf_apply_per_pixel_kernel` consumes for a given `(rho, cc)`
+/// pair. Interpolates the per-channel `o0_cN` LUT along the
+/// `log_rho` axis at the band's spatial frequency, yielding a
+/// length-`N_L_BKG` vector of `log10(S)` values parameterized by
+/// `log_L_bkg`. cvvdp's `castleCSF.sensitivity` does this row
+/// pull-out before its per-pixel L_bkg interp.
+pub fn precompute_logs_row(rho: f32, cc: CsfChannel) -> [f32; N_L_BKG] {
+    let log_rho_q = rho.max(1e-6).log10();
+    let lut = channel_lut(cc);
+    let mut row = [0.0_f32; N_L_BKG];
+    for l_idx in 0..N_L_BKG {
+        let r = &lut[l_idx * N_RHO..(l_idx + 1) * N_RHO];
+        row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, r, log_rho_q);
+    }
+    row
+}
+
+/// Per-pixel CSF apply: interpolates `logs_row` along the
+/// `log_L_bkg` axis at each pixel's `log_l_bkg`, raises to 10^,
+/// applies cvvdp's sensitivity correction in log space, and
+/// multiplies the weber-contrast band by `S * ch_gain` to produce
+/// `T_p`.
+///
+/// Host pre-collapses the `rho` axis via [`precompute_logs_row`];
+/// the kernel only needs the resulting 32-entry row plus per-pixel
+/// `log_l_bkg`.
+///
+/// The `log_L_bkg` axis is uniform in log space
+/// (`step = (4.0 − (−2.301)) / 31`), so the kernel computes the
+/// bracket index by direct arithmetic instead of binary search.
+#[cube(launch)]
+pub fn csf_apply_per_pixel_kernel(
+    weber: &Array<f32>,
+    log_l_bkg: &Array<f32>,
+    logs_row: &Array<f32>,
+    t_p: &mut Array<f32>,
+    ch_gain: f32,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+
+    // LUT axis constants (uniform log spacing).
+    let axis_min = f32::new(-2.301_03);
+    let inv_step = f32::new(4.920_640_4); // 31 / (4.0 - (-2.30103))
+    // Upper clamp just below 31.0 so floor(off_lo) ∈ [0, 30] and
+    // hi_idx = lo_idx + 1 stays in [1, 31] — last valid bracket of
+    // the 32-point axis. Setting it to 30.0 would mishandle queries
+    // at log_l_bkg = 4.0 (axis max) by collapsing frac to 0.
+    let max_idx_f = f32::new(30.999_999);
+
+    // sensitivity_correction in log10 space: log10(10^(-0.279742/20))
+    //                                    = -0.279742 / 20 = -0.013987.
+    let log_correction = f32::new(-0.013_987_1);
+
+    let log_l = log_l_bkg[idx];
+    let off_raw = (log_l - axis_min) * inv_step;
+
+    let off_lo = if off_raw < f32::new(0.0) {
+        f32::new(0.0)
+    } else if off_raw > max_idx_f {
+        max_idx_f
+    } else {
+        off_raw
+    };
+
+    let lo_idx_f = f32::floor(off_lo);
+    let frac = off_lo - lo_idx_f;
+    let lo_idx = lo_idx_f as u32 as usize;
+    let hi_idx = lo_idx + 1;
+
+    let lo = logs_row[lo_idx];
+    let hi = logs_row[hi_idx];
+    let log_s_raw = lo + frac * (hi - lo);
+    let log_s_corr = log_s_raw + log_correction;
+    let s = f32::powf(f32::new(10.0), log_s_corr);
+
+    t_p[idx] = weber[idx] * s * ch_gain;
+}
+
 /// Multiply `band` in-place by `weights[weight_idx]`. `weights` is a
 /// flat per-(level, channel) CSF sensitivity table uploaded once per
 /// pipeline init. `weight_idx` is the host-resolved slot for the
