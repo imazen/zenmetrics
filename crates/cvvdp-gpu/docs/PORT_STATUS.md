@@ -9,7 +9,7 @@ Tracking faithful-port progress against the Python reference
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
-| CSF weighting      | `kernels/csf`          | scaffold                                 | none                                      |
+| CSF weighting      | `kernels/csf`          | host scalar (LUT bilinear interp)        | 60 pts vs pycvvdp <1e-3 rel               |
 | Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
 | Host fold / JOD    | `pipeline`             | scaffold                                 | none                                      |

@@ -1,21 +1,135 @@
 //! Contrast-sensitivity weighting per pyramid band.
 //!
-//! Each band has an associated spatial frequency (cy/deg, derived from
-//! the display pixels-per-degree and the band's level). cvvdp's
-//! castleCSF gives the sensitivity for that frequency in the
-//! achromatic channel; chrom-CSF variants handle RG and VY.
+//! cvvdp v0.5.4 uses a LUT-based castleCSF (the
+//! `csf_lut_weber_fixed_size.json` variant referenced in
+//! `cvvdp_parameters.json` as `csf = "weber_fixed_size"`):
 //!
-//! The kernel multiplies each band's coefficient by its CSF weight
-//! (`csf(freq, level, channel)`). Per-band weights are precomputed
-//! host-side once per `(width, height, display_model)` triple and
-//! uploaded as a small `Array<f32>` of length `n_levels × N_CHANNELS`.
+//! - 32 log-spaced background-luminance points (`L_bkg` in cd/m²)
+//! - 32 log-spaced spatial-frequency points (`rho` in cy/deg)
+//! - 3 channels at temporal frequency `omega = 0`:
+//!   - `o0_c1` = achromatic (A)
+//!   - `o0_c2` = red-green   (RG)
+//!   - `o0_c3` = violet-yellow (VY)
+//! - 1 channel at `omega = 5` for the achromatic temporal pathway
+//!   (out of scope for still-image cvvdp; not ported here).
 //!
-//! Compiling stub.
+//! Sensitivity is bilinear-interpolated in log space:
+//!
+//! ```text
+//! logS_at_rho(L_bkg)   = interp1(log_rho, logS[L_bkg, *], log10(rho))
+//! S(rho, L_bkg, cc)    = 10 ** interp1(log_L_bkg, logS_at_rho, log10(L_bkg))
+//! ```
+//!
+//! Then multiplied by `10 ** (sensitivity_correction / 20)` from
+//! `cvvdp_parameters.json` — captured as a runtime scalar
+//! [`SENSITIVITY_CORRECTION_DB`] so per-pin tweaks don't require a
+//! recompile.
 
 use cubecl::prelude::*;
 
+mod csf_lut_v0_5_4 {
+    include!("csf_lut/v0_5_4.rs");
+}
+
+pub use csf_lut_v0_5_4::{
+    GE_SIGMA, LOG_L_BKG_AXIS, LOG_RHO_AXIS, LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3,
+};
+
+/// cvvdp v0.5.4's `sensitivity_correction` parameter (dB). The
+/// effective scale on every CSF sensitivity is
+/// `10 ** (SENSITIVITY_CORRECTION_DB / 20)`. Negative values reduce
+/// metric sensitivity.
+pub const SENSITIVITY_CORRECTION_DB: f32 = -0.279_742_33;
+
+/// Channel index for the per-channel `o0_c*` tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CsfChannel {
+    A = 0,
+    Rg = 1,
+    Vy = 2,
+}
+
+/// Number of grid points along each LUT axis.
+pub const N_L_BKG: usize = 32;
+pub const N_RHO: usize = 32;
+
+/// 1-D linear interpolation in log-space along a monotonically
+/// increasing axis. Returns the y-value at `x`. Clamps to the axis
+/// endpoints — matches torch's `interp1q`'s behavior for queries
+/// outside the table range.
+fn interp1_clamped(xs: &[f32], ys: &[f32], x: f32) -> f32 {
+    debug_assert_eq!(xs.len(), ys.len());
+    let n = xs.len();
+    if x <= xs[0] {
+        return ys[0];
+    }
+    if x >= xs[n - 1] {
+        return ys[n - 1];
+    }
+    // Binary search for the bracket.
+    let mut lo = 0usize;
+    let mut hi = n - 1;
+    while hi - lo > 1 {
+        let mid = (lo + hi) / 2;
+        if xs[mid] <= x {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+    ys[lo] + t * (ys[hi] - ys[lo])
+}
+
+fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
+    match cc {
+        CsfChannel::A => &LOG_S_O0_C1,
+        CsfChannel::Rg => &LOG_S_O0_C2,
+        CsfChannel::Vy => &LOG_S_O0_C3,
+    }
+}
+
+/// Host-scalar CSF sensitivity for still-image cvvdp (omega = 0).
+///
+/// - `rho`     — spatial frequency in cy/deg
+/// - `l_bkg`   — background luminance in cd/m² (must be > 0)
+/// - `cc`      — opponent channel
+///
+/// Returns sensitivity `S` such that the band is weighted by `S` (or
+/// `S * S` if the metric squares it; cvvdp does the per-channel
+/// scaling separately). Pre-correction; the
+/// `10 ** (SENSITIVITY_CORRECTION_DB / 20)` multiplier is applied by
+/// `sensitivity_corrected_scalar`.
+pub fn sensitivity_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
+    let log_rho_q = rho.max(1e-6).log10();
+    let log_l_bkg_q = l_bkg.max(1e-6).log10();
+    let lut = channel_lut(cc);
+
+    // Step 1: interpolate along rho for each L_bkg row.
+    // Matches pycvvdp's batch_interp1d + interp1q sequence: first
+    // pull a 1-D vector of logS values as a function of L_bkg, with
+    // rho fixed; then interpolate that across L_bkg.
+    let mut logs_row = [0.0_f32; N_L_BKG];
+    for l_idx in 0..N_L_BKG {
+        let row = &lut[l_idx * N_RHO..(l_idx + 1) * N_RHO];
+        logs_row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, row, log_rho_q);
+    }
+
+    // Step 2: interpolate along L_bkg.
+    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg_q);
+
+    10.0_f32.powf(log_s)
+}
+
+/// Sensitivity with cvvdp's published correction applied.
+pub fn sensitivity_corrected_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
+    let s = sensitivity_scalar(rho, l_bkg, cc);
+    let correction = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+    s * correction
+}
+
 /// Multiply `band` in-place by `weights[channel * n_levels + level]`.
-/// `weights` is uploaded once per pipeline init.
+/// `weights` is uploaded once per pipeline init. Stub body.
 #[cube(launch)]
 #[allow(unused_variables)]
 pub fn weight_band_kernel(
@@ -28,5 +142,4 @@ pub fn weight_band_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    // body lands with the actual CSF weights pinned.
 }
