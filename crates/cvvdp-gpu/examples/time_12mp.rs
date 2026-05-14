@@ -58,6 +58,30 @@ fn main() {
         .expect("warm-up");
     eprintln!("warm-up: {:?}", t0.elapsed());
 
+    // Diagnostic: do two consecutive weber calls on the SAME data
+    // to test whether the "weber(dist) is 2× weber(ref)" slowdown
+    // observed inside compute_dkl_d_bands is data-specific or
+    // purely position-dependent (consecutive-call overhead).
+    eprintln!("---- consecutive-weber diagnostic ----");
+    for i in 0..3 {
+        let t = Instant::now();
+        let (w_b, w_l) = cvvdp
+            .compute_dkl_weber_pyramid(&ref_bytes)
+            .expect("weber call 1");
+        let dt1 = t.elapsed();
+        black_box((w_b, w_l));
+
+        let t = Instant::now();
+        let (w_b, w_l) = cvvdp
+            .compute_dkl_weber_pyramid(&ref_bytes)
+            .expect("weber call 2");
+        let dt2 = t.elapsed();
+        black_box((w_b, w_l));
+
+        eprintln!("run {i}: weber#1={dt1:?}  weber#2={dt2:?}");
+    }
+    eprintln!("---- end diagnostic ----\n");
+
     let mut jod_times = Vec::with_capacity(ITERS);
     let mut d_bands_times = Vec::with_capacity(ITERS);
     let mut weber_times = Vec::with_capacity(ITERS);
