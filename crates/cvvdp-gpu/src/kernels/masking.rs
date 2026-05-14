@@ -286,7 +286,125 @@ pub fn mult_mutual_band(
     d
 }
 
-/// Per-pixel masked difference. **Stub**.
+/// Full mult-mutual + xchannel masking for a 3-channel band, no
+/// phase-uncertainty blur. Mirrors `mult_mutual_band` for the small-
+/// band branch (`w ≤ PU_PADSIZE || h ≤ PU_PADSIZE`):
+///
+/// ```text
+/// M_mm[c]  = min(|T_p[c]|, |R_p[c]|) * 10^mask_c
+/// term[c]  = safe_pow(|M_mm[c]|, q[c])
+/// M[c]     = sum_in xcm[in, c] * term[in]
+/// D[c]     = clamp_diffs(safe_pow(|T_p[c] - R_p[c]|, p) / (1 + M[c]))
+/// ```
+///
+/// Inputs `t_p_*`, `r_p_*` are CSF-weighted contrasts already
+/// scaled by `S * CH_GAIN`. Outputs `d_*` are per-pixel post-clamp
+/// masked differences.
+///
+/// Constants `MASK_P`, `MASK_Q`, `MASK_C`, `D_MAX`, `XCM_3X3` are
+/// baked at compile time via `f32::new` literals. Same numeric
+/// outputs as `mult_mutual_band` when called with the same inputs
+/// at a small band size.
+///
+/// For bands larger than `PU_PADSIZE = 6`, caller should first
+/// apply the σ=3 Gaussian blur (kernel still pending) and feed the
+/// blurred M_mm tensor to a separate variant of this kernel; this
+/// no-blur form covers the deepest pyramid levels which are always
+/// small.
+#[cube(launch)]
+pub fn mult_mutual_3ch_no_blur_kernel(
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    d_a: &mut Array<f32>,
+    d_rg: &mut Array<f32>,
+    d_vy: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+
+    // cvvdp v0.5.4 constants — bake to match host scalar exactly.
+    let mask_p = f32::new(2.264_355_2);
+    let mask_q_0 = f32::new(1.302_622_7);
+    let mask_q_1 = f32::new(2.888_590_8);
+    let mask_q_2 = f32::new(3.680_771_3);
+    let pu_scale = f32::new(0.160_188_4); // 10^MASK_C with MASK_C = -0.79549712
+    let d_max_lin = f32::new(366.732_25); // 10^D_MAX with D_MAX = 2.5642455
+
+    // XCM_3X3 (row-major: [in][out]) baked as scalar consts.
+    let xcm_00 = f32::new(0.876_968);
+    let xcm_01 = f32::new(0.016_103_15);
+    let xcm_02 = f32::new(0.050_159_38);
+    let xcm_10 = f32::new(5.918_792);
+    let xcm_11 = f32::new(1.269_323);
+    let xcm_12 = f32::new(0.152_080_92);
+    let xcm_20 = f32::new(14.041_055);
+    let xcm_21 = f32::new(0.498_209_6);
+    let xcm_22 = f32::new(0.697_756_55);
+
+    let eps = f32::new(1e-5);
+
+    let t_a = t_p_a[idx];
+    let t_rg = t_p_rg[idx];
+    let t_vy = t_p_vy[idx];
+    let r_a = r_p_a[idx];
+    let r_rg = r_p_rg[idx];
+    let r_vy = r_p_vy[idx];
+
+    let abs_t_a = if t_a < f32::new(0.0) { -t_a } else { t_a };
+    let abs_t_rg = if t_rg < f32::new(0.0) { -t_rg } else { t_rg };
+    let abs_t_vy = if t_vy < f32::new(0.0) { -t_vy } else { t_vy };
+    let abs_r_a = if r_a < f32::new(0.0) { -r_a } else { r_a };
+    let abs_r_rg = if r_rg < f32::new(0.0) { -r_rg } else { r_rg };
+    let abs_r_vy = if r_vy < f32::new(0.0) { -r_vy } else { r_vy };
+
+    // M_mm = min(|T_p|, |R_p|) * 10^mask_c.
+    let mm_a = if abs_t_a < abs_r_a { abs_t_a } else { abs_r_a };
+    let mm_rg = if abs_t_rg < abs_r_rg { abs_t_rg } else { abs_r_rg };
+    let mm_vy = if abs_t_vy < abs_r_vy { abs_t_vy } else { abs_r_vy };
+    let m_mm_a = mm_a * pu_scale;
+    let m_mm_rg = mm_rg * pu_scale;
+    let m_mm_vy = mm_vy * pu_scale;
+
+    // term[c] = safe_pow(|M_mm[c]|, q[c]). safe_pow(x, p) = (x+eps)^p - eps^p.
+    let term_a = f32::powf(m_mm_a + eps, mask_q_0) - f32::powf(eps, mask_q_0);
+    let term_rg = f32::powf(m_mm_rg + eps, mask_q_1) - f32::powf(eps, mask_q_1);
+    let term_vy = f32::powf(m_mm_vy + eps, mask_q_2) - f32::powf(eps, mask_q_2);
+
+    // M[c] = sum_in xcm[in, c] * term[in].
+    let m_a_pool = xcm_00 * term_a + xcm_10 * term_rg + xcm_20 * term_vy;
+    let m_rg_pool = xcm_01 * term_a + xcm_11 * term_rg + xcm_21 * term_vy;
+    let m_vy_pool = xcm_02 * term_a + xcm_12 * term_rg + xcm_22 * term_vy;
+
+    // D[c] = clamp_diffs(safe_pow(|T_p[c] - R_p[c]|, p) / (1 + M[c])).
+    let diff_a = t_a - r_a;
+    let abs_diff_a = if diff_a < f32::new(0.0) { -diff_a } else { diff_a };
+    let diff_rg = t_rg - r_rg;
+    let abs_diff_rg = if diff_rg < f32::new(0.0) { -diff_rg } else { diff_rg };
+    let diff_vy = t_vy - r_vy;
+    let abs_diff_vy = if diff_vy < f32::new(0.0) { -diff_vy } else { diff_vy };
+
+    let sp_a = f32::powf(abs_diff_a + eps, mask_p) - f32::powf(eps, mask_p);
+    let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
+    let sp_vy = f32::powf(abs_diff_vy + eps, mask_p) - f32::powf(eps, mask_p);
+
+    let d_u_a = sp_a / (f32::new(1.0) + m_a_pool);
+    let d_u_rg = sp_rg / (f32::new(1.0) + m_rg_pool);
+    let d_u_vy = sp_vy / (f32::new(1.0) + m_vy_pool);
+
+    d_a[idx] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
+    d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
+    d_vy[idx] = d_max_lin * d_u_vy / (d_max_lin + d_u_vy);
+}
+
+/// Legacy stub kept while pipeline.rs continues to reference it.
+/// New consumers should use `mult_mutual_3ch_no_blur_kernel`.
 #[cube(launch)]
 #[allow(unused_variables)]
 pub fn masked_diff_kernel(
