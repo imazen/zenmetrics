@@ -48,9 +48,13 @@
 use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
-use crate::kernels::csf::{flatten_band_weights, precomputed_band_weights, weight_band_kernel};
+use crate::kernels::csf::{
+    CsfChannel, csf_apply_per_pixel_kernel, flatten_band_weights, precompute_logs_row,
+    precomputed_band_weights, weight_band_kernel,
+};
+use crate::kernels::masking::CH_GAIN;
 use crate::kernels::pyramid::{
-    downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
+    band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
     weber_contrast_compute_kernel,
 };
 use crate::params::CvvdpParams;
@@ -670,6 +674,117 @@ impl<R: Runtime> Cvvdp<R> {
         log_l_bkg_out.push(vec![log_l_bkg_baseband; baseband_n]);
 
         Ok((bands_out, log_l_bkg_out))
+    }
+
+    /// Run color + Weber-contrast pyramid + per-pixel CSF apply on
+    /// GPU. Returns the `T_p` bands that the masking stage consumes:
+    ///
+    /// ```text
+    /// T_p[k][c][i] = band_mul[k] * weber[k][c][i] * S(rho_k, log_l_bkg[k][i], c) * CH_GAIN_eff
+    /// ```
+    ///
+    /// where:
+    /// - `band_mul = 1.0` for the first level (`k == 0`) and baseband
+    ///   (`k == N-1`), `2.0` otherwise. Matches cvvdp's
+    ///   `lpyr.get_band` ×2 band-readout gain on non-edge levels.
+    /// - `S` is the per-pixel CSF sensitivity (with the
+    ///   `sensitivity_correction` log offset baked in) from the
+    ///   `csf_lut_weber_fixed_size` LUT. The kernel interpolates
+    ///   `logs_row[rho_k, c]` along the per-pixel `log10(L_bkg)` axis.
+    /// - `CH_GAIN_eff = CH_GAIN[c] = [1, 1.45, 1]` for non-baseband
+    ///   levels. For the baseband, cvvdp's `apply_masking_model`
+    ///   bypasses `CH_GAIN`, so this helper sets `CH_GAIN_eff = 1.0`
+    ///   on the baseband — the caller can still subtract sides
+    ///   directly to obtain the per-channel `D` (cvvdp's baseband
+    ///   formula is `|T_p - R_p|` with `CH_GAIN` absorbed only in
+    ///   `T_p` / `R_p` of non-baseband bands).
+    ///
+    /// `ppd` is pixels-per-degree (from `DisplayGeometry::pixels_per_degree()`).
+    /// Each level's `rho_k` is resolved via
+    /// [`crate::kernels::pyramid::band_frequencies`].
+    ///
+    /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
+    /// as `compute_dkl_weber_pyramid`'s `.0`.
+    pub fn compute_dkl_t_p_bands(
+        &mut self,
+        srgb: &[u8],
+        ppd: f32,
+    ) -> Result<Vec<[Vec<f32>; 3]>> {
+        // Build Weber bands + log_l_bkg on GPU. Side effect leaves
+        // weber bands resident in self.bands_ref and log_l_bkg as
+        // host-side data.
+        let (weber_bands, log_l_bkg) = self.compute_dkl_weber_pyramid(srgb)?;
+        let n_levels = self.n_levels as usize;
+        let freqs = band_frequencies(ppd, self.width as usize, self.height as usize);
+
+        let cube_dim = CubeDim::new_1d(64);
+        let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+        let mut t_p_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let rho_k = freqs[k];
+            let is_first = k == 0;
+            let is_baseband = k == n_levels - 1;
+            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            let bw = if k == 0 {
+                self.width as usize
+            } else {
+                (self.width as usize) >> k
+            };
+            let bh = if k == 0 {
+                self.height as usize
+            } else {
+                (self.height as usize) >> k
+            };
+            let n_px = bw * bh;
+            debug_assert_eq!(weber_bands[k][0].len(), n_px);
+            debug_assert_eq!(log_l_bkg[k].len(), n_px);
+
+            let log_l_bkg_h = self
+                .client
+                .create_from_slice(f32::as_bytes(&log_l_bkg[k]));
+
+            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+
+            for (c, cc) in csf_channels.iter().enumerate() {
+                let logs_row = precompute_logs_row(rho_k, *cc);
+                let logs_row_h = self.client.create_from_slice(f32::as_bytes(&logs_row));
+                let weber_h = self
+                    .client
+                    .create_from_slice(f32::as_bytes(&weber_bands[k][c]));
+                let t_p_h = alloc_zeros_f32(&self.client, n_px);
+
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
+
+                unsafe {
+                    csf_apply_per_pixel_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(weber_h, n_px),
+                        ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
+                        ArrayArg::from_raw_parts(logs_row_h, 32),
+                        ArrayArg::from_raw_parts(t_p_h.clone(), n_px),
+                        ch_gain_eff,
+                        n_px as u32,
+                    );
+                }
+
+                let bytes = self
+                    .client
+                    .read_one(t_p_h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            t_p_bands.push(planes);
+        }
+
+        Ok(t_p_bands)
     }
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.

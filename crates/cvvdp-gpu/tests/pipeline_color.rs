@@ -374,3 +374,132 @@ fn compute_dkl_weber_pyramid_matches_host_scalar() {
         );
     }
 }
+
+#[test]
+fn compute_dkl_t_p_bands_matches_host_scalar() {
+    // GPU Weber pyramid + per-pixel CSF apply → T_p bands, compared
+    // against the same formula computed entirely in host scalar
+    // (sensitivity_corrected_scalar per pixel × CH_GAIN × band_mul).
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp_gpu::kernels::masking::CH_GAIN;
+    use cvvdp_gpu::kernels::pyramid::band_frequencies;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            srgb[i] = r;
+            srgb[i + 1] = g;
+            srgb[i + 2] = b;
+        }
+    }
+
+    // GPU T_p.
+    let t_p_gpu = cvvdp
+        .compute_dkl_t_p_bands(&srgb, ppd)
+        .expect("compute_dkl_t_p_bands");
+
+    // Host reference: build Weber pyramid + per-pixel CSF apply by hand.
+    let n_px = (w * h) as usize;
+    let display = DisplayModel::STANDARD_4K;
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+    for (i, chunk) in srgb.chunks_exact(3).enumerate() {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            chunk[0],
+            chunk[1],
+            chunk[2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+
+    let n_levels = t_p_gpu.len();
+    let host_per_ch = [
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[0],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[1],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[2],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+    ];
+
+    let freqs = band_frequencies(ppd, w as usize, h as usize);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = host_per_ch[0].bands[k].w;
+        let bh = host_per_ch[0].bands[k].h;
+        let n_band = bw * bh;
+        let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
+
+        for c in 0..3 {
+            let weber_c = &host_per_ch[c].bands[k].data;
+            let mut host_t_p = vec![0.0_f32; n_band];
+            for i in 0..n_band {
+                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+                host_t_p[i] = weber_c[i] * s * ch_gain_eff;
+            }
+            assert_eq!(
+                t_p_gpu[k][c].len(),
+                host_t_p.len(),
+                "level {k} channel {c} size mismatch"
+            );
+            let max_err = t_p_gpu[k][c]
+                .iter()
+                .zip(&host_t_p)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            // T_p magnitudes span 10-100s once band_mul * CH_GAIN *
+            // CSF S (typ. 10-300) multiply the Weber band. The GPU
+            // path uses uniform-axis-step arithmetic for the
+            // log_L_bkg interp while the host uses binary-search
+            // interp1_clamped — bit-identical for interior values
+            // but accumulating f32 noise through the chain. Use a
+            // relative tolerance to absorb the magnitude variation.
+            let max_t_p_mag = host_t_p
+                .iter()
+                .map(|v| v.abs())
+                .fold(0.0_f32, f32::max)
+                .max(1.0);
+            let rel_err = max_err / max_t_p_mag;
+            assert!(
+                rel_err < 5e-3,
+                "T_p level {k} channel {c}: max-abs GPU vs host = {max_err}, \
+                 relative = {rel_err:.4e}, max-abs |host T_p| = {max_t_p_mag}"
+            );
+        }
+    }
+}
