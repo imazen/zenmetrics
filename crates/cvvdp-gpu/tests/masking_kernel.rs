@@ -312,3 +312,87 @@ fn mult_mutual_with_blurred_pipeline_matches_host() {
     }
     eprintln!("blur-path max relative error: {max_rel:.4e}");
 }
+
+#[test]
+fn min_abs_3ch_kernel_matches_host_minabs() {
+    // `min_abs_3ch_kernel` computes M_mm_raw[c] = min(|T_p[c]|, |R_p[c]|)
+    // per channel per pixel — the raw masker before phase-uncertainty
+    // (the small-band branch inlines this step inside
+    // mult_mutual_3ch_no_blur_kernel, so this test pins the standalone
+    // kernel that the blur-path uses upstream of pu_blur_{h,v}_kernel).
+    //
+    // Host reference is the formula itself: trivially bit-exact when
+    // floats agree on negation + magnitude comparison.
+    let client = Backend::client(&Default::default());
+    let n = 32usize;
+
+    // Inputs span negative + positive, including pairs where the sign
+    // of T vs R differs but |T| < |R|, and edge cases at 0.0.
+    let t_a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.41).sin() * 3.5).collect();
+    let t_rg: Vec<f32> = (0..n)
+        .map(|i| {
+            let x = (i as f32) - 16.0;
+            x * 0.25
+        })
+        .collect();
+    let t_vy: Vec<f32> = (0..n)
+        .map(|i| if i.is_multiple_of(3) { 0.0 } else { i as f32 * -0.13 })
+        .collect();
+    let r_a: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.31 + 0.7).cos() * 4.0)
+        .collect();
+    let r_rg: Vec<f32> = (0..n).map(|i| ((i as f32) - 18.0) * 0.2).collect();
+    let r_vy: Vec<f32> = (0..n).map(|i| (i as f32 * 0.07).sin() * 1.2).collect();
+
+    let t_a_h = client.create_from_slice(f32::as_bytes(&t_a));
+    let t_rg_h = client.create_from_slice(f32::as_bytes(&t_rg));
+    let t_vy_h = client.create_from_slice(f32::as_bytes(&t_vy));
+    let r_a_h = client.create_from_slice(f32::as_bytes(&r_a));
+    let r_rg_h = client.create_from_slice(f32::as_bytes(&r_rg));
+    let r_vy_h = client.create_from_slice(f32::as_bytes(&r_vy));
+    let m_a_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let m_rg_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let m_vy_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        min_abs_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(t_a_h.clone(), n),
+            ArrayArg::from_raw_parts(t_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(t_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(r_a_h.clone(), n),
+            ArrayArg::from_raw_parts(r_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(r_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(m_a_h.clone(), n),
+            ArrayArg::from_raw_parts(m_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(m_vy_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let m_a_bytes = client.read_one(m_a_h.clone()).expect("read M_a");
+    let m_rg_bytes = client.read_one(m_rg_h.clone()).expect("read M_rg");
+    let m_vy_bytes = client.read_one(m_vy_h.clone()).expect("read M_vy");
+    let m_a_gpu: &[f32] = f32::from_bytes(&m_a_bytes);
+    let m_rg_gpu: &[f32] = f32::from_bytes(&m_rg_bytes);
+    let m_vy_gpu: &[f32] = f32::from_bytes(&m_vy_bytes);
+
+    for i in 0..n {
+        for (tag, gpu, t, r) in [
+            ("A", m_a_gpu[i], t_a[i], r_a[i]),
+            ("RG", m_rg_gpu[i], t_rg[i], r_rg[i]),
+            ("VY", m_vy_gpu[i], t_vy[i], r_vy[i]),
+        ] {
+            let expected = t.abs().min(r.abs());
+            assert!(
+                (gpu - expected).abs() <= f32::EPSILON * expected.abs().max(1.0),
+                "ch {tag} pixel {i}: gpu={gpu} expected={expected} (t={t}, r={r})"
+            );
+        }
+    }
+}
