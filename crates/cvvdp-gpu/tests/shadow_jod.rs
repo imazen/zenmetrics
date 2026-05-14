@@ -9,20 +9,19 @@
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~5.9
-//!   5    8.89               ~6.8
-//!   20   9.71               ~8.1
-//!   45   9.83               ~8.0
-//!   70   9.89               ~8.4
-//!   90   9.99               ~8.6
+//!   1    7.65               ~8.4   (overshoots)
+//!   5    8.89               ~9.3   (overshoots)
+//!   20   9.71               ~9.8
+//!   45   9.83               ~9.9
+//!   70   9.89               ~9.96
+//!   90   9.99               ~10.0
 //! ```
 //!
-//! Remaining gap (~1.4 JOD at high q) attributed to:
-//! - **`weber_contrast_pyr` not yet ported**: cvvdp v0.5.4's actual
-//!   pyramid for `contrast = "weber_g1"` is NOT vanilla Laplacian;
-//!   it produces Weber-contrast bands and implicitly log10s the
-//!   gauss output. The Rust port still uses vanilla Laplacian + an
-//!   explicit log10 in host_scalar. See PORT_STATUS for details.
+//! Shadow now sits 0–0.7 JOD ABOVE pycvvdp's manifest values.
+//! Likely causes of the overshoot (each their own next chunk):
+//! - **`band_mul = 2.0`** for non-edge Laplacian bands (cvvdp's
+//!   `lpyr.get_band` applies this; our Weber pyramid output doesn't).
+//! - **Baseband bypass formula** (`|T_f - R_f| * S`, no masking).
 //!
 //! Both produce a JOD that broadly increases with q, but the
 //! shadow's absolute scale is ~2-3 JOD lower. The non-monotone

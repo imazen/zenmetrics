@@ -318,6 +318,156 @@ pub fn laplacian_pyramid_dec_scalar(
     bands
 }
 
+/// Output of `weber_contrast_pyr_dec_scalar`: Weber-contrast bands
+/// plus the per-band per-pixel log10 background luminance the CSF
+/// stage consumes.
+pub struct WeberPyramid {
+    pub bands: Vec<Band>,
+    /// `log10(L_bkg)` per band — shape matches each band's spatial
+    /// dimensions for non-baseband levels, and is a 1×1 spatial
+    /// mean for the baseband (cvvdp's `weber_contrast_pyr`).
+    pub log_l_bkg: Vec<Vec<f32>>,
+}
+
+/// Single-channel Weber-contrast pyramid for cvvdp v0.5.4's
+/// `contrast = "weber_g1"` path. Mirrors `weber_contrast_pyr.decompose`:
+///
+/// For each non-baseband level `k`:
+/// 1. `expanded = expand(gauss[k+1])` — same dims as `gauss[k]`.
+/// 2. `layer = gauss[k] - expanded` (Laplacian-style difference).
+/// 3. `L_bkg = clamp(expanded, min=0.01)` (achromatic gauss; same
+///    field used for all 3 DKL channels in the cvvdp pipeline).
+/// 4. `contrast = clamp(layer / L_bkg, max=1000)`.
+///
+/// For the baseband (coarsest level):
+/// 1. `layer = gauss[N-1]`.
+/// 2. `L_bkg = mean(clamp(gauss_A[N-1], min=0.01))` — a SCALAR
+///    (mean over spatial). Both test and ref end up dividing the
+///    same image's gauss by its own mean: contrast would otherwise
+///    be 1 everywhere.
+/// 3. `contrast = layer / L_bkg`.
+///
+/// `log_l_bkg` stores `log10(L_bkg)` per band — per-pixel for
+/// non-baseband, replicated scalar for baseband.
+///
+/// `l_bkg_channel_data` is the SEPARATE achromatic channel used to
+/// compute L_bkg. cvvdp's weber_g1 path uses each image's own
+/// achromatic gauss as its L_bkg (i.e. for ref-side bands, use
+/// gauss_ref_A; for dist-side bands, use gauss_dist_A). For a
+/// callee processing one image at a time, pass the image's own
+/// achromatic Gaussian pyramid.
+pub fn weber_contrast_pyr_dec_scalar(
+    image_plane: &[f32],
+    l_bkg_plane: &[f32],
+    sw: usize,
+    sh: usize,
+    n_levels: usize,
+) -> WeberPyramid {
+    let n = if n_levels == 0 {
+        sw.min(sh).ilog2() as usize
+    } else {
+        n_levels
+    };
+    debug_assert!(n >= 1);
+
+    // Build separate Gaussian pyramids for the image plane and the
+    // L_bkg plane. They may be the same plane (single channel) but
+    // are passed separately so the caller can use the achromatic
+    // channel as L_bkg for chroma bands.
+    fn build_pyr(src: &[f32], sw: usize, sh: usize, n: usize) -> Vec<Band> {
+        let mut p = Vec::with_capacity(n);
+        p.push(Band {
+            w: sw,
+            h: sh,
+            data: src.to_vec(),
+        });
+        let mut w = sw;
+        let mut h = sh;
+        for _ in 1..n {
+            let mut next = Vec::new();
+            let (nw, nh) = gausspyr_reduce_scalar(&p.last().unwrap().data, w, h, &mut next);
+            p.push(Band {
+                w: nw,
+                h: nh,
+                data: next,
+            });
+            w = nw;
+            h = nh;
+        }
+        p
+    }
+    let gauss_img = build_pyr(image_plane, sw, sh, n);
+    let gauss_l = build_pyr(l_bkg_plane, sw, sh, n);
+
+    let mut bands: Vec<Band> = Vec::with_capacity(n);
+    let mut log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n);
+
+    let mut expanded_buf = Vec::new();
+    for k in 0..n {
+        let is_baseband = k == n - 1;
+        let fine = &gauss_img[k];
+        let l_fine = &gauss_l[k];
+        let n_px = fine.w * fine.h;
+
+        if is_baseband {
+            // L_bkg = scalar mean over the achromatic baseband.
+            let sum: f32 = l_fine.data.iter().map(|v| v.max(0.01)).sum();
+            let l_bkg_mean = sum / l_fine.data.len() as f32;
+            let log_l = l_bkg_mean.log10();
+            let mut contrast = vec![0.0_f32; n_px];
+            for i in 0..n_px {
+                contrast[i] = fine.data[i] / l_bkg_mean;
+            }
+            bands.push(Band {
+                w: fine.w,
+                h: fine.h,
+                data: contrast,
+            });
+            log_l_bkg.push(vec![log_l; n_px]);
+        } else {
+            // expanded gauss[k+1] → fine dims
+            let coarse = &gauss_l[k + 1];
+            gausspyr_expand_scalar(
+                &coarse.data,
+                coarse.w,
+                coarse.h,
+                fine.w,
+                fine.h,
+                &mut expanded_buf,
+            );
+            // Build the laplacian-style layer from the IMAGE's gauss,
+            // not the l_bkg's gauss (the two differ for chroma channels).
+            let img_coarse = &gauss_img[k + 1];
+            let mut img_expanded = Vec::new();
+            gausspyr_expand_scalar(
+                &img_coarse.data,
+                img_coarse.w,
+                img_coarse.h,
+                fine.w,
+                fine.h,
+                &mut img_expanded,
+            );
+
+            let mut contrast = vec![0.0_f32; n_px];
+            let mut log_l = vec![0.0_f32; n_px];
+            for i in 0..n_px {
+                let l_bkg = expanded_buf[i].max(0.01);
+                let layer = fine.data[i] - img_expanded[i];
+                let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
+                contrast[i] = c;
+                log_l[i] = l_bkg.log10();
+            }
+            bands.push(Band {
+                w: fine.w,
+                h: fine.h,
+                data: contrast,
+            });
+            log_l_bkg.push(log_l);
+        }
+    }
+    WeberPyramid { bands, log_l_bkg }
+}
+
 /// 2× downscale with the cvvdp 5-tap Gaussian. Per-output-pixel
 /// thread; each thread reads 25 source pixels (5 × 5 reflected
 /// taps) and emits one f32. Equivalent to two-pass separable conv
