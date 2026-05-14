@@ -199,7 +199,11 @@ pub fn csf_apply_per_pixel_kernel(
     let hi = logs_row[hi_idx];
     let log_s_raw = lo + frac * (hi - lo);
     let log_s_corr = log_s_raw + log_correction;
-    let s = f32::powf(f32::new(10.0), log_s_corr);
+    // 10^x = exp(x * ln(10)). `exp` typically maps to a single
+    // hardware instruction on cubecl backends while `powf(10, x)`
+    // takes the general powf path (uses logs/exps internally).
+    let ln_10 = f32::new(2.302_585_1);
+    let s = f32::exp(log_s_corr * ln_10);
 
     t_p[idx] = weber[idx] * s * ch_gain;
 }
@@ -257,25 +261,29 @@ pub fn csf_apply_3ch_kernel(
     let lo_idx = lo_idx_f as u32 as usize;
     let hi_idx = lo_idx + 1;
 
+    // 10^x = exp(x * ln(10)) — single-instruction `exp` is faster
+    // than the general-purpose `powf`. Shared across channels.
+    let ln_10 = f32::new(2.302_585_1);
+
     // A channel.
     let lo_a = logs_row_a[lo_idx];
     let hi_a = logs_row_a[hi_idx];
     let log_s_a = lo_a + frac * (hi_a - lo_a) + log_correction;
-    let s_a = f32::powf(f32::new(10.0), log_s_a);
+    let s_a = f32::exp(log_s_a * ln_10);
     t_p_a[idx] = weber_a[idx] * s_a * ch_gain_a;
 
     // RG channel.
     let lo_rg = logs_row_rg[lo_idx];
     let hi_rg = logs_row_rg[hi_idx];
     let log_s_rg = lo_rg + frac * (hi_rg - lo_rg) + log_correction;
-    let s_rg = f32::powf(f32::new(10.0), log_s_rg);
+    let s_rg = f32::exp(log_s_rg * ln_10);
     t_p_rg[idx] = weber_rg[idx] * s_rg * ch_gain_rg;
 
     // VY channel.
     let lo_vy = logs_row_vy[lo_idx];
     let hi_vy = logs_row_vy[hi_idx];
     let log_s_vy = lo_vy + frac * (hi_vy - lo_vy) + log_correction;
-    let s_vy = f32::powf(f32::new(10.0), log_s_vy);
+    let s_vy = f32::exp(log_s_vy * ln_10);
     t_p_vy[idx] = weber_vy[idx] * s_vy * ch_gain_vy;
 }
 
