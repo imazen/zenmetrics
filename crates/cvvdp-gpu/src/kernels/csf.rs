@@ -95,28 +95,28 @@ fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
 /// - `l_bkg`   — background luminance in cd/m² (must be > 0)
 /// - `cc`      — opponent channel
 ///
-/// Returns sensitivity `S` such that the band is weighted by `S` (or
-/// `S * S` if the metric squares it; cvvdp does the per-channel
-/// scaling separately). Pre-correction; the
-/// `10 ** (SENSITIVITY_CORRECTION_DB / 20)` multiplier is applied by
-/// `sensitivity_corrected_scalar`.
+/// cvvdp v0.5.4 quirk: although the LUT's L_bkg axis is in log10
+/// space, cvvdp's call site (`cvvdp_metric.py:651`) passes the
+/// **raw** linear luminance from the Gaussian pyramid as the
+/// `logL_bkg` argument (variable misnamed; no log10 applied). The
+/// `interp1q` clamps queries outside the axis range, so for the
+/// typical L_bkg = 10–200 cd/m² range this saturates at the
+/// log_L_bkg axis maximum (= 4.0 → L = 10⁴), giving roughly
+/// constant max sensitivity. We replicate this raw-input behaviour
+/// for parity. Pass `l_bkg.log10()` here if you want the
+/// physically-correct lookup.
 pub fn sensitivity_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
     let log_rho_q = rho.max(1e-6).log10();
-    let log_l_bkg_q = l_bkg.max(1e-6).log10();
+    let l_bkg_q = l_bkg; // raw — matches cvvdp's quirky parameter handling
     let lut = channel_lut(cc);
 
-    // Step 1: interpolate along rho for each L_bkg row.
-    // Matches pycvvdp's batch_interp1d + interp1q sequence: first
-    // pull a 1-D vector of logS values as a function of L_bkg, with
-    // rho fixed; then interpolate that across L_bkg.
     let mut logs_row = [0.0_f32; N_L_BKG];
     for l_idx in 0..N_L_BKG {
         let row = &lut[l_idx * N_RHO..(l_idx + 1) * N_RHO];
         logs_row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, row, log_rho_q);
     }
 
-    // Step 2: interpolate along L_bkg.
-    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg_q);
+    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, l_bkg_q);
 
     10.0_f32.powf(log_s)
 }

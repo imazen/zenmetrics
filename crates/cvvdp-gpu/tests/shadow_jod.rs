@@ -9,17 +9,18 @@
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~6.0
-//!   5    8.89               ~6.9
-//!   20   9.71               ~8.1
-//!   45   9.83               ~8.0
-//!   70   9.89               ~8.4
-//!   90   9.99               ~8.6
+//!   1    7.65               ~6.3
+//!   5    8.89               ~7.0
+//!   20   9.71               ~8.5
+//!   45   9.83               ~8.4
+//!   70   9.89               ~8.8
+//!   90   9.99               ~9.0
 //! ```
 //!
-//! Remaining gap (~1.0-1.5 JOD at high q) attributed to:
+//! Remaining gap (~1.0 JOD at high q) attributed to:
 //! - **Global L_bkg approximation**: cvvdp uses per-pixel L_bkg
-//!   from achromatic gauss[1].
+//!   from the reference's achromatic Gaussian-pyramid level
+//!   matching each band.
 //!
 //! Both produce a JOD that broadly increases with q, but the
 //! shadow's absolute scale is ~2-3 JOD lower. The non-monotone
