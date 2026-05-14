@@ -169,8 +169,11 @@ struct SweepArgs {
     /// CubeCL runtime selector for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
-    /// Reserved for future fan-out. Currently serial.
-    #[arg(long, default_value = "1")]
+    /// CPU thread budget for the per-image inner cell loop. `0` (default)
+    /// uses rayon's auto-detection (one thread per logical core). `1`
+    /// forces serial execution. Higher values cap the rayon pool.
+    /// GPU metrics still serialize through one CubeCL stream regardless.
+    #[arg(long, default_value = "0")]
     jobs: usize,
 }
 
@@ -267,6 +270,11 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("no source files found in {}", args.sources.display()).into());
     }
 
+    // Default: 0 → use rayon's auto-detected num_cpus. Allow override
+    // via --jobs N. Old behaviour (`--jobs 1`, serial) preserved for
+    // debugging.
+    let jobs = if args.jobs == 0 { 0 } else { args.jobs };
+    crate::sweep::try_init_thread_pool(jobs)?;
     let cfg = SweepConfig {
         codec: args.codec,
         sources,
@@ -276,6 +284,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         gpu_runtime: args.gpu_runtime,
         output: args.output,
         feature_output: args.feature_output,
+        jobs,
     };
     let stats = run_sweep(&cfg)?;
     eprintln!(

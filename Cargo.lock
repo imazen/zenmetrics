@@ -1782,9 +1782,9 @@ dependencies = [
 
 [[package]]
 name = "garb"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae3f56f280a24621bef5778559c4502d10136565311efa37a7b4ca257dce00ed"
+checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
 dependencies = [
  "archmage",
  "bytemuck",
@@ -4570,15 +4570,18 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "ultrahdr-core"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "964a038e0f75524ef9bd01ee6bda6d2457a3b6c1ca8df22478b9bb94b3547669"
+checksum = "1d65bd22a90785bb7360076b599ffbc201aef2c5817d2e5f37f37357829d476e"
 dependencies = [
  "bytemuck",
  "enough",
  "half",
+ "linear-srgb",
  "thiserror",
  "wide 1.3.0",
+ "zencodec",
+ "zenpixels",
 ]
 
 [[package]]
@@ -5579,6 +5582,7 @@ dependencies = [
  "imgref",
  "jxl-encoder",
  "parquet",
+ "rayon",
  "rgb",
  "serde",
  "serde_json",
@@ -5593,6 +5597,18 @@ dependencies = [
  "zenpng",
  "zensim",
  "zenwebp",
+]
+
+[[package]]
+name = "zenanalyze"
+version = "0.1.0"
+dependencies = [
+ "archmage",
+ "garb",
+ "linear-srgb",
+ "magetypes",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -5671,27 +5687,27 @@ dependencies = [
 
 [[package]]
 name = "zenjpeg"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234cde6246c6168bff9330d6fd196d1b92bec76945cd5666e492acaaf9421468"
+version = "0.8.4"
 dependencies = [
  "aligned-vec",
  "archmage",
  "bytemuck",
  "enough",
+ "garb",
  "imgref",
  "linear-srgb",
  "magetypes",
+ "memchr",
  "rgb",
  "safe_unaligned_simd",
  "thiserror",
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "wide 1.3.0",
- "yuv",
+ "zenanalyze",
  "zencodec",
  "zenpixels",
+ "zenyuv 0.1.3",
 ]
 
 [[package]]
@@ -5921,7 +5937,18 @@ dependencies = [
  "thiserror",
  "whereat",
  "zenpixels",
- "zenyuv",
+ "zenyuv 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "zenyuv"
+version = "0.1.3"
+dependencies = [
+ "archmage",
+ "libm",
+ "linear-srgb",
+ "magetypes",
+ "safe_unaligned_simd",
 ]
 
 [[package]]

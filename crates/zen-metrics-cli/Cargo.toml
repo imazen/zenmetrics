@@ -19,15 +19,14 @@ path = "src/main.rs"
 # build cleanly against the latest archmage / magetypes. JPEG is omitted
 # from the default set because zenjpeg 0.8.3 does not yet build against
 # magetypes 0.9.x — see the `jpeg` feature note below.
-default = ["png", "webp", "avif", "jxl", "cpu-metrics"]
+default = ["png", "jpeg", "webp", "avif", "jxl", "cpu-metrics"]
 
 # Decoder feature flags
 png = ["dep:zenpng"]
-# Optional: enables the `zenjpeg` decoder. The published 0.8.3 version
-# fails to compile against magetypes >= 0.9 (see the issue tracker).
-# Until a fixed release lands the CLI does not include JPEG support; once
-# it does, opt in with `--features jpeg`.
-jpeg = ["dep:zenjpeg"]
+# Enables the `zenjpeg` decoder + sweep encoder. We pin to a path dep on
+# the in-workspace zenjpeg 0.8.4 (sibling repo), which restores
+# magetypes >= 0.9 compatibility and adds the `__expert` knob bundle.
+jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
 webp = ["dep:zenwebp"]
 avif = ["dep:zenavif"]
 jxl = ["dep:zenjxl"]
@@ -82,13 +81,20 @@ gpu-cpu = [
 # Codec coverage at zen-metrics-cli 0.3.0:
 # - zenwebp 0.4.5, zenavif 0.1.7, zenjxl 0.2.1 each ship `__expert` and we
 #   opt in here for the full knob bundle.
-# - zenjpeg 0.8.3 (published) has no `__expert` feature — it lands in 0.8.4.
-#   For now the sweep driver does not include zenjpeg; it can be added once
-#   0.8.4 (or a `path = ...` override) is wired through.
+# - zenjpeg 0.8.4 (path dep on the sibling repo) ships `__expert`, so the
+#   sweep driver pulls it in alongside the other codecs.
 sweep = [
+    "jpeg",
     "webp",
     "avif",
     "jxl",
+    "zenjpeg?/__expert",
+    "zenjpeg?/trellis",
+    # `__test-utils` re-exposes the otherwise-`pub(crate)` `zenjpeg::encode`
+    # module so the sweep harness can reach `QuantTableSource` and
+    # `HybridConfig` (these are field types of the public `InternalParams`
+    # bundle but aren't re-exported through `zenjpeg::encoder::*`).
+    "zenjpeg?/__test-utils",
     "zenwebp?/__expert",
     "zenavif?/__expert",
     "zenjxl?/__expert",
@@ -128,10 +134,15 @@ serde = { workspace = true, features = ["derive"] }
 # keys (reference → variant → scores), matching the documented schema.
 serde_json = { workspace = true, features = ["preserve_order"] }
 csv = { workspace = true }
+# Inner-loop parallelism in the sweep runner. CPU metrics already use
+# rayon internally for SIMD; we add per-cell rayon at the outer level so
+# one zen-metrics process saturates all cores natively, replacing the
+# `xargs -P` shell-level fan-out used in earlier sweeps.
+rayon = "1"
 
 # zen image decoders
 zenpng = { version = "0.1.4", optional = true }
-zenjpeg = { version = "0.8.3", optional = true }
+zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, optional = true, features = ["decoder"] }
 zenwebp = { version = "0.4.5", optional = true }
 zenavif = { version = "0.1.7", optional = true }
 zenjxl = { version = "0.2.1", optional = true }
