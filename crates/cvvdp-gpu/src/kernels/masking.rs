@@ -203,7 +203,7 @@ pub fn pu_blur_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
 
     // Reflect-12 unroll, inline. For each tap t in 0..13, source
     // index is x + (t - half), reflected into [0, w).
-    let s0 = reflect_pu_idx(x_i + 0 - half, w_i);
+    let s0 = reflect_pu_idx(x_i - half, w_i);
     let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
     let s2 = reflect_pu_idx(x_i + 2 - half, w_i);
     let s3 = reflect_pu_idx(x_i + 3 - half, w_i);
@@ -262,7 +262,7 @@ pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
     let k11 = f32::new(3.416_694_2e-2);
     let k12 = f32::new(1.854_402_2e-2);
 
-    let s0 = reflect_pu_idx(y_i + 0 - half, h_i);
+    let s0 = reflect_pu_idx(y_i - half, h_i);
     let s1 = reflect_pu_idx(y_i + 1 - half, h_i);
     let s2 = reflect_pu_idx(y_i + 2 - half, h_i);
     let s3 = reflect_pu_idx(y_i + 3 - half, h_i);

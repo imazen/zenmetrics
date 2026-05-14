@@ -91,14 +91,13 @@ fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
 
 /// Host-scalar CSF sensitivity for still-image cvvdp (omega = 0).
 ///
-/// - `rho`      — spatial frequency in cy/deg
+/// - `rho` — spatial frequency in cy/deg.
 /// - `log_l_bkg` — log10 of background luminance in cd/m². cvvdp's
-///                `csf.sensitivity()` expects this argument already in
-///                log10 space (matches the LUT's L_bkg axis). The
-///                pycvvdp pipeline applies the log10 before the call
-///                via `weber_contrast_pyr` — host_scalar does it
-///                explicitly.
-/// - `cc`       — opponent channel
+///   `csf.sensitivity()` expects this argument already in log10 space
+///   (matches the LUT's L_bkg axis). The pycvvdp pipeline applies the
+///   log10 before the call via `weber_contrast_pyr` — host_scalar
+///   does it explicitly.
+/// - `cc` — opponent channel.
 pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let log_rho_q = rho.max(1e-6).log10();
     let lut = channel_lut(cc);

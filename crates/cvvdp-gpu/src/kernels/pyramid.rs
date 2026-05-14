@@ -160,9 +160,7 @@ pub fn gausspyr_expand_scalar(
     let odd_h = out_h & 1;
     let back_idx_v = out_h + 2 + odd_h;
     for x in 0..sw {
-        for slot in &mut z_v {
-            *slot = 0.0;
-        }
+        z_v.fill(0.0);
         z_v[0] = src[x];
         for ky in 0..sh {
             z_v[2 + 2 * ky] = src[ky * sw + x];
@@ -187,9 +185,7 @@ pub fn gausspyr_expand_scalar(
     let odd_w = out_w & 1;
     let back_idx_h = out_w + 2 + odd_w;
     for y in 0..out_h {
-        for slot in &mut z_h {
-            *slot = 0.0;
-        }
+        z_h.fill(0.0);
         z_h[0] = vscratch[y * sw];
         for kx in 0..sw {
             z_h[2 + 2 * kx] = vscratch[y * sw + kx];
@@ -601,7 +597,13 @@ pub fn downscale_kernel(
 /// Validity branch is dodged by mask-multiplying the coefficient:
 /// invalid taps contribute 0 to the sum, and the read index falls
 /// back to 0 to avoid OOB.
+//
+// The `0u32.into()` calls in the body bridge between native `u32`
+// literals and the cubecl IR type that the `#[cube(launch)]` macro
+// expects on each branch of the `if`/`else` chain; clippy flags
+// them as `useless_conversion` but removing them breaks the macro.
 #[cube(launch)]
+#[allow(clippy::useless_conversion)]
 pub fn upscale_v_kernel(
     src: &Array<f32>,
     dst: &mut Array<f32>,
@@ -703,7 +705,12 @@ pub fn upscale_v_kernel(
 /// kernel's output (`src_w × in_h`) and produces the full
 /// `dst_w × in_h` result. The other ×2 of the ×4 reconstruction
 /// gain lives here.
+//
+// See `upscale_v_kernel` for the rationale on the `useless_conversion`
+// allow — the `0u32.into()` branches are required by the
+// `#[cube(launch)]` macro.
 #[cube(launch)]
+#[allow(clippy::useless_conversion)]
 pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_w: u32, in_h: u32) {
     let idx = ABSOLUTE_POS;
     let total = (dst_w * in_h) as usize;
