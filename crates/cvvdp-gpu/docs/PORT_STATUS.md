@@ -10,7 +10,7 @@ Tracking faithful-port progress against the Python reference
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
 | CSF weighting      | `kernels/csf`          | scalar + weight_band_kernel + table      | 60 pts vs pycvvdp + GPU scale parity      |
-| Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
+| Contrast masking   | `kernels/masking`      | host scalar mult-mutual (no PU blur)     | 4×4×3 pycvvdp parity <1e-3 rel            |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
 | Host fold / JOD    | `pipeline`             | compute_dkl_planes wired                 | pipeline → kernel parity <3e-5            |
 
@@ -33,6 +33,13 @@ The cvvdp parameter JSON gets vendored into
 - HDR display models — sRGB-std only for the initial parity pass.
 
 ## Open questions
+
+- **Phase-uncertainty Gaussian blur** in masking. cvvdp applies a
+  σ=3 separable Gaussian to the M_mm tensor when both band dims
+  exceed `pu_padsize = 6`. The Rust port currently uses the no-blur
+  path (`M * 10^mask_c`), which is exact for small bands but
+  divergent on the larger coarse-level bands at standard_4k
+  resolution. Port the blur once whole-image parity is being chased.
 
 - **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
   of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks
