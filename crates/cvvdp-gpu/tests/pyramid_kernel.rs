@@ -16,7 +16,7 @@
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
-use cvvdp_gpu::kernels::pyramid::{downscale_kernel, gausspyr_reduce_scalar};
+use cvvdp_gpu::kernels::pyramid::{downscale_kernel, gausspyr_reduce_scalar, subtract_kernel};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -86,4 +86,44 @@ fn downscale_kernel_matches_host_scalar() {
          gpu = {gpu_out:?}\n\
          cpu = {cpu_out:?}"
     );
+}
+
+#[test]
+fn subtract_kernel_produces_band_correctly() {
+    // band[i] = fine[i] - upscaled_coarse[i]. Trivial but a regression
+    // gate against accidentally swapping operand order or zeroing.
+    let client = Backend::client(&Default::default());
+
+    let fine: Vec<f32> = (0..64).map(|i| i as f32).collect();
+    let coarse: Vec<f32> = (0..64).map(|i| (i * 2) as f32).collect();
+    let n = fine.len();
+
+    let fine_h = client.create_from_slice(f32::as_bytes(&fine));
+    let coarse_h = client.create_from_slice(f32::as_bytes(&coarse));
+    let band_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        subtract_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(fine_h.clone(), n),
+            ArrayArg::from_raw_parts(coarse_h.clone(), n),
+            ArrayArg::from_raw_parts(band_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let band_bytes = client.read_one(band_h.clone()).expect("read band");
+    let band: &[f32] = f32::from_bytes(&band_bytes);
+    for (i, &v) in band.iter().enumerate() {
+        let expected = fine[i] - coarse[i];
+        assert!(
+            (v - expected).abs() < 1e-7,
+            "band[{i}] = {v}, expected {expected}"
+        );
+    }
 }

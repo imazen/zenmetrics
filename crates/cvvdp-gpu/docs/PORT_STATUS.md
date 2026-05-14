@@ -8,7 +8,7 @@ Tracking faithful-port progress against the Python reference
 | sRGB → linear      | `kernels/color`        | host scalar + cubecl kernel body         | 2e-3 vs pycvvdp scalar goldens            |
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
-| Laplacian pyramid  | `kernels/pyramid`      | host scalar + downscale_kernel cubecl    | pycvvdp 3 bands <1e-4 + cuda kernel <1e-5 |
+| Laplacian pyramid  | `kernels/pyramid`      | scalar + downscale + subtract kernels    | pycvvdp 3 bands + 2 cuda kernels parity   |
 | CSF weighting      | `kernels/csf`          | scaffold                                 | none                                      |
 | Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
@@ -33,6 +33,15 @@ The cvvdp parameter JSON gets vendored into
 - HDR display models — sRGB-std only for the initial parity pass.
 
 ## Open questions
+
+- **upscale_kernel cubecl body**: still a stub. Fused single-pass
+  attempt hit cubecl 0.10.0-pre.4 typing friction
+  (`u32::new(0xFFFF_FFFF)` overflows the macro's i32 literal
+  expansion; bool-flag short-circuits produce a
+  `NativeExpand<u32>` vs `u32` mismatch at the cube boundary).
+  Plan: split into two kernels (vertical-then-horizontal) so each
+  has cleaner addressing and matches the host scalar's structure
+  1:1.
 
 - **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
   of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks

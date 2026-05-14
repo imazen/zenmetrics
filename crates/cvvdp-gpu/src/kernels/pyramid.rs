@@ -387,6 +387,14 @@ pub fn downscale_kernel(
 }
 
 /// 2× upscale with the cvvdp 5-tap Gaussian. Stub kernel.
+///
+/// The fused single-pass implementation hit cubecl 0.10.0-pre.4 typing
+/// friction (`u32::new(0xFFFF_FFFF)` overflows the macro's i32 literal
+/// expansion; replacement with bool-flag short-circuits produces a
+/// `NativeExpand<u32>` vs `u32` mismatch at the cube boundary). To be
+/// re-attempted as two kernels (vertical + horizontal pass with an
+/// intermediate buffer) — that path avoids the cartesian-product
+/// validity flags and matches the host scalar's structure 1:1.
 #[cube(launch)]
 #[allow(unused_variables)]
 pub fn upscale_kernel(
@@ -407,7 +415,6 @@ pub fn upscale_kernel(
 
 /// `band = fine - upscaled_coarse`.
 #[cube(launch)]
-#[allow(unused_variables)]
 pub fn subtract_kernel(
     fine: &Array<f32>,
     upscaled_coarse: &Array<f32>,
@@ -418,7 +425,7 @@ pub fn subtract_kernel(
     if idx >= n as usize {
         terminate!();
     }
-    band[idx] = 0.0;
+    band[idx] = fine[idx] - upscaled_coarse[idx];
 }
 
 #[cfg(test)]
