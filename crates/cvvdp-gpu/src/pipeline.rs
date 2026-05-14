@@ -81,8 +81,78 @@ struct Level {
     planes: [cubecl::server::Handle; N_CHANNELS],
 }
 
+/// Per-level scratch buffers reused by `compute_dkl_d_bands` so the
+/// hot loop doesn't allocate per band. At 12 MP the function would
+/// otherwise allocate ~1.5 GB of transient GPU buffers per call (3
+/// channels × 2 sides × 6 buffer kinds × per-level size). Pre-
+/// allocating once on `Cvvdp::new` keeps the steady-state cost off
+/// the per-frame budget.
+struct DBandsScratch {
+    /// CSF-applied bands per channel for ref and dist sides.
+    /// `compute_dkl_d_bands` runs `csf_apply_per_pixel_kernel` into
+    /// these (one launch per side per channel).
+    t_p_ref: [cubecl::server::Handle; N_CHANNELS],
+    t_p_dis: [cubecl::server::Handle; N_CHANNELS],
+    /// Masking-chain scratch (non-baseband levels only).
+    m_raw: [cubecl::server::Handle; N_CHANNELS],
+    m_mid: [cubecl::server::Handle; N_CHANNELS],
+    m_blur: [cubecl::server::Handle; N_CHANNELS],
+    /// Per-band masked-difference output (consumed by host
+    /// `lp_norm_mean` after read-back).
+    d: [cubecl::server::Handle; N_CHANNELS],
+}
+
 fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
+}
+
+fn build_d_bands_scratch<R: Runtime>(
+    client: &ComputeClient<R>,
+    n_levels: usize,
+    width: u32,
+    height: u32,
+) -> Vec<DBandsScratch> {
+    let mut out = Vec::with_capacity(n_levels);
+    let mut w = width;
+    let mut h = height;
+    for _ in 0..n_levels {
+        let n = (w as usize) * (h as usize);
+        out.push(DBandsScratch {
+            t_p_ref: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            t_p_dis: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_raw: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_mid: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_blur: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            d: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+        });
+        w /= 2;
+        h /= 2;
+    }
+    out
 }
 
 /// Reference-side state kept across `score_with_reference` calls.
@@ -139,6 +209,11 @@ pub struct Cvvdp<R: Runtime> {
     /// both sides like `gauss_ref`. Coarsest level shares storage
     /// with the coarsest gaussian for the Weber baseband path.
     bands_ref: Vec<Level>,
+
+    /// Per-level scratch for `compute_dkl_d_bands`'s CSF + masking
+    /// + D buffers. Pre-allocated so the hot loop doesn't churn
+    /// GPU allocations per band (~1.5 GB worth at 12 MP).
+    d_scratch: Vec<DBandsScratch>,
 
     /// Reference-side cache (used by `score_with_reference`).
     cached: Option<CachedReference>,
@@ -224,6 +299,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         let gauss_ref = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
+        let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
 
         Ok(Self {
             client,
@@ -236,6 +312,7 @@ impl<R: Runtime> Cvvdp<R> {
             srgb_lut,
             gauss_ref,
             bands_ref,
+            d_scratch,
             cached: None,
         })
     }
@@ -845,18 +922,20 @@ impl<R: Runtime> Cvvdp<R> {
                 .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            // Allocate GPU handles for T_p ref and T_p dis per channel
-            // — kept resident so the masking kernels can consume them
-            // without a round-trip to host.
+            // Reuse the pre-allocated per-level scratch (Cvvdp.d_scratch).
+            // T_p / m_* / d handles are kept resident so the masking kernels
+            // can consume them without a round-trip to host AND without
+            // per-band alloc_zeros_f32 churn (~1.5 GB worth at 12 MP).
+            let scratch = &self.d_scratch[k];
             let t_p_ref_h: [cubecl::server::Handle; 3] = [
-                alloc_zeros_f32(&self.client, n_px),
-                alloc_zeros_f32(&self.client, n_px),
-                alloc_zeros_f32(&self.client, n_px),
+                scratch.t_p_ref[0].clone(),
+                scratch.t_p_ref[1].clone(),
+                scratch.t_p_ref[2].clone(),
             ];
             let t_p_dis_h: [cubecl::server::Handle; 3] = [
-                alloc_zeros_f32(&self.client, n_px),
-                alloc_zeros_f32(&self.client, n_px),
-                alloc_zeros_f32(&self.client, n_px),
+                scratch.t_p_dis[0].clone(),
+                scratch.t_p_dis[1].clone(),
+                scratch.t_p_dis[2].clone(),
             ];
 
             for (c, cc) in csf_channels.iter().enumerate() {
@@ -912,22 +991,22 @@ impl<R: Runtime> Cvvdp<R> {
                 }
                 d_bands.push(planes);
             } else {
-                // GPU masking. Allocate D output handles per channel
-                // and dispatch the appropriate kernel chain based on
-                // band size relative to PU_PADSIZE.
+                // GPU masking. D output + masking-chain scratch all
+                // come from the pre-allocated d_scratch[k] (no
+                // per-band alloc_zeros_f32 churn).
                 let d_h: [cubecl::server::Handle; 3] = [
-                    alloc_zeros_f32(&self.client, n_px),
-                    alloc_zeros_f32(&self.client, n_px),
-                    alloc_zeros_f32(&self.client, n_px),
+                    scratch.d[0].clone(),
+                    scratch.d[1].clone(),
+                    scratch.d[2].clone(),
                 ];
                 let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
                 unsafe {
                     if use_blur {
                         // min_abs → pu_blur_h → pu_blur_v → mult_mutual_3ch_with_blurred.
                         let m_raw_h: [cubecl::server::Handle; 3] = [
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
+                            scratch.m_raw[0].clone(),
+                            scratch.m_raw[1].clone(),
+                            scratch.m_raw[2].clone(),
                         ];
                         min_abs_3ch_kernel::launch::<R>(
                             &self.client,
@@ -947,14 +1026,14 @@ impl<R: Runtime> Cvvdp<R> {
                         // PU blur: h pass into scratch, v pass into the
                         // final blurred buffer. One pair per channel.
                         let m_mid_h: [cubecl::server::Handle; 3] = [
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
+                            scratch.m_mid[0].clone(),
+                            scratch.m_mid[1].clone(),
+                            scratch.m_mid[2].clone(),
                         ];
                         let m_blur_h: [cubecl::server::Handle; 3] = [
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
-                            alloc_zeros_f32(&self.client, n_px),
+                            scratch.m_blur[0].clone(),
+                            scratch.m_blur[1].clone(),
+                            scratch.m_blur[2].clone(),
                         ];
                         // PU blur is sum-to-1 normalized. After v pass
                         // we need to apply phase_uncertainty's `* 10^MASK_C`
