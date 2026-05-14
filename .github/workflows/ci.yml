@@ -34,6 +34,16 @@ jobs:
           - macos-latest         # macos-aarch64
     steps:
       - uses: actions/checkout@v4
+      - name: Clone zenjpeg sibling-repo (path dep target)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. Without this clone, every workspace cargo
+        # command fails with "failed to read .../zenjpeg/Cargo.toml".
+        # Pin to a known-good origin commit so CI is reproducible.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -60,6 +70,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clone zenjpeg sibling-repo (path dep target)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. Without this clone, every workspace cargo
+        # command fails with "failed to read .../zenjpeg/Cargo.toml".
+        # Pin to a known-good origin commit so CI is reproducible.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cross
         run: cargo install --locked cross
@@ -90,6 +110,16 @@ jobs:
         os: [macos-latest, macos-26-intel]
     steps:
       - uses: actions/checkout@v4
+      - name: Clone zenjpeg sibling-repo (path dep target)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. Without this clone, every workspace cargo
+        # command fails with "failed to read .../zenjpeg/Cargo.toml".
+        # Pin to a known-good origin commit so CI is reproducible.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -117,6 +147,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clone zenjpeg sibling-repo (path dep target)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. Without this clone, every workspace cargo
+        # command fails with "failed to read .../zenjpeg/Cargo.toml".
+        # Pin to a known-good origin commit so CI is reproducible.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -130,6 +170,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clone zenjpeg sibling-repo (path dep target)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. Without this clone, every workspace cargo
+        # command fails with "failed to read .../zenjpeg/Cargo.toml".
+        # Pin to a known-good origin commit so CI is reproducible.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
