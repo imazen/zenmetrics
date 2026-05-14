@@ -12,7 +12,7 @@ Tracking faithful-port progress against the Python reference
 | CSF weighting      | `kernels/csf`          | host scalar (LUT bilinear interp)        | 60 pts vs pycvvdp <1e-3 rel               |
 | Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
-| Host fold / JOD    | `pipeline`             | scaffold                                 | none                                      |
+| Host fold / JOD    | `pipeline`             | compute_dkl_planes wired                 | pipeline → kernel parity <3e-5            |
 
 ## Reference version pin
 
