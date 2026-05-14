@@ -704,9 +704,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// — this function does NO readback of the per-level band /
     /// log_l_bkg data.
     ///
-    /// Used by both `compute_dkl_weber_pyramid` (which wraps with
-    /// readback to host Vecs) and future GPU-resident callers that
-    /// keep the data on-device.
+    /// Used by `compute_dkl_weber_pyramid` (which wraps with
+    /// readback to host Vecs). A planned future use was to call
+    /// this directly from `compute_dkl_d_bands` to skip the host
+    /// readback (~570 MB at 12 MP). Tick 85 attempted that refactor
+    /// and observed a 5× regression in standalone weber timing —
+    /// likely from cubecl handle-clone churn or memory-pool
+    /// fragmentation when an additional `ref_log_l_bkg` buffer was
+    /// added to `Cvvdp`. Reverted pending root-cause analysis.
     fn _dispatch_weber_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<f32> {
         // Build Gaussian pyramids on GPU. The function leaves
         // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
