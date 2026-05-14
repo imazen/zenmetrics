@@ -308,3 +308,105 @@ fn compute_dkl_jod_vs_host_scalar_on_corpus() {
         "GPU JOD drifts > 1.0 from host scalar: {max_gpu_host_drift}"
     );
 }
+
+#[test]
+fn compute_dkl_weber_pyramid_matches_host_on_corpus_256x256() {
+    // The 32×32 synthetic parity test (in pipeline_color.rs) shows
+    // Weber bands match host within 5e-4 max-abs. On 256×256 corpus
+    // images with deeper pyramids the f32 accumulation across 5+
+    // reduce/expand levels may compound. This test surfaces per-
+    // band max-abs error at scale, narrowing where the q=1 JOD
+    // drift comes from.
+    use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+    use cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar;
+    use cvvdp_gpu::params::DisplayModel;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Test on the most-distorted (q=1) dist image — that's where the
+    // observed GPU-vs-host JOD drift is largest.
+    let srgb = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(1), w, h);
+    let (gpu_bands, gpu_log_l_bkg) = cvvdp
+        .compute_dkl_weber_pyramid(&srgb)
+        .expect("compute_dkl_weber_pyramid");
+
+    // Host reference: replay color → 3 weber pyramids (one per channel,
+    // achromatic as L_bkg).
+    let display = DisplayModel::STANDARD_4K;
+    let n = (w * h) as usize;
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for (i, chunk) in srgb.chunks_exact(3).enumerate() {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            chunk[0],
+            chunk[1],
+            chunk[2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+    let n_levels = gpu_bands.len();
+    let host_per_ch = [
+        weber_contrast_pyr_dec_scalar(&planes[0], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[1], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[2], &planes[0], w as usize, h as usize, n_levels),
+    ];
+
+    eprintln!("level   shape    | A max-abs  RG max-abs  VY max-abs  log_l_bkg max-abs");
+    let mut overall_max_band = 0.0_f32;
+    let mut overall_max_log = 0.0_f32;
+    for k in 0..n_levels {
+        let bw = host_per_ch[0].bands[k].w;
+        let bh = host_per_ch[0].bands[k].h;
+        let mut max_bands = [0.0_f32; 3];
+        for (c, max_b) in max_bands.iter_mut().enumerate() {
+            let host = &host_per_ch[c].bands[k].data;
+            let gpu = &gpu_bands[k][c];
+            let max_err = gpu
+                .iter()
+                .zip(host)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            *max_b = max_err;
+        }
+        let host_log = &host_per_ch[0].log_l_bkg[k];
+        let gpu_log = &gpu_log_l_bkg[k];
+        let max_log = gpu_log
+            .iter()
+            .zip(host_log)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        eprintln!(
+            "  {k}   {bw:>3}x{bh:<3}  | {:<10.4e} {:<11.4e} {:<11.4e} {:<10.4e}",
+            max_bands[0], max_bands[1], max_bands[2], max_log
+        );
+        let band_max = max_bands.iter().fold(0.0_f32, |a, &b| a.max(b));
+        if band_max > overall_max_band {
+            overall_max_band = band_max;
+        }
+        if max_log > overall_max_log {
+            overall_max_log = max_log;
+        }
+    }
+    eprintln!(
+        "max-abs over all bands: weber = {overall_max_band:.4e}, log_l_bkg = {overall_max_log:.4e}"
+    );
+
+    // Tolerances calibrated from the observed values; tightens if the
+    // upstream stages get bit-stable, surfaces a regression if either
+    // stage starts to drift further.
+    assert!(
+        overall_max_band < 1e-2,
+        "Weber band max-abs vs host on corpus 256×256 = {overall_max_band:.4e}"
+    );
+    assert!(
+        overall_max_log < 1e-2,
+        "log_l_bkg max-abs vs host on corpus 256×256 = {overall_max_log:.4e}"
+    );
+}
