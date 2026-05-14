@@ -29,8 +29,8 @@ use image::ImageReader;
 use zenbench::criterion_compat::*;
 use zenbench::{criterion_group, criterion_main};
 
-const W: u32 = 256;
-const H: u32 = 256;
+const W_256: u32 = 256;
+const H_256: u32 = 256;
 
 fn load_rgb_bytes(path: &PathBuf) -> Vec<u8> {
     let img = ImageReader::open(path)
@@ -38,9 +38,85 @@ fn load_rgb_bytes(path: &PathBuf) -> Vec<u8> {
         .decode()
         .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
         .to_rgb8();
-    assert_eq!(img.width(), W);
-    assert_eq!(img.height(), H);
+    assert_eq!(img.width(), W_256);
+    assert_eq!(img.height(), H_256);
     img.into_raw()
+}
+
+/// Synthetic ref + dist pattern for benches at arbitrary
+/// resolution. The actual pixel content doesn't matter for timing
+/// (the algorithm has no data-dependent fast paths on GPU), so a
+/// deterministic perlin-ish pattern + a perturbation is enough.
+fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
+    let n = (w * h * 3) as usize;
+    let mut ref_b = vec![0u8; n];
+    let mut dis_b = vec![0u8; n];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * w as usize + x) * 3;
+            ref_b[i] = r;
+            ref_b[i + 1] = g;
+            ref_b[i + 2] = b;
+            dis_b[i] = r.saturating_sub(8);
+            dis_b[i + 1] = g.saturating_sub(4);
+            dis_b[i + 2] = b.saturating_add(12);
+        }
+    }
+    (ref_b, dis_b)
+}
+
+fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host: bool) {
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+
+    let (ref_bytes, dist_bytes) = synth_pair(w, h);
+
+    let group_name = format!("cvvdp_jod_{label}");
+    let mut g = c.benchmark_group(&group_name);
+    g.throughput(Throughput::Elements((w * h) as u64));
+
+    let client = CudaRuntime::client(&Default::default());
+    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on cuda");
+    let _ = cvvdp
+        .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+        .expect("warm-up jod");
+
+    // host_scalar at 12 MP would take seconds per iteration —
+    // skip it where it'd make the bench unrunnable. The GPU-only
+    // numbers are what matter for the per-resolution scaling
+    // question; we already have host_scalar at 256×256 in the
+    // q20/q1 groups for absolute calibration.
+    if include_host {
+        g.bench_function("host_scalar", |b| {
+            b.iter(|| {
+                let jod = predict_jod_still_3ch(
+                    black_box(&ref_bytes),
+                    black_box(&dist_bytes),
+                    w as usize,
+                    h as usize,
+                    display,
+                    ppd,
+                );
+                black_box(jod);
+            });
+        });
+    }
+
+    g.bench_function("gpu_compute_dkl_jod_cuda", |b| {
+        b.iter(|| {
+            let jod = cvvdp
+                .compute_dkl_jod(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
+                .expect("compute_dkl_jod");
+            black_box(jod);
+        });
+    });
+
+    g.finish();
 }
 
 fn bench_at_quality(c: &mut Criterion, q: u32) {
@@ -53,7 +129,7 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
 
     let group_name = format!("cvvdp_jod_256x256_q{q}");
     let mut g = c.benchmark_group(&group_name);
-    g.throughput(Throughput::Elements((W * H) as u64));
+    g.throughput(Throughput::Elements((W_256 * H_256) as u64));
 
     // All-host scalar path. What Cvvdp::score routes through today;
     // shadow_jod pins it to pycvvdp.
@@ -62,8 +138,8 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
             let jod = predict_jod_still_3ch(
                 black_box(&ref_bytes),
                 black_box(&dist_bytes),
-                W as usize,
-                H as usize,
+                W_256 as usize,
+                H_256 as usize,
                 display,
                 ppd,
             );
@@ -75,7 +151,7 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
     // buffer allocs + srgb_lut upload + first-call cubecl kernel
     // compilation) hoisted via a warm-up call outside iter().
     let client = CudaRuntime::client(&Default::default());
-    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, W, H, CvvdpParams::PLACEHOLDER)
+    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, W_256, H_256, CvvdpParams::PLACEHOLDER)
         .expect("new Cvvdp on cuda");
     let _ = cvvdp
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
@@ -109,6 +185,16 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
     g.finish();
 }
 
+fn bench_1mp(c: &mut Criterion) {
+    bench_resolution(c, 1024, 1024, "1mp_1024x1024", true);
+}
+
+fn bench_12mp(c: &mut Criterion) {
+    // 4000×3000 = 12.0 MP, common DSLR aspect. host_scalar skipped
+    // — single-threaded scalar at 12 MP takes seconds per iter.
+    bench_resolution(c, 4000, 3000, "12mp_4000x3000", false);
+}
+
 fn bench_score_q20(c: &mut Criterion) {
     bench_at_quality(c, 20);
 }
@@ -124,5 +210,11 @@ fn bench_score_q1(c: &mut Criterion) {
     bench_at_quality(c, 1);
 }
 
-criterion_group!(benches, bench_score_q20, bench_score_q1);
+criterion_group!(
+    benches,
+    bench_score_q20,
+    bench_score_q1,
+    bench_1mp,
+    bench_12mp
+);
 criterion_main!(benches);

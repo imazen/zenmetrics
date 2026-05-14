@@ -72,7 +72,14 @@ pub fn predict_jod_still_3ch(
     // always comes from the side's own achromatic plane (cvvdp's
     // weber_g1 contract): for ref-side bands use ref_planes[0]; for
     // dist-side bands use dis_planes[0].
-    let n_levels_query = 0;
+    //
+    // n_levels MUST match what band_frequencies returns — cvvdp
+    // truncates the pyramid once the per-band spatial frequency
+    // drops below 0.2 cy/deg (below the detectable threshold).
+    // The auto-pick (n_levels=0 → ilog2(min(w,h))) only happens
+    // to coincide with band_frequencies at 256×256; larger images
+    // would over-build the pyramid and index past freqs.
+    let n_levels_query = band_frequencies(ppd, width, height).len();
     let ref_weber = [
         weber_contrast_pyr_dec_scalar(
             &ref_planes[0],
