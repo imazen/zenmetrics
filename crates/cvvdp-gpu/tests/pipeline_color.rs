@@ -680,3 +680,65 @@ fn compute_dkl_d_bands_matches_host_scalar() {
         }
     }
 }
+
+#[test]
+fn compute_dkl_jod_matches_host_scalar() {
+    // GPU-composed JOD (color + Weber pyramid + per-pixel CSF on
+    // GPU; masking + pool + final fold on host) vs the all-host
+    // host_scalar::predict_jod_still_3ch. Both should agree within
+    // f32 accumulation noise.
+    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let host_jod =
+        predict_jod_still_3ch(&ref_srgb, &dist_srgb, w as usize, h as usize, display, ppd);
+    let diff = (gpu_jod - host_jod).abs();
+    eprintln!("compute_dkl_jod = {gpu_jod:.6}, host_scalar = {host_jod:.6}, |diff| = {diff:.6}");
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    // f32 accumulation through 9 stages (color → reduce ×5 →
+    // expand ×5 → subtract → weber contrast → per-pixel CSF interp
+    // → mult_mutual + soft clamp → spatial-pool → 3-stage
+    // Minkowski → met2jod) propagates a ~1% per-band Q delta into
+    // a JOD shift whose magnitude scales with the slope of met2jod
+    // at the operating point. The shadow_jod test pins
+    // Cvvdp::score (the all-host path) to pycvvdp's v1 manifest
+    // within 0.006 JOD; this test only measures the GPU-composed
+    // path's drift from the all-host reference. Tolerance stays
+    // loose until the masking + pool GPU kernels get wired into
+    // compute_dkl_jod and the accumulated drift collapses.
+    assert!(
+        diff < 0.5,
+        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6}"
+    );
+}

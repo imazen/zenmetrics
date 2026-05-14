@@ -53,6 +53,7 @@ use crate::kernels::csf::{
     precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
+use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
     band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
     weber_contrast_compute_kernel,
@@ -847,10 +848,8 @@ impl<R: Runtime> Cvvdp<R> {
                 .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            let mut t_p_ref: [Vec<f32>; 3] =
-                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-            let mut t_p_dis: [Vec<f32>; 3] =
-                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            let mut t_p_ref: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            let mut t_p_dis: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
 
             for (c, cc) in csf_channels.iter().enumerate() {
                 let logs_row = precompute_logs_row(rho_k, *cc);
@@ -861,9 +860,7 @@ impl<R: Runtime> Cvvdp<R> {
                     band_mul * CH_GAIN[c]
                 };
 
-                for (side_weber, dst) in
-                    [(&ref_weber, &mut t_p_ref), (&dist_weber, &mut t_p_dis)]
-                {
+                for (side_weber, dst) in [(&ref_weber, &mut t_p_ref), (&dist_weber, &mut t_p_dis)] {
                     let weber_h = self
                         .client
                         .create_from_slice(f32::as_bytes(&side_weber[k][c]));
@@ -890,8 +887,7 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             let d = if is_baseband {
-                let mut planes: [Vec<f32>; 3] =
-                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
                 for c in 0..N_CHANNELS {
                     for i in 0..n_px {
                         planes[c][i] = (t_p_dis[c][i] - t_p_ref[c][i]).abs();
@@ -905,6 +901,48 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         Ok(d_bands)
+    }
+
+    /// Final JOD for a (reference, distorted) sRGB pair, computed
+    /// through the full GPU composition: color → Weber pyramid →
+    /// per-pixel CSF apply → mult-mutual masking (host) → spatial
+    /// pool (host) → 3-stage Minkowski fold (host) → met2jod.
+    ///
+    /// Currently the masking + spatial pool + final fold are
+    /// host-scalar; only the per-pixel stages (color, pyramid,
+    /// CSF) run on GPU. The masking + pool host calls remain
+    /// because they operate on band-sized data (≤ 1/4 image per
+    /// level) and don't dominate runtime; moving them to GPU is
+    /// a follow-on tick.
+    ///
+    /// Returns JOD on cvvdp's 0–10 scale.
+    ///
+    /// The shadow_jod test still pins the public `Cvvdp::score`
+    /// path through `host_scalar::predict_jod_still_3ch` against
+    /// the v1 R2 manifest (≤ 0.006 JOD). This helper exposes the
+    /// GPU-composed path so its parity vs the host scalar can be
+    /// measured independently — see
+    /// `tests/pipeline_color.rs::compute_dkl_jod_matches_host_scalar`.
+    /// Once the GPU JOD parity vs the host scalar is locked at
+    /// f32-precision tolerance, `Cvvdp::score` will switch to this
+    /// helper and the manifest-parity test will retarget.
+    pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
+        let d_bands = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
+        let n_levels = d_bands.len();
+
+        // Spatial pool per (band, channel) — host-scalar lp_norm_mean
+        // matches what `pool_band_kernel` produces (parity-locked in
+        // pool_scalar.rs).
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let mut q_band = [0.0_f32; 3];
+            for c in 0..N_CHANNELS {
+                q_band[c] = lp_norm_mean(&d_bands[k][c], BETA_SPATIAL);
+            }
+            q_per_ch.push(q_band);
+        }
+
+        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
     }
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.
