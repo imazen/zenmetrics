@@ -438,6 +438,54 @@ pub fn mult_mutual_band(
     d
 }
 
+/// Per-pixel `M_mm_raw[c] = min(|T_p[c]|, |R_p[c]|)` for all 3
+/// channels. First step of cvvdp's `mult-mutual` masking — the raw
+/// per-channel masker before phase-uncertainty (either the σ=3
+/// Gaussian blur for large bands or just `* 10^MASK_C` for small
+/// bands).
+///
+/// Used by callers that need to chain `min_abs → pu_blur_h →
+/// pu_blur_v → mult_mutual_3ch_with_blurred` on bands larger than
+/// `PU_PADSIZE`. For small bands the no-blur kernel inlines this
+/// step.
+#[cube(launch)]
+pub fn min_abs_3ch_kernel(
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &mut Array<f32>,
+    m_mm_rg: &mut Array<f32>,
+    m_mm_vy: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    let zero = f32::new(0.0);
+
+    let ta = t_p_a[idx];
+    let abs_ta = if ta < zero { -ta } else { ta };
+    let ra = r_p_a[idx];
+    let abs_ra = if ra < zero { -ra } else { ra };
+    m_mm_a[idx] = if abs_ta < abs_ra { abs_ta } else { abs_ra };
+
+    let trg = t_p_rg[idx];
+    let abs_trg = if trg < zero { -trg } else { trg };
+    let rrg = r_p_rg[idx];
+    let abs_rrg = if rrg < zero { -rrg } else { rrg };
+    m_mm_rg[idx] = if abs_trg < abs_rrg { abs_trg } else { abs_rrg };
+
+    let tvy = t_p_vy[idx];
+    let abs_tvy = if tvy < zero { -tvy } else { tvy };
+    let rvy = r_p_vy[idx];
+    let abs_rvy = if rvy < zero { -rvy } else { rvy };
+    m_mm_vy[idx] = if abs_tvy < abs_rvy { abs_tvy } else { abs_rvy };
+}
+
 /// Full mult-mutual + xchannel masking for a 3-channel band, no
 /// phase-uncertainty blur. Mirrors `mult_mutual_band` for the small-
 /// band branch (`w ≤ PU_PADSIZE || h ≤ PU_PADSIZE`):
@@ -535,6 +583,99 @@ pub fn mult_mutual_3ch_no_blur_kernel(
     let m_vy_pool = xcm_02 * term_a + xcm_12 * term_rg + xcm_22 * term_vy;
 
     // D[c] = clamp_diffs(safe_pow(|T_p[c] - R_p[c]|, p) / (1 + M[c])).
+    let diff_a = t_a - r_a;
+    let abs_diff_a = if diff_a < f32::new(0.0) { -diff_a } else { diff_a };
+    let diff_rg = t_rg - r_rg;
+    let abs_diff_rg = if diff_rg < f32::new(0.0) { -diff_rg } else { diff_rg };
+    let diff_vy = t_vy - r_vy;
+    let abs_diff_vy = if diff_vy < f32::new(0.0) { -diff_vy } else { diff_vy };
+
+    let sp_a = f32::powf(abs_diff_a + eps, mask_p) - f32::powf(eps, mask_p);
+    let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
+    let sp_vy = f32::powf(abs_diff_vy + eps, mask_p) - f32::powf(eps, mask_p);
+
+    let d_u_a = sp_a / (f32::new(1.0) + m_a_pool);
+    let d_u_rg = sp_rg / (f32::new(1.0) + m_rg_pool);
+    let d_u_vy = sp_vy / (f32::new(1.0) + m_vy_pool);
+
+    d_a[idx] = d_max_lin * d_u_a / (d_max_lin + d_u_a);
+    d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
+    d_vy[idx] = d_max_lin * d_u_vy / (d_max_lin + d_u_vy);
+}
+
+/// Companion to `min_abs_3ch_kernel` for the large-band path. Takes
+/// the pre-blurred + pre-scaled `M_mm` (i.e. `pu_blur(min(|T_p|,
+/// |R_p|)) * 10^MASK_C` per channel; caller chains `min_abs →
+/// pu_blur_h → pu_blur_v → multiply-by-10^MASK_C`) and finishes the
+/// mult-mutual + xchannel + soft-clamp formula. Same math as
+/// `mult_mutual_3ch_no_blur_kernel` from step 3 onward (`term[c] =
+/// safe_pow(|M_mm|, q[c])`, cross-channel pool, masked diff with
+/// `safe_pow(|T_p-R_p|, p) / (1+M)`, soft clamp).
+///
+/// 9 input arrays (T_p[3], R_p[3], M_mm_blurred_scaled[3]) and 3
+/// output arrays (D[3]). Same constants baked.
+#[cube(launch)]
+pub fn mult_mutual_3ch_with_blurred_kernel(
+    t_p_a: &Array<f32>,
+    t_p_rg: &Array<f32>,
+    t_p_vy: &Array<f32>,
+    r_p_a: &Array<f32>,
+    r_p_rg: &Array<f32>,
+    r_p_vy: &Array<f32>,
+    m_mm_a: &Array<f32>,
+    m_mm_rg: &Array<f32>,
+    m_mm_vy: &Array<f32>,
+    d_a: &mut Array<f32>,
+    d_rg: &mut Array<f32>,
+    d_vy: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+
+    let mask_p = f32::new(2.264_355_2);
+    let mask_q_0 = f32::new(1.302_622_7);
+    let mask_q_1 = f32::new(2.888_590_8);
+    let mask_q_2 = f32::new(3.680_771_3);
+    let d_max_lin = f32::new(366.732_25);
+
+    let xcm_00 = f32::new(0.876_968);
+    let xcm_01 = f32::new(0.016_103_15);
+    let xcm_02 = f32::new(0.050_159_38);
+    let xcm_10 = f32::new(5.918_792);
+    let xcm_11 = f32::new(1.269_323);
+    let xcm_12 = f32::new(0.152_080_92);
+    let xcm_20 = f32::new(14.041_055);
+    let xcm_21 = f32::new(0.498_209_6);
+    let xcm_22 = f32::new(0.697_756_55);
+
+    let eps = f32::new(1e-5);
+
+    let m_a = m_mm_a[idx];
+    let m_rg = m_mm_rg[idx];
+    let m_vy = m_mm_vy[idx];
+
+    let abs_m_a = if m_a < f32::new(0.0) { -m_a } else { m_a };
+    let abs_m_rg = if m_rg < f32::new(0.0) { -m_rg } else { m_rg };
+    let abs_m_vy = if m_vy < f32::new(0.0) { -m_vy } else { m_vy };
+
+    let term_a = f32::powf(abs_m_a + eps, mask_q_0) - f32::powf(eps, mask_q_0);
+    let term_rg = f32::powf(abs_m_rg + eps, mask_q_1) - f32::powf(eps, mask_q_1);
+    let term_vy = f32::powf(abs_m_vy + eps, mask_q_2) - f32::powf(eps, mask_q_2);
+
+    let m_a_pool = xcm_00 * term_a + xcm_10 * term_rg + xcm_20 * term_vy;
+    let m_rg_pool = xcm_01 * term_a + xcm_11 * term_rg + xcm_21 * term_vy;
+    let m_vy_pool = xcm_02 * term_a + xcm_12 * term_rg + xcm_22 * term_vy;
+
+    let t_a = t_p_a[idx];
+    let t_rg = t_p_rg[idx];
+    let t_vy = t_p_vy[idx];
+    let r_a = r_p_a[idx];
+    let r_rg = r_p_rg[idx];
+    let r_vy = r_p_vy[idx];
+
     let diff_a = t_a - r_a;
     let abs_diff_a = if diff_a < f32::new(0.0) { -diff_a } else { diff_a };
     let diff_rg = t_rg - r_rg;
