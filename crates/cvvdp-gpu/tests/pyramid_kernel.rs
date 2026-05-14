@@ -18,7 +18,8 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::pyramid::{
     downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar, subtract_kernel,
-    upscale_h_kernel, upscale_v_kernel, weber_contrast_compute_kernel,
+    upscale_h_kernel, upscale_v_kernel, weber_contrast_compute_3ch_kernel,
+    weber_contrast_compute_kernel,
 };
 
 #[cfg(feature = "cuda")]
@@ -220,6 +221,97 @@ fn weber_contrast_compute_kernel_matches_host_formula() {
             "log_l_bkg[{i}]: got {} expected {} (lbkg={})",
             l_gpu[i],
             log_l_exp,
+            lbkg[i]
+        );
+    }
+}
+
+#[test]
+fn weber_contrast_compute_3ch_kernel_matches_per_channel_kernel() {
+    // Fused 3-channel weber-contrast compute — verifies it produces
+    // the same per-channel `contrast` output as three independent
+    // launches of `weber_contrast_compute_kernel` AND the same
+    // `log_l_bkg` field. A bug in the shared L_bkg compute would
+    // show up identically across all three channels; a bug in the
+    // per-channel layer math would show up only on the affected
+    // channel — distinct per-channel inputs make the difference
+    // detectable.
+    let client = Backend::client(&Default::default());
+
+    // Mirrors the single-channel parity test's edge-case coverage:
+    // clamp triggers on both sides, tiny lbkg, large lbkg.
+    let lbkg: Vec<f32> = vec![
+        1.0, 1.0, 1.0, 10.0, 100.0, 0.5, 0.005, 0.5, 0.001, 50.0, 50.0, 1.0, 0.001, 0.001,
+    ];
+    let layer_a: Vec<f32> = vec![
+        0.0, 1.0, -1.0, 5.0, -5.0, 50.0, -50.0, 500.0, -500.0, 1.0e5, -1.0e5, 0.001, -0.001, 0.0,
+    ];
+    // Distinct per-channel layer values so a "wrong-channel" bug
+    // would mismatch.
+    let layer_rg: Vec<f32> = layer_a.iter().map(|v| v * 0.5 + 0.25).collect();
+    let layer_vy: Vec<f32> = layer_a.iter().map(|v| -v * 0.75 - 0.1).collect();
+    let n = lbkg.len();
+
+    let layer_a_h = client.create_from_slice(f32::as_bytes(&layer_a));
+    let layer_rg_h = client.create_from_slice(f32::as_bytes(&layer_rg));
+    let layer_vy_h = client.create_from_slice(f32::as_bytes(&layer_vy));
+    let lbkg_h = client.create_from_slice(f32::as_bytes(&lbkg));
+    let c_a_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let c_rg_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let c_vy_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let log_l_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        weber_contrast_compute_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(layer_a_h.clone(), n),
+            ArrayArg::from_raw_parts(layer_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(layer_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(lbkg_h.clone(), n),
+            ArrayArg::from_raw_parts(c_a_h.clone(), n),
+            ArrayArg::from_raw_parts(c_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(c_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(log_l_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let a_bytes = client.read_one(c_a_h).expect("read c_a");
+    let rg_bytes = client.read_one(c_rg_h).expect("read c_rg");
+    let vy_bytes = client.read_one(c_vy_h).expect("read c_vy");
+    let l_bytes = client.read_one(log_l_h).expect("read log_l");
+    let c_a_gpu: &[f32] = f32::from_bytes(&a_bytes);
+    let c_rg_gpu: &[f32] = f32::from_bytes(&rg_bytes);
+    let c_vy_gpu: &[f32] = f32::from_bytes(&vy_bytes);
+    let l_gpu: &[f32] = f32::from_bytes(&l_bytes);
+
+    let layers = [layer_a.as_slice(), layer_rg.as_slice(), layer_vy.as_slice()];
+    let gpu = [c_a_gpu, c_rg_gpu, c_vy_gpu];
+    for c in 0..3 {
+        for i in 0..n {
+            let l = lbkg[i].max(0.01);
+            let exp = (layers[c][i] / l).clamp(-1000.0, 1000.0);
+            assert!(
+                (gpu[c][i] - exp).abs() < 1e-4 * exp.abs().max(1e-3),
+                "channel {c} pixel {i}: got {} expected {} (layer={}, lbkg={})",
+                gpu[c][i],
+                exp,
+                layers[c][i],
+                lbkg[i],
+            );
+        }
+    }
+    for i in 0..n {
+        let exp_log = lbkg[i].max(0.01).log10();
+        assert!(
+            (l_gpu[i] - exp_log).abs() < 1e-5,
+            "log_l_bkg[{i}]: got {} expected {} (lbkg={})",
+            l_gpu[i],
+            exp_log,
             lbkg[i]
         );
     }

@@ -59,7 +59,7 @@ use crate::kernels::masking::{
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
     band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
-    weber_contrast_compute_kernel,
+    weber_contrast_compute_3ch_kernel,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
@@ -799,14 +799,15 @@ impl<R: Runtime> Cvvdp<R> {
                 );
             }
 
-            // Per channel: build the Laplacian-style layer + run weber.
-            // log_l_bkg writes to the caller-provided destination
-            // (bisect tick 86).
+            // Per channel: build the Laplacian-style layer (upscale +
+            // subtract). Weber-contrast compute is hoisted out of the
+            // channel loop and run as a single 3-channel fused launch
+            // (tick 89) — eliminates 2 redundant log10(L_bkg) writes
+            // per pixel per level + drops 3 kernel launches to 1.
             let log_l_bkg = log_l_bkg_dest[k].clone();
             for c in 0..N_CHANNELS {
                 let coarse = self.gauss_ref[k + 1].planes[c].clone();
                 let fine = self.gauss_ref[k].planes[c].clone();
-                let band = self.bands_ref[k].planes[c].clone();
 
                 let vscratch_c = scratch.vscratch_c[c].clone();
                 let upscaled_c = scratch.upscaled_c[c].clone();
@@ -839,24 +840,36 @@ impl<R: Runtime> Cvvdp<R> {
                         cube_dim,
                         ArrayArg::from_raw_parts(fine, n_fine),
                         ArrayArg::from_raw_parts(upscaled_c, n_fine),
-                        ArrayArg::from_raw_parts(layer_c.clone(), n_fine),
-                        n_fine as u32,
-                    );
-                    weber_contrast_compute_kernel::launch::<R>(
-                        &self.client,
-                        count_fine.clone(),
-                        cube_dim,
                         ArrayArg::from_raw_parts(layer_c, n_fine),
-                        ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
-                        ArrayArg::from_raw_parts(band, n_fine),
-                        ArrayArg::from_raw_parts(log_l_bkg.clone(), n_fine),
                         n_fine as u32,
                     );
                 }
             }
-            // log_l_bkg lives on GPU in self.weber_scratch[k].log_l_bkg
-            // — no need to thread it back; callers reconstruct.
-            let _ = log_l_bkg;
+            // 3-channel fused weber-contrast compute. One launch
+            // instead of three; log_l_bkg computed once per pixel
+            // instead of three times.
+            let layer_a = scratch.layer_c[0].clone();
+            let layer_rg = scratch.layer_c[1].clone();
+            let layer_vy = scratch.layer_c[2].clone();
+            let band_a = self.bands_ref[k].planes[0].clone();
+            let band_rg = self.bands_ref[k].planes[1].clone();
+            let band_vy = self.bands_ref[k].planes[2].clone();
+            unsafe {
+                weber_contrast_compute_3ch_kernel::launch::<R>(
+                    &self.client,
+                    count_fine.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(layer_a, n_fine),
+                    ArrayArg::from_raw_parts(layer_rg, n_fine),
+                    ArrayArg::from_raw_parts(layer_vy, n_fine),
+                    ArrayArg::from_raw_parts(l_bkg_fine, n_fine),
+                    ArrayArg::from_raw_parts(band_a, n_fine),
+                    ArrayArg::from_raw_parts(band_rg, n_fine),
+                    ArrayArg::from_raw_parts(band_vy, n_fine),
+                    ArrayArg::from_raw_parts(log_l_bkg, n_fine),
+                    n_fine as u32,
+                );
+            }
         }
 
         // Baseband: scalar L_bkg = mean of max(gauss_A[N-1], 0.01).

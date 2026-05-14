@@ -876,6 +876,69 @@ pub fn weber_contrast_compute_kernel(
     log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 }
 
+/// 3-channel fused weber-contrast compute. Single launch produces
+/// `contrast` for all three DKL channels plus the shared
+/// `log_l_bkg`. Replaces three separate `weber_contrast_compute_kernel`
+/// launches per non-baseband pyramid level — the per-pixel
+/// `l_bkg_fine → log10` math is now computed once instead of three
+/// times.
+///
+/// Inputs:
+/// - `layer_a` / `layer_rg` / `layer_vy` — per-channel Laplacian
+///   layers (`fine - upscaled_coarse`) for the three DKL channels.
+/// - `expanded_lbkg` — per-pixel achromatic L_bkg (upscaled from
+///   `gauss[k+1]` to fine resolution).
+/// - `n` — pixel count (must match all four input arrays + outputs).
+///
+/// Outputs:
+/// - `contrast_a` / `contrast_rg` / `contrast_vy` — per-channel
+///   Weber-contrast bands.
+/// - `log_l_bkg` — per-pixel `log10(max(L_bkg, 0.01))` shared by all
+///   three channels in the downstream CSF lookup.
+#[cube(launch)]
+pub fn weber_contrast_compute_3ch_kernel(
+    layer_a: &Array<f32>,
+    layer_rg: &Array<f32>,
+    layer_vy: &Array<f32>,
+    expanded_lbkg: &Array<f32>,
+    contrast_a: &mut Array<f32>,
+    contrast_rg: &mut Array<f32>,
+    contrast_vy: &mut Array<f32>,
+    log_l_bkg: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    let l_min = f32::new(0.01);
+    let l_max = f32::new(1000.0);
+    let l_min_neg = f32::new(-1000.0);
+
+    let raw_lbkg = expanded_lbkg[idx];
+    let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
+
+    // Three layers / l with the same upper+lower clamp pattern.
+    let c_a_raw = layer_a[idx] / l;
+    let c_a_hi = if c_a_raw > l_max { l_max } else { c_a_raw };
+    let c_a = if c_a_hi < l_min_neg { l_min_neg } else { c_a_hi };
+    contrast_a[idx] = c_a;
+
+    let c_rg_raw = layer_rg[idx] / l;
+    let c_rg_hi = if c_rg_raw > l_max { l_max } else { c_rg_raw };
+    let c_rg = if c_rg_hi < l_min_neg { l_min_neg } else { c_rg_hi };
+    contrast_rg[idx] = c_rg;
+
+    let c_vy_raw = layer_vy[idx] / l;
+    let c_vy_hi = if c_vy_raw > l_max { l_max } else { c_vy_raw };
+    let c_vy = if c_vy_hi < l_min_neg { l_min_neg } else { c_vy_hi };
+    contrast_vy[idx] = c_vy;
+
+    // log10(x) via the natural log — once per pixel rather than
+    // three times.
+    log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
