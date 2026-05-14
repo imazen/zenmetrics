@@ -18,7 +18,7 @@
 //! ```
 
 use cvvdp_gpu::kernels::pyramid::{
-    gausspyr_expand_scalar, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
+    band_frequencies, gausspyr_expand_scalar, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
 };
 
 #[rustfmt::skip]
@@ -170,4 +170,84 @@ fn one_band_laplacian_matches_pycvvdp() {
         max_err < 1e-5,
         "band + expand(reduce) reconstruction error = {max_err}"
     );
+}
+
+#[test]
+fn band_frequencies_match_pycvvdp() {
+    // Goldens generated via:
+    //   dec = pycvvdp.lpyr_dec.lpyr_dec(W=256, H=256, ppd=PPD, device='cpu')
+    //   print(dec.get_freqs())
+    // All for 256×256 inputs at the listed PPD. Each returned vec is
+    // 8 entries long (max_levels=7, n_levels=7, +1 for the base).
+    let cases: &[(f32, [f32; 8])] = &[
+        (
+            37.701_225,
+            [
+                18.850_612, 6.084_978, 3.042_489, 1.521_244, 0.760_622, 0.380_311,
+                0.190_156, 0.095_078,
+            ],
+        ),
+        (
+            60.0,
+            [
+                30.0, 9.684, 4.842, 2.421, 1.2105, 0.605_25, 0.302_625, 0.151_312_5,
+            ],
+        ),
+        (
+            32.0,
+            [
+                16.0, 5.1648, 2.5824, 1.2912, 0.6456, 0.3228, 0.1614, 0.0807,
+            ],
+        ),
+        (
+            90.0,
+            [
+                45.0, 14.526, 7.263, 3.6315, 1.815_75, 0.907_875, 0.453_937_5, 0.226_968_75,
+            ],
+        ),
+    ];
+    for &(ppd, ref expected) in cases {
+        let got = band_frequencies(ppd, 256, 256);
+        assert_eq!(
+            got.len(),
+            expected.len(),
+            "len mismatch for ppd={ppd}: got {} entries, expected {}",
+            got.len(),
+            expected.len()
+        );
+        let max_err = got
+            .iter()
+            .zip(expected)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            max_err < 1e-4,
+            "ppd={ppd}: max-abs error vs pycvvdp = {max_err}\n  got = {got:?}\n  exp = {expected:?}"
+        );
+    }
+}
+
+#[test]
+fn band_frequencies_match_v1_manifest() {
+    // The v1 R2 goldens were captured for the standard_4k display
+    // (cvvdp's internally-computed PPD is ~75.402). The manifest's
+    // rho_band field is documented as:
+    //   [37.701, 12.170, 6.085, 3.042, 1.521, 0.761, 0.380, 0.100]
+    //
+    // Our band_frequencies(ppd=75.402, 256, 256) reproduces the
+    // first 7 entries; the 8th (0.100) is a slight cvvdp quirk where
+    // the highest-frequency band gets a special clamped value rather
+    // than the geometric continuation. The clamp lives outside
+    // band_frequencies and would be applied by the masking/pooling
+    // call site — flag it explicitly so the test doesn't pretend
+    // they match end-to-end.
+    let got = band_frequencies(75.402_25, 256, 256);
+    let manifest_first_7 = [37.701_226_f32, 12.169_955, 6.084_978, 3.042_489, 1.521_244, 0.760_622, 0.380_311];
+    assert_eq!(got.len(), 8);
+    let max_err = got[..7]
+        .iter()
+        .zip(&manifest_first_7)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(max_err < 1e-3, "first 7 manifest entries: max-abs = {max_err}");
 }

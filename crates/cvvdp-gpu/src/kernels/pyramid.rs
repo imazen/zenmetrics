@@ -205,6 +205,47 @@ pub struct Band {
     pub data: Vec<f32>,
 }
 
+/// Compute the per-band spatial frequencies (cy/deg) for a cvvdp
+/// pyramid, matching `lpyr_dec.get_freqs()` from pycvvdp v0.5.4.
+///
+/// The pyramid height is determined by:
+/// - `max_levels = floor(log2(min(w, h))) - 1`
+/// - the band index whose frequency drops to or below `min_freq = 0.2`
+///   cy/deg (anything lower is below detectable threshold),
+///   clamped to `max_levels`.
+///
+/// Returns a `Vec<f32>` of length `height + 1` (the "base" band plus
+/// `height` subsequent reduces), each entry in cy/deg.
+pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
+    const MIN_FREQ: f32 = 0.2;
+    let min_dim = width.min(height);
+    debug_assert!(min_dim >= 2, "pyramid needs at least 2px shortest side");
+    let max_levels = (min_dim as f32).log2().floor() as usize - 1;
+    let half_ppd = ppd / 2.0;
+
+    // Build the candidate "bands" series cvvdp checks against
+    // MIN_FREQ. 15 entries: [1.0, 0.3228, 0.3228/2, …, 0.3228/2^13]
+    // each scaled by ppd/2.
+    let mut candidate = Vec::with_capacity(15);
+    candidate.push(half_ppd);
+    for f in 0..14 {
+        candidate.push(0.3228_f32 * 2.0_f32.powi(-f) * half_ppd);
+    }
+    let max_band = candidate
+        .iter()
+        .position(|&b| b <= MIN_FREQ)
+        .unwrap_or(max_levels);
+    let n_levels = (max_band + 1).min(max_levels);
+
+    // Final frequencies: [ppd/2] (the base) + n_levels reduces.
+    let mut freqs = Vec::with_capacity(n_levels + 1);
+    freqs.push(half_ppd);
+    for f in 0..n_levels {
+        freqs.push(0.3228_f32 * 2.0_f32.powi(-(f as i32)) * half_ppd);
+    }
+    freqs
+}
+
 /// Multi-level Laplacian pyramid decomposition (host scalar). Matches
 /// cvvdp's `lpyr_dec.laplacian_pyramid_dec` shape:
 ///
