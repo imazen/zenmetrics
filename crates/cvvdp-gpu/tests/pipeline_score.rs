@@ -241,3 +241,70 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
         "GPU JOD drifts > 1.0 from v1 manifest: {max_drift}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_vs_host_scalar_on_corpus() {
+    // Direct GPU-vs-HOST comparison on the v1 manifest corpus (real
+    // 256×256 images). shadow_jod pinned the all-host path to
+    // pycvvdp within 0.006 JOD; compute_dkl_jod_on_v1_manifest_corpus
+    // measured GPU-vs-pycvvdp. The remaining unknown was whether
+    // GPU-vs-HOST agrees better than GPU-vs-pycvvdp, or whether the
+    // drift compounds. This test surfaces both.
+    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+    use cvvdp_gpu::params::DisplayModel;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+
+    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    eprintln!("  q   pycvvdp    host_scalar   GPU JOD   GPU-host   GPU-pycvvdp");
+    let mut max_gpu_host_drift = 0.0_f32;
+    let pycvvdp_manifest: &[(u32, f32)] = &[
+        (1, 7.6536),
+        (5, 8.8889),
+        (20, 9.7076),
+        (45, 9.8273),
+        (70, 9.8915),
+        (90, 9.9930),
+    ];
+    for &q in qs {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let gpu_jod = cvvdp
+            .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+            .expect("compute_dkl_jod");
+        let host_jod = predict_jod_still_3ch(
+            &ref_bytes,
+            &dist_bytes,
+            w as usize,
+            h as usize,
+            display,
+            ppd,
+        );
+        let manifest = pycvvdp_manifest.iter().find(|&&(qq, _)| qq == q).unwrap().1;
+        let gpu_host = (gpu_jod - host_jod).abs();
+        let gpu_pyc = (gpu_jod - manifest).abs();
+        eprintln!(
+            "  {q:>2}  {manifest:>8.4}   {host_jod:>9.4}   {gpu_jod:>7.4}    {gpu_host:>7.4}      {gpu_pyc:>7.4}"
+        );
+        if gpu_host > max_gpu_host_drift {
+            max_gpu_host_drift = gpu_host;
+        }
+        assert!(gpu_jod.is_finite(), "q={q}: GPU JOD not finite");
+        assert!(
+            (0.0..=10.0).contains(&gpu_jod),
+            "q={q}: GPU JOD = {gpu_jod} out of range"
+        );
+    }
+    eprintln!("compute_dkl_jod max drift vs host scalar: {max_gpu_host_drift:.4}");
+    assert!(
+        max_gpu_host_drift < 1.0,
+        "GPU JOD drifts > 1.0 from host scalar: {max_gpu_host_drift}"
+    );
+}
