@@ -11,7 +11,7 @@ Tracking faithful-port progress against the Python reference
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
 | Weber-contrast pyr | `kernels/pyramid`      | host scalar + weber_contrast_compute_kernel | scalar via shadow_jod; kernel 14-pt parity |
 | CSF weighting      | `kernels/csf`          | scalar (log10 L_bkg) + kernel + table     | 60 pts vs pycvvdp + GPU scale parity      |
-| Contrast masking   | `kernels/masking`      | scalar + mult_mutual_3ch_no_blur_kernel  | scalar parity + GPU no-blur kernel 4×4    |
+| Contrast masking   | `kernels/masking`      | scalar + no-blur kernel + PU blur kernels | scalar + no-blur + PU σ=3 blur all parity |
 | Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
 | Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | <0.01 JOD vs pycvvdp v1 manifest          |

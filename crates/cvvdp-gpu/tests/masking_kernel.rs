@@ -6,7 +6,10 @@
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
-use cvvdp_gpu::kernels::masking::{mult_mutual_3ch_no_blur_kernel, mult_mutual_band};
+use cvvdp_gpu::kernels::masking::{
+    gaussian_blur_sigma3, mult_mutual_3ch_no_blur_kernel, mult_mutual_band, pu_blur_h_kernel,
+    pu_blur_v_kernel,
+};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -89,4 +92,65 @@ fn mult_mutual_3ch_no_blur_matches_host_scalar() {
         }
     }
     eprintln!("max relative error: {max_rel:.4e}");
+}
+
+#[test]
+fn pu_blur_two_kernels_match_host_scalar() {
+    let client = Backend::client(&Default::default());
+
+    // 16×16 band with a non-trivial pattern — large enough that
+    // reflect padding spans both ends of the kernel.
+    let (w, h) = (16usize, 16usize);
+    let n = w * h;
+    let src: Vec<f32> = (0..n)
+        .map(|i| {
+            let x = (i % w) as f32;
+            let y = (i / w) as f32;
+            (x * 0.3 + y * 0.5).sin() * 4.0 + 1.0
+        })
+        .collect();
+
+    // Host reference.
+    let cpu = gaussian_blur_sigma3(&src, w, h);
+
+    // GPU: h pass then v pass via the two kernels.
+    let src_h = client.create_from_slice(f32::as_bytes(&src));
+    let mid_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let dst_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        pu_blur_h_kernel::launch::<Backend>(
+            &client,
+            cube_count.clone(),
+            cube_dim,
+            ArrayArg::from_raw_parts(src_h.clone(), n),
+            ArrayArg::from_raw_parts(mid_h.clone(), n),
+            w as u32,
+            h as u32,
+        );
+        pu_blur_v_kernel::launch::<Backend>(
+            &client,
+            cube_count.clone(),
+            cube_dim,
+            ArrayArg::from_raw_parts(mid_h.clone(), n),
+            ArrayArg::from_raw_parts(dst_h.clone(), n),
+            w as u32,
+            h as u32,
+        );
+    }
+
+    let bytes = client.read_one(dst_h.clone()).expect("read dst");
+    let gpu: &[f32] = f32::from_bytes(&bytes);
+    let max_err = gpu
+        .iter()
+        .zip(&cpu)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        max_err < 1e-4,
+        "PU blur GPU vs CPU max-abs = {max_err}"
+    );
 }

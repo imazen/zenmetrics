@@ -164,6 +164,158 @@ pub fn gaussian_blur_sigma3(src: &[f32], w: usize, h: usize) -> Vec<f32> {
     out
 }
 
+/// Horizontal pass of the σ=3 separable Gaussian blur, with reflect
+/// padding. Per-output-pixel thread. Input `src` is `w × h`
+/// row-major; output `dst` is the same shape. Caller multiplies the
+/// kernel coefficients by `10^MASK_C` separately (or chains a
+/// scalar multiply kernel) since the blur itself is sum-to-1.
+///
+/// Boundary handling: reflect (no edge repeat), matching
+/// torchvision's `F.pad(..., mode='reflect')`.
+#[cube(launch)]
+pub fn pu_blur_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y = idx / wu;
+    let x = idx - y * wu;
+    let w_i = w as i32;
+    let x_i = x as i32;
+    let half = 6_i32;
+
+    // 13-tap Gaussian (σ=3), normalized — matches PU_BLUR_KERNEL_1D.
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    // Reflect-12 unroll, inline. For each tap t in 0..13, source
+    // index is x + (t - half), reflected into [0, w).
+    let s0 = reflect_pu_idx(x_i + 0 - half, w_i);
+    let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
+    let s2 = reflect_pu_idx(x_i + 2 - half, w_i);
+    let s3 = reflect_pu_idx(x_i + 3 - half, w_i);
+    let s4 = reflect_pu_idx(x_i + 4 - half, w_i);
+    let s5 = reflect_pu_idx(x_i + 5 - half, w_i);
+    let s6 = reflect_pu_idx(x_i + 6 - half, w_i);
+    let s7 = reflect_pu_idx(x_i + 7 - half, w_i);
+    let s8 = reflect_pu_idx(x_i + 8 - half, w_i);
+    let s9 = reflect_pu_idx(x_i + 9 - half, w_i);
+    let s10 = reflect_pu_idx(x_i + 10 - half, w_i);
+    let s11 = reflect_pu_idx(x_i + 11 - half, w_i);
+    let s12 = reflect_pu_idx(x_i + 12 - half, w_i);
+
+    let row_off = y * wu;
+    dst[idx] = k0 * src[row_off + s0]
+        + k1 * src[row_off + s1]
+        + k2 * src[row_off + s2]
+        + k3 * src[row_off + s3]
+        + k4 * src[row_off + s4]
+        + k5 * src[row_off + s5]
+        + k6 * src[row_off + s6]
+        + k7 * src[row_off + s7]
+        + k8 * src[row_off + s8]
+        + k9 * src[row_off + s9]
+        + k10 * src[row_off + s10]
+        + k11 * src[row_off + s11]
+        + k12 * src[row_off + s12];
+}
+
+/// Vertical pass of the σ=3 separable Gaussian blur.
+#[cube(launch)]
+pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y = idx / wu;
+    let x = idx - y * wu;
+    let h_i = h as i32;
+    let y_i = y as i32;
+    let half = 6_i32;
+
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    let s0 = reflect_pu_idx(y_i + 0 - half, h_i);
+    let s1 = reflect_pu_idx(y_i + 1 - half, h_i);
+    let s2 = reflect_pu_idx(y_i + 2 - half, h_i);
+    let s3 = reflect_pu_idx(y_i + 3 - half, h_i);
+    let s4 = reflect_pu_idx(y_i + 4 - half, h_i);
+    let s5 = reflect_pu_idx(y_i + 5 - half, h_i);
+    let s6 = reflect_pu_idx(y_i + 6 - half, h_i);
+    let s7 = reflect_pu_idx(y_i + 7 - half, h_i);
+    let s8 = reflect_pu_idx(y_i + 8 - half, h_i);
+    let s9 = reflect_pu_idx(y_i + 9 - half, h_i);
+    let s10 = reflect_pu_idx(y_i + 10 - half, h_i);
+    let s11 = reflect_pu_idx(y_i + 11 - half, h_i);
+    let s12 = reflect_pu_idx(y_i + 12 - half, h_i);
+
+    dst[idx] = k0 * src[s0 * wu + x]
+        + k1 * src[s1 * wu + x]
+        + k2 * src[s2 * wu + x]
+        + k3 * src[s3 * wu + x]
+        + k4 * src[s4 * wu + x]
+        + k5 * src[s5 * wu + x]
+        + k6 * src[s6 * wu + x]
+        + k7 * src[s7 * wu + x]
+        + k8 * src[s8 * wu + x]
+        + k9 * src[s9 * wu + x]
+        + k10 * src[s10 * wu + x]
+        + k11 * src[s11 * wu + x]
+        + k12 * src[s12 * wu + x];
+}
+
+/// Reflect index `i` into `[0, n)` for the PU blur. Matches
+/// torchvision's `F.pad(..., mode='reflect')` (no edge repeat).
+/// Inline-able from #[cube] bodies.
+#[cube]
+fn reflect_pu_idx(i: i32, n: i32) -> usize {
+    let mut j = i;
+    // Up to four folds cover the kernel-radius-6 range we use. For
+    // bands ≥ 7 px (the only sizes where this kernel runs) one or
+    // two folds suffice; the extra branches are cheap and keep
+    // the function defined for all inputs.
+    if j < 0 {
+        j = -j;
+    }
+    if j >= n {
+        j = 2 * n - 2 - j;
+    }
+    if j < 0 {
+        j = -j;
+    }
+    if j >= n {
+        j = 2 * n - 2 - j;
+    }
+    j as usize
+}
+
 /// cvvdp's `phase_uncertainty` for an entire band. If both
 /// dimensions exceed `PU_PADSIZE = 6`, applies the σ=3 separable
 /// Gaussian blur; otherwise just scales by `10^mask_c`.
