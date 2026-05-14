@@ -5,6 +5,7 @@
 //! Tolerance is 1e-4 absolute on the PPD itself — for a typical
 //! standard_4k (PPD ≈ 75.4) that's 1.3 ppm relative, well within
 //! f32 noise.
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::params::DisplayGeometry;
 

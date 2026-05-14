@@ -111,21 +111,21 @@ fn compute_dkl_gauss_pyramid_matches_host_scalar() {
         let expected_w = if k == 0 { w as usize } else { prev_w / 2 };
         let expected_h = if k == 0 { h as usize } else { prev_h / 2 };
         let expected_n = expected_w * expected_h;
-        for c in 0..3 {
+        for (c, gpu_plane) in gpu_level.iter().enumerate() {
             assert_eq!(
-                gpu_level[c].len(),
+                gpu_plane.len(),
                 expected_n,
                 "level {k} channel {c}: got {} elements, expected {expected_n}",
-                gpu_level[c].len()
+                gpu_plane.len()
             );
         }
 
         if k > 0 {
             // Reduce each host channel from prev level into current.
-            for c in 0..3 {
+            for plane in host_level.iter_mut() {
                 let mut reduced = Vec::new();
-                gausspyr_reduce_scalar(&host_level[c], prev_w, prev_h, &mut reduced);
-                host_level[c] = reduced;
+                gausspyr_reduce_scalar(plane, prev_w, prev_h, &mut reduced);
+                *plane = reduced;
             }
         }
 

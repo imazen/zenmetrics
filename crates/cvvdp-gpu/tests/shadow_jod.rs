@@ -42,7 +42,6 @@ fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
 
 #[test]
 fn shadow_jod_runs_and_is_monotonic_on_corpus() {
-    let corpus = zenmetrics_corpus::corpus_dir();
     let (w, h) = (256u32, 256u32);
 
     let display = DisplayModel::STANDARD_4K;

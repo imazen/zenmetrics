@@ -15,6 +15,7 @@
 //!
 //! against the `standard_4k` display model
 //! (Y_peak=200, contrast=1000, E_ambient=250, k_refl=0.005, sRGB EOTF).
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
 use cvvdp_gpu::params::DisplayModel;

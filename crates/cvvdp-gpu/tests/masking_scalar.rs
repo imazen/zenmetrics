@@ -8,6 +8,7 @@
 //! `M * 10^mask_c` form applies — which is what the Rust port
 //! currently implements. The blur path lands when whole-image
 //! parity is wired (coarse-level bands > 6 px).
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::masking::mult_mutual_pixel;
 

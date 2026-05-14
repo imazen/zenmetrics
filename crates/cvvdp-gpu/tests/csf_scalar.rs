@@ -21,6 +21,7 @@
 //! csf = castleCSF(csf_version='weber_fixed_size', device='cpu')
 //! # iterate rho × l_bkg × cc, call csf.sensitivity(rho, omega=0, ...)
 //! ```
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::csf::{
     CsfChannel, flatten_band_weights, precomputed_band_weights, sensitivity_scalar,

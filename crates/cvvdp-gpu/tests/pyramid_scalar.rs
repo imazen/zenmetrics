@@ -16,6 +16,7 @@
 //! reduce = dec.gausspyr_reduce(x, kernel_a=0.4)
 //! expand = dec.gausspyr_expand(reduce, sz=[8, 8], kernel_a=0.4)
 //! ```
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::pyramid::{
     band_frequencies, gausspyr_expand_scalar, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,

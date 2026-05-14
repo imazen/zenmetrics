@@ -5,6 +5,7 @@
 //! - near-perfect (~10 JOD)
 //! - middling (~9.99 JOD)
 //! - strongly distorted (~9.93 JOD)
+#![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, met2jod};
 
@@ -40,7 +41,7 @@ mod gpu {
         // single-slot Atomic<f32> partial; host finalises with
         // pool_band_finalize.
         let band_h = client.create_from_slice(f32::as_bytes(&band));
-        let partial_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; 1]));
+        let partial_h = client.create_from_slice(f32::as_bytes(&[0.0_f32; 1]));
 
         let cube_dim = CubeDim::new_1d(64);
         let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
