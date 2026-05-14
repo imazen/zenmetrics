@@ -91,23 +91,16 @@ fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
 
 /// Host-scalar CSF sensitivity for still-image cvvdp (omega = 0).
 ///
-/// - `rho`     — spatial frequency in cy/deg
-/// - `l_bkg`   — background luminance in cd/m² (must be > 0)
-/// - `cc`      — opponent channel
-///
-/// cvvdp v0.5.4 quirk: although the LUT's L_bkg axis is in log10
-/// space, cvvdp's call site (`cvvdp_metric.py:651`) passes the
-/// **raw** linear luminance from the Gaussian pyramid as the
-/// `logL_bkg` argument (variable misnamed; no log10 applied). The
-/// `interp1q` clamps queries outside the axis range, so for the
-/// typical L_bkg = 10–200 cd/m² range this saturates at the
-/// log_L_bkg axis maximum (= 4.0 → L = 10⁴), giving roughly
-/// constant max sensitivity. We replicate this raw-input behaviour
-/// for parity. Pass `l_bkg.log10()` here if you want the
-/// physically-correct lookup.
-pub fn sensitivity_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
+/// - `rho`      — spatial frequency in cy/deg
+/// - `log_l_bkg` — log10 of background luminance in cd/m². cvvdp's
+///                `csf.sensitivity()` expects this argument already in
+///                log10 space (matches the LUT's L_bkg axis). The
+///                pycvvdp pipeline applies the log10 before the call
+///                via `weber_contrast_pyr` — host_scalar does it
+///                explicitly.
+/// - `cc`       — opponent channel
+pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let log_rho_q = rho.max(1e-6).log10();
-    let l_bkg_q = l_bkg; // raw — matches cvvdp's quirky parameter handling
     let lut = channel_lut(cc);
 
     let mut logs_row = [0.0_f32; N_L_BKG];
@@ -116,14 +109,15 @@ pub fn sensitivity_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
         logs_row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, row, log_rho_q);
     }
 
-    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, l_bkg_q);
+    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg);
 
     10.0_f32.powf(log_s)
 }
 
-/// Sensitivity with cvvdp's published correction applied.
-pub fn sensitivity_corrected_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32 {
-    let s = sensitivity_scalar(rho, l_bkg, cc);
+/// Sensitivity with cvvdp's published correction applied. Same
+/// log10-space `log_l_bkg` convention as `sensitivity_scalar`.
+pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
+    let s = sensitivity_scalar(rho, log_l_bkg, cc);
     let correction = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
     s * correction
 }

@@ -9,7 +9,7 @@ Tracking faithful-port progress against the Python reference
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
-| CSF weighting      | `kernels/csf`          | scalar (raw-L_bkg quirk) + kernel + table | 60 pts vs pycvvdp + GPU scale parity     |
+| CSF weighting      | `kernels/csf`          | scalar (log10 L_bkg) + kernel + table     | 60 pts vs pycvvdp + GPU scale parity      |
 | Contrast masking   | `kernels/masking`      | scalar mult-mutual + PU σ=3 blur + CH_GAIN| 4×4×3 small-band <1e-3 rel; whole-image    |
 | Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
@@ -41,6 +41,30 @@ The cvvdp parameter JSON gets vendored into
   Closed by replicating torchvision's `GaussianBlur(13, 3.0)`
   kernel + reflect padding. Whole-image parity gate via `shadow_jod`
   closed ~0.5-1.5 JOD of the gap.
+
+- **cvvdp v0.5.4 uses `weber_contrast_pyr`, NOT vanilla Laplacian**
+  for the `contrast = "weber_g1"` config. `weber_contrast_pyr` (from
+  `pycvvdp.lpyr_dec`) builds bands as Weber-contrast ratios
+  (`band = (gauss[k] - expand(gauss[k+1])) / gauss[k+1]`-flavoured
+  forms) on the linear DKL planes, and the call site implicitly
+  log10s the gauss output before passing it to CSF. The Rust port
+  currently uses vanilla Laplacian + explicit log10 in host_scalar.
+  This is the dominant cause of the remaining ~1.4 JOD gap to
+  pycvvdp at high q (shadow q90 = 8.60 vs pycvvdp 9.99). Porting
+  weber_contrast_pyr is the biggest single chunk left.
+
+- **`lpyr.get_band` multiplies non-edge Laplacian bands by 2.0**
+  (cvvdp's `lpyr_dec.get_band` does `band_mul = 2.0` for
+  `0 < bb < n-1`, else 1.0). Our port doesn't replicate this gain
+  on the band readout. Affects masking input magnitudes by 2× on
+  bands 1..n-2.
+
+- **cvvdp's baseband uses `|T_f - R_f| * S` (no masking model)**
+  with `rho_band[last] = 0.1` clamp before the CSF lookup. Trivial
+  to wire once weber_contrast_pyr brings the baseband magnitudes
+  into the same units cvvdp's Q_per_ch[last] reflects (~6.88 for
+  VY in the v1 manifest; vanilla Laplacian + |T-R|*S gives ~712,
+  the 100× discrepancy that defeated tick 23's attempt).
 
 - **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
   of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks

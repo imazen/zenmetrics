@@ -4,23 +4,25 @@
 //! pooling → JOD) at the standard_4k display config.
 //!
 //! This test does NOT yet assert tight pycvvdp parity. Observed
-//! shadow on the v1 corpus (standard_4k, l_bkg=100, CH_GAIN +
-//! PU blur both on):
+//! shadow on the v1 corpus (standard_4k, per-pixel L_bkg + log10
+//! contract + CH_GAIN + PU blur):
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~6.3
-//!   5    8.89               ~7.0
-//!   20   9.71               ~8.5
-//!   45   9.83               ~8.4
-//!   70   9.89               ~8.8
-//!   90   9.99               ~9.0
+//!   1    7.65               ~5.9
+//!   5    8.89               ~6.8
+//!   20   9.71               ~8.1
+//!   45   9.83               ~8.0
+//!   70   9.89               ~8.4
+//!   90   9.99               ~8.6
 //! ```
 //!
-//! Remaining gap (~1.0 JOD at high q) attributed to:
-//! - **Global L_bkg approximation**: cvvdp uses per-pixel L_bkg
-//!   from the reference's achromatic Gaussian-pyramid level
-//!   matching each band.
+//! Remaining gap (~1.4 JOD at high q) attributed to:
+//! - **`weber_contrast_pyr` not yet ported**: cvvdp v0.5.4's actual
+//!   pyramid for `contrast = "weber_g1"` is NOT vanilla Laplacian;
+//!   it produces Weber-contrast bands and implicitly log10s the
+//!   gauss output. The Rust port still uses vanilla Laplacian + an
+//!   explicit log10 in host_scalar. See PORT_STATUS for details.
 //!
 //! Both produce a JOD that broadly increases with q, but the
 //! shadow's absolute scale is ~2-3 JOD lower. The non-monotone
@@ -59,7 +61,6 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
     let display = DisplayModel::STANDARD_4K;
     let geom = DisplayGeometry::STANDARD_4K;
     let ppd = geom.pixels_per_degree();
-    let l_bkg = display.y_peak / 2.0;
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
@@ -74,7 +75,6 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
             h as usize,
             display,
             ppd,
-            l_bkg,
         );
         eprintln!("q={q:>2}: shadow JOD = {jod:.4}");
         jods.push((q, jod));

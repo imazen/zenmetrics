@@ -1,23 +1,10 @@
 //! Composed host-scalar still-image cvvdp pipeline.
 //!
 //! Chains all the per-stage host scalars into a single
-//! `predict_jod_still_3ch` entry point. The intermediate values
-//! match cvvdp v0.5.4 at each stage (verified by per-stage parity
-//! tests); the composed result diverges from pycvvdp's manifest
-//! JOD wherever the port has documented simplifications:
-//!
-//! - **Global L_bkg approximation**: cvvdp uses per-pixel L_bkg
-//!   from the achromatic channel's Gaussian pyramid at level 1.
-//!   This module accepts a scalar `l_bkg` and applies it to all
-//!   pixels — accurate for uniform images, biased for high-contrast
-//!   ones.
-//! - **No phase-uncertainty Gaussian blur**: cvvdp applies a σ=3
-//!   separable Gaussian to the M_mm tensor for bands > 6×6 px.
-//!   The Rust port currently uses the no-blur path everywhere,
-//!   which produces a sharper masker and biases the JOD lower.
-//!
-//! Use this for sanity-checking the math composition; whole-image
-//! pycvvdp parity needs the gaps closed.
+//! `predict_jod_still_3ch` entry point. Each stage's parity vs
+//! pycvvdp v0.5.4 is verified by a dedicated test; the composed
+//! result is exercised by `tests/shadow_jod.rs` against the v1 R2
+//! manifest.
 
 use crate::kernels::color::srgb_byte_to_dkl_scalar;
 use crate::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
@@ -25,7 +12,9 @@ use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
-use crate::kernels::pyramid::{band_frequencies, laplacian_pyramid_dec_scalar};
+use crate::kernels::pyramid::{
+    band_frequencies, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
+};
 use crate::params::DisplayModel;
 
 /// Predict cvvdp JOD for a still-image (reference, distorted) pair.
@@ -36,9 +25,14 @@ use crate::params::DisplayModel;
 /// - `width`, `height` — image dimensions in pixels.
 /// - `display` — photometric display model (luminance + EOTF).
 /// - `ppd` — pixels-per-degree (from `DisplayGeometry::pixels_per_degree`).
-/// - `l_bkg` — global background-luminance approximation (cd/m²).
 ///
 /// Returns predicted JOD in `[0, 10]` (10 = imperceptible).
+///
+/// Uses per-pixel L_bkg from the reference's achromatic Gaussian
+/// pyramid, matching cvvdp v0.5.4's `process_block_of_frames` —
+/// each band's CSF lookup queries `gauss_a[bb][i]` where `bb` is
+/// the band index and `i` is the per-pixel index into the
+/// band-sized buffer.
 pub fn predict_jod_still_3ch(
     ref_srgb: &[u8],
     dist_srgb: &[u8],
@@ -46,7 +40,6 @@ pub fn predict_jod_still_3ch(
     height: usize,
     display: DisplayModel,
     ppd: f32,
-    l_bkg: f32,
 ) -> f32 {
     assert_eq!(ref_srgb.len(), width * height * 3);
     assert_eq!(dist_srgb.len(), width * height * 3);
@@ -93,55 +86,63 @@ pub fn predict_jod_still_3ch(
     ];
     let n_levels = ref_bands[0].len();
 
-    // Per-band per-channel CSF sensitivity (one scalar per band per
-    // channel using the global L_bkg approximation).
+    // Build the Gaussian pyramid of the reference's achromatic plane
+    // — this is the per-pixel L_bkg cvvdp uses for the CSF lookup at
+    // each band.
     let freqs = band_frequencies(ppd, width, height);
     let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
-    let mut s_per_band: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
-    for k in 0..n_levels {
-        let rho = freqs[k];
-        s_per_band.push([
-            sensitivity_corrected_scalar(rho, l_bkg, channels[0]),
-            sensitivity_corrected_scalar(rho, l_bkg, channels[1]),
-            sensitivity_corrected_scalar(rho, l_bkg, channels[2]),
-        ]);
+    let mut gauss_ref_a: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
+    gauss_ref_a.push(ref_planes[0].clone());
+    let mut prev_w = width;
+    let mut prev_h = height;
+    for _ in 1..n_levels {
+        let mut next = Vec::new();
+        let (nw, nh) = gausspyr_reduce_scalar(
+            gauss_ref_a.last().unwrap(),
+            prev_w,
+            prev_h,
+            &mut next,
+        );
+        gauss_ref_a.push(next);
+        prev_w = nw;
+        prev_h = nh;
     }
 
     // For each band: apply CSF weighting → masking → spatial pool.
-    // Build Q_per_ch[level][channel] for the final pooling stage.
+    // Baseband-bypass and rho-clamp behaviour mirror cvvdp's
+    // weber_contrast_pyr path which we have NOT yet ported (vanilla
+    // Laplacian + linear DKL bands here vs. cvvdp's Weber-contrast
+    // Laplacian + log10(gauss) for L_bkg). Documented in PORT_STATUS.
     let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
     for k in 0..n_levels {
         let bw = ref_bands[0][k].w;
         let bh = ref_bands[0][k].h;
         let n_px = bw * bh;
-        let s = s_per_band[k];
+        let rho = freqs[k];
+        let l_bkg_band = &gauss_ref_a[k];
+        debug_assert_eq!(l_bkg_band.len(), n_px);
 
-        // Build T_p, R_p per channel: T * S * CH_GAIN.
-        let t_p_per_ch: [Vec<f32>; 3] = [
-            (0..n_px)
-                .map(|i| dis_bands[0][k].data[i] * s[0] * CH_GAIN[0])
-                .collect(),
-            (0..n_px)
-                .map(|i| dis_bands[1][k].data[i] * s[1] * CH_GAIN[1])
-                .collect(),
-            (0..n_px)
-                .map(|i| dis_bands[2][k].data[i] * s[2] * CH_GAIN[2])
-                .collect(),
-        ];
-        let r_p_per_ch: [Vec<f32>; 3] = [
-            (0..n_px)
-                .map(|i| ref_bands[0][k].data[i] * s[0] * CH_GAIN[0])
-                .collect(),
-            (0..n_px)
-                .map(|i| ref_bands[1][k].data[i] * s[1] * CH_GAIN[1])
-                .collect(),
-            (0..n_px)
-                .map(|i| ref_bands[2][k].data[i] * s[2] * CH_GAIN[2])
-                .collect(),
-        ];
+        // Build T_p, R_p per channel: T * S(rho, log10(L_bkg[i]), cc) * CH_GAIN.
+        // cvvdp's `csf.sensitivity` expects the L_bkg argument in
+        // log10 space (the LUT's L_bkg axis is log10); the cvvdp
+        // pipeline log10s its gauss-pyramid output before the call.
+        let mut t_p_per_ch: [Vec<f32>; 3] =
+            [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        let mut r_p_per_ch: [Vec<f32>; 3] =
+            [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        for i in 0..n_px {
+            let log_l = l_bkg_band[i].max(1e-6).log10();
+            let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);
+            let s_rg = sensitivity_corrected_scalar(rho, log_l, channels[1]);
+            let s_vy = sensitivity_corrected_scalar(rho, log_l, channels[2]);
+            t_p_per_ch[0][i] = dis_bands[0][k].data[i] * s_a * CH_GAIN[0];
+            t_p_per_ch[1][i] = dis_bands[1][k].data[i] * s_rg * CH_GAIN[1];
+            t_p_per_ch[2][i] = dis_bands[2][k].data[i] * s_vy * CH_GAIN[2];
+            r_p_per_ch[0][i] = ref_bands[0][k].data[i] * s_a * CH_GAIN[0];
+            r_p_per_ch[1][i] = ref_bands[1][k].data[i] * s_rg * CH_GAIN[1];
+            r_p_per_ch[2][i] = ref_bands[2][k].data[i] * s_vy * CH_GAIN[2];
+        }
 
-        // Band-level masking with phase-uncertainty blur for large
-        // bands (cvvdp's mult-mutual + xchannel).
         let d_per_ch = mult_mutual_band(&t_p_per_ch, &r_p_per_ch, bw, bh);
 
         // Spatial pool per channel (RMS = beta_spatial).
