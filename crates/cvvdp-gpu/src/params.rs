@@ -18,31 +18,46 @@
 
 /// Display model: how sRGB bytes are mapped to physical luminance
 /// (cd/m²) before perceptual processing.
+///
+/// Matches cvvdp's `vvdp_display_photo_eotf.forward` for the sRGB EOTF
+/// branch:
+///
+/// ```text
+/// L_rgb = (y_peak - y_black) * srgb2lin(byte / 255) + y_black + y_refl
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct DisplayModel {
-    /// Peak display luminance in cd/m². cvvdp default: 100.0 (sRGB).
+    /// Peak display luminance in cd/m².
     pub y_peak: f32,
-    /// Black level in cd/m² (display contrast = `y_peak / y_black`).
+    /// Black level in cd/m² (`y_peak / contrast`).
     pub y_black: f32,
-    /// Ambient illumination reflected off the screen (cd/m²).
+    /// Light reflected from the screen, precomputed host-side from
+    /// `E_ambient / π * k_refl`.
     pub y_refl: f32,
-    /// Display EOTF gamma. cvvdp default for sRGB-byte input: the sRGB
-    /// piecewise EOTF (signaled by `is_srgb = true`).
-    pub gamma: f32,
-    /// Flag selecting the sRGB piecewise EOTF vs pure power-law gamma.
-    pub is_srgb: bool,
 }
 
 impl DisplayModel {
-    /// cvvdp's published sRGB / standard-display defaults.
-    pub const SRGB_STD: Self = Self {
-        y_peak: 100.0,
-        y_black: 0.5,
-        y_refl: 0.0,
-        gamma: 2.2,
-        is_srgb: true,
+    /// cvvdp's `standard_4k` defaults — peak 200 cd/m², contrast 1000,
+    /// 250 lux ambient, k_refl 0.005, sRGB EOTF. The v1 R2 goldens
+    /// were captured under this display.
+    pub const STANDARD_4K: Self = Self {
+        y_peak: 200.0,
+        y_black: 0.2,
+        y_refl: 0.397_887_36,
     };
 }
+
+/// Combined `sRGB linear-RGB → DKLd65` matrix (row-major), computed at
+/// f64 precision from cvvdp's published per-stage matrices:
+/// `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ sRGB_to_XYZ`.
+///
+/// Apply per-pixel as:
+/// `dkl[c] = M[c][0]*r_lin + M[c][1]*g_lin + M[c][2]*b_lin`.
+pub const SRGB_LINEAR_TO_DKL: [[f32; 3]; 3] = [
+    [0.233_201_21, 0.728_830_8, 0.088_995_87],
+    [0.127_620_77, -0.087_068_09, -0.036_777_39],
+    [-0.214_822_5, -0.626_253_7, 0.851_403_3],
+];
 
 /// castleCSF achromatic + chrom params. Concrete numbers come from the
 /// vendored cvvdp JSON; placeholders until pin.
@@ -103,7 +118,7 @@ impl CvvdpParams {
     /// require parity must not use these defaults — they should
     /// construct `CvvdpParams` from the vendored numbers explicitly.
     pub const PLACEHOLDER: Self = Self {
-        display: DisplayModel::SRGB_STD,
+        display: DisplayModel::STANDARD_4K,
         csf: CsfParams {
             a_peak: 0.0,
             rg_peak: 0.0,

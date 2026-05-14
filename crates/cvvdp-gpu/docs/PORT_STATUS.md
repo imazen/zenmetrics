@@ -3,16 +3,16 @@
 Tracking faithful-port progress against the Python reference
 (`gfxdisp/ColorVideoVDP`). One row per pipeline stage.
 
-| Stage              | Module                 | Status     | Goldens? |
-|--------------------|------------------------|------------|----------|
-| sRGB → linear      | `kernels/color`        | scaffold   | no       |
-| Display model      | `kernels/color`        | scaffold   | no       |
-| RGB → DKL          | `kernels/color`        | scaffold   | no       |
-| Laplacian pyramid  | `kernels/pyramid`      | scaffold   | no       |
-| CSF weighting      | `kernels/csf`          | scaffold   | no       |
-| Contrast masking   | `kernels/masking`      | scaffold   | no       |
-| Per-band pooling   | `kernels/pool`         | scaffold   | no       |
-| Host fold / JOD    | `pipeline`             | scaffold   | no       |
+| Stage              | Module                 | Status                                   | Parity check                              |
+|--------------------|------------------------|------------------------------------------|-------------------------------------------|
+| sRGB → linear      | `kernels/color`        | host scalar + cubecl kernel body         | 2e-3 vs pycvvdp scalar goldens            |
+| Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
+| RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
+| Laplacian pyramid  | `kernels/pyramid`      | host scalar (reduce/expand) interior-OK  | constant-signal interior + GAUSS5 sum     |
+| CSF weighting      | `kernels/csf`          | scaffold                                 | none                                      |
+| Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
+| Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
+| Host fold / JOD    | `pipeline`             | scaffold                                 | none                                      |
 
 ## Reference version pin
 
@@ -34,9 +34,14 @@ The cvvdp parameter JSON gets vendored into
 
 ## Open questions
 
-- **Edge handling in the pyramid filters**: cvvdp's reference uses
-  `replicate` border in PyTorch's `F.conv2d(padding_mode='replicate')`.
-  Confirm during port.
+- **Edge fix-ups for pyramid reduce/expand**: cvvdp v0.5.4 uses
+  `F.conv2d(padding=2)` + explicit row/col patches that reproduce
+  symmetric reflection (see `lpyr_dec.gausspyr_reduce`/`gausspyr_expand`).
+  The Rust port currently uses pure symmetric reflection via a
+  reflect-index helper, which matches the interior exactly but
+  diverges on the outer 2-pixel ring (for expand) and the top/bottom
+  rows of odd-height inputs (for reduce). Need to port the explicit
+  patches before any whole-image JOD parity test can pass.
 - **Per-band CSF weight precomputation**: should the host upload one
   flat `f32` array (`n_levels × N_CHANNELS`) or one tensor per band?
   Single flat upload is simpler; keep unless a per-band variant becomes
