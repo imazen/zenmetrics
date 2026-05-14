@@ -4,19 +4,18 @@
 //! pooling → JOD) at the standard_4k display config.
 //!
 //! This test does NOT yet assert tight pycvvdp parity. Documented
-//! simplifications (global L_bkg, no PU Gaussian blur, no
-//! `ch_gain` per-channel multiplier in CSF) bias the JOD scale
-//! systematically lower than pycvvdp's manifest values. Observed
-//! shadow on the v1 corpus (standard_4k, l_bkg=100):
+//! simplifications (global L_bkg, no PU Gaussian blur) bias the
+//! JOD scale lower than pycvvdp's manifest values. Observed shadow
+//! on the v1 corpus (standard_4k, l_bkg=100, CH_GAIN applied):
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~5.2
-//!   5    8.89               ~5.6
+//!   1    7.65               ~5.4
+//!   5    8.89               ~5.8
 //!   20   9.71               ~6.8
 //!   45   9.83               ~6.7
 //!   70   9.89               ~7.3
-//!   90   9.99               ~7.8
+//!   90   9.99               ~7.9
 //! ```
 //!
 //! Both produce a JOD that broadly increases with q, but the

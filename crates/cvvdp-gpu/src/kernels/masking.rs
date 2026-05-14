@@ -28,6 +28,21 @@
 
 use cubecl::prelude::*;
 
+/// Per-channel gain `[1, 1.45, 1]` that cvvdp's `mult-mutual` path
+/// applies to `T_p` and `R_p` together with the CSF sensitivity `S`,
+/// BEFORE masking:
+///
+/// ```text
+/// T_p = T * S * CH_GAIN
+/// R_p = R * S * CH_GAIN
+/// ```
+///
+/// In cvvdp v0.5.4 the 4-channel tensor is `[1, 1.45, 1, 1]`; the
+/// still-image 3-channel pipeline slices to `[1, 1.45, 1]`. Apply
+/// at the masking call site — the CSF kernel itself doesn't bake
+/// this in.
+pub const CH_GAIN: [f32; 3] = [1.0, 1.45, 1.0];
+
 /// `mask_p` exponent from cvvdp v0.5.4.
 pub const MASK_P: f32 = 2.264_355_2;
 

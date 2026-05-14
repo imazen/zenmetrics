@@ -15,17 +15,13 @@
 //!   separable Gaussian to the M_mm tensor for bands > 6×6 px.
 //!   The Rust port currently uses the no-blur path everywhere,
 //!   which produces a sharper masker and biases the JOD lower.
-//! - **No CSF ch_gain multiplier**: cvvdp's `mult-mutual` path
-//!   applies an extra per-channel gain `[1, 1.45, 1]` to T_p and
-//!   R_p before masking. This module skips it for symmetry with
-//!   the GPU CSF kernel.
 //!
 //! Use this for sanity-checking the math composition; whole-image
 //! pycvvdp parity needs the gaps closed.
 
 use crate::kernels::color::srgb_byte_to_dkl_scalar;
 use crate::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
-use crate::kernels::masking::mult_mutual_pixel;
+use crate::kernels::masking::{CH_GAIN, mult_mutual_pixel};
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
@@ -120,19 +116,21 @@ pub fn predict_jod_still_3ch(
         let n_px = bw * bh;
         let s = s_per_band[k];
 
-        // Per-pixel masking with CSF-weighted contrasts.
+        // Per-pixel masking with CSF-weighted contrasts. cvvdp's
+        // `mult-mutual` path multiplies by S and CH_GAIN before
+        // masking — same form is replicated here.
         let mut d_per_ch: [Vec<f32>; 3] =
             [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
         for i in 0..n_px {
             let t_p = [
-                dis_bands[0][k].data[i] * s[0],
-                dis_bands[1][k].data[i] * s[1],
-                dis_bands[2][k].data[i] * s[2],
+                dis_bands[0][k].data[i] * s[0] * CH_GAIN[0],
+                dis_bands[1][k].data[i] * s[1] * CH_GAIN[1],
+                dis_bands[2][k].data[i] * s[2] * CH_GAIN[2],
             ];
             let r_p = [
-                ref_bands[0][k].data[i] * s[0],
-                ref_bands[1][k].data[i] * s[1],
-                ref_bands[2][k].data[i] * s[2],
+                ref_bands[0][k].data[i] * s[0] * CH_GAIN[0],
+                ref_bands[1][k].data[i] * s[1] * CH_GAIN[1],
+                ref_bands[2][k].data[i] * s[2] * CH_GAIN[2],
             ];
             let d = mult_mutual_pixel(t_p, r_p);
             d_per_ch[0][i] = d[0];
