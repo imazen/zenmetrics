@@ -2,31 +2,32 @@
 //!
 //! Pipeline order (per reference/distorted side):
 //!
-//! 1. `color`   — sRGB packed-u8 → linear → DKL opponent planar f32
-//!                via per-row display model (luminance + EOTF) and the
-//!                cvvdp RGB→LMS→DKL matrix product.
-//! 2. `pyramid` — per-channel Laplacian decomposition (downscale +
-//!                upscale + subtract). Produces `n_levels` band buffers
-//!                per channel.
-//! 3. `csf`     — per-band sensitivity weighting (castleCSF for the
-//!                achromatic channel, chrom variants for RG/VY).
-//! 4. `masking` — within-channel + cross-channel contrast masking.
-//!                Produces per-pixel masked differences per band.
-//! 5. `pool`    — Minkowski accumulation per band, then per channel.
-//!                Per-band partials are produced here; the host-side
-//!                folder combines them into the scalar `D` and applies
-//!                the JOD mapping.
-//! 6. `reduce`  — common reduction utilities (per-column f64 accums,
-//!                final host fold) shared by `pool` and any per-band
-//!                debug taps.
+//! 1. [`color`]   — sRGB packed-u8 → linear → DKL opponent planar
+//!                  f32 via the cvvdp RGB→LMS→DKL matrix product.
+//! 2. [`pyramid`] — per-channel Weber-contrast decomposition:
+//!                  downscale + upscale + subtract builds the
+//!                  Laplacian-style layer, then
+//!                  `weber_contrast_compute_kernel` divides by the
+//!                  per-pixel achromatic `L_bkg` plane (clamped to
+//!                  `±1000` over `max(L_bkg, 0.01)`). Baseband
+//!                  bypasses Weber.
+//! 3. [`csf`]     — per-pixel CSF apply using the
+//!                  `csf_lut_weber_fixed_size` LUT, with bilinear
+//!                  interp over `(log_rho, log_L_bkg)` for all three
+//!                  `omega = 0` channels (A, RG, VY).
+//! 4. [`masking`] — cvvdp `mult-mutual` masking with the `XCM_3X3`
+//!                  cross-channel matrix; small bands skip the σ = 3
+//!                  PU blur (`pu_padsize = 6` gate).
+//! 5. [`pool`]    — per-band Minkowski accumulation + 3-stage
+//!                  host fold + `met2jod` piecewise.
 //!
-//! Numerical parity target: bit-stable to the Python `pycvvdp`
-//! reference's float32 path. Per-thread accumulators stay in f64
-//! where the reference uses f64 reductions; otherwise f32.
+//! Numerical parity target: matches pycvvdp v0.5.4 within ~0.006 JOD
+//! on the v1 R2 manifest across q1–q90 fixtures. Per-thread
+//! accumulators stay in f64 where the reference uses f64 reductions;
+//! otherwise f32.
 
 pub mod color;
 pub mod csf;
 pub mod masking;
 pub mod pool;
 pub mod pyramid;
-pub mod reduce;

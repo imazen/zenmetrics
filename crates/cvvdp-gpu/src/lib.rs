@@ -24,20 +24,34 @@
 //!    (gamma + peak luminance + ambient).
 //! 2. **Color transform**: linear RGB → DKL opponent space
 //!    `(A, RG, VY)`.
-//! 3. **Pyramid**: per-channel Laplacian (still mode uses Laplacian,
-//!    not steerable). ~7 levels for a 1024-wide image.
-//! 4. **CSF**: per-band contrast sensitivity weighting (castleCSF for
-//!    achromatic, separate chrom CSF for RG/VY).
-//! 5. **Masking**: within-channel + cross-channel contrast masking with
-//!    cvvdp's power-law model.
-//! 6. **Pooling**: Minkowski-norm per band → per channel → overall
-//!    distortion `D`.
-//! 7. **JOD**: `JOD = jod_a - jod_b * D^jod_c`.
+//! 3. **Pyramid**: per-channel **Weber-contrast** pyramid
+//!    (`contrast="weber_g1"`) — non-baseband bands are
+//!    `clip(layer / max(L_bkg, 0.01), ±1000)` with `L_bkg` taken from
+//!    the per-pixel expanded achromatic gauss. Baseband bypasses
+//!    Weber and feeds directly into pooling. ~7 levels for a
+//!    1024-wide image.
+//! 4. **CSF**: per-pixel LUT lookup of castleCSF
+//!    `weber_fixed_size` — bilinear interp over
+//!    `(log_rho, log_L_bkg)` for the three `omega = 0` channels
+//!    (achromatic A, red-green RG, violet-yellow VY), then `T_p =
+//!    weber × S × CH_GAIN`.
+//! 5. **Masking**: cvvdp's `mult-mutual` with cross-channel pooling
+//!    (`MASK_P / MASK_Q / MASK_C / D_MAX` + the `XCM_3X3` matrix).
+//!    Bands smaller than `pu_padsize = 6` skip the σ = 3 PU blur;
+//!    larger bands run separable 13-tap Gaussian blur first.
+//! 6. **Pooling**: 3-stage Minkowski fold per `(band, channel)` →
+//!    per-channel → overall `D`.
+//! 7. **JOD**: piecewise [`pool::met2jod`] — two `jod_a/b/c` regimes
+//!    joined continuously at `Q = 0.1`.
 //!
 //! ## Status
 //!
-//! Scaffolding — kernel bodies are stubs. Goldens against the Python
-//! reference land per stage. See `docs/PORT_STATUS.md` once written.
+//! Still-image score matches pycvvdp v0.5.4 within ~0.006 JOD across
+//! q1–q90 fixtures on the v1 R2 manifest. The `Cvvdp::score` public
+//! API currently routes through [`host_scalar::predict_jod_still_3ch`];
+//! every stage has a parity-tested cubecl kernel in [`kernels`], and
+//! the GPU composition path (replacing the host scalar fold) is the
+//! remaining chunk of pipeline work.
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
