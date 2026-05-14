@@ -89,9 +89,7 @@ fn pool_middling_matches_pycvvdp() {
         [0.4, 0.25, 0.18, 0.12, 0.08, 0.06, 0.04, 0.03],
         [0.3, 0.2, 0.15, 0.1, 0.07, 0.05, 0.03, 0.02],
     ];
-    let q_per_ch: Vec<[f32; 3]> = (0..8)
-        .map(|k| [ch[0][k], ch[1][k], ch[2][k]])
-        .collect();
+    let q_per_ch: Vec<[f32; 3]> = (0..8).map(|k| [ch[0][k], ch[1][k], ch[2][k]]).collect();
     let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
     let expected = 9.987_316_f32;
     assert!(
@@ -107,9 +105,7 @@ fn pool_strong_matches_pycvvdp() {
         [2.0, 1.2, 0.8, 0.6, 0.4, 0.3],
         [1.5, 0.9, 0.6, 0.5, 0.3, 0.2],
     ];
-    let q_per_ch: Vec<[f32; 3]> = (0..6)
-        .map(|k| [ch[0][k], ch[1][k], ch[2][k]])
-        .collect();
+    let q_per_ch: Vec<[f32; 3]> = (0..6).map(|k| [ch[0][k], ch[1][k], ch[2][k]]).collect();
     let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
     let expected = 9.931_840_f32;
     assert!(

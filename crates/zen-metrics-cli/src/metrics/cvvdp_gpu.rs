@@ -95,9 +95,13 @@ fn run<R: Runtime>(
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
     let client = R::client(&Default::default());
-    let mut c =
-        cvvdp_gpu::Cvvdp::<R>::new(client, reference.width, reference.height, cvvdp_gpu::CvvdpParams::PLACEHOLDER)
-            .map_err(|e| format!("Cvvdp::new: {e}"))?;
+    let mut c = cvvdp_gpu::Cvvdp::<R>::new(
+        client,
+        reference.width,
+        reference.height,
+        cvvdp_gpu::CvvdpParams::PLACEHOLDER,
+    )
+    .map_err(|e| format!("Cvvdp::new: {e}"))?;
     let jod = c
         .score(&reference.pixels, &distorted.pixels)
         .map_err(|e| format!("Cvvdp::score: {e}"))?;

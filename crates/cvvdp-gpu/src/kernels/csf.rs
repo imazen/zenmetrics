@@ -216,12 +216,7 @@ pub fn csf_apply_per_pixel_kernel(
 /// per-pixel form (using gauss_a[1] as L_bkg per pixel) is the next
 /// chunk after this.
 #[cube(launch)]
-pub fn weight_band_kernel(
-    band: &mut Array<f32>,
-    weights: &Array<f32>,
-    weight_idx: u32,
-    n: u32,
-) {
+pub fn weight_band_kernel(band: &mut Array<f32>, weights: &Array<f32>, weight_idx: u32, n: u32) {
     let idx = ABSOLUTE_POS;
     if idx >= n as usize {
         terminate!();

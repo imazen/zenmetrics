@@ -232,9 +232,9 @@ fn encode_jpeg(
     use zenjpeg::JpegEncoderConfig;
     use zenjpeg::encode::encoder_types::QuantTableSource;
     use zenjpeg::encoder::{
-        ChromaSubsampling, DownsamplingMethod, EncoderConfig as ZenEncoderConfig,
-        HuffmanStrategy, InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout,
-        ProgressiveScanMode, TinyFileMode,
+        ChromaSubsampling, DownsamplingMethod, EncoderConfig as ZenEncoderConfig, HuffmanStrategy,
+        InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout, ProgressiveScanMode,
+        TinyFileMode,
     };
     use zenpixels::{PixelDescriptor, PixelSlice};
 

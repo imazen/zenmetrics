@@ -74,8 +74,7 @@ fn downscale_kernel_matches_host_scalar() {
     assert_eq!(gpu_out.len(), n_dst);
 
     let mut cpu_out = Vec::new();
-    let (dw_s, dh_s) =
-        gausspyr_reduce_scalar(&INPUT_8X8, sw as usize, sh as usize, &mut cpu_out);
+    let (dw_s, dh_s) = gausspyr_reduce_scalar(&INPUT_8X8, sw as usize, sh as usize, &mut cpu_out);
     assert_eq!((dw_s, dh_s), (dw as usize, dh as usize));
 
     let max_err = gpu_out
@@ -171,8 +170,7 @@ fn weber_contrast_compute_kernel_matches_host_formula() {
     // tiny-clamp to large values; one layer/lbkg ratio over 1000
     // to exercise the upper clamp.
     let layer: Vec<f32> = vec![
-        0.0, 1.0, -1.0, 5.0, -5.0, 50.0, -50.0, 500.0, -500.0, 1.0e5, -1.0e5, 0.001, -0.001,
-        0.0,
+        0.0, 1.0, -1.0, 5.0, -5.0, 50.0, -50.0, 500.0, -500.0, 1.0e5, -1.0e5, 0.001, -0.001, 0.0,
     ];
     let lbkg: Vec<f32> = vec![
         1.0, 1.0, 1.0, 10.0, 100.0, 0.5, 0.005, 0.5, 0.001, 50.0, 50.0, 1.0, 0.001, 0.001,

@@ -279,8 +279,7 @@ pub fn laplacian_pyramid_dec_scalar(
     for k in 1..n {
         let prev = &gauss[k - 1];
         let mut next_data = Vec::new();
-        let (nw, nh) =
-            gausspyr_reduce_scalar(&prev.data, prev.w, prev.h, &mut next_data);
+        let (nw, nh) = gausspyr_reduce_scalar(&prev.data, prev.w, prev.h, &mut next_data);
         gauss.push(Band {
             w: nw,
             h: nh,
@@ -696,13 +695,7 @@ pub fn upscale_v_kernel(
 /// `dst_w × in_h` result. The other ×2 of the ×4 reconstruction
 /// gain lives here.
 #[cube(launch)]
-pub fn upscale_h_kernel(
-    src: &Array<f32>,
-    dst: &mut Array<f32>,
-    src_w: u32,
-    dst_w: u32,
-    in_h: u32,
-) {
+pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_w: u32, in_h: u32) {
     let idx = ABSOLUTE_POS;
     let total = (dst_w * in_h) as usize;
     if idx >= total {

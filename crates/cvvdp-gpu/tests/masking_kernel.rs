@@ -149,10 +149,7 @@ fn pu_blur_two_kernels_match_host_scalar() {
         .zip(&cpu)
         .map(|(a, b)| (a - b).abs())
         .fold(0.0_f32, f32::max);
-    assert!(
-        max_err < 1e-4,
-        "PU blur GPU vs CPU max-abs = {max_err}"
-    );
+    assert!(max_err < 1e-4, "PU blur GPU vs CPU max-abs = {max_err}");
 }
 
 #[test]
@@ -163,11 +160,17 @@ fn mult_mutual_with_blurred_pipeline_matches_host() {
     // path, exercising the chain.
     let (w, h) = (16usize, 16usize);
     let n = w * h;
-    let t_a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.123).sin() * 4.0 + 1.0).collect();
+    let t_a: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.123).sin() * 4.0 + 1.0)
+        .collect();
     let t_rg: Vec<f32> = (0..n).map(|i| (i as f32 * 0.075).cos() * 2.0).collect();
     let t_vy: Vec<f32> = (0..n).map(|i| ((i as f32) - 100.0) * 0.05).collect();
-    let r_a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.123 + 0.3).sin() * 4.0 + 0.7).collect();
-    let r_rg: Vec<f32> = (0..n).map(|i| (i as f32 * 0.075 + 0.1).cos() * 2.0 + 0.1).collect();
+    let r_a: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.123 + 0.3).sin() * 4.0 + 0.7)
+        .collect();
+    let r_rg: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.075 + 0.1).cos() * 2.0 + 0.1)
+        .collect();
     let r_vy: Vec<f32> = (0..n).map(|i| ((i as f32) - 95.0) * 0.05).collect();
 
     let t_p = [t_a.clone(), t_rg.clone(), t_vy.clone()];

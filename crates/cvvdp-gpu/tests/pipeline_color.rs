@@ -23,8 +23,8 @@ fn compute_dkl_planes_matches_host_scalar() {
     let client = Backend::client(&Default::default());
     let (w, h) = (16u32, 16u32);
     let n = (w * h) as usize;
-    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // Non-trivial RGB pattern.
     let mut srgb = Vec::with_capacity(n * 3);
@@ -69,8 +69,8 @@ fn compute_dkl_gauss_pyramid_matches_host_scalar() {
     let client = Backend::client(&Default::default());
     let (w, h) = (16u32, 16u32);
     let n = (w * h) as usize;
-    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     let mut srgb = Vec::with_capacity(n * 3);
     for i in 0..n {
@@ -90,11 +90,7 @@ fn compute_dkl_gauss_pyramid_matches_host_scalar() {
     let display = DisplayModel::STANDARD_4K;
 
     // Level 0: from host scalar color transform.
-    let mut host_level: [Vec<f32>; 3] = [
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-    ];
+    let mut host_level: [Vec<f32>; 3] = [vec![0.0_f32; n], vec![0.0_f32; n], vec![0.0_f32; n]];
     for i in 0..n {
         let (a, rg, vy) = srgb_byte_to_dkl_scalar(
             srgb[i * 3],
@@ -156,8 +152,8 @@ fn compute_dkl_laplacian_pyramid_matches_host_scalar() {
     let client = Backend::client(&Default::default());
     let (w, h) = (16u32, 16u32);
     let n = (w * h) as usize;
-    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     let mut srgb = Vec::with_capacity(n * 3);
     for i in 0..n {
@@ -173,11 +169,7 @@ fn compute_dkl_laplacian_pyramid_matches_host_scalar() {
     let display = DisplayModel::STANDARD_4K;
     // Host reference: build DKL planes per channel, then call
     // laplacian_pyramid_dec_scalar on each channel separately.
-    let mut planes: [Vec<f32>; 3] = [
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-    ];
+    let mut planes: [Vec<f32>; 3] = [vec![0.0_f32; n], vec![0.0_f32; n], vec![0.0_f32; n]];
     for i in 0..n {
         let (a, rg, vy) = srgb_byte_to_dkl_scalar(
             srgb[i * 3],
@@ -227,8 +219,8 @@ fn compute_dkl_csf_weighted_bands_matches_host() {
     let client = Backend::client(&Default::default());
     let (w, h) = (16u32, 16u32);
     let n = (w * h) as usize;
-    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     let mut srgb = Vec::with_capacity(n * 3);
     for i in 0..n {
@@ -248,11 +240,7 @@ fn compute_dkl_csf_weighted_bands_matches_host() {
     // Host reference: same Laplacian path then per-channel × per-level
     // multiply by precomputed_band_weights.
     let display = DisplayModel::STANDARD_4K;
-    let mut planes: [Vec<f32>; 3] = [
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-        vec![0.0_f32; n],
-    ];
+    let mut planes: [Vec<f32>; 3] = [vec![0.0_f32; n], vec![0.0_f32; n], vec![0.0_f32; n]];
     for i in 0..n {
         let (a, rg, vy) = srgb_byte_to_dkl_scalar(
             srgb[i * 3],

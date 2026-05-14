@@ -9,9 +9,7 @@
 use crate::kernels::color::srgb_byte_to_dkl_scalar;
 use crate::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
 use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
-use crate::kernels::pool::{
-    BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean,
-};
+use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
 use crate::params::DisplayModel;
 
@@ -76,14 +74,50 @@ pub fn predict_jod_still_3ch(
     // dist-side bands use dis_planes[0].
     let n_levels_query = 0;
     let ref_weber = [
-        weber_contrast_pyr_dec_scalar(&ref_planes[0], &ref_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&ref_planes[1], &ref_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&ref_planes[2], &ref_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[0],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[1],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[2],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
     ];
     let dis_weber = [
-        weber_contrast_pyr_dec_scalar(&dis_planes[0], &dis_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&dis_planes[1], &dis_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&dis_planes[2], &dis_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[0],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[1],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[2],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
     ];
     let n_levels = ref_weber[0].bands.len();
 
@@ -116,10 +150,8 @@ pub fn predict_jod_still_3ch(
         debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
         // T_p, R_p: band_mul * Weber-contrast * S(rho, log_L_bkg[i], cc) * CH_GAIN.
-        let mut t_p_per_ch: [Vec<f32>; 3] =
-            [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-        let mut r_p_per_ch: [Vec<f32>; 3] =
-            [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        let mut t_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        let mut r_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
         for i in 0..n_px {
             let log_l = log_l_bkg_band[i];
             let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);

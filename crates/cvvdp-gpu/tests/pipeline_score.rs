@@ -33,8 +33,8 @@ fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
 fn cvvdp_score_matches_v1_manifest() {
     let client = Backend::client(&Default::default());
     let (w, h) = (256u32, 256u32);
-    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 

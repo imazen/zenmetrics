@@ -348,10 +348,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Per-level temp buffers are allocated per call (no scratch
     /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
     /// these once.
-    pub fn compute_dkl_laplacian_pyramid(
-        &mut self,
-        srgb: &[u8],
-    ) -> Result<Vec<[Vec<f32>; 3]>> {
+    pub fn compute_dkl_laplacian_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
         // Builds the Gaussian pyramid first (color → reduce chain).
         let _ = self.compute_dkl_gauss_pyramid(srgb)?;
 
@@ -375,8 +372,7 @@ impl<R: Runtime> Cvvdp<R> {
                 let fine = self.gauss_ref[k].planes[c].clone();
                 let band = self.bands_ref[k].planes[c].clone();
 
-                let vscratch =
-                    alloc_zeros_f32(&self.client, n_v);
+                let vscratch = alloc_zeros_f32(&self.client, n_v);
                 let upscaled = alloc_zeros_f32(&self.client, n_fine);
 
                 let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);

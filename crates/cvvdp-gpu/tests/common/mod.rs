@@ -27,8 +27,7 @@ pub const GOLDEN_VERSION: &str = "v1";
 /// Public R2 URL for the manifest. The bucket is the same
 /// `s3://coefficient/` that the sweep infrastructure uses; its public
 /// mirror is configured at `coefficient.r2.imazen.org`.
-pub const MANIFEST_URL: &str =
-    "https://coefficient.r2.imazen.org/cvvdp-goldens/v1/manifest.json";
+pub const MANIFEST_URL: &str = "https://coefficient.r2.imazen.org/cvvdp-goldens/v1/manifest.json";
 
 /// sha256 of the manifest, captured at upload time
 /// (`2026-05-14`, v0.5.4 reference, zenmetrics-corpus 256×256 q-grid).
@@ -54,7 +53,6 @@ pub fn cache_dir() -> PathBuf {
 /// return the local path. Panics on failure — meant for use in tests
 /// where the right behavior is loud failure, not silent skip.
 pub fn fetch(name: &str, sha256: &str) -> PathBuf {
-
     let local = cache_dir().join(name);
     if local.exists() {
         if let Ok(hex) = file_sha256_hex(&local) {

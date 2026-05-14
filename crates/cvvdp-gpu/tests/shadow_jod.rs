@@ -73,9 +73,7 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
             ppd,
         );
         let diff = (jod - expected).abs();
-        eprintln!(
-            "q={q:>2}: shadow JOD = {jod:.4} (pycvvdp {expected:.4}, |diff| {diff:.4})"
-        );
+        eprintln!("q={q:>2}: shadow JOD = {jod:.4} (pycvvdp {expected:.4}, |diff| {diff:.4})");
         assert!(jod.is_finite(), "q={q}: JOD = {jod} (not finite)");
         assert!(
             (0.0..=10.0).contains(&jod),

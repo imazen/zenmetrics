@@ -340,9 +340,7 @@ pub const PU_PADSIZE: usize = 6;
 pub fn mask_pool_pixel(term: [f32; 3]) -> [f32; 3] {
     let mut out = [0.0_f32; 3];
     for cc in 0..3 {
-        out[cc] = XCM_3X3[0][cc] * term[0]
-            + XCM_3X3[1][cc] * term[1]
-            + XCM_3X3[2][cc] * term[2];
+        out[cc] = XCM_3X3[0][cc] * term[0] + XCM_3X3[1][cc] * term[1] + XCM_3X3[2][cc] * term[2];
     }
     out
 }
@@ -419,9 +417,18 @@ pub fn mult_mutual_band(
 
     // Step 3: term[ch][i] = safe_pow(|M_mm[ch][i]|, q[ch]).
     let term: [Vec<f32>; 3] = [
-        m_mm[0].iter().map(|v| safe_pow(v.abs(), MASK_Q[0])).collect(),
-        m_mm[1].iter().map(|v| safe_pow(v.abs(), MASK_Q[1])).collect(),
-        m_mm[2].iter().map(|v| safe_pow(v.abs(), MASK_Q[2])).collect(),
+        m_mm[0]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q[0]))
+            .collect(),
+        m_mm[1]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q[1]))
+            .collect(),
+        m_mm[2]
+            .iter()
+            .map(|v| safe_pow(v.abs(), MASK_Q[2]))
+            .collect(),
     ];
 
     // Step 4: cross-channel pool per pixel + masked diff.
@@ -566,8 +573,16 @@ pub fn mult_mutual_3ch_no_blur_kernel(
 
     // M_mm = min(|T_p|, |R_p|) * 10^mask_c.
     let mm_a = if abs_t_a < abs_r_a { abs_t_a } else { abs_r_a };
-    let mm_rg = if abs_t_rg < abs_r_rg { abs_t_rg } else { abs_r_rg };
-    let mm_vy = if abs_t_vy < abs_r_vy { abs_t_vy } else { abs_r_vy };
+    let mm_rg = if abs_t_rg < abs_r_rg {
+        abs_t_rg
+    } else {
+        abs_r_rg
+    };
+    let mm_vy = if abs_t_vy < abs_r_vy {
+        abs_t_vy
+    } else {
+        abs_r_vy
+    };
     let m_mm_a = mm_a * pu_scale;
     let m_mm_rg = mm_rg * pu_scale;
     let m_mm_vy = mm_vy * pu_scale;
@@ -584,11 +599,23 @@ pub fn mult_mutual_3ch_no_blur_kernel(
 
     // D[c] = clamp_diffs(safe_pow(|T_p[c] - R_p[c]|, p) / (1 + M[c])).
     let diff_a = t_a - r_a;
-    let abs_diff_a = if diff_a < f32::new(0.0) { -diff_a } else { diff_a };
+    let abs_diff_a = if diff_a < f32::new(0.0) {
+        -diff_a
+    } else {
+        diff_a
+    };
     let diff_rg = t_rg - r_rg;
-    let abs_diff_rg = if diff_rg < f32::new(0.0) { -diff_rg } else { diff_rg };
+    let abs_diff_rg = if diff_rg < f32::new(0.0) {
+        -diff_rg
+    } else {
+        diff_rg
+    };
     let diff_vy = t_vy - r_vy;
-    let abs_diff_vy = if diff_vy < f32::new(0.0) { -diff_vy } else { diff_vy };
+    let abs_diff_vy = if diff_vy < f32::new(0.0) {
+        -diff_vy
+    } else {
+        diff_vy
+    };
 
     let sp_a = f32::powf(abs_diff_a + eps, mask_p) - f32::powf(eps, mask_p);
     let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
@@ -677,11 +704,23 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     let r_vy = r_p_vy[idx];
 
     let diff_a = t_a - r_a;
-    let abs_diff_a = if diff_a < f32::new(0.0) { -diff_a } else { diff_a };
+    let abs_diff_a = if diff_a < f32::new(0.0) {
+        -diff_a
+    } else {
+        diff_a
+    };
     let diff_rg = t_rg - r_rg;
-    let abs_diff_rg = if diff_rg < f32::new(0.0) { -diff_rg } else { diff_rg };
+    let abs_diff_rg = if diff_rg < f32::new(0.0) {
+        -diff_rg
+    } else {
+        diff_rg
+    };
     let diff_vy = t_vy - r_vy;
-    let abs_diff_vy = if diff_vy < f32::new(0.0) { -diff_vy } else { diff_vy };
+    let abs_diff_vy = if diff_vy < f32::new(0.0) {
+        -diff_vy
+    } else {
+        diff_vy
+    };
 
     let sp_a = f32::powf(abs_diff_a + eps, mask_p) - f32::powf(eps, mask_p);
     let sp_rg = f32::powf(abs_diff_rg + eps, mask_p) - f32::powf(eps, mask_p);
