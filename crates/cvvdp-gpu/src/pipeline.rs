@@ -35,6 +35,7 @@
 use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
+use crate::kernels::csf::{flatten_band_weights, precomputed_band_weights, weight_band_kernel};
 use crate::kernels::pyramid::{
     downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
 };
@@ -404,6 +405,73 @@ impl<R: Runtime> Cvvdp<R> {
             // Re-upload as bands_ref[last] so the read-back loop is
             // uniform across levels.
             self.bands_ref[last].planes[c] = self.client.create_from_slice(&bytes);
+        }
+
+        // Read back every band × every channel.
+        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.bands_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            out.push(planes);
+        }
+        Ok(out)
+    }
+
+    /// Run color + Laplacian-pyramid + per-band CSF weighting.
+    ///
+    /// `ppd` is pixels-per-degree (from `DisplayGeometry::pixels_per_degree()`).
+    /// `l_bkg` is the scalar background-luminance approximation used
+    /// for every pyramid band — typically a per-image mean or
+    /// display-peak / 2. The per-pixel L_bkg form (cvvdp's exact
+    /// behaviour) lands once we wire the achromatic gauss[1] read
+    /// path into the kernel.
+    ///
+    /// Returns the same shape as `compute_dkl_laplacian_pyramid`:
+    /// `levels[k] = [a, rg, vy]` planar f32 vecs, with each pixel
+    /// already multiplied by `sensitivity_corrected_scalar(rho_k,
+    /// l_bkg, channel)`.
+    pub fn compute_dkl_csf_weighted_bands(
+        &mut self,
+        srgb: &[u8],
+        ppd: f32,
+        l_bkg: f32,
+    ) -> Result<Vec<[Vec<f32>; 3]>> {
+        // Side effect: leaves the un-weighted Laplacian bands in
+        // self.bands_ref[k].planes[c].
+        let _ = self.compute_dkl_laplacian_pyramid(srgb)?;
+
+        let weights_per_level =
+            precomputed_band_weights(ppd, self.width as usize, self.height as usize, l_bkg);
+        let flat_weights = flatten_band_weights(&weights_per_level);
+        let weights_handle = self.client.create_from_slice(f32::as_bytes(&flat_weights));
+
+        let cube_dim = CubeDim::new_1d(64);
+        let n_levels = self.n_levels as usize;
+        for k in 0..n_levels {
+            let n_px = (self.bands_ref[k].w * self.bands_ref[k].h) as usize;
+            let cube_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            for c in 0..N_CHANNELS {
+                let weight_idx = (k * N_CHANNELS + c) as u32;
+                let band = self.bands_ref[k].planes[c].clone();
+                unsafe {
+                    weight_band_kernel::launch::<R>(
+                        &self.client,
+                        cube_count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(band, n_px),
+                        ArrayArg::from_raw_parts(weights_handle.clone(), flat_weights.len()),
+                        weight_idx,
+                        n_px as u32,
+                    );
+                }
+            }
         }
 
         // Read back every band × every channel.

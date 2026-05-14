@@ -7,7 +7,9 @@
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+use cvvdp_gpu::kernels::csf::precomputed_band_weights;
 use cvvdp_gpu::kernels::pyramid::{gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar};
+use cvvdp_gpu::params::DisplayGeometry;
 use cvvdp_gpu::params::{CvvdpParams, DisplayModel};
 
 #[cfg(feature = "cuda")]
@@ -215,6 +217,79 @@ fn compute_dkl_laplacian_pyramid_matches_host_scalar() {
             assert!(
                 max_err < 5e-3,
                 "level {k} channel {c}: max-abs vs host scalar = {max_err}"
+            );
+        }
+    }
+}
+
+#[test]
+fn compute_dkl_csf_weighted_bands_matches_host() {
+    let client = Backend::client(&Default::default());
+    let (w, h) = (16u32, 16u32);
+    let n = (w * h) as usize;
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp");
+
+    let mut srgb = Vec::with_capacity(n * 3);
+    for i in 0..n {
+        srgb.push((i % 251) as u8);
+        srgb.push(((i * 7 + 13) % 251) as u8);
+        srgb.push(((i * 19 + 41) % 251) as u8);
+    }
+
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let l_bkg = 100.0_f32;
+
+    let gpu = cvvdp
+        .compute_dkl_csf_weighted_bands(&srgb, ppd, l_bkg)
+        .expect("compute_dkl_csf_weighted_bands");
+
+    // Host reference: same Laplacian path then per-channel × per-level
+    // multiply by precomputed_band_weights.
+    let display = DisplayModel::STANDARD_4K;
+    let mut planes: [Vec<f32>; 3] = [
+        vec![0.0_f32; n],
+        vec![0.0_f32; n],
+        vec![0.0_f32; n],
+    ];
+    for i in 0..n {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            srgb[i * 3],
+            srgb[i * 3 + 1],
+            srgb[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+
+    let n_levels = gpu.len();
+    let host_bands: [Vec<cvvdp_gpu::kernels::pyramid::Band>; 3] = [
+        laplacian_pyramid_dec_scalar(&planes[0], w as usize, h as usize, n_levels),
+        laplacian_pyramid_dec_scalar(&planes[1], w as usize, h as usize, n_levels),
+        laplacian_pyramid_dec_scalar(&planes[2], w as usize, h as usize, n_levels),
+    ];
+    let weights = precomputed_band_weights(ppd, w as usize, h as usize, l_bkg);
+
+    for k in 0..n_levels {
+        for c in 0..3 {
+            let scale = weights[k][c];
+            let host: Vec<f32> = host_bands[c][k].data.iter().map(|v| v * scale).collect();
+            let max_err = gpu[k][c]
+                .iter()
+                .zip(&host)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            // Loose tol — weighted bands span a wider magnitude due
+            // to the CSF scale (~1-100×) compounding with f32
+            // multi-stage accumulated noise.
+            assert!(
+                max_err < 1e-1,
+                "level {k} channel {c}: max-abs vs host weighted = {max_err}"
             );
         }
     }
