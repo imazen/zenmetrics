@@ -55,6 +55,11 @@
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
+// cvvdp parameters + the per-(rho, L_bkg, channel) CSF LUT are imported
+// verbatim from pycvvdp v0.5.4 source. The literals carry more digits
+// than f32 can represent so the values document the source even though
+// LLVM rounds at compile time.
+#![allow(clippy::excessive_precision)]
 
 pub mod host_scalar;
 pub mod kernels;

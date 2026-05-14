@@ -1,5 +1,11 @@
 // Auto-generated from pycvvdp v0.5.4's csf_lut_weber_fixed_size.json.
 // Regenerate via scripts/cvvdp_goldens/.venv + the snippet in csf.rs.
+//
+// Extra precision past f32 representability is preserved verbatim from
+// the source JSON (LLVM rounds to f32 at compile time, so the values
+// are mathematically identical to truncated forms, but the literal
+// digits document what cvvdp shipped). The crate-wide allow on
+// `clippy::excessive_precision` lives in lib.rs.
 
 pub const LOG_L_BKG_AXIS: [f32; 32] = [
     -2.3010299957e+00_f32, -2.0977709635e+00_f32, -1.8945119314e+00_f32, -1.6912528993e+00_f32,
