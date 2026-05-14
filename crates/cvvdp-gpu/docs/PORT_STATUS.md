@@ -8,7 +8,7 @@ Tracking faithful-port progress against the Python reference
 | sRGB → linear      | `kernels/color`        | host scalar + cubecl kernel body         | 2e-3 vs pycvvdp scalar goldens            |
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
-| Laplacian pyramid  | `kernels/pyramid`      | host scalar reduce/expand (boundary-OK)  | constant-signal whole-buffer + odd target |
+| Laplacian pyramid  | `kernels/pyramid`      | host scalar reduce/expand                | pycvvdp 8×8 ramp parity (max-abs <1e-4)   |
 | CSF weighting      | `kernels/csf`          | scaffold                                 | none                                      |
 | Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
