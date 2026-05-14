@@ -8,7 +8,7 @@ Tracking faithful-port progress against the Python reference
 | sRGB → linear      | `kernels/color`        | host scalar + cubecl kernel body         | 2e-3 vs pycvvdp scalar goldens            |
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
-| Laplacian pyramid  | `kernels/pyramid`      | host scalar (reduce/expand) interior-OK  | constant-signal interior + GAUSS5 sum     |
+| Laplacian pyramid  | `kernels/pyramid`      | host scalar reduce/expand (boundary-OK)  | constant-signal whole-buffer + odd target |
 | CSF weighting      | `kernels/csf`          | scaffold                                 | none                                      |
 | Contrast masking   | `kernels/masking`      | scaffold                                 | none                                      |
 | Per-band pooling   | `kernels/pool`         | scaffold                                 | none                                      |
@@ -34,14 +34,24 @@ The cvvdp parameter JSON gets vendored into
 
 ## Open questions
 
-- **Edge fix-ups for pyramid reduce/expand**: cvvdp v0.5.4 uses
-  `F.conv2d(padding=2)` + explicit row/col patches that reproduce
-  symmetric reflection (see `lpyr_dec.gausspyr_reduce`/`gausspyr_expand`).
-  The Rust port currently uses pure symmetric reflection via a
-  reflect-index helper, which matches the interior exactly but
-  diverges on the outer 2-pixel ring (for expand) and the top/bottom
-  rows of odd-height inputs (for reduce). Need to port the explicit
-  patches before any whole-image JOD parity test can pass.
+- **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
+  of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks
+  `x.shape[-2] % 2` (row count) when deciding the right-column edge
+  fix-up — the variable being patched is `y[...,:,-1]`, the
+  rightmost column, so the parity check should clearly use
+  `x.shape[-1] % 2` (column count). Doesn't affect the
+  zenmetrics-corpus (all 2^k square inputs through the pyramid),
+  but will cause a divergence on non-square inputs at odd-height-
+  but-even-width levels. To preserve bit-stable parity our port
+  reproduces the bug verbatim; document it here and re-evaluate when
+  the cvvdp pin moves.
+
+  Status: pure-symmetric-reflection happens to be equivalent to
+  cvvdp's `zero-pad + explicit edge patches` for even-input dims, so
+  `gausspyr_reduce_scalar` matches cvvdp exactly on the corpus's
+  pyramid levels. `gausspyr_expand_scalar` now uses cvvdp's explicit
+  edge-replication scheme (`interleave_zeros_and_pad`) so the
+  constant-signal test passes across the whole buffer.
 - **Per-band CSF weight precomputation**: should the host upload one
   flat `f32` array (`n_levels × N_CHANNELS`) or one tensor per band?
   Single flat upload is simpler; keep unless a per-band variant becomes

@@ -116,14 +116,20 @@ pub fn gausspyr_reduce_scalar(
     (dw, dh)
 }
 
-/// 2× upscale: zero-insert at stride 2 in each axis, then 5-tap
-/// separable Gaussian with reconstruction gain (×4) — half-gain
-/// folded into the kernel by applying GAUSS5 with the standard
-/// coefficients and compensating by ×4 on the output, matching
-/// cvvdp's `gausspyr_expand` convention.
+/// 2× upscale: zero-insert at stride 2 + 5-tap separable Gaussian.
 ///
-/// `out_w`, `out_h` may be one less than `2*sw`, `2*sh` depending on
-/// the original parity (the inverse of `div_ceil` used in reduce).
+/// Faithful to cvvdp's `gausspyr_expand` /
+/// `interleave_zeros_and_pad`: each axis is expanded by building a
+/// length-`(m+4)` buffer with the source values at even positions
+/// starting at index 2, the input's first sample replicated at
+/// index 0, and the input's last sample replicated at index
+/// `m + 2 + (m & 1)`. A 5-tap conv with no padding then yields a
+/// length-`m` row. Each axis multiplies output by 2; total
+/// reconstruction gain is therefore ×4 across the separable pass.
+///
+/// `out_w`, `out_h` may be `2*sw`, `2*sh-1`, etc. depending on the
+/// parity rule used by the matching reduce — pass the target size
+/// explicitly.
 pub fn gausspyr_expand_scalar(
     src: &[f32],
     sw: usize,
@@ -132,47 +138,61 @@ pub fn gausspyr_expand_scalar(
     out_h: usize,
     dst: &mut Vec<f32>,
 ) {
-    debug_assert!(out_w == 2 * sw || out_w == 2 * sw - 1);
-    debug_assert!(out_h == 2 * sh || out_h == 2 * sh - 1);
-
-    dst.clear();
-    dst.resize(out_w * out_h, 0.0);
-
-    // Zero-insertion: build a sparse `out_w × out_h` grid where
-    // src[y][x] lands at (2*y, 2*x). Then run separable conv at the
-    // full output resolution. The reconstruction gain ×4 cancels the
-    // factor-of-4 of zeros introduced.
-    let mut sparse = vec![0.0_f32; out_w * out_h];
-    for y in 0..sh {
-        for x in 0..sw {
-            let dy = 2 * y;
-            let dx = 2 * x;
-            if dy < out_h && dx < out_w {
-                sparse[dy * out_w + dx] = src[y * sw + x];
-            }
-        }
-    }
+    debug_assert!(out_w >= 2 * sw - 1 && out_w <= 2 * sw);
+    debug_assert!(out_h >= 2 * sh - 1 && out_h <= 2 * sh);
 
     let k = GAUSS5;
-    let mut vscratch = vec![0.0_f32; out_w * out_h];
-    for y in 0..out_h {
-        for x in 0..out_w {
-            let s = |off: isize| -> f32 {
-                let r = reflect(y as isize + off, out_h);
-                sparse[r * out_w + x]
-            };
-            vscratch[y * out_w + x] =
-                k[0] * s(-2) + k[1] * s(-1) + k[2] * s(0) + k[3] * s(1) + k[4] * s(2);
+
+    // Vertical pass: each column of `src` is expanded to `out_h`
+    // samples via the zero-interleave + edge-replicate scheme.
+    let mut vscratch = vec![0.0_f32; sw * out_h];
+    let z_len_v = out_h + 4;
+    let mut z_v = vec![0.0_f32; z_len_v];
+    let odd_h = out_h & 1;
+    let back_idx_v = out_h + 2 + odd_h;
+    for x in 0..sw {
+        for slot in &mut z_v {
+            *slot = 0.0;
+        }
+        z_v[0] = src[x];
+        for ky in 0..sh {
+            z_v[2 + 2 * ky] = src[ky * sw + x];
+        }
+        z_v[back_idx_v] = src[(sh - 1) * sw + x];
+        for y in 0..out_h {
+            let sum = k[0] * z_v[y]
+                + k[1] * z_v[y + 1]
+                + k[2] * z_v[y + 2]
+                + k[3] * z_v[y + 3]
+                + k[4] * z_v[y + 4];
+            vscratch[y * sw + x] = 2.0 * sum;
         }
     }
+
+    // Horizontal pass: each row of vscratch is expanded to `out_w`
+    // samples via the same scheme.
+    dst.clear();
+    dst.resize(out_w * out_h, 0.0);
+    let z_len_h = out_w + 4;
+    let mut z_h = vec![0.0_f32; z_len_h];
+    let odd_w = out_w & 1;
+    let back_idx_h = out_w + 2 + odd_w;
     for y in 0..out_h {
+        for slot in &mut z_h {
+            *slot = 0.0;
+        }
+        z_h[0] = vscratch[y * sw];
+        for kx in 0..sw {
+            z_h[2 + 2 * kx] = vscratch[y * sw + kx];
+        }
+        z_h[back_idx_h] = vscratch[y * sw + sw - 1];
         for x in 0..out_w {
-            let s = |off: isize| -> f32 {
-                let r = reflect(x as isize + off, out_w);
-                vscratch[y * out_w + r]
-            };
-            let v = k[0] * s(-2) + k[1] * s(-1) + k[2] * s(0) + k[3] * s(1) + k[4] * s(2);
-            dst[y * out_w + x] = 4.0 * v;
+            let sum = k[0] * z_h[x]
+                + k[1] * z_h[x + 1]
+                + k[2] * z_h[x + 2]
+                + k[3] * z_h[x + 3]
+                + k[4] * z_h[x + 4];
+            dst[y * out_w + x] = 2.0 * sum;
         }
     }
 }
@@ -267,39 +287,47 @@ mod tests {
     }
 
     #[test]
-    fn expand_preserves_constant_signal_interior() {
-        // Boundary cells deviate because zero-insertion + reflection
-        // breaks the 2-zeros-then-2-source-values cadence at the edge
-        // (a reflected pixel re-uses the source row, doubling its
-        // contribution). cvvdp's `gausspyr_expand` has explicit edge
-        // fix-ups; until those land in the Rust port, this test only
-        // checks the kernel-radius interior of a 16×16 expand.
+    fn expand_preserves_constant_signal() {
+        // With the cvvdp-style explicit edge extension (z[0] =
+        // src[0], z[back] = src[-1]), every output sample's kernel
+        // hits either the K[0]+K[2]+K[4] subset or the K[1]+K[3]
+        // subset of the 5-tap, each summing to 0.5; the ×2 gain per
+        // axis recovers full unity. So a constant input must produce
+        // a constant output across the entire buffer — boundaries
+        // included.
         let src = vec![7.5_f32; 8 * 8];
         let mut dst = Vec::new();
         gausspyr_expand_scalar(&src, 8, 8, 16, 16, &mut dst);
-        for y in 4..12 {
-            for x in 4..12 {
-                let v = dst[y * 16 + x];
-                assert!(
-                    (v - 7.5).abs() < 1e-5,
-                    "interior constant-signal expand produced {v} ≠ 7.5 at ({x},{y})"
-                );
-            }
+        for (i, &v) in dst.iter().enumerate() {
+            assert!(
+                (v - 7.5).abs() < 1e-5,
+                "constant-signal expand produced {v} ≠ 7.5 at index {i}"
+            );
         }
     }
 
     #[test]
-    fn reduce_then_expand_round_trips_constant_interior() {
+    fn reduce_then_expand_round_trips_constant() {
         let src = vec![2.0_f32; 16 * 16];
         let mut reduced = Vec::new();
         let (dw, dh) = gausspyr_reduce_scalar(&src, 16, 16, &mut reduced);
         let mut expanded = Vec::new();
         gausspyr_expand_scalar(&reduced, dw, dh, 16, 16, &mut expanded);
-        for y in 4..12 {
-            for x in 4..12 {
-                let v = expanded[y * 16 + x];
-                assert!((v - 2.0).abs() < 1e-5, "interior {v} ≠ 2.0 at ({x},{y})");
-            }
+        for (i, &v) in expanded.iter().enumerate() {
+            assert!((v - 2.0).abs() < 1e-5, "round-trip {v} ≠ 2.0 at index {i}");
+        }
+    }
+
+    #[test]
+    fn expand_preserves_constant_odd_target() {
+        // Odd target dimension exercises the `out_h & 1` parity branch
+        // in the edge-replication index. cvvdp uses div_ceil on
+        // reduce, so the inverse target can be one less than 2*sh.
+        let src = vec![4.0_f32; 4 * 4];
+        let mut dst = Vec::new();
+        gausspyr_expand_scalar(&src, 4, 4, 7, 7, &mut dst);
+        for (i, &v) in dst.iter().enumerate() {
+            assert!((v - 4.0).abs() < 1e-5, "odd-target expand {v} ≠ 4.0 at {i}");
         }
     }
 }
