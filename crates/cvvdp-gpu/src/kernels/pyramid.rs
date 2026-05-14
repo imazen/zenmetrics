@@ -197,6 +197,86 @@ pub fn gausspyr_expand_scalar(
     }
 }
 
+/// One band of a Laplacian pyramid — a flat plane plus its
+/// dimensions.
+pub struct Band {
+    pub w: usize,
+    pub h: usize,
+    pub data: Vec<f32>,
+}
+
+/// Multi-level Laplacian pyramid decomposition (host scalar). Matches
+/// cvvdp's `lpyr_dec.laplacian_pyramid_dec` shape:
+///
+/// - `out[k] = gauss[k] - expand(gauss[k+1])` for `k < n_levels - 1`
+/// - `out[n_levels - 1] = gauss[n_levels - 1]` (the coarsest gaussian)
+///
+/// `n_levels` defaults to `floor(log2(min(sw, sh)))` if the caller
+/// passes `0`. cvvdp uses the same default.
+///
+/// The Gaussian pyramid is built by repeated `gausspyr_reduce_scalar`.
+pub fn laplacian_pyramid_dec_scalar(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    n_levels: usize,
+) -> Vec<Band> {
+    let n = if n_levels == 0 {
+        sw.min(sh).ilog2() as usize
+    } else {
+        n_levels
+    };
+    debug_assert!(n >= 1, "pyramid needs at least 1 level");
+
+    // Build the Gaussian pyramid first.
+    let mut gauss: Vec<Band> = Vec::with_capacity(n);
+    gauss.push(Band {
+        w: sw,
+        h: sh,
+        data: src.to_vec(),
+    });
+    for k in 1..n {
+        let prev = &gauss[k - 1];
+        let mut next_data = Vec::new();
+        let (nw, nh) =
+            gausspyr_reduce_scalar(&prev.data, prev.w, prev.h, &mut next_data);
+        gauss.push(Band {
+            w: nw,
+            h: nh,
+            data: next_data,
+        });
+    }
+
+    // Build the Laplacian bands: band[k] = gauss[k] - expand(gauss[k+1]).
+    let mut bands: Vec<Band> = Vec::with_capacity(n);
+    let mut expanded = Vec::new();
+    for k in 0..(n - 1) {
+        let fine = &gauss[k];
+        let coarse = &gauss[k + 1];
+        gausspyr_expand_scalar(
+            &coarse.data,
+            coarse.w,
+            coarse.h,
+            fine.w,
+            fine.h,
+            &mut expanded,
+        );
+        let mut band_data = vec![0.0_f32; fine.w * fine.h];
+        for (i, dst) in band_data.iter_mut().enumerate() {
+            *dst = fine.data[i] - expanded[i];
+        }
+        bands.push(Band {
+            w: fine.w,
+            h: fine.h,
+            data: band_data,
+        });
+    }
+    // The coarsest band is the coarsest gaussian — no subtraction.
+    let coarsest = gauss.pop().expect("at least one level");
+    bands.push(coarsest);
+    bands
+}
+
 /// 2× downscale with the cvvdp 5-tap Gaussian. Stub kernel.
 #[cube(launch)]
 #[allow(unused_variables)]

@@ -17,7 +17,9 @@
 //! expand = dec.gausspyr_expand(reduce, sz=[8, 8], kernel_a=0.4)
 //! ```
 
-use cvvdp_gpu::kernels::pyramid::{gausspyr_expand_scalar, gausspyr_reduce_scalar};
+use cvvdp_gpu::kernels::pyramid::{
+    gausspyr_expand_scalar, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
+};
 
 #[rustfmt::skip]
 const INPUT_8X8: [f32; 64] = [
@@ -101,6 +103,48 @@ fn expand_matches_pycvvdp() {
          pycvvdp = {:?}",
         &EXPAND_8X8[..]
     );
+}
+
+#[rustfmt::skip]
+const LAPLACIAN_BAND_0: [f32; 64] = [
+    -2.8,         -2.4399998,   -2.2799997,   -2.2400002,   -2.2350006,   -2.2150006,   -1.9950008,   -1.1900005,
+    -1.3599997,   -1.0,         -0.84000015,  -0.80000019,  -0.79500008,  -0.77499962,  -0.55500031,   0.25,
+    -0.72062492,  -0.36312485,  -0.20562458,  -0.16625023,  -0.16062641,  -0.13812637,   0.084373474,  0.88999939,
+    -0.56312466,  -0.21562481,  -0.06812477,  -0.03125,     -0.023124695,  0.0093746185, 0.24187469,   1.0499992,
+    -0.54562569,  -0.20812607,  -0.070625305, -0.036251068, -0.025627136,  0.016872406,  0.2593708,    1.0699978,
+    -0.46625137,  -0.13125038,   0.0037498474, 1.0374985,    0.048746109,  0.093748093,  0.33874702,   1.1499977,
+     0.41374779,   0.74874878,   0.88374901,   0.91749954,   0.92874908,   0.97374725,   1.2187462,    2.0299969,
+     3.6337471,    3.96875,      4.1037483,    4.1375008,    4.1487484,    4.1937485,    4.4387455,    5.2499962,
+];
+
+#[rustfmt::skip]
+const LAPLACIAN_BAND_1: [f32; 16] = [
+    -4.7252316,   -4.2640944,   -3.402956,    -1.7376719,
+    -2.8834076,   -2.4242191,   -1.5650311,    0.099765778,
+     0.55841541,   1.0781555,    1.9353924,    3.5372028,
+     7.2188759,   7.7381229,    8.5948753,    10.196566,
+];
+
+#[rustfmt::skip]
+const LAPLACIAN_BAND_2: [f32; 4] = [
+     5.3010941,   8.1470318,
+    16.695314,   19.553438,
+];
+
+#[test]
+fn laplacian_3_levels_matches_pycvvdp() {
+    let bands = laplacian_pyramid_dec_scalar(&INPUT_8X8, 8, 8, 3);
+    assert_eq!(bands.len(), 3);
+    assert_eq!((bands[0].w, bands[0].h), (8, 8));
+    assert_eq!((bands[1].w, bands[1].h), (4, 4));
+    assert_eq!((bands[2].w, bands[2].h), (2, 2));
+
+    let e0 = max_abs_diff(&bands[0].data, &LAPLACIAN_BAND_0);
+    let e1 = max_abs_diff(&bands[1].data, &LAPLACIAN_BAND_1);
+    let e2 = max_abs_diff(&bands[2].data, &LAPLACIAN_BAND_2);
+    assert!(e0 < 1e-4, "band 0 max-abs vs pycvvdp = {e0}");
+    assert!(e1 < 1e-4, "band 1 max-abs vs pycvvdp = {e1}");
+    assert!(e2 < 1e-4, "band 2 max-abs vs pycvvdp = {e2}");
 }
 
 #[test]
