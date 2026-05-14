@@ -410,3 +410,117 @@ fn compute_dkl_weber_pyramid_matches_host_on_corpus_256x256() {
         "log_l_bkg max-abs vs host on corpus 256×256 = {overall_max_log:.4e}"
     );
 }
+
+#[test]
+fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
+    // Last tick: Weber pyramid + log_l_bkg bit-stable at 256×256.
+    // This tick: characterize the per-pixel CSF apply + CH_GAIN +
+    // band_mul step at the same scale on the q=1 corpus image.
+    // If T_p bands are also bit-stable here, the 0.40 JOD drift
+    // must live in masking or the spatial pool (both already
+    // pinned bit-stable on synthetic data — would suggest a scale-
+    // dependent regression).
+    use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp_gpu::kernels::masking::CH_GAIN;
+    use cvvdp_gpu::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
+    use cvvdp_gpu::params::DisplayModel;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let srgb = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(1), w, h);
+
+    // GPU T_p (per-side Weber → CSF → CH_GAIN × band_mul).
+    let t_p_gpu = cvvdp
+        .compute_dkl_t_p_bands(&srgb, ppd)
+        .expect("compute_dkl_t_p_bands");
+
+    // Host T_p: same formula reproduced from host_scalar at scale.
+    let display = DisplayModel::STANDARD_4K;
+    let n = (w * h) as usize;
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for (i, chunk) in srgb.chunks_exact(3).enumerate() {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            chunk[0],
+            chunk[1],
+            chunk[2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+    let n_levels = t_p_gpu.len();
+    let host_per_ch = [
+        weber_contrast_pyr_dec_scalar(&planes[0], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[1], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[2], &planes[0], w as usize, h as usize, n_levels),
+    ];
+    let freqs = band_frequencies(ppd, w as usize, h as usize);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    eprintln!(
+        "level   shape    | A max-abs   RG max-abs   VY max-abs   A band-rel  RG band-rel  VY band-rel"
+    );
+    let mut overall_max_band_rel = 0.0_f32;
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = host_per_ch[0].bands[k].w;
+        let bh = host_per_ch[0].bands[k].h;
+        let n_band = bw * bh;
+        let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
+
+        let mut max_abs = [0.0_f32; 3];
+        let mut max_band_t_p = [0.0_f32; 3];
+        for c in 0..3 {
+            let weber_c = &host_per_ch[c].bands[k].data;
+            let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+            for i in 0..n_band {
+                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let host_t_p = weber_c[i] * s * ch_gain_eff;
+                let abs = (t_p_gpu[k][c][i] - host_t_p).abs();
+                if abs > max_abs[c] {
+                    max_abs[c] = abs;
+                }
+                let mag = host_t_p.abs();
+                if mag > max_band_t_p[c] {
+                    max_band_t_p[c] = mag;
+                }
+            }
+        }
+        // Band-normalized rel: max-abs over the band divided by the
+        // band's max |T_p|. More meaningful than per-pixel rel which
+        // blows up near zero-crossings.
+        let band_rel = [
+            max_abs[0] / max_band_t_p[0].max(1e-6),
+            max_abs[1] / max_band_t_p[1].max(1e-6),
+            max_abs[2] / max_band_t_p[2].max(1e-6),
+        ];
+        eprintln!(
+            "  {k}   {bw:>3}x{bh:<3}  | {:<11.4e} {:<12.4e} {:<12.4e} {:<11.4e} {:<12.4e} {:<11.4e}",
+            max_abs[0], max_abs[1], max_abs[2], band_rel[0], band_rel[1], band_rel[2]
+        );
+        let local_max = band_rel.iter().fold(0.0_f32, |a, &b| a.max(b));
+        if local_max > overall_max_band_rel {
+            overall_max_band_rel = local_max;
+        }
+    }
+    eprintln!("max band-normalized rel over all bands: {overall_max_band_rel:.4e}");
+
+    // Band-normalized rel tolerance — keeps near-zero crossings
+    // from dominating the metric. Loose ceiling to surface a clear
+    // regression; tightens when the CSF interp gets bit-stable.
+    assert!(
+        overall_max_band_rel < 1e-1,
+        "T_p max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e}"
+    );
+}
