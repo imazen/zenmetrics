@@ -690,9 +690,24 @@ impl<R: Runtime> Cvvdp<R> {
     ///   non-baseband levels and a scalar (replicated 1×1) for the
     ///   baseband. Same shape convention as
     ///   `WeberPyramid::log_l_bkg` in host_scalar.
-    pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
-        let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
-        let t_dispatch = std::time::Instant::now();
+    /// GPU-only Weber pyramid dispatch. Writes:
+    /// - `self.bands_ref[k].planes[c]` — Weber-contrast bands per
+    ///   level per channel (non-baseband levels). Baseband level
+    ///   gets the per-channel gauss[last] divided by the achromatic
+    ///   baseband's scalar mean (host-side).
+    /// - `self.weber_scratch[k].log_l_bkg` — per-pixel
+    ///   `log10(L_bkg)` plane per non-baseband level.
+    ///
+    /// Returns the baseband's scalar `log10(L_bkg)` since that's
+    /// computed host-side (small reduction over the achromatic
+    /// baseband). Callers handle the per-pixel readback themselves
+    /// — this function does NO readback of the per-level band /
+    /// log_l_bkg data.
+    ///
+    /// Used by both `compute_dkl_weber_pyramid` (which wraps with
+    /// readback to host Vecs) and future GPU-resident callers that
+    /// keep the data on-device.
+    fn _dispatch_weber_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<f32> {
         // Build Gaussian pyramids on GPU. The function leaves
         // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
         let _ = self.compute_dkl_gauss_pyramid(srgb)?;
@@ -702,7 +717,6 @@ impl<R: Runtime> Cvvdp<R> {
 
         // Non-baseband levels: build layers + expanded L_bkg, then
         // launch weber_contrast_compute_kernel per channel.
-        let mut log_l_bkg_handles: Vec<cubecl::server::Handle> = Vec::with_capacity(n_levels);
         for k in 0..n_levels.saturating_sub(1) {
             let coarse_w = self.gauss_ref[k + 1].w;
             let coarse_h = self.gauss_ref[k + 1].h;
@@ -748,6 +762,9 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             // Per channel: build the Laplacian-style layer + run weber.
+            // log_l_bkg writes to scratch.log_l_bkg — kept resident
+            // on GPU. Callers can read it back via the handle (which
+            // they reconstruct by cloning self.weber_scratch[k].log_l_bkg).
             let log_l_bkg = scratch.log_l_bkg.clone();
             for c in 0..N_CHANNELS {
                 let coarse = self.gauss_ref[k + 1].planes[c].clone();
@@ -800,7 +817,9 @@ impl<R: Runtime> Cvvdp<R> {
                     );
                 }
             }
-            log_l_bkg_handles.push(log_l_bkg);
+            // log_l_bkg lives on GPU in self.weber_scratch[k].log_l_bkg
+            // — no need to thread it back; callers reconstruct.
+            let _ = log_l_bkg;
         }
 
         // Baseband: scalar L_bkg = mean of max(gauss_A[N-1], 0.01).
@@ -830,6 +849,19 @@ impl<R: Runtime> Cvvdp<R> {
             let divided: Vec<f32> = data.iter().map(|v| v / l_bkg_mean).collect();
             self.bands_ref[last].planes[c] = self.client.create_from_slice(f32::as_bytes(&divided));
         }
+
+        Ok(log_l_bkg_baseband)
+    }
+
+    pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
+        let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
+        let t_dispatch = std::time::Instant::now();
+
+        let log_l_bkg_baseband = self._dispatch_weber_pyramid_gpu(srgb)?;
+
+        let n_levels = self.n_levels as usize;
+        let last = n_levels - 1;
+        let baseband_n = (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
 
         if trace_weber {
             eprintln!(
@@ -862,11 +894,14 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let t_log_readback = std::time::Instant::now();
 
-        // Read back log_l_bkg per band: non-baseband from GPU,
+        // Read back log_l_bkg per band: non-baseband from GPU
+        // (reconstruct handle from self.weber_scratch[k].log_l_bkg
+        // since _dispatch_weber_pyramid_gpu left the data there),
         // baseband as replicated scalar matching host_scalar's
         // WeberPyramid shape.
         let mut log_l_bkg_out: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
-        for log_h in log_l_bkg_handles.drain(..) {
+        for k in 0..n_levels.saturating_sub(1) {
+            let log_h = self.weber_scratch[k].log_l_bkg.clone();
             let bytes = self
                 .client
                 .read_one(log_h)
