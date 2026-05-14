@@ -1,0 +1,4 @@
+# PyPI package is `cvvdp`; the importable module is `pycvvdp`.
+cvvdp==0.5.4
+pillow>=10
+numpy>=1.26

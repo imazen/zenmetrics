@@ -12,3 +12,8 @@
 **/target
 .workongoing
 .DS_Store
+
+# Python venvs and local outputs from scripts/cvvdp_goldens/.
+# Goldens themselves live on R2 (coefficient bucket), not in-tree.
+**/.venv/
+scripts/cvvdp_goldens/out/

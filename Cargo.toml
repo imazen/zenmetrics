@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/butteraugli-gpu",
+    "crates/cvvdp-gpu",
     "crates/dssim-gpu",
     "crates/ssim2-gpu",
     "crates/zen-metrics-cli",
@@ -19,6 +20,7 @@ rust-version = "1.93"
 [workspace.dependencies]
 # Workspace member crates (in-tree).
 butteraugli-gpu = { version = "0.0.1", path = "crates/butteraugli-gpu", default-features = false }
+cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }

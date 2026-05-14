@@ -1,0 +1,39 @@
+[package]
+name = "cvvdp-gpu"
+version = "0.0.1"
+description = "Multi-vendor GPU implementation of ColorVideoVDP (still-image mode), via CubeCL"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["cuda", "wgpu", "cpu"]
+cuda = ["cubecl/cuda"]
+wgpu = ["cubecl/wgpu"]
+hip  = ["cubecl/hip"]
+cpu  = ["cubecl/cpu"]
+# Enables integration tests that fetch the pycvvdp v0.5.4 goldens
+# from R2 and check Rust output against them. Off by default so
+# `cargo test` stays offline. The skip-via-feature is what avoids
+# the "silent runtime skip" anti-pattern: when this feature isn't
+# enabled, the parity tests aren't compiled in at all.
+parity-goldens = []
+
+[dependencies]
+cubecl = { workspace = true }
+
+[dev-dependencies]
+bytemuck = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+zenmetrics-corpus = { workspace = true }
+# Used only by `tests/parity.rs` when the `parity-goldens` feature
+# is on. Cargo doesn't allow optional dev-dependencies, so these
+# compile whenever tests are built — the runtime binary is unaffected.
+sha2 = "0.10"
+ureq = "3.1"
