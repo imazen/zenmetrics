@@ -21,7 +21,7 @@
 
 use crate::kernels::color::srgb_byte_to_dkl_scalar;
 use crate::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
-use crate::kernels::masking::{CH_GAIN, mult_mutual_pixel};
+use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
@@ -116,27 +116,33 @@ pub fn predict_jod_still_3ch(
         let n_px = bw * bh;
         let s = s_per_band[k];
 
-        // Per-pixel masking with CSF-weighted contrasts. cvvdp's
-        // `mult-mutual` path multiplies by S and CH_GAIN before
-        // masking — same form is replicated here.
-        let mut d_per_ch: [Vec<f32>; 3] =
-            [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-        for i in 0..n_px {
-            let t_p = [
-                dis_bands[0][k].data[i] * s[0] * CH_GAIN[0],
-                dis_bands[1][k].data[i] * s[1] * CH_GAIN[1],
-                dis_bands[2][k].data[i] * s[2] * CH_GAIN[2],
-            ];
-            let r_p = [
-                ref_bands[0][k].data[i] * s[0] * CH_GAIN[0],
-                ref_bands[1][k].data[i] * s[1] * CH_GAIN[1],
-                ref_bands[2][k].data[i] * s[2] * CH_GAIN[2],
-            ];
-            let d = mult_mutual_pixel(t_p, r_p);
-            d_per_ch[0][i] = d[0];
-            d_per_ch[1][i] = d[1];
-            d_per_ch[2][i] = d[2];
-        }
+        // Build T_p, R_p per channel: T * S * CH_GAIN.
+        let t_p_per_ch: [Vec<f32>; 3] = [
+            (0..n_px)
+                .map(|i| dis_bands[0][k].data[i] * s[0] * CH_GAIN[0])
+                .collect(),
+            (0..n_px)
+                .map(|i| dis_bands[1][k].data[i] * s[1] * CH_GAIN[1])
+                .collect(),
+            (0..n_px)
+                .map(|i| dis_bands[2][k].data[i] * s[2] * CH_GAIN[2])
+                .collect(),
+        ];
+        let r_p_per_ch: [Vec<f32>; 3] = [
+            (0..n_px)
+                .map(|i| ref_bands[0][k].data[i] * s[0] * CH_GAIN[0])
+                .collect(),
+            (0..n_px)
+                .map(|i| ref_bands[1][k].data[i] * s[1] * CH_GAIN[1])
+                .collect(),
+            (0..n_px)
+                .map(|i| ref_bands[2][k].data[i] * s[2] * CH_GAIN[2])
+                .collect(),
+        ];
+
+        // Band-level masking with phase-uncertainty blur for large
+        // bands (cvvdp's mult-mutual + xchannel).
+        let d_per_ch = mult_mutual_band(&t_p_per_ch, &r_p_per_ch, bw, bh);
 
         // Spatial pool per channel (RMS = beta_spatial).
         let mut q_band = [0.0_f32; 3];

@@ -10,7 +10,7 @@ Tracking faithful-port progress against the Python reference
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
 | CSF weighting      | `kernels/csf`          | scalar + weight_band_kernel + table      | 60 pts vs pycvvdp + GPU scale parity      |
-| Contrast masking   | `kernels/masking`      | host scalar mult-mutual (no PU blur)     | 4×4×3 pycvvdp parity <1e-3 rel            |
+| Contrast masking   | `kernels/masking`      | scalar mult-mutual + PU σ=3 blur + CH_GAIN| 4×4×3 small-band <1e-3 rel; whole-image    |
 | Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
 | Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | bounded, broadly monotone (gap vs pycvvdp)|
@@ -35,12 +35,12 @@ The cvvdp parameter JSON gets vendored into
 
 ## Open questions
 
-- **Phase-uncertainty Gaussian blur** in masking. cvvdp applies a
-  σ=3 separable Gaussian to the M_mm tensor when both band dims
-  exceed `pu_padsize = 6`. The Rust port currently uses the no-blur
-  path (`M * 10^mask_c`), which is exact for small bands but
-  divergent on the larger coarse-level bands at standard_4k
-  resolution. Port the blur once whole-image parity is being chased.
+- **(Resolved tick 21)** Phase-uncertainty Gaussian blur in
+  masking. cvvdp's σ=3 separable Gaussian for bands > 6×6 is now
+  applied via `mult_mutual_band` + `phase_uncertainty_band`.
+  Closed by replicating torchvision's `GaussianBlur(13, 3.0)`
+  kernel + reflect padding. Whole-image parity gate via `shadow_jod`
+  closed ~0.5-1.5 JOD of the gap.
 
 - **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
   of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks

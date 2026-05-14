@@ -89,12 +89,97 @@ pub fn clamp_diff_soft(d: f32) -> f32 {
 }
 
 /// Phase uncertainty for the "small band, no blur" path: multiply
-/// by `10^mask_c`. The blur path (Gaussian sigma = 3 for bands
-/// larger than 6 px) is not yet ported.
+/// by `10^mask_c`. cvvdp uses this branch when the band's smallest
+/// dimension is ≤ `PU_PADSIZE`.
 #[inline]
 pub fn phase_uncertainty_no_blur(m: f32) -> f32 {
     m * 10.0_f32.powf(MASK_C)
 }
+
+/// 1D Gaussian kernel for phase-uncertainty blur. Matches the
+/// kernel `torchvision.transforms.GaussianBlur(13, 3.0)` builds —
+/// σ = 3 px, 13 taps, normalized to sum 1.
+#[rustfmt::skip]
+pub const PU_BLUR_KERNEL_1D: [f32; 13] = [
+    1.854_402_2e-2, 3.416_694_2e-2, 5.633_176_4e-2, 8.310_854e-2,
+    1.097_193e-1,   1.296_180_3e-1, 1.370_228_2e-1, 1.296_180_3e-1,
+    1.097_193e-1,   8.310_854e-2,   5.633_176_4e-2, 3.416_694_2e-2,
+    1.854_402_2e-2,
+];
+
+/// Reflect index `i` into `[0, n)` for the 13-tap PU blur. Matches
+/// torchvision's `F.pad(..., mode='reflect')` behaviour: indices
+/// outside the range mirror around the boundary without repeating
+/// the edge pixel.
+fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
+    let n_i = n as isize;
+    debug_assert!(n_i > 0);
+    let mut j = i;
+    // Loop in case the radius exceeds the dimension (small bands).
+    while j < 0 || j >= n_i {
+        if j < 0 {
+            j = -j;
+        }
+        if j >= n_i {
+            j = 2 * n_i - 2 - j;
+        }
+    }
+    j as usize
+}
+
+/// Apply the σ=3 separable Gaussian blur from cvvdp's
+/// `phase_uncertainty`. Allocates the intermediate buffer; not for
+/// hot paths. Returns a `w × h` Vec<f32>. Reflect padding at the
+/// boundary, matching torchvision.
+pub fn gaussian_blur_sigma3(src: &[f32], w: usize, h: usize) -> Vec<f32> {
+    debug_assert_eq!(src.len(), w * h);
+    let k = PU_BLUR_KERNEL_1D;
+    let half = 6_isize; // (13 - 1) / 2
+
+    // Horizontal pass.
+    let mut h_pass = vec![0.0_f32; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let mut s = 0.0_f32;
+            for t in 0..13 {
+                let sx = reflect_idx_for_blur(x as isize + t as isize - half, w);
+                s += k[t] * src[y * w + sx];
+            }
+            h_pass[y * w + x] = s;
+        }
+    }
+
+    // Vertical pass.
+    let mut out = vec![0.0_f32; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let mut s = 0.0_f32;
+            for t in 0..13 {
+                let sy = reflect_idx_for_blur(y as isize + t as isize - half, h);
+                s += k[t] * h_pass[sy * w + x];
+            }
+            out[y * w + x] = s;
+        }
+    }
+    out
+}
+
+/// cvvdp's `phase_uncertainty` for an entire band. If both
+/// dimensions exceed `PU_PADSIZE = 6`, applies the σ=3 separable
+/// Gaussian blur; otherwise just scales by `10^mask_c`.
+pub fn phase_uncertainty_band(m: &[f32], w: usize, h: usize) -> Vec<f32> {
+    let scale = 10.0_f32.powf(MASK_C);
+    if w > PU_PADSIZE && h > PU_PADSIZE {
+        let blurred = gaussian_blur_sigma3(m, w, h);
+        blurred.into_iter().map(|v| v * scale).collect()
+    } else {
+        m.iter().map(|v| v * scale).collect()
+    }
+}
+
+/// Band-size threshold below which `phase_uncertainty` skips the
+/// Gaussian blur. cvvdp computes `pu_padsize = int(pu_dilate * 2) = 6`.
+pub const PU_PADSIZE: usize = 6;
 
 /// Cross-channel mask pooling at one pixel: given `term[ch]` for
 /// each of the 3 channels (where `term[ch] = safe_pow(|M_mm[ch]|, q[ch])`),
@@ -140,6 +225,63 @@ pub fn mult_mutual_pixel(t_p: [f32; 3], r_p: [f32; 3]) -> [f32; 3] {
         let diff = (t_p[cc] - r_p[cc]).abs();
         let d_u = safe_pow(diff, MASK_P) / (1.0 + m[cc]);
         d[cc] = clamp_diff_soft(d_u);
+    }
+    d
+}
+
+/// Full-band masking for the cvvdp "mult-mutual" model with
+/// xchannel masking on. Inputs are CSF-weighted contrasts including
+/// `CH_GAIN` (so `t_p_per_ch[c][i] = T[c][i] * S[c] * CH_GAIN[c]`).
+///
+/// Applies the band-level `phase_uncertainty` (with the σ=3 blur
+/// when the band is large enough) before the cross-channel pool,
+/// matching cvvdp exactly. Returns per-channel per-pixel D values.
+pub fn mult_mutual_band(
+    t_p_per_ch: &[Vec<f32>; 3],
+    r_p_per_ch: &[Vec<f32>; 3],
+    w: usize,
+    h: usize,
+) -> [Vec<f32>; 3] {
+    let n = w * h;
+    debug_assert_eq!(t_p_per_ch[0].len(), n);
+
+    // Step 1: M_mm[ch][i] = min(|T_p[ch][i]|, |R_p[ch][i]|).
+    let m_mm_raw: [Vec<f32>; 3] = [
+        (0..n)
+            .map(|i| t_p_per_ch[0][i].abs().min(r_p_per_ch[0][i].abs()))
+            .collect(),
+        (0..n)
+            .map(|i| t_p_per_ch[1][i].abs().min(r_p_per_ch[1][i].abs()))
+            .collect(),
+        (0..n)
+            .map(|i| t_p_per_ch[2][i].abs().min(r_p_per_ch[2][i].abs()))
+            .collect(),
+    ];
+
+    // Step 2: phase_uncertainty per channel (blur if band large).
+    let m_mm: [Vec<f32>; 3] = [
+        phase_uncertainty_band(&m_mm_raw[0], w, h),
+        phase_uncertainty_band(&m_mm_raw[1], w, h),
+        phase_uncertainty_band(&m_mm_raw[2], w, h),
+    ];
+
+    // Step 3: term[ch][i] = safe_pow(|M_mm[ch][i]|, q[ch]).
+    let term: [Vec<f32>; 3] = [
+        m_mm[0].iter().map(|v| safe_pow(v.abs(), MASK_Q[0])).collect(),
+        m_mm[1].iter().map(|v| safe_pow(v.abs(), MASK_Q[1])).collect(),
+        m_mm[2].iter().map(|v| safe_pow(v.abs(), MASK_Q[2])).collect(),
+    ];
+
+    // Step 4: cross-channel pool per pixel + masked diff.
+    let mut d: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let term_i = [term[0][i], term[1][i], term[2][i]];
+        let m_pool = mask_pool_pixel(term_i);
+        for cc in 0..3 {
+            let diff = (t_p_per_ch[cc][i] - r_p_per_ch[cc][i]).abs();
+            let d_u = safe_pow(diff, MASK_P) / (1.0 + m_pool[cc]);
+            d[cc][i] = clamp_diff_soft(d_u);
+        }
     }
     d
 }

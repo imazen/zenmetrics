@@ -3,20 +3,23 @@
 //! still-image cvvdp chain (color → pyramid → CSF → masking →
 //! pooling → JOD) at the standard_4k display config.
 //!
-//! This test does NOT yet assert tight pycvvdp parity. Documented
-//! simplifications (global L_bkg, no PU Gaussian blur) bias the
-//! JOD scale lower than pycvvdp's manifest values. Observed shadow
-//! on the v1 corpus (standard_4k, l_bkg=100, CH_GAIN applied):
+//! This test does NOT yet assert tight pycvvdp parity. Observed
+//! shadow on the v1 corpus (standard_4k, l_bkg=100, CH_GAIN +
+//! PU blur both on):
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar
-//!   1    7.65               ~5.4
-//!   5    8.89               ~5.8
-//!   20   9.71               ~6.8
-//!   45   9.83               ~6.7
-//!   70   9.89               ~7.3
-//!   90   9.99               ~7.9
+//!   1    7.65               ~6.0
+//!   5    8.89               ~6.9
+//!   20   9.71               ~8.1
+//!   45   9.83               ~8.0
+//!   70   9.89               ~8.4
+//!   90   9.99               ~8.6
 //! ```
+//!
+//! Remaining gap (~1.0-1.5 JOD at high q) attributed to:
+//! - **Global L_bkg approximation**: cvvdp uses per-pixel L_bkg
+//!   from achromatic gauss[1].
 //!
 //! Both produce a JOD that broadly increases with q, but the
 //! shadow's absolute scale is ~2-3 JOD lower. The non-monotone
