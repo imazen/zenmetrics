@@ -35,7 +35,9 @@
 use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
-use crate::kernels::pyramid::downscale_kernel;
+use crate::kernels::pyramid::{
+    downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
+};
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
 
@@ -297,6 +299,119 @@ impl<R: Runtime> Cvvdp<R> {
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let h = self.gauss_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            out.push(planes);
+        }
+        Ok(out)
+    }
+
+    /// Run color + full Laplacian-pyramid decomposition. Returns
+    /// `levels[k] = [a, rg, vy]` planar f32 bands matching cvvdp's
+    /// `lpyr_dec.laplacian_pyramid_dec`:
+    ///
+    /// - `levels[k]` for `k < n_levels - 1` = `gauss[k] - expand(gauss[k+1])`
+    /// - `levels[n_levels - 1]` = `gauss[n_levels - 1]` (coarse residual)
+    ///
+    /// Per-level temp buffers are allocated per call (no scratch
+    /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
+    /// these once.
+    pub fn compute_dkl_laplacian_pyramid(
+        &mut self,
+        srgb: &[u8],
+    ) -> Result<Vec<[Vec<f32>; 3]>> {
+        // Builds the Gaussian pyramid first (color → reduce chain).
+        let _ = self.compute_dkl_gauss_pyramid(srgb)?;
+
+        let cube_dim = CubeDim::new_1d(64);
+
+        // Now produce Laplacian bands top-down. For each level k <
+        // n_levels - 1: expand gauss[k+1] → temp, then subtract
+        // (gauss[k] - temp) → bands_ref[k].
+        for k in 0..(self.n_levels as usize - 1) {
+            let coarse_w = self.gauss_ref[k + 1].w;
+            let coarse_h = self.gauss_ref[k + 1].h;
+            let fine_w = self.gauss_ref[k].w;
+            let fine_h = self.gauss_ref[k].h;
+            let n_v = (coarse_w * fine_h) as usize;
+            let n_fine = (fine_w * fine_h) as usize;
+
+            // Per-channel: upscale_v(coarse → vscratch), upscale_h(vscratch →
+            // upscaled), subtract(fine, upscaled → band).
+            for c in 0..N_CHANNELS {
+                let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                let fine = self.gauss_ref[k].planes[c].clone();
+                let band = self.bands_ref[k].planes[c].clone();
+
+                let vscratch =
+                    alloc_zeros_f32(&self.client, n_v);
+                let upscaled = alloc_zeros_f32(&self.client, n_fine);
+
+                let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
+                let count_h = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+                let count_sub = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+                let n_coarse = (coarse_w * coarse_h) as usize;
+
+                unsafe {
+                    upscale_v_kernel::launch::<R>(
+                        &self.client,
+                        count_v,
+                        cube_dim,
+                        ArrayArg::from_raw_parts(coarse, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch.clone(), n_v),
+                        coarse_w,
+                        coarse_h,
+                        fine_h,
+                    );
+                    upscale_h_kernel::launch::<R>(
+                        &self.client,
+                        count_h,
+                        cube_dim,
+                        ArrayArg::from_raw_parts(vscratch, n_v),
+                        ArrayArg::from_raw_parts(upscaled.clone(), n_fine),
+                        coarse_w,
+                        fine_w,
+                        fine_h,
+                    );
+                    subtract_kernel::launch::<R>(
+                        &self.client,
+                        count_sub,
+                        cube_dim,
+                        ArrayArg::from_raw_parts(fine, n_fine),
+                        ArrayArg::from_raw_parts(upscaled, n_fine),
+                        ArrayArg::from_raw_parts(band, n_fine),
+                        n_fine as u32,
+                    );
+                }
+            }
+        }
+
+        // Coarsest band = coarsest gauss (no subtraction). Read it
+        // directly from gauss_ref. For symmetry with the rest, copy
+        // into bands_ref[last] via a host trip — small buffer.
+        let n_levels = self.n_levels as usize;
+        let last = n_levels - 1;
+        for c in 0..N_CHANNELS {
+            let g = self.gauss_ref[last].planes[c].clone();
+            let bytes = self
+                .client
+                .read_one(g)
+                .map_err(|_| Error::InvalidImageSize)?;
+            // Re-upload as bands_ref[last] so the read-back loop is
+            // uniform across levels.
+            self.bands_ref[last].planes[c] = self.client.create_from_slice(&bytes);
+        }
+
+        // Read back every band × every channel.
+        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.bands_ref[k].planes[c].clone();
                 let bytes = self
                     .client
                     .read_one(h)
