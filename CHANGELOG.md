@@ -51,6 +51,46 @@ Workspace conventions per the global rules:
   network-fetching integration test, keeping default `cargo test`
   offline. Per-stage parity tests (color, pyramid, csf, masking,
   pooling) all locked vs pycvvdp.
+- **GPU-composed score path** — full pipeline up through D bands +
+  masking runs on GPU; only the spatial pool + 3-stage Minkowski +
+  `met2jod` are host. New `Cvvdp` helpers:
+  - `compute_dkl_weber_pyramid` — color + Weber-contrast pyramid,
+    returns `(bands, log_l_bkg)` per the `WeberPyramidGpu` type
+    alias.
+  - `compute_dkl_t_p_bands(ppd)` — Weber × per-pixel CSF S ×
+    `CH_GAIN` × `band_mul`. `band_mul = 2.0` for non-edge levels,
+    `1.0` at level 0 and baseband. Baseband sets `CH_GAIN_eff = 1.0`
+    so callers can reproduce cvvdp's `|T_p - R_p|` baseband bypass.
+  - `compute_dkl_d_bands(ref, dist, ppd)` — composes Weber + CSF +
+    masking. Non-baseband bands use the GPU `mult_mutual_3ch_*`
+    masker (with the `10^MASK_C` PU-blur scale applied via
+    `weight_band_kernel`); baseband uses `|T_p_dis - T_p_ref|`.
+    Uses the reference's `log_l_bkg` for both sides per cvvdp's
+    `weber_g1` contract.
+  - `compute_dkl_jod(ref, dist, ppd)` — full GPU score path
+    returning a JOD scalar. Drift survey shows GPU matches host
+    within 0.001 JOD for q ≥ 20; the 0.40 drift at q=1 is
+    cumulative f32 noise compounding through `met2jod`'s steep
+    slope region, not a parity bug.
+- `Cvvdp::score_with_reference` is wired (previously returned a
+  silent 0.0). Caches reference sRGB bytes and routes through
+  `host_scalar::predict_jod_still_3ch` — exact-parity with
+  `Cvvdp::score(ref, dist)`.
+- Drift-survey tests document where GPU vs host diverges per
+  stage: `compute_dkl_{weber_pyramid,t_p_bands,d_bands}_matches_host_on_corpus_256x256`
+  + `compute_dkl_jod_vs_host_scalar_on_corpus` +
+  `compute_dkl_jod_on_v1_manifest_corpus`.
+
+### Removed
+
+#### cvvdp-gpu
+
+- Dead `masked_diff_kernel` cubecl stub (always wrote 0.0; never
+  launched).
+- Dead `upscale_kernel` cubecl stub (replaced by the
+  `upscale_v_kernel` + `upscale_h_kernel` pair).
+- Empty `kernels::reduce` module (planned scope landed in
+  `kernels::pool` instead).
 
 #### zen-metrics-cli
 
