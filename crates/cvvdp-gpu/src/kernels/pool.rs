@@ -132,19 +132,47 @@ pub fn do_pooling_and_jod_still_3ch(q_per_ch: &[[f32; 3]]) -> f32 {
     met2jod(q)
 }
 
-/// One thread per pixel raises `band_diff[i]^beta` and atomically adds
-/// into the per-band f32 accumulator at `out[band_idx]`. Stub.
+/// One thread per pixel computes cvvdp's `safe_pow(|x|, β) =
+/// (|x| + 1e-5)^β - 1e-5^β` for the pixel and atomically adds it
+/// into the f32 accumulator at `partials[partial_idx]`. Host folds
+/// the partial to the final lp_norm via:
+///
+/// ```text
+/// Q = safe_pow(partial / n_pixels, 1/β)
+///   = ((partial / n_pixels) + 1e-5)^(1/β) - 1e-5^(1/β)
+/// ```
+///
+/// `partial_idx` lets the caller pack multiple (band, channel)
+/// partials into the same buffer. Works on cubecl backends with
+/// `Atomic<f32>::fetch_add` support — CUDA, DX12, HIP (per
+/// butteraugli-gpu's notes; Metal silently no-ops on the f32 add).
 #[cube(launch)]
-#[allow(unused_variables)]
 pub fn pool_band_kernel(
     band_diff: &Array<f32>,
-    out: &mut Array<f32>,
+    partials: &mut Array<Atomic<f32>>,
     beta: f32,
-    band_idx: u32,
+    partial_idx: u32,
     n: u32,
 ) {
     let idx = ABSOLUTE_POS;
     if idx >= n as usize {
         terminate!();
     }
+    let v = band_diff[idx];
+    let abs_v = if v < f32::new(0.0) { -v } else { v };
+    let eps = f32::new(1e-5);
+    // safe_pow_lp(|v|, beta) — accumulator gets the raw safe-pow
+    // contribution; the - eps^beta and 1/beta exponentiation
+    // happen host-side once per (band, channel).
+    let contribution = f32::powf(abs_v + eps, beta) - f32::powf(eps, beta);
+    partials[partial_idx as usize].fetch_add(contribution);
+}
+
+/// Finish the host-side fold for `pool_band_kernel`: given the
+/// atomic partial sum and pixel count for one band, return the
+/// lp_norm_mean(β) value matching `kernels::pool::lp_norm_mean`.
+pub fn pool_band_finalize(partial: f32, n_pixels: usize, beta: f32) -> f32 {
+    let n = n_pixels as f32;
+    let eps = 1e-5_f32;
+    ((partial / n).max(0.0) + eps).powf(1.0 / beta) - eps.powf(1.0 / beta)
 }

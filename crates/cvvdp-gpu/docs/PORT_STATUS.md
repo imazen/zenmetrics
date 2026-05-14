@@ -12,7 +12,7 @@ Tracking faithful-port progress against the Python reference
 | Weber-contrast pyr | `kernels/pyramid`      | host scalar + weber_contrast_compute_kernel | scalar via shadow_jod; kernel 14-pt parity |
 | CSF weighting      | `kernels/csf`          | scalar (log10 L_bkg) + kernel + table     | 60 pts vs pycvvdp + GPU scale parity      |
 | Contrast masking   | `kernels/masking`      | scalar + no-blur kernel + PU blur kernels | scalar + no-blur + PU σ=3 blur all parity |
-| Per-band pooling   | `kernels/pool`         | host scalar lp_norm + 3-stage pool       | 3 fixtures vs pycvvdp <1e-3 abs           |
+| Per-band pooling   | `kernels/pool`         | host scalar + pool_band_kernel (atomic)  | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
 | Composed pipeline  | `host_scalar`          | end-to-end sRGB → JOD on corpus          | <0.01 JOD vs pycvvdp v1 manifest          |
 
