@@ -97,6 +97,24 @@ Workspace conventions per the global rules:
   in `tests/csf_kernel.rs` — sweeps the full log_l_bkg LUT axis
   with distinct per-channel ch_gain values (catches bugs the
   indirect d_bands test would miss).
+- Consecutive-weber diagnostic block in `examples/time_12mp.rs`
+  (`0a71bb22`) — calls `compute_dkl_weber_pyramid` twice on the
+  same `ref_bytes` outside `compute_dkl_d_bands` to isolate
+  whether the "weber(dist) is 2× weber(ref)" slowdown is
+  position-dependent (consecutive-call overhead) or data-shape
+  dependent. Result: standalone consecutive calls show no
+  slowdown, ruling out cubecl warm-up / driver effects and
+  pinning the cause to host memory pressure from holding the
+  `ref_weber: Vec<Vec<f32>>` (~190 MB at 12 MP) alive across the
+  second call inside the d_bands flow.
+- `_dispatch_weber_pyramid_gpu` private helper (`072d9e43`)
+  factored out of `compute_dkl_weber_pyramid` — takes a
+  `&[Handle]` destination slice for the per-level `log_l_bkg`
+  outputs. The bisect for tick 85's 5× regression revealed
+  that this extraction itself does not regress, only the
+  full 5-phase serial restructure did; the helper is kept so
+  future experiments can swap the destination buffer set
+  without re-wiring weber's body.
 
 ### Changed (performance)
 
@@ -135,6 +153,48 @@ hoists + one kernel fuse landed in succession:
   mathematical identity. No measurable win on cuda (likely cubecl
   already compiles to similar PTX); kept for potential wgpu/hip
   payoff.
+- **Dist-side CSF reads `self.bands_ref` handles directly**
+  (`8b6f2776`) — `compute_dkl_d_bands` no longer uploads
+  `dist_weber[k]` from host inside the per-band CSF apply. The
+  dist-side handles are already resident in `self.bands_ref`
+  after the `weber(dist)` call earlier in the band loop, so the
+  CSF kernel reads them in place. REF-side still uploads since
+  `bands_ref` has been overwritten with DIST data by band-loop
+  time. Result on 12 MP cuda: weber 291 ms (baseline),
+  d_bands 1.42 s (−3% from 1.46 s), jod 1.40 s (−7% from 1.50 s).
+  Parity intact at 1.3e-3 band-relative on q=1 corpus. Critically,
+  this also proves the handle-direct CSF pattern is **innocent**
+  of tick 85's 5× weber regression — that regression was the
+  5-phase serial restructure, not the handle access pattern.
+
+### Investigation Notes (cvvdp-gpu, post-tick-81)
+
+These observations don't ship as code, but they document
+findings that would otherwise be re-discovered:
+
+- **Standalone weber(dist) is not slower than weber(ref)** —
+  the consecutive-weber diagnostic in `examples/time_12mp.rs`
+  shows two back-to-back `compute_dkl_weber_pyramid` calls on
+  the same `ref_bytes` complete in nearly identical time. The
+  "weber(dist) is 2× weber(ref)" effect observed inside
+  `compute_dkl_d_bands` is therefore not algorithmic, not a
+  cubecl warm-up artifact, and not driver thermal throttling.
+  It is host memory pressure: ~190 MB of `ref_weber` Vec stays
+  alive across the second call.
+- **Tick 85's failed 5-phase d_bands refactor regressed
+  standalone weber by 5×** (260 ms → 1300 ms) — the per-band
+  bisect ruled out: (a) the new `self.ref_log_l_bkg` field
+  itself (allocation-only does not regress), (b) the new
+  `log_l_bkg_dest` parameter on `_dispatch_weber_pyramid_gpu`,
+  and (c) the GPU memory-handle pattern (the dist-side CSF
+  optimization above confirms this). The proven cause is the
+  5-phase serial control-flow structure (all CSF(ref) bands →
+  weber(dist) → all CSF(dist) bands → all masking), but the
+  actual mechanism (cubecl sync barrier? memory-pool
+  fragmentation? kernel-scheduler ordering?) remains unknown.
+  Future attempts at the d_bands restructure should bisect a
+  different axis (interleaved-per-level vs. phase-serial)
+  rather than re-flatten the existing structure.
 
 Net 12 MP performance trajectory (CUDA, RTX-class):
 
@@ -143,6 +203,14 @@ Net 12 MP performance trajectory (CUDA, RTX-class):
 | weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 21.6 ns/px |
 | compute_dkl_d_bands     | 428 ns/px | 121 ns/px | 121 ns/px |
 | compute_dkl_jod         | 444 ns/px | 127 ns/px | 127 ns/px |
+
+Tick 87's dist-side handle-direct CSF showed a 3% d_bands /
+7% jod improvement on a single 12 MP run vs the immediately
+prior baseline on the same machine — not yet promoted into
+the trajectory table because the tick 73 figures are
+machine-equalized published numbers and the new measurement
+was a single point. The next properly-benchmarked sweep
+will re-anchor the column.
 
 vs fcvvdp at 360 p (their bench, i7-13700k):
 
