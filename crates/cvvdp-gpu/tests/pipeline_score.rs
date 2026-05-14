@@ -157,3 +157,83 @@ fn score_with_reference_errors_without_set_reference() {
         "unexpected error kind: {msg}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_on_v1_manifest_corpus() {
+    // GPU-composed compute_dkl_jod against the v1 R2 manifest values.
+    // shadow_jod pins the all-host path to ≤0.006 JOD; this test
+    // measures the GPU path's drift on real corpus images vs pycvvdp.
+    //
+    // Observed 2026-05-14 (cuda backend, current scaffold):
+    //
+    // ```text
+    //   q    pycvvdp manifest   GPU JOD    |drift|
+    //   1    7.6536             8.0528     0.3992
+    //   5    8.8889             8.9434     0.0545
+    //   20   9.7076             9.7086     0.0010
+    //   45   9.8273             9.8293     0.0020
+    //   70   9.8915             9.8944     0.0029
+    //   90   9.9930             9.9919     0.0011
+    // ```
+    //
+    // Findings:
+    // - q ≥ 20: GPU JOD matches pycvvdp within 0.003 JOD (well
+    //   inside f32 accumulation noise — the GPU score path is
+    //   production-quality at moderate-to-high quality).
+    // - q = 5: 0.055 JOD drift — borderline.
+    // - q = 1: 0.40 JOD drift in the optimistic direction (GPU
+    //   reports less distortion than pycvvdp). Likely from the
+    //   mult_mutual soft-clamp at very large D values: when D is
+    //   pushed past D_MAX, the clamp saturates and small upstream
+    //   f32 deltas in the masker get amplified. Moving the masking
+    //   step to the GPU kernels (mult_mutual_3ch_{no_blur,with_blurred})
+    //   should keep the soft-clamp arithmetic bit-stable with the
+    //   host scalar — that's the targeted next chunk.
+    //
+    // Per-q diffs report to stdout so the loop can watch the drift
+    // shrink as more stages move to GPU.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+
+    let cases: &[(u32, f32)] = &[
+        (1, 7.6536),
+        (5, 8.8889),
+        (20, 9.7076),
+        (45, 9.8273),
+        (70, 9.8915),
+        (90, 9.9930),
+    ];
+
+    let mut max_drift = 0.0_f32;
+    for &(q, expected) in cases {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod = cvvdp
+            .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+            .expect("compute_dkl_jod");
+        let diff = (jod - expected).abs();
+        if diff > max_drift {
+            max_drift = diff;
+        }
+        eprintln!(
+            "compute_dkl_jod q={q:>2}: GPU JOD = {jod:.4} (pycvvdp manifest {expected:.4}, |drift| {diff:.4})"
+        );
+        assert!(jod.is_finite(), "q={q}: JOD = {jod} (not finite)");
+        assert!(
+            (0.0..=10.0).contains(&jod),
+            "q={q}: JOD = {jod} out of [0, 10]"
+        );
+    }
+    eprintln!("compute_dkl_jod max drift vs v1 manifest: {max_drift:.4}");
+    // Loose ceiling — measure-only test. Tightens once GPU masking
+    // + pool kernels replace the host calls in compute_dkl_jod.
+    assert!(
+        max_drift < 1.0,
+        "GPU JOD drifts > 1.0 from v1 manifest: {max_drift}"
+    );
+}
