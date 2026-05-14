@@ -128,10 +128,17 @@ pub fn sensitivity_corrected_scalar(rho: f32, l_bkg: f32, cc: CsfChannel) -> f32
     s * correction
 }
 
-/// Multiply `band` in-place by `weights[channel * n_levels + level]`.
-/// `weights` is uploaded once per pipeline init. Stub body.
+/// Multiply `band` in-place by `weights[weight_idx]`. `weights` is a
+/// flat per-(level, channel) CSF sensitivity table uploaded once per
+/// pipeline init. `weight_idx` is the host-resolved slot for the
+/// (level, channel) pair this launch handles.
+///
+/// Per-pixel L_bkg variation is NOT modeled here; this kernel
+/// applies the same scalar weight to every pixel of the band, which
+/// matches the "global L_bkg approximation" code path. The full
+/// per-pixel form (using gauss_a[1] as L_bkg per pixel) is the next
+/// chunk after this.
 #[cube(launch)]
-#[allow(unused_variables)]
 pub fn weight_band_kernel(
     band: &mut Array<f32>,
     weights: &Array<f32>,
@@ -142,4 +149,47 @@ pub fn weight_band_kernel(
     if idx >= n as usize {
         terminate!();
     }
+    band[idx] = band[idx] * weights[weight_idx as usize];
+}
+
+/// Per-band, per-channel CSF weight table for the "global L_bkg
+/// approximation" path. Combines [`crate::params::DisplayGeometry`]
+/// and [`crate::kernels::pyramid::band_frequencies`] with this
+/// module's `sensitivity_corrected_scalar` to produce a
+/// `Vec<[f32; 3]>` indexed as `[level][channel]`.
+///
+/// Use case: the application path that approximates background
+/// luminance as a single scalar (e.g. display peak / 2, or a
+/// per-image mean). The kernel above (`weight_band_kernel`) consumes
+/// the flat-layout version of this table.
+pub fn precomputed_band_weights(
+    ppd: f32,
+    width: usize,
+    height: usize,
+    l_bkg: f32,
+) -> Vec<[f32; 3]> {
+    let freqs = crate::kernels::pyramid::band_frequencies(ppd, width, height);
+    freqs
+        .iter()
+        .map(|&rho| {
+            [
+                sensitivity_corrected_scalar(rho, l_bkg, CsfChannel::A),
+                sensitivity_corrected_scalar(rho, l_bkg, CsfChannel::Rg),
+                sensitivity_corrected_scalar(rho, l_bkg, CsfChannel::Vy),
+            ]
+        })
+        .collect()
+}
+
+/// Flatten a `precomputed_band_weights` result to the layout
+/// expected by [`weight_band_kernel`]:
+/// `[lvl0_chA, lvl0_chRG, lvl0_chVY, lvl1_chA, …]`.
+///
+/// `weight_idx = level * 3 + channel`.
+pub fn flatten_band_weights(weights: &[[f32; 3]]) -> Vec<f32> {
+    let mut out = Vec::with_capacity(weights.len() * 3);
+    for w in weights {
+        out.extend_from_slice(w);
+    }
+    out
 }

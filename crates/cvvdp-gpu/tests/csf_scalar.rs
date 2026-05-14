@@ -22,7 +22,10 @@
 //! # iterate rho × l_bkg × cc, call csf.sensitivity(rho, omega=0, ...)
 //! ```
 
-use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_scalar};
+use cvvdp_gpu::kernels::csf::{
+    CsfChannel, flatten_band_weights, precomputed_band_weights, sensitivity_scalar,
+};
+use cvvdp_gpu::params::DisplayGeometry;
 
 #[rustfmt::skip]
 const CSF_GOLDENS: &[(f32, f32, u32, f32)] = &[
@@ -79,6 +82,36 @@ fn sensitivity_matches_pycvvdp_v0_5_4() {
         worst_pt.3,
         worst_pt.4
     );
+}
+
+#[test]
+fn precomputed_band_weights_match_pointwise() {
+    // Compose the helper from its underlying primitives; this is a
+    // sanity check that the helper does what its docstring claims.
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let l_bkg = 100.0;
+    let weights = precomputed_band_weights(ppd, 256, 256, l_bkg);
+    let freqs = cvvdp_gpu::kernels::pyramid::band_frequencies(ppd, 256, 256);
+    let correction = 10.0_f32.powf(cvvdp_gpu::kernels::csf::SENSITIVITY_CORRECTION_DB / 20.0);
+
+    assert_eq!(weights.len(), freqs.len());
+    for (i, &rho) in freqs.iter().enumerate() {
+        let exp_a = sensitivity_scalar(rho, l_bkg, CsfChannel::A) * correction;
+        let exp_rg = sensitivity_scalar(rho, l_bkg, CsfChannel::Rg) * correction;
+        let exp_vy = sensitivity_scalar(rho, l_bkg, CsfChannel::Vy) * correction;
+        let [a, rg, vy] = weights[i];
+        for (got, exp, tag) in [(a, exp_a, "A"), (rg, exp_rg, "Rg"), (vy, exp_vy, "Vy")] {
+            let rel = ((got - exp) / exp).abs();
+            assert!(rel < 1e-6, "level {i} {tag}: got {got}, expected {exp}");
+        }
+    }
+}
+
+#[test]
+fn flatten_band_weights_layout() {
+    let weights = vec![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]];
+    let flat = flatten_band_weights(&weights);
+    assert_eq!(flat, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 }
 
 #[test]
