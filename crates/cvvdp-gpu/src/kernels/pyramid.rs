@@ -872,8 +872,8 @@ pub fn weber_contrast_compute_kernel(
     contrast[idx] = c_clamped;
     // log10(x) via the natural log. cubecl 0.10's `f32::log` is
     // base-2 (per butteraugli-gpu's PORT_STATUS notes); `f32::ln` is
-    // natural log. log10(x) = ln(x) * (1 / ln(10)).
-    log_l_bkg[idx] = f32::ln(l) * f32::new(0.434_294_48);
+    // natural log. log10(x) = ln(x) * log10(e) = ln(x) * (1/ln(10)).
+    log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 }
 
 #[cfg(test)]
@@ -900,13 +900,13 @@ mod tests {
         // GAUSS5 sums to 1; on a constant input every output pixel
         // must equal the constant. Catches coefficient typos and
         // off-by-one edge errors simultaneously.
-        let src = vec![3.14_f32; 16 * 16];
+        let src = vec![2.5_f32; 16 * 16];
         let mut dst = Vec::new();
         gausspyr_reduce_scalar(&src, 16, 16, &mut dst);
         for &v in &dst {
             assert!(
-                (v - 3.14).abs() < 1e-6,
-                "constant-signal reduce produced {v} ≠ 3.14"
+                (v - 2.5).abs() < 1e-6,
+                "constant-signal reduce produced {v} ≠ 2.5"
             );
         }
     }
