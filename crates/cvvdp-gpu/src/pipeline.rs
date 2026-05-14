@@ -74,7 +74,6 @@ use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
 pub type WeberPyramidGpu = (Vec<[Vec<f32>; 3]>, Vec<Vec<f32>>);
 
 /// One pyramid level: a `width × height` planar f32 buffer per channel.
-#[allow(dead_code)]
 struct Level {
     w: u32,
     h: u32,
@@ -88,13 +87,18 @@ fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::s
 
 /// Reference-side state kept across `score_with_reference` calls.
 ///
-/// Today this just stashes the raw sRGB bytes so the host-scalar
-/// pipeline can re-run end-to-end per distorted candidate — matches
-/// what `score()` does internally, just without re-uploading the
-/// reference on every call. Once the GPU composition path lands, this
-/// will hold the CSF-weighted pyramid bands (`Vec<Vec<Handle>>`,
-/// indexed `[level][channel]`) so the reference side of the pipeline
-/// runs once and is reused for every distorted candidate.
+/// Stashes the raw sRGB bytes so the host-scalar pipeline can re-run
+/// end-to-end per distorted candidate — same bytes that `score()`
+/// would have re-uploaded, just kept around. Exact-parity with
+/// `score(ref, dist)`.
+///
+/// The fast path that materializes the reference's CSF-weighted
+/// pyramid bands once (`Vec<Vec<Handle>>`, indexed `[level][channel]`)
+/// is the obvious next optimization but isn't wired yet — every
+/// `score_with_reference` call still re-runs the full host pipeline.
+/// The GPU helpers (`compute_dkl_weber_pyramid` and friends) exist
+/// and could be retargeted here once `Cvvdp::score` itself routes
+/// through the GPU composition.
 struct CachedReference {
     /// Cached reference sRGB bytes (length `width * height * 3`).
     ref_srgb: Vec<u8>,
@@ -105,7 +109,6 @@ struct CachedReference {
 /// Allocates GPU buffers up front for a fixed image size and reuses
 /// them across calls. To score images of a different size, construct
 /// a new `Cvvdp`.
-#[allow(dead_code)]
 pub struct Cvvdp<R: Runtime> {
     client: ComputeClient<R>,
     params: CvvdpParams,
