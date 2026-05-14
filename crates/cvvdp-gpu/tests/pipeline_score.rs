@@ -182,13 +182,17 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
     //   production-quality at moderate-to-high quality).
     // - q = 5: 0.055 JOD drift — borderline.
     // - q = 1: 0.40 JOD drift in the optimistic direction (GPU
-    //   reports less distortion than pycvvdp). Likely from the
-    //   mult_mutual soft-clamp at very large D values: when D is
-    //   pushed past D_MAX, the clamp saturates and small upstream
-    //   f32 deltas in the masker get amplified. Moving the masking
-    //   step to the GPU kernels (mult_mutual_3ch_{no_blur,with_blurred})
-    //   should keep the soft-clamp arithmetic bit-stable with the
-    //   host scalar — that's the targeted next chunk.
+    //   reports less distortion than pycvvdp). Tick 55 moved the
+    //   masking step from host scalar to GPU kernels
+    //   (min_abs_3ch + pu_blur_{h,v} + mult_mutual_3ch_with_blurred,
+    //   plus the 10^MASK_C scale on the blurred PU output via
+    //   weight_band_kernel) — drift was unchanged at q=1, so the
+    //   masker itself is bit-stable across paths.
+    //   The residual drift is upstream — most likely the per-pixel
+    //   CSF interp's uniform-axis arithmetic (GPU) vs binary-search
+    //   interp1_clamped (host). At very low quality D values are
+    //   large enough that the soft-clamp at D_MAX saturates, and
+    //   small `S` deltas from the LUT interp amplify into JOD shift.
     //
     // Per-q diffs report to stdout so the loop can watch the drift
     // shrink as more stages move to GPU.

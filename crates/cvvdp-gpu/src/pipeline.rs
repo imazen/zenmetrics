@@ -52,7 +52,10 @@ use crate::kernels::csf::{
     CsfChannel, csf_apply_per_pixel_kernel, flatten_band_weights, precompute_logs_row,
     precomputed_band_weights, weight_band_kernel,
 };
-use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
+use crate::kernels::masking::{
+    CH_GAIN, MASK_C, PU_PADSIZE, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
+    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_kernel, pu_blur_v_kernel,
+};
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
     band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
@@ -848,8 +851,19 @@ impl<R: Runtime> Cvvdp<R> {
                 .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            let mut t_p_ref: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-            let mut t_p_dis: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            // Allocate GPU handles for T_p ref and T_p dis per channel
+            // — kept resident so the masking kernels can consume them
+            // without a round-trip to host.
+            let t_p_ref_h: [cubecl::server::Handle; 3] = [
+                alloc_zeros_f32(&self.client, n_px),
+                alloc_zeros_f32(&self.client, n_px),
+                alloc_zeros_f32(&self.client, n_px),
+            ];
+            let t_p_dis_h: [cubecl::server::Handle; 3] = [
+                alloc_zeros_f32(&self.client, n_px),
+                alloc_zeros_f32(&self.client, n_px),
+                alloc_zeros_f32(&self.client, n_px),
+            ];
 
             for (c, cc) in csf_channels.iter().enumerate() {
                 let logs_row = precompute_logs_row(rho_k, *cc);
@@ -860,11 +874,13 @@ impl<R: Runtime> Cvvdp<R> {
                     band_mul * CH_GAIN[c]
                 };
 
-                for (side_weber, dst) in [(&ref_weber, &mut t_p_ref), (&dist_weber, &mut t_p_dis)] {
+                for (side_weber, t_p_h) in [
+                    (&ref_weber, t_p_ref_h[c].clone()),
+                    (&dist_weber, t_p_dis_h[c].clone()),
+                ] {
                     let weber_h = self
                         .client
                         .create_from_slice(f32::as_bytes(&side_weber[k][c]));
-                    let t_p_h = alloc_zeros_f32(&self.client, n_px);
                     unsafe {
                         csf_apply_per_pixel_kernel::launch::<R>(
                             &self.client,
@@ -873,31 +889,163 @@ impl<R: Runtime> Cvvdp<R> {
                             ArrayArg::from_raw_parts(weber_h, n_px),
                             ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
                             ArrayArg::from_raw_parts(logs_row_h.clone(), 32),
-                            ArrayArg::from_raw_parts(t_p_h.clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_h, n_px),
                             ch_gain_eff,
                             n_px as u32,
                         );
                     }
-                    let bytes = self
-                        .client
-                        .read_one(t_p_h)
-                        .map_err(|_| Error::InvalidImageSize)?;
-                    dst[c] = f32::from_bytes(&bytes).to_vec();
                 }
             }
 
-            let d = if is_baseband {
-                let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            if is_baseband {
+                // Read back T_p per channel, compute |Δ| on host (tiny).
+                let mut planes: [Vec<f32>; 3] =
+                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
                 for c in 0..N_CHANNELS {
+                    let t_ref_bytes = self
+                        .client
+                        .read_one(t_p_ref_h[c].clone())
+                        .map_err(|_| Error::InvalidImageSize)?;
+                    let t_dis_bytes = self
+                        .client
+                        .read_one(t_p_dis_h[c].clone())
+                        .map_err(|_| Error::InvalidImageSize)?;
+                    let t_ref: &[f32] = f32::from_bytes(&t_ref_bytes);
+                    let t_dis: &[f32] = f32::from_bytes(&t_dis_bytes);
                     for i in 0..n_px {
-                        planes[c][i] = (t_p_dis[c][i] - t_p_ref[c][i]).abs();
+                        planes[c][i] = (t_dis[i] - t_ref[i]).abs();
                     }
                 }
-                planes
+                d_bands.push(planes);
             } else {
-                mult_mutual_band(&t_p_dis, &t_p_ref, bw, bh)
-            };
-            d_bands.push(d);
+                // GPU masking. Allocate D output handles per channel
+                // and dispatch the appropriate kernel chain based on
+                // band size relative to PU_PADSIZE.
+                let d_h: [cubecl::server::Handle; 3] = [
+                    alloc_zeros_f32(&self.client, n_px),
+                    alloc_zeros_f32(&self.client, n_px),
+                    alloc_zeros_f32(&self.client, n_px),
+                ];
+                let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
+                unsafe {
+                    if use_blur {
+                        // min_abs → pu_blur_h → pu_blur_v → mult_mutual_3ch_with_blurred.
+                        let m_raw_h: [cubecl::server::Handle; 3] = [
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                        ];
+                        min_abs_3ch_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(t_p_dis_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_raw_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_raw_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_raw_h[2].clone(), n_px),
+                            n_px as u32,
+                        );
+                        // PU blur: h pass into scratch, v pass into the
+                        // final blurred buffer. One pair per channel.
+                        let m_mid_h: [cubecl::server::Handle; 3] = [
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                        ];
+                        let m_blur_h: [cubecl::server::Handle; 3] = [
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                            alloc_zeros_f32(&self.client, n_px),
+                        ];
+                        // PU blur is sum-to-1 normalized. After v pass
+                        // we need to apply phase_uncertainty's `* 10^MASK_C`
+                        // scale before the masker — weight_band_kernel
+                        // multiplies in place by weights[0].
+                        let pu_scale_h = self
+                            .client
+                            .create_from_slice(f32::as_bytes(&[10.0_f32.powf(MASK_C)]));
+                        for c in 0..N_CHANNELS {
+                            pu_blur_h_kernel::launch::<R>(
+                                &self.client,
+                                count.clone(),
+                                cube_dim,
+                                ArrayArg::from_raw_parts(m_raw_h[c].clone(), n_px),
+                                ArrayArg::from_raw_parts(m_mid_h[c].clone(), n_px),
+                                bw as u32,
+                                bh as u32,
+                            );
+                            pu_blur_v_kernel::launch::<R>(
+                                &self.client,
+                                count.clone(),
+                                cube_dim,
+                                ArrayArg::from_raw_parts(m_mid_h[c].clone(), n_px),
+                                ArrayArg::from_raw_parts(m_blur_h[c].clone(), n_px),
+                                bw as u32,
+                                bh as u32,
+                            );
+                            weight_band_kernel::launch::<R>(
+                                &self.client,
+                                count.clone(),
+                                cube_dim,
+                                ArrayArg::from_raw_parts(m_blur_h[c].clone(), n_px),
+                                ArrayArg::from_raw_parts(pu_scale_h.clone(), 1),
+                                0_u32,
+                                n_px as u32,
+                            );
+                        }
+                        mult_mutual_3ch_with_blurred_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(t_p_dis_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
+                            n_px as u32,
+                        );
+                    } else {
+                        // Small band: inline no-blur masker (band ≤ PU_PADSIZE).
+                        mult_mutual_3ch_no_blur_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(t_p_dis_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_dis_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
+                            n_px as u32,
+                        );
+                    }
+                }
+                let mut planes: [Vec<f32>; 3] =
+                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                for c in 0..N_CHANNELS {
+                    let bytes = self
+                        .client
+                        .read_one(d_h[c].clone())
+                        .map_err(|_| Error::InvalidImageSize)?;
+                    planes[c] = f32::from_bytes(&bytes).to_vec();
+                }
+                d_bands.push(planes);
+            }
         }
 
         Ok(d_bands)
