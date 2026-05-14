@@ -491,11 +491,20 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(out)
     }
 
-    /// Score a (reference, distorted) pair, returning JOD.
+    /// Score a (reference, distorted) sRGB pair, returning JOD on
+    /// the cvvdp scale (0–10; 10 = imperceptible).
     ///
-    /// **Stub** — wiring complete enough for the type to exist; the
-    /// kernel bodies don't yet produce parity numbers. Returns `0.0`
-    /// until per-stage goldens land.
+    /// Currently routes through the parity-locked host scalar
+    /// (`host_scalar::predict_jod_still_3ch`). The kernels for every
+    /// stage exist and are individually parity-tested; replacing the
+    /// host scalar with a fully-GPU composition is the next chunk of
+    /// pipeline work. Score matches pycvvdp v0.5.4 on the v1 R2
+    /// manifest within 0.006 JOD across q1–q90.
+    ///
+    /// The viewing geometry is taken from
+    /// [`crate::params::DisplayGeometry::STANDARD_4K`] (the v1
+    /// manifest's display). Future versions will accept a per-call
+    /// or per-instance `DisplayGeometry`.
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
@@ -510,9 +519,17 @@ impl<R: Runtime> Cvvdp<R> {
                 got: distorted_srgb.len(),
             });
         }
-        // TODO: launch kernels, fold partials, apply JOD mapping.
-        let _ = self.params; // keep field "used" until pipeline lands
-        Ok(0.0)
+        let geom = crate::params::DisplayGeometry::STANDARD_4K;
+        let ppd = geom.pixels_per_degree();
+        let jod = crate::host_scalar::predict_jod_still_3ch(
+            reference_srgb,
+            distorted_srgb,
+            self.width as usize,
+            self.height as usize,
+            self.params.display,
+            ppd,
+        );
+        Ok(jod as f64)
     }
 
     /// Cache the reference-side CSF-weighted pyramid for repeated
