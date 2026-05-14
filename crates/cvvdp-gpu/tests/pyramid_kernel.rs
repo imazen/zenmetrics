@@ -18,7 +18,7 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::pyramid::{
     downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar, subtract_kernel,
-    upscale_h_kernel, upscale_v_kernel,
+    upscale_h_kernel, upscale_v_kernel, weber_contrast_compute_kernel,
 };
 
 #[cfg(feature = "cuda")]
@@ -161,6 +161,70 @@ fn upscale_two_kernels_match_host_scalar() {
          gpu = {gpu_out:?}\n\
          cpu = {cpu_out:?}"
     );
+}
+
+#[test]
+fn weber_contrast_compute_kernel_matches_host_formula() {
+    let client = Backend::client(&Default::default());
+
+    // Mixed inputs: layer goes negative + positive; l_bkg spans
+    // tiny-clamp to large values; one layer/lbkg ratio over 1000
+    // to exercise the upper clamp.
+    let layer: Vec<f32> = vec![
+        0.0, 1.0, -1.0, 5.0, -5.0, 50.0, -50.0, 500.0, -500.0, 1.0e5, -1.0e5, 0.001, -0.001,
+        0.0,
+    ];
+    let lbkg: Vec<f32> = vec![
+        1.0, 1.0, 1.0, 10.0, 100.0, 0.5, 0.005, 0.5, 0.001, 50.0, 50.0, 1.0, 0.001, 0.001,
+    ];
+    assert_eq!(layer.len(), lbkg.len());
+    let n = layer.len();
+
+    let layer_h = client.create_from_slice(f32::as_bytes(&layer));
+    let lbkg_h = client.create_from_slice(f32::as_bytes(&lbkg));
+    let contrast_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let log_l_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        weber_contrast_compute_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(layer_h.clone(), n),
+            ArrayArg::from_raw_parts(lbkg_h.clone(), n),
+            ArrayArg::from_raw_parts(contrast_h.clone(), n),
+            ArrayArg::from_raw_parts(log_l_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let c_bytes = client.read_one(contrast_h.clone()).expect("read contrast");
+    let l_bytes = client.read_one(log_l_h.clone()).expect("read log_l");
+    let c_gpu: &[f32] = f32::from_bytes(&c_bytes);
+    let l_gpu: &[f32] = f32::from_bytes(&l_bytes);
+
+    for i in 0..n {
+        let l = lbkg[i].max(0.01);
+        let c_exp = (layer[i] / l).clamp(-1000.0, 1000.0);
+        let log_l_exp = l.log10();
+        assert!(
+            (c_gpu[i] - c_exp).abs() < 1e-4 * c_exp.abs().max(1e-3),
+            "contrast[{i}]: got {} expected {} (layer={}, lbkg={})",
+            c_gpu[i],
+            c_exp,
+            layer[i],
+            lbkg[i]
+        );
+        assert!(
+            (l_gpu[i] - log_l_exp).abs() < 1e-5,
+            "log_l_bkg[{i}]: got {} expected {} (lbkg={})",
+            l_gpu[i],
+            log_l_exp,
+            lbkg[i]
+        );
+    }
 }
 
 #[test]

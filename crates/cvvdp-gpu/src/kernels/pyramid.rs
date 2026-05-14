@@ -831,6 +831,63 @@ pub fn subtract_kernel(
     band[idx] = fine[idx] - upscaled_coarse[idx];
 }
 
+/// Per-pixel finishing step of the Weber-contrast pyramid for one
+/// non-baseband band of one channel. Mirrors the inner body of
+/// `weber_contrast_pyr_dec_scalar`:
+///
+/// ```text
+/// L_bkg     = max(expanded_lbkg, 0.01)
+/// contrast  = clamp(layer / L_bkg, max = 1000)
+/// log_l_bkg = log10(L_bkg)
+/// ```
+///
+/// Inputs:
+/// - `layer`         — `gauss_img[k] - expand(gauss_img[k+1])` for the
+///                     channel of interest. Caller produces this via
+///                     `upscale_v` + `upscale_h` + `subtract` kernels.
+/// - `expanded_lbkg` — `expand(gauss_l_bkg[k+1])` (achromatic L_bkg
+///                     plane, expanded to the band's spatial size).
+///
+/// Outputs:
+/// - `contrast` — Weber-contrast band ready for CSF weighting +
+///                masking.
+/// - `log_l_bkg` — per-pixel log10 background luminance for the CSF
+///                lookup. All 3 DKL channels share the same field
+///                produced by the achromatic-channel run.
+///
+/// The baseband case (scalar mean L_bkg) is handled separately by
+/// host code; the per-band per-pixel mean reduction wouldn't gain
+/// from a per-pixel kernel.
+#[cube(launch)]
+pub fn weber_contrast_compute_kernel(
+    layer: &Array<f32>,
+    expanded_lbkg: &Array<f32>,
+    contrast: &mut Array<f32>,
+    log_l_bkg: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    let l_min = f32::new(0.01);
+    let l_max = f32::new(1000.0);
+    let l_min_neg = f32::new(-1000.0);
+
+    let raw_lbkg = expanded_lbkg[idx];
+    let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
+
+    let c_raw = layer[idx] / l;
+    let c_hi = if c_raw > l_max { l_max } else { c_raw };
+    let c_clamped = if c_hi < l_min_neg { l_min_neg } else { c_hi };
+
+    contrast[idx] = c_clamped;
+    // log10(x) via the natural log. cubecl 0.10's `f32::log` is
+    // base-2 (per butteraugli-gpu's PORT_STATUS notes); `f32::ln` is
+    // natural log. log10(x) = ln(x) * (1 / ln(10)).
+    log_l_bkg[idx] = f32::ln(l) * f32::new(0.434_294_48);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
