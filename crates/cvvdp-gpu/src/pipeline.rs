@@ -71,6 +71,10 @@ struct CachedReference {
 pub struct Cvvdp<R: Runtime> {
     client: ComputeClient<R>,
     params: CvvdpParams,
+    /// Viewing geometry — drives PPD (= cy/deg) for the CSF lookup.
+    /// Independent of `width`/`height` (the image dimensions) since
+    /// cvvdp's PPD is a display property, not an image one.
+    geometry: crate::params::DisplayGeometry,
     width: u32,
     height: u32,
     n_levels: u32,
@@ -111,7 +115,10 @@ fn pyramid_levels(width: u32, height: u32) -> u32 {
 
 impl<R: Runtime> Cvvdp<R> {
     /// Allocate GPU buffers for a fixed `width × height` image and the
-    /// given parameter bundle.
+    /// given parameter bundle. Uses
+    /// [`crate::params::DisplayGeometry::STANDARD_4K`] as the viewing
+    /// geometry — equivalent to `new_with_geometry(..., STANDARD_4K)`.
+    /// Override via `new_with_geometry` for non-4K displays.
     ///
     /// Returns [`Error::InvalidImageSize`] if either dimension is
     /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid).
@@ -120,6 +127,25 @@ impl<R: Runtime> Cvvdp<R> {
         width: u32,
         height: u32,
         params: CvvdpParams,
+    ) -> Result<Self> {
+        Self::new_with_geometry(
+            client,
+            width,
+            height,
+            params,
+            crate::params::DisplayGeometry::STANDARD_4K,
+        )
+    }
+
+    /// Allocate GPU buffers + record a custom viewing geometry. The
+    /// geometry is used by `score` to derive PPD (and thus the
+    /// per-band spatial frequencies the CSF table is queried with).
+    pub fn new_with_geometry(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
@@ -166,6 +192,7 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(Self {
             client,
             params,
+            geometry,
             width,
             height,
             n_levels,
@@ -501,10 +528,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// pipeline work. Score matches pycvvdp v0.5.4 on the v1 R2
     /// manifest within 0.006 JOD across q1–q90.
     ///
-    /// The viewing geometry is taken from
-    /// [`crate::params::DisplayGeometry::STANDARD_4K`] (the v1
-    /// manifest's display). Future versions will accept a per-call
-    /// or per-instance `DisplayGeometry`.
+    /// The viewing geometry comes from `self.geometry` — set via
+    /// `Cvvdp::new_with_geometry` or defaulted to STANDARD_4K by
+    /// `Cvvdp::new`.
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
@@ -519,8 +545,7 @@ impl<R: Runtime> Cvvdp<R> {
                 got: distorted_srgb.len(),
             });
         }
-        let geom = crate::params::DisplayGeometry::STANDARD_4K;
-        let ppd = geom.pixels_per_degree();
+        let ppd = self.geometry.pixels_per_degree();
         let jod = crate::host_scalar::predict_jod_still_3ch(
             reference_srgb,
             distorted_srgb,

@@ -8,7 +8,7 @@
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
-use cvvdp_gpu::params::CvvdpParams;
+use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 use image::ImageReader;
 use std::path::PathBuf;
 
@@ -57,4 +57,51 @@ fn cvvdp_score_matches_v1_manifest() {
             "q={q}: Cvvdp::score returned {jod}, pycvvdp manifest {expected}, |diff| {diff:.4} > 0.05"
         );
     }
+}
+
+#[test]
+fn cvvdp_score_respects_custom_geometry() {
+    // Same image pair, two different display geometries — the JOD
+    // should differ because PPD differs (higher PPD = more pixels
+    // per degree = lower spatial frequency per pyramid band =
+    // different CSF weighting). The exact deltas depend on the
+    // image; we just assert that (a) both calls succeed, (b) both
+    // are in the valid JOD range, and (c) different geometries
+    // produce a measurable difference.
+    let client_4k = Backend::client(&Default::default());
+    let client_phone = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+
+    let mut cvvdp_4k =
+        Cvvdp::<Backend>::new(client_4k, w, h, CvvdpParams::PLACEHOLDER).expect("new 4k");
+
+    let phone_geom = DisplayGeometry {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.40,
+        diagonal_inches: 5.5,
+    };
+    let mut cvvdp_phone = Cvvdp::<Backend>::new_with_geometry(
+        client_phone,
+        w,
+        h,
+        CvvdpParams::PLACEHOLDER,
+        phone_geom,
+    )
+    .expect("new phone");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+
+    let jod_4k = cvvdp_4k.score(&ref_bytes, &dist_bytes).expect("4k");
+    let jod_phone = cvvdp_phone.score(&ref_bytes, &dist_bytes).expect("phone");
+    eprintln!("q20 @ standard_4k: JOD = {jod_4k:.4}");
+    eprintln!("q20 @ phone:       JOD = {jod_phone:.4}");
+
+    assert!((0.0..=10.0).contains(&jod_4k));
+    assert!((0.0..=10.0).contains(&jod_phone));
+    assert!(
+        (jod_4k - jod_phone).abs() > 1e-3,
+        "geometries differ; JODs should not be identical: 4k={jod_4k}, phone={jod_phone}"
+    );
 }
