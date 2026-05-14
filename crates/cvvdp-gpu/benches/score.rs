@@ -43,19 +43,20 @@ fn load_rgb_bytes(path: &PathBuf) -> Vec<u8> {
     img.into_raw()
 }
 
-fn bench_score(c: &mut Criterion) {
+fn bench_at_quality(c: &mut Criterion, q: u32) {
     let display = DisplayModel::STANDARD_4K;
     let geom = DisplayGeometry::STANDARD_4K;
     let ppd = geom.pixels_per_degree();
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png());
-    let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20));
+    let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q));
 
-    let mut g = c.benchmark_group("cvvdp_jod_256x256_q20");
+    let group_name = format!("cvvdp_jod_256x256_q{q}");
+    let mut g = c.benchmark_group(&group_name);
     g.throughput(Throughput::Elements((W * H) as u64));
 
-    // All-host scalar path. This is what Cvvdp::score routes
-    // through today and what shadow_jod pins to pycvvdp.
+    // All-host scalar path. What Cvvdp::score routes through today;
+    // shadow_jod pins it to pycvvdp.
     g.bench_function("host_scalar", |b| {
         b.iter(|| {
             let jod = predict_jod_still_3ch(
@@ -70,17 +71,32 @@ fn bench_score(c: &mut Criterion) {
         });
     });
 
-    // GPU-composed path on CUDA. Setup cost (Cvvdp::new, GPU buffer
-    // allocs, srgb_lut upload) hoisted outside iter() — the inner
-    // measurement is the per-call cost amortized over many runs.
+    // GPU-composed path on CUDA. Setup cost (Cvvdp::new + GPU
+    // buffer allocs + srgb_lut upload + first-call cubecl kernel
+    // compilation) hoisted via a warm-up call outside iter().
     let client = CudaRuntime::client(&Default::default());
     let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, W, H, CvvdpParams::PLACEHOLDER)
         .expect("new Cvvdp on cuda");
-    // Warm up so the first measured iteration doesn't pay for
-    // cubecl kernel compilation.
     let _ = cvvdp
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
-        .expect("warm-up");
+        .expect("warm-up jod");
+    let _ = cvvdp
+        .compute_dkl_d_bands(&ref_bytes, &dist_bytes, ppd)
+        .expect("warm-up d_bands");
+
+    // Inner GPU work only (color → weber × 2 sides → CSF → masking
+    // → D-band read-back). Excludes the host-side lp_norm_mean +
+    // 3-stage Minkowski + met2jod. Difference vs gpu_compute_dkl_jod_cuda
+    // is the host post-processing cost.
+    g.bench_function("gpu_compute_dkl_d_bands_cuda", |b| {
+        b.iter(|| {
+            let d = cvvdp
+                .compute_dkl_d_bands(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
+                .expect("compute_dkl_d_bands");
+            black_box(d);
+        });
+    });
+
     g.bench_function("gpu_compute_dkl_jod_cuda", |b| {
         b.iter(|| {
             let jod = cvvdp
@@ -93,5 +109,20 @@ fn bench_score(c: &mut Criterion) {
     g.finish();
 }
 
-criterion_group!(benches, bench_score);
+fn bench_score_q20(c: &mut Criterion) {
+    bench_at_quality(c, 20);
+}
+
+fn bench_score_q1(c: &mut Criterion) {
+    // q=1 is the severe-distortion case where the GPU JOD drifts
+    // 0.40 from the host scalar (cumulative f32 noise through the
+    // soft clamp + met2jod non-linearity, see drift survey in
+    // tests/pipeline_score.rs). Per-call timing should match q=20
+    // since the algorithm shape doesn't change with quality —
+    // running both is a sanity check that the bench captures the
+    // intrinsic cost, not data-dependent fast paths.
+    bench_at_quality(c, 1);
+}
+
+criterion_group!(benches, bench_score_q20, bench_score_q1);
 criterion_main!(benches);
