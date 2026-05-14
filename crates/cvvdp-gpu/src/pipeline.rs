@@ -51,9 +51,19 @@ use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
 use crate::kernels::csf::{flatten_band_weights, precomputed_band_weights, weight_band_kernel};
 use crate::kernels::pyramid::{
     downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
+    weber_contrast_compute_kernel,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
+
+/// Return shape of [`Cvvdp::compute_dkl_weber_pyramid`].
+///
+/// - `.0` — `levels[k] = [a, rg, vy]` Weber-contrast bands. Same
+///   layout as `compute_dkl_laplacian_pyramid`'s output.
+/// - `.1` — `levels[k]` per-pixel `log10(L_bkg)` plane for non-
+///   baseband levels, replicated scalar for the baseband. Matches
+///   `host_scalar::WeberPyramid::log_l_bkg`.
+pub type WeberPyramidGpu = (Vec<[Vec<f32>; 3]>, Vec<Vec<f32>>);
 
 /// One pyramid level: a `width × height` planar f32 buffer per channel.
 #[allow(dead_code)]
@@ -465,6 +475,201 @@ impl<R: Runtime> Cvvdp<R> {
             out.push(planes);
         }
         Ok(out)
+    }
+
+    /// Run color + Weber-contrast pyramid on GPU. Matches what
+    /// `host_scalar::weber_contrast_pyr_dec_scalar` builds for each
+    /// of the 3 DKL channels, using each image's own achromatic
+    /// channel as the `L_bkg` source (cvvdp's `weber_g1` rule).
+    ///
+    /// For non-baseband levels `k < N-1`:
+    /// 1. `layer_c = gauss_c[k] - expand(gauss_c[k+1])` per channel
+    ///    (built via `upscale_v_kernel` + `upscale_h_kernel` +
+    ///    `subtract_kernel`, sharing the expand of `gauss_A[k+1]`
+    ///    across channels for the L_bkg pathway).
+    /// 2. `L_bkg = expand(gauss_A[k+1])`, clamped to ≥ 0.01 inside
+    ///    `weber_contrast_compute_kernel`.
+    /// 3. `contrast_c = clamp(layer_c / L_bkg, ±1000)` and
+    ///    `log_l_bkg = log10(L_bkg)` via
+    ///    `weber_contrast_compute_kernel`.
+    ///
+    /// For the baseband level `k = N-1`, cvvdp uses a SCALAR mean
+    /// of `max(gauss_A[N-1], 0.01)`. The mean is computed host-side
+    /// from a read-back of the achromatic baseband (≤16 pixels at
+    /// 1024² × 7 levels), then each channel's baseband is divided
+    /// by that scalar host-side. Avoids a GPU reduction for tiny
+    /// data; the per-pixel divide is also tiny.
+    ///
+    /// Returns `(bands, log_l_bkg)`:
+    /// - `bands[k] = [a, rg, vy]` Weber-contrast planar f32 vecs,
+    ///   matching the shape of `compute_dkl_laplacian_pyramid`.
+    /// - `log_l_bkg[k]` is a per-pixel `log10(L_bkg)` plane for
+    ///   non-baseband levels and a scalar (replicated 1×1) for the
+    ///   baseband. Same shape convention as
+    ///   `WeberPyramid::log_l_bkg` in host_scalar.
+    pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
+        // Build Gaussian pyramids on GPU. The function leaves
+        // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
+        let _ = self.compute_dkl_gauss_pyramid(srgb)?;
+
+        let cube_dim = CubeDim::new_1d(64);
+        let n_levels = self.n_levels as usize;
+
+        // Non-baseband levels: build layers + expanded L_bkg, then
+        // launch weber_contrast_compute_kernel per channel.
+        let mut log_l_bkg_handles: Vec<cubecl::server::Handle> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels.saturating_sub(1) {
+            let coarse_w = self.gauss_ref[k + 1].w;
+            let coarse_h = self.gauss_ref[k + 1].h;
+            let fine_w = self.gauss_ref[k].w;
+            let fine_h = self.gauss_ref[k].h;
+            let n_v = (coarse_w * fine_h) as usize;
+            let n_fine = (fine_w * fine_h) as usize;
+            let n_coarse = (coarse_w * coarse_h) as usize;
+
+            let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
+            let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+
+            // Expand achromatic gauss[k+1] once → l_bkg_fine.
+            let l_bkg_fine = alloc_zeros_f32(&self.client, n_fine);
+            let vscratch_a = alloc_zeros_f32(&self.client, n_v);
+            let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+            unsafe {
+                upscale_v_kernel::launch::<R>(
+                    &self.client,
+                    count_v.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                    ArrayArg::from_raw_parts(vscratch_a.clone(), n_v),
+                    coarse_w,
+                    coarse_h,
+                    fine_h,
+                );
+                upscale_h_kernel::launch::<R>(
+                    &self.client,
+                    count_fine.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(vscratch_a, n_v),
+                    ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
+                    coarse_w,
+                    fine_w,
+                    fine_h,
+                );
+            }
+
+            // Per channel: build the Laplacian-style layer + run weber.
+            let log_l_bkg = alloc_zeros_f32(&self.client, n_fine);
+            for c in 0..N_CHANNELS {
+                let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                let fine = self.gauss_ref[k].planes[c].clone();
+                let band = self.bands_ref[k].planes[c].clone();
+
+                let vscratch_c = alloc_zeros_f32(&self.client, n_v);
+                let upscaled_c = alloc_zeros_f32(&self.client, n_fine);
+                let layer_c = alloc_zeros_f32(&self.client, n_fine);
+
+                unsafe {
+                    upscale_v_kernel::launch::<R>(
+                        &self.client,
+                        count_v.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(coarse, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch_c.clone(), n_v),
+                        coarse_w,
+                        coarse_h,
+                        fine_h,
+                    );
+                    upscale_h_kernel::launch::<R>(
+                        &self.client,
+                        count_fine.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(vscratch_c, n_v),
+                        ArrayArg::from_raw_parts(upscaled_c.clone(), n_fine),
+                        coarse_w,
+                        fine_w,
+                        fine_h,
+                    );
+                    subtract_kernel::launch::<R>(
+                        &self.client,
+                        count_fine.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(fine, n_fine),
+                        ArrayArg::from_raw_parts(upscaled_c, n_fine),
+                        ArrayArg::from_raw_parts(layer_c.clone(), n_fine),
+                        n_fine as u32,
+                    );
+                    weber_contrast_compute_kernel::launch::<R>(
+                        &self.client,
+                        count_fine.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(layer_c, n_fine),
+                        ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
+                        ArrayArg::from_raw_parts(band, n_fine),
+                        ArrayArg::from_raw_parts(log_l_bkg.clone(), n_fine),
+                        n_fine as u32,
+                    );
+                }
+            }
+            log_l_bkg_handles.push(log_l_bkg);
+        }
+
+        // Baseband: scalar L_bkg = mean of max(gauss_A[N-1], 0.01).
+        let last = n_levels - 1;
+        let baseband_w = self.gauss_ref[last].w as usize;
+        let baseband_h = self.gauss_ref[last].h as usize;
+        let baseband_n = baseband_w * baseband_h;
+
+        let gauss_a_last = self.gauss_ref[last].planes[0].clone();
+        let bytes_a = self
+            .client
+            .read_one(gauss_a_last)
+            .map_err(|_| Error::InvalidImageSize)?;
+        let gauss_a_data: &[f32] = f32::from_bytes(&bytes_a);
+        let l_bkg_sum: f32 = gauss_a_data.iter().map(|v| v.max(0.01)).sum();
+        let l_bkg_mean = l_bkg_sum / baseband_n as f32;
+        let log_l_bkg_baseband = l_bkg_mean.log10();
+
+        // Per channel: copy gauss[last][c] into bands_ref[last] divided by mean.
+        for c in 0..N_CHANNELS {
+            let g = self.gauss_ref[last].planes[c].clone();
+            let bytes = self
+                .client
+                .read_one(g)
+                .map_err(|_| Error::InvalidImageSize)?;
+            let data: &[f32] = f32::from_bytes(&bytes);
+            let divided: Vec<f32> = data.iter().map(|v| v / l_bkg_mean).collect();
+            self.bands_ref[last].planes[c] = self.client.create_from_slice(f32::as_bytes(&divided));
+        }
+
+        // Read back every band × every channel for return.
+        let mut bands_out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.bands_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            bands_out.push(planes);
+        }
+
+        // Read back log_l_bkg per band: non-baseband from GPU,
+        // baseband as replicated scalar matching host_scalar's
+        // WeberPyramid shape.
+        let mut log_l_bkg_out: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
+        for log_h in log_l_bkg_handles.drain(..) {
+            let bytes = self
+                .client
+                .read_one(log_h)
+                .map_err(|_| Error::InvalidImageSize)?;
+            log_l_bkg_out.push(f32::from_bytes(&bytes).to_vec());
+        }
+        log_l_bkg_out.push(vec![log_l_bkg_baseband; baseband_n]);
+
+        Ok((bands_out, log_l_bkg_out))
     }
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.

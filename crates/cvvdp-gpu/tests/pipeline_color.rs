@@ -8,7 +8,9 @@ use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
 use cvvdp_gpu::kernels::csf::precomputed_band_weights;
-use cvvdp_gpu::kernels::pyramid::{gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar};
+use cvvdp_gpu::kernels::pyramid::{
+    gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar, weber_contrast_pyr_dec_scalar,
+};
 use cvvdp_gpu::params::DisplayGeometry;
 use cvvdp_gpu::params::{CvvdpParams, DisplayModel};
 
@@ -280,5 +282,95 @@ fn compute_dkl_csf_weighted_bands_matches_host() {
                 "level {k} channel {c}: max-abs vs host weighted = {max_err}"
             );
         }
+    }
+}
+
+#[test]
+fn compute_dkl_weber_pyramid_matches_host_scalar() {
+    // Build a deterministic sRGB pattern, run it through the GPU
+    // Weber-contrast pyramid path, and compare bands + log_l_bkg
+    // against host_scalar's weber_contrast_pyr_dec_scalar per channel.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            srgb[i] = r;
+            srgb[i + 1] = g;
+            srgb[i + 2] = b;
+        }
+    }
+
+    let (gpu_bands, gpu_log_l_bkg) = cvvdp
+        .compute_dkl_weber_pyramid(&srgb)
+        .expect("gpu weber");
+
+    // Host reference: replay color transform per pixel, then per
+    // channel run weber_contrast_pyr_dec_scalar with the
+    // achromatic-channel data as the L_bkg plane.
+    let n_levels = gpu_bands.len();
+    let n_px = (w * h) as usize;
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+    let display = DisplayModel::STANDARD_4K;
+    for (i, chunk) in srgb.chunks_exact(3).enumerate() {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            chunk[0],
+            chunk[1],
+            chunk[2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+    let host_per_ch = [
+        weber_contrast_pyr_dec_scalar(&planes[0], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[1], &planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&planes[2], &planes[0], w as usize, h as usize, n_levels),
+    ];
+
+    for k in 0..n_levels {
+        // Compare bands per channel.
+        for (c, gpu_plane) in gpu_bands[k].iter().enumerate() {
+            let host_band = &host_per_ch[c].bands[k].data;
+            assert_eq!(gpu_plane.len(), host_band.len(), "level {k} channel {c}");
+            let max_err = gpu_plane
+                .iter()
+                .zip(host_band)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            // Tolerance: GPU uses single-call kernels, host uses the
+            // unrolled scalar — both compute the same formula but
+            // through different float accumulation orders.
+            assert!(
+                max_err < 5e-4,
+                "weber band level {k} channel {c}: max-abs GPU vs host = {max_err}"
+            );
+        }
+        // Compare log_l_bkg (taken from the achromatic channel).
+        let host_log = &host_per_ch[0].log_l_bkg[k];
+        assert_eq!(
+            gpu_log_l_bkg[k].len(),
+            host_log.len(),
+            "log_l_bkg level {k}"
+        );
+        let max_err = gpu_log_l_bkg[k]
+            .iter()
+            .zip(host_log)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            max_err < 1e-4,
+            "weber log_l_bkg level {k}: max-abs GPU vs host = {max_err}"
+        );
     }
 }
