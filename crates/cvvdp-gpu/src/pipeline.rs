@@ -106,6 +106,69 @@ fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::s
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
 }
 
+/// Per-level scratch buffers reused by `compute_dkl_weber_pyramid`.
+/// At 12 MP the function would otherwise allocate ~176 MB of
+/// transient GPU buffers per call (l_bkg_fine, vscratch_a, log_l_bkg
+/// per level + vscratch_c/upscaled_c/layer_c per (level, channel)).
+/// Called twice per `compute_dkl_d_bands` so doubled per d_bands call.
+///
+/// `coarse_w * fine_h` shape (n_v) is the vertical-pass scratch for
+/// upscale_v_kernel; `fine_w * fine_h` shape (n_fine) is everything
+/// else.
+struct WeberScratch {
+    /// Expanded achromatic L_bkg, shared across channels (n_fine).
+    l_bkg_fine: cubecl::server::Handle,
+    /// Vertical-pass scratch for achromatic L_bkg expand (n_v).
+    vscratch_a: cubecl::server::Handle,
+    /// Per-pixel log10(L_bkg) plane (n_fine). Re-used for both sides.
+    log_l_bkg: cubecl::server::Handle,
+    /// Per-channel vertical/horizontal expand scratch (n_v, n_fine, n_fine).
+    vscratch_c: [cubecl::server::Handle; N_CHANNELS],
+    upscaled_c: [cubecl::server::Handle; N_CHANNELS],
+    layer_c: [cubecl::server::Handle; N_CHANNELS],
+}
+
+fn build_weber_scratch<R: Runtime>(
+    client: &ComputeClient<R>,
+    n_levels: usize,
+    width: u32,
+    height: u32,
+) -> Vec<WeberScratch> {
+    let mut out = Vec::with_capacity(n_levels.saturating_sub(1));
+    let mut fine_w = width;
+    let mut fine_h = height;
+    // Only non-baseband levels need scratch (baseband bypasses the
+    // expand/subtract/weber chain).
+    for _ in 0..n_levels.saturating_sub(1) {
+        let coarse_w = fine_w / 2;
+        let n_fine = (fine_w as usize) * (fine_h as usize);
+        let n_v = (coarse_w as usize) * (fine_h as usize);
+        out.push(WeberScratch {
+            l_bkg_fine: alloc_zeros_f32(client, n_fine),
+            vscratch_a: alloc_zeros_f32(client, n_v),
+            log_l_bkg: alloc_zeros_f32(client, n_fine),
+            vscratch_c: [
+                alloc_zeros_f32(client, n_v),
+                alloc_zeros_f32(client, n_v),
+                alloc_zeros_f32(client, n_v),
+            ],
+            upscaled_c: [
+                alloc_zeros_f32(client, n_fine),
+                alloc_zeros_f32(client, n_fine),
+                alloc_zeros_f32(client, n_fine),
+            ],
+            layer_c: [
+                alloc_zeros_f32(client, n_fine),
+                alloc_zeros_f32(client, n_fine),
+                alloc_zeros_f32(client, n_fine),
+            ],
+        });
+        fine_w = coarse_w;
+        fine_h /= 2;
+    }
+    out
+}
+
 fn build_d_bands_scratch<R: Runtime>(
     client: &ComputeClient<R>,
     n_levels: usize,
@@ -215,6 +278,11 @@ pub struct Cvvdp<R: Runtime> {
     /// GPU allocations per band (~1.5 GB worth at 12 MP).
     d_scratch: Vec<DBandsScratch>,
 
+    /// Per-non-baseband-level scratch for `compute_dkl_weber_pyramid`'s
+    /// expand/subtract/weber chain. Pre-allocated; reused per side
+    /// per call. ~176 MB worth at 12 MP per call.
+    weber_scratch: Vec<WeberScratch>,
+
     /// Reference-side cache (used by `score_with_reference`).
     cached: Option<CachedReference>,
 }
@@ -300,6 +368,7 @@ impl<R: Runtime> Cvvdp<R> {
         let gauss_ref = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
+        let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
         Ok(Self {
             client,
@@ -313,6 +382,7 @@ impl<R: Runtime> Cvvdp<R> {
             gauss_ref,
             bands_ref,
             d_scratch,
+            weber_scratch,
             cached: None,
         })
     }
@@ -609,9 +679,14 @@ impl<R: Runtime> Cvvdp<R> {
             let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
             let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
 
-            // Expand achromatic gauss[k+1] once → l_bkg_fine.
-            let l_bkg_fine = alloc_zeros_f32(&self.client, n_fine);
-            let vscratch_a = alloc_zeros_f32(&self.client, n_v);
+            // Pre-allocated per-level scratch (Cvvdp.weber_scratch).
+            // Reuses the same handles across calls + across both sides
+            // of compute_dkl_d_bands. Each call writes-then-reads-back
+            // before the next call overwrites, so the read-back captures
+            // the data correctly.
+            let scratch = &self.weber_scratch[k];
+            let l_bkg_fine = scratch.l_bkg_fine.clone();
+            let vscratch_a = scratch.vscratch_a.clone();
             let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
             unsafe {
                 upscale_v_kernel::launch::<R>(
@@ -637,15 +712,15 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             // Per channel: build the Laplacian-style layer + run weber.
-            let log_l_bkg = alloc_zeros_f32(&self.client, n_fine);
+            let log_l_bkg = scratch.log_l_bkg.clone();
             for c in 0..N_CHANNELS {
                 let coarse = self.gauss_ref[k + 1].planes[c].clone();
                 let fine = self.gauss_ref[k].planes[c].clone();
                 let band = self.bands_ref[k].planes[c].clone();
 
-                let vscratch_c = alloc_zeros_f32(&self.client, n_v);
-                let upscaled_c = alloc_zeros_f32(&self.client, n_fine);
-                let layer_c = alloc_zeros_f32(&self.client, n_fine);
+                let vscratch_c = scratch.vscratch_c[c].clone();
+                let upscaled_c = scratch.upscaled_c[c].clone();
+                let layer_c = scratch.layer_c[c].clone();
 
                 unsafe {
                     upscale_v_kernel::launch::<R>(
