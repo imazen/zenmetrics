@@ -16,7 +16,10 @@
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
-use cvvdp_gpu::kernels::pyramid::{downscale_kernel, gausspyr_reduce_scalar, subtract_kernel};
+use cvvdp_gpu::kernels::pyramid::{
+    downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar, subtract_kernel,
+    upscale_h_kernel, upscale_v_kernel,
+};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -83,6 +86,78 @@ fn downscale_kernel_matches_host_scalar() {
     assert!(
         max_err < 1e-5,
         "GPU vs CPU scalar downscale max-abs error = {max_err}\n\
+         gpu = {gpu_out:?}\n\
+         cpu = {cpu_out:?}"
+    );
+}
+
+#[test]
+fn upscale_two_kernels_match_host_scalar() {
+    // 4×4 → 8×8 expand via the cvvdp interleave-with-edge-replicate
+    // scheme. The GPU path runs upscale_v_kernel (4×4 → 4×8) then
+    // upscale_h_kernel (4×8 → 8×8); the CPU reference is
+    // gausspyr_expand_scalar (already locked vs pycvvdp).
+    let client = Backend::client(&Default::default());
+
+    let src: Vec<f32> = (0..16).map(|i| i as f32).collect();
+    let (sw, sh) = (4u32, 4u32);
+    let (dw, dh) = (8u32, 8u32);
+    let n_src = (sw * sh) as usize;
+    let n_v = (sw * dh) as usize;
+    let n_dst = (dw * dh) as usize;
+
+    let src_h = client.create_from_slice(f32::as_bytes(&src));
+    let vscratch_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n_v]));
+    let dst_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n_dst]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
+    let count_h = CubeCount::Static((n_dst as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        upscale_v_kernel::launch::<Backend>(
+            &client,
+            count_v,
+            cube_dim,
+            ArrayArg::from_raw_parts(src_h.clone(), n_src),
+            ArrayArg::from_raw_parts(vscratch_h.clone(), n_v),
+            sw,
+            sh,
+            dh,
+        );
+        upscale_h_kernel::launch::<Backend>(
+            &client,
+            count_h,
+            cube_dim,
+            ArrayArg::from_raw_parts(vscratch_h.clone(), n_v),
+            ArrayArg::from_raw_parts(dst_h.clone(), n_dst),
+            sw,
+            dw,
+            dh,
+        );
+    }
+
+    let dst_bytes = client.read_one(dst_h.clone()).expect("read dst");
+    let gpu_out: &[f32] = f32::from_bytes(&dst_bytes);
+
+    let mut cpu_out = Vec::new();
+    gausspyr_expand_scalar(
+        &src,
+        sw as usize,
+        sh as usize,
+        dw as usize,
+        dh as usize,
+        &mut cpu_out,
+    );
+
+    let max_err = gpu_out
+        .iter()
+        .zip(&cpu_out)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        max_err < 1e-4,
+        "GPU vs CPU scalar 2-kernel upscale max-abs error = {max_err}\n\
          gpu = {gpu_out:?}\n\
          cpu = {cpu_out:?}"
     );
