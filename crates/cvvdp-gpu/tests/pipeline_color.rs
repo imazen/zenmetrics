@@ -7,6 +7,7 @@
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+use cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar;
 use cvvdp_gpu::params::{CvvdpParams, DisplayModel};
 
 #[cfg(feature = "cuda")]
@@ -59,4 +60,91 @@ fn compute_dkl_planes_matches_host_scalar() {
         max_err < 3e-5,
         "compute_dkl_planes vs host scalar max-abs = {max_err}"
     );
+}
+
+#[test]
+fn compute_dkl_gauss_pyramid_matches_host_scalar() {
+    let client = Backend::client(&Default::default());
+    let (w, h) = (16u32, 16u32);
+    let n = (w * h) as usize;
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp");
+
+    let mut srgb = Vec::with_capacity(n * 3);
+    for i in 0..n {
+        srgb.push((i % 251) as u8);
+        srgb.push(((i * 7 + 13) % 251) as u8);
+        srgb.push(((i * 19 + 41) % 251) as u8);
+    }
+
+    let pyramid = cvvdp
+        .compute_dkl_gauss_pyramid(&srgb)
+        .expect("compute_dkl_gauss_pyramid");
+    assert!(!pyramid.is_empty(), "pyramid had no levels");
+
+    // Host reference: compute level-0 via host scalar, then chain
+    // gausspyr_reduce_scalar for each subsequent level. Each level
+    // should match the GPU output within FMA-tolerance.
+    let display = DisplayModel::STANDARD_4K;
+
+    // Level 0: from host scalar color transform.
+    let mut host_level: [Vec<f32>; 3] = [
+        vec![0.0_f32; n],
+        vec![0.0_f32; n],
+        vec![0.0_f32; n],
+    ];
+    for i in 0..n {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            srgb[i * 3],
+            srgb[i * 3 + 1],
+            srgb[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        host_level[0][i] = a;
+        host_level[1][i] = rg;
+        host_level[2][i] = vy;
+    }
+
+    let mut prev_w = w as usize;
+    let mut prev_h = h as usize;
+    for (k, gpu_level) in pyramid.iter().enumerate() {
+        let expected_w = if k == 0 { w as usize } else { prev_w / 2 };
+        let expected_h = if k == 0 { h as usize } else { prev_h / 2 };
+        let expected_n = expected_w * expected_h;
+        for c in 0..3 {
+            assert_eq!(
+                gpu_level[c].len(),
+                expected_n,
+                "level {k} channel {c}: got {} elements, expected {expected_n}",
+                gpu_level[c].len()
+            );
+        }
+
+        if k > 0 {
+            // Reduce each host channel from prev level into current.
+            for c in 0..3 {
+                let mut reduced = Vec::new();
+                gausspyr_reduce_scalar(&host_level[c], prev_w, prev_h, &mut reduced);
+                host_level[c] = reduced;
+            }
+        }
+
+        let mut max_err = 0.0_f32;
+        for c in 0..3 {
+            for (a, b) in gpu_level[c].iter().zip(&host_level[c]) {
+                let d = (a - b).abs();
+                if d > max_err {
+                    max_err = d;
+                }
+            }
+        }
+        assert!(
+            max_err < 1e-3,
+            "level {k} max-abs error vs host = {max_err}"
+        );
+        prev_w = expected_w;
+        prev_h = expected_h;
+    }
 }

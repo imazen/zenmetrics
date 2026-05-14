@@ -35,6 +35,7 @@
 use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
+use crate::kernels::pyramid::downscale_kernel;
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
 
@@ -249,6 +250,62 @@ impl<R: Runtime> Cvvdp<R> {
             f32::from_bytes(&rg_bytes).to_vec(),
             f32::from_bytes(&vy_bytes).to_vec(),
         ])
+    }
+
+    /// Run color stage + Gaussian-pyramid reduce loop. Returns the
+    /// pyramid as `levels[k] = [a, rg, vy]` planar f32 vecs, with
+    /// `levels[0]` at base resolution and each subsequent level
+    /// halved (cvvdp's `div_ceil(2)` convention).
+    pub fn compute_dkl_gauss_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
+        let _ = self.compute_dkl_planes(srgb)?;
+
+        // The color stage left level-0 planes filled in gauss_ref.
+        // Now chain downscale_kernel: gauss[k-1].channel[c] → gauss[k].channel[c]
+        // for k in 1..n_levels.
+        let cube_dim = CubeDim::new_1d(64);
+        for k in 1..(self.n_levels as usize) {
+            let prev_w = self.gauss_ref[k - 1].w;
+            let prev_h = self.gauss_ref[k - 1].h;
+            let curr_w = self.gauss_ref[k].w;
+            let curr_h = self.gauss_ref[k].h;
+            let n_curr = (curr_w * curr_h) as usize;
+            let n_prev = (prev_w * prev_h) as usize;
+            let cube_count = CubeCount::Static((n_curr as u32).div_ceil(64), 1, 1);
+
+            for c in 0..N_CHANNELS {
+                let src = self.gauss_ref[k - 1].planes[c].clone();
+                let dst = self.gauss_ref[k].planes[c].clone();
+                unsafe {
+                    downscale_kernel::launch::<R>(
+                        &self.client,
+                        cube_count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(src, n_prev),
+                        ArrayArg::from_raw_parts(dst, n_curr),
+                        prev_w,
+                        prev_h,
+                        curr_w,
+                        curr_h,
+                    );
+                }
+            }
+        }
+
+        // Read back every level × every channel.
+        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(self.n_levels as usize);
+        for k in 0..(self.n_levels as usize) {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.gauss_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            out.push(planes);
+        }
+        Ok(out)
     }
 
     /// Score a (reference, distorted) pair, returning JOD.
