@@ -42,34 +42,39 @@ cpu-metrics = [
 ]
 
 # GPU bundle: pulls every GPU metric implementation.
-gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim"]
+gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp"]
 gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl"]
 gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl"]
 gpu-dssim = ["dep:dssim-gpu", "dep:cubecl"]
+gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl"]
 # Pick CubeCL backends. Default forwards through the GPU metric crates which
 # already enable cuda/wgpu/cpu when their default features are kept.
 gpu-cuda = [
     "butteraugli-gpu?/cuda",
     "ssim2-gpu?/cuda",
     "dssim-gpu?/cuda",
+    "cvvdp-gpu?/cuda",
     "cubecl?/cuda",
 ]
 gpu-wgpu = [
     "butteraugli-gpu?/wgpu",
     "ssim2-gpu?/wgpu",
     "dssim-gpu?/wgpu",
+    "cvvdp-gpu?/wgpu",
     "cubecl?/wgpu",
 ]
 gpu-hip = [
     "butteraugli-gpu?/hip",
     "ssim2-gpu?/hip",
     "dssim-gpu?/hip",
+    "cvvdp-gpu?/hip",
     "cubecl?/hip",
 ]
 gpu-cpu = [
     "butteraugli-gpu?/cpu",
     "ssim2-gpu?/cpu",
     "dssim-gpu?/cpu",
+    "cvvdp-gpu?/cpu",
     "cubecl?/cpu",
 ]
 
@@ -186,6 +191,7 @@ imgref = { version = "1", optional = true }
 butteraugli-gpu = { path = "../butteraugli-gpu", optional = true, default-features = false }
 ssim2-gpu = { path = "../ssim2-gpu", optional = true, default-features = false }
 dssim-gpu = { path = "../dssim-gpu", optional = true, default-features = false }
+cvvdp-gpu = { path = "../cvvdp-gpu", optional = true, default-features = false }
 
 # CubeCL is required to construct GPU clients when any GPU backend is enabled.
 # Optional — pulled in by the gpu-* feature flags.

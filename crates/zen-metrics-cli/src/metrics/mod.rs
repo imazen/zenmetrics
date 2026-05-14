@@ -22,12 +22,15 @@ mod zensim;
 #[cfg(any(
     feature = "gpu-butteraugli",
     feature = "gpu-ssim2",
-    feature = "gpu-dssim"
+    feature = "gpu-dssim",
+    feature = "gpu-cvvdp"
 ))]
 mod gpu_runtime_dispatch;
 
 #[cfg(feature = "gpu-butteraugli")]
 mod butteraugli_gpu;
+#[cfg(feature = "gpu-cvvdp")]
+mod cvvdp_gpu;
 #[cfg(feature = "gpu-dssim")]
 mod dssim_gpu;
 #[cfg(feature = "gpu-ssim2")]
@@ -65,6 +68,13 @@ pub enum MetricKind {
     /// Zensim — CPU implementation via the `zensim` crate.
     #[value(name = "zensim")]
     Zensim,
+    /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) via
+    /// the `cvvdp-gpu` crate. Currently routes through the parity-locked
+    /// host scalar; the public score path is stable while the kernels for
+    /// every stage are individually parity-tested for a future fully-GPU
+    /// composition.
+    #[value(name = "cvvdp")]
+    Cvvdp,
 }
 
 impl MetricKind {
@@ -77,6 +87,7 @@ impl MetricKind {
             MetricKind::Dssim,
             MetricKind::DssimGpu,
             MetricKind::Zensim,
+            MetricKind::Cvvdp,
         ]
     }
 
@@ -89,12 +100,16 @@ impl MetricKind {
             MetricKind::Dssim => "dssim",
             MetricKind::DssimGpu => "dssim-gpu",
             MetricKind::Zensim => "zensim",
+            MetricKind::Cvvdp => "cvvdp",
         }
     }
 
     pub fn backend(self) -> &'static str {
         match self {
-            MetricKind::Ssim2Gpu | MetricKind::ButteraugliGpu | MetricKind::DssimGpu => "GPU",
+            MetricKind::Ssim2Gpu
+            | MetricKind::ButteraugliGpu
+            | MetricKind::DssimGpu
+            | MetricKind::Cvvdp => "GPU",
             _ => "CPU",
         }
     }
@@ -102,7 +117,10 @@ impl MetricKind {
     pub fn requires_gpu(self) -> bool {
         matches!(
             self,
-            MetricKind::Ssim2Gpu | MetricKind::ButteraugliGpu | MetricKind::DssimGpu
+            MetricKind::Ssim2Gpu
+                | MetricKind::ButteraugliGpu
+                | MetricKind::DssimGpu
+                | MetricKind::Cvvdp
         )
     }
 
@@ -123,6 +141,7 @@ impl MetricKind {
             MetricKind::Dssim => &["dssim"],
             MetricKind::DssimGpu => &["dssim_gpu"],
             MetricKind::Zensim => &["zensim"],
+            MetricKind::Cvvdp => &["cvvdp"],
         }
     }
 }
@@ -234,6 +253,14 @@ pub fn run_metric(
         MetricKind::Zensim => Ok(vec![("zensim", zensim::score(reference, distorted)?)]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
+
+        #[cfg(feature = "gpu-cvvdp")]
+        MetricKind::Cvvdp => Ok(vec![(
+            "cvvdp",
+            cvvdp_gpu::score(reference, distorted, gpu_runtime)?,
+        )]),
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "gpu-cvvdp")),
     }
 }
 
