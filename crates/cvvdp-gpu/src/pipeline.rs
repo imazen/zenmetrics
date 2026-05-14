@@ -962,9 +962,22 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
+        // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
+        // see where compute_dkl_d_bands spends its time without
+        // committing instrumentation. Zero cost when unset.
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+
+        let t_weber_ref = std::time::Instant::now();
         let (ref_weber, ref_log_l_bkg) = self.compute_dkl_weber_pyramid(ref_srgb)?;
+        if trace {
+            eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
+        }
         // Discard dist log_l_bkg — cvvdp's weber_g1 uses ref's log_l_bkg.
+        let t_weber_dis = std::time::Instant::now();
         let (dist_weber, _) = self.compute_dkl_weber_pyramid(dist_srgb)?;
+        if trace {
+            eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
+        }
 
         let n_levels = self.n_levels as usize;
         let freqs = band_frequencies(ppd, self.width as usize, self.height as usize);
@@ -972,6 +985,7 @@ impl<R: Runtime> Cvvdp<R> {
         let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
             let rho_k = freqs[k];
             let is_first = k == 0;
@@ -991,10 +1005,19 @@ impl<R: Runtime> Cvvdp<R> {
             debug_assert_eq!(ref_weber[k][0].len(), n_px);
             debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
 
+            let t_band = std::time::Instant::now();
+
             // Upload ref log_l_bkg once per band; both sides reuse it.
+            let t_log_upload = std::time::Instant::now();
             let log_l_bkg_h = self
                 .client
                 .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
+            if trace {
+                eprintln!(
+                    "[trace] L{k} log_l_bkg upload ({bw}×{bh}): {:?}",
+                    t_log_upload.elapsed()
+                );
+            }
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
             // Reuse the pre-allocated per-level scratch (Cvvdp.d_scratch).
@@ -1013,6 +1036,7 @@ impl<R: Runtime> Cvvdp<R> {
                 scratch.t_p_dis[2].clone(),
             ];
 
+            let t_csf = std::time::Instant::now();
             for (c, cc) in csf_channels.iter().enumerate() {
                 let logs_row = precompute_logs_row(rho_k, *cc);
                 let logs_row_h = self.client.create_from_slice(f32::as_bytes(&logs_row));
@@ -1044,7 +1068,11 @@ impl<R: Runtime> Cvvdp<R> {
                     }
                 }
             }
+            if trace {
+                eprintln!("[trace] L{k} csf 6 launches:        {:?}", t_csf.elapsed());
+            }
 
+            let t_mask = std::time::Instant::now();
             if is_baseband {
                 // Read back T_p per channel, compute |Δ| on host (tiny).
                 let mut planes: [Vec<f32>; 3] =
@@ -1194,6 +1222,19 @@ impl<R: Runtime> Cvvdp<R> {
                 }
                 d_bands.push(planes);
             }
+            if trace {
+                eprintln!(
+                    "[trace] L{k} mask+readback:         {:?}   (band total: {:?})",
+                    t_mask.elapsed(),
+                    t_band.elapsed()
+                );
+            }
+        }
+        if trace {
+            eprintln!(
+                "[trace] band loop total ({n_levels} levels): {:?}",
+                t_band_loop.elapsed()
+            );
         }
 
         Ok(d_bands)
