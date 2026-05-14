@@ -49,8 +49,8 @@ use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
 use crate::kernels::csf::{
-    CsfChannel, csf_apply_per_pixel_kernel, flatten_band_weights, precompute_logs_row,
-    precomputed_band_weights, weight_band_kernel,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_per_pixel_kernel, flatten_band_weights,
+    precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::masking::{
     CH_GAIN, MASK_C, PU_PADSIZE, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
@@ -1021,7 +1021,7 @@ impl<R: Runtime> Cvvdp<R> {
         // signature for source-compatibility.
         let _ = ppd;
         let cube_dim = CubeDim::new_1d(64);
-        let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+        let _csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         let t_band_loop = std::time::Instant::now();
@@ -1075,39 +1075,51 @@ impl<R: Runtime> Cvvdp<R> {
             ];
 
             let t_csf = std::time::Instant::now();
-            for (c, _cc) in csf_channels.iter().enumerate() {
-                // Pre-uploaded logs_row (stable per Cvvdp instance).
-                let logs_row_h = self.logs_row[k][c].clone();
-                let ch_gain_eff = if is_baseband {
-                    1.0
-                } else {
-                    band_mul * CH_GAIN[c]
-                };
 
-                for (side_weber, t_p_h) in [
-                    (&ref_weber, t_p_ref_h[c].clone()),
-                    (&dist_weber, t_p_dis_h[c].clone()),
-                ] {
-                    let weber_h = self
-                        .client
-                        .create_from_slice(f32::as_bytes(&side_weber[k][c]));
-                    unsafe {
-                        csf_apply_per_pixel_kernel::launch::<R>(
-                            &self.client,
-                            count.clone(),
-                            cube_dim,
-                            ArrayArg::from_raw_parts(weber_h, n_px),
-                            ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
-                            ArrayArg::from_raw_parts(logs_row_h.clone(), 32),
-                            ArrayArg::from_raw_parts(t_p_h, n_px),
-                            ch_gain_eff,
-                            n_px as u32,
-                        );
-                    }
+            // Fused 3-channel CSF apply — one launch per side instead
+            // of three. The per-pixel LUT bracket math is shared across
+            // the A/RG/VY channels.
+            let ch_gain_a: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[0] };
+            let ch_gain_rg: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[1] };
+            let ch_gain_vy: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[2] };
+
+            for (side_weber, t_p_side) in [
+                (&ref_weber, &t_p_ref_h),
+                (&dist_weber, &t_p_dis_h),
+            ] {
+                let weber_a_h = self
+                    .client
+                    .create_from_slice(f32::as_bytes(&side_weber[k][0]));
+                let weber_rg_h = self
+                    .client
+                    .create_from_slice(f32::as_bytes(&side_weber[k][1]));
+                let weber_vy_h = self
+                    .client
+                    .create_from_slice(f32::as_bytes(&side_weber[k][2]));
+                unsafe {
+                    csf_apply_3ch_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(weber_a_h, n_px),
+                        ArrayArg::from_raw_parts(weber_rg_h, n_px),
+                        ArrayArg::from_raw_parts(weber_vy_h, n_px),
+                        ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
+                        ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
+                        ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
+                        ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
+                        ArrayArg::from_raw_parts(t_p_side[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_side[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_side[2].clone(), n_px),
+                        ch_gain_a,
+                        ch_gain_rg,
+                        ch_gain_vy,
+                        n_px as u32,
+                    );
                 }
             }
             if trace {
-                eprintln!("[trace] L{k} csf 6 launches:        {:?}", t_csf.elapsed());
+                eprintln!("[trace] L{k} csf 2 launches:        {:?}", t_csf.elapsed());
             }
 
             let t_mask = std::time::Instant::now();

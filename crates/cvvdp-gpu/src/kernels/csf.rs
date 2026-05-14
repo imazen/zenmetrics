@@ -204,6 +204,81 @@ pub fn csf_apply_per_pixel_kernel(
     t_p[idx] = weber[idx] * s * ch_gain;
 }
 
+/// 3-channel fused CSF apply — same math as `csf_apply_per_pixel_kernel`
+/// but processes all three opponent channels (A, RG, VY) in one launch.
+/// Replaces 3 separate launches with 1, saving the per-launch sync
+/// overhead that dominates 12 MP CSF time (~70 ms per launch on cuda).
+///
+/// The LUT bracket computation (`off_lo`, `lo_idx`, `frac`) is
+/// computed once per pixel and shared across all three channels —
+/// avoids redundant `floor` + axis arithmetic in addition to the
+/// launch-count win.
+#[cube(launch)]
+pub fn csf_apply_3ch_kernel(
+    weber_a: &Array<f32>,
+    weber_rg: &Array<f32>,
+    weber_vy: &Array<f32>,
+    log_l_bkg: &Array<f32>,
+    logs_row_a: &Array<f32>,
+    logs_row_rg: &Array<f32>,
+    logs_row_vy: &Array<f32>,
+    t_p_a: &mut Array<f32>,
+    t_p_rg: &mut Array<f32>,
+    t_p_vy: &mut Array<f32>,
+    ch_gain_a: f32,
+    ch_gain_rg: f32,
+    ch_gain_vy: f32,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+
+    // LUT axis constants (uniform log spacing) — same as the
+    // per-channel kernel above.
+    let axis_min = f32::new(-2.301_03);
+    let inv_step = f32::new(4.920_640_4);
+    let max_idx_f = f32::new(30.999_999);
+    let log_correction = f32::new(-0.013_987_1);
+
+    // Bracket math: shared across all 3 channels.
+    let log_l = log_l_bkg[idx];
+    let off_raw = (log_l - axis_min) * inv_step;
+    let off_lo = if off_raw < f32::new(0.0) {
+        f32::new(0.0)
+    } else if off_raw > max_idx_f {
+        max_idx_f
+    } else {
+        off_raw
+    };
+    let lo_idx_f = f32::floor(off_lo);
+    let frac = off_lo - lo_idx_f;
+    let lo_idx = lo_idx_f as u32 as usize;
+    let hi_idx = lo_idx + 1;
+
+    // A channel.
+    let lo_a = logs_row_a[lo_idx];
+    let hi_a = logs_row_a[hi_idx];
+    let log_s_a = lo_a + frac * (hi_a - lo_a) + log_correction;
+    let s_a = f32::powf(f32::new(10.0), log_s_a);
+    t_p_a[idx] = weber_a[idx] * s_a * ch_gain_a;
+
+    // RG channel.
+    let lo_rg = logs_row_rg[lo_idx];
+    let hi_rg = logs_row_rg[hi_idx];
+    let log_s_rg = lo_rg + frac * (hi_rg - lo_rg) + log_correction;
+    let s_rg = f32::powf(f32::new(10.0), log_s_rg);
+    t_p_rg[idx] = weber_rg[idx] * s_rg * ch_gain_rg;
+
+    // VY channel.
+    let lo_vy = logs_row_vy[lo_idx];
+    let hi_vy = logs_row_vy[hi_idx];
+    let log_s_vy = lo_vy + frac * (hi_vy - lo_vy) + log_correction;
+    let s_vy = f32::powf(f32::new(10.0), log_s_vy);
+    t_p_vy[idx] = weber_vy[idx] * s_vy * ch_gain_vy;
+}
+
 /// Multiply `band` in-place by `weights[weight_idx]`. `weights` is a
 /// flat per-(level, channel) CSF sensitivity table uploaded once per
 /// pipeline init. `weight_idx` is the host-resolved slot for the
