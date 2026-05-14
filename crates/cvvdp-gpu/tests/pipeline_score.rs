@@ -524,3 +524,155 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
         "T_p max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e}"
     );
 }
+
+#[test]
+fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
+    // Last two ticks: Weber + log_l_bkg bit-stable (7e-7), T_p
+    // bit-stable (band-rel < 8e-4) on the q=1 corpus image. This
+    // test pushes one step downstream — the masking + soft-clamp
+    // step. If D-bands also pin tight, the 0.40 JOD drift lives in
+    // the spatial pool / 3-stage Minkowski / met2jod chain
+    // (everything host-scalar in compute_dkl_jod), which would mean
+    // it's the non-linearity of met2jod amplifying a tiny Q delta,
+    // not a kernel parity issue.
+    use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp_gpu::kernels::masking::{CH_GAIN, mult_mutual_band};
+    use cvvdp_gpu::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
+    use cvvdp_gpu::params::DisplayModel;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(1), w, h);
+
+    let gpu_d = cvvdp
+        .compute_dkl_d_bands(&ref_bytes, &dist_bytes, ppd)
+        .expect("compute_dkl_d_bands");
+
+    // Host reference: full replay of host_scalar's per-band masking.
+    let display = DisplayModel::STANDARD_4K;
+    let n = (w * h) as usize;
+    let mut ref_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    let mut dis_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            ref_bytes[i * 3],
+            ref_bytes[i * 3 + 1],
+            ref_bytes[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        ref_planes[0][i] = a;
+        ref_planes[1][i] = rg;
+        ref_planes[2][i] = vy;
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            dist_bytes[i * 3],
+            dist_bytes[i * 3 + 1],
+            dist_bytes[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        dis_planes[0][i] = a;
+        dis_planes[1][i] = rg;
+        dis_planes[2][i] = vy;
+    }
+    let n_levels = gpu_d.len();
+    let ref_weber = [
+        weber_contrast_pyr_dec_scalar(&ref_planes[0], &ref_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&ref_planes[1], &ref_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&ref_planes[2], &ref_planes[0], w as usize, h as usize, n_levels),
+    ];
+    let dis_weber = [
+        weber_contrast_pyr_dec_scalar(&dis_planes[0], &dis_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&dis_planes[1], &dis_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(&dis_planes[2], &dis_planes[0], w as usize, h as usize, n_levels),
+    ];
+    let freqs = band_frequencies(ppd, w as usize, h as usize);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    eprintln!(
+        "level   shape    | A max-abs    RG max-abs    VY max-abs    A band-rel   RG band-rel   VY band-rel"
+    );
+    let mut overall_max_band_rel = 0.0_f32;
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = ref_weber[0].bands[k].w;
+        let bh = ref_weber[0].bands[k].h;
+        let n_band = bw * bh;
+        let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+
+        let mut t_p_dis: [Vec<f32>; 3] =
+            [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        let mut t_p_ref: [Vec<f32>; 3] =
+            [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        for c in 0..3 {
+            for i in 0..n_band {
+                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+                t_p_dis[c][i] = dis_weber[c].bands[k].data[i] * s * ch_gain_eff;
+                t_p_ref[c][i] = ref_weber[c].bands[k].data[i] * s * ch_gain_eff;
+            }
+        }
+        let host_d = if is_baseband {
+            let mut planes: [Vec<f32>; 3] =
+                [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+            for c in 0..3 {
+                for i in 0..n_band {
+                    planes[c][i] = (t_p_dis[c][i] - t_p_ref[c][i]).abs();
+                }
+            }
+            planes
+        } else {
+            mult_mutual_band(&t_p_dis, &t_p_ref, bw, bh)
+        };
+
+        let mut max_abs = [0.0_f32; 3];
+        let mut max_band_d = [0.0_f32; 3];
+        for c in 0..3 {
+            for i in 0..n_band {
+                let abs = (gpu_d[k][c][i] - host_d[c][i]).abs();
+                if abs > max_abs[c] {
+                    max_abs[c] = abs;
+                }
+                let mag = host_d[c][i].abs();
+                if mag > max_band_d[c] {
+                    max_band_d[c] = mag;
+                }
+            }
+        }
+        let band_rel = [
+            max_abs[0] / max_band_d[0].max(1e-6),
+            max_abs[1] / max_band_d[1].max(1e-6),
+            max_abs[2] / max_band_d[2].max(1e-6),
+        ];
+        eprintln!(
+            "  {k}   {bw:>3}x{bh:<3}  | {:<12.4e} {:<13.4e} {:<13.4e} {:<12.4e} {:<13.4e} {:<12.4e}",
+            max_abs[0], max_abs[1], max_abs[2], band_rel[0], band_rel[1], band_rel[2]
+        );
+        let local_max = band_rel.iter().fold(0.0_f32, |a, &b| a.max(b));
+        if local_max > overall_max_band_rel {
+            overall_max_band_rel = local_max;
+        }
+    }
+    eprintln!("max band-normalized rel over all bands: {overall_max_band_rel:.4e}");
+
+    // Loose ceiling — D bands at q=1 with severe distortion push T_p
+    // values past D_MAX in the soft clamp, where small upstream f32
+    // deltas can amplify into larger D deltas. Surfaces a regression
+    // if the masker drifts further; tightens once we instrument the
+    // soft-clamp explicitly.
+    assert!(
+        overall_max_band_rel < 5e-2,
+        "D max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e}"
+    );
+}
