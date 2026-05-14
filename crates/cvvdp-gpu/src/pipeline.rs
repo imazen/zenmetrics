@@ -117,24 +117,25 @@ pub struct Cvvdp<R: Runtime> {
     height: u32,
     n_levels: u32,
 
-    /// sRGB byte upload scratch (one per side).
+    /// sRGB byte upload scratch. The GPU helpers reuse this slot
+    /// for both ref and dist (writing one side, running the
+    /// pipeline, reading back, then overwriting for the other
+    /// side). A second `_dis` slot was originally allocated but
+    /// went unused — kept on one buffer to save ~3 MB at 256×256.
     src_ref: cubecl::server::Handle,
-    src_dis: cubecl::server::Handle,
 
     /// 256-entry sRGB→linear LUT, uploaded once.
     srgb_lut: cubecl::server::Handle,
 
-    /// Gaussian pyramids per side. Indexed `[level].planes[channel]`.
+    /// Gaussian pyramid buffers (per channel, per level). Reused
+    /// for both sides — each `compute_dkl_*` call overwrites these
+    /// for the side it's currently processing then reads back.
     gauss_ref: Vec<Level>,
-    gauss_dis: Vec<Level>,
 
-    /// Laplacian-band buffers per side. Indexed `[level].planes[channel]`.
-    /// The coarsest level shares storage with the coarsest gaussian.
+    /// Pyramid-band buffers (per channel, per level). Reused for
+    /// both sides like `gauss_ref`. Coarsest level shares storage
+    /// with the coarsest gaussian for the Weber baseband path.
     bands_ref: Vec<Level>,
-    bands_dis: Vec<Level>,
-
-    /// Per-band f32 Minkowski partials, length `n_levels × N_CHANNELS`.
-    pool_partials: cubecl::server::Handle,
 
     /// Reference-side cache (used by `score_with_reference`).
     cached: Option<CachedReference>,
@@ -195,7 +196,6 @@ impl<R: Runtime> Cvvdp<R> {
         // — one byte per slot, RGBRGB row-major. Matches what
         // `srgb_to_dkl_kernel` expects.
         let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0 * 3]));
-        let src_dis = client.create_from_slice(u32::as_bytes(&vec![0u32; n0 * 3]));
         let srgb_lut = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
 
         let build_pyramid = |client: &ComputeClient<R>| -> Vec<Level> {
@@ -220,12 +220,7 @@ impl<R: Runtime> Cvvdp<R> {
         };
 
         let gauss_ref = build_pyramid(&client);
-        let gauss_dis = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
-        let bands_dis = build_pyramid(&client);
-
-        let pool_n = (n_levels as usize) * N_CHANNELS;
-        let pool_partials = client.create_from_slice(f32::as_bytes(&vec![0.0f32; pool_n]));
 
         Ok(Self {
             client,
@@ -235,13 +230,9 @@ impl<R: Runtime> Cvvdp<R> {
             height,
             n_levels,
             src_ref,
-            src_dis,
             srgb_lut,
             gauss_ref,
-            gauss_dis,
             bands_ref,
-            bands_dis,
-            pool_partials,
             cached: None,
         })
     }
