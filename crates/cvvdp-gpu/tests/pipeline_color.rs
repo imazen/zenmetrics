@@ -308,9 +308,7 @@ fn compute_dkl_weber_pyramid_matches_host_scalar() {
         }
     }
 
-    let (gpu_bands, gpu_log_l_bkg) = cvvdp
-        .compute_dkl_weber_pyramid(&srgb)
-        .expect("gpu weber");
+    let (gpu_bands, gpu_log_l_bkg) = cvvdp.compute_dkl_weber_pyramid(&srgb).expect("gpu weber");
 
     // Host reference: replay color transform per pixel, then per
     // channel run weber_contrast_pyr_dec_scalar with the
@@ -430,25 +428,13 @@ fn compute_dkl_t_p_bands_matches_host_scalar() {
     let n_levels = t_p_gpu.len();
     let host_per_ch = [
         cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
-            &planes[0],
-            &planes[0],
-            w as usize,
-            h as usize,
-            n_levels,
+            &planes[0], &planes[0], w as usize, h as usize, n_levels,
         ),
         cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
-            &planes[1],
-            &planes[0],
-            w as usize,
-            h as usize,
-            n_levels,
+            &planes[1], &planes[0], w as usize, h as usize, n_levels,
         ),
         cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
-            &planes[2],
-            &planes[0],
-            w as usize,
-            h as usize,
-            n_levels,
+            &planes[2], &planes[0], w as usize, h as usize, n_levels,
         ),
     ];
 
@@ -469,7 +455,11 @@ fn compute_dkl_t_p_bands_matches_host_scalar() {
             let mut host_t_p = vec![0.0_f32; n_band];
             for i in 0..n_band {
                 let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
-                let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
                 host_t_p[i] = weber_c[i] * s * ch_gain_eff;
             }
             assert_eq!(
@@ -499,6 +489,193 @@ fn compute_dkl_t_p_bands_matches_host_scalar() {
                 rel_err < 5e-3,
                 "T_p level {k} channel {c}: max-abs GPU vs host = {max_err}, \
                  relative = {rel_err:.4e}, max-abs |host T_p| = {max_t_p_mag}"
+            );
+        }
+    }
+}
+
+#[test]
+fn compute_dkl_d_bands_matches_host_scalar() {
+    // GPU pipeline through T_p + host-scalar mult_mutual_band → D
+    // bands, compared against the same composition in pure host
+    // scalar (sensitivity_corrected_scalar + CH_GAIN + band_mul +
+    // mult_mutual_band per non-baseband band; |T_p_dis - T_p_ref|
+    // for the baseband).
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp_gpu::kernels::masking::{CH_GAIN, mult_mutual_band};
+    use cvvdp_gpu::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Deterministic ref + dist patterns (dist ≠ ref so masking step is exercised).
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    let gpu_d = cvvdp
+        .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_d_bands");
+
+    // Host reference: replay color → Weber pyramid → per-pixel CSF
+    // apply → mult_mutual_band (non-baseband) / |Δ| (baseband).
+    let n_levels = gpu_d.len();
+    let n_px = (w * h) as usize;
+    let display = DisplayModel::STANDARD_4K;
+    let mut ref_planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+    let mut dis_planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+    for i in 0..n_px {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            ref_srgb[i * 3],
+            ref_srgb[i * 3 + 1],
+            ref_srgb[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        ref_planes[0][i] = a;
+        ref_planes[1][i] = rg;
+        ref_planes[2][i] = vy;
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            dist_srgb[i * 3],
+            dist_srgb[i * 3 + 1],
+            dist_srgb[i * 3 + 2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
+        );
+        dis_planes[0][i] = a;
+        dis_planes[1][i] = rg;
+        dis_planes[2][i] = vy;
+    }
+
+    let ref_weber = [
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[0],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[1],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[2],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+    ];
+    let dis_weber = [
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[0],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[1],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[2],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+    ];
+    let freqs = band_frequencies(ppd, w as usize, h as usize);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = ref_weber[0].bands[k].w;
+        let bh = ref_weber[0].bands[k].h;
+        let n_band = bw * bh;
+        let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+
+        let mut t_p_dis: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        let mut t_p_ref: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        for c in 0..3 {
+            for i in 0..n_band {
+                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
+                t_p_dis[c][i] = dis_weber[c].bands[k].data[i] * s * ch_gain_eff;
+                t_p_ref[c][i] = ref_weber[c].bands[k].data[i] * s * ch_gain_eff;
+            }
+        }
+
+        let host_d = if is_baseband {
+            let mut planes: [Vec<f32>; 3] =
+                [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+            for c in 0..3 {
+                for i in 0..n_band {
+                    planes[c][i] = (t_p_dis[c][i] - t_p_ref[c][i]).abs();
+                }
+            }
+            planes
+        } else {
+            mult_mutual_band(&t_p_dis, &t_p_ref, bw, bh)
+        };
+
+        for c in 0..3 {
+            assert_eq!(
+                gpu_d[k][c].len(),
+                host_d[c].len(),
+                "level {k} channel {c} size mismatch"
+            );
+            let max_err = gpu_d[k][c]
+                .iter()
+                .zip(&host_d[c])
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
+            let max_d_mag = host_d[c]
+                .iter()
+                .map(|v| v.abs())
+                .fold(0.0_f32, f32::max)
+                .max(1.0);
+            let rel_err = max_err / max_d_mag;
+            // D magnitudes after the soft clamp are in 1-100 range
+            // for typical T_p deltas; rel tolerance absorbs the
+            // accumulated f32 noise across color→weber→CSF→masking.
+            assert!(
+                rel_err < 1e-2,
+                "D level {k} channel {c}: max-abs GPU vs host = {max_err}, \
+                 relative = {rel_err:.4e}, max |host D| = {max_d_mag}"
             );
         }
     }

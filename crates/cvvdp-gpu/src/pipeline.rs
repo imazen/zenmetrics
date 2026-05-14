@@ -52,7 +52,7 @@ use crate::kernels::csf::{
     CsfChannel, csf_apply_per_pixel_kernel, flatten_band_weights, precompute_logs_row,
     precomputed_band_weights, weight_band_kernel,
 };
-use crate::kernels::masking::CH_GAIN;
+use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
 use crate::kernels::pyramid::{
     band_frequencies, downscale_kernel, subtract_kernel, upscale_h_kernel, upscale_v_kernel,
     weber_contrast_compute_kernel,
@@ -705,11 +705,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
-    pub fn compute_dkl_t_p_bands(
-        &mut self,
-        srgb: &[u8],
-        ppd: f32,
-    ) -> Result<Vec<[Vec<f32>; 3]>> {
+    pub fn compute_dkl_t_p_bands(&mut self, srgb: &[u8], ppd: f32) -> Result<Vec<[Vec<f32>; 3]>> {
         // Build Weber bands + log_l_bkg on GPU. Side effect leaves
         // weber bands resident in self.bands_ref and log_l_bkg as
         // host-side data.
@@ -740,9 +736,7 @@ impl<R: Runtime> Cvvdp<R> {
             debug_assert_eq!(weber_bands[k][0].len(), n_px);
             debug_assert_eq!(log_l_bkg[k].len(), n_px);
 
-            let log_l_bkg_h = self
-                .client
-                .create_from_slice(f32::as_bytes(&log_l_bkg[k]));
+            let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
 
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
@@ -785,6 +779,132 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         Ok(t_p_bands)
+    }
+
+    /// Per-band per-channel masked-difference (`D`) bands.
+    ///
+    /// Composes the GPU Weber-pyramid + per-pixel CSF apply for
+    /// both reference and distorted sides, then runs the
+    /// host-scalar [`mult_mutual_band`] masker. Output per cvvdp's
+    /// `apply_masking_model`:
+    /// - Non-baseband levels: `D = mult_mutual_band(T_p_dis, T_p_ref)`
+    ///   — cvvdp's per-channel masker (min-abs + phase-uncertainty +
+    ///   xchannel pool + soft clamp).
+    /// - Baseband level: `D[c] = |T_p_dis[c] - T_p_ref[c]|` —
+    ///   matches cvvdp's baseband bypass because both `T_p` are
+    ///   built with `CH_GAIN_eff = 1.0` and `band_mul = 1.0` at the
+    ///   baseband, so the subtraction equals
+    ///   `(dis_weber - ref_weber) * S`.
+    ///
+    /// Per cvvdp's `weber_g1` contract, the CSF lookup uses the
+    /// **reference's** achromatic `log10(L_bkg)` for both `T_p`
+    /// (test) and `R_p` (reference) — see `host_scalar` line ~124.
+    /// `compute_dkl_t_p_bands` uses each side's own log_l_bkg, so
+    /// this helper inlines the CSF apply and shares the ref-side
+    /// log_l_bkg + logs_row uploads across both sides.
+    ///
+    /// Moving the masking step to a GPU composition is the next
+    /// chunk after this — the GPU masking kernels already exist
+    /// and are parity-tested in `tests/masking_kernel.rs`.
+    pub fn compute_dkl_d_bands(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        ppd: f32,
+    ) -> Result<Vec<[Vec<f32>; 3]>> {
+        let (ref_weber, ref_log_l_bkg) = self.compute_dkl_weber_pyramid(ref_srgb)?;
+        // Discard dist log_l_bkg — cvvdp's weber_g1 uses ref's log_l_bkg.
+        let (dist_weber, _) = self.compute_dkl_weber_pyramid(dist_srgb)?;
+
+        let n_levels = self.n_levels as usize;
+        let freqs = band_frequencies(ppd, self.width as usize, self.height as usize);
+        let cube_dim = CubeDim::new_1d(64);
+        let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+        let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let rho_k = freqs[k];
+            let is_first = k == 0;
+            let is_baseband = k == n_levels - 1;
+            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            let bw = if k == 0 {
+                self.width as usize
+            } else {
+                (self.width as usize) >> k
+            };
+            let bh = if k == 0 {
+                self.height as usize
+            } else {
+                (self.height as usize) >> k
+            };
+            let n_px = bw * bh;
+            debug_assert_eq!(ref_weber[k][0].len(), n_px);
+            debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
+
+            // Upload ref log_l_bkg once per band; both sides reuse it.
+            let log_l_bkg_h = self
+                .client
+                .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
+            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+
+            let mut t_p_ref: [Vec<f32>; 3] =
+                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            let mut t_p_dis: [Vec<f32>; 3] =
+                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+
+            for (c, cc) in csf_channels.iter().enumerate() {
+                let logs_row = precompute_logs_row(rho_k, *cc);
+                let logs_row_h = self.client.create_from_slice(f32::as_bytes(&logs_row));
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
+
+                for (side_weber, dst) in
+                    [(&ref_weber, &mut t_p_ref), (&dist_weber, &mut t_p_dis)]
+                {
+                    let weber_h = self
+                        .client
+                        .create_from_slice(f32::as_bytes(&side_weber[k][c]));
+                    let t_p_h = alloc_zeros_f32(&self.client, n_px);
+                    unsafe {
+                        csf_apply_per_pixel_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(weber_h, n_px),
+                            ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
+                            ArrayArg::from_raw_parts(logs_row_h.clone(), 32),
+                            ArrayArg::from_raw_parts(t_p_h.clone(), n_px),
+                            ch_gain_eff,
+                            n_px as u32,
+                        );
+                    }
+                    let bytes = self
+                        .client
+                        .read_one(t_p_h)
+                        .map_err(|_| Error::InvalidImageSize)?;
+                    dst[c] = f32::from_bytes(&bytes).to_vec();
+                }
+            }
+
+            let d = if is_baseband {
+                let mut planes: [Vec<f32>; 3] =
+                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                for c in 0..N_CHANNELS {
+                    for i in 0..n_px {
+                        planes[c][i] = (t_p_dis[c][i] - t_p_ref[c][i]).abs();
+                    }
+                }
+                planes
+            } else {
+                mult_mutual_band(&t_p_dis, &t_p_ref, bw, bh)
+            };
+            d_bands.push(d);
+        }
+
+        Ok(d_bands)
     }
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.
