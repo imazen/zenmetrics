@@ -283,6 +283,14 @@ pub struct Cvvdp<R: Runtime> {
     /// per call. ~176 MB worth at 12 MP per call.
     weber_scratch: Vec<WeberScratch>,
 
+    /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
+    /// Indexed `[level][channel]`. Each holds the 32-entry
+    /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
+    /// on `geometry.pixels_per_degree()` which is fixed per Cvvdp
+    /// — so these are stable across calls and reuploading per band
+    /// is pure waste (was 24 uploads of 128 B per call).
+    logs_row: Vec<[cubecl::server::Handle; N_CHANNELS]>,
+
     /// Reference-side cache (used by `score_with_reference`).
     cached: Option<CachedReference>,
 }
@@ -370,6 +378,31 @@ impl<R: Runtime> Cvvdp<R> {
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
+        // Pre-upload logs_row per (level, channel) — depends only on
+        // (rho_k, channel) which are fixed for this Cvvdp.
+        let ppd = geometry.pixels_per_degree();
+        let freqs = band_frequencies(ppd, width as usize, height as usize);
+        let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+        let mut logs_row: Vec<[cubecl::server::Handle; N_CHANNELS]> =
+            Vec::with_capacity(n_levels as usize);
+        for k in 0..n_levels as usize {
+            let rho_k = freqs[k];
+            logs_row.push([
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
+                    rho_k,
+                    channels[0],
+                ))),
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
+                    rho_k,
+                    channels[1],
+                ))),
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
+                    rho_k,
+                    channels[2],
+                ))),
+            ]);
+        }
+
         Ok(Self {
             client,
             params,
@@ -383,6 +416,7 @@ impl<R: Runtime> Cvvdp<R> {
             bands_ref,
             d_scratch,
             weber_scratch,
+            logs_row,
             cached: None,
         })
     }
@@ -861,14 +895,16 @@ impl<R: Runtime> Cvvdp<R> {
         // host-side data.
         let (weber_bands, log_l_bkg) = self.compute_dkl_weber_pyramid(srgb)?;
         let n_levels = self.n_levels as usize;
-        let freqs = band_frequencies(ppd, self.width as usize, self.height as usize);
+        // ppd unused — logs_row is pre-uploaded against the geometry
+        // baked into Cvvdp::new. compute_dkl_t_p_bands still takes
+        // ppd in the signature for source-compatibility.
+        let _ = ppd;
 
         let cube_dim = CubeDim::new_1d(64);
         let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let mut t_p_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let rho_k = freqs[k];
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
@@ -891,9 +927,9 @@ impl<R: Runtime> Cvvdp<R> {
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
 
-            for (c, cc) in csf_channels.iter().enumerate() {
-                let logs_row = precompute_logs_row(rho_k, *cc);
-                let logs_row_h = self.client.create_from_slice(f32::as_bytes(&logs_row));
+            for (c, _cc) in csf_channels.iter().enumerate() {
+                // Pre-uploaded logs_row (stable per Cvvdp instance).
+                let logs_row_h = self.logs_row[k][c].clone();
                 let weber_h = self
                     .client
                     .create_from_slice(f32::as_bytes(&weber_bands[k][c]));
@@ -980,14 +1016,16 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         let n_levels = self.n_levels as usize;
-        let freqs = band_frequencies(ppd, self.width as usize, self.height as usize);
+        // ppd unused — logs_row is pre-uploaded against the geometry
+        // baked into Cvvdp::new. compute_dkl_d_bands keeps ppd in the
+        // signature for source-compatibility.
+        let _ = ppd;
         let cube_dim = CubeDim::new_1d(64);
         let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
-            let rho_k = freqs[k];
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
@@ -1037,9 +1075,9 @@ impl<R: Runtime> Cvvdp<R> {
             ];
 
             let t_csf = std::time::Instant::now();
-            for (c, cc) in csf_channels.iter().enumerate() {
-                let logs_row = precompute_logs_row(rho_k, *cc);
-                let logs_row_h = self.client.create_from_slice(f32::as_bytes(&logs_row));
+            for (c, _cc) in csf_channels.iter().enumerate() {
+                // Pre-uploaded logs_row (stable per Cvvdp instance).
+                let logs_row_h = self.logs_row[k][c].clone();
                 let ch_gain_eff = if is_baseband {
                     1.0
                 } else {
