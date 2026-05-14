@@ -37,3 +37,8 @@ zenmetrics-corpus = { workspace = true }
 # compile whenever tests are built — the runtime binary is unaffected.
 sha2 = "0.10"
 ureq = "3.1"
+zenbench = { version = "0.1.8", features = ["criterion-compat"] }
+
+[[bench]]
+name = "score"
+harness = false
