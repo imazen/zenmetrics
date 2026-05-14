@@ -6,8 +6,8 @@
 use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::csf::{
-    CsfChannel, csf_apply_per_pixel_kernel, precompute_logs_row, sensitivity_corrected_scalar,
-    weight_band_kernel,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_per_pixel_kernel, precompute_logs_row,
+    sensitivity_corrected_scalar, weight_band_kernel,
 };
 use cvvdp_gpu::kernels::masking::CH_GAIN;
 
@@ -116,4 +116,109 @@ fn csf_apply_per_pixel_kernel_matches_host() {
         );
     }
     eprintln!("max rel error: {max_rel:.4e}");
+}
+
+#[test]
+fn csf_apply_3ch_kernel_matches_host() {
+    // Fused 3-channel CSF kernel — verifies it produces the same
+    // per-channel output as the per-channel kernel + host scalar.
+    // The fused kernel shares LUT bracket math across channels, so
+    // a bug in the shared portion would show as a 3-channel mismatch.
+    let client = Backend::client(&Default::default());
+
+    let n = 128usize;
+    let log_l_bkg: Vec<f32> = (0..n)
+        .map(|i| -2.3 + (i as f32 / (n - 1) as f32) * 6.3)
+        .collect();
+    let weber_a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+    let weber_rg: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.13 + 0.4).cos() * 0.3)
+        .collect();
+    let weber_vy: Vec<f32> = (0..n)
+        .map(|i| ((i as f32) - 64.0) * 0.01)
+        .collect();
+    let rho = 4.0_f32;
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    // Use unusual ch_gain values to make sure each channel reads
+    // its own gain (a bug would have all 3 use the same gain).
+    let ch_gain_a = 1.5_f32;
+    let ch_gain_rg = 0.8_f32;
+    let ch_gain_vy = 2.3_f32;
+    let ch_gains = [ch_gain_a, ch_gain_rg, ch_gain_vy];
+
+    let logs_rows = [
+        precompute_logs_row(rho, channels[0]),
+        precompute_logs_row(rho, channels[1]),
+        precompute_logs_row(rho, channels[2]),
+    ];
+
+    let weber_a_h = client.create_from_slice(f32::as_bytes(&weber_a));
+    let weber_rg_h = client.create_from_slice(f32::as_bytes(&weber_rg));
+    let weber_vy_h = client.create_from_slice(f32::as_bytes(&weber_vy));
+    let log_l_h = client.create_from_slice(f32::as_bytes(&log_l_bkg));
+    let logs_row_a_h = client.create_from_slice(f32::as_bytes(&logs_rows[0]));
+    let logs_row_rg_h = client.create_from_slice(f32::as_bytes(&logs_rows[1]));
+    let logs_row_vy_h = client.create_from_slice(f32::as_bytes(&logs_rows[2]));
+    let t_p_a_h = client.create_from_slice(f32::as_bytes(&[0.0_f32; 128]));
+    let t_p_rg_h = client.create_from_slice(f32::as_bytes(&[0.0_f32; 128]));
+    let t_p_vy_h = client.create_from_slice(f32::as_bytes(&[0.0_f32; 128]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        csf_apply_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(weber_a_h, n),
+            ArrayArg::from_raw_parts(weber_rg_h, n),
+            ArrayArg::from_raw_parts(weber_vy_h, n),
+            ArrayArg::from_raw_parts(log_l_h, n),
+            ArrayArg::from_raw_parts(logs_row_a_h, 32),
+            ArrayArg::from_raw_parts(logs_row_rg_h, 32),
+            ArrayArg::from_raw_parts(logs_row_vy_h, 32),
+            ArrayArg::from_raw_parts(t_p_a_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_vy_h.clone(), n),
+            ch_gain_a,
+            ch_gain_rg,
+            ch_gain_vy,
+            n as u32,
+        );
+    }
+
+    let a_bytes = client.read_one(t_p_a_h).expect("read t_p_a");
+    let rg_bytes = client.read_one(t_p_rg_h).expect("read t_p_rg");
+    let vy_bytes = client.read_one(t_p_vy_h).expect("read t_p_vy");
+    let gpu_a: &[f32] = f32::from_bytes(&a_bytes);
+    let gpu_rg: &[f32] = f32::from_bytes(&rg_bytes);
+    let gpu_vy: &[f32] = f32::from_bytes(&vy_bytes);
+
+    let webers = [weber_a.as_slice(), weber_rg.as_slice(), weber_vy.as_slice()];
+    let gpu_planes = [gpu_a, gpu_rg, gpu_vy];
+
+    let mut max_rel_per_channel = [0.0_f32; 3];
+    for c in 0..3 {
+        for i in 0..n {
+            let s = sensitivity_corrected_scalar(rho, log_l_bkg[i], channels[c]);
+            let exp = webers[c][i] * s * ch_gains[c];
+            let rel = ((gpu_planes[c][i] - exp) / exp.abs().max(1e-6)).abs();
+            if rel > max_rel_per_channel[c] {
+                max_rel_per_channel[c] = rel;
+            }
+            assert!(
+                rel < 5e-3,
+                "channel {c} pixel {i}: gpu={} exp={} rel={:.4e}",
+                gpu_planes[c][i],
+                exp,
+                rel,
+            );
+        }
+    }
+    eprintln!(
+        "max rel per channel: A={:.4e}, RG={:.4e}, VY={:.4e}",
+        max_rel_per_channel[0], max_rel_per_channel[1], max_rel_per_channel[2],
+    );
 }
