@@ -734,24 +734,3 @@ pub fn mult_mutual_3ch_with_blurred_kernel(
     d_rg[idx] = d_max_lin * d_u_rg / (d_max_lin + d_u_rg);
     d_vy[idx] = d_max_lin * d_u_vy / (d_max_lin + d_u_vy);
 }
-
-/// Legacy stub kept while pipeline.rs continues to reference it.
-/// New consumers should use `mult_mutual_3ch_no_blur_kernel`.
-#[cube(launch)]
-#[allow(unused_variables)]
-pub fn masked_diff_kernel(
-    ref_band: &Array<f32>,
-    dist_band: &Array<f32>,
-    masker: &Array<f32>,
-    out: &mut Array<f32>,
-    p: f32,
-    q: f32,
-    k: f32,
-    n: u32,
-) {
-    let idx = ABSOLUTE_POS;
-    if idx >= n as usize {
-        terminate!();
-    }
-    out[idx] = 0.0;
-}

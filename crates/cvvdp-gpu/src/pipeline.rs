@@ -15,14 +15,27 @@
 //! 1. Upload sRGB-u8 bytes for both sides (or skip reference side
 //!    when cached).
 //! 2. Run `color::srgb_to_dkl_kernel` once per side → 3 planar DKL
-//!    buffers each.
-//! 3. Build per-channel Laplacian pyramids (downscale + upscale +
-//!    subtract) → `n_levels` bands per channel per side.
-//! 4. Apply CSF weights per band (`weight_band_kernel`).
-//! 5. Compute masked differences per band (`masked_diff_kernel`).
-//! 6. Per-band Minkowski accumulation (`pool_band_kernel`) → per-band
-//!    f32 partials.
-//! 7. Host-side fold: per-band → per-channel → overall `D`, then JOD.
+//!    buffers each (achromatic + RG + VY).
+//! 3. Build per-channel Weber-contrast pyramids
+//!    (`pyramid::weber_contrast_compute_kernel` over each band of a
+//!    decimating Gaussian pyramid built via `downscale_kernel` +
+//!    `upscale_{v,h}_kernel` + `subtract_kernel`). Yields
+//!    `n_levels` Weber-contrast bands per channel per side plus a
+//!    per-pixel `log10(L_bkg)` map from the achromatic gauss for
+//!    step 4. The coarsest band (the gaussian base) bypasses Weber
+//!    contrast and feeds directly into pooling.
+//! 4. Per-pixel CSF apply via `csf::csf_apply_per_pixel_kernel`
+//!    (per-band `rho` resolved via `csf::precompute_logs_row`).
+//!    Output `T_p` = Weber × S(rho, L_bkg, channel) × CH_GAIN.
+//! 5. Multi-channel mult-mutual masking via
+//!    `masking::mult_mutual_3ch_no_blur_kernel` (small bands) or the
+//!    `min_abs_3ch_kernel` → `pu_blur_h_kernel` → `pu_blur_v_kernel`
+//!    → `mult_mutual_3ch_with_blurred_kernel` chain (bands larger
+//!    than `PU_PADSIZE`).
+//! 6. Per-band Minkowski accumulation (`pool::pool_band_kernel`) →
+//!    per-band f32 partials.
+//! 7. Host-side fold: per-band → per-channel → overall `D` via the
+//!    3-stage Minkowski pool, then `pool::met2jod` piecewise.
 //!
 //! ## Buffer layout
 //!
@@ -55,11 +68,18 @@ fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::s
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
 }
 
-/// Reference-side pyramid kept across `score_with_reference` calls.
-#[allow(dead_code)]
+/// Reference-side state kept across `score_with_reference` calls.
+///
+/// Today this just stashes the raw sRGB bytes so the host-scalar
+/// pipeline can re-run end-to-end per distorted candidate — matches
+/// what `score()` does internally, just without re-uploading the
+/// reference on every call. Once the GPU composition path lands, this
+/// will hold the CSF-weighted pyramid bands (`Vec<Vec<Handle>>`,
+/// indexed `[level][channel]`) so the reference side of the pipeline
+/// runs once and is reused for every distorted candidate.
 struct CachedReference {
-    /// CSF-weighted pyramid bands. Indexed `[channel][level]`.
-    bands: Vec<Vec<cubecl::server::Handle>>,
+    /// Cached reference sRGB bytes (length `width * height * 3`).
+    ref_srgb: Vec<u8>,
 }
 
 /// ColorVideoVDP scorer.
@@ -553,8 +573,13 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(jod as f64)
     }
 
-    /// Cache the reference-side CSF-weighted pyramid for repeated
-    /// scoring against many distorted candidates.
+    /// Cache the reference side for repeated scoring against many
+    /// distorted candidates.
+    ///
+    /// Today this just stashes the sRGB bytes (the host-scalar path
+    /// re-runs the reference side per call); the planned GPU
+    /// composition will materialise the CSF-weighted pyramid here so
+    /// the reference work happens once per `set_reference`.
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
@@ -563,16 +588,17 @@ impl<R: Runtime> Cvvdp<R> {
                 got: reference_srgb.len(),
             });
         }
-        // TODO: run color → pyramid → CSF stages and stash bands.
-        self.cached = Some(CachedReference { bands: Vec::new() });
+        self.cached = Some(CachedReference {
+            ref_srgb: reference_srgb.to_vec(),
+        });
         Ok(())
     }
 
     /// Score a distorted candidate against the cached reference.
+    /// Matches `score(ref, dist)` exactly — the fast path lands when
+    /// GPU composition stops re-running the reference side.
     pub fn score_with_reference(&mut self, distorted_srgb: &[u8]) -> Result<f64> {
-        if self.cached.is_none() {
-            return Err(Error::NoCachedReference);
-        }
+        let cached = self.cached.as_ref().ok_or(Error::NoCachedReference)?;
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if distorted_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -580,7 +606,15 @@ impl<R: Runtime> Cvvdp<R> {
                 got: distorted_srgb.len(),
             });
         }
-        // TODO: reuse cached reference bands.
-        Ok(0.0)
+        let ppd = self.geometry.pixels_per_degree();
+        let jod = crate::host_scalar::predict_jod_still_3ch(
+            &cached.ref_srgb,
+            distorted_srgb,
+            self.width as usize,
+            self.height as usize,
+            self.params.display,
+            ppd,
+        );
+        Ok(jod as f64)
     }
 }

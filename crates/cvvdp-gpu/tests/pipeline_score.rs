@@ -105,3 +105,55 @@ fn cvvdp_score_respects_custom_geometry() {
         "geometries differ; JODs should not be identical: 4k={jod_4k}, phone={jod_phone}"
     );
 }
+
+#[test]
+fn score_with_reference_matches_score() {
+    // The cached-reference path is currently a host-scalar
+    // pass-through; once the GPU composition lands it becomes a
+    // band-reuse fast path. Either way, the contract is exact
+    // parity with `score(ref, dist)` — pin it.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+
+    // set_reference + score_with_reference against several
+    // distorted candidates — that's the call pattern that motivates
+    // having a cached fast path in the first place.
+    cvvdp
+        .set_reference(&ref_bytes)
+        .expect("set_reference should succeed on valid bytes");
+    for &q in &[1u32, 20, 90] {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod_direct = cvvdp.score(&ref_bytes, &dist_bytes).expect("score");
+        let jod_cached = cvvdp
+            .score_with_reference(&dist_bytes)
+            .expect("score_with_reference");
+        assert!(
+            (jod_direct - jod_cached).abs() < 1e-6,
+            "q={q}: cached path {jod_cached} != direct {jod_direct}"
+        );
+    }
+}
+
+#[test]
+fn score_with_reference_errors_without_set_reference() {
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+    let err = cvvdp
+        .score_with_reference(&dist_bytes)
+        .expect_err("must error without prior set_reference");
+    // Don't lock the exact Debug repr; just ensure we got a
+    // structured error rather than a 0.0 placeholder.
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("NoCachedReference"),
+        "unexpected error kind: {msg}"
+    );
+}
