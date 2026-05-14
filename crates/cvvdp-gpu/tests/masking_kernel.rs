@@ -336,7 +336,13 @@ fn min_abs_3ch_kernel_matches_host_minabs() {
         })
         .collect();
     let t_vy: Vec<f32> = (0..n)
-        .map(|i| if i.is_multiple_of(3) { 0.0 } else { i as f32 * -0.13 })
+        .map(|i| {
+            if i.is_multiple_of(3) {
+                0.0
+            } else {
+                i as f32 * -0.13
+            }
+        })
         .collect();
     let r_a: Vec<f32> = (0..n)
         .map(|i| (i as f32 * 0.31 + 0.7).cos() * 4.0)

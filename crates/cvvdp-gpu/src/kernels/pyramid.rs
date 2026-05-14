@@ -1,9 +1,16 @@
-//! Laplacian pyramid analysis (still-image cvvdp).
+//! Pyramid decomposition for still-image cvvdp (Weber contrast on
+//! non-baseband levels, gaussian residual on the baseband).
 //!
-//! For each of the 3 DKL channels, produces `n_levels` band buffers:
+//! Per DKL channel, `weber_contrast_pyr_dec_scalar` produces
+//! `n_levels` bands:
 //!
-//! - `band[k]` for `k < n_levels - 1` = `gauss[k] - upscale(gauss[k+1])`
-//! - `band[n_levels - 1]` = the coarsest gaussian (residual)
+//! - `band[k]` for `k < n_levels - 1` = Weber contrast of the
+//!   `(gauss[k] - expand(gauss[k+1]))` layer relative to the
+//!   per-pixel achromatic `L_bkg` plane (`expand(gauss_l_bkg[k+1])`,
+//!   floored at 0.01, clipped to ±1000).
+//! - `band[n_levels - 1]` = the coarsest gaussian (residual); the
+//!   host bypasses Weber contrast for the baseband and feeds it
+//!   directly into pooling.
 //!
 //! cvvdp v0.5.4 uses a 5-tap separable Gaussian (the "Burt-Adelson
 //! kernel" with `a = 0.4`):
@@ -15,26 +22,28 @@
 //! At `a = 0.4` that's `[0.05, 0.25, 0.40, 0.25, 0.05]`. Applied
 //! separably (vertical then horizontal) at stride 2 in each direction
 //! for the reduce step; zero-interleaved at stride 2 + filtered for
-//! the expand step.
+//! the expand step (with the ×4 reconstruction gain split between the
+//! two passes).
 //!
 //! Edge handling: **symmetric padding**. cvvdp's `gausspyr_reduce`
 //! uses `F.conv2d` with `padding=2` (zero-pad) and then patches the
 //! first/last rows/cols with explicit reflection terms. For the
 //! scalar reference here we collapse those patches into a single
 //! reflect-index helper; numerical equivalence is verified against
-//! pycvvdp goldens (per-band f32 dumps) in `tests/pyramid_scalar.rs`
-//! once the per-stage tap lands in `build_goldens.py`.
+//! pycvvdp goldens in `tests/pyramid_scalar.rs`.
 //!
-//! Kernels in this module:
-//! - `downscale_kernel` — 5-tap separable Gaussian + 2× decimation
+//! Kernels in this module (all live, all parity-tested in
+//! `tests/pyramid_kernel.rs`):
+//!
+//! - [`downscale_kernel`] — 5-tap separable Gaussian + 2× decimation
 //!   (gauss-pyramid reduce step).
-//! - `upscale_kernel`   — 2× zero-insertion + 5-tap separable Gaussian
-//!   (gauss-pyramid expand step), with reconstruction gain ×4.
-//! - `subtract_kernel`  — `band = fine - upscaled_coarse`.
-//!
-//! Kernel bodies are still stubs; the host scalar functions below
-//! lock the numerical contract first so the GPU kernels can be
-//! validated against them in a later round.
+//! - [`upscale_v_kernel`] + [`upscale_h_kernel`] — separable vertical
+//!   then horizontal 2× zero-insertion + 5-tap Gaussian (gauss-pyramid
+//!   expand step), with reconstruction gain ×4 split as ×2 per pass.
+//! - [`subtract_kernel`] — `band = fine - upscaled_coarse`.
+//! - [`weber_contrast_compute_kernel`] — per-pixel `layer / L_bkg`
+//!   with cvvdp's clamps + `log10(L_bkg)` emission for the CSF
+//!   lookup.
 
 use cubecl::prelude::*;
 
@@ -786,27 +795,6 @@ pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_
         + (k2 * m2) * src[base + x2 as usize]
         + (k3 * m3) * src[base + x3 as usize]
         + (k4 * m4) * src[base + x4 as usize];
-}
-
-/// Legacy single-kernel upscale entry point. Production path is the
-/// `upscale_v_kernel` + `upscale_h_kernel` pair above. This stub is
-/// kept until pipeline.rs is wired to the new pair.
-#[cube(launch)]
-#[allow(unused_variables)]
-pub fn upscale_kernel(
-    src: &Array<f32>,
-    dst: &mut Array<f32>,
-    src_w: u32,
-    src_h: u32,
-    dst_w: u32,
-    dst_h: u32,
-) {
-    let idx = ABSOLUTE_POS;
-    let total = (dst_w * dst_h) as usize;
-    if idx >= total {
-        terminate!();
-    }
-    dst[idx] = 0.0;
 }
 
 /// `band = fine - upscaled_coarse`.
