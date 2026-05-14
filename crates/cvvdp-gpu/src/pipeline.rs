@@ -283,6 +283,18 @@ pub struct Cvvdp<R: Runtime> {
     /// per call. ~176 MB worth at 12 MP per call.
     weber_scratch: Vec<WeberScratch>,
 
+    /// Stable per-pixel `log10(L_bkg)` storage for the REFERENCE
+    /// side, intended for future use by `compute_dkl_d_bands` to
+    /// preserve REF log_l_bkg across the dist weber call (cvvdp's
+    /// `weber_g1` rule). Currently unused — tick 85's attempt to
+    /// wire this into a GPU-resident d_bands caused a 5× perf
+    /// regression in standalone weber for reasons not yet diagnosed
+    /// (tick 86 bisect confirmed the allocation + parameter passing
+    /// are NOT the cause; the regression is in the d_bands rewrite
+    /// itself). One handle per non-baseband level, n_pixels f32 each.
+    #[allow(dead_code)]
+    ref_log_l_bkg: Vec<cubecl::server::Handle>,
+
     /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
     /// Indexed `[level][channel]`. Each holds the 32-entry
     /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
@@ -378,6 +390,21 @@ impl<R: Runtime> Cvvdp<R> {
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
+        // Stable REF log_l_bkg buffers (one per non-baseband level).
+        // Allocated for future GPU-resident d_bands use.
+        let mut ref_log_l_bkg: Vec<cubecl::server::Handle> =
+            Vec::with_capacity(n_levels as usize - 1);
+        let mut log_w = width;
+        let mut log_h = height;
+        for _ in 0..(n_levels as usize).saturating_sub(1) {
+            ref_log_l_bkg.push(alloc_zeros_f32(
+                &client,
+                (log_w as usize) * (log_h as usize),
+            ));
+            log_w /= 2;
+            log_h /= 2;
+        }
+
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
         let ppd = geometry.pixels_per_degree();
@@ -416,6 +443,7 @@ impl<R: Runtime> Cvvdp<R> {
             bands_ref,
             d_scratch,
             weber_scratch,
+            ref_log_l_bkg,
             logs_row,
             cached: None,
         })
@@ -705,14 +733,19 @@ impl<R: Runtime> Cvvdp<R> {
     /// log_l_bkg data.
     ///
     /// Used by `compute_dkl_weber_pyramid` (which wraps with
-    /// readback to host Vecs). A planned future use was to call
-    /// this directly from `compute_dkl_d_bands` to skip the host
-    /// readback (~570 MB at 12 MP). Tick 85 attempted that refactor
-    /// and observed a 5× regression in standalone weber timing —
-    /// likely from cubecl handle-clone churn or memory-pool
-    /// fragmentation when an additional `ref_log_l_bkg` buffer was
-    /// added to `Cvvdp`. Reverted pending root-cause analysis.
-    fn _dispatch_weber_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<f32> {
+    /// readback to host Vecs). A future GPU-resident
+    /// `compute_dkl_d_bands` will call this with the stable
+    /// `self.ref_log_l_bkg` destination so REF log_l_bkg survives
+    /// the dist weber call — currently blocked on a separate
+    /// regression in the d_bands rewrite (tick 85/86).
+    ///
+    /// `log_l_bkg_dest` must have length `n_levels - 1` (one handle
+    /// per non-baseband level).
+    fn _dispatch_weber_pyramid_gpu(
+        &mut self,
+        srgb: &[u8],
+        log_l_bkg_dest: &[cubecl::server::Handle],
+    ) -> Result<f32> {
         // Build Gaussian pyramids on GPU. The function leaves
         // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
         let _ = self.compute_dkl_gauss_pyramid(srgb)?;
@@ -767,10 +800,9 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             // Per channel: build the Laplacian-style layer + run weber.
-            // log_l_bkg writes to scratch.log_l_bkg — kept resident
-            // on GPU. Callers can read it back via the handle (which
-            // they reconstruct by cloning self.weber_scratch[k].log_l_bkg).
-            let log_l_bkg = scratch.log_l_bkg.clone();
+            // log_l_bkg writes to the caller-provided destination
+            // (bisect tick 86).
+            let log_l_bkg = log_l_bkg_dest[k].clone();
             for c in 0..N_CHANNELS {
                 let coarse = self.gauss_ref[k + 1].planes[c].clone();
                 let fine = self.gauss_ref[k].planes[c].clone();
@@ -862,7 +894,13 @@ impl<R: Runtime> Cvvdp<R> {
         let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
         let t_dispatch = std::time::Instant::now();
 
-        let log_l_bkg_baseband = self._dispatch_weber_pyramid_gpu(srgb)?;
+        // Build dests Vec (cloned from self.weber_scratch[*].log_l_bkg).
+        let dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        let log_l_bkg_baseband = self._dispatch_weber_pyramid_gpu(srgb, &dests)?;
 
         let n_levels = self.n_levels as usize;
         let last = n_levels - 1;
