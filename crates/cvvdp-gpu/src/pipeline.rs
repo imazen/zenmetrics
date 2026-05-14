@@ -691,6 +691,8 @@ impl<R: Runtime> Cvvdp<R> {
     ///   baseband. Same shape convention as
     ///   `WeberPyramid::log_l_bkg` in host_scalar.
     pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
+        let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
+        let t_dispatch = std::time::Instant::now();
         // Build Gaussian pyramids on GPU. The function leaves
         // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
         let _ = self.compute_dkl_gauss_pyramid(srgb)?;
@@ -829,6 +831,14 @@ impl<R: Runtime> Cvvdp<R> {
             self.bands_ref[last].planes[c] = self.client.create_from_slice(f32::as_bytes(&divided));
         }
 
+        if trace_weber {
+            eprintln!(
+                "[weber-trace] GPU dispatch + baseband host (before readback): {:?}",
+                t_dispatch.elapsed()
+            );
+        }
+        let t_readback = std::time::Instant::now();
+
         // Read back every band × every channel for return.
         let mut bands_out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
@@ -844,6 +854,14 @@ impl<R: Runtime> Cvvdp<R> {
             bands_out.push(planes);
         }
 
+        if trace_weber {
+            eprintln!(
+                "[weber-trace] bands readback ({n_levels} levels): {:?}",
+                t_readback.elapsed()
+            );
+        }
+        let t_log_readback = std::time::Instant::now();
+
         // Read back log_l_bkg per band: non-baseband from GPU,
         // baseband as replicated scalar matching host_scalar's
         // WeberPyramid shape.
@@ -856,6 +874,13 @@ impl<R: Runtime> Cvvdp<R> {
             log_l_bkg_out.push(f32::from_bytes(&bytes).to_vec());
         }
         log_l_bkg_out.push(vec![log_l_bkg_baseband; baseband_n]);
+
+        if trace_weber {
+            eprintln!(
+                "[weber-trace] log_l_bkg readback: {:?}",
+                t_log_readback.elapsed()
+            );
+        }
 
         Ok((bands_out, log_l_bkg_out))
     }
