@@ -47,6 +47,51 @@ impl DisplayModel {
     };
 }
 
+/// Display geometry — resolution + viewing distance + physical size.
+/// Used to derive pixels-per-degree, which the CSF stage consumes via
+/// each pyramid band's spatial frequency.
+///
+/// Matches cvvdp's `vvdp_display_geometry` for the `diagonal_inches +
+/// distance_m` path (the one the `standard_4k` JSON uses). Other
+/// cvvdp paths (`fov_diagonal`, `fov_horizontal`, etc.) are not
+/// ported until a use case appears.
+#[derive(Debug, Clone, Copy)]
+pub struct DisplayGeometry {
+    pub resolution_w: u32,
+    pub resolution_h: u32,
+    /// Viewing distance in meters.
+    pub distance_m: f32,
+    /// Display diagonal in inches.
+    pub diagonal_inches: f32,
+}
+
+impl DisplayGeometry {
+    /// cvvdp's `standard_4k`: 3840×2160, 30" diagonal, 0.7472 m. The
+    /// PPD this derives to (~75.40) is what the v1 R2 manifest's
+    /// `rho_band[0]` (= ppd/2 ≈ 37.70) is computed against.
+    pub const STANDARD_4K: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 0.7472,
+        diagonal_inches: 30.0,
+    };
+
+    /// Pixels-per-degree at the display centre (eccentricity = 0).
+    /// Matches cvvdp's `vvdp_display_geometry.get_ppd()` for the
+    /// no-eccentricity path.
+    pub fn pixels_per_degree(&self) -> f32 {
+        let ar = self.resolution_w as f32 / self.resolution_h as f32;
+        let diagonal_mm = self.diagonal_inches * 25.4;
+        let height_mm = (diagonal_mm * diagonal_mm / (1.0 + ar * ar)).sqrt();
+        let width_m = ar * height_mm / 1000.0;
+        let pix_deg = 2.0
+            * (0.5 * width_m / self.resolution_w as f32 / self.distance_m)
+                .atan()
+                .to_degrees();
+        1.0 / pix_deg
+    }
+}
+
 /// Combined `sRGB linear-RGB → DKLd65` matrix (row-major), computed at
 /// f64 precision from cvvdp's published per-stage matrices:
 /// `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ sRGB_to_XYZ`.
