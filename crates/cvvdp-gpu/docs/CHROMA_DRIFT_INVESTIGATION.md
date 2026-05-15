@@ -54,26 +54,45 @@ Candidates for the source:
 
 ## Remaining candidates
 
-All three original candidates are now falsified. The drift must
-come from a stage I haven't yet enumerated. New candidates to
-investigate (tick 194+):
+All three original candidates are now falsified. Tick 194's
+constant-pin sweep falsifies several more:
 
-- **Display model luminance computation**: cvvdp's
-  `apply_display_model` maps sRGB byte → linear → cd/m² via
-  `Y_peak * (R + R_refl)` style math. A small constant difference
-  in `Y_peak`, `Y_black`, or `Y_refl` between our
-  `DisplayModel::STANDARD_4K` and pycvvdp's display config
-  could shift the chromatic channels disproportionately because
-  the chromatic CSF response is steeper at low luminance.
-- **Band-multiplier (`band_mul`) rule**: We apply `band_mul=2.0`
-  on non-edge non-baseband levels (cvvdp's `lpyr.get_band`
-  doubles non-edge bands). Edge cases at the smallest /
-  largest levels — what if pycvvdp's rule differs slightly?
-- **Pool weights**: `BASEBAND_W` (3-channel still-image
-  `baseband_weight`) and `PER_CH_W` ([1.0, 1.0, 1.0] for 3ch)
-  multiply per-band contributions before the L_p fold.
-  Worth diffing against `cvvdp_parameters.json`'s
-  `baseband_weight` field.
+- **Display luminance constants** — **FALSIFIED (tick 194)**.
+  `pycvvdp/vvdp_data/display_models.json` standard_4k entry:
+  `max_luminance=200`, `contrast=1000`, `E_ambient=250`, default
+  `k_refl=0.005`. y_peak=200 ✓, y_black=200/1000=0.2 ✓,
+  y_refl = E_ambient·k_refl/π = 250·0.005/π = 0.39788736 ✓
+  (matches our `0.397_887_36` byte-for-byte).
+- **Pool weights** — **FALSIFIED (tick 194)**.
+  `cvvdp_parameters.json` `baseband_weight` =
+  `[0.0036334486, 1.6627724, 4.1187453, 25.2596989]`. Our
+  `BASEBAND_W` carries the first three to f32 precision.
+  `PER_CH_W = [1.0, 1.0, 1.0]` matches pycvvdp's
+  `get_ch_weights` for still-image 3-channel
+  (`[1, ch_chrom_w=1.0, ch_chrom_w=1.0]`).
+- **`SENSITIVITY_CORRECTION_DB`** — **FALSIFIED (tick 194)**.
+  pycvvdp `sensitivity_correction = -0.2797423303127289`.
+  Our const `-0.279_742_33` matches at f32 precision.
+- **`D_MAX` soft-clamp** — **FALSIFIED (tick 194)**.
+  pycvvdp `d_max = 2.5642454624176025`. Our const `2.564_245_5`
+  matches at f32 precision.
+- **Baseband + masking control flow** — **FALSIFIED (tick 194)**.
+  Read pycvvdp's `apply_masking_model` + `weber_contrast_pyr.decompose`
+  end-to-end. Baseband path is `D = |T_f - R_f| * S` with no
+  CH_GAIN (mirrors our `diff_abs_3ch` after a no-CH_GAIN
+  csf_apply_6ch). Non-baseband applies CH_GAIN=[1, 1.45, 1] in
+  `T_p = T * S * ch_gain` before mult-mutual masking — same as
+  our `ch_gain_for_band(is_baseband=false)` ×
+  `csf_apply_6ch_kernel`. The baseband weber-contrast formula
+  divides test bands by test_Y_mean and ref bands by ref_Y_mean
+  with `clamp(..., max=1000)` — structurally matches our
+  `baseband_divide_3ch_kernel`. No divergence found.
+
+Remaining live candidates: smaller. Either a SUBTLE
+implementation detail somewhere (e.g. pycvvdp clamps baseband
+to max=1000 only, we clamp to ±1000 — but values are far from
+clamp on chroma_shift), or a stage I haven't traced yet
+(sensitivity ↔ band_mul interaction, log10 base, etc.).
 
 ## Direct next-step idea
 
