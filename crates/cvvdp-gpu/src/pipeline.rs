@@ -273,9 +273,9 @@ pub struct Cvvdp<R: Runtime> {
     /// with the coarsest gaussian for the Weber baseband path.
     bands_ref: Vec<Level>,
 
-    /// Per-level scratch for `compute_dkl_d_bands`'s CSF + masking
-    /// + D buffers. Pre-allocated so the hot loop doesn't churn
-    /// GPU allocations per band (~1.5 GB worth at 12 MP).
+    /// Per-level scratch for `compute_dkl_d_bands`'s CSF, masking,
+    /// and D output buffers. Pre-allocated so the hot loop doesn't
+    /// churn GPU allocations per band (~1.5 GB worth at 12 MP).
     d_scratch: Vec<DBandsScratch>,
 
     /// Per-non-baseband-level scratch for `compute_dkl_weber_pyramid`'s
@@ -718,6 +718,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///   non-baseband levels and a scalar (replicated 1×1) for the
     ///   baseband. Same shape convention as
     ///   `WeberPyramid::log_l_bkg` in host_scalar.
+    ///
     /// GPU-only Weber pyramid dispatch. Writes:
     /// - `self.bands_ref[k].planes[c]` — Weber-contrast bands per
     ///   level per channel (non-baseband levels). Baseband level

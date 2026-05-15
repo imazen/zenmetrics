@@ -202,7 +202,7 @@ pub fn csf_apply_per_pixel_kernel(
     // 10^x = exp(x * ln(10)). `exp` typically maps to a single
     // hardware instruction on cubecl backends while `powf(10, x)`
     // takes the general powf path (uses logs/exps internally).
-    let ln_10 = f32::new(2.302_585_1);
+    let ln_10 = f32::new(core::f32::consts::LN_10);
     let s = f32::exp(log_s_corr * ln_10);
 
     t_p[idx] = weber[idx] * s * ch_gain;
@@ -263,7 +263,7 @@ pub fn csf_apply_3ch_kernel(
 
     // 10^x = exp(x * ln(10)) — single-instruction `exp` is faster
     // than the general-purpose `powf`. Shared across channels.
-    let ln_10 = f32::new(2.302_585_1);
+    let ln_10 = f32::new(core::f32::consts::LN_10);
 
     // A channel.
     let lo_a = logs_row_a[lo_idx];
@@ -360,7 +360,7 @@ pub fn csf_apply_6ch_kernel(
     let lo_idx = lo_idx_f as u32 as usize;
     let hi_idx = lo_idx + 1;
 
-    let ln_10 = f32::new(2.302_585_1);
+    let ln_10 = f32::new(core::f32::consts::LN_10);
 
     // Per-channel: load logs_row pair, interpolate, scale once.
     // Apply to both REF and DIST.
