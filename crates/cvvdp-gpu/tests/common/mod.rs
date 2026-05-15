@@ -183,6 +183,60 @@ pub struct TpSentinel {
     pub t_p_ref_vy: f32,
 }
 
+/// Per-band per-channel pycvvdp raw S (CSF sensitivity,
+/// pre-sens_corr) values at chroma_shift sentinels. The struct
+/// also carries the per-pixel `log_l_bkg_ref` pycvvdp computed,
+/// so a parity test can feed THE SAME log_l_bkg into our
+/// `sensitivity_scalar` for an apples-to-apples CSF lookup
+/// comparison. See `dump_s_chroma.py`.
+pub struct SSentinel {
+    pub y0: u32,
+    pub x0: u32,
+    pub yk: u32,
+    pub xk: u32,
+    pub log_l_bkg_ref: f32,
+    pub s_raw_a: f32,
+    pub s_raw_rg: f32,
+    pub s_raw_vy: f32,
+}
+
+/// Per-band raw S values + per-pixel log_l_bkg_ref for chroma_shift.
+/// Index by pyramid level `k`. Embedded via include_str! at compile
+/// time.
+pub fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_s_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_s_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    samples
+        .iter()
+        .map(|s| SSentinel {
+            y0: s["y0"].as_u64().unwrap() as u32,
+            x0: s["x0"].as_u64().unwrap() as u32,
+            yk: s["yk"].as_u64().unwrap() as u32,
+            xk: s["xk"].as_u64().unwrap() as u32,
+            log_l_bkg_ref: s["log_l_bkg_ref"].as_f64().unwrap() as f32,
+            s_raw_a:  s["s_raw_a"].as_f64().unwrap() as f32,
+            s_raw_rg: s["s_raw_rg"].as_f64().unwrap() as f32,
+            s_raw_vy: s["s_raw_vy"].as_f64().unwrap() as f32,
+        })
+        .collect()
+}
+
+/// rho-per-band axis as pycvvdp's `lpyr.band_freqs` reports it on
+/// the chroma_shift fixture. Single source of truth for the parity
+/// test: same band index → same rho on both sides.
+pub fn pycvvdp_s_chroma_shift_rho(k: usize) -> f32 {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_s_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_s_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    bands[k]["rho"].as_f64().expect("band rho") as f32
+}
+
 /// Per-band per-channel pycvvdp D (post-masking, post-PU-blur,
 /// pre-pool) values at chroma_shift sentinels. Used to localize
 /// whether the 0.117 JOD drift sits in masking-and-earlier vs in

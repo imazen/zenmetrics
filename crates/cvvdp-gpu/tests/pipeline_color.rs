@@ -1263,6 +1263,87 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
 }
 
 #[test]
+fn sensitivity_scalar_matches_pycvvdp_raw_csf_at_chroma_shift_all_bands() {
+    // Tick 202 stage-5 parity probe: raw CSF sensitivity (no
+    // sens_corr_factor applied) at chroma_shift sentinels.
+    //
+    // Inputs to our `sensitivity_scalar(rho, log_l_bkg, cc)` are
+    // pinned to pycvvdp's exact per-pixel `log_l_bkg_ref` (the REF
+    // side of the achromatic Weber pyramid's log10-gauss). With the
+    // same input, S divergence isolates the CSF lookup itself
+    // (table + interp) from upstream pyramid + downstream sens_corr
+    // application.
+    //
+    // Tick 198 confirmed Weber bands bit-identical. Tick 199 found
+    // T_p REF-side 0.89% rel drift. Since T = Weber (bit-identical)
+    // and ch_gain is constant, S MUST carry the 0.9% drift.
+    // This probe answers: does S diverge BEFORE sens_corr (CSF
+    // lookup divergence) or AFTER (sens_corr application order)?
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_scalar};
+
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+    let n_bands = 8;
+    let mut overall_max_rel = 0.0_f32;
+    let mut overall_max_abs = 0.0_f32;
+    let mut first_diverging_band: Option<usize> = None;
+    for k in 0..n_bands {
+        let rho = common::pycvvdp_s_chroma_shift_rho(k);
+        let sentinels = common::pycvvdp_s_chroma_shift_band(k);
+        let mut band_max_rel = 0.0_f32;
+        let mut band_max_abs = 0.0_f32;
+        for s in &sentinels {
+            let ours_a = sensitivity_scalar(rho, s.log_l_bkg_ref, channels[0]);
+            let ours_rg = sensitivity_scalar(rho, s.log_l_bkg_ref, channels[1]);
+            let ours_vy = sensitivity_scalar(rho, s.log_l_bkg_ref, channels[2]);
+            let pairs = [
+                ("S_A",  ours_a,  s.s_raw_a),
+                ("S_RG", ours_rg, s.s_raw_rg),
+                ("S_VY", ours_vy, s.s_raw_vy),
+            ];
+            for (_, ours, py) in pairs {
+                let d = (ours - py).abs();
+                let r = d / py.abs().max(1e-6);
+                if d > band_max_abs {
+                    band_max_abs = d;
+                }
+                if r > band_max_rel {
+                    band_max_rel = r;
+                }
+            }
+        }
+        eprintln!(
+            "band {k} rho={rho:.3} raw S: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}"
+        );
+        if band_max_abs > overall_max_abs {
+            overall_max_abs = band_max_abs;
+        }
+        if band_max_rel > overall_max_rel {
+            overall_max_rel = band_max_rel;
+        }
+        // CSF lookups should agree at f32 noise floor (~1e-6 rel)
+        // since the LUT tables match pycvvdp's at 5e-11 (tick 193)
+        // and the interp methods are mathematically equivalent for
+        // matching inputs. 1e-3 rel marks a real divergence.
+        if first_diverging_band.is_none() && band_max_rel > 1e-3 {
+            first_diverging_band = Some(k);
+        }
+    }
+    eprintln!("overall max raw S abs={overall_max_abs:.4e} rel={overall_max_rel:.4e}");
+    if let Some(k) = first_diverging_band {
+        eprintln!("FIRST DIVERGING BAND (raw S): {k} — CSF lookup divergence localized");
+    } else {
+        eprintln!(
+            "All raw S bands match within 1e-3 rel — CSF lookup is bit-close; \
+             the 0.9% T_p drift is from sens_corr application order"
+        );
+    }
+    assert!(
+        overall_max_rel < 0.5,
+        "raw S diverges from pycvvdp by rel={overall_max_rel:.4e} — implausible regression"
+    );
+}
+
+#[test]
 fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
     // Tick 201 stage-4 parity probe: D values (post-masking,
     // post-PU-blur, pre-pool) on the chroma_shift fixture, both

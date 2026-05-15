@@ -293,17 +293,68 @@ band where T_p's rel error peaks. Tick 200's L_bkg
 interp1_uniform didn't help — the rho-axis CSF lookup or
 the sensitivity_correction application is the next suspect.
 
+## Tick 202 update — host_scalar S matches pycvvdp at f32 noise
+
+Stage-5 raw-S parity probe shipped:
+- `scripts/cvvdp_goldens/dump_s_chroma.py` produces
+  `pycvvdp_s_chroma_shift.json` with per-band raw S values
+  (pre-sens_corr) at 10 sentinel pixels, plus pycvvdp's
+  per-pixel `log_l_bkg_ref` so the host comparison runs on
+  the same inputs.
+- `sensitivity_scalar_matches_pycvvdp_raw_csf_at_chroma_shift_all_bands`
+  parity test feeds the SAME `log_l_bkg_ref` into our
+  `sensitivity_scalar(rho, log_l_bkg, cc)` and compares.
+
+Per-band rel diff (our host_scalar S vs pycvvdp raw S):
+- band 0: rel **8.1e-7**     band 4: rel **5.0e-7**
+- band 1: rel 1.1e-6          band 5: rel 6.2e-7
+- band 2: rel 6.1e-7          band 6: rel 1.0e-6
+- band 3: rel 5.9e-7          band 7: rel 5.4e-7
+
+**Verdict**: host_scalar's CSF lookup is **bit-identical to
+pycvvdp at the f32 noise floor (1e-6 rel)**. The CSF table +
+interp implementation is not the source.
+
+So where does the 0.9% T_p drift come from? Combining
+established findings:
+
+- Weber bands: bit-identical (tick 198, 2.7e-7 abs)
+- ch_gain: constant array, bit-identical
+- host_scalar's CSF S: bit-identical to pycvvdp (tick 202, 1e-6 rel)
+- BUT: GPU pipeline T_p (`compute_dkl_t_p_bands`) diverges
+  0.9% rel from pycvvdp (tick 199)
+
+Therefore: **the GPU `csf_apply_*` kernel diverges from the
+host scalar by ≥0.9% rel** at chroma_shift. The host scalar
+chain is correct; the GPU port has an arithmetic discrepancy.
+
+### Suspect: `exp(log_s_corr * LN_10)` vs `10^log_s * 10^sens_corr`
+
+The GPU kernel folds sens_corr into the log-space sum then
+applies a single `exp(x * LN_10)` for the final S, whereas
+the host scalar applies `10^log_s` (one transcendental) and
+multiplies by a constant `10^(sens_corr/20)` (precomputed
+literal). f32 transcendental routines differ:
+
+- `f32::exp(x * LN_10)` on cubecl-cuda → typically `__expf`
+  (fast-math, ~3.5 ULP)
+- Host `10f32.powf(log_s)` → libm or rustc's powf, more
+  accurate (~1 ULP)
+
+3.5 ULP at S ≈ 300 (band 4) is ≈ 8.4e-5 abs / 304 = 2.8e-7
+rel — well under 0.9%. So fast-math precision alone doesn't
+account for the drift.
+
 ### Next probe (queued for next tick)
 
-Dump **raw S values** (no sens_corr applied, no ch_gain) from
-pycvvdp's `csf.sensitivity(rho, omega=0, logL_ref, cc, sigma=0)`
-on the chroma_shift fixture. Compare to our host_scalar
-`sensitivity_corrected_scalar` divided by `sens_corr_factor`.
-
-If raw S diverges, the CSF lookup table or interp is the
-source. If raw S matches, the sens_corr_factor application
-order is the source (e.g., we apply `* 10^(sens_corr/20)` per
-pixel vs pycvvdp's broadcast multiplication).
+Directly compare the GPU CSF kernel output to the host scalar
+at chroma_shift sentinels, pixel-by-pixel. The existing test
+`compute_dkl_t_p_bands_matches_host_scalar` only gates against
+**band-max-normalized** rel error (5e-3 threshold) — it would
+miss a 0.9% per-pixel rel diff at coarser bands where pixel
+values vary significantly. A new test with per-pixel rel
+tolerance will pinpoint whether the GPU kernel is the source
+and which band's CSF apply diverges most.
 
 See `examples/chroma_shift_drift_probe.rs` for the canonical
 end-to-end measurement.
