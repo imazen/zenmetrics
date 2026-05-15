@@ -133,6 +133,15 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (doctests)
 
+- **Doctest cpu-only feature combo also fixed** — tick 283's
+  cuda+wgpu cascade left cpu-only `--features cpu` builds broken
+  (3 GPU doctests fail compile since neither cuda nor wgpu is on).
+  Added a third `# #[cfg(all(feature = "cpu", not(any(feature =
+  "cuda", feature = "wgpu"))))] # type Backend = cubecl::cpu::CpuRuntime;`
+  fallback so the cuda doctests now compile under cpu-only too.
+  No-op for the rendered docs (the canonical cuda branch still
+  renders). All 6 doctests now pass under: cuda-only, wgpu-only,
+  cpu-only, and default (cuda+wgpu+cpu).
 - **CI doctest pass under `--no-default-features --features wgpu`
   was broken** for the 5 GPU/cpu doctests added between ticks 225
   and 244. They hardcoded `cubecl::cuda::CudaRuntime` (3 doctests)

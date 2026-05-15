@@ -2205,6 +2205,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// type Backend = cubecl::cuda::CudaRuntime;
     /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
@@ -2473,6 +2475,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// type Backend = cubecl::cuda::CudaRuntime;
     /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
@@ -2558,6 +2562,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// type Backend = cubecl::cuda::CudaRuntime;
     /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
