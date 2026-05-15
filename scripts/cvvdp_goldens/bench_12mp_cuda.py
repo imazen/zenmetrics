@@ -55,6 +55,27 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_256_blur1x3(w=256, h=256):
+    """256×256 ref with a 3-pixel VERTICAL average distortion.
+    Complement to `synth_pair_256_blur3x1` (horizontal) — together
+    they exercise both axes of the separable Gaussian pyramid.
+
+    dist[y,x,c] = (ref[y,x,c] + ref[(y+1)%h,x,c] + ref[(y+2)%h,x,c]) // 3
+
+    Pure integer ops, bit-stable across NumPy + Rust.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    ref16 = ref.astype(np.uint16)
+    ref16_y1 = np.roll(ref16, shift=-1, axis=0)
+    ref16_y2 = np.roll(ref16, shift=-2, axis=0)
+    dist = ((ref16 + ref16_y1 + ref16_y2) // 3).astype(np.uint8)
+    return ref, dist
+
+
 def synth_pair_256_noise(w=256, h=256):
     """256×256 ref with per-pixel-per-channel deterministic
     additive noise. Tests a noise-type distortion (no spatial
@@ -162,8 +183,17 @@ def main():
     noise256_ref, noise256_dist = synth_pair_256_noise()
     print("256x256 noise golden:")
     noise256_jod, _ = metric.predict(noise256_dist, noise256_ref, dim_order="HWC")
-    print(f"  jod = {float(noise256_jod):.4f}\n")
+    print(f"  jod = {float(noise256_jod):.4f}")
     noise256_jod_val = float(noise256_jod)
+
+    # 256x256 fixture with VERTICAL 3-pixel blur — complement to
+    # blur3x1 so the test sweep covers both axes of the separable
+    # pyramid passes.
+    vblur256_ref, vblur256_dist = synth_pair_256_blur1x3()
+    print("256x256 blur1x3 golden:")
+    vblur256_jod, _ = metric.predict(vblur256_dist, vblur256_ref, dim_order="HWC")
+    print(f"  jod = {float(vblur256_jod):.4f}\n")
+    vblur256_jod_val = float(vblur256_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -225,6 +255,11 @@ def main():
                 "shape_hw": [256, 256],
                 "construction": "synth_pair_256_noise",
                 "jod": noise256_jod_val,
+            },
+            "synth_256x256_blur1x3": {
+                "shape_hw": [256, 256],
+                "construction": "synth_pair_256_blur1x3",
+                "jod": vblur256_jod_val,
             },
         },
     }

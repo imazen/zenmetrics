@@ -978,6 +978,73 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1() {
 }
 
 #[test]
+fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur1x3() {
+    // 256×256 pycvvdp parity with a VERTICAL 3-pixel blur —
+    // complement to blur3x1 (horizontal). Together they exercise
+    // both axes of the separable pyramid passes. The vertical blur
+    // golden (8.1243) is lower than horizontal (8.4412), reflecting
+    // the CSF's known vertical-leaning anisotropy.
+    //
+    // Bit-stable synth: dist[y,x,c] =
+    //   (ref[y,x,c] + ref[(y+1)%h,x,c] + ref[(y+2)%h,x,c]) // 3.
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_256x256_blur1x3");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+        }
+    }
+    let mut dist_srgb = vec![0u8; n];
+    for y in 0..hu {
+        for x in 0..wu {
+            let y1 = (y + 1) % hu;
+            let y2 = (y + 2) % hu;
+            for c in 0..3 {
+                let a = ref_srgb[(y * wu + x) * 3 + c] as u16;
+                let b = ref_srgb[(y1 * wu + x) * 3 + c] as u16;
+                let cval = ref_srgb[(y2 * wu + x) * 3 + c] as u16;
+                dist_srgb[(y * wu + x) * 3 + c] = ((a + b + cval) / 3) as u8;
+            }
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "256×256 blur1x3: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_matches_pycvvdp_at_256x256_noise() {
     // 256×256 pycvvdp parity with a non-spatial distortion: per-pixel
     // additive noise. Complementary to the blur3x1 test (which adds
