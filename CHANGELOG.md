@@ -122,6 +122,19 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu
 
+- **Debug-assert `compute_dkl_csf_weighted_bands` weight-band-count
+  matches construction-time `n_levels`.** The per-level
+  `weight_band_kernel` loop reads `weight_idx = k * N_CHANNELS + c`
+  into the host-flattened weights buffer for `k = 0..n_levels`. If
+  the caller's `ppd` produces fewer band frequencies than the
+  construction-time `n_levels`, the higher-k kernel launches read
+  past `flat_weights.len()` and OOB the GPU buffer. Now
+  `debug_assert_eq!(weights_per_level.len(), n_levels)` catches
+  the precondition violation in debug builds with a message that
+  spells out the fix: reconstruct against the new geometry. Release
+  preserves silent OOB behavior since this is a documented
+  precondition (per tick 246's docstring update). Tick 247 pairs
+  the docstring warning with an enforceable check.
 - **Revert misplaced tick-243 debug_assert + tick-245 docstring
   on `compute_dkl_csf_weighted_bands`.** Unlike the JOD-path
   helpers, this function genuinely consumes the caller-passed `ppd`

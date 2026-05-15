@@ -2364,11 +2364,32 @@ impl<R: Runtime> Cvvdp<R> {
 
         let weights_per_level =
             precomputed_band_weights(ppd, self.width as usize, self.height as usize, l_bkg);
+        let n_levels = self.n_levels as usize;
+        // Pyramid shape is fixed by Cvvdp::new; the per-level
+        // weight_band_kernel loop reads `weight_idx = k * N_CHANNELS + c`
+        // into the flat weights buffer for `k = 0..n_levels`. If the
+        // caller's ppd produces fewer band frequencies than
+        // construction-time n_levels, those higher-k kernel launches
+        // would read past `flat_weights.len()`. Debug-assert the match;
+        // release builds will silently OOB-read on a violation (which
+        // is the function's documented precondition). Tick 247.
+        debug_assert_eq!(
+            weights_per_level.len(),
+            n_levels,
+            "precomputed_band_weights(ppd={}, w={}, h={}) yielded {} bands but \
+             Cvvdp construction-time n_levels = {}; \
+             the caller-passed ppd implies a different pyramid shape — \
+             reconstruct the Cvvdp instance against the new geometry instead.",
+            ppd,
+            self.width,
+            self.height,
+            weights_per_level.len(),
+            n_levels,
+        );
         let flat_weights = flatten_band_weights(&weights_per_level);
         let weights_handle = self.client.create_from_slice(f32::as_bytes(&flat_weights));
 
         let cube_dim = CubeDim::new_1d(64);
-        let n_levels = self.n_levels as usize;
         for k in 0..n_levels {
             let n_px = (self.bands_ref[k].w * self.bands_ref[k].h) as usize;
             let cube_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
