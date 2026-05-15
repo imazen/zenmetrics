@@ -60,7 +60,7 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
     // helper — single source of truth so a build_goldens.py
     // rerun + JSON bump propagates without hand-editing test
     // constants. Tick 253 dedup.
-    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let qs = common::v1_corpus_qs();
     let cases: Vec<(u32, f32)> = qs
         .iter()
         .map(|&q| (q, common::v1_corpus_jod_golden(q)))
@@ -142,7 +142,7 @@ type Backend = cubecl::hip::HipRuntime;
     // helper (tick 253 dedup — was hand-mirroring the values
     // alongside the sibling shadow_jod_runs_and_is_monotonic_on_corpus
     // test).
-    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let qs = common::v1_corpus_qs();
     let cases: Vec<(u32, f32)> = qs
         .iter()
         .map(|&q| (q, common::v1_corpus_jod_golden(q)))

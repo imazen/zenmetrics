@@ -407,3 +407,27 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
     }
     panic!("v1_corpus_jods.json: q={q} not found");
 }
+
+/// All `q` values present in `scripts/cvvdp_goldens/v1_corpus_jods.json`,
+/// sorted ascending. Tick 254 dedup — was `&[1, 5, 20, 45, 70, 90]`
+/// hand-mirrored across 5 callers. A future
+/// `scripts/cvvdp_goldens/build_goldens.py` rerun + JSON bump that
+/// adds (e.g.) `q = 2` now propagates to every manifest-parity test
+/// without hand-editing.
+pub fn v1_corpus_qs() -> Vec<u32> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/v1_corpus_jods.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse v1_corpus_jods.json");
+    let pairs = v
+        .get("pairs")
+        .and_then(|p| p.as_object())
+        .expect("v1_corpus_jods.json missing .pairs");
+    let mut qs: Vec<u32> = pairs
+        .values()
+        .filter_map(|fx| fx.get("q").and_then(|n| n.as_u64()).map(|q| q as u32))
+        .collect();
+    qs.sort_unstable();
+    qs.dedup();
+    qs
+}

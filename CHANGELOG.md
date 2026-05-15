@@ -122,6 +122,13 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- New `common::v1_corpus_qs()` helper derives the q-list from the
+  canonical `scripts/cvvdp_goldens/v1_corpus_jods.json` itself.
+  Replaces the hand-mirrored `&[1, 5, 20, 45, 70, 90]` constant
+  duplicated across 5 callers (3 in `pipeline_score.rs` + 2 in
+  `shadow_jod.rs`). A goldens regen that adds (e.g.) q=2 to the
+  manifest now propagates to every parity test without hand-editing.
+  Same shape as tick 253's `v1_corpus_jod_golden(q)` dedup.
 - `tests/shadow_jod.rs` no longer hardcodes the pycvvdp manifest
   JOD constants. Both tests now load via `common::v1_corpus_jod_golden(q)`
   from the canonical `scripts/cvvdp_goldens/v1_corpus_jods.json`
