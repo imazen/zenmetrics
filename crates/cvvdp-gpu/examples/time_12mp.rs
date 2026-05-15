@@ -99,9 +99,7 @@ fn main() {
     for i in 0..ITERS {
         // Phase 1: weber pyramid only (one side).
         let t = Instant::now();
-        let (w_b, w_l) = cvvdp
-            .compute_dkl_weber_pyramid(&ref_bytes)
-            .expect("weber");
+        let (w_b, w_l) = cvvdp.compute_dkl_weber_pyramid(&ref_bytes).expect("weber");
         let dt_weber = t.elapsed();
         black_box((w_b, w_l));
 

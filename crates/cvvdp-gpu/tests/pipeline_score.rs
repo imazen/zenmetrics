@@ -308,15 +308,8 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     // Closure to extract (expected, got) from a DimensionMismatch.
     let check_dim_err = |err: cvvdp_gpu::Error, label: &str| match err {
         cvvdp_gpu::Error::DimensionMismatch { expected, got } => {
-            assert_eq!(
-                expected, expected_len,
-                "{label}: expected field mismatched",
-            );
-            assert_eq!(
-                got,
-                expected_len / 4,
-                "{label}: got field mismatched",
-            );
+            assert_eq!(expected, expected_len, "{label}: expected field mismatched",);
+            assert_eq!(got, expected_len / 4, "{label}: got field mismatched",);
         }
         other => panic!("{label}: expected DimensionMismatch, got {other:?}"),
     };
@@ -436,8 +429,7 @@ fn debug_assert_fires_when_ppd_mismatches_geometry() {
         diagonal_inches: 5.5,
     };
     let phone_ppd = phone_geom.pixels_per_degree();
-    let standard_4k_ppd =
-        cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let standard_4k_ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
     assert!(
         (phone_ppd - standard_4k_ppd).abs() > 1.0,
         "test premise broken: phone_ppd {phone_ppd} too close to STANDARD_4K {standard_4k_ppd}"
@@ -776,7 +768,11 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
         let mut max_band_t_p = [0.0_f32; 3];
         for c in 0..3 {
             let weber_c = &host_per_ch[c].bands[k].data;
-            let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+            let ch_gain_eff = if is_baseband {
+                1.0
+            } else {
+                band_mul * CH_GAIN[c]
+            };
             for i in 0..n_band {
                 let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let host_t_p = weber_c[i] * s * ch_gain_eff;
@@ -881,14 +877,50 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
     }
     let n_levels = gpu_d.len();
     let ref_weber = [
-        weber_contrast_pyr_dec_scalar(&ref_planes[0], &ref_planes[0], w as usize, h as usize, n_levels),
-        weber_contrast_pyr_dec_scalar(&ref_planes[1], &ref_planes[0], w as usize, h as usize, n_levels),
-        weber_contrast_pyr_dec_scalar(&ref_planes[2], &ref_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[0],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[1],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[2],
+            &ref_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
     ];
     let dis_weber = [
-        weber_contrast_pyr_dec_scalar(&dis_planes[0], &dis_planes[0], w as usize, h as usize, n_levels),
-        weber_contrast_pyr_dec_scalar(&dis_planes[1], &dis_planes[0], w as usize, h as usize, n_levels),
-        weber_contrast_pyr_dec_scalar(&dis_planes[2], &dis_planes[0], w as usize, h as usize, n_levels),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[0],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[1],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[2],
+            &dis_planes[0],
+            w as usize,
+            h as usize,
+            n_levels,
+        ),
     ];
     let freqs = band_frequencies(ppd, w as usize, h as usize);
     let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
@@ -913,14 +945,16 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
             freqs[k]
         };
 
-        let mut t_p_dis: [Vec<f32>; 3] =
-            [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
-        let mut t_p_ref: [Vec<f32>; 3] =
-            [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        let mut t_p_dis: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
+        let mut t_p_ref: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
         for c in 0..3 {
             for i in 0..n_band {
                 let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
-                let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
                 t_p_dis[c][i] = dis_weber[c].bands[k].data[i] * s * ch_gain_eff;
                 t_p_ref[c][i] = ref_weber[c].bands[k].data[i] * s * ch_gain_eff;
             }

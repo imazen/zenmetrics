@@ -1028,9 +1028,7 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
             .expect_err("warm state should be invalidated");
         match err {
             cvvdp_gpu::Error::NoWarmReference => {}
-            other => panic!(
-                "after {name}: expected NoWarmReference, got {other:?}"
-            ),
+            other => panic!("after {name}: expected NoWarmReference, got {other:?}"),
         }
     }
 }
@@ -1086,11 +1084,7 @@ fn gauss_chain_helpers_do_not_invalidate_warm_state() {
         // gauss_ref, not bands_ref or weber_scratch.log_l_bkg.
         let jod = cvvdp
             .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "after {name}: warm state must survive, got error {e:?}"
-                )
-            });
+            .unwrap_or_else(|e| panic!("after {name}: warm state must survive, got error {e:?}"));
         assert!(
             jod.is_finite(),
             "after {name}: warm-ref JOD must be finite, got {jod}"
@@ -1301,7 +1295,11 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
     for s in &sentinels {
         let idx = (s.y as usize) * wu + (s.x as usize);
         let our_ref = [ref_planes[0][idx], ref_planes[1][idx], ref_planes[2][idx]];
-        let our_dist = [dist_planes[0][idx], dist_planes[1][idx], dist_planes[2][idx]];
+        let our_dist = [
+            dist_planes[0][idx],
+            dist_planes[1][idx],
+            dist_planes[2][idx],
+        ];
         // Host-scalar reproduction at the same pixel — pinpoints
         // whether divergence is GPU-specific or shared with host.
         let byte_i = idx * 3;
@@ -1330,10 +1328,17 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
         }
         eprintln!(
             "  ({:>3},{:>3}) gpu=({:.4},{:.4},{:.4}) host=({:.4},{:.4},{:.4}) py=({:.4},{:.4},{:.4})",
-            s.y, s.x,
-            our_ref[0], our_ref[1], our_ref[2],
-            host_ref[0], host_ref[1], host_ref[2],
-            s.ref_dkl[0], s.ref_dkl[1], s.ref_dkl[2],
+            s.y,
+            s.x,
+            our_ref[0],
+            our_ref[1],
+            our_ref[2],
+            host_ref[0],
+            host_ref[1],
+            host_ref[2],
+            s.ref_dkl[0],
+            s.ref_dkl[1],
+            s.ref_dkl[2],
         );
     }
     eprintln!("max host-vs-gpu diff: {max_host_gpu_diff:.4e}");
@@ -1378,7 +1383,9 @@ fn compute_dkl_t_p_bands_ref_matches_pycvvdp_at_chroma_shift_all_bands() {
     let hu = h as usize;
     let ref_srgb = common::synth_pair_ref(wu, hu);
 
-    let ref_tp = cvvdp.compute_dkl_t_p_bands(&ref_srgb, ppd).expect("t_p ref");
+    let ref_tp = cvvdp
+        .compute_dkl_t_p_bands(&ref_srgb, ppd)
+        .expect("t_p ref");
 
     let n_bands = ref_tp.len();
     let mut overall_max_diff = 0.0_f32;
@@ -1394,20 +1401,28 @@ fn compute_dkl_t_p_bands_ref_matches_pycvvdp_at_chroma_shift_all_bands() {
             let xk = (s.xk as usize).min(band_w - 1);
             let idx = yk * band_w + xk;
             let pairs = [
-                ("ref_A",  ref_tp[k][0][idx], s.t_p_ref_a),
+                ("ref_A", ref_tp[k][0][idx], s.t_p_ref_a),
                 ("ref_RG", ref_tp[k][1][idx], s.t_p_ref_rg),
                 ("ref_VY", ref_tp[k][2][idx], s.t_p_ref_vy),
             ];
             for (_, ours, py) in pairs {
                 let d = (ours - py).abs();
                 let r = d / py.abs().max(1e-4);
-                if d > band_max_diff { band_max_diff = d; }
-                if r > band_max_rel { band_max_rel = r; }
+                if d > band_max_diff {
+                    band_max_diff = d;
+                }
+                if r > band_max_rel {
+                    band_max_rel = r;
+                }
             }
         }
         eprintln!("band {k} REF: max T_p abs={band_max_diff:.4e} rel={band_max_rel:.4e}");
-        if band_max_diff > overall_max_diff { overall_max_diff = band_max_diff; }
-        if band_max_rel > overall_max_rel { overall_max_rel = band_max_rel; }
+        if band_max_diff > overall_max_diff {
+            overall_max_diff = band_max_diff;
+        }
+        if band_max_rel > overall_max_rel {
+            overall_max_rel = band_max_rel;
+        }
         if first_diverging_band.is_none() && band_max_rel > 1e-3 {
             first_diverging_band = Some(k);
         }
@@ -1497,7 +1512,9 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
     }
     eprintln!("overall max weber diff: {overall_max_diff:.4e}");
     if let Some(k) = first_diverging_band {
-        eprintln!("FIRST DIVERGING BAND: {k} — localizes the chroma drift to weber stage at this level or upstream");
+        eprintln!(
+            "FIRST DIVERGING BAND: {k} — localizes the chroma drift to weber stage at this level or upstream"
+        );
     } else {
         eprintln!("All weber bands match within f32 noise — drift is downstream of weber");
     }
@@ -1554,7 +1571,7 @@ fn spatial_pool_q_per_ch_matches_pycvvdp_at_chroma_shift_all_bands() {
         let ours_rg = lp_norm_mean(&d_bands[k][1], BETA_SPATIAL);
         let ours_vy = lp_norm_mean(&d_bands[k][2], BETA_SPATIAL);
         let pairs = [
-            ("Q_A",  ours_a,  py.q_a),
+            ("Q_A", ours_a, py.q_a),
             ("Q_RG", ours_rg, py.q_rg),
             ("Q_VY", ours_vy, py.q_vy),
         ];
@@ -1588,9 +1605,7 @@ fn spatial_pool_q_per_ch_matches_pycvvdp_at_chroma_shift_all_bands() {
     }
     eprintln!("overall max Q_per_ch abs={overall_max_abs:.4e} rel={overall_max_rel:.4e}");
     if let Some(k) = first_diverging_band {
-        eprintln!(
-            "FIRST DIVERGING BAND (Q_per_ch): {k} — spatial pool source localized"
-        );
+        eprintln!("FIRST DIVERGING BAND (Q_per_ch): {k} — spatial pool source localized");
     } else {
         eprintln!(
             "All Q_per_ch bands match at <0.1% rel — spatial pool is bit-close; \
@@ -1648,8 +1663,12 @@ fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
     let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
     for (i, chunk) in ref_srgb.chunks_exact(3).enumerate() {
         let (a, rg, vy) = srgb_byte_to_dkl_scalar(
-            chunk[0], chunk[1], chunk[2],
-            display.y_peak, display.y_black, display.y_refl,
+            chunk[0],
+            chunk[1],
+            chunk[2],
+            display.y_peak,
+            display.y_black,
+            display.y_refl,
         );
         planes[0][i] = a;
         planes[1][i] = rg;
@@ -1720,9 +1739,7 @@ fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
                 }
             }
         }
-        eprintln!(
-            "band {k} GPU vs host T_p: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}"
-        );
+        eprintln!("band {k} GPU vs host T_p: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}");
         if band_max_abs > overall_max_abs {
             overall_max_abs = band_max_abs;
         }
@@ -1784,7 +1801,7 @@ fn sensitivity_scalar_matches_pycvvdp_raw_csf_at_chroma_shift_all_bands() {
             let ours_rg = sensitivity_scalar(rho, s.log_l_bkg_ref, channels[1]);
             let ours_vy = sensitivity_scalar(rho, s.log_l_bkg_ref, channels[2]);
             let pairs = [
-                ("S_A",  ours_a,  s.s_raw_a),
+                ("S_A", ours_a, s.s_raw_a),
                 ("S_RG", ours_rg, s.s_raw_rg),
                 ("S_VY", ours_vy, s.s_raw_vy),
             ];
@@ -1799,9 +1816,7 @@ fn sensitivity_scalar_matches_pycvvdp_raw_csf_at_chroma_shift_all_bands() {
                 }
             }
         }
-        eprintln!(
-            "band {k} rho={rho:.3} raw S: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}"
-        );
+        eprintln!("band {k} rho={rho:.3} raw S: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}");
         if band_max_abs > overall_max_abs {
             overall_max_abs = band_max_abs;
         }
@@ -1879,7 +1894,7 @@ fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
             let xk = (s.xk as usize).min(band_w - 1);
             let idx = yk * band_w + xk;
             let pairs = [
-                ("D_A",  d_bands[k][0][idx], s.d_a),
+                ("D_A", d_bands[k][0][idx], s.d_a),
                 ("D_RG", d_bands[k][1][idx], s.d_rg),
                 ("D_VY", d_bands[k][2][idx], s.d_vy),
             ];
@@ -1993,9 +2008,7 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_256x256_chroma_shift() {
         .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
-    cvvdp
-        .warm_reference(&ref_srgb)
-        .expect("warm_reference");
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
     let gpu_jod = cvvdp
         .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
         .expect("compute_dkl_jod_with_warm_ref");
@@ -2303,9 +2316,7 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd() {
         })
         .collect();
 
-    cvvdp
-        .warm_reference(&ref_srgb)
-        .expect("warm_reference");
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
     let gpu_jod = cvvdp
         .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
         .expect("compute_dkl_jod_with_warm_ref");
@@ -2365,9 +2376,7 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth() {
         })
         .collect();
 
-    cvvdp
-        .warm_reference(&ref_srgb)
-        .expect("warm_reference");
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
     let gpu_jod = cvvdp
         .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
         .expect("compute_dkl_jod_with_warm_ref");

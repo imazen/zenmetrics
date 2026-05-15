@@ -202,7 +202,7 @@ pub fn pycvvdp_q_chroma_shift_band(k: usize) -> QSentinel {
     let bands = v["bands"].as_array().expect(".bands missing");
     let b = &bands[k];
     QSentinel {
-        q_a:  b["q_a"].as_f64().unwrap() as f32,
+        q_a: b["q_a"].as_f64().unwrap() as f32,
         q_rg: b["q_rg"].as_f64().unwrap() as f32,
         q_vy: b["q_vy"].as_f64().unwrap() as f32,
     }
@@ -234,7 +234,9 @@ pub fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
     let v: serde_json::Value =
         serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_s_chroma_shift.json");
     let bands = v["bands"].as_array().expect(".bands missing");
-    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    let samples = bands[k]["samples"]
+        .as_array()
+        .expect("band samples missing");
     samples
         .iter()
         .map(|s| SSentinel {
@@ -243,7 +245,7 @@ pub fn pycvvdp_s_chroma_shift_band(k: usize) -> Vec<SSentinel> {
             yk: s["yk"].as_u64().unwrap() as u32,
             xk: s["xk"].as_u64().unwrap() as u32,
             log_l_bkg_ref: s["log_l_bkg_ref"].as_f64().unwrap() as f32,
-            s_raw_a:  s["s_raw_a"].as_f64().unwrap() as f32,
+            s_raw_a: s["s_raw_a"].as_f64().unwrap() as f32,
             s_raw_rg: s["s_raw_rg"].as_f64().unwrap() as f32,
             s_raw_vy: s["s_raw_vy"].as_f64().unwrap() as f32,
         })
@@ -284,7 +286,9 @@ pub fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
     let v: serde_json::Value =
         serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_d_chroma_shift.json");
     let bands = v["bands"].as_array().expect(".bands missing");
-    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    let samples = bands[k]["samples"]
+        .as_array()
+        .expect("band samples missing");
     samples
         .iter()
         .map(|s| DSentinel {
@@ -292,7 +296,7 @@ pub fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
             x0: s["x0"].as_u64().unwrap() as u32,
             yk: s["yk"].as_u64().unwrap() as u32,
             xk: s["xk"].as_u64().unwrap() as u32,
-            d_a:  s["d_a"].as_f64().unwrap() as f32,
+            d_a: s["d_a"].as_f64().unwrap() as f32,
             d_rg: s["d_rg"].as_f64().unwrap() as f32,
             d_vy: s["d_vy"].as_f64().unwrap() as f32,
         })
@@ -308,7 +312,9 @@ pub fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
     let v: serde_json::Value =
         serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_tp_chroma_shift.json");
     let bands = v["bands"].as_array().expect(".bands missing");
-    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    let samples = bands[k]["samples"]
+        .as_array()
+        .expect("band samples missing");
     samples
         .iter()
         .map(|s| TpSentinel {
@@ -316,12 +322,12 @@ pub fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
             x0: s["x0"].as_u64().unwrap() as u32,
             yk: s["yk"].as_u64().unwrap() as u32,
             xk: s["xk"].as_u64().unwrap() as u32,
-            t_p_test_a:  s["t_p_test_a"].as_f64().unwrap() as f32,
-            t_p_ref_a:   s["t_p_ref_a"].as_f64().unwrap() as f32,
+            t_p_test_a: s["t_p_test_a"].as_f64().unwrap() as f32,
+            t_p_ref_a: s["t_p_ref_a"].as_f64().unwrap() as f32,
             t_p_test_rg: s["t_p_test_rg"].as_f64().unwrap() as f32,
-            t_p_ref_rg:  s["t_p_ref_rg"].as_f64().unwrap() as f32,
+            t_p_ref_rg: s["t_p_ref_rg"].as_f64().unwrap() as f32,
             t_p_test_vy: s["t_p_test_vy"].as_f64().unwrap() as f32,
-            t_p_ref_vy:  s["t_p_ref_vy"].as_f64().unwrap() as f32,
+            t_p_ref_vy: s["t_p_ref_vy"].as_f64().unwrap() as f32,
         })
         .collect()
 }
@@ -334,7 +340,9 @@ pub fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {
     let v: serde_json::Value =
         serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_weber_chroma_shift.json");
     let bands = v["bands"].as_array().expect(".bands missing");
-    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    let samples = bands[k]["samples"]
+        .as_array()
+        .expect("band samples missing");
     samples
         .iter()
         .map(|s| WeberSentinel {
@@ -402,7 +410,8 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
             return fx
                 .get("jod")
                 .and_then(|j| j.as_f64())
-                .unwrap_or_else(|| panic!("v1_corpus_jods.json: q={q} has no .jod")) as f32;
+                .unwrap_or_else(|| panic!("v1_corpus_jods.json: q={q} has no .jod"))
+                as f32;
         }
     }
     panic!("v1_corpus_jods.json: q={q} not found");

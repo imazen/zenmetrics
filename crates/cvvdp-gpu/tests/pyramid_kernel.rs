@@ -432,8 +432,14 @@ fn subtract_weber_3ch_kernel_matches_subtract_then_weber() {
             lbkg[i],
         );
     }
-    assert!(saw_upper_clamp, "test inputs failed to exercise upper clamp");
-    assert!(saw_lower_clamp, "test inputs failed to exercise lower clamp");
+    assert!(
+        saw_upper_clamp,
+        "test inputs failed to exercise upper clamp"
+    );
+    assert!(
+        saw_lower_clamp,
+        "test inputs failed to exercise lower clamp"
+    );
 }
 
 #[test]

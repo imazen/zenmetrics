@@ -117,8 +117,8 @@ fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
     type Backend = cubecl::cuda::CudaRuntime;
     #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+    #[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+    type Backend = cubecl::hip::HipRuntime;
 
     let (w, h) = (256u32, 256u32);
     let geom = DisplayGeometry::STANDARD_4K;

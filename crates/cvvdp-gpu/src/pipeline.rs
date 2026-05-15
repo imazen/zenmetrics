@@ -435,12 +435,8 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
     // ~0.6 JOD drift vs pycvvdp at sub-megapixel sizes. The
     // band_frequencies cutoff (~0.2 cpd) is the authoritative
     // limit; MAX_LEVELS still caps the alloc count.
-    let band_count = crate::kernels::pyramid::band_frequencies(
-        ppd,
-        width as usize,
-        height as usize,
-    )
-    .len() as u32;
+    let band_count = crate::kernels::pyramid::band_frequencies(ppd, width as usize, height as usize)
+        .len() as u32;
     band_count.min(MAX_LEVELS as u32)
 }
 
@@ -555,10 +551,8 @@ impl<R: Runtime> Cvvdp<R> {
         // to .collect() these per call; pre-building once eliminates
         // a small but real per-JOD allocator round-trip plus a handle
         // ref-bump per level. Tick 240.
-        let log_l_bkg_ref_dests: Vec<cubecl::server::Handle> = weber_scratch
-            .iter()
-            .map(|s| s.log_l_bkg.clone())
-            .collect();
+        let log_l_bkg_ref_dests: Vec<cubecl::server::Handle> =
+            weber_scratch.iter().map(|s| s.log_l_bkg.clone()).collect();
         let log_l_bkg_dis_dests: Vec<cubecl::server::Handle> = weber_scratch
             .iter()
             .map(|s| s.log_l_bkg_dis.clone())
@@ -588,18 +582,9 @@ impl<R: Runtime> Cvvdp<R> {
                 freqs[k]
             };
             logs_row.push([
-                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
-                    rho_k,
-                    channels[0],
-                ))),
-                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
-                    rho_k,
-                    channels[1],
-                ))),
-                client.create_from_slice(f32::as_bytes(&precompute_logs_row(
-                    rho_k,
-                    channels[2],
-                ))),
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(rho_k, channels[0]))),
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(rho_k, channels[1]))),
+                client.create_from_slice(f32::as_bytes(&precompute_logs_row(rho_k, channels[2]))),
             ]);
         }
 
@@ -2232,11 +2217,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///     assert!((0.0..=10.0).contains(&jod));
     /// }
     /// ```
-    pub fn compute_dkl_jod_with_warm_ref(
-        &mut self,
-        dist_srgb: &[u8],
-        ppd: f32,
-    ) -> Result<f32> {
+    pub fn compute_dkl_jod_with_warm_ref(&mut self, dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
         // Tick 248: validate dist length before checking warm state.
         // If a caller has both problems, the wrong-size buffer is the
@@ -2319,11 +2300,7 @@ impl<R: Runtime> Cvvdp<R> {
             let (_, _, n_px_k) = self.level_dims(k);
             let mut q = [0.0_f32; 3];
             for c in 0..N_CHANNELS {
-                q[c] = pool_band_finalize(
-                    partials_data[k * N_CHANNELS + c],
-                    n_px_k,
-                    BETA_SPATIAL,
-                );
+                q[c] = pool_band_finalize(partials_data[k * N_CHANNELS + c], n_px_k, BETA_SPATIAL);
             }
             q_per_ch.push(q);
         }

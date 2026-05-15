@@ -101,9 +101,7 @@ fn measure_one(w: u32, h: u32, label: &'static str) -> Row {
     let mut jod_times = Vec::with_capacity(TIMED_ITERS);
     for _ in 0..TIMED_ITERS {
         let t = Instant::now();
-        let r = cvvdp
-            .compute_dkl_weber_pyramid(&ref_b)
-            .expect("weber");
+        let r = cvvdp.compute_dkl_weber_pyramid(&ref_b).expect("weber");
         weber_times.push(t.elapsed());
         black_box(r);
 
@@ -115,9 +113,7 @@ fn measure_one(w: u32, h: u32, label: &'static str) -> Row {
         black_box(r);
 
         let t = Instant::now();
-        let r = cvvdp
-            .compute_dkl_jod(&ref_b, &dis_b, ppd)
-            .expect("jod");
+        let r = cvvdp.compute_dkl_jod(&ref_b, &dis_b, ppd).expect("jod");
         jod_times.push(t.elapsed());
         black_box(r);
     }

@@ -7,8 +7,7 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::csf::{
     CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, csf_apply_per_pixel_kernel,
-    precompute_logs_row,
-    sensitivity_corrected_scalar, weight_band_kernel,
+    precompute_logs_row, sensitivity_corrected_scalar, weight_band_kernel,
 };
 use cvvdp_gpu::kernels::masking::CH_GAIN;
 
@@ -137,9 +136,7 @@ fn csf_apply_3ch_kernel_matches_host() {
     let weber_rg: Vec<f32> = (0..n)
         .map(|i| (i as f32 * 0.13 + 0.4).cos() * 0.3)
         .collect();
-    let weber_vy: Vec<f32> = (0..n)
-        .map(|i| ((i as f32) - 64.0) * 0.01)
-        .collect();
+    let weber_vy: Vec<f32> = (0..n).map(|i| ((i as f32) - 64.0) * 0.01).collect();
     let rho = 4.0_f32;
     let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
@@ -246,9 +243,7 @@ fn csf_apply_6ch_kernel_matches_host_for_both_sides() {
     let weber_ref_rg: Vec<f32> = (0..n)
         .map(|i| (i as f32 * 0.13 + 0.4).cos() * 0.3)
         .collect();
-    let weber_ref_vy: Vec<f32> = (0..n)
-        .map(|i| ((i as f32) - 64.0) * 0.01)
-        .collect();
+    let weber_ref_vy: Vec<f32> = (0..n).map(|i| ((i as f32) - 64.0) * 0.01).collect();
 
     // DIST weber: distinct values to detect any cross-wiring bug.
     let weber_dis_a: Vec<f32> = weber_ref_a.iter().map(|v| v * 0.7 + 0.05).collect();

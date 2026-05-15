@@ -120,6 +120,17 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (cleanup)
+
+- `cargo fmt -p cvvdp-gpu` run across the crate. Multiple test
+  files + examples had drift after the recent dedup refactors
+  (mostly Cvvdp::<Backend>::new(...) and predict_jod_still_3ch()
+  call sites that fit on one line post-helper-extraction).
+  Alphabetised the masking_kernel.rs `use` import list while
+  there. No behavioural changes — 6 masking_kernel + 31
+  pipeline_color + 14 pipeline_score + 2 shadow_jod tests still
+  green.
+
 #### cvvdp-gpu (tests)
 
 - `common::load_rgb_bytes` signature widened from `&PathBuf` to

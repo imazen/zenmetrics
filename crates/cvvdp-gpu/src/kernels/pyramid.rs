@@ -160,8 +160,7 @@ pub fn gausspyr_reduce_scalar(
     // Pycvvdp horizontal first-col patch (always applied).
     if dw > 0 && sw >= 2 {
         for dy in 0..dh {
-            dst[dy * dw] +=
-                vscratch[dy * sw] * k[1] + vscratch[dy * sw + 1] * k[0];
+            dst[dy * dw] += vscratch[dy * sw] * k[1] + vscratch[dy * sw + 1] * k[0];
         }
     }
     // Pycvvdp horizontal last-col patch. THE BUG: parity check uses
@@ -1029,17 +1028,29 @@ pub fn weber_contrast_compute_3ch_kernel(
     // Three layers / l with the same upper+lower clamp pattern.
     let c_a_raw = layer_a[idx] / l;
     let c_a_hi = if c_a_raw > l_max { l_max } else { c_a_raw };
-    let c_a = if c_a_hi < l_min_neg { l_min_neg } else { c_a_hi };
+    let c_a = if c_a_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_a_hi
+    };
     contrast_a[idx] = c_a;
 
     let c_rg_raw = layer_rg[idx] / l;
     let c_rg_hi = if c_rg_raw > l_max { l_max } else { c_rg_raw };
-    let c_rg = if c_rg_hi < l_min_neg { l_min_neg } else { c_rg_hi };
+    let c_rg = if c_rg_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_rg_hi
+    };
     contrast_rg[idx] = c_rg;
 
     let c_vy_raw = layer_vy[idx] / l;
     let c_vy_hi = if c_vy_raw > l_max { l_max } else { c_vy_raw };
-    let c_vy = if c_vy_hi < l_min_neg { l_min_neg } else { c_vy_hi };
+    let c_vy = if c_vy_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_vy_hi
+    };
     contrast_vy[idx] = c_vy;
 
     // log10(x) via the natural log — once per pixel rather than
@@ -1107,19 +1118,31 @@ pub fn subtract_weber_3ch_kernel(
     let layer_a = fine_a[idx] - upsc_a[idx];
     let c_a_raw = layer_a / l;
     let c_a_hi = if c_a_raw > l_max { l_max } else { c_a_raw };
-    let c_a = if c_a_hi < l_min_neg { l_min_neg } else { c_a_hi };
+    let c_a = if c_a_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_a_hi
+    };
     contrast_a[idx] = c_a;
 
     let layer_rg = fine_rg[idx] - upsc_rg[idx];
     let c_rg_raw = layer_rg / l;
     let c_rg_hi = if c_rg_raw > l_max { l_max } else { c_rg_raw };
-    let c_rg = if c_rg_hi < l_min_neg { l_min_neg } else { c_rg_hi };
+    let c_rg = if c_rg_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_rg_hi
+    };
     contrast_rg[idx] = c_rg;
 
     let layer_vy = fine_vy[idx] - upsc_vy[idx];
     let c_vy_raw = layer_vy / l;
     let c_vy_hi = if c_vy_raw > l_max { l_max } else { c_vy_raw };
-    let c_vy = if c_vy_hi < l_min_neg { l_min_neg } else { c_vy_hi };
+    let c_vy = if c_vy_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_vy_hi
+    };
     contrast_vy[idx] = c_vy;
 
     log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
@@ -1134,7 +1157,6 @@ pub fn subtract_weber_3ch_kernel(
 // launch overhead was costing us. Kept as a doc breadcrumb so this
 // path isn't re-tried without a different angle (e.g. shared-memory
 // tiling that actually changes the memory access pattern).
-
 
 /// Baseband finishing step: scale each of the 3 coarsest Gaussian
 /// planes by `inv_l_bkg_mean` (= 1 / mean(max(gauss_a, 0.01))) and

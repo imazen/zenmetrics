@@ -116,14 +116,7 @@ fn compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend() {
     let cpu_jod = cvvdp
         .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
         .expect("compute_dkl_jod_host_pool on cpu");
-    let host_jod = predict_jod_still_3ch(
-        &ref_b,
-        &dist_b,
-        w as usize,
-        h as usize,
-        display,
-        ppd,
-    );
+    let host_jod = predict_jod_still_3ch(&ref_b, &dist_b, w as usize, h as usize, display, ppd);
     let diff = (cpu_jod - host_jod).abs();
     eprintln!(
         "cpu_backend (host_pool) = {cpu_jod:.6}, host_scalar = {host_jod:.6}, |diff| = {diff:.6}"

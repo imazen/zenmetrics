@@ -7,8 +7,8 @@
 use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::masking::{
-    MASK_C, gaussian_blur_sigma3, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    diff_abs_3ch_kernel, mult_mutual_3ch_with_blurred_kernel, mult_mutual_band,
+    MASK_C, diff_abs_3ch_kernel, gaussian_blur_sigma3, min_abs_3ch_kernel,
+    mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, mult_mutual_band,
     pu_blur_h_3ch_kernel, pu_blur_h_kernel, pu_blur_v_3ch_scaled_kernel, pu_blur_v_kernel,
 };
 

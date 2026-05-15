@@ -202,19 +202,12 @@ fn run_fixture(f: &Fixture) -> bool {
     let golden = pycvvdp_synth_golden_jod(f.name);
 
     let client = Backend::client(&Default::default());
-    let mut cvvdp = Cvvdp::<Backend>::new(client, f.w, f.h, CvvdpParams::PLACEHOLDER)
-        .expect("Cvvdp::new");
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, f.w, f.h, CvvdpParams::PLACEHOLDER).expect("Cvvdp::new");
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_b, &dist_b, ppd)
         .expect("compute_dkl_jod");
-    let host_jod = predict_jod_still_3ch(
-        &ref_b,
-        &dist_b,
-        f.w as usize,
-        f.h as usize,
-        display,
-        ppd,
-    );
+    let host_jod = predict_jod_still_3ch(&ref_b, &dist_b, f.w as usize, f.h as usize, display, ppd);
     let d_gpu_golden = (gpu_jod - golden).abs();
     let d_host_golden = (host_jod - golden).abs();
     let d_gpu_host = (gpu_jod - host_jod).abs();

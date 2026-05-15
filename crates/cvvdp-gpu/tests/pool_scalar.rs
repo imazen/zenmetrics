@@ -22,8 +22,8 @@ mod gpu {
 
     #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+    #[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+    type Backend = cubecl::hip::HipRuntime;
 
     #[test]
     fn pool_band_kernel_matches_host_lp_norm_mean() {
@@ -95,9 +95,7 @@ type Backend = cubecl::hip::HipRuntime;
                 x.cos() * 3.0 - 1.5
             })
             .collect();
-        let band_vy: Vec<f32> = (0..n)
-            .map(|i| (i as f32 - 128.0) * 0.08)
-            .collect();
+        let band_vy: Vec<f32> = (0..n).map(|i| (i as f32 - 128.0) * 0.08).collect();
         let beta = 2.0_f32;
 
         let band_a_h = client.create_from_slice(f32::as_bytes(&band_a));

@@ -181,7 +181,11 @@ pub fn predict_jod_still_3ch(
         // returns the geometric rho (0.190 at 256² standard_4k), which
         // we'd otherwise use here — closing this gap was the source of
         // the chroma_shift 0.117 JOD drift chased through ticks 191-203.
-        let rho = if is_baseband { CSF_BASEBAND_RHO } else { freqs[k] };
+        let rho = if is_baseband {
+            CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
         debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
