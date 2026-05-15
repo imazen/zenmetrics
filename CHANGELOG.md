@@ -397,6 +397,69 @@ elimination (ticks 151–160):
 | 157  | 53.0      | 25.5         | 45.2     | 1.62× faster |
 | 158  | **52.9**  | **24.9**     | **43.7** | **1.63× faster** |
 
+Continued perf wave + structural cleanup (ticks 162–166):
+
+- **PORT_STATUS.md refresh** (tick 162, `621a5867`) — weber-
+  contrast pyr row names `baseband_divide_3ch_kernel`, composed-
+  pipeline row carries the tick 158 perf number, "Open tick 159"
+  entry documents the 3ch upscale fusion negative result.
+- **`compute_dkl_t_p_bands` skips bands readback**
+  (tick 163, `8a6de7be`) — same tick-156 pattern applied to the
+  test-only T_p path. Was discarding the bands portion of
+  `compute_dkl_weber_pyramid`'s return tuple (~190 MB host
+  alloc per call at 12 MP). Now dispatches via the private
+  helper + log_l_bkg-only readback.
+- **Size-sweep re-measurement** (tick 164, `d27c5194`) —
+  documents the tick 150-158 wave's per-bucket impact:
+  - tiny    jod 1835 → 527 ns/px (−71%)
+  - small   jod  223 →  91 ns/px (−59%)
+  - medium  jod   65 →  28 ns/px (−56%)
+  - large   jod  145 →  39 ns/px (−73%)
+  Most importantly the medium→large per-pixel regression open
+  since tick 97 **narrowed from 2.2× to 1.36×** — falsifies the
+  L2-cache-pressure hypothesis as dominant; most of it was
+  host memory pressure all along. Small (256²) is now the most-
+  expensive per-pixel bucket — launch overhead dominates at
+  that thread count.
+- **`pool_band_3ch_kernel` fusion** (tick 165, `df4dd106`) —
+  3 per-channel pool launches per level → 1 fused 3ch launch.
+  Total pool dispatch: `n_levels × N_CHANNELS = 24` → `n_levels
+  = 8` launches per JOD. Unlike tick 159's upscale 3ch fusion
+  (regressed via register pressure), pool kernel does only 3
+  powfs + 3 atomic-adds per thread — register footprint stays
+  small, fusion wins on launch-overhead reduction. 12 MP jod
+  52.9 → 49.0 ns/px (−7%), 1.76× faster than fcvvdp 8t.
+
+  **Decision rule for 3-channel fusion** extracted from
+  tick 159 vs tick 165: fusion wins when per-thread arithmetic
+  is tiny (atomics, pointwise math); loses to register pressure
+  on medium-arithmetic kernels (5-tap convolutions, multi-read
+  patterns). Future 3ch fusion attempts should respect this.
+
+- **`log_l_bkg` roundtrip elimination** (tick 166, `7ce2bc24`)
+  — adds `WeberScratch.log_l_bkg_dis` throwaway destination
+  (parallel to tick 154's `bands_dis` split) so the DIST weber
+  dispatch's log_l_bkg write doesn't clobber REF's data on
+  `weber_scratch[k].log_l_bkg`. Per cvvdp's weber_g1 rule,
+  both sides use REF's log_l_bkg, so DIST's value is computed-
+  then-discarded. The band loop's CSF kernel now reads REF's
+  log_l_bkg directly from the GPU-resident handle — no host
+  roundtrip.
+
+  Bytes saved per JOD at 12 MP: ~128 MB (64 MB readback +
+  64 MB reupload of the same data). Sync drains saved: 7
+  (one per non-baseband level). 12 MP jod 49.0 → **41.8 ns/px**
+  (−15%). Now **2.06× faster than fcvvdp 8-thread @ 360p**.
+
+12 MP perf trajectory through ticks 165-166
+(`benchmarks/time_12mp_tick{165,166}_2026-05-14.md`):
+
+| tick | jod ns/px | weber 1-side | d_bands  | vs fcvvdp 8t |
+| ---- | --------- | -----------  | -------- | ------------ |
+| 158  | 52.9      | 24.9         | 43.7     | 1.63× faster |
+| 165  | 49.0      | 23.4         | 41.3     | 1.76× faster |
+| 166  | **41.8**  | **22.2**     | **39.8** | **2.06× faster** |
+
 The `d_bands − 2×weber` bucket (CSF + masking + IO) is sub-noise
 since tick 156: 2×weber ≈ d_bands, meaning the band-loop overhead
 is now bandwidth-tightly packed against the two weber pyramids.
@@ -438,26 +501,18 @@ findings that would otherwise be re-discovered:
 
 Net 12 MP performance trajectory (CUDA, RTX-class):
 
-| metric                  | tick 64   | tick 73    | tick 158  |
+| metric                  | tick 64   | tick 73    | tick 166  |
 | ----                    | ----      | ----       | ----      |
-| weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 24.9 ns/px |
-| compute_dkl_d_bands     | 428 ns/px | 121 ns/px  | 43.7 ns/px |
-| compute_dkl_jod         | 444 ns/px | 127 ns/px  | 52.9 ns/px |
-
-(The weber column went up between tick 73 and tick 158 because
-tick 73's measurement was taken on a fresh process with no
-prior GPU state; later ticks share state with the dispatch
-pipeline that runs around weber, and the standalone weber
-benchmark in `time_12mp` ends up with more thermal/warm-up
-mix. The d_bands and jod columns are the load-bearing
-trajectory.)
+| weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 22.2 ns/px |
+| compute_dkl_d_bands     | 428 ns/px | 121 ns/px  | 39.8 ns/px |
+| compute_dkl_jod         | 444 ns/px | 127 ns/px  | **41.8 ns/px** |
 
 vs fcvvdp at 360 p (their bench, i7-13700k):
 
 | variant       | per-pixel  | vs current cvvdp-gpu @ 12 MP |
 | ----          | ----       | ----                         |
-| 1-thread      | 214 ns/px  | we are **4.05× faster**      |
-| 8-thread      |  86 ns/px  | we are **1.63× faster**      |
+| 1-thread      | 214 ns/px  | we are **5.12× faster**      |
+| 8-thread      |  86 ns/px  | we are **2.06× faster**      |
 
 ### Fixed
 
