@@ -36,6 +36,23 @@ Workspace conventions per the global rules:
   cpu-runtime callers use `compute_dkl_jod_host_pool`.
   Also tightened `tests/pipeline_score.rs` `cvvdp_score_matches_v1_manifest`
   from 0.05 → 0.005 JOD (measured diffs 0.0000–0.0033).
+- Removed the dead `reflect()` helper in `kernels/pyramid.rs` —
+  superseded in tick 206 when `gausspyr_reduce_scalar` was
+  rewritten to bug-compatible zero-pad + explicit boundary
+  patches matching pycvvdp.
+- **Manifest-parity tolerances tightened to 0.005 JOD across the
+  v1 R2 corpus** (`tests/shadow_jod.rs`). Was a per-q schedule
+  (0.5 JOD at q=1, 0.1 at q=5, 0.05 at q≥20 GPU; flat 0.05 host)
+  before ticks 204/206 closed the chroma_shift and 73×91 odd-dim
+  drifts. Measured diffs are now 0.0000–0.0031 JOD across all 6
+  q levels (host + GPU) — well within the same 0.005 tolerance
+  the other parity tests use.
+- `pipeline_score.rs` host-vs-GPU corpus tests
+  (`compute_dkl_t_p_bands_matches_host_on_corpus_256x256`,
+  `compute_dkl_d_bands_matches_host_on_corpus_256x256`) updated
+  to apply the tick-204 `CSF_BASEBAND_RHO` override in their
+  host reference computation — caught when running the full
+  suite after tightening shadow_jod tolerances.
 
 ### Added
 
@@ -60,29 +77,6 @@ Workspace conventions per the global rules:
   All other test files gate themselves out of cpu-only builds; this
   file is the only place cpu-backend coverage lives.
   Run with `cargo test -p cvvdp-gpu --no-default-features --features cpu`.
-
-### Changed
-
-#### cvvdp-gpu
-
-- Removed the dead `reflect()` helper in `kernels/pyramid.rs` —
-  superseded in tick 206 when `gausspyr_reduce_scalar` was
-  rewritten to bug-compatible zero-pad + explicit boundary
-  patches matching pycvvdp.
-
-- **Manifest-parity tolerances tightened to 0.005 JOD across the
-  v1 R2 corpus** (`tests/shadow_jod.rs`). Was a per-q schedule
-  (0.5 JOD at q=1, 0.1 at q=5, 0.05 at q≥20 GPU; flat 0.05 host)
-  before ticks 204/206 closed the chroma_shift and 73×91 odd-dim
-  drifts. Measured diffs are now 0.0000–0.0031 JOD across all 6
-  q levels (host + GPU) — well within the same 0.005 tolerance
-  the other parity tests use.
-- `pipeline_score.rs` host-vs-GPU corpus tests
-  (`compute_dkl_t_p_bands_matches_host_on_corpus_256x256`,
-  `compute_dkl_d_bands_matches_host_on_corpus_256x256`) updated
-  to apply the tick-204 `CSF_BASEBAND_RHO` override in their
-  host reference computation — caught when running the full
-  suite after tightening shadow_jod tolerances.
 
 ### Fixed
 
