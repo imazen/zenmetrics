@@ -9,12 +9,12 @@ Tracking faithful-port progress against the Python reference
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | Laplacian pyramid  | `kernels/pyramid`      | host scalar + cubecl kernels             | pycvvdp 3 bands + cuda kernels parity     |
-| Weber-contrast pyr | `kernels/pyramid`      | host scalar + fused `subtract_weber_3ch_kernel` (3ch + log_l_bkg one launch) | scalar via shadow_jod; 14-pt + fused-kernel parity |
+| Weber-contrast pyr | `kernels/pyramid`      | host scalar + fused `subtract_weber_3ch_kernel` (3ch + log_l_bkg one launch) + `baseband_divide_3ch_kernel` (GPU baseband finishing, no host roundtrip) | scalar via shadow_jod; 14-pt + fused-kernel parity + direct `baseband_divide` unit test |
 | CSF weighting      | `kernels/csf`          | scalar + fused 3ch + 6ch (REF+DIST one launch) kernels | scalar + per-pixel + 3ch + 6ch parity all green |
 | Contrast masking   | `kernels/masking`      | scalar + fused 3ch min_abs + 3ch PU blur with folded scale + mult_mutual_3ch + diff_abs_3ch (baseband) | scalar + 3ch + with-blurred + diff_abs parity |
 | Per-band pooling   | `kernels/pool`         | GPU `pool_band_kernel` (atomic f32 partials) consumed by `compute_dkl_jod` | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar `do_pooling_and_jod_still_3ch` + `met2jod` over a ~144-byte partials Vec | 3 fixtures + kink continuity              |
-| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor) |
+| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor. 12 MP per-pixel: jod 52.9 ns/px on RTX-class CUDA (tick 158) — **1.63× faster than fcvvdp's 8-thread reference at 360p**. | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor) |
 
 ## Reference version pin
 
@@ -94,3 +94,31 @@ The cvvdp parameter JSON gets vendored into
   backend can't run the pool path. A per-block partial-tree
   reduction would be the cpu-backend port if/when that runtime
   becomes necessary.
+
+- **(Resolved tick 157)** Wasted-readback discard pattern. Several
+  public helpers (`compute_dkl_planes`, `compute_dkl_gauss_pyramid`,
+  `compute_dkl_laplacian_pyramid`, `compute_dkl_weber_pyramid`) were
+  called internally by downstream stages with `let _ = ...`, paying
+  for full host transfers that immediately got dropped. Each gained
+  a private `_dispatch_*_gpu` sibling that does the GPU launches
+  and leaves the data on `gauss_ref` / `bands_ref` handles.
+  Internal callers now use the dispatch-only path; the public
+  functions wrap them with the readback for test/external use.
+  Net saving per JOD at 12 MP: ~460 MB of GPU→host transfer that
+  would otherwise be allocated and discarded.
+
+- **(Open, tick 159)** 3-channel `upscale_v_3ch_kernel` /
+  `upscale_h_3ch_kernel` fusion regressed ~4% jod at 12 MP on
+  RTX CUDA across two runs. Same fusion pattern as the
+  `weber_contrast_compute_3ch` and `subtract_weber_3ch` kernels
+  that won 3-5%, but those did *math fusion* (shared
+  per-pixel arithmetic across channels) while upscale just
+  reads from 3 separate arrays at the same indices. The 3ch
+  upscale's per-thread register footprint reduced warp-level
+  latency hiding more than launch-overhead reduction was
+  costing us. Future attempts should change the memory access
+  pattern (e.g. shared-memory tiling that loads a coarse tile
+  once and serves multiple destination pixels), not just
+  rearrange the work across kernels. See the breadcrumb in
+  `kernels/pyramid.rs` immediately after
+  `subtract_weber_3ch_kernel`.
