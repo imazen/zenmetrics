@@ -42,6 +42,10 @@ normalized so higher = better):
 - [`docs/SSIMULACRA2_PORTING_PLAN.md`](docs/SSIMULACRA2_PORTING_PLAN.md),
   [`docs/SSIM2_GPU_HANDOFF.md`](docs/SSIM2_GPU_HANDOFF.md) — the per-crate
   porting playbooks.
+- [`crates/cvvdp-gpu/docs/PORT_STATUS.md`](crates/cvvdp-gpu/docs/PORT_STATUS.md)
+  — ColorVideoVDP per-stage port status against pycvvdp v0.5.4
+  (host scalar reference path + GPU composition + parity test
+  matrix).
 
 ## License
 
