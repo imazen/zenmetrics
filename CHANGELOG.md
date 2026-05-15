@@ -58,6 +58,15 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- `kernels/mod.rs` module-level "Numerical parity target"
+  paragraph claimed the 0.005 JOD bound against pycvvdp v0.5.4
+  without scoping it to a `PerfMode`. Same gap I closed in
+  `src/lib.rs` Status (tick 323) and in the kernels overview.
+  Updated to "under the default `crate::PerfMode::Strict`" with
+  a one-line forward-reference that future `PerfMode::Fast`
+  optimizations gate inside individual kernel dispatch sites
+  and leave the strict path as-described. Tick 332.
+
 - `host_scalar::predict_jod_still_3ch` docstring didn't mention
   `PerfMode`, which left readers asking whether the host-scalar
   reference path responds to `PerfMode::Fast`. Answer: no — it's

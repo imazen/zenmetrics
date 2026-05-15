@@ -35,11 +35,14 @@
 //! test-only entry point (`tests/pool_scalar.rs`) for unit parity
 //! against `lp_norm_mean`.
 //!
-//! Numerical parity target: matches pycvvdp v0.5.4 within 0.005 JOD
-//! on the v1 R2 manifest across q=1–90 fixtures (measured 0.0000–
-//! 0.0031 since tick 207's tolerance tightening). Per-thread
-//! accumulators stay in f64 where the reference uses f64 reductions;
-//! otherwise f32.
+//! Numerical parity target (under the default
+//! [`crate::PerfMode::Strict`]): matches pycvvdp v0.5.4 within
+//! 0.005 JOD on the v1 R2 manifest across q=1–90 fixtures
+//! (measured 0.0000–0.0031 since tick 207's tolerance tightening).
+//! Per-thread accumulators stay in f64 where the reference uses
+//! f64 reductions; otherwise f32. Future [`crate::PerfMode::Fast`]
+//! stage-level relaxations gate inside individual kernel dispatch
+//! sites; the strict path stays as-described above.
 
 pub mod color;
 pub mod csf;
