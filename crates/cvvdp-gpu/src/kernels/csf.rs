@@ -287,6 +287,108 @@ pub fn csf_apply_3ch_kernel(
     t_p_vy[idx] = weber_vy[idx] * s_vy * ch_gain_vy;
 }
 
+/// 6-channel fused CSF apply — runs both sides (REF + DIST) of one
+/// pyramid level in a single launch. Replaces two
+/// `csf_apply_3ch_kernel` launches per non-baseband level.
+///
+/// The per-pixel LUT bracket math (`log_l_bkg → (lo_idx, frac)`) is
+/// computed once and shared across all 6 outputs. The 3 logs_rows
+/// (one per channel) are shared between the REF and DIST sides since
+/// cvvdp's `weber_g1` contract uses the REF's `log_l_bkg` + the
+/// per-channel sensitivity row for both sides. The 3 `ch_gain`
+/// values are also shared — REF and DIST go through the same CSF
+/// weighting.
+///
+/// Inputs:
+/// - `weber_ref_*` — REF Weber-contrast band, 3 channels.
+/// - `weber_dis_*` — DIST Weber-contrast band, 3 channels.
+/// - `log_l_bkg`   — per-pixel `log10(L_bkg)` from REF achromatic.
+/// - `logs_row_*`  — 32-entry sensitivity LUT row per channel.
+/// - `ch_gain_*`   — per-channel CSF gain (CH_GAIN × band_mul or
+///                   1.0 at baseband + edge bands).
+/// - `n`           — pixel count.
+///
+/// Outputs:
+/// - `t_p_ref_*`   — REF post-CSF per channel.
+/// - `t_p_dis_*`   — DIST post-CSF per channel.
+#[cube(launch)]
+#[allow(clippy::too_many_arguments)]
+pub fn csf_apply_6ch_kernel(
+    weber_ref_a: &Array<f32>,
+    weber_ref_rg: &Array<f32>,
+    weber_ref_vy: &Array<f32>,
+    weber_dis_a: &Array<f32>,
+    weber_dis_rg: &Array<f32>,
+    weber_dis_vy: &Array<f32>,
+    log_l_bkg: &Array<f32>,
+    logs_row_a: &Array<f32>,
+    logs_row_rg: &Array<f32>,
+    logs_row_vy: &Array<f32>,
+    t_p_ref_a: &mut Array<f32>,
+    t_p_ref_rg: &mut Array<f32>,
+    t_p_ref_vy: &mut Array<f32>,
+    t_p_dis_a: &mut Array<f32>,
+    t_p_dis_rg: &mut Array<f32>,
+    t_p_dis_vy: &mut Array<f32>,
+    ch_gain_a: f32,
+    ch_gain_rg: f32,
+    ch_gain_vy: f32,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+
+    let axis_min = f32::new(-2.301_03);
+    let inv_step = f32::new(4.920_640_4);
+    let max_idx_f = f32::new(30.999_999);
+    let log_correction = f32::new(-0.013_987_1);
+
+    // Bracket math: shared across all 6 outputs.
+    let log_l = log_l_bkg[idx];
+    let off_raw = (log_l - axis_min) * inv_step;
+    let off_lo = if off_raw < f32::new(0.0) {
+        f32::new(0.0)
+    } else if off_raw > max_idx_f {
+        max_idx_f
+    } else {
+        off_raw
+    };
+    let lo_idx_f = f32::floor(off_lo);
+    let frac = off_lo - lo_idx_f;
+    let lo_idx = lo_idx_f as u32 as usize;
+    let hi_idx = lo_idx + 1;
+
+    let ln_10 = f32::new(2.302_585_1);
+
+    // Per-channel: load logs_row pair, interpolate, scale once.
+    // Apply to both REF and DIST.
+    let lo_a = logs_row_a[lo_idx];
+    let hi_a = logs_row_a[hi_idx];
+    let log_s_a = lo_a + frac * (hi_a - lo_a) + log_correction;
+    let s_a = f32::exp(log_s_a * ln_10);
+    let scale_a = s_a * ch_gain_a;
+    t_p_ref_a[idx] = weber_ref_a[idx] * scale_a;
+    t_p_dis_a[idx] = weber_dis_a[idx] * scale_a;
+
+    let lo_rg = logs_row_rg[lo_idx];
+    let hi_rg = logs_row_rg[hi_idx];
+    let log_s_rg = lo_rg + frac * (hi_rg - lo_rg) + log_correction;
+    let s_rg = f32::exp(log_s_rg * ln_10);
+    let scale_rg = s_rg * ch_gain_rg;
+    t_p_ref_rg[idx] = weber_ref_rg[idx] * scale_rg;
+    t_p_dis_rg[idx] = weber_dis_rg[idx] * scale_rg;
+
+    let lo_vy = logs_row_vy[lo_idx];
+    let hi_vy = logs_row_vy[hi_idx];
+    let log_s_vy = lo_vy + frac * (hi_vy - lo_vy) + log_correction;
+    let s_vy = f32::exp(log_s_vy * ln_10);
+    let scale_vy = s_vy * ch_gain_vy;
+    t_p_ref_vy[idx] = weber_ref_vy[idx] * scale_vy;
+    t_p_dis_vy[idx] = weber_dis_vy[idx] * scale_vy;
+}
+
 /// Multiply `band` in-place by `weights[weight_idx]`. `weights` is a
 /// flat per-(level, channel) CSF sensitivity table uploaded once per
 /// pipeline init. `weight_idx` is the host-resolved slot for the

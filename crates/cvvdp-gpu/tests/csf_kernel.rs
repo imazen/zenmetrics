@@ -6,7 +6,8 @@
 use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::csf::{
-    CsfChannel, csf_apply_3ch_kernel, csf_apply_per_pixel_kernel, precompute_logs_row,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, csf_apply_per_pixel_kernel,
+    precompute_logs_row,
     sensitivity_corrected_scalar, weight_band_kernel,
 };
 use cvvdp_gpu::kernels::masking::CH_GAIN;
@@ -221,4 +222,146 @@ fn csf_apply_3ch_kernel_matches_host() {
         "max rel per channel: A={:.4e}, RG={:.4e}, VY={:.4e}",
         max_rel_per_channel[0], max_rel_per_channel[1], max_rel_per_channel[2],
     );
+}
+
+#[test]
+fn csf_apply_6ch_kernel_matches_host_for_both_sides() {
+    // Fused 6-channel CSF — verifies that the single kernel
+    // produces matching output for both REF and DIST sides
+    // against the scalar `sensitivity_corrected_scalar` formula.
+    // Distinct REF/DIST weber arrays + per-channel gains + a
+    // log_l_bkg ramp that exercises the full LUT axis ensures
+    // every output is independently checked.
+    let client = Backend::client(&Default::default());
+
+    let n = 128usize;
+    let log_l_bkg: Vec<f32> = (0..n)
+        .map(|i| -2.3 + (i as f32 / (n - 1) as f32) * 6.3)
+        .collect();
+
+    // REF weber: same shape as the 3ch test.
+    let weber_ref_a: Vec<f32> = (0..n).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+    let weber_ref_rg: Vec<f32> = (0..n)
+        .map(|i| (i as f32 * 0.13 + 0.4).cos() * 0.3)
+        .collect();
+    let weber_ref_vy: Vec<f32> = (0..n)
+        .map(|i| ((i as f32) - 64.0) * 0.01)
+        .collect();
+
+    // DIST weber: distinct values to detect any cross-wiring bug.
+    let weber_dis_a: Vec<f32> = weber_ref_a.iter().map(|v| v * 0.7 + 0.05).collect();
+    let weber_dis_rg: Vec<f32> = weber_ref_rg.iter().map(|v| -v * 1.3 - 0.1).collect();
+    let weber_dis_vy: Vec<f32> = weber_ref_vy.iter().map(|v| v * 0.4 + 0.2).collect();
+
+    let rho = 4.0_f32;
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+    let ch_gain_a = 1.5_f32;
+    let ch_gain_rg = 0.8_f32;
+    let ch_gain_vy = 2.3_f32;
+    let ch_gains = [ch_gain_a, ch_gain_rg, ch_gain_vy];
+
+    let logs_rows = [
+        precompute_logs_row(rho, channels[0]),
+        precompute_logs_row(rho, channels[1]),
+        precompute_logs_row(rho, channels[2]),
+    ];
+
+    let weber_ref_a_h = client.create_from_slice(f32::as_bytes(&weber_ref_a));
+    let weber_ref_rg_h = client.create_from_slice(f32::as_bytes(&weber_ref_rg));
+    let weber_ref_vy_h = client.create_from_slice(f32::as_bytes(&weber_ref_vy));
+    let weber_dis_a_h = client.create_from_slice(f32::as_bytes(&weber_dis_a));
+    let weber_dis_rg_h = client.create_from_slice(f32::as_bytes(&weber_dis_rg));
+    let weber_dis_vy_h = client.create_from_slice(f32::as_bytes(&weber_dis_vy));
+    let log_l_h = client.create_from_slice(f32::as_bytes(&log_l_bkg));
+    let logs_row_a_h = client.create_from_slice(f32::as_bytes(&logs_rows[0]));
+    let logs_row_rg_h = client.create_from_slice(f32::as_bytes(&logs_rows[1]));
+    let logs_row_vy_h = client.create_from_slice(f32::as_bytes(&logs_rows[2]));
+    let zero = vec![0.0_f32; n];
+    let t_p_ref_a_h = client.create_from_slice(f32::as_bytes(&zero));
+    let t_p_ref_rg_h = client.create_from_slice(f32::as_bytes(&zero));
+    let t_p_ref_vy_h = client.create_from_slice(f32::as_bytes(&zero));
+    let t_p_dis_a_h = client.create_from_slice(f32::as_bytes(&zero));
+    let t_p_dis_rg_h = client.create_from_slice(f32::as_bytes(&zero));
+    let t_p_dis_vy_h = client.create_from_slice(f32::as_bytes(&zero));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        csf_apply_6ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(weber_ref_a_h, n),
+            ArrayArg::from_raw_parts(weber_ref_rg_h, n),
+            ArrayArg::from_raw_parts(weber_ref_vy_h, n),
+            ArrayArg::from_raw_parts(weber_dis_a_h, n),
+            ArrayArg::from_raw_parts(weber_dis_rg_h, n),
+            ArrayArg::from_raw_parts(weber_dis_vy_h, n),
+            ArrayArg::from_raw_parts(log_l_h, n),
+            ArrayArg::from_raw_parts(logs_row_a_h, 32),
+            ArrayArg::from_raw_parts(logs_row_rg_h, 32),
+            ArrayArg::from_raw_parts(logs_row_vy_h, 32),
+            ArrayArg::from_raw_parts(t_p_ref_a_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_ref_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_ref_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_dis_a_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_dis_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(t_p_dis_vy_h.clone(), n),
+            ch_gain_a,
+            ch_gain_rg,
+            ch_gain_vy,
+            n as u32,
+        );
+    }
+
+    let ref_a_b = client.read_one(t_p_ref_a_h).expect("read");
+    let ref_rg_b = client.read_one(t_p_ref_rg_h).expect("read");
+    let ref_vy_b = client.read_one(t_p_ref_vy_h).expect("read");
+    let dis_a_b = client.read_one(t_p_dis_a_h).expect("read");
+    let dis_rg_b = client.read_one(t_p_dis_rg_h).expect("read");
+    let dis_vy_b = client.read_one(t_p_dis_vy_h).expect("read");
+    let gpu_ref_a: &[f32] = f32::from_bytes(&ref_a_b);
+    let gpu_ref_rg: &[f32] = f32::from_bytes(&ref_rg_b);
+    let gpu_ref_vy: &[f32] = f32::from_bytes(&ref_vy_b);
+    let gpu_dis_a: &[f32] = f32::from_bytes(&dis_a_b);
+    let gpu_dis_rg: &[f32] = f32::from_bytes(&dis_rg_b);
+    let gpu_dis_vy: &[f32] = f32::from_bytes(&dis_vy_b);
+
+    let webers_ref = [
+        weber_ref_a.as_slice(),
+        weber_ref_rg.as_slice(),
+        weber_ref_vy.as_slice(),
+    ];
+    let webers_dis = [
+        weber_dis_a.as_slice(),
+        weber_dis_rg.as_slice(),
+        weber_dis_vy.as_slice(),
+    ];
+    let gpu_ref = [gpu_ref_a, gpu_ref_rg, gpu_ref_vy];
+    let gpu_dis = [gpu_dis_a, gpu_dis_rg, gpu_dis_vy];
+
+    for c in 0..3 {
+        for i in 0..n {
+            let s = sensitivity_corrected_scalar(rho, log_l_bkg[i], channels[c]);
+            let exp_ref = webers_ref[c][i] * s * ch_gains[c];
+            let exp_dis = webers_dis[c][i] * s * ch_gains[c];
+            let rel_ref = ((gpu_ref[c][i] - exp_ref) / exp_ref.abs().max(1e-6)).abs();
+            let rel_dis = ((gpu_dis[c][i] - exp_dis) / exp_dis.abs().max(1e-6)).abs();
+            assert!(
+                rel_ref < 5e-3,
+                "REF channel {c} pixel {i}: gpu={} exp={} rel={:.4e}",
+                gpu_ref[c][i],
+                exp_ref,
+                rel_ref,
+            );
+            assert!(
+                rel_dis < 5e-3,
+                "DIST channel {c} pixel {i}: gpu={} exp={} rel={:.4e}",
+                gpu_dis[c][i],
+                exp_dis,
+                rel_dis,
+            );
+        }
+    }
 }

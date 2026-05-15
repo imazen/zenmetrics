@@ -49,7 +49,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
 use crate::kernels::csf::{
-    CsfChannel, csf_apply_3ch_kernel, csf_apply_per_pixel_kernel, flatten_band_weights,
+    CsfChannel, csf_apply_6ch_kernel, csf_apply_per_pixel_kernel, flatten_band_weights,
     precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::masking::{
@@ -1190,52 +1190,32 @@ impl<R: Runtime> Cvvdp<R> {
             let ch_gain_rg: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[1] };
             let ch_gain_vy: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[2] };
 
-            // REF side: upload weber from ref_weber Vec (as before).
+            // Fused 6-channel CSF apply: one launch runs both sides
+            // (REF + DIST) and shares the per-pixel LUT bracket math.
+            // REF weber comes from the host upload (bands_ref was
+            // overwritten with DIST by the weber(dist) call earlier
+            // in the band loop). DIST weber reads self.bands_ref
+            // handles directly. Tick 93 — was 2 separate
+            // csf_apply_3ch launches.
             {
-                let weber_a_h = self
+                let weber_ref_a_h = self
                     .client
                     .create_from_slice(f32::as_bytes(&ref_weber[k][0]));
-                let weber_rg_h = self
+                let weber_ref_rg_h = self
                     .client
                     .create_from_slice(f32::as_bytes(&ref_weber[k][1]));
-                let weber_vy_h = self
+                let weber_ref_vy_h = self
                     .client
                     .create_from_slice(f32::as_bytes(&ref_weber[k][2]));
+                let _ = &dist_weber; // dist host upload path retired
                 unsafe {
-                    csf_apply_3ch_kernel::launch::<R>(
+                    csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
                         count.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(weber_a_h, n_px),
-                        ArrayArg::from_raw_parts(weber_rg_h, n_px),
-                        ArrayArg::from_raw_parts(weber_vy_h, n_px),
-                        ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
-                        ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
-                        ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
-                        ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
-                        ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
-                        ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
-                        ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
-                        ch_gain_a,
-                        ch_gain_rg,
-                        ch_gain_vy,
-                        n_px as u32,
-                    );
-                }
-            }
-            // DIST side: bisect tick 87 — use self.bands_ref handles
-            // directly (skip the 12 MB host upload at L0). bands_ref
-            // currently holds DIST data (weber(dist) was the last
-            // call before the band loop started). If this causes the
-            // 5× regression we saw in tick 85, the handle-direct
-            // pattern is the culprit.
-            {
-                let _ = &dist_weber; // discard host upload path
-                unsafe {
-                    csf_apply_3ch_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        cube_dim,
+                        ArrayArg::from_raw_parts(weber_ref_a_h, n_px),
+                        ArrayArg::from_raw_parts(weber_ref_rg_h, n_px),
+                        ArrayArg::from_raw_parts(weber_ref_vy_h, n_px),
                         ArrayArg::from_raw_parts(self.bands_ref[k].planes[0].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_ref[k].planes[1].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_ref[k].planes[2].clone(), n_px),
@@ -1243,6 +1223,9 @@ impl<R: Runtime> Cvvdp<R> {
                         ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
                         ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
                         ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
+                        ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
                         ArrayArg::from_raw_parts(t_p_dis_h[0].clone(), n_px),
                         ArrayArg::from_raw_parts(t_p_dis_h[1].clone(), n_px),
                         ArrayArg::from_raw_parts(t_p_dis_h[2].clone(), n_px),
