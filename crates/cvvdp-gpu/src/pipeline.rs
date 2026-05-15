@@ -1186,7 +1186,7 @@ impl<R: Runtime> Cvvdp<R> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
-        let (ref_weber, ref_log_l_bkg) = self.compute_dkl_weber_pyramid(ref_srgb)?;
+        let (mut ref_weber, mut ref_log_l_bkg) = self.compute_dkl_weber_pyramid(ref_srgb)?;
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
@@ -1308,6 +1308,12 @@ impl<R: Runtime> Cvvdp<R> {
                     );
                 }
             }
+            // CSF + log_l_bkg uploads have copied band-k's host data
+            // into GPU buffers — drop our local Vecs so peak host
+            // residency during the band loop scales with the largest
+            // remaining band, not the full pyramid.
+            ref_weber[k] = [Vec::new(), Vec::new(), Vec::new()];
+            ref_log_l_bkg[k] = Vec::new();
             if trace {
                 eprintln!("[trace] L{k} csf 2 launches:        {:?}", t_csf.elapsed());
             }
