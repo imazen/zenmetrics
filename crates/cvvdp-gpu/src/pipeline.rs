@@ -1551,18 +1551,18 @@ impl<R: Runtime> Cvvdp<R> {
     /// f32-precision tolerance, `Cvvdp::score` will switch to this
     /// helper and the manifest-parity test will retarget.
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
-        // Run the full D-bands dispatch. compute_dkl_d_bands leaves the
-        // per-band D planes resident in self.d_scratch[k].d[c] — those
-        // handles persist across the call (the returned Vec is just a
-        // host-readback snapshot of those handles). After tick 94 the
-        // baseband path also writes through diff_abs_3ch into
-        // d_scratch.d, so every level's D plane lives in the same slot.
+        // Run the full D-bands GPU dispatch (color → weber → CSF →
+        // masking). `_dispatch_d_bands_into_scratch` leaves the
+        // per-band D planes resident in `self.d_scratch[k].d[c]` for
+        // every level (baseband included since tick 94's
+        // diff_abs_3ch_kernel) and does no host read-back.
         //
-        // Tick 95 plumbed `pool_band_kernel` into this function; tick
-        // 96 dropped the per-band host readback by routing through
-        // the new `_dispatch_d_bands_into_scratch` helper. The full
-        // ~432 MB per-band readback at 12 MP is gone — only the
-        // `n_levels * N_CHANNELS` partials Vec comes back to host.
+        // The JOD path then pools via `pool_band_kernel` on each
+        // resident D handle, accumulating into an `n_levels ×
+        // N_CHANNELS` partials buffer that's the only data read back
+        // to host. `compute_dkl_d_bands` (the parity-test helper)
+        // adds a per-band readback on top, paying ~432 MB of
+        // GPU→host transfer at 12 MP — JOD skips that.
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
         let n_levels = self.n_levels as usize;
 
