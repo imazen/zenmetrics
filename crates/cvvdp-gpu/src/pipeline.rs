@@ -57,7 +57,9 @@ use crate::kernels::masking::{
     mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel,
     pu_blur_v_3ch_scaled_kernel,
 };
-use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
+use crate::kernels::pool::{
+    BETA_SPATIAL, do_pooling_and_jod_still_3ch, pool_band_finalize, pool_band_kernel,
+};
 use crate::kernels::pyramid::{
     band_frequencies, downscale_kernel, subtract_kernel, subtract_weber_3ch_kernel,
     upscale_h_kernel, upscale_v_kernel,
@@ -1445,19 +1447,91 @@ impl<R: Runtime> Cvvdp<R> {
     /// f32-precision tolerance, `Cvvdp::score` will switch to this
     /// helper and the manifest-parity test will retarget.
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
-        let d_bands = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
-        let n_levels = d_bands.len();
+        // Run the full D-bands dispatch. compute_dkl_d_bands leaves the
+        // per-band D planes resident in self.d_scratch[k].d[c] — those
+        // handles persist across the call (the returned Vec is just a
+        // host-readback snapshot of those handles). After tick 94 the
+        // baseband path also writes through diff_abs_3ch into
+        // d_scratch.d, so every level's D plane lives in the same slot.
+        //
+        // Tick 95: rather than reducing the host-readback `d_bands`
+        // Vec with `lp_norm_mean`, dispatch `pool_band_kernel` on the
+        // still-GPU-resident D handles directly. The partials buffer
+        // is `n_levels × N_CHANNELS` floats — read back once at the
+        // end, then `pool_band_finalize` per (band, channel) produces
+        // the same `q_per_ch` values as the host scalar path.
+        //
+        // The readback cost is unchanged this tick because
+        // compute_dkl_d_bands still does its own per-band Vec readback;
+        // dropping that is the next chunk. Correctness-first: this
+        // commit just plumbs the GPU pool path end-to-end.
+        let _ = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
+        let n_levels = self.n_levels as usize;
 
-        // Spatial pool per (band, channel) — host-scalar lp_norm_mean
-        // matches what `pool_band_kernel` produces (parity-locked in
-        // pool_scalar.rs).
+        let partials_init = vec![0.0_f32; n_levels * N_CHANNELS];
+        let partials_h = self
+            .client
+            .create_from_slice(f32::as_bytes(&partials_init));
+        let cube_dim = CubeDim::new_1d(64);
+        for k in 0..n_levels {
+            let bw = if k == 0 {
+                self.width as usize
+            } else {
+                (self.width as usize) >> k
+            };
+            let bh = if k == 0 {
+                self.height as usize
+            } else {
+                (self.height as usize) >> k
+            };
+            let n_px = bw * bh;
+            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            for c in 0..N_CHANNELS {
+                let partial_idx = (k * N_CHANNELS + c) as u32;
+                let d_handle = self.d_scratch[k].d[c].clone();
+                unsafe {
+                    pool_band_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(d_handle, n_px),
+                        ArrayArg::from_raw_parts(partials_h.clone(), n_levels * N_CHANNELS),
+                        BETA_SPATIAL,
+                        partial_idx,
+                        n_px as u32,
+                    );
+                }
+            }
+        }
+
+        let bytes = self
+            .client
+            .read_one(partials_h)
+            .map_err(|_| Error::InvalidImageSize)?;
+        let partials_data: &[f32] = f32::from_bytes(&bytes);
+
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let mut q_band = [0.0_f32; 3];
+            let bw = if k == 0 {
+                self.width as usize
+            } else {
+                (self.width as usize) >> k
+            };
+            let bh = if k == 0 {
+                self.height as usize
+            } else {
+                (self.height as usize) >> k
+            };
+            let n_px_k = bw * bh;
+            let mut q = [0.0_f32; 3];
             for c in 0..N_CHANNELS {
-                q_band[c] = lp_norm_mean(&d_bands[k][c], BETA_SPATIAL);
+                q[c] = pool_band_finalize(
+                    partials_data[k * N_CHANNELS + c],
+                    n_px_k,
+                    BETA_SPATIAL,
+                );
             }
-            q_per_ch.push(q_band);
+            q_per_ch.push(q);
         }
 
         Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
