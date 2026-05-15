@@ -1321,7 +1321,7 @@ impl<R: Runtime> Cvvdp<R> {
             ref_weber[k] = [Vec::new(), Vec::new(), Vec::new()];
             ref_log_l_bkg[k] = Vec::new();
             if trace {
-                eprintln!("[trace] L{k} csf 2 launches:        {:?}", t_csf.elapsed());
+                eprintln!("[trace] L{k} csf 1 fused launch:    {:?}", t_csf.elapsed());
             }
 
             let t_mask = std::time::Instant::now();
