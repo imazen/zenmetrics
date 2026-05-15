@@ -1017,9 +1017,10 @@ impl<R: Runtime> Cvvdp<R> {
 
         let mut t_p_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
-            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            // band_mul = 2.0 on every level except the finest (k=0) and the
+            // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
+            let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (_, _, n_px) = self.level_dims(k);
             debug_assert_eq!(log_l_bkg[k].len(), n_px);
 
@@ -1130,9 +1131,10 @@ impl<R: Runtime> Cvvdp<R> {
 
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
-            let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
-            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            // band_mul = 2.0 on every level except the finest (k=0) and the
+            // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
+            let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (bw, bh, n_px) = self.level_dims(k);
             debug_assert_eq!(ref_weber[k][0].len(), n_px);
             debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
