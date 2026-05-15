@@ -8,13 +8,13 @@ Tracking faithful-port progress against the Python reference
 | sRGB → linear      | `kernels/color`        | host scalar + cubecl kernel body         | host 2e-3 vs pycvvdp; GPU 3e-5 vs scalar  |
 | Display model      | `kernels/color`        | fused into host scalar + kernel          | same                                      |
 | RGB → DKL          | `kernels/color`        | fused into host scalar + kernel          | same                                      |
-| Laplacian pyramid  | `kernels/pyramid`      | host scalar + all 3 cubecl kernels       | pycvvdp 3 bands + 3 cuda kernels parity   |
-| Weber-contrast pyr | `kernels/pyramid`      | host scalar + weber_contrast_compute_kernel | scalar via shadow_jod; kernel 14-pt parity |
-| CSF weighting      | `kernels/csf`          | scalar + csf_apply_per_pixel_kernel + table | scalar parity + per-pixel kernel <1e-3 rel|
-| Contrast masking   | `kernels/masking`      | scalar + no-blur kernel + PU blur kernels | scalar + no-blur + PU σ=3 blur all parity |
-| Per-band pooling   | `kernels/pool`         | host scalar + pool_band_kernel (atomic)  | 3 host fixtures + GPU vs lp_norm_mean     |
-| Host fold / JOD    | `kernels/pool`         | host scalar met2jod (smooth piecewise)   | 3 fixtures + kink continuity              |
-| Composed pipeline  | `host_scalar` + `Cvvdp::score` | end-to-end sRGB → JOD on corpus  | <0.01 JOD vs pycvvdp v1 manifest          |
+| Laplacian pyramid  | `kernels/pyramid`      | host scalar + cubecl kernels             | pycvvdp 3 bands + cuda kernels parity     |
+| Weber-contrast pyr | `kernels/pyramid`      | host scalar + fused `subtract_weber_3ch_kernel` (3ch + log_l_bkg one launch) | scalar via shadow_jod; 14-pt + fused-kernel parity |
+| CSF weighting      | `kernels/csf`          | scalar + fused 3ch + 6ch (REF+DIST one launch) kernels | scalar + per-pixel + 3ch + 6ch parity all green |
+| Contrast masking   | `kernels/masking`      | scalar + fused 3ch min_abs + 3ch PU blur with folded scale + mult_mutual_3ch + diff_abs_3ch (baseband) | scalar + 3ch + with-blurred + diff_abs parity |
+| Per-band pooling   | `kernels/pool`         | GPU `pool_band_kernel` (atomic f32 partials) consumed by `compute_dkl_jod` | 3 host fixtures + GPU vs lp_norm_mean     |
+| Host fold / JOD    | `kernels/pool`         | host scalar `do_pooling_and_jod_still_3ch` + `met2jod` over a ~144-byte partials Vec | 3 fixtures + kink continuity              |
+| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor) |
 
 ## Reference version pin
 
