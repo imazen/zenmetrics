@@ -14,7 +14,7 @@ Tracking faithful-port progress against the Python reference
 | Contrast masking   | `kernels/masking`      | scalar + fused 3ch min_abs + 3ch PU blur with folded scale + mult_mutual_3ch + diff_abs_3ch (baseband) | scalar + 3ch + with-blurred + diff_abs parity |
 | Per-band pooling   | `kernels/pool`         | GPU `pool_band_kernel` (atomic f32 partials) consumed by `compute_dkl_jod` | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar `do_pooling_and_jod_still_3ch` + `met2jod` over a ~144-byte partials Vec | 3 fixtures + kink continuity              |
-| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `Cvvdp::compute_dkl_jod_with_warm_ref` (GPU batch) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor. 12 MP CUDA timing (RTX 5070, ceil-div tick 175+): cold `jod` ~62 ns/px; warm-ref ~34 ns/px. vs canonical **pycvvdp v0.5.4 CUDA: 14 ns/px** — we are **4.4× slower cold / 2.4× slower warm** with correct output. Pre-ceil-div timings (36 / 21 ns/px) reflected a broken pyramid drifting 0.586 JOD vs pycvvdp; corrected numbers come from output that matches pycvvdp at 0.0003 JOD. pycvvdp benefits from cuDNN-optimised separable conv; cubek path or shared-memory tiling can close the gap. We win on portability: WGPU + HIP backends, 50 MB static binary vs ~3 GB PyTorch runtime. | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor); warm-ref vs cold-ref parity ≤1e-5 JOD; 12 MP synth vs pycvvdp golden 0.0003 JOD (`compute_dkl_jod_matches_pycvvdp_at_12mp_synth`, tick 178); odd-dim 73×91 GPU vs host 0.092 JOD (`compute_dkl_jod_matches_host_scalar_on_odd_dims`, tick 177) |
+| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `Cvvdp::compute_dkl_jod_with_warm_ref` (GPU batch) + `Cvvdp::compute_dkl_jod_host_pool` (cpu backend) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference; host-pool variant added in tick 208 reads D bands back + pools on host (works on cubecl-cpu). `Cvvdp::score` still routes through host_scalar per `shadow_jod` v1 manifest anchor. 12 MP CUDA timing (RTX 5070, ceil-div tick 175+): cold `jod` ~62 ns/px; warm-ref ~34 ns/px. vs canonical **pycvvdp v0.5.4 CUDA: 14 ns/px** — we are **4.4× slower cold / 2.4× slower warm** with correct output. pycvvdp benefits from cuDNN-optimised separable conv; cubek path or shared-memory tiling can close the gap. We win on portability: WGPU + HIP backends, 50 MB static binary vs ~3 GB PyTorch runtime. | host + GPU: **≤0.005 JOD vs pycvvdp v1 manifest** (`shadow_jod`, tick 207; was loose 0.05/0.5 schedule before ticks 204/206 closed the chroma_shift and 73×91 drifts). Measured max diff 0.0031 JOD across q=1,5,20,45,70,90; q=1 closed from 0.4 → 0.0000. Synth fixtures: 12 MP 0.0003 JOD, 256² blur3x1/blur1x3/noise/chroma_shift ≤0.0002 JOD, 73×91 odd-dim 0.0000 JOD (tick 206 replicated pycvvdp's gausspyr_reduce parity-check bug). warm-ref vs cold-ref ≤1e-5 JOD; host_pool vs GPU pool 0.000000 (tick 208) |
 
 ## Reference version pin
 
@@ -61,24 +61,32 @@ The cvvdp parameter JSON gets vendored into
   formula (no 100× blow-up the tick-23 vanilla-Laplacian attempt
   hit).
 
-- **cvvdp bug: column-parity check in `gausspyr_reduce`.** Line 206
-  of cvvdp v0.5.4's `lpyr_dec.gausspyr_reduce` checks
-  `x.shape[-2] % 2` (row count) when deciding the right-column edge
-  fix-up — the variable being patched is `y[...,:,-1]`, the
-  rightmost column, so the parity check should clearly use
-  `x.shape[-1] % 2` (column count). Doesn't affect the
-  zenmetrics-corpus (all 2^k square inputs through the pyramid),
-  but will cause a divergence on non-square inputs at odd-height-
-  but-even-width levels. To preserve bit-stable parity our port
-  reproduces the bug verbatim; document it here and re-evaluate when
-  the cvvdp pin moves.
+- **(Resolved tick 206)** cvvdp bug: column-parity check in
+  `gausspyr_reduce`. Line ~206 of cvvdp v0.5.4's
+  `lpyr_dec.gausspyr_reduce` checks `x.shape[-2] % 2` (row count)
+  when deciding the horizontal-pass right-column edge fix-up — the
+  variable being patched is `y[...,:,-1]`, the rightmost column, so
+  the parity check should clearly use `x.shape[-1] % 2` (column
+  count). Comments say "odd number of columns"; the code tests
+  rows.
 
-  Status: pure-symmetric-reflection happens to be equivalent to
-  cvvdp's `zero-pad + explicit edge patches` for even-input dims, so
-  `gausspyr_reduce_scalar` matches cvvdp exactly on the corpus's
-  pyramid levels. `gausspyr_expand_scalar` now uses cvvdp's explicit
-  edge-replication scheme (`interleave_zeros_and_pad`) so the
-  constant-signal test passes across the whole buffer.
+  Affects mixed-parity inputs at any pyramid level (e.g. 6×5 → 3×3
+  at level 4→5 of the 73×91 pyramid; 46×37 → 23×19 at level 1→2);
+  doesn't affect same-parity pyramid levels (256² + 4 MP corpus
+  hits this exclusively).
+
+  Tick 206 fix: `gausspyr_reduce_scalar` rewritten from pure
+  reflection to zero-pad + explicit pycvvdp-bug-compatible patches.
+  GPU `downscale_kernel` keeps the reflect-based main path (matches
+  pycvvdp on all same-parity inputs) and adds a delta correction at
+  the right column when `sw` and `sh` parities differ. Result:
+  `compute_dkl_jod_matches_pycvvdp_at_73x91_odd` passes at
+  `diff = 0.000000` (was 0.006 before fix). Re-evaluate when the
+  cvvdp pin moves.
+
+  `gausspyr_expand_scalar` uses cvvdp's explicit edge-replication
+  scheme (`interleave_zeros_and_pad`); constant-signal test passes
+  across the whole buffer.
 - **(Resolved)** Per-band CSF weight precomputation chose the
   flat-upload form. `Cvvdp::new_with_geometry` uploads one
   `Vec<[Handle; N_CHANNELS]>` per pyramid level (the 32-entry
@@ -86,14 +94,33 @@ The cvvdp parameter JSON gets vendored into
   once and reused across calls. A per-band tensor form would offer
   no functional benefit and adds Handle-juggling.
 
-- **(Resolved for cuda + wgpu; open for cubecl-cpu)** Atomic-f32
-  pooling. `pool_band_kernel` uses `Atomic<f32>::fetch_add` and is
-  parity-tested via `gpu::pool_band_kernel_matches_host_lp_norm_mean`
-  + `compute_dkl_jod_matches_host_scalar`. cubecl-cpu still lacks
-  `Atomic<f32>::fetch_add` (same gap zensim-gpu hits), so the cpu
-  backend can't run the pool path. A per-block partial-tree
-  reduction would be the cpu-backend port if/when that runtime
-  becomes necessary.
+- **(Resolved tick 204)** Baseband CSF rho override. pycvvdp's
+  `process_block_of_frames` overrides `rho_band[-1] = 0.1` cy/deg
+  for the CSF lookup at the baseband (`cvvdp_metric.py:628`),
+  separately from the geometric `lpyr.band_freqs`. Our pipeline
+  was using the geometric value (0.190 at 256² standard_4k) — a
+  0.117 JOD drift on the chroma_shift fixture that drove the
+  ticks 191-203 investigation. Closed by adding
+  `kernels::csf::CSF_BASEBAND_RHO = 0.1` and applying it at the
+  baseband in both `host_scalar::predict_jod_still_3ch` and
+  `Cvvdp::new`'s `logs_row` pre-upload. After the fix
+  `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift` passes
+  at 0.000000 diff. See `docs/CHROMA_DRIFT_INVESTIGATION.md` for
+  the full investigation timeline.
+
+- **(Resolved tick 208)** Atomic-f32 pooling on cubecl-cpu.
+  `pool_band_kernel` uses `Atomic<f32>::fetch_add` and is parity-
+  tested via `gpu::pool_band_kernel_matches_host_lp_norm_mean` +
+  `compute_dkl_jod_matches_host_scalar`. cubecl-cpu lacks
+  `Atomic<f32>::fetch_add`; instead of porting a per-block partial-
+  tree reduction, tick 208 added `Cvvdp::compute_dkl_jod_host_pool`
+  which reuses `compute_dkl_d_bands` to read D bands back to host
+  then pools with the host-scalar `lp_norm_mean`. Same JOD output
+  to f32 precision on GPU backends (parity test
+  `compute_dkl_jod_host_pool_matches_compute_dkl_jod` reports
+  `diff = 0.000000`). Use it on cubecl-cpu where the atomic path
+  fails; GPU backends should keep `compute_dkl_jod` for the small
+  partials readback.
 
 - **(Resolved tick 157)** Wasted-readback discard pattern. Several
   public helpers (`compute_dkl_planes`, `compute_dkl_gauss_pyramid`,
