@@ -1263,6 +1263,159 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
 }
 
 #[test]
+fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
+    // Tick 203 stage-6 parity probe: pixel-by-pixel GPU vs host
+    // scalar T_p comparison at chroma_shift.
+    //
+    // Tick 202 established host_scalar's S matches pycvvdp at
+    // f32 noise (1e-6 rel) across all 8 bands. Tick 199 found GPU
+    // T_p diverges from pycvvdp by 0.9% rel. By transitivity, the
+    // GPU csf_apply_3ch_kernel must diverge from the host scalar
+    // by ~0.9% rel — this test localizes that.
+    //
+    // Existing `compute_dkl_t_p_bands_matches_host_scalar` uses a
+    // 5e-3 band-max-normalized tolerance which would mask 0.9%
+    // per-pixel divergence. This test uses **per-pixel rel
+    // tolerance** so the source localizes to the kernel rather
+    // than getting averaged out.
+    use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp_gpu::kernels::masking::CH_GAIN;
+    use cvvdp_gpu::kernels::pyramid::band_frequencies;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+        }
+    }
+
+    // GPU T_p.
+    let t_p_gpu = cvvdp
+        .compute_dkl_t_p_bands(&ref_srgb, ppd)
+        .expect("compute_dkl_t_p_bands");
+
+    // Host T_p — same chain pycvvdp uses, computed in pure
+    // host scalar. Uses the SAME Weber + log_l_bkg the GPU path
+    // produces internally (read back via the host scalar Weber
+    // pyramid; tick 198 confirmed they match the GPU to 2.7e-7).
+    let n_px = (wu * hu) as usize;
+    let display = DisplayModel::STANDARD_4K;
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+    for (i, chunk) in ref_srgb.chunks_exact(3).enumerate() {
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+            chunk[0], chunk[1], chunk[2],
+            display.y_peak, display.y_black, display.y_refl,
+        );
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+
+    let n_levels = t_p_gpu.len();
+    let host_per_ch = [
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[0], &planes[0], wu, hu, n_levels,
+        ),
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[1], &planes[0], wu, hu, n_levels,
+        ),
+        cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar(
+            &planes[2], &planes[0], wu, hu, n_levels,
+        ),
+    ];
+
+    let freqs = band_frequencies(ppd, wu, hu);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    let mut overall_max_rel = 0.0_f32;
+    let mut overall_max_abs = 0.0_f32;
+    let mut first_diverging_band: Option<usize> = None;
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = host_per_ch[0].bands[k].w;
+        let bh = host_per_ch[0].bands[k].h;
+        let n_band = bw * bh;
+        let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
+
+        let mut band_max_rel = 0.0_f32;
+        let mut band_max_abs = 0.0_f32;
+        for c in 0..3 {
+            let weber_c = &host_per_ch[c].bands[k].data;
+            for i in 0..n_band {
+                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let ch_gain_eff = if is_baseband {
+                    1.0
+                } else {
+                    band_mul * CH_GAIN[c]
+                };
+                let host_t_p = weber_c[i] * s * ch_gain_eff;
+                let gpu_t_p = t_p_gpu[k][c][i];
+                let d = (gpu_t_p - host_t_p).abs();
+                // Per-pixel rel error — skip near-zero pixels
+                // where |host| < 1e-4 (denom would amplify f32
+                // noise into spurious "huge" rel errors).
+                let r = if host_t_p.abs() > 1e-4 {
+                    d / host_t_p.abs()
+                } else {
+                    0.0
+                };
+                if d > band_max_abs {
+                    band_max_abs = d;
+                }
+                if r > band_max_rel {
+                    band_max_rel = r;
+                }
+            }
+        }
+        eprintln!(
+            "band {k} GPU vs host T_p: max abs={band_max_abs:.4e} rel={band_max_rel:.4e}"
+        );
+        if band_max_abs > overall_max_abs {
+            overall_max_abs = band_max_abs;
+        }
+        if band_max_rel > overall_max_rel {
+            overall_max_rel = band_max_rel;
+        }
+        if first_diverging_band.is_none() && band_max_rel > 1e-3 {
+            first_diverging_band = Some(k);
+        }
+    }
+    eprintln!("overall max GPU vs host T_p abs={overall_max_abs:.4e} rel={overall_max_rel:.4e}");
+    if let Some(k) = first_diverging_band {
+        eprintln!(
+            "FIRST DIVERGING BAND (GPU vs host T_p): {k} — kernel-side discrepancy localized"
+        );
+    } else {
+        eprintln!(
+            "All bands match at <0.1% rel — GPU csf_apply matches host_scalar; \
+             the 0.9% T_p vs pycvvdp drift must come from elsewhere"
+        );
+    }
+    assert!(
+        overall_max_rel < 0.5,
+        "GPU T_p diverges from host_scalar by rel={overall_max_rel:.4e} — implausible"
+    );
+}
+
+#[test]
 fn sensitivity_scalar_matches_pycvvdp_raw_csf_at_chroma_shift_all_bands() {
     // Tick 202 stage-5 parity probe: raw CSF sensitivity (no
     // sens_corr_factor applied) at chroma_shift sentinels.

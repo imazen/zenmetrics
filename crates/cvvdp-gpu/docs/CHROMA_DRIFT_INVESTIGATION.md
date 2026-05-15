@@ -345,16 +345,96 @@ literal). f32 transcendental routines differ:
 rel — well under 0.9%. So fast-math precision alone doesn't
 account for the drift.
 
+## Tick 203 — `inv_step` constant fixed; absolute T_p drift down 800×, headline JOD drift unchanged
+
+Stage-6 GPU-vs-host T_p parity probe shipped:
+- `compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift`
+  compares GPU T_p (`compute_dkl_t_p_bands`) to host_scalar
+  T_p (Weber × `sensitivity_corrected_scalar` × ch_gain) pixel-
+  by-pixel with per-pixel rel tolerance. The existing
+  `_matches_host_scalar` test uses band-max-normalized rel
+  tolerance and missed the per-pixel rel drift.
+
+**Pre-fix** GPU vs host T_p divergence at chroma_shift:
+  band 0 abs **7.6e-3** rel 7.8e-3
+  band 1 abs 6.2e-2     rel 1.8e-2
+  band 4 abs 7.7e-3     rel 3.1e-2
+  band 5 abs 1.3e-3     rel 20% (small-T_p pixels)
+
+The 7.6e-3 abs at band 0 implies a real arithmetic discrepancy
+between GPU and host. Reading the GPU `csf_apply_per_pixel_kernel`
+revealed:
+
+```
+let inv_step = f32::new(4.920_640_4); // 31 / (4.0 - (-2.30103))
+```
+
+Computing 31 / 6.3010299957 = 4.91983057 (correct).
+Computing 31 / 6.3 = 4.92063492 (truncated denominator → matches literal).
+
+**The literal was computed as `31/6.3` (dropping the .0103
+suffix of the axis range) — a 1.6e-4 relative error baked
+into the bracket-index arithmetic.** This survived ticks
+196-202 because the constant is documented with a misleading
+comment (`31 / (4.0 - (-2.30103))`) that yields the wrong
+value only if you literally compute the comment text instead
+of the underlying math.
+
+### Fix
+
+Updated `inv_step` to `4.919_830_6` at all three GPU CSF kernels
+(`csf_apply_per_pixel_kernel`, `csf_apply_3ch_kernel`,
+`csf_apply_6ch_kernel`).
+
+**Post-fix** GPU vs host T_p divergence at chroma_shift:
+  band 0 abs **9.5e-6** rel 7.4e-3   ← 800× tighter abs
+  band 1 abs 1.4e-4    rel 1.8e-2
+  band 4 abs 1.5e-4    rel 3.1e-2
+  band 5 abs 4.8e-5    rel 20% (small-T_p pixels)
+
+Absolute T_p divergence collapsed by ~800× at band 0 and
+~400× at band 1. Remaining per-pixel rel is concentrated at
+tiny-T_p pixels (where the denominator amplifies f32 noise);
+absolute contributions there are negligible.
+
+### Why the headline JOD didn't move much
+
+Re-measured via `examples/chroma_shift_drift_probe.rs`:
+  cvvdp-gpu = 9.547566 (was 9.547440)
+  pycvvdp golden = 9.664865
+  abs diff = **0.117298** (was 0.117425)
+
+JOD shift of 1.3e-4 — the bands' lp_norm pool integrates
+over the whole spatial extent; large-magnitude pixels
+(where the inv_step error contributed <1% rel error) dominate
+the pool. The fix is correct and necessary (a 800× absolute
+tightening at the kernel output is a real correctness win),
+but the chroma_shift JOD divergence has another source
+upstream or in pooling.
+
+All 20 pipeline_color tests pass after the fix — the canonical
+parity gates (12 MP synth at 0.005 JOD; blur3x1/blur1x3/noise
+at 0.005 JOD) all still pass.
+
 ### Next probe (queued for next tick)
 
-Directly compare the GPU CSF kernel output to the host scalar
-at chroma_shift sentinels, pixel-by-pixel. The existing test
-`compute_dkl_t_p_bands_matches_host_scalar` only gates against
-**band-max-normalized** rel error (5e-3 threshold) — it would
-miss a 0.9% per-pixel rel diff at coarser bands where pixel
-values vary significantly. A new test with per-pixel rel
-tolerance will pinpoint whether the GPU kernel is the source
-and which band's CSF apply diverges most.
+The remaining 0.117 JOD drift on chroma_shift can't be from
+CSF apply anymore (now within f32 noise at large magnitudes).
+Likely sources:
+1. **Pool reduction order**: our `pool_band_kernel` uses
+   `Atomic<f32>::fetch_add` (non-deterministic reduce order).
+   pycvvdp uses torch's deterministic sum. For chroma_shift
+   the RG channel is the dominant contributor; f32 sum order
+   can shift accumulated sums by ~1e-5 abs over O(10⁴) pixels
+   — potentially significant when the final Q sits near the
+   met2jod kink at Q=0.1.
+2. **`band_mul` placement**: pycvvdp applies `band_mul`
+   inside `lpyr.get_band` before CSF; we apply it via
+   `ch_gain_for_band` after. Math is identical at f64 but
+   f32 ordering may differ.
+3. **Per-pixel ch_gain at baseband**: baseband bypasses
+   ch_gain in pycvvdp (`is_baseband` branch); our kernel
+   path needs verification.
 
 See `examples/chroma_shift_drift_probe.rs` for the canonical
 end-to-end measurement.
