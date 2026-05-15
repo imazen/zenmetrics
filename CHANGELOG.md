@@ -101,6 +101,14 @@ Workspace conventions per the global rules:
   for parquet sidecars, the `parity-goldens` feature gate,
   and the standard build / license footer. Tick 285.
 
+- README "Sweep tooling" section now links to
+  `docs/CVVDP_SIDECAR_SCHEMA.md` (full identity-tuple +
+  score-column + manifest spec) and `docs/BURN_PORT_PLAN.md`
+  (scoping for the future `cvvdp_burn_v*` column that would
+  land alongside `cvvdp_imazen_v*` and `cvvdp_pycvvdp_v054`).
+  Closes the navigability gap a reader following
+  `CVVDP_COLUMN_NAME` would hit. Tick 287.
+
 ### Fixed
 
 #### cvvdp-gpu

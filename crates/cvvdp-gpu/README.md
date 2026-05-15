@@ -138,6 +138,13 @@ entire string at build time via the `CVVDP_IMPL_TAG` env var to
 bake in a git short hash when iterating within the same crate
 version.
 
+The full sidecar schema (identity tuple, score-column type
+contract, manifest format, producer / consumer protocols) lives
+in [`docs/CVVDP_SIDECAR_SCHEMA.md`](docs/CVVDP_SIDECAR_SCHEMA.md).
+The Burn-based port that would land alongside as
+`cvvdp_burn_v*` is scoped in
+[`docs/BURN_PORT_PLAN.md`](docs/BURN_PORT_PLAN.md).
+
 ## Status
 
 Still-image score matches pycvvdp v0.5.4 within **0.005 JOD** across
