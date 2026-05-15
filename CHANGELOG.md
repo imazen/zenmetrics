@@ -122,6 +122,12 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- `tests/cpu_backend.rs::synth_pair` now uses
+  `common::synth_pair_odd_dim_ref` instead of its own inline copy.
+  Last unmigrated odd-dim synth site outside the example file;
+  `pipeline_color.rs` + `cpu_backend.rs` both now go through the
+  common helper. All 4 cpu_backend tests still green (incl. the
+  73×91 pycvvdp parity test at 0.000001 JOD diff).
 - New `common::synth_pair_odd_dim_ref(w, h)` helper for the
   alternate odd-dim synth pattern (`(x * 8) % 256` / `(y * 8) % 256`
   / `((x + y) * 4) % 256`). Migrated all 10 hand-inlined sites in

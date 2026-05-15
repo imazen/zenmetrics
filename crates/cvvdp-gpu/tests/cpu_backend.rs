@@ -30,26 +30,23 @@ use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 
+#[path = "common/mod.rs"]
+mod common;
+
 type Backend = cubecl::cpu::CpuRuntime;
 
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
-    let n = (w * h * 3) as usize;
-    let mut r = vec![0u8; n];
-    let mut d = vec![0u8; n];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let rr = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            r[i] = rr;
-            r[i + 1] = g;
-            r[i + 2] = b;
-            d[i] = rr.saturating_sub(8);
-            d[i + 1] = g.saturating_sub(4);
-            d[i + 2] = b.saturating_add(12);
-        }
-    }
+    let r = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let d: Vec<u8> = r
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
     (r, d)
 }
 
