@@ -90,6 +90,13 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (docs)
 
+- `Cvvdp::score_with_reference` now has a `no_run` doctest example
+  showing the canonical `set_reference` + `score_with_reference`
+  batch pattern (one stashed REF, many DIST). Pairs with the
+  `Cvvdp::score` doctest from tick 225 to cover both top-level
+  public scoring entry points. Also notes the
+  `Error::NoCachedReference` precondition explicitly in the
+  doc body.
 - Renamed `examples/chroma_shift_drift_probe.rs` →
   `examples/manifest_parity_probe.rs`. The file started life
   (tick 191) as a single-fixture probe while investigating the

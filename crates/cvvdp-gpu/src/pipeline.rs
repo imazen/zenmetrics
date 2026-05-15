@@ -2266,6 +2266,34 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Cvvdp::warm_reference`] + [`Cvvdp::compute_dkl_jod_with_warm_ref`]
     /// — `score_with_reference` keeps the simple ref-stashing
     /// contract from v0 and re-dispatches REF on every call.
+    ///
+    /// Returns [`Error::NoCachedReference`] if [`Cvvdp::set_reference`]
+    /// wasn't called first.
+    ///
+    /// # Example
+    ///
+    /// Batch-score N distorted candidates against one stashed reference
+    /// on the CUDA backend (max JOD = 10 for the byte-identical pair).
+    /// `no_run` because docs.rs has no GPU:
+    ///
+    /// ```no_run
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let reference = vec![128u8; (w * h * 3) as usize];
+    /// cvvdp.set_reference(&reference).expect("set_reference");
+    ///
+    /// // Score the same buffer against itself — perceptually identical.
+    /// let jod = cvvdp.score_with_reference(&reference).expect("score_with_reference");
+    /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
+    /// ```
     pub fn score_with_reference(&mut self, distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if distorted_srgb.len() != expected {
