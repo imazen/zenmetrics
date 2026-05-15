@@ -9,11 +9,11 @@
 //! Run with:
 //!     cargo bench -p cvvdp-gpu --features cuda
 //!
-//! `Cvvdp::score` is still pinned to the host path; this bench
-//! exposes the GPU-vs-host speedup so future ticks can decide
-//! whether the (production-quality at q ≥ 20) GPU path is worth
-//! the cumulative f32 drift trade-off documented in the
-//! drift-survey integration tests.
+//! Both paths match pycvvdp v0.5.4 on the v1 manifest at f32
+//! precision (≤ 0.005 JOD across q=1..90 since tick 207); the
+//! public `Cvvdp::score` API routes through the GPU path as of
+//! tick 213. This bench keeps the host-vs-GPU comparison live so
+//! perf regressions on either side surface immediately.
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
