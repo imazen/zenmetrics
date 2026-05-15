@@ -1787,17 +1787,15 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns JOD on cvvdp's 0–10 scale (10 = imperceptible).
     ///
-    /// The shadow_jod test still pins the public `Cvvdp::score`
-    /// path through `host_scalar::predict_jod_still_3ch` against
-    /// the v1 R2 manifest (≤ 0.006 JOD). This helper exposes the
-    /// GPU-composed path so its parity vs the host scalar can be
-    /// measured independently — see
-    /// `tests/pipeline_color.rs::compute_dkl_jod_matches_host_scalar`,
-    /// `tests/pipeline_score.rs::compute_dkl_jod_on_v1_manifest_corpus`,
-    /// and the drift sweep `compute_dkl_jod_vs_host_scalar_on_corpus`.
-    /// Once the GPU JOD parity vs the host scalar is locked at
-    /// f32-precision tolerance, `Cvvdp::score` will switch to this
-    /// helper and the manifest-parity test will retarget.
+    /// `Cvvdp::score` routes through this method as of tick 213
+    /// (post-tick-207's tightened 0.005 JOD manifest-parity
+    /// tolerance). Parity tests:
+    /// - `compute_dkl_jod_matches_host_scalar` (GPU vs the
+    ///   all-host reference, f32 precision)
+    /// - `shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus`
+    ///   (GPU vs pycvvdp v1 R2 manifest, ≤ 0.005 JOD)
+    /// - `compute_dkl_jod_host_pool_matches_compute_dkl_jod` (GPU
+    ///   atomic pool vs host pool, 0.000000 diff)
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         // Run the full D-bands GPU dispatch (color → weber → CSF →
         // masking). `_dispatch_d_bands_into_scratch` leaves the
@@ -2090,16 +2088,21 @@ impl<R: Runtime> Cvvdp<R> {
     /// Score a (reference, distorted) sRGB pair, returning JOD on
     /// the cvvdp scale (0–10; 10 = imperceptible).
     ///
-    /// Currently routes through the parity-locked host scalar
-    /// (`host_scalar::predict_jod_still_3ch`). The full GPU
-    /// composition path is implemented and parity-tested as
-    /// [`Cvvdp::compute_dkl_jod`] (color → pyramid → CSF → masking →
-    /// `pool_band_kernel` → host fold); `score` will retarget once
-    /// the v1 R2 manifest parity is held by the GPU path through a
-    /// `shadow_jod`-style anchor.
+    /// Routes through the full GPU composition path
+    /// ([`Cvvdp::compute_dkl_jod`]): color → Weber pyramid → CSF →
+    /// masking → spatial pool → host fold. Tick 213 switched from
+    /// the host-scalar reference path now that all 6 v1 R2 manifest
+    /// q-levels match pycvvdp at ≤ 0.005 JOD on the GPU pipeline
+    /// (the canonical parity tolerance; see
+    /// `shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus`).
     ///
-    /// Score matches pycvvdp v0.5.4 on the v1 R2 manifest within
-    /// 0.006 JOD across q1–q90.
+    /// Output matches the prior host-scalar path to f32 noise
+    /// (verified by `compute_dkl_jod_matches_host_scalar`,
+    /// `compute_dkl_jod_host_pool_matches_compute_dkl_jod`); callers
+    /// that need the all-host reference for any reason can still
+    /// invoke [`crate::host_scalar::predict_jod_still_3ch`] directly,
+    /// or [`Cvvdp::compute_dkl_jod_host_pool`] for the cpu-runtime
+    /// host-pool path.
     ///
     /// The viewing geometry comes from `self.geometry` — set via
     /// `Cvvdp::new_with_geometry` or defaulted to STANDARD_4K by
@@ -2119,14 +2122,7 @@ impl<R: Runtime> Cvvdp<R> {
             });
         }
         let ppd = self.geometry.pixels_per_degree();
-        let jod = crate::host_scalar::predict_jod_still_3ch(
-            reference_srgb,
-            distorted_srgb,
-            self.width as usize,
-            self.height as usize,
-            self.params.display,
-            ppd,
-        );
+        let jod = self.compute_dkl_jod(reference_srgb, distorted_srgb, ppd)?;
         Ok(jod as f64)
     }
 
@@ -2152,10 +2148,13 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Score a distorted candidate against the cached reference.
-    /// Matches `score(ref, dist)` exactly — the fast path lands when
-    /// GPU composition stops re-running the reference side.
+    /// Matches `score(ref, dist)` exactly (same GPU pipeline as of
+    /// tick 213); the dedicated warm-ref fast path that skips re-
+    /// running the REF weber pyramid per call lives at
+    /// [`Cvvdp::warm_reference`] + [`Cvvdp::compute_dkl_jod_with_warm_ref`]
+    /// — `score_with_reference` keeps the simple ref-stashing
+    /// contract from v0 and re-dispatches REF on every call.
     pub fn score_with_reference(&mut self, distorted_srgb: &[u8]) -> Result<f64> {
-        let cached = self.cached.as_ref().ok_or(Error::NoCachedReference)?;
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if distorted_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -2163,15 +2162,14 @@ impl<R: Runtime> Cvvdp<R> {
                 got: distorted_srgb.len(),
             });
         }
+        let ref_srgb = self
+            .cached
+            .as_ref()
+            .ok_or(Error::NoCachedReference)?
+            .ref_srgb
+            .clone();
         let ppd = self.geometry.pixels_per_degree();
-        let jod = crate::host_scalar::predict_jod_still_3ch(
-            &cached.ref_srgb,
-            distorted_srgb,
-            self.width as usize,
-            self.height as usize,
-            self.params.display,
-            ppd,
-        );
+        let jod = self.compute_dkl_jod(&ref_srgb, distorted_srgb, ppd)?;
         Ok(jod as f64)
     }
 }

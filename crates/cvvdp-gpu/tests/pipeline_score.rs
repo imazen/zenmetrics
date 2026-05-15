@@ -1,8 +1,10 @@
 //! `Cvvdp::score` end-to-end against the v1 R2 manifest values.
 //!
-//! Currently routes through the host scalar (see `score` doc), but
-//! the public surface is what matters: the JOD returned matches
-//! pycvvdp v0.5.4 on the v1 manifest within ~0.01 JOD across q1–q90.
+//! Routes through `Cvvdp::compute_dkl_jod` as of tick 213; the
+//! prior host-scalar path is still callable directly via
+//! `host_scalar::predict_jod_still_3ch`. Measured manifest diffs
+//! across q=1, 5, 20, 45, 70, 90 are 0.0000–0.0033 JOD, well
+//! within the canonical 0.005 manifest-parity tolerance.
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
@@ -56,8 +58,8 @@ fn cvvdp_score_matches_v1_manifest() {
         let diff = (jod as f32 - expected).abs();
         eprintln!("q={q:>2}: JOD = {jod:.4} (pycvvdp {expected:.4}, |diff| {diff:.4})");
         assert!(
-            diff < 0.05,
-            "q={q}: Cvvdp::score returned {jod}, pycvvdp manifest {expected}, |diff| {diff:.4} > 0.05"
+            diff < 0.005,
+            "q={q}: Cvvdp::score returned {jod}, pycvvdp manifest {expected}, |diff| {diff:.4} > 0.005"
         );
     }
 }

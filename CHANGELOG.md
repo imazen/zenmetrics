@@ -17,6 +17,26 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+#### cvvdp-gpu
+
+- **`Cvvdp::score` and `Cvvdp::score_with_reference` now route
+  through the GPU pipeline** (`compute_dkl_jod`), replacing the
+  host-scalar reference path. Output matches the prior host
+  path to f32 noise (verified by
+  `compute_dkl_jod_matches_host_scalar` at ≤ 0.005 JOD) and the
+  pycvvdp v1 R2 manifest to ≤ 0.005 JOD (verified by
+  `shadow_jod_gpu`). The switch was explicitly pre-promised in
+  `lib.rs` ("Switching `score` over to the GPU path is the
+  remaining chunk of pipeline work") and was unblocked by tick 207's
+  tightened manifest-parity tolerances. Callers that need the
+  all-host path can still invoke
+  `host_scalar::predict_jod_still_3ch` directly;
+  cpu-runtime callers use `compute_dkl_jod_host_pool`.
+  Also tightened `tests/pipeline_score.rs` `cvvdp_score_matches_v1_manifest`
+  from 0.05 → 0.005 JOD (measured diffs 0.0000–0.0033).
+
 ### Added
 
 #### cvvdp-gpu

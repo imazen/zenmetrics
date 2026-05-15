@@ -96,11 +96,14 @@
 //! head-to-head and `benchmarks/pycvvdp_parity_tick175_2026-05-15.md`
 //! for the post-ceil-div correctness + perf numbers.
 //!
-//! The public [`Cvvdp::score`] API still routes through
-//! [`host_scalar::predict_jod_still_3ch`] (kept stable while the GPU
-//! path's manifest-level parity is held by `shadow_jod`). Switching
-//! `score` over to the GPU path is the remaining chunk of pipeline
-//! work.
+//! The public [`Cvvdp::score`] API now routes through the full GPU
+//! composition path ([`Cvvdp::compute_dkl_jod`]) — tick 213 made
+//! the switch after `shadow_jod_gpu` confirmed all 6 v1 R2
+//! manifest q-levels match pycvvdp at ≤ 0.005 JOD. For the
+//! host-scalar reference (slower but doesn't need a working GPU
+//! pool), use [`host_scalar::predict_jod_still_3ch`] directly; for
+//! the cpu cubecl runtime (no atomic f32), use
+//! [`Cvvdp::compute_dkl_jod_host_pool`].
 
 #![allow(clippy::needless_range_loop)]
 // cvvdp parameters + the per-(rho, L_bkg, channel) CSF LUT are imported
