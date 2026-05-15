@@ -417,6 +417,24 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
     panic!("v1_corpus_jods.json: q={q} not found");
 }
 
+/// Shared "first available GPU backend" type alias used by every
+/// `#[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]`
+/// test file. Prefers cuda, falls back to wgpu, then hip. Tick 270
+/// dedup — was hand-mirrored across 6 test files (color_kernel,
+/// csf_kernel, masking_kernel, pyramid_kernel, pipeline_color,
+/// pipeline_score) plus inline-in-fn copies in shadow_jod /
+/// pool_scalar (kept local because they sit inside `fn` / `mod gpu`).
+///
+/// Not defined when no GPU feature is on — callers that use it are
+/// already gated on the same `any(cuda, wgpu, hip)` cfg, so the
+/// missing-symbol error if someone forgets the gate surfaces clearly.
+#[cfg(feature = "cuda")]
+pub type Backend = cubecl::cuda::CudaRuntime;
+#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+pub type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+pub type Backend = cubecl::hip::HipRuntime;
+
 /// Open a PNG/JPEG at `path`, decode to RGB8, and return the raw
 /// bytes. Asserts the decoded dimensions match the expected
 /// `(w, h)` — meant for test fixtures where a mismatch indicates

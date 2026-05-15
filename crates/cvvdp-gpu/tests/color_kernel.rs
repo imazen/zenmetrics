@@ -16,13 +16,10 @@ use cubecl::prelude::*;
 use cvvdp_gpu::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_byte_to_dkl_scalar, srgb_to_dkl_kernel};
 use cvvdp_gpu::params::DisplayModel;
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
+#[path = "common/mod.rs"]
+mod common;
 
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+use common::Backend;
 
 fn rgb_input(w: u32, h: u32) -> Vec<u8> {
     let n = (w * h) as usize;

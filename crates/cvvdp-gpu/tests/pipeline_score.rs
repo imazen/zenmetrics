@@ -15,15 +15,7 @@ use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 #[path = "common/mod.rs"]
 mod common;
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
-
-use common::load_rgb_bytes;
+use common::{Backend, load_rgb_bytes};
 
 #[test]
 fn cvvdp_score_matches_v1_manifest() {

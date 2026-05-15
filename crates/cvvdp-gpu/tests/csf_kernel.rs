@@ -11,13 +11,10 @@ use cvvdp_gpu::kernels::csf::{
 };
 use cvvdp_gpu::kernels::masking::CH_GAIN;
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
+#[path = "common/mod.rs"]
+mod common;
 
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+use common::Backend;
 
 #[test]
 fn weight_band_kernel_scales_in_place() {

@@ -120,6 +120,22 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- New `common::Backend` type alias dedups the "first available GPU
+  backend" cascade (`cuda` → `wgpu` → `hip`) that was hand-mirrored
+  across 6 test files at file root: `color_kernel.rs`, `csf_kernel.rs`,
+  `masking_kernel.rs`, `pyramid_kernel.rs`, `pipeline_color.rs`,
+  `pipeline_score.rs`. Each now uses `use common::Backend;` after a
+  `#[path = "common/mod.rs"] mod common;` at the file top. The
+  alias is cfg-gated on the same `any(cuda, wgpu, hip)` so cpu-only
+  builds (and the cpu_backend test's `CpuRuntime` alias) are
+  unaffected. The inline-in-fn / inline-in-mod copies in
+  `shadow_jod.rs` and `pool_scalar.rs` stay local for now (different
+  scope; needs a `use super::common::Backend;` migration that's a
+  separate chunk). 6 files × 6 lines of cascade = 36 lines deleted;
+  all 63 tests across 6 binaries still green.
+
 #### cvvdp-gpu (cleanup)
 
 - `cargo fmt -p cvvdp-gpu` run across the crate. Multiple test

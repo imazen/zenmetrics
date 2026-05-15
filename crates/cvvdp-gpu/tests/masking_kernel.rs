@@ -12,13 +12,10 @@ use cvvdp_gpu::kernels::masking::{
     pu_blur_h_3ch_kernel, pu_blur_h_kernel, pu_blur_v_3ch_scaled_kernel, pu_blur_v_kernel,
 };
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
+#[path = "common/mod.rs"]
+mod common;
 
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+use common::Backend;
 
 #[test]
 fn mult_mutual_3ch_no_blur_matches_host_scalar() {

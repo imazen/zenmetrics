@@ -22,13 +22,10 @@ use cvvdp_gpu::kernels::pyramid::{
     weber_contrast_compute_3ch_kernel, weber_contrast_compute_kernel,
 };
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
+#[path = "common/mod.rs"]
+mod common;
 
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+use common::Backend;
 
 #[rustfmt::skip]
 const INPUT_8X8: [f32; 64] = [
