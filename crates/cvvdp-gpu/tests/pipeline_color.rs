@@ -1217,23 +1217,17 @@ fn compute_dkl_jod_matches_pycvvdp_at_12mp_synth() {
 
     // Same synth construction as examples/time_12mp.rs +
     // scripts/cvvdp_goldens/bench_12mp_cuda.py — keep in sync.
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -2546,23 +2540,17 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     cvvdp
         .warm_reference(&ref_srgb)

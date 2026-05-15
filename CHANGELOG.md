@@ -122,6 +122,19 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- New `common::synth_pair_ref(w, h) -> Vec<u8>` helper builds the
+  canonical synthetic-fixture reference image (the
+  `(x * 17 + y * 5) % 251`-style modular pattern matching pycvvdp's
+  `synth_pair_ref` in `bench_12mp_cuda.py`). Migrated the two
+  largest fixture-using tests (`compute_dkl_jod_matches_pycvvdp_at_12mp_synth`
+  and `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth`)
+  off their hand-inlined copies; bit-stable output (JOD 9.4580
+  matches pycvvdp golden to 0.0000 on both). The pattern was
+  duplicated across 12 more sites in `pipeline_color.rs`; future
+  ticks can migrate them opportunistically.
+
+#### cvvdp-gpu (tests)
+
 - New `common::v1_corpus_qs()` helper derives the q-list from the
   canonical `scripts/cvvdp_goldens/v1_corpus_jods.json` itself.
   Replaces the hand-mirrored `&[1, 5, 20, 45, 70, 90]` constant

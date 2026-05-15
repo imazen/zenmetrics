@@ -408,6 +408,32 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
     panic!("v1_corpus_jods.json: q={q} not found");
 }
 
+/// Deterministic synthetic reference image used by the
+/// `synth_*_*` parity fixtures in `pycvvdp_synth_goldens.json`. Bit-
+/// stable across pycvvdp's `scripts/cvvdp_goldens/bench_12mp_cuda.py`
+/// `synth_pair_ref` and the Rust port — pure modular arithmetic, no
+/// PRNG. Tick 255 dedup — was hand-inlined across 14 sites in
+/// `tests/pipeline_color.rs` (chroma_shift, blur, noise, 12mp warm-ref,
+/// 12mp cold, and stage probes). Callers that need a (ref, dist)
+/// fixture pair pass this through their own per-fixture dist builder
+/// (saturating_sub / clamp / pseudo-blur / etc.).
+pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
+    let n = w * h * 3;
+    let mut b = vec![0u8; n];
+    for y in 0..h {
+        for x in 0..w {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let bb = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * w + x) * 3;
+            b[i] = r;
+            b[i + 1] = g;
+            b[i + 2] = bb;
+        }
+    }
+    b
+}
+
 /// All `q` values present in `scripts/cvvdp_goldens/v1_corpus_jods.json`,
 /// sorted ascending. Tick 254 dedup — was `&[1, 5, 20, 45, 70, 90]`
 /// hand-mirrored across 5 callers. A future
