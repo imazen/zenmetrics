@@ -167,6 +167,83 @@ hoists + one kernel fuse landed in succession:
   of tick 85's 5× weber regression — that regression was the
   5-phase serial restructure, not the handle access pattern.
 
+The post-tick-87 fusion + structural-change wave (ticks 89–96)
+took the d_bands per-band launch count from 27 → 14:
+
+- **`weber_contrast_compute_3ch_kernel`** (`af994a87`) — fuses
+  the per-pixel `layer/clamp(L_bkg)` math and the shared
+  `log_l_bkg = log10(L_bkg)` write into one launch per
+  non-baseband level. Was 3 separate
+  `weber_contrast_compute_kernel` launches. log10 computed
+  once per pixel instead of three times.
+- **`subtract_weber_3ch_kernel`** (`39d6957f`) — drops the
+  `layer_c` intermediate entirely. Reads `fine_c` and
+  `upscaled_c` handles directly and writes `band[c] =
+  clamp((fine_c − upscaled_c) / L_bkg)` for all three channels
+  + shared `log_l_bkg` in one launch. Was 3 `subtract_kernel`
+  launches + the (already-fused) weber compute. Frees ~36 MB
+  of `WeberScratch.layer_c` at 12 MP per side.
+- **`pu_blur_h_3ch_kernel` + `pu_blur_v_3ch_scaled_kernel`**
+  (`78d951d1`) — fuses the masking-branch pu_blur into one
+  h-pass + one v-pass for all 3 channels, AND folds the
+  `* 10^MASK_C` post-scale into the v-pass output. Cuts the
+  masking blur chain from 9 launches per non-baseband level
+  (3× h + 3× v + 3× `weight_band_kernel`) to 2.
+- **`csf_apply_6ch_kernel`** (`7bf02fae`) — fuses the
+  REF + DIST CSF apply into a single launch sharing the
+  per-pixel LUT bracket math. Per non-baseband level: 2
+  `csf_apply_3ch_kernel` launches → 1 6-channel launch.
+- **`diff_abs_3ch_kernel`** (`06d8e4a5`) — moves the
+  baseband `|T_p_dis - T_p_ref|` bypass to GPU. Every level's
+  D plane now lives in the same `d_scratch.d[k][c]` slot.
+- **`pool_band_kernel` in `compute_dkl_jod`** (`5817a2e4`)
+  — replaces host-scalar `lp_norm_mean` over the per-band D
+  Vecs with GPU `pool_band_kernel(d_handle) → partials[k*3+c]`.
+  Partials buffer is `n_levels × N_CHANNELS` floats (~144 bytes
+  at 12 MP); the host fold operates on that tiny Vec.
+- **Split `compute_dkl_d_bands`** (`ea632f87`) — extracted
+  `_dispatch_d_bands_into_scratch` private helper that does the
+  GPU dispatch only. `compute_dkl_jod` calls the helper
+  directly and skips the per-band Vec readback that
+  `compute_dkl_d_bands` was paying. **17% wall-time win** at
+  12 MP (jod 122.4 → 101.8 ns/px); jod is now faster than
+  d_bands because it skips the ~432 MB host readback. vs
+  fcvvdp 8-thread at 360p, the gap narrowed from 1.48× slower
+  (tick 89) to 1.18× slower.
+
+Post-fuse housekeeping (ticks 97–107):
+
+- **`examples/time_size_sweep.rs`** + benchmark snapshot
+  (`134bc04a`) — covers tiny (64²), small (256²), medium
+  (1024²), large (4000×3000) sizes with per-phase wall + per-
+  pixel cost + naive OLS fit. Found per-pixel cost is
+  **non-monotonic** in image size: medium (1 MP) is the
+  cheapest at 53.7 ns/px JOD, large (12 MP) regresses to
+  159 ns/px; weber alone shows the same shape (19 → 61 ns/px),
+  so the regression is intrinsic to the dispatch, not pure
+  readback bandwidth. Open investigation.
+- **`shadow_jod_gpu`** manifest-parity test (`562ee924`) —
+  pins the GPU JOD path directly against pycvvdp v0.5.4's
+  published manifest values (not just against the host
+  scalar via relative parity). q=1 tolerance is wider (0.5
+  JOD) per the documented cumulative-f32 drift; q≥20 tol is
+  0.05 (observed < 0.001).
+- **`Cvvdp::level_dims`** helper (`efcdba76`) — drops 5 sites
+  of duplicated `if k == 0 { width } else { width >> k }`
+  boilerplate. The `if k == 0` branch was redundant since
+  `>> 0` is a no-op.
+- **Dropped `Cvvdp.ref_log_l_bkg` dead field** (`ba586480`)
+  — was added in tick 85 for a regression bisect that
+  confirmed the field was NOT the cause; kept around with
+  `#[allow(dead_code)]` for "future use" that subsequent
+  ticks went around. Frees ~190 MB of unused GPU memory per
+  `Cvvdp::new` at 12 MP, drops 14 lines of allocation code.
+- **`compute_dkl_t_p_bands` modernized** (`8e509807`) — uses
+  the fused `csf_apply_3ch_kernel` and reads weber from the
+  GPU-resident `bands_ref` handles instead of re-uploading
+  from the host Vec. Per non-baseband level: 3 host uploads
+  + 3 launches → 0 uploads + 1 launch.
+
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
 These observations don't ship as code, but they document
