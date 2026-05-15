@@ -70,9 +70,10 @@
 //! For batch scoring (one reference vs many distorted candidates),
 //! [`Cvvdp::warm_reference`] + [`Cvvdp::compute_dkl_jod_with_warm_ref`]
 //! caches the REF GPU state and skips that half of the pipeline per
-//! candidate — 1.75× faster per DIST at 12 MP. Parity vs the cold
-//! path is locked at ≤ 1e-5 JOD by
-//! `compute_dkl_jod_with_warm_ref_matches_unwarm_path`.
+//! candidate — ~1.8× faster per DIST at 12 MP (~62 → ~34 ns/px;
+//! see the "How we compare to the canonical reference" section
+//! below for the source). Parity vs the cold path is locked at
+//! ≤ 1e-5 JOD by `compute_dkl_jod_with_warm_ref_matches_unwarm_path`.
 //!
 //! ## How we compare to the canonical reference
 //!

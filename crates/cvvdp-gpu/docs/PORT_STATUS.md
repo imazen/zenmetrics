@@ -145,8 +145,14 @@ The cvvdp parameter JSON gets vendored into
   - `Cvvdp::compute_dkl_jod_with_warm_ref(dist_srgb, ppd)` skips
     the REF half of the JOD pipeline. Same JOD output as
     `compute_dkl_jod(ref, dist, ppd)` within 1e-5 absolute tol.
-  - Per-DIST throughput at 12 MP: cold path 36.1 ns/px → warm
-    path 20.6 ns/px (42.9% saved, 1.75× faster per call).
+  - Per-DIST throughput at 12 MP, as-measured at tick 170: cold
+    path 36.1 ns/px → warm path 20.6 ns/px (42.9% saved, 1.75×
+    faster per call). Tick 175 ceil-div correctness fix raised
+    absolute timings (~62 / ~34 ns/px) while keeping a similar
+    ratio (~1.8×); the lib.rs "How we compare to the canonical
+    reference" section carries the current numbers and discusses
+    why the post-fix path is slower than pre-fix (correct output
+    vs the broken pyramid pre-tick-175).
   - Warm state is invalidated automatically by any method that
     dispatches REF weber (`compute_dkl_jod`, `compute_dkl_d_bands`,
     `compute_dkl_weber_pyramid`, etc.); `Error::NoWarmReference`

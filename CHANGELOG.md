@@ -120,6 +120,21 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- Stale pre-tick-175 warm-ref throughput numbers updated across
+  `warm_reference`, `set_reference`, the `CachedReference`
+  struct doc, the `compute_dkl_jod_with_warm_ref` doctest, and
+  `lib.rs`. All sites referenced `1.75× / 36.1 → 20.6 ns/px /
+  42.9% saved` from tick 170; the tick-175 ceil-div correctness
+  fix raised absolutes to ~62 / ~34 ns/px while keeping a similar
+  ratio (~1.8×). Docstrings now cite `~1.8×` and defer to
+  `lib.rs` "How we compare to the canonical reference" for the
+  source-of-truth measurements. The "Resolved tick 170" entry in
+  `PORT_STATUS.md` keeps the original numbers (accurate as-of-tick-170)
+  plus a tick-175 update note explaining why the post-fix path is
+  numerically slower (correct output vs broken pyramid).
+
 #### cvvdp-gpu (tests)
 
 - `invalid_image_size_surfaces_on_too_small_dims` — pins the

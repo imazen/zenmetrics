@@ -298,8 +298,8 @@ fn build_d_bands_scratch<R: Runtime>(
 /// The dedicated warm-ref fast path that materialises the REF
 /// Weber pyramid on the GPU once and skips it on subsequent DIST
 /// calls lives at [`Cvvdp::warm_reference`] +
-/// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (≈ 1.75× per-DIST
-/// throughput at 12 MP). The host-pool variants
+/// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (~1.8× per-DIST
+/// throughput at 12 MP — see `lib.rs` Status). The host-pool variants
 /// `compute_dkl_jod_host_pool_with_warm_ref` give the same
 /// optimisation on the cpu cubecl backend.
 struct CachedReference {
@@ -2060,8 +2060,12 @@ impl<R: Runtime> Cvvdp<R> {
     /// Pre-dispatch the REF weber pyramid + cache state for batch
     /// scoring. Subsequent calls to
     /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] skip the REF half of
-    /// the JOD pipeline — measured 1.75× per-DIST throughput at 12 MP
-    /// on CUDA (cold 36.1 ns/px → warm 20.6 ns/px, 42.9% saved).
+    /// the JOD pipeline — measured ~1.8× per-DIST throughput at
+    /// 12 MP on CUDA (cold ~62 ns/px → warm ~34 ns/px, ~45% saved)
+    /// per the post-tick-175 numbers in `lib.rs`. Pre-tick-175
+    /// timings (36/21 ns/px) reflected a 0.586 JOD drift vs pycvvdp;
+    /// the current numbers are slower but bit-stable with the
+    /// pycvvdp reference.
     ///
     /// Any call to [`Cvvdp::compute_dkl_jod`],
     /// [`Cvvdp::compute_dkl_d_bands`],
@@ -2126,7 +2130,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
     ///
     /// // REF weber runs once above; each compute_dkl_jod_with_warm_ref
-    /// // call skips it. ~1.75× per-DIST throughput at 12 MP vs cold.
+    /// // call skips it. ~1.8× per-DIST throughput at 12 MP vs cold.
     /// for shift in [0u8, 8, 16] {
     ///     let dist_bytes: Vec<u8> = ref_bytes
     ///         .iter()
@@ -2380,8 +2384,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// fast path that materialises the REF Weber pyramid on the
     /// GPU once and skips it per DIST call, use
     /// [`Cvvdp::warm_reference`] +
-    /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (≈ 1.75× per-DIST
-    /// throughput at 12 MP).
+    /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (~1.8× per-DIST
+    /// throughput at 12 MP — see `lib.rs` Status).
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
