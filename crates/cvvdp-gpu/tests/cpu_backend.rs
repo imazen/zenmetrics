@@ -71,6 +71,36 @@ fn compute_dkl_jod_host_pool_runs_on_cpu_backend() {
 }
 
 #[test]
+fn compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend() {
+    // Tick 212 follow-up: validates the warm-ref host-pool variant
+    // on the cpu runtime. Batch CPU scoring against a warmed REF
+    // should produce the same JOD as the cold-ref host_pool path.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, dist_b) = synth_pair(w, h);
+    let cold = cvvdp
+        .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
+        .expect("cold host_pool");
+
+    cvvdp.warm_reference(&ref_b).expect("warm_reference on cpu");
+    let warm = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_b, ppd)
+        .expect("warm host_pool on cpu");
+
+    let diff = (cold - warm).abs();
+    eprintln!("cpu cold host_pool = {cold:.6}, warm host_pool = {warm:.6}, |diff| = {diff:.6}");
+    assert!(
+        diff < 0.005,
+        "cpu warm host_pool {warm:.6} diverges from cold {cold:.6} by {diff:.6}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend() {
     let client = Backend::client(&Default::default());
     let (w, h) = (32u32, 32u32);

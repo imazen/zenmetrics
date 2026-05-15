@@ -818,6 +818,58 @@ fn compute_dkl_jod_host_pool_matches_compute_dkl_jod() {
 }
 
 #[test]
+fn compute_dkl_jod_host_pool_with_warm_ref_matches_compute_dkl_jod() {
+    // Tick 212: host-pool warm-ref variant. Same JOD as the
+    // canonical compute_dkl_jod, but uses the warm-ref state path
+    // (skip REF weber) AND host pool (cubecl-cpu compatible).
+    // Useful for batch CPU scoring against one warmed REF.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    // Canonical cold-ref path.
+    let canonical = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+
+    // Warm + host-pool path: warm_reference, then host-pool with warm ref.
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
+    let warm_host = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_host_pool_with_warm_ref");
+
+    let diff = (canonical - warm_host).abs();
+    eprintln!(
+        "warm host_pool: canonical = {canonical:.6}, warm_host_pool = {warm_host:.6}, |diff| = {diff:.6}"
+    );
+    assert!(canonical.is_finite() && warm_host.is_finite());
+    assert!(
+        diff < 0.005,
+        "warm_host_pool {warm_host:.6} diverges from canonical compute_dkl_jod {canonical:.6} by {diff:.6}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
     // Batch-scoring fast path: warm_reference dispatches the REF
     // weber pyramid once and caches the GPU state; subsequent

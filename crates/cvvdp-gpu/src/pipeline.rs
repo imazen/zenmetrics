@@ -1842,12 +1842,61 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<f32> {
-        let d_bands = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
-        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(d_bands.len());
-        for d_planes in &d_bands {
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
+        self._host_pool_and_finalize_jod()
+    }
+
+    /// Warm-reference companion to [`Cvvdp::compute_dkl_jod_host_pool`].
+    ///
+    /// Same algorithm and same JOD output as
+    /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] but pools the per-band
+    /// D values on the host instead of via the GPU atomic kernel —
+    /// runs on every cubecl runtime, including `cubecl-cpu`. Useful
+    /// for batch CPU scoring (one warm REF, many DIST candidates)
+    /// where the GPU pool path isn't available.
+    ///
+    /// Same `Error::NoWarmReference` semantics as the GPU warm-ref
+    /// variant: requires a prior [`Cvvdp::warm_reference`] call, and
+    /// any intervening REF-dispatching method invalidates the warm
+    /// state.
+    pub fn compute_dkl_jod_host_pool_with_warm_ref(
+        &mut self,
+        dist_srgb: &[u8],
+        ppd: f32,
+    ) -> Result<f32> {
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
+        self._host_pool_and_finalize_jod()
+    }
+
+    /// Host-side spatial pool + 3-stage Minkowski fold over the D
+    /// planes resident in `self.d_scratch[k].d[c]`. Used by both
+    /// `compute_dkl_jod_host_pool` and `compute_dkl_jod_host_pool_with_warm_ref`
+    /// — the dispatch path that landed the D bands differs, but
+    /// the pool tail is identical.
+    fn _host_pool_and_finalize_jod(&mut self) -> Result<f32> {
+        let n_levels = self.n_levels as usize;
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let (_, _, n_px) = self.level_dims(k);
             let mut q = [0.0_f32; 3];
             for c in 0..N_CHANNELS {
-                q[c] = lp_norm_mean(&d_planes[c], BETA_SPATIAL);
+                let bytes = self
+                    .client
+                    .read_one(self.d_scratch[k].d[c].clone())
+                    .map_err(|_| Error::InvalidImageSize)?;
+                let d_vec: &[f32] = f32::from_bytes(&bytes);
+                debug_assert_eq!(d_vec.len(), n_px);
+                q[c] = lp_norm_mean(d_vec, BETA_SPATIAL);
             }
             q_per_ch.push(q);
         }
