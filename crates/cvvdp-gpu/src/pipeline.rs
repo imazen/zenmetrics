@@ -2051,23 +2051,26 @@ impl<R: Runtime> Cvvdp<R> {
         self._pool_and_finalize_jod()
     }
 
-    /// CPU-backend-compatible variant of [`Cvvdp::compute_dkl_jod`].
+    /// Portable-backend variant of [`Cvvdp::compute_dkl_jod`] that
+    /// avoids the GPU `Atomic<f32>::fetch_add` trap.
     ///
     /// Same JOD result, but uses a host-side spatial pool instead
     /// of `pool_band_3ch_kernel`. That GPU kernel uses
-    /// `Atomic<f32>::fetch_add`, which `cubecl-cpu` doesn't support;
-    /// this variant reads D bands back via
+    /// `Atomic<f32>::fetch_add`, which `cubecl-cpu` panics on and
+    /// Metal silently no-ops; this variant reads D bands back via
     /// [`Cvvdp::compute_dkl_d_bands`] and pools them with the
     /// host-scalar `lp_norm_mean`, so it runs on every cubecl
-    /// runtime — including `cubecl-cpu`.
+    /// runtime — including `cubecl-cpu` and Metal-via-`cubecl-wgpu`.
     ///
     /// Tradeoff: the readback is `O(n_pixels × n_channels × n_levels
     /// × 4/3)` bytes (geometric series on band sizes). At 12 MP that's
     /// ≈ 432 MB GPU→host transfer per call, swamping the GPU pool's
-    /// few-microsecond kernel time. **Use this only on the CPU
-    /// backend** — for `cuda` / `wgpu` / `hip` runtimes prefer
+    /// few-microsecond kernel time. **Use this on `cubecl-cpu` and
+    /// Metal**; for CUDA / Vulkan / DX12 / HIP runtimes prefer
     /// [`Cvvdp::compute_dkl_jod`], which keeps everything GPU-
-    /// resident.
+    /// resident and produces canonical JOD via the working
+    /// atomic-reduction path. See the "Backend support" section
+    /// on [`Cvvdp::compute_dkl_jod`] for the full atomic-f32 story.
     ///
     /// Output matches `compute_dkl_jod` to f32 noise on all backends
     /// where both run (the GPU pool's atomic reduction and the host
@@ -2126,9 +2129,12 @@ impl<R: Runtime> Cvvdp<R> {
     /// Same algorithm and same JOD output as
     /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] but pools the per-band
     /// D values on the host instead of via the GPU atomic kernel —
-    /// runs on every cubecl runtime, including `cubecl-cpu`. Useful
-    /// for batch CPU scoring (one warm REF, many DIST candidates)
-    /// where the GPU pool path isn't available.
+    /// runs on every cubecl runtime, including `cubecl-cpu` and
+    /// Metal-via-`cubecl-wgpu`. Useful for batch CPU/Metal scoring
+    /// (one warm REF, many DIST candidates) where the GPU pool path
+    /// panics or silently no-ops. See the "Backend support" section
+    /// on [`Cvvdp::compute_dkl_jod`] for the underlying
+    /// `Atomic<f32>::fetch_add` trap.
     ///
     /// Same `Error::NoWarmReference` semantics as the GPU warm-ref
     /// variant: requires a prior [`Cvvdp::warm_reference`] call, and
