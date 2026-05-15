@@ -166,38 +166,26 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
     // shadow_jod pins the all-host path to ≤0.006 JOD; this test
     // measures the GPU path's drift on real corpus images vs pycvvdp.
     //
-    // Observed 2026-05-14 (cuda backend, current scaffold):
+    // Observed 2026-05-15 (cuda backend, post tick-181 band-count
+    // alignment + tick-175 ceil-div pyramid):
     //
     // ```text
     //   q    pycvvdp manifest   GPU JOD    |drift|
-    //   1    7.6536             8.0528     0.3992
-    //   5    8.8889             8.9434     0.0545
-    //   20   9.7076             9.7086     0.0010
-    //   45   9.8273             9.8293     0.0020
-    //   70   9.8915             9.8944     0.0029
-    //   90   9.9930             9.9919     0.0011
+    //   1    7.6536             7.6471     0.0065
+    //   5    8.8889             8.8909     0.0020
+    //   20   9.7076             9.7088     0.0012
+    //   45   9.8273             9.8295     0.0022
+    //   70   9.8915             9.8945     0.0030
+    //   90   9.9930             9.9929     0.0001
     // ```
     //
-    // Findings:
-    // - q ≥ 20: GPU JOD matches pycvvdp within 0.003 JOD (well
-    //   inside f32 accumulation noise — the GPU score path is
-    //   production-quality at moderate-to-high quality).
-    // - q = 5: 0.055 JOD drift — borderline.
-    // - q = 1: 0.40 JOD drift in the optimistic direction (GPU
-    //   reports less distortion than pycvvdp). Tick 55 moved the
-    //   masking step from host scalar to GPU kernels
-    //   (min_abs_3ch + pu_blur_{h,v} + mult_mutual_3ch_with_blurred,
-    //   plus the 10^MASK_C scale on the blurred PU output via
-    //   weight_band_kernel) — drift was unchanged at q=1, so the
-    //   masker itself is bit-stable across paths.
-    //   The residual drift is upstream — most likely the per-pixel
-    //   CSF interp's uniform-axis arithmetic (GPU) vs binary-search
-    //   interp1_clamped (host). At very low quality D values are
-    //   large enough that the soft-clamp at D_MAX saturates, and
-    //   small `S` deltas from the LUT interp amplify into JOD shift.
+    // Max drift 0.0065 at q=1 — comfortably inside f32 accumulation
+    // noise across the full q range. The old q=1 drift of 0.3992
+    // came from the pre-tick-175 floor-div pyramid bug; q=5 was
+    // 0.0545. Both collapsed to <0.01 once the pyramid was fixed.
     //
-    // Per-q diffs report to stdout so the loop can watch the drift
-    // shrink as more stages move to GPU.
+    // Per-q diffs report to stdout so future ticks can watch the
+    // drift profile if upstream changes shift it.
     let client = Backend::client(&Default::default());
     let (w, h) = (256u32, 256u32);
     let geom = DisplayGeometry::STANDARD_4K;
@@ -236,11 +224,13 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
         );
     }
     eprintln!("compute_dkl_jod max drift vs v1 manifest: {max_drift:.4}");
-    // Loose ceiling — measure-only test. Tightens once GPU masking
-    // + pool kernels replace the host calls in compute_dkl_jod.
+    // Tightened in tick 185. Post tick-181 band-count alignment +
+    // tick-175 ceil-div pyramid, observed max drift = 0.0065 JOD at
+    // q=1. 0.02 gives ~3× margin while catching a real regression
+    // (pre-fix q=1 drift was 0.3992 — far above 0.02).
     assert!(
-        max_drift < 1.0,
-        "GPU JOD drifts > 1.0 from v1 manifest: {max_drift}"
+        max_drift < 0.02,
+        "GPU JOD drifts > 0.02 from v1 manifest: {max_drift} (was 0.0065 at tick 185)"
     );
 }
 
@@ -305,9 +295,15 @@ fn compute_dkl_jod_vs_host_scalar_on_corpus() {
         );
     }
     eprintln!("compute_dkl_jod max drift vs host scalar: {max_gpu_host_drift:.4}");
+    // Tightened in tick 185. Post tick-181's band-count alignment,
+    // observed max drift = 0.0006 JOD across q1..q90. The earlier
+    // 1.0 JOD tolerance dated to when the GPU pipeline was partial
+    // (host fold + masking). 0.005 gives ~8× margin while still
+    // gating real regressions (pre-tick-175 ceil-div bug was 0.5+
+    // JOD at deeper pyramids).
     assert!(
-        max_gpu_host_drift < 1.0,
-        "GPU JOD drifts > 1.0 from host scalar: {max_gpu_host_drift}"
+        max_gpu_host_drift < 0.005,
+        "GPU JOD drifts > 0.005 from host scalar: {max_gpu_host_drift} (was 0.0006 at tick 185)"
     );
 }
 
