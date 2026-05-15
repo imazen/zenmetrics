@@ -58,6 +58,20 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **`crates/burn-conv-spike/README.md`** — new top-level README
+  for the perf-spike crate that informed tick 324's
+  "abandon Burn port" verdict. Documents what the spike is
+  (one-shot paper trail, not a maintained crate), the
+  measured numbers in a table form (4.32× for the best cubek
+  algorithm, 4.98–5.03× for the rest), the root cause
+  (CMMA tile waste at 1-channel; im2col→GEMM memory-traffic
+  overhead), the recommended actionable next lever
+  (shared-memory tiling of the existing direct stencil), and
+  how to re-run. Also adds a "Don't extend this crate" note —
+  future re-investigations should spin up a sibling
+  `burn-conv-spike-v2/` so this one stays frozen at the
+  configuration that produced the verdict. Tick 325.
+
 - **Burn port plan marked ABANDONED.** Tick 322's PerfMode
   framework was paired with a perf spike at
   `crates/burn-conv-spike/` (`e101c895`, run on RTX 5070 sm_120
