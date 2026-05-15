@@ -194,6 +194,22 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Six `u8 as u16` widening casts (3 each in
+  `tests/pipeline_color.rs::compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1`
+  and `..._blur1x3`) and six more in
+  `examples/manifest_parity_probe.rs::synth_blur3x1_pair` and
+  `synth_blur1x3_pair` switched to `u16::from(...)`. Clippy
+  `-W clippy::pedantic`'s
+  `cast_lossless`/`unnecessary_cast` family flagged them
+  because the `From<u8>` impl for `u16` is infallible — the
+  bare `as` form works but is the wrong idiom for
+  lossless widening conversions. The blur synth-pair fixtures
+  (3-tap horizontal / 3-tap vertical mean over `u16`
+  accumulator) produce identical pixel arithmetic; the 2
+  blur parity tests
+  (`compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1`,
+  `..._blur1x3`) still pass. Tick 300.
+
 - `tests/common/mod.rs` had 3 sites using Debug formatting
   (`{path:?}`, `{local:?}`) inside `panic!` for path-typed
   values, which clippy `-W clippy::pedantic`'s

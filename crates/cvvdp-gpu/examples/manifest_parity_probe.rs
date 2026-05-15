@@ -54,9 +54,9 @@ fn synth_blur3x1_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
             let x1 = (x + 1) % w;
             let x2 = (x + 2) % w;
             for c in 0..3 {
-                let a = r[(y * w + x) * 3 + c] as u16;
-                let b = r[(y * w + x1) * 3 + c] as u16;
-                let cc = r[(y * w + x2) * 3 + c] as u16;
+                let a = u16::from(r[(y * w + x) * 3 + c]);
+                let b = u16::from(r[(y * w + x1) * 3 + c]);
+                let cc = u16::from(r[(y * w + x2) * 3 + c]);
                 d[(y * w + x) * 3 + c] = ((a + b + cc) / 3) as u8;
             }
         }
@@ -72,9 +72,9 @@ fn synth_blur1x3_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
             let y1 = (y + 1) % h;
             let y2 = (y + 2) % h;
             for c in 0..3 {
-                let a = r[(y * w + x) * 3 + c] as u16;
-                let b = r[(y1 * w + x) * 3 + c] as u16;
-                let cc = r[(y2 * w + x) * 3 + c] as u16;
+                let a = u16::from(r[(y * w + x) * 3 + c]);
+                let b = u16::from(r[(y1 * w + x) * 3 + c]);
+                let cc = u16::from(r[(y2 * w + x) * 3 + c]);
                 d[(y * w + x) * 3 + c] = ((a + b + cc) / 3) as u8;
             }
         }

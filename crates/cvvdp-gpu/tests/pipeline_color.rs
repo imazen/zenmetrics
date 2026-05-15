@@ -1180,9 +1180,9 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1() {
             let x2 = (x + 2) % wu;
             let row = y * wu;
             for c in 0..3 {
-                let a = ref_srgb[(row + x) * 3 + c] as u16;
-                let b = ref_srgb[(row + x1) * 3 + c] as u16;
-                let cval = ref_srgb[(row + x2) * 3 + c] as u16;
+                let a = u16::from(ref_srgb[(row + x) * 3 + c]);
+                let b = u16::from(ref_srgb[(row + x1) * 3 + c]);
+                let cval = u16::from(ref_srgb[(row + x2) * 3 + c]);
                 dist_srgb[(row + x) * 3 + c] = ((a + b + cval) / 3) as u8;
             }
         }
@@ -2016,9 +2016,9 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur1x3() {
             let y1 = (y + 1) % hu;
             let y2 = (y + 2) % hu;
             for c in 0..3 {
-                let a = ref_srgb[(y * wu + x) * 3 + c] as u16;
-                let b = ref_srgb[(y1 * wu + x) * 3 + c] as u16;
-                let cval = ref_srgb[(y2 * wu + x) * 3 + c] as u16;
+                let a = u16::from(ref_srgb[(y * wu + x) * 3 + c]);
+                let b = u16::from(ref_srgb[(y1 * wu + x) * 3 + c]);
+                let cval = u16::from(ref_srgb[(y2 * wu + x) * 3 + c]);
                 dist_srgb[(y * wu + x) * 3 + c] = ((a + b + cval) / 3) as u8;
             }
         }
