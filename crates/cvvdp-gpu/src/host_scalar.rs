@@ -29,6 +29,29 @@ use crate::params::DisplayModel;
 /// each band's CSF lookup queries `gauss_a[bb][i]` where `bb` is
 /// the band index and `i` is the per-pixel index into the
 /// band-sized buffer.
+///
+/// # Example
+///
+/// Pure-host scoring of a 64×64 byte-identical pair (max JOD = 10):
+///
+/// ```
+/// use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+/// use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
+///
+/// let (w, h) = (64usize, 64usize);
+/// let bytes = vec![128u8; w * h * 3];
+/// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+/// let jod = predict_jod_still_3ch(
+///     &bytes,
+///     &bytes,
+///     w,
+///     h,
+///     DisplayModel::STANDARD_4K,
+///     ppd,
+/// );
+/// // Byte-identical inputs → no perceptible difference.
+/// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
+/// ```
 pub fn predict_jod_still_3ch(
     ref_srgb: &[u8],
     dist_srgb: &[u8],

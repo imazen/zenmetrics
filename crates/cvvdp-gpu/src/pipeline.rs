@@ -1833,6 +1833,27 @@ impl<R: Runtime> Cvvdp<R> {
     /// Output matches `compute_dkl_jod` to f32 noise on all backends
     /// where both run (the GPU pool's atomic reduction and the host
     /// `lp_norm_mean` compute the same `safe_pow`-form Minkowski norm).
+    ///
+    /// # Example
+    ///
+    /// CPU-runtime scoring of a byte-identical 64×64 pair (max JOD = 10):
+    ///
+    /// ```
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<cubecl::cpu::CpuRuntime>::new(
+    ///     client, w, h, CvvdpParams::PLACEHOLDER,
+    /// ).expect("Cvvdp::new");
+    /// let bytes = vec![128u8; (w * h * 3) as usize];
+    /// let jod = cvvdp.compute_dkl_jod_host_pool(&bytes, &bytes, ppd)
+    ///     .expect("compute_dkl_jod_host_pool");
+    /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
+    /// ```
     pub fn compute_dkl_jod_host_pool(
         &mut self,
         ref_srgb: &[u8],
