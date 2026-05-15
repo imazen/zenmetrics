@@ -305,18 +305,7 @@ fn compute_dkl_weber_pyramid_matches_host_scalar() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            srgb[i] = r;
-            srgb[i + 1] = g;
-            srgb[i + 2] = b;
-        }
-    }
+    let srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
 
     let (gpu_bands, gpu_log_l_bkg) = cvvdp.compute_dkl_weber_pyramid(&srgb).expect("gpu weber");
 
@@ -399,18 +388,7 @@ fn compute_dkl_t_p_bands_matches_host_scalar() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            srgb[i] = r;
-            srgb[i + 1] = g;
-            srgb[i + 2] = b;
-        }
-    }
+    let srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
 
     // GPU T_p.
     let t_p_gpu = cvvdp
@@ -532,22 +510,17 @@ fn compute_dkl_d_bands_matches_host_scalar() {
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // Deterministic ref + dist patterns (dist ≠ ref so masking step is exercised).
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     let gpu_d = cvvdp
         .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
@@ -723,22 +696,17 @@ fn compute_dkl_jod_matches_host_scalar() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -788,22 +756,17 @@ fn compute_dkl_jod_host_pool_matches_compute_dkl_jod() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -835,22 +798,17 @@ fn compute_dkl_jod_host_pool_with_warm_ref_matches_compute_dkl_jod() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     // Canonical cold-ref path.
     let canonical = cvvdp
@@ -888,26 +846,27 @@ fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_a = vec![0u8; (w * h * 3) as usize];
-    let mut dist_b = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_a[i] = r.saturating_sub(8);
-            dist_a[i + 1] = g.saturating_sub(4);
-            dist_a[i + 2] = b.saturating_add(12);
-            dist_b[i] = r.saturating_add(5);
-            dist_b[i + 1] = g.saturating_sub(10);
-            dist_b[i + 2] = b.saturating_sub(3);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_a: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
+    let dist_b: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_add(5),
+                p[1].saturating_sub(10),
+                p[2].saturating_sub(3),
+            ]
+        })
+        .collect();
 
     // Reference values via the non-warm path. Each call rebuilds
     // both sides — exactly what the warm-ref fast path skips.
@@ -2204,22 +2163,17 @@ fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
 
     // Same per-pixel construction as the 32×32 test — distinct R/G/B
     // patterns + a small DIST perturbation so the JOD is non-trivial.
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -2276,22 +2230,17 @@ fn compute_dkl_jod_matches_pycvvdp_at_73x91_odd() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     // Our compute_dkl_jod(ref, dist) corresponds semantically to
     // pycvvdp's predict(dist, ref) — both "score this distortion
@@ -2342,22 +2291,17 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
-    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let b = (((x + y) * 4) % 256) as u8;
-            let i = (y * w as usize + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r.saturating_sub(8);
-            dist_srgb[i + 1] = g.saturating_sub(4);
-            dist_srgb[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
 
     cvvdp
         .warm_reference(&ref_srgb)

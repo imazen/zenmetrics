@@ -122,6 +122,12 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- New `common::synth_pair_odd_dim_ref(w, h)` helper for the
+  alternate odd-dim synth pattern (`(x * 8) % 256` / `(y * 8) % 256`
+  / `((x + y) * 4) % 256`). Migrated all 10 hand-inlined sites in
+  `tests/pipeline_color.rs` onto it. Companion to tick 255-258's
+  `synth_pair_ref` dedup. Bit-stable parity preserved on all 31
+  pipeline_color tests (including 73×91 odd-dim cold + warm).
 - Final 6 hand-inlined synth_pair_ref sites in
   `tests/pipeline_color.rs` migrated onto `common::synth_pair_ref`
   (stage-probe helpers for chroma_shift: `compute_dkl_planes`,

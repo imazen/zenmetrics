@@ -434,6 +434,34 @@ pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
     b
 }
 
+/// Alternate deterministic synthetic reference used by the 73×91
+/// odd-dim parity fixture and several stage-probe tests. Bit-
+/// stable across pycvvdp's `bench_12mp_cuda.py::synth_pair_odd_dim`
+/// and the Rust port — modular arithmetic with all-channel x/y
+/// linear patterns. Distinct from [`synth_pair_ref`] which uses
+/// per-channel mixed coefficients; this one's coarser pattern is
+/// easier to read in stage-probe debug dumps.
+///
+/// Tick 259 dedup — was hand-inlined across 10 sites in
+/// `tests/pipeline_color.rs`, plus `tests/cpu_backend.rs` (synth_pair
+/// helper) and `examples/manifest_parity_probe.rs` (synth_odd_pair).
+pub fn synth_pair_odd_dim_ref(w: usize, h: usize) -> Vec<u8> {
+    let n = w * h * 3;
+    let mut b = vec![0u8; n];
+    for y in 0..h {
+        for x in 0..w {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let bb = (((x + y) * 4) % 256) as u8;
+            let i = (y * w + x) * 3;
+            b[i] = r;
+            b[i + 1] = g;
+            b[i + 2] = bb;
+        }
+    }
+    b
+}
+
 /// All `q` values present in `scripts/cvvdp_goldens/v1_corpus_jods.json`,
 /// sorted ascending. Tick 254 dedup — was `&[1, 5, 20, 45, 70, 90]`
 /// hand-mirrored across 5 callers. A future
