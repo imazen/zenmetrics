@@ -496,9 +496,9 @@ impl<R: Runtime> Cvvdp<R> {
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
-        // Baseband log_l_bkg buffer — `n_levels_baseband =
-        // (width >> (n_levels-1)) × (height >> (n_levels-1))` pixels.
-        // Allocated once; filled per-JOD via `fill_f32_kernel`.
+        // Baseband log_l_bkg buffer. Size matches `gauss_ref[last]`
+        // which `build_pyramid` allocated with ceil-div halving
+        // (tick 175). Allocated once; filled per-JOD via `fill_f32_kernel`.
         let last = n_levels as usize - 1;
         let baseband_w = gauss_ref[last].w as usize;
         let baseband_h = gauss_ref[last].h as usize;
