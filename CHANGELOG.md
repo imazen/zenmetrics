@@ -88,6 +88,17 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (tests)
+
+- `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd` —
+  direct warm-ref pycvvdp parity on the mixed-parity 73×91 fixture.
+  Pairs with the chroma_shift warm-ref test from tick 222: both pin
+  the warm-state restoration path against canonical pycvvdp, but
+  73×91 specifically exercises the tick-206 gausspyr_reduce
+  parity-bug fix on REF (mixed-parity reduce levels 6×5 → 3×3 and
+  46×37 → 23×19). Measured diff: 0.0000 JOD. Closes a transitivity
+  gap: prior warm-ref pycvvdp coverage was same-parity only.
+
 #### Workspace
 
 - Pinned multi-tick task in `CLAUDE.md`: compute CVVDP scores for

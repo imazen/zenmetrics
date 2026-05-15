@@ -2228,3 +2228,69 @@ fn compute_dkl_jod_matches_pycvvdp_at_73x91_odd() {
         "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd() {
+    // Tick 226: direct warm-ref pycvvdp parity on the mixed-parity
+    // 73×91 fixture. Pairs with the chroma_shift warm-ref test
+    // (`compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_256x256_chroma_shift`,
+    // tick 222) but exercises a fundamentally different code path
+    // on REF: the warm-state restoration has to apply the tick-206
+    // gausspyr_reduce parity-bug fix on a pyramid whose mixed-parity
+    // reduce levels (6×5 → 3×3 at level 4→5, 46×37 → 23×19 at level
+    // 1→2) hit the bug-compatible right-column delta correction.
+    //
+    // Transitive coverage before this test:
+    //   - compute_dkl_jod_matches_pycvvdp_at_73x91_odd (tick 206)
+    //     pins cold compute_dkl_jod == pycvvdp at ≤ 0.005 JOD
+    //   - compute_dkl_jod_with_warm_ref_matches_unwarm_path pins
+    //     warm == unwarm at ≤ 1e-5 JOD (synth pair, same-parity dims)
+    // Neither leg exercises the warm-state restoration on a
+    // mixed-parity REF — that's what this test closes.
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_73x91_odd");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    cvvdp
+        .warm_reference(&ref_srgb)
+        .expect("warm_reference");
+    let gpu_jod = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_with_warm_ref");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "warm-ref 73×91 odd: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "warm-ref JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
