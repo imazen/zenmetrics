@@ -158,6 +158,29 @@ Also pushed to `s3://zentrain/<run>/consolidated/` unless
 bash scripts/sweep/destroy_all.sh   # or per-instance: vastai destroy instance <id>
 ```
 
+### 6b. (Optional) Gate automation on parity
+
+`finalize.sh` always writes `manifest.json` regardless of how blown out
+parity is. For an automation step that needs a pass/fail signal — a
+nightly fleet run, a release gate, a PR job — wrap the manifest with
+`assert_parity.py`:
+
+```bash
+# Defaults: mean & median |diff| <= 0.10 JOD, max <= 0.50 JOD,
+# null parity tolerated.
+python3 scripts/sweep/cvvdp_backfill/assert_parity.py \
+    "$LOCAL_UNIFIED_DIR/cvvdp_sidecars/manifest.json"
+
+# Strict (every source must have both impls present):
+python3 scripts/sweep/cvvdp_backfill/assert_parity.py \
+    --require-parity-on-all \
+    "$LOCAL_UNIFIED_DIR/cvvdp_sidecars/manifest.json"
+```
+
+Exit 0 = pass, exit 2 = at least one threshold blown, exit 3 = a
+source had `parity: null` and `--require-parity-on-all` was set. See
+the script's header docstring for the full flag list.
+
 ## Docker images
 
 The fleet uses two images. Build + smoke + push lives in the
