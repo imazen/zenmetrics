@@ -181,6 +181,19 @@ original Fixed/Added/Changed sections.
   `reduce_preserves_constant_signal`, `expand_*`, etc.) all
   still pass. Tick 296.
 
+- `tests/pipeline_color.rs` had 9 identical
+  `const TOLERANCE: f32 = 0.005;` declarations, each inside a
+  separate test function and each tripping clippy
+  `-W clippy::pedantic`'s `items_after_statements` (the const
+  followed the per-test `let pycvvdp_golden_jod = ...` golden
+  load). Hoisted to file scope as a single
+  `const TOLERANCE: f32 = 0.005;` with a docstring tying the
+  number to the tick 207 tolerance schedule. The 9 inner
+  declarations are gone; their bodies still reference
+  `TOLERANCE` via outer-scope lookup. All 31 pipeline_color
+  tests still pass post-change (including the 12 MP parity
+  pair that takes ~30 s/test). Tick 297.
+
 ### Fixed (post-tick-238)
 
 #### cvvdp-gpu (docs)
