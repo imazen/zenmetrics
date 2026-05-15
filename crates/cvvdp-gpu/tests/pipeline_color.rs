@@ -1229,7 +1229,7 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
     let ref_srgb = common::synth_pair_ref(wu, hu);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     let ref_planes = cvvdp
@@ -1409,7 +1409,7 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
     let ref_srgb = common::synth_pair_ref(wu, hu);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     let (ref_bands, _ref_log) = cvvdp
@@ -1504,7 +1504,7 @@ fn spatial_pool_q_per_ch_matches_pycvvdp_at_chroma_shift_all_bands() {
     let ref_srgb = common::synth_pair_ref(wu, hu);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     let d_bands = cvvdp
@@ -1822,7 +1822,7 @@ fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
     let ref_srgb = common::synth_pair_ref(wu, hu);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     let d_bands = cvvdp
@@ -1908,7 +1908,7 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift() {
     let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     let gpu_jod = cvvdp
@@ -1953,7 +1953,7 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_256x256_chroma_shift() {
     let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
     let dist_srgb: Vec<u8> = ref_srgb
         .chunks_exact(3)
-        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
         .collect();
 
     cvvdp.warm_reference(&ref_srgb).expect("warm_reference");

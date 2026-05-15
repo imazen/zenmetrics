@@ -194,6 +194,19 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Seven `u8 as i16` widening casts in the
+  `chroma_shift` synth-pair pattern
+  (`(byte as i16 + 16).clamp(0, 255) as u8`) switched to
+  `i16::from(byte) + 16` for the lossless widening.
+  Six sites in `tests/pipeline_color.rs` (one per
+  `chroma_shift`-family test, all using the same `.flat_map`
+  closure) plus one in
+  `examples/manifest_parity_probe.rs::synth_chroma_shift_pair`.
+  Bit-identical arithmetic; all 9 `chroma_shift` parity tests
+  (`compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift`,
+  `..._with_warm_ref`, plus the 7 per-stage shadow tests)
+  still pass. Tick 301.
+
 - Six `u8 as u16` widening casts (3 each in
   `tests/pipeline_color.rs::compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1`
   and `..._blur1x3`) and six more in

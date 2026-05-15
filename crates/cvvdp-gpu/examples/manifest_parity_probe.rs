@@ -41,7 +41,7 @@ fn synth_chroma_shift_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     let r = synth_pair_ref(w, h);
     let mut d = r.clone();
     for i in (1..(w * h * 3)).step_by(3) {
-        d[i] = (r[i] as i16 + 16).clamp(0, 255) as u8;
+        d[i] = (i16::from(r[i]) + 16).clamp(0, 255) as u8;
     }
     (r, d)
 }
