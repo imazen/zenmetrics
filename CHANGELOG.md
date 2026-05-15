@@ -122,6 +122,17 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (docs)
 
+- `lib.rs` Status section now cross-references the warm-state
+  invalidation regression tests
+  (`warm_state_invalidates_after_each_documented_dispatcher`,
+  `set_reference_does_not_invalidate_warm_state`,
+  `gauss_chain_helpers_do_not_invalidate_warm_state`) and points
+  at `docs/PORT_STATUS.md`'s "Resolved ticks 236-249" audit-history
+  entry. Surfaces the contract work in the crate-root docs that
+  docs.rs renders first.
+
+#### cvvdp-gpu (docs)
+
 - `MaskingParams`, `PoolingParams`, `JodParams` docstrings now
   state they're unused scaffolding and cross-reference
   `CvvdpParams::PLACEHOLDER`. Previously only `CsfParams` had this

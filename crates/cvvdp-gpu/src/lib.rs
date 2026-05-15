@@ -74,6 +74,13 @@
 //! see the "How we compare to the canonical reference" section
 //! below for the source). Parity vs the cold path is locked at
 //! ≤ 1e-5 JOD by `compute_dkl_jod_with_warm_ref_matches_unwarm_path`.
+//! The warm-state invalidation contract (which helpers reset the
+//! cache vs preserve it) is pinned by
+//! `warm_state_invalidates_after_each_documented_dispatcher`,
+//! `set_reference_does_not_invalidate_warm_state`, and
+//! `gauss_chain_helpers_do_not_invalidate_warm_state`. See
+//! `docs/PORT_STATUS.md`'s "Resolved ticks 236-249" entry for
+//! the audit history.
 //!
 //! ## How we compare to the canonical reference
 //!
