@@ -180,3 +180,41 @@ The cvvdp parameter JSON gets vendored into
   rearrange the work across kernels. See the breadcrumb in
   `kernels/pyramid.rs` immediately after
   `subtract_weber_3ch_kernel`.
+
+- **(Resolved ticks 236-249)** Warm-ref + cache contract audit
+  on the batch-scoring API. The `Cvvdp::warm_reference` docstring
+  promised since tick 170 that 4 dispatchers would invalidate the
+  cached `warm_ref_baseband_log_l_bkg` scalar, but only 2 actually
+  did. Ticks 236-238 closed every silent-stale-scalar hole:
+  - Tick 236: `compute_dkl_weber_pyramid` / `compute_dkl_t_p_bands`
+    now invalidate (they call `_dispatch_weber_pyramid_gpu` directly,
+    which had left the scalar live)
+  - Tick 237: `compute_dkl_laplacian_pyramid` /
+    `compute_dkl_csf_weighted_bands` also invalidate (Laplacian
+    chain via `_dispatch_laplacian_pyramid_gpu` overwrites
+    `bands_ref` too)
+  - Tick 238: `Cvvdp::score` / `Cvvdp::score_with_reference`
+    documented as transitive invalidators (via `compute_dkl_jod`);
+    `Cvvdp::set_reference` documented as explicit non-invalidator
+  - Tick 243: `debug_assert_ppd_matches_geometry` on the 6 public
+    methods that silently ignore the per-call `ppd` parameter
+    (logs_row is pre-uploaded against construction-time geometry)
+  - Tick 246: revert tick-243 spurious assert on
+    `compute_dkl_csf_weighted_bands` (which genuinely consumes ppd)
+  - Tick 247: `debug_assert_eq!(weights_per_level.len(), n_levels)`
+    in `compute_dkl_csf_weighted_bands` to catch the OOB-read
+    precondition violation
+  - Tick 248: dim mismatch check moved before NoWarmReference on
+    `compute_dkl_jod_with_warm_ref` /
+    `compute_dkl_jod_host_pool_with_warm_ref` for more actionable
+    error reporting
+  - Tick 249: `set_reference` cache-replace semantics pinned in
+    test + explicit docstring
+
+  Regression-locked by `warm_state_invalidates_after_each_documented_dispatcher`
+  (8 cases), `set_reference_does_not_invalidate_warm_state`,
+  `set_reference_replaces_prior_cache`,
+  `debug_assert_fires_when_ppd_mismatches_geometry`,
+  `dimension_mismatch_surfaces_on_wrong_size_inputs`,
+  `invalid_image_size_surfaces_on_too_small_dims`, and
+  `compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`.
