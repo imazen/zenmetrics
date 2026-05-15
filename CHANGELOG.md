@@ -194,6 +194,24 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- `tests/common/mod.rs` had 4 sites using closure-wrapped
+  method calls (`.and_then(|j| j.as_f64())`,
+  `.and_then(|n| n.as_u64())`) that
+  clippy `-W clippy::pedantic`'s
+  `redundant_closure_for_method_calls` flags — the bare method
+  pointer form is shorter and stylistically preferred. Each
+  site (in `pycvvdp_synth_golden_jod`,
+  `v1_corpus_jod_golden`, and `v1_corpus_qs`) now uses
+  `.and_then(serde_json::Value::as_f64)` or
+  `.and_then(serde_json::Value::as_u64)`. The 4 sites are each
+  re-counted 3× because `tests/common/mod.rs` is consumed via
+  `#[path]` from the bench/example/test scopes (12 total
+  pedantic warnings cleared). `pipeline_score` corpus tests
+  (`compute_dkl_jod_on_v1_manifest_corpus`,
+  `score_with_reference_matches_score`,
+  `cvvdp_score_matches_v1_manifest`, and 11 more) all still
+  pass post-change. Tick 298.
+
 ### Fixed (post-tick-238)
 
 #### cvvdp-gpu (docs)

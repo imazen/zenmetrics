@@ -127,7 +127,7 @@ pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
         .get("fixtures")
         .and_then(|f| f.get(fixture))
         .and_then(|fx| fx.get("jod"))
-        .and_then(|j| j.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or_else(|| {
             panic!(
                 "pycvvdp_synth_goldens.json: fixture '{fixture}' not found or .jod is not a number"
@@ -406,10 +406,10 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
         .and_then(|p| p.as_object())
         .expect("v1_corpus_jods.json missing .pairs");
     for (_name, fx) in pairs {
-        if fx.get("q").and_then(|n| n.as_u64()) == Some(q as u64) {
+        if fx.get("q").and_then(serde_json::Value::as_u64) == Some(q as u64) {
             return fx
                 .get("jod")
-                .and_then(|j| j.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or_else(|| panic!("v1_corpus_jods.json: q={q} has no .jod"))
                 as f32;
         }
@@ -567,7 +567,7 @@ pub fn v1_corpus_qs() -> Vec<u32> {
         .expect("v1_corpus_jods.json missing .pairs");
     let mut qs: Vec<u32> = pairs
         .values()
-        .filter_map(|fx| fx.get("q").and_then(|n| n.as_u64()).map(|q| q as u32))
+        .filter_map(|fx| fx.get("q").and_then(serde_json::Value::as_u64).map(|q| q as u32))
         .collect();
     qs.sort_unstable();
     qs.dedup();
