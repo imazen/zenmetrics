@@ -22,21 +22,41 @@ DKL transform projects the +16 G offset largely into the RG
 opponent channel, isolating the chromatic pipeline.
 
 Candidates for the source:
-1. **DKL RGB→opponent matrix**: We carry the cvvdp v0.5.4
-   matrix at `crates/cvvdp-gpu/src/kernels/color.rs`. A small
-   precision difference (e.g. f32 truncation of pycvvdp's
-   double-precision constants) would shift RG values that
-   amplify through the rest of the pipeline.
+1. **DKL RGB→opponent matrix** — **FALSIFIED (tick 192)**.
+   Computed pycvvdp's combined matrix
+   (`LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ sRGB_to_XYZ`) at f64
+   precision and compared digit-for-digit to our
+   `SRGB_LINEAR_TO_DKL` constant. They match to 8+ decimal
+   digits — at the f32 precision limit. Computation script
+   left at `/tmp/dkl_compute.py`. **Not the source.**
 2. **Chromatic CSF interp**: Our per-pixel CSF kernel uses a
    uniform-axis arithmetic interp on a 32×32 LUT, while
    pycvvdp's `interp.py` does a binary-search bracket. At
    chrominance frequencies (RG / VY channels), the LUT shape
    may differ at the level where our interp converges to a
-   different bracket than pycvvdp's.
-3. **CH_GAIN per-channel weights**: We carry pycvvdp's
-   `[1.0, ch_chrom_w, ch_chrom_w, ch_trans_w]` slice. If
-   `ch_chrom_w` got the wrong value at port time (it's 1.0 in
-   v0.5.4), a 1% delta would compound through the pool.
+   different bracket than pycvvdp's. **Remaining suspect.**
+3. **CH_GAIN per-channel weights** — **FALSIFIED (tick 192)**.
+   pycvvdp's mult-mutual path (the default masking_model in
+   cvvdp_parameters.json) uses
+   `ch_gain = [1, 1.45, 1, 1.]` applied as `T_p = T * S * ch_gain`.
+   Our `CH_GAIN = [1.0, 1.45, 1.0]` matches byte-for-byte for the
+   3-channel still-image case. (The `ch_chrom_w` config field at
+   1.0 is a different weight applied to the per-channel pool,
+   not the CSF-stage ch_gain.) **Not the source.**
+
+## Remaining candidates
+
+After tick 192, only one of the three candidates is still live:
+**CSF LUT interpolation form**. Two follow-up directions:
+- **Direct value check**: feed a known chrominance ρ + log_L_bkg
+  pair through both our `csf_apply_per_pixel_kernel` and pycvvdp's
+  interp1; compare the per-channel `S` value bit-for-bit. If they
+  diverge at chrominance specifically, that's the source.
+- **LUT staleness**: our `csf_lut/csf_lut_weber_fixed_size.json`
+  was vendored from pycvvdp at port time. Diff it against the
+  v0.5.4-installed file at
+  `.venv/lib/python3.10/site-packages/pycvvdp/vvdp_data/csf_lut_weber_fixed_size.json`
+  to rule out a stale snapshot.
 
 ## Next steps
 
