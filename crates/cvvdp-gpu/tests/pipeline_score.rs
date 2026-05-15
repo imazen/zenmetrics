@@ -514,12 +514,15 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
     }
     eprintln!("max band-normalized rel over all bands: {overall_max_band_rel:.4e}");
 
-    // Band-normalized rel tolerance — keeps near-zero crossings
-    // from dominating the metric. Loose ceiling to surface a clear
-    // regression; tightens when the CSF interp gets bit-stable.
+    // Tightened in tick 186. Post tick 175 (ceil-div) + tick 181
+    // (band-count), observed max band-normalized rel = 7.6e-4. 5e-3
+    // gives ~6× margin while catching a real regression (pre-fix
+    // we observed 8e-4 in this test's original comment, but the
+    // 1e-1 tolerance allowed a much larger silent drift to slip
+    // by during the pre-tick-175 ceil-div bug).
     assert!(
-        overall_max_band_rel < 1e-1,
-        "T_p max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e}"
+        overall_max_band_rel < 5e-3,
+        "T_p max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e} (was 7.6e-4 at tick 186)"
     );
 }
 
@@ -664,13 +667,12 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
     }
     eprintln!("max band-normalized rel over all bands: {overall_max_band_rel:.4e}");
 
-    // Loose ceiling — D bands at q=1 with severe distortion push T_p
-    // values past D_MAX in the soft clamp, where small upstream f32
-    // deltas can amplify into larger D deltas. Surfaces a regression
-    // if the masker drifts further; tightens once we instrument the
-    // soft-clamp explicitly.
+    // Tightened in tick 186. Post tick 175 + tick 181, observed max
+    // band-normalized rel = 1.3e-3. 5e-3 gives ~4× margin while
+    // surfacing a regression — pre-fix ceil-div drift would have
+    // pushed this well above 5e-3 on the deeper-pyramid bands.
     assert!(
-        overall_max_band_rel < 5e-2,
-        "D max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e}"
+        overall_max_band_rel < 5e-3,
+        "D max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e} (was 1.3e-3 at tick 186)"
     );
 }
