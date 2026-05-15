@@ -55,6 +55,32 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_256_blur3x1(w=256, h=256):
+    """256×256 reference with a deterministic 3-pixel horizontal
+    average as the distortion. Tests parity at the common 256² size
+    used by the v1 manifest corpus, but using pure-integer DIST
+    construction so the Rust test can reproduce the exact bytes
+    without depending on the zenmetrics-corpus PNG/JPEG files.
+
+    dist[y,x,c] = (ref[y,x,c] + ref[y,(x+1)%w,c] + ref[y,(x+2)%w,c]) // 3
+
+    Pure integer ops (u8 → u16 → u8 floor-div) — bit-stable across
+    NumPy and Rust.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    # Horizontal 3-pixel average with wrap. Cast to u16 before the
+    # sum to avoid overflow at u8 + u8 + u8 (could hit 765 > 255).
+    ref16 = ref.astype(np.uint16)
+    ref16_x1 = np.roll(ref16, shift=-1, axis=1)
+    ref16_x2 = np.roll(ref16, shift=-2, axis=1)
+    dist = ((ref16 + ref16_x1 + ref16_x2) // 3).astype(np.uint8)
+    return ref, dist
+
+
 def synth_pair_odd_dim(w=73, h=91):
     """Matches the 73×91 odd-dim parity test's construction —
     distinct R/G/B patterns from x/y position, with a small DIST
@@ -94,8 +120,17 @@ def main():
     odd_ref, odd_dist = synth_pair_odd_dim()
     print("odd-dim 73x91 golden:")
     odd_jod, _ = metric.predict(odd_dist, odd_ref, dim_order="HWC")
-    print(f"  jod = {float(odd_jod):.4f}\n")
+    print(f"  jod = {float(odd_jod):.4f}")
     odd_jod_val = float(odd_jod)
+
+    # 256x256 fixture with deterministic blur-3x1 distortion. Tests
+    # the common 256² size without depending on the zenmetrics-corpus
+    # PNG/JPEG files (so Rust tests can run in fully offline contexts).
+    blur256_ref, blur256_dist = synth_pair_256_blur3x1()
+    print("256x256 blur3x1 golden:")
+    blur256_jod, _ = metric.predict(blur256_dist, blur256_ref, dim_order="HWC")
+    print(f"  jod = {float(blur256_jod):.4f}\n")
+    blur256_jod_val = float(blur256_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -147,6 +182,11 @@ def main():
                 "shape_hw": [91, 73],
                 "construction": "synth_pair_odd_dim",
                 "jod": odd_jod_val,
+            },
+            "synth_256x256_blur3x1": {
+                "shape_hw": [256, 256],
+                "construction": "synth_pair_256_blur3x1",
+                "jod": blur256_jod_val,
             },
         },
     }

@@ -905,6 +905,79 @@ fn compute_dkl_jod_matches_pycvvdp_at_12mp_synth() {
 }
 
 #[test]
+fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1() {
+    // 256×256 pycvvdp parity using a non-JPEG-q distortion type
+    // (3-pixel horizontal average with wrap). The synth construction
+    // is bit-stable across NumPy (bench_12mp_cuda.py) and Rust
+    // (this test): pure u8→u16→u8 floor-div arithmetic.
+    //
+    // Adds size coverage at 256² without depending on the
+    // zenmetrics-corpus PNG/JPEG files — useful for offline contexts
+    // and as a deterministic widening of the distortion-type sweep
+    // (currently only JPEG-q via the corpus).
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_256x256_blur3x1");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Match `synth_pair_256_blur3x1` byte-for-byte. ref is the same
+    // synth_pair_12mp pattern at 256×256; dist is the wrap-around
+    // 3-pixel horizontal average. Use u16 in the sum to avoid
+    // u8 overflow (3 × 255 = 765 > 255).
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+        }
+    }
+    let mut dist_srgb = vec![0u8; n];
+    for y in 0..hu {
+        for x in 0..wu {
+            let x1 = (x + 1) % wu;
+            let x2 = (x + 2) % wu;
+            let row = y * wu;
+            for c in 0..3 {
+                let a = ref_srgb[(row + x) * 3 + c] as u16;
+                let b = ref_srgb[(row + x1) * 3 + c] as u16;
+                let cval = ref_srgb[(row + x2) * 3 + c] as u16;
+                dist_srgb[(row + x) * 3 + c] = ((a + b + cval) / 3) as u8;
+            }
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "256×256 blur3x1: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
     // Catches regressions in the ceil-div pyramid invariant (tick
     // 175). All other JOD parity tests run at power-of-2 sizes

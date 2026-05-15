@@ -19,6 +19,14 @@
       ],
       "construction": "synth_pair_odd_dim",
       "jod": 9.39037036895752
+    },
+    "synth_256x256_blur3x1": {
+      "shape_hw": [
+        256,
+        256
+      ],
+      "construction": "synth_pair_256_blur3x1",
+      "jod": 8.441193580627441
     }
   }
 }
