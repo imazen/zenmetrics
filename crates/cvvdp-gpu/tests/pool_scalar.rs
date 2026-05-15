@@ -7,7 +7,7 @@
 //! - strongly distorted (~9.93 JOD)
 #![allow(clippy::excessive_precision)]
 
-use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, met2jod};
+use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, lp_norm_sum, met2jod};
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[path = "common/mod.rs"]
@@ -281,4 +281,96 @@ fn do_pooling_and_jod_panics_on_empty_q_per_ch() {
     // that built zero bands due to a min-dim regression).
     let empty: Vec<[f32; 3]> = Vec::new();
     let _ = do_pooling_and_jod_still_3ch(&empty);
+}
+
+// `lp_norm_sum` is a public API but had no direct unit tests — its
+// behaviour was only exercised transitively through
+// `do_pooling_and_jod_still_3ch`. Pin a few hand-computable cases
+// so a refactor of the `safe_pow_lp` shift (which lives inside
+// pool.rs and is the source of subtle bit-level drift) trips here
+// before propagating into the JOD parity tests.
+
+#[test]
+fn lp_norm_sum_pythagorean_triple_at_p2() {
+    // Classic L2: lp_norm_sum([3, 4], 2) returns
+    //   sqrt(sum_i((|x_i| + eps)^p - eps^p) + eps) - eps^(1/p)
+    // which simplifies to ~sqrt(25) - sqrt(eps) at this scale.
+    // The outer eps^(1/p) is NOT negligible — for p=2 with
+    // eps=1e-5 it's ~0.00316, large enough to be the dominant
+    // error term against the naive L2 result of 5.0. The form
+    // is documented as cvvdp's `safe_pow` shape — it's the
+    // differentiable-at-zero family that the pool kernels match
+    // exactly so the cvvdp parity stays bit-stable.
+    let got = lp_norm_sum(&[3.0, 4.0], 2.0);
+    let eps_tail = (1e-5_f32).sqrt(); // ≈ 0.0031623
+    let expected = 5.0 - eps_tail;
+    assert!(
+        (got - expected).abs() < 1e-3,
+        "lp_norm_sum([3, 4], 2) = {got}, expected ~{expected} (naive L2=5 minus eps^(1/2)={eps_tail})",
+    );
+}
+
+#[test]
+fn lp_norm_sum_handles_negative_signs_via_abs() {
+    // safe_pow_lp takes |x| first — so sign of inputs must not
+    // change the output. Pin so a refactor that drops the .abs()
+    // (and silently squares-negatives-back-positive at p=2 but
+    // breaks at odd p) trips immediately.
+    let pos = lp_norm_sum(&[3.0, 4.0], 2.0);
+    let mixed = lp_norm_sum(&[-3.0, 4.0], 2.0);
+    let neg = lp_norm_sum(&[-3.0, -4.0], 2.0);
+    assert_eq!(
+        pos.to_bits(),
+        mixed.to_bits(),
+        "sign of one input changed lp_norm_sum: pos={pos}, mixed={mixed}",
+    );
+    assert_eq!(
+        pos.to_bits(),
+        neg.to_bits(),
+        "sign of both inputs changed lp_norm_sum: pos={pos}, neg={neg}",
+    );
+}
+
+#[test]
+fn lp_norm_sum_zero_input_returns_zero() {
+    // safe_pow_lp(0, p) = (0 + eps)^p - eps^p = 0, so any all-zero
+    // input vector accumulates zero before the outer safe_pow_lp,
+    // which itself produces 0 at any p. The empty case is also
+    // zero (sum-of-empty is 0).
+    for n in [0_usize, 1, 5, 64] {
+        let v = vec![0.0_f32; n];
+        let got = lp_norm_sum(&v, 2.0);
+        assert!(
+            got.abs() < 1e-6,
+            "lp_norm_sum([0; {n}], 2) = {got}, expected 0",
+        );
+    }
+}
+
+#[test]
+fn lp_norm_sum_scales_with_count_under_uniform_input() {
+    // For uniform input [a; n] at exponent p, the eps-shifted form
+    // produces ~(n)^(1/p) * |a| MINUS the outer eps^(1/p) tail.
+    // Pin two specific counts so a regression that breaks the
+    // sum/mean split (e.g. accidentally dividing by n inside
+    // lp_norm_sum, turning it into lp_norm_mean) trips here. The
+    // eps_tail term at p=4 is ~0.0562 — substantial enough to
+    // matter, so we subtract it explicitly rather than loosening
+    // the tolerance to mask it.
+    let a = 2.5_f32;
+    let p = 4.0_f32;
+    let eps_tail = (1e-5_f32).powf(1.0 / p); // ≈ 0.0562
+    let got_n1 = lp_norm_sum(&[a], p);
+    let got_n16 = lp_norm_sum(&[a; 16], p);
+    let expected_n1 = a - eps_tail; // 1^(1/4) * a - eps^(1/4)
+    let expected_n16 = (16f32).powf(1.0 / p) * a - eps_tail; // = 2 * a - eps_tail = 4.944
+    assert!(
+        (got_n1 - expected_n1).abs() < 1e-3,
+        "lp_norm_sum([{a}], 4) = {got_n1}, expected ~{expected_n1} (a={a} minus eps^(1/4)={eps_tail})",
+    );
+    assert!(
+        (got_n16 - expected_n16).abs() < 1e-3,
+        "lp_norm_sum([{a}; 16], 4) = {got_n16}, expected ~{expected_n16} (n^(1/p)*a={} minus eps^(1/4)={eps_tail})",
+        (16f32).powf(1.0 / p) * a,
+    );
 }
