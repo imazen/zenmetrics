@@ -38,10 +38,17 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
 
 ### Progress markers (update each tick)
 
-- [ ] Inventory zensim parquet sidecars (paths, schemas, row counts)
-- [ ] Decide cvvdp-gpu binary delivery: register cvvdp metric in
-      `zen-metrics-cli` (it already dispatches butteraugli/zensim/ssim2)
-- [ ] Spec column schema (dtype, nullability, sidecar layout)
+- [x] Inventory zensim parquet sidecars (paths, schemas, row counts):
+      `/mnt/v/zen/zensim-training/2026-05-07/unified/` has 7 parquets,
+      351 cols each, identity `(image_path, codec, q, knob_tuple_json)`,
+      no cvvdp columns yet. 2.37M rows total.
+- [x] cvvdp metric registered in `zen-metrics-cli` (it dispatches
+      via `cvvdp_gpu::score` behind the `gpu-cvvdp` feature)
+- [x] Versioned column name implemented (`cvvdp_gpu::CVVDP_COLUMN_NAME`,
+      default `cvvdp_imazen_v<VER>`, `CVVDP_IMPL_TAG` env override).
+      See commit b2b7f135.
+- [x] Spec column schema (dtype, nullability, sidecar layout) —
+      see `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`
 - [ ] pycvvdp Dockerfile (separate image, pinned pytorch+CUDA)
 - [ ] cvvdp-gpu Dockerfile extension (or new image) + onstart script
 - [ ] Sweep launcher dispatching both implementations in parallel
