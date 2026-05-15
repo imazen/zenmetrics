@@ -113,7 +113,7 @@ fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host
         });
     }
 
-    g.bench_function("gpu_compute_dkl_jod_cuda", |b| {
+    g.bench_function("gpu_compute_dkl_jod", |b| {
         b.iter(|| {
             let jod = cvvdp
                 .compute_dkl_jod(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
@@ -171,13 +171,13 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
     // channels × pixels = ~432 MB at 12 MP, ~70 KB at 256×256).
     // Excludes the spatial pool, Minkowski fold, and met2jod.
     //
-    // The delta vs `gpu_compute_dkl_jod_cuda` below is **not** just
+    // The delta vs `gpu_compute_dkl_jod` below is **not** just
     // "host post-processing": the JOD path replaces the per-band
     // readback with a single GPU `pool_band_kernel` pass and a
     // ~144-byte partials readback (tick 95+96). So compute_dkl_jod
     // can be *faster* than compute_dkl_d_bands at large sizes
     // — it skips the ~432 MB readback this function pays.
-    g.bench_function("gpu_compute_dkl_d_bands_cuda", |b| {
+    g.bench_function("gpu_compute_dkl_d_bands", |b| {
         b.iter(|| {
             let d = cvvdp
                 .compute_dkl_d_bands(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
@@ -186,7 +186,7 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
         });
     });
 
-    g.bench_function("gpu_compute_dkl_jod_cuda", |b| {
+    g.bench_function("gpu_compute_dkl_jod", |b| {
         b.iter(|| {
             let jod = cvvdp
                 .compute_dkl_jod(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
