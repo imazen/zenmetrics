@@ -244,6 +244,40 @@ Post-fuse housekeeping (ticks 97–107):
   from the host Vec. Per non-baseband level: 3 host uploads
   + 3 launches → 0 uploads + 1 launch.
 
+Post-fuse housekeeping (ticks 108–124):
+
+- **Tests + examples + benches now run under wgpu** (`a0473bf9`,
+  `3c72a86d`, `70a62e63`) — `shadow_jod_gpu`, `time_12mp`,
+  `time_size_sweep`, and `benches/score.rs` all switched from
+  cuda-only to the `cfg(any(cuda, wgpu))` + `Backend` type-alias
+  pattern. Machines without a CUDA SDK (macOS, AMD, Intel) can
+  now run the manifest-parity anchor + per-phase timings under
+  wgpu's Vulkan/Metal/DX12 backend.
+- **`ch_gain_for_band(is_baseband, band_mul)` helper** (`f5c1df3c`)
+  — replaces 6 lines of `if is_baseband { 1.0 } else { band_mul *
+  CH_GAIN[c] }` boilerplate at two band-loop sites with a single
+  destructuring bind.
+- **Stack-allocated `compute_dkl_jod` partials zero-init**
+  (`a4e019c0`) — replaces a 192-byte heap Vec with
+  `[0.0_f32; MAX_LEVELS * N_CHANNELS]` sliced to the active
+  prefix.
+- **CHANGELOG catch-up + PORT_STATUS refresh + many small doc
+  fixes** (`bcf3dfcc`, `0dc01ea5`, `b7686203`, `35a0b48d`,
+  `6826c0eb`, `77908be7`, `fd1e2527`, `8cd803a9`, `ac1e21d3`,
+  `067ba379`, `08c65040`, `45719dad`, `1b8b51ca`) — module-level
+  pipeline overviews in `lib.rs`, `pipeline.rs`, and
+  `kernels/mod.rs` updated to name the actual fused kernels;
+  stale claims about which stages run host-side cleared;
+  `compute_dkl_weber_pyramid` got its missing doc comment; the
+  misleading α/β OLS fit dropped from `time_size_sweep`; and 9
+  of 15 rustdoc warnings cleared (remaining 6 are macro-induced
+  by `#[cube(launch)]`'s function-and-module duplication).
+- **`Cvvdp::score` v1 manifest tolerance** still pinned by the
+  CPU reference path (`shadow_jod`). The GPU composition path
+  is parity-locked against pycvvdp directly via `shadow_jod_gpu`
+  but with a wider q=1 tolerance (~0.4 JOD) per the documented
+  cumulative-f32 drift through `met2jod`'s steep slope.
+
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
 These observations don't ship as code, but they document
