@@ -177,8 +177,16 @@ struct WeberScratch {
     l_bkg_fine: cubecl::server::Handle,
     /// Vertical-pass scratch for achromatic L_bkg expand (n_v).
     vscratch_a: cubecl::server::Handle,
-    /// Per-pixel log10(L_bkg) plane (n_fine). Re-used for both sides.
+    /// Per-pixel log10(L_bkg) plane for the REF side (n_fine).
+    /// Persists through the band loop so the CSF kernel can read
+    /// it directly without a host roundtrip (tick 166).
     log_l_bkg: cubecl::server::Handle,
+    /// Throwaway destination for DIST's log_l_bkg write — same
+    /// shape as `log_l_bkg`. cvvdp's weber_g1 rule uses REF's
+    /// log_l_bkg for both sides, so DIST's value is computed but
+    /// discarded; this lets the DIST dispatch write somewhere
+    /// without clobbering REF.
+    log_l_bkg_dis: cubecl::server::Handle,
     /// Per-channel vertical/horizontal expand scratch (n_v, n_fine).
     /// The previous `layer_c` intermediate is gone — tick 91 fuses
     /// `subtract + weber` into a single 3-channel kernel that reads
@@ -206,6 +214,7 @@ fn build_weber_scratch<R: Runtime>(
             l_bkg_fine: alloc_zeros_f32(client, n_fine),
             vscratch_a: alloc_zeros_f32(client, n_v),
             log_l_bkg: alloc_zeros_f32(client, n_fine),
+            log_l_bkg_dis: alloc_zeros_f32(client, n_fine),
             vscratch_c: [
                 alloc_zeros_f32(client, n_v),
                 alloc_zeros_f32(client, n_v),
@@ -1289,13 +1298,13 @@ impl<R: Runtime> Cvvdp<R> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
-        // REF weber pyramid: call `_dispatch_weber_pyramid_gpu`
-        // directly and read back only the per-level log_l_bkg
-        // planes (the band loop's CSF kernel uploads them per
-        // band). Skips the ~190 MB bands readback that
-        // `compute_dkl_weber_pyramid` would do — the CSF dispatch
-        // reads from `self.bands_ref[k]` GPU handles directly
-        // (tick 155).
+        // REF weber pyramid: dispatch only. Writes log_l_bkg into
+        // weber_scratch[k].log_l_bkg — these handles persist through
+        // the band loop so the CSF kernel reads them directly with
+        // no host roundtrip (tick 166). Skips the ~190 MB bands
+        // readback that `compute_dkl_weber_pyramid` would do —
+        // CSF dispatch reads from `self.bands_ref[k]` GPU handles
+        // directly (tick 155).
         let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
             .weber_scratch
             .iter()
@@ -1303,38 +1312,21 @@ impl<R: Runtime> Cvvdp<R> {
             .collect();
         let log_l_bkg_baseband =
             self._dispatch_weber_pyramid_gpu(ref_srgb, &ref_log_l_bkg_dests, false)?;
-        let n_levels_usize = self.n_levels as usize;
-        let last = n_levels_usize - 1;
-        let baseband_n =
-            (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
-        let mut ref_log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n_levels_usize);
-        for k in 0..n_levels_usize.saturating_sub(1) {
-            let log_h = self.weber_scratch[k].log_l_bkg.clone();
-            let bytes = self
-                .client
-                .read_one(log_h)
-                .map_err(|_| Error::InvalidImageSize)?;
-            ref_log_l_bkg.push(f32::from_bytes(&bytes).to_vec());
-        }
-        ref_log_l_bkg.push(vec![log_l_bkg_baseband; baseband_n]);
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        // DIST weber pyramid: dispatch-only, no readback.
-        // `compute_dkl_weber_pyramid` would allocate ~240 MB of host
-        // Vecs (bands + log_l_bkg) and queue the GPU→host transfers
-        // — but we never use those host bytes (DIST CSF reads
-        // `self.bands_ref` GPU handles directly per tick 87, and
-        // DIST `log_l_bkg` is discarded per cvvdp's weber_g1 rule
-        // that uses REF's log_l_bkg for both sides). Calling the
-        // private `_dispatch_weber_pyramid_gpu` directly with the
-        // weber_scratch dest skips both the allocation AND the
-        // GPU→host transfer.
+        // DIST weber pyramid: dispatch-only, writes log_l_bkg to
+        // the throwaway `log_l_bkg_dis` handles so REF's data on
+        // `weber_scratch[k].log_l_bkg` survives. cvvdp's weber_g1
+        // rule uses REF's log_l_bkg for both sides, so DIST's
+        // value is computed-then-discarded. The DIST CSF kernel
+        // reads from `self.bands_dis[k]` GPU handles directly
+        // (tick 154 split); no host transfer.
         let t_weber_dis = std::time::Instant::now();
         let dist_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
             .weber_scratch
             .iter()
-            .map(|s| s.log_l_bkg.clone())
+            .map(|s| s.log_l_bkg_dis.clone())
             .collect();
         let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests, true)?;
         if trace {
@@ -1358,18 +1350,32 @@ impl<R: Runtime> Cvvdp<R> {
             // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
             let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (bw, bh, n_px) = self.level_dims(k);
-            debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
 
             let t_band = std::time::Instant::now();
 
-            // Upload ref log_l_bkg once per band; both sides reuse it.
+            // log_l_bkg source:
+            // - Non-baseband bands: read directly from the GPU-resident
+            //   `weber_scratch[k].log_l_bkg` handle (REF data, written
+            //   during the REF weber dispatch above). Tick 166 skips
+            //   the host roundtrip — was reading back ~64 MB at 12 MP
+            //   then re-uploading the same bytes per band.
+            // - Baseband: scalar `log_l_bkg_baseband` replicated to
+            //   `baseband_n` elements via a small host upload. The
+            //   baseband path doesn't run subtract_weber_3ch_kernel,
+            //   so `weber_scratch[last].log_l_bkg` is uninitialized
+            //   there; the host fill is unavoidable without a separate
+            //   GPU fill kernel.
             let t_log_upload = std::time::Instant::now();
-            let log_l_bkg_h = self
-                .client
-                .create_from_slice(f32::as_bytes(&ref_log_l_bkg[k]));
+            let log_l_bkg_h = if is_baseband {
+                let baseband_log_l_bkg = vec![log_l_bkg_baseband; n_px];
+                self.client
+                    .create_from_slice(f32::as_bytes(&baseband_log_l_bkg))
+            } else {
+                self.weber_scratch[k].log_l_bkg.clone()
+            };
             if trace {
                 eprintln!(
-                    "[trace] L{k} log_l_bkg upload ({bw}×{bh}): {:?}",
+                    "[trace] L{k} log_l_bkg source ({bw}×{bh}): {:?}",
                     t_log_upload.elapsed()
                 );
             }
@@ -1433,11 +1439,9 @@ impl<R: Runtime> Cvvdp<R> {
                     );
                 }
             }
-            // log_l_bkg upload has copied band-k's host data into a
-            // GPU buffer — drop our local Vec so peak host residency
-            // during the band loop scales with the remaining bands,
-            // not the full pyramid.
-            ref_log_l_bkg[k] = Vec::new();
+            // Tick 166 removed the per-band host Vec entirely —
+            // non-baseband bands read log_l_bkg from GPU directly,
+            // baseband does a one-shot scalar fill. Nothing to drop.
             if trace {
                 eprintln!("[trace] L{k} csf 1 fused launch:    {:?}", t_csf.elapsed());
             }
