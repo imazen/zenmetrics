@@ -55,6 +55,29 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_256_chroma_shift(w=256, h=256):
+    """256×256 ref with a chrominance-only distortion: G channel
+    gains a uniform +16 offset (clamped), R and B unchanged. Tests
+    the DKL RG/VY response in isolation — the other 256² fixtures
+    (blur3x1, blur1x3, noise) perturb all three channels roughly
+    equally, so they don't isolate chromatic vs achromatic sensitivity.
+
+    dist[y,x,R] = ref[y,x,R]
+    dist[y,x,G] = clamp(ref[y,x,G] + 16, 0, 255)
+    dist[y,x,B] = ref[y,x,B]
+
+    Pure integer ops, bit-stable across NumPy + Rust.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = ref.copy()
+    dist[..., 1] = np.clip(ref[..., 1].astype(np.int16) + 16, 0, 255).astype(np.uint8)
+    return ref, dist
+
+
 def synth_pair_256_blur1x3(w=256, h=256):
     """256×256 ref with a 3-pixel VERTICAL average distortion.
     Complement to `synth_pair_256_blur3x1` (horizontal) — together
@@ -192,8 +215,17 @@ def main():
     vblur256_ref, vblur256_dist = synth_pair_256_blur1x3()
     print("256x256 blur1x3 golden:")
     vblur256_jod, _ = metric.predict(vblur256_dist, vblur256_ref, dim_order="HWC")
-    print(f"  jod = {float(vblur256_jod):.4f}\n")
+    print(f"  jod = {float(vblur256_jod):.4f}")
     vblur256_jod_val = float(vblur256_jod)
+
+    # 256x256 fixture with chrominance-only distortion (G+16). Isolates
+    # the DKL RG/VY channel response — other 256² fixtures perturb all
+    # three R/G/B channels roughly equally.
+    chroma256_ref, chroma256_dist = synth_pair_256_chroma_shift()
+    print("256x256 chroma_shift golden:")
+    chroma256_jod, _ = metric.predict(chroma256_dist, chroma256_ref, dim_order="HWC")
+    print(f"  jod = {float(chroma256_jod):.4f}\n")
+    chroma256_jod_val = float(chroma256_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -260,6 +292,11 @@ def main():
                 "shape_hw": [256, 256],
                 "construction": "synth_pair_256_blur1x3",
                 "jod": vblur256_jod_val,
+            },
+            "synth_256x256_chroma_shift": {
+                "shape_hw": [256, 256],
+                "construction": "synth_pair_256_chroma_shift",
+                "jod": chroma256_jod_val,
             },
         },
     }

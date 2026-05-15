@@ -43,6 +43,14 @@
       ],
       "construction": "synth_pair_256_blur1x3",
       "jod": 8.124330520629883
+    },
+    "synth_256x256_chroma_shift": {
+      "shape_hw": [
+        256,
+        256
+      ],
+      "construction": "synth_pair_256_chroma_shift",
+      "jod": 9.664864540100098
     }
   }
 }
