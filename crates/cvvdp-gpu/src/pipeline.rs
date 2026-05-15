@@ -322,10 +322,18 @@ pub struct Cvvdp<R: Runtime> {
     /// for the side it's currently processing then reads back.
     gauss_ref: Vec<Level>,
 
-    /// Pyramid-band buffers (per channel, per level). Reused for
-    /// both sides like `gauss_ref`. Coarsest level shares storage
-    /// with the coarsest gaussian for the Weber baseband path.
+    /// Pyramid-band buffers for the REFERENCE side (per channel,
+    /// per level). The REF weber-pyramid dispatch writes here; the
+    /// band loop's CSF reads here for REF inputs. Coarsest level
+    /// shares storage with the coarsest gaussian for the Weber
+    /// baseband path.
     bands_ref: Vec<Level>,
+
+    /// Pyramid-band buffers for the DISTORTED side. Same shape as
+    /// `bands_ref`; separate storage so both sides' weber-pyramid
+    /// data can live on GPU simultaneously through the d_bands
+    /// band loop (avoiding host upload from `dist_weber` Vec).
+    bands_dis: Vec<Level>,
 
     /// Per-level scratch for `compute_dkl_d_bands`'s CSF, masking,
     /// and D output buffers. Pre-allocated so the hot loop doesn't
@@ -429,6 +437,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         let gauss_ref = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
+        let bands_dis = build_pyramid(&client);
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
@@ -468,6 +477,7 @@ impl<R: Runtime> Cvvdp<R> {
             srgb_lut,
             gauss_ref,
             bands_ref,
+            bands_dis,
             d_scratch,
             weber_scratch,
             logs_row,
@@ -779,11 +789,15 @@ impl<R: Runtime> Cvvdp<R> {
     /// output destination is decoupled from this helper.
     ///
     /// `log_l_bkg_dest` must have length `n_levels - 1` (one handle
-    /// per non-baseband level).
+    /// per non-baseband level). `dest_is_dis = false` writes weber
+    /// bands to `self.bands_ref` (the REF side); `true` writes to
+    /// `self.bands_dis` so both sides can persist on GPU through
+    /// the d_bands band loop.
     fn _dispatch_weber_pyramid_gpu(
         &mut self,
         srgb: &[u8],
         log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
     ) -> Result<f32> {
         // Build Gaussian pyramids on GPU. The function leaves
         // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
@@ -881,9 +895,14 @@ impl<R: Runtime> Cvvdp<R> {
             let upsc_a = scratch.upscaled_c[0].clone();
             let upsc_rg = scratch.upscaled_c[1].clone();
             let upsc_vy = scratch.upscaled_c[2].clone();
-            let band_a = self.bands_ref[k].planes[0].clone();
-            let band_rg = self.bands_ref[k].planes[1].clone();
-            let band_vy = self.bands_ref[k].planes[2].clone();
+            let bands_dest = if dest_is_dis {
+                &self.bands_dis
+            } else {
+                &self.bands_ref
+            };
+            let band_a = bands_dest[k].planes[0].clone();
+            let band_rg = bands_dest[k].planes[1].clone();
+            let band_vy = bands_dest[k].planes[2].clone();
             unsafe {
                 subtract_weber_3ch_kernel::launch::<R>(
                     &self.client,
@@ -921,7 +940,7 @@ impl<R: Runtime> Cvvdp<R> {
         let l_bkg_mean = l_bkg_sum / baseband_n as f32;
         let log_l_bkg_baseband = l_bkg_mean.log10();
 
-        // Per channel: copy gauss[last][c] into bands_ref[last] divided by mean.
+        // Per channel: copy gauss[last][c] into bands_{ref,dis}[last] divided by mean.
         for c in 0..N_CHANNELS {
             let g = self.gauss_ref[last].planes[c].clone();
             let bytes = self
@@ -930,7 +949,12 @@ impl<R: Runtime> Cvvdp<R> {
                 .map_err(|_| Error::InvalidImageSize)?;
             let data: &[f32] = f32::from_bytes(&bytes);
             let divided: Vec<f32> = data.iter().map(|v| v / l_bkg_mean).collect();
-            self.bands_ref[last].planes[c] = self.client.create_from_slice(f32::as_bytes(&divided));
+            let new_handle = self.client.create_from_slice(f32::as_bytes(&divided));
+            if dest_is_dis {
+                self.bands_dis[last].planes[c] = new_handle;
+            } else {
+                self.bands_ref[last].planes[c] = new_handle;
+            }
         }
 
         Ok(log_l_bkg_baseband)
@@ -980,7 +1004,7 @@ impl<R: Runtime> Cvvdp<R> {
             .iter()
             .map(|s| s.log_l_bkg.clone())
             .collect();
-        let log_l_bkg_baseband = self._dispatch_weber_pyramid_gpu(srgb, &dests)?;
+        let log_l_bkg_baseband = self._dispatch_weber_pyramid_gpu(srgb, &dests, false)?;
 
         let n_levels = self.n_levels as usize;
         let last = n_levels - 1;
@@ -1206,7 +1230,7 @@ impl<R: Runtime> Cvvdp<R> {
             .iter()
             .map(|s| s.log_l_bkg.clone())
             .collect();
-        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests)?;
+        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests, true)?;
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
@@ -1294,9 +1318,9 @@ impl<R: Runtime> Cvvdp<R> {
                         ArrayArg::from_raw_parts(weber_ref_a_h, n_px),
                         ArrayArg::from_raw_parts(weber_ref_rg_h, n_px),
                         ArrayArg::from_raw_parts(weber_ref_vy_h, n_px),
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[0].clone(), n_px),
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[1].clone(), n_px),
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[2].clone(), n_px),
+                        ArrayArg::from_raw_parts(self.bands_dis[k].planes[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(self.bands_dis[k].planes[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(self.bands_dis[k].planes[2].clone(), n_px),
                         ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
                         ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
                         ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
