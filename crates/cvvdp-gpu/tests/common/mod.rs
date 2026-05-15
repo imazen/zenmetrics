@@ -511,6 +511,17 @@ pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
+/// Convenience: `(ref, dist)` pair from `synth_pair_odd_dim_ref` +
+/// the canonical offset dist — the construction
+/// `bench_12mp_cuda.py::synth_pair_odd_dim` uses for the 73×91
+/// pycvvdp golden. Tick 280 — pairs with
+/// `synth_pair_with_offset_dist` for the alternate ref pattern.
+pub fn synth_pair_odd_dim_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    let r = synth_pair_odd_dim_ref(w, h);
+    let d = apply_offset_dist(&r);
+    (r, d)
+}
+
 /// Alternate deterministic synthetic reference used by the 73×91
 /// odd-dim parity fixture and several stage-probe tests. Bit-
 /// stable across pycvvdp's `bench_12mp_cuda.py::synth_pair_odd_dim`

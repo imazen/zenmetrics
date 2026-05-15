@@ -504,8 +504,8 @@ fn compute_dkl_d_bands_matches_host_scalar() {
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // Deterministic ref + dist patterns (dist ≠ ref so masking step is exercised).
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     let gpu_d = cvvdp
         .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
@@ -681,8 +681,8 @@ fn compute_dkl_jod_matches_host_scalar() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -732,8 +732,8 @@ fn compute_dkl_jod_host_pool_matches_compute_dkl_jod() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -765,8 +765,8 @@ fn compute_dkl_jod_host_pool_with_warm_ref_matches_compute_dkl_jod() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     // Canonical cold-ref path.
     let canonical = cvvdp
@@ -1119,8 +1119,8 @@ fn compute_dkl_jod_matches_pycvvdp_at_12mp_synth() {
 
     // Same synth construction as examples/time_12mp.rs +
     // scripts/cvvdp_goldens/bench_12mp_cuda.py — keep in sync.
-    let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_with_offset_dist(w as usize, h as usize);
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -2116,8 +2116,8 @@ fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
 
     // Same per-pixel construction as the 32×32 test — distinct R/G/B
     // patterns + a small DIST perturbation so the JOD is non-trivial.
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     let gpu_jod = cvvdp
         .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
@@ -2174,8 +2174,8 @@ fn compute_dkl_jod_matches_pycvvdp_at_73x91_odd() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     // Our compute_dkl_jod(ref, dist) corresponds semantically to
     // pycvvdp's predict(dist, ref) — both "score this distortion
@@ -2226,8 +2226,8 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_odd_dim_with_offset_dist(w as usize, h as usize);
 
     cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
     let gpu_jod = cvvdp
@@ -2277,8 +2277,8 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let ref_srgb = common::synth_pair_ref(w as usize, h as usize);
-    let dist_srgb = common::apply_offset_dist(&ref_srgb);
+    let (ref_srgb, dist_srgb) =
+        common::synth_pair_with_offset_dist(w as usize, h as usize);
 
     cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
     let gpu_jod = cvvdp

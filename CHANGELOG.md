@@ -129,6 +129,20 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (tests)
+
+- New `common::synth_pair_odd_dim_with_offset_dist(w, h) -> (ref, dist)`
+  pairs `synth_pair_odd_dim_ref` with `apply_offset_dist` for the
+  73×91 pycvvdp golden's construction
+  (`bench_12mp_cuda.py::synth_pair_odd_dim`). Replaces 7-of-8
+  inline `synth_pair_odd_dim_ref + apply_offset_dist` pairs in
+  `tests/pipeline_color.rs` with a single-line tuple destructure.
+  Also migrated the two `synth_pair_ref + apply_offset_dist`
+  pairs in `pipeline_color.rs` (12mp tests) onto the existing
+  `synth_pair_with_offset_dist`. The cpu_backend `synth_pair`
+  wrapper and the warm-ref idempotence test (dist_a + dist_b)
+  intentionally keep the two-line form for clarity.
+
 #### cvvdp-gpu (tests + examples)
 
 - New `common::apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8>`
