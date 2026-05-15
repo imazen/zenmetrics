@@ -120,6 +120,20 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- Refreshed stale "0.40 JOD GPU-vs-host drift" / "where the
+  q=1 JOD drift lives" docstrings on three corpus-scale parity
+  tests in `tests/pipeline_score.rs`:
+  - `compute_dkl_weber_pyramid_matches_host_on_corpus_256x256`
+  - `compute_dkl_t_p_bands_matches_host_on_corpus_256x256`
+  - `compute_dkl_d_bands_matches_host_on_corpus_256x256`
+  These were stage-isolation probes during the tick 175 pyramid
+  fix; ticks 175/204/206 closed every drift to f32 noise. The
+  tests still serve a useful role (per-stage bit-stability pins
+  at corpus scale) but the docstrings claimed an in-flight
+  investigation that's been done for ~80 ticks.
+
 #### cvvdp-gpu (tests + docs)
 
 - `score_with_reference_matches_score` now iterates the full

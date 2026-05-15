@@ -621,8 +621,11 @@ fn compute_dkl_weber_pyramid_matches_host_on_corpus_256x256() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    // Test on the most-distorted (q=1) dist image — that's where the
-    // observed GPU-vs-host JOD drift is largest.
+    // Test on the most-distorted (q=1) dist image — heaviest
+    // signal stress on the pyramid. Pre-tick-175 q=1 had a 0.4 JOD
+    // GPU-vs-host drift (closed by the ceil-div fix); the test
+    // remains useful as a stress-point even though the modern
+    // pipeline tracks host within f32 noise across all q-levels.
     let srgb = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(1), w, h);
     let (gpu_bands, gpu_log_l_bkg) = cvvdp
         .compute_dkl_weber_pyramid(&srgb)
@@ -708,13 +711,12 @@ fn compute_dkl_weber_pyramid_matches_host_on_corpus_256x256() {
 
 #[test]
 fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
-    // Last tick: Weber pyramid + log_l_bkg bit-stable at 256×256.
-    // This tick: characterize the per-pixel CSF apply + CH_GAIN +
-    // band_mul step at the same scale on the q=1 corpus image.
-    // If T_p bands are also bit-stable here, the 0.40 JOD drift
-    // must live in masking or the spatial pool (both already
-    // pinned bit-stable on synthetic data — would suggest a scale-
-    // dependent regression).
+    // Original purpose (pre-tick-175): characterize the per-pixel
+    // CSF apply + CH_GAIN + band_mul step on the q=1 corpus image,
+    // to narrow where the 0.4 JOD GPU-vs-host drift lived. Ticks
+    // 175/204/206 closed that drift; the test now pins T_p
+    // bit-stability vs host at scale (256×256 q=1 corpus) so a
+    // future regression in the CSF apply chain surfaces here.
     use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
     use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
     use cvvdp_gpu::kernels::masking::CH_GAIN;
@@ -832,14 +834,13 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
 
 #[test]
 fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
-    // Last two ticks: Weber + log_l_bkg bit-stable (7e-7), T_p
-    // bit-stable (band-rel < 8e-4) on the q=1 corpus image. This
-    // test pushes one step downstream — the masking + soft-clamp
-    // step. If D-bands also pin tight, the 0.40 JOD drift lives in
-    // the spatial pool / 3-stage Minkowski / met2jod chain
-    // (everything host-scalar in compute_dkl_jod), which would mean
-    // it's the non-linearity of met2jod amplifying a tiny Q delta,
-    // not a kernel parity issue.
+    // Original purpose (pre-tick-175): isolate where the 0.4 JOD
+    // GPU-vs-host drift lived by walking the pipeline stage by
+    // stage. The Weber + log_l_bkg + T_p companion tests pin
+    // bit-stability earlier in the chain; this test pins D bands
+    // (the masking + soft-clamp output). Ticks 175/204/206 closed
+    // that drift; the test now pins D-band bit-stability at scale
+    // so any future masking-chain regression surfaces here.
     use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
     use cvvdp_gpu::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
     use cvvdp_gpu::kernels::masking::{CH_GAIN, mult_mutual_band};
