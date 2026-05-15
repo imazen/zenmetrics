@@ -14,7 +14,7 @@ Tracking faithful-port progress against the Python reference
 | Contrast masking   | `kernels/masking`      | scalar + fused 3ch min_abs + 3ch PU blur with folded scale + mult_mutual_3ch + diff_abs_3ch (baseband) | scalar + 3ch + with-blurred + diff_abs parity |
 | Per-band pooling   | `kernels/pool`         | GPU `pool_band_kernel` (atomic f32 partials) consumed by `compute_dkl_jod` | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar `do_pooling_and_jod_still_3ch` + `met2jod` over a ~144-byte partials Vec | 3 fixtures + kink continuity              |
-| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor. 12 MP per-pixel: jod 52.9 ns/px on RTX-class CUDA (tick 158) — **1.63× faster than fcvvdp's 8-thread reference at 360p**. | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor) |
+| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `Cvvdp::compute_dkl_jod_with_warm_ref` (GPU batch) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference. `Cvvdp::score` still routes through CPU per `shadow_jod` v1 manifest anchor. 12 MP CUDA timing (RTX 5070): cold `jod` **36.1 ns/px**; warm-ref **20.6 ns/px**. vs canonical **pycvvdp v0.5.4 CUDA: 14 ns/px** — we are **2.58× slower cold / 1.47× slower warm** than the reference (pycvvdp benefits from cuDNN-optimised separable conv on the downscale/upscale pyramid; see `benchmarks/pycvvdp_12mp_cuda_2026-05-14.md`). We win on portability: WGPU + HIP backends, 50 MB static binary vs ~3 GB PyTorch runtime, ~1 s warm-up vs 1–13 s graph compile. | host: ≤0.01 JOD vs pycvvdp v1 manifest (`shadow_jod`); GPU: matches host within f32 precision at q≥20 (`compute_dkl_jod_matches_host_scalar`), ~0.4 JOD cumulative drift at q=1 through `met2jod`'s steep slope (`shadow_jod_gpu` anchor); warm-ref vs cold-ref parity ≤1e-5 JOD (`compute_dkl_jod_with_warm_ref_matches_unwarm_path`) |
 
 ## Reference version pin
 
@@ -106,6 +106,29 @@ The cvvdp parameter JSON gets vendored into
   functions wrap them with the readback for test/external use.
   Net saving per JOD at 12 MP: ~460 MB of GPU→host transfer that
   would otherwise be allocated and discarded.
+
+- **(Resolved tick 170)** Cached-reference fast path. The
+  `score_with_reference` doc had promised "the fast path lands
+  when GPU composition stops re-running the reference side"
+  since v0.0.1. Now real:
+  - `Cvvdp::warm_reference(ref_srgb)` dispatches the REF weber
+    pyramid once and caches the GPU state (`bands_ref[k]` and
+    `weber_scratch[k].log_l_bkg` planes + the
+    `log_l_bkg_baseband` scalar in `warm_ref_baseband_log_l_bkg`).
+  - `Cvvdp::compute_dkl_jod_with_warm_ref(dist_srgb, ppd)` skips
+    the REF half of the JOD pipeline. Same JOD output as
+    `compute_dkl_jod(ref, dist, ppd)` within 1e-5 absolute tol.
+  - Per-DIST throughput at 12 MP: cold path 36.1 ns/px → warm
+    path 20.6 ns/px (42.9% saved, 1.75× faster per call).
+  - Warm state is invalidated automatically by any method that
+    dispatches REF weber (`compute_dkl_jod`, `compute_dkl_d_bands`,
+    `compute_dkl_weber_pyramid`, etc.); `Error::NoWarmReference`
+    surfaces clearly when the cache is cold.
+
+  `Cvvdp::score_with_reference` (the public host-scalar path) is
+  unchanged — it still routes through `predict_jod_still_3ch`
+  for manifest-precise scoring. Users opting into GPU drift for
+  speed call `compute_dkl_jod_with_warm_ref` explicitly.
 
 - **(Open, tick 159)** 3-channel `upscale_v_3ch_kernel` /
   `upscale_h_3ch_kernel` fusion regressed ~4% jod at 12 MP on

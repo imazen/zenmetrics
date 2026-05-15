@@ -388,7 +388,7 @@ pub struct Cvvdp<R: Runtime> {
     warm_ref_baseband_log_l_bkg: Option<f32>,
 }
 
-fn pyramid_levels(width: u32, height: u32) -> u32 {
+fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
     let min = width.min(height);
     let mut levels = 1u32;
     let mut cur = min;
@@ -396,7 +396,19 @@ fn pyramid_levels(width: u32, height: u32) -> u32 {
         cur /= 2;
         levels += 1;
     }
-    levels
+    // band_frequencies has its own min-freq cutoff (matching cvvdp's
+    // ~0.2 cpd lower bound). If it would emit fewer bands than the
+    // size-based loop produces, the band loop would index off the end
+    // of `freqs` — cap here so the two stay in lockstep. pycvvdp uses
+    // band_freqs as the authority on n_bands, so this matches its
+    // behaviour.
+    let band_count = crate::kernels::pyramid::band_frequencies(
+        ppd,
+        width as usize,
+        height as usize,
+    )
+    .len() as u32;
+    levels.min(band_count)
 }
 
 impl<R: Runtime> Cvvdp<R> {
@@ -436,7 +448,7 @@ impl<R: Runtime> Cvvdp<R> {
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
         }
-        let n_levels = pyramid_levels(width, height);
+        let n_levels = pyramid_levels(geometry.pixels_per_degree(), width, height);
 
         let n0 = (width as usize) * (height as usize);
         // Source-byte buffers are u32-slot arrays of length `n0 * 3`

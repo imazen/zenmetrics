@@ -460,6 +460,65 @@ Continued perf wave + structural cleanup (ticks 162–166):
 | 165  | 49.0      | 23.4         | 41.3     | 1.76× faster |
 | 166  | **41.8**  | **22.2**     | **39.8** | **2.06× faster** |
 
+Warm-ref API + last per-JOD host alloc removed (ticks 168–171):
+
+- **`fill_f32_kernel` + `baseband_log_l_bkg` pre-alloc**
+  (tick 168, `e0b6ca62`) — replaces the baseband band's per-JOD
+  `vec![log_l_bkg_baseband; n]` host alloc + GPU upload with a
+  single GPU fill launch into a pre-allocated buffer. Wallclock
+  impact minimal (baseband is small), but closes the last
+  per-JOD host alloc in the hot path. New parity test
+  `fill_f32_kernel_writes_uniform_value` uses a sentinel-fill
+  trick to catch off-by-one or short-write bugs.
+- **Extract REF/DIST weber helpers + perf snapshot**
+  (tick 169, `ea13bcf8`) — factors
+  `_dispatch_ref_weber_pyramid_only` and
+  `_dispatch_dist_weber_pyramid_only` out of
+  `_dispatch_d_bands_into_scratch`. No behaviour change, sets
+  up the warm-ref API. The tick 169 measurement landed at
+  jod 38.0 ns/px (2.26× faster than fcvvdp 8t @ 360p) —
+  the tick 166 reading at 41.8 was on the high end of its noise
+  band.
+- **Warm-ref batch-scoring API** (tick 170, `abe3599d`) —
+  delivers the `score_with_reference` doc promise from v0.0.1:
+  - `Cvvdp::warm_reference(ref_srgb)` dispatches REF weber once
+    and stores `Some(log_l_bkg_baseband)` in
+    `Cvvdp::warm_ref_baseband_log_l_bkg`. Any subsequent method
+    that dispatches REF weber resets this to `None` —
+    `_dispatch_ref_weber_pyramid_only` does the reset
+    unconditionally so warm-reference is the only path that
+    arms it.
+  - `Cvvdp::compute_dkl_jod_with_warm_ref(dist_srgb, ppd)`
+    skips the REF half of the JOD pipeline. Returns
+    `Error::NoWarmReference` if the cache is cold.
+  - Refactored band loop + pool into `_dispatch_d_bands_dist_and_band_loop`
+    and `_pool_and_finalize_jod` so cold and warm paths share
+    the post-REF tail.
+  - Parity test `compute_dkl_jod_with_warm_ref_matches_unwarm_path`
+    verifies: (1) warm/cold byte-for-byte match within 1e-5
+    JOD, (2) state survives multiple warm-ref calls,
+    (3) intervening cold calls invalidate correctly.
+- **`time_12mp` measures warm-ref fast path**
+  (tick 171, `8c7c5f96`) — adds phase 4 measuring per-DIST cost
+  after one `warm_reference` per iter. 12 MP results:
+  - jod (cold REF):       36.1 ns/px
+  - jod_warm (cached REF): **20.6 ns/px**
+  - Per-DIST saving: 42.9% (1.75× faster per call)
+  - vs fcvvdp 8-thread @ 360p: **4.17× faster per DIST**
+
+Warm path delivers below the naive 50% saving because the host
+pool fold + band loop dispatch overhead run once per JOD
+regardless of REF state. The amortization break-even is ~2
+candidates per warmed reference — anything larger lands at
+1.75× throughput.
+
+| tick | jod cold (ns/px) | jod warm (ns/px) | vs fcvvdp 8t (cold / warm) |
+| ---- | ----             | ----             | ----                        |
+| 158  | 52.9             | —                | 1.63× / —                   |
+| 166  | 41.8             | —                | 2.06× / —                   |
+| 169  | 38.0             | —                | 2.26× / —                   |
+| 171  | **36.1**         | **20.6**         | **2.38× / 4.17× faster**    |
+
 The `d_bands − 2×weber` bucket (CSF + masking + IO) is sub-noise
 since tick 156: 2×weber ≈ d_bands, meaning the band-loop overhead
 is now bandwidth-tightly packed against the two weber pyramids.
@@ -469,6 +528,107 @@ tiled rewrite could shrink — but the per-thread register
 pressure observation from tick 159 means any fusion attempt
 should change the memory access pattern, not just rearrange
 launches.
+
+### Investigation Notes (cvvdp-gpu, tick 174 — large-image drift)
+
+After tick 173's pycvvdp v0.5.4 CUDA bench surfaced a **0.586 JOD
+drift** between our `compute_dkl_jod` and pycvvdp on a 4000×3000
+synthetic pair (ours 8.8726, pycvvdp 9.4580), tick 174 traced the
+cause. Diagnostic scripts in `scripts/cvvdp_goldens/`:
+
+- `bench_12mp_cuda.py` — pycvvdp CUDA timing + JOD output
+- `diagnose_12mp.py` — pycvvdp metric internals
+- `diagnose_pyramid.py` — pycvvdp band_freqs + height + pyr_shape
+- `diagnose_freqs.py` — direct comparison of band frequencies
+- `diagnose_decompose.py` — actual band tensor shapes via decompose()
+
+**Two structural divergences from pycvvdp at large sizes:**
+
+1. **n_bands cap**. Our `MAX_LEVELS = 8` caps the pyramid at 8
+   levels. pycvvdp uses **9 bands** at 4000×3000 (one extra deep
+   level). Bumping `MAX_LEVELS` alone is insufficient — see #2.
+
+2. **Floor vs ceil division on pyramid sizes** (the dominant
+   cause). pycvvdp uses **ceil-div** when halving level
+   dimensions; we use floor-div. The bands diverge from level 4
+   onward:
+
+   | level | pycvvdp shape (ceil)  | cvvdp-gpu shape (floor) |
+   | ---   | ---                   | ---                     |
+   | 0     | 3000×4000             | 3000×4000               |
+   | 1     | 1500×2000             | 1500×2000               |
+   | 2     | 750×1000              | 750×1000                |
+   | 3     | 375×500               | 375×500                 |
+   | 4     | **188**×250           | **187**×250             |
+   | 5     | 94×125                | 93×125                  |
+   | 6     | **47×63**             | **46×62**               |
+   | 7     | 24×32                 | 23×31                   |
+   | 8     | 12×16 (baseband)      | (n/a — capped)          |
+
+   Naively bumping MAX_LEVELS to 10 + adding level 8 INCREASED
+   the drift (JOD 8.87 → 7.92) because the ceil-div mismatch
+   compounds with every additional level. Reverted MAX_LEVELS
+   to 8 until the ceil-div fix lands.
+
+The 0.006 JOD parity tolerance our existing tests hit at 256×256
+holds because at small sizes the ceil/floor difference is 0 or 1
+pixel and most of pycvvdp's pyramid math rounds out. At 12 MP
+the divergence stacks to ~0.6 JOD.
+
+**Fix plan** (multi-tick):
+- Switch pyramid `Level` allocator + `gauss_ref` chain to
+  ceil-div (`(w + 1) / 2`).
+- Update `downscale_kernel` boundary handling for the off-by-one
+  case (currently floor-div semantics).
+- Update upscale `back_v` / `back_h` math which assumes the
+  parent floor-div shape.
+- Bump MAX_LEVELS to 10 once ceil-div parity holds at 256×256.
+- Add a 12 MP parity test driven by a pycvvdp golden so the
+  drift is visible in CI.
+
+**Goldens expansion (user ask, 2026-05-15):**
+
+> pycvvdp needs to be the source of goldens and we have to sweep
+> a larger distortion set
+
+Current goldens at `v1/manifest.json` only cover 256×256 source
+×6 JPEG quality levels. Planned expansion:
+- Multi-resolution: 256², 1024², 4000×3000 (and 8K for sanity).
+- More distortion types: Gaussian blur, Gaussian noise,
+  contrast/saturation perturbations, downscale+upscale, color
+  shifts, dithering, banding.
+- Quality levels closer to perceptual JND than just JPEG-q.
+- Sweep dimension: image content (photo, screen, line-art) so the
+  golden corpus stratifies across the codec-corpus categories.
+
+Goldens regenerator script (`build_goldens.py`) needs to grow a
+distortion-config DSL + a multi-resolution + multi-image pipeline
+before this expansion can land cleanly.
+
+**cvvdp-gpu vs pycvvdp perf gap (cuDNN / Burn / cubek):**
+
+User suggestion (2026-05-15):
+
+> Burn is a libtorch alternative so we should be able to beat
+> pycvvdp on GPU — maybe we didn't update to the latest cubecl
+> 0.10 release or use the best algorithms in cubek?
+
+Current state:
+- cubecl pin: `0.10.0-pre.4` (per workspace Cargo.lock). The
+  cubek (`tracel-ai/cubek`) high-level kernel library at
+  `cubecl-kernels` exposes well-optimised matmul, conv, reduce.
+- pycvvdp's hot path is the downscale/upscale Gaussian pyramid
+  — pure depthwise separable convolution. PyTorch routes this
+  via cuDNN, which has hand-tuned per-arch kernels.
+- The cubek conv kernel (depthwise 5-tap, shared-memory tiled)
+  would close the gap if it matches cuDNN. We currently do not
+  use cubek conv — our `downscale_kernel` /
+  `upscale_v_kernel` / `upscale_h_kernel` are hand-rolled 5-tap.
+
+Investigation queued: try replacing the downscale/upscale
+kernels with cubek-conv calls and re-measure. If cubek-conv
+holds parity (separable filter, ceil-div boundaries) and lands
+≤ pycvvdp at 12 MP, that's our path to "beat libtorch".
 
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
@@ -501,18 +661,48 @@ findings that would otherwise be re-discovered:
 
 Net 12 MP performance trajectory (CUDA, RTX-class):
 
-| metric                  | tick 64   | tick 73    | tick 166  |
-| ----                    | ----      | ----       | ----      |
-| weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 22.2 ns/px |
-| compute_dkl_d_bands     | 428 ns/px | 121 ns/px  | 39.8 ns/px |
-| compute_dkl_jod         | 444 ns/px | 127 ns/px  | **41.8 ns/px** |
+| metric                          | tick 64   | tick 73    | tick 171   |
+| ----                            | ----      | ----       | ----       |
+| weber pyramid (1 side)          | 103 ns/px | 21.6 ns/px | 18.7 ns/px |
+| compute_dkl_d_bands             | 428 ns/px | 121 ns/px  | 33.7 ns/px |
+| compute_dkl_jod (cold REF)      | 444 ns/px | 127 ns/px  | **36.1 ns/px** |
+| compute_dkl_jod_with_warm_ref   | —         | —          | **20.6 ns/px** |
 
-vs fcvvdp at 360 p (their bench, i7-13700k):
+### Honest comparison against the canonical reference (tick 173)
 
-| variant       | per-pixel  | vs current cvvdp-gpu @ 12 MP |
-| ----          | ----       | ----                         |
-| 1-thread      | 214 ns/px  | we are **5.12× faster**      |
-| 8-thread      |  86 ns/px  | we are **2.06× faster**      |
+The fcvvdp ratios cited in earlier rows compare against
+`halidecx/fcvvdp` — a separate C+Zig fork, not the canonical
+pycvvdp at `gfxdisp/ColorVideoVDP`. Direct pycvvdp v0.5.4
+CUDA measurement on the same RTX 5070 host:
+
+| metric                          | per-pixel  | vs pycvvdp CUDA |
+| -----                           | ----       | ----            |
+| **pycvvdp v0.5.4 (CUDA)**       | **14 ns/px** | baseline        |
+| cvvdp-gpu cold                  | 36.1 ns/px | **2.58× slower** |
+| cvvdp-gpu warm-ref              | 20.6 ns/px | **1.47× slower** |
+
+pycvvdp benefits from cuDNN-optimised separable convolution on
+the downscale/upscale pyramid; our cubecl kernels are hand-written
+5-tap separable. cvvdp-gpu wins on portability (WGPU + HIP
+backends, ~50 MB static binary vs ~3 GB PyTorch runtime, ~1 s
+warm-up vs 1-13 s graph compile) but loses on raw CUDA throughput.
+
+See `crates/cvvdp-gpu/benchmarks/pycvvdp_12mp_cuda_2026-05-14.md`
++ `scripts/cvvdp_goldens/bench_12mp_cuda.py` for the
+reproduction recipe.
+
+### vs fcvvdp (separate C+Zig fork, NOT the canonical reference)
+
+fcvvdp's published 360p bench (i7-13700k):
+
+| fcvvdp variant | per-pixel  | vs cvvdp-gpu cold @ 12 MP | vs cvvdp-gpu warm @ 12 MP |
+| ----           | ----       | ----                       | ----                       |
+| 1-thread       | 214 ns/px  | cvvdp-gpu **5.93× faster** | cvvdp-gpu **10.39× faster** |
+| 8-thread       |  86 ns/px  | cvvdp-gpu **2.38× faster** | cvvdp-gpu **4.17× faster**  |
+
+The fcvvdp comparison is real (numbers measured, ratios correct)
+but **fcvvdp is not pycvvdp**. Use the pycvvdp row for the
+canonical comparison.
 
 ### Fixed
 

@@ -119,6 +119,12 @@ fn main() {
             .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
             .expect("compute_dkl_jod");
         let dt_jod = t.elapsed();
+        if i == 0 {
+            // Print on the first iter so the JOD value is comparable
+            // against pycvvdp's bench output (see
+            // benchmarks/pycvvdp_12mp_cuda_2026-05-14.md).
+            eprintln!("compute_dkl_jod = {jod:.4} (compare vs pycvvdp 9.4580)");
+        }
         black_box(jod);
 
         // Phase 4: warm-ref JOD (REF dispatched once before the

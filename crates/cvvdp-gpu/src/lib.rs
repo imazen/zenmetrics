@@ -63,6 +63,29 @@
 //! `compute_dkl_jod_vs_host_scalar_on_corpus` all lock the GPU path
 //! within f32-precision tolerance of the host scalar reference.
 //!
+//! For batch scoring (one reference vs many distorted candidates),
+//! [`Cvvdp::warm_reference`] + [`Cvvdp::compute_dkl_jod_with_warm_ref`]
+//! caches the REF GPU state and skips that half of the pipeline per
+//! candidate — 1.75× faster per DIST at 12 MP. Parity vs the cold
+//! path is locked at ≤ 1e-5 JOD by
+//! `compute_dkl_jod_with_warm_ref_matches_unwarm_path`.
+//!
+//! ## How we compare to the canonical reference
+//!
+//! On an RTX 5070 at 12 MP the **canonical** pycvvdp v0.5.4 CUDA path
+//! lands at ~14 ns/px steady-state (after a 1–13 s PyTorch graph
+//! compile). Our cold path is 36.1 ns/px and our warm-ref path is
+//! 20.6 ns/px — **2.58× / 1.47× slower than pycvvdp**, respectively.
+//! pycvvdp benefits from cuDNN-optimised separable convolutions on
+//! the downscale/upscale pyramid; our hand-written cubecl kernels
+//! don't reach that level of optimisation yet.
+//!
+//! Where we win: multi-vendor backends (WGPU + HIP work; pycvvdp is
+//! CUDA-only via PyTorch), static-binary deployment (~50 MB vs ~3 GB
+//! PyTorch runtime), and ~1 s warm-up. See
+//! `benchmarks/pycvvdp_12mp_cuda_2026-05-14.md` for the
+//! head-to-head.
+//!
 //! The public [`Cvvdp::score`] API still routes through
 //! [`host_scalar::predict_jod_still_3ch`] (kept stable while the GPU
 //! path's manifest-level parity is held by `shadow_jod`). Switching
