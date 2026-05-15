@@ -167,6 +167,20 @@ original Fixed/Added/Changed sections.
   `flatten_band_weights_layout`,
   `sensitivity_is_finite_at_extremes`) still all pass. Tick 295.
 
+- `kernels::pyramid::weber_contrast_pyr_dec_scalar` nested
+  `fn build_pyr` helper was defined mid-body, after the
+  `n_levels` resolution and `debug_assert!` statements, which
+  clippy `-W clippy::pedantic`'s `items_after_statements` lint
+  flags as confusing (items exist from the start of scope; the
+  visual ordering implies a runtime dependency that doesn't
+  exist). Moved the nested fn ahead of the statements without
+  changing its body — pure reordering. `pyramid_scalar` parity
+  tests (6 tests including `reduce_matches_pycvvdp` and
+  `one_band_laplacian_matches_pycvvdp`) and the lib-internal
+  `kernels::pyramid::tests` (`reduce_halves_dimensions`,
+  `reduce_preserves_constant_signal`, `expand_*`, etc.) all
+  still pass. Tick 296.
+
 ### Fixed (post-tick-238)
 
 #### cvvdp-gpu (docs)

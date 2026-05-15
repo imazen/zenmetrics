@@ -426,13 +426,6 @@ pub fn weber_contrast_pyr_dec_scalar(
     sh: usize,
     n_levels: usize,
 ) -> WeberPyramid {
-    let n = if n_levels == 0 {
-        sw.min(sh).ilog2() as usize
-    } else {
-        n_levels
-    };
-    debug_assert!(n >= 1);
-
     // Build separate Gaussian pyramids for the image plane and the
     // L_bkg plane. They may be the same plane (single channel) but
     // are passed separately so the caller can use the achromatic
@@ -459,6 +452,14 @@ pub fn weber_contrast_pyr_dec_scalar(
         }
         p
     }
+
+    let n = if n_levels == 0 {
+        sw.min(sh).ilog2() as usize
+    } else {
+        n_levels
+    };
+    debug_assert!(n >= 1);
+
     let gauss_img = build_pyr(image_plane, sw, sh, n);
     let gauss_l = build_pyr(l_bkg_plane, sw, sh, n);
 
