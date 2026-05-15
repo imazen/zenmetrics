@@ -27,6 +27,14 @@
       ],
       "construction": "synth_pair_256_blur3x1",
       "jod": 8.441193580627441
+    },
+    "synth_256x256_noise": {
+      "shape_hw": [
+        256,
+        256
+      ],
+      "construction": "synth_pair_256_noise",
+      "jod": 9.016885757446289
     }
   }
 }

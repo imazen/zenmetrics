@@ -978,6 +978,68 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1() {
 }
 
 #[test]
+fn compute_dkl_jod_matches_pycvvdp_at_256x256_noise() {
+    // 256×256 pycvvdp parity with a non-spatial distortion: per-pixel
+    // additive noise. Complementary to the blur3x1 test (which adds
+    // spatial correlation in one direction). Together they cover two
+    // distinct CSF/masking response shapes — broadband noise activates
+    // every band, while horizontal blur attenuates high horizontal
+    // frequencies specifically.
+    //
+    // Bit-stable synth construction across NumPy + Rust:
+    //   noise[y,x,c] = ((x * 73 + y * 137 + c * 211) % 64) - 32
+    //   dist[y,x,c] = clamp(ref[y,x,c] + noise[y,x,c], 0, 255)
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_256x256_noise");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            for c in 0..3 {
+                let noise = ((x as i64 * 73 + y as i64 * 137 + c as i64 * 211) % 64) - 32;
+                let v = (ref_srgb[i + c] as i64 + noise).clamp(0, 255) as u8;
+                dist_srgb[i + c] = v;
+            }
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "256×256 noise: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
     // Catches regressions in the ceil-div pyramid invariant (tick
     // 175). All other JOD parity tests run at power-of-2 sizes
