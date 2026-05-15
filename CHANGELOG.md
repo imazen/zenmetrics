@@ -129,6 +129,17 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (tests + examples)
+
+- Collapse the last two-line `synth_pair_odd_dim_ref + apply_offset_dist`
+  pairs onto `common::synth_pair_odd_dim_with_offset_dist`:
+  `tests/cpu_backend.rs::synth_pair` (was 3 lines) and
+  `examples/manifest_parity_probe.rs::synth_odd_pair` (was 3 lines).
+  Each collapses to a single tuple-returning call. Drops the
+  now-unused `synth_pair_odd_dim_ref` import from
+  `manifest_parity_probe.rs` since `synth_odd_pair` was its only
+  consumer.
+
 #### cvvdp-gpu (tests)
 
 - New `common::synth_pair_odd_dim_with_offset_dist(w, h) -> (ref, dist)`

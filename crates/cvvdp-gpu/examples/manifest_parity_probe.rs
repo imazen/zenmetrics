@@ -33,7 +33,7 @@ use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-use common::{Backend, synth_pair_odd_dim_ref, synth_pair_ref};
+use common::{Backend, synth_pair_ref};
 
 const TOLERANCE: f32 = 0.005;
 
@@ -83,9 +83,7 @@ fn synth_blur1x3_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn synth_odd_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
-    let r = synth_pair_odd_dim_ref(w, h);
-    let d = common::apply_offset_dist(&r);
-    (r, d)
+    common::synth_pair_odd_dim_with_offset_dist(w, h)
 }
 
 fn synth_noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
