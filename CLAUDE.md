@@ -25,8 +25,13 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
    cvvdp variants land side-by-side without collision:
    - `cvvdp_pycvvdp_v054`  — canonical pycvvdp v0.5.4 reference
    - `cvvdp_gpu_imazen_<short_commit>` — our zenmetrics cvvdp-gpu
-   - `cvvdp_burn_<short_commit>` — future Burn port (see
-     `crates/cvvdp-gpu/docs/BURN_PORT_PLAN.md`)
+   - `cvvdp_burn_<short_commit>` — namespace reserved for a
+     potential Burn-based port. Tick 324's spike (4.32× regression
+     vs. the hand-written separable kernel at 4000×3000 on RTX 5070)
+     ruled out the original Burn plan; the namespace stays free in
+     case a future re-attempt wants to claim it. See
+     `crates/cvvdp-gpu/docs/BURN_PORT_PLAN.md`'s "Status: ABANDONED"
+     banner and `crates/burn-conv-spike/README.md`.
 3. **Parquet sidecars**, matching zenmetrics' existing sweep
    convention (`image_path / codec / q / knob_tuple_json /
    <metric>_score / feat_*`).

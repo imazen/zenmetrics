@@ -48,11 +48,13 @@ WORKDIR /workspace/zenmetrics
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
-    cargo build -p zen-metrics-cli --release --features sweep && \
+    cargo build -p zen-metrics-cli --release --features sweep,gpu,gpu-cuda && \
     cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
     chmod +x /usr/local/bin/zen-metrics && \
     /usr/local/bin/zen-metrics --version && \
-    /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg
+    /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg && \
+    /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp && \
+    /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv
 
 FROM debian:bookworm-slim AS helpers
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
