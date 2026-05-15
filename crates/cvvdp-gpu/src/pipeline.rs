@@ -50,11 +50,38 @@
 //!
 //! ## Buffer layout
 //!
-//! Per side, per channel: one `width × height` plane at level 0, then
-//! `width/2 × height/2`, … geometrically decimating. No SIMD-pad columns
-//! (cvvdp's reference doesn't pad). One `Handle` per (side, channel,
-//! level) — for a 1024² image with 3 channels and 7 levels that's 42
-//! plane handles, allocated once in `new()` and reused.
+//! Storage is GPU-resident and pre-allocated by `Cvvdp::new` for a
+//! fixed `(width, height)`. No SIMD-pad columns (cvvdp's reference
+//! doesn't pad).
+//!
+//! - `bands_ref: Vec<Level>` — one `Handle` per (channel, level)
+//!   for the Weber-contrast bands. Content alternates between REF
+//!   and DIST data inside `compute_dkl_d_bands`: the per-side weber
+//!   pyramid dispatch overwrites it, and the band loop reads
+//!   directly from these handles for the downstream CSF apply.
+//! - `gauss_ref: Vec<Level>` — Gaussian pyramid handles per
+//!   (channel, level), used by the weber pyramid dispatch to build
+//!   each non-baseband level. Shared between REF/DIST passes the
+//!   same way `bands_ref` is.
+//! - `weber_scratch[k]` (per non-baseband level) — the
+//!   `l_bkg_fine`, `vscratch_a`, `log_l_bkg`, plus per-channel
+//!   `vscratch_c` / `upscaled_c` handles consumed by the fused
+//!   `subtract_weber_3ch_kernel`.
+//! - `d_scratch[k]` (per level, including baseband) — `t_p_ref`,
+//!   `t_p_dis`, masking-chain (`m_raw`, `m_mid`, `m_blur`), and
+//!   the final `d` output handles, all per-channel. Every level's
+//!   D plane lives in `d_scratch[k].d[c]` regardless of whether
+//!   the band ran through the masker (`mult_mutual_3ch_*`) or the
+//!   baseband bypass (`diff_abs_3ch`).
+//! - `logs_row[k][c]` — pre-uploaded 32-entry CSF sensitivity LUT
+//!   row per (level, channel); stable across calls since `rho_k`
+//!   is fixed for this Cvvdp.
+//!
+//! Total per-Cvvdp budget at 4000×3000 with 8 pyramid levels is
+//! ~700 MB of GPU memory (dominated by `d_scratch.t_p_*` and the
+//! masking-chain scratch buffers). All allocations happen once in
+//! `Cvvdp::new`; the hot path does only `create_from_slice` for
+//! input bytes and reads back small results.
 
 use cubecl::prelude::*;
 
