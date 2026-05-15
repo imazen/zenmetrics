@@ -169,3 +169,38 @@ fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
         );
     }
 }
+
+// The `# Panics` section on `predict_jod_still_3ch` documents two
+// dim-mismatch assertions. Pin both as separate `#[should_panic]`
+// tests so a refactor that drops one assertion is caught — they
+// guard against the most likely caller bug (sRGB buffer with the
+// wrong stride / width / height tuple). `Cvvdp::score` returns
+// `Error::DimensionMismatch` instead of panicking; `predict_jod_still_3ch`
+// keeps the panic contract because it's the host-scalar reference
+// path that fixtures and shadow tests invoke with hand-rolled
+// buffers.
+
+#[test]
+#[should_panic(expected = "assertion `left == right` failed")]
+fn predict_jod_still_3ch_panics_on_ref_dim_mismatch() {
+    let (w, h) = (8usize, 8usize);
+    let display = DisplayModel::STANDARD_4K;
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    // ref short by 1 byte.
+    let bad_ref = vec![128u8; w * h * 3 - 1];
+    let ok_dist = vec![128u8; w * h * 3];
+    let _ = predict_jod_still_3ch(&bad_ref, &ok_dist, w, h, display, ppd);
+}
+
+#[test]
+#[should_panic(expected = "assertion `left == right` failed")]
+fn predict_jod_still_3ch_panics_on_dist_dim_mismatch() {
+    let (w, h) = (8usize, 8usize);
+    let display = DisplayModel::STANDARD_4K;
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let ok_ref = vec![128u8; w * h * 3];
+    // dist short by 1 byte — second assertion fires only when the
+    // first passed.
+    let bad_dist = vec![128u8; w * h * 3 - 1];
+    let _ = predict_jod_still_3ch(&ok_ref, &bad_dist, w, h, display, ppd);
+}

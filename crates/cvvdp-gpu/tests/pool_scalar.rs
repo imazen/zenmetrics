@@ -270,3 +270,15 @@ fn met2jod_clamps_at_origin() {
     let jod = met2jod(0.0);
     assert!((jod - 10.0).abs() < 1e-6, "met2jod(0) = {jod}, expected 10");
 }
+
+#[test]
+#[should_panic(expected = "need at least one pyramid level")]
+fn do_pooling_and_jod_panics_on_empty_q_per_ch() {
+    // `do_pooling_and_jod_still_3ch` has a documented `# Panics`
+    // section: "Panics if `q_per_ch` is empty (`n_levels == 0`)".
+    // Pin the contract — a refactor that silently returns 0.0 or
+    // NaN on empty input would mask upstream bugs (e.g. a pyramid
+    // that built zero bands due to a min-dim regression).
+    let empty: Vec<[f32; 3]> = Vec::new();
+    let _ = do_pooling_and_jod_still_3ch(&empty);
+}
