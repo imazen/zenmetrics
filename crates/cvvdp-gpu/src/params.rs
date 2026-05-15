@@ -140,8 +140,10 @@ pub struct MaskingParams {
 /// Minkowski pooling exponents.
 ///
 /// Currently unused scaffolding — the pool kernels read
-/// `BETA_SPATIAL` / `BETA_BAND` / `BETA_CHANNEL` as inlined
+/// `BETA_SPATIAL` / `BETA_BAND` / `BETA_CH` as inlined
 /// `const`s in `kernels::pool`. See `CvvdpParams::PLACEHOLDER`.
+/// `beta_channel` here corresponds to the kernel's `BETA_CH`
+/// (cvvdp `beta_tch`).
 #[derive(Debug, Clone, Copy)]
 pub struct PoolingParams {
     /// Per-band spatial pooling exponent (Minkowski `beta`).
@@ -152,10 +154,22 @@ pub struct PoolingParams {
     pub beta_channel: f32,
 }
 
-/// JOD mapping: `JOD = jod_a - jod_b * D^jod_c`.
+/// JOD mapping coefficients.
 ///
-/// Currently unused scaffolding — `kernels::pool::met2jod` inlines
-/// `JOD_A` / `JOD_EXP` directly. See `CvvdpParams::PLACEHOLDER`.
+/// Currently unused scaffolding — the actual JOD mapping is
+/// `kernels::pool::met2jod`, a piecewise function with two
+/// regimes joined continuously at `Q = 0.1`:
+///
+/// - `Q ≤ 0.1`: `JOD = 10 − JOD_A · 0.1^(JOD_EXP − 1) · Q`
+///   (linear extension that matches the power curve's slope at the
+///   knee, avoiding the zero-derivative singularity at `Q = 0`).
+/// - `Q  > 0.1`: `JOD = 10 − JOD_A · Q^JOD_EXP`.
+///
+/// `JOD_A` (`= 0.0439…`) and `JOD_EXP` (`= 0.9302…`) are inlined
+/// as `const`s in `kernels::pool`. The struct fields below map to
+/// `jod_a → JOD_A`, `jod_c → JOD_EXP`; `jod_b` is unused (the
+/// formula has no separate `b` coefficient). See
+/// `CvvdpParams::PLACEHOLDER`.
 #[derive(Debug, Clone, Copy)]
 pub struct JodParams {
     pub jod_a: f32,

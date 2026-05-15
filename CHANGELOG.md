@@ -152,6 +152,26 @@ original Fixed/Added/Changed sections.
 
 ### Fixed (post-tick-238)
 
+#### cvvdp-gpu (docs)
+
+- `PoolingParams` scaffolding docstring referenced
+  `BETA_CHANNEL` as the inlined `const` in `kernels::pool`, but
+  the actual const there is `BETA_CH` (mirroring cvvdp's
+  `beta_tch` field name). Grepping `BETA_CHANNEL` returned no
+  hits, leaving a future maintainer reading the struct without
+  a working pointer to the production value. Replaced
+  `BETA_CHANNEL` with `BETA_CH` and added a one-line mapping
+  note from the struct's `beta_channel` field to the const.
+- `JodParams` docstring described `JOD = jod_a − jod_b · D^jod_c`,
+  a 3-coefficient form the production code doesn't implement.
+  `kernels::pool::met2jod` is a 2-coefficient piecewise function
+  (`JOD_A`, `JOD_EXP`) with a linear extension below `Q = 0.1`
+  joined continuously at the knee. Replaced the made-up
+  3-coefficient formula with the actual piecewise definition,
+  added the `JOD_A` (`≈ 0.0440`) and `JOD_EXP` (`≈ 0.9302`)
+  numeric anchors, and noted that the struct's `jod_b` is unused
+  (the formula has no separate `b` coefficient). Tick 288.
+
 #### cvvdp-gpu (doctests)
 
 - **Doctest cpu-only feature combo also fixed** — tick 283's
