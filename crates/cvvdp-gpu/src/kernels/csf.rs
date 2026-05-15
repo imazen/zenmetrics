@@ -71,20 +71,25 @@ pub enum CsfChannel {
 pub const N_L_BKG: usize = 32;
 pub const N_RHO: usize = 32;
 
-/// 1-D linear interpolation in log-space along a monotonically
-/// increasing axis. Returns the y-value at `x`. Clamps to the axis
-/// endpoints — matches torch's `interp1q`'s behavior for queries
-/// outside the table range.
-/// Linear interp on a UNIFORMLY-spaced axis via global-stride
-/// rescale. Equivalent to pycvvdp's `interp1q` + `get_interpolants_quick`
-/// — matching it bit-exactly closes a ~0.9% relative drift in CSF S
+/// 1-D linear interpolation on a UNIFORMLY-spaced axis via
+/// global-stride rescale. Returns the y-value at `x`, clamping
+/// queries to the axis endpoints.
+///
+/// Equivalent to pycvvdp's `interp1q` + `get_interpolants_quick` —
+/// matching it bit-exactly closes a ~0.9% relative drift in CSF S
 /// values at chrominance frequencies (tick 199 finding,
-/// docs/CHROMA_DRIFT_INVESTIGATION.md). For uniform axes, binary-search
-/// and uniform-rescale forms are mathematically equivalent, but f32
-/// storage makes the stored axis values slightly non-uniform at ULP
-/// boundaries, and binary-search uses a LOCAL diff `(xs[hi]-xs[lo])`
-/// while uniform-rescale uses the GLOBAL diff `(xs[N-1]-xs[0])/(N-1)` —
-/// these can disagree at the last bit, producing accumulated drift.
+/// `docs/CHROMA_DRIFT_INVESTIGATION.md`). For uniform axes,
+/// binary-search and uniform-rescale forms are mathematically
+/// equivalent, but f32 storage makes the stored axis values
+/// slightly non-uniform at ULP boundaries, and binary-search uses
+/// a LOCAL diff `(xs[hi] − xs[lo])` while uniform-rescale uses
+/// the GLOBAL diff `(xs[N−1] − xs[0]) / (N − 1)` — these can
+/// disagree at the last bit, producing accumulated drift.
+///
+/// Used for the outer `log_L_bkg` interp in `sensitivity_scalar`
+/// and `precompute_logs_row`; the inner `log_rho` interp uses
+/// [`interp1_clamped`] (binary-search) instead, mirroring
+/// pycvvdp's per-axis choice.
 fn interp1_uniform(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     debug_assert_eq!(xs.len(), ys.len());
     let n = xs.len();
@@ -98,6 +103,18 @@ fn interp1_uniform(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     ys[imin] * (1.0 - ifrc) + ys[imax] * ifrc
 }
 
+/// 1-D linear interpolation via binary-search bracket lookup.
+/// Returns the y-value at `x`, clamping queries outside the
+/// axis range to the endpoint y-values.
+///
+/// Works on any monotonically-increasing `xs`, uniformly-spaced
+/// or not. Slower than [`interp1_uniform`] but doesn't depend on
+/// the axis being grid-uniform at f32 precision. Used for the
+/// inner `log_rho` axis interp in `sensitivity_scalar` and
+/// `precompute_logs_row` — matching pycvvdp's choice of
+/// `torch.searchsorted` + linear interp for the rho axis (vs.
+/// `interp1q` for L_bkg). See [`interp1_uniform`] for the
+/// uniform-axis fast path used on the outer L_bkg interp.
 fn interp1_clamped(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     debug_assert_eq!(xs.len(), ys.len());
     let n = xs.len();

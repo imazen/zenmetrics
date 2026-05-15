@@ -154,6 +154,27 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (docs)
 
+- `kernels::csf::interp1_uniform` had a 14-line docstring whose
+  opening 4 lines ("1-D linear interpolation in log-space along
+  a monotonically increasing axis…") read as a generic
+  intro that applied to either interpolator, blurring into the
+  function-specific "Linear interp on a UNIFORMLY-spaced axis"
+  description on line 78 with no separator. `interp1_clamped`
+  underneath had no docstring at all.
+  Rewrote both as standalone docs:
+  - `interp1_uniform`: now opens with "uniformly-spaced axis
+    via global-stride rescale" (the actual semantics), keeps the
+    tick 199 / chroma-drift parity rationale, and adds an
+    explicit "used for the outer L_bkg interp" pointer to
+    `sensitivity_scalar` / `precompute_logs_row`.
+  - `interp1_clamped`: gains a docstring explaining the
+    binary-search bracket form, its applicability to any
+    monotonically-increasing axis (uniform or not), and the
+    pycvvdp-side rationale for using it on the inner rho axis
+    (`torch.searchsorted` + linear interp) versus the L_bkg
+    axis (`interp1q`). Cross-references `interp1_uniform`.
+  Tick 294.
+
 - `kernels/mod.rs` step 5 breadcrumb introduced in tick 291
   triggered 3 `clippy::doc_lazy_continuation` warnings — the
   new sentence about `pool_band_kernel` being test-only landed
