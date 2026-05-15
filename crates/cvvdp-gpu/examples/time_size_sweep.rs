@@ -17,8 +17,9 @@
 //! Run with:
 //!     cargo run --release --example time_size_sweep -p cvvdp-gpu --features cuda
 //!
-//! Falls back to wgpu when cuda isn't compiled in:
+//! Falls back to wgpu / hip when cuda isn't compiled in:
 //!     cargo run --release --example time_size_sweep -p cvvdp-gpu --no-default-features --features wgpu
+//!     cargo run --release --example time_size_sweep -p cvvdp-gpu --no-default-features --features hip
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
