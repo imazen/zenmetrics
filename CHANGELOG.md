@@ -58,6 +58,19 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- `host_scalar::predict_jod_still_3ch` docstring didn't mention
+  `PerfMode`, which left readers asking whether the host-scalar
+  reference path responds to `PerfMode::Fast`. Answer: no — it's
+  the canonical f32-precision reference that every
+  `PerfMode::Strict` parity test validates against, and Fast-mode
+  optimizations apply only to the GPU pipeline (gated on
+  `Cvvdp::params.perf_mode`). Added an explicit "Always runs the
+  strict path" paragraph with intra-doc links to `PerfMode`,
+  `PerfMode::Strict`, and `Cvvdp::compute_dkl_jod_host_pool`
+  (the right answer for callers who want portable perf + the
+  strict numerical contract). All 8 doctests still pass; `cargo
+  doc` zero-warning. Tick 331.
+
 - `kernels::pool::pool_band_finalize` docstring said "Finish
   the host-side fold for `pool_band_kernel`", but the function
   is used to finalize partials from BOTH `pool_band_kernel`

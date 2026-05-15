@@ -30,6 +30,21 @@ use crate::params::DisplayModel;
 /// the band index and `i` is the per-pixel index into the
 /// band-sized buffer.
 ///
+/// **Always runs the strict path** — this is the canonical
+/// f32-precision reference implementation that every
+/// [`PerfMode::Strict`] parity test validates against. It does
+/// not take a [`PerfMode`] argument; future stage-level Fast
+/// optimizations are gated on `Cvvdp::params.perf_mode` and
+/// apply only to the GPU pipeline. Callers wanting maximum
+/// portable performance + the strict numerical contract go via
+/// [`Cvvdp::compute_dkl_jod_host_pool`]; callers wanting the
+/// canonical bit-for-bit pycvvdp reference (slower but doesn't
+/// need a GPU runtime) use this function directly.
+///
+/// [`PerfMode`]: crate::PerfMode
+/// [`PerfMode::Strict`]: crate::PerfMode::Strict
+/// [`Cvvdp::compute_dkl_jod_host_pool`]: crate::Cvvdp::compute_dkl_jod_host_pool
+///
 /// # Example
 ///
 /// Pure-host scoring of a 64×64 byte-identical pair (max JOD = 10):
