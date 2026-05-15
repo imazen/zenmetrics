@@ -120,6 +120,17 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- `tests/shadow_jod.rs` no longer hardcodes the pycvvdp manifest
+  JOD constants. Both tests now load via `common::v1_corpus_jod_golden(q)`
+  from the canonical `scripts/cvvdp_goldens/v1_corpus_jods.json`
+  (which the existing `tests/pipeline_score.rs::cvvdp_score_matches_v1_manifest`
+  already used). Previously the same six `(q, expected_jod)` pairs
+  were duplicated across three test files; a `build_goldens.py`
+  rerun + JSON bump would have silently skipped the two shadow_jod
+  copies until manual sync. Tick 253 dedup.
+
 #### cvvdp-gpu (docs)
 
 - `benches/score.rs` stale-comment cleanup:

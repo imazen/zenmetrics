@@ -31,6 +31,9 @@ use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
 use image::ImageReader;
 use std::path::PathBuf;
 
+#[path = "common/mod.rs"]
+mod common;
+
 fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
     let img = ImageReader::open(path)
         .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
@@ -52,18 +55,18 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
-    // (q, pycvvdp_manifest_jod) captured 2026-05-14 from
-    // build_goldens.py over the v1 corpus at standard_4k.
-    let cases: &[(u32, f32)] = &[
-        (1, 7.6536),
-        (5, 8.8889),
-        (20, 9.7076),
-        (45, 9.8273),
-        (70, 9.8915),
-        (90, 9.9930),
-    ];
+    // pycvvdp_manifest_jod loaded from
+    // scripts/cvvdp_goldens/v1_corpus_jods.json via the common
+    // helper — single source of truth so a build_goldens.py
+    // rerun + JSON bump propagates without hand-editing test
+    // constants. Tick 253 dedup.
+    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let cases: Vec<(u32, f32)> = qs
+        .iter()
+        .map(|&q| (q, common::v1_corpus_jod_golden(q)))
+        .collect();
     let mut jods = Vec::with_capacity(cases.len());
-    for &(q, expected) in cases {
+    for &(q, expected) in &cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod = predict_jod_still_3ch(
             &ref_bytes,
@@ -134,14 +137,16 @@ type Backend = cubecl::hip::HipRuntime;
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
-    let cases: &[(u32, f32)] = &[
-        (1, 7.6536),
-        (5, 8.8889),
-        (20, 9.7076),
-        (45, 9.8273),
-        (70, 9.8915),
-        (90, 9.9930),
-    ];
+    // pycvvdp_manifest_jod loaded from the canonical
+    // scripts/cvvdp_goldens/v1_corpus_jods.json via the common
+    // helper (tick 253 dedup — was hand-mirroring the values
+    // alongside the sibling shadow_jod_runs_and_is_monotonic_on_corpus
+    // test).
+    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let cases: Vec<(u32, f32)> = qs
+        .iter()
+        .map(|&q| (q, common::v1_corpus_jod_golden(q)))
+        .collect();
 
     let client = Backend::client(&Default::default());
     let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
@@ -153,7 +158,7 @@ type Backend = cubecl::hip::HipRuntime;
     // pycvvdp diffs are now 0.0000–0.0031 across the manifest.
     let tol_for = |_q: u32| -> f32 { 0.005 };
     let mut jods = Vec::with_capacity(cases.len());
-    for &(q, expected) in cases {
+    for &(q, expected) in &cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod = cvvdp
             .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
