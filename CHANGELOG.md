@@ -78,6 +78,16 @@ Workspace conventions per the global rules:
   file is the only place cpu-backend coverage lives.
   Run with `cargo test -p cvvdp-gpu --no-default-features --features cpu`.
 
+#### cvvdp-gpu (docs)
+
+- `Cvvdp::score` now has a `no_run` doctest example showing the
+  canonical `Cvvdp::<CudaRuntime>::new` → `.score(&ref, &dist)`
+  shape against a 64×64 byte-identical pair. Fills the only
+  remaining doc gap on the crate's headline public entry point —
+  the host-only and host-pool paths already had doctests via
+  `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
+  and `compute_dkl_jod_host_pool_with_warm_ref`.
+
 #### Workspace
 
 - Pinned multi-tick task in `CLAUDE.md`: compute CVVDP scores for

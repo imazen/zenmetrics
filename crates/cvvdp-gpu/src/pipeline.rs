@@ -2162,6 +2162,28 @@ impl<R: Runtime> Cvvdp<R> {
     /// The viewing geometry comes from `self.geometry` — set via
     /// `Cvvdp::new_with_geometry` or defaulted to STANDARD_4K by
     /// `Cvvdp::new`.
+    ///
+    /// # Example
+    ///
+    /// Score a 64×64 byte-identical pair on the CUDA backend (max JOD = 10).
+    /// `no_run` because docs.rs has no GPU; the call shape compiles against
+    /// every cubecl backend with a working atomic-f32 pool (cuda, wgpu,
+    /// hip — see [`Cvvdp::compute_dkl_jod_host_pool`] for the cpu runtime):
+    ///
+    /// ```no_run
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    /// let bytes = vec![128u8; (w * h * 3) as usize];
+    /// let jod = cvvdp.score(&bytes, &bytes).expect("score");
+    /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
+    /// ```
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
