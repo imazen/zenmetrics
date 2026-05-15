@@ -312,7 +312,6 @@ pub fn csf_apply_3ch_kernel(
 /// - `t_p_ref_*`   — REF post-CSF per channel.
 /// - `t_p_dis_*`   — DIST post-CSF per channel.
 #[cube(launch)]
-#[allow(clippy::too_many_arguments)]
 pub fn csf_apply_6ch_kernel(
     weber_ref_a: &Array<f32>,
     weber_ref_rg: &Array<f32>,
