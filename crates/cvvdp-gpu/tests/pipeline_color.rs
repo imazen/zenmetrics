@@ -1321,25 +1321,13 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // Same byte-for-byte synth as the chroma_shift fixture.
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r;
-            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
-            dist_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
 
     let ref_planes = cvvdp
         .compute_dkl_planes(&ref_srgb)
@@ -1427,21 +1415,9 @@ fn compute_dkl_t_p_bands_ref_matches_pycvvdp_at_chroma_shift_all_bands() {
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // chroma_shift ref bytes only.
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
 
     let ref_tp = cvvdp.compute_dkl_t_p_bands(&ref_srgb, ppd).expect("t_p ref");
 
@@ -1504,25 +1480,13 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r;
-            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
-            dist_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
 
     let (ref_bands, _ref_log) = cvvdp
         .compute_dkl_weber_pyramid(&ref_srgb)
@@ -1609,25 +1573,13 @@ fn spatial_pool_q_per_ch_matches_pycvvdp_at_chroma_shift_all_bands() {
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
     // chroma_shift ref + dist bytes.
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r;
-            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
-            dist_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
 
     let d_bands = cvvdp
         .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
@@ -1719,21 +1671,9 @@ fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
 
     // GPU T_p.
     let t_p_gpu = cvvdp
@@ -1953,25 +1893,13 @@ fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
 
     // chroma_shift ref + dist bytes (same synth as the
     // T_p test, plus the +16-on-G distortion).
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-            dist_srgb[i] = r;
-            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
-            dist_srgb[i + 2] = b;
-        }
-    }
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let dist_srgb: Vec<u8> = ref_srgb
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (p[1] as i16 + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
 
     let d_bands = cvvdp
         .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)

@@ -122,6 +122,15 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- Final 6 hand-inlined synth_pair_ref sites in
+  `tests/pipeline_color.rs` migrated onto `common::synth_pair_ref`
+  (stage-probe helpers for chroma_shift: `compute_dkl_planes`,
+  `compute_dkl_t_p_bands`, `compute_dkl_weber_pyramid`,
+  `spatial_pool`, `compute_dkl_d_bands`, plus an `_at_chroma_shift_sentinels`
+  helper). 14 of 14 callers now consolidated; the inline modular-
+  arithmetic ref construction no longer appears anywhere except the
+  helper definition itself. Bit-stable parity preserved across all
+  31 pipeline_color tests.
 - Migrated the `blur3x1`, `blur1x3`, and `noise` 256×256 parity
   tests off the hand-inlined `synth_pair_ref` construction onto
   `common::synth_pair_ref`. 7 of 14 inlined sites in
