@@ -1077,6 +1077,73 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
 }
 
 #[test]
+fn gauss_chain_helpers_do_not_invalidate_warm_state() {
+    // Tick 251: pin the inverse of
+    // warm_state_invalidates_after_each_documented_dispatcher.
+    // `compute_dkl_planes` and `compute_dkl_gauss_pyramid` write only
+    // to `gauss_ref` (per-call scratch, NOT part of the warm state).
+    // They MUST preserve the warm scalar so a subsequent
+    // `compute_dkl_jod_with_warm_ref` call succeeds.
+    //
+    // A future refactor that, say, made `compute_dkl_planes`
+    // additionally pre-emit weber bands into bands_ref (matching the
+    // public `compute_dkl_weber_pyramid` interface for symmetry) would
+    // need to invalidate warm state — this test would catch it.
+    //
+    // Sibling to `set_reference_does_not_invalidate_warm_state` and
+    // `warm_state_invalidates_after_each_documented_dispatcher`.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb = vec![128u8; n];
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(8)).collect();
+    let other_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(4)).collect();
+
+    let non_invalidators: &[&str] = &["compute_dkl_planes", "compute_dkl_gauss_pyramid"];
+
+    for &name in non_invalidators {
+        cvvdp
+            .warm_reference(&ref_srgb)
+            .expect("warm_reference (re-arm)");
+        match name {
+            "compute_dkl_planes" => {
+                let _ = cvvdp
+                    .compute_dkl_planes(&other_srgb)
+                    .expect("intervening compute_dkl_planes");
+            }
+            "compute_dkl_gauss_pyramid" => {
+                let _ = cvvdp
+                    .compute_dkl_gauss_pyramid(&other_srgb)
+                    .expect("intervening compute_dkl_gauss_pyramid");
+            }
+            other => unreachable!("unhandled non-invalidator {other}"),
+        }
+        // Warm-ref score must succeed — the call above only touched
+        // gauss_ref, not bands_ref or weber_scratch.log_l_bkg.
+        let jod = cvvdp
+            .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "after {name}: warm state must survive, got error {e:?}"
+                )
+            });
+        assert!(
+            jod.is_finite(),
+            "after {name}: warm-ref JOD must be finite, got {jod}"
+        );
+        assert!(
+            (0.0..=10.0).contains(&jod),
+            "after {name}: warm-ref JOD must be in [0, 10], got {jod}"
+        );
+    }
+}
+
+#[test]
 fn set_reference_does_not_invalidate_warm_state() {
     // Tick 238: pin the documented non-invalidator. set_reference
     // only stashes host-side bytes for the score_with_reference

@@ -120,6 +120,18 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- `gauss_chain_helpers_do_not_invalidate_warm_state` — pins the
+  inverse of `warm_state_invalidates_after_each_documented_dispatcher`:
+  `compute_dkl_planes` and `compute_dkl_gauss_pyramid` write only
+  to `gauss_ref` (per-call scratch, not warm state), so they MUST
+  preserve the cached scalar. A future refactor that made either
+  helper additionally emit bands into `bands_ref` (matching the
+  symmetric `compute_dkl_weber_pyramid` interface) would need to
+  invalidate warm state — this test would surface that. Sibling
+  to `set_reference_does_not_invalidate_warm_state` (tick 238).
+
 #### cvvdp-gpu (tests + docs)
 
 - `set_reference_replaces_prior_cache` — pins the implicit
