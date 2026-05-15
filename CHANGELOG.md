@@ -122,6 +122,14 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- `invalid_image_size_surfaces_on_too_small_dims` — pins the
+  `Error::InvalidImageSize` construction-time guard on `Cvvdp::new`
+  and `Cvvdp::new_with_geometry`. Tests 6 sub-threshold cases
+  (7×8, 8×7, 7×7, 4×4, 0×0, plus a `new_with_geometry` case)
+  plus the 8×8 boundary success path. Pre-tick-241 a refactor
+  that swapped the `width < PYRAMID_MIN_DIM * 2` check for
+  `width < PYRAMID_MIN_DIM` (accepting 4×4 with no usable
+  pyramid) would not have surfaced in CI.
 - `dimension_mismatch_surfaces_on_wrong_size_inputs` — pins the
   `Error::DimensionMismatch` contract on every public entry that
   validates buffer length: `Cvvdp::score` (both arms),

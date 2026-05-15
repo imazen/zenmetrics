@@ -164,6 +164,76 @@ fn score_with_reference_errors_without_set_reference() {
 }
 
 #[test]
+fn invalid_image_size_surfaces_on_too_small_dims() {
+    // Tick 241: pin the InvalidImageSize error path on Cvvdp::new
+    // and Cvvdp::new_with_geometry. The construction-time guard at
+    // `if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2`
+    // had zero test coverage before this — a refactor that swapped
+    // the check for `width < PYRAMID_MIN_DIM` (off-by-2× threshold,
+    // would accept 4×4 which has no usable pyramid) would not have
+    // surfaced in CI.
+    //
+    // PYRAMID_MIN_DIM = 4, so the lower bound is 4×2 = 8. Cases:
+    //   - 8×8 must succeed (boundary)
+    //   - 7×8, 8×7, 7×7 must each fail
+    //   - 4×4 must fail (smaller than threshold)
+    //   - 0×0 must fail (degenerate)
+    // One client shared across all subcases — the guard at
+    // `width < PYRAMID_MIN_DIM * 2 || ...` runs before any GPU
+    // alloc, so failing cases never touch the cubecl backend.
+    // The boundary 8×8 case fully constructs (does touch the
+    // backend); do it last so an early failure doesn't leak a
+    // partial Cvvdp.
+    let client = Backend::client(&Default::default());
+
+    let check_invalid = |w: u32, h: u32, label: &str| {
+        let err = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+            .err()
+            .unwrap_or_else(|| panic!("{label}: expected InvalidImageSize, got Ok"));
+        match err {
+            cvvdp_gpu::Error::InvalidImageSize => {}
+            other => panic!("{label}: expected InvalidImageSize, got {other:?}"),
+        }
+    };
+
+    // Sub-threshold cases (guard rejects before GPU touch).
+    check_invalid(7, 8, "Cvvdp::new(7, 8)");
+    check_invalid(8, 7, "Cvvdp::new(8, 7)");
+    check_invalid(7, 7, "Cvvdp::new(7, 7)");
+    check_invalid(4, 4, "Cvvdp::new(4, 4)");
+    check_invalid(0, 0, "Cvvdp::new(0, 0)");
+
+    // new_with_geometry shares the same guard — pin one case to
+    // catch a future copy-paste mistake that drops the check from
+    // one constructor.
+    let phone_geom = cvvdp_gpu::params::DisplayGeometry {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.40,
+        diagonal_inches: 5.5,
+    };
+    let err = Cvvdp::<Backend>::new_with_geometry(
+        client.clone(),
+        4,
+        4,
+        CvvdpParams::PLACEHOLDER,
+        phone_geom,
+    )
+    .err()
+    .expect("new_with_geometry(4, 4) should fail");
+    match err {
+        cvvdp_gpu::Error::InvalidImageSize => {}
+        other => panic!("new_with_geometry(4, 4): expected InvalidImageSize, got {other:?}"),
+    }
+
+    // Boundary: exact minimum dims must construct successfully.
+    let cvvdp_ok = Cvvdp::<Backend>::new(client, 8, 8, CvvdpParams::PLACEHOLDER);
+    if let Err(e) = &cvvdp_ok {
+        panic!("8×8 should succeed (PYRAMID_MIN_DIM * 2 boundary), got Err({e:?})");
+    }
+}
+
+#[test]
 fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     // Tick 239: pin the DimensionMismatch error-path on every public
     // entry that validates buffer length. The 8 sites (lib::Error::
