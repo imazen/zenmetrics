@@ -49,8 +49,20 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       See commit b2b7f135.
 - [x] Spec column schema (dtype, nullability, sidecar layout) —
       see `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`
-- [ ] pycvvdp Dockerfile (separate image, pinned pytorch+CUDA)
+- [x] pycvvdp scoring worker: `scripts/sweep/pycvvdp_worker.py`
+      (consumes pairs TSV, writes parquet sidecar) +
+      `scripts/sweep/Dockerfile.pycvvdp` (pytorch 2.5.1 + CUDA 12.4
+      + pycvvdp 0.5.4). End-to-end verified locally on a synth pair
+      (JOD 10.0 / 9.63 for identical vs chroma-shifted 64×64 inputs).
 - [ ] cvvdp-gpu Dockerfile extension (or new image) + onstart script
+- [x] Encoder driver that re-encodes from
+      `(image_path, codec, q, knob_tuple_json)` and emits the pairs
+      TSV that the pycvvdp worker consumes:
+      `zen-metrics-cli sweep --distorted-out-dir <DIR> --pairs-tsv <TSV>`
+      (PNG fastest-effort dist images; deterministic filenames hashed
+      on `(src_path, knob_json)`). End-to-end smoke-tested on a 2-image
+      × 2-q grid: zen-metrics sweep → pycvvdp_worker score-pairs →
+      4-row parquet sidecar with `cvvdp_pycvvdp_v054` column.
 - [ ] Sweep launcher dispatching both implementations in parallel
 - [ ] Verification pass (n≈100 pairs, both implementations, manual
       diff against canonical pycvvdp output)

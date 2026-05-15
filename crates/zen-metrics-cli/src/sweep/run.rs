@@ -39,7 +39,9 @@
 //! cells continue. Stat counters use `AtomicU64`, so multiple parallel
 //! failures don't lose increments to torn writes.
 
+use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -73,6 +75,25 @@ pub struct SweepConfig {
     /// is created but receives no rows; we don't auto-add zensim because
     /// callers may have explicit reasons for the metric set they passed.
     pub feature_output: Option<PathBuf>,
+    /// When set, every successfully decoded cell writes its
+    /// **distorted** image (the result of encode + decode-back) as
+    /// PNG into this directory. Filenames are
+    /// `<src_stem>_<src_path_hash16>_<codec>_q<q>_<knob_hash16>.png`
+    /// — deterministic per cell so reruns overwrite the same files
+    /// rather than producing duplicates.
+    ///
+    /// Pairs with `pairs_tsv` to feed external scorers (e.g. the
+    /// pycvvdp worker at `scripts/sweep/pycvvdp_worker.py`) that
+    /// need on-disk `(ref, dist)` pairs. See
+    /// `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
+    pub distorted_out_dir: Option<PathBuf>,
+    /// When set, a parallel TSV is written with the columns
+    /// `image_path  codec  q  knob_tuple_json  ref_path  dist_path`
+    /// — one row per successfully-decoded cell, mirroring the main
+    /// `output` TSV's identity tuple. `ref_path` is the source
+    /// image; `dist_path` is the cell's distorted PNG (empty when
+    /// `distorted_out_dir` is not set).
+    pub pairs_tsv: Option<PathBuf>,
     /// Number of CPU threads for the per-image inner cell loop. `0`
     /// defers to rayon's default (one per logical core). `1` runs cells
     /// serially, useful for debugging.
@@ -114,6 +135,26 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
         None => None,
     };
 
+    // Optional pairs TSV — header row first so failures partway
+    // through a sweep still leave a parseable file.
+    let pairs_writer_inner = match &cfg.pairs_tsv {
+        Some(path) => {
+            let mut w = csv::WriterBuilder::new()
+                .delimiter(b'\t')
+                .from_path(path)?;
+            w.write_record([
+                "image_path",
+                "codec",
+                "q",
+                "knob_tuple_json",
+                "ref_path",
+                "dist_path",
+            ])?;
+            Some(w)
+        }
+        None => None,
+    };
+
     let cells_total = (cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64;
     let stats = AtomicSweepStats::new(cells_total);
 
@@ -122,6 +163,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     // of milliseconds — so the critical section is tiny in comparison.
     let wtr = Mutex::new(wtr);
     let feature_writer = Mutex::new(feature_writer_inner);
+    let pairs_writer = Mutex::new(pairs_writer_inner);
 
     for src_path in &cfg.sources {
         // Decode the source once per image so we don't re-PNG-decode for
@@ -197,6 +239,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                 CellOutcome::Ok {
                     row,
                     feature,
+                    pair_row,
                     score_failed,
                 } => {
                     if let Ok(mut w) = wtr.lock() {
@@ -215,6 +258,18 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                                     eprintln!(
                                         "[sweep] feature_writer push failed: {} q={q_}: {e}",
                                         image,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if let Some(pair) = pair_row {
+                        if let Ok(mut pw_guard) = pairs_writer.lock() {
+                            if let Some(pw) = pw_guard.as_mut() {
+                                if let Err(e) = pw.write_record(&pair) {
+                                    eprintln!(
+                                        "[sweep] pairs writer failed: {} q={q}: {e}",
+                                        pair[0],
                                     );
                                 }
                             }
@@ -251,6 +306,12 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     {
         fw.finish()?;
     }
+    if let Some(mut pw) = pairs_writer
+        .into_inner()
+        .map_err(|e| format!("pairs_writer lock poisoned: {e}"))?
+    {
+        pw.flush()?;
+    }
     Ok(stats.snapshot())
 }
 
@@ -260,6 +321,10 @@ enum CellOutcome {
         row: Vec<String>,
         /// `(image_path, codec, q, knob_json, zensim_score, features)`
         feature: Option<(String, &'static str, u32, String, f32, Vec<f64>)>,
+        /// `[image_path, codec, q, knob_tuple_json, ref_path, dist_path]`
+        /// — emitted when the sweep config requests a pairs TSV. The
+        /// outer loop writes this row to the pairs writer.
+        pair_row: Option<[String; 6]>,
         score_failed: bool,
     },
     EncodeFailed {
@@ -404,10 +469,104 @@ fn compute_cell(
         )
     });
 
+    // Emit the pair row + (optionally) save the distorted PNG when
+    // requested. Failure to write the PNG demotes the pair_row to
+    // an empty dist_path so downstream tooling can spot it; we don't
+    // hard-fail the whole cell because the score columns are still
+    // valid.
+    let pair_row = if cfg.pairs_tsv.is_some() {
+        let dist_path = match &cfg.distorted_out_dir {
+            Some(dir) => save_distorted_png(
+                dir,
+                src_path,
+                cfg.codec.name(),
+                q,
+                &knob_json,
+                &decoded,
+            )
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "[sweep] save distorted PNG failed: {} q={q}: {e}",
+                    src_path.display(),
+                );
+                String::new()
+            }),
+            None => String::new(),
+        };
+        Some([
+            src_path.display().to_string(),
+            cfg.codec.name().to_string(),
+            q.to_string(),
+            knob_json.clone(),
+            src_path.display().to_string(),
+            dist_path,
+        ])
+    } else {
+        None
+    };
+
     CellOutcome::Ok {
         row,
         feature,
+        pair_row,
         score_failed: any_score_failed,
+    }
+}
+
+/// Hash a value to a fixed-width hex string. Used to produce
+/// collision-resistant filename fragments for `(src_path, knobs)`
+/// without dragging in a cryptographic dep.
+fn hex_hash16<H: Hash + ?Sized>(value: &H) -> String {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Write `decoded` as a fast-effort PNG into `dir` at the canonical
+/// filename. Returns the saved path as a string for the pair-row.
+fn save_distorted_png(
+    dir: &Path,
+    src_path: &Path,
+    codec_name: &str,
+    q: u32,
+    knob_json: &str,
+    decoded: &Rgb8Image,
+) -> Result<String, Box<dyn Error>> {
+    #[cfg(feature = "png")]
+    {
+        use enough::Unstoppable;
+        use imgref::ImgRef;
+        use zenpng::{Compression, EncodeConfig};
+
+        std::fs::create_dir_all(dir)?;
+
+        let stem = src_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("source");
+        let src_hash = hex_hash16(src_path.to_string_lossy().as_ref());
+        let knob_hash = hex_hash16(knob_json);
+        let filename = format!(
+            "{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.png"
+        );
+        let out_path = dir.join(&filename);
+
+        // Fastest effort — these PNGs feed scorers, not end users.
+        let cfg = EncodeConfig::default().with_compression(Compression::Fastest);
+
+        use rgb::FromSlice;
+        let pixels: &[rgb::Rgb<u8>] = decoded.pixels.as_rgb();
+        let img = ImgRef::new(pixels, decoded.width as usize, decoded.height as usize);
+
+        let bytes = zenpng::encode_rgb8(img, None, &cfg, &Unstoppable, &Unstoppable)
+            .map_err(|e| format!("zenpng encode failed: {e}"))?;
+        std::fs::write(&out_path, bytes)?;
+        Ok(out_path.display().to_string())
+    }
+    #[cfg(not(feature = "png"))]
+    {
+        let _ = (dir, src_path, codec_name, q, knob_json, decoded);
+        Err("distorted-out-dir requires the `png` feature to be enabled".into())
     }
 }
 

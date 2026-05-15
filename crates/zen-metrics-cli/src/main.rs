@@ -166,6 +166,20 @@ struct SweepArgs {
     /// The metric list must include `zensim` for any rows to be written.
     #[arg(long)]
     feature_output: Option<PathBuf>,
+    /// Optional directory to receive a PNG of every successfully
+    /// decoded cell's distorted image. Filenames are deterministic
+    /// per `(src_path, codec, q, knobs)`. Pairs with `--pairs-tsv`
+    /// to feed external scorers (e.g. pycvvdp) that need on-disk
+    /// `(ref, dist)` image pairs.
+    #[arg(long)]
+    distorted_out_dir: Option<PathBuf>,
+    /// Optional TSV path emitting one row per successfully decoded
+    /// cell with columns `image_path codec q knob_tuple_json
+    /// ref_path dist_path`. The `ref_path` is the source image's
+    /// path; `dist_path` is the distorted PNG written under
+    /// `--distorted-out-dir` (empty when that flag is unset).
+    #[arg(long)]
+    pairs_tsv: Option<PathBuf>,
     /// CubeCL runtime selector for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
@@ -284,6 +298,8 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         gpu_runtime: args.gpu_runtime,
         output: args.output,
         feature_output: args.feature_output,
+        distorted_out_dir: args.distorted_out_dir,
+        pairs_tsv: args.pairs_tsv,
         jobs,
     };
     let stats = run_sweep(&cfg)?;

@@ -1,0 +1,62 @@
+# Dockerfile.pycvvdp — pycvvdp v0.5.4 scoring worker for vast.ai
+#
+# Companion to `Dockerfile.sweep` (which bakes the zen-metrics binary).
+# This image is the canonical pycvvdp reference scorer — used to
+# produce the `cvvdp_pycvvdp_v054` column in parquet sidecars per
+# `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
+#
+# Build (from repo root):
+#   docker build -f scripts/sweep/Dockerfile.pycvvdp \
+#       -t ghcr.io/imazen/pycvvdp-scorer:0.5.4 .
+#
+# Push (requires gh auth):
+#   docker push ghcr.io/imazen/pycvvdp-scorer:0.5.4
+#
+# Run locally on a CUDA box:
+#   docker run --rm --gpus all \
+#       -v /path/to/pairs.tsv:/work/pairs.tsv:ro \
+#       -v /path/to/out:/work/out \
+#       ghcr.io/imazen/pycvvdp-scorer:0.5.4 \
+#       pycvvdp-worker score-pairs \
+#           --pairs-tsv /work/pairs.tsv \
+#           --out-parquet /work/out/sidecar.parquet
+#
+# Vast.ai launch is the same shape as Dockerfile.sweep — set --image
+# to this tag and pass the chunk env vars. The image's CMD is a no-op
+# help text so vast.ai must pass an explicit command (no
+# accidental scoring runs on instance boot).
+
+# Pin to PyTorch 2.5.1 + CUDA 12.4 cudnn 9 runtime — matches what the
+# pycvvdp v0.5.4 wheels are tested against and what bench_12mp_cuda.py
+# already runs against locally.
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+# Pin the pycvvdp version explicitly to match the
+# `cvvdp_pycvvdp_v054` column tag. If this version changes, the
+# column name must change in lockstep — see CVVDP_SIDECAR_SCHEMA.md.
+ARG PYCVVDP_VERSION=0.5.4
+ENV PYCVVDP_VERSION=${PYCVVDP_VERSION}
+
+# Worker dependencies. Pillow / numpy come from the base image but
+# we pin to known-good ranges. pyarrow drives parquet output.
+RUN pip install --no-cache-dir \
+        "cvvdp==${PYCVVDP_VERSION}" \
+        "pillow>=10" \
+        "numpy>=1.26" \
+        "pyarrow>=15"
+
+WORKDIR /opt/pycvvdp-worker
+
+# Worker script lives under scripts/sweep next to this Dockerfile.
+COPY scripts/sweep/pycvvdp_worker.py /opt/pycvvdp-worker/pycvvdp_worker.py
+RUN chmod +x /opt/pycvvdp-worker/pycvvdp_worker.py && \
+    ln -s /opt/pycvvdp-worker/pycvvdp_worker.py /usr/local/bin/pycvvdp-worker
+
+# Embed the schema spec so users can read it without pulling the repo.
+COPY crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md \
+     /opt/pycvvdp-worker/CVVDP_SIDECAR_SCHEMA.md
+
+# Sanity: import works and prints version.
+RUN python3 -c "import pycvvdp; print('pycvvdp version:', pycvvdp.__version__ if hasattr(pycvvdp, '__version__') else 'unknown')"
+
+CMD ["pycvvdp-worker", "--help"]

@@ -27,6 +27,37 @@ Workspace conventions per the global rules:
   names (e.g. `cvvdp_pycvvdp_v054`, `cvvdp_imazen_v0_0_1`). Survives
   context compaction; every `/loop` tick re-reads it.
 
+#### zen-metrics-cli (sweep)
+
+- `sweep` subcommand learns two new flags that pair off for
+  external-scorer workflows (e.g. pycvvdp):
+  - `--distorted-out-dir <DIR>`: every successfully-decoded cell
+    writes its distorted image as a `Compression::Fastest` PNG
+    into this directory. Filenames are deterministic and
+    collision-resistant:
+    `<src_stem>_<src_path_hash16>_<codec>_q<q>_<knob_hash16>.png`.
+  - `--pairs-tsv <FILE>`: tab-separated companion to the main
+    `--output` TSV with columns
+    `image_path codec q knob_tuple_json ref_path dist_path` —
+    one row per decoded cell. `dist_path` is empty when
+    `--distorted-out-dir` is unset.
+  - Smoke test: 2-image × 2-q sweep produced 4 PNGs + a 4-row pairs
+    TSV that `pycvvdp_worker` then scored into a 4-row
+    `cvvdp_pycvvdp_v054` parquet sidecar.
+
+#### scripts/sweep
+
+- `pycvvdp_worker.py` — canonical pycvvdp v0.5.4 scoring worker.
+  Consumes a TSV of `(identity_tuple, ref_path, dist_path)` rows
+  and writes a parquet sidecar with the `cvvdp_pycvvdp_v054`
+  column per `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
+  Verified end-to-end on a synth 64×64 pair: JOD 10.0 for identical
+  inputs, 9.63 for chroma-shifted.
+- `Dockerfile.pycvvdp` — image for the worker on vast.ai. Bases on
+  `pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime` with pycvvdp
+  0.5.4, pillow, numpy, pyarrow. CMD is help text; runners must
+  pass an explicit `pycvvdp-worker score-pairs …` command.
+
 #### cvvdp-gpu
 
 - `CVVDP_COLUMN_NAME` const exposes a per-implementation column tag
