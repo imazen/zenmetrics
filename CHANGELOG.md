@@ -117,6 +117,29 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pool_scalar.rs::lp_norm_sum_*`** — four direct unit
+  tests on the previously-uncovered public `lp_norm_sum`:
+  Pythagorean-triple at p=2, sign-handling via `.abs()`,
+  zero-input across n in {0, 1, 5, 64}, and uniform-input
+  count-scaling at p=4. Discovered while writing: the outer
+  `eps^(1/p)` tail subtraction is NOT negligible — sqrt(1e-5)
+  ≈ 0.00316 at p=2, eps^0.25 ≈ 0.0562 at p=4. Tests subtract
+  the eps tail explicitly rather than loosening tolerances to
+  mask it; this is cvvdp's documented safe_pow shape. Tick 351,
+  `711eba8a`.
+- **`tests/cpu_backend.rs::compute_dkl_jod_host_pool_returns_max_jod_on_identical_inputs`**
+  — end-to-end identity gate that scores a buffer against
+  itself and asserts JOD ≈ 10.0. Closes a gap where the
+  property was only exercised by the `Cvvdp::score` doctest
+  (skipped in `cargo test --test <name>` runs). Tick 350,
+  `ca3b9d3a`.
+- **Documented panic contracts now have `should_panic` regression
+  tests** — `do_pooling_and_jod_panics_on_empty_q_per_ch` in
+  `pool_scalar.rs` and `predict_jod_still_3ch_panics_on_ref_dim_mismatch`
+  / `predict_jod_still_3ch_panics_on_dist_dim_mismatch` in
+  `shadow_jod.rs`. Both `# Panics` docstring sections previously
+  had only doctest coverage; the integration tests gate them in
+  the standard `cargo test` run. Tick 349, `2beffe90`.
 - `tests/pyramid_scalar.rs::band_frequencies_exceeds_max_levels_at_high_ppd_or_dim`
   pins the `MAX_LEVELS=9` cap in `pipeline::pyramid_levels` as
   non-vacuous: `band_frequencies` returns 11 entries for
