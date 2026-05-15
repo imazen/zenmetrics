@@ -280,6 +280,7 @@ pub struct Band {
 ///
 /// Returns a `Vec<f32>` of length `height + 1` (the "base" band plus
 /// `height` subsequent reduces), each entry in cy/deg.
+#[must_use]
 pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
     const MIN_FREQ: f32 = 0.2;
     let min_dim = width.min(height);
@@ -329,6 +330,7 @@ pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
 /// `debug_assert!`. Release builds reach the
 /// `gauss.pop().expect("at least one level")` line after the
 /// gaussian-pyramid loop produced nothing.
+#[must_use]
 pub fn laplacian_pyramid_dec_scalar(
     src: &[f32],
     sw: usize,
@@ -428,6 +430,7 @@ pub struct WeberPyramid {
 /// gauss_ref_A; for dist-side bands, use gauss_dist_A). For a
 /// callee processing one image at a time, pass the image's own
 /// achromatic Gaussian pyramid.
+#[must_use]
 pub fn weber_contrast_pyr_dec_scalar(
     image_plane: &[f32],
     l_bkg_plane: &[f32],

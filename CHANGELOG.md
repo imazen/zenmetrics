@@ -405,6 +405,38 @@ original Fixed/Added/Changed sections.
   `kernels/mod.rs` that `pool_band_kernel` is retained for the
   pool-scalar unit test. Tick 291.
 
+- Added `#[must_use]` to 24 pure-return `pub fn`s where ignoring
+  the return value is always a bug (clippy
+  `-W clippy::must_use_candidate`). These are all
+  host-scalar / kernel helpers and one method
+  (`DisplayGeometry::pixels_per_degree`); the attribute is purely
+  additive — callers that already use the return value are
+  unaffected, and callers that drop it on the floor get a
+  `unused_must_use` warning surfacing the bug at the use site.
+  Breakdown:
+  - `src/host_scalar.rs`: `predict_jod_still_3ch` (1)
+  - `src/params.rs`: `DisplayGeometry::pixels_per_degree` (1)
+  - `src/kernels/color.rs`: `srgb_byte_to_dkl_scalar` (1)
+  - `src/kernels/csf.rs`: `sensitivity_scalar`,
+    `sensitivity_corrected_scalar`, `precompute_logs_row`,
+    `precomputed_band_weights`, `flatten_band_weights` (5)
+  - `src/kernels/masking.rs`: `safe_pow`, `clamp_diff_soft`,
+    `phase_uncertainty_no_blur`, `gaussian_blur_sigma3`,
+    `phase_uncertainty_band`, `mask_pool_pixel`,
+    `mult_mutual_pixel`, `mult_mutual_band` (8)
+  - `src/kernels/pool.rs`: `lp_norm_mean`, `lp_norm_sum`,
+    `met2jod`, `do_pooling_and_jod_still_3ch`,
+    `pool_band_finalize` (5)
+  - `src/kernels/pyramid.rs`: `band_frequencies`,
+    `laplacian_pyramid_dec_scalar`,
+    `weber_contrast_pyr_dec_scalar` (3)
+  `must_use_candidate` warning count: 0 (was 24). The
+  `#[cube(launch)]` GPU kernels are skipped because they return
+  `()` and don't trigger the lint. `pool_scalar` (8) and
+  `display_geometry` (2) test suites still pass post-change.
+  Crate is `publish = false` so no semver implications.
+  Tick 309.
+
 - Added `# Panics` sections to 3 `pub fn` host-scalar /
   kernel helpers that can panic on out-of-spec input (clippy
   `-W clippy::missing_panics_doc`):

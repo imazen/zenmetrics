@@ -160,6 +160,7 @@ fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
 ///   log10 before the call via `weber_contrast_pyr` — host_scalar
 ///   does it explicitly.
 /// - `cc` — opponent channel.
+#[must_use]
 pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let log_rho_q = rho.max(1e-6).log10();
     let lut = channel_lut(cc);
@@ -182,6 +183,7 @@ pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
 
 /// Sensitivity with cvvdp's published correction applied. Same
 /// log10-space `log_l_bkg` convention as `sensitivity_scalar`.
+#[must_use]
 pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let s = sensitivity_scalar(rho, log_l_bkg, cc);
     let correction = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
@@ -195,6 +197,7 @@ pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) ->
 /// length-`N_L_BKG` vector of `log10(S)` values parameterized by
 /// `log_L_bkg`. cvvdp's `castleCSF.sensitivity` does this row
 /// pull-out before its per-pixel L_bkg interp.
+#[must_use]
 pub fn precompute_logs_row(rho: f32, cc: CsfChannel) -> [f32; N_L_BKG] {
     let log_rho_q = rho.max(1e-6).log10();
     let lut = channel_lut(cc);
@@ -492,6 +495,7 @@ pub fn weight_band_kernel(band: &mut Array<f32>, weights: &Array<f32>, weight_id
 /// luminance as a single scalar (e.g. display peak / 2, or a
 /// per-image mean). The kernel above (`weight_band_kernel`) consumes
 /// the flat-layout version of this table.
+#[must_use]
 pub fn precomputed_band_weights(
     ppd: f32,
     width: usize,
@@ -516,6 +520,7 @@ pub fn precomputed_band_weights(
 /// `[lvl0_chA, lvl0_chRG, lvl0_chVY, lvl1_chA, …]`.
 ///
 /// `weight_idx = level * 3 + channel`.
+#[must_use]
 pub fn flatten_band_weights(weights: &[[f32; 3]]) -> Vec<f32> {
     let mut out = Vec::with_capacity(weights.len() * 3);
     for w in weights {

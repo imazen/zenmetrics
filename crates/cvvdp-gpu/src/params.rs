@@ -79,6 +79,7 @@ impl DisplayGeometry {
     /// Pixels-per-degree at the display centre (eccentricity = 0).
     /// Matches cvvdp's `vvdp_display_geometry.get_ppd()` for the
     /// no-eccentricity path.
+    #[must_use]
     pub fn pixels_per_degree(&self) -> f32 {
         let ar = self.resolution_w as f32 / self.resolution_h as f32;
         let diagonal_mm = self.diagonal_inches * 25.4;

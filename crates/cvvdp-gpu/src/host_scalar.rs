@@ -61,6 +61,7 @@ use crate::params::DisplayModel;
 /// pipeline.
 ///
 /// [`Cvvdp::score`]: crate::Cvvdp::score
+#[must_use]
 pub fn predict_jod_still_3ch(
     ref_srgb: &[u8],
     dist_srgb: &[u8],

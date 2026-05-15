@@ -64,6 +64,7 @@ fn safe_pow_lp(x: f32, p: f32) -> f32 {
 
 /// cvvdp's `lp_norm` with `normalize=True`. Matches:
 /// `safe_pow(sum_i(safe_pow(x_i, p)) / N, 1/p)` where N = `values.len()`.
+#[must_use]
 pub fn lp_norm_mean(values: &[f32], p: f32) -> f32 {
     if values.is_empty() {
         return 0.0;
@@ -75,6 +76,7 @@ pub fn lp_norm_mean(values: &[f32], p: f32) -> f32 {
 
 /// cvvdp's `lp_norm` with `normalize=False`. Matches:
 /// `safe_pow(sum_i(safe_pow(x_i, p)), 1/p)`.
+#[must_use]
 pub fn lp_norm_sum(values: &[f32], p: f32) -> f32 {
     let acc: f32 = values.iter().map(|v| safe_pow_lp(*v, p)).sum();
     safe_pow_lp(acc, 1.0 / p)
@@ -86,6 +88,7 @@ pub fn lp_norm_sum(values: &[f32], p: f32) -> f32 {
 ///   (linear extension that matches the slope of the power curve
 ///   at Q = 0.1, avoiding the zero-derivative singularity).
 /// - For `Q > 0.1`: `Q_JOD = 10 - jod_a * Q^jod_exp`.
+#[must_use]
 pub fn met2jod(q: f32) -> f32 {
     let q_t = 0.1_f32;
     if q <= q_t {
@@ -108,6 +111,7 @@ pub fn met2jod(q: f32) -> f32 {
 /// Panics if `q_per_ch` is empty (`n_levels == 0`). At least one
 /// pyramid level (the baseband) must be present — cvvdp's pool
 /// stage is undefined on a zero-band input.
+#[must_use]
 pub fn do_pooling_and_jod_still_3ch(q_per_ch: &[[f32; 3]]) -> f32 {
     let n_levels = q_per_ch.len();
     assert!(n_levels >= 1, "need at least one pyramid level");
@@ -247,6 +251,7 @@ pub fn fill_f32_kernel(dest: &mut Array<f32>, value: f32, n: u32) {
 /// Finish the host-side fold for `pool_band_kernel`: given the
 /// atomic partial sum and pixel count for one band, return the
 /// lp_norm_mean(β) value matching `kernels::pool::lp_norm_mean`.
+#[must_use]
 pub fn pool_band_finalize(partial: f32, n_pixels: usize, beta: f32) -> f32 {
     let n = n_pixels as f32;
     let eps = 1e-5_f32;

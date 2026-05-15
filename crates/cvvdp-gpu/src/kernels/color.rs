@@ -65,6 +65,7 @@ pub const SRGB8_TO_LINEAR_LUT: [f32; 256] = [
 ///
 /// Returns `(dkl_a, dkl_rg, dkl_vy)` for one pixel.
 #[inline]
+#[must_use]
 pub fn srgb_byte_to_dkl_scalar(
     r: u8,
     g: u8,
