@@ -20,11 +20,14 @@
 //!   to 4×4, which is the cross-channel pooling matrix for the 3-
 //!   channel still-image path.
 //!
-//! Phase-uncertainty Gaussian blur (sigma = `pu_dilate = 3`) is
-//! **out of scope for this tick**. cvvdp skips the blur for bands
-//! smaller than `pu_padsize = 6`, so small-band parity is already
-//! exact; the blur path lands when whole-image parity (large
-//! coarse-level bands at standard_4k resolution) is wired through.
+//! Phase-uncertainty Gaussian blur (sigma = `pu_dilate = 3`)
+//! ships via `pu_blur_h_kernel` + `pu_blur_v_kernel` (single-
+//! channel spec reference) and the production 3-channel fused
+//! variants `pu_blur_h_3ch_kernel` + `pu_blur_v_3ch_scaled_kernel`
+//! (the v-pass folds the post-blur `* 10^MASK_C` scale into the
+//! output). cvvdp skips the blur for bands smaller than
+//! `pu_padsize = 6`; `compute_dkl_d_bands` routes the small-band
+//! case to `mult_mutual_3ch_no_blur_kernel`.
 
 use cubecl::prelude::*;
 
