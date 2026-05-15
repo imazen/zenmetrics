@@ -170,3 +170,78 @@ fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
         "cpu-backend JOD {jod:.6} drifts from pycvvdp golden {pycvvdp_golden:.6} by {diff:.6} > {TOLERANCE:.6}"
     );
 }
+
+#[test]
+fn perf_mode_fast_matches_strict_on_cpu_host_pool() {
+    // Tick 327 sibling to
+    // `perf_mode_fast_matches_strict_today` (pipeline_score.rs).
+    // That test pins the no-op contract on the GPU pool path,
+    // where `Atomic<f32>::fetch_add`'s non-deterministic reduce
+    // order forces a 1e-4 tolerance instead of bit-equality.
+    //
+    // The cpu-runtime host-pool path bypasses the GPU atomic pool
+    // entirely (`compute_dkl_jod_host_pool` reads D bands back to
+    // host then folds via `host_scalar::lp_norm_mean`, which is
+    // deterministic sequential f32 arithmetic). So Fast vs Strict
+    // here SHOULD produce bit-identical output today, and that's
+    // a tighter contract worth pinning.
+    //
+    // When a real Fast-mode optimization lands the test should be
+    // RELAXED (not deleted) to that optimization's documented drift
+    // budget on the cpu/host-pool path; the CHANGELOG entry
+    // documents the new tolerance.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+
+    let (ref_b, dist_b) = synth_pair(w, h);
+
+    let mut strict = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new (strict)");
+    let strict_jod = strict
+        .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool (strict)");
+
+    let mut fast = Cvvdp::<Backend>::new(
+        client,
+        w,
+        h,
+        CvvdpParams {
+            perf_mode: cvvdp_gpu::PerfMode::Fast,
+            ..CvvdpParams::PLACEHOLDER
+        },
+    )
+    .expect("Cvvdp::new (fast)");
+    let fast_jod = fast
+        .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool (fast)");
+
+    // Deterministic host-pool path. Bit-equality today.
+    assert_eq!(
+        strict_jod.to_bits(),
+        fast_jod.to_bits(),
+        "PerfMode::Fast must produce bit-identical output to PerfMode::Strict \
+         on the cpu host-pool path (no atomic-add non-determinism here) \
+         until a Fast-mode optimization lands (strict={strict_jod}, fast={fast_jod})"
+    );
+
+    // Also pin the warm-ref host-pool variant: same code path
+    // post-warm, same determinism guarantee.
+    strict
+        .warm_reference(&ref_b)
+        .expect("warm_reference (strict)");
+    let strict_warm = strict
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool_with_warm_ref (strict)");
+    fast.warm_reference(&ref_b).expect("warm_reference (fast)");
+    let fast_warm = fast
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool_with_warm_ref (fast)");
+    assert_eq!(
+        strict_warm.to_bits(),
+        fast_warm.to_bits(),
+        "PerfMode::Fast must produce bit-identical output to PerfMode::Strict \
+         on the warm-ref cpu host-pool path (strict={strict_warm}, fast={fast_warm})"
+    );
+}

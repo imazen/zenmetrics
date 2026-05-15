@@ -58,6 +58,23 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **`perf_mode_fast_matches_strict_on_cpu_host_pool`** —
+  cpu-runtime sibling of the GPU-side
+  `perf_mode_fast_matches_strict_today` (in
+  `tests/pipeline_score.rs`). The GPU-pool test had to relax
+  to a 1e-4 tolerance because `pool_band_3ch_kernel` uses
+  `Atomic<f32>::fetch_add` whose reduce order is
+  non-deterministic across runs. The cpu-runtime host-pool
+  path bypasses that atomic entirely (reads D bands back to
+  host then folds via deterministic sequential f32
+  `lp_norm_mean`), so Fast vs Strict CAN be pinned to
+  bit-equality via `.to_bits()`. Covers both
+  `compute_dkl_jod_host_pool` (cold) and
+  `compute_dkl_jod_host_pool_with_warm_ref` (warm). When a
+  real Fast-mode optimization lands on the host-pool path
+  this test relaxes to the documented per-stage drift budget
+  for the cpu/host-pool case. Tick 327.
+
 - Tick 324's "abandon Burn port" verdict reached into three
   surviving stale references in cvvdp-gpu docs that still
   pitched the Burn port as a "future" direction:
