@@ -225,13 +225,15 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
         );
     }
     eprintln!("compute_dkl_jod max drift vs v1 manifest: {max_drift:.4}");
-    // Tightened in tick 185. Post tick-181 band-count alignment +
-    // tick-175 ceil-div pyramid, observed max drift = 0.0065 JOD at
-    // q=1. 0.02 gives ~3× margin while catching a real regression
-    // (pre-fix q=1 drift was 0.3992 — far above 0.02).
+    // Tightened to the canonical 0.005 JOD manifest tolerance in
+    // tick 224. Was 0.02 (set in tick 185); post-tick-204/206/207
+    // drift closures the observed max is 0.0031 at q=70 (was
+    // 0.0065 at tick 185, before chroma_shift fix). 0.005 matches
+    // the tolerance every other manifest-parity test in the suite
+    // uses (shadow_jod_gpu, cvvdp_score_matches_v1_manifest).
     assert!(
-        max_drift < 0.02,
-        "GPU JOD drifts > 0.02 from v1 manifest: {max_drift} (was 0.0065 at tick 185)"
+        max_drift < 0.005,
+        "GPU JOD drifts > 0.005 from v1 manifest: {max_drift} (observed 0.0031 at q=70 post-tick-207)"
     );
 }
 
