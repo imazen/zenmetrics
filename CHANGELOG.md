@@ -405,6 +405,28 @@ original Fixed/Added/Changed sections.
   `kernels/mod.rs` that `pool_band_kernel` is retained for the
   pool-scalar unit test. Tick 291.
 
+- Closed out the `# Errors`-section work started in tick 306.
+  Added sections to the remaining 10 `Result`-returning public
+  methods:
+  - `compute_dkl_jod` and `compute_dkl_jod_host_pool` /
+    `compute_dkl_jod_host_pool_with_warm_ref` — the canonical
+    GPU and cpu-runtime JOD entry points documented in
+    `lib.rs`. The warm-ref host-pool variant shares the
+    tick-248 `DimensionMismatch`-before-`NoWarmReference`
+    precedence rule with its all-GPU counterpart and the new
+    `# Errors` section documents it.
+  - 7 stage-debug helpers (`compute_dkl_planes`,
+    `compute_dkl_gauss_pyramid`,
+    `compute_dkl_laplacian_pyramid`,
+    `compute_dkl_weber_pyramid`, `compute_dkl_t_p_bands`,
+    `compute_dkl_d_bands`, `compute_dkl_csf_weighted_bands`) —
+    each gets a uniform short `# Errors` section naming
+    `DimensionMismatch` and `InvalidImageSize` with the
+    specific stage chain that can fail.
+  `clippy::missing_errors_doc` warning count: 0 (was 17 at
+  start of tick 306). All 6 doctests still pass under the
+  CI wgpu combo. Tick 307.
+
 - Added `# Errors` sections to 7 user-facing public entry
   points (`Cvvdp::new`, `Cvvdp::new_with_geometry`,
   `Cvvdp::score`, `Cvvdp::set_reference`,

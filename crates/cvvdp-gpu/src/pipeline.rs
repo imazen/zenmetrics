@@ -688,6 +688,12 @@ impl<R: Runtime> Cvvdp<R> {
     /// ```
     ///
     /// but executed on the GPU.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails.
     pub fn compute_dkl_planes(&mut self, srgb: &[u8]) -> Result<[Vec<f32>; 3]> {
         self._dispatch_dkl_planes_gpu(srgb)?;
 
@@ -775,6 +781,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// pyramid as `levels[k] = [a, rg, vy]` planar f32 vecs, with
     /// `levels[0]` at base resolution and each subsequent level
     /// halved (cvvdp's `div_ceil(2)` convention).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails anywhere in the
+    /// color → gauss-pyramid chain.
     pub fn compute_dkl_gauss_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
         self._dispatch_gauss_pyramid_gpu(srgb)?;
 
@@ -843,6 +856,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// Per-level temp buffers are allocated per call (no scratch
     /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
     /// these once.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails anywhere in the
+    /// color → gauss → laplacian chain.
     pub fn compute_dkl_laplacian_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
         // _dispatch_laplacian_pyramid_gpu overwrites bands_ref[k] with
         // Laplacian bands (not the Weber bands the warm-ref state was
@@ -1245,6 +1265,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// `CVVDP_TRACE_WEBER=1` env-var enables stderr instrumentation
     /// of the GPU dispatch vs read-back split — zero cost when
     /// unset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails anywhere in the
+    /// color → weber-pyramid chain.
     pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
         let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
         let t_dispatch = std::time::Instant::now();
@@ -1363,6 +1390,13 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails anywhere in the
+    /// color → weber → CSF chain.
     pub fn compute_dkl_t_p_bands(&mut self, srgb: &[u8], ppd: f32) -> Result<Vec<[Vec<f32>; 3]>> {
         self.debug_assert_ppd_matches_geometry(ppd);
 
@@ -1892,6 +1926,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
     /// Pass it consistent with the construction-time geometry; debug
     /// builds verify the match (tick 243).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input buffer's
+    /// length doesn't match `width × height × 3`, or
+    /// [`Error::InvalidImageSize`] if a GPU readback / kernel
+    /// dispatch fails anywhere in the color → weber → CSF →
+    /// masking chain.
     pub fn compute_dkl_d_bands(
         &mut self,
         ref_srgb: &[u8],
@@ -1965,6 +2007,14 @@ impl<R: Runtime> Cvvdp<R> {
     ///   (GPU vs pycvvdp v1 R2 manifest, ≤ 0.005 JOD)
     /// - `compute_dkl_jod_host_pool_matches_compute_dkl_jod` (GPU
     ///   atomic pool vs host pool, 0.000000 diff)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input buffer's
+    /// length doesn't match `width × height × 3`, or
+    /// [`Error::InvalidImageSize`] if a GPU readback / kernel
+    /// dispatch fails anywhere in the color → weber → CSF →
+    /// masking → pool chain.
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
 
@@ -2035,6 +2085,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input buffer's
+    /// length doesn't match `width × height × 3`, or
+    /// [`Error::InvalidImageSize`] if a GPU readback / dispatch
+    /// fails inside [`Cvvdp::compute_dkl_d_bands`] (the GPU stages
+    /// up to the per-band readback).
     pub fn compute_dkl_jod_host_pool(
         &mut self,
         ref_srgb: &[u8],
@@ -2099,6 +2157,20 @@ impl<R: Runtime> Cvvdp<R> {
     /// }
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - [`Error::DimensionMismatch`] if `dist_srgb.len() !=
+    ///   width × height × 3` (checked first, per the tick-248
+    ///   precedence rule shared with
+    ///   [`Cvvdp::compute_dkl_jod_with_warm_ref`]).
+    /// - [`Error::NoWarmReference`] if `warm_reference` wasn't
+    ///   called or the warm state was invalidated by an
+    ///   intervening REF-dispatching method (see
+    ///   [`Cvvdp::warm_reference`] for the documented set).
+    /// - [`Error::InvalidImageSize`] if a GPU readback / dispatch
+    ///   in the DIST chain fails before the per-band readback.
     pub fn compute_dkl_jod_host_pool_with_warm_ref(
         &mut self,
         dist_srgb: &[u8],
@@ -2371,6 +2443,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// `levels[k] = [a, rg, vy]` planar f32 vecs, with each pixel
     /// already multiplied by `sensitivity_corrected_scalar(rho_k,
     /// l_bkg, channel)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a
+    /// GPU readback / kernel dispatch fails anywhere in the
+    /// color → gauss → laplacian → CSF chain.
     pub fn compute_dkl_csf_weighted_bands(
         &mut self,
         srgb: &[u8],
