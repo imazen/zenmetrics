@@ -55,6 +55,11 @@ PYCVVDP_IMAGE="${PYCVVDP_IMAGE:-ghcr.io/imazen/pycvvdp-scorer:0.5.4}"
 SKIP_IMAZEN="${SKIP_IMAZEN:-0}"
 SKIP_PYCVVDP="${SKIP_PYCVVDP:-0}"
 DOCKER_GPUS="${DOCKER_GPUS:---gpus all}"
+# CubeCL runtime override forwarded to `zen-metrics score-pairs`. Default
+# leaves the binary on its own auto-detect path (cuda → wgpu → hip → cpu).
+# Set to `cpu` for local-CPU smoke runs (e.g. WSL2 where --gpus all fails)
+# or `cuda` to force CUDA on a known-good GPU host.
+ZEN_GPU_RUNTIME="${ZEN_GPU_RUNTIME:-}"
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
@@ -108,15 +113,21 @@ SIDECAR_IMAZEN_HOST="$OUT_ABS/${SIDECAR_IMAZEN_NAME}.parquet"
 SIDECAR_PYCVVDP_HOST="$OUT_ABS/cvvdp_pycvvdp_v054.parquet"
 
 run_zen_metrics() {
+    # Override ENTRYPOINT — the production image's default entrypoint is
+    # the chunk-claim worker (`zen-metrics-worker`), which expects R2 env
+    # vars and consumes chunk specs. For per-pair scoring we drive the
+    # underlying `zen-metrics` binary directly.
     docker run --rm $DOCKER_GPUS \
+        --entrypoint /usr/local/bin/zen-metrics \
         -v "$SOURCES_ABS":"$CTR_SOURCES":ro \
         -v "$OUT_ABS":"$CTR_OUT":rw \
         -w "$CTR_OUT" \
         "$ZEN_METRICS_IMAGE" \
-        zen-metrics "$@"
+        "$@"
 }
 
 run_pycvvdp() {
+    # pycvvdp image uses CMD (overridable positionally) — pass through.
     docker run --rm $DOCKER_GPUS \
         -v "$SOURCES_ABS":"$CTR_SOURCES":ro \
         -v "$OUT_ABS":"$CTR_OUT":rw \
@@ -141,11 +152,13 @@ run_zen_metrics "${SWEEP_ARGS[@]}" 2>&1 | sed 's/^/  [sweep] /'
 
 if [[ "$SKIP_IMAZEN" != "1" ]]; then
     echo "[dual-impl-docker] step 2/4: score-pairs cvvdp (imazen, GPU)" >&2
-    run_zen_metrics score-pairs \
-        --metric cvvdp \
-        --pairs-tsv "$CTR_PAIRS_TSV" \
-        --out-parquet "$CTR_OUT/${SIDECAR_IMAZEN_NAME}.parquet" \
-        2>&1 | sed 's/^/  [imazen] /'
+    IMAZEN_ARGS=(score-pairs
+        --metric cvvdp
+        --pairs-tsv "$CTR_PAIRS_TSV"
+        --out-parquet "$CTR_OUT/${SIDECAR_IMAZEN_NAME}.parquet"
+    )
+    [[ -n "$ZEN_GPU_RUNTIME" ]] && IMAZEN_ARGS+=(--gpu-runtime "$ZEN_GPU_RUNTIME")
+    run_zen_metrics "${IMAZEN_ARGS[@]}" 2>&1 | sed 's/^/  [imazen] /'
 else
     echo "[dual-impl-docker] step 2/4: SKIPPED (cvvdp-gpu)" >&2
 fi

@@ -48,7 +48,7 @@ WORKDIR /workspace/zenmetrics
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
-    cargo build -p zen-metrics-cli --release --features sweep,gpu,gpu-cuda && \
+    cargo build -p zen-metrics-cli --release --features sweep,gpu,gpu-cuda,gpu-cpu && \
     cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
     chmod +x /usr/local/bin/zen-metrics && \
     /usr/local/bin/zen-metrics --version && \
