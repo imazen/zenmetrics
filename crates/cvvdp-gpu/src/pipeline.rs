@@ -396,27 +396,22 @@ pub struct Cvvdp<R: Runtime> {
 }
 
 fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
-    let min = width.min(height);
-    let mut levels = 1u32;
-    let mut cur = min;
-    while cur >= 2 * PYRAMID_MIN_DIM && (levels as usize) < MAX_LEVELS {
-        // Ceil-div halving — matches pycvvdp's behaviour (tick 175).
-        cur = (cur + 1) / 2;
-        levels += 1;
-    }
-    // band_frequencies has its own min-freq cutoff (matching cvvdp's
-    // ~0.2 cpd lower bound). If it would emit fewer bands than the
-    // size-based loop produces, the band loop would index off the end
-    // of `freqs` — cap here so the two stay in lockstep. pycvvdp uses
-    // band_freqs as the authority on n_bands, so this matches its
-    // behaviour.
+    // Defer to band_frequencies — same as host_scalar (see
+    // host_scalar::predict_jod_still_3ch) and same as pycvvdp's
+    // n_bands. Tick 181: previously we additionally capped by a
+    // size-based loop with PYRAMID_MIN_DIM=4 (stopping when
+    // cur < 8), which under-counted at small inputs (5 vs 6 at
+    // 73×91, 4 vs 5 at 32×32, 7 vs 8 at 256×256) and drove a
+    // ~0.6 JOD drift vs pycvvdp at sub-megapixel sizes. The
+    // band_frequencies cutoff (~0.2 cpd) is the authoritative
+    // limit; MAX_LEVELS still caps the alloc count.
     let band_count = crate::kernels::pyramid::band_frequencies(
         ppd,
         width as usize,
         height as usize,
     )
     .len() as u32;
-    levels.min(band_count)
+    band_count.min(MAX_LEVELS as u32)
 }
 
 impl<R: Runtime> Cvvdp<R> {
