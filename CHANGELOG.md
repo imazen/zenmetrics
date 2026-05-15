@@ -122,6 +122,11 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- Migrated the `blur3x1`, `blur1x3`, and `noise` 256×256 parity
+  tests off the hand-inlined `synth_pair_ref` construction onto
+  `common::synth_pair_ref`. 7 of 14 inlined sites in
+  `tests/pipeline_color.rs` now consolidated. Bit-stable parity
+  preserved on all three (still ≤ 0.005 JOD vs pycvvdp goldens).
 - Migrated the two `compute_dkl_jod_*_pycvvdp_at_256x256_chroma_shift`
   tests (cold + warm-ref) off the inlined synth-pair construction
   onto `common::synth_pair_ref`. Same shape as tick 255's 12mp

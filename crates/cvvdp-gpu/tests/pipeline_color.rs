@@ -1267,22 +1267,10 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur3x1() {
     // synth_pair_12mp pattern at 256×256; dist is the wrap-around
     // 3-pixel horizontal average. Use u16 in the sum to avoid
     // u8 overflow (3 × 255 = 765 > 255).
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-        }
-    }
-    let mut dist_srgb = vec![0u8; n];
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let mut dist_srgb = vec![0u8; wu * hu * 3];
     for y in 0..hu {
         for x in 0..wu {
             let x1 = (x + 1) % wu;
@@ -2172,22 +2160,10 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_blur1x3() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
-    for y in 0..hu {
-        for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
-        }
-    }
-    let mut dist_srgb = vec![0u8; n];
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let mut dist_srgb = vec![0u8; wu * hu * 3];
     for y in 0..hu {
         for x in 0..wu {
             let y1 = (y + 1) % hu;
@@ -2241,20 +2217,13 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_noise() {
     let mut cvvdp =
         Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
 
-    let n = (w * h * 3) as usize;
-    let mut ref_srgb = vec![0u8; n];
-    let mut dist_srgb = vec![0u8; n];
     let wu = w as usize;
     let hu = h as usize;
+    let ref_srgb = common::synth_pair_ref(wu, hu);
+    let mut dist_srgb = vec![0u8; wu * hu * 3];
     for y in 0..hu {
         for x in 0..wu {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
             let i = (y * wu + x) * 3;
-            ref_srgb[i] = r;
-            ref_srgb[i + 1] = g;
-            ref_srgb[i + 2] = b;
             for c in 0..3 {
                 let noise = ((x as i64 * 73 + y as i64 * 137 + c as i64 * 211) % 64) - 32;
                 let v = (ref_srgb[i + c] as i64 + noise).clamp(0, 255) as u8;
