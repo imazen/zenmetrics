@@ -18,35 +18,25 @@
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use std::hint::black_box;
-use std::path::PathBuf;
+use std::path::Path;
 
 use cubecl::Runtime;
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+#[path = "../tests/common/mod.rs"]
+mod common;
+
+use common::Backend;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
-use image::ImageReader;
 use zenbench::criterion_compat::*;
 use zenbench::{criterion_group, criterion_main};
 
 const W_256: u32 = 256;
 const H_256: u32 = 256;
 
-fn load_rgb_bytes(path: &PathBuf) -> Vec<u8> {
-    let img = ImageReader::open(path)
-        .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
-        .decode()
-        .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
-        .to_rgb8();
-    assert_eq!(img.width(), W_256);
-    assert_eq!(img.height(), H_256);
-    img.into_raw()
+fn load_rgb_bytes(path: &Path) -> Vec<u8> {
+    common::load_rgb_bytes(path, W_256, H_256)
 }
 
 /// Synthetic ref + dist pattern for benches at arbitrary
@@ -54,23 +44,17 @@ fn load_rgb_bytes(path: &PathBuf) -> Vec<u8> {
 /// (the algorithm has no data-dependent fast paths on GPU), so a
 /// deterministic perlin-ish pattern + a perturbation is enough.
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
-    let n = (w * h * 3) as usize;
-    let mut ref_b = vec![0u8; n];
-    let mut dis_b = vec![0u8; n];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * w as usize + x) * 3;
-            ref_b[i] = r;
-            ref_b[i + 1] = g;
-            ref_b[i + 2] = b;
-            dis_b[i] = r.saturating_sub(8);
-            dis_b[i + 1] = g.saturating_sub(4);
-            dis_b[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_b = common::synth_pair_ref(w as usize, h as usize);
+    let dis_b: Vec<u8> = ref_b
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
     (ref_b, dis_b)
 }
 

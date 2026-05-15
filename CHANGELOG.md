@@ -129,6 +129,18 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (benches)
+
+- `benches/score.rs` now consumes `tests/common/mod.rs` via
+  `#[path = "../tests/common/mod.rs"] mod common;`. Drops the
+  bench's local `Backend` cascade + `load_rgb_bytes` + `synth_pair`
+  in favour of `common::Backend`, `common::load_rgb_bytes`, and
+  `common::synth_pair_ref` (with the bench's per-fixture dist
+  builder inlined). Closes the last synth-pattern duplication
+  outside the example file. The bench's `load_rgb_bytes(path)`
+  wrapper preserves the 256×256-assert contract by passing the
+  bench's `W_256` / `H_256` constants through.
+
 #### cvvdp-gpu (docs)
 
 - `lib.rs` Status section now cross-references the warm-state
