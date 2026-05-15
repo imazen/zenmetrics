@@ -24,6 +24,11 @@
 //!         -p cvvdp-gpu --features cuda
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
+// pycvvdp golden literals copied verbatim from the bench script's
+// output; the 7-digit decimal documents the source even though
+// LLVM rounds at f32 precision. Same pattern as the library's
+// `#![allow(clippy::excessive_precision)]`.
+#![allow(clippy::excessive_precision)]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;

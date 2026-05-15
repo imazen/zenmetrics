@@ -90,6 +90,24 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (cleanup)
 
+- Cleared remaining 7 clippy warnings under `--all-targets`:
+  - `tests/common/mod.rs`: collapsed nested `if let Ok(hex) = ...
+    { if hex == sha256 { return ... } }` into a let-chain
+    (`if let ... && hex == sha256`).
+  - `tests/pipeline_color.rs`: dropped a redundant `(wu * hu) as usize`
+    cast (wu/hu were already `usize`); added module-level
+    `#![allow(clippy::needless_range_loop)]` for the 3 per-band
+    `for k in 0..n_bands` loops (k indexes ref_tp[k] / d_bands[k]
+    plus side metadata — enumerate is a wash). Mirrors the library's
+    same allow.
+  - `tests/cpu_backend.rs` + `examples/manifest_parity_probe.rs`:
+    `#![allow(clippy::excessive_precision)]` for the pycvvdp
+    golden literals — same rationale as the library-level allow:
+    the 7-digit decimal documents the source value verbatim even
+    though LLVM rounds at f32.
+  Net: `cargo clippy -p cvvdp-gpu --features cuda --all-targets`
+  is warning-clean. All 27 pipeline_color + 9 pipeline_score + 4
+  cpu_backend tests still green.
 - Fixed 8 clippy lints surfaced under MSRV 1.93:
   - 6× `manual_div_ceil` in `pipeline.rs` (`(x + 1) / 2` →
     `x.div_ceil(2)` in pyramid-level allocators)

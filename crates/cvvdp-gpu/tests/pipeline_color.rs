@@ -3,6 +3,11 @@
 //! pipeline. Compares against the host scalar `srgb_byte_to_dkl_scalar`.
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
+// Per-band loops naturally use `for k in 0..n_bands` indexing into
+// `ref_tp[k]` / `d_bands[k]` plus side metadata (sentinels,
+// per-band widths) — converting to enumerate is a wash. Same
+// pattern as the library's `#![allow(clippy::needless_range_loop)]`.
+#![allow(clippy::needless_range_loop)]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
@@ -1540,7 +1545,7 @@ fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
     // host scalar. Uses the SAME Weber + log_l_bkg the GPU path
     // produces internally (read back via the host scalar Weber
     // pyramid; tick 198 confirmed they match the GPU to 2.7e-7).
-    let n_px = (wu * hu) as usize;
+    let n_px = wu * hu;
     let display = DisplayModel::STANDARD_4K;
     let mut planes: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
     for (i, chunk) in ref_srgb.chunks_exact(3).enumerate() {

@@ -19,6 +19,11 @@
 //! so this file is the only place cpu-backend coverage lives.
 
 #![cfg(feature = "cpu")]
+// pycvvdp golden literals come from the bench script's printed
+// output verbatim. The 7-digit decimal documents the source value
+// even though LLVM rounds at f32 precision — same pattern as the
+// library's `#![allow(clippy::excessive_precision)]`.
+#![allow(clippy::excessive_precision)]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;

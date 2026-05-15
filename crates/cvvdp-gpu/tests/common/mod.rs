@@ -61,10 +61,10 @@ pub fn cache_dir() -> PathBuf {
 pub fn fetch(name: &str, sha256: &str) -> PathBuf {
     let local = cache_dir().join(name);
     if local.exists() {
-        if let Ok(hex) = file_sha256_hex(&local) {
-            if hex == sha256 {
-                return local;
-            }
+        if let Ok(hex) = file_sha256_hex(&local)
+            && hex == sha256
+        {
+            return local;
         }
         // Stale or corrupt — drop it and refetch.
         let _ = fs::remove_file(&local);
