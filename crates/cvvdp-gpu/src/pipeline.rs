@@ -99,8 +99,8 @@ use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, pool_band_finalize, pool_band_kernel,
 };
 use crate::kernels::pyramid::{
-    band_frequencies, downscale_kernel, subtract_kernel, subtract_weber_3ch_kernel,
-    upscale_h_kernel, upscale_v_kernel,
+    band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
+    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
@@ -510,46 +510,11 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// but executed on the GPU.
     pub fn compute_dkl_planes(&mut self, srgb: &[u8]) -> Result<[Vec<f32>; 3]> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
-        if srgb.len() != expected {
-            return Err(Error::DimensionMismatch {
-                expected,
-                got: srgb.len(),
-            });
-        }
-        let n0 = (self.width as usize) * (self.height as usize);
+        self._dispatch_dkl_planes_gpu(srgb)?;
 
-        // Widen bytes to u32 slots and re-upload.
-        let src_u32: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
-        self.src_ref = self.client.create_from_slice(u32::as_bytes(&src_u32));
-
-        // The level-0 gauss planes double as the color stage's output
-        // — that's where the pyramid expects DKL to land at scale 0.
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();
         let vy_handle = self.gauss_ref[0].planes[2].clone();
-
-        let cube_dim = CubeDim::new_1d(64);
-        let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
-
-        let display = self.params.display;
-        unsafe {
-            srgb_to_dkl_kernel::launch::<R>(
-                &self.client,
-                cube_count,
-                cube_dim,
-                ArrayArg::from_raw_parts(self.src_ref.clone(), n0 * 3),
-                ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
-                ArrayArg::from_raw_parts(a_handle.clone(), n0),
-                ArrayArg::from_raw_parts(rg_handle.clone(), n0),
-                ArrayArg::from_raw_parts(vy_handle.clone(), n0),
-                self.width,
-                self.height,
-                display.y_peak,
-                display.y_black,
-                display.y_refl,
-            );
-        }
 
         let a_bytes = self
             .client
@@ -571,16 +536,83 @@ impl<R: Runtime> Cvvdp<R> {
         ])
     }
 
+    /// Dispatch-only version of `compute_dkl_planes`: uploads sRGB
+    /// bytes, launches the color kernel, leaves `gauss_ref[0].planes[c]`
+    /// populated on GPU. No host readback. Internal helper used by
+    /// `compute_dkl_planes` and by downstream pipeline stages that
+    /// only need the GPU handles (gauss pyramid, weber pyramid).
+    fn _dispatch_dkl_planes_gpu(&mut self, srgb: &[u8]) -> Result<()> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            });
+        }
+        let n0 = (self.width as usize) * (self.height as usize);
+
+        let src_u32: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
+        self.src_ref = self.client.create_from_slice(u32::as_bytes(&src_u32));
+
+        let a_handle = self.gauss_ref[0].planes[0].clone();
+        let rg_handle = self.gauss_ref[0].planes[1].clone();
+        let vy_handle = self.gauss_ref[0].planes[2].clone();
+
+        let cube_dim = CubeDim::new_1d(64);
+        let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
+
+        let display = self.params.display;
+        unsafe {
+            srgb_to_dkl_kernel::launch::<R>(
+                &self.client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(self.src_ref.clone(), n0 * 3),
+                ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
+                ArrayArg::from_raw_parts(a_handle, n0),
+                ArrayArg::from_raw_parts(rg_handle, n0),
+                ArrayArg::from_raw_parts(vy_handle, n0),
+                self.width,
+                self.height,
+                display.y_peak,
+                display.y_black,
+                display.y_refl,
+            );
+        }
+        Ok(())
+    }
+
     /// Run color stage + Gaussian-pyramid reduce loop. Returns the
     /// pyramid as `levels[k] = [a, rg, vy]` planar f32 vecs, with
     /// `levels[0]` at base resolution and each subsequent level
     /// halved (cvvdp's `div_ceil(2)` convention).
     pub fn compute_dkl_gauss_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
-        let _ = self.compute_dkl_planes(srgb)?;
+        self._dispatch_gauss_pyramid_gpu(srgb)?;
 
-        // The color stage left level-0 planes filled in gauss_ref.
-        // Now chain downscale_kernel: gauss[k-1].channel[c] → gauss[k].channel[c]
-        // for k in 1..n_levels.
+        // Read back every level × every channel.
+        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(self.n_levels as usize);
+        for k in 0..(self.n_levels as usize) {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.gauss_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            out.push(planes);
+        }
+        Ok(out)
+    }
+
+    /// Dispatch-only version of `compute_dkl_gauss_pyramid`: chains
+    /// `_dispatch_dkl_planes_gpu` (color stage) with the per-level
+    /// `downscale_kernel` reduce. Leaves `gauss_ref[k].planes[c]`
+    /// populated on GPU for `k = 0..n_levels`. No host readback.
+    fn _dispatch_gauss_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<()> {
+        self._dispatch_dkl_planes_gpu(srgb)?;
+
         let cube_dim = CubeDim::new_1d(64);
         for k in 1..(self.n_levels as usize) {
             let prev_w = self.gauss_ref[k - 1].w;
@@ -609,22 +641,7 @@ impl<R: Runtime> Cvvdp<R> {
                 }
             }
         }
-
-        // Read back every level × every channel.
-        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(self.n_levels as usize);
-        for k in 0..(self.n_levels as usize) {
-            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
-            for c in 0..N_CHANNELS {
-                let h = self.gauss_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
-                planes[c] = f32::from_bytes(&bytes).to_vec();
-            }
-            out.push(planes);
-        }
-        Ok(out)
+        Ok(())
     }
 
     /// Run color + full Laplacian-pyramid decomposition. Returns
@@ -639,7 +656,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// these once.
     pub fn compute_dkl_laplacian_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
         // Builds the Gaussian pyramid first (color → reduce chain).
-        let _ = self.compute_dkl_gauss_pyramid(srgb)?;
+        // Uses the dispatch-only helper so we don't pay for a host
+        // readback of the full pyramid we don't consume here.
+        self._dispatch_gauss_pyramid_gpu(srgb)?;
 
         let cube_dim = CubeDim::new_1d(64);
 
@@ -799,9 +818,11 @@ impl<R: Runtime> Cvvdp<R> {
         log_l_bkg_dest: &[cubecl::server::Handle],
         dest_is_dis: bool,
     ) -> Result<f32> {
-        // Build Gaussian pyramids on GPU. The function leaves
-        // self.gauss_ref[k].planes[c] populated for k = 0..n_levels.
-        let _ = self.compute_dkl_gauss_pyramid(srgb)?;
+        // Build Gaussian pyramids on GPU. The dispatch-only helper
+        // leaves `self.gauss_ref[k].planes[c]` populated for
+        // `k = 0..n_levels` without paying for a full-pyramid
+        // host readback (~190 MB at 12 MP) that we'd discard.
+        self._dispatch_gauss_pyramid_gpu(srgb)?;
 
         let cube_dim = CubeDim::new_1d(64);
         let n_levels = self.n_levels as usize;
@@ -940,21 +961,36 @@ impl<R: Runtime> Cvvdp<R> {
         let l_bkg_mean = l_bkg_sum / baseband_n as f32;
         let log_l_bkg_baseband = l_bkg_mean.log10();
 
-        // Per channel: copy gauss[last][c] into bands_{ref,dis}[last] divided by mean.
-        for c in 0..N_CHANNELS {
-            let g = self.gauss_ref[last].planes[c].clone();
-            let bytes = self
-                .client
-                .read_one(g)
-                .map_err(|_| Error::InvalidImageSize)?;
-            let data: &[f32] = f32::from_bytes(&bytes);
-            let divided: Vec<f32> = data.iter().map(|v| v / l_bkg_mean).collect();
-            let new_handle = self.client.create_from_slice(f32::as_bytes(&divided));
-            if dest_is_dis {
-                self.bands_dis[last].planes[c] = new_handle;
-            } else {
-                self.bands_ref[last].planes[c] = new_handle;
-            }
+        // GPU divide: bands_{ref,dis}[last].planes[c] = gauss[last][c] /
+        // l_bkg_mean. Replaces 3 channel readbacks + 3 reuploads with
+        // one launch using the host-computed mean as a scalar uniform.
+        let inv_l_bkg_mean = 1.0_f32 / l_bkg_mean;
+        let gauss_a = self.gauss_ref[last].planes[0].clone();
+        let gauss_rg = self.gauss_ref[last].planes[1].clone();
+        let gauss_vy = self.gauss_ref[last].planes[2].clone();
+        let bands_dest = if dest_is_dis {
+            &self.bands_dis
+        } else {
+            &self.bands_ref
+        };
+        let band_a = bands_dest[last].planes[0].clone();
+        let band_rg = bands_dest[last].planes[1].clone();
+        let band_vy = bands_dest[last].planes[2].clone();
+        let baseband_count = CubeCount::Static((baseband_n as u32).div_ceil(64), 1, 1);
+        unsafe {
+            baseband_divide_3ch_kernel::launch::<R>(
+                &self.client,
+                baseband_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(gauss_a, baseband_n),
+                ArrayArg::from_raw_parts(gauss_rg, baseband_n),
+                ArrayArg::from_raw_parts(gauss_vy, baseband_n),
+                ArrayArg::from_raw_parts(band_a, baseband_n),
+                ArrayArg::from_raw_parts(band_rg, baseband_n),
+                ArrayArg::from_raw_parts(band_vy, baseband_n),
+                inv_l_bkg_mean,
+                baseband_n as u32,
+            );
         }
 
         Ok(log_l_bkg_baseband)

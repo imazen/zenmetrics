@@ -1028,6 +1028,36 @@ pub fn subtract_weber_3ch_kernel(
     log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 }
 
+/// Baseband finishing step: scale each of the 3 coarsest Gaussian
+/// planes by `inv_l_bkg_mean` (= 1 / mean(max(gauss_a, 0.01))) and
+/// emit the 3 baseband bands. Replaces the host-side per-channel
+/// read-back → divide → re-upload that the prior baseband path did
+/// in `_dispatch_weber_pyramid_gpu`.
+///
+/// The host still reads back `gauss_a` once to compute the mean
+/// (small buffer, ~744 pixels at MAX_LEVELS=8 / 12 MP, single
+/// synchronous drain), but the 3 per-channel readbacks +
+/// 3 per-channel reuploads become this single GPU launch.
+#[cube(launch)]
+pub fn baseband_divide_3ch_kernel(
+    gauss_a: &Array<f32>,
+    gauss_rg: &Array<f32>,
+    gauss_vy: &Array<f32>,
+    band_a: &mut Array<f32>,
+    band_rg: &mut Array<f32>,
+    band_vy: &mut Array<f32>,
+    inv_l_bkg_mean: f32,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    band_a[idx] = gauss_a[idx] * inv_l_bkg_mean;
+    band_rg[idx] = gauss_rg[idx] * inv_l_bkg_mean;
+    band_vy[idx] = gauss_vy[idx] * inv_l_bkg_mean;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
