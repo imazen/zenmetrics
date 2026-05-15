@@ -35,8 +35,8 @@ zenmetrics-corpus = { workspace = true }
 # Used only by `tests/parity.rs` when the `parity-goldens` feature
 # is on. Cargo doesn't allow optional dev-dependencies, so these
 # compile whenever tests are built — the runtime binary is unaffected.
-sha2 = "0.10"
-ureq = "3.1"
+sha2 = "0.10.9"
+ureq = "3.3.0"
 zenbench = { version = "0.1.8", features = ["criterion-compat"] }
 
 [[bench]]
