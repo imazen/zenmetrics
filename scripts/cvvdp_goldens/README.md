@@ -12,9 +12,9 @@ first test run and cached under `$XDG_CACHE_HOME/zenmetrics-cvvdp-goldens/`.
 ColorVideoVDP v0.5.4 (gfxdisp/ColorVideoVDP).
 
 When updating the pin: bump `requirements.txt`, rerun `build_goldens.py`,
-upload to a new R2 prefix (`v2`, `v3`, ...), and update `MANIFEST_URL`
-in `crates/cvvdp-gpu/tests/common.rs`. Old prefixes stay live so older
-commits keep building.
+upload to a new R2 prefix (`v2`, `v3`, ...), and update `GOLDEN_VERSION`
++ `MANIFEST_URL` in `crates/cvvdp-gpu/tests/common/mod.rs`. Old prefixes
+stay live so older commits keep building.
 
 ## Local one-shot
 
