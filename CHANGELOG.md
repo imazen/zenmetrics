@@ -154,6 +154,19 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (docs)
 
+- `kernels::pool::pool_band_kernel` (single-channel) doc now
+  explicitly notes it's not dispatched by
+  `Cvvdp::compute_dkl_jod` — the production path uses the fused
+  3-channel `pool_band_3ch_kernel`. Added a one-line breadcrumb
+  pointing at the
+  `tests/pool_scalar.rs::pool_band_kernel_matches_host_lp_norm_mean`
+  parity test that justifies keeping the symbol public. A
+  maintainer reading this kernel was previously left guessing
+  why two near-duplicate `pool_band_*` kernels coexist; now the
+  link from single → fused is symmetric (the 3ch docstring
+  already cross-references the single-channel form as the
+  base case). Tick 292.
+
 - Pipeline-overview docstrings in `kernels/mod.rs` step 5,
   `pipeline.rs` step 6, `Cvvdp::compute_dkl_d_bands`'s "no
   readback" note, and `Cvvdp::compute_dkl_jod`'s ASCII pipeline
