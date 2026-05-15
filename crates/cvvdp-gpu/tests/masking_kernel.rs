@@ -2,7 +2,7 @@
 //! the host scalar `mult_mutual_band` at small band sizes (no PU
 //! Gaussian blur).
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
@@ -17,6 +17,8 @@ type Backend = cubecl::cuda::CudaRuntime;
 
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 #[test]
 fn mult_mutual_3ch_no_blur_matches_host_scalar() {

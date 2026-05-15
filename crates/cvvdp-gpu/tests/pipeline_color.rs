@@ -2,7 +2,7 @@
 //! upload + LUT-init + color-kernel path end-to-end through the
 //! pipeline. Compares against the host scalar `srgb_byte_to_dkl_scalar`.
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
@@ -19,6 +19,8 @@ type Backend = cubecl::cuda::CudaRuntime;
 
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 #[test]
 fn compute_dkl_planes_matches_host_scalar() {

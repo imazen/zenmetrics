@@ -9,7 +9,7 @@
 
 use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, met2jod};
 
-#[cfg(any(feature = "cuda", feature = "wgpu"))]
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 mod gpu {
     use cubecl::Runtime;
     use cubecl::prelude::*;
@@ -20,6 +20,8 @@ mod gpu {
 
     #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
     #[test]
     fn pool_band_kernel_matches_host_lp_norm_mean() {

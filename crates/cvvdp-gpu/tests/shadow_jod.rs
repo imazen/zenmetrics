@@ -109,7 +109,7 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 /// drift in the steep slope region of `met2jod` (documented in
 /// the CHANGELOG investigation notes). The drift is bounded and
 /// stable; if it grows, this test catches it.
-#[cfg(any(feature = "cuda", feature = "wgpu"))]
+#[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[test]
 fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
     use cubecl::Runtime;
@@ -123,6 +123,8 @@ fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
     type Backend = cubecl::cuda::CudaRuntime;
     #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
     type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
     let (w, h) = (256u32, 256u32);
     let geom = DisplayGeometry::STANDARD_4K;

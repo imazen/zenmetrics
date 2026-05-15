@@ -9,7 +9,7 @@
 //! not, so the matmul order can differ in the last bit of the
 //! mantissa.
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
@@ -21,6 +21,8 @@ type Backend = cubecl::cuda::CudaRuntime;
 
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 fn rgb_input(w: u32, h: u32) -> Vec<u8> {
     let n = (w * h) as usize;

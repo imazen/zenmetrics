@@ -4,7 +4,7 @@
 //! the public surface is what matters: the JOD returned matches
 //! pycvvdp v0.5.4 on the v1 manifest within ~0.01 JOD across q1–q90.
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
@@ -17,6 +17,8 @@ type Backend = cubecl::cuda::CudaRuntime;
 
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
     let img = ImageReader::open(path)

@@ -15,7 +15,7 @@
 //! the cumulative f32 drift trade-off documented in the
 //! drift-survey integration tests.
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -26,6 +26,8 @@ use cubecl::Runtime;
 type Backend = cubecl::cuda::CudaRuntime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};

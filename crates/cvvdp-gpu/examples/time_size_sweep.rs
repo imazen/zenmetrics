@@ -20,7 +20,7 @@
 //! Falls back to wgpu when cuda isn't compiled in:
 //!     cargo run --release --example time_size_sweep -p cvvdp-gpu --no-default-features --features wgpu
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
@@ -33,6 +33,8 @@ use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 type Backend = cubecl::cuda::CudaRuntime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 const SIZES: &[(u32, u32, &str)] = &[
     (64, 64, "tiny"),

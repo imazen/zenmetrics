@@ -12,7 +12,7 @@
 //! inconsistently, which is unrelated to the kernel correctness we
 //! want to verify.
 
-#![cfg(any(feature = "cuda", feature = "wgpu"))]
+#![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
@@ -27,6 +27,8 @@ type Backend = cubecl::cuda::CudaRuntime;
 
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
+#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
+type Backend = cubecl::hip::HipRuntime;
 
 #[rustfmt::skip]
 const INPUT_8X8: [f32; 64] = [
