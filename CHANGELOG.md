@@ -122,6 +122,14 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu
 
+- **`compute_dkl_jod_with_warm_ref` / `compute_dkl_jod_host_pool_with_warm_ref`
+  now check dim mismatch before `NoWarmReference`.** When a caller
+  has BOTH a wrong-size dist buffer AND no warm state, the wrong-size
+  buffer is the more actionable error — they need to fix the buffer
+  regardless of whether warm state is set. Pre-tick-248 ordering
+  reported `NoWarmReference` first, masking the dim mismatch. New
+  test `compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`
+  pins the order so a future regression surfaces in CI.
 - **Debug-assert `compute_dkl_csf_weighted_bands` weight-band-count
   matches construction-time `n_levels`.** The per-level
   `weight_band_kernel` loop reads `weight_idx = k * N_CHANNELS + c`

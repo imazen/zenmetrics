@@ -2090,9 +2090,9 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        // Tick 248: validate dist length before checking warm state.
+        // See compute_dkl_jod_with_warm_ref for the same ordering
+        // rationale.
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if dist_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -2100,6 +2100,9 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
         self._host_pool_and_finalize_jod()
     }
@@ -2224,9 +2227,12 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        // Tick 248: validate dist length before checking warm state.
+        // If a caller has both problems, the wrong-size buffer is the
+        // more actionable error — they need to fix the buffer regardless
+        // of whether warm state is set. Pre-tick-248 ordering reported
+        // NoWarmReference first, masking the dim mismatch until they
+        // re-armed.
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if dist_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -2234,6 +2240,9 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
         self._pool_and_finalize_jod()
     }

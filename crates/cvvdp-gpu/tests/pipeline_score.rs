@@ -318,6 +318,44 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     check_dim_err(err, "compute_dkl_jod_with_warm_ref(short)");
 }
 
+#[test]
+fn compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm() {
+    // Tick 248: pin the dim-check-before-NoWarmReference ordering.
+    // When a caller has BOTH a wrong-size dist buffer AND no warm
+    // state set, the wrong-size buffer is the more actionable error.
+    // Pre-tick-248 the function returned NoWarmReference first,
+    // masking the dim mismatch until the caller re-armed.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // No warm_reference call. Pass a buffer sized for 32×32 against
+    // a Cvvdp configured for 64×64. Expect DimensionMismatch, not
+    // NoWarmReference.
+    let expected_len = (w as usize) * (h as usize) * 3;
+    let wrong_bytes = vec![128u8; expected_len / 4];
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let err = cvvdp
+        .compute_dkl_jod_with_warm_ref(&wrong_bytes, ppd)
+        .expect_err("must error on wrong-size dist regardless of warm state");
+    match err {
+        cvvdp_gpu::Error::DimensionMismatch { expected, got } => {
+            assert_eq!(expected, expected_len);
+            assert_eq!(got, expected_len / 4);
+        }
+        cvvdp_gpu::Error::NoWarmReference => {
+            panic!(
+                "tick-248 regression: ordering changed back — \
+                 NoWarmReference reported before DimensionMismatch on a \
+                 wrong-size + no-warm call"
+            );
+        }
+        other => panic!("expected DimensionMismatch, got {other:?}"),
+    }
+}
+
 #[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "ppd=")]
