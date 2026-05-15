@@ -16,9 +16,9 @@ use std::time::Instant;
 use cubecl::Runtime;
 use cubecl::client::ComputeClient;
 use cubecl::cuda::CudaRuntime;
-use cubecl::ir::AddressType;
+use cubecl::future as cf;
 use cubecl::prelude::*;
-use cubecl::server::Bindings;
+use cubecl::server::Handle;
 use cubecl::zspace::{Shape, Strides};
 
 mod kernel;
@@ -33,8 +33,6 @@ const ITERS: usize = 100;
 fn synth_input() -> Vec<f32> {
     let n = (SRC_W * SRC_H) as usize;
     let mut v = Vec::with_capacity(n);
-    // Smooth pattern with some variation so 0 isn't a degenerate
-    // case for the matmul tiles.
     for y in 0..SRC_H {
         for x in 0..SRC_W {
             let fx = x as f32 / SRC_W as f32;
@@ -43,6 +41,10 @@ fn synth_input() -> Vec<f32> {
         }
     }
     v
+}
+
+fn sync(client: &ComputeClient<CudaRuntime>) {
+    cf::block_on(client.sync()).expect("cuda sync failed");
 }
 
 // =====================================================================
@@ -67,16 +69,16 @@ fn run_handwritten(client: &ComputeClient<CudaRuntime>, src_bytes: &[u8]) -> (f6
                 client,
                 cube_count.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts::<f32>(&src_handle, n_src, 1),
-                ArrayArg::from_raw_parts::<f32>(&dst_handle, n_dst, 1),
-                ScalarArg::new(SRC_W),
-                ScalarArg::new(SRC_H),
-                ScalarArg::new(DST_W),
-                ScalarArg::new(DST_H),
+                ArrayArg::from_raw_parts(src_handle.clone(), n_src),
+                ArrayArg::from_raw_parts(dst_handle.clone(), n_dst),
+                SRC_W,
+                SRC_H,
+                DST_W,
+                DST_H,
             );
         }
     }
-    client.sync();
+    sync(client);
 
     let mut samples = Vec::with_capacity(ITERS);
     for _ in 0..ITERS {
@@ -86,22 +88,24 @@ fn run_handwritten(client: &ComputeClient<CudaRuntime>, src_bytes: &[u8]) -> (f6
                 client,
                 cube_count.clone(),
                 cube_dim,
-                ArrayArg::from_raw_parts::<f32>(&src_handle, n_src, 1),
-                ArrayArg::from_raw_parts::<f32>(&dst_handle, n_dst, 1),
-                ScalarArg::new(SRC_W),
-                ScalarArg::new(SRC_H),
-                ScalarArg::new(DST_W),
-                ScalarArg::new(DST_H),
+                ArrayArg::from_raw_parts(src_handle.clone(), n_src),
+                ArrayArg::from_raw_parts(dst_handle.clone(), n_dst),
+                SRC_W,
+                SRC_H,
+                DST_W,
+                DST_H,
             );
         }
-        client.sync();
+        sync(client);
         samples.push(t0.elapsed().as_nanos() as f64);
     }
 
     samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let median_ns = samples[samples.len() / 2];
 
-    let dst_bytes = client.read_one(dst_handle.binding());
+    let dst_bytes = client
+        .read_one(dst_handle.clone())
+        .expect("read dst failed");
     let mut dst = vec![0f32; n_dst];
     let dst_slice: &mut [u8] = bytemuck::cast_slice_mut(&mut dst);
     dst_slice.copy_from_slice(&dst_bytes);
@@ -120,24 +124,20 @@ use cubek_convolution::{
 use cubek_matmul::definition::{MatmulElems, MatmulGlobalElems};
 use cubek_std::InputBinding;
 
+#[allow(clippy::too_many_arguments)]
 fn run_cubek_pass(
     client: &ComputeClient<CudaRuntime>,
-    in_handle: cubecl::server::Handle,
-    weight_handle: cubecl::server::Handle,
-    out_handle: cubecl::server::Handle,
-    in_shape: [usize; 4],       // [N, H, W, C]
-    weight_shape: [usize; 4],   // [O, kH, kW, C]
-    out_shape_arr: [usize; 4],  // [N, oH, oW, O]
+    in_handle: Handle,
+    weight_handle: Handle,
+    out_handle: Handle,
+    in_shape: [usize; 4],
+    weight_shape: [usize; 4],
+    out_shape_arr: [usize; 4],
     stride: [usize; 2],
     padding: [usize; 2],
     strategy: &Strategy,
     dtypes: &MatmulElems,
 ) -> Result<(), String> {
-    let f32_size = core::mem::size_of::<f32>();
-    let in_size = in_shape.iter().product::<usize>();
-    let weight_size = weight_shape.iter().product::<usize>();
-    let out_size = out_shape_arr.iter().product::<usize>();
-
     let in_strides = row_major_strides(&in_shape);
     let weight_strides = row_major_strides(&weight_shape);
     let out_strides = row_major_strides(&out_shape_arr);
@@ -160,7 +160,6 @@ fn run_cubek_pass(
         strides: Strides::new(&out_strides),
         runtime: core::marker::PhantomData,
     };
-    let _ = (in_size, weight_size, out_size, f32_size); // silence unused
 
     let inputs = ConvolutionInputs::Forward {
         input: InputBinding::new(in_binding, dtypes.lhs_global),
@@ -199,21 +198,17 @@ fn run_cubek_separable(
     //   stride [1, 2], padding [0, 2]
 
     let f32_size = core::mem::size_of::<f32>();
-    let n_src = (SRC_W * SRC_H) as usize;
-    let n_v = (SRC_W * DST_H) as usize; // 4000 * 1500
-    let n_dst = (DST_W * DST_H) as usize; // 2000 * 1500
+    let n_v = (SRC_W * DST_H) as usize;
+    let n_dst = (DST_W * DST_H) as usize;
 
-    // Allocate
     let src_handle = client.create_from_slice(src_bytes);
     let vscratch_handle = client.empty(n_v * f32_size);
     let dst_handle = client.empty(n_dst * f32_size);
 
-    let weight_v_bytes = bytemuck::cast_slice::<f32, u8>(&k);
-    let weight_h_bytes = bytemuck::cast_slice::<f32, u8>(&k);
-    let weight_v_handle = client.create_from_slice(weight_v_bytes);
-    let weight_h_handle = client.create_from_slice(weight_h_bytes);
+    let weight_bytes = bytemuck::cast_slice::<f32, u8>(&k);
+    let weight_v_handle = client.create_from_slice(weight_bytes);
+    let weight_h_handle = client.create_from_slice(weight_bytes);
 
-    // Dtypes: f32 all the way (no f16 globals on this 1-channel test).
     let f32_storage = f32::as_type_native_unchecked().storage_type();
     let dtypes = MatmulElems::from_globals(&MatmulGlobalElems {
         lhs: f32_storage,
@@ -250,7 +245,7 @@ fn run_cubek_separable(
             &dtypes,
         )?;
     }
-    client.sync();
+    sync(client);
 
     let mut samples = Vec::with_capacity(ITERS);
     for _ in 0..ITERS {
@@ -281,26 +276,30 @@ fn run_cubek_separable(
             strategy,
             &dtypes,
         )?;
-        client.sync();
+        sync(client);
         samples.push(t0.elapsed().as_nanos() as f64);
     }
 
     samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let median_ns = samples[samples.len() / 2];
 
-    let dst_bytes = client.read_one(dst_handle.binding());
+    let dst_bytes = client
+        .read_one(dst_handle.clone())
+        .map_err(|e| format!("read dst: {e:?}"))?;
     let mut dst = vec![0f32; n_dst];
     let dst_slice: &mut [u8] = bytemuck::cast_slice_mut(&mut dst);
     dst_slice.copy_from_slice(&dst_bytes);
 
-    let _ = Bindings::default;
     Ok((median_ns, dst))
 }
 
 fn main() {
     println!("=== burn-conv-spike: cvvdp downscale vs cubek separable conv2d ===");
     println!("Hardware: AMD Ryzen 9 7950X + RTX 5070 (sm_120)");
-    println!("Input: {}x{} f32, output: {}x{} f32", SRC_W, SRC_H, DST_W, DST_H);
+    println!(
+        "Input: {}x{} f32, output: {}x{} f32",
+        SRC_W, SRC_H, DST_W, DST_H
+    );
     println!("Iterations per measurement: {}", ITERS);
     println!();
 
@@ -313,15 +312,39 @@ fn main() {
     // --- Path A: hand-written ---
     println!("[A] hand-written downscale_kernel (cvvdp)...");
     let (hand_ns, hand_out) = run_handwritten(&client, src_bytes);
-    println!("    median: {:.0} ns/op ({:.3} ms)", hand_ns, hand_ns / 1e6);
+    println!(
+        "    median: {:.0} ns/op ({:.3} ms)",
+        hand_ns,
+        hand_ns / 1e6
+    );
 
     // --- Path B: cubek separable, multiple algorithms ---
     let algorithms = &[
-        ("SimpleSyncCyclic+Cmma", ConvAlgorithm::SimpleSyncCyclic, AcceleratedTileKind::Cmma),
-        ("SimpleSyncStrided+Cmma", ConvAlgorithm::SimpleSyncStrided, AcceleratedTileKind::Cmma),
-        ("SimpleSyncTilewise+Cmma", ConvAlgorithm::SimpleSyncTilewise, AcceleratedTileKind::Cmma),
-        ("SimpleAsyncCyclic+Cmma", ConvAlgorithm::SimpleAsyncCyclic, AcceleratedTileKind::Cmma),
-        ("SimpleSyncCyclic+Mma", ConvAlgorithm::SimpleSyncCyclic, AcceleratedTileKind::Mma),
+        (
+            "SimpleSyncCyclic+Cmma",
+            ConvAlgorithm::SimpleSyncCyclic,
+            AcceleratedTileKind::Cmma,
+        ),
+        (
+            "SimpleSyncStrided+Cmma",
+            ConvAlgorithm::SimpleSyncStrided,
+            AcceleratedTileKind::Cmma,
+        ),
+        (
+            "SimpleSyncTilewise+Cmma",
+            ConvAlgorithm::SimpleSyncTilewise,
+            AcceleratedTileKind::Cmma,
+        ),
+        (
+            "SimpleAsyncCyclic+Cmma",
+            ConvAlgorithm::SimpleAsyncCyclic,
+            AcceleratedTileKind::Cmma,
+        ),
+        (
+            "SimpleSyncCyclic+Mma",
+            ConvAlgorithm::SimpleSyncCyclic,
+            AcceleratedTileKind::Mma,
+        ),
     ];
 
     let mut best_cubek: Option<(String, f64, Vec<f32>)> = None;
@@ -355,7 +378,10 @@ fn main() {
             println!("Verdict: cannot evaluate — cubek path did not run.");
         }
         Some((label, cubek_ns, cubek_out)) => {
-            println!("cubek separable (best: {}): {:.0} ns/op", label, cubek_ns);
+            println!(
+                "cubek separable (best: {}): {:.0} ns/op",
+                label, cubek_ns
+            );
             let ratio = cubek_ns / hand_ns;
             println!("delta (cubek/hand): {:.2}x", ratio);
 
@@ -372,37 +398,54 @@ fn main() {
             let parity_ok = abs_diff < 1e-3 || rel_diff < 1e-3;
             println!("parity_ok (tolerance 1e-3): {}", parity_ok);
             if !parity_ok {
-                println!("NOTE: Parity mismatch is expected — cvvdp's hand-written kernel");
-                println!("uses symmetric reflection padding + pycvvdp's bug-compat edge");
-                println!("delta; cubek uses zero padding. Interior pixels (far from edges)");
-                println!("should still match approximately.");
+                println!(
+                    "NOTE: Parity mismatch is expected near edges — cvvdp's hand-written kernel"
+                );
+                println!(
+                    "uses symmetric reflection padding + pycvvdp's bug-compat edge delta;"
+                );
+                println!(
+                    "cubek uses zero padding. Interior pixels (far from edges) should still"
+                );
+                println!("match approximately.");
 
-                // Try a more central pixel
-                let center_idx = ((DST_H / 2) * DST_W + DST_W / 2) as usize;
                 let n_center_samples = 5;
                 let mut max_diff: f32 = 0.0;
                 for dy in 0..n_center_samples {
                     for dx in 0..n_center_samples {
                         let idx = ((DST_H / 2 + dy) * DST_W + DST_W / 2 + dx) as usize;
                         let d = (hand_out[idx] - cubek_out[idx]).abs();
-                        if d > max_diff { max_diff = d; }
+                        if d > max_diff {
+                            max_diff = d;
+                        }
                     }
                 }
-                let _ = center_idx;
                 println!("max abs_diff over central 5x5 patch: {:.6}", max_diff);
             }
 
             println!();
             println!("=== Verdict ===");
             if ratio < 1.10 {
-                println!("PASS: cubek path is within 10% of hand-written. Burn port is viable.");
+                println!(
+                    "PASS: cubek path is within 10% of hand-written. Burn port is viable."
+                );
             } else if ratio <= 1.5 {
-                println!("MARGINAL: cubek path is {:.2}x slower (10-50% regression).", ratio);
-                println!("Flag for user judgement — the API simplification may be worth the cost,");
+                println!(
+                    "MARGINAL: cubek path is {:.2}x slower (10-50% regression).",
+                    ratio
+                );
+                println!(
+                    "Flag for user judgement — the API simplification may be worth the cost,"
+                );
                 println!("but it's not a free win.");
             } else {
-                println!("FAIL: cubek path is {:.2}x slower (>50% regression).", ratio);
-                println!("The Burn port via cubek is a perf regression at this problem size.");
+                println!(
+                    "FAIL: cubek path is {:.2}x slower (>50% regression).",
+                    ratio
+                );
+                println!(
+                    "The Burn port via cubek is a perf regression at this problem size."
+                );
                 println!("Recommend abandoning the rewrite; keep the hand-written kernel.");
             }
         }
