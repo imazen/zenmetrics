@@ -52,10 +52,12 @@
 //! The full GPU composition path is wired through
 //! [`Cvvdp::compute_dkl_jod`]: color, Weber pyramid, CSF, masking,
 //! and spatial pool all run on GPU; only the 3-stage Minkowski fold
-//! + `met2jod` happen host-side on a ~144-byte partials Vec. The
-//! parity tests `compute_dkl_jod_{matches_host_scalar,on_v1_manifest_corpus,vs_host_scalar_on_corpus}`
-//! all lock the GPU path within f32-precision tolerance of the host
-//! scalar reference.
+//! and the `met2jod` mapping happen host-side, on a ~144-byte
+//! partials Vec. The parity tests
+//! `compute_dkl_jod_matches_host_scalar`,
+//! `compute_dkl_jod_on_v1_manifest_corpus`, and
+//! `compute_dkl_jod_vs_host_scalar_on_corpus` all lock the GPU path
+//! within f32-precision tolerance of the host scalar reference.
 //!
 //! The public [`Cvvdp::score`] API still routes through
 //! [`host_scalar::predict_jod_still_3ch`] (kept stable while the GPU

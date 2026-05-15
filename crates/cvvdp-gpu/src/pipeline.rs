@@ -1009,7 +1009,7 @@ impl<R: Runtime> Cvvdp<R> {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
-            let (_bw, _bh, n_px) = self.level_dims(k);
+            let (_, _, n_px) = self.level_dims(k);
             debug_assert_eq!(log_l_bkg[k].len(), n_px);
 
             let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
@@ -1116,7 +1116,6 @@ impl<R: Runtime> Cvvdp<R> {
         // signature for source-compatibility.
         let _ = ppd;
         let cube_dim = CubeDim::new_1d(64);
-        let _csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
@@ -1398,7 +1397,7 @@ impl<R: Runtime> Cvvdp<R> {
         let n_levels = self.n_levels as usize;
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let (_bw, _bh, n_px) = self.level_dims(k);
+            let (_, _, n_px) = self.level_dims(k);
             let mut planes: [Vec<f32>; 3] =
                 [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
             for c in 0..N_CHANNELS {
@@ -1472,7 +1471,7 @@ impl<R: Runtime> Cvvdp<R> {
             .create_from_slice(f32::as_bytes(&partials_init));
         let cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
-            let (_bw, _bh, n_px) = self.level_dims(k);
+            let (_, _, n_px) = self.level_dims(k);
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
             for c in 0..N_CHANNELS {
                 let partial_idx = (k * N_CHANNELS + c) as u32;
@@ -1500,7 +1499,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let (_bw, _bh, n_px_k) = self.level_dims(k);
+            let (_, _, n_px_k) = self.level_dims(k);
             let mut q = [0.0_f32; 3];
             for c in 0..N_CHANNELS {
                 q[c] = pool_band_finalize(
