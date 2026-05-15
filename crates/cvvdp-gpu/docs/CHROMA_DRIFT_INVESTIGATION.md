@@ -94,6 +94,38 @@ to max=1000 only, we clamp to ±1000 — but values are far from
 clamp on chroma_shift), or a stage I haven't traced yet
 (sensitivity ↔ band_mul interaction, log10 base, etc.).
 
+Tick 195 also falsified:
+- **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
+- **`MASK_Q`** = [1.302623, 2.888591, 3.680771] (matches pycvvdp's
+  first three of [1.302622, 2.888590, 3.680771, 3.588787]; the
+  fourth is the transient channel, unused for still-image 3ch)
+- **`MASK_C`** = -0.795497 (matches pycvvdp -0.7954971194267273)
+- **`XCM_3X3`** = `2 ^ pycvvdp.xcm_weights.reshape(4,4)[:3,:3]`
+  digit-for-digit (rows: input channel; cols: output channel
+  per pycvvdp's `mask_pool`: `M[cc] = sum_in C[in] * xcm[in, cc]`)
+- **Gauss kernel coefficients**: pycvvdp `K = [0.05, 0.25, 0.40,
+  0.25, 0.05]` (from `kernel_a = 0.4`, where the formula is
+  `[0.25 − a/2, 0.25, a, 0.25, 0.25 − a/2]`). Our `GAUSS5` array
+  uses the same formula with `KERNEL_A = 0.4`, so the values
+  are identical.
+
+After tick 195, **every constant + control-flow hypothesis has
+been ruled out via direct source comparison**. The 0.117 JOD
+chroma_shift drift must come from an implementation-level
+divergence that constant-pinning can't surface. Concrete next
+steps:
+
+1. **Stage-by-stage value dump** at the chroma_shift fixture:
+   intercept our host_scalar's intermediate Weber bands, log_l_bkg,
+   T_p, D arrays, and pycvvdp's via `dump_channels.py`. Compare
+   element-wise. The stage where the first divergence appears
+   ≥ f32 noise localizes the source.
+2. **Burn port** (`BURN_PORT_PLAN.md`): calling pycvvdp's exact
+   conv/matmul/reduce graph through Burn eliminates every
+   untested implementation-level detail (clamp form, log base,
+   sum order, etc.) wholesale. This is the more robust path
+   once the value-dump finds where the divergence sits.
+
 ## Direct next-step idea
 
 The cleanest diagnostic: spool up `dump_channels.py` from
