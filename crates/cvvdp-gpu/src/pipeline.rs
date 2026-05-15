@@ -208,7 +208,13 @@ fn build_weber_scratch<R: Runtime>(
     // Only non-baseband levels need scratch (baseband bypasses the
     // expand/subtract/weber chain).
     for _ in 0..n_levels.saturating_sub(1) {
-        let coarse_w = fine_w / 2;
+        // Ceil-div halving — matches cvvdp's `gausspyr_reduce`
+        // boundary semantics so the GPU pyramid stays bit-stable
+        // against the host scalar reference at all sizes (not just
+        // even-dim corpora). See `gausspyr_reduce_scalar` in
+        // kernels/pyramid.rs (which already uses div_ceil(2)).
+        let coarse_w = (fine_w + 1) / 2;
+        let coarse_h = (fine_h + 1) / 2;
         let n_fine = (fine_w as usize) * (fine_h as usize);
         let n_v = (coarse_w as usize) * (fine_h as usize);
         out.push(WeberScratch {
@@ -228,7 +234,7 @@ fn build_weber_scratch<R: Runtime>(
             ],
         });
         fine_w = coarse_w;
-        fine_h /= 2;
+        fine_h = coarse_h;
     }
     out
 }
@@ -276,8 +282,9 @@ fn build_d_bands_scratch<R: Runtime>(
                 alloc_zeros_f32(client, n),
             ],
         });
-        w /= 2;
-        h /= 2;
+        // Ceil-div halving — see WeberScratch comment.
+        w = (w + 1) / 2;
+        h = (h + 1) / 2;
     }
     out
 }
@@ -393,7 +400,8 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
     let mut levels = 1u32;
     let mut cur = min;
     while cur >= 2 * PYRAMID_MIN_DIM && (levels as usize) < MAX_LEVELS {
-        cur /= 2;
+        // Ceil-div halving — matches pycvvdp's behaviour (tick 175).
+        cur = (cur + 1) / 2;
         levels += 1;
     }
     // band_frequencies has its own min-freq cutoff (matching cvvdp's
@@ -472,8 +480,12 @@ impl<R: Runtime> Cvvdp<R> {
                         alloc_zeros_f32(client, n),
                     ],
                 });
-                w /= 2;
-                h /= 2;
+                // Ceil-div halving — matches cvvdp's `gausspyr_reduce`
+                // boundary semantics (tick 175). Was floor-div, which
+                // caused 0.586 JOD drift vs pycvvdp at 4000×3000 due
+                // to off-by-one shapes at levels 4+ on odd-dim inputs.
+                w = (w + 1) / 2;
+                h = (h + 1) / 2;
             }
             out
         };

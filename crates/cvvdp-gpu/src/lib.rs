@@ -117,7 +117,7 @@ pub const N_CHANNELS: usize = 3;
 /// 2^MAX_LEVELS` (≈ 1024 with the defaults) get only `MAX_LEVELS`
 /// bands — coarser frequency content above the cap is folded into
 /// the baseband.
-pub const MAX_LEVELS: usize = 8;
+pub const MAX_LEVELS: usize = 9;
 
 /// Smallest logical width/height at which the pyramid keeps
 /// building further coarse levels. Once `min(w, h) < 2 ×
