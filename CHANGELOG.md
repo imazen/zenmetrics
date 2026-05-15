@@ -305,6 +305,37 @@ portion. vs fcvvdp's 8-thread number at 360p we crossed from
 1.48× slower (tick 89) to 1.18× slower (tick 96) to **1.01×
 tied** here.
 
+- **DIST weber pyramid skips host readback entirely**
+  (`8c5b96e0`, tick 150) — `compute_dkl_d_bands` was calling
+  `compute_dkl_weber_pyramid` for the DIST side and
+  immediately discarding the returned tuple. Tick 144 caught
+  the unused tuple; tick 150 caught that the *wrapper* itself
+  still allocated ~240 MB of host Vecs and issued
+  `client.read_one` calls that wait for the GPU dispatch to
+  complete before transferring bytes. Replaced with
+  `_dispatch_weber_pyramid_gpu` (the dispatch-only private
+  helper) — skips both the allocation AND the GPU→host
+  transfer.
+
+  Result on the next 12 MP run
+  (`benchmarks/time_12mp_tick150_2026-05-14.md`):
+  - compute_dkl_d_bands: 82.1 → **71.0 ns/px** (−14%)
+  - compute_dkl_jod: 87.2 → **74.6 ns/px** (−14%)
+  - `d_bands − 2×weber`: 252 ms → 156 ms (−38%)
+  - vs fcvvdp 8-thread @ 360p: now **1.15× faster** (vs 1.01×
+    tied pre-tick).
+
+Perf trajectory through the recent fusion + host-pressure wave:
+
+| tick | jod ns/px | vs fcvvdp 8t @ 360p |
+| ---- | --------- | ------------------- |
+| 64   | 444       | 5.16× slower        |
+| 73   | 127       | 1.48× slower        |
+| 89   | 122       | 1.42× slower        |
+| 96   | 102       | 1.18× slower        |
+| 145  |  87       | 1.01× tied          |
+| 150  |  **75**   | **1.15× faster**    |
+
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
 These observations don't ship as code, but they document
