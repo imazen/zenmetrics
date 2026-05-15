@@ -104,8 +104,12 @@ pub const SRGB_LINEAR_TO_DKL: [[f32; 3]; 3] = [
     [-0.214_822_5, -0.626_253_7, 0.851_403_3],
 ];
 
-/// castleCSF achromatic + chrom params. Concrete numbers come from the
-/// vendored cvvdp JSON; placeholders until pin.
+/// castleCSF achromatic + chrom params. Scaffolding for a planned
+/// "load from vendored cvvdp JSON" path that hasn't landed; the
+/// production code reads CSF sensitivity straight from the
+/// `csf_lut_weber_fixed_size` LUT vendored in `kernels/csf_lut/`,
+/// not from this struct. See `CvvdpParams::PLACEHOLDER` for the
+/// full unused-scaffolding picture.
 #[derive(Debug, Clone, Copy)]
 pub struct CsfParams {
     /// Sensitivity peak for the achromatic channel.
