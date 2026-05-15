@@ -160,10 +160,17 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
         .compute_dkl_d_bands(&ref_bytes, &dist_bytes, ppd)
         .expect("warm-up d_bands");
 
-    // Inner GPU work only (color → weber × 2 sides → CSF → masking
-    // → D-band read-back). Excludes the host-side lp_norm_mean +
-    // 3-stage Minkowski + met2jod. Difference vs gpu_compute_dkl_jod_cuda
-    // is the host post-processing cost.
+    // GPU dispatch (color → weber × 2 sides → CSF → masking) plus
+    // a per-band host read-back of every D plane (n_levels × 3
+    // channels × pixels = ~432 MB at 12 MP, ~70 KB at 256×256).
+    // Excludes the spatial pool, Minkowski fold, and met2jod.
+    //
+    // The delta vs `gpu_compute_dkl_jod_cuda` below is **not** just
+    // "host post-processing": the JOD path replaces the per-band
+    // readback with a single GPU `pool_band_kernel` pass and a
+    // ~144-byte partials readback (tick 95+96). So compute_dkl_jod
+    // can be *faster* than compute_dkl_d_bands at large sizes
+    // — it skips the ~432 MB readback this function pays.
     g.bench_function("gpu_compute_dkl_d_bands_cuda", |b| {
         b.iter(|| {
             let d = cvvdp
