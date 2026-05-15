@@ -53,8 +53,9 @@ use crate::kernels::csf::{
     precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::masking::{
-    CH_GAIN, MASK_C, PU_PADSIZE, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_v_3ch_scaled_kernel,
+    CH_GAIN, MASK_C, PU_PADSIZE, diff_abs_3ch_kernel, min_abs_3ch_kernel,
+    mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel,
+    pu_blur_v_3ch_scaled_kernel,
 };
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
@@ -1242,23 +1243,40 @@ impl<R: Runtime> Cvvdp<R> {
 
             let t_mask = std::time::Instant::now();
             if is_baseband {
-                // Read back T_p per channel, compute |Δ| on host (tiny).
+                // Baseband: cvvdp's `|T_p_dis - T_p_ref|` bypass. Tick
+                // 94 — GPU fused 3-channel diff into scratch.d so the
+                // baseband output lives in d_scratch.d[k][c] like every
+                // other level (prep for GPU pool in tick 95).
+                let d_h: [cubecl::server::Handle; 3] = [
+                    scratch.d[0].clone(),
+                    scratch.d[1].clone(),
+                    scratch.d[2].clone(),
+                ];
+                unsafe {
+                    diff_abs_3ch_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(t_p_dis_h[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_dis_h[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_dis_h[2].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_ref_h[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_ref_h[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(t_p_ref_h[2].clone(), n_px),
+                        ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
+                        n_px as u32,
+                    );
+                }
                 let mut planes: [Vec<f32>; 3] =
                     [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
                 for c in 0..N_CHANNELS {
-                    let t_ref_bytes = self
+                    let bytes = self
                         .client
-                        .read_one(t_p_ref_h[c].clone())
+                        .read_one(d_h[c].clone())
                         .map_err(|_| Error::InvalidImageSize)?;
-                    let t_dis_bytes = self
-                        .client
-                        .read_one(t_p_dis_h[c].clone())
-                        .map_err(|_| Error::InvalidImageSize)?;
-                    let t_ref: &[f32] = f32::from_bytes(&t_ref_bytes);
-                    let t_dis: &[f32] = f32::from_bytes(&t_dis_bytes);
-                    for i in 0..n_px {
-                        planes[c][i] = (t_dis[i] - t_ref[i]).abs();
-                    }
+                    planes[c] = f32::from_bytes(&bytes).to_vec();
                 }
                 d_bands.push(planes);
             } else {

@@ -8,8 +8,8 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::masking::{
     MASK_C, gaussian_blur_sigma3, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, mult_mutual_band, pu_blur_h_3ch_kernel,
-    pu_blur_h_kernel, pu_blur_v_3ch_scaled_kernel, pu_blur_v_kernel,
+    diff_abs_3ch_kernel, mult_mutual_3ch_with_blurred_kernel, mult_mutual_band,
+    pu_blur_h_3ch_kernel, pu_blur_h_kernel, pu_blur_v_3ch_scaled_kernel, pu_blur_v_kernel,
 };
 
 #[cfg(feature = "cuda")]
@@ -151,6 +151,87 @@ fn pu_blur_two_kernels_match_host_scalar() {
         .map(|(a, b)| (a - b).abs())
         .fold(0.0_f32, f32::max);
     assert!(max_err < 1e-4, "PU blur GPU vs CPU max-abs = {max_err}");
+}
+
+#[test]
+fn diff_abs_3ch_kernel_writes_per_channel_abs_diff() {
+    // Verifies `d[c] = |t_p_dis[c] - t_p_ref[c]|` per pixel,
+    // independently for all 3 channels. Distinct per-channel
+    // inputs detect any cross-wiring.
+    let client = Backend::client(&Default::default());
+
+    let n = 64usize;
+    let t_ref_a: Vec<f32> = (0..n).map(|i| (i as f32) * 0.1 - 2.0).collect();
+    let t_ref_rg: Vec<f32> = (0..n).map(|i| (i as f32) * -0.05 + 0.7).collect();
+    let t_ref_vy: Vec<f32> = (0..n).map(|i| (i as f32) * 0.2).collect();
+    let t_dis_a: Vec<f32> = (0..n).map(|i| (i as f32) * 0.07).collect();
+    let t_dis_rg: Vec<f32> = (0..n).map(|i| (i as f32) * -0.05 - 1.0).collect();
+    let t_dis_vy: Vec<f32> = (0..n).map(|i| (i as f32) * 0.2 + 0.4).collect();
+
+    let t_ref_a_h = client.create_from_slice(f32::as_bytes(&t_ref_a));
+    let t_ref_rg_h = client.create_from_slice(f32::as_bytes(&t_ref_rg));
+    let t_ref_vy_h = client.create_from_slice(f32::as_bytes(&t_ref_vy));
+    let t_dis_a_h = client.create_from_slice(f32::as_bytes(&t_dis_a));
+    let t_dis_rg_h = client.create_from_slice(f32::as_bytes(&t_dis_rg));
+    let t_dis_vy_h = client.create_from_slice(f32::as_bytes(&t_dis_vy));
+    let d_a_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let d_rg_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let d_vy_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        diff_abs_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(t_dis_a_h, n),
+            ArrayArg::from_raw_parts(t_dis_rg_h, n),
+            ArrayArg::from_raw_parts(t_dis_vy_h, n),
+            ArrayArg::from_raw_parts(t_ref_a_h, n),
+            ArrayArg::from_raw_parts(t_ref_rg_h, n),
+            ArrayArg::from_raw_parts(t_ref_vy_h, n),
+            ArrayArg::from_raw_parts(d_a_h.clone(), n),
+            ArrayArg::from_raw_parts(d_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(d_vy_h.clone(), n),
+            n as u32,
+        );
+    }
+
+    let a_b = client.read_one(d_a_h).expect("read d_a");
+    let rg_b = client.read_one(d_rg_h).expect("read d_rg");
+    let vy_b = client.read_one(d_vy_h).expect("read d_vy");
+    let g_a: &[f32] = f32::from_bytes(&a_b);
+    let g_rg: &[f32] = f32::from_bytes(&rg_b);
+    let g_vy: &[f32] = f32::from_bytes(&vy_b);
+
+    let refs = [t_ref_a.as_slice(), t_ref_rg.as_slice(), t_ref_vy.as_slice()];
+    let diss = [t_dis_a.as_slice(), t_dis_rg.as_slice(), t_dis_vy.as_slice()];
+    let gpus = [g_a, g_rg, g_vy];
+    let mut saw_pos = false;
+    let mut saw_neg = false;
+    for c in 0..3 {
+        for i in 0..n {
+            let raw = diss[c][i] - refs[c][i];
+            if raw > 0.0 {
+                saw_pos = true;
+            }
+            if raw < 0.0 {
+                saw_neg = true;
+            }
+            let exp = raw.abs();
+            assert!(
+                (gpus[c][i] - exp).abs() < 1e-6,
+                "channel {c} pixel {i}: got {} expected {} (ref={} dis={})",
+                gpus[c][i],
+                exp,
+                refs[c][i],
+                diss[c][i],
+            );
+        }
+    }
+    assert!(saw_pos, "test inputs failed to cover positive diff");
+    assert!(saw_neg, "test inputs failed to cover negative diff");
 }
 
 #[test]

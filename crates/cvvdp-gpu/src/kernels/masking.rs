@@ -233,6 +233,38 @@ pub fn pu_blur_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
         + k12 * src[row_off + s12];
 }
 
+/// 3-channel `|T_p_dis[c] - T_p_ref[c]|` per pixel. Used by the
+/// baseband branch of `compute_dkl_d_bands` — cvvdp bypasses the
+/// mult-mutual masker on the baseband and emits the raw absolute
+/// difference of the CSF-weighted T_p values. Single launch per
+/// non-masked band.
+#[cube(launch)]
+pub fn diff_abs_3ch_kernel(
+    t_p_dis_a: &Array<f32>,
+    t_p_dis_rg: &Array<f32>,
+    t_p_dis_vy: &Array<f32>,
+    t_p_ref_a: &Array<f32>,
+    t_p_ref_rg: &Array<f32>,
+    t_p_ref_vy: &Array<f32>,
+    d_a: &mut Array<f32>,
+    d_rg: &mut Array<f32>,
+    d_vy: &mut Array<f32>,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    let zero = f32::new(0.0);
+
+    let da = t_p_dis_a[idx] - t_p_ref_a[idx];
+    d_a[idx] = if da < zero { -da } else { da };
+    let drg = t_p_dis_rg[idx] - t_p_ref_rg[idx];
+    d_rg[idx] = if drg < zero { -drg } else { drg };
+    let dvy = t_p_dis_vy[idx] - t_p_ref_vy[idx];
+    d_vy[idx] = if dvy < zero { -dvy } else { dvy };
+}
+
 /// 3-channel horizontal pass of the σ=3 separable Gaussian blur.
 /// Reads `src_a` / `src_rg` / `src_vy` at the same `(x, y)` and
 /// writes the corresponding three blurred outputs in one launch.
