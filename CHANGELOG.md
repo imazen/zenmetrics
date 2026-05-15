@@ -56,6 +56,86 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### scripts/sweep (cvvdp-backfill pipeline — PINNED TASK)
+
+End-to-end vast.ai fleet pipeline to backfill cvvdp scores
+(`cvvdp_imazen_*` + `cvvdp_pycvvdp_v054` columns) onto the
+2.37M-row unified parquet store at
+`/mnt/v/zen/zensim-training/2026-05-07/unified/`. Six scripts
+shipped across six commits + an operator runbook:
+
+- `scripts/sweep/generate_cvvdp_backfill_chunks.py` — reads the
+  7 unified parquets, splits into ~23,747 chunks of 100 rows
+  each, emits `chunks.jsonl` with input_parquet, row_range,
+  image_basenames, and per-impl R2 sidecar paths (`d2eb0f7c`,
+  tick 336).
+- `scripts/sweep/cvvdp_backfill_chunk_worker.sh` — per-chunk
+  worker. Downloads input_parquet from R2, syncs basenames,
+  slices parquet, groups rows by (codec,q,knob_tuple),
+  re-encodes via `zen-metrics sweep --pairs-tsv`, scores in
+  both impls (`score-pairs` + `pycvvdp_worker.py`), uploads
+  sidecars. Host-binary OR docker-image execution modes
+  (`87deac34`, tick 337).
+- `scripts/sweep/onstart_cvvdp_backfill.sh` — vast.ai instance
+  entry point. 239 lines: installs s5cmd+jq+docker, pre-pulls
+  ZEN_METRICS_IMAGE + PYCVVDP_IMAGE, heartbeats, downloads
+  chunks.jsonl + worker.sh, processes via `xargs -P $PARALLEL`
+  with R2 atomic-claim (`32a3b64a`, tick 338).
+- `scripts/sweep/cvvdp_backfill/launch.sh` — host-side fleet
+  launcher modeled on `v15/launch_gpu.sh`. Boots ubuntu:24.04,
+  bootstrap pulls onstart from R2. Defaults: N_BOXES=6,
+  MAX_DPH=0.30, MIN_RAM_GB=16, MIN_DISK_GB=40 (for the 6.5 GB
+  pycvvdp image) (`c572c192`, tick 339).
+- `scripts/sweep/cvvdp_backfill/finalize.sh` — post-fleet
+  consolidation. 253 lines: R2-syncs per-chunk sidecars,
+  groups by (impl, source_stem), concatenates via
+  `pyarrow.concat_tables`, emits parity TSV per source +
+  manifest.json with per-source row counts and parity stats
+  (`09512676`, tick 341).
+- `scripts/sweep/cvvdp_backfill/README.md` — 213-line operator
+  runbook with ASCII pipeline diagram, 6-step quick-start,
+  docker image specs, 5 troubleshooting cases, "when NOT to
+  use this" guidance vs v15 dispatcher (`cbf218d9`, tick 342).
+- `scripts/sweep/cvvdp_backfill/assert_parity.py` — optional
+  automation gate that consumes finalize.sh's `manifest.json`
+  and exits non-zero on threshold violation. Defaults match
+  the smoke-tested n=4 sentinel: `mean/median ≤ 0.10 JOD`,
+  `max ≤ 0.50 JOD`. Six-fixture smoke-verified across
+  pass/fail/null-tolerated/null-required-fails/only-sources
+  scoping/json-summary write (`252ee704`, tick 344).
+
+#### cvvdp-gpu (docs)
+
+- **`CVVDP_TRACE` / `CVVDP_TRACE_WEBER` debug env vars** are now
+  documented in lib.rs's crate-level docstring under a new
+  "Debug tracing env vars" section. Both vars existed in
+  pipeline.rs dispatch helpers but only `CVVDP_TRACE_WEBER` had
+  a user-facing docstring — `CVVDP_TRACE` was discoverable only
+  via grep or by reading a benchmark MD. The new section lists
+  the exact stderr line shapes each var emits, verified against
+  the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
+
+#### cvvdp-gpu (tests)
+
+- `tests/pyramid_scalar.rs::band_frequencies_exceeds_max_levels_at_high_ppd_or_dim`
+  pins the `MAX_LEVELS=9` cap in `pipeline::pyramid_levels` as
+  non-vacuous: `band_frequencies` returns 11 entries for
+  `(ppd=400, 2048×2048)`, `(ppd=200, 4096×4096)`,
+  `(ppd=200, 8192×8192)` — the cap MUST engage to keep
+  `weight_idx = k * N_CHANNELS + c` indexing within the
+  construction-time weights buffer. Counter-case at
+  `(ppd=75.402, 4000×3000)` (standard-4K corpus) shows the cap
+  is dormant for typical inputs (`233ed177`, tick 346).
+- `tests/column_name.rs` — five regression tests pin the
+  `CVVDP_COLUMN_NAME` contract that downstream parquet sidecars
+  depend on: non-empty, `cvvdp_` prefix, parquet-safe chars
+  (ASCII alnum + underscore only), default form encodes the
+  crate version (`cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`),
+  claims the reserved `cvvdp_imazen_*` tag. Version + tag
+  assertions skip gracefully when `CVVDP_IMPL_TAG` is set at
+  compile time so the override path stays a free-form escape
+  hatch (`a08d79a0`, tick 345).
+
 #### cvvdp-gpu (api)
 
 - `kernels/mod.rs` module-level "Numerical parity target"
