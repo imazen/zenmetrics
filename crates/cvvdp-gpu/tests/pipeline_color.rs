@@ -140,7 +140,7 @@ fn compute_dkl_gauss_pyramid_matches_host_scalar() {
 
         if k > 0 {
             // Reduce each host channel from prev level into current.
-            for plane in host_level.iter_mut() {
+            for plane in &mut host_level {
                 let mut reduced = Vec::new();
                 gausspyr_reduce_scalar(plane, prev_w, prev_h, &mut reduced);
                 *plane = reduced;

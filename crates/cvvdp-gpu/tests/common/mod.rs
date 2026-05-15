@@ -101,7 +101,7 @@ fn sha256_hex(data: &[u8]) -> String {
     hasher.update(data);
     let out = hasher.finalize();
     let mut s = String::with_capacity(64);
-    for b in out.iter() {
+    for b in &out {
         use std::fmt::Write;
         write!(s, "{b:02x}").unwrap();
     }

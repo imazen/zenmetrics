@@ -349,8 +349,8 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     // Closure to extract (expected, got) from a DimensionMismatch.
     let check_dim_err = |err: cvvdp_gpu::Error, label: &str| match err {
         cvvdp_gpu::Error::DimensionMismatch { expected, got } => {
-            assert_eq!(expected, expected_len, "{label}: expected field mismatched",);
-            assert_eq!(got, expected_len / 4, "{label}: got field mismatched",);
+            assert_eq!(expected, expected_len, "{label}: expected field mismatched");
+            assert_eq!(got, expected_len / 4, "{label}: got field mismatched");
         }
         other => panic!("{label}: expected DimensionMismatch, got {other:?}"),
     };

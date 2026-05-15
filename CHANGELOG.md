@@ -194,6 +194,26 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Two `for x in container.iter()`/`for x in container.iter_mut()`
+  sites switched to the more idiomatic `for x in &container`
+  / `for x in &mut container` form (clippy
+  `-W clippy::pedantic`'s `explicit_iter_loop`):
+  - `tests/common/mod.rs:104` (hex-encode loop over `Sha256`
+    finalize output, called by `manifest_sha256_hex` /
+    `fetch`).
+  - `tests/pipeline_color.rs:143` (host pyramid reduce
+    loop over per-channel plane buffers).
+  The `tests/common/mod.rs` site clears 3× because the file is
+  consumed via `#[path]` from bench/example/test scopes (4
+  total `explicit_iter_loop` warnings cleared across cvvdp-gpu).
+  Also dropped two unnecessary trailing commas in
+  `tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`'s
+  `assert_eq!` macro calls (clippy `unnecessary_trailing_comma`).
+  All affected tests
+  (`dimension_mismatch_surfaces_on_wrong_size_inputs` plus
+  the parity tests that reduce host pyramids) pass post-change.
+  Tick 303.
+
 - Six `u32 as u64` lossless widening casts switched to
   `u64::from(...)`. Sites:
   - `tests/common/mod.rs:409`
