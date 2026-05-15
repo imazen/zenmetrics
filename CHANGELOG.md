@@ -120,6 +120,16 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- `MaskingParams`, `PoolingParams`, `JodParams` docstrings now
+  state they're unused scaffolding and cross-reference
+  `CvvdpParams::PLACEHOLDER`. Previously only `CsfParams` had this
+  note; the other three sub-bundles left it implicit. Same shape
+  as tick 264's `Cvvdp::new` silent-ignored-fields docs — protects
+  users who'd otherwise expect varying `p` / `beta_spatial` /
+  `jod_a` to change the metric output.
+
 #### cvvdp-gpu (tests)
 
 - Migrated the last 2 inline `Backend` cascade copies onto

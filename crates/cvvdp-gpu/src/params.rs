@@ -122,6 +122,11 @@ pub struct CsfParams {
 }
 
 /// Contrast masking model (within-channel + cross-channel).
+///
+/// Currently unused scaffolding — the GPU + host-scalar masking
+/// kernels read `MASK_P`, `MASK_Q`, `MASK_C`, and `XCM_3X3` as
+/// inlined `const`s in `kernels::masking`. See
+/// `CvvdpParams::PLACEHOLDER` for the full picture.
 #[derive(Debug, Clone, Copy)]
 pub struct MaskingParams {
     /// Excitation exponent (cvvdp `p`).
@@ -133,6 +138,10 @@ pub struct MaskingParams {
 }
 
 /// Minkowski pooling exponents.
+///
+/// Currently unused scaffolding — the pool kernels read
+/// `BETA_SPATIAL` / `BETA_BAND` / `BETA_CHANNEL` as inlined
+/// `const`s in `kernels::pool`. See `CvvdpParams::PLACEHOLDER`.
 #[derive(Debug, Clone, Copy)]
 pub struct PoolingParams {
     /// Per-band spatial pooling exponent (Minkowski `beta`).
@@ -144,6 +153,9 @@ pub struct PoolingParams {
 }
 
 /// JOD mapping: `JOD = jod_a - jod_b * D^jod_c`.
+///
+/// Currently unused scaffolding — `kernels::pool::met2jod` inlines
+/// `JOD_A` / `JOD_EXP` directly. See `CvvdpParams::PLACEHOLDER`.
 #[derive(Debug, Clone, Copy)]
 pub struct JodParams {
     pub jod_a: f32,
