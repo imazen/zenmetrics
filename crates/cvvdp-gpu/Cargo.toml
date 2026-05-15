@@ -27,9 +27,7 @@ parity-goldens = []
 cubecl = { workspace = true }
 
 [dev-dependencies]
-bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
-serde = { workspace = true }
 serde_json = { workspace = true }
 zenmetrics-corpus = { workspace = true }
 # Used only by `tests/parity.rs` when the `parity-goldens` feature

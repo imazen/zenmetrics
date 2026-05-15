@@ -1241,10 +1241,8 @@ dependencies = [
 name = "cvvdp-gpu"
 version = "0.0.1"
 dependencies = [
- "bytemuck",
  "cubecl",
  "image",
- "serde",
  "serde_json",
  "sha2",
  "ureq",

@@ -154,6 +154,20 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- Dropped two unused dev-dependencies from
+  `crates/cvvdp-gpu/Cargo.toml`:
+  - `bytemuck` — zero references anywhere in `src/`, `tests/`,
+    `examples/`, or `benches/`. The cubecl APIs we use
+    (`f32::as_bytes` / `client.create_from_slice`) pull
+    bytemuck transitively where needed.
+  - `serde` — only `serde_json` is used directly; `serde_json`
+    pulls the `serde` traits transitively.
+  Pure dependency hygiene; cargo no longer asks rustc to link
+  these two crates into the dev-build. `cargo build --tests
+  --benches --examples` is clean under both `--features cuda`
+  and `--features wgpu`. `cvvdp_score_matches_v1_manifest`
+  still passes. Tick 311.
+
 - `kernels::csf::interp1_clamped` binary-search midpoint switched
   from `(lo + hi) / 2` to `usize::midpoint(lo, hi)` (stable since
   Rust 1.85; workspace MSRV 1.93). Overflow-safe by construction
