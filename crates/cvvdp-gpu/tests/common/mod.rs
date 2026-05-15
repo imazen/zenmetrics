@@ -13,6 +13,12 @@
 //!
 //! Cache layout: `$XDG_CACHE_HOME/zenmetrics-cvvdp-goldens/<version>/<file>`.
 
+// Each test file that includes this module uses a different subset of
+// the helpers — fetch/cache for the R2 v1 manifest path, or the
+// embedded JSON loader for synth-fixture goldens. The unused ones in
+// any given test compile-unit aren't dead crate-wide.
+#![allow(dead_code)]
+
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -100,4 +106,32 @@ fn sha256_hex(data: &[u8]) -> String {
         write!(s, "{b:02x}").unwrap();
     }
     s
+}
+
+/// Look up a pycvvdp synth golden JOD value from
+/// `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json` (regenerated
+/// by `bench_12mp_cuda.py`). The manifest is embedded at compile
+/// time via `include_str!` so tests don't need filesystem access
+/// at runtime; rebuild after regenerating the manifest to pick up
+/// new golden values.
+///
+/// Panics if the fixture key is missing. Test authors should add
+/// the fixture to `bench_12mp_cuda.py` first, regenerate, then
+/// reference it here.
+pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_synth_goldens.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_synth_goldens.json");
+    let jod = v
+        .get("fixtures")
+        .and_then(|f| f.get(fixture))
+        .and_then(|fx| fx.get("jod"))
+        .and_then(|j| j.as_f64())
+        .unwrap_or_else(|| {
+            panic!(
+                "pycvvdp_synth_goldens.json: fixture '{fixture}' not found or .jod is not a number"
+            )
+        });
+    jod as f32
 }
