@@ -88,6 +88,28 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+### Fixed
+
+#### cvvdp-gpu
+
+- **Warm-ref state invalidation honored on all 4 documented
+  dispatchers.** `Cvvdp::warm_reference`'s docstring promised
+  (since tick 170) that calls to `compute_dkl_jod`,
+  `compute_dkl_d_bands`, `compute_dkl_weber_pyramid`, or
+  `compute_dkl_t_p_bands` would invalidate the cached
+  `warm_ref_baseband_log_l_bkg` scalar — but only the first two
+  actually did. `compute_dkl_weber_pyramid` and
+  `compute_dkl_t_p_bands` called `_dispatch_weber_pyramid_gpu`
+  directly (overwriting bands_ref + weber_scratch.log_l_bkg) but
+  left the scalar live, so a subsequent
+  `compute_dkl_jod_with_warm_ref` would silently mix a stale
+  scalar with fresh GPU bands and emit a wrong-and-finite JOD.
+  Both functions now clear `warm_ref_baseband_log_l_bkg` at entry.
+  New regression test
+  `warm_state_invalidates_after_each_documented_dispatcher` pins
+  the contract for all 4 dispatchers — would have caught this
+  silently-stale-scalar bug.
+
 #### cvvdp-gpu (tests)
 
 - `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth` —

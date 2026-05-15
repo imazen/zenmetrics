@@ -964,6 +964,86 @@ fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
 }
 
 #[test]
+fn warm_state_invalidates_after_each_documented_dispatcher() {
+    // Tick 236: pin every dispatcher listed in `warm_reference`'s
+    // docstring as a warm-state invalidator. The docstring promised
+    // four invalidators since tick 170:
+    //   - compute_dkl_jod
+    //   - compute_dkl_d_bands
+    //   - compute_dkl_weber_pyramid
+    //   - compute_dkl_t_p_bands
+    //
+    // Before tick 236 only the first two actually cleared
+    // `warm_ref_baseband_log_l_bkg`. `compute_dkl_weber_pyramid`
+    // and `compute_dkl_t_p_bands` overwrote bands_ref +
+    // weber_scratch[*].log_l_bkg via _dispatch_weber_pyramid_gpu
+    // but left the cached scalar alive — a subsequent
+    // `compute_dkl_jod_with_warm_ref` would silently mix stale
+    // scalar with fresh bands. Tick 236 added the missing
+    // `warm_ref_baseband_log_l_bkg = None` at the top of both;
+    // this test pins each invalidator independently so the
+    // contract stays honest.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb = vec![128u8; n];
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(8)).collect();
+
+    // Re-arm warm state then trigger each documented invalidator
+    // in turn. After each one, compute_dkl_jod_with_warm_ref must
+    // surface Error::NoWarmReference.
+    let invalidators: &[&str] = &[
+        "compute_dkl_jod",
+        "compute_dkl_d_bands",
+        "compute_dkl_weber_pyramid",
+        "compute_dkl_t_p_bands",
+    ];
+
+    for &name in invalidators {
+        cvvdp
+            .warm_reference(&ref_srgb)
+            .expect("warm_reference (re-arm)");
+        match name {
+            "compute_dkl_jod" => {
+                let _ = cvvdp
+                    .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+                    .expect("intervening compute_dkl_jod");
+            }
+            "compute_dkl_d_bands" => {
+                let _ = cvvdp
+                    .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
+                    .expect("intervening compute_dkl_d_bands");
+            }
+            "compute_dkl_weber_pyramid" => {
+                let _ = cvvdp
+                    .compute_dkl_weber_pyramid(&ref_srgb)
+                    .expect("intervening compute_dkl_weber_pyramid");
+            }
+            "compute_dkl_t_p_bands" => {
+                let _ = cvvdp
+                    .compute_dkl_t_p_bands(&ref_srgb, ppd)
+                    .expect("intervening compute_dkl_t_p_bands");
+            }
+            other => unreachable!("unhandled invalidator {other}"),
+        }
+        let err = cvvdp
+            .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+            .expect_err("warm state should be invalidated");
+        match err {
+            cvvdp_gpu::Error::NoWarmReference => {}
+            other => panic!(
+                "after {name}: expected NoWarmReference, got {other:?}"
+            ),
+        }
+    }
+}
+
+#[test]
 fn compute_dkl_jod_matches_pycvvdp_at_12mp_synth() {
     // 12 MP parity vs pycvvdp v0.5.4 CUDA on a deterministic
     // synthetic 4000×3000 pair (same construction as

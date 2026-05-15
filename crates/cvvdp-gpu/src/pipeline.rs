@@ -1169,6 +1169,16 @@ impl<R: Runtime> Cvvdp<R> {
         let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
         let t_dispatch = std::time::Instant::now();
 
+        // _dispatch_weber_pyramid_gpu overwrites `bands_ref[k]` +
+        // `weber_scratch[k].log_l_bkg` with `srgb`'s data. The
+        // warm-ref state cached different bytes; invalidate the
+        // scalar so a subsequent `compute_dkl_jod_with_warm_ref`
+        // surfaces `Error::NoWarmReference` instead of producing a
+        // stale-mixed JOD. The `Cvvdp::warm_reference` docstring
+        // already promised this for `compute_dkl_weber_pyramid`;
+        // tick 236 closed the gap where the promise wasn't kept.
+        self.warm_ref_baseband_log_l_bkg = None;
+
         // Build dests Vec (cloned from self.weber_scratch[*].log_l_bkg).
         let dests: Vec<cubecl::server::Handle> = self
             .weber_scratch
@@ -1268,6 +1278,15 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
     pub fn compute_dkl_t_p_bands(&mut self, srgb: &[u8], ppd: f32) -> Result<Vec<[Vec<f32>; 3]>> {
+        // _dispatch_weber_pyramid_gpu below overwrites bands_ref +
+        // weber_scratch[k].log_l_bkg with the new srgb's data. The
+        // warm-ref state cached different bytes; invalidate the
+        // scalar so a subsequent compute_dkl_jod_with_warm_ref
+        // surfaces Error::NoWarmReference instead of producing a
+        // stale-mixed JOD. Closes the same docstring-gap as
+        // compute_dkl_weber_pyramid (tick 236).
+        self.warm_ref_baseband_log_l_bkg = None;
+
         // Build Weber bands + log_l_bkg on GPU. Side effect leaves
         // weber bands resident in self.bands_ref and log_l_bkg in
         // weber_scratch[k].log_l_bkg handles.
