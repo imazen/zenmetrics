@@ -122,6 +122,12 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- Migrated the two `compute_dkl_jod_*_pycvvdp_at_256x256_chroma_shift`
+  tests (cold + warm-ref) off the inlined synth-pair construction
+  onto `common::synth_pair_ref`. Same shape as tick 255's 12mp
+  migration. 4 of 14 inlined sites in `tests/pipeline_color.rs`
+  now use the helper. Bit-stable parity preserved (chroma_shift
+  diff vs pycvvdp golden remains 0.0000).
 - New `common::synth_pair_ref(w, h) -> Vec<u8>` helper builds the
   canonical synthetic-fixture reference image (the
   `(x * 17 + y * 5) % 251`-style modular pattern matching pycvvdp's
