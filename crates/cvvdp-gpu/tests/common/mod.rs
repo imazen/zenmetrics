@@ -135,3 +135,30 @@ pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
         });
     jod as f32
 }
+
+/// Look up the v1 corpus 256×256 per-pair JOD golden from
+/// `scripts/cvvdp_goldens/v1_corpus_jods.json` (mirrors the
+/// `pairs.*.jod` fields from the R2 v1 manifest). Embedded via
+/// `include_str!` so tests don't need network or filesystem access.
+///
+/// `q` is the JPEG quality level (1, 5, 20, 45, 70, or 90). Panics
+/// if the q is missing from the manifest.
+pub fn v1_corpus_jod_golden(q: u32) -> f32 {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/v1_corpus_jods.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse v1_corpus_jods.json");
+    let pairs = v
+        .get("pairs")
+        .and_then(|p| p.as_object())
+        .expect("v1_corpus_jods.json missing .pairs");
+    for (_name, fx) in pairs {
+        if fx.get("q").and_then(|n| n.as_u64()) == Some(q as u64) {
+            return fx
+                .get("jod")
+                .and_then(|j| j.as_f64())
+                .unwrap_or_else(|| panic!("v1_corpus_jods.json: q={q} has no .jod")) as f32;
+        }
+    }
+    panic!("v1_corpus_jods.json: q={q} not found");
+}

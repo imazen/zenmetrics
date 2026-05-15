@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "comment": "Per-pair JOD values from the v1 manifest at https://coefficient.r2.imazen.org/cvvdp-goldens/v1/manifest.json. Mirrored here so the two pipeline_score corpus tests can load via include_str! instead of duplicating hardcoded constants. Regenerate from the v1 manifest if pycvvdp pin or corpus changes.",
+  "pycvvdp_version": "0.5.4",
+  "display_name": "standard_4k",
+  "corpus": "zenmetrics-corpus 256x256 q-grid",
+  "pairs": {
+    "src_vs_q1":  { "q":  1, "jod": 7.6536160 },
+    "src_vs_q5":  { "q":  5, "jod": 8.8891029 },
+    "src_vs_q20": { "q": 20, "jod": 9.7075844 },
+    "src_vs_q45": { "q": 45, "jod": 9.8271732 },
+    "src_vs_q70": { "q": 70, "jod": 9.8912544 },
+    "src_vs_q90": { "q": 90, "jod": 9.9929180 }
+  }
+}

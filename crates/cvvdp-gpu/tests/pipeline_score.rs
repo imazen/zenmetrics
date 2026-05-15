@@ -12,6 +12,9 @@ use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 use image::ImageReader;
 use std::path::PathBuf;
 
+#[path = "common/mod.rs"]
+mod common;
+
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
 
@@ -40,16 +43,14 @@ fn cvvdp_score_matches_v1_manifest() {
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
-    // (q, pycvvdp_manifest_jod) — same goldens shadow_jod uses.
-    let cases: &[(u32, f32)] = &[
-        (1, 7.6536),
-        (5, 8.8889),
-        (20, 9.7076),
-        (45, 9.8273),
-        (70, 9.8915),
-        (90, 9.9930),
-    ];
-    for &(q, expected) in cases {
+    // (q, pycvvdp_manifest_jod) — loaded from
+    // scripts/cvvdp_goldens/v1_corpus_jods.json (mirrors R2 v1).
+    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let cases: Vec<(u32, f32)> = qs
+        .iter()
+        .map(|&q| (q, common::v1_corpus_jod_golden(q)))
+        .collect();
+    for &(q, expected) in &cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod = cvvdp.score(&ref_bytes, &dist_bytes).expect("score");
         let diff = (jod as f32 - expected).abs();
@@ -195,17 +196,15 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
 
     let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
 
-    let cases: &[(u32, f32)] = &[
-        (1, 7.6536),
-        (5, 8.8889),
-        (20, 9.7076),
-        (45, 9.8273),
-        (70, 9.8915),
-        (90, 9.9930),
-    ];
+    // Loaded from scripts/cvvdp_goldens/v1_corpus_jods.json.
+    let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
+    let cases: Vec<(u32, f32)> = qs
+        .iter()
+        .map(|&q| (q, common::v1_corpus_jod_golden(q)))
+        .collect();
 
     let mut max_drift = 0.0_f32;
-    for &(q, expected) in cases {
+    for &(q, expected) in &cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod = cvvdp
             .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
@@ -258,14 +257,10 @@ fn compute_dkl_jod_vs_host_scalar_on_corpus() {
     let qs: &[u32] = &[1, 5, 20, 45, 70, 90];
     eprintln!("  q   pycvvdp    host_scalar   GPU JOD   GPU-host   GPU-pycvvdp");
     let mut max_gpu_host_drift = 0.0_f32;
-    let pycvvdp_manifest: &[(u32, f32)] = &[
-        (1, 7.6536),
-        (5, 8.8889),
-        (20, 9.7076),
-        (45, 9.8273),
-        (70, 9.8915),
-        (90, 9.9930),
-    ];
+    let pycvvdp_manifest: Vec<(u32, f32)> = qs
+        .iter()
+        .map(|&q| (q, common::v1_corpus_jod_golden(q)))
+        .collect();
     for &q in qs {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let gpu_jod = cvvdp
