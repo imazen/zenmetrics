@@ -95,6 +95,7 @@ fn main() {
     let mut jod_times = Vec::with_capacity(ITERS);
     let mut d_bands_times = Vec::with_capacity(ITERS);
     let mut weber_times = Vec::with_capacity(ITERS);
+    let mut warm_ref_times = Vec::with_capacity(ITERS);
     for i in 0..ITERS {
         // Phase 1: weber pyramid only (one side).
         let t = Instant::now();
@@ -120,7 +121,21 @@ fn main() {
         let dt_jod = t.elapsed();
         black_box(jod);
 
-        eprintln!("iter {i}: weber={dt_weber:?} d_bands={dt_d:?} jod={dt_jod:?}");
+        // Phase 4: warm-ref JOD (REF dispatched once before the
+        // timed call; the call itself runs DIST weber + band loop +
+        // pool only). Models the batch-scoring workflow.
+        cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+        let t = Instant::now();
+        let jod_warm = cvvdp
+            .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+            .expect("compute_dkl_jod_with_warm_ref");
+        let dt_warm = t.elapsed();
+        black_box(jod_warm);
+
+        eprintln!(
+            "iter {i}: weber={dt_weber:?} d_bands={dt_d:?} jod={dt_jod:?} jod_warm={dt_warm:?}"
+        );
+        warm_ref_times.push(dt_warm);
         weber_times.push(dt_weber);
         d_bands_times.push(dt_d);
         jod_times.push(dt_jod);
@@ -128,6 +143,7 @@ fn main() {
     weber_times.sort();
     d_bands_times.sort();
     jod_times.sort();
+    warm_ref_times.sort();
     let total_pixels = (W as u64) * (H as u64);
     let mid = ITERS / 2;
     println!("\n12 MP ({W}×{H}) per-phase medians:");
@@ -146,9 +162,19 @@ fn main() {
         "  jod (full + host pool):   {j:?}  → {:.1} ns/px",
         j.as_nanos() as f64 / total_pixels as f64
     );
+    let warm = warm_ref_times[mid];
+    println!(
+        "  jod_warm (cached REF):    {warm:?}  → {:.1} ns/px",
+        warm.as_nanos() as f64 / total_pixels as f64
+    );
     println!("  jod - d_bands (host pool): {:?}", j.saturating_sub(d));
     println!(
         "  d_bands - 2*weber (CSF+mask+IO): {:?}",
         d.saturating_sub(w * 2)
+    );
+    println!(
+        "  jod - jod_warm (REF weber skipped): {:?} ({:.1}% saved)",
+        j.saturating_sub(warm),
+        100.0 * j.saturating_sub(warm).as_nanos() as f64 / j.as_nanos() as f64,
     );
 }
