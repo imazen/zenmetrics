@@ -212,9 +212,63 @@ The cvvdp parameter JSON gets vendored into
     test + explicit docstring
 
   Regression-locked by `warm_state_invalidates_after_each_documented_dispatcher`
-  (8 cases), `set_reference_does_not_invalidate_warm_state`,
+  (8 cases at tick-249 close; tick 314 extended to 9 by adding
+  `compute_dkl_jod_host_pool` — its `_dispatch_d_bands_into_scratch`
+  routes through `_dispatch_ref_weber_pyramid_only` which clears
+  the cached scalar, so it's a real invalidator too, just one
+  the original audit missed),
+  `set_reference_does_not_invalidate_warm_state`,
   `set_reference_replaces_prior_cache`,
   `debug_assert_fires_when_ppd_mismatches_geometry`,
   `dimension_mismatch_surfaces_on_wrong_size_inputs`,
   `invalid_image_size_surfaces_on_too_small_dims`, and
   `compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`.
+
+- **(Resolved ticks 313-315)** Sibling regression-test
+  coverage gaps to the tick 236-249 audit. Tick 313 added
+  `debug_assert_fires_when_ppd_mismatches_geometry_on_warm_ref_path`
+  — the original tick-244 test only covered `compute_dkl_jod`,
+  so a refactor that dropped the assert from the warm-ref path
+  specifically would have slipped through. Tick 314 (above)
+  documented `compute_dkl_jod_host_pool` as an invalidator +
+  extended the invalidator-test to cover it. Tick 315 added
+  `compute_dkl_jod_host_pool_with_warm_ref` to the
+  non-invalidator dual test
+  (`gauss_chain_helpers_do_not_invalidate_warm_state`,
+  3 cases) — it reads the cached scalar without writing it, so
+  it MUST preserve warm state. The non-invalidator side
+  matters because cpu-runtime batch scoring is the most-used
+  call pattern.
+
+- **(Resolved tick 322)** `PerfMode` enum opens the
+  parity-vs-perf opt-in surface. Two variants: `Strict`
+  (default, matches pycvvdp v0.5.4 bit-for-bit within f32
+  noise) and `Fast` (opt-in entry point for future stage-level
+  relaxations). Currently a no-op; the variant exists so
+  callers wire the opt-in once and future per-stage
+  optimizations gate on `params.perf_mode == Fast` without
+  forcing a breaking change. Pinned by
+  `perf_mode_fast_matches_strict_today` (GPU pool, |diff| <
+  1e-4 tolerance against atomic-add noise — tick 324 corrected
+  the tick-322 bit-equality assertion that was wrong) and
+  `perf_mode_fast_matches_strict_on_cpu_host_pool` (tick 327,
+  host-pool path is deterministic so this one IS bit-equality
+  via `.to_bits()`). When a real Fast-mode optimization lands
+  each test relaxes to that optimization's documented drift
+  budget; CHANGELOG.md tracks the running list.
+
+- **(Resolved tick 324)** Burn-based port abandoned. The
+  original `BURN_PORT_PLAN.md` (tick 190) claimed cubek's
+  conv2d would recover cuDNN-class perf for our 5-tap
+  separable Gaussian downscale. A spike at
+  `crates/burn-conv-spike/` measured 4.32× regression vs.
+  the hand-written direct stencil at 4000×3000 f32 on
+  RTX 5070 sm_120 (best cubek algorithm: `SimpleSyncCyclic +
+  Mma`, 1.46 ms/op vs 0.34 ms/op hand-written; other
+  algorithms 4.98–5.03× slower). Root cause: cubek routes
+  conv2d through im2col → GEMM with CMMA 16×16×16 tensor-core
+  tiles, which waste 15/16 of the work when `in_channels =
+  out_channels = 1`. `BURN_PORT_PLAN.md` carries a "Status:
+  ABANDONED" banner; `crates/burn-conv-spike/README.md`
+  documents the measured numbers + recommended next perf
+  lever (shared-memory tiling of the existing direct stencil).

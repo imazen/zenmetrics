@@ -58,6 +58,25 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- `docs/PORT_STATUS.md` "Open questions" section had a stale
+  claim that `warm_state_invalidates_after_each_documented_dispatcher`
+  covers 8 cases — true at tick-249 close but tick 314 extended
+  it to 9 (added `compute_dkl_jod_host_pool` as a real
+  invalidator the original audit missed). Updated the "Resolved
+  ticks 236-249" entry to acknowledge the tick-314 extension
+  inline. Also added three new "Resolved" entries summarizing
+  the post-249 work that wasn't captured anywhere in
+  PORT_STATUS.md:
+  - **Tick 313-315**: sibling regression-test coverage gaps to
+    the tick 236-249 audit (warm-ref ppd-mismatch test,
+    non-invalidator dual coverage for cpu host_pool warm-ref).
+  - **Tick 322**: `PerfMode` enum framework + the two regression
+    tests pinning the no-op contract (GPU pool with 1e-4
+    tolerance; cpu host-pool with bit-equality).
+  - **Tick 324**: Burn-based port abandoned with measured
+    4.32× regression numbers + recommended next perf lever.
+  PORT_STATUS.md is now current through tick 328. Tick 328.
+
 - **`perf_mode_fast_matches_strict_on_cpu_host_pool`** —
   cpu-runtime sibling of the GPU-side
   `perf_mode_fast_matches_strict_today` (in
