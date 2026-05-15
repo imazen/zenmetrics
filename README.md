@@ -31,6 +31,7 @@ normalized so higher = better):
 | `dssim-gpu` (= DSSIM) | 0.871 | 0.856 | 0.872 |
 | `ssim2-gpu` (= SSIMULACRA2) | 0.819 | 0.785 | 0.885 |
 | `zensim-gpu` (= zensim) | (Imazen-internal benchmark) | | |
+| `cvvdp-gpu` (= ColorVideoVDP) | TBD | TBD | TBD |
 | `butteraugli-gpu` (3-norm) | 0.664 | 0.543 | 0.794 |
 
 ## Documentation
