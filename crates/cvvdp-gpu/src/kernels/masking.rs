@@ -233,6 +233,104 @@ pub fn pu_blur_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
         + k12 * src[row_off + s12];
 }
 
+/// 3-channel horizontal pass of the σ=3 separable Gaussian blur.
+/// Reads `src_a` / `src_rg` / `src_vy` at the same `(x, y)` and
+/// writes the corresponding three blurred outputs in one launch.
+/// Saves 2 kernel launches per non-baseband pyramid level vs the
+/// per-channel `pu_blur_h_kernel`.
+#[cube(launch)]
+pub fn pu_blur_h_3ch_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    w: u32,
+    h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y = idx / wu;
+    let x = idx - y * wu;
+    let w_i = w as i32;
+    let x_i = x as i32;
+    let half = 6_i32;
+
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    let s0 = reflect_pu_idx(x_i - half, w_i);
+    let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
+    let s2 = reflect_pu_idx(x_i + 2 - half, w_i);
+    let s3 = reflect_pu_idx(x_i + 3 - half, w_i);
+    let s4 = reflect_pu_idx(x_i + 4 - half, w_i);
+    let s5 = reflect_pu_idx(x_i + 5 - half, w_i);
+    let s6 = reflect_pu_idx(x_i + 6 - half, w_i);
+    let s7 = reflect_pu_idx(x_i + 7 - half, w_i);
+    let s8 = reflect_pu_idx(x_i + 8 - half, w_i);
+    let s9 = reflect_pu_idx(x_i + 9 - half, w_i);
+    let s10 = reflect_pu_idx(x_i + 10 - half, w_i);
+    let s11 = reflect_pu_idx(x_i + 11 - half, w_i);
+    let s12 = reflect_pu_idx(x_i + 12 - half, w_i);
+
+    let row_off = y * wu;
+    dst_a[idx] = k0 * src_a[row_off + s0]
+        + k1 * src_a[row_off + s1]
+        + k2 * src_a[row_off + s2]
+        + k3 * src_a[row_off + s3]
+        + k4 * src_a[row_off + s4]
+        + k5 * src_a[row_off + s5]
+        + k6 * src_a[row_off + s6]
+        + k7 * src_a[row_off + s7]
+        + k8 * src_a[row_off + s8]
+        + k9 * src_a[row_off + s9]
+        + k10 * src_a[row_off + s10]
+        + k11 * src_a[row_off + s11]
+        + k12 * src_a[row_off + s12];
+    dst_rg[idx] = k0 * src_rg[row_off + s0]
+        + k1 * src_rg[row_off + s1]
+        + k2 * src_rg[row_off + s2]
+        + k3 * src_rg[row_off + s3]
+        + k4 * src_rg[row_off + s4]
+        + k5 * src_rg[row_off + s5]
+        + k6 * src_rg[row_off + s6]
+        + k7 * src_rg[row_off + s7]
+        + k8 * src_rg[row_off + s8]
+        + k9 * src_rg[row_off + s9]
+        + k10 * src_rg[row_off + s10]
+        + k11 * src_rg[row_off + s11]
+        + k12 * src_rg[row_off + s12];
+    dst_vy[idx] = k0 * src_vy[row_off + s0]
+        + k1 * src_vy[row_off + s1]
+        + k2 * src_vy[row_off + s2]
+        + k3 * src_vy[row_off + s3]
+        + k4 * src_vy[row_off + s4]
+        + k5 * src_vy[row_off + s5]
+        + k6 * src_vy[row_off + s6]
+        + k7 * src_vy[row_off + s7]
+        + k8 * src_vy[row_off + s8]
+        + k9 * src_vy[row_off + s9]
+        + k10 * src_vy[row_off + s10]
+        + k11 * src_vy[row_off + s11]
+        + k12 * src_vy[row_off + s12];
+}
+
 /// Vertical pass of the σ=3 separable Gaussian blur.
 #[cube(launch)]
 pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) {
@@ -289,6 +387,110 @@ pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) 
         + k10 * src[s10 * wu + x]
         + k11 * src[s11 * wu + x]
         + k12 * src[s12 * wu + x];
+}
+
+/// 3-channel vertical pass of the σ=3 separable Gaussian blur with
+/// the `* pu_scale` post-multiply folded in. Replaces three
+/// `pu_blur_v_kernel` launches plus three `weight_band_kernel`
+/// launches per non-baseband pyramid level: 6→1 launches.
+///
+/// `pu_scale` is the host-supplied `10^MASK_C` value applied by
+/// cvvdp's `phase_uncertainty` after the sum-to-1 blur (the σ=3
+/// Gaussian kernel coefficients here are already normalized).
+#[cube(launch)]
+pub fn pu_blur_v_3ch_scaled_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    pu_scale: f32,
+    w: u32,
+    h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y = idx / wu;
+    let x = idx - y * wu;
+    let h_i = h as i32;
+    let y_i = y as i32;
+    let half = 6_i32;
+
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    let s0 = reflect_pu_idx(y_i - half, h_i);
+    let s1 = reflect_pu_idx(y_i + 1 - half, h_i);
+    let s2 = reflect_pu_idx(y_i + 2 - half, h_i);
+    let s3 = reflect_pu_idx(y_i + 3 - half, h_i);
+    let s4 = reflect_pu_idx(y_i + 4 - half, h_i);
+    let s5 = reflect_pu_idx(y_i + 5 - half, h_i);
+    let s6 = reflect_pu_idx(y_i + 6 - half, h_i);
+    let s7 = reflect_pu_idx(y_i + 7 - half, h_i);
+    let s8 = reflect_pu_idx(y_i + 8 - half, h_i);
+    let s9 = reflect_pu_idx(y_i + 9 - half, h_i);
+    let s10 = reflect_pu_idx(y_i + 10 - half, h_i);
+    let s11 = reflect_pu_idx(y_i + 11 - half, h_i);
+    let s12 = reflect_pu_idx(y_i + 12 - half, h_i);
+
+    dst_a[idx] = (k0 * src_a[s0 * wu + x]
+        + k1 * src_a[s1 * wu + x]
+        + k2 * src_a[s2 * wu + x]
+        + k3 * src_a[s3 * wu + x]
+        + k4 * src_a[s4 * wu + x]
+        + k5 * src_a[s5 * wu + x]
+        + k6 * src_a[s6 * wu + x]
+        + k7 * src_a[s7 * wu + x]
+        + k8 * src_a[s8 * wu + x]
+        + k9 * src_a[s9 * wu + x]
+        + k10 * src_a[s10 * wu + x]
+        + k11 * src_a[s11 * wu + x]
+        + k12 * src_a[s12 * wu + x])
+        * pu_scale;
+    dst_rg[idx] = (k0 * src_rg[s0 * wu + x]
+        + k1 * src_rg[s1 * wu + x]
+        + k2 * src_rg[s2 * wu + x]
+        + k3 * src_rg[s3 * wu + x]
+        + k4 * src_rg[s4 * wu + x]
+        + k5 * src_rg[s5 * wu + x]
+        + k6 * src_rg[s6 * wu + x]
+        + k7 * src_rg[s7 * wu + x]
+        + k8 * src_rg[s8 * wu + x]
+        + k9 * src_rg[s9 * wu + x]
+        + k10 * src_rg[s10 * wu + x]
+        + k11 * src_rg[s11 * wu + x]
+        + k12 * src_rg[s12 * wu + x])
+        * pu_scale;
+    dst_vy[idx] = (k0 * src_vy[s0 * wu + x]
+        + k1 * src_vy[s1 * wu + x]
+        + k2 * src_vy[s2 * wu + x]
+        + k3 * src_vy[s3 * wu + x]
+        + k4 * src_vy[s4 * wu + x]
+        + k5 * src_vy[s5 * wu + x]
+        + k6 * src_vy[s6 * wu + x]
+        + k7 * src_vy[s7 * wu + x]
+        + k8 * src_vy[s8 * wu + x]
+        + k9 * src_vy[s9 * wu + x]
+        + k10 * src_vy[s10 * wu + x]
+        + k11 * src_vy[s11 * wu + x]
+        + k12 * src_vy[s12 * wu + x])
+        * pu_scale;
 }
 
 /// Reflect index `i` into `[0, n)` for the PU blur. Matches

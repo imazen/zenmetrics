@@ -8,7 +8,8 @@ use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::masking::{
     MASK_C, gaussian_blur_sigma3, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, mult_mutual_band, pu_blur_h_kernel, pu_blur_v_kernel,
+    mult_mutual_3ch_with_blurred_kernel, mult_mutual_band, pu_blur_h_3ch_kernel,
+    pu_blur_h_kernel, pu_blur_v_3ch_scaled_kernel, pu_blur_v_kernel,
 };
 
 #[cfg(feature = "cuda")]
@@ -150,6 +151,117 @@ fn pu_blur_two_kernels_match_host_scalar() {
         .map(|(a, b)| (a - b).abs())
         .fold(0.0_f32, f32::max);
     assert!(max_err < 1e-4, "PU blur GPU vs CPU max-abs = {max_err}");
+}
+
+#[test]
+fn pu_blur_3ch_kernels_match_per_channel_with_scale() {
+    // Fused 3-channel PU blur — verifies that the h_3ch + v_3ch_scaled
+    // pair produces the same output as three separate per-channel
+    // pu_blur_h + pu_blur_v + (* pu_scale) chains. Distinct per-channel
+    // input arrays so a "wrong-channel" bug would mismatch.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (16usize, 16usize);
+    let n = w * h;
+    let src_a: Vec<f32> = (0..n)
+        .map(|i| {
+            let x = (i % w) as f32;
+            let y = (i / w) as f32;
+            (x * 0.3 + y * 0.5).sin() * 4.0 + 1.0
+        })
+        .collect();
+    let src_rg: Vec<f32> = (0..n)
+        .map(|i| {
+            let x = (i % w) as f32;
+            let y = (i / w) as f32;
+            (x * 0.17 - y * 0.21).cos() * 2.5 - 0.5
+        })
+        .collect();
+    let src_vy: Vec<f32> = (0..n)
+        .map(|i| {
+            let x = (i % w) as f32;
+            let y = (i / w) as f32;
+            (x - y) * 0.1 + 3.0
+        })
+        .collect();
+    let pu_scale = 10.0_f32.powf(-0.69); // arbitrary, matches MASK_C order
+
+    // CPU reference per channel + scale.
+    let cpu_a: Vec<f32> = gaussian_blur_sigma3(&src_a, w, h)
+        .into_iter()
+        .map(|v| v * pu_scale)
+        .collect();
+    let cpu_rg: Vec<f32> = gaussian_blur_sigma3(&src_rg, w, h)
+        .into_iter()
+        .map(|v| v * pu_scale)
+        .collect();
+    let cpu_vy: Vec<f32> = gaussian_blur_sigma3(&src_vy, w, h)
+        .into_iter()
+        .map(|v| v * pu_scale)
+        .collect();
+
+    // GPU: fused h_3ch → v_3ch_scaled.
+    let src_a_h = client.create_from_slice(f32::as_bytes(&src_a));
+    let src_rg_h = client.create_from_slice(f32::as_bytes(&src_rg));
+    let src_vy_h = client.create_from_slice(f32::as_bytes(&src_vy));
+    let mid_a = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let mid_rg = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let mid_vy = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let dst_a = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let dst_rg = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let dst_vy = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        pu_blur_h_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count.clone(),
+            cube_dim,
+            ArrayArg::from_raw_parts(src_a_h, n),
+            ArrayArg::from_raw_parts(src_rg_h, n),
+            ArrayArg::from_raw_parts(src_vy_h, n),
+            ArrayArg::from_raw_parts(mid_a.clone(), n),
+            ArrayArg::from_raw_parts(mid_rg.clone(), n),
+            ArrayArg::from_raw_parts(mid_vy.clone(), n),
+            w as u32,
+            h as u32,
+        );
+        pu_blur_v_3ch_scaled_kernel::launch::<Backend>(
+            &client,
+            cube_count.clone(),
+            cube_dim,
+            ArrayArg::from_raw_parts(mid_a, n),
+            ArrayArg::from_raw_parts(mid_rg, n),
+            ArrayArg::from_raw_parts(mid_vy, n),
+            ArrayArg::from_raw_parts(dst_a.clone(), n),
+            ArrayArg::from_raw_parts(dst_rg.clone(), n),
+            ArrayArg::from_raw_parts(dst_vy.clone(), n),
+            pu_scale,
+            w as u32,
+            h as u32,
+        );
+    }
+
+    let bytes_a = client.read_one(dst_a).expect("read dst_a");
+    let bytes_rg = client.read_one(dst_rg).expect("read dst_rg");
+    let bytes_vy = client.read_one(dst_vy).expect("read dst_vy");
+    let gpu_a: &[f32] = f32::from_bytes(&bytes_a);
+    let gpu_rg: &[f32] = f32::from_bytes(&bytes_rg);
+    let gpu_vy: &[f32] = f32::from_bytes(&bytes_vy);
+
+    let cpus = [cpu_a.as_slice(), cpu_rg.as_slice(), cpu_vy.as_slice()];
+    let gpus = [gpu_a, gpu_rg, gpu_vy];
+    for c in 0..3 {
+        let max_err = gpus[c]
+            .iter()
+            .zip(cpus[c])
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            max_err < 1e-4,
+            "channel {c}: fused PU blur×scale vs per-channel max-abs = {max_err}"
+        );
+    }
 }
 
 #[test]

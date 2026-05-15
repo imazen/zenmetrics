@@ -54,7 +54,7 @@ use crate::kernels::csf::{
 };
 use crate::kernels::masking::{
     CH_GAIN, MASK_C, PU_PADSIZE, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_kernel, pu_blur_v_kernel,
+    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_v_3ch_scaled_kernel,
 };
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{
@@ -1311,8 +1311,11 @@ impl<R: Runtime> Cvvdp<R> {
                             ArrayArg::from_raw_parts(m_raw_h[2].clone(), n_px),
                             n_px as u32,
                         );
-                        // PU blur: h pass into scratch, v pass into the
-                        // final blurred buffer. One pair per channel.
+                        // PU blur: 3-channel h pass → 3-channel v pass
+                        // with `* 10^MASK_C` post-scale folded in (tick
+                        // 92). One launch each = 2 launches total
+                        // instead of 9 (3× pu_blur_h + 3× pu_blur_v +
+                        // 3× weight_band).
                         let m_mid_h: [cubecl::server::Handle; 3] = [
                             scratch.m_mid[0].clone(),
                             scratch.m_mid[1].clone(),
@@ -1323,42 +1326,34 @@ impl<R: Runtime> Cvvdp<R> {
                             scratch.m_blur[1].clone(),
                             scratch.m_blur[2].clone(),
                         ];
-                        // PU blur is sum-to-1 normalized. After v pass
-                        // we need to apply phase_uncertainty's `* 10^MASK_C`
-                        // scale before the masker — weight_band_kernel
-                        // multiplies in place by weights[0].
-                        let pu_scale_h = self
-                            .client
-                            .create_from_slice(f32::as_bytes(&[10.0_f32.powf(MASK_C)]));
-                        for c in 0..N_CHANNELS {
-                            pu_blur_h_kernel::launch::<R>(
-                                &self.client,
-                                count.clone(),
-                                cube_dim,
-                                ArrayArg::from_raw_parts(m_raw_h[c].clone(), n_px),
-                                ArrayArg::from_raw_parts(m_mid_h[c].clone(), n_px),
-                                bw as u32,
-                                bh as u32,
-                            );
-                            pu_blur_v_kernel::launch::<R>(
-                                &self.client,
-                                count.clone(),
-                                cube_dim,
-                                ArrayArg::from_raw_parts(m_mid_h[c].clone(), n_px),
-                                ArrayArg::from_raw_parts(m_blur_h[c].clone(), n_px),
-                                bw as u32,
-                                bh as u32,
-                            );
-                            weight_band_kernel::launch::<R>(
-                                &self.client,
-                                count.clone(),
-                                cube_dim,
-                                ArrayArg::from_raw_parts(m_blur_h[c].clone(), n_px),
-                                ArrayArg::from_raw_parts(pu_scale_h.clone(), 1),
-                                0_u32,
-                                n_px as u32,
-                            );
-                        }
+                        let pu_scale = 10.0_f32.powf(MASK_C);
+                        pu_blur_h_3ch_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(m_raw_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_raw_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_raw_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_mid_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_mid_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_mid_h[2].clone(), n_px),
+                            bw as u32,
+                            bh as u32,
+                        );
+                        pu_blur_v_3ch_scaled_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(m_mid_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_mid_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_mid_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(m_blur_h[2].clone(), n_px),
+                            pu_scale,
+                            bw as u32,
+                            bh as u32,
+                        );
                         mult_mutual_3ch_with_blurred_kernel::launch::<R>(
                             &self.client,
                             count.clone(),
