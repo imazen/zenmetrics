@@ -129,6 +129,17 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (tests)
+
+- `error_display_messages_are_actionable` — pins the user-facing
+  `Display` strings for all 4 `cvvdp_gpu::Error` variants. Tests
+  content (variant name hint, the actionable next step) rather
+  than exact strings, so future context additions still pass.
+  Pre-tick-282 a rename of the `Display` impl would have silently
+  degraded the user experience for callers who `?`-bubble cvvdp
+  errors through `anyhow::Error::to_string()` / `panic!`
+  propagation.
+
 #### cvvdp-gpu (tests + examples)
 
 - Collapse the last two-line `synth_pair_odd_dim_ref + apply_offset_dist`

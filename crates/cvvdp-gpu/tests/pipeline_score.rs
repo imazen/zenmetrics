@@ -204,6 +204,55 @@ fn score_with_reference_errors_without_set_reference() {
 }
 
 #[test]
+fn error_display_messages_are_actionable() {
+    // Tick 282: pin the user-facing Display strings for every
+    // `cvvdp_gpu::Error` variant. Display is what users see in
+    // logs / `anyhow::Error::to_string()` / `panic!` propagation
+    // when they `?`-bubble a cvvdp_gpu::Result through their own
+    // error type. A rename or format-string break would silently
+    // degrade the user experience without this pin.
+    //
+    // The strings are checked for content, not exact match — so a
+    // future improvement that adds context (e.g. \"DimensionMismatch:
+    // got X bytes, expected Y\") still passes, but a refactor that
+    // dropped the variant-name hint or the byte-count details
+    // surfaces.
+    use cvvdp_gpu::Error;
+
+    let dm = Error::DimensionMismatch {
+        expected: 12_288,
+        got: 3_072,
+    }
+    .to_string();
+    assert!(
+        dm.contains("12288") && dm.contains("3072"),
+        "DimensionMismatch Display must include expected + got byte counts; got: {dm:?}"
+    );
+    assert!(
+        dm.contains("dimension"),
+        "DimensionMismatch Display must mention 'dimension'; got: {dm:?}"
+    );
+
+    let ncr = Error::NoCachedReference.to_string();
+    assert!(
+        ncr.contains("set_reference"),
+        "NoCachedReference Display must point at set_reference; got: {ncr:?}"
+    );
+
+    let nwr = Error::NoWarmReference.to_string();
+    assert!(
+        nwr.contains("warm_reference"),
+        "NoWarmReference Display must point at warm_reference; got: {nwr:?}"
+    );
+
+    let iis = Error::InvalidImageSize.to_string();
+    assert!(
+        iis.contains("small") || iis.contains("pyramid"),
+        "InvalidImageSize Display must hint at the too-small / pyramid cause; got: {iis:?}"
+    );
+}
+
+#[test]
 fn invalid_image_size_surfaces_on_too_small_dims() {
     // Tick 241: pin the InvalidImageSize error path on Cvvdp::new
     // and Cvvdp::new_with_geometry. The construction-time guard at
