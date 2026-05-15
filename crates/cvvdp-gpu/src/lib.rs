@@ -85,13 +85,17 @@ pub use pipeline::Cvvdp;
 /// red-green + violet-yellow).
 pub const N_CHANNELS: usize = 3;
 
-/// Maximum pyramid depth supported by the kernel allocations. Image
-/// sizes larger than `2^MAX_LEVELS × base_min` use only the lower
-/// `MAX_LEVELS` bands.
+/// Maximum pyramid depth supported by the kernel allocations.
+/// `pipeline::pyramid_levels` caps the per-image pyramid depth at
+/// this value, so images with `min(w, h) > PYRAMID_MIN_DIM ×
+/// 2^MAX_LEVELS` (≈ 1024 with the defaults) get only `MAX_LEVELS`
+/// bands — coarser frequency content above the cap is folded into
+/// the baseband.
 pub const MAX_LEVELS: usize = 8;
 
-/// Smallest logical width/height at which the pyramid keeps building
-/// further coarse levels. Below this, the band is the coarse residual.
+/// Smallest logical width/height at which the pyramid keeps
+/// building further coarse levels. Once `min(w, h) < 2 ×
+/// PYRAMID_MIN_DIM`, the current level becomes the baseband.
 pub const PYRAMID_MIN_DIM: u32 = 4;
 
 #[derive(Debug, Clone)]
