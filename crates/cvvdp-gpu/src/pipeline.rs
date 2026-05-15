@@ -291,18 +291,17 @@ fn build_d_bands_scratch<R: Runtime>(
 
 /// Reference-side state kept across `score_with_reference` calls.
 ///
-/// Stashes the raw sRGB bytes so the host-scalar pipeline can re-run
-/// end-to-end per distorted candidate — same bytes that `score()`
-/// would have re-uploaded, just kept around. Exact-parity with
-/// `score(ref, dist)`.
+/// Stashes the raw sRGB bytes; every `score_with_reference` call
+/// re-runs the full GPU pipeline (`compute_dkl_jod`) against the
+/// cached bytes — matches `Cvvdp::score(ref, dist)` byte-for-byte.
 ///
-/// The fast path that materializes the reference's CSF-weighted
-/// pyramid bands once (`Vec<Vec<Handle>>`, indexed `[level][channel]`)
-/// is the obvious next optimization but isn't wired yet — every
-/// `score_with_reference` call still re-runs the full host pipeline.
-/// The GPU helpers (`compute_dkl_weber_pyramid` and friends) exist
-/// and could be retargeted here once `Cvvdp::score` itself routes
-/// through the GPU composition.
+/// The dedicated warm-ref fast path that materialises the REF
+/// Weber pyramid on the GPU once and skips it on subsequent DIST
+/// calls lives at [`Cvvdp::warm_reference`] +
+/// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (≈ 1.75× per-DIST
+/// throughput at 12 MP). The host-pool variants
+/// `compute_dkl_jod_host_pool_with_warm_ref` give the same
+/// optimisation on the cpu cubecl backend.
 struct CachedReference {
     /// Cached reference sRGB bytes (length `width * height * 3`).
     ref_srgb: Vec<u8>,
@@ -2126,13 +2125,17 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(jod as f64)
     }
 
-    /// Cache the reference side for repeated scoring against many
-    /// distorted candidates.
+    /// Cache the reference side for repeated `score_with_reference`
+    /// calls against many distorted candidates.
     ///
-    /// Today this just stashes the sRGB bytes (the host-scalar path
-    /// re-runs the reference side per call); the planned GPU
-    /// composition will materialise the CSF-weighted pyramid here so
-    /// the reference work happens once per `set_reference`.
+    /// Stashes the raw sRGB bytes; each subsequent
+    /// `score_with_reference` re-runs the full GPU
+    /// `compute_dkl_jod` against them. For the dedicated warm-ref
+    /// fast path that materialises the REF Weber pyramid on the
+    /// GPU once and skips it per DIST call, use
+    /// [`Cvvdp::warm_reference`] +
+    /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (≈ 1.75× per-DIST
+    /// throughput at 12 MP).
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {

@@ -14,7 +14,7 @@ Tracking faithful-port progress against the Python reference
 | Contrast masking   | `kernels/masking`      | scalar + fused 3ch min_abs + 3ch PU blur with folded scale + mult_mutual_3ch + diff_abs_3ch (baseband) | scalar + 3ch + with-blurred + diff_abs parity |
 | Per-band pooling   | `kernels/pool`         | GPU `pool_band_kernel` (atomic f32 partials) consumed by `compute_dkl_jod` | 3 host fixtures + GPU vs lp_norm_mean     |
 | Host fold / JOD    | `kernels/pool`         | host scalar `do_pooling_and_jod_still_3ch` + `met2jod` over a ~144-byte partials Vec | 3 fixtures + kink continuity              |
-| Composed pipeline  | `Cvvdp::compute_dkl_jod` (GPU) + `Cvvdp::compute_dkl_jod_with_warm_ref` (GPU batch) + `Cvvdp::compute_dkl_jod_host_pool` (cpu backend) + `host_scalar::predict_jod_still_3ch` (CPU reference) | full GPU path: color → weber → CSF → masking → pool → host fold; CPU path retained as parity-locked reference; host-pool variant added in tick 208 reads D bands back + pools on host (works on cubecl-cpu). `Cvvdp::score` still routes through host_scalar per `shadow_jod` v1 manifest anchor. 12 MP CUDA timing (RTX 5070, ceil-div tick 175+): cold `jod` ~62 ns/px; warm-ref ~34 ns/px. vs canonical **pycvvdp v0.5.4 CUDA: 14 ns/px** — we are **4.4× slower cold / 2.4× slower warm** with correct output. pycvvdp benefits from cuDNN-optimised separable conv; cubek path or shared-memory tiling can close the gap. We win on portability: WGPU + HIP backends, 50 MB static binary vs ~3 GB PyTorch runtime. | host + GPU: **≤0.005 JOD vs pycvvdp v1 manifest** (`shadow_jod`, tick 207; was loose 0.05/0.5 schedule before ticks 204/206 closed the chroma_shift and 73×91 drifts). Measured max diff 0.0031 JOD across q=1,5,20,45,70,90; q=1 closed from 0.4 → 0.0000. Synth fixtures: 12 MP 0.0003 JOD, 256² blur3x1/blur1x3/noise/chroma_shift ≤0.0002 JOD, 73×91 odd-dim 0.0000 JOD (tick 206 replicated pycvvdp's gausspyr_reduce parity-check bug). warm-ref vs cold-ref ≤1e-5 JOD; host_pool vs GPU pool 0.000000 (tick 208) |
+| Composed pipeline  | `Cvvdp::score` → `compute_dkl_jod` (GPU, tick 213); `compute_dkl_jod_with_warm_ref` (GPU batch); `compute_dkl_jod_host_pool` + `..._with_warm_ref` (cpu backend, tick 208/212); `host_scalar::predict_jod_still_3ch` (host-only reference) | full GPU path: color → weber → CSF → masking → pool → host fold. The public `Cvvdp::score` API now routes through this path after tick 207 tightened the manifest parity tolerance to 0.005 JOD and tick 213 made the switch. Host-pool variants run on `cubecl-cpu` where the GPU atomic pool kernel is unsupported. 12 MP CUDA timing (RTX 5070, ceil-div tick 175+): cold `jod` ~62 ns/px; warm-ref ~34 ns/px. vs canonical **pycvvdp v0.5.4 CUDA: 14 ns/px** — we are **4.4× slower cold / 2.4× slower warm** with correct output. pycvvdp benefits from cuDNN-optimised separable conv; cubek path or shared-memory tiling can close the gap. We win on portability: WGPU + HIP backends, 50 MB static binary vs ~3 GB PyTorch runtime. | host + GPU: **≤0.005 JOD vs pycvvdp v1 manifest** (`shadow_jod`, tick 207; was loose 0.05/0.5 schedule before ticks 204/206 closed the chroma_shift and 73×91 drifts). Measured max diff 0.0031 JOD across q=1,5,20,45,70,90; q=1 closed from 0.4 → 0.0000. Synth fixtures: 12 MP 0.0003 JOD, 256² blur3x1/blur1x3/noise/chroma_shift ≤0.0002 JOD, 73×91 odd-dim 0.0000 JOD (tick 206 replicated pycvvdp's gausspyr_reduce parity-check bug). warm-ref vs cold-ref ≤1e-5 JOD; host_pool vs GPU pool 0.000000 (tick 208) |
 
 ## Reference version pin
 
@@ -152,10 +152,12 @@ The cvvdp parameter JSON gets vendored into
     `compute_dkl_weber_pyramid`, etc.); `Error::NoWarmReference`
     surfaces clearly when the cache is cold.
 
-  `Cvvdp::score_with_reference` (the public host-scalar path) is
-  unchanged — it still routes through `predict_jod_still_3ch`
-  for manifest-precise scoring. Users opting into GPU drift for
-  speed call `compute_dkl_jod_with_warm_ref` explicitly.
+  Tick 213 update: `Cvvdp::score_with_reference` now routes
+  through the GPU `compute_dkl_jod` cold-ref path (matches
+  `Cvvdp::score`'s switch). For the dedicated warm-ref fast path
+  callers use `Cvvdp::warm_reference` + `compute_dkl_jod_with_warm_ref`
+  explicitly. For the all-host scalar reference (no GPU runtime
+  needed), call `host_scalar::predict_jod_still_3ch` directly.
 
 - **(Open, tick 159)** 3-channel `upscale_v_3ch_kernel` /
   `upscale_h_3ch_kernel` fusion regressed ~4% jod at 12 MP on
