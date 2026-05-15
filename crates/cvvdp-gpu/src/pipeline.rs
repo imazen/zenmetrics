@@ -283,18 +283,6 @@ pub struct Cvvdp<R: Runtime> {
     /// per call. ~176 MB worth at 12 MP per call.
     weber_scratch: Vec<WeberScratch>,
 
-    /// Stable per-pixel `log10(L_bkg)` storage for the REFERENCE
-    /// side, intended for future use by `compute_dkl_d_bands` to
-    /// preserve REF log_l_bkg across the dist weber call (cvvdp's
-    /// `weber_g1` rule). Currently unused — tick 85's attempt to
-    /// wire this into a GPU-resident d_bands caused a 5× perf
-    /// regression in standalone weber for reasons not yet diagnosed
-    /// (tick 86 bisect confirmed the allocation + parameter passing
-    /// are NOT the cause; the regression is in the d_bands rewrite
-    /// itself). One handle per non-baseband level, n_pixels f32 each.
-    #[allow(dead_code)]
-    ref_log_l_bkg: Vec<cubecl::server::Handle>,
-
     /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
     /// Indexed `[level][channel]`. Each holds the 32-entry
     /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
@@ -390,21 +378,6 @@ impl<R: Runtime> Cvvdp<R> {
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
-        // Stable REF log_l_bkg buffers (one per non-baseband level).
-        // Allocated for future GPU-resident d_bands use.
-        let mut ref_log_l_bkg: Vec<cubecl::server::Handle> =
-            Vec::with_capacity(n_levels as usize - 1);
-        let mut log_w = width;
-        let mut log_h = height;
-        for _ in 0..(n_levels as usize).saturating_sub(1) {
-            ref_log_l_bkg.push(alloc_zeros_f32(
-                &client,
-                (log_w as usize) * (log_h as usize),
-            ));
-            log_w /= 2;
-            log_h /= 2;
-        }
-
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
         let ppd = geometry.pixels_per_degree();
@@ -443,7 +416,6 @@ impl<R: Runtime> Cvvdp<R> {
             bands_ref,
             d_scratch,
             weber_scratch,
-            ref_log_l_bkg,
             logs_row,
             cached: None,
         })
@@ -746,11 +718,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// log_l_bkg data.
     ///
     /// Used by `compute_dkl_weber_pyramid` (which wraps with
-    /// readback to host Vecs). A future GPU-resident
-    /// `compute_dkl_d_bands` will call this with the stable
-    /// `self.ref_log_l_bkg` destination so REF log_l_bkg survives
-    /// the dist weber call — currently blocked on a separate
-    /// regression in the d_bands rewrite (tick 85/86).
+    /// readback to host Vecs) and by `_dispatch_d_bands_into_scratch`
+    /// (which feeds the dispatch's per-band CSF + masking chain).
+    /// The caller supplies the `log_l_bkg_dest` slice — typically
+    /// the per-level handles from `self.weber_scratch` — so the
+    /// output destination is decoupled from this helper.
     ///
     /// `log_l_bkg_dest` must have length `n_levels - 1` (one handle
     /// per non-baseband level).
