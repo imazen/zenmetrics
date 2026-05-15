@@ -16,26 +16,37 @@
 //!    when cached).
 //! 2. Run `color::srgb_to_dkl_kernel` once per side → 3 planar DKL
 //!    buffers each (achromatic + RG + VY).
-//! 3. Build per-channel Weber-contrast pyramids
-//!    (`pyramid::weber_contrast_compute_kernel` over each band of a
-//!    decimating Gaussian pyramid built via `downscale_kernel` +
-//!    `upscale_{v,h}_kernel` + `subtract_kernel`). Yields
-//!    `n_levels` Weber-contrast bands per channel per side plus a
-//!    per-pixel `log10(L_bkg)` map from the achromatic gauss for
-//!    step 4. The coarsest band (the gaussian base) bypasses Weber
-//!    contrast and feeds directly into pooling.
-//! 4. Per-pixel CSF apply via `csf::csf_apply_per_pixel_kernel`
-//!    (per-band `rho` resolved via `csf::precompute_logs_row`).
-//!    Output `T_p` = Weber × S(rho, L_bkg, channel) × CH_GAIN.
-//! 5. Multi-channel mult-mutual masking via
-//!    `masking::mult_mutual_3ch_no_blur_kernel` (small bands) or the
-//!    `min_abs_3ch_kernel` → `pu_blur_h_kernel` → `pu_blur_v_kernel`
-//!    → `mult_mutual_3ch_with_blurred_kernel` chain (bands larger
-//!    than `PU_PADSIZE`).
+//! 3. Build per-channel Weber-contrast pyramids: each pyramid level
+//!    runs `pyramid::downscale_kernel` (Gaussian reduce) then
+//!    `pyramid::upscale_v_kernel` + `pyramid::upscale_h_kernel`
+//!    (separable expand), followed by the fused
+//!    `pyramid::subtract_weber_3ch_kernel` that emits all three
+//!    channel bands plus the shared `log10(L_bkg)` from one launch.
+//!    Yields `n_levels` Weber-contrast bands per channel per side
+//!    plus a per-pixel `log10(L_bkg)` map for step 4. The coarsest
+//!    band (the gaussian base) bypasses Weber contrast and feeds
+//!    directly into step 5's baseband bypass.
+//! 4. Per-pixel CSF apply via `csf::csf_apply_6ch_kernel` — a single
+//!    launch per non-baseband level runs CSF for both REF and DIST
+//!    sides (the per-pixel LUT bracket math is shared). Per-band
+//!    `rho` resolved via `csf::precompute_logs_row`. Output `T_p` =
+//!    Weber × S(rho, L_bkg, channel) × CH_GAIN.
+//! 5. Multi-channel mult-mutual masking:
+//!    - Non-baseband bands: `masking::min_abs_3ch_kernel` →
+//!      `masking::pu_blur_h_3ch_kernel` →
+//!      `masking::pu_blur_v_3ch_scaled_kernel` (folds the
+//!      `* 10^MASK_C` post-scale) →
+//!      `masking::mult_mutual_3ch_with_blurred_kernel`. Falls back
+//!      to `masking::mult_mutual_3ch_no_blur_kernel` when either
+//!      band dimension is ≤ `PU_PADSIZE`.
+//!    - Baseband: `masking::diff_abs_3ch_kernel` writes
+//!      `|T_p_dis - T_p_ref|` (cvvdp's baseband bypass).
 //! 6. Per-band Minkowski accumulation (`pool::pool_band_kernel`) →
-//!    per-band f32 partials.
-//! 7. Host-side fold: per-band → per-channel → overall `D` via the
-//!    3-stage Minkowski pool, then `pool::met2jod` piecewise.
+//!    per-band f32 partials (one `f32` per (level, channel) in a
+//!    shared GPU buffer).
+//! 7. Host-side fold: read back the `n_levels × 3` partials Vec,
+//!    `pool_band_finalize` per (level, channel), then the 3-stage
+//!    Minkowski pool + `pool::met2jod` piecewise.
 //!
 //! ## Buffer layout
 //!
