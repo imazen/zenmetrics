@@ -25,11 +25,14 @@
 //!    or fall back to `mult_mutual_3ch_no_blur_kernel` when either
 //!    band dimension is ≤ `pu_padsize = 6`. Baseband bypasses
 //!    masking via `diff_abs_3ch_kernel`.
-//! 5. [`pool`] — `pool_band_kernel` writes per-(level, channel)
-//!    Minkowski partials into a shared GPU buffer; the host fold
-//!    reduces the resulting `n_levels × 3` Vec via
-//!    `pool_band_finalize` + `do_pooling_and_jod_still_3ch` +
-//!    `met2jod` piecewise.
+//! 5. [`pool`] — `pool_band_3ch_kernel` (one fused 3-channel
+//!    launch per band) writes per-(level, channel) Minkowski
+//!    partials into a shared GPU buffer; the host fold reduces
+//!    the resulting `n_levels × 3` Vec via `pool_band_finalize`
+//!    + `do_pooling_and_jod_still_3ch` + `met2jod` piecewise.
+//!    The single-channel `pool_band_kernel` is retained as a
+//!    test-only entry point (`tests/pool_scalar.rs`) for unit
+//!    parity against `lp_norm_mean`.
 //!
 //! Numerical parity target: matches pycvvdp v0.5.4 within 0.005 JOD
 //! on the v1 R2 manifest across q=1–90 fixtures (measured 0.0000–

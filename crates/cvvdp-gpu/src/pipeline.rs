@@ -41,9 +41,10 @@
 //!      band dimension is ≤ `PU_PADSIZE`.
 //!    - Baseband: `masking::diff_abs_3ch_kernel` writes
 //!      `|T_p_dis - T_p_ref|` (cvvdp's baseband bypass).
-//! 6. Per-band Minkowski accumulation (`pool::pool_band_kernel`) →
-//!    per-band f32 partials (one `f32` per (level, channel) in a
-//!    shared GPU buffer).
+//! 6. Per-band Minkowski accumulation
+//!    (`pool::pool_band_3ch_kernel`, fused 3-channel launch per
+//!    level) → per-band f32 partials (one `f32` per (level,
+//!    channel) in a shared GPU buffer).
 //! 7. Host-side fold: read back the `n_levels × 3` partials Vec,
 //!    `pool_band_finalize` per (level, channel), then the 3-stage
 //!    Minkowski pool + `pool::met2jod` piecewise.
@@ -1490,7 +1491,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// the host-side `Vec<[Vec<f32>; 3]>` snapshot use
     /// [`Cvvdp::compute_dkl_d_bands`]; callers that pool on GPU
     /// (`Cvvdp::compute_dkl_jod`) read straight from the resident
-    /// handles via `pool_band_kernel`.
+    /// handles via `pool_band_3ch_kernel` (one fused 3-channel
+    /// launch per band).
     /// REF-side weber pyramid only. Dispatches color +
     /// `_dispatch_weber_pyramid_gpu` writing into `bands_ref` and
     /// `weber_scratch[k].log_l_bkg`. Returns the scalar baseband
@@ -1921,8 +1923,9 @@ impl<R: Runtime> Cvvdp<R> {
     ///      → mult-mutual masking (GPU, fused min_abs + pu_blur 3ch +
     ///        mult_mutual_3ch_with_blurred per level — baseband uses
     ///        diff_abs_3ch)
-    ///      → spatial pool (GPU, pool_band_kernel per (band, channel),
-    ///        atomic-f32 accumulation into a partials Vec)
+    ///      → spatial pool (GPU, pool_band_3ch_kernel — one fused
+    ///        3-channel launch per band, atomic-f32 accumulation
+    ///        into a partials Vec)
     ///      → 3-stage Minkowski fold + met2jod (host scalar — operates
     ///        on the `n_levels × N_CHANNELS` partials Vec, ~144 bytes
     ///        total, sub-microsecond regardless of image size).

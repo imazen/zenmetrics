@@ -154,6 +154,19 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (docs)
 
+- Pipeline-overview docstrings in `kernels/mod.rs` step 5,
+  `pipeline.rs` step 6, `Cvvdp::compute_dkl_d_bands`'s "no
+  readback" note, and `Cvvdp::compute_dkl_jod`'s ASCII pipeline
+  diagram all referred to the GPU pool stage as `pool_band_kernel`.
+  The production path dispatches `pool_band_3ch_kernel` (one
+  fused 3-channel launch per band, ~3× fewer launches than the
+  single-channel version) — `pool_band_kernel` survives only as
+  a unit-test entry point in `tests/pool_scalar.rs`. Updated
+  all 4 sites to name `pool_band_3ch_kernel` and noted the fused
+  3-channel-per-launch property; added a one-line breadcrumb in
+  `kernels/mod.rs` that `pool_band_kernel` is retained for the
+  pool-scalar unit test. Tick 291.
+
 - `host_scalar::predict_jod_still_3ch` had a stale comment
   claiming "weber_contrast_pyr path which we have NOT yet
   ported (vanilla Laplacian + linear DKL bands here vs.
