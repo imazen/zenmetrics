@@ -1307,6 +1307,48 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Cvvdp::compute_dkl_d_bands`]; callers that pool on GPU
     /// (`Cvvdp::compute_dkl_jod`) read straight from the resident
     /// handles via `pool_band_kernel`.
+    /// REF-side weber pyramid only. Dispatches color +
+    /// `_dispatch_weber_pyramid_gpu` writing into `bands_ref` and
+    /// `weber_scratch[k].log_l_bkg`. Returns the scalar baseband
+    /// `log10(L_bkg)` so callers can store it for the band-loop's
+    /// baseband CSF path.
+    ///
+    /// Skips the ~190 MB bands host readback that
+    /// `compute_dkl_weber_pyramid` would do — the CSF dispatch
+    /// reads `self.bands_ref[k]` GPU handles directly (tick 155);
+    /// log_l_bkg planes stay resident on GPU (tick 166).
+    ///
+    /// Lives in its own helper so a future `warm_reference` /
+    /// `compute_dkl_jod_with_warm_ref` fast path can dispatch the
+    /// REF side once and reuse the GPU-resident state across many
+    /// DIST candidates.
+    fn _dispatch_ref_weber_pyramid_only(&mut self, ref_srgb: &[u8]) -> Result<f32> {
+        let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        self._dispatch_weber_pyramid_gpu(ref_srgb, &ref_log_l_bkg_dests, false)
+    }
+
+    /// DIST-side weber pyramid only. Writes log_l_bkg to the
+    /// throwaway `log_l_bkg_dis` handles so REF's data on
+    /// `weber_scratch[k].log_l_bkg` survives. cvvdp's weber_g1
+    /// rule uses REF's log_l_bkg for both sides, so DIST's value
+    /// is computed-then-discarded.
+    ///
+    /// The DIST CSF kernel reads from `self.bands_dis[k]` GPU
+    /// handles directly (tick 154 split); no host transfer.
+    fn _dispatch_dist_weber_pyramid_only(&mut self, dist_srgb: &[u8]) -> Result<()> {
+        let dist_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg_dis.clone())
+            .collect();
+        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests, true)?;
+        Ok(())
+    }
+
     fn _dispatch_d_bands_into_scratch(
         &mut self,
         ref_srgb: &[u8],
@@ -1319,37 +1361,12 @@ impl<R: Runtime> Cvvdp<R> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
-        // REF weber pyramid: dispatch only. Writes log_l_bkg into
-        // weber_scratch[k].log_l_bkg — these handles persist through
-        // the band loop so the CSF kernel reads them directly with
-        // no host roundtrip (tick 166). Skips the ~190 MB bands
-        // readback that `compute_dkl_weber_pyramid` would do —
-        // CSF dispatch reads from `self.bands_ref[k]` GPU handles
-        // directly (tick 155).
-        let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
-            .weber_scratch
-            .iter()
-            .map(|s| s.log_l_bkg.clone())
-            .collect();
-        let log_l_bkg_baseband =
-            self._dispatch_weber_pyramid_gpu(ref_srgb, &ref_log_l_bkg_dests, false)?;
+        let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        // DIST weber pyramid: dispatch-only, writes log_l_bkg to
-        // the throwaway `log_l_bkg_dis` handles so REF's data on
-        // `weber_scratch[k].log_l_bkg` survives. cvvdp's weber_g1
-        // rule uses REF's log_l_bkg for both sides, so DIST's
-        // value is computed-then-discarded. The DIST CSF kernel
-        // reads from `self.bands_dis[k]` GPU handles directly
-        // (tick 154 split); no host transfer.
         let t_weber_dis = std::time::Instant::now();
-        let dist_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
-            .weber_scratch
-            .iter()
-            .map(|s| s.log_l_bkg_dis.clone())
-            .collect();
-        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests, true)?;
+        self._dispatch_dist_weber_pyramid_only(dist_srgb)?;
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
