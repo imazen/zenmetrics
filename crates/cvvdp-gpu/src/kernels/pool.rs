@@ -218,6 +218,20 @@ pub fn pool_band_3ch_kernel(
     partials[partial_idx_vy as usize].fetch_add(c_vy);
 }
 
+/// Write the same `value` to every slot of `dest`. Used by the
+/// baseband CSF path in `_dispatch_d_bands_into_scratch` to fill
+/// `baseband_log_l_bkg` from the host-computed scalar
+/// `log_l_bkg_baseband` — replaces a host `vec![value; n]` alloc
+/// + GPU upload with a single GPU launch and zero host bytes.
+#[cube(launch)]
+pub fn fill_f32_kernel(dest: &mut Array<f32>, value: f32, n: u32) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    dest[idx] = value;
+}
+
 /// Finish the host-side fold for `pool_band_kernel`: given the
 /// atomic partial sum and pixel count for one band, return the
 /// lp_norm_mean(β) value matching `kernels::pool::lp_norm_mean`.

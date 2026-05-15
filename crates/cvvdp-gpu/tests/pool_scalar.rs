@@ -14,7 +14,7 @@ mod gpu {
     use cubecl::Runtime;
     use cubecl::prelude::*;
     use cvvdp_gpu::kernels::pool::{
-        lp_norm_mean, pool_band_3ch_kernel, pool_band_finalize, pool_band_kernel,
+        fill_f32_kernel, lp_norm_mean, pool_band_3ch_kernel, pool_band_finalize, pool_band_kernel,
     };
 
     #[cfg(feature = "cuda")]
@@ -159,6 +159,45 @@ type Backend = cubecl::hip::HipRuntime;
                 partials[i], 0.0,
                 "untouched partial slot {i} got written ({})",
                 partials[i]
+            );
+        }
+    }
+
+    #[test]
+    fn fill_f32_kernel_writes_uniform_value() {
+        // Used by the baseband CSF path to fill log_l_bkg with the
+        // scalar log_l_bkg_baseband. Simple but a regression gate:
+        // a stray + 1 in the kernel body or a wrong index would
+        // show up as an off-by-one fill or a zero-trail.
+        let client = Backend::client(&Default::default());
+
+        let n = 128usize;
+        // Pre-seed with a sentinel so any unwritten slot would
+        // surface as `7.0` in the assertion.
+        let dest_init = vec![7.0_f32; n];
+        let dest_h = client.create_from_slice(f32::as_bytes(&dest_init));
+
+        let value = -1.23456_f32;
+        let cube_dim = CubeDim::new_1d(64);
+        let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+        unsafe {
+            fill_f32_kernel::launch::<Backend>(
+                &client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(dest_h.clone(), n),
+                value,
+                n as u32,
+            );
+        }
+
+        let bytes = client.read_one(dest_h).expect("read dest");
+        let dest: &[f32] = f32::from_bytes(&bytes);
+        for (i, &v) in dest.iter().enumerate() {
+            assert_eq!(
+                v, value,
+                "slot {i} = {v}, expected {value} (sentinel was 7.0 → would be visible if unwritten)"
             );
         }
     }

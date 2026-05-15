@@ -96,7 +96,8 @@ use crate::kernels::masking::{
     pu_blur_v_3ch_scaled_kernel,
 };
 use crate::kernels::pool::{
-    BETA_SPATIAL, do_pooling_and_jod_still_3ch, pool_band_3ch_kernel, pool_band_finalize,
+    BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, pool_band_3ch_kernel,
+    pool_band_finalize,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
@@ -354,6 +355,16 @@ pub struct Cvvdp<R: Runtime> {
     /// per call. ~176 MB worth at 12 MP per call.
     weber_scratch: Vec<WeberScratch>,
 
+    /// Pre-allocated per-pixel log_l_bkg buffer for the baseband level.
+    /// `subtract_weber_3ch_kernel` doesn't run at the baseband, so
+    /// `weber_scratch[last].log_l_bkg` (which doesn't exist — `weber_scratch`
+    /// only spans non-baseband levels) can't hold the baseband value.
+    /// `_dispatch_d_bands_into_scratch` fills this with the host-computed
+    /// scalar `log_l_bkg_baseband` via `fill_f32_kernel` per JOD call.
+    /// Tick 168 replaces the per-call `vec![scalar; n_baseband]` host
+    /// alloc + upload with a single GPU launch.
+    baseband_log_l_bkg: cubecl::server::Handle,
+
     /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
     /// Indexed `[level][channel]`. Each holds the 32-entry
     /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
@@ -450,6 +461,15 @@ impl<R: Runtime> Cvvdp<R> {
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
         let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
 
+        // Baseband log_l_bkg buffer — `n_levels_baseband =
+        // (width >> (n_levels-1)) × (height >> (n_levels-1))` pixels.
+        // Allocated once; filled per-JOD via `fill_f32_kernel`.
+        let last = n_levels as usize - 1;
+        let baseband_w = gauss_ref[last].w as usize;
+        let baseband_h = gauss_ref[last].h as usize;
+        let baseband_n = baseband_w * baseband_h;
+        let baseband_log_l_bkg = alloc_zeros_f32(&client, baseband_n);
+
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
         let ppd = geometry.pixels_per_degree();
@@ -489,6 +509,7 @@ impl<R: Runtime> Cvvdp<R> {
             bands_dis,
             d_scratch,
             weber_scratch,
+            baseband_log_l_bkg,
             logs_row,
             cached: None,
         })
@@ -1359,17 +1380,26 @@ impl<R: Runtime> Cvvdp<R> {
             //   during the REF weber dispatch above). Tick 166 skips
             //   the host roundtrip — was reading back ~64 MB at 12 MP
             //   then re-uploading the same bytes per band.
-            // - Baseband: scalar `log_l_bkg_baseband` replicated to
-            //   `baseband_n` elements via a small host upload. The
-            //   baseband path doesn't run subtract_weber_3ch_kernel,
-            //   so `weber_scratch[last].log_l_bkg` is uninitialized
-            //   there; the host fill is unavoidable without a separate
-            //   GPU fill kernel.
+            // - Baseband: GPU fill the pre-allocated
+            //   `self.baseband_log_l_bkg` buffer with the scalar
+            //   `log_l_bkg_baseband`. Tick 168 replaces the per-JOD
+            //   `vec![scalar; n]` host alloc + upload with a single
+            //   GPU launch — keeps the JOD hot path entirely GPU-
+            //   resident for log_l_bkg data.
             let t_log_upload = std::time::Instant::now();
             let log_l_bkg_h = if is_baseband {
-                let baseband_log_l_bkg = vec![log_l_bkg_baseband; n_px];
-                self.client
-                    .create_from_slice(f32::as_bytes(&baseband_log_l_bkg))
+                let fill_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                unsafe {
+                    fill_f32_kernel::launch::<R>(
+                        &self.client,
+                        fill_count,
+                        cube_dim,
+                        ArrayArg::from_raw_parts(self.baseband_log_l_bkg.clone(), n_px),
+                        log_l_bkg_baseband,
+                        n_px as u32,
+                    );
+                }
+                self.baseband_log_l_bkg.clone()
             } else {
                 self.weber_scratch[k].log_l_bkg.clone()
             };
