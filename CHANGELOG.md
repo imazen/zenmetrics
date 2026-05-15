@@ -129,6 +129,24 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (tests + examples + benches)
+
+- New `common::synth_pair_with_offset_dist(w, h) -> (ref, dist)`
+  helper bundles the canonical `synth_pair_ref` + `(-8, -4, +12)`
+  saturating offset dist that 16 sites across the crate were
+  building inline:
+  - `benches/score.rs::synth_pair`
+  - `examples/time_12mp.rs::synth_pair`
+  - `examples/time_size_sweep.rs::synth_pair`
+  - `examples/manifest_parity_probe.rs::synth_pair_12mp`
+  All four now collapse to a single `synth_pair_with_offset_dist`
+  call; the per-site `synth_pair` wrappers stay since they pass
+  `u32 → usize`. `tests/pipeline_color.rs` 12mp tests already
+  use the equivalent inline pattern (untouched — each test
+  decides whether to pre-cache the ref or inline). The cpu_backend
+  synth_pair keeps its odd_dim ref version with a clarifying
+  comment.
+
 #### cvvdp-gpu (examples)
 
 - `examples/time_12mp.rs` + `examples/time_size_sweep.rs` now

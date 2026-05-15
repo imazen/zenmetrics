@@ -36,6 +36,12 @@ mod common;
 type Backend = cubecl::cpu::CpuRuntime;
 
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
+    // Note: uses the odd-dim ref (`(x * 8) % 256` etc) — the
+    // 73×91 pycvvdp golden is computed against this construction
+    // in bench_12mp_cuda.py::synth_pair_odd_dim. The standard
+    // offset dist (-8, -4, +12) is the same as
+    // common::synth_pair_with_offset_dist but with the odd-dim
+    // ref instead of the regular ref.
     let r = common::synth_pair_odd_dim_ref(w as usize, h as usize);
     let d: Vec<u8> = r
         .chunks_exact(3)

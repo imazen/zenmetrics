@@ -120,18 +120,7 @@ fn synth_pair_12mp(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     // pycvvdp `synth_pair_12mp` (bench_12mp_cuda.py:38) — same ref
     // construction as synth_pair_ref, with R-8 / G-4 / B+12 saturated
     // distortion. Identical formula to synth_odd_pair, just at 12 MP.
-    let r = synth_pair_ref(w, h);
-    let d: Vec<u8> = r
-        .chunks_exact(3)
-        .flat_map(|p| {
-            [
-                p[0].saturating_sub(8),
-                p[1].saturating_sub(4),
-                p[2].saturating_add(12),
-            ]
-        })
-        .collect();
-    (r, d)
+    common::synth_pair_with_offset_dist(w, h)
 }
 
 struct Fixture {

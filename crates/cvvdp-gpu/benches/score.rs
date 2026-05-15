@@ -44,18 +44,7 @@ fn load_rgb_bytes(path: &Path) -> Vec<u8> {
 /// (the algorithm has no data-dependent fast paths on GPU), so a
 /// deterministic perlin-ish pattern + a perturbation is enough.
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
-    let ref_b = common::synth_pair_ref(w as usize, h as usize);
-    let dis_b: Vec<u8> = ref_b
-        .chunks_exact(3)
-        .flat_map(|p| {
-            [
-                p[0].saturating_sub(8),
-                p[1].saturating_sub(4),
-                p[2].saturating_add(12),
-            ]
-        })
-        .collect();
-    (ref_b, dis_b)
+    common::synth_pair_with_offset_dist(w as usize, h as usize)
 }
 
 fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host: bool) {

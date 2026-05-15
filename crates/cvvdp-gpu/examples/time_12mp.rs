@@ -30,18 +30,7 @@ const H: u32 = 3000;
 const ITERS: usize = 5;
 
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
-    let ref_b = common::synth_pair_ref(w as usize, h as usize);
-    let dis_b: Vec<u8> = ref_b
-        .chunks_exact(3)
-        .flat_map(|p| {
-            [
-                p[0].saturating_sub(8),
-                p[1].saturating_sub(4),
-                p[2].saturating_add(12),
-            ]
-        })
-        .collect();
-    (ref_b, dis_b)
+    common::synth_pair_with_offset_dist(w as usize, h as usize)
 }
 
 fn main() {

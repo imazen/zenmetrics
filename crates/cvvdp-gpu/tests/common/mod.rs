@@ -481,6 +481,29 @@ pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
     b
 }
 
+/// `(ref, dist)` pair where dist is `synth_pair_ref` with the
+/// canonical `(-8, -4, +12)` per-channel saturating offset that
+/// `bench_12mp_cuda.py::synth_pair_12mp` uses. Tick 278 dedup —
+/// 16 sites across tests/examples/benches built this exact pair
+/// from `synth_pair_ref` + an inline chunks_exact(3).flat_map.
+/// Use this when you need the standard offset-dist; build the
+/// dist inline only when the distortion pattern is custom
+/// (chroma_shift, blur3x1, noise, etc).
+pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    let r = synth_pair_ref(w, h);
+    let d: Vec<u8> = r
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
+    (r, d)
+}
+
 /// Alternate deterministic synthetic reference used by the 73×91
 /// odd-dim parity fixture and several stage-probe tests. Bit-
 /// stable across pycvvdp's `bench_12mp_cuda.py::synth_pair_odd_dim`
