@@ -194,13 +194,17 @@ fn score_with_reference_errors_without_set_reference() {
     let err = cvvdp
         .score_with_reference(&dist_bytes)
         .expect_err("must error without prior set_reference");
-    // Don't lock the exact Debug repr; just ensure we got a
-    // structured error rather than a 0.0 placeholder.
-    let msg = format!("{err:?}");
-    assert!(
-        msg.contains("NoCachedReference"),
-        "unexpected error kind: {msg}"
-    );
+    // Pattern-match on the variant rather than Debug-formatting and
+    // substring-checking. Tick 318: prior version did
+    // `format!("{err:?}").contains("NoCachedReference")` which
+    // would silently pass on any Debug repr containing those
+    // characters — including a future variant rename that landed
+    // "NoCachedReferenceV2" by accident. The match arm pins the
+    // variant identity directly via the public Error API.
+    match err {
+        cvvdp_gpu::Error::NoCachedReference => {}
+        other => panic!("expected NoCachedReference, got {other:?}"),
+    }
 }
 
 #[test]

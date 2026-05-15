@@ -154,6 +154,20 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `score_with_reference_errors_without_set_reference` (in
+  `tests/pipeline_score.rs`) was using
+  `format!("{err:?}").contains("NoCachedReference")` to verify
+  the error variant. Substring matching on Debug output is
+  brittle — a future variant rename that landed
+  "NoCachedReferenceV2" or similar by accident would silently
+  pass the substring check. Other tests in the same file
+  (`invalid_image_size_surfaces_on_too_small_dims`,
+  `dimension_mismatch_surfaces_on_wrong_size_inputs`) use
+  proper `match err { Error::X => {}, other => panic! }`
+  pattern matching on the variant via the public Error API,
+  which pins identity directly. Switched this test to the
+  same pattern. Test passes post-change. Tick 318.
+
 - `Error::NoWarmReference` variant docstring listed two
   example invalidators (`compute_dkl_jod`,
   `compute_dkl_d_bands`) — fine when the list was short, but
