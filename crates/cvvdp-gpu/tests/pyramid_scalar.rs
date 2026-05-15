@@ -275,3 +275,84 @@ fn band_frequencies_match_v1_manifest() {
         "first 7 manifest entries: max-abs = {max_err}"
     );
 }
+
+/// `pyramid_levels` in `pipeline.rs` caps band count at
+/// `MAX_LEVELS` (= 9) because every per-band allocation
+/// (`gauss_ref`, `bands_ref`, `bands_dis`, `d_scratch`,
+/// `weber_scratch`, partials buffer) is sized for at most that
+/// many entries. The cap is `band_count.min(MAX_LEVELS as u32)`.
+///
+/// This test pins three things:
+///
+/// 1. The cap is **non-vacuous** — `band_frequencies` does
+///    return more than `MAX_LEVELS + 1` entries for realistic
+///    high-density display configurations (the lib.rs note
+///    quotes `min(w, h) > PYRAMID_MIN_DIM × 2^MAX_LEVELS ≈
+///    1024` as the rough threshold, but the actual length
+///    depends on both dimensions AND ppd — high-ppd small
+///    images can also exceed `MAX_LEVELS`).
+///
+/// 2. Without the cap, `weight_idx = k * N_CHANNELS + c` for
+///    `k >= MAX_LEVELS` would OOB-read the construction-time
+///    weights buffer — a silent corruption rather than a
+///    panic, because cubecl reads are not bounds-checked.
+///
+/// 3. The exact returned-length values for a few characteristic
+///    inputs, so a future refactor of `band_frequencies` (the
+///    candidate-sequence math, the `MIN_FREQ` constant, or
+///    `max_levels` derivation) trips this test if it accidentally
+///    changes the cap-engagement boundary.
+///
+/// If `MAX_LEVELS` ever bumps (e.g., to support 32 K displays),
+/// these cases shift and the test needs new entries past the new
+/// cap. That's intentional — the assertion documents the cap's
+/// engagement, not its absolute value.
+#[test]
+fn band_frequencies_exceeds_max_levels_at_high_ppd_or_dim() {
+    use cvvdp_gpu::MAX_LEVELS;
+
+    // (ppd, w, h, expected_len): chosen to span both
+    // "high ppd at moderate dims" and "modest ppd at huge dims".
+    // Hand-verified against the implementation's candidate-sequence
+    // math; see commit's body for the algebra.
+    let cases: &[(f32, usize, usize, usize)] = &[
+        // High-density 4K-ish phone or VR HMD at 2K square.
+        (400.0, 2048, 2048, 11),
+        // 4K HDR display, very large image. The lib.rs note's
+        // "≈ 1024" boundary based on `min(w, h)` alone gets the
+        // ballpark right but understates — ppd matters too.
+        (200.0, 4096, 4096, 11),
+        // 8K display.
+        (200.0, 8192, 8192, 11),
+    ];
+
+    for &(ppd, w, h, expected_len) in cases {
+        let freqs = band_frequencies(ppd, w, h);
+        assert_eq!(
+            freqs.len(),
+            expected_len,
+            "band_frequencies(ppd={ppd}, {w}x{h}).len() = {} but expected {expected_len}; \
+             a change here means the cap-engagement boundary moved",
+            freqs.len(),
+        );
+        assert!(
+            freqs.len() > MAX_LEVELS,
+            "case (ppd={ppd}, {w}x{h}) was selected to exceed MAX_LEVELS = {MAX_LEVELS}; \
+             returned {} entries — if this no longer exceeds, the cap may have become vacuous \
+             and the test cases need new entries past the new boundary",
+            freqs.len(),
+        );
+    }
+
+    // Sanity counter-case: the 4000×3000 standard-4k input that's
+    // common in the goldens does NOT exceed MAX_LEVELS, so the
+    // cap is only relevant in the high-density regime. Locking
+    // this lets a future contributor see at a glance which
+    // configurations need the cap and which don't.
+    let typical = band_frequencies(75.402_25, 4000, 3000);
+    assert!(
+        typical.len() <= MAX_LEVELS,
+        "standard_4k 4000x3000 should NOT exceed the cap; got {} entries",
+        typical.len(),
+    );
+}
