@@ -449,6 +449,18 @@ impl<R: Runtime> Cvvdp<R> {
         })
     }
 
+    /// Pyramid level `k`'s spatial dimensions as `(bw, bh, n_px)`.
+    /// `bw = width >> k`, `bh = height >> k`. At `k = 0` the shift
+    /// is a no-op so this matches the source-image dims; deeper
+    /// levels are floor-halved. Mirrors what `build_weber_scratch`
+    /// and `build_d_bands_scratch` use when allocating per-level
+    /// scratch.
+    fn level_dims(&self, k: usize) -> (usize, usize, usize) {
+        let bw = (self.width as usize) >> k;
+        let bh = (self.height as usize) >> k;
+        (bw, bh, bw * bh)
+    }
+
     /// Run only the color stage: upload sRGB bytes, launch the
     /// `srgb_to_dkl_kernel`, and read back three planar `f32` buffers
     /// (A, RG, VY) in row-major order.
@@ -1025,17 +1037,7 @@ impl<R: Runtime> Cvvdp<R> {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
-            let bw = if k == 0 {
-                self.width as usize
-            } else {
-                (self.width as usize) >> k
-            };
-            let bh = if k == 0 {
-                self.height as usize
-            } else {
-                (self.height as usize) >> k
-            };
-            let n_px = bw * bh;
+            let (_bw, _bh, n_px) = self.level_dims(k);
             debug_assert_eq!(log_l_bkg[k].len(), n_px);
 
             let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
@@ -1149,17 +1151,7 @@ impl<R: Runtime> Cvvdp<R> {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
             let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
-            let bw = if k == 0 {
-                self.width as usize
-            } else {
-                (self.width as usize) >> k
-            };
-            let bh = if k == 0 {
-                self.height as usize
-            } else {
-                (self.height as usize) >> k
-            };
-            let n_px = bw * bh;
+            let (bw, bh, n_px) = self.level_dims(k);
             debug_assert_eq!(ref_weber[k][0].len(), n_px);
             debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
 
@@ -1434,17 +1426,7 @@ impl<R: Runtime> Cvvdp<R> {
         let n_levels = self.n_levels as usize;
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let bw = if k == 0 {
-                self.width as usize
-            } else {
-                (self.width as usize) >> k
-            };
-            let bh = if k == 0 {
-                self.height as usize
-            } else {
-                (self.height as usize) >> k
-            };
-            let n_px = bw * bh;
+            let (_bw, _bh, n_px) = self.level_dims(k);
             let mut planes: [Vec<f32>; 3] =
                 [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
             for c in 0..N_CHANNELS {
@@ -1518,17 +1500,7 @@ impl<R: Runtime> Cvvdp<R> {
             .create_from_slice(f32::as_bytes(&partials_init));
         let cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
-            let bw = if k == 0 {
-                self.width as usize
-            } else {
-                (self.width as usize) >> k
-            };
-            let bh = if k == 0 {
-                self.height as usize
-            } else {
-                (self.height as usize) >> k
-            };
-            let n_px = bw * bh;
+            let (_bw, _bh, n_px) = self.level_dims(k);
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
             for c in 0..N_CHANNELS {
                 let partial_idx = (k * N_CHANNELS + c) as u32;
@@ -1556,17 +1528,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let bw = if k == 0 {
-                self.width as usize
-            } else {
-                (self.width as usize) >> k
-            };
-            let bh = if k == 0 {
-                self.height as usize
-            } else {
-                (self.height as usize) >> k
-            };
-            let n_px_k = bw * bh;
+            let (_bw, _bh, n_px_k) = self.level_dims(k);
             let mut q = [0.0_f32; 3];
             for c in 0..N_CHANNELS {
                 q[c] = pool_band_finalize(
