@@ -167,8 +167,31 @@ struct Fixture {
     name: &'static str,
     w: u32,
     h: u32,
-    golden: f32,
     builder: fn(usize, usize) -> (Vec<u8>, Vec<u8>),
+}
+
+/// Load the pycvvdp golden JOD for a named fixture from the
+/// embedded `pycvvdp_synth_goldens.json`. Mirrors
+/// `tests/common/mod.rs::pycvvdp_synth_golden_jod` but inlined here
+/// because Rust examples can't import test-only modules. Tick 266
+/// dedup — was 6 hand-mirrored `golden: 9.xxx` fields in the
+/// fixture table.
+fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
+    const GOLDENS_JSON: &str =
+        include_str!("../../../scripts/cvvdp_goldens/pycvvdp_synth_goldens.json");
+    let v: serde_json::Value =
+        serde_json::from_str(GOLDENS_JSON).expect("parse pycvvdp_synth_goldens.json");
+    let jod = v
+        .get("fixtures")
+        .and_then(|f| f.get(fixture))
+        .and_then(|fx| fx.get("jod"))
+        .and_then(|j| j.as_f64())
+        .unwrap_or_else(|| {
+            panic!(
+                "pycvvdp_synth_goldens.json: fixture '{fixture}' not found or .jod is not a number"
+            )
+        });
+    jod as f32
 }
 
 fn run_fixture(f: &Fixture) -> bool {
@@ -176,6 +199,7 @@ fn run_fixture(f: &Fixture) -> bool {
     let display = DisplayModel::STANDARD_4K;
     let ppd = geom.pixels_per_degree();
     let (ref_b, dist_b) = (f.builder)(f.w as usize, f.h as usize);
+    let golden = pycvvdp_synth_golden_jod(f.name);
 
     let client = Backend::client(&Default::default());
     let mut cvvdp = Cvvdp::<Backend>::new(client, f.w, f.h, CvvdpParams::PLACEHOLDER)
@@ -191,8 +215,8 @@ fn run_fixture(f: &Fixture) -> bool {
         display,
         ppd,
     );
-    let d_gpu_golden = (gpu_jod - f.golden).abs();
-    let d_host_golden = (host_jod - f.golden).abs();
+    let d_gpu_golden = (gpu_jod - golden).abs();
+    let d_host_golden = (host_jod - golden).abs();
     let d_gpu_host = (gpu_jod - host_jod).abs();
     let pass = d_gpu_golden < TOLERANCE && d_host_golden < TOLERANCE;
     println!(
@@ -202,7 +226,7 @@ fn run_fixture(f: &Fixture) -> bool {
         f.h,
         gpu_jod,
         host_jod,
-        f.golden,
+        golden,
         d_gpu_golden,
         d_host_golden,
         d_gpu_host,
@@ -225,42 +249,36 @@ fn main() {
             name: "synth_73x91_odd",
             w: 73,
             h: 91,
-            golden: 9.390370,
             builder: synth_odd_pair,
         },
         Fixture {
             name: "synth_256x256_chroma_shift",
             w: 256,
             h: 256,
-            golden: 9.664865,
             builder: synth_chroma_shift_pair,
         },
         Fixture {
             name: "synth_256x256_blur3x1",
             w: 256,
             h: 256,
-            golden: 8.441194,
             builder: synth_blur3x1_pair,
         },
         Fixture {
             name: "synth_256x256_blur1x3",
             w: 256,
             h: 256,
-            golden: 8.124331,
             builder: synth_blur1x3_pair,
         },
         Fixture {
             name: "synth_256x256_noise",
             w: 256,
             h: 256,
-            golden: 9.016886,
             builder: synth_noise_pair,
         },
         Fixture {
             name: "synth_4000x3000",
             w: 4000,
             h: 3000,
-            golden: 9.458028,
             builder: synth_pair_12mp,
         },
     ];

@@ -120,6 +120,19 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (examples)
+
+- `examples/manifest_parity_probe.rs` no longer hand-mirrors the
+  6 pycvvdp golden JODs as `golden: 9.xxx` fields in its fixture
+  table. Loads from `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`
+  at runtime via a local `pycvvdp_synth_golden_jod(name)` helper
+  that mirrors `tests/common/mod.rs`'s identical function (examples
+  can't easily import test modules, so the lookup logic is inlined).
+  Closes the last hand-mirrored golden in the repo; a future
+  `build_goldens.py` rerun propagates to the example with zero
+  hand-editing. Probe verified end-to-end: all 6 fixtures pass at
+  ≤ 0.005 JOD.
+
 #### cvvdp-gpu (tests)
 
 - `tests/cpu_backend.rs::compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend`
