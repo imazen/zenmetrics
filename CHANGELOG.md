@@ -122,6 +122,12 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- `common::load_rgb_bytes` signature widened from `&PathBuf` to
+  `&Path`. `&PathBuf` callers still work via auto-deref; `&Path`
+  callers (e.g. `path.parent().unwrap()` returning `&Path`)
+  newly work without an extra `PathBuf::from(...)`. Standard Rust
+  API hygiene per the
+  [pathbuf-vs-path nursery clippy](https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg).
 - `tests/common::load_rgb_bytes` extracted. The 10-line PNG/JPEG
   decode + dimension-assert helper was hand-mirrored across
   `tests/pipeline_score.rs` and `tests/shadow_jod.rs`. Both call

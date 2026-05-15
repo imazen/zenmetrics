@@ -414,7 +414,10 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
 /// either a corrupted corpus file or a wrong test expectation.
 /// Tick 267 dedup — was hand-mirrored across `pipeline_score.rs`
 /// and `shadow_jod.rs`.
-pub fn load_rgb_bytes(path: &std::path::PathBuf, w: u32, h: u32) -> Vec<u8> {
+///
+/// Accepts `&Path` so callers can pass either `&PathBuf` (auto-
+/// derefs) or `&Path` directly. Tick 268 widened from `&PathBuf`.
+pub fn load_rgb_bytes(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
     let img = image::ImageReader::open(path)
         .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
         .decode()
