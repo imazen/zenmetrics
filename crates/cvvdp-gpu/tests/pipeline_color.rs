@@ -1888,6 +1888,69 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift() {
     );
 }
 
+#[test]
+fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_256x256_chroma_shift() {
+    // Tick 222: direct warm-ref pycvvdp parity. The warm-ref state
+    // machine is currently covered transitively:
+    //   - compute_dkl_jod_with_warm_ref_matches_unwarm_path pins
+    //     warm == unwarm at ≤ 1e-5 JOD
+    //   - compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift
+    //     pins unwarm == pycvvdp at ≤ 0.005 JOD (closed in tick 204
+    //     to 0.000000 on this fixture)
+    // This test closes the transitive chain with a direct measure,
+    // catching any regression that breaks at the warm-state-restoration
+    // step without surfacing in either transitive leg.
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_256x256_chroma_shift");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r;
+            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
+            dist_srgb[i + 2] = b;
+        }
+    }
+
+    cvvdp
+        .warm_reference(&ref_srgb)
+        .expect("warm_reference");
+    let gpu_jod = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_with_warm_ref");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "warm-ref 256×256 chroma_shift: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "warm-ref JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
+
 // NOTE (tick 191, updated tick 196): the
 // compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift test
 // still fails (0.1174 JOD drift vs golden 9.6649). Tick 196
