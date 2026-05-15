@@ -2000,9 +2000,13 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// # Example
     ///
-    /// CPU-runtime scoring of a byte-identical 64×64 pair (max JOD = 10):
+    /// CPU-runtime scoring of a byte-identical 64×64 pair (max JOD = 10).
+    /// Doctest body is gated on `feature = "cpu"` so non-cpu builds
+    /// (e.g. CI's `--no-default-features --features wgpu` doctest pass)
+    /// skip the body while still type-checking the example shape.
     ///
     /// ```
+    /// # #[cfg(feature = "cpu")] {
     /// use cvvdp_gpu::Cvvdp;
     /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
     /// use cubecl::Runtime;
@@ -2017,6 +2021,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// let jod = cvvdp.compute_dkl_jod_host_pool(&bytes, &bytes, ppd)
     ///     .expect("compute_dkl_jod_host_pool");
     /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
+    /// # }
     /// ```
     pub fn compute_dkl_jod_host_pool(
         &mut self,
@@ -2053,6 +2058,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// runtime — common batch-CPU pattern for sweep workers:
     ///
     /// ```
+    /// # #[cfg(feature = "cpu")] {
     /// use cvvdp_gpu::Cvvdp;
     /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
     /// use cubecl::Runtime;
@@ -2079,6 +2085,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///         .expect("warm host_pool");
     ///     assert!((0.0..=10.0).contains(&jod));
     /// }
+    /// # }
     /// ```
     pub fn compute_dkl_jod_host_pool_with_warm_ref(
         &mut self,
@@ -2194,7 +2201,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
     /// use cubecl::Runtime;
     ///
+    /// # #[cfg(feature = "cuda")]
     /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
@@ -2459,7 +2469,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// use cvvdp_gpu::params::CvvdpParams;
     /// use cubecl::Runtime;
     ///
+    /// # #[cfg(feature = "cuda")]
     /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
@@ -2541,7 +2554,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// use cvvdp_gpu::params::CvvdpParams;
     /// use cubecl::Runtime;
     ///
+    /// # #[cfg(feature = "cuda")]
     /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
     /// let client = Backend::client(&Default::default());
     /// let (w, h) = (64u32, 64u32);
     /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)

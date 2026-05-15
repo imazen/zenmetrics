@@ -129,6 +129,31 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+### Fixed (post-tick-238)
+
+#### cvvdp-gpu (doctests)
+
+- **CI doctest pass under `--no-default-features --features wgpu`
+  was broken** for the 5 GPU/cpu doctests added between ticks 225
+  and 244. They hardcoded `cubecl::cuda::CudaRuntime` (3 doctests)
+  or `cubecl::cpu::CpuRuntime` (2 doctests), which don't exist
+  under the CI doctest invocation
+  (`cargo test --workspace --no-default-features --features wgpu
+  --doc --release` per `.github/workflows/ci.yml:173`).
+  Each doctest now wraps its body in feature-gated cfg attrs:
+  - CUDA doctests: `# #[cfg(feature = "cuda")] type Backend = ...;`
+    + `# #[cfg(all(feature = "wgpu", not(feature = "cuda")))] # type
+    Backend = cubecl::wgpu::WgpuRuntime;` (wgpu fallback). Rendered
+    docs still show the canonical cuda form; the wgpu fallback is
+    hidden via `# ` prefix but compiles when cuda isn't on.
+  - CPU doctests: wrap the entire body in `# #[cfg(feature = "cpu")]
+    { ... # }` so non-cpu builds skip the body. Rendered docs are
+    unchanged.
+  No regression on default-features builds (all 6 doctests still
+  green); CI's wgpu-only doctest pass now compiles all 6.
+  The CI was masked from this regression because the bug landed
+  on `feat/cvvdp-gpu-scaffold` and CI triggers only on master/PR.
+
 #### cvvdp-gpu (tests)
 
 - `error_display_messages_are_actionable` — pins the user-facing
