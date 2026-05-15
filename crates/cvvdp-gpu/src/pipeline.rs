@@ -1210,7 +1210,14 @@ impl<R: Runtime> Cvvdp<R> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
-        let (mut ref_weber, mut ref_log_l_bkg) = self.compute_dkl_weber_pyramid(ref_srgb)?;
+        // ref_weber bands Vec is discarded — after tick 154's
+        // bands_ref/bands_dis split the CSF dispatch reads from
+        // `self.bands_ref[k]` GPU handles directly. ref_log_l_bkg
+        // is still used: the band loop uploads it per band as the
+        // CSF kernel's log_l_bkg input (DIST log_l_bkg is discarded
+        // per cvvdp's weber_g1 rule).
+        let (_ref_weber_unused, mut ref_log_l_bkg) =
+            self.compute_dkl_weber_pyramid(ref_srgb)?;
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
@@ -1252,7 +1259,6 @@ impl<R: Runtime> Cvvdp<R> {
             // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
             let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (bw, bh, n_px) = self.level_dims(k);
-            debug_assert_eq!(ref_weber[k][0].len(), n_px);
             debug_assert_eq!(ref_log_l_bkg[k].len(), n_px);
 
             let t_band = std::time::Instant::now();
@@ -1295,29 +1301,19 @@ impl<R: Runtime> Cvvdp<R> {
 
             // Fused 6-channel CSF apply: one launch runs both sides
             // (REF + DIST) and shares the per-pixel LUT bracket math.
-            // REF weber comes from the host upload (bands_ref was
-            // overwritten with DIST by the weber(dist) call earlier
-            // in the band loop). DIST weber reads self.bands_ref
-            // handles directly. Tick 93 — was 2 separate
-            // csf_apply_3ch launches.
+            // After tick 154's bands_ref/bands_dis split, both
+            // sides' weber data lives on GPU at band-loop time —
+            // REF in `self.bands_ref[k]`, DIST in `self.bands_dis[k]`.
+            // No host upload needed.
             {
-                let weber_ref_a_h = self
-                    .client
-                    .create_from_slice(f32::as_bytes(&ref_weber[k][0]));
-                let weber_ref_rg_h = self
-                    .client
-                    .create_from_slice(f32::as_bytes(&ref_weber[k][1]));
-                let weber_ref_vy_h = self
-                    .client
-                    .create_from_slice(f32::as_bytes(&ref_weber[k][2]));
                 unsafe {
                     csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
                         count.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(weber_ref_a_h, n_px),
-                        ArrayArg::from_raw_parts(weber_ref_rg_h, n_px),
-                        ArrayArg::from_raw_parts(weber_ref_vy_h, n_px),
+                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[0].clone(), n_px),
+                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[1].clone(), n_px),
+                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[2].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[0].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[1].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[2].clone(), n_px),
@@ -1338,11 +1334,10 @@ impl<R: Runtime> Cvvdp<R> {
                     );
                 }
             }
-            // CSF + log_l_bkg uploads have copied band-k's host data
-            // into GPU buffers — drop our local Vecs so peak host
-            // residency during the band loop scales with the largest
-            // remaining band, not the full pyramid.
-            ref_weber[k] = [Vec::new(), Vec::new(), Vec::new()];
+            // log_l_bkg upload has copied band-k's host data into a
+            // GPU buffer — drop our local Vec so peak host residency
+            // during the band loop scales with the remaining bands,
+            // not the full pyramid.
             ref_log_l_bkg[k] = Vec::new();
             if trace {
                 eprintln!("[trace] L{k} csf 1 fused launch:    {:?}", t_csf.elapsed());
