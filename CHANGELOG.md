@@ -129,6 +129,24 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (tests + examples)
+
+- New `common::apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8>`
+  standalone helper for the canonical `(-8, -4, +12)` saturating
+  offset distortion. Tick 278's `synth_pair_with_offset_dist`
+  paired this with the regular `synth_pair_ref`; tick 279
+  extracts the dist half so callers can pair it with either ref
+  variant (regular or `synth_pair_odd_dim_ref`). Migrated 12 more
+  inline copies:
+  - 10 sites in `tests/pipeline_color.rs` (all of which use
+    `synth_pair_odd_dim_ref` + the offset dist for stage-probe
+    tests at 32×32 odd dims)
+  - 1 in `tests/cpu_backend.rs::synth_pair`
+  - 1 in `examples/manifest_parity_probe.rs::synth_odd_pair`
+  `synth_pair_with_offset_dist` itself now delegates to
+  `apply_offset_dist`. Total dedup across ticks 278-279: 16 sites
+  consolidated.
+
 #### cvvdp-gpu (tests + examples + benches)
 
 - New `common::synth_pair_with_offset_dist(w, h) -> (ref, dist)`

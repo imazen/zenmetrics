@@ -43,16 +43,7 @@ fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
     // common::synth_pair_with_offset_dist but with the odd-dim
     // ref instead of the regular ref.
     let r = common::synth_pair_odd_dim_ref(w as usize, h as usize);
-    let d: Vec<u8> = r
-        .chunks_exact(3)
-        .flat_map(|p| {
-            [
-                p[0].saturating_sub(8),
-                p[1].saturating_sub(4),
-                p[2].saturating_add(12),
-            ]
-        })
-        .collect();
+    let d = common::apply_offset_dist(&r);
     (r, d)
 }
 

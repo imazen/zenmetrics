@@ -481,17 +481,15 @@ pub fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
     b
 }
 
-/// `(ref, dist)` pair where dist is `synth_pair_ref` with the
-/// canonical `(-8, -4, +12)` per-channel saturating offset that
-/// `bench_12mp_cuda.py::synth_pair_12mp` uses. Tick 278 dedup —
-/// 16 sites across tests/examples/benches built this exact pair
-/// from `synth_pair_ref` + an inline chunks_exact(3).flat_map.
-/// Use this when you need the standard offset-dist; build the
-/// dist inline only when the distortion pattern is custom
-/// (chroma_shift, blur3x1, noise, etc).
-pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
-    let r = synth_pair_ref(w, h);
-    let d: Vec<u8> = r
+/// Apply the canonical `(-8, -4, +12)` per-channel saturating
+/// offset distortion to a ref buffer. Matches the dist
+/// construction `bench_12mp_cuda.py::synth_pair_12mp` uses (also
+/// `synth_pair_odd_dim`). Tick 278 extracted this as a reusable
+/// closure; tick 279 made it a standalone helper so callers can
+/// pair it with either `synth_pair_ref` or
+/// `synth_pair_odd_dim_ref`.
+pub fn apply_offset_dist(ref_bytes: &[u8]) -> Vec<u8> {
+    ref_bytes
         .chunks_exact(3)
         .flat_map(|p| {
             [
@@ -500,7 +498,16 @@ pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
                 p[2].saturating_add(12),
             ]
         })
-        .collect();
+        .collect()
+}
+
+/// Convenience: `(ref, dist)` pair from `synth_pair_ref` + the
+/// canonical offset dist. Most call sites that want both halves
+/// use this; sites that already hold a ref buffer use
+/// `apply_offset_dist` directly. Tick 278.
+pub fn synth_pair_with_offset_dist(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    let r = synth_pair_ref(w, h);
+    let d = apply_offset_dist(&r);
     (r, d)
 }
 
