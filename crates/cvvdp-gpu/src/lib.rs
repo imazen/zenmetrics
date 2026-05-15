@@ -119,6 +119,48 @@
 //! pool), use [`host_scalar::predict_jod_still_3ch`] directly; for
 //! the cpu cubecl runtime (no atomic f32), use
 //! [`Cvvdp::compute_dkl_jod_host_pool`].
+//!
+//! ## Debug tracing env vars
+//!
+//! Two opt-in environment variables emit per-phase stderr timing
+//! lines. Both default off (zero cost when unset — single
+//! `var_os` lookup per call) and exist for ad-hoc profiling
+//! without committing instrumentation. Set either to any
+//! non-empty value to enable.
+//!
+//! - `CVVDP_TRACE=1` — instruments the JOD dispatch path
+//!   ([`Cvvdp::compute_dkl_jod`] and the host-pool variants).
+//!   Emits these stderr lines per call:
+//!
+//!   ```text
+//!   [trace] weber(ref):  …               REF weber pyramid pass
+//!   [trace] weber(dist): …               DIST weber pyramid pass
+//!   [trace] L{k} log_l_bkg source ({bw}×{bh}): …
+//!   [trace] L{k} csf 1 fused launch:     …   per-band CSF dispatch
+//!   [trace] L{k} mask:                   …   per-band masking + (band total)
+//!   [trace] band loop total ({n} levels): …
+//!   ```
+//!
+//!   Useful for narrowing down which pyramid level dominates
+//!   the per-image budget on a given GPU.
+//!
+//! - `CVVDP_TRACE_WEBER=1` — instruments
+//!   [`Cvvdp::compute_dkl_weber_pyramid`] only, splitting GPU
+//!   dispatch from host readback so we can see which side
+//!   dominates when the weber pyramid is the target of a
+//!   microbenchmark. Emits these stderr lines per call:
+//!
+//!   ```text
+//!   [weber-trace] GPU dispatch + baseband host (before readback): …
+//!   [weber-trace] bands readback ({n} levels): …
+//!   [weber-trace] log_l_bkg readback: …
+//!   ```
+//!
+//! Both variables are read once per call via `std::env::var_os`
+//! — fine for one-off diagnostics, but if you need sub-call
+//! granularity, prefer an external profiler over toggling these
+//! mid-run. The output goes to stderr only; release builds
+//! emit nothing unless explicitly enabled.
 
 #![allow(clippy::needless_range_loop)]
 // cvvdp parameters + the per-(rho, L_bkg, channel) CSF LUT are imported
