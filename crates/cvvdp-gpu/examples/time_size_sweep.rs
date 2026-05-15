@@ -16,16 +16,23 @@
 //!
 //! Run with:
 //!     cargo run --release --example time_size_sweep -p cvvdp-gpu --features cuda
+//!
+//! Falls back to wgpu when cuda isn't compiled in:
+//!     cargo run --release --example time_size_sweep -p cvvdp-gpu --no-default-features --features wgpu
 
-#![cfg(feature = "cuda")]
+#![cfg(any(feature = "cuda", feature = "wgpu"))]
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use cubecl::Runtime;
-use cubecl::cuda::CudaRuntime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+
+#[cfg(feature = "cuda")]
+type Backend = cubecl::cuda::CudaRuntime;
+#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+type Backend = cubecl::wgpu::WgpuRuntime;
 
 const SIZES: &[(u32, u32, &str)] = &[
     (64, 64, "tiny"),
@@ -77,9 +84,9 @@ fn measure_one(w: u32, h: u32, label: &'static str) -> Row {
     let ppd = geom.pixels_per_degree();
     let (ref_b, dis_b) = synth_pair(w, h);
 
-    let client = CudaRuntime::client(&Default::default());
-    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp on cuda");
+    let client = Backend::client(&Default::default());
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on GPU backend");
 
     // Warm-up — compile kernels + first allocations.
     for _ in 0..WARMUP_ITERS {
