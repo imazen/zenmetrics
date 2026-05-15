@@ -120,6 +120,19 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- `benches/score.rs` stale-comment cleanup:
+  - `bench_score_q1` no longer claims the GPU drifts 0.4 JOD at q=1;
+    that drift was closed to 0.0000 in ticks 204/206 (chroma_shift
+    CSF + gausspyr_reduce parity-bug fixes). Comment now correctly
+    states the historical drift and points at the regression-pin test.
+  - `bench_at_quality`'s host_scalar group comment no longer says
+    `Cvvdp::score` routes through it; tick 213 switched `score` to
+    GPU `compute_dkl_jod`. Comment now correctly states the host
+    path is a faster-to-debug reference exposed via
+    `host_scalar::predict_jod_still_3ch`.
+
 #### cvvdp-gpu (tests)
 
 - `gauss_chain_helpers_do_not_invalidate_warm_state` — pins the

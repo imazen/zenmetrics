@@ -137,8 +137,11 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
     let mut g = c.benchmark_group(&group_name);
     g.throughput(Throughput::Elements((W_256 * H_256) as u64));
 
-    // All-host scalar path. What Cvvdp::score routes through today;
-    // shadow_jod pins it to pycvvdp.
+    // All-host scalar path. Cvvdp::score used to route through this
+    // before tick 213 switched to the GPU `compute_dkl_jod`; the
+    // host path remains a faster-to-debug reference and is what
+    // `host_scalar::predict_jod_still_3ch` exposes directly.
+    // `shadow_jod` pins it to pycvvdp at ≤ 0.005 JOD.
     g.bench_function("host_scalar", |b| {
         b.iter(|| {
             let jod = predict_jod_still_3ch(
@@ -213,13 +216,15 @@ fn bench_score_q20(c: &mut Criterion) {
 }
 
 fn bench_score_q1(c: &mut Criterion) {
-    // q=1 is the severe-distortion case where the GPU JOD drifts
-    // 0.40 from the host scalar (cumulative f32 noise through the
-    // soft clamp + met2jod non-linearity, see drift survey in
-    // tests/pipeline_score.rs). Per-call timing should match q=20
-    // since the algorithm shape doesn't change with quality —
-    // running both is a sanity check that the bench captures the
-    // intrinsic cost, not data-dependent fast paths.
+    // q=1 is the severe-distortion case. Pre-tick-204/206 the GPU
+    // JOD drifted ~0.4 from pycvvdp at q=1 (cumulative f32 noise
+    // through the soft clamp + met2jod non-linearity); the
+    // chroma_shift CSF + gausspyr_reduce parity-bug fixes closed
+    // that to 0.0000 (tracked by
+    // `compute_dkl_jod_on_v1_manifest_corpus`). Per-call timing
+    // should match q=20 since the algorithm shape doesn't change
+    // with quality — running both is a sanity check that the bench
+    // captures the intrinsic cost, not data-dependent fast paths.
     bench_at_quality(c, 1);
 }
 
