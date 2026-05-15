@@ -52,6 +52,15 @@ use crate::params::DisplayModel;
 /// // Byte-identical inputs → no perceptible difference.
 /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
 /// ```
+///
+/// # Panics
+///
+/// Panics if `ref_srgb.len() != width * height * 3` or
+/// `dist_srgb.len() != width * height * 3`. Use [`Cvvdp::score`]
+/// for the fallible-Result variant routed through the same
+/// pipeline.
+///
+/// [`Cvvdp::score`]: crate::Cvvdp::score
 pub fn predict_jod_still_3ch(
     ref_srgb: &[u8],
     dist_srgb: &[u8],

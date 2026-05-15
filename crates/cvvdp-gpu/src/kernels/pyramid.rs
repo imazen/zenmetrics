@@ -320,6 +320,15 @@ pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
 /// passes `0`. cvvdp uses the same default.
 ///
 /// The Gaussian pyramid is built by repeated `gausspyr_reduce_scalar`.
+///
+/// # Panics
+///
+/// Panics if the resolved level count is zero (e.g. `n_levels == 0`
+/// together with `sw.min(sh).ilog2() as usize == 0`, which requires
+/// `min(sw, sh) < 2`). Debug builds also trip the `n >= 1`
+/// `debug_assert!`. Release builds reach the
+/// `gauss.pop().expect("at least one level")` line after the
+/// gaussian-pyramid loop produced nothing.
 pub fn laplacian_pyramid_dec_scalar(
     src: &[f32],
     sw: usize,

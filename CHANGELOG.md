@@ -405,6 +405,24 @@ original Fixed/Added/Changed sections.
   `kernels/mod.rs` that `pool_band_kernel` is retained for the
   pool-scalar unit test. Tick 291.
 
+- Added `# Panics` sections to 3 `pub fn` host-scalar /
+  kernel helpers that can panic on out-of-spec input (clippy
+  `-W clippy::missing_panics_doc`):
+  - `host_scalar::predict_jod_still_3ch` — panics on
+    `ref_srgb.len() != w*h*3` or `dist_srgb.len() != w*h*3`
+    (the two `assert_eq!` calls at the top). Doc points at
+    `Cvvdp::score` for the fallible `Result` variant routed
+    through the same pipeline.
+  - `kernels::pool::do_pooling_and_jod_still_3ch` — panics on
+    empty `q_per_ch` (zero pyramid levels). cvvdp's pool stage
+    is undefined on a zero-band input.
+  - `kernels::pyramid::laplacian_pyramid_dec_scalar` — panics
+    if the resolved level count is zero. Debug builds trip
+    the `debug_assert!`; release builds reach the
+    `gauss.pop().expect("at least one level")` line.
+  `missing_panics_doc` warning count: 0 (was 3). 6 doctests
+  still pass under the CI wgpu combo. Tick 308.
+
 - Closed out the `# Errors`-section work started in tick 306.
   Added sections to the remaining 10 `Result`-returning public
   methods:

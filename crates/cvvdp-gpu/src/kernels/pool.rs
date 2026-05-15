@@ -102,6 +102,12 @@ pub fn met2jod(q: f32) -> f32 {
 /// last level is the coarse residual.
 ///
 /// Returns JOD ∈ [0, 10] where 10 = imperceptible difference.
+///
+/// # Panics
+///
+/// Panics if `q_per_ch` is empty (`n_levels == 0`). At least one
+/// pyramid level (the baseband) must be present — cvvdp's pool
+/// stage is undefined on a zero-band input.
 pub fn do_pooling_and_jod_still_3ch(q_per_ch: &[[f32; 3]]) -> f32 {
     let n_levels = q_per_ch.len();
     assert!(n_levels >= 1, "need at least one pyramid level");
