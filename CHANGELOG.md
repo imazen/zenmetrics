@@ -154,6 +154,21 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `crates/cvvdp-gpu/docs/PORT_STATUS.md` pipeline-stage table
+  (line 15, "Per-band pooling" row) named the test-only
+  `pool_band_kernel` as the GPU kernel consumed by
+  `compute_dkl_jod`. Same stale-reference shape as tick
+  319's README fix — the production dispatcher is the fused
+  3-channel `pool_band_3ch_kernel`, per the tick-291 audit.
+  Updated the row to: "GPU `pool_band_3ch_kernel` (fused
+  3-channel, atomic f32 partials, one launch per pyramid band)
+  consumed by `compute_dkl_jod`. Single-channel
+  `pool_band_kernel` retained as a test-only entry point."
+  The "Resolved tick 208" entry further down (line 112) keeps
+  its `pool_band_kernel` reference — that's accurate
+  historical context (tick 208 predates the tick 165 fusion
+  to `pool_band_3ch_kernel`). Tick 320.
+
 - `crates/cvvdp-gpu/README.md` "CPU backend" section had a
   stale reference to `pool_band_kernel` (the single-channel
   pool kernel) as the source of the `Atomic<f32>::fetch_add`
