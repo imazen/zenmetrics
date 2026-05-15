@@ -79,11 +79,18 @@ The cvvdp parameter JSON gets vendored into
   pyramid levels. `gausspyr_expand_scalar` now uses cvvdp's explicit
   edge-replication scheme (`interleave_zeros_and_pad`) so the
   constant-signal test passes across the whole buffer.
-- **Per-band CSF weight precomputation**: should the host upload one
-  flat `f32` array (`n_levels × N_CHANNELS`) or one tensor per band?
-  Single flat upload is simpler; keep unless a per-band variant becomes
-  necessary.
-- **Atomics for pooling**: cubecl-cpu doesn't yet support
-  `Atomic<f32>::fetch_add` (per zensim-gpu's lib.rs). Use per-band
-  per-block partials with a tree reduction, same shape as zensim-gpu's
-  fused features kernel, so the CPU runtime works.
+- **(Resolved)** Per-band CSF weight precomputation chose the
+  flat-upload form. `Cvvdp::new_with_geometry` uploads one
+  `Vec<[Handle; N_CHANNELS]>` per pyramid level (the 32-entry
+  per-channel logs_row LUT), all `n_levels × 3` handles allocated
+  once and reused across calls. A per-band tensor form would offer
+  no functional benefit and adds Handle-juggling.
+
+- **(Resolved for cuda + wgpu; open for cubecl-cpu)** Atomic-f32
+  pooling. `pool_band_kernel` uses `Atomic<f32>::fetch_add` and is
+  parity-tested via `gpu::pool_band_kernel_matches_host_lp_norm_mean`
+  + `compute_dkl_jod_matches_host_scalar`. cubecl-cpu still lacks
+  `Atomic<f32>::fetch_add` (same gap zensim-gpu hits), so the cpu
+  backend can't run the pool path. A per-block partial-tree
+  reduction would be the cpu-backend port if/when that runtime
+  becomes necessary.
