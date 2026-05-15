@@ -32,6 +32,14 @@ Workspace conventions per the global rules:
   `compute_dkl_jod_host_pool_matches_compute_dkl_jod` test pins
   the two paths together. Closes the standing CPU-backend
   blocker noted in `lib.rs`.
+- **`tests/cpu_backend.rs`** — cpu-runtime smoke + parity tests
+  exercising `compute_dkl_jod_host_pool` on `cubecl::cpu::CpuRuntime`.
+  Validates the lib.rs claim that the cpu backend works:
+    JOD finite + in [0, 10] on a 32×32 synth pair.
+    cpu backend JOD vs host_scalar JOD: `diff = 0.000000`.
+  All other test files gate themselves out of cpu-only builds; this
+  file is the only place cpu-backend coverage lives.
+  Run with `cargo test -p cvvdp-gpu --no-default-features --features cpu`.
 
 ### Changed
 
