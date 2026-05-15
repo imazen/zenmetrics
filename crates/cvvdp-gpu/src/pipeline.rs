@@ -2010,6 +2010,42 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns [`Error::NoWarmReference`] if `warm_reference` was
     /// not called, or if the warm state was invalidated by an
     /// intervening REF-dispatching method.
+    ///
+    /// # Example
+    ///
+    /// Score N distorted candidates against one warm REF on the CUDA
+    /// backend — canonical batch-GPU pattern for sweep workers.
+    /// `no_run` because docs.rs has no GPU; mirrors the cpu-runtime
+    /// example on [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`]:
+    ///
+    /// ```no_run
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let ref_bytes = vec![128u8; (w * h * 3) as usize];
+    /// cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    ///
+    /// // REF weber runs once above; each compute_dkl_jod_with_warm_ref
+    /// // call skips it. ~1.75× per-DIST throughput at 12 MP vs cold.
+    /// for shift in [0u8, 8, 16] {
+    ///     let dist_bytes: Vec<u8> = ref_bytes
+    ///         .iter()
+    ///         .map(|b| b.saturating_add(shift))
+    ///         .collect();
+    ///     let jod = cvvdp
+    ///         .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+    ///         .expect("warm GPU jod");
+    ///     assert!((0.0..=10.0).contains(&jod));
+    /// }
+    /// ```
     pub fn compute_dkl_jod_with_warm_ref(
         &mut self,
         dist_srgb: &[u8],

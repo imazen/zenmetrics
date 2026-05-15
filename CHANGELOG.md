@@ -88,6 +88,16 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (docs)
+
+- `Cvvdp::compute_dkl_jod_with_warm_ref` now has a `no_run` doctest
+  example showing the canonical GPU batch-scoring pattern
+  (warm REF once, score N DIST candidates against it). Mirrors
+  the existing cpu-runtime example on
+  [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`] — completes
+  the doctest coverage on the warm-ref API across both GPU and
+  cpu-runtime paths.
+
 #### cvvdp-gpu (cleanup)
 
 - Cleared remaining 7 clippy warnings under `--all-targets`:
