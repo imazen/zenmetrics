@@ -218,6 +218,54 @@ form (compute `ind = (x_q - x[0]) / (x[-1] - x[0]) * (N-1)` and
 use the same form pycvvdp uses to remove the implementation
 divergence wholesale.
 
+## Tick 200 — host_scalar interp1_uniform on L_bkg
+
+Implemented the uniform-rescale form for `LOG_L_BKG_AXIS`
+(`interp1_uniform` in `kernels/csf.rs`); the rho axis stays on
+binary search (its first interval has ratio 0.3228 vs the
+regular 0.5 — not uniformly log-spaced). All 78 parity tests
+still pass after the swap.
+
+## Tick 201 — drift did NOT close
+
+Re-measured on the chroma_shift fixture via
+`examples/chroma_shift_drift_probe.rs`:
+
+```
+cvvdp-gpu (current):  9.547440
+pycvvdp golden:       9.664865
+abs diff:             0.117425
+```
+
+**Bit-identical to the pre-tick-200 number** (0.1174). So the
+L_bkg interp form was not the source — the T_p REF-side 0.89%
+relative drift comes from somewhere else in the CSF apply step,
+or the drift surfaces further downstream.
+
+Remaining hypotheses (in order of suspicion now):
+1. **CSF apply step** still has a non-interp divergence
+   (sensitivity_correction order? f32 cast of LUT-returned
+   value? `10^(sens_corr/20)` vs `pow10` form?).
+2. **Masking model (`mult-mutual`)** — cross-channel pooling
+   via `XCM_3X3` and the `mask_pool` step. T_p divergence may
+   amplify through the |T_test| − |T_ref| difference path.
+3. **f32 accumulation order in pool** — our `Atomic<f32>::fetch_add`
+   in `pool_band_kernel` has non-deterministic reduce order.
+   pycvvdp uses torch's deterministic sum. For chroma_shift
+   where most-bands' contributions are similar magnitude,
+   accumulation order could matter for the 4th decimal.
+
+### Next probe
+
+Stage-by-stage dump of D bands (post-masking, post-PU-blur,
+pre-pool) on the chroma_shift fixture. If D bands match pycvvdp,
+the drift is pool-or-later (likely accumulation order). If D
+bands diverge, masking is the source.
+
+See `examples/chroma_shift_drift_probe.rs` for the canonical
+measurement entry point — run on every commit to gate against
+regression.
+
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
 - **`MASK_Q`** = [1.302623, 2.888591, 3.680771] (matches pycvvdp's
