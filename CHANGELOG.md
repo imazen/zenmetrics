@@ -405,6 +405,20 @@ original Fixed/Added/Changed sections.
   `kernels/mod.rs` that `pool_band_kernel` is retained for the
   pool-scalar unit test. Tick 291.
 
+- `cargo fmt --check` was failing on cvvdp-gpu — tick 298's
+  `|n| n.as_u64()` → `serde_json::Value::as_u64` swap inside
+  `v1_corpus_qs::filter_map` made the line too long for
+  rustfmt's column limit, but the file wasn't reformatted at
+  the time. Ran `cargo fmt -p cvvdp-gpu` to clean it up; the
+  change splits the `filter_map` body across 4 lines (still
+  consumed via `#[path]` from bench/example/test scopes).
+  Also picked up several pipeline_color.rs `let (ref_srgb,
+  dist_srgb) = common::synth_pair_*(...)` 2-line forms that
+  now fit on a single line after ticks 278-280 shortened the
+  helper names. `cargo fmt -p cvvdp-gpu --check`: clean.
+  `pipeline_score::cvvdp_score_matches_v1_manifest` passes
+  post-change. Tick 310.
+
 - Added `#[must_use]` to 24 pure-return `pub fn`s where ignoring
   the return value is always a bug (clippy
   `-W clippy::must_use_candidate`). These are all

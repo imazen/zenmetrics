@@ -567,7 +567,11 @@ pub fn v1_corpus_qs() -> Vec<u32> {
         .expect("v1_corpus_jods.json missing .pairs");
     let mut qs: Vec<u32> = pairs
         .values()
-        .filter_map(|fx| fx.get("q").and_then(serde_json::Value::as_u64).map(|q| q as u32))
+        .filter_map(|fx| {
+            fx.get("q")
+                .and_then(serde_json::Value::as_u64)
+                .map(|q| q as u32)
+        })
         .collect();
     qs.sort_unstable();
     qs.dedup();
