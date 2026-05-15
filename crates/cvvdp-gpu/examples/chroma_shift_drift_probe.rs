@@ -1,18 +1,19 @@
 //! Multi-fixture parity probe vs pycvvdp v0.5.4 goldens.
 //!
+//! Walks every synth fixture in the goldens manifest
+//! (`scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`) and prints
+//! `gpu_jod`, `host_scalar_jod`, the pycvvdp golden, and absolute
+//! diffs side-by-side — a fast way to confirm manifest parity
+//! hasn't regressed after a kernel edit. Exits non-zero if any
+//! abs diff exceeds 0.005 JOD — the canonical tolerance the
+//! manifest-parity tests use.
+//!
 //! Originally written (tick 191) as a single-fixture
 //! `chroma_shift` drift probe while investigating the 0.117 JOD
-//! divergence chased through ticks 191-204. Now that ticks 204
-//! (baseband CSF rho) and 206 (gauss-reduce parity bug) closed
-//! the chroma_shift AND 73×91 odd-dim drifts to f32 precision,
-//! this example walks every synth fixture in the goldens manifest
-//! and reports the diff side-by-side — a fast way to confirm
-//! manifest parity hasn't regressed after a kernel edit.
-//!
-//! Each row prints `gpu_jod`, `host_scalar_jod`, the pycvvdp
-//! golden, and absolute diffs (vs golden, GPU vs host). Exits
-//! non-zero if any abs diff exceeds 0.005 JOD — the canonical
-//! tolerance used by the manifest-parity tests.
+//! divergence chased through ticks 191-204. Ticks 204 (baseband
+//! CSF rho) and 206 (gauss-reduce parity bug) closed every drift
+//! to f32 precision; tick 210 expanded the probe to all 6 manifest
+//! fixtures (the kept filename is a historical artifact).
 //!
 //! Run:
 //!     cargo run --release --example chroma_shift_drift_probe \
@@ -120,6 +121,39 @@ fn synth_odd_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
+fn synth_noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    // pycvvdp `synth_pair_256_noise` (bench_12mp_cuda.py:102):
+    //   noise[y,x,c] = ((x * 73 + y * 137 + c * 211) % 64) - 32
+    //   dist[y,x,c]  = clamp(ref[y,x,c] + noise[y,x,c], 0, 255)
+    // Pure integer arithmetic — bit-stable across NumPy + Rust.
+    let r = synth_pair_ref(w, h);
+    let mut d = vec![0u8; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3 {
+                let noise = (((x * 73 + y * 137 + c * 211) % 64) as i32) - 32;
+                let v = r[(y * w + x) * 3 + c] as i32 + noise;
+                d[(y * w + x) * 3 + c] = v.clamp(0, 255) as u8;
+            }
+        }
+    }
+    (r, d)
+}
+
+fn synth_pair_12mp(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
+    // pycvvdp `synth_pair_12mp` (bench_12mp_cuda.py:38) — same ref
+    // construction as synth_pair_ref, with R-8 / G-4 / B+12 saturated
+    // distortion. Identical formula to synth_odd_pair, just at 12 MP.
+    let r = synth_pair_ref(w, h);
+    let mut d = vec![0u8; w * h * 3];
+    for i in (0..w * h * 3).step_by(3) {
+        d[i] = r[i].saturating_sub(8);
+        d[i + 1] = r[i + 1].saturating_sub(4);
+        d[i + 2] = r[i + 2].saturating_add(12);
+    }
+    (r, d)
+}
+
 struct Fixture {
     name: &'static str,
     w: u32,
@@ -173,11 +207,10 @@ fn main() {
         "{:30}  {:>11}  {:>8}  {:>8}  {:>8}  {:>8}  {:>8}  {:>8}  status",
         "fixture", "dims", "gpu_jod", "host_jod", "pycvvdp", "d_gpu", "d_host", "d_g-h",
     );
-    // Fixtures whose dist construction is bit-stable across Python
-    // (`scripts/cvvdp_goldens/bench_12mp_cuda.py`) and Rust. The 12 MP
-    // and 256² noise fixtures use pycvvdp constructions that aren't
-    // ported here yet; they're covered by the test-side parity
-    // (tests/pipeline_color.rs).
+    // Bit-stable dist constructions across pycvvdp's
+    // `scripts/cvvdp_goldens/bench_12mp_cuda.py` and Rust. Every
+    // synth fixture in the goldens manifest now has a matching
+    // builder here.
     let fixtures: &[Fixture] = &[
         Fixture {
             name: "synth_73x91_odd",
@@ -206,6 +239,20 @@ fn main() {
             h: 256,
             golden: 8.124331,
             builder: synth_blur1x3_pair,
+        },
+        Fixture {
+            name: "synth_256x256_noise",
+            w: 256,
+            h: 256,
+            golden: 9.016886,
+            builder: synth_noise_pair,
+        },
+        Fixture {
+            name: "synth_4000x3000",
+            w: 4000,
+            h: 3000,
+            golden: 9.458028,
+            builder: synth_pair_12mp,
         },
     ];
 
