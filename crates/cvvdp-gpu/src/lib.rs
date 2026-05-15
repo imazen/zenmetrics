@@ -102,9 +102,14 @@ pub const PYRAMID_MIN_DIM: u32 = 4;
 pub enum Error {
     /// Buffer length doesn't match `width × height × 3`.
     DimensionMismatch { expected: usize, got: usize },
-    /// `compute_with_reference` was called without a prior `set_reference`.
+    /// `Cvvdp::score_with_reference` was called without a prior
+    /// `Cvvdp::set_reference`.
     NoCachedReference,
-    /// Image is too small for the configured pyramid.
+    /// Image is too small for the configured pyramid, **or** a GPU
+    /// read-back / dispatch failed. The two get the same variant
+    /// because cubecl's read errors aren't easily separable yet —
+    /// callers in tests / production should treat this as "GPU
+    /// pipeline failed, retry or surface to user".
     InvalidImageSize,
 }
 
