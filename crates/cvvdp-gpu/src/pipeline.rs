@@ -2313,10 +2313,14 @@ impl<R: Runtime> Cvvdp<R> {
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.
     ///
-    /// `ppd` is silently ignored — the GPU CSF LUT was pre-uploaded
-    /// at construction time against `self.geometry.pixels_per_degree()`.
-    /// Pass it consistent with the construction-time geometry; debug
-    /// builds verify the match (tick 243).
+    /// `ppd` is pixels-per-degree. **Unlike the JOD-path helpers,
+    /// this function genuinely consumes `ppd`** — `precomputed_band_weights`
+    /// runs on host with the caller-passed value to compute per-band
+    /// `rho_k` for the weight LUT. Pass a `ppd` whose
+    /// `band_frequencies(ppd, w, h)` length matches the construction-
+    /// time `n_levels`, or the weights buffer will mismatch the
+    /// kernel's expectations. Tick 246 reverted a misplaced tick-243
+    /// debug_assert here.
     /// `l_bkg` is the scalar background-luminance approximation used
     /// for every pyramid band — typically a per-image mean or
     /// display-peak / 2. The per-pixel L_bkg form (cvvdp's exact
@@ -2333,7 +2337,15 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
         l_bkg: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
-        self.debug_assert_ppd_matches_geometry(ppd);
+        // Note: unlike the Weber-chain helpers, this function genuinely
+        // consumes the caller-passed `ppd` (via `precomputed_band_weights`
+        // below). Tick 246 reverts the tick-243 debug_assert that was
+        // added in error here. Pyramid shape is still fixed by
+        // construction-time geometry (n_levels is set by Cvvdp::new),
+        // so passing a `ppd` whose `band_frequencies(ppd, w, h)` length
+        // differs from the construction-time n_levels would mismatch
+        // the weights buffer — caller must ensure consistency at the
+        // pyramid-shape level, not just the PPD scalar.
 
         // Overwrites bands_ref[k] (first with Laplacian bands via
         // _dispatch_laplacian_pyramid_gpu, then in place via the per-

@@ -120,6 +120,25 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu
+
+- **Revert misplaced tick-243 debug_assert + tick-245 docstring
+  on `compute_dkl_csf_weighted_bands`.** Unlike the JOD-path
+  helpers, this function genuinely consumes the caller-passed `ppd`
+  (via `precomputed_band_weights(ppd, w, h, l_bkg)` which uses
+  `band_frequencies(ppd, ...)` to compute per-band rho). The
+  tick-243 audit assumed every public `ppd` parameter was a
+  silent-ignored relic — true for the 6 JOD-path helpers but
+  wrong for this Laplacian + per-band-weight helper.
+  - Removed the `debug_assert_ppd_matches_geometry` call at entry
+  - Docstring now correctly states `ppd` is consumed and warns
+    that the caller must keep `band_frequencies(ppd, w, h).len()`
+    consistent with the construction-time `n_levels` (otherwise
+    the weights buffer mismatches the per-level kernel launches)
+  No tests changed behaviour — all 30 pipeline_color + 12
+  pipeline_score tests still green; existing call sites pass
+  matching ppd so the spurious assert never fired in CI.
+
 #### cvvdp-gpu (docs)
 
 - Document the silent-ignored `ppd` argument on the 6 public
