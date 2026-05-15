@@ -120,6 +120,15 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+### Changed (docs, tests, dedup — post-tick-238)
+
+Many small docs / tests / dedup chunks landed under this bucket
+during the ticks 239-273 maintenance run. They follow the
+Keep-a-Changelog `Changed` semantics (no behavioural shift in the
+public API; refactors, comment refreshes, regression-test pinning,
+and helper extractions). Pre-tick-238 entries above stay in their
+original Fixed/Added/Changed sections.
+
 #### cvvdp-gpu (docs)
 
 - `lib.rs` Status section now cross-references the warm-state
