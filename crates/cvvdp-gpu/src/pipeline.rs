@@ -1203,6 +1203,9 @@ impl<R: Runtime> Cvvdp<R> {
         // signature for source-compatibility.
         let _ = ppd;
         let cube_dim = CubeDim::new_1d(64);
+        // `10^MASK_C` post-blur scale for the PU stage — constant
+        // per Cvvdp config, so compute once outside the band loop.
+        let pu_scale = 10.0_f32.powf(MASK_C);
 
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
@@ -1379,7 +1382,6 @@ impl<R: Runtime> Cvvdp<R> {
                             scratch.m_blur[1].clone(),
                             scratch.m_blur[2].clone(),
                         ];
-                        let pu_scale = 10.0_f32.powf(MASK_C);
                         pu_blur_h_3ch_kernel::launch::<R>(
                             &self.client,
                             count.clone(),
