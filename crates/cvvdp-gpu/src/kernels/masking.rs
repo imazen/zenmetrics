@@ -750,11 +750,13 @@ pub fn min_abs_3ch_kernel(
 /// outputs as `mult_mutual_band` when called with the same inputs
 /// at a small band size.
 ///
-/// For bands larger than `PU_PADSIZE = 6`, caller should first
-/// apply the σ=3 Gaussian blur (kernel still pending) and feed the
-/// blurred M_mm tensor to a separate variant of this kernel; this
-/// no-blur form covers the deepest pyramid levels which are always
-/// small.
+/// For bands larger than `PU_PADSIZE = 6`, callers run the σ=3
+/// Gaussian blur first (production uses the 3-channel fused
+/// `pu_blur_h_3ch_kernel` + `pu_blur_v_3ch_scaled_kernel` — the
+/// v-pass folds the `* 10^MASK_C` post-scale into its output) and
+/// feed the blurred M_mm tensor to
+/// `mult_mutual_3ch_with_blurred_kernel`. This no-blur form covers
+/// the deepest pyramid levels where the blur is skipped.
 #[cube(launch)]
 pub fn mult_mutual_3ch_no_blur_kernel(
     t_p_a: &Array<f32>,
