@@ -1476,10 +1476,14 @@ impl<R: Runtime> Cvvdp<R> {
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
         let n_levels = self.n_levels as usize;
 
-        let partials_init = vec![0.0_f32; n_levels * N_CHANNELS];
+        // Pool partials: one `f32` per (level, channel). Stack-
+        // allocated since `n_levels * N_CHANNELS ≤ MAX_LEVELS *
+        // N_CHANNELS = 24` — `create_from_slice` reads only the
+        // active prefix.
+        let partials_init = [0.0_f32; MAX_LEVELS * N_CHANNELS];
         let partials_h = self
             .client
-            .create_from_slice(f32::as_bytes(&partials_init));
+            .create_from_slice(f32::as_bytes(&partials_init[..n_levels * N_CHANNELS]));
         let cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
