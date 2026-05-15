@@ -58,6 +58,25 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **`burn-conv-spike` clippy `approx_constant`** — the perlin-
+  pattern frequency literal `6.28` in
+  `crates/burn-conv-spike/src/main.rs:40` trips clippy's
+  `approx_constant` lint (close to but not exactly TAU). Added
+  a targeted `#[allow(clippy::approx_constant)]` over the
+  expression with a comment explaining why the literal stays
+  frozen: the README's parity number (`rel_diff = 0.000156`)
+  was measured against this exact value, and the spike's
+  "don't extend this crate" rule keeps the verdict
+  configuration stable. `cargo clippy --release` in the spike
+  dir is now zero-warning. The spike crate has its own
+  `[workspace]` root so it doesn't affect parent CI; this is
+  a quality-of-life fix for anyone who `cd`s into the spike
+  dir to reproduce the verdict. Pre-existing rustfmt
+  formatting issues in the spike's main.rs (from the
+  subagent's commit) are intentionally left alone — they're
+  cosmetic and modifying them would touch the frozen state.
+  Tick 329.
+
 - `docs/PORT_STATUS.md` "Open questions" section had a stale
   claim that `warm_state_invalidates_after_each_documented_dispatcher`
   covers 8 cases — true at tick-249 close but tick 314 extended

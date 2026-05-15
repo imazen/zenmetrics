@@ -37,7 +37,15 @@ fn synth_input() -> Vec<f32> {
         for x in 0..SRC_W {
             let fx = x as f32 / SRC_W as f32;
             let fy = y as f32 / SRC_H as f32;
-            v.push(0.5 + 0.25 * (fx * 6.28).sin() * (fy * 6.28).cos());
+            // `6.28` is a perlin-pattern frequency — close to TAU but
+            // not meant to be exactly 2π. The README's frozen
+            // parity number (`rel_diff = 0.000156`) was measured
+            // against this literal; switching to `std::f32::consts::TAU`
+            // would change it slightly. `#[allow]` over `s/6.28/TAU/`
+            // keeps the spike's frozen-verdict-config intact.
+            #[allow(clippy::approx_constant)]
+            let v_xy = 0.5 + 0.25 * (fx * 6.28).sin() * (fy * 6.28).cos();
+            v.push(v_xy);
         }
     }
     v
