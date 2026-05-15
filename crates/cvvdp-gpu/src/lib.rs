@@ -98,6 +98,9 @@ pub const MAX_LEVELS: usize = 8;
 /// PYRAMID_MIN_DIM`, the current level becomes the baseband.
 pub const PYRAMID_MIN_DIM: u32 = 4;
 
+/// Failure modes for `Cvvdp::*` methods. Implements
+/// `std::error::Error` so callers can use `?` against
+/// `Box<dyn Error>` or `anyhow::Error` as usual.
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Buffer length doesn't match `width × height × 3`.
@@ -128,4 +131,7 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// `Result<T, cvvdp_gpu::Error>` — the crate's standard fallible
+/// return type. Every `Cvvdp::*` constructor and dispatch method
+/// returns this.
 pub type Result<T> = std::result::Result<T, Error>;
