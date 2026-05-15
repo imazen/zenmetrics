@@ -28,7 +28,15 @@ mod output;
 mod sweep;
 
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+// `Path` is consumed only by `score_one_pair`, which lives behind
+// the `sweep` feature. Under `--no-default-features --features wgpu`
+// (CI's clippy invocation) `Path` would be an unused import and
+// trip `-D warnings`. Gating the import alongside its sole caller
+// keeps the wgpu-only build clean while the sweep build still gets
+// it.
+#[cfg(feature = "sweep")]
+use std::path::Path;
 use std::process::ExitCode;
 
 use crate::compare::{print_report, run_compare};
