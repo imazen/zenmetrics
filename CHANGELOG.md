@@ -120,6 +120,20 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- Document the silent-ignored `ppd` argument on the 6 public
+  methods that take it (`compute_dkl_jod`, `compute_dkl_d_bands`,
+  `compute_dkl_t_p_bands`, `compute_dkl_jod_host_pool`,
+  `compute_dkl_jod_host_pool_with_warm_ref`,
+  `compute_dkl_jod_with_warm_ref`, plus
+  `compute_dkl_csf_weighted_bands`). Each docstring now states that
+  `ppd` is silently ignored — the GPU CSF LUT is pre-uploaded
+  against the construction-time geometry — and points readers at
+  `Cvvdp::new_with_geometry` for a different display geometry. Pairs
+  with the tick-243 `debug_assert_ppd_matches_geometry` safety net
+  by making the contract explicit in the docs that users read first.
+
 #### cvvdp-gpu (tests)
 
 - `debug_assert_fires_when_ppd_mismatches_geometry` — pins the

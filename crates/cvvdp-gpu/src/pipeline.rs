@@ -1345,9 +1345,15 @@ impl<R: Runtime> Cvvdp<R> {
     ///   formula is `|T_p - R_p|` with `CH_GAIN` absorbed only in
     ///   `T_p` / `R_p` of non-baseband bands).
     ///
-    /// `ppd` is pixels-per-degree (from `DisplayGeometry::pixels_per_degree()`).
-    /// Each level's `rho_k` is resolved via
-    /// [`crate::kernels::pyramid::band_frequencies`].
+    /// `ppd` is pixels-per-degree. **The per-call `ppd` is silently
+    /// ignored** — `logs_row` was pre-uploaded at `Cvvdp::new` /
+    /// `Cvvdp::new_with_geometry` time against
+    /// `self.geometry.pixels_per_degree()`, so the per-band `rho_k`
+    /// (and thus the CSF LUT lookup) is fixed for this `Cvvdp` instance.
+    /// Pass it consistent with the construction-time geometry for clarity;
+    /// debug builds verify the match via `debug_assert_ppd_matches_geometry`
+    /// (tick 243). Reconstruct with `new_with_geometry` if you need a
+    /// different display geometry.
     ///
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
@@ -1875,6 +1881,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// scalar processing); use [`Cvvdp::compute_dkl_jod`] directly
     /// when you want the JOD scalar — that path pools on GPU and
     /// avoids the full ~432 MB per-band readback at 12 MP.
+    ///
+    /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match (tick 243).
     pub fn compute_dkl_d_bands(
         &mut self,
         ref_srgb: &[u8],
@@ -1931,6 +1941,13 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns JOD on cvvdp's 0–10 scale (10 = imperceptible).
     ///
+    /// `ppd` is silently ignored — the GPU CSF LUT was pre-uploaded
+    /// at construction time against `self.geometry.pixels_per_degree()`.
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match via `debug_assert_ppd_matches_geometry`
+    /// (tick 243). Use `Cvvdp::new_with_geometry` if you need a
+    /// different display geometry.
+    ///
     /// `Cvvdp::score` routes through this method as of tick 213
     /// (post-tick-207's tightened 0.005 JOD manifest-parity
     /// tolerance). Parity tests:
@@ -1981,6 +1998,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// where both run (the GPU pool's atomic reduction and the host
     /// `lp_norm_mean` compute the same `safe_pow`-form Minkowski norm).
     ///
+    /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match (tick 243).
+    ///
     /// # Example
     ///
     /// CPU-runtime scoring of a byte-identical 64×64 pair (max JOD = 10):
@@ -2025,6 +2046,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// variant: requires a prior [`Cvvdp::warm_reference`] call, and
     /// any intervening REF-dispatching method invalidates the warm
     /// state.
+    ///
+    /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match (tick 243).
     ///
     /// # Example
     ///
@@ -2153,6 +2178,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns [`Error::NoWarmReference`] if `warm_reference` was
     /// not called, or if the warm state was invalidated by an
     /// intervening REF-dispatching method.
+    ///
+    /// `ppd` is silently ignored — see [`Cvvdp::compute_dkl_jod`].
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match (tick 243).
     ///
     /// # Example
     ///
@@ -2284,7 +2313,10 @@ impl<R: Runtime> Cvvdp<R> {
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.
     ///
-    /// `ppd` is pixels-per-degree (from `DisplayGeometry::pixels_per_degree()`).
+    /// `ppd` is silently ignored — the GPU CSF LUT was pre-uploaded
+    /// at construction time against `self.geometry.pixels_per_degree()`.
+    /// Pass it consistent with the construction-time geometry; debug
+    /// builds verify the match (tick 243).
     /// `l_bkg` is the scalar background-luminance approximation used
     /// for every pyramid band — typically a per-image mean or
     /// display-peak / 2. The per-pixel L_bkg form (cvvdp's exact
