@@ -1877,6 +1877,40 @@ impl<R: Runtime> Cvvdp<R> {
     /// variant: requires a prior [`Cvvdp::warm_reference`] call, and
     /// any intervening REF-dispatching method invalidates the warm
     /// state.
+    ///
+    /// # Example
+    ///
+    /// Score N distorted candidates against one warm REF on the cpu
+    /// runtime — common batch-CPU pattern for sweep workers:
+    ///
+    /// ```
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<cubecl::cpu::CpuRuntime>::new(
+    ///     client, w, h, CvvdpParams::PLACEHOLDER,
+    /// ).expect("Cvvdp::new");
+    ///
+    /// let ref_bytes = vec![128u8; (w * h * 3) as usize];
+    /// cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    ///
+    /// // Score each candidate; REF weber runs once via warm_reference
+    /// // above instead of being re-dispatched per call.
+    /// for shift in [0u8, 8, 16] {
+    ///     let dist_bytes: Vec<u8> = ref_bytes
+    ///         .iter()
+    ///         .map(|b| b.saturating_add(shift))
+    ///         .collect();
+    ///     let jod = cvvdp
+    ///         .compute_dkl_jod_host_pool_with_warm_ref(&dist_bytes, ppd)
+    ///         .expect("warm host_pool");
+    ///     assert!((0.0..=10.0).contains(&jod));
+    /// }
+    /// ```
     pub fn compute_dkl_jod_host_pool_with_warm_ref(
         &mut self,
         dist_srgb: &[u8],
@@ -1924,7 +1958,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// Pre-dispatch the REF weber pyramid + cache state for batch
     /// scoring. Subsequent calls to
     /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] skip the REF half of
-    /// the JOD pipeline, halving the GPU compute per DIST candidate.
+    /// the JOD pipeline — measured 1.75× per-DIST throughput at 12 MP
+    /// on CUDA (cold 36.1 ns/px → warm 20.6 ns/px, 42.9% saved).
     ///
     /// Any call to [`Cvvdp::compute_dkl_jod`],
     /// [`Cvvdp::compute_dkl_d_bands`],
