@@ -120,6 +120,18 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (docs)
+
+- `Cvvdp::new` / `Cvvdp::new_with_geometry` docstrings now spell
+  out that **only `params.display` is consumed** — the
+  `csf`/`masking`/`pooling`/`jod` sub-bundles of `CvvdpParams` are
+  silently ignored because the per-stage cvvdp v0.5.4 numbers are
+  inlined as `const`s in the kernels module. `CvvdpParams::PLACEHOLDER`
+  already documented this on the struct side; the constructor docs
+  now point at it. Same shape as tick 243's silent-ignored-`ppd`
+  docs surfacing — protects users who'd otherwise pass a custom
+  `CvvdpParams` expecting the masking/pooling exponents to matter.
+
 #### cvvdp-gpu (benches)
 
 - `benches/score.rs` adds `gpu_compute_dkl_jod_with_warm_ref` to

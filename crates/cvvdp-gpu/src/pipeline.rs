@@ -451,6 +451,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// geometry — equivalent to `new_with_geometry(..., STANDARD_4K)`.
     /// Override via `new_with_geometry` for non-4K displays.
     ///
+    /// **Of the `params` fields, only `display` is consumed** — the
+    /// `csf`/`masking`/`pooling`/`jod` sub-bundles are unused because
+    /// the per-stage cvvdp v0.5.4 numbers are inlined as `const`s in
+    /// the kernels module. Pass [`CvvdpParams::PLACEHOLDER`] unless
+    /// you specifically need to override the display model. See the
+    /// `CvvdpParams::PLACEHOLDER` docstring for the full picture.
+    ///
     /// Returns [`Error::InvalidImageSize`] if either dimension is
     /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid).
     pub fn new(
@@ -471,6 +478,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// Allocate GPU buffers + record a custom viewing geometry. The
     /// geometry is used by `score` to derive PPD (and thus the
     /// per-band spatial frequencies the CSF table is queried with).
+    ///
+    /// Same `params` caveat as [`Cvvdp::new`]: only `params.display`
+    /// is consumed; the `csf`/`masking`/`pooling`/`jod` sub-bundles
+    /// are ignored.
     pub fn new_with_geometry(
         client: ComputeClient<R>,
         width: u32,
