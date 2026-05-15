@@ -168,6 +168,56 @@ pub fn pool_band_kernel(
     partials[partial_idx as usize].fetch_add(contribution);
 }
 
+/// 3-channel fused version of `pool_band_kernel`. Same per-pixel
+/// safe_pow math, but takes 3 input arrays and 3 partial slot
+/// indices, doing 3 atomic-adds per thread (each into a different
+/// slot of `partials`). Eliminates 2/3 of the launch overhead for
+/// the per-band pool dispatch in `compute_dkl_jod`.
+///
+/// Each thread reads `band_diff_{a,rg,vy}[idx]`, computes the
+/// `safe_pow` contribution for each channel, and atomically adds
+/// to `partials[partial_idx_{a,rg,vy}]`. The host-side fold and
+/// `pool_band_finalize` semantics are unchanged.
+///
+/// Pool atomics into distinct slots don't contend across channels,
+/// so the atomic-throughput characteristic is the same as 3 separate
+/// launches — the win is purely launch-overhead reduction (which
+/// matters more at small image sizes per the tick 164 size sweep).
+#[cube(launch)]
+pub fn pool_band_3ch_kernel(
+    band_diff_a: &Array<f32>,
+    band_diff_rg: &Array<f32>,
+    band_diff_vy: &Array<f32>,
+    partials: &mut Array<Atomic<f32>>,
+    beta: f32,
+    partial_idx_a: u32,
+    partial_idx_rg: u32,
+    partial_idx_vy: u32,
+    n: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    let eps = f32::new(1e-5);
+    let eps_pow_beta = f32::powf(eps, beta);
+
+    let v_a = band_diff_a[idx];
+    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let c_a = f32::powf(abs_a + eps, beta) - eps_pow_beta;
+    partials[partial_idx_a as usize].fetch_add(c_a);
+
+    let v_rg = band_diff_rg[idx];
+    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let c_rg = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
+    partials[partial_idx_rg as usize].fetch_add(c_rg);
+
+    let v_vy = band_diff_vy[idx];
+    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let c_vy = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
+    partials[partial_idx_vy as usize].fetch_add(c_vy);
+}
+
 /// Finish the host-side fold for `pool_band_kernel`: given the
 /// atomic partial sum and pixel count for one band, return the
 /// lp_norm_mean(β) value matching `kernels::pool::lp_norm_mean`.

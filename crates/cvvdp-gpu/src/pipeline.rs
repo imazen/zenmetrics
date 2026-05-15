@@ -96,7 +96,7 @@ use crate::kernels::masking::{
     pu_blur_v_3ch_scaled_kernel,
 };
 use crate::kernels::pool::{
-    BETA_SPATIAL, do_pooling_and_jod_still_3ch, pool_band_finalize, pool_band_kernel,
+    BETA_SPATIAL, do_pooling_and_jod_still_3ch, pool_band_3ch_kernel, pool_band_finalize,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
@@ -1702,21 +1702,27 @@ impl<R: Runtime> Cvvdp<R> {
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
-            for c in 0..N_CHANNELS {
-                let partial_idx = (k * N_CHANNELS + c) as u32;
-                let d_handle = self.d_scratch[k].d[c].clone();
-                unsafe {
-                    pool_band_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(d_handle, n_px),
-                        ArrayArg::from_raw_parts(partials_h.clone(), n_levels * N_CHANNELS),
-                        BETA_SPATIAL,
-                        partial_idx,
-                        n_px as u32,
-                    );
-                }
+            let d_a = self.d_scratch[k].d[0].clone();
+            let d_rg = self.d_scratch[k].d[1].clone();
+            let d_vy = self.d_scratch[k].d[2].clone();
+            let partial_idx_a = (k * N_CHANNELS) as u32;
+            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
+            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
+            unsafe {
+                pool_band_3ch_kernel::launch::<R>(
+                    &self.client,
+                    count.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(d_a, n_px),
+                    ArrayArg::from_raw_parts(d_rg, n_px),
+                    ArrayArg::from_raw_parts(d_vy, n_px),
+                    ArrayArg::from_raw_parts(partials_h.clone(), n_levels * N_CHANNELS),
+                    BETA_SPATIAL,
+                    partial_idx_a,
+                    partial_idx_rg,
+                    partial_idx_vy,
+                    n_px as u32,
+                );
             }
         }
 

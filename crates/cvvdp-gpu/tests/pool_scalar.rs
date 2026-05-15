@@ -13,7 +13,9 @@ use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, met2jod};
 mod gpu {
     use cubecl::Runtime;
     use cubecl::prelude::*;
-    use cvvdp_gpu::kernels::pool::{lp_norm_mean, pool_band_finalize, pool_band_kernel};
+    use cvvdp_gpu::kernels::pool::{
+        lp_norm_mean, pool_band_3ch_kernel, pool_band_finalize, pool_band_kernel,
+    };
 
     #[cfg(feature = "cuda")]
     type Backend = cubecl::cuda::CudaRuntime;
@@ -71,6 +73,94 @@ type Backend = cubecl::hip::HipRuntime;
             rel < 5e-4,
             "GPU pool Q = {gpu_q}, CPU lp_norm_mean = {cpu_q}, rel = {rel:.4e}"
         );
+    }
+
+    #[test]
+    fn pool_band_3ch_kernel_matches_per_channel_kernel() {
+        // Each channel's partial must match what the single-channel
+        // kernel would produce for that channel alone. Three distinct
+        // signal shapes catch a stray cross-channel mix.
+        let client = Backend::client(&Default::default());
+
+        let n = 256usize;
+        let band_a: Vec<f32> = (0..n)
+            .map(|i| {
+                let x = i as f32 * 0.0123;
+                x.sin() * 5.0
+            })
+            .collect();
+        let band_rg: Vec<f32> = (0..n)
+            .map(|i| {
+                let x = i as f32 * 0.05;
+                x.cos() * 3.0 - 1.5
+            })
+            .collect();
+        let band_vy: Vec<f32> = (0..n)
+            .map(|i| (i as f32 - 128.0) * 0.08)
+            .collect();
+        let beta = 2.0_f32;
+
+        let band_a_h = client.create_from_slice(f32::as_bytes(&band_a));
+        let band_rg_h = client.create_from_slice(f32::as_bytes(&band_rg));
+        let band_vy_h = client.create_from_slice(f32::as_bytes(&band_vy));
+        // Layout partials so 3ch writes to [3, 5, 7] — non-contiguous
+        // indices catch a stray slot-index bug that would have passed
+        // with contiguous [0, 1, 2].
+        let partials_init = vec![0.0_f32; 10];
+        let partials_h = client.create_from_slice(f32::as_bytes(&partials_init));
+
+        let cube_dim = CubeDim::new_1d(64);
+        let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+        unsafe {
+            pool_band_3ch_kernel::launch::<Backend>(
+                &client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(band_a_h, n),
+                ArrayArg::from_raw_parts(band_rg_h, n),
+                ArrayArg::from_raw_parts(band_vy_h, n),
+                ArrayArg::from_raw_parts(partials_h.clone(), partials_init.len()),
+                beta,
+                3_u32,
+                5_u32,
+                7_u32,
+                n as u32,
+            );
+        }
+
+        let bytes = client.read_one(partials_h).expect("read partials");
+        let partials: &[f32] = f32::from_bytes(&bytes);
+
+        let q_a = pool_band_finalize(partials[3], n, beta);
+        let q_rg = pool_band_finalize(partials[5], n, beta);
+        let q_vy = pool_band_finalize(partials[7], n, beta);
+
+        let cpu_a = lp_norm_mean(&band_a, beta);
+        let cpu_rg = lp_norm_mean(&band_rg, beta);
+        let cpu_vy = lp_norm_mean(&band_vy, beta);
+
+        for (name, gpu, cpu) in [
+            ("a", q_a, cpu_a),
+            ("rg", q_rg, cpu_rg),
+            ("vy", q_vy, cpu_vy),
+        ] {
+            let rel = ((gpu - cpu) / cpu.abs().max(1e-6)).abs();
+            assert!(
+                rel < 5e-4,
+                "channel {name}: GPU Q = {gpu}, CPU lp_norm_mean = {cpu}, rel = {rel:.4e}"
+            );
+        }
+
+        // Sanity: untouched partial slots stayed at zero — proves the
+        // kernel didn't accidentally write outside its target indices.
+        for i in [0, 1, 2, 4, 6, 8, 9] {
+            assert_eq!(
+                partials[i], 0.0,
+                "untouched partial slot {i} got written ({})",
+                partials[i]
+            );
+        }
     }
 }
 
