@@ -238,11 +238,13 @@ fn compute_dkl_jod_on_v1_manifest_corpus() {
 #[test]
 fn compute_dkl_jod_vs_host_scalar_on_corpus() {
     // Direct GPU-vs-HOST comparison on the v1 manifest corpus (real
-    // 256×256 images). shadow_jod pinned the all-host path to
-    // pycvvdp within 0.006 JOD; compute_dkl_jod_on_v1_manifest_corpus
-    // measured GPU-vs-pycvvdp. The remaining unknown was whether
-    // GPU-vs-HOST agrees better than GPU-vs-pycvvdp, or whether the
-    // drift compounds. This test surfaces both.
+    // 256×256 images). shadow_jod pins both paths against pycvvdp at
+    // 0.005 JOD (tick 207); compute_dkl_jod_on_v1_manifest_corpus
+    // measures GPU-vs-pycvvdp directly. This test answers the
+    // remaining question: does GPU-vs-HOST agree better than either
+    // of those, or does the drift compound? (Measured: GPU vs host
+    // ≤ 0.003 JOD — f32 noise from the atomic pool's accumulation
+    // order.)
     use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
     use cvvdp_gpu::params::DisplayModel;
 

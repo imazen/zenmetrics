@@ -31,8 +31,9 @@
 //!    `pool_band_finalize` + `do_pooling_and_jod_still_3ch` +
 //!    `met2jod` piecewise.
 //!
-//! Numerical parity target: matches pycvvdp v0.5.4 within ~0.006 JOD
-//! on the v1 R2 manifest across q1–q90 fixtures. Per-thread
+//! Numerical parity target: matches pycvvdp v0.5.4 within 0.005 JOD
+//! on the v1 R2 manifest across q=1–90 fixtures (measured 0.0000–
+//! 0.0031 since tick 207's tolerance tightening). Per-thread
 //! accumulators stay in f64 where the reference uses f64 reductions;
 //! otherwise f32.
 

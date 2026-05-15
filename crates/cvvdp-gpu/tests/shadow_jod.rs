@@ -3,18 +3,18 @@
 //! still-image cvvdp chain (color → pyramid → CSF → masking →
 //! pooling → JOD) at the standard_4k display config.
 //!
-//! After tick 25 (Weber pyramid + band_mul = 2.0 + baseband bypass)
+//! Post-ticks 204/206 (chroma_shift + 73×91 odd-dim drifts closed),
 //! the host-scalar shadow matches the v1 R2 manifest values
-//! (standard_4k display) within ~0.01 JOD across all 6 q-levels:
+//! (standard_4k display) within 0.005 JOD across all 6 q-levels:
 //!
 //! ```text
 //!   q    pycvvdp manifest   shadow scalar   |diff|
-//!   1    7.6536             7.6476          0.006
-//!   5    8.8889             8.8912          0.002
-//!   20   9.7076             9.7089          0.001
-//!   45   9.8273             9.8296          0.002
-//!   70   9.8915             9.8945          0.003
-//!   90   9.9930             9.9929          0.000
+//!   1    7.6536             7.6538          0.0002
+//!   5    8.8889             8.8903          0.0014
+//!   20   9.7076             9.7091          0.0015
+//!   45   9.8273             9.8295          0.0022
+//!   70   9.8915             9.8946          0.0031
+//!   90   9.9930             9.9929          0.0001
 //! ```
 //!
 //! Test assertions:
@@ -22,7 +22,8 @@
 //! - Each shadow JOD is within 0.005 of the pycvvdp manifest value.
 //!   Was 0.05 before ticks 204/206 closed the chroma_shift and
 //!   73×91 odd-dim drifts; tightened to the standard 0.005
-//!   tolerance once all 6 q levels measured ≤ 0.003 vs manifest.
+//!   tolerance in tick 207 once all 6 q levels measured ≤ 0.0031
+//!   vs manifest.
 //! - JOD is monotonic non-decreasing across q.
 
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
