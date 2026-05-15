@@ -95,3 +95,89 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
         );
     }
 }
+
+/// Same manifest-parity check as `shadow_jod_runs_and_is_monotonic_on_corpus`
+/// but routed through the GPU pipeline via [`Cvvdp::compute_dkl_jod`].
+/// Anchors the full GPU composition path (color → weber → CSF →
+/// masking → spatial pool → host fold) directly against pycvvdp
+/// v0.5.4's published manifest values, complementing the
+/// `compute_dkl_jod_matches_host_scalar` test (which only pins GPU
+/// vs host scalar at f32 precision, not vs the manifest).
+///
+/// Wider tolerance (0.1 vs 0.05) than the host-scalar shadow test
+/// because the GPU path's q=1 case shows ~0.4 JOD cumulative-f32
+/// drift in the steep slope region of `met2jod` (documented in
+/// the CHANGELOG investigation notes). The drift is bounded and
+/// stable; if it grows, this test catches it.
+#[cfg(feature = "cuda")]
+#[test]
+fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
+    use cubecl::Runtime;
+    use cubecl::cuda::CudaRuntime;
+    use cvvdp_gpu::Cvvdp;
+    use cvvdp_gpu::params::CvvdpParams;
+
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+
+    let cases: &[(u32, f32)] = &[
+        (1, 7.6536),
+        (5, 8.8889),
+        (20, 9.7076),
+        (45, 9.8273),
+        (70, 9.8915),
+        (90, 9.9930),
+    ];
+
+    let client = CudaRuntime::client(&Default::default());
+    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on cuda");
+
+    // Per-q tolerance reflecting the documented cumulative-f32 drift
+    // through met2jod's steep slope region — biggest at low q where
+    // small Q changes amplify into large JOD changes:
+    //   q=1  : ~0.40 JOD observed (CHANGELOG notes 0.40)
+    //   q=5  : ~0.06 JOD observed
+    //   q≥20 : ≤ 0.001 JOD per the CHANGELOG drift survey
+    let tol_for = |q: u32| -> f32 {
+        match q {
+            1 => 0.5,
+            5 => 0.1,
+            _ => 0.05,
+        }
+    };
+    let mut jods = Vec::with_capacity(cases.len());
+    for &(q, expected) in cases {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod = cvvdp
+            .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+            .unwrap_or_else(|e| panic!("compute_dkl_jod failed at q={q}: {e:?}"));
+        let diff = (jod - expected).abs();
+        let tol = tol_for(q);
+        eprintln!(
+            "q={q:>2}: GPU JOD = {jod:.4} (pycvvdp {expected:.4}, |diff| {diff:.4}, tol {tol:.2})"
+        );
+        assert!(jod.is_finite(), "q={q}: JOD = {jod} (not finite)");
+        assert!(
+            (0.0..=10.0).contains(&jod),
+            "q={q}: JOD = {jod} out of [0, 10]"
+        );
+        assert!(
+            diff < tol,
+            "q={q}: GPU JOD {jod:.4} diverges from pycvvdp manifest {expected:.4} by {diff:.4} > {tol:.2}"
+        );
+        jods.push((q, jod));
+    }
+
+    for win in jods.windows(2) {
+        let (q_lo, j_lo) = win[0];
+        let (q_hi, j_hi) = win[1];
+        assert!(
+            j_hi + 1e-3 >= j_lo,
+            "non-monotone: q={q_lo} JOD={j_lo:.4} > q={q_hi} JOD={j_hi:.4}"
+        );
+    }
+}
