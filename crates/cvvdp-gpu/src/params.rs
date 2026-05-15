@@ -158,10 +158,18 @@ pub struct CvvdpParams {
 }
 
 impl CvvdpParams {
-    /// Placeholder defaults. Replace with values loaded from the
-    /// vendored cvvdp JSON once the reference is pinned. Tests that
-    /// require parity must not use these defaults — they should
-    /// construct `CvvdpParams` from the vendored numbers explicitly.
+    /// Default parameter bundle. The `display` field is read by the
+    /// host scalar (`predict_jod_still_3ch` uses
+    /// `display.y_peak/y_black/y_refl`) and the GPU color kernel; the
+    /// `csf`/`masking`/`pooling`/`jod` sub-bundles are currently
+    /// **unused** because the per-stage cvvdp v0.5.4 numbers are
+    /// inlined as `const`s in `kernels::pool` (BETA_*),
+    /// `kernels::masking` (MASK_P / MASK_Q / MASK_C / XCM_3X3), and
+    /// `kernels::pool::met2jod` (JOD_A / JOD_EXP). The fields exist
+    /// as scaffolding for the planned "load parameters from the
+    /// vendored cvvdp JSON" path which hasn't landed; the placeholder
+    /// numbers below are approximate but won't affect any test
+    /// because no code path reads them.
     pub const PLACEHOLDER: Self = Self {
         display: DisplayModel::STANDARD_4K,
         csf: CsfParams {
