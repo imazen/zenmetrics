@@ -131,3 +131,52 @@ fn compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend() {
         "cpu-backend host_pool diverges from host_scalar by {diff:.6}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
+    // Tick 223: direct cpu-backend vs pycvvdp parity on the 73×91
+    // odd-dim fixture. synth_pair() above uses the exact
+    // synth_pair_odd_dim construction from
+    // scripts/cvvdp_goldens/bench_12mp_cuda.py:152, so the
+    // pycvvdp golden 9.390370 applies at 73×91.
+    //
+    // Previously the cpu-backend was only covered transitively:
+    //   - host_pool == host_scalar at f32 noise (3 tests above)
+    //   - host_scalar == pycvvdp at 0.005 (shadow_jod_runs_and_is_monotonic_on_corpus,
+    //     pipeline_color tests)
+    // This pins the cpu-backend JOD path directly against the
+    // canonical pycvvdp reference. Also exercises tick 206's
+    // gausspyr_reduce parity-bug replication — the 73×91 fixture
+    // hits the mixed-parity (6×5 → 3×3, 46×37 → 23×19) reduce
+    // levels where the bug-compat fix matters.
+    //
+    // 73×91 = 6643 px, ~6.5× the existing 32×32 cpu smoke tests;
+    // expected runtime ~5-10s on cubecl-cpu.
+    const PYCVVDP_GOLDEN: f32 = 9.390370;
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, dist_b) = synth_pair(w, h);
+    let jod = cvvdp
+        .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool on cpu");
+    let diff = (jod - PYCVVDP_GOLDEN).abs();
+    eprintln!(
+        "cpu-backend 73×91: jod = {jod:.6}, pycvvdp golden = {PYCVVDP_GOLDEN:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "cpu-backend JOD {jod:.6} drifts from pycvvdp golden {PYCVVDP_GOLDEN:.6} by {diff:.6} > {TOLERANCE:.6}"
+    );
+}
