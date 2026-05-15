@@ -194,6 +194,28 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Six `u32 as u64` lossless widening casts switched to
+  `u64::from(...)`. Sites:
+  - `tests/common/mod.rs:409`
+    (`v1_corpus_jod_golden` parameter comparison
+    `Some(q as u64)`).
+  - `examples/time_12mp.rs:132` per-pixel cost math
+    (`(W as u64) * (H as u64)` for total-pixels divisor).
+  - `examples/time_size_sweep.rs:104` per-bucket pixel
+    count.
+  - `benches/score.rs` twice — both `Throughput::Elements`
+    calls in the GPU-JOD bench setup.
+  Clippy `-W clippy::pedantic`'s
+  `cast_lossless` flagged them with `an as cast can become
+  silently lossy if the types change in the future` — the
+  `u64::From<u32>` impl encodes the widening intent
+  explicitly and would surface a hard compile error if a
+  caller swapped `u32` for a wider type. Throughput-math and
+  the corpus-q comparison evaluate to the same `u64`.
+  `pipeline_score::cvvdp_score_matches_v1_manifest` (the
+  primary consumer of `v1_corpus_qs` → `v1_corpus_jod_golden`)
+  still passes. Tick 302.
+
 - Seven `u8 as i16` widening casts in the
   `chroma_shift` synth-pair pattern
   (`(byte as i16 + 16).clamp(0, 255) as u8`) switched to

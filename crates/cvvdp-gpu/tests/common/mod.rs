@@ -406,7 +406,7 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
         .and_then(|p| p.as_object())
         .expect("v1_corpus_jods.json missing .pairs");
     for (_name, fx) in pairs {
-        if fx.get("q").and_then(serde_json::Value::as_u64) == Some(q as u64) {
+        if fx.get("q").and_then(serde_json::Value::as_u64) == Some(u64::from(q)) {
             return fx
                 .get("jod")
                 .and_then(serde_json::Value::as_f64)

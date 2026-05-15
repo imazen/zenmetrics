@@ -129,7 +129,7 @@ fn main() {
     d_bands_times.sort();
     jod_times.sort();
     warm_ref_times.sort();
-    let total_pixels = (W as u64) * (H as u64);
+    let total_pixels = u64::from(W) * u64::from(H);
     let mid = ITERS / 2;
     println!("\n12 MP ({W}×{H}) per-phase medians:");
     let w = weber_times[mid];

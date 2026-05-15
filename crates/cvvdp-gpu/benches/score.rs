@@ -56,7 +56,7 @@ fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host
 
     let group_name = format!("cvvdp_jod_{label}");
     let mut g = c.benchmark_group(&group_name);
-    g.throughput(Throughput::Elements((w * h) as u64));
+    g.throughput(Throughput::Elements(u64::from(w) * u64::from(h)));
 
     let client = Backend::client(&Default::default());
     let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
@@ -126,7 +126,7 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
 
     let group_name = format!("cvvdp_jod_256x256_q{q}");
     let mut g = c.benchmark_group(&group_name);
-    g.throughput(Throughput::Elements((W_256 * H_256) as u64));
+    g.throughput(Throughput::Elements(u64::from(W_256) * u64::from(H_256)));
 
     // All-host scalar path. Cvvdp::score used to route through this
     // before tick 213 switched to the GPU `compute_dkl_jod`; the

@@ -101,7 +101,7 @@ fn measure_one(w: u32, h: u32, label: &'static str) -> Row {
 
     Row {
         label,
-        pixels: (w as u64) * (h as u64),
+        pixels: u64::from(w) * u64::from(h),
         weber_med: median(&mut weber_times),
         d_bands_med: median(&mut d_bands_times),
         jod_med: median(&mut jod_times),
