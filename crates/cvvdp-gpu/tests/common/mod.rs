@@ -154,6 +154,48 @@ pub struct DklSentinel {
     pub dist_dkl: [f32; 3],
 }
 
+/// Per-band per-channel pycvvdp Weber-contrast values at chroma_shift
+/// sentinels. Used to localize where the chroma drift sits after the
+/// DKL stage matches pycvvdp bit-identical (tick 196).
+pub struct WeberSentinel {
+    pub y0: u32,
+    pub x0: u32,
+    pub yk: u32,
+    pub xk: u32,
+    pub test_a: f32,
+    pub ref_a: f32,
+    pub test_rg: f32,
+    pub ref_rg: f32,
+    pub test_vy: f32,
+    pub ref_vy: f32,
+}
+
+/// Returns (band_index → list of sentinels) for pycvvdp's Weber
+/// pyramid at chroma_shift. Embedded via include_str! at compile time.
+pub fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_weber_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_weber_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    samples
+        .iter()
+        .map(|s| WeberSentinel {
+            y0: s["y0"].as_u64().unwrap() as u32,
+            x0: s["x0"].as_u64().unwrap() as u32,
+            yk: s["yk"].as_u64().unwrap() as u32,
+            xk: s["xk"].as_u64().unwrap() as u32,
+            test_a: s["test_A"].as_f64().unwrap() as f32,
+            ref_a: s["ref_A"].as_f64().unwrap() as f32,
+            test_rg: s["test_RG"].as_f64().unwrap() as f32,
+            ref_rg: s["ref_RG"].as_f64().unwrap() as f32,
+            test_vy: s["test_VY"].as_f64().unwrap() as f32,
+            ref_vy: s["ref_VY"].as_f64().unwrap() as f32,
+        })
+        .collect()
+}
+
 pub fn pycvvdp_dkl_chroma_shift_sentinels() -> Vec<DklSentinel> {
     const MANIFEST_JSON: &str =
         include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_dkl_chroma_shift.json");

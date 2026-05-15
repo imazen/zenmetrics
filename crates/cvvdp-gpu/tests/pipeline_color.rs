@@ -1074,6 +1074,94 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
     );
 }
 
+#[test]
+fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_band0() {
+    // Tick 197 stage-2 parity probe (after tick 196's DKL fix).
+    // Compares our compute_dkl_weber_pyramid output at level 0
+    // (256×256) against pycvvdp's interleaved weber_contrast_pyr
+    // output (test/ref channels) on the chroma_shift fixture.
+    //
+    // Band 0 only this tick — if this passes tight, the weber
+    // stage at the finest level is fine and the drift is at
+    // deeper levels OR downstream (CSF / masking / pool). If it
+    // fails, weber level 0 is the source.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Synth chroma_shift bytes.
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r;
+            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
+            dist_srgb[i + 2] = b;
+        }
+    }
+
+    // Run weber pyramid for both sides.
+    let (ref_bands, _ref_log) = cvvdp
+        .compute_dkl_weber_pyramid(&ref_srgb)
+        .expect("weber ref");
+    let (dist_bands, _dist_log) = cvvdp
+        .compute_dkl_weber_pyramid(&dist_srgb)
+        .expect("weber dist");
+
+    // Band 0 is the highest-resolution band — 256×256.
+    let sentinels = common::pycvvdp_weber_chroma_shift_band(0);
+    let mut max_diff = 0.0_f32;
+    for s in &sentinels {
+        let idx = (s.yk as usize) * wu + (s.xk as usize);
+        // ref_bands[k][c] is a Vec<f32>. Indexing: bands[0] is level 0.
+        let our_test_a = dist_bands[0][0][idx];
+        let our_ref_a = ref_bands[0][0][idx];
+        let our_test_rg = dist_bands[0][1][idx];
+        let our_ref_rg = ref_bands[0][1][idx];
+        let our_test_vy = dist_bands[0][2][idx];
+        let our_ref_vy = ref_bands[0][2][idx];
+
+        for (label, ours, py) in [
+            ("test_A", our_test_a, s.test_a),
+            ("ref_A", our_ref_a, s.ref_a),
+            ("test_RG", our_test_rg, s.test_rg),
+            ("ref_RG", our_ref_rg, s.ref_rg),
+            ("test_VY", our_test_vy, s.test_vy),
+            ("ref_VY", our_ref_vy, s.ref_vy),
+        ] {
+            let d = (ours - py).abs();
+            if d > max_diff {
+                max_diff = d;
+            }
+            if d > 1e-3 {
+                eprintln!(
+                    "  ({:>3},{:>3}) {}: ours={:.6} py={:.6} diff={:.4e}",
+                    s.y0, s.x0, label, ours, py, d
+                );
+            }
+        }
+    }
+    eprintln!("Band 0 max weber diff over 10 sentinels: {max_diff:.4e}");
+    // Tight tolerance — Weber values are O(0.1) magnitude; 1e-3 is
+    // ~1% relative. Anything larger localizes the chroma drift to
+    // this stage.
+    assert!(
+        max_diff < 5e-3,
+        "Weber band 0 diverges from pycvvdp at chroma_shift by {max_diff:.4e}"
+    );
+}
+
 // NOTE (tick 191, updated tick 196): the
 // compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift test
 // still fails (0.1174 JOD drift vs golden 9.6649). Tick 196
