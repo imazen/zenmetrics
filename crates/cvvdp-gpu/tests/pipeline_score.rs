@@ -250,6 +250,18 @@ fn error_display_messages_are_actionable() {
         iis.contains("small") || iis.contains("pyramid"),
         "InvalidImageSize Display must hint at the too-small / pyramid cause; got: {iis:?}"
     );
+    // Tick 316: pin the dual-purpose hint too. InvalidImageSize
+    // is also returned when a cubecl GPU readback / dispatch
+    // fails (the doc on the variant spells this out — the two
+    // get the same variant because cubecl's read errors aren't
+    // easily separable yet). Pre-tick-316 the Display message
+    // only mentioned image-size, so a user hitting a GPU error
+    // would investigate image dimensions instead of the actual
+    // backend failure.
+    assert!(
+        iis.contains("GPU") || iis.contains("readback") || iis.contains("dispatch"),
+        "InvalidImageSize Display must also hint at the GPU-failure cause; got: {iis:?}"
+    );
 }
 
 #[test]

@@ -209,7 +209,10 @@ impl std::fmt::Display for Error {
                 f,
                 "no warm GPU reference; call warm_reference first (or warm state was invalidated by an intervening REF dispatch)"
             ),
-            Error::InvalidImageSize => write!(f, "image is too small for the configured pyramid"),
+            Error::InvalidImageSize => write!(
+                f,
+                "image too small for the configured pyramid, or GPU readback/dispatch failed (see the InvalidImageSize variant docs — cubecl's read errors aren't separable yet so both surface as this variant)"
+            ),
         }
     }
 }

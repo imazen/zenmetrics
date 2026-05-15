@@ -154,6 +154,23 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `Error::InvalidImageSize` Display message was misleading.
+  The variant is documented as dual-purpose (image too small
+  for the configured pyramid OR GPU readback/dispatch failed,
+  because cubecl's read errors aren't separable yet) but
+  the Display impl only mentioned the image-size case:
+  "image is too small for the configured pyramid". A user
+  hitting a GPU readback failure would see this and
+  investigate image dimensions instead of the actual backend
+  failure. Updated to: "image too small for the configured
+  pyramid, or GPU readback/dispatch failed (see the
+  InvalidImageSize variant docs — cubecl's read errors aren't
+  separable yet so both surface as this variant)". Also
+  extended `error_display_messages_are_actionable` to pin
+  the new dual-purpose hint by asserting the message contains
+  "GPU"/"readback"/"dispatch" in addition to the existing
+  "small"/"pyramid" check. Test passes. Tick 316.
+
 - `gauss_chain_helpers_do_not_invalidate_warm_state` regression
   test extended from 2 → 3 non-invalidators. Adds
   `compute_dkl_jod_host_pool_with_warm_ref` — pinning the
