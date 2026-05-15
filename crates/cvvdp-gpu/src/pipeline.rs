@@ -1102,15 +1102,26 @@ impl<R: Runtime> Cvvdp<R> {
     /// Moving the masking step to a GPU composition is the next
     /// chunk after this — the GPU masking kernels already exist
     /// and are parity-tested in `tests/masking_kernel.rs`.
-    pub fn compute_dkl_d_bands(
+    /// Run the full per-band dispatch (color → weber pyramid → CSF →
+    /// masking) for a (ref, dist) sRGB pair and leave the resulting
+    /// per-band D planes in `self.d_scratch[k].d[c]` (every level
+    /// including the baseband — tick 94 made the baseband write
+    /// through `diff_abs_3ch_kernel` into the same slot).
+    ///
+    /// No GPU→host readback inside this helper. Callers that want
+    /// the host-side `Vec<[Vec<f32>; 3]>` snapshot use
+    /// [`Cvvdp::compute_dkl_d_bands`]; callers that pool on GPU
+    /// (`Cvvdp::compute_dkl_jod`) read straight from the resident
+    /// handles.
+    fn _dispatch_d_bands_into_scratch(
         &mut self,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
         ppd: f32,
-    ) -> Result<Vec<[Vec<f32>; 3]>> {
+    ) -> Result<()> {
         // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
-        // see where compute_dkl_d_bands spends its time without
-        // committing instrumentation. Zero cost when unset.
+        // see where the dispatch spends its time without committing
+        // instrumentation. Zero cost when unset.
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
@@ -1133,7 +1144,6 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_dim = CubeDim::new_1d(64);
         let _csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
-        let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
             let is_first = k == 0;
@@ -1271,16 +1281,7 @@ impl<R: Runtime> Cvvdp<R> {
                         n_px as u32,
                     );
                 }
-                let mut planes: [Vec<f32>; 3] =
-                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-                for c in 0..N_CHANNELS {
-                    let bytes = self
-                        .client
-                        .read_one(d_h[c].clone())
-                        .map_err(|_| Error::InvalidImageSize)?;
-                    planes[c] = f32::from_bytes(&bytes).to_vec();
-                }
-                d_bands.push(planes);
+                let _ = d_h; // baseband result lives in d_scratch[k].d[c]
             } else {
                 // GPU masking. D output + masking-chain scratch all
                 // come from the pre-allocated d_scratch[k] (no
@@ -1394,20 +1395,11 @@ impl<R: Runtime> Cvvdp<R> {
                         );
                     }
                 }
-                let mut planes: [Vec<f32>; 3] =
-                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-                for c in 0..N_CHANNELS {
-                    let bytes = self
-                        .client
-                        .read_one(d_h[c].clone())
-                        .map_err(|_| Error::InvalidImageSize)?;
-                    planes[c] = f32::from_bytes(&bytes).to_vec();
-                }
-                d_bands.push(planes);
+                let _ = d_h; // non-baseband result lives in d_scratch[k].d[c]
             }
             if trace {
                 eprintln!(
-                    "[trace] L{k} mask+readback:         {:?}   (band total: {:?})",
+                    "[trace] L{k} mask:                  {:?}   (band total: {:?})",
                     t_mask.elapsed(),
                     t_band.elapsed()
                 );
@@ -1420,6 +1412,50 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
+        Ok(())
+    }
+
+    /// Host-side readback wrapper around the GPU D-bands dispatch.
+    /// Calls [`Cvvdp::_dispatch_d_bands_into_scratch`] then copies
+    /// each band's D plane out of `self.d_scratch[k].d[c]` into a
+    /// `Vec<[Vec<f32>; 3]>`. Use this when you need the raw band
+    /// values (parity checks, debugging, downstream host scalar
+    /// processing); use [`Cvvdp::compute_dkl_jod`] directly when you
+    /// want the JOD scalar — that path pools on GPU and avoids the
+    /// full ~432 MB per-band readback at 12 MP.
+    pub fn compute_dkl_d_bands(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        ppd: f32,
+    ) -> Result<Vec<[Vec<f32>; 3]>> {
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
+
+        let n_levels = self.n_levels as usize;
+        let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let bw = if k == 0 {
+                self.width as usize
+            } else {
+                (self.width as usize) >> k
+            };
+            let bh = if k == 0 {
+                self.height as usize
+            } else {
+                (self.height as usize) >> k
+            };
+            let n_px = bw * bh;
+            let mut planes: [Vec<f32>; 3] =
+                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            for c in 0..N_CHANNELS {
+                let bytes = self
+                    .client
+                    .read_one(self.d_scratch[k].d[c].clone())
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            d_bands.push(planes);
+        }
         Ok(d_bands)
     }
 
@@ -1454,18 +1490,12 @@ impl<R: Runtime> Cvvdp<R> {
         // baseband path also writes through diff_abs_3ch into
         // d_scratch.d, so every level's D plane lives in the same slot.
         //
-        // Tick 95: rather than reducing the host-readback `d_bands`
-        // Vec with `lp_norm_mean`, dispatch `pool_band_kernel` on the
-        // still-GPU-resident D handles directly. The partials buffer
-        // is `n_levels × N_CHANNELS` floats — read back once at the
-        // end, then `pool_band_finalize` per (band, channel) produces
-        // the same `q_per_ch` values as the host scalar path.
-        //
-        // The readback cost is unchanged this tick because
-        // compute_dkl_d_bands still does its own per-band Vec readback;
-        // dropping that is the next chunk. Correctness-first: this
-        // commit just plumbs the GPU pool path end-to-end.
-        let _ = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
+        // Tick 95 plumbed `pool_band_kernel` into this function; tick
+        // 96 dropped the per-band host readback by routing through
+        // the new `_dispatch_d_bands_into_scratch` helper. The full
+        // ~432 MB per-band readback at 12 MP is gone — only the
+        // `n_levels * N_CHANNELS` partials Vec comes back to host.
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
         let n_levels = self.n_levels as usize;
 
         let partials_init = vec![0.0_f32; n_levels * N_CHANNELS];
