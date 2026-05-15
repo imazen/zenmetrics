@@ -36,8 +36,15 @@
 #
 #   echo '<one chunk JSON line>' | \
 #       cvvdp_backfill_chunk_worker.sh \
-#           --zen-metrics-image ghcr.io/imazen/zen-metrics-sweep:0.6.4-aba984c \
+#           --zen-metrics-image ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8 \
 #           --pycvvdp-image ghcr.io/imazen/pycvvdp-scorer:0.5.4
+#
+# Image-tag note: the 0.6.4-cvvdp-<short> tag was bumped after the
+# tick-340 decision-D rebuild which baked gpu/gpu-cvvdp/gpu-cpu
+# features into the Dockerfile. Earlier 0.6.4-aba984c images
+# lacked the gpu-cvvdp feature and the cvvdp metric was disabled
+# at runtime — do not use them for this pipeline. The launcher's
+# ZEN_METRICS_IMAGE default tracks the current build.
 #
 # OR:
 #
