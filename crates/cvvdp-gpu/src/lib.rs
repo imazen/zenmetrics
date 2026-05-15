@@ -41,8 +41,8 @@
 //!    larger bands run separable 13-tap Gaussian blur first.
 //! 6. **Pooling**: 3-stage Minkowski fold per `(band, channel)` →
 //!    per-channel → overall `D`.
-//! 7. **JOD**: piecewise [`pool::met2jod`] — two `jod_a/b/c` regimes
-//!    joined continuously at `Q = 0.1`.
+//! 7. **JOD**: piecewise [`kernels::pool::met2jod`] — two
+//!    `jod_a/b/c` regimes joined continuously at `Q = 0.1`.
 //!
 //! ## Status
 //!

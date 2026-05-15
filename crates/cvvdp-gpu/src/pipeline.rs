@@ -1417,13 +1417,13 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Host-side readback wrapper around the GPU D-bands dispatch.
-    /// Calls [`Cvvdp::_dispatch_d_bands_into_scratch`] then copies
-    /// each band's D plane out of `self.d_scratch[k].d[c]` into a
-    /// `Vec<[Vec<f32>; 3]>`. Use this when you need the raw band
-    /// values (parity checks, debugging, downstream host scalar
-    /// processing); use [`Cvvdp::compute_dkl_jod`] directly when you
-    /// want the JOD scalar — that path pools on GPU and avoids the
-    /// full ~432 MB per-band readback at 12 MP.
+    /// Runs the full GPU dispatch (color → weber → CSF → masking)
+    /// into `self.d_scratch[k].d[c]` then copies each band's D plane
+    /// out into a `Vec<[Vec<f32>; 3]>`. Use this when you need the
+    /// raw band values (parity checks, debugging, downstream host
+    /// scalar processing); use [`Cvvdp::compute_dkl_jod`] directly
+    /// when you want the JOD scalar — that path pools on GPU and
+    /// avoids the full ~432 MB per-band readback at 12 MP.
     pub fn compute_dkl_d_bands(
         &mut self,
         ref_srgb: &[u8],
@@ -1588,8 +1588,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// `l_bkg` is the scalar background-luminance approximation used
     /// for every pyramid band — typically a per-image mean or
     /// display-peak / 2. The per-pixel L_bkg form (cvvdp's exact
-    /// behaviour) lands once we wire the achromatic gauss[1] read
-    /// path into the kernel.
+    /// behaviour) lands once we wire the achromatic `gauss\[1\]`
+    /// read path into the kernel.
     ///
     /// Returns the same shape as `compute_dkl_laplacian_pyramid`:
     /// `levels[k] = [a, rg, vy]` planar f32 vecs, with each pixel

@@ -129,7 +129,7 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 
 /// Apply the σ=3 separable Gaussian blur from cvvdp's
 /// `phase_uncertainty`. Allocates the intermediate buffer; not for
-/// hot paths. Returns a `w × h` Vec<f32>. Reflect padding at the
+/// hot paths. Returns a `w × h` `Vec<f32>`. Reflect padding at the
 /// boundary, matching torchvision.
 pub fn gaussian_blur_sigma3(src: &[f32], w: usize, h: usize) -> Vec<f32> {
     debug_assert_eq!(src.len(), w * h);
@@ -873,8 +873,8 @@ pub fn mult_mutual_3ch_no_blur_kernel(
 /// safe_pow(|M_mm|, q[c])`, cross-channel pool, masked diff with
 /// `safe_pow(|T_p-R_p|, p) / (1+M)`, soft clamp).
 ///
-/// 9 input arrays (T_p[3], R_p[3], M_mm_blurred_scaled[3]) and 3
-/// output arrays (D[3]). Same constants baked.
+/// 9 input arrays (`T_p\[3\]`, `R_p\[3\]`, `M_mm_blurred_scaled\[3\]`)
+/// and 3 output arrays (`D\[3\]`). Same constants baked.
 #[cube(launch)]
 pub fn mult_mutual_3ch_with_blurred_kernel(
     t_p_a: &Array<f32>,

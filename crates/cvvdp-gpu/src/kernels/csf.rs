@@ -397,8 +397,8 @@ pub fn csf_apply_6ch_kernel(
 /// Per-pixel L_bkg variation is NOT modeled here; this kernel
 /// applies the same scalar weight to every pixel of the band, which
 /// matches the "global L_bkg approximation" code path. The full
-/// per-pixel form (using gauss_a[1] as L_bkg per pixel) is the next
-/// chunk after this.
+/// per-pixel form (using `gauss_a\[1\]` as L_bkg per pixel) is the
+/// next chunk after this.
 #[cube(launch)]
 pub fn weight_band_kernel(band: &mut Array<f32>, weights: &Array<f32>, weight_idx: u32, n: u32) {
     let idx = ABSOLUTE_POS;
