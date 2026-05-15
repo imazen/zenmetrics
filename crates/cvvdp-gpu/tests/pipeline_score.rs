@@ -1108,3 +1108,58 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
         "D max band-normalized rel vs host on corpus 256×256 = {overall_max_band_rel:.4e} (was 1.3e-3 at tick 186)"
     );
 }
+
+#[test]
+fn perf_mode_fast_matches_strict_today() {
+    // Tick 322: pin the documented invariant that PerfMode::Fast is
+    // currently a no-op — it produces bit-identical output to Strict
+    // because no stage-level fast-path has landed yet. The PerfMode
+    // enum exists as the opt-in entry point for future relaxations;
+    // this test catches an accidental "premature optimization" that
+    // wires a Fast-mode fast path without documenting its drift
+    // budget and without surfacing the parity loss to callers who
+    // didn't realize PerfMode existed.
+    //
+    // When a real Fast-mode optimization lands, this test should be
+    // RELAXED (not deleted) to the documented per-stage drift budget
+    // — e.g. `<= 0.005 JOD` for nearest-neighbor CSF, `<= 0.01 JOD`
+    // for f16 contrast pyramid storage, etc. The CHANGELOG entry
+    // for the optimization documents the new tolerance.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+
+    let n = (w * h * 3) as usize;
+    let ref_bytes: Vec<u8> = (0..n).map(|i| ((i * 53 + 17) % 251) as u8).collect();
+    let dist_bytes: Vec<u8> = (0..n).map(|i| ((i * 71 + 31) % 251) as u8).collect();
+
+    let mut strict = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new (strict)");
+    let strict_jod = strict
+        .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+        .expect("compute_dkl_jod (strict)");
+
+    let mut fast = Cvvdp::<Backend>::new(
+        client,
+        w,
+        h,
+        CvvdpParams {
+            perf_mode: cvvdp_gpu::PerfMode::Fast,
+            ..CvvdpParams::PLACEHOLDER
+        },
+    )
+    .expect("Cvvdp::new (fast)");
+    let fast_jod = fast
+        .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+        .expect("compute_dkl_jod (fast)");
+
+    // Today: Fast is a no-op. Bit-pattern equality. Loosen this when
+    // the first Fast-mode optimization lands.
+    assert_eq!(
+        strict_jod.to_bits(),
+        fast_jod.to_bits(),
+        "PerfMode::Fast must produce bit-identical output to PerfMode::Strict \
+         until a Fast-mode optimization lands (strict={strict_jod}, fast={fast_jod})"
+    );
+}

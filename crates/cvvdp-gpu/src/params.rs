@@ -192,6 +192,59 @@ pub struct JodParams {
     pub jod_c: f32,
 }
 
+/// Parity-vs-perf trade-off knob for the cvvdp pipeline.
+///
+/// Most callers want [`PerfMode::Strict`] — that's what every parity
+/// test and the v1 R2 manifest are calibrated against. [`PerfMode::Fast`]
+/// is the opt-in entry point for future stage-level relaxations that
+/// trade measurable per-call cost for a bounded JOD drift versus the
+/// strict path (the canonical pycvvdp v0.5.4 reference).
+///
+/// The variant exists as the public API surface even when no
+/// optimization has landed yet — better to design the opt-in once
+/// than to add it later and force a breaking change. As individual
+/// stages add Fast-mode fast paths they document their drift budget
+/// (e.g. nearest-neighbor CSF LUT lookup vs. bilinear) and gate on
+/// `self.perf_mode == PerfMode::Fast`. The running list of Fast-mode
+/// optimizations lives in `CHANGELOG.md`.
+///
+/// # Examples
+///
+/// Default (Strict) builds match all existing parity tests:
+///
+/// ```
+/// use cvvdp_gpu::params::{CvvdpParams, PerfMode};
+/// let params = CvvdpParams::PLACEHOLDER;
+/// assert_eq!(params.perf_mode, PerfMode::Strict);
+/// ```
+///
+/// Opt into Fast mode by overriding the field:
+///
+/// ```
+/// use cvvdp_gpu::params::{CvvdpParams, PerfMode};
+/// let params = CvvdpParams {
+///     perf_mode: PerfMode::Fast,
+///     ..CvvdpParams::PLACEHOLDER
+/// };
+/// assert_eq!(params.perf_mode, PerfMode::Fast);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PerfMode {
+    /// Match pycvvdp v0.5.4 bit-for-bit within f32 noise. Every
+    /// parity test in `tests/` is calibrated against this mode.
+    /// Pyramid downscale/upscale, CSF apply, masking, and pool all
+    /// run the canonical (slower, higher-precision) path.
+    #[default]
+    Strict,
+    /// Opt in to stage-level relaxations that trade measurable
+    /// per-call cost for a bounded JOD drift vs. Strict. Currently
+    /// a no-op — no Fast-mode fast paths have landed yet. The
+    /// variant exists so callers can wire the opt-in once; future
+    /// per-stage optimizations gate on `perf_mode == Fast` and
+    /// document their individual drift budget in `CHANGELOG.md`.
+    Fast,
+}
+
 /// Top-level cvvdp parameter bundle.
 #[derive(Debug, Clone, Copy)]
 pub struct CvvdpParams {
@@ -200,6 +253,10 @@ pub struct CvvdpParams {
     pub masking: MaskingParams,
     pub pooling: PoolingParams,
     pub jod: JodParams,
+    /// Parity-vs-perf trade-off. Defaults to [`PerfMode::Strict`]
+    /// via [`CvvdpParams::PLACEHOLDER`]. See [`PerfMode`] for the
+    /// opt-in mechanics.
+    pub perf_mode: PerfMode,
 }
 
 impl CvvdpParams {
@@ -240,5 +297,6 @@ impl CvvdpParams {
             jod_b: 1.0,
             jod_c: 0.30,
         },
+        perf_mode: PerfMode::Strict,
     };
 }

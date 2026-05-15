@@ -128,7 +128,7 @@ pub mod kernels;
 pub mod params;
 pub mod pipeline;
 
-pub use params::CvvdpParams;
+pub use params::{CvvdpParams, PerfMode};
 pub use pipeline::Cvvdp;
 
 /// Number of color channels in DKL opponent space (achromatic +

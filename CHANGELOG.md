@@ -56,6 +56,32 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### cvvdp-gpu (api)
+
+- **`PerfMode` enum** opens the parity-vs-perf opt-in surface
+  on the public API. Two variants:
+  - `PerfMode::Strict` (default) — matches pycvvdp v0.5.4
+    bit-for-bit within f32 noise, exactly what every parity test
+    in `tests/` is calibrated against.
+  - `PerfMode::Fast` — opt-in entry point for future stage-level
+    relaxations that trade measurable per-call cost for a
+    bounded JOD drift vs. Strict. Currently a no-op (no
+    Fast-mode fast paths have landed yet); the variant exists so
+    callers can wire the opt-in once and individual stages can
+    later gate on `params.perf_mode == Fast` without forcing a
+    breaking change.
+  Plumbed through `CvvdpParams::perf_mode` (new field, defaults
+  to `Strict` in `CvvdpParams::PLACEHOLDER`) → stored on
+  `Cvvdp` via the existing `params` field. Re-exported from
+  `cvvdp_gpu` for convenience (`use cvvdp_gpu::PerfMode;`).
+  Regression test `perf_mode_fast_matches_strict_today` (in
+  `tests/pipeline_score.rs`) pins the bit-pattern-equality
+  invariant; when a real Fast-mode optimization lands the test
+  should be RELAXED (not deleted) to the documented per-stage
+  drift budget for that optimization. `doctest` count grows
+  from 6 → 8 (two new examples in the `PerfMode` doc comment).
+  Tick 322.
+
 #### cvvdp-gpu
 
 - **`Cvvdp::compute_dkl_jod_host_pool`** — CPU-backend-compatible

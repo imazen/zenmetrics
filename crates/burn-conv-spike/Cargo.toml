@@ -1,0 +1,33 @@
+[package]
+name = "burn-conv-spike"
+version = "0.0.1"
+edition = "2024"
+description = "Perf spike: cvvdp downscale_kernel vs cubek-convolution separable conv. NOT a published crate."
+authors = ["Imazen <support@imazen.io>"]
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+publish = false
+# Standalone crate — pin cubecl to 0.10.0 stable so cubek-convolution
+# (which requires ^0.10.0 and EXCLUDES pre-releases) resolves cleanly.
+# The parent workspace uses cubecl 0.10.0-pre.4; this crate is excluded
+# from that workspace via the parent Cargo.toml's `exclude` list.
+
+[workspace]
+# This is a standalone workspace so we don't pollute the parent
+# resolution graph with a cubecl-stable lockfile.
+
+[dependencies]
+cubecl = { version = "0.10.0", default-features = false, features = ["std", "cuda"] }
+cubek-convolution = "0.2.0"
+cubek-matmul = "0.2.0"
+cubek-std = "0.2.0"
+half = "2.5"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+debug = false
+codegen-units = 1
+
+[[bin]]
+name = "burn-conv-spike"
+path = "src/main.rs"

@@ -448,12 +448,16 @@ impl<R: Runtime> Cvvdp<R> {
     /// geometry — equivalent to `new_with_geometry(..., STANDARD_4K)`.
     /// Override via `new_with_geometry` for non-4K displays.
     ///
-    /// **Of the `params` fields, only `display` is consumed** — the
-    /// `csf`/`masking`/`pooling`/`jod` sub-bundles are unused because
-    /// the per-stage cvvdp v0.5.4 numbers are inlined as `const`s in
-    /// the kernels module. Pass [`CvvdpParams::PLACEHOLDER`] unless
-    /// you specifically need to override the display model. See the
-    /// `CvvdpParams::PLACEHOLDER` docstring for the full picture.
+    /// **Of the `params` fields, only `display` and `perf_mode` are
+    /// consumed** — the `csf`/`masking`/`pooling`/`jod` sub-bundles
+    /// are unused because the per-stage cvvdp v0.5.4 numbers are
+    /// inlined as `const`s in the kernels module. `perf_mode` is
+    /// stored on `Self` so future stage-level fast paths can gate on
+    /// it; today it's a no-op (Strict and Fast produce identical
+    /// output). Pass [`CvvdpParams::PLACEHOLDER`] unless you
+    /// specifically need to override the display model or opt into
+    /// `PerfMode::Fast`. See the `CvvdpParams::PLACEHOLDER` and
+    /// [`crate::params::PerfMode`] docstrings for the full picture.
     ///
     /// # Errors
     ///
@@ -1583,11 +1587,7 @@ impl<R: Runtime> Cvvdp<R> {
         result.map(|_| ())
     }
 
-    fn _dispatch_d_bands_into_scratch(
-        &mut self,
-        ref_srgb: &[u8],
-        dist_srgb: &[u8],
-    ) -> Result<()> {
+    fn _dispatch_d_bands_into_scratch(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let t_weber_ref = std::time::Instant::now();
         let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
