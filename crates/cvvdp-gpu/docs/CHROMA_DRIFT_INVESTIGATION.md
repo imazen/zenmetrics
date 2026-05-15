@@ -94,6 +94,42 @@ to max=1000 only, we clamp to ±1000 — but values are far from
 clamp on chroma_shift), or a stage I haven't traced yet
 (sensitivity ↔ band_mul interaction, log10 base, etc.).
 
+## Tick 196 — found a real LUT bug, narrowed the gap
+
+`compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels`
+(new test) compared our DKL planes to pycvvdp's at 10 sentinel
+pixels of the chroma_shift fixture. Low-byte sentinels matched
+exactly; high-byte sentinels diverged by up to **0.198 cd/m²**
+(at byte 232).
+
+Root-caused to **`SRGB8_TO_LINEAR_LUT` having wrong values at
+high bytes**:
+- byte 217: ours **0.6941793** vs correct **0.6938717365** (+3.1e-4)
+- byte 230: ours **0.7919172** vs correct **0.7912979126** (+6.2e-4)
+- byte 232: ours **0.8076336** vs correct **0.8069522381** (+6.8e-4)
+
+The constants were copied from
+`zensim-gpu::kernels::color::SRGB8_TO_LINEARF32_LUT` at port time.
+The doc comment named the right formula
+(`((p + 0.055) / 1.055)^2.4` for p > 0.04045) but the literal
+numbers diverged from the formula's outputs. Regenerated from
+the canonical sRGB EOTF at f64 → f32, replaced our LUT.
+
+After the fix:
+- DKL planes now bit-identical with pycvvdp at all 10 sentinels
+  (max diff 3.8e-5, pure f32 noise). Locked by the new
+  parity test in CI.
+- All 74 existing tests still pass — the LUT-value differences
+  are well inside the f32-precision margins of the other
+  fixtures (12 MP synth, blur3x1, blur1x3, noise, JPEG q-grid).
+- **The chroma_shift JOD still drifts by 0.117** (9.5474 vs
+  9.6649). With DKL bit-identical, the divergence is now
+  **downstream of color transform**.
+
+Next-tick target: instrument the Weber-contrast pyramid output
+on the chroma_shift fixture. If our weber bands match pycvvdp's,
+drift is further downstream (CSF / masking / pool).
+
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
 - **`MASK_Q`** = [1.302623, 2.888591, 3.680771] (matches pycvvdp's

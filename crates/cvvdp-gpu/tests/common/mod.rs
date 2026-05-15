@@ -143,6 +143,53 @@ pub fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
 ///
 /// `q` is the JPEG quality level (1, 5, 20, 45, 70, or 90). Panics
 /// if the q is missing from the manifest.
+/// Sentinel-pixel DKL value from
+/// `scripts/cvvdp_goldens/pycvvdp_dkl_chroma_shift.json`.
+/// Used by `compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels`
+/// to localize where the 0.117 JOD chroma_shift drift starts.
+pub struct DklSentinel {
+    pub y: u32,
+    pub x: u32,
+    pub ref_dkl: [f32; 3],
+    pub dist_dkl: [f32; 3],
+}
+
+pub fn pycvvdp_dkl_chroma_shift_sentinels() -> Vec<DklSentinel> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_dkl_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_dkl_chroma_shift.json");
+    let sentinels = v
+        .get("sentinels")
+        .and_then(|s| s.as_array())
+        .expect("missing .sentinels");
+    sentinels
+        .iter()
+        .map(|s| {
+            let y = s["y"].as_u64().unwrap() as u32;
+            let x = s["x"].as_u64().unwrap() as u32;
+            let ref_dkl = s["ref_dkl_f32"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_f64().unwrap() as f32)
+                .collect::<Vec<_>>();
+            let dist_dkl = s["dist_dkl_f32"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_f64().unwrap() as f32)
+                .collect::<Vec<_>>();
+            DklSentinel {
+                y,
+                x,
+                ref_dkl: [ref_dkl[0], ref_dkl[1], ref_dkl[2]],
+                dist_dkl: [dist_dkl[0], dist_dkl[1], dist_dkl[2]],
+            }
+        })
+        .collect()
+}
+
 pub fn v1_corpus_jod_golden(q: u32) -> f32 {
     const MANIFEST_JSON: &str =
         include_str!("../../../../scripts/cvvdp_goldens/v1_corpus_jods.json");
