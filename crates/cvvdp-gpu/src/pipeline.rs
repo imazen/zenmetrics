@@ -1190,9 +1190,17 @@ impl<R: Runtime> Cvvdp<R> {
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        // Discard dist log_l_bkg — cvvdp's weber_g1 uses ref's log_l_bkg.
+        // Discard both the dist host-side `bands` Vec (the
+        // bands_ref GPU handles still hold the just-computed DIST
+        // data, which the CSF 6ch dispatch reads directly — the
+        // host Vec is unused) AND the dist `log_l_bkg` Vec (cvvdp's
+        // weber_g1 contract uses the REF's log_l_bkg for both
+        // sides). Discarding both immediately frees ~190 MB of host
+        // memory at 12 MP before the band loop starts — was a
+        // proven source of CPU memory pressure in tick 83's
+        // diagnostic.
         let t_weber_dis = std::time::Instant::now();
-        let (dist_weber, _) = self.compute_dkl_weber_pyramid(dist_srgb)?;
+        let _ = self.compute_dkl_weber_pyramid(dist_srgb)?;
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
@@ -1272,7 +1280,6 @@ impl<R: Runtime> Cvvdp<R> {
                 let weber_ref_vy_h = self
                     .client
                     .create_from_slice(f32::as_bytes(&ref_weber[k][2]));
-                let _ = &dist_weber; // dist host upload path retired
                 unsafe {
                     csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
