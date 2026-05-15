@@ -103,10 +103,12 @@ JOD is the canonical ColorVideoVDP output; `score` returns it as
 ## CPU backend (`cubecl-cpu`)
 
 `Cvvdp::compute_dkl_jod` uses `Atomic<f32>::fetch_add` in
-`pool_band_kernel`, which `cubecl-cpu` 0.10 doesn't support. For
-cpu-runtime use, switch to `Cvvdp::compute_dkl_jod_host_pool` (or
-its warm-ref variant `compute_dkl_jod_host_pool_with_warm_ref`) —
-they read the per-band D arrays back to the host and reduce with
+`pool_band_3ch_kernel` (the fused 3-channel pool kernel that
+production dispatches, one launch per pyramid band), which
+`cubecl-cpu` 0.10 doesn't support. For cpu-runtime use, switch
+to `Cvvdp::compute_dkl_jod_host_pool` (or its warm-ref variant
+`compute_dkl_jod_host_pool_with_warm_ref`) — they read the
+per-band D arrays back to the host and reduce with
 `host_scalar::lp_norm_mean`, producing the same JOD at f32
 precision. See `tests/cpu_backend.rs` for direct
 cpu-vs-pycvvdp parity coverage on the 73×91 odd-dim fixture.

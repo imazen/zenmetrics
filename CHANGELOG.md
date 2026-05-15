@@ -154,6 +154,20 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `crates/cvvdp-gpu/README.md` "CPU backend" section had a
+  stale reference to `pool_band_kernel` (the single-channel
+  pool kernel) as the source of the `Atomic<f32>::fetch_add`
+  that cubecl-cpu doesn't support. Tick 291's audit
+  established that production dispatches the fused
+  `pool_band_3ch_kernel` instead (one launch per pyramid band,
+  3× fewer launches than the single-channel form); the
+  `pool_band_kernel` symbol is retained only for the
+  `tests/pool_scalar.rs::pool_band_kernel_matches_host_lp_norm_mean`
+  unit-parity test. Updated the README to name the fused
+  3-channel production kernel + the "one launch per pyramid
+  band" descriptor. The cpu-runtime workaround (route through
+  `compute_dkl_jod_host_pool`) is unchanged. Tick 319.
+
 - `score_with_reference_errors_without_set_reference` (in
   `tests/pipeline_score.rs`) was using
   `format!("{err:?}").contains("NoCachedReference")` to verify
