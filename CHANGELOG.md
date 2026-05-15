@@ -278,6 +278,33 @@ Post-fuse housekeeping (ticks 108–124):
   but with a wider q=1 tolerance (~0.4 JOD) per the documented
   cumulative-f32 drift through `met2jod`'s steep slope.
 
+Host-memory-pressure relief (ticks 144–146):
+
+- **Drop dist_weber host Vec immediately** (`02f37728`) —
+  `compute_dkl_d_bands` was binding the `(dist_weber, _)` tuple
+  from `compute_dkl_weber_pyramid(dist_srgb)` even though the
+  dist-side CSF path reads `self.bands_ref` GPU handles
+  directly (per tick 87). Changed to `let _ = ...` so the
+  ~190 MB host Vec drops at the call site instead of
+  surviving the band loop.
+- **Per-band ref-side host Vec drops** (`913a7c5f`) — after the
+  band-`k` CSF dispatch finishes its `create_from_slice`
+  uploads, replace `ref_weber[k] = [Vec::new(); 3]` and
+  `ref_log_l_bkg[k] = Vec::new()` so peak host residency scales
+  with the remaining-bands sum, not the whole pyramid.
+
+Together these two commits dropped 12 MP perf
+(`benchmarks/time_12mp_tick145_2026-05-14.md`):
+- weber pyramid: 26.4 → 30.6 ns/px (noise band)
+- compute_dkl_d_bands: 106.6 → **82.1 ns/px** (−23%)
+- compute_dkl_jod: 101.8 → **87.2 ns/px** (−14%)
+
+The `d_bands − 2×weber` bucket (CSF + masking + IO) dropped
+from 645 ms → 252 ms — a **2.5× speedup** on the non-weber
+portion. vs fcvvdp's 8-thread number at 360p we crossed from
+1.48× slower (tick 89) to 1.18× slower (tick 96) to **1.01×
+tied** here.
+
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
 These observations don't ship as code, but they document
