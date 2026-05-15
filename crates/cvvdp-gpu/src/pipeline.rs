@@ -120,6 +120,22 @@ fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::s
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
 }
 
+/// Per-channel CSF gain for a pyramid level. Non-baseband bands get
+/// `band_mul * CH_GAIN[c]`; the baseband bypasses `CH_GAIN` so the
+/// downstream `|T_p_dis - T_p_ref|` subtraction reproduces cvvdp's
+/// `apply_masking_model` baseband formula exactly.
+fn ch_gain_for_band(is_baseband: bool, band_mul: f32) -> [f32; N_CHANNELS] {
+    if is_baseband {
+        [1.0, 1.0, 1.0]
+    } else {
+        [
+            band_mul * CH_GAIN[0],
+            band_mul * CH_GAIN[1],
+            band_mul * CH_GAIN[2],
+        ]
+    }
+}
+
 /// Per-level scratch buffers reused by `compute_dkl_weber_pyramid`.
 /// At 12 MP the function would otherwise allocate ~140 MB of
 /// transient GPU buffers per call (l_bkg_fine, vscratch_a, log_l_bkg
@@ -1027,9 +1043,7 @@ impl<R: Runtime> Cvvdp<R> {
             let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            let ch_gain_a = if is_baseband { 1.0 } else { band_mul * CH_GAIN[0] };
-            let ch_gain_rg = if is_baseband { 1.0 } else { band_mul * CH_GAIN[1] };
-            let ch_gain_vy = if is_baseband { 1.0 } else { band_mul * CH_GAIN[2] };
+            let [ch_gain_a, ch_gain_rg, ch_gain_vy] = ch_gain_for_band(is_baseband, band_mul);
 
             let t_p_a_h = alloc_zeros_f32(&self.client, n_px);
             let t_p_rg_h = alloc_zeros_f32(&self.client, n_px);
@@ -1175,9 +1189,7 @@ impl<R: Runtime> Cvvdp<R> {
             // Fused 3-channel CSF apply — one launch per side instead
             // of three. The per-pixel LUT bracket math is shared across
             // the A/RG/VY channels.
-            let ch_gain_a: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[0] };
-            let ch_gain_rg: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[1] };
-            let ch_gain_vy: f32 = if is_baseband { 1.0 } else { band_mul * CH_GAIN[2] };
+            let [ch_gain_a, ch_gain_rg, ch_gain_vy] = ch_gain_for_band(is_baseband, band_mul);
 
             // Fused 6-channel CSF apply: one launch runs both sides
             // (REF + DIST) and shares the per-pixel LUT bracket math.
