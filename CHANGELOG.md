@@ -144,6 +144,18 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (performance)
 
+- **Persistent `log_l_bkg_{ref,dis}_dests: Vec<Handle>` slots** —
+  `Cvvdp::new_with_geometry` now pre-builds the destination-handle
+  Vecs that `_dispatch_ref_weber_pyramid_only` and
+  `_dispatch_dist_weber_pyramid_only` previously rebuilt per call
+  via `weber_scratch.iter().map(|s| s.log_l_bkg.clone()).collect()`.
+  Each dispatch now `mem::take`s the pre-built Vec, passes it as
+  `&[Handle]` to `_dispatch_weber_pyramid_gpu`, then moves it back —
+  zero heap allocation per JOD-side, replacing `(1 Vec alloc) +
+  (n_levels - 1) handle ref-bumps` per call. Cold JOD pays this
+  twice (REF + DIST), warm-ref JOD pays it once (DIST only). All
+  30 pipeline_color + 10 pipeline_score + 4 cpu_backend tests
+  green; manifest parity untouched.
 - **Persistent `src_u32_scratch` host buffer** — `Cvvdp::new` pre-
   allocates a `Vec<u32>` of length `width * height * 3` once at
   construction time; `_dispatch_dkl_planes_gpu` now fills it in

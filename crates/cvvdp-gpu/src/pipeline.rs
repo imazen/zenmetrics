@@ -392,6 +392,16 @@ pub struct Cvvdp<R: Runtime> {
     /// alloc + GPU upload.
     partials_h: cubecl::server::Handle,
 
+    /// Pre-built clones of `weber_scratch[k].log_l_bkg` and
+    /// `weber_scratch[k].log_l_bkg_dis` handles, one per non-baseband
+    /// level. `_dispatch_ref_weber_pyramid_only` and
+    /// `_dispatch_dist_weber_pyramid_only` pass these by reference
+    /// to `_dispatch_weber_pyramid_gpu` instead of building a fresh
+    /// `Vec<Handle>` + `n_levels - 1` handle ref-bumps per JOD-side
+    /// dispatch. Tick 240.
+    log_l_bkg_ref_dests: Vec<cubecl::server::Handle>,
+    log_l_bkg_dis_dests: Vec<cubecl::server::Handle>,
+
     /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
     /// Indexed `[level][channel]`. Each holds the 32-entry
     /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
@@ -529,6 +539,20 @@ impl<R: Runtime> Cvvdp<R> {
         // `create_from_slice` host alloc + upload is eliminated (tick 227).
         let partials_h = alloc_zeros_f32(&client, (n_levels as usize) * N_CHANNELS);
 
+        // Persistent `Vec<Handle>` slices for the per-non-baseband
+        // log_l_bkg destinations. _dispatch_*_weber_pyramid_only used
+        // to .collect() these per call; pre-building once eliminates
+        // a small but real per-JOD allocator round-trip plus a handle
+        // ref-bump per level. Tick 240.
+        let log_l_bkg_ref_dests: Vec<cubecl::server::Handle> = weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        let log_l_bkg_dis_dests: Vec<cubecl::server::Handle> = weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg_dis.clone())
+            .collect();
+
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
         //
@@ -585,6 +609,8 @@ impl<R: Runtime> Cvvdp<R> {
             weber_scratch,
             baseband_log_l_bkg,
             partials_h,
+            log_l_bkg_ref_dests,
+            log_l_bkg_dis_dests,
             logs_row,
             cached: None,
             warm_ref_baseband_log_l_bkg: None,
@@ -1442,12 +1468,15 @@ impl<R: Runtime> Cvvdp<R> {
         // resident. `warm_reference` re-sets the scalar after this
         // returns; everyone else lets it stay None.
         self.warm_ref_baseband_log_l_bkg = None;
-        let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
-            .weber_scratch
-            .iter()
-            .map(|s| s.log_l_bkg.clone())
-            .collect();
-        self._dispatch_weber_pyramid_gpu(ref_srgb, &ref_log_l_bkg_dests, false)
+        // Temporarily move the pre-built dests Vec out via mem::take
+        // so we can pass it as `&[Handle]` without conflicting with
+        // the `&mut self` borrow on _dispatch_weber_pyramid_gpu.
+        // Restored on the path back. Tick 240 amortises the per-call
+        // Vec alloc + handle ref-bumps across construction time.
+        let dests = std::mem::take(&mut self.log_l_bkg_ref_dests);
+        let result = self._dispatch_weber_pyramid_gpu(ref_srgb, &dests, false);
+        self.log_l_bkg_ref_dests = dests;
+        result
     }
 
     /// DIST-side weber pyramid only. Writes log_l_bkg to the
@@ -1459,13 +1488,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// The DIST CSF kernel reads from `self.bands_dis[k]` GPU
     /// handles directly (tick 154 split); no host transfer.
     fn _dispatch_dist_weber_pyramid_only(&mut self, dist_srgb: &[u8]) -> Result<()> {
-        let dist_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
-            .weber_scratch
-            .iter()
-            .map(|s| s.log_l_bkg_dis.clone())
-            .collect();
-        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests, true)?;
-        Ok(())
+        // mem::take the pre-built dests Vec to pass it as &[Handle]
+        // without conflicting with _dispatch_weber_pyramid_gpu's
+        // &mut self. Restored on the path back. Mirrors tick 240's
+        // fix in _dispatch_ref_weber_pyramid_only.
+        let dests = std::mem::take(&mut self.log_l_bkg_dis_dests);
+        let result = self._dispatch_weber_pyramid_gpu(dist_srgb, &dests, true);
+        self.log_l_bkg_dis_dests = dests;
+        result.map(|_| ())
     }
 
     fn _dispatch_d_bands_into_scratch(
