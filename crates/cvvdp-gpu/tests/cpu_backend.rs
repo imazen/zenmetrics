@@ -65,6 +65,49 @@ fn compute_dkl_jod_host_pool_runs_on_cpu_backend() {
 }
 
 #[test]
+fn compute_dkl_jod_host_pool_returns_max_jod_on_identical_inputs() {
+    // End-to-end identity gate: feeding the same buffer in as both
+    // reference AND distorted side must produce JOD ≈ 10.0
+    // (`met2jod(0) == 10`). The chain — color → weber pyramid →
+    // CSF → masking → spatial pool — must compute exact-zero D
+    // for every (band, channel), then fold to Q = 0, then map to
+    // JOD = 10.
+    //
+    // The doctest on `Cvvdp::score` exercises the same property
+    // but only in `cargo test --doc` runs. This test gates it in
+    // the integration suite so a refactor that breaks identity
+    // (e.g. a stray `+ eps` in a kernel, a saturation off-by-one
+    // in the sRGB→linear LUT, a missing baseband-bypass) trips
+    // here even when doctest runs are skipped.
+    //
+    // Tolerance is 1e-3 JOD — matches the doctest. Identity should
+    // give exactly 10.0 in theory, but the eps shift in
+    // `pool_band_finalize` produces a tiny non-zero floor for
+    // empty input that propagates into the final JOD; the
+    // tolerance accommodates that without admitting any
+    // meaningful chain drift.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    // Mid-gray (not pure black or white) avoids any sRGB-LUT
+    // boundary artifacts that an off-by-one quantization regression
+    // could hide.
+    let buf = vec![128u8; (w * h * 3) as usize];
+    let jod = cvvdp
+        .compute_dkl_jod_host_pool(&buf, &buf, ppd)
+        .expect("compute_dkl_jod_host_pool on cpu (identity)");
+
+    eprintln!("identity JOD (host_pool, cpu) = {jod:.6}");
+    assert!(
+        (jod - 10.0).abs() < 1e-3,
+        "identity should give JOD ≈ 10, got {jod}",
+    );
+}
+
+#[test]
 fn compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend() {
     // Tick 212 follow-up: validates the warm-ref host-pool variant
     // on the cpu runtime. Batch CPU scoring against a warmed REF
