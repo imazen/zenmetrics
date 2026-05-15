@@ -47,11 +47,21 @@
 //! ## Status
 //!
 //! Still-image score matches pycvvdp v0.5.4 within ~0.006 JOD across
-//! q1–q90 fixtures on the v1 R2 manifest. The `Cvvdp::score` public
-//! API currently routes through [`host_scalar::predict_jod_still_3ch`];
-//! every stage has a parity-tested cubecl kernel in [`kernels`], and
-//! the GPU composition path (replacing the host scalar fold) is the
-//! remaining chunk of pipeline work.
+//! q1–q90 fixtures on the v1 R2 manifest.
+//!
+//! The full GPU composition path is wired through
+//! [`Cvvdp::compute_dkl_jod`]: color, Weber pyramid, CSF, masking,
+//! and spatial pool all run on GPU; only the 3-stage Minkowski fold
+//! + `met2jod` happen host-side on a ~144-byte partials Vec. The
+//! parity tests `compute_dkl_jod_{matches_host_scalar,on_v1_manifest_corpus,vs_host_scalar_on_corpus}`
+//! all lock the GPU path within f32-precision tolerance of the host
+//! scalar reference.
+//!
+//! The public [`Cvvdp::score`] API still routes through
+//! [`host_scalar::predict_jod_still_3ch`] (kept stable while the GPU
+//! path's manifest-level parity is held by `shadow_jod`). Switching
+//! `score` over to the GPU path is the remaining chunk of pipeline
+//! work.
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]

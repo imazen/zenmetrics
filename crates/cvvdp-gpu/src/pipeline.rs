@@ -1461,25 +1461,39 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Final JOD for a (reference, distorted) sRGB pair, computed
-    /// through the full GPU composition: color → Weber pyramid →
-    /// per-pixel CSF apply → mult-mutual masking (host) → spatial
-    /// pool (host) → 3-stage Minkowski fold (host) → met2jod.
+    /// through the full GPU composition:
     ///
-    /// Currently the masking + spatial pool + final fold are
-    /// host-scalar; only the per-pixel stages (color, pyramid,
-    /// CSF) run on GPU. The masking + pool host calls remain
-    /// because they operate on band-sized data (≤ 1/4 image per
-    /// level) and don't dominate runtime; moving them to GPU is
-    /// a follow-on tick.
+    /// ```text
+    /// sRGB → DKL (GPU)
+    ///      → Weber pyramid (GPU, fused subtract+weber 3ch per level)
+    ///      → per-pixel CSF apply (GPU, fused REF+DIST 6ch per level)
+    ///      → mult-mutual masking (GPU, fused min_abs + pu_blur 3ch +
+    ///        mult_mutual_3ch_with_blurred per level — baseband uses
+    ///        diff_abs_3ch)
+    ///      → spatial pool (GPU, pool_band_kernel per (band, channel),
+    ///        atomic-f32 accumulation into a partials Vec)
+    ///      → 3-stage Minkowski fold + met2jod (host scalar — operates
+    ///        on the `n_levels × N_CHANNELS` partials Vec, ~144 bytes
+    ///        total, sub-microsecond regardless of image size).
+    /// ```
     ///
-    /// Returns JOD on cvvdp's 0–10 scale.
+    /// Only the GPU→host readback of the partials Vec touches host
+    /// memory in proportion to anything other than the pyramid depth
+    /// — and that readback is tiny (≤ 36 floats for typical 4K
+    /// imagery). The full per-band D Vec readback was removed in
+    /// tick 96; callers that still want the host-side band Vecs use
+    /// [`Cvvdp::compute_dkl_d_bands`] directly.
+    ///
+    /// Returns JOD on cvvdp's 0–10 scale (10 = imperceptible).
     ///
     /// The shadow_jod test still pins the public `Cvvdp::score`
     /// path through `host_scalar::predict_jod_still_3ch` against
     /// the v1 R2 manifest (≤ 0.006 JOD). This helper exposes the
     /// GPU-composed path so its parity vs the host scalar can be
     /// measured independently — see
-    /// `tests/pipeline_color.rs::compute_dkl_jod_matches_host_scalar`.
+    /// `tests/pipeline_color.rs::compute_dkl_jod_matches_host_scalar`,
+    /// `tests/pipeline_score.rs::compute_dkl_jod_on_v1_manifest_corpus`,
+    /// and the drift sweep `compute_dkl_jod_vs_host_scalar_on_corpus`.
     /// Once the GPU JOD parity vs the host scalar is locked at
     /// f32-precision tolerance, `Cvvdp::score` will switch to this
     /// helper and the manifest-parity test will retarget.
@@ -1639,11 +1653,15 @@ impl<R: Runtime> Cvvdp<R> {
     /// the cvvdp scale (0–10; 10 = imperceptible).
     ///
     /// Currently routes through the parity-locked host scalar
-    /// (`host_scalar::predict_jod_still_3ch`). The kernels for every
-    /// stage exist and are individually parity-tested; replacing the
-    /// host scalar with a fully-GPU composition is the next chunk of
-    /// pipeline work. Score matches pycvvdp v0.5.4 on the v1 R2
-    /// manifest within 0.006 JOD across q1–q90.
+    /// (`host_scalar::predict_jod_still_3ch`). The full GPU
+    /// composition path is implemented and parity-tested as
+    /// [`Cvvdp::compute_dkl_jod`] (color → pyramid → CSF → masking →
+    /// `pool_band_kernel` → host fold); `score` will retarget once
+    /// the v1 R2 manifest parity is held by the GPU path through a
+    /// `shadow_jod`-style anchor.
+    ///
+    /// Score matches pycvvdp v0.5.4 on the v1 R2 manifest within
+    /// 0.006 JOD across q1–q90.
     ///
     /// The viewing geometry comes from `self.geometry` — set via
     /// `Cvvdp::new_with_geometry` or defaulted to STANDARD_4K by
