@@ -170,6 +170,46 @@ pub struct WeberSentinel {
     pub ref_vy: f32,
 }
 
+pub struct TpSentinel {
+    pub y0: u32,
+    pub x0: u32,
+    pub yk: u32,
+    pub xk: u32,
+    pub t_p_test_a: f32,
+    pub t_p_ref_a: f32,
+    pub t_p_test_rg: f32,
+    pub t_p_ref_rg: f32,
+    pub t_p_test_vy: f32,
+    pub t_p_ref_vy: f32,
+}
+
+/// Per-band T_p (post-CSF, pre-masking) values for chroma_shift.
+/// T_p = weber · S · ch_gain. Used to localize whether the
+/// downstream-of-weber chroma drift sits in the CSF apply.
+pub fn pycvvdp_tp_chroma_shift_band(k: usize) -> Vec<TpSentinel> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_tp_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_tp_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    samples
+        .iter()
+        .map(|s| TpSentinel {
+            y0: s["y0"].as_u64().unwrap() as u32,
+            x0: s["x0"].as_u64().unwrap() as u32,
+            yk: s["yk"].as_u64().unwrap() as u32,
+            xk: s["xk"].as_u64().unwrap() as u32,
+            t_p_test_a:  s["t_p_test_a"].as_f64().unwrap() as f32,
+            t_p_ref_a:   s["t_p_ref_a"].as_f64().unwrap() as f32,
+            t_p_test_rg: s["t_p_test_rg"].as_f64().unwrap() as f32,
+            t_p_ref_rg:  s["t_p_ref_rg"].as_f64().unwrap() as f32,
+            t_p_test_vy: s["t_p_test_vy"].as_f64().unwrap() as f32,
+            t_p_ref_vy:  s["t_p_ref_vy"].as_f64().unwrap() as f32,
+        })
+        .collect()
+}
+
 /// Returns (band_index → list of sentinels) for pycvvdp's Weber
 /// pyramid at chroma_shift. Embedded via include_str! at compile time.
 pub fn pycvvdp_weber_chroma_shift_band(k: usize) -> Vec<WeberSentinel> {

@@ -168,6 +168,56 @@ chromatic channels (RG, VY) carry most of the signal and the
 CSF interp at chrominance frequencies + log_L_bkg is the
 densest part of the downstream pipeline.
 
+## Tick 199 — CSF apply has ~0.9% rel divergence
+
+Tick 199 added `compute_dkl_t_p_bands_ref_matches_pycvvdp_at_chroma_shift_all_bands`:
+dumps pycvvdp's T_p (= weber · S · ch_gain) on the REF side
+across all 8 bands. (We compare REF only because pycvvdp uses
+REF's log_l_bkg for the S lookup in both T_test_p and T_ref_p
+computation, while our compute_dkl_t_p_bands uses each-call's
+input. The JOD path is fine — it uses REF's log_l_bkg for both
+sides via the bands_dis split.)
+
+Result on chroma_shift:
+- band 0 REF: max abs 3.2e-3, rel 1.0e-3
+- band 1 REF: max abs 4.1e-2, rel 6.3e-4
+- band 2 REF: max abs 8.8e-2, rel 3.6e-4
+- band 3 REF: max abs 7.1e-2, rel 3.6e-4
+- **band 4 REF: max abs 7.8e-3, rel 8.8e-3** (worst rel)
+- band 5 REF: max abs 1.3e-3, rel 8.9e-3 (also worst rel)
+- band 6 REF: max abs 2.8e-4, rel 6.4e-4
+- band 7 REF: max abs 3.1e-3, rel 3.4e-4
+
+Max relative drift: **0.89%** at band 4-5.
+
+This is small but real. Pure f32 noise would be ~1e-7 relative;
+0.9% is well above that. The chain  rho → log10(rho) →
+LUT interp → 10^ → × sens_corr_factor has ~5 f32 operations,
+each at f32-precision noise (1e-7). 0.9% relative means there's
+a real algorithmic divergence, not f32 noise.
+
+Most likely source: subtle f32 ordering in our `interp1_clamped`
+vs pycvvdp's `interp1q` (uniform-axis rescale). For LOG_L_BKG_AXIS
+which IS uniform in log space, the two methods are
+mathematically equivalent — but f32 storage may make the stored
+axis values slightly non-uniform (e.g. -2.301029 vs -2.301030 at
+ULP boundaries). Binary search on slightly-non-uniform values
+can pick a different bracket than uniform-rescale.
+
+Why this becomes 0.117 JOD: a 0.9% relative T_p drift propagates
+through pool (lp_norm with p=2, preserves relative error) and
+the 3-stage Minkowski fold (also p=2-4, near-preserves). Then
+met2jod maps Q → JOD with a STEEP local slope at chroma_shift's
+Q-value (around the kink at Q=0.1, jod_a/p_e regime). A 0.9%
+relative input shift at that slope produces a 0.1+ JOD output
+shift.
+
+The fix path: switch our `interp1_clamped` to a uniform-axis
+form (compute `ind = (x_q - x[0]) / (x[-1] - x[0]) * (N-1)` and
+`imin = floor(ind)`, matching pycvvdp's interp1q exactly). Or
+use the same form pycvvdp uses to remove the implementation
+divergence wholesale.
+
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
 - **`MASK_Q`** = [1.302623, 2.888591, 3.680771] (matches pycvvdp's

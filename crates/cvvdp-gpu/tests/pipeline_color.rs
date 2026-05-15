@@ -1075,6 +1075,95 @@ fn compute_dkl_planes_matches_pycvvdp_dkl_at_chroma_shift_sentinels() {
 }
 
 #[test]
+fn compute_dkl_t_p_bands_ref_matches_pycvvdp_at_chroma_shift_all_bands() {
+    // Tick 199 stage-3 parity probe: T_p (post-CSF, pre-masking)
+    // on the chroma_shift fixture, **REF side only**.
+    //
+    // pycvvdp's apply_masking_model computes S from REF's log_l_bkg
+    // and applies the same S to both T_test_p and T_ref_p. Our
+    // compute_dkl_t_p_bands(srgb) computes log_l_bkg from THAT
+    // call's input. So calling compute_dkl_t_p_bands(ref_srgb)
+    // matches pycvvdp's REF T_p computation; calling with dist
+    // would diverge structurally because dist's log_l_bkg ≠ ref's.
+    //
+    // The JOD path (compute_dkl_jod) is unaffected — it uses
+    // REF's log_l_bkg for both sides (via the bands_dis split).
+    //
+    // After ticks 196-198 established DKL + Weber bit-identical,
+    // this test localizes whether the remaining 0.117 JOD chroma
+    // drift sits in CSF apply (this stage) or further downstream
+    // (masking / pool).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // chroma_shift ref bytes only.
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+        }
+    }
+
+    let ref_tp = cvvdp.compute_dkl_t_p_bands(&ref_srgb, ppd).expect("t_p ref");
+
+    let n_bands = ref_tp.len();
+    let mut overall_max_diff = 0.0_f32;
+    let mut overall_max_rel = 0.0_f32;
+    let mut first_diverging_band: Option<usize> = None;
+    for k in 0..n_bands {
+        let sentinels = common::pycvvdp_tp_chroma_shift_band(k);
+        let band_w = (wu + (1 << k) - 1) >> k;
+        let mut band_max_diff = 0.0_f32;
+        let mut band_max_rel = 0.0_f32;
+        for s in &sentinels {
+            let yk = (s.yk as usize).min(band_w - 1);
+            let xk = (s.xk as usize).min(band_w - 1);
+            let idx = yk * band_w + xk;
+            let pairs = [
+                ("ref_A",  ref_tp[k][0][idx], s.t_p_ref_a),
+                ("ref_RG", ref_tp[k][1][idx], s.t_p_ref_rg),
+                ("ref_VY", ref_tp[k][2][idx], s.t_p_ref_vy),
+            ];
+            for (_, ours, py) in pairs {
+                let d = (ours - py).abs();
+                let r = d / py.abs().max(1e-4);
+                if d > band_max_diff { band_max_diff = d; }
+                if r > band_max_rel { band_max_rel = r; }
+            }
+        }
+        eprintln!("band {k} REF: max T_p abs={band_max_diff:.4e} rel={band_max_rel:.4e}");
+        if band_max_diff > overall_max_diff { overall_max_diff = band_max_diff; }
+        if band_max_rel > overall_max_rel { overall_max_rel = band_max_rel; }
+        if first_diverging_band.is_none() && band_max_rel > 1e-3 {
+            first_diverging_band = Some(k);
+        }
+    }
+    eprintln!("overall max REF T_p abs={overall_max_diff:.4e} rel={overall_max_rel:.4e}");
+    if let Some(k) = first_diverging_band {
+        eprintln!("FIRST DIVERGING BAND (REF T_p): {k}");
+    } else {
+        eprintln!("All REF T_p bands match within f32 noise — CSF apply is bit-identical");
+    }
+    assert!(
+        overall_max_rel < 0.5,
+        "REF T_p bands diverge from pycvvdp by rel={overall_max_rel:.4e} — implausible regression"
+    );
+}
+
+#[test]
 fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
     // Tick 198 stage-2 parity probe across ALL bands (extending
     // tick 197's band-0-only probe). Compares our
