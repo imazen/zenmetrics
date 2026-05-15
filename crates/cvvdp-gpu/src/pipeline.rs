@@ -1190,17 +1190,23 @@ impl<R: Runtime> Cvvdp<R> {
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        // Discard both the dist host-side `bands` Vec (the
-        // bands_ref GPU handles still hold the just-computed DIST
-        // data, which the CSF 6ch dispatch reads directly — the
-        // host Vec is unused) AND the dist `log_l_bkg` Vec (cvvdp's
-        // weber_g1 contract uses the REF's log_l_bkg for both
-        // sides). Discarding both immediately frees ~190 MB of host
-        // memory at 12 MP before the band loop starts — was a
-        // proven source of CPU memory pressure in tick 83's
-        // diagnostic.
+        // DIST weber pyramid: dispatch-only, no readback.
+        // `compute_dkl_weber_pyramid` would allocate ~240 MB of host
+        // Vecs (bands + log_l_bkg) and queue the GPU→host transfers
+        // — but we never use those host bytes (DIST CSF reads
+        // `self.bands_ref` GPU handles directly per tick 87, and
+        // DIST `log_l_bkg` is discarded per cvvdp's weber_g1 rule
+        // that uses REF's log_l_bkg for both sides). Calling the
+        // private `_dispatch_weber_pyramid_gpu` directly with the
+        // weber_scratch dest skips both the allocation AND the
+        // GPU→host transfer.
         let t_weber_dis = std::time::Instant::now();
-        let _ = self.compute_dkl_weber_pyramid(dist_srgb)?;
+        let dist_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        let _ = self._dispatch_weber_pyramid_gpu(dist_srgb, &dist_log_l_bkg_dests)?;
         if trace {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
