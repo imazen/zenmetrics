@@ -586,10 +586,49 @@ The pycvvdp parity matrix is now end-to-end:
 | size      | test                                                              | tolerance | observed |
 | ----      | ----                                                              | ----      | ----     |
 | 32×32     | `compute_dkl_jod_matches_host_scalar`                            | 0.5 JOD   | < 0.1    |
-| 73×91     | `compute_dkl_jod_matches_host_scalar_on_odd_dims`                | 0.5 JOD   | 0.092    |
+| 73×91     | `compute_dkl_jod_matches_host_scalar_on_odd_dims`                | 0.5 JOD   | **0.0004** (post tick 181) |
 | 256×256   | `compute_dkl_jod_matches_host_on_corpus_256x256` (drift sweep)   | 0.06 JOD  | < 0.05   |
 | 4000×3000 | `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`                  | 0.005 JOD | **0.0003** |
 | 256×256 v1 manifest | `shadow_jod` (host scalar)                              | 0.01 JOD  | < 0.006  |
+
+### Tick 179–182 — band-count alignment + pycvvdp goldens manifest
+
+- **CHANGELOG / PORT_STATUS / lib.rs docs caught up to tick 175-178**
+  (tick 179, `d7f8445f`) — the ceil-div correctness wave is now
+  surfaced in user-facing docs. Corrected `lib.rs` to drop the
+  misleading "2.58× slower than pycvvdp" framing (those numbers
+  reflected a broken pyramid drifting 0.586 JOD); honest post-fix
+  is 4.4× slower cold / 2.4× slower warm with correct output.
+
+- **Extended pycvvdp bench script + goldens manifest**
+  (tick 180, `b937401e`) — `scripts/cvvdp_goldens/bench_12mp_cuda.py`
+  now produces a `pycvvdp_synth_goldens.json` manifest with the
+  pycvvdp golden JOD for both the 4000×3000 12 MP fixture
+  (9.4580) and a 73×91 odd-dim fixture (9.3904). The manifest
+  schema lets future Rust parity tests load canonical reference
+  values directly instead of duplicating hardcoded constants.
+
+- **Surprise: host_scalar drifts ~0.6 JOD vs pycvvdp at 73×91**
+  (tick 180 finding) — at sub-megapixel sizes our host_scalar
+  reference produces 8.79 vs pycvvdp 9.39. The 256² v1 manifest
+  fixtures hold ≤ 0.006 JOD, the 4000×3000 synth holds 0.0003,
+  but 73×91 drifts ~0.6. Possible causes (open investigation):
+  CSF interpolation at very small angular widths, band-mul rule
+  difference for the small-band branch, or a display-geometry
+  interpretation gap at sub-degree image sizes.
+
+- **`pyramid_levels` defers to `band_frequencies` (tick 181, `e4951c15`)**
+  — the GPU pipeline had a size-based cap (`cur >= 2 *
+  PYRAMID_MIN_DIM`) that produced fewer bands than host_scalar
+  at small inputs (4 vs 5 at 32², 5 vs 6 at 73×91, 7 vs 8 at
+  256²). host_scalar already used `band_frequencies(ppd, w, h).len()`
+  directly. Aligned the GPU side. Effect on the 73×91 GPU-vs-host
+  parity test: **diff 0.092 → 0.0004 JOD** (235× better
+  agreement). 12 MP pycvvdp gate still passes at 0.0003.
+
+  Resolves the GPU↔host structural mismatch at small sizes.
+  The remaining ~0.6 JOD drift at 73×91 is purely host_scalar
+  vs pycvvdp (GPU now matches host within f32 precision).
 
 ### Investigation Notes (cvvdp-gpu, tick 174 — large-image drift)
 

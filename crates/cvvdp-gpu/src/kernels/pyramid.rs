@@ -1046,7 +1046,7 @@ pub fn subtract_weber_3ch_kernel(
 /// in `_dispatch_weber_pyramid_gpu`.
 ///
 /// The host still reads back `gauss_a` once to compute the mean
-/// (small buffer, ~744 pixels at MAX_LEVELS=8 / 12 MP, single
+/// (small buffer — ~192 pixels at MAX_LEVELS=9 / 12 MP, single
 /// synchronous drain), but the 3 per-channel readbacks +
 /// 3 per-channel reuploads become this single GPU launch.
 #[cube(launch)]
