@@ -1761,9 +1761,12 @@ impl<R: Runtime> Cvvdp<R> {
         let n_levels = self.n_levels as usize;
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
-            let (_, _, n_px) = self.level_dims(k);
-            let mut planes: [Vec<f32>; 3] =
-                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            // Empty Vecs — `read_one` + `to_vec` allocates a fresh
+            // host buffer per channel; the previous `vec![0.0; n_px]`
+            // alloc + zero-fill was discarded by `planes[c] =
+            // f32::from_bytes(&bytes).to_vec()` on the next line.
+            // Matches `compute_dkl_gauss_pyramid`'s readback shape.
+            let mut planes: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             for c in 0..N_CHANNELS {
                 let bytes = self
                     .client

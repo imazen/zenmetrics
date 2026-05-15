@@ -90,6 +90,13 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (performance)
 
+- `compute_dkl_d_bands` host readback init no longer pre-allocates
+  `vec![0.0; n_px] × 3` per pyramid level only to immediately
+  overwrite each entry with `f32::from_bytes(&bytes).to_vec()`.
+  Now uses empty `Vec::new()` slots — matches `compute_dkl_gauss_pyramid`'s
+  readback shape and drops `~3 × n_levels × n_px` floats of wasted
+  host zero-fill per call. (`compute_dkl_d_bands` is a parity-test
+  helper; production JOD path is unaffected since it pools on-GPU.)
 - **Persistent `partials_h` atomic-pool buffer** — `Cvvdp::new`
   now allocates a single `n_levels × N_CHANNELS` partials buffer
   (≤ 144 bytes at MAX_LEVELS=9) and `_pool_and_finalize_jod` zero-
