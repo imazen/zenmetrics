@@ -88,6 +88,19 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+- **`crates/cvvdp-gpu/README.md`** — new crate-root README
+  mirroring the peer GPU-metric crates' structure
+  (`ssim2-gpu`, `zensim-gpu`, `dssim-gpu` all had one;
+  cvvdp-gpu didn't). Covers the multi-vendor pitch
+  (CUDA / WGPU / HIP / cubecl-cpu), single-image + cached-ref
+  + warm-ref usage shapes, JOD 0..10 score interpretation
+  (higher = better, matching pycvvdp convention), the
+  `compute_dkl_jod_host_pool` workaround for cubecl-cpu and
+  Metal (Atomic<f32>::fetch_add gotcha), the
+  `CVVDP_COLUMN_NAME` / `CVVDP_IMPL_TAG` sweep-tooling story
+  for parquet sidecars, the `parity-goldens` feature gate,
+  and the standard build / license footer. Tick 285.
+
 ### Fixed
 
 #### cvvdp-gpu

@@ -20,19 +20,14 @@ v0 — defer until still-mode parity is locked.
 ## Single-image usage
 
 ```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::CvvdpParams;
-use cubecl::Runtime;
 
-# #[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-# #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-# type Backend = cubecl::wgpu::WgpuRuntime;
-# #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
-# type Backend = cubecl::cpu::CpuRuntime;
-let client = Backend::client(&Default::default());
+let client = CudaRuntime::client(&Default::default());
 let (w, h) = (256u32, 256u32);
-let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
+let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
 
 let ref_srgb: Vec<u8> = vec![128u8; (w * h * 3) as usize];
 let dis_srgb: Vec<u8> = vec![128u8; (w * h * 3) as usize];
@@ -40,6 +35,12 @@ let jod = cvvdp.score(&ref_srgb, &dis_srgb)?;
 println!("JOD = {jod:.4}");
 # Ok::<(), cvvdp_gpu::Error>(())
 ```
+
+Swap `cubecl::cuda::CudaRuntime` for `cubecl::wgpu::WgpuRuntime` to
+target Metal / Vulkan / DX12 / WebGPU, or `cubecl::hip::HipRuntime`
+for AMD ROCm. On `cubecl::cpu::CpuRuntime` use
+`Cvvdp::compute_dkl_jod_host_pool` instead of `Cvvdp::score` — see
+the CPU backend section below.
 
 ## Cached-reference usage
 
@@ -56,20 +57,15 @@ candidates:
   "How we compare to the canonical reference" section).
 
 ```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
-use cubecl::Runtime;
 
-# #[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-# #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-# type Backend = cubecl::wgpu::WgpuRuntime;
-# #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
-# type Backend = cubecl::cpu::CpuRuntime;
-let client = Backend::client(&Default::default());
+let client = CudaRuntime::client(&Default::default());
 let (w, h) = (256u32, 256u32);
 let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
-let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
+let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
 
 let reference: Vec<u8> = vec![128u8; (w * h * 3) as usize];
 cvvdp.warm_reference(&reference)?;
