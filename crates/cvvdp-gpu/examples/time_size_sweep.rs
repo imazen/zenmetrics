@@ -1,7 +1,8 @@
 //! Size-sweep timer for `Cvvdp::compute_dkl_jod` across 4 image
-//! sizes. Reports per-phase wall-time + per-pixel cost plus the
-//! `α + β · pixels` linear fit so launch-overhead intercept is
-//! visible separately from per-pixel work.
+//! sizes. Reports per-phase wall-time + per-pixel cost so the
+//! per-call fixed overhead (visible at tiny sizes) and the
+//! steady-state per-pixel slope (visible at medium / large) can
+//! be read off independently.
 //!
 //! Sweep buckets follow the global "tiny + small + medium + large"
 //! discipline:
@@ -120,26 +121,6 @@ fn measure_one(w: u32, h: u32, label: &'static str) -> Row {
     }
 }
 
-/// OLS fit `y = α + β · x` over the rows' (pixels, duration_ns).
-/// Returns (α_ns, β_ns_per_pixel).
-fn fit(rows: &[Row], extract: impl Fn(&Row) -> Duration) -> (f64, f64) {
-    let n = rows.len() as f64;
-    let xs: Vec<f64> = rows.iter().map(|r| r.pixels as f64).collect();
-    let ys: Vec<f64> = rows.iter().map(|r| extract(r).as_nanos() as f64).collect();
-    let mean_x = xs.iter().sum::<f64>() / n;
-    let mean_y = ys.iter().sum::<f64>() / n;
-    let mut num = 0.0;
-    let mut den = 0.0;
-    for i in 0..rows.len() {
-        let dx = xs[i] - mean_x;
-        num += dx * (ys[i] - mean_y);
-        den += dx * dx;
-    }
-    let beta = num / den;
-    let alpha = mean_y - beta * mean_x;
-    (alpha, beta)
-}
-
 fn main() {
     let mut rows = Vec::with_capacity(SIZES.len());
     for &(w, h, label) in SIZES {
@@ -185,22 +166,11 @@ fn main() {
         );
     }
 
-    println!("\n=== linear fit  duration_ns = α + β · pixels ===\n");
-    println!(
-        "{:<10}  {:>10}  {:>10}",
-        "phase", "α (ms)", "β (ns/px)"
-    );
-    let (a_w, b_w) = fit(&rows, |r| r.weber_med);
-    let (a_d, b_d) = fit(&rows, |r| r.d_bands_med);
-    let (a_j, b_j) = fit(&rows, |r| r.jod_med);
-    println!("{:<10}  {:>10.3}  {:>10.2}", "weber", a_w / 1.0e6, b_w);
-    println!("{:<10}  {:>10.3}  {:>10.2}", "d_bands", a_d / 1.0e6, b_d);
-    println!("{:<10}  {:>10.3}  {:>10.2}", "jod", a_j / 1.0e6, b_j);
-
-    println!(
-        "\nIntercept α (in ms) is the launch-overhead floor — what a\n\
-        single call costs regardless of image size. β is the\n\
-        per-pixel slope. The tick-91–93 launch-count fusions should\n\
-        be visible as a lower α than pre-fuse code."
-    );
+    // Note: a naive `total = α + β · pixels` OLS fit over 4 buckets
+    // spanning 4 orders of magnitude produces nonsense α intercepts
+    // (negative ms) because the relationship isn't a clean straight
+    // line across that range — the per-pixel table above is the
+    // trustworthy artifact. See `benchmarks/time_size_sweep_tick97_2026-05-14.md`
+    // for the discussion. A meaningful α fit needs a denser sweep
+    // or restricting to the linear-regime range; future tick.
 }
