@@ -2001,13 +2001,37 @@ impl<R: Runtime> Cvvdp<R> {
     /// - `compute_dkl_jod_host_pool_matches_compute_dkl_jod` (GPU
     ///   atomic pool vs host pool, 0.000000 diff)
     ///
+    /// # Backend support
+    ///
+    /// This method dispatches `pool_band_3ch_kernel`, which uses
+    /// `Atomic<f32>::fetch_add`. The two known traps:
+    ///
+    /// - **`cubecl-cpu` (0.10.x): the kernel panics at launch** with
+    ///   "not yet implemented: This type is not implemented yet.
+    ///   `atomic<f32>`". The panic is NOT surfaced as
+    ///   [`Error::InvalidImageSize`] — it unwinds through the
+    ///   caller. Use [`Cvvdp::compute_dkl_jod_host_pool`] on
+    ///   `cubecl-cpu` instead; it reads D bands back and folds
+    ///   on host (same JOD output at f32 precision).
+    /// - **Metal (via `cubecl-wgpu`): the kernel succeeds but
+    ///   silently no-ops** on the `Atomic<f32>::fetch_add`,
+    ///   producing all-zero partials and thus JOD = 10 (the
+    ///   identity-pair value) regardless of input. Use
+    ///   [`Cvvdp::compute_dkl_jod_host_pool`] there too.
+    ///
+    /// CUDA, Vulkan, DX12, and HIP backends support
+    /// `Atomic<f32>::fetch_add` correctly and produce the
+    /// canonical JOD.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if either input buffer's
     /// length doesn't match `width × height × 3`, or
     /// [`Error::InvalidImageSize`] if a GPU readback / kernel
     /// dispatch fails anywhere in the color → weber → CSF →
-    /// masking → pool chain.
+    /// masking → pool chain. **Note:** the `cubecl-cpu` panic
+    /// described in the Backend support section above is NOT
+    /// surfaced via this error path; it unwinds.
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
 
@@ -2332,6 +2356,16 @@ impl<R: Runtime> Cvvdp<R> {
     ///   [`Cvvdp::warm_reference`]).
     /// - [`Error::InvalidImageSize`] if a GPU readback / dispatch
     ///   in the DIST weber → CSF → masking → pool chain fails.
+    ///
+    /// # Backend support
+    ///
+    /// Dispatches `pool_band_3ch_kernel` like
+    /// [`Cvvdp::compute_dkl_jod`]; same constraints. `cubecl-cpu`
+    /// callers must use
+    /// [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`] instead;
+    /// Metal callers should too. See the "Backend support"
+    /// section on [`Cvvdp::compute_dkl_jod`] for the full
+    /// `Atomic<f32>::fetch_add` story.
     pub fn compute_dkl_jod_with_warm_ref(&mut self, dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
         // Tick 248: validate dist length before checking warm state.
@@ -2595,6 +2629,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// let jod = cvvdp.score(&bytes, &bytes).expect("score");
     /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
     /// ```
+    ///
+    /// # Backend support
+    ///
+    /// See the "Backend support" section on [`Cvvdp::compute_dkl_jod`]
+    /// — `score` inherits its constraints. `cubecl-cpu` callers
+    /// must route through [`Cvvdp::compute_dkl_jod_host_pool`]
+    /// instead; Metal callers should too.
     ///
     /// # Errors
     ///
