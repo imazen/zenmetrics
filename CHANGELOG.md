@@ -120,6 +120,18 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- `tests/cpu_backend.rs::compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend`
+  no longer hardcodes the `9.390370` pycvvdp golden as a `const`.
+  Loads from `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`
+  via the `common::pycvvdp_synth_golden_jod("synth_73x91_odd")`
+  helper that the pipeline_color sibling tests already use. Last
+  hardcoded synth golden in tests/; a build_goldens.py rerun now
+  propagates without any hand-edited mirrors anywhere in tests/.
+  The 6 hand-mirrored copies in examples/manifest_parity_probe.rs
+  stay (examples can't easily import test modules).
+
 #### cvvdp-gpu (docs)
 
 - `Cvvdp::new` / `Cvvdp::new_with_geometry` docstrings now spell

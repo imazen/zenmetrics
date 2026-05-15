@@ -154,7 +154,10 @@ fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
     //
     // 73×91 = 6643 px, ~6.5× the existing 32×32 cpu smoke tests;
     // expected runtime ~5-10s on cubecl-cpu.
-    const PYCVVDP_GOLDEN: f32 = 9.390370;
+    // Tick 265 dedup: golden loaded from
+    // scripts/cvvdp_goldens/pycvvdp_synth_goldens.json via the
+    // common helper (was hardcoded 9.390370, kept in sync by hand).
+    let pycvvdp_golden = common::pycvvdp_synth_golden_jod("synth_73x91_odd");
     const TOLERANCE: f32 = 0.005;
 
     let client = Backend::client(&Default::default());
@@ -168,9 +171,9 @@ fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
     let jod = cvvdp
         .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
         .expect("compute_dkl_jod_host_pool on cpu");
-    let diff = (jod - PYCVVDP_GOLDEN).abs();
+    let diff = (jod - pycvvdp_golden).abs();
     eprintln!(
-        "cpu-backend 73×91: jod = {jod:.6}, pycvvdp golden = {PYCVVDP_GOLDEN:.6}, |diff| = {diff:.6}"
+        "cpu-backend 73×91: jod = {jod:.6}, pycvvdp golden = {pycvvdp_golden:.6}, |diff| = {diff:.6}"
     );
     assert!(jod.is_finite(), "JOD must be finite, got {jod}");
     assert!(
@@ -179,6 +182,6 @@ fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
     );
     assert!(
         diff < TOLERANCE,
-        "cpu-backend JOD {jod:.6} drifts from pycvvdp golden {PYCVVDP_GOLDEN:.6} by {diff:.6} > {TOLERANCE:.6}"
+        "cpu-backend JOD {jod:.6} drifts from pycvvdp golden {pycvvdp_golden:.6} by {diff:.6} > {TOLERANCE:.6}"
     );
 }
