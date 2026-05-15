@@ -835,6 +835,71 @@ fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
 }
 
 #[test]
+fn compute_dkl_jod_matches_pycvvdp_at_12mp_synth() {
+    // 12 MP parity vs pycvvdp v0.5.4 CUDA on a deterministic
+    // synthetic 4000×3000 pair (same construction as
+    // examples/time_12mp.rs). The pycvvdp golden was measured on
+    // an RTX 5070 via scripts/cvvdp_goldens/bench_12mp_cuda.py
+    // (see `benchmarks/pycvvdp_12mp_cuda_2026-05-14.md` and
+    // `benchmarks/pycvvdp_parity_tick175_2026-05-15.md`).
+    //
+    // This test catches large-image drift that the 32×32 /
+    // 256×256 / 73×91 parity tests can't: at small sizes the
+    // pyramid is shallow enough that cumulative f32 noise doesn't
+    // build up. The original 0.586 JOD drift was only visible at
+    // 12 MP; the ceil-div + MAX_LEVELS=9 fix (tick 175) closed it
+    // to ~0.0003.
+    //
+    // Tolerance: 0.005 JOD ≈ ~10× f32 noise floor we observed at
+    // 12 MP. A floor-div or n-bands regression would push this
+    // far past 0.005.
+    //
+    // Runtime: ~600ms per call at 12 MP on RTX-class CUDA. Acceptable
+    // for parity-test budgets.
+    const PYCVVDP_GOLDEN_JOD: f32 = 9.4580;
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (4000u32, 3000u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Same synth construction as examples/time_12mp.rs +
+    // scripts/cvvdp_goldens/bench_12mp_cuda.py — keep in sync.
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - PYCVVDP_GOLDEN_JOD).abs();
+    eprintln!(
+        "12mp synth: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {PYCVVDP_GOLDEN_JOD:.4}, |diff| = {diff:.4}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {PYCVVDP_GOLDEN_JOD:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
     // Catches regressions in the ceil-div pyramid invariant (tick
     // 175). All other JOD parity tests run at power-of-2 sizes
