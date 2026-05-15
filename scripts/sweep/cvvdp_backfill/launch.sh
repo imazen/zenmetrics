@@ -29,7 +29,7 @@
 #
 # Environment overrides:
 #   SWEEP_RUN_ID            (default: cvvdp-backfill-<YYYY-MM-DD>)
-#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-aba984c)
+#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8)
 #   PYCVVDP_IMAGE           (default: ghcr.io/imazen/pycvvdp-scorer:0.5.4)
 #   N_BOXES                 (default: 6 — moderate fleet for the smoke pass)
 #   MAX_DPH                 (default: 0.30 — pycvvdp wants more compute than v15)
@@ -43,7 +43,7 @@ set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-cvvdp-backfill-$(date -u +%Y-%m-%d)}"
-ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-aba984c}"
+ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8}"
 PYCVVDP_IMAGE="${PYCVVDP_IMAGE:-ghcr.io/imazen/pycvvdp-scorer:0.5.4}"
 
 # Boot image: a thin ubuntu:24.04 — the real scoring images get pulled

@@ -79,13 +79,22 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       scorers (cvvdp-gpu + pycvvdp) + a parity TSV side-by-side.
       Smoke-tested: 4/4 cells joinable, mean |diff| 0.0245 JOD,
       max 0.0300 JOD on the synth zenjpeg q50/q90 corpus.
-- [ ] Multi-instance dispatch (vast.ai fan-out wrapping
+- [/] Multi-instance dispatch (vast.ai fan-out wrapping
       `dual_impl_chunk.sh`) — chunk-claim from R2, run, upload
       sidecars back. Extends the existing v15 launcher rather than
-      rebuilding from scratch.
-- [/] Verification pass (initial sentinel n=4: implementations agree
-      within 0.03 JOD; need n≈100 over CID22 / KADID for full
-      checkout — see commit history for the demo).
+      rebuilding from scratch. Chunk generator + worker + onstart +
+      launcher all shipped (commits d2eb0f7c, 87deac34, 32a3b64a,
+      c572c192). Push of corrected `zen-metrics-sweep:0.6.4-cvvdp-*`
+      image still gated on a real-GPU smoke run (see 2026-05-15
+      retry note below — local WSL2 can't satisfy the GATE).
+- [/] Verification pass — local n=18 measured 2026-05-15 retry
+      (decision D, q={30,70,90} × 6 zenwebp sources): cvvdp-gpu was
+      forced through cubecl-cpu runtime (CUDA-in-snap-docker fails
+      on this WSL2 host) where `atomic<f32>` panics short-circuit
+      the kernel to default JOD=10.0, so the comparison reduces to
+      "pycvvdp − 10.0" — mean |diff| 0.18, median 0.16, max 0.58.
+      The parity number is unrepresentative of the gpu-cuda path
+      and the GATE remains unverified.
 - [ ] Production run + parquet write-back to
       `/mnt/v/zen/zensim-training/<date>/unified/`
 
@@ -120,6 +129,82 @@ Secondary issue surfaced (local-env only, not a sweep design defect): snap docke
 on this WSL2 box cannot bind-mount `/usr/lib/wsl/lib/libnvidia-ml.so.1` so
 `--gpus all` fails with NVML ERROR_LIBRARY_NOT_FOUND. The pycvvdp CPU path still
 works end-to-end; production vast.ai workers do not hit this.
+
+### Local docker smoke 2026-05-15 (retry, decision D) — STILL NOT PUSHED
+
+Picked up the unblock path 1 from the previous note: built v13 from the
+`feat/cvvdp-gpu-scaffold` tree directly. New tag is
+`ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-76854e8` (the `-cvvdp-`
+infix flags branch-origin to future readers).
+
+Build-context approach: (b) materialised at
+`/home/lilith/work/zen/_build-ctx-cvvdp-76854e8/` — rsynced scaffold
+zenmetrics tree (excluding `target/`, `.jj/`, and the 6.7 GB
+`scripts/cvvdp_goldens/`) plus trimmed `zenjpeg/` and `zenanalyze/`
+siblings. Two builds were needed:
+
+1. First build (canonical-features `--features sweep`, log
+   `/tmp/build-rebuild.log`): produced an image with the scaffold's
+   `score-pairs` subcommand and `sweep --pairs-tsv` flag (✓) but
+   `cvvdp` disabled at runtime — `score-pairs --metric cvvdp` emits
+   `metric 'cvvdp' is disabled (rebuild with --features gpu-cvvdp)`.
+   This is the actual blocker the prior note missed: the Dockerfile
+   never enabled GPU features, so even with the right subcommand
+   shape, `score-pairs --metric cvvdp` cannot work against any
+   image built straight off canonical's Dockerfile.sweep.v13.
+2. Fixed by updating `Dockerfile.sweep.v13` to build with
+   `--features sweep,gpu,gpu-cuda,gpu-cpu`. Second build (~5 min
+   including 298 s LTO link) produced
+   `sha256:d8786ca29428…` (576 MB, was 230 MB without GPU/cubecl).
+
+`score-pairs --metric cvvdp` now reaches the cvvdp-gpu code, but on
+this WSL2 box neither runtime path completes correctly:
+
+- `--gpu-runtime cuda` panics at `cubecl-cuda runtime.rs:53` with
+  `DriverError(CUDA_ERROR_OPERATING_SYSTEM)` even with libcuda.so.1
+  + libnvidia-ml.so.1 bind-mounted at `/wsl-cuda/` and
+  `LD_LIBRARY_PATH` set. Snap docker on WSL2 needs
+  nvidia-container-toolkit, which isn't installed; task forbids
+  fixing that.
+- `--gpu-runtime cpu` (cubecl-cpu via tracel-mlir) hits
+  `not yet implemented: This type is not implemented yet.
+  atomic<f32>` in `cubecl-cpu compiler/visitor/elem.rs:38` once
+  per pair. The score-pairs loop swallows the panic, writes
+  `cvvdp = 10.0` as the default-fail value, and continues. Result
+  is a parquet with all 18 rows at JOD 10.0 — kernel never
+  executed.
+
+Joinable n=18 (all 6 sources × q={30,70,90} mapped):
+- `mean |diff| = 0.1805 JOD`
+- `median |diff| = 0.1611 JOD`
+- `max |diff|   = 0.5790 JOD`
+
+GATE thresholds were `mean < 0.10` and `max < 0.30` — both miss.
+But these numbers measure "pycvvdp − 10.0" because the imazen
+column is the fall-through default, not the real cvvdp-gpu output.
+The GATE remains unverifiable on this host.
+
+Wrapper fixes shipped this tick (commit `f7e321b6`):
+
+- `Dockerfile.sweep.v13`: `--features sweep,gpu,gpu-cuda,gpu-cpu`
+  plus inline `score-pairs --help` / `list-metrics` sanity checks
+  in the same RUN.
+- `scripts/sweep/dual_impl_chunk_docker.sh`:
+  - `--entrypoint /usr/local/bin/zen-metrics` for the zen-metrics
+    image (prior wrapper assumed CMD — production entrypoint is
+    `zen-metrics-worker`, which then expected R2 env vars).
+  - `ZEN_GPU_RUNTIME` env var forwarded as `--gpu-runtime` to
+    `score-pairs` for runtime override (defaults to letting the
+    binary auto-detect).
+
+What's still needed:
+
+1. A real-GPU smoke run on a CUDA-capable host (vast.ai box or any
+   non-snap, non-WSL2 box with nvidia-container-toolkit). With
+   --gpus all and `--gpu-runtime cuda`, the n=18 parity should
+   land in the < 0.10 JOD band (consistent with the n=4 sentinel
+   that already passed at 0.03 JOD).
+2. Push of both images is still gated on that real-GPU smoke.
 
 ### Blocker note
 
