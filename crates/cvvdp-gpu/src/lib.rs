@@ -132,6 +132,31 @@ pub const MAX_LEVELS: usize = 9;
 /// PYRAMID_MIN_DIM`, the current level becomes the baseband.
 pub const PYRAMID_MIN_DIM: u32 = 4;
 
+/// Stable column-name identifier for this implementation snapshot.
+///
+/// Used by sweep tooling (`zen-metrics-cli` and downstream
+/// pipelines) to land cvvdp scores in parquet sidecars without
+/// colliding with other cvvdp variants such as the canonical
+/// pycvvdp reference (`cvvdp_pycvvdp_v054`) or a future Burn-based
+/// port. See the PINNED TASK in `CLAUDE.md` at repo root.
+///
+/// Default form: `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` derived
+/// from `CARGO_PKG_VERSION` with `.` rewritten to `_`. The
+/// `CVVDP_IMPL_TAG` build-time env var overrides the entire
+/// string when set (e.g. CI bakes in a git short hash to
+/// distinguish iterations within the same crate version).
+pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "cvvdp_imazen_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
 /// Failure modes for `Cvvdp::*` methods. Implements
 /// `std::error::Error` so callers can use `?` against
 /// `Box<dyn Error>` or `anyhow::Error` as usual.

@@ -141,10 +141,28 @@ impl MetricKind {
             MetricKind::Dssim => &["dssim"],
             MetricKind::DssimGpu => &["dssim_gpu"],
             MetricKind::Zensim => &["zensim"],
-            MetricKind::Cvvdp => &["cvvdp"],
+            MetricKind::Cvvdp => CVVDP_COLUMNS,
         }
     }
 }
+
+// Versioned cvvdp column name. With the `gpu-cvvdp` feature enabled,
+// pulls the per-implementation tag from
+// [`::cvvdp_gpu::CVVDP_COLUMN_NAME`] (defaults to
+// `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; overridable at build time
+// via `CVVDP_IMPL_TAG`). Without the feature, falls back to a bare
+// `"cvvdp"` so callers that list metric names without invoking the
+// backend still see a usable identifier.
+//
+// Why versioned: parquet sidecars store cvvdp scores from multiple
+// implementations side-by-side (e.g. `cvvdp_pycvvdp_v054` for the
+// pycvvdp reference, `cvvdp_imazen_v0_0_1` for this crate's host
+// scalar path). A bare `cvvdp` column would collide on join. See the
+// PINNED TASK section in the repo-root `CLAUDE.md`.
+#[cfg(feature = "gpu-cvvdp")]
+const CVVDP_COLUMNS: &[&str] = &[::cvvdp_gpu::CVVDP_COLUMN_NAME];
+#[cfg(not(feature = "gpu-cvvdp"))]
+const CVVDP_COLUMNS: &[&str] = &["cvvdp"];
 
 /// CubeCL runtime selector for GPU metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -256,7 +274,7 @@ pub fn run_metric(
 
         #[cfg(feature = "gpu-cvvdp")]
         MetricKind::Cvvdp => Ok(vec![(
-            "cvvdp",
+            ::cvvdp_gpu::CVVDP_COLUMN_NAME,
             cvvdp_gpu::score(reference, distorted, gpu_runtime)?,
         )]),
         #[cfg(not(feature = "gpu-cvvdp"))]
@@ -290,5 +308,44 @@ pub fn run_zensim_with_features(
     #[cfg(not(feature = "cpu-metrics"))]
     {
         Err(disabled_msg("zensim", "cpu-metrics"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cvvdp_column_name_is_versioned_when_feature_on() {
+        let cols = MetricKind::Cvvdp.column_names();
+        assert_eq!(cols.len(), 1);
+        // With `gpu-cvvdp` enabled, the column carries an
+        // implementation tag so multiple cvvdp variants don't
+        // collide in joined parquet sidecars. The user-facing CLI
+        // flag (`--metric cvvdp`) remains stable.
+        #[cfg(feature = "gpu-cvvdp")]
+        {
+            assert!(
+                cols[0].starts_with("cvvdp_imazen_v")
+                    || std::env::var("CVVDP_IMPL_TAG")
+                        .map(|t| cols[0] == t)
+                        .unwrap_or(false),
+                "expected cvvdp column to start with cvvdp_imazen_v or match \
+                 CVVDP_IMPL_TAG override, got {:?}",
+                cols[0]
+            );
+        }
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        {
+            assert_eq!(cols[0], "cvvdp");
+        }
+    }
+
+    #[test]
+    fn cvvdp_cli_flag_name_is_stable() {
+        // User-facing identifier stays "cvvdp" regardless of which
+        // implementation is wired in — only the parquet column
+        // changes.
+        assert_eq!(MetricKind::Cvvdp.name(), "cvvdp");
     }
 }

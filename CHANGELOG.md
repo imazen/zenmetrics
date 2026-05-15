@@ -19,6 +19,30 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### Workspace
+
+- Pinned multi-tick task in `CLAUDE.md`: compute CVVDP scores for
+  all zensim training data sets via vast.ai docker images, output
+  as parquet sidecars with implementation-distinguished column
+  names (e.g. `cvvdp_pycvvdp_v054`, `cvvdp_imazen_v0_0_1`). Survives
+  context compaction; every `/loop` tick re-reads it.
+
+#### cvvdp-gpu
+
+- `CVVDP_COLUMN_NAME` const exposes a per-implementation column tag
+  (default `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable via
+  the `CVVDP_IMPL_TAG` build-time env var). Used by sweep tooling so
+  multiple cvvdp variants land side-by-side in parquet sidecars
+  without colliding.
+
+#### zen-metrics-cli
+
+- `MetricKind::Cvvdp::column_names()` now returns
+  `cvvdp_gpu::CVVDP_COLUMN_NAME` when the `gpu-cvvdp` feature is
+  enabled, so sweep TSV/parquet headers emit
+  `score_cvvdp_imazen_v0_0_1` (or the override). The user-facing
+  CLI flag `--metric cvvdp` stays stable.
+
 #### cvvdp-gpu (new crate, v0.0.1)
 
 - ColorVideoVDP (still-image) port matching pycvvdp v0.5.4 on the
