@@ -107,8 +107,18 @@ Workspace conventions per the global rules:
   `Cvvdp::warm_reference` docstring lists all 6 invalidators;
   and the regression test
   `warm_state_invalidates_after_each_documented_dispatcher`
-  extends from 4 → 6 cases. Audit is now complete: every public
-  helper that writes to `bands_ref` invalidates warm state.
+  extends from 4 → 6 cases.
+
+  Tick 238 closes the audit: the `warm_reference` docstring now
+  also documents `Cvvdp::score` / `Cvvdp::score_with_reference`
+  as transitive invalidators (via `compute_dkl_jod` since tick
+  213) and `Cvvdp::set_reference` as an explicit non-invalidator
+  (it only stashes host bytes). Regression test extends 6 → 8
+  invalidator cases; new sibling test
+  `set_reference_does_not_invalidate_warm_state` pins the
+  non-invalidator contract — a future refactor that turned
+  `set_reference` into an eager GPU dispatch would silently
+  break batch-scoring callers and surface here.
 
 #### cvvdp-gpu (tests)
 

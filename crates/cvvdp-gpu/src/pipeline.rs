@@ -2044,6 +2044,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// via the Laplacian chain). Call `warm_reference` again to
     /// re-arm.
     ///
+    /// [`Cvvdp::score`] and [`Cvvdp::score_with_reference`] also
+    /// invalidate — they route through `compute_dkl_jod` since
+    /// tick 213. [`Cvvdp::set_reference`] does NOT invalidate
+    /// (it only stashes host-side bytes; no GPU dispatch).
+    ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;

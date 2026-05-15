@@ -1004,6 +1004,13 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
         "compute_dkl_t_p_bands",
         "compute_dkl_laplacian_pyramid",
         "compute_dkl_csf_weighted_bands",
+        // Tick 238: transitive invalidators that route through
+        // compute_dkl_jod. Pin so a future refactor that bypasses
+        // the GPU path (e.g. reintroducing a host_scalar shortcut
+        // in `score`) doesn't silently break the documented
+        // contract.
+        "score",
+        "score_with_reference",
     ];
 
     let l_bkg_scalar = cvvdp_gpu::params::DisplayModel::STANDARD_4K.y_peak / 2.0;
@@ -1042,6 +1049,19 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
                     .compute_dkl_csf_weighted_bands(&ref_srgb, ppd, l_bkg_scalar)
                     .expect("intervening compute_dkl_csf_weighted_bands");
             }
+            "score" => {
+                let _ = cvvdp
+                    .score(&ref_srgb, &dist_srgb)
+                    .expect("intervening score");
+            }
+            "score_with_reference" => {
+                cvvdp
+                    .set_reference(&ref_srgb)
+                    .expect("set_reference for score_with_reference path");
+                let _ = cvvdp
+                    .score_with_reference(&dist_srgb)
+                    .expect("intervening score_with_reference");
+            }
             other => unreachable!("unhandled invalidator {other}"),
         }
         let err = cvvdp
@@ -1054,6 +1074,43 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
             ),
         }
     }
+}
+
+#[test]
+fn set_reference_does_not_invalidate_warm_state() {
+    // Tick 238: pin the documented non-invalidator. set_reference
+    // only stashes host-side bytes for the score_with_reference
+    // cache; it does no GPU dispatch and shouldn't disturb the
+    // separate warm-ref state. A future refactor that eagerly
+    // dispatches on set_reference (e.g. pre-uploading to GPU)
+    // would silently break this contract — pin it.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb = vec![128u8; n];
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(8)).collect();
+    let other_ref: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(4)).collect();
+
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
+    cvvdp
+        .set_reference(&other_ref)
+        .expect("set_reference must not invalidate warm state");
+
+    // Warm-ref score should still succeed against the warm_reference
+    // input, not the set_reference one.
+    let jod = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("warm state must survive set_reference");
+    assert!(jod.is_finite(), "warm-ref JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "warm-ref JOD must be in [0, 10], got {jod}"
+    );
 }
 
 #[test]
