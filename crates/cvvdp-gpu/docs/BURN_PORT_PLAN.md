@@ -1,5 +1,23 @@
 # Burn port plan — alternative to hand-tuning cubecl kernels
 
+> **Status (tick 324, 2026-05-15): ABANDONED.** A perf spike at
+> `crates/burn-conv-spike/` (commit `e101c895`) measured the
+> proposed `cubek::conv2d(5×1) + conv2d(1×5)` separable path
+> against our hand-written `downscale_kernel` at 4000×3000 f32 on
+> an RTX 5070 sm_120. Result: **4.32× slower** even with the best
+> algorithm choice (`SimpleSyncCyclic + Mma`, 1.46 ms/op vs
+> 0.34 ms/op for the hand-written direct stencil). Other cubek
+> algorithm choices (CMMA variants, strided, tilewise) all landed
+> 4.98–5.03× slower. The Mma path's tensor-core 16×16×16 tiles
+> waste 15/16 of the work when `in_channels = out_channels = 1`,
+> and im2col → GEMM doubles memory traffic vs. a direct stencil.
+> The "recover cuDNN-class perf via Burn" pitch doesn't hold for
+> our use case. ABANDON. The remaining content below is preserved
+> as the design context that surfaced the gap; future ticks that
+> want to close the 2.4× gap to pycvvdp should look at
+> shared-memory tiling / register tiling of the existing direct
+> stencil kernel instead.
+
 Captured tick 190 (2026-05-15) after the user asked: "why not have an
 agent try to port pycvvdp from pytorch to burn as an alt path that
 might be easier?". Agent investigation confirmed: yes, this is the

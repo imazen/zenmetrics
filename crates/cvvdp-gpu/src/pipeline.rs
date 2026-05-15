@@ -484,8 +484,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// per-band spatial frequencies the CSF table is queried with).
     ///
     /// Same `params` caveat as [`Cvvdp::new`]: only `params.display`
-    /// is consumed; the `csf`/`masking`/`pooling`/`jod` sub-bundles
-    /// are ignored.
+    /// and `params.perf_mode` are consumed; the
+    /// `csf`/`masking`/`pooling`/`jod` sub-bundles are ignored
+    /// (per-stage numbers inlined as `const`s in the kernels
+    /// module). See [`crate::params::PerfMode`] for the parity-vs-perf
+    /// opt-in.
     ///
     /// # Errors
     ///

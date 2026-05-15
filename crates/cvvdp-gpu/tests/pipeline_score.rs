@@ -1111,24 +1111,35 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
 
 #[test]
 fn perf_mode_fast_matches_strict_today() {
-    // Tick 322: pin the documented invariant that PerfMode::Fast is
-    // currently a no-op — it produces bit-identical output to Strict
-    // because no stage-level fast-path has landed yet. The PerfMode
-    // enum exists as the opt-in entry point for future relaxations;
-    // this test catches an accidental "premature optimization" that
-    // wires a Fast-mode fast path without documenting its drift
-    // budget and without surfacing the parity loss to callers who
-    // didn't realize PerfMode existed.
+    // Tick 322 + 324: pin the documented invariant that PerfMode::Fast
+    // is currently a no-op. The original tick-322 form asserted
+    // bit-pattern equality via .to_bits(); tick 324 surfaced that
+    // this was wrong — two separate Cvvdp instances running the
+    // same inputs can disagree by 1 ULP (~6e-8 relative) because
+    // `pool_band_3ch_kernel` uses `Atomic<f32>::fetch_add` whose
+    // reduce order is non-deterministic across runs
+    // (CHROMA_DRIFT_INVESTIGATION.md flagged this as the
+    // ~1e-5-abs floor over O(10⁴) pixels).
     //
-    // When a real Fast-mode optimization lands, this test should be
-    // RELAXED (not deleted) to the documented per-stage drift budget
-    // — e.g. `<= 0.005 JOD` for nearest-neighbor CSF, `<= 0.01 JOD`
-    // for f16 contrast pyramid storage, etc. The CHANGELOG entry
-    // for the optimization documents the new tolerance.
+    // The correct no-op contract is: Fast and Strict agree within
+    // the atomic-add noise floor — same algorithm, same numerical
+    // intent, just non-deterministic accumulation order. Today
+    // that means JOD diff <= 1e-4 abs (well below any real Fast-
+    // mode optimization's drift budget — e.g. nearest-neighbor CSF
+    // would land at ~0.005, f16 pyramid at ~0.01). When a real
+    // Fast-mode optimization lands, RELAX this to the documented
+    // per-stage drift budget; the CHANGELOG entry for the
+    // optimization documents the new tolerance.
     let client = Backend::client(&Default::default());
     let (w, h) = (64u32, 64u32);
     let geom = DisplayGeometry::STANDARD_4K;
     let ppd = geom.pixels_per_degree();
+
+    // Atomic-add noise floor measured at tick 324: 1 ULP (~6e-8
+    // relative, ~1e-7 abs at JOD ~10). Set 1000× headroom so a
+    // real Fast-mode optimization (e.g. 0.005 JOD nearest-CSF)
+    // surfaces, but f32-ordering noise doesn't trip the test.
+    const NO_OP_DRIFT_TOLERANCE: f32 = 1e-4;
 
     let n = (w * h * 3) as usize;
     let ref_bytes: Vec<u8> = (0..n).map(|i| ((i * 53 + 17) % 251) as u8).collect();
@@ -1154,12 +1165,50 @@ fn perf_mode_fast_matches_strict_today() {
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
         .expect("compute_dkl_jod (fast)");
 
-    // Today: Fast is a no-op. Bit-pattern equality. Loosen this when
-    // the first Fast-mode optimization lands.
-    assert_eq!(
-        strict_jod.to_bits(),
-        fast_jod.to_bits(),
-        "PerfMode::Fast must produce bit-identical output to PerfMode::Strict \
-         until a Fast-mode optimization lands (strict={strict_jod}, fast={fast_jod})"
+    let diff = (strict_jod - fast_jod).abs();
+    assert!(
+        diff < NO_OP_DRIFT_TOLERANCE,
+        "PerfMode::Fast must match PerfMode::Strict within atomic-add noise \
+         (strict={strict_jod}, fast={fast_jod}, |diff|={diff:.2e}, \
+          tolerance={NO_OP_DRIFT_TOLERANCE:.2e})"
+    );
+
+    // Pin the no-op contract across the warm-ref entry point too.
+    // A refactor that wired perf_mode through compute_dkl_jod but
+    // not compute_dkl_jod_with_warm_ref would silently break the
+    // documented "Fast is currently a no-op everywhere" claim. The
+    // warm-ref path is the most-used production entry (batch
+    // sweeps), so covering it closes the realistic gap.
+    strict
+        .warm_reference(&ref_bytes)
+        .expect("warm_reference (strict)");
+    let strict_warm = strict
+        .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+        .expect("compute_dkl_jod_with_warm_ref (strict)");
+    fast.warm_reference(&ref_bytes)
+        .expect("warm_reference (fast)");
+    let fast_warm = fast
+        .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+        .expect("compute_dkl_jod_with_warm_ref (fast)");
+    let warm_diff = (strict_warm - fast_warm).abs();
+    assert!(
+        warm_diff < NO_OP_DRIFT_TOLERANCE,
+        "PerfMode::Fast must match PerfMode::Strict on the warm-ref path within atomic-add noise \
+         (strict={strict_warm}, fast={fast_warm}, |diff|={warm_diff:.2e})"
+    );
+
+    // Also pin Cvvdp::score (the headline f64 API that routes
+    // through compute_dkl_jod since tick 213). Same no-op contract;
+    // tolerance is in f64 here but the underlying f32 JOD goes
+    // through .into() so the same atomic-add noise floor applies.
+    let strict_score = strict
+        .score(&ref_bytes, &dist_bytes)
+        .expect("score (strict)");
+    let fast_score = fast.score(&ref_bytes, &dist_bytes).expect("score (fast)");
+    let score_diff = (strict_score - fast_score).abs() as f32;
+    assert!(
+        score_diff < NO_OP_DRIFT_TOLERANCE,
+        "PerfMode::Fast must match PerfMode::Strict via score() within atomic-add noise \
+         (strict={strict_score}, fast={fast_score}, |diff|={score_diff:.2e})"
     );
 }

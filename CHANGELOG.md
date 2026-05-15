@@ -58,6 +58,44 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **Burn port plan marked ABANDONED.** Tick 322's PerfMode
+  framework was paired with a perf spike at
+  `crates/burn-conv-spike/` (`e101c895`, run on RTX 5070 sm_120
+  at 4000×3000 f32) that compared the proposed
+  `cubek::conv2d(5×1) + conv2d(1×5)` separable replacement
+  against our hand-written direct-stencil `downscale_kernel`.
+  Result: **4.32× slower** even with the best cubek algorithm
+  choice (`SimpleSyncCyclic + Mma`, 1.46 ms/op vs 0.34 ms/op
+  for the hand-written). Other algorithm choices landed
+  4.98–5.03× slower. Root cause: cubek routes conv2d through
+  im2col → GEMM with CMMA 16×16×16 tensor-core tiles, which
+  waste 15/16 of the work when `in_channels = out_channels = 1`
+  and doubles memory traffic vs. a direct stencil. The
+  "recover cuDNN-class perf via Burn" pitch doesn't hold for
+  our 1-channel separable use case. `docs/BURN_PORT_PLAN.md`
+  now has a "Status: ABANDONED" banner up top pointing at the
+  spike + recommending shared-memory tiling of the existing
+  direct stencil as the actionable next perf lever. The
+  surviving content stays as design context.
+
+- **`perf_mode_fast_matches_strict_today` regression test fix +
+  extension.** The tick-322 form asserted bit-pattern equality
+  via `.to_bits()`; tick 324 (this tick) surfaced that this
+  was wrong — two separate `Cvvdp` instances running the same
+  inputs can disagree by 1 ULP because `pool_band_3ch_kernel`
+  uses `Atomic<f32>::fetch_add` whose reduce order is
+  non-deterministic across runs (`CHROMA_DRIFT_INVESTIGATION.md`
+  documents the ~1e-5-abs floor over O(10⁴) pixels). The
+  tick-322 test passed by chance on the small 64² fixture; the
+  warm-ref extension I added in this tick caught the latent
+  bug. Switched to `(strict - fast).abs() < 1e-4` (1000× the
+  observed 1-ULP noise floor, still well below any real
+  Fast-mode optimization's drift budget like 0.005 for
+  nearest-CSF or 0.01 for f16 pyramid). Extended coverage to
+  `compute_dkl_jod_with_warm_ref` and `Cvvdp::score` so a
+  refactor that wired `perf_mode` through one entry point but
+  not another would surface. Tick 324.
+
 - **`PerfMode` surfaced in user-facing docs**. Tick 322 added
   the framework; this tick wires it into the discoverable
   surface area:
