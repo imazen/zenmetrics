@@ -69,9 +69,15 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       on `(src_path, knob_json)`). End-to-end smoke-tested on a 2-image
       × 2-q grid: zen-metrics sweep → pycvvdp_worker score-pairs →
       4-row parquet sidecar with `cvvdp_pycvvdp_v054` column.
-- [ ] Sweep launcher dispatching both implementations in parallel
-      (chunk-runner that fans out cvvdp_imazen + cvvdp_pycvvdp jobs
-      to separate vast.ai instances reading the same pairs TSV).
+- [x] Per-chunk dual-implementation runner:
+      `scripts/sweep/dual_impl_chunk.sh`. Drives one sweep + both
+      scorers (cvvdp-gpu + pycvvdp) + a parity TSV side-by-side.
+      Smoke-tested: 4/4 cells joinable, mean |diff| 0.0245 JOD,
+      max 0.0300 JOD on the synth zenjpeg q50/q90 corpus.
+- [ ] Multi-instance dispatch (vast.ai fan-out wrapping
+      `dual_impl_chunk.sh`) — chunk-claim from R2, run, upload
+      sidecars back. Extends the existing v15 launcher rather than
+      rebuilding from scratch.
 - [/] Verification pass (initial sentinel n=4: implementations agree
       within 0.03 JOD; need n≈100 over CID22 / KADID for full
       checkout — see commit history for the demo).

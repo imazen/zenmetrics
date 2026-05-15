@@ -60,6 +60,12 @@ Workspace conventions per the global rules:
 
 #### scripts/sweep
 
+- `dual_impl_chunk.sh` — per-chunk dual-implementation runner.
+  Drives one sweep + both cvvdp scorers (zen-metrics-cli score-pairs
+  for cvvdp-gpu + pycvvdp_worker.py for canonical pycvvdp) and
+  joins the two sidecars into a parity TSV. Local smoke test: 4
+  cells joinable, mean |diff| 0.0245 JOD, max 0.0300 JOD on the
+  synth zenjpeg q50/q90 corpus.
 - `pycvvdp_worker.py` — canonical pycvvdp v0.5.4 scoring worker.
   Consumes a TSV of `(identity_tuple, ref_path, dist_path)` rows
   and writes a parquet sidecar with the `cvvdp_pycvvdp_v054`
