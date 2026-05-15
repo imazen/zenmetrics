@@ -1030,7 +1030,19 @@ fn gauss_chain_helpers_do_not_invalidate_warm_state() {
     let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(8)).collect();
     let other_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(4)).collect();
 
-    let non_invalidators: &[&str] = &["compute_dkl_planes", "compute_dkl_gauss_pyramid"];
+    let non_invalidators: &[&str] = &[
+        "compute_dkl_planes",
+        "compute_dkl_gauss_pyramid",
+        // Tick 315: pin the dual of the tick-314 docstring fix —
+        // compute_dkl_jod_host_pool_with_warm_ref READS the cached
+        // scalar (.ok_or(NoWarmReference)) but never writes it, so
+        // it MUST preserve the warm state across calls. A refactor
+        // that accidentally cleared the scalar (e.g. moving the
+        // warm-ref host-pool path through _dispatch_d_bands_into_scratch
+        // by mistake) would silently break batch cpu-runtime
+        // scoring; this case catches it.
+        "compute_dkl_jod_host_pool_with_warm_ref",
+    ];
 
     for &name in non_invalidators {
         cvvdp
@@ -1046,6 +1058,15 @@ fn gauss_chain_helpers_do_not_invalidate_warm_state() {
                 let _ = cvvdp
                     .compute_dkl_gauss_pyramid(&other_srgb)
                     .expect("intervening compute_dkl_gauss_pyramid");
+            }
+            "compute_dkl_jod_host_pool_with_warm_ref" => {
+                // dist_srgb (not other_srgb) so the warm-ref call
+                // is a genuine score against the warmed reference,
+                // not a "fresh DIST against the same warm REF"
+                // edge case.
+                let _ = cvvdp
+                    .compute_dkl_jod_host_pool_with_warm_ref(&dist_srgb, ppd)
+                    .expect("intervening compute_dkl_jod_host_pool_with_warm_ref");
             }
             other => unreachable!("unhandled non-invalidator {other}"),
         }

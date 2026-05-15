@@ -154,6 +154,17 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `gauss_chain_helpers_do_not_invalidate_warm_state` regression
+  test extended from 2 → 3 non-invalidators. Adds
+  `compute_dkl_jod_host_pool_with_warm_ref` — pinning the
+  tick-314 docstring claim that this method only READS the
+  cached scalar (`.ok_or(NoWarmReference)`) and must preserve
+  warm state across calls. A refactor that accidentally
+  cleared the cached scalar (e.g. moving the warm-ref
+  host-pool path through `_dispatch_d_bands_into_scratch` by
+  mistake) would silently break cpu-runtime batch scoring —
+  this case catches it. Test passes. Tick 315.
+
 - `Cvvdp::warm_reference` docstring's invalidator list was
   missing `compute_dkl_jod_host_pool` — it routes through
   `_dispatch_d_bands_into_scratch` →
