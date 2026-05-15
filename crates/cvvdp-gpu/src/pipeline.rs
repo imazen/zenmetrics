@@ -772,6 +772,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
     /// these once.
     pub fn compute_dkl_laplacian_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
+        // _dispatch_laplacian_pyramid_gpu overwrites bands_ref[k] with
+        // Laplacian bands (not the Weber bands the warm-ref state was
+        // built on). Invalidate the cached scalar so a subsequent
+        // compute_dkl_jod_with_warm_ref surfaces NoWarmReference
+        // instead of silently mixing Laplacian bands against the
+        // cached Weber-baseband scalar. Same shape as the tick-236
+        // fix for compute_dkl_weber_pyramid / compute_dkl_t_p_bands.
+        self.warm_ref_baseband_log_l_bkg = None;
         self._dispatch_laplacian_pyramid_gpu(srgb)?;
 
         let n_levels = self.n_levels as usize;
@@ -2027,10 +2035,14 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Any call to [`Cvvdp::compute_dkl_jod`],
     /// [`Cvvdp::compute_dkl_d_bands`],
-    /// [`Cvvdp::compute_dkl_weber_pyramid`], or
-    /// [`Cvvdp::compute_dkl_t_p_bands`] invalidates the warm state
-    /// (their REF dispatches overwrite the shared GPU scratch). Call
-    /// `warm_reference` again to re-arm.
+    /// [`Cvvdp::compute_dkl_weber_pyramid`],
+    /// [`Cvvdp::compute_dkl_t_p_bands`],
+    /// [`Cvvdp::compute_dkl_laplacian_pyramid`], or
+    /// [`Cvvdp::compute_dkl_csf_weighted_bands`] invalidates the
+    /// warm state (their REF dispatches overwrite the shared GPU
+    /// scratch — either bands_ref via the weber chain, or bands_ref
+    /// via the Laplacian chain). Call `warm_reference` again to
+    /// re-arm.
     ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
@@ -2202,6 +2214,15 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
         l_bkg: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
+        // Overwrites bands_ref[k] (first with Laplacian bands via
+        // _dispatch_laplacian_pyramid_gpu, then in place via the per-
+        // (level, channel) weight_band_kernel loop below). Either
+        // way the warm-ref Weber bands are gone; invalidate the
+        // cached scalar so a subsequent compute_dkl_jod_with_warm_ref
+        // surfaces NoWarmReference. Same shape as the tick-236 fix
+        // for compute_dkl_weber_pyramid.
+        self.warm_ref_baseband_log_l_bkg = None;
+
         // Leaves the un-weighted Laplacian bands in
         // self.bands_ref[k].planes[c]. Uses the dispatch-only helper
         // so we don't pay for a full-pyramid host readback we'd

@@ -92,23 +92,23 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu
 
-- **Warm-ref state invalidation honored on all 4 documented
-  dispatchers.** `Cvvdp::warm_reference`'s docstring promised
-  (since tick 170) that calls to `compute_dkl_jod`,
-  `compute_dkl_d_bands`, `compute_dkl_weber_pyramid`, or
-  `compute_dkl_t_p_bands` would invalidate the cached
-  `warm_ref_baseband_log_l_bkg` scalar — but only the first two
-  actually did. `compute_dkl_weber_pyramid` and
-  `compute_dkl_t_p_bands` called `_dispatch_weber_pyramid_gpu`
-  directly (overwriting bands_ref + weber_scratch.log_l_bkg) but
-  left the scalar live, so a subsequent
-  `compute_dkl_jod_with_warm_ref` would silently mix a stale
-  scalar with fresh GPU bands and emit a wrong-and-finite JOD.
-  Both functions now clear `warm_ref_baseband_log_l_bkg` at entry.
-  New regression test
-  `warm_state_invalidates_after_each_documented_dispatcher` pins
-  the contract for all 4 dispatchers — would have caught this
-  silently-stale-scalar bug.
+- **Warm-ref state invalidation honored on all 6 dispatchers that
+  overwrite `bands_ref`.** Tick 236 fixed the two weber-chain
+  dispatchers (`compute_dkl_weber_pyramid`,
+  `compute_dkl_t_p_bands`); tick 237 audits the rest and finds
+  two more silent-stale-scalar holes through the Laplacian chain:
+  `compute_dkl_laplacian_pyramid` and `compute_dkl_csf_weighted_bands`
+  both run `_dispatch_laplacian_pyramid_gpu` which overwrites
+  `bands_ref[k].planes[c]` with Laplacian bands (not the Weber
+  bands the warm-ref state was built on). Pre-fix, a subsequent
+  `compute_dkl_jod_with_warm_ref` would silently mix Laplacian
+  bands against the cached Weber-baseband scalar. Both functions
+  now clear `warm_ref_baseband_log_l_bkg` at entry; the
+  `Cvvdp::warm_reference` docstring lists all 6 invalidators;
+  and the regression test
+  `warm_state_invalidates_after_each_documented_dispatcher`
+  extends from 4 → 6 cases. Audit is now complete: every public
+  helper that writes to `bands_ref` invalidates warm state.
 
 #### cvvdp-gpu (tests)
 

@@ -1002,8 +1002,11 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
         "compute_dkl_d_bands",
         "compute_dkl_weber_pyramid",
         "compute_dkl_t_p_bands",
+        "compute_dkl_laplacian_pyramid",
+        "compute_dkl_csf_weighted_bands",
     ];
 
+    let l_bkg_scalar = cvvdp_gpu::params::DisplayModel::STANDARD_4K.y_peak / 2.0;
     for &name in invalidators {
         cvvdp
             .warm_reference(&ref_srgb)
@@ -1028,6 +1031,16 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
                 let _ = cvvdp
                     .compute_dkl_t_p_bands(&ref_srgb, ppd)
                     .expect("intervening compute_dkl_t_p_bands");
+            }
+            "compute_dkl_laplacian_pyramid" => {
+                let _ = cvvdp
+                    .compute_dkl_laplacian_pyramid(&ref_srgb)
+                    .expect("intervening compute_dkl_laplacian_pyramid");
+            }
+            "compute_dkl_csf_weighted_bands" => {
+                let _ = cvvdp
+                    .compute_dkl_csf_weighted_bands(&ref_srgb, ppd, l_bkg_scalar)
+                    .expect("intervening compute_dkl_csf_weighted_bands");
             }
             other => unreachable!("unhandled invalidator {other}"),
         }
