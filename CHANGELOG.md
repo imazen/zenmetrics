@@ -88,6 +88,21 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (docs)
+
+- Renamed `examples/chroma_shift_drift_probe.rs` →
+  `examples/manifest_parity_probe.rs`. The file started life
+  (tick 191) as a single-fixture probe while investigating the
+  chroma_shift drift, but tick 210 expanded it to walk all 6
+  manifest fixtures — the old name no longer reflected what it
+  did. Internal doc header + run-with command updated; a note at
+  the top of `docs/CHROMA_DRIFT_INVESTIGATION.md` flags the rename
+  so historical references in that file (which describe past
+  measurements) stay accurate. Active "See ..." pointer also
+  updated to the new name. Probe verified end-to-end: all 6
+  fixtures pass at ≤ 0.005 JOD vs pycvvdp goldens, max
+  measured |d_gpu| = 0.000186 JOD on synth_256x256_blur1x3.
+
 #### cvvdp-gpu (performance)
 
 - `compute_dkl_d_bands` host readback init no longer pre-allocates

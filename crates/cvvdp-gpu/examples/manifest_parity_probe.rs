@@ -9,14 +9,18 @@
 //! manifest-parity tests use.
 //!
 //! Originally written (tick 191) as a single-fixture
-//! `chroma_shift` drift probe while investigating the 0.117 JOD
+//! `chroma_shift_drift_probe.rs` while investigating the 0.117 JOD
 //! divergence chased through ticks 191-204. Ticks 204 (baseband
 //! CSF rho) and 206 (gauss-reduce parity bug) closed every drift
 //! to f32 precision; tick 210 expanded the probe to all 6 manifest
-//! fixtures (the kept filename is a historical artifact).
+//! fixtures, and tick 229 renamed it to reflect what it actually
+//! does. References to the old name in
+//! `CHROMA_DRIFT_INVESTIGATION.md` are preserved as historical
+//! context — the verification command in this file is the
+//! authoritative one.
 //!
 //! Run:
-//!     cargo run --release --example chroma_shift_drift_probe \
+//!     cargo run --release --example manifest_parity_probe \
 //!         -p cvvdp-gpu --features cuda
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]

@@ -1,5 +1,13 @@
 # 256×256 chrominance-shift drift vs pycvvdp (RESOLVED, tick 204)
 
+> **Note on file references**: Below, `examples/chroma_shift_drift_probe.rs`
+> refers to the probe file as it existed during the investigation
+> (ticks 191-208). The file was renamed to
+> `examples/manifest_parity_probe.rs` in tick 229 to reflect that
+> it now walks all 6 manifest fixtures rather than just chroma_shift.
+> Historical references are preserved as-written so the timeline
+> stays accurate.
+
 ## Resolution — pycvvdp overrides baseband CSF rho to 0.1 cy/deg
 
 **Root cause**: `cvvdp_metric.py:628` does `rho_band[bb] = 0.1`
@@ -561,8 +569,9 @@ Likely sources:
    ch_gain in pycvvdp (`is_baseband` branch); our kernel
    path needs verification.
 
-See `examples/chroma_shift_drift_probe.rs` for the canonical
-end-to-end measurement.
+See `examples/manifest_parity_probe.rs` for the canonical
+end-to-end measurement (was `chroma_shift_drift_probe.rs` until
+tick 229; see note at top of this doc).
 
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
