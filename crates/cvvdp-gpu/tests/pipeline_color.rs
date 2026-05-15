@@ -1262,6 +1262,109 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
     );
 }
 
+#[test]
+fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
+    // Tick 201 stage-4 parity probe: D values (post-masking,
+    // post-PU-blur, pre-pool) on the chroma_shift fixture, both
+    // sides combined since D = clamped(|T_p-R_p|^p / (1+M)).
+    //
+    // After ticks 196-198 established DKL + Weber bit-identical
+    // and tick 199 found T_p REF-side diverges 0.89% rel, this
+    // localizes whether the masking model is where the divergence
+    // amplifies (or where it stays bounded) — if D bands match
+    // pycvvdp, the drift is downstream in pool / accumulation
+    // order; if D diverges, masking is the source.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // chroma_shift ref + dist bytes (same synth as the
+    // T_p test, plus the +16-on-G distortion).
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r;
+            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
+            dist_srgb[i + 2] = b;
+        }
+    }
+
+    let d_bands = cvvdp
+        .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
+        .expect("d bands");
+
+    let n_bands = d_bands.len();
+    let mut overall_max_diff = 0.0_f32;
+    let mut overall_max_rel = 0.0_f32;
+    let mut first_diverging_band: Option<usize> = None;
+    for k in 0..n_bands {
+        let sentinels = common::pycvvdp_d_chroma_shift_band(k);
+        let band_w = (wu + (1 << k) - 1) >> k;
+        let band_h = (hu + (1 << k) - 1) >> k;
+        let mut band_max_diff = 0.0_f32;
+        let mut band_max_rel = 0.0_f32;
+        for s in &sentinels {
+            let yk = (s.yk as usize).min(band_h - 1);
+            let xk = (s.xk as usize).min(band_w - 1);
+            let idx = yk * band_w + xk;
+            let pairs = [
+                ("D_A",  d_bands[k][0][idx], s.d_a),
+                ("D_RG", d_bands[k][1][idx], s.d_rg),
+                ("D_VY", d_bands[k][2][idx], s.d_vy),
+            ];
+            for (_, ours, py) in pairs {
+                let d = (ours - py).abs();
+                let r = d / py.abs().max(1e-6);
+                if d > band_max_diff {
+                    band_max_diff = d;
+                }
+                if r > band_max_rel {
+                    band_max_rel = r;
+                }
+            }
+        }
+        eprintln!("band {k} D: max abs={band_max_diff:.4e} rel={band_max_rel:.4e}");
+        if band_max_diff > overall_max_diff {
+            overall_max_diff = band_max_diff;
+        }
+        if band_max_rel > overall_max_rel {
+            overall_max_rel = band_max_rel;
+        }
+        if first_diverging_band.is_none() && band_max_rel > 1e-2 {
+            first_diverging_band = Some(k);
+        }
+    }
+    eprintln!("overall max D abs={overall_max_diff:.4e} rel={overall_max_rel:.4e}");
+    if let Some(k) = first_diverging_band {
+        eprintln!("FIRST DIVERGING BAND (D): {k}");
+    } else {
+        eprintln!("All D bands match within 1% rel — masking is bit-close, drift sits downstream");
+    }
+    // Generous tolerance gates regression; the real drift is reported
+    // via eprintln! so future ticks can read the per-band diff and
+    // localize the source. T_p had max ~0.9% rel; D may amplify to
+    // ~5% if masking is sensitive (mask_p ≈ 2.26 in the safe_pow).
+    // 50% rel is the implausible-regression tripwire.
+    assert!(
+        overall_max_rel < 0.5,
+        "D bands diverge from pycvvdp by rel={overall_max_rel:.4e} — implausible regression"
+    );
+}
+
 // NOTE (tick 191, updated tick 196): the
 // compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift test
 // still fails (0.1174 JOD drift vs golden 9.6649). Tick 196

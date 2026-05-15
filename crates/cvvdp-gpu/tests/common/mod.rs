@@ -183,6 +183,43 @@ pub struct TpSentinel {
     pub t_p_ref_vy: f32,
 }
 
+/// Per-band per-channel pycvvdp D (post-masking, post-PU-blur,
+/// pre-pool) values at chroma_shift sentinels. Used to localize
+/// whether the 0.117 JOD drift sits in masking-and-earlier vs in
+/// the pool / accumulation order. See `dump_d_chroma.py`.
+pub struct DSentinel {
+    pub y0: u32,
+    pub x0: u32,
+    pub yk: u32,
+    pub xk: u32,
+    pub d_a: f32,
+    pub d_rg: f32,
+    pub d_vy: f32,
+}
+
+/// Per-band D values for chroma_shift. Index by pyramid level
+/// `k`. Embedded via include_str! at compile time.
+pub fn pycvvdp_d_chroma_shift_band(k: usize) -> Vec<DSentinel> {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_d_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_d_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    let samples = bands[k]["samples"].as_array().expect("band samples missing");
+    samples
+        .iter()
+        .map(|s| DSentinel {
+            y0: s["y0"].as_u64().unwrap() as u32,
+            x0: s["x0"].as_u64().unwrap() as u32,
+            yk: s["yk"].as_u64().unwrap() as u32,
+            xk: s["xk"].as_u64().unwrap() as u32,
+            d_a:  s["d_a"].as_f64().unwrap() as f32,
+            d_rg: s["d_rg"].as_f64().unwrap() as f32,
+            d_vy: s["d_vy"].as_f64().unwrap() as f32,
+        })
+        .collect()
+}
+
 /// Per-band T_p (post-CSF, pre-masking) values for chroma_shift.
 /// T_p = weber · S · ch_gain. Used to localize whether the
 /// downstream-of-weber chroma drift sits in the CSF apply.

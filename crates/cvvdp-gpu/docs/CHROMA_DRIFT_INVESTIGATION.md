@@ -255,16 +255,58 @@ Remaining hypotheses (in order of suspicion now):
    where most-bands' contributions are similar magnitude,
    accumulation order could matter for the 4th decimal.
 
-### Next probe
+## Tick 201 update — D bands DIVERGE at band 4 (7% rel)
 
-Stage-by-stage dump of D bands (post-masking, post-PU-blur,
-pre-pool) on the chroma_shift fixture. If D bands match pycvvdp,
-the drift is pool-or-later (likely accumulation order). If D
-bands diverge, masking is the source.
+Stage-4 parity probe shipped:
+- `scripts/cvvdp_goldens/dump_d_chroma.py` produces
+  `pycvvdp_d_chroma_shift.json` (post-masking, post-PU-blur,
+  pre-pool D values at 10 sentinel pixels per band).
+- `compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands`
+  parity test verifies against the golden.
+
+Per-band rel diff (cvvdp-gpu vs pycvvdp at chroma_shift):
+- band 0 D: rel **2.3e-3**
+- band 1 D: rel 8.2e-4
+- band 2 D: rel 6.3e-4
+- band 3 D: rel 7.6e-4
+- **band 4 D: rel 7.0e-2** (worst — 8× amplification vs T_p's 0.9%)
+- band 5 D: rel 2.1e-2
+- band 6 D: rel 1.4e-2
+- band 7 D (baseband): rel 8.0e-4
+
+**Verdict**: The masking model **amplifies** the T_p drift by
+roughly 8× where T_p's rel error peaks (band 4-5). Given
+`D_u = safe_pow(|T_p-R_p|, mask_p) / (1 + M)` with
+`mask_p = 2.264`, the amplification path is:
+
+1. T_p_test - T_p_ref: at chroma_shift the diff is small (RG
+   shifted by 16/255 ≈ 6%) — a 0.9% rel error in either T_p
+   becomes a much larger rel error in the residual when
+   `|T_p_test - T_p_ref|` is much smaller than `T_p`.
+2. `^mask_p` (= 2.26): doubles the rel residual error.
+3. (1 + M) denominator: M can be O(1), so it dampens but
+   doesn't restore.
+
+So the **root cause is still in the CSF apply step** (the
+0.9% T_p drift), but it surfaces dramatically in D at the
+band where T_p's rel error peaks. Tick 200's L_bkg
+interp1_uniform didn't help — the rho-axis CSF lookup or
+the sensitivity_correction application is the next suspect.
+
+### Next probe (queued for next tick)
+
+Dump **raw S values** (no sens_corr applied, no ch_gain) from
+pycvvdp's `csf.sensitivity(rho, omega=0, logL_ref, cc, sigma=0)`
+on the chroma_shift fixture. Compare to our host_scalar
+`sensitivity_corrected_scalar` divided by `sens_corr_factor`.
+
+If raw S diverges, the CSF lookup table or interp is the
+source. If raw S matches, the sens_corr_factor application
+order is the source (e.g., we apply `* 10^(sens_corr/20)` per
+pixel vs pycvvdp's broadcast multiplication).
 
 See `examples/chroma_shift_drift_probe.rs` for the canonical
-measurement entry point — run on every commit to gate against
-regression.
+end-to-end measurement.
 
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
