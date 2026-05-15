@@ -405,6 +405,24 @@ original Fixed/Added/Changed sections.
   `kernels/mod.rs` that `pool_band_kernel` is retained for the
   pool-scalar unit test. Tick 291.
 
+- Added `# Errors` sections to 7 user-facing public entry
+  points (`Cvvdp::new`, `Cvvdp::new_with_geometry`,
+  `Cvvdp::score`, `Cvvdp::set_reference`,
+  `Cvvdp::score_with_reference`, `Cvvdp::warm_reference`,
+  `Cvvdp::compute_dkl_jod_with_warm_ref`) — clippy
+  `-W clippy::missing_errors_doc` was flagging all 17
+  Result-returning public methods, but only the 7 user-facing
+  ones really needed dedicated sections (the lower-level
+  `compute_dkl_*_bands` helpers are exposed for testing /
+  shadowing rather than primary use). Each new section
+  enumerates the specific `Error` variants the method can
+  return — including the tick-248 precedence audit detail
+  that `compute_dkl_jod_with_warm_ref` returns
+  `DimensionMismatch` *before* `NoWarmReference` when both
+  conditions hold. All 6 doctests still pass under the CI
+  wgpu combo (`cargo test --doc --features wgpu`). Cleared
+  7 of 17 `missing_errors_doc` warnings. Tick 306.
+
 - `host_scalar::predict_jod_still_3ch` had a stale comment
   claiming "weber_contrast_pyr path which we have NOT yet
   ported (vanilla Laplacian + linear DKL bands here vs.

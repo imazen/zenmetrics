@@ -455,8 +455,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// you specifically need to override the display model. See the
     /// `CvvdpParams::PLACEHOLDER` docstring for the full picture.
     ///
+    /// # Errors
+    ///
     /// Returns [`Error::InvalidImageSize`] if either dimension is
-    /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid).
+    /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid),
+    /// or if a GPU buffer allocation / kernel dispatch fails.
     pub fn new(
         client: ComputeClient<R>,
         width: u32,
@@ -479,6 +482,12 @@ impl<R: Runtime> Cvvdp<R> {
     /// Same `params` caveat as [`Cvvdp::new`]: only `params.display`
     /// is consumed; the `csf`/`masking`/`pooling`/`jod` sub-bundles
     /// are ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidImageSize`] if either dimension is
+    /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid),
+    /// or if a GPU buffer allocation / kernel dispatch fails.
     pub fn new_with_geometry(
         client: ComputeClient<R>,
         width: u32,
@@ -2165,6 +2174,12 @@ impl<R: Runtime> Cvvdp<R> {
     /// (it only stashes host-side bytes; no GPU dispatch).
     ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `ref_srgb.len() !=
+    /// width × height × 3`, or [`Error::InvalidImageSize`] if a GPU
+    /// readback / dispatch in the REF weber-pyramid pass fails.
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if ref_srgb.len() != expected {
@@ -2232,6 +2247,19 @@ impl<R: Runtime> Cvvdp<R> {
     ///     assert!((0.0..=10.0).contains(&jod));
     /// }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - [`Error::DimensionMismatch`] if `dist_srgb.len() !=
+    ///   width × height × 3` (checked first, ahead of the warm-state
+    ///   check, per the tick-248 precedence audit).
+    /// - [`Error::NoWarmReference`] if `warm_reference` wasn't called
+    ///   first, or the warm state was invalidated by an intervening
+    ///   REF-dispatching method (see the documented set on
+    ///   [`Cvvdp::warm_reference`]).
+    /// - [`Error::InvalidImageSize`] if a GPU readback / dispatch
+    ///   in the DIST weber → CSF → masking → pool chain fails.
     pub fn compute_dkl_jod_with_warm_ref(&mut self, dist_srgb: &[u8], ppd: f32) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
         // Tick 248: validate dist length before checking warm state.
@@ -2488,6 +2516,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// let jod = cvvdp.score(&bytes, &bytes).expect("score");
     /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if either input buffer's
+    /// length doesn't match `width × height × 3`, or
+    /// [`Error::InvalidImageSize`] if a GPU readback or dispatch
+    /// fails inside the underlying [`Cvvdp::compute_dkl_jod`].
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
@@ -2525,6 +2560,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// `set_reference_replaces_prior_cache` (tick 249). Does NOT
     /// disturb the separate warm-ref state — see
     /// `set_reference_does_not_invalidate_warm_state` (tick 238).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] if `reference_srgb.len()
+    /// != width × height × 3`. No GPU dispatch happens here — the
+    /// bytes are stashed host-side until the next
+    /// `score_with_reference` call.
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
@@ -2579,6 +2621,16 @@ impl<R: Runtime> Cvvdp<R> {
     /// let jod = cvvdp.score_with_reference(&reference).expect("score_with_reference");
     /// assert!((jod - 10.0).abs() < 1e-3, "expected JOD ≈ 10, got {jod}");
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns:
+    /// - [`Error::NoCachedReference`] if `set_reference` wasn't
+    ///   called first.
+    /// - [`Error::DimensionMismatch`] if `distorted_srgb.len() !=
+    ///   width × height × 3`.
+    /// - [`Error::InvalidImageSize`] if the underlying
+    ///   [`Cvvdp::compute_dkl_jod`] dispatch fails.
     pub fn score_with_reference(&mut self, distorted_srgb: &[u8]) -> Result<f64> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if distorted_srgb.len() != expected {
