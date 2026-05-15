@@ -150,6 +150,23 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+### Changed (post-tick-238)
+
+#### cvvdp-gpu
+
+- `kernels::csf::interp1_clamped` binary-search midpoint switched
+  from `(lo + hi) / 2` to `usize::midpoint(lo, hi)` (stable since
+  Rust 1.85; workspace MSRV 1.93). Overflow-safe by construction
+  and matches the canonical idiom — clippy `-W clippy::pedantic`
+  was suggesting it. The shorthand can't overflow at our
+  32-entry LUT sizes, but the explicit form documents intent
+  and removes a pedantic-lint speed bump for anyone who flips
+  `clippy::pedantic` on. `csf_scalar` parity tests
+  (`sensitivity_matches_pycvvdp_v0_5_4`,
+  `precomputed_band_weights_match_pointwise`,
+  `flatten_band_weights_layout`,
+  `sensitivity_is_finite_at_extremes`) still all pass. Tick 295.
+
 ### Fixed (post-tick-238)
 
 #### cvvdp-gpu (docs)

@@ -124,11 +124,15 @@ fn interp1_clamped(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     if x >= xs[n - 1] {
         return ys[n - 1];
     }
-    // Binary search for the bracket.
+    // Binary search for the bracket. `usize::midpoint` is the
+    // overflow-safe form — the `(lo + hi) / 2` shorthand would
+    // wrap on platforms where `lo + hi > usize::MAX`, which
+    // can't happen at our 32-entry LUT sizes but is the
+    // canonical idiom under MSRV 1.85+.
     let mut lo = 0usize;
     let mut hi = n - 1;
     while hi - lo > 1 {
-        let mid = (lo + hi) / 2;
+        let mid = usize::midpoint(lo, hi);
         if xs[mid] <= x {
             lo = mid;
         } else {
