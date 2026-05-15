@@ -31,6 +31,52 @@ Drift CLOSED to f32 precision. Re-enabled the
 `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift`
 test at the standard 0.005 JOD tolerance.
 
+## Follow-up: 73×91 odd-dim residual (tick 205, open)
+
+After ticks 196-204 closed the chroma_shift drift to f32 precision,
+the canonical 256² and 4K synth fixtures all pass pycvvdp parity
+at the standard 0.005 JOD tolerance. The 73×91 odd-dim fixture is
+the one outlier:
+
+| Call (ref, dist) | Ours    | pycvvdp | diff   |
+|------------------|---------|---------|--------|
+| (ref, dist)      | 9.38409 | 9.39608 | 0.012  |
+| (dist, ref)      | 9.38988 | 9.39037 | 0.0005 |
+
+Note both implementations are asymmetric here (different JOD when
+test/ref roles swap) because the 73×91 synth_pair_odd_dim fixture's
+dist has direction-asymmetric perturbations per channel
+(R−8, G−4, B+12) — `predict(ref, dist) ≠ predict(dist, ref)` is
+expected from the metric. The 0.006-0.012 JOD residual sits in our
+chain somewhere distinct from chroma_shift's baseband CSF rho.
+
+Candidates for the source (small-image specific):
+- Gauss pyramid boundary handling at very small bands (5×6, 3×3).
+- log_l_bkg statistic at the 3×3 baseband (only 9 pixels — pycvvdp
+  uses spatial-mean for `weber_g1` baseband; our host_scalar uses
+  the per-pixel L_bkg of the achromatic plane, which at 3×3 is
+  effectively a few-pixel average too).
+- PU blur skip threshold at bands ≤ 6 pixels per axis (our
+  threshold is `w > 6 && h > 6` — strictly greater, matching
+  pycvvdp's `pu_padsize = 6`).
+- Edge effects in the 5-tap separable Gaussian at very small
+  bands (5×6 has 5 wide — kernel radius 2 means every pixel
+  touches the boundary).
+
+Verified other fixtures still pass at 0.005:
+- 4000×3000 synth (12 MP)        ≤ 0.005
+- 256×256 blur3x1                ≤ 0.005
+- 256×256 blur1x3                ≤ 0.005
+- 256×256 noise                  ≤ 0.005
+- 256×256 chroma_shift           = 0.000000 (tick 204)
+
+This is a smaller drift than chroma_shift was (0.012 vs 0.117), and
+only triggers on odd dimensions ≤ ~100. Tracked for a future
+investigation tick. No code change needed to ship the chroma_shift
+fix — the existing odd-dim test `compute_dkl_jod_matches_host_scalar_on_odd_dims`
+still gates GPU vs host_scalar at 0.005 (passes; our two paths
+agree even though they jointly diverge from pycvvdp).
+
 ## Earlier history
 
 ## Finding

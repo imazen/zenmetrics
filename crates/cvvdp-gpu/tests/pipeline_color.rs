@@ -1992,3 +1992,23 @@ fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
         "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6} on odd dims (was 0.0004 at tick 184)"
     );
 }
+
+// NOTE (tick 205): a `compute_dkl_jod_matches_pycvvdp_at_73x91_odd`
+// test would currently fail at ~0.006 JOD diff. Tick 204 fixed
+// chroma_shift's 0.117 drift (baseband CSF rho = 0.1) but uncovered
+// a SEPARATE smaller drift on the odd-dim 73×91 fixture:
+//
+//   compute_dkl_jod(ref, dist)          = 9.384090
+//   compute_dkl_jod(dist, ref)          = 9.389880  (swap roles)
+//   pycvvdp predict(dist, ref) golden   = 9.390370  (canonical, from bench script)
+//   pycvvdp predict(ref, dist)          = 9.396081
+//
+// Diff in either ordering ≈ 0.006–0.012 JOD. Both our impl AND
+// pycvvdp are asymmetric here because the 73×91 synth_pair_odd_dim
+// fixture's dist has DIFFERENT-direction perturbations per channel
+// (R−8, G−4, B+12) — the test/ref roles are not interchangeable.
+// All four-channel power-of-2 fixtures (12 MP, 256² blur/noise/chroma)
+// pass at 0.005 against pycvvdp; only the odd-dim 73×91 case
+// shows the small residual. Suspected source: small-image gauss
+// pyramid boundary handling or log_l_bkg statistic at very small
+// baseband (3×3). Tracked for a future tick.
