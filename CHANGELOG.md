@@ -122,6 +122,17 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- Migrated the last 2 inline `Backend` cascade copies onto
+  `common::Backend` (tick 270 covered the 6 file-root cases):
+  - `pool_scalar.rs::mod gpu` → `use super::common::Backend;`
+    (paired with a new file-root `#[path = "common/mod.rs"] mod common;`
+    gated on the same `any(cuda, wgpu, hip)` as the gpu submodule)
+  - `shadow_jod.rs::shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus`
+    → `use common::Backend;` at the function top (already had
+    `mod common` at file root since tick 253). Drops the 4-line
+    cascade inside the fn body.
+  Backend cascade dedup now complete — 0 inline copies remain
+  anywhere in `tests/`.
 - New `common::Backend` type alias dedups the "first available GPU
   backend" cascade (`cuda` → `wgpu` → `hip`) that was hand-mirrored
   across 6 test files at file root: `color_kernel.rs`, `csf_kernel.rs`,

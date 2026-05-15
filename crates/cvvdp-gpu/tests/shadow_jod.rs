@@ -106,19 +106,10 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[test]
 fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
+    use common::Backend;
     use cubecl::Runtime;
     use cvvdp_gpu::Cvvdp;
     use cvvdp_gpu::params::CvvdpParams;
-
-    // Prefer cuda when both backends are compiled in; fall back to
-    // wgpu otherwise. Matches the type-alias pattern in
-    // `pipeline_score.rs` / `pipeline_color.rs`.
-    #[cfg(feature = "cuda")]
-    type Backend = cubecl::cuda::CudaRuntime;
-    #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-    type Backend = cubecl::wgpu::WgpuRuntime;
-    #[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-    type Backend = cubecl::hip::HipRuntime;
 
     let (w, h) = (256u32, 256u32);
     let geom = DisplayGeometry::STANDARD_4K;
