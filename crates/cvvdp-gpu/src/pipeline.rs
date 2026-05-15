@@ -330,6 +330,18 @@ pub struct Cvvdp<R: Runtime> {
     /// went unused — kept on one buffer to save ~3 MB at 256×256.
     src_ref: cubecl::server::Handle,
 
+    /// Persistent host-side `Vec<u32>` reused across every
+    /// `_dispatch_dkl_planes_gpu` call to widen the input
+    /// `&[u8]` sRGB bytes to `u32` slots (one byte per slot —
+    /// `srgb_to_dkl_kernel` reads `Array<u32>` because the LUT
+    /// indexing wants the byte as an integer). Tick 234 replaces
+    /// the per-call `srgb.iter().map(|b| b as u32).collect()`
+    /// host alloc with an in-place fill of this buffer, saving
+    /// `width × height × 3 × 4` bytes of allocator pressure per
+    /// JOD-side dispatch (~144 MB at 12 MP). Capacity is fixed
+    /// at construction time (`Cvvdp::new_with_geometry`).
+    src_u32_scratch: Vec<u32>,
+
     /// 256-entry sRGB→linear LUT, uploaded once.
     srgb_lut: cubecl::server::Handle,
 
@@ -466,6 +478,9 @@ impl<R: Runtime> Cvvdp<R> {
         // — one byte per slot, RGBRGB row-major. Matches what
         // `srgb_to_dkl_kernel` expects.
         let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0 * 3]));
+        // Persistent host-side widening scratch (tick 234). The fill
+        // happens per dispatch but allocation is amortised across calls.
+        let src_u32_scratch: Vec<u32> = vec![0u32; n0 * 3];
         let srgb_lut = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
 
         let build_pyramid = |client: &ComputeClient<R>| -> Vec<Level> {
@@ -561,6 +576,7 @@ impl<R: Runtime> Cvvdp<R> {
             height,
             n_levels,
             src_ref,
+            src_u32_scratch,
             srgb_lut,
             gauss_ref,
             bands_ref,
@@ -642,8 +658,18 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let n0 = (self.width as usize) * (self.height as usize);
 
-        let src_u32: Vec<u32> = srgb.iter().map(|&b| b as u32).collect();
-        self.src_ref = self.client.create_from_slice(u32::as_bytes(&src_u32));
+        // Widen sRGB bytes into the persistent host scratch buffer
+        // (sized at construction time for `n0 * 3` slots). Tick 234
+        // replaces the per-call `Vec<u32>` alloc + collect — at 12 MP
+        // that's a ~144 MB allocator round-trip the warm-ref loop
+        // otherwise pays per DIST candidate.
+        debug_assert_eq!(self.src_u32_scratch.len(), n0 * 3);
+        for (dst, &b) in self.src_u32_scratch.iter_mut().zip(srgb.iter()) {
+            *dst = b as u32;
+        }
+        self.src_ref = self
+            .client
+            .create_from_slice(u32::as_bytes(&self.src_u32_scratch));
 
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();

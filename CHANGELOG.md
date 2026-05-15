@@ -88,6 +88,21 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (performance)
+
+- **Persistent `src_u32_scratch` host buffer** — `Cvvdp::new` pre-
+  allocates a `Vec<u32>` of length `width * height * 3` once at
+  construction time; `_dispatch_dkl_planes_gpu` now fills it in
+  place via `iter_mut().zip(srgb.iter())` instead of allocating
+  a fresh `Vec<u32>` per call via `.iter().map(|b| b as u32).collect()`.
+  Removes ~`width × height × 12` bytes of host allocator round-trip
+  per JOD-side dispatch — at 12 MP that's ~144 MB per side, paid
+  twice per cold JOD and once per warm-ref DIST. The GPU buffer
+  upload (`create_from_slice` of the scratch's bytes) still
+  happens per call since cubecl 0.10 has no public "write into
+  existing handle" API. All 27 pipeline_color + 9 pipeline_score
+  + 4 cpu_backend tests green; manifest parity untouched.
+
 #### cvvdp-gpu (docs)
 
 - `Cvvdp::compute_dkl_jod_with_warm_ref` now has a `no_run` doctest
