@@ -120,6 +120,17 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- `debug_assert_fires_when_ppd_mismatches_geometry` — pins the
+  tick-243 ppd-mismatch debug_assert. Builds Cvvdp with the
+  default STANDARD_4K geometry (75.4 PPD), then calls
+  `compute_dkl_jod` with the phone-shaped 110-PPD value; expects
+  panic via `#[should_panic(expected = "ppd=")]`. Gated on
+  `#[cfg(debug_assertions)]` so release builds skip the test
+  (the assert compiles out there). A future refactor that drops
+  the safety net would silently regress without this pin.
+
 #### cvvdp-gpu (debug)
 
 - **Surface silent-ignored `ppd` mismatches in debug builds.**

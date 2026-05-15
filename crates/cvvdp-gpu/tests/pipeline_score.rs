@@ -318,6 +318,50 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     check_dim_err(err, "compute_dkl_jod_with_warm_ref(short)");
 }
 
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "ppd=")]
+fn debug_assert_fires_when_ppd_mismatches_geometry() {
+    // Tick 244: pin the tick-243 debug_assert. Builds Cvvdp with
+    // the default STANDARD_4K geometry (75.4 PPD), then calls
+    // compute_dkl_jod with a phone PPD (110.087282 derived from
+    // a 5.5″ 1080p phone at 0.40m). Expects the debug-only ppd-
+    // mismatch assertion to fire.
+    //
+    // #[cfg(debug_assertions)] guards the test definition: release
+    // builds skip it (the assertion compiles out, so the call
+    // wouldn't panic and #[should_panic] would itself fail). The
+    // assert is informational only — a refactor that drops the
+    // ppd safety net would silently regress without this test.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_bytes = vec![128u8; n];
+    let dist_bytes = vec![128u8; n];
+
+    // Phone PPD for a 5.5″ 1080p display at 0.40m (110.087 ≠ 75.4).
+    let phone_geom = cvvdp_gpu::params::DisplayGeometry {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.40,
+        diagonal_inches: 5.5,
+    };
+    let phone_ppd = phone_geom.pixels_per_degree();
+    let standard_4k_ppd =
+        cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    assert!(
+        (phone_ppd - standard_4k_ppd).abs() > 1.0,
+        "test premise broken: phone_ppd {phone_ppd} too close to STANDARD_4K {standard_4k_ppd}"
+    );
+
+    // Should panic at the debug_assert in compute_dkl_jod via
+    // debug_assert_ppd_matches_geometry.
+    let _ = cvvdp.compute_dkl_jod(&ref_bytes, &dist_bytes, phone_ppd);
+}
+
 #[test]
 fn compute_dkl_jod_on_v1_manifest_corpus() {
     // GPU-composed compute_dkl_jod against the v1 R2 manifest values.
