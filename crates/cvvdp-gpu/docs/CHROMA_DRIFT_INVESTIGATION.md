@@ -130,6 +130,44 @@ Next-tick target: instrument the Weber-contrast pyramid output
 on the chroma_shift fixture. If our weber bands match pycvvdp's,
 drift is further downstream (CSF / masking / pool).
 
+## Tick 197-198 — weber bit-identical, drift downstream
+
+Tick 197 added the band-0 weber-stage parity probe. Result:
+max diff 2.3e-7 — bit-identical with pycvvdp.
+
+Tick 198 extended to all 8 bands:
+- band 0: max diff 2.3e-7
+- band 1: max diff 2.7e-7
+- band 2: max diff 2.1e-7
+- band 3: max diff 1.1e-7
+- band 4: max diff 2.2e-7
+- band 5: max diff 2.0e-7
+- band 6: max diff 2.2e-7
+- band 7 (baseband): max diff 2.4e-7
+
+All bands bit-identical with pycvvdp across all 10 sentinel
+pixels. **The 0.117 JOD chroma_shift drift is now provably
+downstream of the entire pyramid stage.**
+
+The complete sequence:
+- DKL (sRGB → DKL): ✓ bit-identical (tick 196, after LUT fix)
+- Gauss pyramid reduce: ✓ implicit (Weber consumes its output)
+- Gauss pyramid expand: ✓ implicit
+- Weber-contrast subtract + L_bkg divide: ✓ bit-identical
+- log_l_bkg: ✓ implicit (same input as weber)
+
+So the drift is in one (or more) of:
+- CSF apply (T_p = weber · S · ch_gain · band_mul)
+- mult-mutual masking + PU blur
+- Spatial pool (L_p norm with safe_pow)
+- 3-stage Minkowski fold
+- met2jod piecewise
+
+Most likely candidate: CSF apply, since at chroma_shift the
+chromatic channels (RG, VY) carry most of the signal and the
+CSF interp at chrominance frequencies + log_L_bkg is the
+densest part of the downstream pipeline.
+
 Tick 195 also falsified:
 - **`MASK_P`** = 2.264355 (matches pycvvdp 2.264355182647705)
 - **`MASK_Q`** = [1.302623, 2.888591, 3.680771] (matches pycvvdp's
