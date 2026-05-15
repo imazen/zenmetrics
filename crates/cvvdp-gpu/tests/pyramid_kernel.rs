@@ -17,8 +17,8 @@
 use cubecl::Runtime;
 use cubecl::prelude::*;
 use cvvdp_gpu::kernels::pyramid::{
-    downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar, subtract_kernel,
-    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
+    baseband_divide_3ch_kernel, downscale_kernel, gausspyr_expand_scalar, gausspyr_reduce_scalar,
+    subtract_kernel, subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
     weber_contrast_compute_3ch_kernel, weber_contrast_compute_kernel,
 };
 
@@ -474,4 +474,110 @@ fn subtract_kernel_produces_band_correctly() {
             "band[{i}] = {v}, expected {expected}"
         );
     }
+}
+
+#[test]
+fn baseband_divide_3ch_kernel_scales_all_channels_by_uniform() {
+    // Mirrors the baseband finishing step in `_dispatch_weber_pyramid_gpu`:
+    // bands[c][i] = gauss[c][i] * inv_l_bkg_mean. The kernel takes the
+    // mean as a host-computed scalar uniform, so the test fixes a
+    // mean and verifies all three channels are scaled correctly in
+    // one launch. Inputs include negatives, zeros, and large values
+    // so a stray clamp / abs would show up.
+    let client = Backend::client(&Default::default());
+
+    // gauss_a stays positive (mean is positive); gauss_rg / gauss_vy
+    // include strong negatives and large positives so signs and
+    // magnitudes after scaling exercise the full f32 range.
+    let gauss_a: Vec<f32> = (0..64).map(|i| 0.05 + (i as f32) * 0.05).collect();
+    let gauss_rg: Vec<f32> = (0..64).map(|i| (i as f32) * 0.4 - 12.0).collect();
+    let gauss_vy: Vec<f32> = (0..64).map(|i| (i as f32 - 32.0) * 0.5).collect();
+    let n = gauss_a.len();
+
+    // Use the same recipe as the dispatch path: mean over
+    // max(gauss_a, 0.01), then divide each channel by that mean.
+    let mean: f32 = gauss_a.iter().map(|v| v.max(0.01)).sum::<f32>() / n as f32;
+    let inv_mean = 1.0_f32 / mean;
+
+    let gauss_a_h = client.create_from_slice(f32::as_bytes(&gauss_a));
+    let gauss_rg_h = client.create_from_slice(f32::as_bytes(&gauss_rg));
+    let gauss_vy_h = client.create_from_slice(f32::as_bytes(&gauss_vy));
+    let band_a_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let band_rg_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let band_vy_h = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+
+    unsafe {
+        baseband_divide_3ch_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(gauss_a_h, n),
+            ArrayArg::from_raw_parts(gauss_rg_h, n),
+            ArrayArg::from_raw_parts(gauss_vy_h, n),
+            ArrayArg::from_raw_parts(band_a_h.clone(), n),
+            ArrayArg::from_raw_parts(band_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(band_vy_h.clone(), n),
+            inv_mean,
+            n as u32,
+        );
+    }
+
+    let band_a_b = client.read_one(band_a_h).expect("read band_a");
+    let band_rg_b = client.read_one(band_rg_h).expect("read band_rg");
+    let band_vy_b = client.read_one(band_vy_h).expect("read band_vy");
+    let band_a: &[f32] = f32::from_bytes(&band_a_b);
+    let band_rg: &[f32] = f32::from_bytes(&band_rg_b);
+    let band_vy: &[f32] = f32::from_bytes(&band_vy_b);
+
+    for i in 0..n {
+        let exp_a = gauss_a[i] / mean;
+        let exp_rg = gauss_rg[i] / mean;
+        let exp_vy = gauss_vy[i] / mean;
+        // 1e-5 relative tol covers the 1/x → multiply rounding step
+        // (a host divide vs `gpu_val * inv_mean` differ in the last
+        // 1-2 ulp on real inputs).
+        let tol_a = 1e-5_f32 * exp_a.abs().max(1e-3);
+        let tol_rg = 1e-5_f32 * exp_rg.abs().max(1e-3);
+        let tol_vy = 1e-5_f32 * exp_vy.abs().max(1e-3);
+        assert!(
+            (band_a[i] - exp_a).abs() < tol_a,
+            "band_a[{i}] = {} expected {} (gauss_a={}, mean={})",
+            band_a[i],
+            exp_a,
+            gauss_a[i],
+            mean,
+        );
+        assert!(
+            (band_rg[i] - exp_rg).abs() < tol_rg,
+            "band_rg[{i}] = {} expected {} (gauss_rg={}, mean={})",
+            band_rg[i],
+            exp_rg,
+            gauss_rg[i],
+            mean,
+        );
+        assert!(
+            (band_vy[i] - exp_vy).abs() < tol_vy,
+            "band_vy[{i}] = {} expected {} (gauss_vy={}, mean={})",
+            band_vy[i],
+            exp_vy,
+            gauss_vy[i],
+            mean,
+        );
+    }
+
+    // Sanity: at least one negative output (gauss_rg includes
+    // negatives) and one large-magnitude output (gauss_vy spans
+    // -6.4 to +6.2) so the test really exercises sign + range, not
+    // just one corner.
+    assert!(
+        band_rg.iter().any(|&v| v < -0.5),
+        "test inputs failed to exercise negative outputs",
+    );
+    assert!(
+        band_vy.iter().any(|&v| v.abs() > 4.0),
+        "test inputs failed to exercise large-magnitude outputs",
+    );
 }
