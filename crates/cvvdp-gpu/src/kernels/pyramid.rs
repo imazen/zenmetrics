@@ -1028,6 +1028,17 @@ pub fn subtract_weber_3ch_kernel(
     log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 }
 
+// Note (tick 159): I tried adding `upscale_v_3ch_kernel` and
+// `upscale_h_3ch_kernel` that read/write 3 channels per thread with
+// shared index/mask math. The intent was to halve the upscale
+// launch count per level (6 → 2). Result: a ~4% jod regression at
+// 12 MP on RTX-class CUDA — the 3ch kernel's per-thread work and
+// register footprint reduced warp-level latency hiding more than
+// launch overhead was costing us. Kept as a doc breadcrumb so this
+// path isn't re-tried without a different angle (e.g. shared-memory
+// tiling that actually changes the memory access pattern).
+
+
 /// Baseband finishing step: scale each of the 3 coarsest Gaussian
 /// planes by `inv_l_bkg_mean` (= 1 / mean(max(gauss_a, 0.01))) and
 /// emit the 3 baseband bands. Replaces the host-side per-channel

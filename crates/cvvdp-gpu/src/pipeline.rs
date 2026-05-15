@@ -655,9 +655,31 @@ impl<R: Runtime> Cvvdp<R> {
     /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
     /// these once.
     pub fn compute_dkl_laplacian_pyramid(&mut self, srgb: &[u8]) -> Result<Vec<[Vec<f32>; 3]>> {
-        // Builds the Gaussian pyramid first (color → reduce chain).
-        // Uses the dispatch-only helper so we don't pay for a host
-        // readback of the full pyramid we don't consume here.
+        self._dispatch_laplacian_pyramid_gpu(srgb)?;
+
+        let n_levels = self.n_levels as usize;
+        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+            for c in 0..N_CHANNELS {
+                let h = self.bands_ref[k].planes[c].clone();
+                let bytes = self
+                    .client
+                    .read_one(h)
+                    .map_err(|_| Error::InvalidImageSize)?;
+                planes[c] = f32::from_bytes(&bytes).to_vec();
+            }
+            out.push(planes);
+        }
+        Ok(out)
+    }
+
+    /// Dispatch-only version of `compute_dkl_laplacian_pyramid`:
+    /// builds the Gaussian pyramid on GPU then emits the Laplacian
+    /// bands into `bands_ref[k].planes[c]`. No host readback. Used by
+    /// `compute_dkl_csf_weighted_bands` so we don't pay for a pyramid
+    /// readback whose result is immediately discarded.
+    fn _dispatch_laplacian_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<()> {
         self._dispatch_gauss_pyramid_gpu(srgb)?;
 
         let cube_dim = CubeDim::new_1d(64);
@@ -738,21 +760,7 @@ impl<R: Runtime> Cvvdp<R> {
             self.bands_ref[last].planes[c] = self.client.create_from_slice(&bytes);
         }
 
-        // Read back every band × every channel.
-        let mut out: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
-        for k in 0..n_levels {
-            let mut planes = [Vec::new(), Vec::new(), Vec::new()];
-            for c in 0..N_CHANNELS {
-                let h = self.bands_ref[k].planes[c].clone();
-                let bytes = self
-                    .client
-                    .read_one(h)
-                    .map_err(|_| Error::InvalidImageSize)?;
-                planes[c] = f32::from_bytes(&bytes).to_vec();
-            }
-            out.push(planes);
-        }
-        Ok(out)
+        Ok(())
     }
 
     /// Run color + Weber-contrast pyramid on GPU. Matches what
@@ -874,6 +882,16 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             // Per channel: upscale coarse → fine (separable v + h).
+            // Tried fusing into 3-channel kernels (see git history,
+            // tick 159) — that regressed perf at 12 MP on RTX-class
+            // CUDA by ~4% jod. Hypothesis: the 3ch kernel's register
+            // pressure / per-thread work limited warp-level
+            // parallelism; the 6 small launches per level give the
+            // CUDA scheduler more in-flight warps to hide latency.
+            // The 3ch fusion may still win on backends with higher
+            // launch overhead (wgpu/hip) but isn't worth the
+            // launch-count saving on CUDA.
+            //
             // Subtract + Weber-contrast + log_l_bkg are fused into a
             // single 3-channel launch (tick 91) below — eliminates 3
             // subtract_kernel launches per level + the `layer_c`
@@ -1719,9 +1737,11 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
         l_bkg: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
-        // Side effect: leaves the un-weighted Laplacian bands in
-        // self.bands_ref[k].planes[c].
-        let _ = self.compute_dkl_laplacian_pyramid(srgb)?;
+        // Leaves the un-weighted Laplacian bands in
+        // self.bands_ref[k].planes[c]. Uses the dispatch-only helper
+        // so we don't pay for a full-pyramid host readback we'd
+        // immediately discard.
+        self._dispatch_laplacian_pyramid_gpu(srgb)?;
 
         let weights_per_level =
             precomputed_band_weights(ppd, self.width as usize, self.height as usize, l_bkg);
