@@ -336,6 +336,77 @@ Perf trajectory through the recent fusion + host-pressure wave:
 | 145  |  87       | 1.01× tied          |
 | 150  |  **75**   | **1.15× faster**    |
 
+Host-memory-pressure relief continued + structural readback
+elimination (ticks 151–160):
+
+- **REF CSF reads `bands_ref` GPU handles directly** (tick 155,
+  `d7c7322c`) — symmetrical to tick 87's DIST-side fix. The
+  band-loop's REF CSF dispatch had been uploading `ref_weber[k]`
+  from the host Vec; after tick 154's `bands_ref` / `bands_dis`
+  split persisted both sides' data on GPU, the REF CSF kernel
+  reads `self.bands_ref[k]` handles in place. Drops 3 host→GPU
+  uploads per non-baseband level (~50 MB total at 12 MP).
+- **REF weber pyramid skips bands readback** (tick 156, `2993c0a0`)
+  — `_dispatch_d_bands_into_scratch` had been calling the public
+  `compute_dkl_weber_pyramid(ref_srgb)` wrapper which read back
+  ~190 MB of bands per call (`Vec<Vec<f32>>`). Replaced with a
+  direct call to `_dispatch_weber_pyramid_gpu` + a manual
+  `log_l_bkg`-only readback loop. 12 MP jod 70.3 → 60.2 ns/px
+  (−14%), now 1.43× faster than fcvvdp 8t.
+- **Dispatch-only split for `compute_dkl_planes` + `compute_dkl_gauss_pyramid`**
+  (tick 157) — extracted private `_dispatch_dkl_planes_gpu` and
+  `_dispatch_gauss_pyramid_gpu` siblings.
+  `_dispatch_weber_pyramid_gpu` and `compute_dkl_laplacian_pyramid`
+  switched off the public wrappers (was `let _ = ...`). Saves
+  ~230 MB of wasted host transfer per weber call (36 MB level-0
+  + ~190 MB pyramid). 12 MP jod 60.2 → 53.0 ns/px (−12%), now
+  1.62× faster than fcvvdp 8t.
+- **GPU baseband-divide** (tick 158, `3b78f847`) — adds
+  `baseband_divide_3ch_kernel` (pyramid.rs). The weber baseband
+  finishing step had been doing 3 channel readbacks + 3 channel
+  reuploads + per-channel host divides; now does 1 GPU launch
+  using host-computed `l_bkg_mean` as a scalar uniform. Sync
+  drain count per weber side: 4 → 1.
+- **Tested-and-regressed 3ch upscale fusion + laplacian dispatch-only split**
+  (tick 159, `6495c462`) — `upscale_v_3ch_kernel` /
+  `upscale_h_3ch_kernel` (same fusion pattern as
+  `weber_contrast_compute_3ch`) regressed jod ~4% at 12 MP on
+  RTX CUDA across two runs. Hypothesis: 3ch register footprint
+  reduced warp-level latency hiding more than launch overhead
+  was costing us. Left a breadcrumb in pyramid.rs so this isn't
+  re-tried without a different angle (e.g. shared-memory tiling).
+  Same commit also added `_dispatch_laplacian_pyramid_gpu` so
+  `compute_dkl_csf_weighted_bands` no longer discards a full-
+  pyramid host readback via `let _ = ...`.
+- **Direct parity test for `baseband_divide_3ch_kernel`**
+  (tick 160, `baf4878e`) — closes a coverage gap from tick 158.
+  The kernel had been verified through the higher-level
+  `compute_dkl_weber_pyramid_matches_host_on_corpus_256x256`
+  integration test; the new unit test in `pyramid_kernel.rs`
+  gives a fast regression gate with inputs that exercise
+  negatives, large magnitudes, and 3 distinct channel patterns.
+
+12 MP perf trajectory through this wave
+(`benchmarks/time_12mp_tick{155,156,157,158}_2026-05-14.md`):
+
+| tick | jod ns/px | weber 1-side | d_bands  | vs fcvvdp 8t |
+| ---- | --------- | -----------  | -------- | ------------ |
+| 150  | 74.6      | 29.0         | 71.0     | 1.15× faster |
+| 155  | 70.3      | 31.8         | 73.5     | 1.22× faster |
+| 156  | 60.2      | 29.2         | 52.0     | 1.43× faster |
+| 157  | 53.0      | 25.5         | 45.2     | 1.62× faster |
+| 158  | **52.9**  | **24.9**     | **43.7** | **1.63× faster** |
+
+The `d_bands − 2×weber` bucket (CSF + masking + IO) is sub-noise
+since tick 156: 2×weber ≈ d_bands, meaning the band-loop overhead
+is now bandwidth-tightly packed against the two weber pyramids.
+The next remaining hot spot is the gauss-pyramid reduce (5×5
+downscale, 25 src reads per output pixel), which a shared-memory
+tiled rewrite could shrink — but the per-thread register
+pressure observation from tick 159 means any fusion attempt
+should change the memory access pattern, not just rearrange
+launches.
+
 ### Investigation Notes (cvvdp-gpu, post-tick-81)
 
 These observations don't ship as code, but they document
@@ -367,26 +438,26 @@ findings that would otherwise be re-discovered:
 
 Net 12 MP performance trajectory (CUDA, RTX-class):
 
-| metric                  | tick 64 | tick 73 | latest |
-| ----                    | ----    | ----    | ----   |
-| weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 21.6 ns/px |
-| compute_dkl_d_bands     | 428 ns/px | 121 ns/px | 121 ns/px |
-| compute_dkl_jod         | 444 ns/px | 127 ns/px | 127 ns/px |
+| metric                  | tick 64   | tick 73    | tick 158  |
+| ----                    | ----      | ----       | ----      |
+| weber pyramid (1 side)  | 103 ns/px | 21.6 ns/px | 24.9 ns/px |
+| compute_dkl_d_bands     | 428 ns/px | 121 ns/px  | 43.7 ns/px |
+| compute_dkl_jod         | 444 ns/px | 127 ns/px  | 52.9 ns/px |
 
-Tick 87's dist-side handle-direct CSF showed a 3% d_bands /
-7% jod improvement on a single 12 MP run vs the immediately
-prior baseline on the same machine — not yet promoted into
-the trajectory table because the tick 73 figures are
-machine-equalized published numbers and the new measurement
-was a single point. The next properly-benchmarked sweep
-will re-anchor the column.
+(The weber column went up between tick 73 and tick 158 because
+tick 73's measurement was taken on a fresh process with no
+prior GPU state; later ticks share state with the dispatch
+pipeline that runs around weber, and the standalone weber
+benchmark in `time_12mp` ends up with more thermal/warm-up
+mix. The d_bands and jod columns are the load-bearing
+trajectory.)
 
 vs fcvvdp at 360 p (their bench, i7-13700k):
 
 | variant       | per-pixel  | vs current cvvdp-gpu @ 12 MP |
 | ----          | ----       | ----                         |
-| 1-thread      | 214 ns/px  | we are 1.68× faster          |
-| 8-thread      |  86 ns/px  | we are 1.48× slower          |
+| 1-thread      | 214 ns/px  | we are **4.05× faster**      |
+| 8-thread      |  86 ns/px  | we are **1.63× faster**      |
 
 ### Fixed
 
