@@ -154,6 +154,29 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- Dropped dead `ppd: f32` parameter from two private GPU
+  dispatchers (`_dispatch_d_bands_into_scratch` and
+  `_dispatch_d_bands_dist_and_band_loop`) plus the redundant
+  `let _ = ppd;` discard in `compute_dkl_t_p_bands`.
+  All 6 public methods that take `ppd` validate it via
+  `debug_assert_ppd_matches_geometry(ppd)` at entry; the value
+  itself isn't consumed by the GPU stages (logs_row is
+  pre-uploaded against the construction-time geometry at
+  `Cvvdp::new` time, so the runtime band-loop kernel reads
+  the cached rho-per-band instead of recomputing from ppd).
+  The private helpers were threading ppd through dead until
+  the `let _ = ppd;` discard at the bottom of each. Updated
+  signatures and all 5 call sites
+  (3× `_dispatch_d_bands_into_scratch` from
+  `compute_dkl_jod` / `compute_dkl_d_bands` /
+  `compute_dkl_jod_host_pool` and
+  2× `_dispatch_d_bands_dist_and_band_loop` from
+  `compute_dkl_jod_with_warm_ref` /
+  `compute_dkl_jod_host_pool_with_warm_ref`).
+  Public method signatures unchanged. 14 `pipeline_score`
+  tests + `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`
+  all pass — JOD output is byte-identical. Tick 312.
+
 - Dropped two unused dev-dependencies from
   `crates/cvvdp-gpu/Cargo.toml`:
   - `bytemuck` — zero references anywhere in `src/`, `tests/`,

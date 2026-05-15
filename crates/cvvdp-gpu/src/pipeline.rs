@@ -1446,10 +1446,6 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let (_, _, baseband_n) = self.level_dims(n_levels - 1);
         log_l_bkg.push(vec![log_l_bkg_baseband; baseband_n]);
-        // ppd unused — logs_row is pre-uploaded against the geometry
-        // baked into Cvvdp::new. compute_dkl_t_p_bands still takes
-        // ppd in the signature for source-compatibility.
-        let _ = ppd;
 
         let cube_dim = CubeDim::new_1d(64);
 
@@ -1591,7 +1587,6 @@ impl<R: Runtime> Cvvdp<R> {
         &mut self,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
-        ppd: f32,
     ) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let t_weber_ref = std::time::Instant::now();
@@ -1599,7 +1594,7 @@ impl<R: Runtime> Cvvdp<R> {
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)
     }
 
     /// DIST weber + band loop. Reads REF-side state from
@@ -1618,7 +1613,6 @@ impl<R: Runtime> Cvvdp<R> {
         &mut self,
         dist_srgb: &[u8],
         log_l_bkg_baseband: f32,
-        ppd: f32,
     ) -> Result<()> {
         // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
         // see where the dispatch spends its time without committing
@@ -1632,10 +1626,6 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         let n_levels = self.n_levels as usize;
-        // ppd unused — logs_row is pre-uploaded against the geometry
-        // baked into Cvvdp::new. compute_dkl_d_bands keeps ppd in the
-        // signature for source-compatibility.
-        let _ = ppd;
         let cube_dim = CubeDim::new_1d(64);
         // `10^MASK_C` post-blur scale for the PU stage — constant
         // per Cvvdp config, so compute once outside the band loop.
@@ -1941,7 +1931,7 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
         self.debug_assert_ppd_matches_geometry(ppd);
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
 
         let n_levels = self.n_levels as usize;
         let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
@@ -2030,7 +2020,7 @@ impl<R: Runtime> Cvvdp<R> {
         // to host. `compute_dkl_d_bands` (the parity-test helper)
         // adds a per-band readback on top, paying ~432 MB of
         // GPU→host transfer at 12 MP — JOD skips that.
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
         self._pool_and_finalize_jod()
     }
 
@@ -2100,7 +2090,7 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<f32> {
         self.debug_assert_ppd_matches_geometry(ppd);
-        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
         self._host_pool_and_finalize_jod()
     }
 
@@ -2190,7 +2180,7 @@ impl<R: Runtime> Cvvdp<R> {
         let log_l_bkg_baseband = self
             .warm_ref_baseband_log_l_bkg
             .ok_or(Error::NoWarmReference)?;
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
         self._host_pool_and_finalize_jod()
     }
 
@@ -2350,7 +2340,7 @@ impl<R: Runtime> Cvvdp<R> {
         let log_l_bkg_baseband = self
             .warm_ref_baseband_log_l_bkg
             .ok_or(Error::NoWarmReference)?;
-        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
         self._pool_and_finalize_jod()
     }
 
