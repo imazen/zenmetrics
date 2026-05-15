@@ -88,6 +88,17 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (tests)
+
+- `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth` —
+  large-image warm-ref pycvvdp parity. Completes the warm-ref vs
+  pycvvdp coverage grid: small same-parity (chroma_shift, tick 222)
+  + small mixed-parity (73×91, tick 226) + large same-parity here
+  (12 MP, full ~9-band pyramid). Exercises warm-state restoration
+  across every weber_scratch level. Measured diff: 0.0000 JOD.
+  Runtime ~6s on RTX-class CUDA — within parity-test budget,
+  matches the existing cold-path 12mp test cadence.
+
 #### cvvdp-gpu (performance)
 
 - **Persistent `src_u32_scratch` host buffer** — `Cvvdp::new` pre-

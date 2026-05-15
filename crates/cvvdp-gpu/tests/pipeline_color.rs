@@ -2299,3 +2299,71 @@ fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd() {
         "warm-ref JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth() {
+    // Tick 235: large-image warm-ref pycvvdp parity. Completes the
+    // warm-ref vs pycvvdp coverage grid:
+    //   - chroma_shift (tick 222): small same-parity
+    //   - 73×91 odd-dim (tick 226): small mixed-parity
+    //   - 4000×3000 here:           large same-parity (full ~9-band pyramid)
+    //
+    // The full-depth pyramid exercises the warm-state restoration
+    // across every weber_scratch[k].log_l_bkg level — a regression
+    // in deep-pyramid warm-state would surface here even if it stays
+    // hidden on the 256×256 fixtures.
+    //
+    // Runtime: ~600ms cold warm_reference + ~600ms compute_dkl_jod_with_warm_ref
+    // on RTX-class CUDA. Acceptable budget for parity tests at
+    // parity with the existing compute_dkl_jod_matches_pycvvdp_at_12mp_synth.
+    //
+    // Synth construction matches `synth_pair_12mp` in
+    // scripts/cvvdp_goldens/bench_12mp_cuda.py — keep in sync.
+    let pycvvdp_golden_jod: f32 = common::pycvvdp_synth_golden_jod("synth_4000x3000");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (4000u32, 3000u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    cvvdp
+        .warm_reference(&ref_srgb)
+        .expect("warm_reference");
+    let gpu_jod = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_with_warm_ref");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "warm-ref 12mp synth: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "warm-ref 12mp JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}
