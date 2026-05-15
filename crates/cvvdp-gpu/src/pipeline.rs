@@ -1152,8 +1152,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// as `compute_dkl_weber_pyramid`'s `.0`.
     pub fn compute_dkl_t_p_bands(&mut self, srgb: &[u8], ppd: f32) -> Result<Vec<[Vec<f32>; 3]>> {
         // Build Weber bands + log_l_bkg on GPU. Side effect leaves
-        // weber bands resident in self.bands_ref and log_l_bkg as
-        // host-side data.
+        // weber bands resident in self.bands_ref and log_l_bkg in
+        // weber_scratch[k].log_l_bkg handles.
         //
         // Tick 101: fused 3-channel CSF apply (was 3 per-channel
         // launches per level) AND read weber from `self.bands_ref`
@@ -1161,8 +1161,33 @@ impl<R: Runtime> Cvvdp<R> {
         // returned by compute_dkl_weber_pyramid). Per non-baseband
         // level: 3 host uploads + 3 kernel launches → 0 uploads +
         // 1 launch.
-        let (_weber_bands_unused, log_l_bkg) = self.compute_dkl_weber_pyramid(srgb)?;
+        //
+        // Tick 163: dispatch directly via `_dispatch_weber_pyramid_gpu`
+        // and read back log_l_bkg only (the per-level planes the CSF
+        // kernel needs), skipping the public wrapper's ~190 MB bands
+        // host-alloc. Mirrors the fix tick 156 applied in
+        // `_dispatch_d_bands_into_scratch`.
         let n_levels = self.n_levels as usize;
+        let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        let log_l_bkg_baseband =
+            self._dispatch_weber_pyramid_gpu(srgb, &ref_log_l_bkg_dests, false)?;
+        let mut log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels.saturating_sub(1) {
+            let (_, _, n_px_k) = self.level_dims(k);
+            let h = self.weber_scratch[k].log_l_bkg.clone();
+            let bytes = self
+                .client
+                .read_one(h)
+                .map_err(|_| Error::InvalidImageSize)?;
+            log_l_bkg.push(f32::from_bytes(&bytes).to_vec());
+            debug_assert_eq!(log_l_bkg[k].len(), n_px_k);
+        }
+        let (_, _, baseband_n) = self.level_dims(n_levels - 1);
+        log_l_bkg.push(vec![log_l_bkg_baseband; baseband_n]);
         // ppd unused — logs_row is pre-uploaded against the geometry
         // baked into Cvvdp::new. compute_dkl_t_p_bands still takes
         // ppd in the signature for source-compatibility.
