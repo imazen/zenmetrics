@@ -24,45 +24,18 @@
 //!         -p cvvdp-gpu --features cuda
 
 #![cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
-// pycvvdp golden literals copied verbatim from the bench script's
-// output; the 7-digit decimal documents the source even though
-// LLVM rounds at f32 precision. Same pattern as the library's
-// `#![allow(clippy::excessive_precision)]`.
-#![allow(clippy::excessive_precision)]
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+#[path = "../tests/common/mod.rs"]
+mod common;
+
+use common::{Backend, synth_pair_odd_dim_ref, synth_pair_ref};
 
 const TOLERANCE: f32 = 0.005;
-
-/// Build the same byte-level synth pair `bench_12mp_cuda.py`'s
-/// `synth_pair_12mp` constructs (called for the 4000×3000 and
-/// 256×256 fixtures). Pure xx/yy modular arithmetic — no PRNG.
-fn synth_pair_ref(w: usize, h: usize) -> Vec<u8> {
-    let n = w * h * 3;
-    let mut b = vec![0u8; n];
-    for y in 0..h {
-        for x in 0..w {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let bb = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * w + x) * 3;
-            b[i] = r;
-            b[i + 1] = g;
-            b[i + 2] = bb;
-        }
-    }
-    b
-}
 
 fn synth_chroma_shift_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     let r = synth_pair_ref(w, h);
@@ -110,23 +83,17 @@ fn synth_blur1x3_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn synth_odd_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
-    let n = w * h * 3;
-    let mut r = vec![0u8; n];
-    let mut d = vec![0u8; n];
-    for y in 0..h {
-        for x in 0..w {
-            let rr = ((x * 8) % 256) as u8;
-            let g = ((y * 8) % 256) as u8;
-            let bb = (((x + y) * 4) % 256) as u8;
-            let i = (y * w + x) * 3;
-            r[i] = rr;
-            r[i + 1] = g;
-            r[i + 2] = bb;
-            d[i] = rr.saturating_sub(8);
-            d[i + 1] = g.saturating_sub(4);
-            d[i + 2] = bb.saturating_add(12);
-        }
-    }
+    let r = synth_pair_odd_dim_ref(w, h);
+    let d: Vec<u8> = r
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
     (r, d)
 }
 
@@ -154,12 +121,16 @@ fn synth_pair_12mp(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
     // construction as synth_pair_ref, with R-8 / G-4 / B+12 saturated
     // distortion. Identical formula to synth_odd_pair, just at 12 MP.
     let r = synth_pair_ref(w, h);
-    let mut d = vec![0u8; w * h * 3];
-    for i in (0..w * h * 3).step_by(3) {
-        d[i] = r[i].saturating_sub(8);
-        d[i + 1] = r[i + 1].saturating_sub(4);
-        d[i + 2] = r[i + 2].saturating_add(12);
-    }
+    let d: Vec<u8> = r
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
     (r, d)
 }
 
@@ -170,36 +141,12 @@ struct Fixture {
     builder: fn(usize, usize) -> (Vec<u8>, Vec<u8>),
 }
 
-/// Load the pycvvdp golden JOD for a named fixture from the
-/// embedded `pycvvdp_synth_goldens.json`. Mirrors
-/// `tests/common/mod.rs::pycvvdp_synth_golden_jod` but inlined here
-/// because Rust examples can't import test-only modules. Tick 266
-/// dedup — was 6 hand-mirrored `golden: 9.xxx` fields in the
-/// fixture table.
-fn pycvvdp_synth_golden_jod(fixture: &str) -> f32 {
-    const GOLDENS_JSON: &str =
-        include_str!("../../../scripts/cvvdp_goldens/pycvvdp_synth_goldens.json");
-    let v: serde_json::Value =
-        serde_json::from_str(GOLDENS_JSON).expect("parse pycvvdp_synth_goldens.json");
-    let jod = v
-        .get("fixtures")
-        .and_then(|f| f.get(fixture))
-        .and_then(|fx| fx.get("jod"))
-        .and_then(|j| j.as_f64())
-        .unwrap_or_else(|| {
-            panic!(
-                "pycvvdp_synth_goldens.json: fixture '{fixture}' not found or .jod is not a number"
-            )
-        });
-    jod as f32
-}
-
 fn run_fixture(f: &Fixture) -> bool {
     let geom = DisplayGeometry::STANDARD_4K;
     let display = DisplayModel::STANDARD_4K;
     let ppd = geom.pixels_per_degree();
     let (ref_b, dist_b) = (f.builder)(f.w as usize, f.h as usize);
-    let golden = pycvvdp_synth_golden_jod(f.name);
+    let golden = common::pycvvdp_synth_golden_jod(f.name);
 
     let client = Backend::client(&Default::default());
     let mut cvvdp =

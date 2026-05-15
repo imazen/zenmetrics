@@ -129,6 +129,23 @@ public API; refactors, comment refreshes, regression-test pinning,
 and helper extractions). Pre-tick-238 entries above stay in their
 original Fixed/Added/Changed sections.
 
+#### cvvdp-gpu (examples)
+
+- `examples/manifest_parity_probe.rs` now consumes
+  `tests/common/mod.rs` via
+  `#[path = "../tests/common/mod.rs"] mod common;` (same shape as
+  tick 275's bench dedup). Drops the example's local
+  `synth_pair_ref`, `synth_pair_odd_dim_ref` (via `synth_odd_pair`),
+  and `pycvvdp_synth_golden_jod` clones in favour of the common
+  helpers. Closes ticks 266 (last hand-mirrored goldens in
+  examples) by leveraging the bench-side discovery (tick 275) that
+  examples + benches can both reach `tests/common` via `#[path]`.
+  Probe still passes all 6 fixtures at ≤ 0.005 JOD; max
+  measured |d_gpu| = 0.000172 (synth_256x256_blur3x1).
+- Drop the now-redundant
+  `#![allow(clippy::excessive_precision)]` since the goldens are
+  no longer inline float literals.
+
 #### cvvdp-gpu (benches)
 
 - `benches/score.rs` now consumes `tests/common/mod.rs` via
