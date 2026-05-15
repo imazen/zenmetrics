@@ -248,9 +248,14 @@ pub fn fill_f32_kernel(dest: &mut Array<f32>, value: f32, n: u32) {
     dest[idx] = value;
 }
 
-/// Finish the host-side fold for `pool_band_kernel`: given the
-/// atomic partial sum and pixel count for one band, return the
-/// lp_norm_mean(β) value matching `kernels::pool::lp_norm_mean`.
+/// Finish the host-side fold for the per-band atomic-pool
+/// kernels ([`pool_band_kernel()`] and the fused
+/// [`pool_band_3ch_kernel()`] used in production): given the
+/// atomic partial sum and pixel count for one (band, channel)
+/// slot, return the lp_norm_mean(β) value matching
+/// `kernels::pool::lp_norm_mean`. Same algebra regardless of
+/// which kernel produced the partial — both write the raw
+/// `safe_pow(|x|, β)` contribution into `partials[partial_idx]`.
 #[must_use]
 pub fn pool_band_finalize(partial: f32, n_pixels: usize, beta: f32) -> f32 {
     let n = n_pixels as f32;

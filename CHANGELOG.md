@@ -58,6 +58,16 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- `kernels::pool::pool_band_finalize` docstring said "Finish
+  the host-side fold for `pool_band_kernel`", but the function
+  is used to finalize partials from BOTH `pool_band_kernel`
+  (test-only, post-tick-291) AND the fused `pool_band_3ch_kernel`
+  (production). The finalize algebra doesn't care which kernel
+  wrote the partial — both store the raw `safe_pow(|x|, β)`
+  contribution at `partials[partial_idx]` for the host to fold.
+  Updated the docstring to name both kernels and call out the
+  shared semantics. Tick 330.
+
 - **`burn-conv-spike` clippy `approx_constant`** — the perlin-
   pattern frequency literal `6.28` in
   `crates/burn-conv-spike/src/main.rs:40` trips clippy's
