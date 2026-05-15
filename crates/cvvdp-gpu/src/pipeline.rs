@@ -936,6 +936,40 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(log_l_bkg_baseband)
     }
 
+    /// Run color → Gaussian pyramid → Weber-contrast pyramid for one
+    /// side, then read back the per-band data to host.
+    ///
+    /// Pipeline (GPU):
+    /// - `srgb_to_dkl_kernel` writes 3 DKL planes into `gauss_ref[0]`.
+    /// - `downscale_kernel` builds the Gaussian pyramid into
+    ///   `gauss_ref[1..n_levels]`.
+    /// - For each non-baseband level: separable upscale of
+    ///   `gauss_ref[k+1]` + fused `subtract_weber_3ch_kernel` →
+    ///   `bands_ref[k]` (per-channel Weber-contrast) and
+    ///   `weber_scratch[k].log_l_bkg` (per-pixel `log10(L_bkg)`).
+    /// - Baseband: scalar `L_bkg` = mean of `max(gauss_A[N-1], 0.01)`
+    ///   computed host-side from a small read-back; each channel's
+    ///   baseband band is `gauss[N-1][c] / L_bkg`.
+    ///
+    /// Side effect: `self.bands_ref[k].planes[c]` GPU handles are
+    /// overwritten with the just-computed weber bands. Callers that
+    /// need to compose REF + DIST sides (`compute_dkl_d_bands`,
+    /// `compute_dkl_jod`) capture the host-side return Vecs OR read
+    /// the handles directly between the REF and DIST pyramid calls.
+    ///
+    /// Returns `(bands, log_l_bkg)`:
+    /// - `bands[k][c]` — Weber-contrast band, one `Vec<f32>` per
+    ///   `(level, channel)`. Same shape as
+    ///   `compute_dkl_laplacian_pyramid` / `compute_dkl_csf_weighted_bands`.
+    /// - `log_l_bkg[k]` — per-pixel `log10(L_bkg)` plane for
+    ///   non-baseband levels; a `Vec<f32>` of length `baseband_n`
+    ///   filled with the scalar `log10(L_bkg_baseband_mean)` for the
+    ///   baseband entry (replicated 1×1 shape convention matching
+    ///   `host_scalar::WeberPyramid::log_l_bkg`).
+    ///
+    /// `CVVDP_TRACE_WEBER=1` env-var enables stderr instrumentation
+    /// of the GPU dispatch vs read-back split — zero cost when
+    /// unset.
     pub fn compute_dkl_weber_pyramid(&mut self, srgb: &[u8]) -> Result<WeberPyramidGpu> {
         let trace_weber = std::env::var_os("CVVDP_TRACE_WEBER").is_some();
         let t_dispatch = std::time::Instant::now();
