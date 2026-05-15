@@ -3,10 +3,15 @@
 //! ColorVideoVDP (still-image) score via the `cvvdp-gpu` crate.
 //!
 //! cvvdp's JOD is on a 0–10 scale where 10 = imperceptible. Currently
-//! routes through the parity-locked host scalar inside the
-//! `cvvdp-gpu` crate (matches pycvvdp v0.5.4 on the v1 R2 manifest
-//! within 0.006 JOD); the GPU composition is internal-only and the
-//! public score path is stable.
+//! routes through `cvvdp_gpu::Cvvdp::score`, which is the
+//! parity-locked host scalar path (matches pycvvdp v0.5.4 on the v1
+//! R2 manifest within 0.006 JOD per `shadow_jod`). The full GPU
+//! composition path also ships as `Cvvdp::compute_dkl_jod` (color →
+//! weber → CSF → masking → GPU pool → host fold), parity-locked
+//! against the host scalar at f32 precision for q ≥ 20 and against
+//! the pycvvdp manifest values via `shadow_jod_gpu`. The CLI will
+//! retarget once the GPU path's q=1 drift through `met2jod`'s steep
+//! slope is resolved or absorbed into the test tolerance.
 
 use cubecl::Runtime;
 
