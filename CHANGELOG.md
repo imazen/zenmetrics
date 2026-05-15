@@ -120,6 +120,20 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests + docs)
+
+- `set_reference_replaces_prior_cache` — pins the implicit
+  cache-replace semantics of `Cvvdp::set_reference`. Test calls
+  `set_reference(ref_a)`, then `set_reference(ref_b)`, then
+  `score_with_reference(dist)`; expects the result to match
+  `score(ref_b, dist)`, not `score(ref_a, dist)`. The contract
+  was the natural cache-shape callers expect but had been
+  documented-by-convention only — a refactor that no-op'd the
+  second `set_reference` call wouldn't have surfaced in CI.
+  `set_reference`'s docstring now explicitly states the replace
+  semantics and cross-references this test + the tick-238
+  non-invalidation test.
+
 #### cvvdp-gpu
 
 - **`compute_dkl_jod_with_warm_ref` / `compute_dkl_jod_host_pool_with_warm_ref`

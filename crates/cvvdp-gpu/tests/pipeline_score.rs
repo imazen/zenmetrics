@@ -144,6 +144,63 @@ fn score_with_reference_matches_score() {
 }
 
 #[test]
+fn set_reference_replaces_prior_cache() {
+    // Tick 249: pin the documented-by-convention semantics that
+    // `Cvvdp::set_reference` replaces any prior cached reference
+    // (rather than e.g. accumulating or no-op'ing on second call).
+    // The contract isn't spelled out in the docstring but is the
+    // natural cache-replace shape callers expect.
+    //
+    // Test pattern: stash ref_a, stash ref_b, score against dist.
+    // The cached-path JOD must equal score(ref_b, dist), not
+    // score(ref_a, dist) — they differ because the two refs are
+    // different.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_a = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    // ref_b is q=20-degraded ref_a — a perceptually different ref.
+    let ref_b = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+    // dist is q=70 of source — used to score against both refs.
+    let dist = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(70), w, h);
+
+    // Direct: score(ref_b, dist) — what the cached path should produce.
+    let jod_direct_b = cvvdp.score(&ref_a, &dist).expect("warm-up score");
+    let _ = jod_direct_b; // discard; the warm-up is to flush any first-call costs
+
+    let jod_direct_against_a = cvvdp.score(&ref_a, &dist).expect("score(ref_a, dist)");
+    let jod_direct_against_b = cvvdp.score(&ref_b, &dist).expect("score(ref_b, dist)");
+
+    // The two refs should produce different JODs vs the same dist
+    // (test premise — if they coincide the test can't distinguish
+    // replace-vs-no-op semantics).
+    assert!(
+        (jod_direct_against_a - jod_direct_against_b).abs() > 1e-3,
+        "test premise: score(ref_a) {jod_direct_against_a} and score(ref_b) {jod_direct_against_b} \
+         differ too little to distinguish cache-replace semantics"
+    );
+
+    // Replace pattern: set ref_a, then set ref_b, then score.
+    cvvdp.set_reference(&ref_a).expect("set_reference(ref_a)");
+    cvvdp
+        .set_reference(&ref_b)
+        .expect("set_reference(ref_b) must replace ref_a");
+    let jod_cached = cvvdp
+        .score_with_reference(&dist)
+        .expect("score_with_reference");
+
+    // Must match the ref_b direct path, not ref_a.
+    assert!(
+        (jod_cached - jod_direct_against_b).abs() < 1e-6,
+        "cached path JOD {jod_cached} should equal score(ref_b, dist) \
+         {jod_direct_against_b}, not score(ref_a, dist) {jod_direct_against_a} — \
+         set_reference must replace prior cache"
+    );
+}
+
+#[test]
 fn score_with_reference_errors_without_set_reference() {
     let client = Backend::client(&Default::default());
     let (w, h) = (256u32, 256u32);

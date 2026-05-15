@@ -2510,6 +2510,13 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Cvvdp::warm_reference`] +
     /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] (~1.8× per-DIST
     /// throughput at 12 MP — see `lib.rs` Status).
+    ///
+    /// Calling `set_reference` a second time **replaces** the prior
+    /// cached reference; only the most recent stash is used by
+    /// subsequent `score_with_reference` calls. Pinned by
+    /// `set_reference_replaces_prior_cache` (tick 249). Does NOT
+    /// disturb the separate warm-ref state — see
+    /// `set_reference_does_not_invalidate_warm_state` (tick 238).
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
