@@ -194,6 +194,32 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Closed out the lossless-cast cleanup arc with the remaining
+  6 `cast_lossless` warnings:
+  - `src/pipeline.rs:731` (`b as u32`) — sRGB-byte → u32 lane
+    pack inside the persistent `src_u32_scratch` fill loop
+    (warm-ref-amortised version of the per-call buffer pack).
+  - `tests/color_kernel.rs:47` (`|&b| b as u32`) — same
+    byte → u32 pack inside the color-kernel parity test setup.
+    Also rewrote the closure as `.copied().map(u32::from)` so
+    the `Copy` bound replaces the explicit deref pattern.
+  - `src/pipeline.rs:2507` and `:2598` (`jod as f64`) — the
+    public `Cvvdp::score` and `Cvvdp::score_with_reference`
+    return-value widenings.
+  - `examples/manifest_parity_probe.rs:100`
+    (`r[(y*w + x)*3 + c] as i32`) — synth_noise_pair
+    distortion construction; widens u8 to i32 for the +noise
+    addition.
+  - `tests/pipeline_color.rs:2075`
+    (`ref_srgb[i + c] as i64`) — same noise-fixture pattern
+    inside the 256² parity test.
+  Lossless-widening warning count across cvvdp-gpu is now zero
+  after ticks 300/301/302/304/305 (u16/i16/u64/u32/i32/i64/f64
+  variants). Tests that exercise the changed code paths
+  (`color_kernel::srgb_to_dkl_kernel_matches_host_scalar`,
+  `pipeline_color::compute_dkl_jod_matches_pycvvdp_at_256x256_noise`)
+  pass post-change. Tick 305.
+
 - Two strict-equality `f32` `assert_eq!` calls in
   `tests/pool_scalar.rs` were tripping clippy
   `-W clippy::pedantic`'s `float_cmp` — but both are

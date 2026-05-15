@@ -728,7 +728,7 @@ impl<R: Runtime> Cvvdp<R> {
         // otherwise pays per DIST candidate.
         debug_assert_eq!(self.src_u32_scratch.len(), n0 * 3);
         for (dst, &b) in self.src_u32_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = b as u32;
+            *dst = u32::from(b);
         }
         self.src_ref = self
             .client
@@ -2504,7 +2504,7 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let ppd = self.geometry.pixels_per_degree();
         let jod = self.compute_dkl_jod(reference_srgb, distorted_srgb, ppd)?;
-        Ok(jod as f64)
+        Ok(f64::from(jod))
     }
 
     /// Cache the reference side for repeated `score_with_reference`
@@ -2595,6 +2595,6 @@ impl<R: Runtime> Cvvdp<R> {
             .clone();
         let ppd = self.geometry.pixels_per_degree();
         let jod = self.compute_dkl_jod(&ref_srgb, distorted_srgb, ppd)?;
-        Ok(jod as f64)
+        Ok(f64::from(jod))
     }
 }

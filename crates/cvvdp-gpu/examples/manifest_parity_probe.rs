@@ -97,7 +97,7 @@ fn synth_noise_pair(w: usize, h: usize) -> (Vec<u8>, Vec<u8>) {
         for x in 0..w {
             for c in 0..3 {
                 let noise = (((x * 73 + y * 137 + c * 211) % 64) as i32) - 32;
-                let v = r[(y * w + x) * 3 + c] as i32 + noise;
+                let v = i32::from(r[(y * w + x) * 3 + c]) + noise;
                 d[(y * w + x) * 3 + c] = v.clamp(0, 255) as u8;
             }
         }

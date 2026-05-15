@@ -44,7 +44,7 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
     let rgb_bytes = rgb_input(w, h);
 
     // Kernel expects bytes packed one-per-u32 slot, RGBRGB order.
-    let src_u32: Vec<u32> = rgb_bytes.iter().map(|&b| b as u32).collect();
+    let src_u32: Vec<u32> = rgb_bytes.iter().copied().map(u32::from).collect();
     let src_h = client.create_from_slice(u32::as_bytes(&src_u32));
 
     let lut_h = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));

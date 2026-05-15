@@ -2072,7 +2072,7 @@ fn compute_dkl_jod_matches_pycvvdp_at_256x256_noise() {
             let i = (y * wu + x) * 3;
             for c in 0..3 {
                 let noise = ((x as i64 * 73 + y as i64 * 137 + c as i64 * 211) % 64) - 32;
-                let v = (ref_srgb[i + c] as i64 + noise).clamp(0, 255) as u8;
+                let v = (i64::from(ref_srgb[i + c]) + noise).clamp(0, 255) as u8;
                 dist_srgb[i + c] = v;
             }
         }
