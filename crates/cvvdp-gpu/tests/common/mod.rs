@@ -87,7 +87,7 @@ pub fn fetch(name: &str, sha256: &str) -> PathBuf {
 
     let got = sha256_hex(&bytes);
     assert_eq!(got, sha256, "sha256 mismatch for {name}");
-    fs::write(&local, &bytes).unwrap_or_else(|e| panic!("write {local:?}: {e}"));
+    fs::write(&local, &bytes).unwrap_or_else(|e| panic!("write {}: {e}", local.display()));
     local
 }
 
@@ -446,9 +446,9 @@ pub type Backend = cubecl::hip::HipRuntime;
 /// derefs) or `&Path` directly. Tick 268 widened from `&PathBuf`.
 pub fn load_rgb_bytes(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
     let img = image::ImageReader::open(path)
-        .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
+        .unwrap_or_else(|e| panic!("open {}: {e}", path.display()))
         .decode()
-        .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
+        .unwrap_or_else(|e| panic!("decode {}: {e}", path.display()))
         .to_rgb8();
     assert_eq!(img.width(), w);
     assert_eq!(img.height(), h);

@@ -194,6 +194,25 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- `tests/common/mod.rs` had 3 sites using Debug formatting
+  (`{path:?}`, `{local:?}`) inside `panic!` for path-typed
+  values, which clippy `-W clippy::pedantic`'s
+  `unnecessary_debug_formatting` flags — Debug for
+  `&Path`/`&PathBuf` renders with surrounding quotes and escape
+  sequences (e.g. `"foo bar.png"`), while Display via
+  `path.display()` shows the bare path (`foo bar.png`). For
+  panic-context error messages the Display form is more
+  readable. Switched all 3 sites
+  (`fetch` cache-write panic at line 90,
+  `load_rgb_bytes` open + decode panics at 449/451) to
+  positional format args using `path.display()` /
+  `local.display()`. The 3 unique warnings were each counted
+  3× because `tests/common/mod.rs` is consumed via `#[path]`
+  from the bench/example/test scopes (9 total pedantic
+  warnings cleared). All 31 `pipeline_color` tests still pass
+  post-change (the suite consumes `load_rgb_bytes` via
+  `common::Backend` + image-corpus paths). Tick 299.
+
 - `tests/common/mod.rs` had 4 sites using closure-wrapped
   method calls (`.and_then(|j| j.as_f64())`,
   `.and_then(|n| n.as_u64())`) that
