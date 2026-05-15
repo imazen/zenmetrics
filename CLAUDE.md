@@ -84,6 +84,38 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
 - [ ] Production run + parquet write-back to
       `/mnt/v/zen/zensim-training/<date>/unified/`
 
+### Local docker smoke 2026-05-15 — BUILT but NOT PUSHED
+
+Built two images locally (canonical master HEAD aba984c context):
+
+- `ghcr.io/imazen/pycvvdp-scorer:0.5.4` — sha256:e86bfb22aa82… (6.54 GB)
+  - `pycvvdp-worker --help` works
+  - End-to-end score-pairs CPU run on n=3 pairs: identical pair → JOD 10.000,
+    cross pairs → 1.86 / 1.70. Image is functional.
+- `ghcr.io/imazen/zen-metrics-sweep:0.6.4-aba984c` — sha256:30c2572f6891… (230 MB)
+  - `zen-metrics --version` → `zen-metrics-cli 0.6.0`
+  - `zen-metrics sweep ...` on n=6 sources × q={30,90}: 12/12 cells, no failures
+  - `sweep --help` contains zenjpeg (Dockerfile RUN check passed at build)
+
+**NOT PUSHED.** The `scripts/sweep/dual_impl_chunk_docker.sh` integration smoke
+that the task's GATE was supposed to verify cannot run against the canonical-HEAD
+v13 binary: `score-pairs` subcommand and `sweep --pairs-tsv` / `--distorted-out-dir`
+flags live on `feat/cvvdp-gpu-scaffold` only (commit 14689621), NOT on canonical
+master HEAD (aba984c). So the wrapper script's step 1 (`sweep --pairs-tsv …`)
+exits with an unknown-flag error against the freshly-built 0.6.4-aba984c image,
+and the parity GATE (mean |diff| < 0.10 JOD) is unverifiable.
+
+Two paths to unblock:
+1. Build the v13 image from the cvvdp branch instead (would require user override
+   of decision (C) above), OR
+2. Land the score-pairs / pairs-tsv subcommand on canonical master via a small
+   targeted merge from feat/cvvdp-gpu-scaffold before rebuilding.
+
+Secondary issue surfaced (local-env only, not a sweep design defect): snap docker
+on this WSL2 box cannot bind-mount `/usr/lib/wsl/lib/libnvidia-ml.so.1` so
+`--gpus all` fails with NVML ERROR_LIBRARY_NOT_FOUND. The pycvvdp CPU path still
+works end-to-end; production vast.ai workers do not hit this.
+
 ### Blocker note
 
 `crates/cvvdp-gpu/docs/CHROMA_DRIFT_INVESTIGATION.md` (0.117 JOD on
