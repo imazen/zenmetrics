@@ -2,6 +2,70 @@
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## PINNED TASK — CVVDP scoring on zensim training datasets
+
+**Status: queued, multi-tick. Survives context compaction.** Do not
+drop until shipped. User ask (verbatim, 2026-05-14, three messages):
+
+> "we need cvvdp values for zensim development and all data sets it
+> uses, we can use vastai dockerimages - but we should distonguish
+> between different cvvdp implementations in col name"
+> "parquet sidecars or however we do it"
+> "enqueue this task so that a conpaction will not skip it, loop it"
+
+### Requirements
+
+1. **Compute CVVDP JOD scores** for every (ref, dist) pair zensim
+   currently trains on. Inventory in
+   `~/work/zen/zenanalyze/everything.md` — the "unified V_X store"
+   at `/mnt/v/zen/zensim-training/2026-05-07/unified/` has
+   2.37M rows × 7 codec/sweep parquets. Plus anchor sets:
+   CID22, KADID-10k, TID2013, KonJND-1k.
+2. **Distinguish implementations via column name** so multiple
+   cvvdp variants land side-by-side without collision:
+   - `cvvdp_pycvvdp_v054`  — canonical pycvvdp v0.5.4 reference
+   - `cvvdp_gpu_imazen_<short_commit>` — our zenmetrics cvvdp-gpu
+   - `cvvdp_burn_<short_commit>` — future Burn port (see
+     `crates/cvvdp-gpu/docs/BURN_PORT_PLAN.md`)
+3. **Parquet sidecars**, matching zenmetrics' existing sweep
+   convention (`image_path / codec / q / knob_tuple_json /
+   <metric>_score / feat_*`).
+4. **Compute infra: vast.ai docker images.** Reuse
+   `Dockerfile.sweep.v13` + `scripts/sweep/v15/launch_gpu.sh` +
+   `scripts/sweep/onstart_v3.sh` per "Sweep runner discipline".
+   pycvvdp installs ~3 GB of pytorch — its image must be separate
+   from the cvvdp-gpu image to keep cold-start fetch under control.
+
+### Progress markers (update each tick)
+
+- [ ] Inventory zensim parquet sidecars (paths, schemas, row counts)
+- [ ] Decide cvvdp-gpu binary delivery: register cvvdp metric in
+      `zen-metrics-cli` (it already dispatches butteraugli/zensim/ssim2)
+- [ ] Spec column schema (dtype, nullability, sidecar layout)
+- [ ] pycvvdp Dockerfile (separate image, pinned pytorch+CUDA)
+- [ ] cvvdp-gpu Dockerfile extension (or new image) + onstart script
+- [ ] Sweep launcher dispatching both implementations in parallel
+- [ ] Verification pass (n≈100 pairs, both implementations, manual
+      diff against canonical pycvvdp output)
+- [ ] Production run + parquet write-back to
+      `/mnt/v/zen/zensim-training/<date>/unified/`
+
+### Blocker note
+
+`crates/cvvdp-gpu/docs/CHROMA_DRIFT_INVESTIGATION.md` (0.117 JOD on
+chroma_shift fixture, narrowed through tick 200) gates only the
+`cvvdp_gpu_imazen_*` column. The `cvvdp_pycvvdp_v054` column can
+ship now via `scripts/cvvdp_goldens/.venv`'s already-working pycvvdp
+installation. Don't block the pycvvdp column on cvvdp-gpu parity.
+
+### Loop integration
+
+Every /loop tick should re-read this section and consider whether
+the next concrete improvement should advance the PINNED TASK rather
+than the next cvvdp-gpu kernel parity tick. If the pinned task has
+forward progress available (a missing inventory, an unwritten spec,
+an unbuilt Docker image) prefer it over yet another parity test.
+
 ## Local CUDA toolkit (for building/running GPU metrics)
 
 The water-cooled 7950X workstation has CUDA 13.2.1 SDK installed at the
