@@ -194,6 +194,20 @@ original Fixed/Added/Changed sections.
   tests still pass post-change (including the 12 MP parity
   pair that takes ~30 s/test). Tick 297.
 
+- Two strict-equality `f32` `assert_eq!` calls in
+  `tests/pool_scalar.rs` were tripping clippy
+  `-W clippy::pedantic`'s `float_cmp` — but both are
+  intentional bit-pattern equality checks
+  (kernel-test invariants about untouched partial slots and
+  fill-kernel output), not approximate-equality assertions.
+  Switched to `.to_bits()` comparisons (`partials[i].to_bits()
+  == 0.0_f32.to_bits()`, `v.to_bits() == value.to_bits()`)
+  with a one-line comment per site explaining why bit-pattern
+  equality is the correct test. `pool_scalar` test suite
+  (8 tests) all pass post-change including
+  `gpu::pool_band_kernel_matches_host_lp_norm_mean` and
+  `gpu::fill_f32_kernel_writes_uniform_value`. Tick 304.
+
 - Two `for x in container.iter()`/`for x in container.iter_mut()`
   sites switched to the more idiomatic `for x in &container`
   / `for x in &mut container` form (clippy

@@ -150,9 +150,14 @@ mod gpu {
 
         // Sanity: untouched partial slots stayed at zero — proves the
         // kernel didn't accidentally write outside its target indices.
+        // Bit-pattern equality is the right test: the slots are
+        // initialized to 0.0 and never written, so they should retain
+        // the all-zero IEEE-754 bit pattern. `.to_bits()` form
+        // sidesteps clippy::float_cmp's conservative warning.
         for i in [0, 1, 2, 4, 6, 8, 9] {
             assert_eq!(
-                partials[i], 0.0,
+                partials[i].to_bits(),
+                0.0_f32.to_bits(),
                 "untouched partial slot {i} got written ({})",
                 partials[i]
             );
@@ -190,9 +195,13 @@ mod gpu {
 
         let bytes = client.read_one(dest_h).expect("read dest");
         let dest: &[f32] = f32::from_bytes(&bytes);
+        // fill_f32_kernel writes `value` byte-for-byte; bit-pattern
+        // equality is the right test (clippy::float_cmp would
+        // otherwise complain about ==).
         for (i, &v) in dest.iter().enumerate() {
             assert_eq!(
-                v, value,
+                v.to_bits(),
+                value.to_bits(),
                 "slot {i} = {v}, expected {value} (sentinel was 7.0 → would be visible if unwritten)"
             );
         }
