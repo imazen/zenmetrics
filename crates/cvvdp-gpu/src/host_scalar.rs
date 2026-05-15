@@ -7,7 +7,7 @@
 //! manifest.
 
 use crate::kernels::color::srgb_byte_to_dkl_scalar;
-use crate::kernels::csf::{CsfChannel, sensitivity_corrected_scalar};
+use crate::kernels::csf::{CSF_BASEBAND_RHO, CsfChannel, sensitivity_corrected_scalar};
 use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
 use crate::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
@@ -152,7 +152,13 @@ pub fn predict_jod_still_3ch(
         let bw = ref_weber[0].bands[k].w;
         let bh = ref_weber[0].bands[k].h;
         let n_px = bw * bh;
-        let rho = freqs[k];
+        // Tick 204 fix: pycvvdp's `process_block_of_frames` overrides
+        // the baseband rho to 0.1 cy/deg (`rho_band[bb] = 0.1` at
+        // `cvvdp_metric.py:628`). Our `band_frequencies(ppd, w, h)`
+        // returns the geometric rho (0.190 at 256² standard_4k), which
+        // we'd otherwise use here — closing this gap was the source of
+        // the chroma_shift 0.117 JOD drift chased through ticks 191-203.
+        let rho = if is_baseband { CSF_BASEBAND_RHO } else { freqs[k] };
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
         debug_assert_eq!(log_l_bkg_band.len(), n_px);
 

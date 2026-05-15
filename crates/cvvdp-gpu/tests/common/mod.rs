@@ -183,6 +183,31 @@ pub struct TpSentinel {
     pub t_p_ref_vy: f32,
 }
 
+/// Per-band per-channel pycvvdp Q_per_ch values at chroma_shift —
+/// the output of the spatial pool (`lp_norm(D, beta=2, dim=spatial,
+/// normalize=True)`). Used to localize whether the remaining 0.117
+/// JOD drift sits in the spatial pool, band/channel pools, or
+/// met2jod. See `dump_q_chroma.py`.
+pub struct QSentinel {
+    pub q_a: f32,
+    pub q_rg: f32,
+    pub q_vy: f32,
+}
+
+pub fn pycvvdp_q_chroma_shift_band(k: usize) -> QSentinel {
+    const MANIFEST_JSON: &str =
+        include_str!("../../../../scripts/cvvdp_goldens/pycvvdp_q_chroma_shift.json");
+    let v: serde_json::Value =
+        serde_json::from_str(MANIFEST_JSON).expect("parse pycvvdp_q_chroma_shift.json");
+    let bands = v["bands"].as_array().expect(".bands missing");
+    let b = &bands[k];
+    QSentinel {
+        q_a:  b["q_a"].as_f64().unwrap() as f32,
+        q_rg: b["q_rg"].as_f64().unwrap() as f32,
+        q_vy: b["q_vy"].as_f64().unwrap() as f32,
+    }
+}
+
 /// Per-band per-channel pycvvdp raw S (CSF sensitivity,
 /// pre-sens_corr) values at chroma_shift sentinels. The struct
 /// also carries the per-pixel `log_l_bkg_ref` pycvvdp computed,

@@ -1,4 +1,37 @@
-# 256×256 chrominance-shift drift vs pycvvdp (open, tick 191)
+# 256×256 chrominance-shift drift vs pycvvdp (RESOLVED, tick 204)
+
+## Resolution — pycvvdp overrides baseband CSF rho to 0.1 cy/deg
+
+**Root cause**: `cvvdp_metric.py:628` does `rho_band[bb] = 0.1`
+for the baseband. Our pipeline used the geometric
+`band_frequencies(ppd, w, h)` value (0.190 at 256²) instead.
+For chromatic channels (RG, VY) the low-rho CSF gives high S
+values; using the wrong rho lowered our baseband D → lowered
+Q_sc[RG/VY] → lowered Q_tc → lowered JOD.
+
+**Fix** (tick 204):
+- New `pub const CSF_BASEBAND_RHO: f32 = 0.1` in
+  `kernels/csf.rs`.
+- `host_scalar::predict_jod_still_3ch` uses
+  `CSF_BASEBAND_RHO` for the baseband CSF lookup.
+- `Cvvdp::new` builds `logs_row[last]` from
+  `precompute_logs_row(CSF_BASEBAND_RHO, ...)` — the GPU CSF
+  apply kernels consume this row at baseband.
+
+**Verification**: `examples/chroma_shift_drift_probe.rs`:
+```
+cvvdp-gpu (current):  9.664865
+cvvdp-gpu host_scalar: 9.664865
+pycvvdp golden:       9.664865
+GPU - pycvvdp:        +0.000000
+host - pycvvdp:       +0.000000
+```
+
+Drift CLOSED to f32 precision. Re-enabled the
+`compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift`
+test at the standard 0.005 JOD tolerance.
+
+## Earlier history
 
 ## Finding
 

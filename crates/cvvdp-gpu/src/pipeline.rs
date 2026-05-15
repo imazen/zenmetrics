@@ -502,13 +502,27 @@ impl<R: Runtime> Cvvdp<R> {
 
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
+        //
+        // Tick 204 fix: the baseband uses `CSF_BASEBAND_RHO` (0.1
+        // cy/deg) instead of the geometric `band_frequencies` value,
+        // matching pycvvdp `process_block_of_frames`'s
+        // `rho_band[bb] = 0.1` override at the last band
+        // (cvvdp_metric.py:628). This closes the chroma_shift drift
+        // tracked through ticks 191-203 — the baseband S lookup for
+        // chromatic channels (RG, VY) at the LOW-rho regime is what
+        // gives the chroma response its right magnitude.
         let ppd = geometry.pixels_per_degree();
         let freqs = band_frequencies(ppd, width as usize, height as usize);
         let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
         let mut logs_row: Vec<[cubecl::server::Handle; N_CHANNELS]> =
             Vec::with_capacity(n_levels as usize);
         for k in 0..n_levels as usize {
-            let rho_k = freqs[k];
+            let is_baseband = k == n_levels as usize - 1;
+            let rho_k = if is_baseband {
+                crate::kernels::csf::CSF_BASEBAND_RHO
+            } else {
+                freqs[k]
+            };
             logs_row.push([
                 client.create_from_slice(f32::as_bytes(&precompute_logs_row(
                     rho_k,

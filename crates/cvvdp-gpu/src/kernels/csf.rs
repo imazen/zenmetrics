@@ -41,6 +41,24 @@ pub use csf_lut_v0_5_4::{
 /// metric sensitivity.
 pub const SENSITIVITY_CORRECTION_DB: f32 = -0.279_742_33;
 
+/// Rho (cy/deg) used for the BASEBAND CSF sensitivity lookup.
+///
+/// pycvvdp `process_block_of_frames` overrides the geometric
+/// rho at the last pyramid band:
+///
+/// ```python
+/// rho_band = lpyr.get_freqs()
+/// rho_band[lpyr.get_band_count()-1] = 0.1 # Baseband
+/// ```
+/// (cvvdp_metric.py:628).
+///
+/// Our `band_frequencies(ppd, w, h)` returns the geometric value
+/// (e.g. 0.190 at 256² standard_4k), not 0.1. Using the geometric
+/// rho for the baseband CSF lookup gave a 0.117 JOD drift on
+/// chroma_shift — surfaced in tick 204 by dumping pycvvdp's
+/// Q_per_ch values and tracing back to baseband.
+pub const CSF_BASEBAND_RHO: f32 = 0.1;
+
 /// Channel index for the per-channel `o0_c*` tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsfChannel {

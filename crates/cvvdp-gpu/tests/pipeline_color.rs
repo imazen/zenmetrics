@@ -455,11 +455,20 @@ fn compute_dkl_t_p_bands_matches_host_scalar() {
         let n_band = bw * bh;
         let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
 
+        // Tick 204: pycvvdp overrides baseband rho to 0.1 cy/deg
+        // (cvvdp_metric.py:628); the GPU pipeline now matches. Host
+        // reference uses the same override here so the parity test
+        // compares apples-to-apples.
+        let rho_eff = if is_baseband {
+            cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
         for c in 0..3 {
             let weber_c = &host_per_ch[c].bands[k].data;
             let mut host_t_p = vec![0.0_f32; n_band];
             for i in 0..n_band {
-                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let ch_gain_eff = if is_baseband {
                     1.0
                 } else {
@@ -629,11 +638,18 @@ fn compute_dkl_d_bands_matches_host_scalar() {
         let n_band = bw * bh;
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
 
+        // Tick 204: baseband CSF rho override (see compute_dkl_t_p_*
+        // sibling test).
+        let rho_eff = if is_baseband {
+            cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
         let mut t_p_dis: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
         let mut t_p_ref: [Vec<f32>; 3] = [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
         for c in 0..3 {
             for i in 0..n_band {
-                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let ch_gain_eff = if is_baseband {
                     1.0
                 } else {
@@ -1263,6 +1279,110 @@ fn compute_dkl_weber_pyramid_matches_pycvvdp_at_chroma_shift_all_bands() {
 }
 
 #[test]
+fn spatial_pool_q_per_ch_matches_pycvvdp_at_chroma_shift_all_bands() {
+    // Tick 204 stage-7 probe: spatial-pool Q_per_ch values at
+    // chroma_shift. Compares `lp_norm_mean(D[c], BETA_SPATIAL)` over
+    // our `compute_dkl_d_bands` output against pycvvdp's
+    // `lp_norm(D, beta=2, dim=spatial, normalize=True)`.
+    //
+    // After tick 203, D bands match pycvvdp at f32 noise on large
+    // magnitudes (tick 201 D test). If Q_per_ch ALSO matches, the
+    // 0.117 JOD drift is in band/channel pools or met2jod. If
+    // Q_per_ch diverges, the spatial pool itself is the source.
+    use cvvdp_gpu::kernels::pool::{BETA_SPATIAL, lp_norm_mean};
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // chroma_shift ref + dist bytes.
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r;
+            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
+            dist_srgb[i + 2] = b;
+        }
+    }
+
+    let d_bands = cvvdp
+        .compute_dkl_d_bands(&ref_srgb, &dist_srgb, ppd)
+        .expect("d bands");
+
+    let n_bands = d_bands.len();
+    let mut overall_max_rel = 0.0_f32;
+    let mut overall_max_abs = 0.0_f32;
+    let mut first_diverging_band: Option<usize> = None;
+    for k in 0..n_bands {
+        let py = common::pycvvdp_q_chroma_shift_band(k);
+        let ours_a = lp_norm_mean(&d_bands[k][0], BETA_SPATIAL);
+        let ours_rg = lp_norm_mean(&d_bands[k][1], BETA_SPATIAL);
+        let ours_vy = lp_norm_mean(&d_bands[k][2], BETA_SPATIAL);
+        let pairs = [
+            ("Q_A",  ours_a,  py.q_a),
+            ("Q_RG", ours_rg, py.q_rg),
+            ("Q_VY", ours_vy, py.q_vy),
+        ];
+        let mut band_max_abs = 0.0_f32;
+        let mut band_max_rel = 0.0_f32;
+        for (_, ours, p) in pairs {
+            let d = (ours - p).abs();
+            let r = d / p.abs().max(1e-6);
+            if d > band_max_abs {
+                band_max_abs = d;
+            }
+            if r > band_max_rel {
+                band_max_rel = r;
+            }
+        }
+        eprintln!(
+            "band {k}: Q_per_ch ours=[{ours_a:.4e}, {ours_rg:.4e}, {ours_vy:.4e}] \
+             pycvvdp=[{:.4e}, {:.4e}, {:.4e}] \
+             max abs={band_max_abs:.4e} rel={band_max_rel:.4e}",
+            py.q_a, py.q_rg, py.q_vy
+        );
+        if band_max_abs > overall_max_abs {
+            overall_max_abs = band_max_abs;
+        }
+        if band_max_rel > overall_max_rel {
+            overall_max_rel = band_max_rel;
+        }
+        if first_diverging_band.is_none() && band_max_rel > 1e-3 {
+            first_diverging_band = Some(k);
+        }
+    }
+    eprintln!("overall max Q_per_ch abs={overall_max_abs:.4e} rel={overall_max_rel:.4e}");
+    if let Some(k) = first_diverging_band {
+        eprintln!(
+            "FIRST DIVERGING BAND (Q_per_ch): {k} — spatial pool source localized"
+        );
+    } else {
+        eprintln!(
+            "All Q_per_ch bands match at <0.1% rel — spatial pool is bit-close; \
+             drift is in band/channel pool or met2jod"
+        );
+    }
+    assert!(
+        overall_max_rel < 0.5,
+        "Q_per_ch diverges from pycvvdp by rel={overall_max_rel:.4e} — implausible"
+    );
+}
+
+#[test]
 fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
     // Tick 203 stage-6 parity probe: pixel-by-pixel GPU vs host
     // scalar T_p comparison at chroma_shift.
@@ -1355,12 +1475,18 @@ fn compute_dkl_t_p_bands_matches_host_scalar_per_pixel_at_chroma_shift() {
         let n_band = bw * bh;
         let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
 
+        // Tick 204: baseband CSF rho override.
+        let rho_eff = if is_baseband {
+            cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
         let mut band_max_rel = 0.0_f32;
         let mut band_max_abs = 0.0_f32;
         for c in 0..3 {
             let weber_c = &host_per_ch[c].bands[k].data;
             for i in 0..n_band {
-                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let ch_gain_eff = if is_baseband {
                     1.0
                 } else {
@@ -1596,6 +1722,63 @@ fn compute_dkl_d_bands_matches_pycvvdp_at_chroma_shift_all_bands() {
     assert!(
         overall_max_rel < 0.5,
         "D bands diverge from pycvvdp by rel={overall_max_rel:.4e} — implausible regression"
+    );
+}
+
+#[test]
+fn compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift() {
+    // Tick 204: drift closed. The 0.1174 JOD chroma_shift drift
+    // chased through ticks 191-203 was caused by our pipeline
+    // using the geometric baseband rho (0.190 cy/deg at 256²
+    // standard_4k) for the CSF lookup, whereas pycvvdp overrides
+    // it to 0.1 cy/deg (cvvdp_metric.py:628). Fixed in this tick
+    // — host_scalar + GPU pipeline both now use
+    // `CSF_BASEBAND_RHO = 0.1` at baseband.
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_256x256_chroma_shift");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let mut ref_srgb = vec![0u8; n];
+    let mut dist_srgb = vec![0u8; n];
+    let wu = w as usize;
+    let hu = h as usize;
+    for y in 0..hu {
+        for x in 0..wu {
+            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
+            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
+            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
+            let i = (y * wu + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r;
+            dist_srgb[i + 1] = (g as i16 + 16).clamp(0, 255) as u8;
+            dist_srgb[i + 2] = b;
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "256×256 chroma_shift: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
     );
 }
 

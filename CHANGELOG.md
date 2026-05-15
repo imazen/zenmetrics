@@ -17,6 +17,21 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Fixed
+
+#### cvvdp-gpu
+
+- **Chroma-shift drift closed (was 0.117 JOD).** pycvvdp overrides
+  the baseband CSF rho to 0.1 cy/deg (`cvvdp_metric.py:628`),
+  but our pipeline used the geometric value from
+  `band_frequencies(ppd, w, h)` (0.190 at 256² standard_4k). Fixed
+  by adding `kernels::csf::CSF_BASEBAND_RHO = 0.1` and applying it
+  in both `host_scalar::predict_jod_still_3ch` and
+  `Cvvdp::new`'s `logs_row` pre-upload. The
+  `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift` test
+  re-enabled at standard 0.005 JOD tolerance; chroma_shift now
+  matches pycvvdp golden 9.664865 to f32 precision.
+
 ### Added
 
 #### Workspace

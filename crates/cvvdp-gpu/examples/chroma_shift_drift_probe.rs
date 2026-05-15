@@ -20,7 +20,8 @@
 
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
-use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -67,14 +68,31 @@ fn main() {
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
         .expect("compute_dkl_jod");
 
-    let diff = gpu_jod - PYCVVDP_GOLDEN;
-    let abs_diff = diff.abs();
+    // Also score via the all-host scalar path so we can see whether
+    // the residual drift sits in the GPU pipeline or in the host
+    // pipeline (post-tick-203, GPU vs host diverge only at small-T_p
+    // pixels — large pixels are bit-close).
+    let display = DisplayModel::STANDARD_4K;
+    let host_jod = predict_jod_still_3ch(
+        &ref_bytes,
+        &dist_bytes,
+        W as usize,
+        H as usize,
+        display,
+        ppd,
+    );
+
+    let gpu_diff = gpu_jod - PYCVVDP_GOLDEN;
+    let host_diff = host_jod - PYCVVDP_GOLDEN;
+    let abs_diff = gpu_diff.abs();
 
     println!("chroma_shift JOD drift probe");
     println!("  cvvdp-gpu (current):  {gpu_jod:.6}");
+    println!("  cvvdp-gpu host_scalar: {host_jod:.6}");
     println!("  pycvvdp golden:       {PYCVVDP_GOLDEN:.6}");
-    println!("  signed diff:          {diff:+.6}");
-    println!("  abs diff:             {abs_diff:.6}");
+    println!("  GPU - pycvvdp:        {gpu_diff:+.6}");
+    println!("  host - pycvvdp:       {host_diff:+.6}");
+    println!("  GPU - host:           {:+.6}", gpu_jod - host_jod);
     println!();
     if abs_diff < 0.005 {
         println!("STATUS: drift closed (< 0.005 tolerance — match other JOD fixtures)");
