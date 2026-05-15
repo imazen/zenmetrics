@@ -471,6 +471,13 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
         let bh = host_per_ch[0].bands[k].h;
         let n_band = bw * bh;
         let log_l_bkg_band = &host_per_ch[0].log_l_bkg[k];
+        // Tick 204: pycvvdp overrides baseband CSF rho to 0.1 cy/deg
+        // (cvvdp_metric.py:628); host reference applies the same.
+        let rho_eff = if is_baseband {
+            cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
 
         let mut max_abs = [0.0_f32; 3];
         let mut max_band_t_p = [0.0_f32; 3];
@@ -478,7 +485,7 @@ fn compute_dkl_t_p_bands_matches_host_on_corpus_256x256() {
             let weber_c = &host_per_ch[c].bands[k].data;
             let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
             for i in 0..n_band {
-                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let host_t_p = weber_c[i] * s * ch_gain_eff;
                 let abs = (t_p_gpu[k][c][i] - host_t_p).abs();
                 if abs > max_abs[c] {
@@ -606,6 +613,13 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
         let bh = ref_weber[0].bands[k].h;
         let n_band = bw * bh;
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+        // Tick 204: baseband CSF rho override (see compute_dkl_t_p_*
+        // sibling above).
+        let rho_eff = if is_baseband {
+            cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
 
         let mut t_p_dis: [Vec<f32>; 3] =
             [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
@@ -613,7 +627,7 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
             [vec![0.0; n_band], vec![0.0; n_band], vec![0.0; n_band]];
         for c in 0..3 {
             for i in 0..n_band {
-                let s = sensitivity_corrected_scalar(freqs[k], log_l_bkg_band[i], channels[c]);
+                let s = sensitivity_corrected_scalar(rho_eff, log_l_bkg_band[i], channels[c]);
                 let ch_gain_eff = if is_baseband { 1.0 } else { band_mul * CH_GAIN[c] };
                 t_p_dis[c][i] = dis_weber[c].bands[k].data[i] * s * ch_gain_eff;
                 t_p_ref[c][i] = ref_weber[c].bands[k].data[i] * s * ch_gain_eff;

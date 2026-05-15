@@ -19,9 +19,10 @@
 //!
 //! Test assertions:
 //! - JOD is finite and in `[0, 10]`.
-//! - Each shadow JOD is within 0.05 of the pycvvdp manifest value
-//!   (loose tol to absorb f32 accumulation across the pipeline +
-//!   any future minor refactor).
+//! - Each shadow JOD is within 0.005 of the pycvvdp manifest value.
+//!   Was 0.05 before ticks 204/206 closed the chroma_shift and
+//!   73×91 odd-dim drifts; tightened to the standard 0.005
+//!   tolerance once all 6 q levels measured ≤ 0.003 vs manifest.
 //! - JOD is monotonic non-decreasing across q.
 
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
@@ -79,8 +80,8 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
             "q={q}: JOD = {jod} out of [0, 10]"
         );
         assert!(
-            diff < 0.05,
-            "q={q}: shadow JOD {jod:.4} diverges from pycvvdp manifest {expected:.4} by {diff:.4} > 0.05"
+            diff < 0.005,
+            "q={q}: shadow JOD {jod:.4} diverges from pycvvdp manifest {expected:.4} by {diff:.4} > 0.005"
         );
         jods.push((q, jod));
     }
@@ -104,11 +105,11 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 /// `compute_dkl_jod_matches_host_scalar` test (which only pins GPU
 /// vs host scalar at f32 precision, not vs the manifest).
 ///
-/// Wider tolerance (0.1 vs 0.05) than the host-scalar shadow test
-/// because the GPU path's q=1 case shows ~0.4 JOD cumulative-f32
-/// drift in the steep slope region of `met2jod` (documented in
-/// the CHANGELOG investigation notes). The drift is bounded and
-/// stable; if it grows, this test catches it.
+/// Tick 207: tightened from the old per-q tolerance schedule
+/// (0.5 at q=1, 0.1 at q=5, 0.05 at q≥20) to a flat 0.005 across
+/// the manifest after ticks 204/206 closed the chroma_shift and
+/// 73×91 odd-dim drifts. Measured diffs are 0.0000–0.0031 across
+/// all 6 q levels.
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[test]
 fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
@@ -145,19 +146,11 @@ type Backend = cubecl::hip::HipRuntime;
     let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
         .expect("new Cvvdp on GPU backend");
 
-    // Per-q tolerance reflecting the documented cumulative-f32 drift
-    // through met2jod's steep slope region — biggest at low q where
-    // small Q changes amplify into large JOD changes:
-    //   q=1  : ~0.40 JOD observed (CHANGELOG notes 0.40)
-    //   q=5  : ~0.06 JOD observed
-    //   q≥20 : ≤ 0.001 JOD per the CHANGELOG drift survey
-    let tol_for = |q: u32| -> f32 {
-        match q {
-            1 => 0.5,
-            5 => 0.1,
-            _ => 0.05,
-        }
-    };
+    // Tick 207: flat 0.005 tolerance across all q levels. Was a
+    // per-q schedule (0.5 / 0.1 / 0.05) before ticks 204/206 closed
+    // the chroma_shift and 73×91 odd-dim drifts; measured GPU vs
+    // pycvvdp diffs are now 0.0000–0.0031 across the manifest.
+    let tol_for = |_q: u32| -> f32 { 0.005 };
     let mut jods = Vec::with_capacity(cases.len());
     for &(q, expected) in cases {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);

@@ -17,6 +17,24 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+#### cvvdp-gpu
+
+- **Manifest-parity tolerances tightened to 0.005 JOD across the
+  v1 R2 corpus** (`tests/shadow_jod.rs`). Was a per-q schedule
+  (0.5 JOD at q=1, 0.1 at q=5, 0.05 at q≥20 GPU; flat 0.05 host)
+  before ticks 204/206 closed the chroma_shift and 73×91 odd-dim
+  drifts. Measured diffs are now 0.0000–0.0031 JOD across all 6
+  q levels (host + GPU) — well within the same 0.005 tolerance
+  the other parity tests use.
+- `pipeline_score.rs` host-vs-GPU corpus tests
+  (`compute_dkl_t_p_bands_matches_host_on_corpus_256x256`,
+  `compute_dkl_d_bands_matches_host_on_corpus_256x256`) updated
+  to apply the tick-204 `CSF_BASEBAND_RHO` override in their
+  host reference computation — caught when running the full
+  suite after tightening shadow_jod tolerances.
+
 ### Fixed
 
 #### cvvdp-gpu
