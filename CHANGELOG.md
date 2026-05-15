@@ -27,6 +27,19 @@ Workspace conventions per the global rules:
   names (e.g. `cvvdp_pycvvdp_v054`, `cvvdp_imazen_v0_0_1`). Survives
   context compaction; every `/loop` tick re-reads it.
 
+#### zen-metrics-cli
+
+- New `score-pairs` subcommand (feature-gated on `sweep`):
+  consumes the pairs TSV that `sweep --pairs-tsv` produces and
+  emits a parquet sidecar with the metric's versioned column name
+  (e.g. `cvvdp_imazen_v0_0_1` for cvvdp). Schema matches
+  `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md` exactly:
+  `image_path string`, `codec string`, `q int64`,
+  `knob_tuple_json string`, `<metric> float64`. Zstd compression.
+  Symmetric with `scripts/sweep/pycvvdp_worker.py score-pairs`.
+  Initial n=4 sentinel: cvvdp-gpu vs pycvvdp parity within 0.03 JOD
+  on q50/q90 zenjpeg-encoded 64×64 noise images.
+
 #### zen-metrics-cli (sweep)
 
 - `sweep` subcommand learns two new flags that pair off for

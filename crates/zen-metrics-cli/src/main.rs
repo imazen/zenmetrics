@@ -28,7 +28,7 @@ mod output;
 mod sweep;
 
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use crate::compare::{print_report, run_compare};
@@ -59,6 +59,14 @@ enum Command {
     /// `--features sweep`.
     #[cfg(feature = "sweep")]
     Sweep(SweepArgs),
+    /// Score (ref, dist) pairs from a TSV and emit a parquet sidecar
+    /// per `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`. Symmetric
+    /// with `scripts/sweep/pycvvdp_worker.py score-pairs`: same input
+    /// TSV format, same output parquet schema, just the
+    /// `zen-metrics`-side of the bake. Only available when built with
+    /// `--features sweep`.
+    #[cfg(feature = "sweep")]
+    ScorePairs(ScorePairsArgs),
     /// Print available metrics and which require a GPU.
     ListMetrics,
     /// Print supported input formats.
@@ -201,6 +209,37 @@ enum FormatLabel {
     Jxl,
 }
 
+#[cfg(feature = "sweep")]
+#[derive(Parser, Debug)]
+struct ScorePairsArgs {
+    /// Metric to evaluate. The output parquet's score column name is
+    /// taken from `MetricKind::column_names()` — e.g. cvvdp uses
+    /// `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` (the
+    /// `CVVDP_IMPL_TAG`-overridable per-implementation tag), keeping
+    /// implementations distinguishable in joined sidecars.
+    #[arg(long, value_enum)]
+    metric: MetricKind,
+    /// Input pairs TSV. Required header columns: `ref_path` and
+    /// `dist_path` (aliases `reference` / `distorted` also accepted —
+    /// matches `batch`'s parser). Identity-tuple columns
+    /// `image_path`, `codec`, `q`, `knob_tuple_json` are passed
+    /// through to the output when present; when absent, the
+    /// `ref_path` is used as `image_path` and the rest get blank
+    /// defaults (`""`, `0`, `"{}"`).
+    #[arg(long)]
+    pairs_tsv: PathBuf,
+    /// Output parquet sidecar path. Schema:
+    ///   image_path:string  codec:string  q:int64  knob_tuple_json:string
+    ///   <metric_score_col>:float64
+    /// Zstd compression. Caller joins back to the unified source
+    /// parquet by the identity tuple.
+    #[arg(long)]
+    out_parquet: PathBuf,
+    /// CubeCL runtime selection for GPU metrics.
+    #[arg(long, value_enum, default_value = "auto")]
+    gpu_runtime: GpuRuntime,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -237,6 +276,14 @@ fn main() -> ExitCode {
         },
         #[cfg(feature = "sweep")]
         Command::Sweep(args) => match cmd_sweep(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        #[cfg(feature = "sweep")]
+        Command::ScorePairs(args) => match cmd_score_pairs(args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
@@ -313,6 +360,188 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         sf = stats.cells_failed_score,
     );
     Ok(())
+}
+
+#[cfg(feature = "sweep")]
+fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs::File;
+    use std::sync::Arc;
+
+    use arrow_array::{ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray};
+    use arrow_schema::{DataType, Field, Schema};
+    use parquet::arrow::ArrowWriter;
+    use parquet::basic::{Compression, ZstdLevel};
+    use parquet::file::properties::WriterProperties;
+
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(b'\t')
+        .has_headers(true)
+        .from_path(&args.pairs_tsv)?;
+    let headers = rdr.headers()?.clone();
+    let ref_idx = find_col(&headers, &["ref_path", "reference"])?;
+    let dist_idx = find_col(&headers, &["dist_path", "distorted"])?;
+    let image_path_idx = find_col(&headers, &["image_path"]).ok();
+    let codec_idx = find_col(&headers, &["codec"]).ok();
+    let q_idx = find_col(&headers, &["q"]).ok();
+    let knob_idx = find_col(&headers, &["knob_tuple_json"]).ok();
+
+    let metric_cols = args.metric.column_names();
+    if metric_cols.len() != 1 {
+        // CVVDP_SIDECAR_SCHEMA.md fixes one score column per sidecar.
+        // Butteraugli's 2-column metric isn't useful as a "cvvdp-like"
+        // sidecar — callers should use the `batch` subcommand for that
+        // case until we extend the spec to multi-column sidecars.
+        return Err(format!(
+            "score-pairs supports single-column metrics only; \
+             {} emits {} columns ({:?}). Use `batch` for now.",
+            args.metric.name(),
+            metric_cols.len(),
+            metric_cols,
+        )
+        .into());
+    }
+    let score_col_name = metric_cols[0];
+
+    // Buffer everything in memory — score-pairs runs over a bounded
+    // pairs TSV (one sweep's worth of cells, typically ≤ 10⁵ rows).
+    // For larger jobs the producer should partition the TSV by chunk
+    // and call score-pairs per chunk.
+    let mut image_paths: Vec<String> = Vec::new();
+    let mut codecs: Vec<String> = Vec::new();
+    let mut qs: Vec<i64> = Vec::new();
+    let mut knobs: Vec<String> = Vec::new();
+    let mut scores: Vec<f64> = Vec::new();
+
+    let mut failed = 0usize;
+    let mut succeeded = 0usize;
+
+    for record in rdr.records() {
+        let record = record?;
+        let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
+        let dist_path = PathBuf::from(record.get(dist_idx).ok_or("missing dist_path")?);
+
+        // Identity-tuple passthrough with explicit fallbacks. Producer
+        // contracts (the sweep's pairs-tsv mode, pycvvdp_worker's
+        // input) provide all four; callers feeding a bare ref/dist
+        // TSV get sensible defaults that still round-trip the schema.
+        let image_path = image_path_idx
+            .and_then(|i| record.get(i))
+            .map(String::from)
+            .unwrap_or_else(|| ref_path.display().to_string());
+        let codec = codec_idx
+            .and_then(|i| record.get(i))
+            .map(String::from)
+            .unwrap_or_default();
+        let q = q_idx
+            .and_then(|i| record.get(i))
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(0);
+        let knob = knob_idx
+            .and_then(|i| record.get(i))
+            .map(String::from)
+            .unwrap_or_else(|| "{}".to_string());
+
+        let jod = match score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime) {
+            Ok(v) => {
+                succeeded += 1;
+                v
+            }
+            Err(e) => {
+                eprintln!(
+                    "[score-pairs] {} q={q} failed: {e}",
+                    image_path,
+                );
+                failed += 1;
+                f64::NAN
+            }
+        };
+
+        image_paths.push(image_path);
+        codecs.push(codec);
+        qs.push(q);
+        knobs.push(knob);
+        scores.push(jod);
+
+        let total = succeeded + failed;
+        if total % 100 == 0 && total > 0 {
+            eprintln!(
+                "[score-pairs] {total} pairs scored, {failed} failed",
+            );
+        }
+    }
+
+    if image_paths.is_empty() {
+        return Err("score-pairs: input TSV produced no rows".into());
+    }
+
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("image_path", DataType::Utf8, false),
+        Field::new("codec", DataType::Utf8, false),
+        Field::new("q", DataType::Int64, false),
+        Field::new("knob_tuple_json", DataType::Utf8, false),
+        Field::new(score_col_name, DataType::Float64, false),
+    ]));
+
+    let arrays: Vec<ArrayRef> = vec![
+        Arc::new(StringArray::from(image_paths)),
+        Arc::new(StringArray::from(codecs)),
+        Arc::new(Int64Array::from(qs)),
+        Arc::new(StringArray::from(knobs)),
+        Arc::new(Float64Array::from(scores)),
+    ];
+
+    let batch = RecordBatch::try_new(schema.clone(), arrays)?;
+
+    if let Some(parent) = args.out_parquet.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let file = File::create(&args.out_parquet)?;
+    let props = WriterProperties::builder()
+        .set_compression(Compression::ZSTD(ZstdLevel::try_new(3)?))
+        .build();
+    let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
+    writer.write(&batch)?;
+    writer.close()?;
+
+    eprintln!(
+        "[score-pairs] wrote {succeeded} rows ({failed} NaN-failures) \
+         to {} with score column `{score_col_name}`",
+        args.out_parquet.display(),
+    );
+    Ok(())
+}
+
+#[cfg(feature = "sweep")]
+fn score_one_pair(
+    metric: MetricKind,
+    ref_path: &Path,
+    dist_path: &Path,
+    gpu_runtime: GpuRuntime,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    use crate::metrics::run_metric;
+    let reference = decode::decode_image_to_rgb8(ref_path)?;
+    let distorted = decode::decode_image_to_rgb8(dist_path)?;
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "dimension mismatch: {} ({}x{}) vs {} ({}x{})",
+            ref_path.display(),
+            reference.width,
+            reference.height,
+            dist_path.display(),
+            distorted.width,
+            distorted.height,
+        )
+        .into());
+    }
+    let scores = run_metric(metric, &reference, &distorted, gpu_runtime)?;
+    let (_, value) = scores
+        .first()
+        .copied()
+        .ok_or("metric returned zero scores")?;
+    Ok(value)
 }
 
 fn cmd_score(args: ScoreArgs) -> Result<(), Box<dyn std::error::Error>> {

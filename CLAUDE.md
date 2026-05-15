@@ -54,7 +54,13 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       `scripts/sweep/Dockerfile.pycvvdp` (pytorch 2.5.1 + CUDA 12.4
       + pycvvdp 0.5.4). End-to-end verified locally on a synth pair
       (JOD 10.0 / 9.63 for identical vs chroma-shifted 64×64 inputs).
-- [ ] cvvdp-gpu Dockerfile extension (or new image) + onstart script
+- [x] zen-metrics-cli `score-pairs` subcommand consumes the pairs
+      TSV and writes parquet sidecars directly with the metric's
+      versioned column name (cvvdp → `cvvdp_imazen_v<VER>`). The
+      existing `Dockerfile.sweep` bakes `zen-metrics`, so the
+      cvvdp-gpu scorer ships in that image with no new Dockerfile.
+      Verified n=4 against pycvvdp on the same pairs: implementations
+      agree within 0.03 JOD (q50–90, 64×64 noise images).
 - [x] Encoder driver that re-encodes from
       `(image_path, codec, q, knob_tuple_json)` and emits the pairs
       TSV that the pycvvdp worker consumes:
@@ -64,8 +70,11 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
       × 2-q grid: zen-metrics sweep → pycvvdp_worker score-pairs →
       4-row parquet sidecar with `cvvdp_pycvvdp_v054` column.
 - [ ] Sweep launcher dispatching both implementations in parallel
-- [ ] Verification pass (n≈100 pairs, both implementations, manual
-      diff against canonical pycvvdp output)
+      (chunk-runner that fans out cvvdp_imazen + cvvdp_pycvvdp jobs
+      to separate vast.ai instances reading the same pairs TSV).
+- [/] Verification pass (initial sentinel n=4: implementations agree
+      within 0.03 JOD; need n≈100 over CID22 / KADID for full
+      checkout — see commit history for the demo).
 - [ ] Production run + parquet write-back to
       `/mnt/v/zen/zensim-training/<date>/unified/`
 
