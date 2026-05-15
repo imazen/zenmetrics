@@ -96,8 +96,8 @@ use crate::kernels::masking::{
     pu_blur_v_3ch_scaled_kernel,
 };
 use crate::kernels::pool::{
-    BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, pool_band_3ch_kernel,
-    pool_band_finalize,
+    BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
+    pool_band_3ch_kernel, pool_band_finalize,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
@@ -1813,6 +1813,45 @@ impl<R: Runtime> Cvvdp<R> {
         // GPU→host transfer at 12 MP — JOD skips that.
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
         self._pool_and_finalize_jod()
+    }
+
+    /// CPU-backend-compatible variant of [`Cvvdp::compute_dkl_jod`].
+    ///
+    /// Same JOD result, but uses a host-side spatial pool instead
+    /// of `pool_band_3ch_kernel`. That GPU kernel uses
+    /// `Atomic<f32>::fetch_add`, which `cubecl-cpu` doesn't support;
+    /// this variant reads D bands back via
+    /// [`Cvvdp::compute_dkl_d_bands`] and pools them with the
+    /// host-scalar `lp_norm_mean`, so it runs on every cubecl
+    /// runtime — including `cubecl-cpu`.
+    ///
+    /// Tradeoff: the readback is `O(n_pixels × n_channels × n_levels
+    /// × 4/3)` bytes (geometric series on band sizes). At 12 MP that's
+    /// ≈ 432 MB GPU→host transfer per call, swamping the GPU pool's
+    /// few-microsecond kernel time. **Use this only on the CPU
+    /// backend** — for `cuda` / `wgpu` / `hip` runtimes prefer
+    /// [`Cvvdp::compute_dkl_jod`], which keeps everything GPU-
+    /// resident.
+    ///
+    /// Output matches `compute_dkl_jod` to f32 noise on all backends
+    /// where both run (the GPU pool's atomic reduction and the host
+    /// `lp_norm_mean` compute the same `safe_pow`-form Minkowski norm).
+    pub fn compute_dkl_jod_host_pool(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        ppd: f32,
+    ) -> Result<f32> {
+        let d_bands = self.compute_dkl_d_bands(ref_srgb, dist_srgb, ppd)?;
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(d_bands.len());
+        for d_planes in &d_bands {
+            let mut q = [0.0_f32; 3];
+            for c in 0..N_CHANNELS {
+                q[c] = lp_norm_mean(&d_planes[c], BETA_SPATIAL);
+            }
+            q_per_ch.push(q);
+        }
+        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
     }
 
     /// Pre-dispatch the REF weber pyramid + cache state for batch

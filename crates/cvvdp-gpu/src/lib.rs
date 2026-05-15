@@ -5,12 +5,14 @@
 //! - **CUDA** (NVIDIA) via the cubecl CUDA runtime
 //! - **WGPU** (cross-platform) via Vulkan/Metal/DX12/WebGPU
 //! - **HIP** (AMD ROCm) when the `hip` feature is enabled
-//! - **CPU** via the cubecl CPU runtime — library compiles, but
-//!   `Cvvdp::compute_dkl_jod` won't run there because
-//!   `pool_band_kernel` uses `Atomic<f32>::fetch_add`, which
-//!   cubecl-cpu lacks. A per-block partial-tree reduction port
-//!   would unblock the cpu backend; see
-//!   `docs/PORT_STATUS.md` for context.
+//! - **CPU** via the cubecl CPU runtime — supported through
+//!   [`Cvvdp::compute_dkl_jod_host_pool`] (tick 208), which reads
+//!   D bands back to host and pools with the host-scalar
+//!   `lp_norm_mean` instead of the GPU `pool_band_3ch_kernel`
+//!   (which uses `Atomic<f32>::fetch_add`, unsupported by
+//!   cubecl-cpu). For GPU runtimes prefer
+//!   [`Cvvdp::compute_dkl_jod`] — it keeps the spatial reduction
+//!   on-device and skips the per-band readback.
 //!
 //! ## Scope: still images, JOD score
 //!

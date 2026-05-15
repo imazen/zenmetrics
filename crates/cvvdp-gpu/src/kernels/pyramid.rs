@@ -70,28 +70,6 @@ pub const GAUSS5: [f32; 5] = [
     0.25 - KERNEL_A / 2.0,
 ];
 
-/// Symmetric reflection at boundaries `[0, n)`. Matches cvvdp's
-/// effective access pattern (sympad inside `gausspyr_reduce`).
-///
-/// For `i = -1` returns `0`; `i = -2` returns `1`; ...
-/// For `i = n` returns `n-1`; `i = n+1` returns `n-2`; ...
-fn reflect(i: isize, n: usize) -> usize {
-    let n_i = n as isize;
-    let mut j = i;
-    // Up to two folds cover the kernel-radius-2 range we use here.
-    for _ in 0..3 {
-        if j < 0 {
-            j = -j - 1;
-        } else if j >= n_i {
-            j = 2 * n_i - j - 1;
-        } else {
-            break;
-        }
-    }
-    debug_assert!(j >= 0 && j < n_i);
-    j as usize
-}
-
 /// 2D separable 5-tap Gaussian + 2× decimation in each axis. Output
 /// dimensions are `((sw + 1) / 2, (sh + 1) / 2)` — cvvdp rounds odd
 /// dims up. Edge handling = symmetric reflection.

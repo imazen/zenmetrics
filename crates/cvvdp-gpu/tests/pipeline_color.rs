@@ -764,6 +764,60 @@ fn compute_dkl_jod_matches_host_scalar() {
 }
 
 #[test]
+fn compute_dkl_jod_host_pool_matches_compute_dkl_jod() {
+    // Tick 208: compute_dkl_jod_host_pool is the cpu-backend-
+    // compatible variant of compute_dkl_jod. Same JOD, computed
+    // by reading D bands back to host and pooling via
+    // lp_norm_mean instead of the GPU pool_band_3ch_kernel (which
+    // uses Atomic<f32>::fetch_add, unsupported by cubecl-cpu).
+    //
+    // On any GPU backend both paths run; this test pins the
+    // host-pool variant against the canonical compute_dkl_jod
+    // output. f32-precision tolerance because both paths apply
+    // the same Minkowski safe_pow form — only the accumulation
+    // order differs (atomic on GPU, sequential on host).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let host_pool_jod = cvvdp
+        .compute_dkl_jod_host_pool(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod_host_pool");
+    let diff = (gpu_jod - host_pool_jod).abs();
+    eprintln!(
+        "host_pool: compute_dkl_jod = {gpu_jod:.6}, host_pool = {host_pool_jod:.6}, |diff| = {diff:.6}"
+    );
+    assert!(gpu_jod.is_finite() && host_pool_jod.is_finite());
+    assert!(
+        diff < 0.005,
+        "compute_dkl_jod_host_pool {host_pool_jod:.6} diverges from compute_dkl_jod {gpu_jod:.6} by {diff:.6}"
+    );
+}
+
+#[test]
 fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
     // Batch-scoring fast path: warm_reference dispatches the REF
     // weber pyramid once and caches the GPU state; subsequent

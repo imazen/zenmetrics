@@ -17,9 +17,30 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+#### cvvdp-gpu
+
+- **`Cvvdp::compute_dkl_jod_host_pool`** — CPU-backend-compatible
+  variant of `compute_dkl_jod`. Reads D bands back to host and
+  pools them with the host-scalar `lp_norm_mean` instead of the
+  GPU `pool_band_3ch_kernel` (which uses `Atomic<f32>::fetch_add`,
+  unsupported by `cubecl-cpu`). Same JOD output as
+  `compute_dkl_jod` to f32 noise (`diff = 0.000000` measured on
+  the 32×32 odd-dim test pair); use it on the CPU backend or
+  any runtime that lacks atomic f32 add. New
+  `compute_dkl_jod_host_pool_matches_compute_dkl_jod` test pins
+  the two paths together. Closes the standing CPU-backend
+  blocker noted in `lib.rs`.
+
 ### Changed
 
 #### cvvdp-gpu
+
+- Removed the dead `reflect()` helper in `kernels/pyramid.rs` —
+  superseded in tick 206 when `gausspyr_reduce_scalar` was
+  rewritten to bug-compatible zero-pad + explicit boundary
+  patches matching pycvvdp.
 
 - **Manifest-parity tolerances tightened to 0.005 JOD across the
   v1 R2 corpus** (`tests/shadow_jod.rs`). Was a per-q schedule
