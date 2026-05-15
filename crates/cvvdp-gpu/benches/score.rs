@@ -15,13 +15,17 @@
 //! the cumulative f32 drift trade-off documented in the
 //! drift-survey integration tests.
 
-#![cfg(feature = "cuda")]
+#![cfg(any(feature = "cuda", feature = "wgpu"))]
 
 use std::hint::black_box;
 use std::path::PathBuf;
 
 use cubecl::Runtime;
-use cubecl::cuda::CudaRuntime;
+
+#[cfg(feature = "cuda")]
+type Backend = cubecl::cuda::CudaRuntime;
+#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+type Backend = cubecl::wgpu::WgpuRuntime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
@@ -79,9 +83,9 @@ fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host
     let mut g = c.benchmark_group(&group_name);
     g.throughput(Throughput::Elements((w * h) as u64));
 
-    let client = CudaRuntime::client(&Default::default());
-    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp on cuda");
+    let client = Backend::client(&Default::default());
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on GPU backend");
     let _ = cvvdp
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
         .expect("warm-up jod");
@@ -150,9 +154,9 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
     // GPU-composed path on CUDA. Setup cost (Cvvdp::new + GPU
     // buffer allocs + srgb_lut upload + first-call cubecl kernel
     // compilation) hoisted via a warm-up call outside iter().
-    let client = CudaRuntime::client(&Default::default());
-    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, W_256, H_256, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp on cuda");
+    let client = Backend::client(&Default::default());
+    let mut cvvdp = Cvvdp::<Backend>::new(client, W_256, H_256, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on GPU backend");
     let _ = cvvdp
         .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
         .expect("warm-up jod");
