@@ -529,6 +529,68 @@ pressure observation from tick 159 means any fusion attempt
 should change the memory access pattern, not just rearrange
 launches.
 
+### Tick 175–178 — ceil-div correctness wave (resolves tick 174 drift)
+
+After tick 174 root-caused the 0.586 JOD drift vs pycvvdp at 12 MP
+to floor-div vs ceil-div pyramid halving, the next ticks shipped
+the fix and locked it with new tests.
+
+- **Ceil-div pyramid + MAX_LEVELS = 9** (tick 175, `cee15d24`)
+  — `build_pyramid` / `build_weber_scratch` /
+  `build_d_bands_scratch` / `pyramid_levels` switched from
+  `n / 2` to `(n + 1) / 2`. Order mattered: bumping MAX_LEVELS
+  alone (tick 174 attempt) widened the drift to 1.54; ceil-div
+  first then bump levels closed it to 0.0003.
+  - 4000×3000 synth: ours **9.4583** vs pycvvdp **9.4580** —
+    **drift 0.586 → 0.0003 JOD** (2000× more accurate).
+  - All 67 existing parity tests stayed green (they run at
+    power-of-2 sizes where floor == ceil at every level).
+  - Trade-off: jod cold 36 → 62 ns/px, warm-ref 21 → 34 ns/px
+    on the same RTX 5070. Open investigation — total pixel
+    work is nearly unchanged, so the ~25% post-warmup slowdown
+    must be a kernel-dispatch or boundary-branch interaction,
+    not extra compute. Snapshot: `benchmarks/pycvvdp_parity_tick175_2026-05-15.md`.
+
+- **`level_dims` reads `gauss_ref` shapes** (tick 176, `b9b5b71a`)
+  — was computing `(bw, bh, n_px)` via `width >> k` (floor-div
+  bit shift), which disagreed with the ceil-div allocator at
+  odd-dim levels. Consequence: the band loop's CSF + masking +
+  pool kernels dispatched fewer threads than the bands_ref /
+  d_scratch buffers actually held — the last few tail pixels at
+  each odd-dim level were written by weber but never processed
+  downstream. 12 MP JOD output unchanged (tail values were
+  near-zero so didn't move the pool), but the inconsistency
+  was real and would matter on other inputs. Now reads
+  `gauss_ref[k].w / .h` directly so all shape-using sites
+  agree.
+
+- **Odd-dim JOD parity test** (tick 177, `f2425dce`) — added
+  `compute_dkl_jod_matches_host_scalar_on_odd_dims` at 73×91
+  (the smallest source that diverges at ceil-vs-floor level 4+).
+  Catches future floor-div regressions in either host_scalar
+  or the GPU pyramid path. The other JOD parity tests all run
+  at power-of-2 sizes where floor == ceil.
+
+- **12 MP pycvvdp golden parity test** (tick 178, `cd61a217`)
+  — added `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`. The
+  deterministic 4000×3000 synth pair from
+  `examples/time_12mp.rs` runs through `compute_dkl_jod` and
+  asserts the output matches pycvvdp v0.5.4's measured 9.4580
+  golden within 0.005 JOD. Current observed diff: 0.0003.
+  Would have failed at tick 173 (diff 0.586) and tick 174
+  (diff 1.54); now gates the canonical-reference correctness
+  in CI. Runtime ~5 s per call.
+
+The pycvvdp parity matrix is now end-to-end:
+
+| size      | test                                                              | tolerance | observed |
+| ----      | ----                                                              | ----      | ----     |
+| 32×32     | `compute_dkl_jod_matches_host_scalar`                            | 0.5 JOD   | < 0.1    |
+| 73×91     | `compute_dkl_jod_matches_host_scalar_on_odd_dims`                | 0.5 JOD   | 0.092    |
+| 256×256   | `compute_dkl_jod_matches_host_on_corpus_256x256` (drift sweep)   | 0.06 JOD  | < 0.05   |
+| 4000×3000 | `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`                  | 0.005 JOD | **0.0003** |
+| 256×256 v1 manifest | `shadow_jod` (host scalar)                              | 0.01 JOD  | < 0.006  |
+
 ### Investigation Notes (cvvdp-gpu, tick 174 — large-image drift)
 
 After tick 173's pycvvdp v0.5.4 CUDA bench surfaced a **0.586 JOD
