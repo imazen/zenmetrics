@@ -1085,42 +1085,34 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(t_p_bands)
     }
 
-    /// Per-band per-channel masked-difference (`D`) bands.
+    /// Run the full per-band D dispatch and leave each level's per-
+    /// channel D plane in `self.d_scratch[k].d[c]`.
     ///
-    /// Composes the GPU Weber-pyramid + per-pixel CSF apply for
-    /// both reference and distorted sides, then runs the
-    /// host-scalar [`mult_mutual_band`] masker. Output per cvvdp's
-    /// `apply_masking_model`:
-    /// - Non-baseband levels: `D = mult_mutual_band(T_p_dis, T_p_ref)`
-    ///   — cvvdp's per-channel masker (min-abs + phase-uncertainty +
-    ///   xchannel pool + soft clamp).
-    /// - Baseband level: `D[c] = |T_p_dis[c] - T_p_ref[c]|` —
-    ///   matches cvvdp's baseband bypass because both `T_p` are
-    ///   built with `CH_GAIN_eff = 1.0` and `band_mul = 1.0` at the
-    ///   baseband, so the subtraction equals
-    ///   `(dis_weber - ref_weber) * S`.
-    ///
-    /// Per cvvdp's `weber_g1` contract, the CSF lookup uses the
-    /// **reference's** achromatic `log10(L_bkg)` for both `T_p`
-    /// (test) and `R_p` (reference) — see `host_scalar` line ~124.
-    /// `compute_dkl_t_p_bands` uses each side's own log_l_bkg, so
-    /// this helper inlines the CSF apply and shares the ref-side
-    /// log_l_bkg + logs_row uploads across both sides.
-    ///
-    /// Moving the masking step to a GPU composition is the next
-    /// chunk after this — the GPU masking kernels already exist
-    /// and are parity-tested in `tests/masking_kernel.rs`.
-    /// Run the full per-band dispatch (color → weber pyramid → CSF →
-    /// masking) for a (ref, dist) sRGB pair and leave the resulting
-    /// per-band D planes in `self.d_scratch[k].d[c]` (every level
-    /// including the baseband — tick 94 made the baseband write
-    /// through `diff_abs_3ch_kernel` into the same slot).
+    /// Pipeline (all GPU after tick 96):
+    /// - Color: sRGB → DKL (cached source bytes).
+    /// - Weber pyramid: per-level upscale + fused
+    ///   `subtract_weber_3ch_kernel` writing all three channels +
+    ///   shared `log_l_bkg` in one launch.
+    /// - Per-pixel CSF: `csf_apply_6ch_kernel` runs REF and DIST in
+    ///   a single launch per non-baseband level (the LUT bracket
+    ///   math is shared across all 6 outputs). Per cvvdp's
+    ///   `weber_g1` contract, REF's `log10(L_bkg)` is used for
+    ///   both sides.
+    /// - Masking:
+    ///   - Non-baseband bands: `min_abs_3ch_kernel →
+    ///     pu_blur_h_3ch_kernel → pu_blur_v_3ch_scaled_kernel
+    ///     (folds `* 10^MASK_C`) → mult_mutual_3ch_with_blurred_kernel`
+    ///     (or `mult_mutual_3ch_no_blur_kernel` when `bw ≤ PU_PADSIZE`
+    ///     or `bh ≤ PU_PADSIZE`).
+    ///   - Baseband: `diff_abs_3ch_kernel` writes `|T_p_dis - T_p_ref|`
+    ///     for all three channels in one launch (since tick 94 every
+    ///     level's D plane lives in the same `d_scratch.d[k][c]` slot).
     ///
     /// No GPU→host readback inside this helper. Callers that want
     /// the host-side `Vec<[Vec<f32>; 3]>` snapshot use
     /// [`Cvvdp::compute_dkl_d_bands`]; callers that pool on GPU
     /// (`Cvvdp::compute_dkl_jod`) read straight from the resident
-    /// handles.
+    /// handles via `pool_band_kernel`.
     fn _dispatch_d_bands_into_scratch(
         &mut self,
         ref_srgb: &[u8],
