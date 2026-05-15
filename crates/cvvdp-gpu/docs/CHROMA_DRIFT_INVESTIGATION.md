@@ -29,12 +29,20 @@ Candidates for the source:
    `SRGB_LINEAR_TO_DKL` constant. They match to 8+ decimal
    digits — at the f32 precision limit. Computation script
    left at `/tmp/dkl_compute.py`. **Not the source.**
-2. **Chromatic CSF interp**: Our per-pixel CSF kernel uses a
-   uniform-axis arithmetic interp on a 32×32 LUT, while
-   pycvvdp's `interp.py` does a binary-search bracket. At
-   chrominance frequencies (RG / VY channels), the LUT shape
-   may differ at the level where our interp converges to a
-   different bracket than pycvvdp's. **Remaining suspect.**
+2. **Chromatic CSF interp / LUT data** — **FALSIFIED (tick 193)**.
+   Compared our vendored `csf_lut/v0_5_4.rs` arrays against
+   pycvvdp's installed `csf_lut_weber_fixed_size.json`:
+   axes (LOG_L_BKG_AXIS, LOG_RHO_AXIS) and all three channel
+   matrices (o0_c1/c2/c3) agree to **5e-11 precision** —
+   well below the f32 noise floor.
+   Compared interp methods: pycvvdp uses **`interp1q`**
+   (uniform-axis rescale) on the L_bkg axis and
+   **`batch_interp1d`** (torch.searchsorted, binary) on the rho
+   axis. Our host_scalar `interp1_clamped` uses binary search
+   on both. For a uniformly-sampled axis (LOG_L_BKG_AXIS is
+   uniform in log space, stride ~0.2032), both methods produce
+   the same `t` value and bracket — mathematically equivalent.
+   Not the source.
 3. **CH_GAIN per-channel weights** — **FALSIFIED (tick 192)**.
    pycvvdp's mult-mutual path (the default masking_model in
    cvvdp_parameters.json) uses
@@ -46,17 +54,38 @@ Candidates for the source:
 
 ## Remaining candidates
 
-After tick 192, only one of the three candidates is still live:
-**CSF LUT interpolation form**. Two follow-up directions:
-- **Direct value check**: feed a known chrominance ρ + log_L_bkg
-  pair through both our `csf_apply_per_pixel_kernel` and pycvvdp's
-  interp1; compare the per-channel `S` value bit-for-bit. If they
-  diverge at chrominance specifically, that's the source.
-- **LUT staleness**: our `csf_lut/csf_lut_weber_fixed_size.json`
-  was vendored from pycvvdp at port time. Diff it against the
-  v0.5.4-installed file at
-  `.venv/lib/python3.10/site-packages/pycvvdp/vvdp_data/csf_lut_weber_fixed_size.json`
-  to rule out a stale snapshot.
+All three original candidates are now falsified. The drift must
+come from a stage I haven't yet enumerated. New candidates to
+investigate (tick 194+):
+
+- **Display model luminance computation**: cvvdp's
+  `apply_display_model` maps sRGB byte → linear → cd/m² via
+  `Y_peak * (R + R_refl)` style math. A small constant difference
+  in `Y_peak`, `Y_black`, or `Y_refl` between our
+  `DisplayModel::STANDARD_4K` and pycvvdp's display config
+  could shift the chromatic channels disproportionately because
+  the chromatic CSF response is steeper at low luminance.
+- **Band-multiplier (`band_mul`) rule**: We apply `band_mul=2.0`
+  on non-edge non-baseband levels (cvvdp's `lpyr.get_band`
+  doubles non-edge bands). Edge cases at the smallest /
+  largest levels — what if pycvvdp's rule differs slightly?
+- **Pool weights**: `BASEBAND_W` (3-channel still-image
+  `baseband_weight`) and `PER_CH_W` ([1.0, 1.0, 1.0] for 3ch)
+  multiply per-band contributions before the L_p fold.
+  Worth diffing against `cvvdp_parameters.json`'s
+  `baseband_weight` field.
+
+## Direct next-step idea
+
+The cleanest diagnostic: spool up `dump_channels.py` from
+pycvvdp on the chroma_shift fixture, then have our host_scalar
+dump the same intermediate stages. Compare stage-by-stage to
+find where the first divergence appears.
+
+The Burn port (`BURN_PORT_PLAN.md`) remains the most robust
+resolution path: by calling pycvvdp's exact matmul / conv ops
+through Burn, the drift sources at every untested constant or
+clamp would be eliminated wholesale.
 
 ## Next steps
 
