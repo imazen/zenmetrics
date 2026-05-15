@@ -438,7 +438,7 @@ pub fn precomputed_band_weights(
 }
 
 /// Flatten a `precomputed_band_weights` result to the layout
-/// expected by [`weight_band_kernel`]:
+/// expected by `weight_band_kernel`:
 /// `[lvl0_chA, lvl0_chRG, lvl0_chVY, lvl1_chA, …]`.
 ///
 /// `weight_idx = level * 3 + channel`.

@@ -35,15 +35,26 @@
 //! Kernels in this module (all live, all parity-tested in
 //! `tests/pyramid_kernel.rs`):
 //!
-//! - [`downscale_kernel`] — 5-tap separable Gaussian + 2× decimation
+//! - `downscale_kernel` — 5-tap separable Gaussian + 2× decimation
 //!   (gauss-pyramid reduce step).
-//! - [`upscale_v_kernel`] + [`upscale_h_kernel`] — separable vertical
+//! - `upscale_v_kernel` + `upscale_h_kernel` — separable vertical
 //!   then horizontal 2× zero-insertion + 5-tap Gaussian (gauss-pyramid
 //!   expand step), with reconstruction gain ×4 split as ×2 per pass.
-//! - [`subtract_kernel`] — `band = fine - upscaled_coarse`.
-//! - [`weber_contrast_compute_kernel`] — per-pixel `layer / L_bkg`
+//! - `subtract_kernel` — `band = fine - upscaled_coarse`. Still
+//!   used by `compute_dkl_pyramid` (vanilla Laplacian); the Weber
+//!   path went through the fused subtract+weber kernel below.
+//! - `weber_contrast_compute_kernel` — per-pixel `layer / L_bkg`
 //!   with cvvdp's clamps + `log10(L_bkg)` emission for the CSF
-//!   lookup.
+//!   lookup. Spec reference for the per-pixel math; production
+//!   uses the 3-channel variants below.
+//! - `weber_contrast_compute_3ch_kernel` — fused 3-channel weber
+//!   compute with shared `log10(L_bkg)` write. One launch per
+//!   non-baseband level instead of three.
+//! - `subtract_weber_3ch_kernel` — further fuses the subtract step
+//!   into the weber compute. Reads `fine[c]` + `upscaled[c]` for
+//!   3 channels and writes `band[c] = clamp((fine[c] - upscaled[c])
+//!   / L_bkg)` + shared `log_l_bkg`. Production weber kernel
+//!   (replaces 3× `subtract_kernel` + 1× weber per level).
 
 use cubecl::prelude::*;
 
