@@ -57,6 +57,29 @@ pub const N_RHO: usize = 32;
 /// increasing axis. Returns the y-value at `x`. Clamps to the axis
 /// endpoints — matches torch's `interp1q`'s behavior for queries
 /// outside the table range.
+/// Linear interp on a UNIFORMLY-spaced axis via global-stride
+/// rescale. Equivalent to pycvvdp's `interp1q` + `get_interpolants_quick`
+/// — matching it bit-exactly closes a ~0.9% relative drift in CSF S
+/// values at chrominance frequencies (tick 199 finding,
+/// docs/CHROMA_DRIFT_INVESTIGATION.md). For uniform axes, binary-search
+/// and uniform-rescale forms are mathematically equivalent, but f32
+/// storage makes the stored axis values slightly non-uniform at ULP
+/// boundaries, and binary-search uses a LOCAL diff `(xs[hi]-xs[lo])`
+/// while uniform-rescale uses the GLOBAL diff `(xs[N-1]-xs[0])/(N-1)` —
+/// these can disagree at the last bit, producing accumulated drift.
+fn interp1_uniform(xs: &[f32], ys: &[f32], x: f32) -> f32 {
+    debug_assert_eq!(xs.len(), ys.len());
+    let n = xs.len();
+    debug_assert!(n >= 2);
+    // ind = (x - xs[0]) / (xs[N-1] - xs[0]) * (N - 1), clamped to [0, N-1].
+    let raw_ind = (x - xs[0]) / (xs[n - 1] - xs[0]) * ((n - 1) as f32);
+    let ind = raw_ind.clamp(0.0, (n - 1) as f32);
+    let imin = ind as usize; // truncation = floor for non-negative
+    let imax = (imin + 1).min(n - 1);
+    let ifrc = ind - (imin as f32);
+    ys[imin] * (1.0 - ifrc) + ys[imax] * ifrc
+}
+
 fn interp1_clamped(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     debug_assert_eq!(xs.len(), ys.len());
     let n = xs.len();
@@ -108,7 +131,12 @@ pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
         logs_row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, row, log_rho_q);
     }
 
-    let log_s = interp1_clamped(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg);
+    // pycvvdp uses interp1q (uniform-axis rescale) for the L_bkg
+    // axis — matching this closed a ~0.9% relative drift surfaced
+    // in tick 199's T_p REF probe. The rho axis ABOVE keeps
+    // binary search because rho's first interval has a different
+    // ratio (0.3228 vs 0.5 for the rest) — not uniform in log10.
+    let log_s = interp1_uniform(&LOG_L_BKG_AXIS, &logs_row, log_l_bkg);
 
     10.0_f32.powf(log_s)
 }
