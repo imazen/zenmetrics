@@ -154,6 +154,21 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (docs)
 
+- `host_scalar::predict_jod_still_3ch` had a stale comment
+  claiming "weber_contrast_pyr path which we have NOT yet
+  ported (vanilla Laplacian + linear DKL bands here vs.
+  cvvdp's Weber-contrast Laplacian + log10(gauss) for L_bkg)".
+  The Weber-contrast pyramid was ported in tick 24 (per
+  `docs/PORT_STATUS.md`'s "Resolved tick 24" entry) and the
+  surrounding code already calls
+  `kernels::pyramid::weber_contrast_pyr_dec_scalar` — both
+  `ref_weber` / `dis_weber` carry Weber-contrast bands and the
+  log10-gauss `log_l_bkg`. Replaced the stale comment with an
+  accurate description of the current baseband-bypass +
+  non-baseband mult-mutual structure, the tick 204
+  `CSF_BASEBAND_RHO = 0.1 cy/deg` override, and a
+  forward-reference to the Weber-pyramid port history. Tick 290.
+
 - `PoolingParams` scaffolding docstring referenced
   `BETA_CHANNEL` as the inlined `const` in `kernels::pool`, but
   the actual const there is `BETA_CH` (mirroring cvvdp's

@@ -158,10 +158,21 @@ pub fn predict_jod_still_3ch(
     let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
     // For each band: apply CSF weighting → masking → spatial pool.
-    // Baseband-bypass and rho-clamp behaviour mirror cvvdp's
-    // weber_contrast_pyr path which we have NOT yet ported (vanilla
-    // Laplacian + linear DKL bands here vs. cvvdp's Weber-contrast
-    // Laplacian + log10(gauss) for L_bkg). Documented in PORT_STATUS.
+    // Baseband-bypass uses `|T_f - R_f| * S` (no masking, no
+    // CH_GAIN — cvvdp's apply_masking_model is what applies
+    // CH_GAIN; baseband bypasses it). Non-baseband bands run the
+    // full mult-mutual + xchannel + PU-blur pipeline via
+    // `mult_mutual_band`. Rho for the baseband is overridden to
+    // `CSF_BASEBAND_RHO = 0.1 cy/deg` per pycvvdp's
+    // `process_block_of_frames` (tick 204 fix that closed the
+    // chroma_shift 0.117 JOD drift).
+    //
+    // The Weber-contrast pyramid path is the canonical
+    // `kernels::pyramid::weber_contrast_pyr_dec_scalar` (ported in
+    // tick 24, per `docs/PORT_STATUS.md`'s "Resolved tick 24"
+    // entry) — `ref_weber` / `dis_weber` above already carry the
+    // Weber-contrast bands and the log10-gauss-derived
+    // per-band-per-pixel `log_l_bkg` cvvdp's CSF stage queries.
     let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
     for k in 0..n_levels {
         let is_first = k == 0;
