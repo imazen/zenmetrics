@@ -41,8 +41,10 @@
 //!   then horizontal 2× zero-insertion + 5-tap Gaussian (gauss-pyramid
 //!   expand step), with reconstruction gain ×4 split as ×2 per pass.
 //! - `subtract_kernel` — `band = fine - upscaled_coarse`. Still
-//!   used by `compute_dkl_pyramid` (vanilla Laplacian); the Weber
-//!   path went through the fused subtract+weber kernel below.
+//!   used by `compute_dkl_laplacian_pyramid` (vanilla Laplacian)
+//!   and `compute_dkl_csf_weighted_bands` via the shared
+//!   `_dispatch_laplacian_pyramid_gpu` helper; the Weber path
+//!   went through the fused subtract+weber kernel below.
 //! - `weber_contrast_compute_kernel` — per-pixel `layer / L_bkg`
 //!   with cvvdp's clamps + `log10(L_bkg)` emission for the CSF
 //!   lookup. Spec reference for the per-pixel math; production
