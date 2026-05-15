@@ -30,12 +30,10 @@ use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
 
-#[cfg(feature = "cuda")]
-type Backend = cubecl::cuda::CudaRuntime;
-#[cfg(all(feature = "wgpu", not(feature = "cuda")))]
-type Backend = cubecl::wgpu::WgpuRuntime;
-#[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
-type Backend = cubecl::hip::HipRuntime;
+#[path = "../tests/common/mod.rs"]
+mod common;
+
+use common::Backend;
 
 const SIZES: &[(u32, u32, &str)] = &[
     (64, 64, "tiny"),
@@ -48,23 +46,17 @@ const WARMUP_ITERS: usize = 1;
 const TIMED_ITERS: usize = 5;
 
 fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
-    let n = (w * h * 3) as usize;
-    let mut ref_b = vec![0u8; n];
-    let mut dis_b = vec![0u8; n];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let r = (((x * 17 + y * 5) % 251) as u8).wrapping_add(40);
-            let g = (((x * 11 + y * 13) % 247) as u8).wrapping_add(40);
-            let b = (((x * 7 + y * 19) % 241) as u8).wrapping_add(40);
-            let i = (y * w as usize + x) * 3;
-            ref_b[i] = r;
-            ref_b[i + 1] = g;
-            ref_b[i + 2] = b;
-            dis_b[i] = r.saturating_sub(8);
-            dis_b[i + 1] = g.saturating_sub(4);
-            dis_b[i + 2] = b.saturating_add(12);
-        }
-    }
+    let ref_b = common::synth_pair_ref(w as usize, h as usize);
+    let dis_b: Vec<u8> = ref_b
+        .chunks_exact(3)
+        .flat_map(|p| {
+            [
+                p[0].saturating_sub(8),
+                p[1].saturating_sub(4),
+                p[2].saturating_add(12),
+            ]
+        })
+        .collect();
     (ref_b, dis_b)
 }
 

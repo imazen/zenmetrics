@@ -131,6 +131,17 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (examples)
 
+- `examples/time_12mp.rs` + `examples/time_size_sweep.rs` now
+  consume `tests/common` via `#[path]` (matches ticks 275-276's
+  pattern). Drops 4 duplicates total — 2× Backend cascade
+  (~6 lines each) + 2× hand-inlined `synth_pair` (~20 lines each).
+  Both examples kept their tiny wrapper that combines `synth_pair_ref`
+  with the same saturating-sub/saturating-add dist construction —
+  identical pattern to time_12mp.rs's bench in benches/score.rs.
+  No behaviour change.
+
+#### cvvdp-gpu (examples)
+
 - `examples/manifest_parity_probe.rs` now consumes
   `tests/common/mod.rs` via
   `#[path = "../tests/common/mod.rs"] mod common;` (same shape as
