@@ -113,10 +113,10 @@ fn cvvdp_score_respects_custom_geometry() {
 
 #[test]
 fn score_with_reference_matches_score() {
-    // The cached-reference path is currently a host-scalar
-    // pass-through; once the GPU composition lands it becomes a
-    // band-reuse fast path. Either way, the contract is exact
-    // parity with `score(ref, dist)` — pin it.
+    // Tick 213 routed both score and score_with_reference through
+    // the GPU compute_dkl_jod path. The contract is exact parity
+    // with `score(ref, dist)` — pin it across the full v1 corpus
+    // q-grid.
     let client = Backend::client(&Default::default());
     let (w, h) = (256u32, 256u32);
     let mut cvvdp =
@@ -126,11 +126,13 @@ fn score_with_reference_matches_score() {
 
     // set_reference + score_with_reference against several
     // distorted candidates — that's the call pattern that motivates
-    // having a cached fast path in the first place.
+    // having a cached fast path in the first place. Tick 261:
+    // expanded from a hand-picked &[1, 20, 90] to the full
+    // v1_corpus_qs() set so all 6 q-levels are covered.
     cvvdp
         .set_reference(&ref_bytes)
         .expect("set_reference should succeed on valid bytes");
-    for &q in &[1u32, 20, 90] {
+    for &q in &common::v1_corpus_qs() {
         let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
         let jod_direct = cvvdp.score(&ref_bytes, &dist_bytes).expect("score");
         let jod_cached = cvvdp

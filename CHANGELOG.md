@@ -120,6 +120,16 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests + docs)
+
+- `score_with_reference_matches_score` now iterates the full
+  `common::v1_corpus_qs()` set (6 q-levels: 1, 5, 20, 45, 70, 90)
+  instead of the hand-picked `&[1u32, 20, 90]` subset (3 levels).
+  Doubles parity coverage on the cached-reference contract at
+  the cost of ~6 extra corpus loads. Also updated the leading
+  comment which still claimed the path was "currently a host-
+  scalar pass-through" — that switched to GPU in tick 213.
+
 #### cvvdp-gpu (tests)
 
 - `tests/cpu_backend.rs::synth_pair` now uses
