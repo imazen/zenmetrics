@@ -109,13 +109,20 @@ fn shadow_jod_runs_and_is_monotonic_on_corpus() {
 /// drift in the steep slope region of `met2jod` (documented in
 /// the CHANGELOG investigation notes). The drift is bounded and
 /// stable; if it grows, this test catches it.
-#[cfg(feature = "cuda")]
+#[cfg(any(feature = "cuda", feature = "wgpu"))]
 #[test]
 fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
     use cubecl::Runtime;
-    use cubecl::cuda::CudaRuntime;
     use cvvdp_gpu::Cvvdp;
     use cvvdp_gpu::params::CvvdpParams;
+
+    // Prefer cuda when both backends are compiled in; fall back to
+    // wgpu otherwise. Matches the type-alias pattern in
+    // `pipeline_score.rs` / `pipeline_color.rs`.
+    #[cfg(feature = "cuda")]
+    type Backend = cubecl::cuda::CudaRuntime;
+    #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    type Backend = cubecl::wgpu::WgpuRuntime;
 
     let (w, h) = (256u32, 256u32);
     let geom = DisplayGeometry::STANDARD_4K;
@@ -132,9 +139,9 @@ fn shadow_jod_gpu_runs_and_is_close_to_manifest_on_corpus() {
         (90, 9.9930),
     ];
 
-    let client = CudaRuntime::client(&Default::default());
-    let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)
-        .expect("new Cvvdp on cuda");
+    let client = Backend::client(&Default::default());
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("new Cvvdp on GPU backend");
 
     // Per-q tolerance reflecting the documented cumulative-f32 drift
     // through met2jod's steep slope region — biggest at low q where
