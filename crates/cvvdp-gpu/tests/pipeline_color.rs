@@ -733,18 +733,17 @@ fn compute_dkl_jod_matches_host_scalar() {
     );
     // f32 accumulation through 9 stages (color → reduce ×5 →
     // expand ×5 → subtract → weber contrast → per-pixel CSF interp
-    // → mult_mutual + soft clamp → spatial-pool → 3-stage
-    // Minkowski → met2jod) propagates a ~1% per-band Q delta into
-    // a JOD shift whose magnitude scales with the slope of met2jod
-    // at the operating point. The shadow_jod test pins
-    // Cvvdp::score (the all-host path) to pycvvdp's v1 manifest
-    // within 0.006 JOD; this test only measures the GPU-composed
-    // path's drift from the all-host reference. Tolerance stays
-    // loose until the masking + pool GPU kernels get wired into
-    // compute_dkl_jod and the accumulated drift collapses.
+    // Tightened in tick 184. Post tick-181's band-count alignment,
+    // observed diff = 0.000387 JOD. 0.005 gives ~13× margin while
+    // catching real regressions: pre-tick-175 ceil-div bug produced
+    // 0.586 JOD drift at 12 MP; small-input drifts would be in a
+    // similar range. The earlier 0.5 tolerance was left over from
+    // when the GPU pipeline was still partial (host fold + Minkowski
+    // path) — the full GPU path matches host within f32 precision
+    // now.
     assert!(
-        diff < 0.5,
-        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6}"
+        diff < 0.005,
+        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6} (was 0.000387 at tick 184)"
     );
 }
 
@@ -962,12 +961,14 @@ fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
         (0.0..=10.0).contains(&gpu_jod),
         "JOD must be in [0, 10], got {gpu_jod}"
     );
-    // Same tolerance as the 32×32 test (0.5 JOD covers q≈1 cumulative
-    // drift through met2jod's steep slope). A regression to floor-div
-    // would show a much larger divergence (we observed 0.586 JOD at
-    // 12 MP pre-tick-175).
+    // Tightened in tick 184. Post tick-181's band-count alignment,
+    // observed diff = 0.0004 JOD. 0.005 gives ~12× margin while still
+    // gating a real regression: a revert of ceil-div or the
+    // band_frequencies-driven n_levels would push diff to 0.09+ JOD
+    // (tick-177 baseline pre-band-count-fix) or 0.586+ JOD (tick-173
+    // pre-ceil-div). Either far exceeds 0.005.
     assert!(
-        diff < 0.5,
-        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6} on odd dims"
+        diff < 0.005,
+        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6} on odd dims (was 0.0004 at tick 184)"
     );
 }
