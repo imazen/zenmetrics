@@ -375,6 +375,17 @@ pub struct Cvvdp<R: Runtime> {
 
     /// Reference-side cache (used by `score_with_reference`).
     cached: Option<CachedReference>,
+
+    /// GPU-warm reference state for batch scoring. `Some(scalar)`
+    /// means `warm_reference` was called and `bands_ref` +
+    /// `weber_scratch[k].log_l_bkg` hold a valid REF state; the
+    /// scalar is the baseband `log10(L_bkg)` returned by the REF
+    /// weber dispatch (needed by the band loop's baseband CSF
+    /// path). Reset to `None` whenever a method that dispatches
+    /// REF weber runs (compute_dkl_jod, compute_dkl_d_bands, etc.),
+    /// since those overwrite bands_ref and weber_scratch.log_l_bkg
+    /// with the new REF's data.
+    warm_ref_baseband_log_l_bkg: Option<f32>,
 }
 
 fn pyramid_levels(width: u32, height: u32) -> u32 {
@@ -512,6 +523,7 @@ impl<R: Runtime> Cvvdp<R> {
             baseband_log_l_bkg,
             logs_row,
             cached: None,
+            warm_ref_baseband_log_l_bkg: None,
         })
     }
 
@@ -1323,6 +1335,11 @@ impl<R: Runtime> Cvvdp<R> {
     /// REF side once and reuse the GPU-resident state across many
     /// DIST candidates.
     fn _dispatch_ref_weber_pyramid_only(&mut self, ref_srgb: &[u8]) -> Result<f32> {
+        // Overwriting REF state invalidates any prior warm cache —
+        // the new REF's bands_ref / log_l_bkg / scalar are now
+        // resident. `warm_reference` re-sets the scalar after this
+        // returns; everyone else lets it stay None.
+        self.warm_ref_baseband_log_l_bkg = None;
         let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
             .weber_scratch
             .iter()
@@ -1355,16 +1372,38 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<()> {
-        // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
-        // see where the dispatch spends its time without committing
-        // instrumentation. Zero cost when unset.
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
-
         let t_weber_ref = std::time::Instant::now();
         let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)
+    }
+
+    /// DIST weber + band loop. Reads REF-side state from
+    /// `bands_ref[k]` + `weber_scratch[k].log_l_bkg` (populated by
+    /// `_dispatch_ref_weber_pyramid_only` either earlier in
+    /// `_dispatch_d_bands_into_scratch` or by `warm_reference`).
+    ///
+    /// Leaves the per-band D planes resident in
+    /// `self.d_scratch[k].d[c]`. No host readback.
+    ///
+    /// Lifted out of `_dispatch_d_bands_into_scratch` so a
+    /// `warm_reference` + `compute_dkl_jod_with_warm_ref` fast path
+    /// can dispatch the REF side once and reuse the GPU-resident
+    /// state across many DIST candidates.
+    fn _dispatch_d_bands_dist_and_band_loop(
+        &mut self,
+        dist_srgb: &[u8],
+        log_l_bkg_baseband: f32,
+        ppd: f32,
+    ) -> Result<()> {
+        // CVVDP_TRACE=1 enables per-phase eprintln timings so we can
+        // see where the dispatch spends its time without committing
+        // instrumentation. Zero cost when unset.
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+
         let t_weber_dis = std::time::Instant::now();
         self._dispatch_dist_weber_pyramid_only(dist_srgb)?;
         if trace {
@@ -1732,19 +1771,76 @@ impl<R: Runtime> Cvvdp<R> {
         // every level (baseband included since tick 94's
         // diff_abs_3ch_kernel) and does no host read-back.
         //
-        // The JOD path then pools via `pool_band_kernel` on each
+        // The JOD path then pools via `pool_band_3ch_kernel` on each
         // resident D handle, accumulating into an `n_levels ×
         // N_CHANNELS` partials buffer that's the only data read back
         // to host. `compute_dkl_d_bands` (the parity-test helper)
         // adds a per-band readback on top, paying ~432 MB of
         // GPU→host transfer at 12 MP — JOD skips that.
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
-        let n_levels = self.n_levels as usize;
+        self._pool_and_finalize_jod()
+    }
 
-        // Pool partials: one `f32` per (level, channel). Stack-
-        // allocated since `n_levels * N_CHANNELS ≤ MAX_LEVELS *
-        // N_CHANNELS = 24` — `create_from_slice` reads only the
-        // active prefix.
+    /// Pre-dispatch the REF weber pyramid + cache state for batch
+    /// scoring. Subsequent calls to
+    /// [`Cvvdp::compute_dkl_jod_with_warm_ref`] skip the REF half of
+    /// the JOD pipeline, halving the GPU compute per DIST candidate.
+    ///
+    /// Any call to [`Cvvdp::compute_dkl_jod`],
+    /// [`Cvvdp::compute_dkl_d_bands`],
+    /// [`Cvvdp::compute_dkl_weber_pyramid`], or
+    /// [`Cvvdp::compute_dkl_t_p_bands`] invalidates the warm state
+    /// (their REF dispatches overwrite the shared GPU scratch). Call
+    /// `warm_reference` again to re-arm.
+    ///
+    /// Validates that `ref_srgb.len() == width × height × 3`.
+    pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if ref_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_srgb.len(),
+            });
+        }
+        let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
+        self.warm_ref_baseband_log_l_bkg = Some(log_l_bkg_baseband);
+        Ok(())
+    }
+
+    /// Score a DIST candidate against the GPU-warmed REF. Same JOD
+    /// output as [`Cvvdp::compute_dkl_jod`] but skips the REF weber
+    /// pyramid — useful for batch workflows where one reference
+    /// is scored against many distorted candidates (codec quality
+    /// sweeps, fixture-based testing).
+    ///
+    /// Returns [`Error::NoWarmReference`] if `warm_reference` was
+    /// not called, or if the warm state was invalidated by an
+    /// intervening REF-dispatching method.
+    pub fn compute_dkl_jod_with_warm_ref(
+        &mut self,
+        dist_srgb: &[u8],
+        ppd: f32,
+    ) -> Result<f32> {
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband, ppd)?;
+        self._pool_and_finalize_jod()
+    }
+
+    /// GPU pool + host fold for the per-band D planes resident in
+    /// `self.d_scratch[k].d[c]`. Used by both `compute_dkl_jod` and
+    /// `compute_dkl_jod_with_warm_ref` — the dispatch path that
+    /// landed the bands differs, but the pool/fold tail is identical.
+    fn _pool_and_finalize_jod(&mut self) -> Result<f32> {
+        let n_levels = self.n_levels as usize;
         let partials_init = [0.0_f32; MAX_LEVELS * N_CHANNELS];
         let partials_h = self
             .client

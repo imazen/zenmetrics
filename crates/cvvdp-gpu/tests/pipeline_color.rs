@@ -744,3 +744,92 @@ fn compute_dkl_jod_matches_host_scalar() {
         "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6}"
     );
 }
+
+#[test]
+fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
+    // Batch-scoring fast path: warm_reference dispatches the REF
+    // weber pyramid once and caches the GPU state; subsequent
+    // compute_dkl_jod_with_warm_ref calls skip REF weber. Output
+    // JOD must match compute_dkl_jod(ref, dist, ppd) byte-for-byte
+    // (same kernels, same data, just dispatched in two phases).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_a = vec![0u8; (w * h * 3) as usize];
+    let mut dist_b = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_a[i] = r.saturating_sub(8);
+            dist_a[i + 1] = g.saturating_sub(4);
+            dist_a[i + 2] = b.saturating_add(12);
+            dist_b[i] = r.saturating_add(5);
+            dist_b[i + 1] = g.saturating_sub(10);
+            dist_b[i + 2] = b.saturating_sub(3);
+        }
+    }
+
+    // Reference values via the non-warm path. Each call rebuilds
+    // both sides — exactly what the warm-ref fast path skips.
+    let jod_a_unwarm = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_a, ppd)
+        .expect("compute_dkl_jod a");
+    let jod_b_unwarm = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_b, ppd)
+        .expect("compute_dkl_jod b");
+
+    // Warm-ref path: REF dispatched once, two DIST candidates.
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
+    let jod_a_warm = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("compute_dkl_jod_with_warm_ref a");
+    let jod_b_warm = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_b, ppd)
+        .expect("compute_dkl_jod_with_warm_ref b");
+
+    // Same kernels, same data → same output, modulo f32 rounding
+    // from any difference in scheduling order. 1e-5 absolute tol
+    // catches any real divergence; numerical fuzz at the JOD scale
+    // doesn't surface.
+    assert!(
+        (jod_a_warm - jod_a_unwarm).abs() < 1e-5,
+        "warm vs unwarm JOD diverged for dist_a: warm={jod_a_warm:.6}, unwarm={jod_a_unwarm:.6}"
+    );
+    assert!(
+        (jod_b_warm - jod_b_unwarm).abs() < 1e-5,
+        "warm vs unwarm JOD diverged for dist_b: warm={jod_b_warm:.6}, unwarm={jod_b_unwarm:.6}"
+    );
+
+    // After two warm-ref scores the state should still be warm —
+    // verify by scoring dist_a again and getting the same answer.
+    let jod_a_warm2 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("compute_dkl_jod_with_warm_ref a (second)");
+    assert!(
+        (jod_a_warm2 - jod_a_warm).abs() < 1e-5,
+        "repeat warm-ref score diverged: first={jod_a_warm:.6}, second={jod_a_warm2:.6}"
+    );
+
+    // An intervening non-warm call must invalidate the warm state.
+    let _ = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_a, ppd)
+        .expect("intervening compute_dkl_jod");
+    let err = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect_err("warm state should be invalidated");
+    match err {
+        cvvdp_gpu::Error::NoWarmReference => {}
+        other => panic!("expected NoWarmReference, got {other:?}"),
+    }
+}

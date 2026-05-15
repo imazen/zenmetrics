@@ -111,6 +111,12 @@ pub enum Error {
     /// `Cvvdp::score_with_reference` was called without a prior
     /// `Cvvdp::set_reference`.
     NoCachedReference,
+    /// `Cvvdp::compute_dkl_jod_with_warm_ref` was called without a
+    /// prior `Cvvdp::warm_reference`, **or** the warm state was
+    /// invalidated by an intervening call to a method that
+    /// dispatches the REF weber pyramid (e.g. `compute_dkl_jod`,
+    /// `compute_dkl_d_bands`).
+    NoWarmReference,
     /// Image is too small for the configured pyramid, **or** a GPU
     /// read-back / dispatch failed. The two get the same variant
     /// because cubecl's read errors aren't easily separable yet —
@@ -127,6 +133,10 @@ impl std::fmt::Display for Error {
                 "dimension mismatch: expected {expected} bytes, got {got}"
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
+            Error::NoWarmReference => write!(
+                f,
+                "no warm GPU reference; call warm_reference first (or warm state was invalidated by an intervening REF dispatch)"
+            ),
             Error::InvalidImageSize => write!(f, "image is too small for the configured pyramid"),
         }
     }
