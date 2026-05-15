@@ -630,6 +630,46 @@ impl<R: Runtime> Cvvdp<R> {
         (bw, bh, bw * bh)
     }
 
+    /// Debug-only sanity check that the caller-passed `ppd` matches
+    /// the geometry baked into this `Cvvdp` at construction.
+    ///
+    /// Several public methods (`compute_dkl_jod`, `compute_dkl_d_bands`,
+    /// `compute_dkl_t_p_bands`, `compute_dkl_jod_with_warm_ref`, plus
+    /// the host_pool variants and `compute_dkl_csf_weighted_bands`)
+    /// take a `ppd: f32` parameter that the implementation
+    /// **silently ignores** — `logs_row` is pre-uploaded at
+    /// construction time against `self.geometry.pixels_per_degree()`,
+    /// so passing a different ppd does NOT re-tune the CSF lookup.
+    /// The parameter remains in the signatures for source-
+    /// compatibility (changing it would break the public API).
+    ///
+    /// Pre-tick-243 there was no surfaced sanity check: a caller who
+    /// constructed Cvvdp with `STANDARD_4K` (75.4 PPD) then called
+    /// `compute_dkl_jod(ref, dist, phone_ppd)` (110 PPD) would get
+    /// results scored against 75.4 PPD with no warning. Tick 243
+    /// adds a debug_assert at the public boundary so the mismatch
+    /// fires in debug builds. Release builds preserve the silent-
+    /// ignore behavior to avoid changing observable semantics.
+    ///
+    /// Tolerance: `1e-3` PPD absolute — slack enough for f32-noise
+    /// roundtrips (e.g. derived-from-geometry via
+    /// `DisplayGeometry::pixels_per_degree()`) but tight enough to
+    /// catch a caller passing PHONE PPD when STANDARD_4K is baked
+    /// in.
+    #[inline]
+    fn debug_assert_ppd_matches_geometry(&self, ppd: f32) {
+        debug_assert!(
+            (ppd - self.geometry.pixels_per_degree()).abs() < 1e-3,
+            "ppd={} mismatched with self.geometry.pixels_per_degree()={}; \
+             the GPU CSF logs_row LUT is pre-uploaded against the geometry \
+             at Cvvdp::new and the per-call ppd is silently ignored. \
+             Reconstruct Cvvdp with `new_with_geometry` if you need a \
+             different display geometry.",
+            ppd,
+            self.geometry.pixels_per_degree(),
+        );
+    }
+
     /// Run only the color stage: upload sRGB bytes, launch the
     /// `srgb_to_dkl_kernel`, and read back three planar `f32` buffers
     /// (A, RG, VY) in row-major order.
@@ -1312,6 +1352,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
     pub fn compute_dkl_t_p_bands(&mut self, srgb: &[u8], ppd: f32) -> Result<Vec<[Vec<f32>; 3]>> {
+        self.debug_assert_ppd_matches_geometry(ppd);
+
         // _dispatch_weber_pyramid_gpu below overwrites bands_ref +
         // weber_scratch[k].log_l_bkg with the new srgb's data. The
         // warm-ref state cached different bytes; invalidate the
@@ -1839,6 +1881,7 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
+        self.debug_assert_ppd_matches_geometry(ppd);
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
 
         let n_levels = self.n_levels as usize;
@@ -1898,6 +1941,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// - `compute_dkl_jod_host_pool_matches_compute_dkl_jod` (GPU
     ///   atomic pool vs host pool, 0.000000 diff)
     pub fn compute_dkl_jod(&mut self, ref_srgb: &[u8], dist_srgb: &[u8], ppd: f32) -> Result<f32> {
+        self.debug_assert_ppd_matches_geometry(ppd);
+
         // Run the full D-bands GPU dispatch (color → weber → CSF →
         // masking). `_dispatch_d_bands_into_scratch` leaves the
         // per-band D planes resident in `self.d_scratch[k].d[c]` for
@@ -1962,6 +2007,7 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<f32> {
+        self.debug_assert_ppd_matches_geometry(ppd);
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb, ppd)?;
         self._host_pool_and_finalize_jod()
     }
@@ -2018,6 +2064,7 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<f32> {
+        self.debug_assert_ppd_matches_geometry(ppd);
         let log_l_bkg_baseband = self
             .warm_ref_baseband_log_l_bkg
             .ok_or(Error::NoWarmReference)?;
@@ -2147,6 +2194,7 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         ppd: f32,
     ) -> Result<f32> {
+        self.debug_assert_ppd_matches_geometry(ppd);
         let log_l_bkg_baseband = self
             .warm_ref_baseband_log_l_bkg
             .ok_or(Error::NoWarmReference)?;
@@ -2253,6 +2301,8 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
         l_bkg: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
+        self.debug_assert_ppd_matches_geometry(ppd);
+
         // Overwrites bands_ref[k] (first with Laplacian bands via
         // _dispatch_laplacian_pyramid_gpu, then in place via the per-
         // (level, channel) weight_band_kernel loop below). Either

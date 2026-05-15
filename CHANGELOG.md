@@ -120,6 +120,30 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (debug)
+
+- **Surface silent-ignored `ppd` mismatches in debug builds.**
+  6 public methods take a `ppd: f32` parameter that the
+  implementation **silently ignores** — `logs_row` is pre-uploaded
+  at construction time against `self.geometry.pixels_per_degree()`,
+  so a caller who built `Cvvdp::new(client, w, h, p)` with the
+  default `STANDARD_4K` (75.4 PPD) then called
+  `compute_dkl_jod(ref, dist, phone_ppd)` (110 PPD) would get
+  results scored against 75.4 PPD with no warning. Pre-tick-243
+  there was no surfaced sanity check.
+  - New `Cvvdp::debug_assert_ppd_matches_geometry(ppd)` helper:
+    `debug_assert!((ppd - self.geometry.pixels_per_degree()).abs() < 1e-3)`
+  - Wired into the 6 affected entries: `compute_dkl_jod`,
+    `compute_dkl_d_bands`, `compute_dkl_t_p_bands`,
+    `compute_dkl_jod_host_pool`,
+    `compute_dkl_jod_host_pool_with_warm_ref`,
+    `compute_dkl_jod_with_warm_ref`, and
+    `compute_dkl_csf_weighted_bands`.
+  - Release builds preserve silent-ignore (no public-API change);
+    the parameter remains in the signatures for source compatibility.
+    All 30 pipeline_color + 11 pipeline_score + 4 cpu_backend tests
+    green — all existing call sites pass ppd consistent with geometry.
+
 #### cvvdp-gpu (docs)
 
 - Stale pre-tick-175 warm-ref throughput numbers updated across
