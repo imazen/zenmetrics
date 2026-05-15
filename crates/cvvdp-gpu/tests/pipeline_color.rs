@@ -833,3 +833,70 @@ fn compute_dkl_jod_with_warm_ref_matches_unwarm_path() {
         other => panic!("expected NoWarmReference, got {other:?}"),
     }
 }
+
+#[test]
+fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
+    // Catches regressions in the ceil-div pyramid invariant (tick
+    // 175). All other JOD parity tests run at power-of-2 sizes
+    // (32×32, 256×256) where floor-div == ceil-div at every pyramid
+    // level — so they can't detect a future caller reverting either
+    // the host_scalar or GPU pyramid back to floor-div halving.
+    //
+    // 73×91 produces an odd-dim source that diverges at level 4+:
+    //   73 → 37 (ceil) vs 36 (floor)
+    //   91 → 46 (ceil) vs 45 (floor)
+    // If host_scalar and GPU both use ceil-div (current state) the
+    // outputs agree within f32 precision. If either path slips back
+    // to floor-div, the JOD diverges visibly.
+    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // Same per-pixel construction as the 32×32 test — distinct R/G/B
+    // patterns + a small DIST perturbation so the JOD is non-trivial.
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let host_jod =
+        predict_jod_still_3ch(&ref_srgb, &dist_srgb, w as usize, h as usize, display, ppd);
+    let diff = (gpu_jod - host_jod).abs();
+    eprintln!(
+        "odd-dim 73×91: gpu_jod = {gpu_jod:.6}, host_scalar = {host_jod:.6}, |diff| = {diff:.6}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    // Same tolerance as the 32×32 test (0.5 JOD covers q≈1 cumulative
+    // drift through met2jod's steep slope). A regression to floor-div
+    // would show a much larger divergence (we observed 0.586 JOD at
+    // 12 MP pre-tick-175).
+    assert!(
+        diff < 0.5,
+        "GPU JOD {gpu_jod:.6} diverges from host scalar {host_jod:.6} by {diff:.6} on odd dims"
+    );
+}
