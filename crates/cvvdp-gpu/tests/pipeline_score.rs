@@ -481,6 +481,46 @@ fn debug_assert_fires_when_ppd_mismatches_geometry() {
     let _ = cvvdp.compute_dkl_jod(&ref_bytes, &dist_bytes, phone_ppd);
 }
 
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "ppd=")]
+fn debug_assert_fires_when_ppd_mismatches_geometry_on_warm_ref_path() {
+    // Tick 313 sibling to `debug_assert_fires_when_ppd_mismatches_geometry`.
+    // Pins the same tick-243 debug_assert on the warm-ref dispatcher
+    // (`compute_dkl_jod_with_warm_ref`) — all 6 public methods that
+    // take `ppd: f32` share the assertion at entry, but the existing
+    // tick-244 test only covered `compute_dkl_jod`. A refactor that
+    // dropped the debug_assert from the warm-ref path specifically
+    // would have slipped through. This test closes that coverage gap.
+    //
+    // #[cfg(debug_assertions)] gates the test definition; release
+    // builds skip it (the assert compiles out under -O so the call
+    // wouldn't panic and #[should_panic] would itself fail).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_bytes = vec![128u8; n];
+    let dist_bytes = vec![128u8; n];
+
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+
+    // Phone PPD for a 5.5″ 1080p display at 0.40m (110.087 ≠ 75.4).
+    let phone_ppd = cvvdp_gpu::params::DisplayGeometry {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.40,
+        diagonal_inches: 5.5,
+    }
+    .pixels_per_degree();
+
+    // Should panic at the debug_assert in compute_dkl_jod_with_warm_ref
+    // via debug_assert_ppd_matches_geometry.
+    let _ = cvvdp.compute_dkl_jod_with_warm_ref(&dist_bytes, phone_ppd);
+}
+
 #[test]
 fn compute_dkl_jod_on_v1_manifest_corpus() {
     // GPU-composed compute_dkl_jod against the v1 R2 manifest values.

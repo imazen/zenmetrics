@@ -154,6 +154,26 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- New regression test:
+  `debug_assert_fires_when_ppd_mismatches_geometry_on_warm_ref_path`
+  in `tests/pipeline_score.rs`. Sibling to the existing tick-244
+  test that pinned the tick-243 `debug_assert_ppd_matches_geometry`
+  contract on `compute_dkl_jod`. All 6 public methods share the
+  same assert-at-entry contract (`compute_dkl_jod` /
+  `compute_dkl_d_bands` / `compute_dkl_t_p_bands` /
+  `compute_dkl_jod_host_pool` /
+  `compute_dkl_jod_host_pool_with_warm_ref` /
+  `compute_dkl_jod_with_warm_ref`), but only `compute_dkl_jod`
+  had a regression test. A refactor that dropped the assert
+  from `compute_dkl_jod_with_warm_ref` specifically would have
+  slipped through. The new test warms a reference, then calls
+  `compute_dkl_jod_with_warm_ref` with a phone-resolution PPD
+  (110.09 ≠ STANDARD_4K's 75.4) and expects the debug-only
+  assert to fire. Both ppd-mismatch tests pass; the
+  `#[cfg(debug_assertions)]` gate means release builds skip
+  the test definition entirely (matches the existing pattern).
+  Tick 313.
+
 - Dropped dead `ppd: f32` parameter from two private GPU
   dispatchers (`_dispatch_d_bands_into_scratch` and
   `_dispatch_d_bands_dist_and_band_loop`) plus the redundant
