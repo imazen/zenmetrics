@@ -49,7 +49,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
 use crate::kernels::csf::{
-    CsfChannel, csf_apply_6ch_kernel, csf_apply_per_pixel_kernel, flatten_band_weights,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights,
     precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::masking::{
@@ -1004,7 +1004,14 @@ impl<R: Runtime> Cvvdp<R> {
         // Build Weber bands + log_l_bkg on GPU. Side effect leaves
         // weber bands resident in self.bands_ref and log_l_bkg as
         // host-side data.
-        let (weber_bands, log_l_bkg) = self.compute_dkl_weber_pyramid(srgb)?;
+        //
+        // Tick 101: fused 3-channel CSF apply (was 3 per-channel
+        // launches per level) AND read weber from `self.bands_ref`
+        // handles directly (was re-uploading from the host Vec
+        // returned by compute_dkl_weber_pyramid). Per non-baseband
+        // level: 3 host uploads + 3 kernel launches → 0 uploads +
+        // 1 launch.
+        let (_weber_bands_unused, log_l_bkg) = self.compute_dkl_weber_pyramid(srgb)?;
         let n_levels = self.n_levels as usize;
         // ppd unused — logs_row is pre-uploaded against the geometry
         // baked into Cvvdp::new. compute_dkl_t_p_bands still takes
@@ -1012,7 +1019,6 @@ impl<R: Runtime> Cvvdp<R> {
         let _ = ppd;
 
         let cube_dim = CubeDim::new_1d(64);
-        let csf_channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
 
         let mut t_p_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
@@ -1030,45 +1036,46 @@ impl<R: Runtime> Cvvdp<R> {
                 (self.height as usize) >> k
             };
             let n_px = bw * bh;
-            debug_assert_eq!(weber_bands[k][0].len(), n_px);
             debug_assert_eq!(log_l_bkg[k].len(), n_px);
 
             let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
-
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+
+            let ch_gain_a = if is_baseband { 1.0 } else { band_mul * CH_GAIN[0] };
+            let ch_gain_rg = if is_baseband { 1.0 } else { band_mul * CH_GAIN[1] };
+            let ch_gain_vy = if is_baseband { 1.0 } else { band_mul * CH_GAIN[2] };
+
+            let t_p_a_h = alloc_zeros_f32(&self.client, n_px);
+            let t_p_rg_h = alloc_zeros_f32(&self.client, n_px);
+            let t_p_vy_h = alloc_zeros_f32(&self.client, n_px);
+
+            unsafe {
+                csf_apply_3ch_kernel::launch::<R>(
+                    &self.client,
+                    count.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(self.bands_ref[k].planes[0].clone(), n_px),
+                    ArrayArg::from_raw_parts(self.bands_ref[k].planes[1].clone(), n_px),
+                    ArrayArg::from_raw_parts(self.bands_ref[k].planes[2].clone(), n_px),
+                    ArrayArg::from_raw_parts(log_l_bkg_h, n_px),
+                    ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
+                    ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
+                    ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
+                    ArrayArg::from_raw_parts(t_p_a_h.clone(), n_px),
+                    ArrayArg::from_raw_parts(t_p_rg_h.clone(), n_px),
+                    ArrayArg::from_raw_parts(t_p_vy_h.clone(), n_px),
+                    ch_gain_a,
+                    ch_gain_rg,
+                    ch_gain_vy,
+                    n_px as u32,
+                );
+            }
+
             let mut planes = [Vec::new(), Vec::new(), Vec::new()];
-
-            for (c, _cc) in csf_channels.iter().enumerate() {
-                // Pre-uploaded logs_row (stable per Cvvdp instance).
-                let logs_row_h = self.logs_row[k][c].clone();
-                let weber_h = self
-                    .client
-                    .create_from_slice(f32::as_bytes(&weber_bands[k][c]));
-                let t_p_h = alloc_zeros_f32(&self.client, n_px);
-
-                let ch_gain_eff = if is_baseband {
-                    1.0
-                } else {
-                    band_mul * CH_GAIN[c]
-                };
-
-                unsafe {
-                    csf_apply_per_pixel_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(weber_h, n_px),
-                        ArrayArg::from_raw_parts(log_l_bkg_h.clone(), n_px),
-                        ArrayArg::from_raw_parts(logs_row_h, 32),
-                        ArrayArg::from_raw_parts(t_p_h.clone(), n_px),
-                        ch_gain_eff,
-                        n_px as u32,
-                    );
-                }
-
+            for (c, h) in [t_p_a_h, t_p_rg_h, t_p_vy_h].into_iter().enumerate() {
                 let bytes = self
                     .client
-                    .read_one(t_p_h)
+                    .read_one(h)
                     .map_err(|_| Error::InvalidImageSize)?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
