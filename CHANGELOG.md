@@ -78,40 +78,6 @@ Workspace conventions per the global rules:
   file is the only place cpu-backend coverage lives.
   Run with `cargo test -p cvvdp-gpu --no-default-features --features cpu`.
 
-### Fixed
-
-#### cvvdp-gpu
-
-- **73×91 odd-dim residual closed (was 0.006 JOD).** Found a
-  parity-check bug in pycvvdp's `gausspyr_reduce`: the
-  horizontal-pass right-column patch uses `x.shape[-2]` (INPUT
-  ROW parity) to pick its odd/even branch even though the
-  comments say "columns" — `lpyr_dec.py:204-209`. For
-  mixed-parity inputs (e.g. 6×5 → 3×3 at the 73×91 baseband)
-  pycvvdp applies the wrong patch.
-  - `host_scalar` `gausspyr_reduce_scalar`: rewritten to bug-
-    compatible zero-pad + parity-aware patches.
-  - GPU `downscale_kernel`: adds a delta correction at the right
-    column when sw and sh parities differ.
-  - New `compute_dkl_jod_matches_pycvvdp_at_73x91_odd` test
-    passes at f32 precision (diff = 0.0000 vs pycvvdp golden).
-  - All other corpus fixtures (256² + 4 MP, same-parity dims)
-    unchanged — the bug-compat patches match pure reflection
-    for all sw == sh parity inputs.
-
-- **Chroma-shift drift closed (was 0.117 JOD).** pycvvdp overrides
-  the baseband CSF rho to 0.1 cy/deg (`cvvdp_metric.py:628`),
-  but our pipeline used the geometric value from
-  `band_frequencies(ppd, w, h)` (0.190 at 256² standard_4k). Fixed
-  by adding `kernels::csf::CSF_BASEBAND_RHO = 0.1` and applying it
-  in both `host_scalar::predict_jod_still_3ch` and
-  `Cvvdp::new`'s `logs_row` pre-upload. The
-  `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift` test
-  re-enabled at standard 0.005 JOD tolerance; chroma_shift now
-  matches pycvvdp golden 9.664865 to f32 precision.
-
-### Added
-
 #### Workspace
 
 - Pinned multi-tick task in `CLAUDE.md`: compute CVVDP scores for
@@ -282,6 +248,38 @@ Workspace conventions per the global rules:
   full 5-phase serial restructure did; the helper is kept so
   future experiments can swap the destination buffer set
   without re-wiring weber's body.
+
+### Fixed
+
+#### cvvdp-gpu
+
+- **73×91 odd-dim residual closed (was 0.006 JOD).** Found a
+  parity-check bug in pycvvdp's `gausspyr_reduce`: the
+  horizontal-pass right-column patch uses `x.shape[-2]` (INPUT
+  ROW parity) to pick its odd/even branch even though the
+  comments say "columns" — `lpyr_dec.py:204-209`. For
+  mixed-parity inputs (e.g. 6×5 → 3×3 at the 73×91 baseband)
+  pycvvdp applies the wrong patch.
+  - `host_scalar` `gausspyr_reduce_scalar`: rewritten to bug-
+    compatible zero-pad + parity-aware patches.
+  - GPU `downscale_kernel`: adds a delta correction at the right
+    column when sw and sh parities differ.
+  - New `compute_dkl_jod_matches_pycvvdp_at_73x91_odd` test
+    passes at f32 precision (diff = 0.0000 vs pycvvdp golden).
+  - All other corpus fixtures (256² + 4 MP, same-parity dims)
+    unchanged — the bug-compat patches match pure reflection
+    for all sw == sh parity inputs.
+
+- **Chroma-shift drift closed (was 0.117 JOD).** pycvvdp overrides
+  the baseband CSF rho to 0.1 cy/deg (`cvvdp_metric.py:628`),
+  but our pipeline used the geometric value from
+  `band_frequencies(ppd, w, h)` (0.190 at 256² standard_4k). Fixed
+  by adding `kernels::csf::CSF_BASEBAND_RHO = 0.1` and applying it
+  in both `host_scalar::predict_jod_still_3ch` and
+  `Cvvdp::new`'s `logs_row` pre-upload. The
+  `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift` test
+  re-enabled at standard 0.005 JOD tolerance; chroma_shift now
+  matches pycvvdp golden 9.664865 to f32 precision.
 
 ### Changed (performance)
 
