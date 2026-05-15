@@ -30,9 +30,10 @@
 //!    partials into a shared GPU buffer; the host fold reduces
 //!    the resulting `n_levels × 3` Vec via `pool_band_finalize`
 //!    + `do_pooling_and_jod_still_3ch` + `met2jod` piecewise.
-//!    The single-channel `pool_band_kernel` is retained as a
-//!    test-only entry point (`tests/pool_scalar.rs`) for unit
-//!    parity against `lp_norm_mean`.
+//!
+//! The single-channel `pool_band_kernel` is retained as a
+//! test-only entry point (`tests/pool_scalar.rs`) for unit parity
+//! against `lp_norm_mean`.
 //!
 //! Numerical parity target: matches pycvvdp v0.5.4 within 0.005 JOD
 //! on the v1 R2 manifest across q=1–90 fixtures (measured 0.0000–

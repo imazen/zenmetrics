@@ -154,6 +154,18 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu (docs)
 
+- `kernels/mod.rs` step 5 breadcrumb introduced in tick 291
+  triggered 3 `clippy::doc_lazy_continuation` warnings — the
+  new sentence about `pool_band_kernel` being test-only landed
+  on continuation indentation (`//!    `) of bullet 5, which
+  rustdoc/clippy now read as a malformed sub-list rather than
+  body continuation. Split the breadcrumb out of the bullet
+  into its own paragraph (blank `//!` separator) so it parses
+  as flowing prose under the pipeline-order list. `cargo
+  clippy --all-targets -W clippy::all` is back to zero
+  warnings on both `--features cuda` and `--features wgpu`.
+  Tick 293.
+
 - `kernels::pool::pool_band_kernel` (single-channel) doc now
   explicitly notes it's not dispatched by
   `Cvvdp::compute_dkl_jod` — the production path uses the fused
