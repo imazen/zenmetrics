@@ -122,6 +122,17 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- `dimension_mismatch_surfaces_on_wrong_size_inputs` — pins the
+  `Error::DimensionMismatch` contract on every public entry that
+  validates buffer length: `Cvvdp::score` (both arms),
+  `set_reference`, `score_with_reference`, `warm_reference`, and
+  `compute_dkl_jod_with_warm_ref`. Each is called with a buffer
+  sized for `(w/2) × (h/2)` against a Cvvdp configured for `w × h`;
+  the test asserts both that `DimensionMismatch` fires AND that
+  the `(expected, got)` fields carry the right byte counts.
+  Closes a real zero-coverage gap: a refactor that swapped `!=`
+  for `<` (silently accepting smaller buffers and reading past
+  `srgb.len()`) would not have surfaced in CI before this.
 - `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_12mp_synth` —
   large-image warm-ref pycvvdp parity. Completes the warm-ref vs
   pycvvdp coverage grid: small same-parity (chroma_shift, tick 222)

@@ -164,6 +164,91 @@ fn score_with_reference_errors_without_set_reference() {
 }
 
 #[test]
+fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
+    // Tick 239: pin the DimensionMismatch error-path on every public
+    // entry that validates buffer length. The 8 sites (lib::Error::
+    // DimensionMismatch in pipeline.rs at score, set_reference,
+    // score_with_reference, compute_dkl_planes, warm_reference,
+    // compute_dkl_jod_with_warm_ref, and the GPU compute_dkl_*
+    // helpers via `_dispatch_dkl_planes_gpu`) had zero direct test
+    // coverage before this — a refactor that swapped the != check
+    // for a < check (silently accepting smaller buffers and reading
+    // garbage past srgb.len()) would not surface in CI.
+    //
+    // Test pattern: build a Cvvdp configured for 64×64, then call
+    // each entry with a buffer sized for 32×32 (length n/4); expect
+    // DimensionMismatch with the right expected/got values.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let expected_len = (w as usize) * (h as usize) * 3;
+    let wrong_bytes = vec![128u8; expected_len / 4]; // 32×32 sized
+    let right_bytes = vec![128u8; expected_len];
+
+    // Closure to extract (expected, got) from a DimensionMismatch.
+    let check_dim_err = |err: cvvdp_gpu::Error, label: &str| match err {
+        cvvdp_gpu::Error::DimensionMismatch { expected, got } => {
+            assert_eq!(
+                expected, expected_len,
+                "{label}: expected field mismatched",
+            );
+            assert_eq!(
+                got,
+                expected_len / 4,
+                "{label}: got field mismatched",
+            );
+        }
+        other => panic!("{label}: expected DimensionMismatch, got {other:?}"),
+    };
+
+    // score: both args validated; wrong reference triggers first.
+    let err = cvvdp
+        .score(&wrong_bytes, &right_bytes)
+        .expect_err("score with short reference must error");
+    check_dim_err(err, "score(short_ref, ok_dist)");
+
+    let err = cvvdp
+        .score(&right_bytes, &wrong_bytes)
+        .expect_err("score with short distorted must error");
+    check_dim_err(err, "score(ok_ref, short_dist)");
+
+    // set_reference: validates the stored buffer.
+    let err = cvvdp
+        .set_reference(&wrong_bytes)
+        .expect_err("set_reference with short buffer must error");
+    check_dim_err(err, "set_reference(short)");
+
+    // score_with_reference: validates the dist buffer. set_reference
+    // a correct ref first so we don't hit NoCachedReference.
+    cvvdp
+        .set_reference(&right_bytes)
+        .expect("set_reference(ok)");
+    let err = cvvdp
+        .score_with_reference(&wrong_bytes)
+        .expect_err("score_with_reference with short dist must error");
+    check_dim_err(err, "score_with_reference(short)");
+
+    // warm_reference: validates the ref buffer.
+    let err = cvvdp
+        .warm_reference(&wrong_bytes)
+        .expect_err("warm_reference with short buffer must error");
+    check_dim_err(err, "warm_reference(short)");
+
+    // compute_dkl_jod_with_warm_ref: validates dist buffer. Need a
+    // valid warm state first to not collide with NoWarmReference.
+    cvvdp
+        .warm_reference(&right_bytes)
+        .expect("warm_reference(ok)");
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let err = cvvdp
+        .compute_dkl_jod_with_warm_ref(&wrong_bytes, ppd)
+        .expect_err("compute_dkl_jod_with_warm_ref with short dist must error");
+    check_dim_err(err, "compute_dkl_jod_with_warm_ref(short)");
+}
+
+#[test]
 fn compute_dkl_jod_on_v1_manifest_corpus() {
     // GPU-composed compute_dkl_jod against the v1 R2 manifest values.
     // shadow_jod pins the all-host path to ≤0.006 JOD; this test
