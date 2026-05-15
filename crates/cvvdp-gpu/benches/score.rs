@@ -122,6 +122,24 @@ fn bench_resolution(c: &mut Criterion, w: u32, h: u32, label: &str, include_host
         });
     });
 
+    // Warm-ref batch-scoring fast path. warm_reference pre-dispatches
+    // the REF weber pyramid once; per-DIST calls skip it. Lib.rs
+    // Status quotes ~1.8× per-DIST throughput vs cold at 12 MP — this
+    // bench gives the empirical handle so regressions in the warm-
+    // state path (ticks 236-240) surface.
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    let _ = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+        .expect("warm-up warm-ref jod");
+    g.bench_function("gpu_compute_dkl_jod_with_warm_ref", |b| {
+        b.iter(|| {
+            let jod = cvvdp
+                .compute_dkl_jod_with_warm_ref(black_box(&dist_bytes), ppd)
+                .expect("compute_dkl_jod_with_warm_ref");
+            black_box(jod);
+        });
+    });
+
     g.finish();
 }
 
@@ -194,6 +212,22 @@ fn bench_at_quality(c: &mut Criterion, q: u32) {
             let jod = cvvdp
                 .compute_dkl_jod(black_box(&ref_bytes), black_box(&dist_bytes), ppd)
                 .expect("compute_dkl_jod");
+            black_box(jod);
+        });
+    });
+
+    // Warm-ref batch-scoring fast path — pair with the corpus
+    // `gpu_compute_dkl_jod` bench above. See `bench_resolution` for
+    // the rationale.
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    let _ = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_bytes, ppd)
+        .expect("warm-up warm-ref jod");
+    g.bench_function("gpu_compute_dkl_jod_with_warm_ref", |b| {
+        b.iter(|| {
+            let jod = cvvdp
+                .compute_dkl_jod_with_warm_ref(black_box(&dist_bytes), ppd)
+                .expect("compute_dkl_jod_with_warm_ref");
             black_box(jod);
         });
     });

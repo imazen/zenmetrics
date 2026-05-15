@@ -120,6 +120,18 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (benches)
+
+- `benches/score.rs` adds `gpu_compute_dkl_jod_with_warm_ref` to
+  both bench groups (`bench_resolution` synth + `bench_at_quality`
+  corpus). Captures the warm-ref batch-scoring fast path
+  empirically — the lib.rs Status section quotes ~1.8× per-DIST
+  throughput at 12 MP vs cold, but until now there was no
+  bench that produced numbers for that path. Provides a
+  regression-net for the warm-state work in ticks 236-240
+  (warm-state invalidation + persistent dest Vecs + scratch
+  buffers).
+
 #### cvvdp-gpu (docs)
 
 - Refreshed stale "0.40 JOD GPU-vs-host drift" / "where the
