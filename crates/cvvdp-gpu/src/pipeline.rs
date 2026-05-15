@@ -552,14 +552,15 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Pyramid level `k`'s spatial dimensions as `(bw, bh, n_px)`.
-    /// `bw = width >> k`, `bh = height >> k`. At `k = 0` the shift
-    /// is a no-op so this matches the source-image dims; deeper
-    /// levels are floor-halved. Mirrors what `build_weber_scratch`
-    /// and `build_d_bands_scratch` use when allocating per-level
-    /// scratch.
+    /// Per-level (bw, bh, n_px) for the GPU pyramid. Reads the actual
+    /// stored `gauss_ref[k]` dimensions which since tick 175 use
+    /// ceil-div halving (`(n + 1) / 2`) matching pycvvdp's
+    /// `gausspyr_reduce`. Was previously `width >> k` (floor-div bit
+    /// shift), which silently underprocessed ~1 row per odd-dim level
+    /// in the band loop.
     fn level_dims(&self, k: usize) -> (usize, usize, usize) {
-        let bw = (self.width as usize) >> k;
-        let bh = (self.height as usize) >> k;
+        let bw = self.gauss_ref[k].w as usize;
+        let bh = self.gauss_ref[k].h as usize;
         (bw, bh, bw * bh)
     }
 
