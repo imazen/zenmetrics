@@ -171,19 +171,21 @@ that optimization's drift budget.
 The crate exports a stable column-name constant
 `cvvdp_gpu::CVVDP_COLUMN_NAME` for landing scores in parquet
 sidecars without colliding with other cvvdp variants (the
-canonical pycvvdp reference goes under `cvvdp_pycvvdp_v054`, a
-future Burn-based port would get its own tag, etc.). Default form
-is `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; CI can override the
-entire string at build time via the `CVVDP_IMPL_TAG` env var to
-bake in a git short hash when iterating within the same crate
-version.
+canonical pycvvdp reference goes under `cvvdp_pycvvdp_v054`,
+future alternative implementations would get their own tags,
+etc.). Default form is `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`;
+CI can override the entire string at build time via the
+`CVVDP_IMPL_TAG` env var to bake in a git short hash when
+iterating within the same crate version.
 
 The full sidecar schema (identity tuple, score-column type
 contract, manifest format, producer / consumer protocols) lives
 in [`docs/CVVDP_SIDECAR_SCHEMA.md`](docs/CVVDP_SIDECAR_SCHEMA.md).
-The Burn-based port that would land alongside as
-`cvvdp_burn_v*` is scoped in
-[`docs/BURN_PORT_PLAN.md`](docs/BURN_PORT_PLAN.md).
+A Burn-based port was investigated and abandoned in tick 324
+after a perf spike measured 4.32× regression vs. the
+hand-written separable kernel; see
+[`docs/BURN_PORT_PLAN.md`](docs/BURN_PORT_PLAN.md)'s "Status:
+ABANDONED" banner and `crates/burn-conv-spike/README.md`.
 
 ## Status
 

@@ -58,6 +58,28 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- Tick 324's "abandon Burn port" verdict reached into three
+  surviving stale references in cvvdp-gpu docs that still
+  pitched the Burn port as a "future" direction:
+  - `src/lib.rs:160` (`CVVDP_COLUMN_NAME` docstring) — replaced
+    "future Burn-based port" with "future alternative
+    implementation" + an explicit "(A Burn-based port was
+    investigated and abandoned tick 324; see
+    `docs/BURN_PORT_PLAN.md`'s banner.)" qualifier.
+  - `README.md:175,184` (Sweep-tooling section) — same
+    treatment plus a sentence with the empirical justification
+    ("4.32× regression vs. the hand-written separable kernel")
+    pointing at both BURN_PORT_PLAN.md and the spike's README.
+  - `docs/CVVDP_SIDECAR_SCHEMA.md:52` (Reserved-tags table) —
+    `cvvdp_burn_v*` row's producer column now reads
+    "(abandoned tick 324; the Burn port was investigated and
+    ruled out...). The tag stays reserved in case a future
+    re-attempt wants to reuse it."
+  Tag namespace stays reserved (no risk of accidental
+  collision if someone DOES revisit the question), but the
+  prose tells the reader honestly that the door is closed for
+  now. Tick 326.
+
 - **`crates/burn-conv-spike/README.md`** — new top-level README
   for the perf-spike crate that informed tick 324's
   "abandon Burn port" verdict. Documents what the spike is

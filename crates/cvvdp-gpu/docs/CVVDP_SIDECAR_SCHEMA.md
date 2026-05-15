@@ -49,7 +49,7 @@ convention as `score_zensim` / `score_butteraugli_*` etc.
 |---------------------------------|-----------------------------------------|-------------------------|
 | `cvvdp_pycvvdp_v054`            | upstream pycvvdp v0.5.4 (CUDA PyTorch)  | `pycvvdp` from R2 image |
 | `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` | this crate (`cvvdp-gpu`) host scalar / GPU path | `zen-metrics` binary |
-| `cvvdp_burn_v<MAJOR>_<MINOR>_<PATCH>`   | (future) Burn-based port — see `BURN_PORT_PLAN.md` | TBD |
+| `cvvdp_burn_v<MAJOR>_<MINOR>_<PATCH>`   | (abandoned tick 324; the Burn port was investigated and ruled out — see the "Status: ABANDONED" banner in `BURN_PORT_PLAN.md`. The tag stays reserved in case a future re-attempt wants to reuse it.) | n/a |
 
 The `cvvdp-gpu` crate's column comes from
 `cvvdp_gpu::CVVDP_COLUMN_NAME`. Default form derives from

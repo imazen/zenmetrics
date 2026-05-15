@@ -157,8 +157,10 @@ pub const PYRAMID_MIN_DIM: u32 = 4;
 /// Used by sweep tooling (`zen-metrics-cli` and downstream
 /// pipelines) to land cvvdp scores in parquet sidecars without
 /// colliding with other cvvdp variants such as the canonical
-/// pycvvdp reference (`cvvdp_pycvvdp_v054`) or a future Burn-based
-/// port. See the PINNED TASK in `CLAUDE.md` at repo root.
+/// pycvvdp reference (`cvvdp_pycvvdp_v054`) or a future alternative
+/// implementation. (A Burn-based port was investigated and
+/// abandoned tick 324; see `docs/BURN_PORT_PLAN.md`'s banner.)
+/// See the PINNED TASK in `CLAUDE.md` at repo root.
 ///
 /// Default form: `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>` derived
 /// from `CARGO_PKG_VERSION` with `.` rewritten to `_`. The
