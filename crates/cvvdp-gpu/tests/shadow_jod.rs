@@ -28,22 +28,11 @@
 
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
-use image::ImageReader;
-use std::path::PathBuf;
 
 #[path = "common/mod.rs"]
 mod common;
 
-fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
-    let img = ImageReader::open(path)
-        .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
-        .decode()
-        .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
-        .to_rgb8();
-    assert_eq!(img.width(), w);
-    assert_eq!(img.height(), h);
-    img.into_raw()
-}
+use common::load_rgb_bytes;
 
 #[test]
 fn shadow_jod_runs_and_is_monotonic_on_corpus() {

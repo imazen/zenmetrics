@@ -408,6 +408,23 @@ pub fn v1_corpus_jod_golden(q: u32) -> f32 {
     panic!("v1_corpus_jods.json: q={q} not found");
 }
 
+/// Open a PNG/JPEG at `path`, decode to RGB8, and return the raw
+/// bytes. Asserts the decoded dimensions match the expected
+/// `(w, h)` — meant for test fixtures where a mismatch indicates
+/// either a corrupted corpus file or a wrong test expectation.
+/// Tick 267 dedup — was hand-mirrored across `pipeline_score.rs`
+/// and `shadow_jod.rs`.
+pub fn load_rgb_bytes(path: &std::path::PathBuf, w: u32, h: u32) -> Vec<u8> {
+    let img = image::ImageReader::open(path)
+        .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
+        .decode()
+        .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
+        .to_rgb8();
+    assert_eq!(img.width(), w);
+    assert_eq!(img.height(), h);
+    img.into_raw()
+}
+
 /// Deterministic synthetic reference image used by the
 /// `synth_*_*` parity fixtures in `pycvvdp_synth_goldens.json`. Bit-
 /// stable across pycvvdp's `scripts/cvvdp_goldens/bench_12mp_cuda.py`

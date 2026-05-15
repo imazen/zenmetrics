@@ -11,8 +11,6 @@
 use cubecl::Runtime;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
-use image::ImageReader;
-use std::path::PathBuf;
 
 #[path = "common/mod.rs"]
 mod common;
@@ -25,16 +23,7 @@ type Backend = cubecl::wgpu::WgpuRuntime;
 #[cfg(all(feature = "hip", not(feature = "cuda"), not(feature = "wgpu")))]
 type Backend = cubecl::hip::HipRuntime;
 
-fn load_rgb_bytes(path: &PathBuf, w: u32, h: u32) -> Vec<u8> {
-    let img = ImageReader::open(path)
-        .unwrap_or_else(|e| panic!("open {path:?}: {e}"))
-        .decode()
-        .unwrap_or_else(|e| panic!("decode {path:?}: {e}"))
-        .to_rgb8();
-    assert_eq!(img.width(), w);
-    assert_eq!(img.height(), h);
-    img.into_raw()
-}
+use common::load_rgb_bytes;
 
 #[test]
 fn cvvdp_score_matches_v1_manifest() {

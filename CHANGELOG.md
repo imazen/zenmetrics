@@ -120,6 +120,14 @@ Workspace conventions per the global rules:
   `set_reference` into an eager GPU dispatch would silently
   break batch-scoring callers and surface here.
 
+#### cvvdp-gpu (tests)
+
+- `tests/common::load_rgb_bytes` extracted. The 10-line PNG/JPEG
+  decode + dimension-assert helper was hand-mirrored across
+  `tests/pipeline_score.rs` and `tests/shadow_jod.rs`. Both call
+  sites now use the common helper; the `image::ImageReader` +
+  `std::path::PathBuf` imports drop out of both files.
+
 #### cvvdp-gpu (examples)
 
 - `examples/manifest_parity_probe.rs` no longer hand-mirrors the
