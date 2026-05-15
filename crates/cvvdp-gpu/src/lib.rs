@@ -82,8 +82,9 @@
 //! path runs ~62 ns/px and our warm-ref path ~34 ns/px — **4.4× /
 //! 2.4× slower than pycvvdp**. The pre-tick-175 numbers (36 / 21
 //! ns/px) reflected a broken pyramid that drifted 0.586 JOD vs
-//! pycvvdp; the current numbers come from correct output (≤ 0.0003
-//! JOD drift, gated by `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`).
+//! pycvvdp; the current numbers come from correct output (12 MP
+//! synth |diff| = 0.0000 JOD post-ticks 204-208, gated by
+//! `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`).
 //!
 //! pycvvdp benefits from cuDNN-optimised separable convolutions on
 //! the downscale/upscale pyramid; our hand-written cubecl kernels
