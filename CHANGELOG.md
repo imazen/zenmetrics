@@ -88,6 +88,21 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (performance)
+
+- **Persistent `partials_h` atomic-pool buffer** — `Cvvdp::new`
+  now allocates a single `n_levels × N_CHANNELS` partials buffer
+  (≤ 144 bytes at MAX_LEVELS=9) and `_pool_and_finalize_jod` zero-
+  fills it via `fill_f32_kernel` per call instead of allocating
+  a fresh GPU buffer + uploading host zeros every JOD call.
+  Removes one `create_from_slice` host alloc + Host→GPU copy per
+  call from the JOD hot path; pattern mirrors the tick-168
+  `baseband_log_l_bkg` migration. All 27 pipeline_color + 9
+  pipeline_score + 8 pool_scalar tests green on CUDA, including
+  manifest parity (`compute_dkl_jod_on_v1_manifest_corpus` at ≤ 0.005
+  JOD) and the GPU-pool-vs-host-pool sentinel
+  (`compute_dkl_jod_host_pool_matches_compute_dkl_jod`).
+
 #### cvvdp-gpu (tests)
 
 - `compute_dkl_jod_with_warm_ref_matches_pycvvdp_at_73x91_odd` —

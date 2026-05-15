@@ -371,6 +371,15 @@ pub struct Cvvdp<R: Runtime> {
     /// alloc + upload with a single GPU launch.
     baseband_log_l_bkg: cubecl::server::Handle,
 
+    /// Pre-allocated `n_levels × N_CHANNELS` partials buffer that
+    /// `pool_band_3ch_kernel` accumulates into via `Atomic<f32>::fetch_add`.
+    /// `_pool_and_finalize_jod` zero-fills via `fill_f32_kernel` per call
+    /// (one tiny launch, ~144 bytes worth at MAX_LEVELS=9) instead of
+    /// allocating a fresh GPU buffer + uploading host zeros every JOD
+    /// call. Tick 227: replaces the per-call `create_from_slice` host
+    /// alloc + GPU upload.
+    partials_h: cubecl::server::Handle,
+
     /// Pre-uploaded logs_row buffers for the CSF per-pixel apply.
     /// Indexed `[level][channel]`. Each holds the 32-entry
     /// `precompute_logs_row(rho_k, channel)` result. rho_k depends
@@ -499,6 +508,12 @@ impl<R: Runtime> Cvvdp<R> {
         let baseband_n = baseband_w * baseband_h;
         let baseband_log_l_bkg = alloc_zeros_f32(&client, baseband_n);
 
+        // Persistent `n_levels * N_CHANNELS` atomic-pool partials buffer
+        // — reused across every `_pool_and_finalize_jod` call. Zero-fill
+        // happens per call via `fill_f32_kernel`; the per-call
+        // `create_from_slice` host alloc + upload is eliminated (tick 227).
+        let partials_h = alloc_zeros_f32(&client, (n_levels as usize) * N_CHANNELS);
+
         // Pre-upload logs_row per (level, channel) — depends only on
         // (rho_k, channel) which are fixed for this Cvvdp.
         //
@@ -553,6 +568,7 @@ impl<R: Runtime> Cvvdp<R> {
             d_scratch,
             weber_scratch,
             baseband_log_l_bkg,
+            partials_h,
             logs_row,
             cached: None,
             warm_ref_baseband_log_l_bkg: None,
@@ -2016,11 +2032,23 @@ impl<R: Runtime> Cvvdp<R> {
     /// landed the bands differs, but the pool/fold tail is identical.
     fn _pool_and_finalize_jod(&mut self) -> Result<f32> {
         let n_levels = self.n_levels as usize;
-        let partials_init = [0.0_f32; MAX_LEVELS * N_CHANNELS];
-        let partials_h = self
-            .client
-            .create_from_slice(f32::as_bytes(&partials_init[..n_levels * N_CHANNELS]));
+        let n_partials = n_levels * N_CHANNELS;
         let cube_dim = CubeDim::new_1d(64);
+
+        // Zero the persistent partials buffer before atomic-add
+        // accumulation. One tiny GPU launch replaces the per-call
+        // host alloc + create_from_slice upload (tick 227).
+        unsafe {
+            fill_f32_kernel::launch::<R>(
+                &self.client,
+                CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
+                cube_dim,
+                ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                0.0,
+                n_partials as u32,
+            );
+        }
+
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
@@ -2038,7 +2066,7 @@ impl<R: Runtime> Cvvdp<R> {
                     ArrayArg::from_raw_parts(d_a, n_px),
                     ArrayArg::from_raw_parts(d_rg, n_px),
                     ArrayArg::from_raw_parts(d_vy, n_px),
-                    ArrayArg::from_raw_parts(partials_h.clone(), n_levels * N_CHANNELS),
+                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
                     BETA_SPATIAL,
                     partial_idx_a,
                     partial_idx_rg,
@@ -2050,7 +2078,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         let bytes = self
             .client
-            .read_one(partials_h)
+            .read_one(self.partials_h.clone())
             .map_err(|_| Error::InvalidImageSize)?;
         let partials_data: &[f32] = f32::from_bytes(&bytes);
 
