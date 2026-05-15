@@ -154,6 +154,29 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `Error::NoWarmReference` variant docstring listed two
+  example invalidators (`compute_dkl_jod`,
+  `compute_dkl_d_bands`) — fine when the list was short, but
+  tick 314 grew the canonical invalidator list to 9
+  (compute_dkl_jod, ..._host_pool, _d_bands, _weber_pyramid,
+  _t_p_bands, _laplacian_pyramid, _csf_weighted_bands, score,
+  score_with_reference). Maintaining a parallel example list
+  on the Error variant is a duplicate-maintenance burden the
+  variant doc would inevitably fall behind on — exactly what
+  tick 314's audit caught.
+  Removed the per-example list and instead pointed at
+  `Cvvdp::warm_reference`'s docstring as the canonical
+  invalidator source, plus a pointer to the
+  `warm_state_invalidates_after_each_documented_dispatcher`
+  regression test that pins each method to the contract. Also
+  added the cpu-runtime variant
+  (`compute_dkl_jod_host_pool_with_warm_ref`) to the
+  "called without prior `warm_reference`" sentence — the
+  variant doc previously only named
+  `compute_dkl_jod_with_warm_ref` even though both methods
+  return this variant from the same `.ok_or(NoWarmReference)`
+  site. 14 pipeline_score tests still pass. Tick 317.
+
 - `Error::InvalidImageSize` Display message was misleading.
   The variant is documented as dual-purpose (image too small
   for the configured pyramid OR GPU readback/dispatch failed,

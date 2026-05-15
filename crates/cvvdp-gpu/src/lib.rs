@@ -183,11 +183,14 @@ pub enum Error {
     /// `Cvvdp::score_with_reference` was called without a prior
     /// `Cvvdp::set_reference`.
     NoCachedReference,
-    /// `Cvvdp::compute_dkl_jod_with_warm_ref` was called without a
-    /// prior `Cvvdp::warm_reference`, **or** the warm state was
-    /// invalidated by an intervening call to a method that
-    /// dispatches the REF weber pyramid (e.g. `compute_dkl_jod`,
-    /// `compute_dkl_d_bands`).
+    /// `Cvvdp::compute_dkl_jod_with_warm_ref` or
+    /// `Cvvdp::compute_dkl_jod_host_pool_with_warm_ref` was called
+    /// without a prior `Cvvdp::warm_reference`, **or** the warm
+    /// state was invalidated by an intervening REF-dispatching
+    /// method. The canonical invalidator list lives on
+    /// `Cvvdp::warm_reference`'s docstring; the
+    /// `warm_state_invalidates_after_each_documented_dispatcher`
+    /// regression test pins each method to the contract.
     NoWarmReference,
     /// Image is too small for the configured pyramid, **or** a GPU
     /// read-back / dispatch failed. The two get the same variant
