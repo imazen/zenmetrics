@@ -1210,14 +1210,34 @@ impl<R: Runtime> Cvvdp<R> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
 
         let t_weber_ref = std::time::Instant::now();
-        // ref_weber bands Vec is discarded — after tick 154's
-        // bands_ref/bands_dis split the CSF dispatch reads from
-        // `self.bands_ref[k]` GPU handles directly. ref_log_l_bkg
-        // is still used: the band loop uploads it per band as the
-        // CSF kernel's log_l_bkg input (DIST log_l_bkg is discarded
-        // per cvvdp's weber_g1 rule).
-        let (_ref_weber_unused, mut ref_log_l_bkg) =
-            self.compute_dkl_weber_pyramid(ref_srgb)?;
+        // REF weber pyramid: call `_dispatch_weber_pyramid_gpu`
+        // directly and read back only the per-level log_l_bkg
+        // planes (the band loop's CSF kernel uploads them per
+        // band). Skips the ~190 MB bands readback that
+        // `compute_dkl_weber_pyramid` would do — the CSF dispatch
+        // reads from `self.bands_ref[k]` GPU handles directly
+        // (tick 155).
+        let ref_log_l_bkg_dests: Vec<cubecl::server::Handle> = self
+            .weber_scratch
+            .iter()
+            .map(|s| s.log_l_bkg.clone())
+            .collect();
+        let log_l_bkg_baseband =
+            self._dispatch_weber_pyramid_gpu(ref_srgb, &ref_log_l_bkg_dests, false)?;
+        let n_levels_usize = self.n_levels as usize;
+        let last = n_levels_usize - 1;
+        let baseband_n =
+            (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
+        let mut ref_log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n_levels_usize);
+        for k in 0..n_levels_usize.saturating_sub(1) {
+            let log_h = self.weber_scratch[k].log_l_bkg.clone();
+            let bytes = self
+                .client
+                .read_one(log_h)
+                .map_err(|_| Error::InvalidImageSize)?;
+            ref_log_l_bkg.push(f32::from_bytes(&bytes).to_vec());
+        }
+        ref_log_l_bkg.push(vec![log_l_bkg_baseband; baseband_n]);
         if trace {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
