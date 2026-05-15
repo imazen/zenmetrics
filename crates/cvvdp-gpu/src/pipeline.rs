@@ -213,8 +213,8 @@ fn build_weber_scratch<R: Runtime>(
         // against the host scalar reference at all sizes (not just
         // even-dim corpora). See `gausspyr_reduce_scalar` in
         // kernels/pyramid.rs (which already uses div_ceil(2)).
-        let coarse_w = (fine_w + 1) / 2;
-        let coarse_h = (fine_h + 1) / 2;
+        let coarse_w = fine_w.div_ceil(2);
+        let coarse_h = fine_h.div_ceil(2);
         let n_fine = (fine_w as usize) * (fine_h as usize);
         let n_v = (coarse_w as usize) * (fine_h as usize);
         out.push(WeberScratch {
@@ -283,8 +283,8 @@ fn build_d_bands_scratch<R: Runtime>(
             ],
         });
         // Ceil-div halving — see WeberScratch comment.
-        w = (w + 1) / 2;
-        h = (h + 1) / 2;
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
     }
     out
 }
@@ -487,8 +487,8 @@ impl<R: Runtime> Cvvdp<R> {
                 // boundary semantics (tick 175). Was floor-div, which
                 // caused 0.586 JOD drift vs pycvvdp at 4000×3000 due
                 // to off-by-one shapes at levels 4+ on odd-dim inputs.
-                w = (w + 1) / 2;
-                h = (h + 1) / 2;
+                w = w.div_ceil(2);
+                h = h.div_ceil(2);
             }
             out
         };

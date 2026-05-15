@@ -88,6 +88,17 @@ Workspace conventions per the global rules:
   `host_scalar::predict_jod_still_3ch`, `compute_dkl_jod_host_pool`,
   and `compute_dkl_jod_host_pool_with_warm_ref`.
 
+#### cvvdp-gpu (cleanup)
+
+- Fixed 8 clippy lints surfaced under MSRV 1.93:
+  - 6× `manual_div_ceil` in `pipeline.rs` (`(x + 1) / 2` →
+    `x.div_ceil(2)` in pyramid-level allocators)
+  - 2× `manual_is_multiple_of` in `kernels/pyramid.rs` (`sh % 2 == 0`
+    → `sh.is_multiple_of(2)` in `gausspyr_reduce_scalar`)
+  Semantically equivalent rewrites — all 78 cuda + 4 cpu tests
+  green; manifest parity untouched. `cargo clippy -p cvvdp-gpu`
+  is warning-clean.
+
 #### cvvdp-gpu (docs)
 
 - `Cvvdp::score_with_reference` now has a `no_run` doctest example

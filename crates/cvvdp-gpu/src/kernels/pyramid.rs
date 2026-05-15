@@ -131,7 +131,7 @@ pub fn gausspyr_reduce_scalar(
                 vscratch[last_dy * sw + x] +=
                     src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
             }
-        } else if sh % 2 == 0 {
+        } else if sh.is_multiple_of(2) {
             for x in 0..sw {
                 vscratch[last_dy * sw + x] += src[(sh - 1) * sw + x] * k[4];
             }
@@ -176,7 +176,7 @@ pub fn gausspyr_reduce_scalar(
                 dst[dy * dw + last_dx] +=
                     vscratch[dy * sw + sw - 1] * k[3] + vscratch[dy * sw + sw - 2] * k[4];
             }
-        } else if sh % 2 == 0 {
+        } else if sh.is_multiple_of(2) {
             for dy in 0..dh {
                 dst[dy * dw + last_dx] += vscratch[dy * sw + sw - 1] * k[4];
             }
