@@ -927,6 +927,13 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
         // contract.
         "score",
         "score_with_reference",
+        // Tick 314: compute_dkl_jod_host_pool also invalidates —
+        // it routes through _dispatch_d_bands_into_scratch which
+        // calls _dispatch_ref_weber_pyramid_only, which clears
+        // the cached scalar. The cpu-runtime entry point shares
+        // the same REF dispatch as the all-GPU jod, so the same
+        // invalidation contract applies.
+        "compute_dkl_jod_host_pool",
     ];
 
     let l_bkg_scalar = cvvdp_gpu::params::DisplayModel::STANDARD_4K.y_peak / 2.0;
@@ -977,6 +984,11 @@ fn warm_state_invalidates_after_each_documented_dispatcher() {
                 let _ = cvvdp
                     .score_with_reference(&dist_srgb)
                     .expect("intervening score_with_reference");
+            }
+            "compute_dkl_jod_host_pool" => {
+                let _ = cvvdp
+                    .compute_dkl_jod_host_pool(&ref_srgb, &dist_srgb, ppd)
+                    .expect("intervening compute_dkl_jod_host_pool");
             }
             other => unreachable!("unhandled invalidator {other}"),
         }

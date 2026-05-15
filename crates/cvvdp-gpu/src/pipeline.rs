@@ -2220,6 +2220,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// pycvvdp reference.
     ///
     /// Any call to [`Cvvdp::compute_dkl_jod`],
+    /// [`Cvvdp::compute_dkl_jod_host_pool`],
     /// [`Cvvdp::compute_dkl_d_bands`],
     /// [`Cvvdp::compute_dkl_weber_pyramid`],
     /// [`Cvvdp::compute_dkl_t_p_bands`],
@@ -2227,13 +2228,19 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Cvvdp::compute_dkl_csf_weighted_bands`] invalidates the
     /// warm state (their REF dispatches overwrite the shared GPU
     /// scratch — either bands_ref via the weber chain, or bands_ref
-    /// via the Laplacian chain). Call `warm_reference` again to
-    /// re-arm.
+    /// via the Laplacian chain; `compute_dkl_jod_host_pool` routes
+    /// through the same `_dispatch_d_bands_into_scratch` →
+    /// `_dispatch_ref_weber_pyramid_only` path the GPU jod uses,
+    /// clearing the cached scalar at the inner-REF call). Call
+    /// `warm_reference` again to re-arm.
     ///
     /// [`Cvvdp::score`] and [`Cvvdp::score_with_reference`] also
     /// invalidate — they route through `compute_dkl_jod` since
     /// tick 213. [`Cvvdp::set_reference`] does NOT invalidate
     /// (it only stashes host-side bytes; no GPU dispatch).
+    /// [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`] only
+    /// reads the cached scalar (via `.ok_or(NoWarmReference)`),
+    /// never writes it — so it does NOT invalidate either.
     ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
     ///

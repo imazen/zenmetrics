@@ -154,6 +154,23 @@ original Fixed/Added/Changed sections.
 
 #### cvvdp-gpu
 
+- `Cvvdp::warm_reference` docstring's invalidator list was
+  missing `compute_dkl_jod_host_pool` — it routes through
+  `_dispatch_d_bands_into_scratch` →
+  `_dispatch_ref_weber_pyramid_only` which clears
+  `warm_ref_baseband_log_l_bkg`, same as the GPU jod path. A
+  caller batch-scoring on cpu-runtime who mixed
+  `compute_dkl_jod_host_pool` calls between
+  `warm_reference` + `compute_dkl_jod_host_pool_with_warm_ref`
+  would silently lose the warm state without the docstring
+  warning. Added the missing entry; also noted explicitly that
+  `compute_dkl_jod_host_pool_with_warm_ref` does NOT invalidate
+  (it only reads the cached scalar).
+  Extended the `warm_state_invalidates_after_each_documented_dispatcher`
+  regression test from 8 → 9 invalidators to pin the
+  `compute_dkl_jod_host_pool` contract directly. Test passes.
+  Tick 314.
+
 - New regression test:
   `debug_assert_fires_when_ppd_mismatches_geometry_on_warm_ref_path`
   in `tests/pipeline_score.rs`. Sibling to the existing tick-244
