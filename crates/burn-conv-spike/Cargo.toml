@@ -21,6 +21,7 @@ cubek-convolution = "0.2.0"
 cubek-matmul = "0.2.0"
 cubek-std = "0.2.0"
 half = "2.5"
+bytemuck = "1.16"
 
 [profile.release]
 opt-level = 3

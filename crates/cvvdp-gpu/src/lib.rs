@@ -53,9 +53,13 @@
 //! ## Status
 //!
 //! Still-image score matches pycvvdp v0.5.4 within 0.005 JOD across
-//! q=1–90 fixtures on the v1 R2 manifest (tightened from ~0.006 in
-//! tick 207 after ticks 204/206 closed the chroma_shift and 73×91
-//! odd-dim drifts). Measured GPU vs pycvvdp diffs: 0.0000–0.0031.
+//! q=1–90 fixtures on the v1 R2 manifest under the default
+//! [`PerfMode::Strict`] (tightened from ~0.006 in tick 207 after
+//! ticks 204/206 closed the chroma_shift and 73×91 odd-dim drifts).
+//! Measured GPU vs pycvvdp diffs: 0.0000–0.0031. [`PerfMode::Fast`]
+//! is the opt-in entry point for stage-level relaxations; today
+//! it's a no-op, so Strict and Fast produce identical output (see
+//! `tests/pipeline_score.rs::perf_mode_fast_matches_strict_today`).
 //!
 //! The full GPU composition path is wired through
 //! [`Cvvdp::compute_dkl_jod`]: color, Weber pyramid, CSF, masking,

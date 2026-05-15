@@ -118,6 +118,44 @@ The same `compute_dkl_jod_host_pool` path also works on Metal
 on the f32 add, so the GPU pool produces zero. The host-pool path
 sidesteps the gotcha.
 
+## Parity vs. perf — `PerfMode`
+
+`CvvdpParams` exposes a `perf_mode: PerfMode` field with two
+variants:
+
+- **`PerfMode::Strict`** (default) — matches pycvvdp v0.5.4
+  bit-for-bit within f32 noise. Every parity test in `tests/`
+  is calibrated against this mode.
+- **`PerfMode::Fast`** — opt-in entry point for future
+  stage-level relaxations that trade measurable per-call cost
+  for a bounded JOD drift vs. Strict.
+
+Opt in by overriding the field on `CvvdpParams::PLACEHOLDER`:
+
+```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
+use cvvdp_gpu::{Cvvdp, PerfMode};
+use cvvdp_gpu::params::CvvdpParams;
+
+let client = CudaRuntime::client(&Default::default());
+let mut cvvdp = Cvvdp::<CudaRuntime>::new(
+    client, 256, 256,
+    CvvdpParams { perf_mode: PerfMode::Fast, ..CvvdpParams::PLACEHOLDER },
+)?;
+# Ok::<(), cvvdp_gpu::Error>(())
+```
+
+Today `Fast` is a no-op (no fast-path has landed yet) — the
+variant exists so callers can wire the opt-in once and future
+per-stage optimizations gate on `params.perf_mode == Fast`
+without forcing a breaking change. Each Fast-mode optimization
+documents its drift budget in `CHANGELOG.md`. The
+`perf_mode_fast_matches_strict_today` regression test pins the
+current bit-pattern-equality contract; when a real Fast-mode
+optimization lands the test should be relaxed (not deleted) to
+that optimization's drift budget.
+
 ## Features
 
 | Feature | Default | Effect |

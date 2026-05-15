@@ -158,7 +158,7 @@ pub fn do_pooling_and_jod_still_3ch(q_per_ch: &[[f32; 3]]) -> f32 {
 /// butteraugli-gpu's notes; Metal silently no-ops on the f32 add).
 ///
 /// **Not dispatched by `Cvvdp::compute_dkl_jod`** — the production
-/// path uses the 3-channel fused [`pool_band_3ch_kernel`] (one
+/// path uses the 3-channel fused [`pool_band_3ch_kernel()`] (one
 /// launch per band instead of three). `pool_band_kernel` is kept
 /// as a test-only entry point for the scalar parity test
 /// `tests/pool_scalar.rs::pool_band_kernel_matches_host_lp_norm_mean`.

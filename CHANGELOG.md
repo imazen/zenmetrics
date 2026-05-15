@@ -58,6 +58,24 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **`PerfMode` surfaced in user-facing docs**. Tick 322 added
+  the framework; this tick wires it into the discoverable
+  surface area:
+  - `crates/cvvdp-gpu/README.md` gets a new "Parity vs. perf —
+    `PerfMode`" section between "CPU backend" and "Features"
+    with a code example showing the struct-update opt-in
+    pattern.
+  - `src/lib.rs` "Status" section now scopes the 0.005 JOD
+    parity claim to `PerfMode::Strict` explicitly and notes
+    that Fast is a no-op today (pointing at the regression
+    test).
+  - Also fixed a pre-existing `rustdoc::broken_intra_doc_links`
+    ambiguity warning at `pool.rs:161` — `[`pool_band_3ch_kernel`]`
+    was ambiguous between the function and the auto-generated
+    module of the same name from `#[cube(launch)]`. Switched to
+    the `()` disambiguation form for the function reference.
+    `cargo doc -p cvvdp-gpu` is now zero-warning. Tick 323.
+
 - **`PerfMode` enum** opens the parity-vs-perf opt-in surface
   on the public API. Two variants:
   - `PerfMode::Strict` (default) — matches pycvvdp v0.5.4

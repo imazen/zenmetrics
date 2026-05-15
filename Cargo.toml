@@ -8,6 +8,13 @@ members = [
     "crates/zenmetrics-corpus",
     "crates/zensim-gpu",
 ]
+# Excluded: burn-conv-spike is a standalone perf-spike crate that
+# pins cubecl 0.10.0 stable (cubek-convolution doesn't accept
+# 0.10.0-pre.4). It has its own [workspace] root so it doesn't
+# pull workspace settings either.
+exclude = [
+    "crates/burn-conv-spike",
+]
 resolver = "2"
 
 [workspace.package]
