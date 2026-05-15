@@ -108,29 +108,100 @@ pub fn gausspyr_reduce_scalar(
     let dh = sh.div_ceil(2);
     dst.clear();
     dst.resize(dw * dh, 0.0);
-
-    let mut vscratch = vec![0.0_f32; sw * dh];
     let k = GAUSS5;
+
+    // Bug-compatible with pycvvdp's `gausspyr_reduce` (lpyr_dec.py:186):
+    // each pass uses zero-pad conv + an explicit edge patch that
+    // emulates symmetric reflection. The horizontal-pass right-column
+    // patch picks its odd/even branch from the INPUT row parity
+    // (`x.shape[-2]`) — pycvvdp's source comments say "odd number of
+    // columns" but the check uses rows. We replicate that quirk so
+    // the goldens match. Tick 206 fix for the 73×91 odd-dim residual
+    // (see docs/CHROMA_DRIFT_INVESTIGATION.md follow-up).
+
+    // Vertical pass: zero-pad rows above/below, conv stride 2.
+    let mut vscratch = vec![0.0_f32; sw * dh];
     for dy in 0..dh {
-        let cy = 2 * dy;
+        let cy = 2 * dy as isize;
         for x in 0..sw {
-            let s = |off: isize| -> f32 {
-                let r = reflect(cy as isize + off, sh);
-                src[r * sw + x]
+            let read = |off: isize| -> f32 {
+                let r = cy + off;
+                if r < 0 || r >= sh as isize {
+                    0.0
+                } else {
+                    src[r as usize * sw + x]
+                }
             };
-            vscratch[dy * sw + x] =
-                k[0] * s(-2) + k[1] * s(-1) + k[2] * s(0) + k[3] * s(1) + k[4] * s(2);
+            vscratch[dy * sw + x] = k[0] * read(-2)
+                + k[1] * read(-1)
+                + k[2] * read(0)
+                + k[3] * read(1)
+                + k[4] * read(2);
         }
     }
+    // Pycvvdp vertical first-row patch (always applied, no parity).
+    if dh > 0 && sh >= 2 {
+        for x in 0..sw {
+            vscratch[x] += src[x] * k[1] + src[sw + x] * k[0];
+        }
+    }
+    // Pycvvdp vertical last-row patch (parity = sh's parity).
+    if dh > 0 {
+        let last_dy = dh - 1;
+        if sh % 2 == 1 && sh >= 2 {
+            for x in 0..sw {
+                vscratch[last_dy * sw + x] +=
+                    src[(sh - 1) * sw + x] * k[3] + src[(sh - 2) * sw + x] * k[4];
+            }
+        } else if sh % 2 == 0 {
+            for x in 0..sw {
+                vscratch[last_dy * sw + x] += src[(sh - 1) * sw + x] * k[4];
+            }
+        }
+    }
+
+    // Horizontal pass: zero-pad cols left/right, conv stride 2.
     for dy in 0..dh {
         for dx in 0..dw {
-            let cx = 2 * dx;
-            let s = |off: isize| -> f32 {
-                let r = reflect(cx as isize + off, sw);
-                vscratch[dy * sw + r]
+            let cx = 2 * dx as isize;
+            let read = |off: isize| -> f32 {
+                let c = cx + off;
+                if c < 0 || c >= sw as isize {
+                    0.0
+                } else {
+                    vscratch[dy * sw + c as usize]
+                }
             };
-            dst[dy * dw + dx] =
-                k[0] * s(-2) + k[1] * s(-1) + k[2] * s(0) + k[3] * s(1) + k[4] * s(2);
+            dst[dy * dw + dx] = k[0] * read(-2)
+                + k[1] * read(-1)
+                + k[2] * read(0)
+                + k[3] * read(1)
+                + k[4] * read(2);
+        }
+    }
+    // Pycvvdp horizontal first-col patch (always applied).
+    if dw > 0 && sw >= 2 {
+        for dy in 0..dh {
+            dst[dy * dw] +=
+                vscratch[dy * sw] * k[1] + vscratch[dy * sw + 1] * k[0];
+        }
+    }
+    // Pycvvdp horizontal last-col patch. THE BUG: parity check uses
+    // `x.shape[-2]` (the ORIGINAL input's row count, sh) instead of
+    // the column count. When sw and sh have different parity, the
+    // patch is mis-applied — but we replicate the bug to match
+    // goldens. See pycvvdp/lpyr_dec.py:204-209 for the source bug.
+    if dw > 0 {
+        let last_dx = dw - 1;
+        if sh % 2 == 1 && sw >= 2 {
+            for dy in 0..dh {
+                dst[dy * dw + last_dx] +=
+                    vscratch[dy * sw + sw - 1] * k[3] + vscratch[dy * sw + sw - 2] * k[4];
+            }
+        } else if sh % 2 == 0 {
+            for dy in 0..dh {
+                dst[dy * dw + last_dx] += vscratch[dy * sw + sw - 1] * k[4];
+            }
         }
     }
     (dw, dh)
@@ -486,13 +557,21 @@ pub fn weber_contrast_pyr_dec_scalar(
 /// 2× downscale with the cvvdp 5-tap Gaussian. Per-output-pixel
 /// thread; each thread reads 25 source pixels (5 × 5 reflected
 /// taps) and emits one f32. Equivalent to two-pass separable conv
-/// with symmetric reflection — which matches cvvdp's
-/// `gausspyr_reduce` exactly for even input dims (all pyramid levels
-/// on the standard corpus).
+/// with symmetric reflection.
 ///
-/// Reflection at the source boundary is inlined as conditional
-/// branches per axis. cvvdp's exact zero-pad-plus-edge-fix-up scheme
-/// is numerically equivalent for even input dims.
+/// Bug-compatible with pycvvdp's `gausspyr_reduce` (lpyr_dec.py:186):
+/// upstream uses zero-pad + parity-aware boundary patches. The
+/// horizontal-pass right-column patch checks `x.shape[-2]` (INPUT
+/// ROW parity) where the comments say "odd number of columns" —
+/// the check is using rows. For mismatched-parity inputs (sw and
+/// sh have different parity) the right column gets the wrong patch
+/// from pycvvdp's perspective, but since we MATCH that pycvvdp
+/// behavior our goldens align. Pure symmetric reflection (what
+/// this kernel computes interior) matches pycvvdp's boundary
+/// behavior for ALL same-parity inputs (256², 4000×3000 etc.);
+/// for mixed-parity inputs we apply a delta correction at the
+/// right column to switch from "reflect" to "pycvvdp's bug
+/// branch". See `docs/CHROMA_DRIFT_INVESTIGATION.md` tick 206.
 #[cube(launch)]
 pub fn downscale_kernel(
     src: &Array<f32>,
@@ -514,6 +593,7 @@ pub fn downscale_kernel(
     let cy = 2 * (dy as i32);
     let cx = 2 * (dx as i32);
     let sw = src_w as usize;
+    let sh = src_h as usize;
     let sh_i = src_h as i32;
     let sw_i = src_w as i32;
 
@@ -589,7 +669,46 @@ pub fn downscale_kernel(
         + k3 * src[r3 * sw + sx4]
         + k4 * src[r4 * sw + sx4];
 
-    dst[idx] = k0 * col0 + k1 * col1 + k2 * col2 + k3 * col3 + k4 * col4;
+    let mut total_v = k0 * col0 + k1 * col1 + k2 * col2 + k3 * col3 + k4 * col4;
+
+    // Tick 206 bug-compat delta. At the right column (dx = dw-1),
+    // pycvvdp picks the horizontal patch branch by INPUT ROW
+    // parity (sh) — its comment says "columns" but the code uses
+    // rows. When sw and sh have the same parity the patch matches
+    // what reflect computes; when they differ we add a delta to
+    // switch from reflect to pycvvdp's bug branch. Closes the
+    // 73×91 odd-dim residual.
+    if dx == dw - 1 && sw >= 2 {
+        // vscratch values at the right two columns. Use the same
+        // reflect-based vertical conv (matches pycvvdp regardless
+        // of sh parity for the vertical pass; see analysis in
+        // docs/CHROMA_DRIFT_INVESTIGATION.md).
+        let vs_last = k0 * src[r0 * sw + sw - 1]
+            + k1 * src[r1 * sw + sw - 1]
+            + k2 * src[r2 * sw + sw - 1]
+            + k3 * src[r3 * sw + sw - 1]
+            + k4 * src[r4 * sw + sw - 1];
+        let vs_last2 = k0 * src[r0 * sw + sw - 2]
+            + k1 * src[r1 * sw + sw - 2]
+            + k2 * src[r2 * sw + sw - 2]
+            + k3 * src[r3 * sw + sw - 2]
+            + k4 * src[r4 * sw + sw - 2];
+
+        let sw_odd = sw % 2 == 1;
+        let sh_odd = sh % 2 == 1;
+        if sw_odd && !sh_odd {
+            // Reflect gave the "odd-W" patch result; pycvvdp picks
+            // even-W (using sh's parity). Delta = pycvvdp_even -
+            // reflect_odd = -0.05*vs_last2 - 0.20*vs_last.
+            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+        } else if !sw_odd && sh_odd {
+            // Reflect gave "even-W"; pycvvdp picks odd-W.
+            // Delta = +0.05*vs_last2 + 0.20*vs_last.
+            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+        }
+    }
+
+    dst[idx] = total_v;
 }
 
 /// Vertical pass of the cvvdp expand. Produces a `src_w × dst_h`

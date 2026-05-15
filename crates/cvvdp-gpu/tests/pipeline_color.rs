@@ -1993,22 +1993,69 @@ fn compute_dkl_jod_matches_host_scalar_on_odd_dims() {
     );
 }
 
-// NOTE (tick 205): a `compute_dkl_jod_matches_pycvvdp_at_73x91_odd`
-// test would currently fail at ~0.006 JOD diff. Tick 204 fixed
-// chroma_shift's 0.117 drift (baseband CSF rho = 0.1) but uncovered
-// a SEPARATE smaller drift on the odd-dim 73×91 fixture:
-//
-//   compute_dkl_jod(ref, dist)          = 9.384090
-//   compute_dkl_jod(dist, ref)          = 9.389880  (swap roles)
-//   pycvvdp predict(dist, ref) golden   = 9.390370  (canonical, from bench script)
-//   pycvvdp predict(ref, dist)          = 9.396081
-//
-// Diff in either ordering ≈ 0.006–0.012 JOD. Both our impl AND
-// pycvvdp are asymmetric here because the 73×91 synth_pair_odd_dim
-// fixture's dist has DIFFERENT-direction perturbations per channel
-// (R−8, G−4, B+12) — the test/ref roles are not interchangeable.
-// All four-channel power-of-2 fixtures (12 MP, 256² blur/noise/chroma)
-// pass at 0.005 against pycvvdp; only the odd-dim 73×91 case
-// shows the small residual. Suspected source: small-image gauss
-// pyramid boundary handling or log_l_bkg statistic at very small
-// baseband (3×3). Tracked for a future tick.
+#[test]
+fn compute_dkl_jod_matches_pycvvdp_at_73x91_odd() {
+    // Tick 206: closed the odd-dim 73×91 residual drift identified
+    // in tick 205. Root cause: pycvvdp's `gausspyr_reduce` has a
+    // subtle bug — its horizontal-pass right-column patch selects
+    // odd/even branch based on `x.shape[-2]` (INPUT ROW parity),
+    // not column parity. Comments say "odd number of columns" but
+    // the check uses rows (cvvdp_metric/lpyr_dec.py:204-209). For
+    // mixed-parity inputs (e.g. 6×5 → 3×3 at level 4→5 of 73×91)
+    // pycvvdp applies the wrong patch.
+    //
+    // We replicate the bug to match goldens: host_scalar gauss
+    // reduce switched from pure reflection to zero-pad +
+    // parity-aware patches; GPU `downscale_kernel` keeps the
+    // reflect-based main path and applies a delta correction at
+    // the right column when sw and sh parities mismatch.
+    //
+    // dist construction matches `synth_pair_odd_dim` in
+    // `scripts/cvvdp_goldens/bench_12mp_cuda.py`.
+    let pycvvdp_golden_jod = common::pycvvdp_synth_golden_jod("synth_73x91_odd");
+    const TOLERANCE: f32 = 0.005;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let mut ref_srgb = vec![0u8; (w * h * 3) as usize];
+    let mut dist_srgb = vec![0u8; (w * h * 3) as usize];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let r = ((x * 8) % 256) as u8;
+            let g = ((y * 8) % 256) as u8;
+            let b = (((x + y) * 4) % 256) as u8;
+            let i = (y * w as usize + x) * 3;
+            ref_srgb[i] = r;
+            ref_srgb[i + 1] = g;
+            ref_srgb[i + 2] = b;
+            dist_srgb[i] = r.saturating_sub(8);
+            dist_srgb[i + 1] = g.saturating_sub(4);
+            dist_srgb[i + 2] = b.saturating_add(12);
+        }
+    }
+
+    // Our compute_dkl_jod(ref, dist) corresponds semantically to
+    // pycvvdp's predict(dist, ref) — both "score this distortion
+    // against this reference" — even though the arg orders differ.
+    let gpu_jod = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+    let diff = (gpu_jod - pycvvdp_golden_jod).abs();
+    eprintln!(
+        "odd-dim 73×91: gpu_jod = {gpu_jod:.4}, pycvvdp golden = {pycvvdp_golden_jod:.4}, |diff| = {diff:.4}"
+    );
+    assert!(gpu_jod.is_finite(), "JOD must be finite, got {gpu_jod}");
+    assert!(
+        (0.0..=10.0).contains(&gpu_jod),
+        "JOD must be in [0, 10], got {gpu_jod}"
+    );
+    assert!(
+        diff < TOLERANCE,
+        "GPU JOD {gpu_jod:.4} drifts from pycvvdp golden {pycvvdp_golden_jod:.4} by {diff:.4} > {TOLERANCE:.4}"
+    );
+}

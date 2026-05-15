@@ -21,6 +21,23 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu
 
+- **73×91 odd-dim residual closed (was 0.006 JOD).** Found a
+  parity-check bug in pycvvdp's `gausspyr_reduce`: the
+  horizontal-pass right-column patch uses `x.shape[-2]` (INPUT
+  ROW parity) to pick its odd/even branch even though the
+  comments say "columns" — `lpyr_dec.py:204-209`. For
+  mixed-parity inputs (e.g. 6×5 → 3×3 at the 73×91 baseband)
+  pycvvdp applies the wrong patch.
+  - `host_scalar` `gausspyr_reduce_scalar`: rewritten to bug-
+    compatible zero-pad + parity-aware patches.
+  - GPU `downscale_kernel`: adds a delta correction at the right
+    column when sw and sh parities differ.
+  - New `compute_dkl_jod_matches_pycvvdp_at_73x91_odd` test
+    passes at f32 precision (diff = 0.0000 vs pycvvdp golden).
+  - All other corpus fixtures (256² + 4 MP, same-parity dims)
+    unchanged — the bug-compat patches match pure reflection
+    for all sw == sh parity inputs.
+
 - **Chroma-shift drift closed (was 0.117 JOD).** pycvvdp overrides
   the baseband CSF rho to 0.1 cy/deg (`cvvdp_metric.py:628`),
   but our pipeline used the geometric value from

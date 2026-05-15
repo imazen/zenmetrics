@@ -31,7 +31,53 @@ Drift CLOSED to f32 precision. Re-enabled the
 `compute_dkl_jod_matches_pycvvdp_at_256x256_chroma_shift`
 test at the standard 0.005 JOD tolerance.
 
-## Follow-up: 73×91 odd-dim residual (tick 205, open)
+## Follow-up: 73×91 odd-dim residual — CLOSED (tick 206)
+
+**Root cause**: pycvvdp's `gausspyr_reduce` has a parity-check bug.
+Looking at the horizontal-pass right-column patch in
+`pycvvdp/lpyr_dec.py:204-209`:
+
+```python
+if (x.shape[-2] % 2)==1: # odd number of columns   ← comment says columns
+    y[...,:,-1] += y_a[...,:,-1]*K_horiz[...,0,3] + y_a[...,:,-2]*K_horiz[...,0,4]
+else: # even number of columns
+    y[...,:,-1] += y_a[...,:,-1]*K_horiz[...,0,4]
+```
+
+The check uses `x.shape[-2]` which is the **input ROW count**, not
+column count. The comments say "odd/even number of columns" but the
+implementation tests rows. For mixed-parity inputs (e.g. 6×5 → 3×3
+at level 4→5 of the 73×91 pyramid; or 46×37 → 23×19 at level 1→2),
+pycvvdp applies the wrong patch.
+
+The reduce at 73×91's right-column baseband:
+- Pycvvdp (with bug): right-col gauss[3×3] = [27.18, 43.55, 45.90]
+- Our reflect (correct math): [36.78, 59.66, 62.82]
+
+This propagates through Weber/CSF/D/pool to yield the ~0.006 JOD
+residual.
+
+**Fix** (tick 206):
+- `host_scalar` `gausspyr_reduce_scalar`: rewritten from pure
+  reflection to zero-pad + explicit pycvvdp-bug-compatible patches
+  (vertical patches by sh parity, horizontal first-col always,
+  horizontal last-col by sh parity = the bug).
+- GPU `downscale_kernel`: keeps the reflect-based main path (it
+  matches pycvvdp for all same-parity-sw/sh inputs, which covers
+  the 4K + 256² corpus) plus a delta correction at the right
+  column when `sw` and `sh` parities differ:
+  - `sw odd, sh even`: subtract 0.05·vscratch[sw-2] + 0.20·vscratch[sw-1]
+  - `sw even, sh odd`: add 0.05·vscratch[sw-2] + 0.20·vscratch[sw-1]
+
+**Verification**:
+- `compute_dkl_jod_matches_pycvvdp_at_73x91_odd` (new): GPU JOD
+  9.3904 = pycvvdp golden 9.3904 at f32 precision (diff = 0.0000).
+- All 23 pipeline_color tests pass.
+- chroma_shift, 12 MP synth, 256² blur1x3 / blur3x1 / noise all
+  still pass at 0.005 JOD tolerance (unchanged; even+even inputs
+  hit no parity mismatch).
+
+## Earlier (resolved) follow-up: 73×91 odd-dim residual (tick 205, was open)
 
 After ticks 196-204 closed the chroma_shift drift to f32 precision,
 the canonical 256² and 4K synth fixtures all pass pycvvdp parity
