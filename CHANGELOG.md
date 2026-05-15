@@ -171,6 +171,24 @@ original Fixed/Added/Changed sections.
   added the `JOD_A` (`≈ 0.0440`) and `JOD_EXP` (`≈ 0.9302`)
   numeric anchors, and noted that the struct's `jod_b` is unused
   (the formula has no separate `b` coefficient). Tick 288.
+- `MaskingParams` struct-level docstring listed `MASK_P / MASK_Q
+  / MASK_C / XCM_3X3` but omitted `D_MAX` (the clamp ceiling,
+  separate from `MASK_C`'s phase-blur post-scale). Per-field
+  docs claimed cvvdp `q` and `epsilon`/`k` semantics that don't
+  match production: `MASK_Q` is `[f32; 3]` per-channel (the
+  struct's scalar `q` is shape-mismatched) and there is no
+  `MASK_K` / saturation-epsilon constant in `kernels::masking`
+  (closest are `MASK_C` and `D_MAX`, both log10-encoded and
+  semantically different). Updated to document the shape
+  mismatch explicitly, flag `k` as reserved-no-current-mapping
+  scaffolding, and note a future JSON-loader path would need to
+  widen `q` to `[f32; 3]` and split `k`. Also expanded
+  `CvvdpParams::PLACEHOLDER`'s "inlined consts" list to the full
+  set (`IMAGE_INT`, `PER_CH_W`, `BASEBAND_W` in `kernels::pool`;
+  `D_MAX`, `CH_GAIN`, `PU_BLUR_KERNEL_1D`, `PU_PADSIZE` in
+  `kernels::masking`) so the docstring matches what
+  `kernels::pool` and `kernels::masking` actually export.
+  Tick 289.
 
 #### cvvdp-gpu (doctests)
 

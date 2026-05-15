@@ -124,16 +124,30 @@ pub struct CsfParams {
 /// Contrast masking model (within-channel + cross-channel).
 ///
 /// Currently unused scaffolding — the GPU + host-scalar masking
-/// kernels read `MASK_P`, `MASK_Q`, `MASK_C`, and `XCM_3X3` as
-/// inlined `const`s in `kernels::masking`. See
+/// kernels read `MASK_P`, `MASK_Q`, `MASK_C`, `D_MAX`, and
+/// `XCM_3X3` as inlined `const`s in `kernels::masking`. See
 /// `CvvdpParams::PLACEHOLDER` for the full picture.
+///
+/// The field set below doesn't 1:1 mirror the production
+/// constants — `p` does (`MASK_P`, scalar), but `q` is a single
+/// `f32` here vs. cvvdp's per-channel `MASK_Q: [f32; 3]`
+/// `[A, RG, VY]`, and `k` doesn't correspond to any single named
+/// masking constant (the production model uses `MASK_C` for the
+/// phase-uncertainty `10^c` post-scale and `D_MAX` for the
+/// clamp ceiling, both log10-encoded; there is no "saturation
+/// epsilon" constant). A future "load from vendored cvvdp JSON"
+/// path will need to widen `q` to `[f32; 3]` and split `k` into
+/// the corresponding `MASK_C` / `D_MAX` fields — a breaking
+/// change tracked separately.
 #[derive(Debug, Clone, Copy)]
 pub struct MaskingParams {
-    /// Excitation exponent (cvvdp `p`).
+    /// Excitation exponent (cvvdp `p`) — matches `MASK_P`.
     pub p: f32,
-    /// Inhibition exponent (cvvdp `q`).
+    /// Inhibition exponent (cvvdp `q`). Shape mismatch: production
+    /// is `MASK_Q: [f32; 3]` per-channel.
     pub q: f32,
-    /// Saturation constant (cvvdp `epsilon` / `k`).
+    /// Reserved scaffolding for a future saturation constant; no
+    /// production code path reads this. See struct-level docs.
     pub k: f32,
 }
 
@@ -193,13 +207,16 @@ impl CvvdpParams {
     /// `display.y_peak/y_black/y_refl`) and the GPU color kernel; the
     /// `csf`/`masking`/`pooling`/`jod` sub-bundles are currently
     /// **unused** because the per-stage cvvdp v0.5.4 numbers are
-    /// inlined as `const`s in `kernels::pool` (BETA_*),
-    /// `kernels::masking` (MASK_P / MASK_Q / MASK_C / XCM_3X3), and
-    /// `kernels::pool::met2jod` (JOD_A / JOD_EXP). The fields exist
-    /// as scaffolding for the planned "load parameters from the
-    /// vendored cvvdp JSON" path which hasn't landed; the placeholder
-    /// numbers below are approximate but won't affect any test
-    /// because no code path reads them.
+    /// inlined as `const`s in `kernels::pool` (`BETA_SPATIAL` /
+    /// `BETA_BAND` / `BETA_CH` / `IMAGE_INT` / `PER_CH_W` /
+    /// `BASEBAND_W`), `kernels::masking` (`MASK_P` / `MASK_Q` /
+    /// `MASK_C` / `D_MAX` / `XCM_3X3` / `CH_GAIN` /
+    /// `PU_BLUR_KERNEL_1D` / `PU_PADSIZE`), and
+    /// `kernels::pool::met2jod` (`JOD_A` / `JOD_EXP`). The fields
+    /// exist as scaffolding for the planned "load parameters from
+    /// the vendored cvvdp JSON" path which hasn't landed; the
+    /// placeholder numbers below are approximate but won't affect
+    /// any test because no code path reads them.
     pub const PLACEHOLDER: Self = Self {
         display: DisplayModel::STANDARD_4K,
         csf: CsfParams {
