@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/params_placeholder_non_display.rs`** — 5 additional pins
+  on `CvvdpParams::PLACEHOLDER`'s csf / masking / pooling / jod
+  sub-bundles (the existing `params_placeholder.rs` only pinned
+  display + perf_mode): (1) all csf peaks bit-equal 0.0 (scaffolded
+  placeholder); (2) masking p=2.4, q=2.2, k=0.04 (scaffolding —
+  doesn't match production `kernels::masking` constants); (3)
+  pooling betas all 4.0 (doesn't match production
+  `kernels::pool::BETA_SPATIAL=2.0`); (4) jod_a=10.0, jod_b=1.0,
+  jod_c=0.30 (scaffolding); (5) struct supports `CvvdpParams {
+  ..PLACEHOLDER }` update syntax (Copy + accessible-fields
+  compile-time check). A future wire-through that actually consumes
+  these fields will need to swap in real values; this pin flags the
+  scaffolding state. Tick 435.
+
 - **`tests/predict_jod_invariants.rs`** — 7 flow invariants on
   `predict_jod_still_3ch` (the composed host-scalar pipeline)
   complementing `shadow_jod.rs`'s pycvvdp parity coverage:
