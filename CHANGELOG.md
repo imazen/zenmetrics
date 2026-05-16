@@ -722,6 +722,23 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 618 — combined `# Examples` doctest on `LOG_L_BKG_AXIS`
+covering both CSF LUT axes (`LOG_L_BKG_AXIS` + `LOG_RHO_AXIS`).
+Same shared-coverage pattern as `MASK_P` covering the four
+masking scalars (tick 613). Pins:
+- Both axes have 32 entries (= N_L_BKG = N_RHO).
+- LOG_L_BKG_AXIS endpoints `[-2.301, 4.0]` (luminance 0.005–10000
+  cd/m²).
+- LOG_RHO_AXIS endpoints `[-1.0, 1.806]` (frequency 0.1–64 cy/deg).
+- Both uniformly spaced in log10 (step uniformity over all 31
+  intervals).
+Cross-references `tests/csf_axes_invariants.rs`. Doctest count:
+65 → 66. The three large per-channel sensitivity LUTs
+(`LOG_S_O0_C1/C2/C3`) and the `GE_SIGMA` scalar still lack
+doctests; the C* LUTs are 1024-entry arrays where a meaningful
+doctest beyond "len() == 1024 + positive on bright photopic"
+needs more thought. Docs-only change.
+
 Tick 617 — add `# Examples` doctest to
 `kernels::csf::precompute_logs_row`. Pins the return-shape
 (length `N_L_BKG`) plus the bit-identity contract with

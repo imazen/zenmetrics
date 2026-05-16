@@ -12,6 +12,38 @@
 /// `[log10(0.005), log10(10_000)] = [-2.301, 4.0]` cd/m². Used as
 /// the `xs` axis for `interp1_uniform` queries against
 /// `LOG_S_O0_C*[k * 32 + j]` rows.
+///
+/// # Examples
+///
+/// Combined doctest exercising both LUT axes — same shared-coverage
+/// pattern as `MASK_P` covering the masking-scalars triple. Pinned
+/// by `tests/csf_axes_invariants.rs` at compile time.
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{N_L_BKG, N_RHO, LOG_L_BKG_AXIS, LOG_RHO_AXIS};
+///
+/// // Both axes are 32 entries (= N_L_BKG = N_RHO at cvvdp v0.5.4).
+/// assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
+/// assert_eq!(LOG_RHO_AXIS.len(), N_RHO);
+///
+/// // LOG_L_BKG_AXIS: log10 of luminance from 0.005 to 10000 cd/m².
+/// // Endpoints span the canonical photopic + scotopic range.
+/// assert!((LOG_L_BKG_AXIS[0] - (-2.301)).abs() < 1e-3);
+/// assert!((LOG_L_BKG_AXIS[31] - 4.0).abs() < 1e-3);
+///
+/// // LOG_RHO_AXIS: log10 of frequency from 0.1 to 64 cy/deg.
+/// // Endpoints span baseband (0.1) through high spatial frequency.
+/// assert!((LOG_RHO_AXIS[0] - (-1.0)).abs() < 1e-3);
+/// assert!((LOG_RHO_AXIS[31] - 1.806).abs() < 1e-3);
+///
+/// // Both axes uniformly spaced in log10. Pin step uniformity.
+/// let step_lbkg = LOG_L_BKG_AXIS[1] - LOG_L_BKG_AXIS[0];
+/// let step_rho = LOG_RHO_AXIS[1] - LOG_RHO_AXIS[0];
+/// for i in 1..32 {
+///     assert!((LOG_L_BKG_AXIS[i] - LOG_L_BKG_AXIS[i-1] - step_lbkg).abs() < 1e-5);
+///     assert!((LOG_RHO_AXIS[i] - LOG_RHO_AXIS[i-1] - step_rho).abs() < 1e-5);
+/// }
+/// ```
 pub const LOG_L_BKG_AXIS: [f32; 32] = [
     -2.3010299957e+00_f32, -2.0977709635e+00_f32, -1.8945119314e+00_f32, -1.6912528993e+00_f32,
     -1.4879938672e+00_f32, -1.2847348351e+00_f32, -1.0814758030e+00_f32, -8.7821677084e-01_f32,
