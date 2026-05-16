@@ -114,9 +114,7 @@ impl CvvdpBatchScorer {
         .into())
     }
 
-    fn try_new_with_runtime(
-        runtime: GpuRuntime,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    fn try_new_with_runtime(runtime: GpuRuntime) -> Result<Self, Box<dyn std::error::Error>> {
         match runtime {
             #[cfg(feature = "gpu-cuda")]
             GpuRuntime::Cuda => Ok(Self::Cuda(CvvdpBatchScorerState {

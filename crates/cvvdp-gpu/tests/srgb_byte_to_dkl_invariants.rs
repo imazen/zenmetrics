@@ -37,10 +37,7 @@ fn dkl_a_monotonic_in_luminance() {
     for v in (0_u32..256).step_by(16) {
         let v8 = v as u8;
         let (a, _, _) = srgb_byte_to_dkl_scalar(v8, v8, v8, dm.y_peak, dm.y_black, dm.y_refl);
-        assert!(
-            a.is_finite(),
-            "A non-finite at v={v}: {a}"
-        );
+        assert!(a.is_finite(), "A non-finite at v={v}: {a}");
         assert!(
             a > prev_a,
             "A non-monotonic at v={v}: prev={prev_a}, got={a}"
@@ -85,9 +82,14 @@ fn black_input_produces_minimum_luminance() {
     let (a_black, _, _) = srgb_byte_to_dkl_scalar(0, 0, 0, dm.y_peak, dm.y_black, dm.y_refl);
     let (a_mid, _, _) = srgb_byte_to_dkl_scalar(128, 128, 128, dm.y_peak, dm.y_black, dm.y_refl);
     let (a_white, _, _) = srgb_byte_to_dkl_scalar(255, 255, 255, dm.y_peak, dm.y_black, dm.y_refl);
-    assert!(a_black < a_mid && a_mid < a_white,
-        "Luminance order broken: black={a_black} mid={a_mid} white={a_white}");
-    assert!(a_black > 0.0, "A_black must remain positive (y_black + y_refl > 0)");
+    assert!(
+        a_black < a_mid && a_mid < a_white,
+        "Luminance order broken: black={a_black} mid={a_mid} white={a_white}"
+    );
+    assert!(
+        a_black > 0.0,
+        "A_black must remain positive (y_black + y_refl > 0)"
+    );
 }
 
 #[test]
@@ -131,8 +133,7 @@ fn boundary_inputs_are_finite_and_dont_panic() {
         (0, 255, 255),
         (255, 255, 255),
     ] {
-        let (a, rg, vy) =
-            srgb_byte_to_dkl_scalar(r, g, b, dm.y_peak, dm.y_black, dm.y_refl);
+        let (a, rg, vy) = srgb_byte_to_dkl_scalar(r, g, b, dm.y_peak, dm.y_black, dm.y_refl);
         assert!(
             a.is_finite() && rg.is_finite() && vy.is_finite(),
             "({r}, {g}, {b}) → ({a}, {rg}, {vy}) — non-finite output"
@@ -147,9 +148,21 @@ fn determinism_across_repeated_calls() {
     for (r, g, b) in [(50, 100, 200), (10, 10, 10), (255, 128, 0)] {
         let a1 = srgb_byte_to_dkl_scalar(r, g, b, dm.y_peak, dm.y_black, dm.y_refl);
         let a2 = srgb_byte_to_dkl_scalar(r, g, b, dm.y_peak, dm.y_black, dm.y_refl);
-        assert_eq!(a1.0.to_bits(), a2.0.to_bits(), "({r},{g},{b}) A bit-mismatch");
-        assert_eq!(a1.1.to_bits(), a2.1.to_bits(), "({r},{g},{b}) RG bit-mismatch");
-        assert_eq!(a1.2.to_bits(), a2.2.to_bits(), "({r},{g},{b}) VY bit-mismatch");
+        assert_eq!(
+            a1.0.to_bits(),
+            a2.0.to_bits(),
+            "({r},{g},{b}) A bit-mismatch"
+        );
+        assert_eq!(
+            a1.1.to_bits(),
+            a2.1.to_bits(),
+            "({r},{g},{b}) RG bit-mismatch"
+        );
+        assert_eq!(
+            a1.2.to_bits(),
+            a2.2.to_bits(),
+            "({r},{g},{b}) VY bit-mismatch"
+        );
     }
 }
 
@@ -161,8 +174,7 @@ fn pure_red_pushes_rg_positive_relative_to_neutral() {
     // the matrix's row 1 against a swap with row 2 (VY).
     let dm = d();
     let (_, rg_red, _) = srgb_byte_to_dkl_scalar(255, 0, 0, dm.y_peak, dm.y_black, dm.y_refl);
-    let (_, rg_cyan, _) =
-        srgb_byte_to_dkl_scalar(0, 255, 255, dm.y_peak, dm.y_black, dm.y_refl);
+    let (_, rg_cyan, _) = srgb_byte_to_dkl_scalar(0, 255, 255, dm.y_peak, dm.y_black, dm.y_refl);
     assert!(
         rg_red > 0.0,
         "pure red should give positive RG, got {rg_red}"
@@ -178,10 +190,8 @@ fn pure_blue_pushes_vy_positive_relative_to_neutral() {
     // The DKL Vy channel opposes B against (R + G). Pure blue gives
     // positive VY; pure yellow (255, 255, 0) gives negative VY.
     let dm = d();
-    let (_, _, vy_blue) =
-        srgb_byte_to_dkl_scalar(0, 0, 255, dm.y_peak, dm.y_black, dm.y_refl);
-    let (_, _, vy_yellow) =
-        srgb_byte_to_dkl_scalar(255, 255, 0, dm.y_peak, dm.y_black, dm.y_refl);
+    let (_, _, vy_blue) = srgb_byte_to_dkl_scalar(0, 0, 255, dm.y_peak, dm.y_black, dm.y_refl);
+    let (_, _, vy_yellow) = srgb_byte_to_dkl_scalar(255, 255, 0, dm.y_peak, dm.y_black, dm.y_refl);
     assert!(
         vy_blue > 0.0,
         "pure blue should give positive VY, got {vy_blue}"

@@ -477,7 +477,9 @@ fn band_frequencies_are_strictly_decreasing() {
             assert!(
                 freqs[i] < freqs[i - 1],
                 "ppd={ppd} {w}x{h}: band[{i}] = {} not < band[{}] = {} (must be strictly decreasing)",
-                freqs[i], i - 1, freqs[i - 1],
+                freqs[i],
+                i - 1,
+                freqs[i - 1],
             );
         }
     }
@@ -497,10 +499,7 @@ fn band_frequencies_minimum_image_dim_returns_some_bands() {
     );
     // Sanity: each is finite + positive.
     for (i, &f) in freqs.iter().enumerate() {
-        assert!(
-            f > 0.0 && f.is_finite(),
-            "8x8 band[{i}] = {f}",
-        );
+        assert!(f > 0.0 && f.is_finite(), "8x8 band[{i}] = {f}",);
     }
 }
 

@@ -418,6 +418,12 @@ fn csf_constants_match_pycvvdp_v0_5_4() {
     // and stride arithmetic; a refactor that bumps either without
     // resizing the kernel buffers would corrupt every per-pixel
     // CSF lookup.
-    assert_eq!(N_L_BKG, 32, "N_L_BKG = {N_L_BKG}, expected 32 (cvvdp v0.5.4 LUT axis)");
-    assert_eq!(N_RHO, 32, "N_RHO = {N_RHO}, expected 32 (cvvdp v0.5.4 LUT axis)");
+    assert_eq!(
+        N_L_BKG, 32,
+        "N_L_BKG = {N_L_BKG}, expected 32 (cvvdp v0.5.4 LUT axis)"
+    );
+    assert_eq!(
+        N_RHO, 32,
+        "N_RHO = {N_RHO}, expected 32 (cvvdp v0.5.4 LUT axis)"
+    );
 }

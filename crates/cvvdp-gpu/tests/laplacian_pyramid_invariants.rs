@@ -19,9 +19,7 @@
 //! Numeric reconstruction quality is intentionally out of scope —
 //! that's covered by the parity goldens in `pyramid_scalar.rs`.
 
-use cvvdp_gpu::kernels::pyramid::{
-    Band, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
-};
+use cvvdp_gpu::kernels::pyramid::{Band, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar};
 
 /// Helper: deterministic per-pixel f32 fill `(y * w + x) as f32 * 0.01`
 /// so different sizes produce distinguishable but small-magnitude inputs.

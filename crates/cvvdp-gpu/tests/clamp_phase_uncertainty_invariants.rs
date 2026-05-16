@@ -12,9 +12,7 @@
 //! `tests/masking_constants.rs`. This file pins the FUNCTION
 //! semantics on top of those constants.
 
-use cvvdp_gpu::kernels::masking::{
-    D_MAX, MASK_C, clamp_diff_soft, phase_uncertainty_no_blur,
-};
+use cvvdp_gpu::kernels::masking::{D_MAX, MASK_C, clamp_diff_soft, phase_uncertainty_no_blur};
 
 #[test]
 fn clamp_diff_soft_zero_input_returns_zero() {
@@ -33,14 +31,8 @@ fn clamp_diff_soft_strictly_monotonic_on_positive() {
     let mut prev = f32::NEG_INFINITY;
     for &d in &samples {
         let f = clamp_diff_soft(d);
-        assert!(
-            f.is_finite(),
-            "f({d}) = {f} non-finite"
-        );
-        assert!(
-            f > prev,
-            "non-monotonic at d={d}: prev={prev}, got={f}"
-        );
+        assert!(f.is_finite(), "f({d}) = {f} non-finite");
+        assert!(f > prev, "non-monotonic at d={d}: prev={prev}, got={f}");
         prev = f;
     }
 }

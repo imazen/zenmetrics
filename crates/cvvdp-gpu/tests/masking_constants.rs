@@ -136,7 +136,10 @@ fn pu_blur_kernel_matches_torchvision_gaussianblur_13_3() {
             left.to_bits(),
             right.to_bits(),
             "PU_BLUR_KERNEL_1D not symmetric at offset ±{offset}: [{}]={} vs [{}]={}",
-            6 - offset, left, 6 + offset, right,
+            6 - offset,
+            left,
+            6 + offset,
+            right,
         );
     }
 }

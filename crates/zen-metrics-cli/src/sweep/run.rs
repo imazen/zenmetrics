@@ -139,9 +139,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     // through a sweep still leave a parseable file.
     let pairs_writer_inner = match &cfg.pairs_tsv {
         Some(path) => {
-            let mut w = csv::WriterBuilder::new()
-                .delimiter(b'\t')
-                .from_path(path)?;
+            let mut w = csv::WriterBuilder::new().delimiter(b'\t').from_path(path)?;
             w.write_record([
                 "image_path",
                 "codec",
@@ -476,21 +474,16 @@ fn compute_cell(
     // valid.
     let pair_row = if cfg.pairs_tsv.is_some() {
         let dist_path = match &cfg.distorted_out_dir {
-            Some(dir) => save_distorted_png(
-                dir,
-                src_path,
-                cfg.codec.name(),
-                q,
-                &knob_json,
-                &decoded,
-            )
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "[sweep] save distorted PNG failed: {} q={q}: {e}",
-                    src_path.display(),
-                );
-                String::new()
-            }),
+            Some(dir) => {
+                save_distorted_png(dir, src_path, cfg.codec.name(), q, &knob_json, &decoded)
+                    .unwrap_or_else(|e| {
+                        eprintln!(
+                            "[sweep] save distorted PNG failed: {} q={q}: {e}",
+                            src_path.display(),
+                        );
+                        String::new()
+                    })
+            }
             None => String::new(),
         };
         Some([
@@ -546,9 +539,7 @@ fn save_distorted_png(
             .unwrap_or("source");
         let src_hash = hex_hash16(src_path.to_string_lossy().as_ref());
         let knob_hash = hex_hash16(knob_json);
-        let filename = format!(
-            "{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.png"
-        );
+        let filename = format!("{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.png");
         let out_path = dir.join(&filename);
 
         // Fastest effort — these PNGs feed scorers, not end users.

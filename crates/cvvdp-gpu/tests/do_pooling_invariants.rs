@@ -75,11 +75,7 @@ fn determinism_across_repeated_calls() {
     let q_per_ch = vec![[0.5_f32, 0.3, 0.2], [0.4, 0.25, 0.18], [0.3, 0.2, 0.15]];
     let a = do_pooling_and_jod_still_3ch(&q_per_ch);
     let b = do_pooling_and_jod_still_3ch(&q_per_ch);
-    assert_eq!(
-        a.to_bits(),
-        b.to_bits(),
-        "non-deterministic: {a} vs {b}"
-    );
+    assert_eq!(a.to_bits(), b.to_bits(), "non-deterministic: {a} vs {b}");
 }
 
 #[test]
@@ -124,5 +120,8 @@ fn many_levels_input_supported() {
     let q_per_ch = vec![[0.05_f32, 0.05, 0.05]; 12];
     let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
     assert!(jod.is_finite(), "12-level JOD = {jod} non-finite");
-    assert!(jod <= 10.0 + 1e-3 && jod >= 0.0, "12-level JOD = {jod} out of range");
+    assert!(
+        jod <= 10.0 + 1e-3 && jod >= 0.0,
+        "12-level JOD = {jod} out of range"
+    );
 }

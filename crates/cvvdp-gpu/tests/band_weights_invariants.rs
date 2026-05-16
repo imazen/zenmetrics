@@ -67,11 +67,7 @@ fn flatten_band_weights_indexing_invariant() {
 
     for (lvl, w) in weights.iter().enumerate() {
         for ch in 0..3 {
-            assert_eq!(
-                flat[lvl * 3 + ch],
-                w[ch],
-                "flat[{lvl} * 3 + {ch}] mismatch"
-            );
+            assert_eq!(flat[lvl * 3 + ch], w[ch], "flat[{lvl} * 3 + {ch}] mismatch");
         }
     }
 }

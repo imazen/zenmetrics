@@ -24,7 +24,10 @@ fn n_channels_is_three_for_still_image_dkl() {
     // would mean adding a temporal channel (not in still-image
     // scope) or a luminance variant (also out of scope until
     // pycvvdp ports its own).
-    assert_eq!(N_CHANNELS, 3, "N_CHANNELS = {N_CHANNELS}, expected 3 (still-image DKL)");
+    assert_eq!(
+        N_CHANNELS, 3,
+        "N_CHANNELS = {N_CHANNELS}, expected 3 (still-image DKL)"
+    );
 }
 
 #[test]

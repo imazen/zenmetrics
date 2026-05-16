@@ -1510,7 +1510,10 @@ fn recommend_parallel_minimum_floor_is_one() {
     // return 1, not 0.
     let stingy_free = (est as f64 * PARALLEL_SAFETY_FACTOR / 4.0) as u64;
     let p = recommend_parallel(stingy_free, 1024, 1024);
-    assert_eq!(p, 1, "min floor: stingy_free={stingy_free}, est={est}, got {p}");
+    assert_eq!(
+        p, 1,
+        "min floor: stingy_free={stingy_free}, est={est}, got {p}"
+    );
 }
 
 #[test]
@@ -1616,7 +1619,14 @@ fn estimate_gpu_memory_grows_monotonically_with_dims() {
     // pixels would not invert the relationship — and a bigger
     // bug that DOES invert (e.g. dividing by n_levels) trips here.
     use cvvdp_gpu::estimate_gpu_memory_bytes;
-    let sizes = [(64u32, 64u32), (128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)];
+    let sizes = [
+        (64u32, 64u32),
+        (128, 128),
+        (256, 256),
+        (512, 512),
+        (1024, 1024),
+        (2048, 2048),
+    ];
     let mut prev_bytes = 0_usize;
     for &(w, h) in &sizes {
         let b = estimate_gpu_memory_bytes(w, h).unwrap();

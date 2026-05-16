@@ -130,10 +130,7 @@ fn non_baseband_contrast_is_clamped_to_pm_thousand() {
     for (k, band) in pyr.bands.iter().enumerate() {
         let is_baseband = k == n_levels - 1;
         for (i, &v) in band.data.iter().enumerate() {
-            assert!(
-                v.is_finite(),
-                "level {k} [{i}] = {v} should be finite"
-            );
+            assert!(v.is_finite(), "level {k} [{i}] = {v} should be finite");
             if !is_baseband {
                 assert!(
                     v >= -1000.0 && v <= 1000.0,
@@ -179,11 +176,7 @@ fn determinism_across_repeated_calls() {
     for (k, (ba, bb)) in a.bands.iter().zip(b.bands.iter()).enumerate() {
         assert_eq!((ba.w, ba.h), (bb.w, bb.h));
         for (i, (&va, &vb)) in ba.data.iter().zip(bb.data.iter()).enumerate() {
-            assert_eq!(
-                va.to_bits(),
-                vb.to_bits(),
-                "level {k} [{i}] bit-mismatch"
-            );
+            assert_eq!(va.to_bits(), vb.to_bits(), "level {k} [{i}] bit-mismatch");
         }
     }
     for (k, (la, lb)) in a.log_l_bkg.iter().zip(b.log_l_bkg.iter()).enumerate() {

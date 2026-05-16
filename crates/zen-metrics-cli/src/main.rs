@@ -462,30 +462,26 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
-        let pair_result: Result<f64, Box<dyn std::error::Error>> = if let Some(scorer) =
-            cvvdp_scorer.as_mut()
-        {
-            // Cvvdp fast path: decode + reuse cached Cvvdp instance.
-            match (
-                decode::decode_image_to_rgb8(&ref_path),
-                decode::decode_image_to_rgb8(&dist_path),
-            ) {
-                (Ok(r), Ok(d)) => scorer.score(&r, &d),
-                (Err(e), _) | (_, Err(e)) => Err(e),
-            }
-        } else {
-            score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
-        };
+        let pair_result: Result<f64, Box<dyn std::error::Error>> =
+            if let Some(scorer) = cvvdp_scorer.as_mut() {
+                // Cvvdp fast path: decode + reuse cached Cvvdp instance.
+                match (
+                    decode::decode_image_to_rgb8(&ref_path),
+                    decode::decode_image_to_rgb8(&dist_path),
+                ) {
+                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            } else {
+                score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+            };
         let jod = match pair_result {
             Ok(v) => {
                 succeeded += 1;
                 v
             }
             Err(e) => {
-                eprintln!(
-                    "[score-pairs] {} q={q} failed: {e}",
-                    image_path,
-                );
+                eprintln!("[score-pairs] {} q={q} failed: {e}", image_path,);
                 failed += 1;
                 f64::NAN
             }
@@ -499,9 +495,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
 
         let total = succeeded + failed;
         if total % 100 == 0 && total > 0 {
-            eprintln!(
-                "[score-pairs] {total} pairs scored, {failed} failed",
-            );
+            eprintln!("[score-pairs] {total} pairs scored, {failed} failed",);
         }
     }
 
