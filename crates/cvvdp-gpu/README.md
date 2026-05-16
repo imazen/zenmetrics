@@ -257,15 +257,51 @@ for the history behind the ticks 191–207 chroma_shift hunt.
 
 ## Build
 
-CUDA 13.2 required for cubecl 0.10's CUDA backend. RTX 50-series
-(Blackwell, sm_120) needs CUDA 13 anyway. The cubecl-cuda runtime
-dynamically loads CUDA via `dlopen`, so the build itself succeeds
-without nvcc on PATH:
+CUDA SDK version requirements depend on the target GPU
+architecture, not on cubecl 0.10. cubecl's `cudarc 0.19.4`
+dependency emits dlsym entries gated on a `cuda-<MMmmpp>` cargo
+feature that's auto-selected from the CUDA SDK detected at build
+time (`cuda-version-from-build-system` feature). The selected
+feature must match symbols the host's libcuda actually exports:
+
+- **RTX 50-series (Blackwell, sm_120)** — CUDA 13 SDK required;
+  Blackwell sm_120 isn't supported below CUDA 13.
+- **RTX 20/30/40, A2000, A4000, etc. (Turing through Ada)** —
+  CUDA 12.6 SDK works and is recommended for production
+  deployment. The vast.ai backfill fleet (tick 384+) runs the
+  binary built against CUDA 12.6; verified end-to-end on RTX
+  2060 SUPER, RTX 3060, RTX A2000 hosts under driver 535+.
+
+Building against CUDA 13 produces a binary that calls
+`cuCoredumpDeregisterCompleteCallback`, a symbol gated behind
+`cuda-13020` in cudarc but absent from every released NVIDIA
+libcuda; that binary panics at first kernel dispatch on every
+host. Pick the SDK version that matches the GPU you target.
+
+The cubecl-cuda runtime dynamically loads CUDA via `dlopen`, so
+the build itself succeeds without nvcc on PATH; only the
+matching libcuda is needed at runtime:
 
 ```bash
-CUDA_PATH=/usr/local/cuda cargo build -p cvvdp-gpu
+# RTX 50-series target:
+CUDA_PATH=/usr/local/cuda-13 cargo build -p cvvdp-gpu --release
+
+# RTX 20/30/40, A2000, etc. target (recommended for fleet deployment):
+CUDA_PATH=/usr/local/cuda-12.6 cargo build -p cvvdp-gpu --release
+
+# Run tests against whichever CUDA + driver is present:
 CUDA_PATH=/usr/local/cuda cargo test --release -p cvvdp-gpu
 ```
+
+NVRTC headers (`cuda-cudart-dev-<MMmm>` on Debian/Ubuntu) are
+required at **runtime** on every worker, not just at build:
+cubecl emits kernels with `#include <cuda_runtime.h>` and NVRTC
+compiles them at first launch. Missing headers manifest as
+`Cvvdp::score: image too small for the configured pyramid`
+errors (the dual-purpose `InvalidImageSize` variant masks the
+NVRTC compile failure). See
+`scripts/sweep/onstart_cvvdp_backfill_imazen.sh` for the apt
+install sequence the fleet uses.
 
 For Metal (Apple) or non-NVIDIA GPUs, build wgpu-only:
 

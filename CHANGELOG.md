@@ -227,6 +227,27 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (docs)
+
+- **README "Build" section refreshed for the CUDA-version-matters
+  lesson learned during the v22-v25 fleet incident.** The
+  previous claim "CUDA 13.2 required for cubecl 0.10's CUDA
+  backend" was misleading — cubecl 0.10 itself doesn't require
+  13.x; its `cudarc 0.19.4` dep auto-selects a `cuda-<MMmmpp>`
+  cargo feature from the SDK present at build time, and the
+  resulting binary's dlsym entries must match symbols the host's
+  libcuda exports. Binaries built against CUDA 13 try to dlsym
+  `cuCoredumpDeregisterCompleteCallback` (gated behind cudarc's
+  `cuda-13020` feature) which is absent from every released
+  NVIDIA libcuda — panics at first dispatch. New README guidance
+  explicitly differentiates RTX 50-series (CUDA 13 required for
+  Blackwell sm_120) from RTX 20/30/40/A2000 etc. (CUDA 12.6 SDK,
+  proven on the production fleet under driver 535+). Plus calls
+  out the runtime requirement on NVRTC headers
+  (`cuda-cudart-dev-<MMmm>`) — without them, `Cvvdp::score`
+  returns the dual-purpose `InvalidImageSize` masking an NVRTC
+  compile failure (v25 lesson). Tick 414.
+
 #### cvvdp-gpu (tests)
 
 - **`tests/pyramid_scalar.rs::band_frequencies_{are_strictly_decreasing,minimum_image_dim_returns_some_bands,per_band_ratio_in_sensible_range}`**
