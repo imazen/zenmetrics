@@ -480,6 +480,16 @@ Tick 575 added 12 more invariants on `PLACEHOLDER`:
     moment the fields are wired through.
 Static-assert count is now 165 across 11 test files.
 
+Tick 577 promoted the `CVVDP_COLUMN_NAME.starts_with("cvvdp_imazen_")`
+runtime check to a compile-time pin via a const while-loop over
+`as_bytes()`. `str::starts_with` itself isn't const fn, but
+`str::as_bytes` is (since 1.39), integer comparison is trivially
+const, `while` in const is stable, and `Option::is_none` (used to
+gate the check on the default-form build, no `CVVDP_IMPL_TAG` env
+override) is const since 1.48. Adds a length pin + a loop-body
+match pin (2 logical asserts). Static-assert count is now 167
+across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

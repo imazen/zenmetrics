@@ -30,6 +30,33 @@ const _: () = assert!(
     "CVVDP_COLUMN_NAME must be non-empty; empty would yield unnamed parquet columns",
 );
 
+// Tick 577: compile-time pin of `CVVDP_COLUMN_NAME` default-form
+// prefix `cvvdp_imazen_`. `str::starts_with` isn't const fn, but a
+// while-loop over `as_bytes()` IS — `str::as_bytes` is const since
+// 1.39, integer comparison is trivially const, and `while` in const
+// is stable. The check is gated on `option_env!("CVVDP_IMPL_TAG")`
+// being None (i.e. default-form build, no env override) because the
+// env-override path is intentionally a free-form escape hatch.
+// `Option::is_none` is const since 1.48.
+const _: () = {
+    if option_env!("CVVDP_IMPL_TAG").is_none() {
+        let bytes = CVVDP_COLUMN_NAME.as_bytes();
+        let prefix = b"cvvdp_imazen_";
+        assert!(
+            bytes.len() >= prefix.len(),
+            "CVVDP_COLUMN_NAME shorter than `cvvdp_imazen_` prefix in default-form build",
+        );
+        let mut i = 0;
+        while i < prefix.len() {
+            assert!(
+                bytes[i] == prefix[i],
+                "CVVDP_COLUMN_NAME does not start with `cvvdp_imazen_` in default-form build",
+            );
+            i += 1;
+        }
+    }
+};
+
 #[test]
 fn column_name_is_not_empty() {
     assert!(
