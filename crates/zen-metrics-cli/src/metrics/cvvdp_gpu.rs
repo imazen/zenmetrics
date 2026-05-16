@@ -2,16 +2,29 @@
 
 //! ColorVideoVDP (still-image) score via the `cvvdp-gpu` crate.
 //!
-//! cvvdp's JOD is on a 0–10 scale where 10 = imperceptible. Currently
-//! routes through `cvvdp_gpu::Cvvdp::score`, which is the
-//! parity-locked host scalar path (matches pycvvdp v0.5.4 on the v1
-//! R2 manifest within 0.006 JOD per `shadow_jod`). The full GPU
-//! composition path also ships as `Cvvdp::compute_dkl_jod` (color →
-//! weber → CSF → masking → GPU pool → host fold), parity-locked
-//! against the host scalar at f32 precision for q ≥ 20 and against
-//! the pycvvdp manifest values via `shadow_jod_gpu`. The CLI will
-//! retarget once the GPU path's q=1 drift through `met2jod`'s steep
-//! slope is resolved or absorbed into the test tolerance.
+//! cvvdp's JOD is on a 0–10 scale where 10 = imperceptible. Routes
+//! through `cvvdp_gpu::Cvvdp::score`, which since cvvdp-gpu tick 213
+//! runs the **full GPU composition path** (`compute_dkl_jod`: color
+//! → Weber pyramid → CSF → masking → GPU atomic pool → host
+//! Minkowski fold). Output matches pycvvdp v0.5.4 on the v1 R2
+//! manifest within **0.005 JOD** (measured 0.0000–0.0031 across
+//! q=1,5,20,45,70,90) under the default `PerfMode::Strict`;
+//! `shadow_jod_gpu` pins this. Earlier doc revisions described
+//! the CLI as still routing through the host-scalar path with a
+//! pending retarget — that retarget landed in cvvdp-gpu tick 213
+//! (`compute_dkl_jod_matches_pycvvdp_at_*` parity tests close
+//! q=1 drift to 0.0000 after ticks 204/206 fixed the
+//! chroma_shift + 73×91 odd-dim drifts).
+//!
+//! Backend dispatch: `--gpu-runtime auto` tries Cuda → Wgpu → Hip
+//! → Cpu in order, returning the first successful score. The Cpu
+//! arm routes through `Cvvdp::compute_dkl_jod_host_pool` rather
+//! than the GPU pool kernel, since the latter uses
+//! `Atomic<f32>::fetch_add` which `cubecl-cpu` does not implement
+//! (would panic "atomic<f32> not implemented"). Same JOD output
+//! either way — parity-locked at f32 noise by
+//! `compute_dkl_jod_host_pool_matches_compute_dkl_jod` in
+//! cvvdp-gpu.
 
 use cubecl::Runtime;
 

@@ -24,7 +24,8 @@
 #![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::csf::{
-    CsfChannel, flatten_band_weights, precomputed_band_weights, sensitivity_scalar,
+    CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, flatten_band_weights, precompute_logs_row,
+    precomputed_band_weights, sensitivity_scalar,
 };
 use cvvdp_gpu::params::DisplayGeometry;
 
@@ -132,4 +133,158 @@ fn sensitivity_is_finite_at_extremes() {
     let s_high = sensitivity_scalar(1000.0, (1.0e6_f32).log10(), CsfChannel::A);
     assert!(s_low.is_finite() && s_low > 0.0);
     assert!(s_high.is_finite() && s_high > 0.0);
+}
+
+// `precompute_logs_row` is a public helper that the GPU CSF apply
+// kernel consumes per (rho, channel) — it pulls the `log_rho` axis
+// out of the 32×32 LUT, leaving a length-N_L_BKG row parameterised
+// by `log_L_bkg`. Until this tick it was exercised only by the
+// GPU-gated `csf_kernel.rs` tests, which means CPU-only test runs
+// (no atomic-f32 GPU, no display, no CUDA toolkit) had zero
+// coverage. Add direct unit tests that pin: shape, the identity
+// against `sensitivity_scalar` at axis points, frequency
+// dependence, channel dependence, and the `rho.max(1e-6)` clamp.
+// Same gap-shape as ticks 351/383 closure on lp_norm_sum /
+// pool_band_finalize.
+
+#[test]
+fn precompute_logs_row_returns_n_l_bkg_entries() {
+    // Length is part of the public contract — `csf_apply_per_pixel_kernel`
+    // indexes `logs_row[0..N_L_BKG]` directly. A refactor that
+    // changes the row size (or accidentally drops the last bin)
+    // would corrupt every per-pixel CSF lookup.
+    for cc in [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy] {
+        for &rho in &[0.01_f32, 0.5, 4.0, 64.0] {
+            let row = precompute_logs_row(rho, cc);
+            assert_eq!(
+                row.len(),
+                N_L_BKG,
+                "row length mismatch at rho={rho}, cc={cc:?}: got {}, expected {N_L_BKG}",
+                row.len(),
+            );
+        }
+    }
+}
+
+#[test]
+fn precompute_logs_row_at_axis_points_matches_sensitivity_log10() {
+    // Closed-form identity: precompute_logs_row(rho, cc)[k] is the
+    // log10 of the un-corrected sensitivity at LOG_L_BKG_AXIS[k].
+    // sensitivity_scalar applies interp1_uniform over LOG_L_BKG_AXIS,
+    // which returns exactly logs_row[k] at every axis point (interp
+    // weight = 1.0). So sensitivity_scalar(rho, axis[k], cc) =
+    // 10^precompute_logs_row(rho, cc)[k]. Pin so a refactor that
+    // changes either the precompute or the axis-indexed lookup
+    // diverges immediately. Sweeps all three channels × four rho
+    // values × all 32 axis points = 384 points total.
+    for cc in [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy] {
+        for &rho in &[0.1_f32, 1.0, 8.0, 32.0] {
+            let row = precompute_logs_row(rho, cc);
+            for k in 0..N_L_BKG {
+                let log_l_bkg = LOG_L_BKG_AXIS[k];
+                let s = sensitivity_scalar(rho, log_l_bkg, cc);
+                let expected = 10.0_f32.powf(row[k]);
+                let rel = ((s - expected) / expected.abs().max(1e-9)).abs();
+                assert!(
+                    rel < 1e-4,
+                    "precompute/sensitivity divergence at cc={cc:?} rho={rho} k={k} \
+                     log_l_bkg={log_l_bkg}: precompute row={} → 10^={}; sensitivity={s} \
+                     (rel = {rel:.4e})",
+                    row[k],
+                    expected,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn precompute_logs_row_varies_with_rho() {
+    // Different spatial frequencies must yield different rows
+    // (otherwise the LUT's rho axis is being collapsed, breaking
+    // every per-band CSF lookup). Compare row at rho=0.5 cy/deg
+    // vs rho=16 cy/deg — the achromatic CSF peaks near 4 cy/deg
+    // and falls off at both extremes, so we expect substantial
+    // divergence between these two queries.
+    let row_low = precompute_logs_row(0.5, CsfChannel::A);
+    let row_high = precompute_logs_row(16.0, CsfChannel::A);
+    // Use the max-abs difference across the 32 entries.
+    let mut max_diff = 0.0_f32;
+    for k in 0..N_L_BKG {
+        let d = (row_low[k] - row_high[k]).abs();
+        if d > max_diff {
+            max_diff = d;
+        }
+    }
+    assert!(
+        max_diff > 0.1,
+        "precompute_logs_row collapses across rho: max |diff| = {max_diff} between 0.5 and 16 cy/deg",
+    );
+}
+
+#[test]
+fn precompute_logs_row_varies_with_channel() {
+    // Different opponent channels must yield different rows. The
+    // achromatic vs chromatic CSF shapes differ substantially —
+    // achromatic peaks much higher than chrominance — so the rows
+    // should diverge. Pin so a refactor that points all channels
+    // at the same LUT (e.g. a typo in channel_lut dispatch) trips
+    // immediately.
+    let row_a = precompute_logs_row(4.0, CsfChannel::A);
+    let row_rg = precompute_logs_row(4.0, CsfChannel::Rg);
+    let row_vy = precompute_logs_row(4.0, CsfChannel::Vy);
+    // No two channels should produce identical rows.
+    for (label_a, ra, label_b, rb) in [
+        ("A", &row_a, "Rg", &row_rg),
+        ("A", &row_a, "Vy", &row_vy),
+        ("Rg", &row_rg, "Vy", &row_vy),
+    ] {
+        let mut max_diff = 0.0_f32;
+        for k in 0..N_L_BKG {
+            let d = (ra[k] - rb[k]).abs();
+            if d > max_diff {
+                max_diff = d;
+            }
+        }
+        assert!(
+            max_diff > 1e-3,
+            "{label_a} vs {label_b} channels collapse to same row: max |diff| = {max_diff}",
+        );
+    }
+}
+
+#[test]
+fn precompute_logs_row_clamps_rho_at_zero() {
+    // `precompute_logs_row` applies `rho.max(1e-6).log10()` — a
+    // 0 / negative rho input must not produce -inf or NaN in the
+    // log_rho_q computation. Pin so a refactor that drops the
+    // clamp (e.g. directly calling `rho.log10()` on an unsafe
+    // path) surfaces here before NaN-poisons a downstream band.
+    let row0 = precompute_logs_row(0.0, CsfChannel::A);
+    let row_neg = precompute_logs_row(-1.0, CsfChannel::A);
+    let row_eps = precompute_logs_row(1e-6, CsfChannel::A);
+    for k in 0..N_L_BKG {
+        assert!(
+            row0[k].is_finite(),
+            "rho=0 yielded non-finite at k={k}: {}",
+            row0[k]
+        );
+        assert!(
+            row_neg[k].is_finite(),
+            "rho=-1 yielded non-finite at k={k}: {}",
+            row_neg[k]
+        );
+        // Per the .max(1e-6) clamp, rho=0 and rho=-1 must produce
+        // identical output to rho=1e-6.
+        assert_eq!(
+            row0[k].to_bits(),
+            row_eps[k].to_bits(),
+            "rho=0 should match rho=1e-6 exactly at k={k} (clamp invariant)",
+        );
+        assert_eq!(
+            row_neg[k].to_bits(),
+            row_eps[k].to_bits(),
+            "rho=-1 should match rho=1e-6 exactly at k={k} (clamp invariant)",
+        );
+    }
 }

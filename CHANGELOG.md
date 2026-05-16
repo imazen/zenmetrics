@@ -177,6 +177,45 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/color_scalar.rs::srgb_lut_*`** — four direct unit tests
+  on the public `SRGB8_TO_LINEAR_LUT` 256-entry sRGB EOTF table.
+  Previously the LUT was verified only transitively through the
+  8-point `matches_pycvvdp_standard_4k` byte goldens — and a
+  historical "~6e-4 drift at bright bytes" regression (referenced
+  in `pipeline_color.rs:2009`) had shipped because the goldens
+  happened to skip the affected bytes. New tests pin: (1) length
+  256 + exact 0.0 / 1.0 endpoints at byte 0 / 255 via `.to_bits()`
+  (off-by-one + missing-boundary catcher); (2) strict monotonic
+  increasing across all 256 bytes (bit-flip or swapped-pair
+  catcher); (3) direct comparison against the IEC 61966-2-1
+  inverse companding formula at every byte (f64 reference, 1e-6
+  absolute tolerance — well under the 6e-4 historic drift); (4)
+  seam continuity around c = 0.04045 (byte 11) — pin the local
+  slope ratio to (0.5, 2.0) to catch a refactor that mis-aligns
+  the piecewise branch threshold. Tick 387.
+- **`tests/csf_scalar.rs::precompute_logs_row_*`** — five direct
+  unit tests on the previously-GPU-only-exercised public
+  `precompute_logs_row`. The helper had no scalar-side coverage:
+  it was used in `tests/csf_kernel.rs` to set up GPU kernel
+  inputs, but that file is feature-gated to
+  `cfg(any(cuda, wgpu, hip))` so a CPU-only test run (no GPU
+  available, no atomic-f32 support) never touched it. New tests
+  pin: (1) returns exactly `N_L_BKG = 32` entries across all
+  channels × four rho values (a refactor that shrinks the row
+  would corrupt every per-pixel CSF lookup); (2) the closed-form
+  identity `sensitivity_scalar(rho, LOG_L_BKG_AXIS[k], cc) =
+  10^precompute_logs_row(rho, cc)[k]` across 3 channels × 4 rho
+  × 32 axis points = 384 points (interp1_uniform returns the
+  exact row value at axis indices, so this identity is parity
+  glue between the two public functions); (3) frequency
+  dependence — max |diff| > 0.1 between rho=0.5 and rho=16
+  cy/deg for the achromatic channel (catches a refactor that
+  collapses the rho axis); (4) channel dependence — pairwise
+  max |diff| > 1e-3 between A/Rg/Vy at fixed rho=4 (catches a
+  channel_lut dispatch typo); (5) the `rho.max(1e-6)` clamp —
+  rho ∈ {0, -1, 1e-6} produce bit-identical rows via
+  `.to_bits()` (silent-NaN-propagation regression catcher).
+  Same gap-shape as ticks 351/383. Tick 386.
 - **`tests/pool_scalar.rs::pool_band_finalize_*`** — five direct
   unit tests on the previously-indirectly-exercised public
   `pool_band_finalize`. The function was covered only via the

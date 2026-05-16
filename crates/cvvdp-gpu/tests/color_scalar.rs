@@ -17,7 +17,7 @@
 //! (Y_peak=200, contrast=1000, E_ambient=250, k_refl=0.005, sRGB EOTF).
 #![allow(clippy::excessive_precision)]
 
-use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+use cvvdp_gpu::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_byte_to_dkl_scalar};
 use cvvdp_gpu::params::DisplayModel;
 
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).
@@ -64,6 +64,106 @@ fn matches_pycvvdp_standard_4k() {
              rel errs ({ea:.2e}, {erg:.2e}, {evy:.2e})"
         );
     }
+}
+
+// `SRGB8_TO_LINEAR_LUT` is the 256-entry public sRGB EOTF table
+// that every color-stage call indexes. A historical regression in
+// the LUT itself (~6e-4 drift at bright bytes, mentioned in
+// `pipeline_color.rs:2009`) shipped because the 8-point goldens
+// in `matches_pycvvdp_standard_4k` happened to sample only a
+// handful of bytes — a refactor that breaks the LUT at, say, byte
+// 200 specifically can still pass those goldens. Pin the LUT
+// directly against the IEC 61966-2-1 sRGB EOTF formula at all
+// 256 bytes so any per-byte regression surfaces here before
+// propagating into pipeline drift.
+
+#[test]
+fn srgb_lut_length_and_endpoints() {
+    // Length 256 (one entry per u8). LUT[0] = 0.0 exactly
+    // (sRGB at 0 maps to linear 0). LUT[255] = 1.0 exactly
+    // (sRGB at 255 maps to linear 1.0 — full-scale). Pin these
+    // endpoints so a refactor that off-by-ones the index or
+    // accidentally drops the 255 boundary trips here.
+    assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
+    assert_eq!(
+        SRGB8_TO_LINEAR_LUT[0].to_bits(),
+        0.0_f32.to_bits(),
+        "LUT[0] = {}, expected exactly 0.0",
+        SRGB8_TO_LINEAR_LUT[0]
+    );
+    assert_eq!(
+        SRGB8_TO_LINEAR_LUT[255].to_bits(),
+        1.0_f32.to_bits(),
+        "LUT[255] = {}, expected exactly 1.0",
+        SRGB8_TO_LINEAR_LUT[255]
+    );
+}
+
+#[test]
+fn srgb_lut_is_strictly_monotonic() {
+    // sRGB EOTF is a strictly monotonic increasing function on
+    // [0, 1], so the LUT MUST be strictly increasing. A bit-flip
+    // anywhere in the table (or worse: a swapped pair of entries
+    // due to a copy-paste error) would break this. Catches the
+    // exact shape of regression that the pre-tick-X "~6e-4 drift
+    // at bright bytes" represented.
+    for i in 1..256 {
+        assert!(
+            SRGB8_TO_LINEAR_LUT[i] > SRGB8_TO_LINEAR_LUT[i - 1],
+            "LUT not strictly monotonic at index {i}: LUT[{}]={}, LUT[{i}]={}",
+            i - 1,
+            SRGB8_TO_LINEAR_LUT[i - 1],
+            SRGB8_TO_LINEAR_LUT[i],
+        );
+    }
+}
+
+#[test]
+fn srgb_lut_matches_iec_61966_2_1_formula() {
+    // Direct evaluation of the sRGB inverse companding formula at
+    // every byte:
+    //   c = byte / 255
+    //   lin = if c ≤ 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055)^2.4 }
+    // Reference: IEC 61966-2-1:1999 Annex A. Compute at f64 then
+    // compare to the f32 LUT; tolerate up to 1e-6 absolute (well
+    // under the 6e-4 historic drift) so f64→f32 cast noise doesn't
+    // trip the gate. Sweeping all 256 bytes catches per-byte
+    // regressions that the 8 goldens above never look at.
+    for byte in 0..=255_u8 {
+        let c = f64::from(byte) / 255.0;
+        let expected = if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        } as f32;
+        let got = SRGB8_TO_LINEAR_LUT[byte as usize];
+        let abs_err = (got - expected).abs();
+        assert!(
+            abs_err < 1e-6,
+            "LUT[{byte}] = {got}, expected ~{expected} (|err| = {abs_err:.4e})",
+        );
+    }
+}
+
+#[test]
+fn srgb_lut_branch_seam_continuity() {
+    // The sRGB EOTF has a piecewise definition that joins at
+    // c = 0.04045 (≈ byte 10.31). f32 LUT entries at bytes 10 and
+    // 11 straddle the seam; they should still be smoothly
+    // increasing. Pin so a refactor that mis-aligns the branch
+    // threshold (e.g. uses 0.04 instead of 0.04045) produces a
+    // local discontinuity that we catch here, even if the global
+    // monotonicity test still passes.
+    let d_low = SRGB8_TO_LINEAR_LUT[11] - SRGB8_TO_LINEAR_LUT[10];
+    let d_high = SRGB8_TO_LINEAR_LUT[12] - SRGB8_TO_LINEAR_LUT[11];
+    // Per-step difference at the seam should be small and similar.
+    // The pre-seam slope is 1/(12.92 * 255) ≈ 3.04e-4; post-seam at
+    // c ≈ 0.04 is slightly steeper but not by orders of magnitude.
+    let ratio = d_high / d_low.max(1e-9);
+    assert!(
+        ratio > 0.5 && ratio < 2.0,
+        "Seam slope discontinuity at byte 11: d[10..11]={d_low}, d[11..12]={d_high}, ratio={ratio}",
+    );
 }
 
 #[test]
