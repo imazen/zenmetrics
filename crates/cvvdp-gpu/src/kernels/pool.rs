@@ -96,6 +96,25 @@ pub fn lp_norm_mean(values: &[f32], p: f32) -> f32 {
 
 /// cvvdp's `lp_norm` with `normalize=False`. Matches:
 /// `safe_pow(sum_i(safe_pow(x_i, p)), 1/p)`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::lp_norm_sum;
+///
+/// // Pythagorean: lp_norm_sum([3, 4], 2) ≈ 5 (L2 norm minus a tiny
+/// // eps-tail bias from safe_pow's regularization).
+/// let v = lp_norm_sum(&[3.0_f32, 4.0], 2.0);
+/// assert!((v - 5.0).abs() < 0.01, "got {v}, expected ≈ 5");
+///
+/// // Empty input — sum is 0, so the result is `safe_pow(0, 1/p) = 0`.
+/// assert_eq!(lp_norm_sum(&[], 2.0), 0.0);
+///
+/// // Sign-insensitive via |x| inside safe_pow.
+/// let pos = lp_norm_sum(&[3.0_f32, 4.0], 2.0);
+/// let neg = lp_norm_sum(&[-3.0_f32, -4.0], 2.0);
+/// assert!((pos - neg).abs() < 1e-5);
+/// ```
 #[must_use]
 pub fn lp_norm_sum(values: &[f32], p: f32) -> f32 {
     let acc: f32 = values.iter().map(|v| safe_pow_lp(*v, p)).sum();

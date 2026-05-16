@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`lp_norm_sum` doctest** — added `# Examples`: pythagorean
+  `lp_norm_sum([3, 4], 2) ≈ 5` within 0.01, empty → 0,
+  sign-insensitive via abs. Tick 447.
+
 - **`lp_norm_mean` doctest** — added `# Examples`: empty → 0,
   uniform input → constant within 0.01 (eps-tail bias),
   sign-insensitive via abs. Tick 446.
