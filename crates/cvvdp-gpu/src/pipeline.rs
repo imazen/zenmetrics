@@ -98,7 +98,7 @@ use crate::kernels::masking::{
 };
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_lds_kernel, pool_band_finalize, POOL_LDS_BLOCK_DIM,
+    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_finalize, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
@@ -2603,35 +2603,62 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
-        // T1.C (2026-05-16): LDS-reduction pool. 256-thread workgroup
-        // does pointer-jumping reduce in shared memory, then 1 atomic
-        // per workgroup per channel commits to `partials`. Cuts atomic
-        // traffic ~255× at 12 MP vs the per-pixel atomic variant.
-        let pool_cube_dim = CubeDim::new_1d(POOL_LDS_BLOCK_DIM);
+        // T1.C + T4.K (2026-05-16): per-size pool dispatch. The
+        // LDS-reduction kernel (`pool_band_3ch_lds_kernel`, 256-thread
+        // workgroup, pointer-jumping reduce, 1 atomic per workgroup
+        // per channel) wins at large bands by cutting atomic traffic
+        // ~255×; at tiny bands (≤ ~16 K pixels) its 8-sync overhead
+        // exceeds the per-pixel-atomic cost. POOL_LDS_MIN_PIXELS sets
+        // the crossover; benched on RTX 5070 (256² regressed under
+        // unconditional LDS; 1 MP and 12 MP win cleanly).
+        const POOL_LDS_MIN_PIXELS: usize = 16_384;
+        let pool_lds_cube_dim = CubeDim::new_1d(POOL_LDS_BLOCK_DIM);
+        let pool_atomic_cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
-            let count = CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
             let d_a = self.d_scratch[k].d[0].clone();
             let d_rg = self.d_scratch[k].d[1].clone();
             let d_vy = self.d_scratch[k].d[2].clone();
             let partial_idx_a = (k * N_CHANNELS) as u32;
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-            unsafe {
-                pool_band_3ch_lds_kernel::launch::<R>(
-                    &self.client,
-                    count.clone(),
-                    pool_cube_dim,
-                    ArrayArg::from_raw_parts(d_a, n_px),
-                    ArrayArg::from_raw_parts(d_rg, n_px),
-                    ArrayArg::from_raw_parts(d_vy, n_px),
-                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                    BETA_SPATIAL,
-                    partial_idx_a,
-                    partial_idx_rg,
-                    partial_idx_vy,
-                    n_px as u32,
-                );
+            if n_px >= POOL_LDS_MIN_PIXELS {
+                let count =
+                    CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
+                unsafe {
+                    pool_band_3ch_lds_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        pool_lds_cube_dim,
+                        ArrayArg::from_raw_parts(d_a, n_px),
+                        ArrayArg::from_raw_parts(d_rg, n_px),
+                        ArrayArg::from_raw_parts(d_vy, n_px),
+                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        n_px as u32,
+                    );
+                }
+            } else {
+                let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                unsafe {
+                    pool_band_3ch_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        pool_atomic_cube_dim,
+                        ArrayArg::from_raw_parts(d_a, n_px),
+                        ArrayArg::from_raw_parts(d_rg, n_px),
+                        ArrayArg::from_raw_parts(d_vy, n_px),
+                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        n_px as u32,
+                    );
+                }
             }
         }
 
