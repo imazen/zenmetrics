@@ -112,6 +112,22 @@ impl DisplayGeometry {
 ///
 /// Apply per-pixel as:
 /// `dkl[c] = M[c][0]*r_lin + M[c][1]*g_lin + M[c][2]*b_lin`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+///
+/// // Equal-energy linear input (1.0, 1.0, 1.0) → A row sums to the
+/// // luminance gain (≈ 1.05); chroma rows are mean-zero by DKL
+/// // construction so are small relative to A.
+/// let a_sum = M[0][0] + M[0][1] + M[0][2];
+/// let rg_sum = M[1][0] + M[1][1] + M[1][2];
+/// let vy_sum = M[2][0] + M[2][1] + M[2][2];
+/// assert!(a_sum > 0.5 && a_sum < 2.0, "A row sum {a_sum}");
+/// assert!(rg_sum.abs() < a_sum.abs());
+/// assert!(vy_sum.abs() < a_sum.abs());
+/// ```
 pub const SRGB_LINEAR_TO_DKL: [[f32; 3]; 3] = [
     [0.233_201_21, 0.728_830_8, 0.088_995_87],
     [0.127_620_77, -0.087_068_09, -0.036_777_39],

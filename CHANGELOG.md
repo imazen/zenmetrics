@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`SRGB_LINEAR_TO_DKL` doctest** — added `# Examples` showing
+  row-sum invariants: A row sums in [0.5, 2.0] (luminance gain);
+  RG and VY row-sum absolute values < A row sum (DKL chroma rows
+  mean-zero by construction on equal-energy input). Tick 466.
+
 - **`DisplayGeometry::pixels_per_degree` doctest** — added
   `# Examples` showing standard 4K → ≈ 75.4 ppd (within 0.5) and
   realistic-range invariant 5..=500. Tick 465.
