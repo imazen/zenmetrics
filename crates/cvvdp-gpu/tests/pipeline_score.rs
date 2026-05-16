@@ -339,6 +339,107 @@ fn invalid_image_size_surfaces_on_too_small_dims() {
 }
 
 #[test]
+fn cvvdp_score_smoke_at_pyramid_min_boundary() {
+    // Tick 491: end-to-end GPU smoke test on the minimum supported
+    // dimensions (8×8 = PYRAMID_MIN_DIM × 2). The existing
+    // `invalid_image_size_surfaces_on_too_small_dims` only verifies
+    // that `Cvvdp::new(8, 8)` returns Ok — it doesn't verify any
+    // scoring path actually works at the boundary. predict_jod_still_3ch
+    // (tick 434) covers 8×8 on the host-scalar path; this pins the GPU
+    // path equivalents.
+    //
+    // A pyramid-construction bug that allocates a degenerate
+    // zero-channel band at boundary dims, an off-by-one in the
+    // dispatcher launch geometry, or a halving-loop regression
+    // would surface as a panic or NaN here rather than at the boundary
+    // dim guard.
+    //
+    // Pins (boundary 8×8 only):
+    //   (1) score(ref, ref) ≈ 10 — identity contract holds at boundary
+    //       dims (matches the documented JOD=10 max).
+    //   (2) score(ref, dist) finite + in [0, 10] for a non-trivial
+    //       perturbation.
+    //   (3) set_reference + score_with_reference works (boundary
+    //       cache path).
+    //   (4) warm_reference + compute_dkl_jod_with_warm_ref works
+    //       (boundary warm-ref path).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (8u32, 8u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new(8, 8)");
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let n = (w * h * 3) as usize;
+    // Mid-gray with a sparse perturbation. A flat reference + flat
+    // dist would make Weber bands all-zero and JOD = 10 trivially —
+    // not a useful test of the pipeline.
+    let mut ref_srgb = vec![128u8; n];
+    for i in (0..n).step_by(7) {
+        ref_srgb[i] = ref_srgb[i].saturating_add(20);
+    }
+    let mut dist_srgb = ref_srgb.clone();
+    for i in (0..n).step_by(5) {
+        dist_srgb[i] = dist_srgb[i].saturating_sub(15);
+    }
+
+    // (1) Identity contract.
+    let jod_ident = cvvdp
+        .score(&ref_srgb, &ref_srgb)
+        .expect("score(ref, ref) at 8×8");
+    assert!(
+        (jod_ident - 10.0).abs() < 1e-3,
+        "score(ref, ref) at 8×8 = {jod_ident}, expected ≈ 10",
+    );
+
+    // (2) Non-trivial perturbation produces a finite in-range JOD < ident.
+    let jod_pert = cvvdp
+        .score(&ref_srgb, &dist_srgb)
+        .expect("score(ref, dist) at 8×8");
+    assert!(
+        jod_pert.is_finite(),
+        "score JOD must be finite, got {jod_pert}"
+    );
+    assert!(
+        (0.0..=10.0 + 1e-3).contains(&jod_pert),
+        "score JOD must be in [0, 10], got {jod_pert}",
+    );
+    assert!(
+        jod_pert < jod_ident,
+        "perturbed JOD {jod_pert} must be < identity JOD {jod_ident}",
+    );
+
+    // (3) Cached fast path at boundary.
+    cvvdp
+        .set_reference(&ref_srgb)
+        .expect("set_reference at 8×8");
+    let jod_swr = cvvdp
+        .score_with_reference(&dist_srgb)
+        .expect("score_with_reference at 8×8");
+    // score_with_reference is bit-equal to score(ref, dist) per tick 488.
+    assert_eq!(
+        jod_swr.to_bits(),
+        jod_pert.to_bits(),
+        "score_with_reference {jod_swr} not bit-equal to score(ref, dist) {jod_pert} at 8×8",
+    );
+
+    // (4) Warm-ref fast path at boundary.
+    cvvdp
+        .warm_reference(&ref_srgb)
+        .expect("warm_reference at 8×8");
+    let jod_warm = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_with_warm_ref at 8×8");
+    assert!(
+        jod_warm.is_finite(),
+        "warm-ref JOD must be finite, got {jod_warm}"
+    );
+    assert!(
+        (0.0..=10.0 + 1e-3).contains(&jod_warm),
+        "warm-ref JOD must be in [0, 10], got {jod_warm}",
+    );
+}
+
+#[test]
 fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
     // Tick 239: pin the DimensionMismatch error-path on every public
     // entry that validates buffer length. The 8 sites (lib::Error::

@@ -58,6 +58,25 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`cvvdp_score_smoke_at_pyramid_min_boundary`** (in
+  `pipeline_score.rs`) — end-to-end GPU smoke test on the minimum
+  supported dimensions (8×8 = `PYRAMID_MIN_DIM × 2`). Existing
+  `invalid_image_size_surfaces_on_too_small_dims` only verifies
+  that `Cvvdp::new(8, 8)` returns Ok — it doesn't verify any scoring
+  path works at boundary dims. `predict_jod_still_3ch` invariants
+  (tick 434) covered 8×8 on the host-scalar path; this pins the GPU
+  equivalents. 4 invariants: (1) identity contract `score(ref, ref)
+  ≈ 10` within 1e-3; (2) non-trivial perturbation produces finite
+  JOD in `[0, 10]` strictly less than the identity JOD;
+  (3) `set_reference` + `score_with_reference` works at boundary
+  dims AND is bit-equal to direct `score()` (extends tick 488 pin
+  to boundary); (4) `warm_reference` +
+  `compute_dkl_jod_with_warm_ref` works at boundary dims with
+  finite JOD in `[0, 10]`. A pyramid-construction bug at boundary
+  dims (degenerate zero-channel band, off-by-one in dispatcher
+  launch geometry, halving-loop regression) would surface here as
+  a panic / NaN. Tick 491.
+
 - **`compute_dkl_jod_with_warm_ref_is_deterministic_across_repeated_calls`**
   (in `pipeline_score.rs`) — 2 invariants on the warm-ref fast path
   (the `warm_reference` + `compute_dkl_jod_with_warm_ref` pattern
