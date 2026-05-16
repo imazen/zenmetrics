@@ -108,7 +108,7 @@ Workspace conventions per the global rules:
   sizes (64² through 12 MP), a code example for how a sweep
   worker should derive `PARALLEL`, and guidance on when to
   tighten / loosen the safety factor (warm-ref batches → 1.2;
-  mixed CPU+GPU process → 2.0). Tick 400.
+  mixed CPU+GPU process → 2.0). Tick 400, 253899ab.
 
 #### cvvdp-gpu (api)
 
@@ -801,7 +801,7 @@ shipped across six commits + an operator runbook:
   more angle per pixel → lower PPD); (4) strictly monotonically
   increasing in `resolution_w` at fixed 16:9 aspect. Catches sign
   flips and dimension-swaps that would silently mis-calibrate the
-  CSF stage's per-band rho query. Tick 415.
+  CSF stage's per-band rho query. Tick 415, 1fc417cd.
 
 #### cvvdp-gpu (docs)
 
@@ -822,7 +822,7 @@ shipped across six commits + an operator runbook:
   out the runtime requirement on NVRTC headers
   (`cuda-cudart-dev-<MMmm>`) — without them, `Cvvdp::score`
   returns the dual-purpose `InvalidImageSize` masking an NVRTC
-  compile failure (v25 lesson). Tick 414.
+  compile failure (v25 lesson). Tick 414, 00c5875e.
 
 #### cvvdp-gpu (tests)
 
@@ -835,7 +835,7 @@ shipped across six commits + an operator runbook:
   silently fail); (3) mid-pyramid adjacent-band ratio in
   [1.5, 3.5] — captures the "near-octave" Laplacian behavior
   while accommodating the first-level Nyquist-quarter scaling
-  and the trailing MIN_FREQ=0.2 floor. Tick 412.
+  and the trailing MIN_FREQ=0.2 floor. Tick 412, f861d026.
 
 - **`tests/pipeline_score.rs::score_is_deterministic_*`** — two
   contract tests pinning the critical "no state leakage between
@@ -850,7 +850,7 @@ shipped across six commits + an operator runbook:
   buffer reset is dropped, an accumulator grows across calls, or
   warm-ref state contaminates cold dispatch surfaces here before
   silently breaking the cached-instance pattern that the OOM-fix
-  tick 384 depends on. Tick 411.
+  tick 384 depends on. Tick 411, ebe21f89.
 
 - **`tests/masking_safe_pow.rs`** — five direct unit tests on
   `kernels::masking::safe_pow` (cvvdp's `(x + eps)^p - eps^p`
@@ -868,7 +868,7 @@ shipped across six commits + an operator runbook:
   holds; (5) finite + positive at extreme x ∈ {100, 1k, 10k}
   across p set (catches an overflow-to-inf regression). Lives
   in a dedicated file per the tick-401 precedent (linter-revert
-  safety vs `masking_scalar.rs`). Tick 410.
+  safety vs `masking_scalar.rs`). Tick 410, 57fc5225.
 
 - **`tests/error_traits.rs`** — pins five trait-side contracts on
   `cvvdp_gpu::Error`: (1) `impl std::error::Error` (compile-time
@@ -883,7 +883,7 @@ shipped across six commits + an operator runbook:
   `Box<dyn std::error::Error>` works and preserves the actionable
   Display message. Sibling to tick 282's
   `error_display_messages_are_actionable` (Display content) —
-  this tests the trait *implementations*. Tick 409.
+  this tests the trait *implementations*. Tick 409, 8177979b.
 
 #### cvvdp-gpu (docs)
 
@@ -897,7 +897,7 @@ shipped across six commits + an operator runbook:
   sweep: 0 undocumented public items remain in the non-LUT
   source (the LUT file `csf_lut/v0_5_4.rs` is auto-generated
   from pycvvdp's JSON; comments there would not survive
-  regeneration). Tick 408.
+  regeneration). Tick 408, 7c4d4758.
 
 #### cvvdp-gpu (tests)
 
@@ -910,7 +910,7 @@ shipped across six commits + an operator runbook:
   full v1 corpus q-grid. Catches a refactor that introduces a
   precision-eating step (e.g. `jod as f64 * 1.0` rounded
   through an intermediate). Also asserts score ∈ [0, 10] across
-  the corpus q-range. Tick 407.
+  the corpus q-range. Tick 407, 14582e8a.
 - **`tests/pipeline_score.rs::{parallel_safety_factor_*, recommend_parallel_{monotonic,budget}_*, estimate_gpu_memory_grows_*}`**
   — four invariant tests on the GPU memory predictor + concurrency-
   cap API: (1) `PARALLEL_SAFETY_FACTOR` in [1.0, 3.0] sane-range
@@ -923,7 +923,7 @@ shipped across six commits + an operator runbook:
   case is the documented "back off explicitly" signal); (4)
   `estimate_gpu_memory_bytes` is strictly increasing across six
   image sizes (catches a refactor that introduces fixed-cost
-  inversion). Tick 406.
+  inversion). Tick 406, 8039d126.
 - **`tests/params_placeholder.rs`** — pins the two `CvvdpParams::PLACEHOLDER`
   fields the pipeline actually consumes: `display ==
   DisplayModel::STANDARD_4K` (field-by-field bit-pattern check
@@ -932,7 +932,7 @@ shipped across six commits + an operator runbook:
   PLACEHOLDER)`, so a refactor that flipped the placeholder
   default to `PerfMode::Fast` would silently change every
   golden-test calibration baseline. Plus a contract test
-  exercising PerfMode's Copy + PartialEq derives. Tick 405.
+  exercising PerfMode's Copy + PartialEq derives. Tick 405, daab6476.
 - **`tests/goldens_metadata.rs`** — pins the self-consistency of
   the goldens-fetch infrastructure in `tests/common/mod.rs`:
   `MANIFEST_URL` must embed `GOLDEN_VERSION` as a path segment
@@ -945,7 +945,7 @@ shipped across six commits + an operator runbook:
   `GOLDEN_VERSION = "v2"` but forgets to update `MANIFEST_URL`
   surfaces here before the goldens-feature gate runs the actual
   fetch. Same loud-failure-on-silent-edit discipline applied to
-  test-infrastructure constants. Tick 404.
+  test-infrastructure constants. Tick 404, 6e95bfac.
 - **`tests/shadow_jod.rs::predict_jod_still_3ch_returns_max_jod_on_identical_inputs`**
   — integration-test promotion of the lib.rs doctest's identity
   contract (scoring a buffer against itself yields JOD ≈ 10.0).
@@ -958,7 +958,7 @@ shipped across six commits + an operator runbook:
   255}. Companion to tick 350's
   `compute_dkl_jod_host_pool_returns_max_jod_on_identical_inputs`
   (GPU host-pool path) — same contract on the host-scalar
-  reference twin. Tick 403.
+  reference twin. Tick 403, 7ef5b683.
 - **`tests/lib_constants.rs`** — seventh in the constants-pin
   series. Pins the three crate-level constants exposed from
   `lib.rs`: `N_CHANNELS = 3` (still-image DKL opponent count),
@@ -968,7 +968,7 @@ shipped across six commits + an operator runbook:
   derived-invariant test `PYRAMID_MIN_DIM × 2 = 8` so a refactor
   that changes the `width < PYRAMID_MIN_DIM * 2` guard's
   multiplier surfaces here instead of as a boundary-test
-  regression. Tick 402.
+  regression. Tick 402, c61e4b22.
 - **`tests/masking_constants.rs`** — sixth in the constants-pin
   series (393 pool / 394 csf / 395 pyramid / 396 display / 397
   color matrix). New dedicated test file pins by exact f32 bit
@@ -980,7 +980,7 @@ shipped across six commits + an operator runbook:
   (sum ≈ 1.0 within 1e-6) and symmetry around the centre tap.
   Lives in a dedicated file (not the historically linter-edge-
   case-sensitive `masking_scalar.rs`) so the consts pin stays
-  durable. Tick 401.
+  durable. Tick 401, 57506ad9.
 - **`tests/color_scalar.rs::srgb_linear_to_dkl_*`** — fifth in
   the constants-pin series (393 pool / 394 csf / 395 pyramid /
   396 display). Pins all 9 entries of `SRGB_LINEAR_TO_DKL` by
