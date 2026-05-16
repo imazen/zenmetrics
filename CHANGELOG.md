@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`XCM_3X3` doctest** — added `# Examples` showing 3×3 shape,
+  all entries positive-finite, A-to-A self-coupling dominance
+  `[0][0] > 0.5` (matrix orientation pin). Tick 468.
+
 - **`SRGB8_TO_LINEAR_LUT` doctest** — added `# Examples` showing
   length=256, endpoints `[0]==0.0` / `[255]==1.0`, strict monotonicity
   across the 256-entry table. Tick 467.

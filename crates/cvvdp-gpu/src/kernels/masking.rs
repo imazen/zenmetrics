@@ -66,6 +66,24 @@ pub const D_MAX: f32 = 2.564_245_5;
 /// ```text
 /// M[out] = sum_in XCM_3X3[in][out] * mask_term[in]
 /// ```
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::XCM_3X3;
+///
+/// // 3×3 shape, all entries positive and finite.
+/// assert_eq!(XCM_3X3.len(), 3);
+/// for row in &XCM_3X3 {
+///     assert_eq!(row.len(), 3);
+///     for &v in row {
+///         assert!(v > 0.0 && v.is_finite());
+///     }
+/// }
+///
+/// // A-to-A self-coupling dominates (XCM_3X3[0][0] ≈ 0.877).
+/// assert!(XCM_3X3[0][0] > 0.5);
+/// ```
 pub const XCM_3X3: [[f32; 3]; 3] = [
     // 2^(-0.189501), 2^(-5.962151), 2^(-4.318346)
     [0.876_968, 0.016_103_15, 0.050_159_38],
