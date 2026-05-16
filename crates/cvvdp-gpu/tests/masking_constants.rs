@@ -116,6 +116,84 @@ const _: () = assert!(
     "XCM_3X3[2][2] drifted from cvvdp v0.5.4 = 0.697_756_55",
 );
 
+// Tick 560: compile-time bit-pins for the PU_BLUR_KERNEL_1D 13-tap
+// σ=3 Gaussian blur kernel (matches `torchvision.transforms.GaussianBlur(13, 3.0)`).
+// Each tap pinned independently so an off-by-one shift or a typo
+// in any single tap surfaces at compile time rather than during a
+// per-band kernel-output diff. Same pattern as ticks 522-524,
+// 548-559.
+const _: () = {
+    assert!(
+        PU_BLUR_KERNEL_1D[0].to_bits() == 1.854_402_2e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[0] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[1].to_bits() == 3.416_694_2e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[1] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[2].to_bits() == 5.633_176_4e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[2] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[3].to_bits() == 8.310_854e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[3] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[4].to_bits() == 1.097_193e-1_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[4] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[5].to_bits() == 1.296_180_3e-1_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[5] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[6].to_bits() == 1.370_228_2e-1_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[6] drifted (centre tap)",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[7].to_bits() == 1.296_180_3e-1_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[7] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[8].to_bits() == 1.097_193e-1_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[8] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[9].to_bits() == 8.310_854e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[9] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[10].to_bits() == 5.633_176_4e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[10] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[11].to_bits() == 3.416_694_2e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[11] drifted",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[12].to_bits() == 1.854_402_2e-2_f32.to_bits(),
+        "PU_BLUR_KERNEL_1D[12] drifted",
+    );
+    // Symmetry: kernel must be palindromic for separable σ=3 Gaussian.
+    // Pinning the symmetry directly catches a half-kernel typo that
+    // happens to compile (e.g. swap of taps [4] and [8]) — even if
+    // each individual tap matches its expected value, the symmetry
+    // contract is reinforced compile-time.
+    assert!(
+        PU_BLUR_KERNEL_1D[0].to_bits() == PU_BLUR_KERNEL_1D[12].to_bits(),
+        "PU_BLUR_KERNEL_1D outermost pair must be palindromic",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[1].to_bits() == PU_BLUR_KERNEL_1D[11].to_bits(),
+        "PU_BLUR_KERNEL_1D [1]/[11] pair must be palindromic",
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[5].to_bits() == PU_BLUR_KERNEL_1D[7].to_bits(),
+        "PU_BLUR_KERNEL_1D [5]/[7] pair must be palindromic",
+    );
+};
+
 #[test]
 fn masking_constants_match_pycvvdp_v0_5_4() {
     // CH_GAIN: per-channel gain multiplier inside the masking

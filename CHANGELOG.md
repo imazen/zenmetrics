@@ -295,6 +295,15 @@ cvvdp's published log2-space coefficient table via per-entry
 would surface here at compile time rather than during a parity-
 test run. Static-assert count is now 67 across 11 test files.
 
+Tick 560 promoted 13 individual tap bit-pins + 3 symmetry-pair
+pins for the `PU_BLUR_KERNEL_1D` σ=3 Gaussian blur kernel in
+`masking_constants.rs`. Pinning the symmetry pairs separately
+(`kernel[0] == kernel[12]`, `kernel[1] == kernel[11]`,
+`kernel[5] == kernel[7]`) catches a half-kernel typo that would
+compile if each individual tap matched its expected literal but
+the wrong half was substituted into the array. Static-assert
+count is now 83 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
