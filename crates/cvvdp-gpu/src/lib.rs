@@ -168,6 +168,13 @@
 // than f32 can represent so the values document the source even though
 // LLVM rounds at compile time.
 #![allow(clippy::excessive_precision)]
+// Tick 516: pin the missing_docs-clean state established at tick
+// 514. Crate-level `warn` (not `deny`) so a new undocumented item
+// surfaces as a warning during local dev + cargo doc, but doesn't
+// hard-block. The kernel files override to `allow` via their own
+// inner attribute to silence `#[cube(launch)]` macro-emitted items
+// (their own non-kernel pub items remain documented).
+#![warn(missing_docs)]
 
 pub mod host_scalar;
 pub mod kernels;
