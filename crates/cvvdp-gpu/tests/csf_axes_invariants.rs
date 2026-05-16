@@ -60,6 +60,37 @@ const _: () = assert!(
     "LOG_RHO_AXIS[31] drifted from cvvdp v0.5.4 log10(64) ≈ 1.806_180",
 );
 
+// Tick 571: per-channel sensitivity LUTs (LOG_S_O0_C1/C2/C3) must
+// have exactly N_L_BKG × N_RHO = 32 × 32 = 1024 entries. The CSF
+// kernel indexes these via `idx = l_bkg_i * N_RHO + rho_i` so the
+// length is load-bearing — a size mismatch silently corrupts every
+// per-pixel CSF query. Plus a cross-check pin that all 3 channels
+// have matching lengths (refactor that drops a row from one
+// channel-LUT but not the others would surface here).
+const _: () = {
+    use cvvdp_gpu::kernels::csf::{LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3};
+    assert!(
+        LOG_S_O0_C1.len() == N_L_BKG * N_RHO,
+        "LOG_S_O0_C1 length must equal N_L_BKG × N_RHO (32 × 32 = 1024)",
+    );
+    assert!(
+        LOG_S_O0_C2.len() == N_L_BKG * N_RHO,
+        "LOG_S_O0_C2 length must equal N_L_BKG × N_RHO (32 × 32 = 1024)",
+    );
+    assert!(
+        LOG_S_O0_C3.len() == N_L_BKG * N_RHO,
+        "LOG_S_O0_C3 length must equal N_L_BKG × N_RHO (32 × 32 = 1024)",
+    );
+    // Cross-channel length consistency (catches a row drop from one
+    // channel's LUT even if the absolute length somehow stayed 1024
+    // on another via unrelated additions).
+    assert!(
+        LOG_S_O0_C1.len() == LOG_S_O0_C2.len()
+            && LOG_S_O0_C2.len() == LOG_S_O0_C3.len(),
+        "All 3 CSF sensitivity LUTs must have matching length",
+    );
+};
+
 #[test]
 fn log_l_bkg_axis_length_matches_n_l_bkg() {
     assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG, "axis length != N_L_BKG");

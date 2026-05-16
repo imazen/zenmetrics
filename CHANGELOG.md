@@ -421,6 +421,16 @@ negative taps. Pinning positivity directly captures the Gaussian
 construction contract. Static-assert count is now 135 across 11
 test files.
 
+Tick 571 added 4 length-pin invariants on the per-channel CSF
+sensitivity LUTs `LOG_S_O0_C1/C2/C3` in `csf_axes_invariants.rs`:
+  - Each LUT length must equal `N_L_BKG * N_RHO` (32 × 32 = 1024)
+  - Plus a cross-channel length-consistency pin (all 3 LUTs have
+    matching length)
+The CSF kernel indexes via `idx = l_bkg_i * N_RHO + rho_i` so a
+size mismatch silently corrupts every per-pixel CSF query — these
+pins catch the mismatch at compile time rather than as garbage
+JOD output. Static-assert count is now 139 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
