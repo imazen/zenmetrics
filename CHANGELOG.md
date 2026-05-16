@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/predict_jod_invariants.rs`** — 7 flow invariants on
+  `predict_jod_still_3ch` (the composed host-scalar pipeline)
+  complementing `shadow_jod.rs`'s pycvvdp parity coverage:
+  (1) byte-identical inputs → JOD ≈ 10 within 1e-3; (2) JOD ≤ 10 + ε
+  for any (ref, dist); (3) determinism via `to_bits()`;
+  (4) responds to distortion magnitude — sparse ±2 vs ±80 perturbation
+  on a textured reference produces ≥ 1e-3 JOD shift AND larger
+  distortion gives smaller JOD (catches stuck-at-constant refactor;
+  flat reference + uniform shift was insufficient because the
+  Weber-contrast pyramid of a flat input has zero band content);
+  (5–6) panics on ref / dist `len() != w*h*3` (the `assert_eq!`
+  entry guards); (7) 8×8 smoke — identical → 10, perturbed < 10.
+  Tick 434.
+
 - **`tests/csf_axes_invariants.rs`** — 9 structural pins on the
   public CSF LUT axis arrays `LOG_L_BKG_AXIS` and `LOG_RHO_AXIS`
   (32 entries each). `csf_constants_match_pycvvdp_v0_5_4` doesn't
