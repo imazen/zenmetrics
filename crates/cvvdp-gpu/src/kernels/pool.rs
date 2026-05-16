@@ -169,6 +169,23 @@ pub fn met2jod(q: f32) -> f32 {
 /// Panics if `q_per_ch` is empty (`n_levels == 0`). At least one
 /// pyramid level (the baseband) must be present — cvvdp's pool
 /// stage is undefined on a zero-band input.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::do_pooling_and_jod_still_3ch;
+///
+/// // All-zero contrasts → no distortion → JOD ≈ 10.
+/// let zero = vec![[0.0_f32; 3]; 5];
+/// let jod_max = do_pooling_and_jod_still_3ch(&zero);
+/// assert!((jod_max - 10.0).abs() < 1e-3);
+///
+/// // Some non-zero contrasts → JOD < 10.
+/// let some_distortion = vec![[0.3_f32, 0.2, 0.15]; 5];
+/// let jod = do_pooling_and_jod_still_3ch(&some_distortion);
+/// assert!(jod < jod_max);
+/// assert!(jod.is_finite());
+/// ```
 #[must_use]
 pub fn do_pooling_and_jod_still_3ch(q_per_ch: &[[f32; 3]]) -> f32 {
     let n_levels = q_per_ch.len();

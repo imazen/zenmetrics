@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`do_pooling_and_jod_still_3ch` doctest** — added `# Examples`:
+  all-zero contrasts → JOD ≈ 10 within 1e-3, non-zero contrasts →
+  JOD < that. Tick 452.
+
 - **`mult_mutual_pixel` doctest** — added `# Examples`: T == R →
   D = [0, 0, 0], argument symmetry `f(T, R) == f(R, T)`, and
   non-negative output. Tick 451.
