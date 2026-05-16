@@ -722,6 +722,26 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 609 — add `# Examples` doctests to four public crate-root
+constants that had body-level docstrings but no doctest section:
+
+- `N_CHANNELS` — pin value 3 (DKL still-image).
+- `MAX_LEVELS` — pin value 9 with cross-reference to
+  `tests/lib_constants.rs::max_levels_cap_at_nine` + the
+  buffer-resize implication of bumping it.
+- `PYRAMID_MIN_DIM` — pin value 4 and the derived 8-px minimum
+  image dim (Cvvdp::new's accept threshold).
+- `CVVDP_COLUMN_NAME` — pin `cvvdp_` prefix + parquet-safe charset
+  (ASCII alphanumerics + `_` only), matching the contracts in
+  `tests/column_name.rs`. Rendered docs now surface these
+  contracts to docs.rs readers without forcing them to grep test
+  files.
+
+Doctest count: 44 → 48. Per the crate convention every public
+constant should have a `# Examples` block with at least one
+machine-checked assertion. Docs-only change; `cargo test --doc`
+passes.
+
 Tick 608 — tighten `srgb_byte_to_dkl_scalar`'s grayscale-chroma
 doctest tolerances. The "(255,255,255) → near-zero chroma" claim
 was `rg_white.abs() < a_white * 0.05` and `vy_white.abs() < a_white * 0.05`

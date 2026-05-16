@@ -186,6 +186,14 @@ pub use pipeline::{Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, rec
 
 /// Number of color channels in DKL opponent space (achromatic +
 /// red-green + violet-yellow).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::N_CHANNELS;
+/// // cvvdp's still-image path is fixed at 3 DKL channels.
+/// assert_eq!(N_CHANNELS, 3);
+/// ```
 pub const N_CHANNELS: usize = 3;
 
 /// Maximum pyramid depth supported by the kernel allocations.
@@ -194,11 +202,31 @@ pub const N_CHANNELS: usize = 3;
 /// 2^MAX_LEVELS` (≈ 1024 with the defaults) get only `MAX_LEVELS`
 /// bands — coarser frequency content above the cap is folded into
 /// the baseband.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::MAX_LEVELS;
+/// // Pinned by tests/lib_constants.rs::max_levels_cap_at_nine.
+/// // A bump requires resizing logs_row / partials / weights buffers.
+/// assert_eq!(MAX_LEVELS, 9);
+/// ```
 pub const MAX_LEVELS: usize = 9;
 
 /// Smallest logical width/height at which the pyramid keeps
 /// building further coarse levels. Once `min(w, h) < 2 ×
 /// PYRAMID_MIN_DIM`, the current level becomes the baseband.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::PYRAMID_MIN_DIM;
+/// // 2 × PYRAMID_MIN_DIM = 8 is the minimum image dim accepted by
+/// // Cvvdp::new and estimate_gpu_memory_bytes (smaller returns Err /
+/// // None respectively). Pinned by tests/lib_constants.rs.
+/// assert_eq!(PYRAMID_MIN_DIM, 4);
+/// assert_eq!(PYRAMID_MIN_DIM * 2, 8);
+/// ```
 pub const PYRAMID_MIN_DIM: u32 = 4;
 
 /// Stable column-name identifier for this implementation snapshot.
@@ -216,6 +244,23 @@ pub const PYRAMID_MIN_DIM: u32 = 4;
 /// `CVVDP_IMPL_TAG` build-time env var overrides the entire
 /// string when set (e.g. CI bakes in a git short hash to
 /// distinguish iterations within the same crate version).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::CVVDP_COLUMN_NAME;
+/// // Must claim the `cvvdp_imazen_*` namespace (avoids collision
+/// // with `cvvdp_pycvvdp_v054` reference + `cvvdp_burn_*` reserved
+/// // namespace). Pinned by tests/column_name.rs.
+/// assert!(CVVDP_COLUMN_NAME.starts_with("cvvdp_"));
+/// // The full string is parquet-safe: only ASCII alphanumerics
+/// // and `_`. No whitespace, path separators, or shell metachars
+/// // — survives every downstream tool (parquet columns, TSV
+/// // headers, R2 filename derivations, Python attribute access).
+/// for c in CVVDP_COLUMN_NAME.chars() {
+///     assert!(c.is_ascii_alphanumeric() || c == '_');
+/// }
+/// ```
 pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
     Some(t) => t,
     None => concat!(
