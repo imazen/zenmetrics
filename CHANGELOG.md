@@ -46,11 +46,15 @@ Major themes:
   `predict_jod_still_3ch`. Each pins shape, determinism via
   `to_bits()`, branch thresholds, dynamic range, edge cases.
 
-- **Doctest coverage** (ticks 442–481): every public constant +
-  helper has a `# Examples` doctest with bit-equality / range
-  assertions. 44 doctests pass, 3 are `ignore` (Cvvdp methods need
-  a feature-gated `Backend` type alias). Measured 2026-05-16 via
-  `cargo test --doc -p cvvdp-gpu`.
+- **Doctest coverage** (ticks 442–481, extended 507/510/513): every
+  public constant + helper has a `# Examples` doctest with
+  bit-equality / range assertions, plus rendered example docstrings
+  on the user-facing `Cvvdp::*` scoring methods (`new` / `new_with_geometry`
+  / `score` / `score_with_reference` / `compute_dkl_jod` /
+  `compute_dkl_jod_with_warm_ref` / `compute_dkl_jod_host_pool*` /
+  `warm_reference`). 44 doctests pass, 6 are `ignore` (Cvvdp methods
+  need a feature-gated `Backend` type alias; docs.rs has no GPU).
+  Measured 2026-05-16 via `cargo test --doc -p cvvdp-gpu`.
 
 - **State machine pins** (ticks 486, 488, 489, 491, 493, 494, 497,
   498, 499): `Cvvdp` cache state machine (`set_reference` vs
