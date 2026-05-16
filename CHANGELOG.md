@@ -504,6 +504,19 @@ bucket subpath) and per-char hex validation stay runtime —
 `.contains` requires substring search not easily const-callable.
 Static-assert count is now 173 across 11 test files.
 
+Tick 579 closed the last two goldens-metadata runtime gaps via a
+const sliding-window substring-search helper (also const-callable
+in stable Rust):
+  - MANIFEST_URL contains `/cvvdp-goldens/` (bucket subpath)
+  - MANIFEST_URL contains `/v1/` (version path segment)
+The substring-search helper `bytes_contain(hay, needle)` is a
+`const fn` doing the obvious O(n·m) sliding-window comparison.
+That was the technique the prior tick claimed wasn't "easily const-
+callable" — turns out it IS, the sliding-window inner loop is
+just two more layers of the `while` + byte-comparison primitive
+ticks 577-578 already used. Static-assert count is now 175 across
+11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

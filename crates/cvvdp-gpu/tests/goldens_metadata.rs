@@ -82,6 +82,56 @@ const _: () = {
     );
 };
 
+// Tick 579: const substring-search helper unlocks the
+// `.contains(...)` invariants that tick 578 left runtime-only.
+// `str::contains` isn't const fn, but a sliding-window byte
+// comparison over `as_bytes()` is — and the inner comparison loop
+// is the same primitive we used in 577-578.
+const fn bytes_contain(hay: &[u8], needle: &[u8]) -> bool {
+    if needle.len() > hay.len() {
+        return false;
+    }
+    let max = hay.len() - needle.len();
+    let mut i = 0;
+    while i <= max {
+        let mut j = 0;
+        let mut matched = true;
+        while j < needle.len() {
+            if hay[i + j] != needle[j] {
+                matched = false;
+                break;
+            }
+            j += 1;
+        }
+        if matched {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+// Bucket subpath: catches a refactor that swapped cvvdp-gpu's
+// MANIFEST_URL to a sibling crate's bucket (e.g. /zensim-goldens/).
+// Same load-bearing semantic as the runtime test
+// `manifest_url_uses_cvvdp_goldens_bucket_subpath` (tick 520).
+const _: () = assert!(
+    bytes_contain(MANIFEST_URL.as_bytes(), b"/cvvdp-goldens/"),
+    "MANIFEST_URL must contain bucket subpath /cvvdp-goldens/",
+);
+
+// Version segment: catches a refactor that bumps GOLDEN_VERSION
+// to v2 but forgets to update the URL (or vice versa). The
+// runtime test computes this via `format!("/{GOLDEN_VERSION}/")`;
+// at compile time we can hardcode "/v1/" because GOLDEN_VERSION is
+// statically known to be "v1" (pinned in tick 578). When
+// GOLDEN_VERSION bumps, this pin and the GOLDEN_VERSION value pin
+// will both need updating in the same commit — by design.
+const _: () = assert!(
+    bytes_contain(MANIFEST_URL.as_bytes(), b"/v1/"),
+    "MANIFEST_URL must contain version path segment /v1/ (matches current GOLDEN_VERSION)",
+);
+
 #[test]
 fn manifest_url_embeds_golden_version() {
     // The R2 prefix encodes the version path segment. Bumping
