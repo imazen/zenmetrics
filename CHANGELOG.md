@@ -229,6 +229,18 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/masking_constants.rs`** — sixth in the constants-pin
+  series (393 pool / 394 csf / 395 pyramid / 396 display / 397
+  color matrix). New dedicated test file pins by exact f32 bit
+  pattern: `CH_GAIN = [1.0, 1.45, 1.0]`, `MASK_P = 2.264_355_2`,
+  `MASK_Q = [1.302_622_7, 2.888_590_8, 3.680_771_3]`, `MASK_C =
+  -0.795_497_12`, `D_MAX = 2.564_245_5`, all 9 entries of
+  `XCM_3X3`, and all 13 taps of `PU_BLUR_KERNEL_1D`. Plus
+  structural invariants on `PU_BLUR_KERNEL_1D`: DC preservation
+  (sum ≈ 1.0 within 1e-6) and symmetry around the centre tap.
+  Lives in a dedicated file (not the historically linter-edge-
+  case-sensitive `masking_scalar.rs`) so the consts pin stays
+  durable. Tick 401.
 - **`tests/color_scalar.rs::srgb_linear_to_dkl_*`** — fifth in
   the constants-pin series (393 pool / 394 csf / 395 pyramid /
   396 display). Pins all 9 entries of `SRGB_LINEAR_TO_DKL` by
