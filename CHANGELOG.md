@@ -177,6 +177,16 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/display_geometry.rs::display_{model,geometry}_standard_4k_*`**
+  — pins the f32 bit patterns of `DisplayModel::STANDARD_4K`
+  (`y_peak = 200`, `y_black = 0.2`, `y_refl = 0.397_887_36`) and
+  `DisplayGeometry::STANDARD_4K` (`3840×2160`, `distance_m =
+  0.7472`, `diagonal_inches = 30`). The v1 R2 manifest goldens
+  were captured under this display configuration — a silent edit
+  to any field (e.g. swapping `y_refl` for the unrounded f64
+  literal) would invalidate every shadow_jod parity test in a
+  way that's hard to trace back to the display constants.
+  Companion to ticks 393 (pool) / 394 (csf) / 395 (pyramid). Tick 396.
 - **`tests/pyramid_scalar.rs::pyramid_constants_match_pycvvdp_v0_5_4`**
   — sibling to ticks 393 (pool) / 394 (csf). Pins
   `KERNEL_A = 0.4` (the Burt-Adelson `a` parameter) by exact
