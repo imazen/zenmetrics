@@ -155,19 +155,32 @@ detailed entries below stay grep-able):**
   `# Examples` (plural) Rust API guidelines convention is now
   applied across every docstring in the crate.
 
-As of tick 539 the crate contains 11 `const _: () = assert!(...)`
-static asserts (3 in `csf_channel_invariants.rs` for CsfChannel
-discriminants, 4 in `lib_constants.rs` for crate-root constants
-+ PYRAMID_MIN_DIM × 2 boundary, 4 in `lib_reexports.rs` covering
-the lib-root constants + N_L_BKG). These fire at compile time and
-are the load-bearing enforcement for fundamental dimension
-parameters; the runtime `#[test]` fns are preserved beside them
-to keep the test-runner-visible names referenced by older
+As of tick 575 the crate contains **165** `const _: () = assert!(...)`
+static asserts spread across 11 test files. Ticks 548-575 grew
+the count from 11 to 165 by mining genuine gaps after each
+premature "saturation" call: every named cvvdp v0.5.4 numeric is
+now pinned (values via `to_bits()` bit-equality), every load-
+bearing sign is pinned (`is_sign_positive` / `is_sign_negative`),
+every load-bearing ordering is pinned (`u32 <` on `.to_bits()`
+for positive f32 operands), every load-bearing cross-equality is
+pinned, plus the SRGB_LINEAR_TO_DKL opponent-color sign signature
+and the BETA hierarchy. These fire at compile time and are the
+load-bearing enforcement; the runtime `#[test]` fns are preserved
+beside them to keep test-runner-visible names referenced by older
 CHANGELOG entries resolvable.
 
-Tick 540 added a separate paragraph noting the static-assert
-count and bumping this summary's range. As of tick 540 verified
-clean across:
+Earlier static-assert milestones:
+- Tick 539 had 11 static asserts (CsfChannel + lib_constants + lib_reexports).
+- Tick 540 verified clean: `cargo clippy --all-targets --all-features`,
+  `cargo doc --document-private-items`, `cargo test --doc` (44 + 13).
+- Ticks 548-572 promoted scalar+array bit-pins across pool, csf,
+  masking, pyramid, color, display, params modules.
+- Ticks 573, 575 added cross-bundle linkage and positivity pins on
+  `CvvdpParams::PLACEHOLDER`'s scaffolding sub-bundles.
+- Tick 576 (this entry) updates the milestone block to reflect
+  the current state.
+
+As of tick 576 verified clean across:
   - `cargo clippy -p cvvdp-gpu --all-targets --all-features` — 0 warnings
   - `cargo doc -p cvvdp-gpu --no-deps --document-private-items` — 0 warnings
   - `cargo test --doc -p cvvdp-gpu` — 44 passed + 13 ignored
