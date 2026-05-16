@@ -238,6 +238,19 @@ mention. Tick 500.
   — `Error` and `Result<T>` are how callers see method failures,
   both must be reachable from the crate root. Tick 501.
 
+- **`cvvdp_host_pool_distinguishes_v1_corpus_q_levels`** (in
+  `pipeline_score.rs`) — sibling to tick 508 for the host_pool
+  scoring path (`compute_dkl_jod_host_pool`, the cubecl-cpu /
+  Metal-compatible path). Same strict-separation contract:
+  scoring v1 corpus at q ∈ {1, 20, 90} on the host_pool path
+  produces strictly increasing JOD with ≥ 0.01 JOD adjacent-level
+  gap. The host_pool path uses sequential `lp_norm_mean` instead
+  of GPU atomic-f32 pool — a refactor that breaks distortion
+  discrimination on one path doesn't automatically break it on the
+  other, so pin both. Observed identical scores to GPU path
+  (q=1→7.65, q=20→9.71, q=90→9.99) — consistent with tick 208's
+  GPU/host_pool agreement pin. Tick 509.
+
 - **`cvvdp_score_distinguishes_v1_corpus_q_levels`** (in
   `pipeline_score.rs`) — stuck-at-constant pin for the GPU
   `Cvvdp::score` path. Asserts that scoring the v1 corpus at

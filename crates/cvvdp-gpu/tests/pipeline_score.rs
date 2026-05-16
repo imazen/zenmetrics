@@ -580,6 +580,55 @@ fn new_equivalent_to_new_with_geometry_standard_4k() {
 }
 
 #[test]
+fn cvvdp_host_pool_distinguishes_v1_corpus_q_levels() {
+    // Tick 509: host_pool sibling to tick 508's
+    // `cvvdp_score_distinguishes_v1_corpus_q_levels`.
+    //
+    // The host_pool path is the cubecl-cpu / Metal-compatible
+    // scoring path (`compute_dkl_jod_host_pool`). It reads D bands
+    // back to host then folds via sequential `lp_norm_mean` —
+    // structurally different accumulation from the GPU
+    // `pool_band_3ch_kernel` (atomic-f32). A refactor that breaks
+    // distortion discrimination on one path doesn't automatically
+    // break it on the other; pin both.
+    //
+    // Same strict separation contract as tick 508: q=90 > q=20 > q=1
+    // with ≥ 0.01 JOD adjacent-level gap.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let q_levels: &[u32] = &[1, 20, 90];
+    let mut scores = Vec::with_capacity(q_levels.len());
+    for &q in q_levels {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod = cvvdp
+            .compute_dkl_jod_host_pool(&ref_bytes, &dist_bytes, ppd)
+            .expect("compute_dkl_jod_host_pool");
+        eprintln!("host_pool q={q:>2}: jod = {jod:.4}");
+        scores.push(jod);
+    }
+
+    for i in 0..scores.len() - 1 {
+        let lower = scores[i];
+        let higher = scores[i + 1];
+        let gap = higher - lower;
+        assert!(
+            gap > 0.01,
+            "host_pool q={} ({}) not > q={} ({}) by ≥ 0.01 JOD; gap = {}",
+            q_levels[i + 1],
+            higher,
+            q_levels[i],
+            lower,
+            gap,
+        );
+    }
+}
+
+#[test]
 fn cvvdp_score_distinguishes_v1_corpus_q_levels() {
     // Tick 508: pin that the GPU `Cvvdp::score` path produces
     // distinct JOD values across different distortion levels on
