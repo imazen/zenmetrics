@@ -215,11 +215,14 @@ pub fn up_conv_horizontal_kernel(
     if a4 {
         acc += filters::BINOM5[4] * src[row_off + s4 as usize];
     }
-    // pyrtools' upConv applies the same `binom5 · sqrt(2)` filter once
-    // per axis and relies on the sqrt(2) factor + zero insertion to
-    // preserve DC; multiplying by 2 per axis re-introduces the DC that
-    // the zero-stuffing dropped.
-    dst[idx] = acc * 2.0_f32;
+    // pyrtools' upConv applies the `binom5 · sqrt(2)` filter once per
+    // axis. The sqrt(2) factor + zero insertion natively preserve DC:
+    // zero-stuffing halves the per-axis mean, the sqrt(2)-summed filter
+    // multiplies it back by sqrt(2), and the second axis pass repeats
+    // for a total per-2D-step DC factor of 1/2. Combined with the
+    // downsample's per-2D-step DC factor of 2, the round trip is
+    // exact — no further scaling needed in the kernel.
+    dst[idx] = acc;
 }
 
 #[cube(launch_unchecked)]
@@ -266,7 +269,7 @@ pub fn up_conv_vertical_kernel(
     if a4 {
         acc += filters::BINOM5[4] * src[(s4 as usize) * w_us + ox];
     }
-    dst[idx] = acc * 2.0_f32;
+    dst[idx] = acc;
 }
 
 /// Pointwise `lap = gauss_curr − expanded_next`. Used to build the

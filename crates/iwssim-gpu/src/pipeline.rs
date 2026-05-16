@@ -323,6 +323,14 @@ impl<R: Runtime> Iwssim<R> {
         self.build_laplacian_pyramid(true);
         self.build_laplacian_pyramid(false);
 
+        // Optional per-scale pyramid stats (set `IWSSIM_DEBUG=1`). Kept
+        // because the upConv DC scaling is the most failure-prone piece
+        // of the port and these prints are the fastest way to catch a
+        // regression.
+        if std::env::var("IWSSIM_DEBUG").is_ok() {
+            self.debug_pyramid_stats();
+        }
+
         // 2. Per-scale SSIM stats + combine.
         for s in 0..self.scales.len() {
             self.run_ssim_stats(s);
@@ -331,6 +339,21 @@ impl<R: Runtime> Iwssim<R> {
         // 3. Per-scale IW path (j = 0..3).
         for s in 0..(self.scales.len() - 1) {
             self.run_iw_scale(s);
+            if std::env::var("IWSSIM_DEBUG").is_ok() {
+                self.debug_iw_stats(s);
+            }
+        }
+
+        // Debug-only: bypass the IW weighting (treat all weights as 1).
+        // Reproduces the reference's `iw_flag=False` mode for sanity-
+        // checking the CS path independent of the IW path.
+        if std::env::var("IWSSIM_NO_IW").is_ok() {
+            for s in 0..(self.scales.len() - 1) {
+                let sc = &self.scales[s];
+                let n_iw = (sc.iw_h as usize) * (sc.iw_w as usize);
+                let ones = vec![1.0_f32; n_iw];
+                self.scales[s].iw = self.client.create_from_slice(f32::as_bytes(&ones));
+            }
         }
 
         // 4. Reductions per scale.
@@ -717,6 +740,62 @@ impl<R: Runtime> Iwssim<R> {
         }
     }
 
+    /// Probe pyramid coefficients at every scale — called when
+    /// `IWSSIM_DEBUG=1`. Prints G[s] and LP[s] mean/RMS so the upConv
+    /// DC scaling can be sanity-checked against the pyrtools reference
+    /// (`LP mean` should be ~0 for `s < top`; `LP[top] = G[top]`).
+    fn debug_pyramid_stats(&self) {
+        for s in 0..self.scales.len() {
+            let sc = &self.scales[s];
+            let n_lp = (sc.h as usize) * (sc.w as usize);
+            let lp_bytes = self.client.read_one(sc.lp_ref.clone()).expect("lp read");
+            let lp = f32::from_bytes(&lp_bytes);
+            let lp_active = &lp[..n_lp];
+            let lp_mean: f64 =
+                lp_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
+            let lp_rms = (lp_active
+                .iter()
+                .map(|&v| (v as f64) * (v as f64))
+                .sum::<f64>()
+                / n_lp as f64)
+                .sqrt();
+            let g_bytes = self.client.read_one(sc.g_ref.clone()).expect("g read");
+            let g = f32::from_bytes(&g_bytes);
+            let g_active = &g[..n_lp];
+            let g_mean: f64 =
+                g_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
+            let g_rms = (g_active
+                .iter()
+                .map(|&v| (v as f64) * (v as f64))
+                .sum::<f64>()
+                / n_lp as f64)
+                .sqrt();
+            eprintln!(
+                "PYR | s={} (h={},w={}) | G mean={:.4} rms={:.4} | LP mean={:.4} rms={:.4}",
+                s, sc.h, sc.w, g_mean, g_rms, lp_mean, lp_rms,
+            );
+        }
+    }
+
+    /// Probe iw values for the most recent IW scale — called at the
+    /// end of `run_iw_scale` when IWSSIM_DEBUG is set.
+    fn debug_iw_stats(&self, s: usize) {
+        let sc = &self.scales[s];
+        let n_iw = (sc.iw_h as usize) * (sc.iw_w as usize);
+        let iw_bytes = self.client.read_one(sc.iw.clone()).expect("iw read");
+        let iw_arr = f32::from_bytes(&iw_bytes);
+        let active = &iw_arr[..n_iw];
+        let any_inf = active.iter().any(|v| v.is_infinite());
+        let any_nan = active.iter().any(|v| v.is_nan());
+        let iw_max = active.iter().fold(f32::NEG_INFINITY, |a, &v| a.max(v));
+        let iw_min = active.iter().fold(f32::INFINITY, |a, &v| a.min(v));
+        let iw_mean: f64 = active.iter().map(|&v| v as f64).sum::<f64>() / (n_iw as f64);
+        eprintln!(
+            "scale {} | iw min={:.3e} max={:.3e} mean={:.3e} any_inf={} any_nan={}",
+            s, iw_min, iw_max, iw_mean, any_inf, any_nan
+        );
+    }
+
     /// Per-scale IW path for scale `s ∈ 0..NUM_SCALES − 1`.
     fn run_iw_scale(&mut self, s: usize) {
         let sc = &self.scales[s];
@@ -811,7 +890,39 @@ impl<R: Runtime> Iwssim<R> {
                 cu_f64[i * n_dim + j] = (cu_f32[src_idx] as f64) / nexp;
             }
         }
+        if std::env::var("IWSSIM_DEBUG").is_ok() {
+            let trace: f64 = (0..n_dim).map(|i| cu_f64[i * n_dim + i]).sum();
+            let max_abs = cu_f64.iter().fold(0.0_f64, |a, &v| a.max(v.abs()));
+            let any_nan = cu_f64.iter().any(|v| v.is_nan());
+            // Also probe the LP and parent buffers — RMS + first
+            // few values.
+            let lp_bytes = self.client.read_one(sc.lp_ref.clone()).expect("lp read");
+            let lp = f32::from_bytes(&lp_bytes);
+            let lp_active = &lp[..(h as usize) * (w as usize)];
+            let lp_rms = (lp_active.iter().map(|&v| (v as f64) * (v as f64)).sum::<f64>()
+                / lp_active.len() as f64)
+                .sqrt();
+            let lp_nan = lp_active.iter().any(|v| v.is_nan());
+            eprintln!(
+                "scale {} | n_dim {} | nexp {} | C_u trace={:.6e} max|·|={:.6e} any_nan={} | LP rms={:.4} nan={} first5={:.3?} ",
+                s, n_dim, nexp, trace, max_abs, any_nan, lp_rms, lp_nan, &lp_active[..5]
+            );
+        }
         let eig_result = eig::decompose_and_invert(&cu_f64, n_dim);
+        if std::env::var("IWSSIM_DEBUG").is_ok() {
+            let lam: Vec<f32> = eig_result.lambda[..n_dim].to_vec();
+            eprintln!("scale {} | eigvals: {:?}", s, lam);
+            let cu_inv_min = eig_result.c_u_inv[..n_dim * n_dim]
+                .iter()
+                .fold(f32::INFINITY, |a, &v| a.min(v));
+            let cu_inv_max = eig_result.c_u_inv[..n_dim * n_dim]
+                .iter()
+                .fold(f32::NEG_INFINITY, |a, &v| a.max(v));
+            eprintln!(
+                "scale {} | C_u_inv range [{:.3e}, {:.3e}]",
+                s, cu_inv_min, cu_inv_max
+            );
+        }
 
         // 5. Upload eigenvalues and C_u_inv back to device.
         let lambda_slice = &eig_result.lambda[..n_dim];
@@ -819,6 +930,28 @@ impl<R: Runtime> Iwssim<R> {
         self.scales[s].lambda_dev = self.client.create_from_slice(f32::as_bytes(lambda_slice));
         self.scales[s].cu_inv_dev = self.client.create_from_slice(f32::as_bytes(cu_inv_slice));
         let sc = &self.scales[s];
+
+        if std::env::var("IWSSIM_DEBUG").is_ok() {
+            let g_bytes = self.client.read_one(sc.g_buf.clone()).expect("g read");
+            let g_arr = f32::from_bytes(&g_bytes);
+            let vv_bytes = self.client.read_one(sc.vv_buf.clone()).expect("vv read");
+            let vv_arr = f32::from_bytes(&vv_bytes);
+            let np = (h as usize) * (w as usize);
+            let g_min = g_arr[..np].iter().cloned().fold(f32::INFINITY, f32::min);
+            let g_max = g_arr[..np]
+                .iter()
+                .cloned()
+                .fold(f32::NEG_INFINITY, f32::max);
+            let vv_min = vv_arr[..np].iter().cloned().fold(f32::INFINITY, f32::min);
+            let vv_max = vv_arr[..np]
+                .iter()
+                .cloned()
+                .fold(f32::NEG_INFINITY, f32::max);
+            eprintln!(
+                "scale {} | g range [{:.3e}, {:.3e}] vv range [{:.3e}, {:.3e}]",
+                s, g_min, g_max, vv_min, vv_max
+            );
+        }
 
         // 6. infow kernel.
         unsafe {
