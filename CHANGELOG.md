@@ -722,6 +722,18 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 604 — compile-time bit-pin promotion of the 9
+`SRGB_LINEAR_TO_DKL` element magnitudes in
+`tests/color_scalar.rs`. The existing runtime test
+`srgb_linear_to_dkl_matrix_matches_pycvvdp_v0_5_4` already pinned
+the same 9 f32 values via `.to_bits()`; promoting to compile-time
+`const _: () = assert!(...)` blocks means a refactor that drifts
+any element trips at `cargo check`, before any test binary
+builds. Same promotion pattern as tick 561 (LUT endpoints) and
+tick 567 (sign-signature). Companion to the row-sign-signature
+pin already at compile-time. Static-assert count is now 232 across
+13 test files (+9 from tick 603's 223).
+
 Tick 603 — two `recommend_parallel` contract pins surfacing
 implicit-via-language-semantic guarantees that a refactor could
 silently break:

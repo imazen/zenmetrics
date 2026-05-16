@@ -74,6 +74,38 @@ const _: () = {
     assert!(M[2][2].is_sign_positive(), "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) must be positive");
 };
 
+// Tick 604: compile-time bit-pin promotion of the 9
+// `SRGB_LINEAR_TO_DKL` element magnitudes. Companion to tick 567's
+// sign-signature pin above and tick 561's LUT-endpoint pattern.
+// The existing `#[test] fn srgb_linear_to_dkl_matrix_matches_pycvvdp_v0_5_4`
+// pinned the same 9 values at runtime; promoting to compile-time
+// means a refactor that drifts any element trips at `cargo check`,
+// before any test binary runs. `f32::to_bits` is const fn since
+// Rust 1.83 (workspace MSRV 1.93). Same pattern as ticks 522-524,
+// 548-552, 561.
+//
+// The DKL opponent-color construction is:
+//   LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ sRGB_to_XYZ
+// All numerics derived f64-precision then rounded to f32 (the
+// pycvvdp `torch.tensor(dtype=float32)` rounding mode). Any drift
+// in these 9 values shifts every per-pixel DKL output and propagates
+// through the full pipeline → JOD.
+const _: () = {
+    use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+    // Row 0 — achromatic (A) channel.
+    assert!(M[0][0].to_bits() == 0.233_201_21_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][0] (A.R) drifted from pycvvdp v0.5.4");
+    assert!(M[0][1].to_bits() == 0.728_830_8_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][1] (A.G) drifted from pycvvdp v0.5.4");
+    assert!(M[0][2].to_bits() == 0.088_995_87_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][2] (A.B) drifted from pycvvdp v0.5.4");
+    // Row 1 — red-green (Rg) chroma.
+    assert!(M[1][0].to_bits() == 0.127_620_77_f32.to_bits(), "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) drifted from pycvvdp v0.5.4");
+    assert!(M[1][1].to_bits() == (-0.087_068_09_f32).to_bits(), "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) drifted from pycvvdp v0.5.4");
+    assert!(M[1][2].to_bits() == (-0.036_777_39_f32).to_bits(), "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) drifted from pycvvdp v0.5.4");
+    // Row 2 — violet-yellow (Vy) chroma.
+    assert!(M[2][0].to_bits() == (-0.214_822_5_f32).to_bits(), "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) drifted from pycvvdp v0.5.4");
+    assert!(M[2][1].to_bits() == (-0.626_253_7_f32).to_bits(), "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) drifted from pycvvdp v0.5.4");
+    assert!(M[2][2].to_bits() == 0.851_403_3_f32.to_bits(), "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) drifted from pycvvdp v0.5.4");
+};
+
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).
 const GOLDENS: &[(u8, u8, u8, f32, f32, f32)] = &[
     (0, 0, 0, 0.628_396_27, 0.002_257_2, 0.006_174_458),
