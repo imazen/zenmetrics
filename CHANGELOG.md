@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/mult_mutual_pixel_invariants.rs`** — 7 function-level
+  invariants on `mult_mutual_pixel` (per-pixel cross-channel
+  masking + diff). Complements the single `pycvvdp_4x4` parity
+  test in `masking_scalar.rs` with shape pins: (1) `T == R` →
+  `D = [0, 0, 0]` bit-exact via `to_bits()`; (2) symmetry
+  `f(T, R) == f(R, T)` (since `min(|T|, |R|)` and `|T - R|` are
+  both symmetric); (3) `D[cc] ≥ 0` for all signs of input;
+  (4) `D[cc] < d_max = 10^D_MAX ≈ 366.69` even for ±1e6 inputs
+  (clamp_diff_soft asymptote); (5) determinism; (6) any non-trivial
+  `T ≠ R` produces positive `D` on at least one channel;
+  (7) finite output across 5 dynamic ranges 1e-10 to ±1e6.
+  Tick 425.
+
 - **`tests/met2jod_invariants.rs`** — 8 invariant pins on `met2jod`
   beyond the 2 single-point tests already in `pool_scalar.rs`
   (`met2jod_continuous_at_kink` + `met2jod_clamps_at_origin`):
