@@ -41,6 +41,34 @@ const _: () = {
     );
 };
 
+// Tick 589: pin `scripts/cvvdp_goldens/requirements.txt` against
+// PYCVVDP_REFERENCE_VERSION at compile time. The requirements
+// file pins `cvvdp==<X>.<Y>.<Z>` (note: PyPI package is `cvvdp`,
+// importable as `pycvvdp`); the const stores `v<X>.<Y>.<Z>`.
+// Strip the leading 'v' from the const and confirm the
+// requirements file contains the resulting `X.Y.Z` substring.
+//
+// `slice::split_first().unwrap()` is const-callable since Rust
+// 1.83, and `include_str!` evaluates at compile time. So when
+// the reference is bumped, this pin forces requirements.txt to
+// be updated in the same commit as PYCVVDP_REFERENCE_VERSION.
+//
+// Closes the 6th lockstep site documented in PYCVVDP_REFERENCE_VERSION's
+// docstring (the other 5 are: the const itself, the LUT filename,
+// the csf_lut_v0_5_4 module name, PORT_STATUS.md, and the
+// parity-test manifest check above).
+const _REQUIREMENTS: &str = include_str!("../../../scripts/cvvdp_goldens/requirements.txt");
+const _: () = {
+    use common::const_str;
+    let v_bytes = PYCVVDP_REFERENCE_VERSION.as_bytes();
+    let stripped: &[u8] = v_bytes.split_first().unwrap().1;
+    assert!(
+        const_str::contains(_REQUIREMENTS.as_bytes(), stripped),
+        "scripts/cvvdp_goldens/requirements.txt must contain `cvvdp==<version>` \
+         matching PYCVVDP_REFERENCE_VERSION (strip leading 'v')",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);

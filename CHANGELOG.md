@@ -620,6 +620,20 @@ non-empty, starts with `v`, contains `.` — catches a typo like
 `v054` that breaks the `vX.Y.Z` convention. Static-assert count
 is now 207 across 12 test files (+3 from tick 587's 204).
 
+Tick 589 closed the requirements.txt lockstep gap from tick 588.
+Pins `scripts/cvvdp_goldens/requirements.txt` at compile time
+against `PYCVVDP_REFERENCE_VERSION` (strip leading `v` to match
+the PyPI `cvvdp==X.Y.Z` format — note: the PyPI package is named
+`cvvdp` even though the importable module is `pycvvdp`). Uses
+`include_str!()` (compile-time file read) + `slice::split_first()`
+(const-callable since 1.83) + `common::const_str::contains` to
+verify the version substring is present.
+
+A bump to PYCVVDP_REFERENCE_VERSION now FAILS TO COMPILE unless
+requirements.txt is updated in the same commit. Closes the 6th
+lockstep site documented in the PYCVVDP_REFERENCE_VERSION
+docstring. Static-assert count is now 208 across 12 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
