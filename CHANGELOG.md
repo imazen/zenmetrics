@@ -229,6 +229,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::score_is_deterministic_*`** — two
+  contract tests pinning the critical "no state leakage between
+  calls on the same `Cvvdp` instance" property that zen-metrics-
+  cli's `CvvdpBatchScorer` relies on for the vast.ai backfill
+  pipeline. (1) `score(ref, dist)` called twice → bit-identical
+  output via `.to_bits()`; (2) `score(ref, dist_a)` →
+  `score(ref, dist_b)` → `score(ref, dist_a)` again → first and
+  third results bit-identical (no state leaked from the b call);
+  (3) intervening warm_reference + compute_dkl_jod_with_warm_ref
+  doesn't poison cold-path scratch. A regression where a scratch
+  buffer reset is dropped, an accumulator grows across calls, or
+  warm-ref state contaminates cold dispatch surfaces here before
+  silently breaking the cached-instance pattern that the OOM-fix
+  tick 384 depends on. Tick 411.
+
 - **`tests/masking_safe_pow.rs`** — five direct unit tests on
   `kernels::masking::safe_pow` (cvvdp's `(x + eps)^p - eps^p`
   used in the masking chain — distinct from

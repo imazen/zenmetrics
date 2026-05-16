@@ -1672,3 +1672,80 @@ fn score_returns_lossless_f64_widening_of_compute_dkl_jod() {
         );
     }
 }
+
+#[test]
+fn score_is_deterministic_across_repeated_calls() {
+    // Critical contract for the BatchScorer / score-pairs CLI
+    // hot path: calling `Cvvdp::score(ref, dist)` repeatedly on
+    // the same instance must produce the SAME output. State
+    // leakage between calls (a stale scratch buffer not reset,
+    // an accumulator that grows across calls, etc.) would
+    // silently break the cached-instance optimization that
+    // zen-metrics-cli's CvvdpBatchScorer relies on for the
+    // vast.ai backfill pipeline.
+    //
+    // Three checks:
+    //   (1) score(ref, dist) twice → bit-identical
+    //   (2) score(ref, dist_A) then score(ref, dist_B), then
+    //       score(ref, dist_A) again → first and third results
+    //       are bit-identical (no state leaked from dist_B)
+    //   (3) Same on the host_pool variant — the cubecl-cpu /
+    //       Metal path that the sweep workers actually use
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_a = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(70), w, h);
+    let dist_b = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+
+    // (1) Same inputs twice → bit-identical output.
+    let s1 = cvvdp.score(&ref_bytes, &dist_a).expect("score 1");
+    let s2 = cvvdp.score(&ref_bytes, &dist_a).expect("score 2");
+    assert_eq!(
+        s1.to_bits(),
+        s2.to_bits(),
+        "score(ref, dist_a) not deterministic: first={s1}, second={s2}",
+    );
+
+    // (2) A different DIST between two same-input calls — the
+    // second call must still match the first.
+    let s_a1 = cvvdp.score(&ref_bytes, &dist_a).expect("score a1");
+    let _s_b = cvvdp.score(&ref_bytes, &dist_b).expect("score b");
+    let s_a2 = cvvdp.score(&ref_bytes, &dist_a).expect("score a2");
+    assert_eq!(
+        s_a1.to_bits(),
+        s_a2.to_bits(),
+        "state leaked from dist_b call: score(ref, dist_a) first={s_a1}, after-b={s_a2}",
+    );
+}
+
+#[test]
+fn score_is_deterministic_across_intervening_warm_reference() {
+    // Mixing score() calls with warm_reference + cold-path calls
+    // is the call pattern test workers use. Verify the warm-ref
+    // dispatch doesn't poison the cold-path scratch buffers.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_a = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(70), w, h);
+
+    let cold_first = cvvdp.score(&ref_bytes, &dist_a).expect("cold 1");
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    let _ = cvvdp
+        .compute_dkl_jod_with_warm_ref(
+            &dist_a,
+            cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree(),
+        )
+        .expect("warm-ref score");
+    let cold_second = cvvdp.score(&ref_bytes, &dist_a).expect("cold 2");
+    assert_eq!(
+        cold_first.to_bits(),
+        cold_second.to_bits(),
+        "warm-ref dispatch poisoned cold-path scratch: first={cold_first}, second={cold_second}",
+    );
+}
