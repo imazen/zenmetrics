@@ -96,12 +96,14 @@ fn lib_constants_reexport_match_their_originals() {
     // from. (Currently all four are defined directly in lib.rs, not
     // re-exported from a submodule, so this is a value pin rather
     // than an alias pin.)
-    assert_eq!(N_CHANNELS, 3, "N_CHANNELS contract — DKL opponent count");
-    assert_eq!(MAX_LEVELS, 9, "MAX_LEVELS contract — pyramid cap");
-    assert_eq!(
-        PYRAMID_MIN_DIM, 4,
-        "PYRAMID_MIN_DIM contract — min logical level dim"
-    );
+    //
+    // Tick 522: integer constants promoted to `const _: () =
+    // assert!(...)` static asserts so they fire at compile time
+    // rather than runtime. `CVVDP_COLUMN_NAME` stays runtime
+    // because `.starts_with` isn't `const fn` as of stable Rust.
+    const _: () = assert!(N_CHANNELS == 3, "N_CHANNELS contract — DKL opponent count");
+    const _: () = assert!(MAX_LEVELS == 9, "MAX_LEVELS contract — pyramid cap");
+    const _: () = assert!(PYRAMID_MIN_DIM == 4, "PYRAMID_MIN_DIM contract");
     assert!(
         CVVDP_COLUMN_NAME.starts_with("cvvdp_"),
         "CVVDP_COLUMN_NAME must start with cvvdp_; got: {CVVDP_COLUMN_NAME:?}",
