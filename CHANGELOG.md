@@ -122,10 +122,20 @@ detailed entries below stay grep-able):**
   and `compute_dkl_jod_host_pool_with_warm_ref`. Catches
   near-correct-but-non-discriminative collapse that the manifest
   tolerance pin (0.005 JOD) wouldn't surface.
-- **Documentation polish** (526, 527): added this long-tail
-  summary block; replaced workspace README's stale
+- **Documentation polish** (526, 527, 528, 529): added this
+  long-tail summary block; replaced workspace README's stale
   `TBD | TBD | TBD` cvvdp-gpu row with
-  `(pending — reference is pycvvdp v0.5.4)`.
+  `(pending — reference is pycvvdp v0.5.4)`; this note recording
+  the saturation point — every clippy / rustdoc / missing_docs
+  surface is clean across all feature combinations and target
+  selections, the lib_reexports surface is fully pinned at 11
+  tests, the stuck-at-constant contract is pinned across all 4
+  scoring paths, the CHANGELOG hash provenance is complete from
+  tick 383 onward, and there are no remaining TODOs / FIXMEs in
+  the source. Subsequent significant improvement would require
+  a fresh measurement (e.g. a pycvvdp-baseline SRCC run for the
+  README) or a directed feature (e.g. wiring `CvvdpParams::csf`
+  through to a JSON loader).
 
 ### Changed
 
