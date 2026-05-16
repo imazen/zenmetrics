@@ -454,6 +454,19 @@ Pinning at compile time keeps the scaffolded values stable until
 they're intentionally wired through. Static-assert count is now
 153 across 11 test files.
 
+Tick 575 added 12 more invariants on `PLACEHOLDER`:
+  - **Cross-bundle linkage (3)**: `PLACEHOLDER.display ==
+    STANDARD_4K` — y_peak, y_black, y_refl each pinned via
+    `to_bits()`. Guards against a refactor that copies the
+    STANDARD_4K values into PLACEHOLDER literally (drifting if
+    STANDARD_4K is later updated but PLACEHOLDER's copy isn't).
+  - **Scaffolding positivity (9)**: masking.{p,q,k},
+    pooling.beta_{spatial,band,channel}, jod.{jod_a,jod_b,jod_c}
+    all `.is_sign_positive()`. Negative values would invert the
+    expected algebra (pow singularities, pool reversal) the
+    moment the fields are wired through.
+Static-assert count is now 165 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

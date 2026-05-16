@@ -48,6 +48,48 @@ const _: () = {
     assert!(p.jod.jod_c.to_bits() == 0.30_f32.to_bits(), "PLACEHOLDER.jod.jod_c drifted from 0.30");
 };
 
+// Tick 575: cross-bundle pin — PLACEHOLDER.display must equal
+// DisplayModel::STANDARD_4K. The PLACEHOLDER definition in
+// params.rs sets `display: DisplayModel::STANDARD_4K`; this pin
+// guards against a refactor that copies the STANDARD_4K values
+// into PLACEHOLDER literally (drifting if STANDARD_4K is later
+// updated but PLACEHOLDER's copy isn't). The per-field bit-pins
+// in `params_placeholder.rs` (tick 552's sister file) pin the
+// STANDARD_4K values directly; this pin transitively asserts the
+// PLACEHOLDER → STANDARD_4K linkage stays an identity reference.
+const _: () = {
+    use cvvdp_gpu::params::DisplayModel;
+    let p = CvvdpParams::PLACEHOLDER.display;
+    let s = DisplayModel::STANDARD_4K;
+    assert!(p.y_peak.to_bits() == s.y_peak.to_bits(),
+        "PLACEHOLDER.display.y_peak must equal STANDARD_4K.y_peak (PLACEHOLDER inherits STANDARD_4K)");
+    assert!(p.y_black.to_bits() == s.y_black.to_bits(),
+        "PLACEHOLDER.display.y_black must equal STANDARD_4K.y_black");
+    assert!(p.y_refl.to_bits() == s.y_refl.to_bits(),
+        "PLACEHOLDER.display.y_refl must equal STANDARD_4K.y_refl");
+};
+
+// Tick 575: scaffolding-field positivity invariants. Even though
+// the masking/pooling/jod sub-bundle values are scaffolding-only,
+// the moment they're wired through, negative values would invert
+// the expected algebra (pow(d, p) singular at d=0 for negative p,
+// negative pool exponent reversal, etc.). Pin positivity so future
+// wire-through inherits a sensible default. csf fields are 0.0 so
+// they're NOT pinned positive (is_sign_positive returns true for
+// 0.0 anyway in IEEE 754, but they're not load-bearing yet).
+const _: () = {
+    let p = CvvdpParams::PLACEHOLDER;
+    assert!(p.masking.p.is_sign_positive(), "PLACEHOLDER.masking.p must be positive (transducer exponent)");
+    assert!(p.masking.q.is_sign_positive(), "PLACEHOLDER.masking.q must be positive (transducer exponent)");
+    assert!(p.masking.k.is_sign_positive(), "PLACEHOLDER.masking.k must be positive (gain)");
+    assert!(p.pooling.beta_spatial.is_sign_positive(), "PLACEHOLDER.pooling.beta_spatial must be positive");
+    assert!(p.pooling.beta_band.is_sign_positive(), "PLACEHOLDER.pooling.beta_band must be positive");
+    assert!(p.pooling.beta_channel.is_sign_positive(), "PLACEHOLDER.pooling.beta_channel must be positive");
+    assert!(p.jod.jod_a.is_sign_positive(), "PLACEHOLDER.jod.jod_a must be positive");
+    assert!(p.jod.jod_b.is_sign_positive(), "PLACEHOLDER.jod.jod_b must be positive");
+    assert!(p.jod.jod_c.is_sign_positive(), "PLACEHOLDER.jod.jod_c must be positive");
+};
+
 #[test]
 fn placeholder_csf_fields_are_zero() {
     // CsfParams placeholder values are all 0.0 — the production
