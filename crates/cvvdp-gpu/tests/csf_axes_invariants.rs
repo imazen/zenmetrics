@@ -17,6 +17,24 @@
 
 use cvvdp_gpu::kernels::csf::{LOG_L_BKG_AXIS, LOG_RHO_AXIS, N_L_BKG, N_RHO};
 
+// Tick 548: compile-time enforcement of the CSF LUT axis dimensions.
+// These mirror the runtime test fns below — promoting the most
+// load-bearing invariants (length match + canonical value) to
+// `const _: () = assert!(...)` so a refactor that changes either
+// constant fails to compile rather than just failing at test time.
+// Same pattern as ticks 522-524 (lib_constants.rs PYRAMID_MIN_DIM
+// and CsfChannel discriminants).
+const _: () = assert!(
+    LOG_L_BKG_AXIS.len() == N_L_BKG,
+    "LOG_L_BKG_AXIS.len() must equal N_L_BKG (CSF luminance-axis LUT size)",
+);
+const _: () = assert!(N_L_BKG == 32, "N_L_BKG drifted from canonical pycvvdp value 32");
+const _: () = assert!(
+    LOG_RHO_AXIS.len() == N_RHO,
+    "LOG_RHO_AXIS.len() must equal N_RHO (CSF frequency-axis LUT size)",
+);
+const _: () = assert!(N_RHO == 32, "N_RHO drifted from canonical pycvvdp value 32");
+
 #[test]
 fn log_l_bkg_axis_length_matches_n_l_bkg() {
     assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG, "axis length != N_L_BKG");

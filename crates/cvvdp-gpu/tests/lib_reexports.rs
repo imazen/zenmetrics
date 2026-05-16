@@ -153,7 +153,7 @@ fn kernels_submodules_are_public() {
     //
     // Compile-time use sites — one item per submodule:
     use cvvdp_gpu::kernels::color::SRGB8_TO_LINEAR_LUT;
-    use cvvdp_gpu::kernels::csf::N_L_BKG;
+    use cvvdp_gpu::kernels::csf::{N_L_BKG, N_RHO};
     use cvvdp_gpu::kernels::masking::MASK_C;
     use cvvdp_gpu::kernels::pool::JOD_A;
     use cvvdp_gpu::kernels::pyramid::KERNEL_A;
@@ -161,8 +161,11 @@ fn kernels_submodules_are_public() {
     // compile-time `assert!(N_L_BKG > 0)` (clippy: "this assertion
     // has a constant value") with `const _: () = assert!(...)`,
     // which is a true static assertion checked at compile time.
+    // Tick 548: added the N_RHO > 0 mirror so both CSF axis sizes
+    // share the same compile-time positivity guarantee.
     assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
     const _: () = assert!(N_L_BKG > 0, "N_L_BKG must be positive (CSF LUT axis size)");
+    const _: () = assert!(N_RHO > 0, "N_RHO must be positive (CSF LUT axis size)");
     assert!(MASK_C.is_finite());
     assert!(JOD_A.is_finite());
     assert!(KERNEL_A.is_finite());

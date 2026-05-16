@@ -172,6 +172,16 @@ clean across:
   - `cargo doc -p cvvdp-gpu --no-deps --document-private-items` — 0 warnings
   - `cargo test --doc -p cvvdp-gpu` — 44 passed + 13 ignored
 
+Tick 548 promoted 5 more runtime asserts to static asserts (4 in
+`csf_axes_invariants.rs` — `LOG_L_BKG_AXIS.len() == N_L_BKG`,
+`N_L_BKG == 32`, `LOG_RHO_AXIS.len() == N_RHO`, `N_RHO == 32` —
+plus `N_RHO > 0` in `lib_reexports.rs` to mirror the existing
+`N_L_BKG > 0`). Static-assert count is now 16 across 3 test files.
+The runtime `#[test]` fns in `csf_axes_invariants.rs` are preserved
+beside the new static asserts (same compatibility rationale as
+ticks 522-524). Same clippy / doc / doctest verification as tick 540
+still passes (no new warnings introduced).
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
