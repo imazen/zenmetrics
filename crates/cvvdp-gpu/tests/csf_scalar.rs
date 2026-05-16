@@ -24,8 +24,9 @@
 #![allow(clippy::excessive_precision)]
 
 use cvvdp_gpu::kernels::csf::{
-    CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, flatten_band_weights, precompute_logs_row,
-    precomputed_band_weights, sensitivity_scalar,
+    CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, SENSITIVITY_CORRECTION_DB, flatten_band_weights,
+    precompute_logs_row, precomputed_band_weights, sensitivity_corrected_scalar,
+    sensitivity_scalar,
 };
 use cvvdp_gpu::params::DisplayGeometry;
 
@@ -122,6 +123,91 @@ fn flatten_band_weights_layout() {
     let weights = vec![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]];
     let flat = flatten_band_weights(&weights);
     assert_eq!(flat, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+}
+
+// `sensitivity_corrected_scalar` applies cvvdp v0.5.4's
+// `sensitivity_correction` dB-scale tweak on top of the
+// uncorrected sensitivity. The production path
+// (`precomputed_band_weights`, `csf_apply_*_kernel` host-side
+// row-precompute) reads through `sensitivity_corrected_scalar`
+// — but the only direct csf_scalar.rs coverage was
+// `sensitivity_matches_pycvvdp_v0_5_4` against UNCORRECTED
+// values. Pin the correction factor's algebra + invariants so a
+// refactor that uses the wrong sign convention (corrections in
+// audio dB are typically negative; cvvdp's is -0.28 dB) or
+// applies it to log-space when it should be linear (or vice
+// versa) trips here directly.
+
+#[test]
+fn sensitivity_corrected_applies_constant_multiplicative_factor() {
+    // The correction is `10^(DB / 20)` in linear space (voltage-
+    // ratio convention). It must be independent of (rho, log_L_bkg,
+    // channel) — a constant scalar multiplier. So the ratio
+    // corrected/uncorrected must be bit-identical across every
+    // input. Sweeps 3 channels × 3 rho × 3 log_l_bkg = 27 points.
+    let expected_correction = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+    let mut max_rel_drift = 0.0_f32;
+    for cc in [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy] {
+        for &rho in &[0.5_f32, 4.0, 32.0] {
+            for &log_l in &[-2.0_f32, 0.0, 2.0] {
+                let s = sensitivity_scalar(rho, log_l, cc);
+                let sc = sensitivity_corrected_scalar(rho, log_l, cc);
+                let ratio = sc / s.max(1e-9);
+                let rel = ((ratio - expected_correction) / expected_correction).abs();
+                if rel > max_rel_drift {
+                    max_rel_drift = rel;
+                }
+                assert!(
+                    rel < 1e-5,
+                    "corrected/uncorrected drift at cc={cc:?} rho={rho} log_l={log_l}: \
+                     s={s}, sc={sc}, ratio={ratio}, expected={expected_correction} (rel={rel:.4e})",
+                );
+            }
+        }
+    }
+    assert!(
+        max_rel_drift < 1e-5,
+        "max ratio drift across 27 points = {max_rel_drift:.4e}",
+    );
+}
+
+#[test]
+fn sensitivity_correction_is_a_small_attenuation() {
+    // cvvdp's `sensitivity_correction` value is a small negative dB
+    // (≈ -0.28 dB per the LUT source), so the linear factor is
+    // slightly less than 1 (~0.968). Pin both:
+    //   - Constant magnitude in [0.9, 1.0) — catches a refactor
+    //     that swaps the sign (would give factor > 1) or uses an
+    //     order-of-magnitude wrong DB (e.g. -28 dB = 0.04, which
+    //     would suppress every band by 25×).
+    //   - Specific value: 10^(-0.279_742_33 / 20) ≈ 0.9684.
+    let factor = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+    assert!(
+        (0.9..1.0).contains(&factor),
+        "correction factor {factor} should be in [0.9, 1.0) for a small attenuation; \
+         SENSITIVITY_CORRECTION_DB = {SENSITIVITY_CORRECTION_DB}",
+    );
+    let expected_factor = 10.0_f32.powf(-0.279_742_33 / 20.0);
+    let rel = ((factor - expected_factor) / expected_factor).abs();
+    assert!(
+        rel < 1e-5,
+        "correction factor {factor} ≠ expected {expected_factor} (rel = {rel:.4e}); \
+         did SENSITIVITY_CORRECTION_DB change?",
+    );
+}
+
+#[test]
+fn sensitivity_corrected_is_finite_at_extremes() {
+    // Same out-of-table clamping contract as `sensitivity_scalar`:
+    // extreme inputs must clamp at the LUT endpoints rather than
+    // extrapolate to NaN/Inf. Pin separately because a refactor
+    // could break either the uncorrected path or the multiplicative
+    // correction step independently. The corrected output is
+    // still strictly positive (correction factor > 0).
+    let s_low = sensitivity_corrected_scalar(0.001, (0.0001_f32).log10(), CsfChannel::A);
+    let s_high = sensitivity_corrected_scalar(1000.0, (1.0e6_f32).log10(), CsfChannel::A);
+    assert!(s_low.is_finite() && s_low > 0.0, "low extreme: {s_low}");
+    assert!(s_high.is_finite() && s_high > 0.0, "high extreme: {s_high}");
 }
 
 #[test]

@@ -524,3 +524,116 @@ fn lp_norm_sum_scales_with_count_under_uniform_input() {
         (16f32).powf(1.0 / p) * a,
     );
 }
+
+// `lp_norm_mean` is the sibling of `lp_norm_sum` (cvvdp's
+// `lp_norm` with `normalize=True`). It's exercised through the
+// GPU-gated pool_band_kernel parity test and via the
+// `pool_band_finalize_matches_lp_norm_mean_on_synth_signal` test
+// (one synthetic input), but had no direct unit tests pinning its
+// individual algebra invariants. Same gap-shape as the
+// `lp_norm_sum_*` closure (tick 351) — pin closed-form cases so
+// the eps-shift algebra is locked at this entry point too.
+
+#[test]
+fn lp_norm_mean_empty_input_returns_zero() {
+    // Documented contract: `if values.is_empty() { return 0.0 }`
+    // — early-return before the division-by-zero in `acc / n`.
+    // Pin so a refactor that drops the guard surfaces here
+    // immediately (without it, n=0 yields NaN, which then
+    // poisons the JOD pipeline).
+    for p in [1.0_f32, 2.0, 4.0, 8.0] {
+        let got = lp_norm_mean(&[], p);
+        assert_eq!(
+            got.to_bits(),
+            0.0_f32.to_bits(),
+            "lp_norm_mean([], p={p}) = {got}, expected exactly 0",
+        );
+    }
+}
+
+#[test]
+fn lp_norm_mean_uniform_input_returns_a() {
+    // For any uniform input [a; n] at any p > 0:
+    //   sum_i((|a|+eps)^p - eps^p) = n * ((|a|+eps)^p - eps^p)
+    //   ÷ n = (|a|+eps)^p - eps^p
+    //   safe_pow(..., 1/p) = (|a|+eps+eps - eps^(1/p))... actually:
+    //   ((|a|+eps)^p - eps^p + eps)^(1/p) - eps^(1/p)
+    // For |a| ≫ eps^(1/p), this reduces to ≈ |a|. Pin two
+    // (a, p) shapes spanning small/mid magnitudes. Catches a
+    // refactor that drops the divide-by-n step (which would
+    // turn lp_norm_mean into lp_norm_sum and overestimate by
+    // ~n^(1/p)).
+    for &(a, p) in &[(0.5_f32, 2.0), (2.5, 4.0)] {
+        let eps_tail = (1e-5_f32).powf(1.0 / p);
+        for n in [1_usize, 4, 16, 64] {
+            let v = vec![a; n];
+            let got = lp_norm_mean(&v, p);
+            // Account for the outer eps^(1/p) tail subtraction;
+            // the inner term ((|a|+eps)^p - eps^p) is dominated
+            // by |a|^p for |a| ≫ eps so we use |a| as the lead.
+            let rel_err = ((got - (a - eps_tail)).abs()) / a;
+            assert!(
+                rel_err < 1e-3,
+                "lp_norm_mean([{a}; {n}], {p}) = {got}, expected ≈ {} (uniform-invariance + eps tail = {eps_tail})",
+                a - eps_tail,
+            );
+        }
+    }
+}
+
+#[test]
+fn lp_norm_mean_handles_negative_signs_via_abs() {
+    // safe_pow_lp takes |x|, so sign of inputs must not change
+    // the output. Same property as lp_norm_sum's
+    // `_handles_negative_signs_via_abs`, pinned separately
+    // because lp_norm_mean has its own copy of the call site —
+    // a refactor that drops `.abs()` from one but not the other
+    // surfaces here vs the sibling test.
+    let pos = lp_norm_mean(&[3.0, 4.0, 5.0], 2.0);
+    let mixed = lp_norm_mean(&[-3.0, 4.0, -5.0], 2.0);
+    let neg = lp_norm_mean(&[-3.0, -4.0, -5.0], 2.0);
+    assert_eq!(
+        pos.to_bits(),
+        mixed.to_bits(),
+        "sign of inputs changed lp_norm_mean: pos={pos}, mixed={mixed}",
+    );
+    assert_eq!(
+        pos.to_bits(),
+        neg.to_bits(),
+        "sign of inputs changed lp_norm_mean: pos={pos}, neg={neg}",
+    );
+}
+
+#[test]
+fn lp_norm_mean_relates_to_lp_norm_sum_by_n_root() {
+    // The defining identity:
+    //   lp_norm_sum(v, p) ≈ n^(1/p) * lp_norm_mean(v, p)
+    // (exact in the limit eps → 0). Both functions share the
+    // safe_pow_lp eps-shift; the only structural difference is
+    // the `/ n` division in lp_norm_mean before the outer
+    // safe_pow. Pin so a refactor that changes the eps shift
+    // in only one of them surfaces immediately.
+    //
+    // Tolerance: the outer `- eps^(1/p)` tail is the same
+    // constant in both functions, but the asymmetric shift on
+    // a smaller `mean` magnitude creates a small relative
+    // mismatch. At p=2 the tail is ≈ 3.16e-3; at p=4 it's
+    // ≈ 5.62e-2 — proportionally bigger. Use 1.5e-2 to absorb
+    // p=4 at signal magnitudes of a few; this still catches a
+    // structural divergence (where `/ n` is dropped or applied
+    // twice, which would be order-1 relative error).
+    let signal: Vec<f32> = (0..8_usize).map(|i| (i as f32 + 1.0) * 0.7).collect();
+    let n = signal.len() as f32;
+    for p in [2.0_f32, 4.0] {
+        let s = lp_norm_sum(&signal, p);
+        let m = lp_norm_mean(&signal, p);
+        let scale = n.powf(1.0 / p);
+        let predicted = scale * m;
+        let rel = ((s - predicted) / s).abs();
+        assert!(
+            rel < 1.5e-2,
+            "lp_norm_sum vs n^(1/p) * lp_norm_mean diverged at p={p}: \
+             sum={s}, mean={m}, n^(1/p)={scale}, predicted={predicted} (rel={rel:.4e})",
+        );
+    }
+}

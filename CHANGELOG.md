@@ -177,6 +177,40 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pool_scalar.rs::lp_norm_mean_*`** — four direct unit
+  tests on `lp_norm_mean` (cvvdp's `lp_norm` with `normalize=True`).
+  The function was exercised only through the GPU-gated
+  `pool_band_kernel_matches_host_lp_norm_mean` test and the
+  single-input `pool_band_finalize_matches_lp_norm_mean_on_synth_signal`
+  test, leaving no direct CPU-only coverage of its algebra
+  invariants. New tests pin: (1) empty-input early-return → 0.0
+  exactly at p ∈ {1,2,4,8} via `.to_bits()` (without the guard,
+  `acc/n` produces NaN at n=0); (2) uniform-input identity:
+  `lp_norm_mean([a; n], p) ≈ a - eps^(1/p)` at (a, p) ∈
+  {(0.5, 2), (2.5, 4)} × n ∈ {1,4,16,64} (catches a refactor
+  that drops the `/ n` step, which would overestimate by
+  `n^(1/p)`); (3) sign-handling via `.abs()` — pos/mixed/neg
+  inputs produce bit-identical output (mirror of lp_norm_sum's
+  test, pinned separately for the lp_norm_mean call site); (4)
+  the defining identity `lp_norm_sum ≈ n^(1/p) * lp_norm_mean`
+  at p ∈ {2, 4} on an 8-element signal (a structural-divergence
+  catcher — if either function changes its eps shift, this
+  trips). Tick 389.
+- **`tests/csf_scalar.rs::sensitivity_corrected_*` + `sensitivity_correction_*`**
+  — three direct unit tests on `sensitivity_corrected_scalar`,
+  which the production CSF apply path (`precomputed_band_weights`
+  + the GPU kernel host-side row-precompute) reads through but
+  previously had no scalar-side direct coverage. New tests pin:
+  (1) the correction is a constant multiplicative factor
+  (corrected/uncorrected ratio bit-identical to 1e-5 across 3
+  channels × 3 rho × 3 log_l_bkg = 27 points — catches a
+  refactor that breaks the input-independence invariant); (2)
+  the factor magnitude (0.9, 1.0) and specific value ≈ 0.9684
+  (catches sign flips that would amplify instead of attenuate,
+  and order-of-magnitude wrong DB constants); (3) extreme-input
+  finiteness (same clamping contract as `sensitivity_scalar`,
+  but pinned separately so the uncorrected path and the
+  multiplicative step can each regress independently). Tick 388.
 - **`tests/color_scalar.rs::srgb_lut_*`** — four direct unit tests
   on the public `SRGB8_TO_LINEAR_LUT` 256-entry sRGB EOTF table.
   Previously the LUT was verified only transitively through the
