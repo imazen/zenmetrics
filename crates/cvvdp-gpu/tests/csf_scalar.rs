@@ -30,6 +30,21 @@ use cvvdp_gpu::kernels::csf::{
 };
 use cvvdp_gpu::params::DisplayGeometry;
 
+// Tick 557: compile-time bit-pins for the 2 scalar CSF constants
+// outside the LUT-axis arrays. Same pattern as ticks 522-524,
+// 548-556.
+const _: () = {
+    use cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO;
+    assert!(
+        SENSITIVITY_CORRECTION_DB.to_bits() == (-0.279_742_33_f32).to_bits(),
+        "SENSITIVITY_CORRECTION_DB drifted from cvvdp v0.5.4 = -0.279_742_33 dB",
+    );
+    assert!(
+        CSF_BASEBAND_RHO.to_bits() == 0.1_f32.to_bits(),
+        "CSF_BASEBAND_RHO drifted from cvvdp v0.5.4 baseband override = 0.1 cy/deg",
+    );
+};
+
 // Goldens: each tuple's L_bkg is documented in linear cd/m²; the
 // query is log10(L_bkg) (matching cvvdp's `csf.sensitivity` contract,
 // which expects logL_bkg in log10 space, not raw linear). Pre-tick-22

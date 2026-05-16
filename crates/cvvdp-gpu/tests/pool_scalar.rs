@@ -11,6 +11,39 @@ use cvvdp_gpu::kernels::pool::{
     do_pooling_and_jod_still_3ch, lp_norm_mean, lp_norm_sum, met2jod, pool_band_finalize,
 };
 
+// Tick 557: compile-time bit-pins for the 6 scalar pool constants.
+// Each independently load-bearing for JOD output — a silent drift
+// on any one cascades into a per-q diff visible across every parity
+// gate. `f32::to_bits` is const fn since Rust 1.83 (workspace MSRV
+// 1.93). Same pattern as ticks 522-524, 548-556.
+const _: () = {
+    use cvvdp_gpu::kernels::pool::{BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, JOD_A, JOD_EXP};
+    assert!(
+        BETA_SPATIAL.to_bits() == 2.0_f32.to_bits(),
+        "BETA_SPATIAL drifted from cvvdp v0.5.4 beta=2.0 (RMS-equivalent spatial pool)",
+    );
+    assert!(
+        BETA_BAND.to_bits() == 4.0_f32.to_bits(),
+        "BETA_BAND drifted from cvvdp v0.5.4 beta_sch=4.0",
+    );
+    assert!(
+        BETA_CH.to_bits() == 4.0_f32.to_bits(),
+        "BETA_CH drifted from cvvdp v0.5.4 beta_tch=4.0",
+    );
+    assert!(
+        IMAGE_INT.to_bits() == 0.577_918_3_f32.to_bits(),
+        "IMAGE_INT drifted from cvvdp v0.5.4 image_int=0.577_918_3",
+    );
+    assert!(
+        JOD_A.to_bits() == 0.043_956_94_f32.to_bits(),
+        "JOD_A drifted from cvvdp v0.5.4 jod_a=0.043_956_94 (met2jod slope)",
+    );
+    assert!(
+        JOD_EXP.to_bits() == 0.930_204_27_f32.to_bits(),
+        "JOD_EXP drifted from cvvdp v0.5.4 jod_exp=0.930_204_27 (met2jod power-law exponent)",
+    );
+};
+
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[path = "common/mod.rs"]
 mod common;

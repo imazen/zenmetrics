@@ -263,6 +263,16 @@ only for now — promoting them would add bulk for diminishing
 return; the runtime tests still cover them at f32-bit precision.
 Static-assert count is now 38 across 9 test files.
 
+Tick 557 promoted 8 more scalar bit-pins:
+  - `pool_scalar.rs`: `BETA_SPATIAL == 2.0`, `BETA_BAND == 4.0`,
+    `BETA_CH == 4.0`, `IMAGE_INT == 0.577_918_3`,
+    `JOD_A == 0.043_956_94`, `JOD_EXP == 0.930_204_27` (the
+    met2jod power-law constants — `met2jod(d) = 10 - JOD_A·d^JOD_EXP`)
+  - `csf_scalar.rs`: `SENSITIVITY_CORRECTION_DB == -0.279_742_33`,
+    `CSF_BASEBAND_RHO == 0.1`
+Each is independently load-bearing for JOD output across every
+parity gate. Static-assert count is now 46 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
