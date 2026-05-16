@@ -74,6 +74,48 @@ const _: () = assert!(
     "MASK_Q[Vy] drifted from cvvdp v0.5.4 = 3.680_771_3",
 );
 
+// Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
+// masking matrix (3×3 = 9 entries). Each entry is independently
+// derived from a published log2-space coefficient via 2^x; a
+// re-derivation that rounds differently would surface here at
+// compile time rather than during a parity-test run.
+const _: () = assert!(
+    XCM_3X3[0][0].to_bits() == 0.876_968_f32.to_bits(),
+    "XCM_3X3[0][0] drifted from cvvdp v0.5.4 = 0.876_968",
+);
+const _: () = assert!(
+    XCM_3X3[0][1].to_bits() == 0.016_103_15_f32.to_bits(),
+    "XCM_3X3[0][1] drifted from cvvdp v0.5.4 = 0.016_103_15",
+);
+const _: () = assert!(
+    XCM_3X3[0][2].to_bits() == 0.050_159_38_f32.to_bits(),
+    "XCM_3X3[0][2] drifted from cvvdp v0.5.4 = 0.050_159_38",
+);
+const _: () = assert!(
+    XCM_3X3[1][0].to_bits() == 5.918_792_f32.to_bits(),
+    "XCM_3X3[1][0] drifted from cvvdp v0.5.4 = 5.918_792",
+);
+const _: () = assert!(
+    XCM_3X3[1][1].to_bits() == 1.269_323_f32.to_bits(),
+    "XCM_3X3[1][1] drifted from cvvdp v0.5.4 = 1.269_323",
+);
+const _: () = assert!(
+    XCM_3X3[1][2].to_bits() == 0.152_080_92_f32.to_bits(),
+    "XCM_3X3[1][2] drifted from cvvdp v0.5.4 = 0.152_080_92",
+);
+const _: () = assert!(
+    XCM_3X3[2][0].to_bits() == 14.041_055_f32.to_bits(),
+    "XCM_3X3[2][0] drifted from cvvdp v0.5.4 = 14.041_055",
+);
+const _: () = assert!(
+    XCM_3X3[2][1].to_bits() == 0.498_209_6_f32.to_bits(),
+    "XCM_3X3[2][1] drifted from cvvdp v0.5.4 = 0.498_209_6",
+);
+const _: () = assert!(
+    XCM_3X3[2][2].to_bits() == 0.697_756_55_f32.to_bits(),
+    "XCM_3X3[2][2] drifted from cvvdp v0.5.4 = 0.697_756_55",
+);
+
 #[test]
 fn masking_constants_match_pycvvdp_v0_5_4() {
     // CH_GAIN: per-channel gain multiplier inside the masking

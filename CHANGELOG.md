@@ -287,6 +287,14 @@ A typo that swapped any pair of array entries (e.g. CH_GAIN[A] ↔
 CH_GAIN[Rg], muting chrominance) now surfaces at compile time.
 Static-assert count is now 58 across 11 test files.
 
+Tick 559 promoted 9 array-element bit-pins for the XCM_3X3
+cross-channel masking matrix in `masking_constants.rs`. Each
+entry pinned independently — the 3×3 matrix is derived from
+cvvdp's published log2-space coefficient table via per-entry
+2^x exponentiation, so a re-derivation that rounds differently
+would surface here at compile time rather than during a parity-
+test run. Static-assert count is now 67 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
