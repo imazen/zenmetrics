@@ -72,7 +72,17 @@ fi
 echo "  ok"
 
 # Offer search.
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12 num_gpus=1"
+# cuda_vers>=12.5: cubecl-cuda via cudarc 0.19.4 needs the
+# cuCoredumpDeregisterCompleteCallback symbol introduced in
+# CUDA 12.5. Older filter (cuda_max_good>=12 / >=13) was on the
+# GPU's max-supported version not the host driver's installed
+# version — admitted GTX 1070/1080/2060 boxes with CUDA-12.0
+# host drivers that panicked at score-pairs --metric cvvdp:
+#   DlSym { source: "libcuda.so: undefined symbol:
+#                    cuCoredumpDeregisterCompleteCallback" }
+# cuda_vers is the right filter (machine's max-supported cuda
+# based on installed driver version) per vastai docs.
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_vers>=12.5 num_gpus=1"
 echo "[cvvdp-backfill-imazen] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "

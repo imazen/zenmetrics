@@ -129,9 +129,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# R2 wrapper: all s5cmd calls in this script go through here so
+# they get the correct R2 endpoint + profile. Bare 's5cmd cp ...'
+# falls through to the AWS [default] profile, which on a fresh
+# vast.ai instance is empty (no creds), causing immediate
+# 'InvalidAccessKeyId' 403s on every chunk. Fleet v5 hit this
+# (86 fails before destroy) — tick 365 fix.
+: "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing in environment}"
+R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+R2() {
+    s5cmd --endpoint-url "$R2_ENDPOINT" --profile r2 "$@"
+}
+
 # ── Step 1: pull the input parquet ────────────────────────────────────
 echo "[chunk-worker $CHUNK_ID] step 1/6: download input parquet" >&2
-s5cmd cp "$INPUT_PARQUET_R2" "$WORK_DIR/$INPUT_PARQUET" >&2
+R2 cp "$INPUT_PARQUET_R2" "$WORK_DIR/$INPUT_PARQUET" >&2
 
 # ── Step 2: sync this chunk's source basenames ────────────────────────
 echo "[chunk-worker $CHUNK_ID] step 2/6: sync source basenames" >&2
@@ -142,7 +154,7 @@ echo "$CHUNK_JSON" | jq -r --arg src "$SOURCE_DIR_R2" '
     .image_basenames[] |
     "cp \($src)/\(.) \(.)"
 ' > "$WORK_DIR/sources/_download.run"
-( cd "$WORK_DIR/sources" && s5cmd run "$WORK_DIR/sources/_download.run" >&2 ) || {
+( cd "$WORK_DIR/sources" && s5cmd --endpoint-url "$R2_ENDPOINT" --profile r2 run "$WORK_DIR/sources/_download.run" >&2 ) || {
     echo "ERROR: failed to sync sources" >&2
     exit 2
 }
@@ -192,7 +204,7 @@ PYEOF
 
 # ── Step 4: per-group sweep to produce dist images + pairs.tsv ────────
 echo "[chunk-worker $CHUNK_ID] step 4/6: per-group sweep" >&2
-GROUPS=$(awk -F'\t' 'NR>1 {print $1"|"$2"|"$3"|"$4}' "$WORK_DIR/_groups.tsv" | sort -u)
+GROUP_LINES=$(awk -F'\t' 'NR>1 {print $1"|"$2"|"$3"|"$4}' "$WORK_DIR/_groups.tsv" | sort -u)
 > "$WORK_DIR/pairs.tsv"
 G_IDX=0
 while IFS='|' read -r gid codec q kj; do
@@ -226,6 +238,13 @@ while IFS='|' read -r gid codec q kj; do
         SWEEP_ARGS+=(--knob-grid "$KNOB_GRID")
     fi
 
+    # Run sweep with explicit exit-code capture. Set -e + the sed
+    # pipe was masking sweep failures — the prefixed stderr lines
+    # went to the log file fine, but a non-zero exit from the
+    # docker/zen-metrics run side of the pipe killed the script
+    # before the sed could finish writing. Wrap in 'set +e' around
+    # the call so we keep both the sweep stderr AND the exit code.
+    set +e
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         # --entrypoint override: the production image's ENTRYPOINT is
         # /usr/local/bin/zen-metrics-worker (the chunk-claim worker
@@ -238,9 +257,21 @@ while IFS='|' read -r gid codec q kj; do
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$GROUP_DIR" \
             "$ZEN_METRICS_IMAGE" \
-            "${SWEEP_ARGS[@]}" 2>&1 | sed "s/^/  [sweep g${gid}] /" >&2
+            "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
+        sweep_rc=$?
     else
-        zen-metrics "${SWEEP_ARGS[@]}" 2>&1 | sed "s/^/  [sweep g${gid}] /" >&2
+        zen-metrics "${SWEEP_ARGS[@]}" > "$GROUP_DIR/sweep.stderr.log" 2>&1
+        sweep_rc=$?
+    fi
+    set -e
+    # Echo sweep output prefixed for log clarity.
+    sed "s/^/  [sweep g${gid}] /" < "$GROUP_DIR/sweep.stderr.log" >&2
+    if (( sweep_rc != 0 )); then
+        echo "[chunk-worker $CHUNK_ID] step 4/6: sweep g${gid} FAILED rc=$sweep_rc codec=$codec q=$q" >&2
+        echo "  knob_tuple_json: $kj" >&2
+        echo "  ls $GROUP_SRC:" >&2
+        ls -la "$GROUP_SRC" 2>&1 | sed 's/^/    /' >&2
+        exit 1
     fi
 
     # Concatenate each group's pairs.tsv into the chunk-level one.
@@ -250,7 +281,7 @@ while IFS='|' read -r gid codec q kj; do
     else
         tail -n +2 "$GROUP_DIR/pairs.tsv" >> "$WORK_DIR/pairs.tsv"
     fi
-done <<< "$GROUPS"
+done <<< "$GROUP_LINES"
 
 # ── Step 5: score-pairs both implementations ──────────────────────────
 SIDECAR_IMAZEN_NAME="${SIDECAR_IMAZEN_NAME:-cvvdp_imazen_v0_0_1}"
@@ -301,8 +332,8 @@ fi
 # ── Step 6: upload sidecars to R2 ─────────────────────────────────────
 if [[ "$SKIP_UPLOAD" != "1" ]]; then
     echo "[chunk-worker $CHUNK_ID] step 6/6: upload sidecars" >&2
-    [[ "$SKIP_IMAZEN" != "1" ]] && s5cmd cp "$SIDECAR_IMAZEN" "$OUT_IMAZEN_R2" >&2
-    [[ "$SKIP_PYCVVDP" != "1" ]] && s5cmd cp "$SIDECAR_PYCVVDP" "$OUT_PYCVVDP_R2" >&2
+    [[ "$SKIP_IMAZEN" != "1" ]] && R2 cp "$SIDECAR_IMAZEN" "$OUT_IMAZEN_R2" >&2
+    [[ "$SKIP_PYCVVDP" != "1" ]] && R2 cp "$SIDECAR_PYCVVDP" "$OUT_PYCVVDP_R2" >&2
 else
     echo "[chunk-worker $CHUNK_ID] step 6/6: SKIPPED upload" >&2
     [[ "$SKIP_IMAZEN" != "1" ]] && echo "  imazen sidecar at: $SIDECAR_IMAZEN" >&2
