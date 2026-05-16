@@ -2835,3 +2835,143 @@ fn score_with_reference_monotonically_decreases_with_noise_amplitude() {
         "a=2 noise should keep cached-ref JOD at or below 10, got {jod_a2}",
     );
 }
+
+#[test]
+fn warm_ref_flat_vs_flat_yields_max_jod() {
+    // Tick 547: fifth-leg sibling of the spatial-contrast contract
+    // (host scalar 542, GPU score 545, GPU cached-ref 546, cpu
+    // host_pool 546). Pins the contract on the GPU warm-ref dispatch:
+    // `warm_reference(ref)` then `compute_dkl_jod_with_warm_ref(dist, ppd)`.
+    //
+    // Unlike `score_with_reference` (which clones ref bytes and runs
+    // the full cold-ref pipeline), `compute_dkl_jod_with_warm_ref`
+    // reuses the pre-computed warm-ref baseband log-luminance and
+    // only re-runs the dist-side stages — a different code path
+    // through the same atomic pool. Pin guards both this path and
+    // the warm-ref priming kernel against an absolute-difference
+    // regression.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
+    let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
+    cvvdp.warm_reference(&ref_black).expect("warm_reference black");
+    let jod_bw = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_white, ppd)
+        .expect("warm-ref black-vs-white");
+    eprintln!("warm-ref flat-vs-flat (black vs white): jod = {jod_bw:.4}");
+    assert!(
+        (jod_bw - 10.0).abs() < 1e-2,
+        "warm-ref flat-vs-flat should give JOD ≈ 10, got {jod_bw}",
+    );
+
+    let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
+    let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
+    cvvdp.warm_reference(&ref_gray).expect("warm_reference gray");
+    let jod_gg = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_gray, ppd)
+        .expect("warm-ref gray-vs-gray");
+    assert!(
+        (jod_gg - 10.0).abs() < 1e-2,
+        "warm-ref flat 128 vs flat 64 should give JOD ≈ 10, got {jod_gg}",
+    );
+}
+
+#[test]
+fn warm_ref_textured_vs_flat_detects_detail_loss() {
+    // Tick 547: fifth-leg sibling of the blur-detection pin. GPU
+    // warm-ref dispatch must detect catastrophic blur the same as
+    // every other dispatch surface — specifically guarding that the
+    // pre-computed warm-ref baseband log-luminance doesn't cause the
+    // dist-side pipeline to silently miss the missing-band energy.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_textured: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
+    let dist_flat: Vec<u8> = vec![128u8; n];
+    cvvdp
+        .warm_reference(&ref_textured)
+        .expect("warm_reference textured");
+    let jod = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_flat, ppd)
+        .expect("warm-ref textured-vs-flat");
+    eprintln!("warm-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
+    assert!(jod.is_finite(), "warm-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod < 9.0,
+        "warm-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
+    );
+    assert!(
+        jod > -10.0,
+        "warm-ref blur JOD = {jod} is extreme; sanity-check failed",
+    );
+}
+
+#[test]
+fn warm_ref_monotonically_decreases_with_noise_amplitude() {
+    // Tick 547: fifth-leg sibling of the noise-amplitude monotonicity
+    // pin. GPU warm-ref dispatch must show strict monotonicity in JOD
+    // across dense alternating-sign noise amplitudes {2, 8, 32}.
+    //
+    // Also verifies that consecutive `compute_dkl_jod_with_warm_ref`
+    // calls on the same warmed ref produce distinct outputs (i.e. the
+    // warm-ref state doesn't drift / accumulate / cross-poison across
+    // dispatches).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_: Vec<u8> = (0..n).map(|i| ((i * 13 + 7) % 256) as u8).collect();
+
+    fn add_alt_noise(src: &[u8], amplitude: u8) -> Vec<u8> {
+        src.iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let delta = sign * amplitude as i16;
+                (b as i16 + delta).clamp(0, 255) as u8
+            })
+            .collect()
+    }
+
+    cvvdp.warm_reference(&ref_).expect("warm_reference");
+    let jod_a2 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&add_alt_noise(&ref_, 2), ppd)
+        .expect("warm-ref a=2");
+    let jod_a8 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&add_alt_noise(&ref_, 8), ppd)
+        .expect("warm-ref a=8");
+    let jod_a32 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&add_alt_noise(&ref_, 32), ppd)
+        .expect("warm-ref a=32");
+    eprintln!(
+        "warm-ref noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}"
+    );
+
+    assert!(
+        jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
+        "non-finite warm-ref JOD: a2={jod_a2} a8={jod_a8} a32={jod_a32}",
+    );
+    assert!(
+        jod_a2 > jod_a8,
+        "warm-ref JOD(a=2)={jod_a2} should exceed JOD(a=8)={jod_a8}",
+    );
+    assert!(
+        jod_a8 > jod_a32,
+        "warm-ref JOD(a=8)={jod_a8} should exceed JOD(a=32)={jod_a32}",
+    );
+    assert!(
+        jod_a2 < 10.0 + 1e-2,
+        "a=2 noise should keep warm-ref JOD at or below 10, got {jod_a2}",
+    );
+}

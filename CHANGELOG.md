@@ -172,41 +172,47 @@ clean across:
   - `cargo doc -p cvvdp-gpu --no-deps --document-private-items` — 0 warnings
   - `cargo test --doc -p cvvdp-gpu` — 44 passed + 13 ignored
 
-- **Spatial-contrast contract pinned across all 4 dispatch surfaces
-  (ticks 542–546).** Twelve hypothesis-test pins capture cvvdp's
-  spatial-contrast contract — three properties × four dispatch paths
+- **Spatial-contrast contract pinned across all 6 dispatch surfaces
+  (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
+  spatial-contrast contract — three properties × six dispatch paths
   (host scalar `predict_jod_still_3ch`, GPU cold-ref `Cvvdp::score`,
-  GPU cached-ref `set_reference` + `score_with_reference`, cubecl-cpu
-  host-pool `compute_dkl_jod_host_pool`):
+  GPU cached-ref `set_reference` + `score_with_reference`, GPU warm-
+  ref `warm_reference` + `compute_dkl_jod_with_warm_ref`, cubecl-cpu
+  host-pool `compute_dkl_jod_host_pool`, cubecl-cpu warm-ref host-
+  pool `warm_reference` + `compute_dkl_jod_host_pool_with_warm_ref`):
   - **flat-vs-flat → JOD ≈ 10** (542 host, 545 GPU cold, 546 GPU
-    cached, 546 cpu host_pool): pure black vs pure white returns
-    JOD ≈ 10 because cvvdp measures contrast *within* an image, not
-    absolute differences *between* images. Both flat inputs have
-    zero Weber-band energy → D = 0 → JOD = 10. Guards against an
+    cached, 546 cpu host_pool, 547 GPU warm-ref, 547 cpu warm-ref
+    host_pool): pure black vs pure white returns JOD ≈ 10 because
+    cvvdp measures contrast *within* an image, not absolute
+    differences *between* images. Both flat inputs have zero
+    Weber-band energy → D = 0 → JOD = 10. Guards against an
     "absolute-difference" refactor.
   - **textured-vs-flat → JOD ≪ 10** (543 host, 545 GPU cold, 546
-    GPU cached, 546 cpu host_pool): a 32×32 textured ref vs flat
-    mid-gray dist (catastrophic blur) gives JOD = 3.4402 on host
-    scalar and JOD = 3.4389 on all three GPU/cpu kernel paths. The
-    ref's missing-band energy converts to a non-trivial Q via
-    masking → pool, and met2jod maps that below 10.
+    GPU cached, 546 cpu host_pool, 547 GPU warm-ref, 547 cpu warm-
+    ref host_pool): a 32×32 textured ref vs flat mid-gray dist
+    (catastrophic blur) gives JOD = 3.4402 on host scalar and JOD =
+    3.4389 on all five GPU/cpu kernel paths. The ref's missing-band
+    energy converts to a non-trivial Q via masking → pool, and
+    met2jod maps that below 10.
   - **noise-amplitude monotonicity** (544 host, 545 GPU cold, 546
-    GPU cached, 546 cpu host_pool): dense alternating-sign noise
-    at amplitudes {2, 8, 32} produces JOD {9.9941, 9.9670, 9.6885}
-    — bit-identical across all 4 dispatch surfaces to 4 decimals.
-    Probes the dense-noise regime that the sparse-distortion pin
+    GPU cached, 546 cpu host_pool, 547 GPU warm-ref, 547 cpu warm-
+    ref host_pool): dense alternating-sign noise at amplitudes
+    {2, 8, 32} produces JOD {9.9941, 9.9670, 9.6885} — bit-identical
+    across all 6 dispatch surfaces to 4 decimals. Probes the dense-
+    noise regime that the sparse-distortion pin
     (`output_responds_to_distortion_magnitude`) doesn't cover.
 
   Cross-path agreement: bit-identical to 4 decimals across host
-  scalar, GPU cold-ref, GPU cached-ref, and cpu host_pool — the
-  only divergence is host-scalar 3.4402 vs the three kernel-path
-  3.4389 on textured-vs-flat (atomic-add noise floor on the host
-  pool of the scalar reference path). Together with the stuck-at-
-  constant pins (ticks 494, 508, 509, 525), the spatial-contrast
-  contract is now load-bearing-tested on every dispatch surface.
+  scalar, GPU cold-ref, GPU cached-ref, GPU warm-ref, cpu host_pool,
+  and cpu warm-ref host_pool — the only divergence is host-scalar
+  3.4402 vs the five kernel-path 3.4389 on textured-vs-flat (atomic-
+  add noise floor on the host pool of the scalar reference path).
+  Together with the stuck-at-constant pins (ticks 494, 508, 509,
+  525), the spatial-contrast contract is now load-bearing-tested on
+  every dispatch surface.
 
   Commit hashes: `002e6958` (542), `58523a73` (543), `2ed1f4a4`
-  (544), `2da874bf` (545), tick 546 in this commit.
+  (544), `2da874bf` (545), `35594044` (546), tick 547 in this commit.
 
 ### Changed
 

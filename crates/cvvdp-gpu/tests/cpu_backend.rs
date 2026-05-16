@@ -430,3 +430,128 @@ fn host_pool_monotonically_decreases_with_noise_amplitude() {
         "a=2 noise should detectably drop host_pool JOD below 10, got {jod_a2}",
     );
 }
+
+#[test]
+fn host_pool_warm_ref_flat_vs_flat_yields_max_jod() {
+    // Tick 547: sixth-leg sibling of the spatial-contrast contract.
+    // cpu warm-ref host_pool dispatch (`warm_reference` +
+    // `compute_dkl_jod_host_pool_with_warm_ref`) must give JOD ≈ 10
+    // for flat ref + flat dist.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
+    let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
+    cvvdp.warm_reference(&ref_black).expect("warm_reference black");
+    let jod_bw = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_white, ppd)
+        .expect("host_pool_warm_ref black-vs-white");
+    eprintln!("host_pool warm-ref flat-vs-flat (black vs white): jod = {jod_bw:.4}");
+    assert!(
+        (jod_bw - 10.0).abs() < 1e-3,
+        "host_pool warm-ref flat-vs-flat should give JOD ≈ 10, got {jod_bw}",
+    );
+
+    let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
+    let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
+    cvvdp.warm_reference(&ref_gray).expect("warm_reference gray");
+    let jod_gg = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_gray, ppd)
+        .expect("host_pool_warm_ref gray-vs-gray");
+    assert!(
+        (jod_gg - 10.0).abs() < 1e-3,
+        "host_pool warm-ref flat 128 vs flat 64 should give JOD ≈ 10, got {jod_gg}",
+    );
+}
+
+#[test]
+fn host_pool_warm_ref_textured_vs_flat_detects_detail_loss() {
+    // Tick 547: sixth-leg sibling of the blur-detection pin. cpu
+    // warm-ref host_pool dispatch must detect catastrophic blur.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let n = (w * h * 3) as usize;
+    let ref_textured: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
+    let dist_flat: Vec<u8> = vec![128u8; n];
+    cvvdp
+        .warm_reference(&ref_textured)
+        .expect("warm_reference textured");
+    let jod = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&dist_flat, ppd)
+        .expect("host_pool_warm_ref textured-vs-flat");
+    eprintln!("host_pool warm-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
+    assert!(jod.is_finite(), "host_pool warm-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod < 9.0,
+        "host_pool warm-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
+    );
+    assert!(
+        jod > -10.0,
+        "host_pool warm-ref blur JOD = {jod} is extreme; sanity-check failed",
+    );
+}
+
+#[test]
+fn host_pool_warm_ref_monotonically_decreases_with_noise_amplitude() {
+    // Tick 547: sixth-leg sibling of the noise-amplitude monotonicity
+    // pin. cpu warm-ref host_pool dispatch must show strict
+    // monotonicity across dense alternating-sign noise amplitudes
+    // {2, 8, 32}.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let n = (w * h * 3) as usize;
+    let ref_: Vec<u8> = (0..n).map(|i| ((i * 13 + 7) % 256) as u8).collect();
+
+    fn add_alt_noise(src: &[u8], amplitude: u8) -> Vec<u8> {
+        src.iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let delta = sign * amplitude as i16;
+                (b as i16 + delta).clamp(0, 255) as u8
+            })
+            .collect()
+    }
+
+    cvvdp.warm_reference(&ref_).expect("warm_reference");
+    let jod_a2 = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&add_alt_noise(&ref_, 2), ppd)
+        .expect("host_pool_warm_ref a=2");
+    let jod_a8 = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&add_alt_noise(&ref_, 8), ppd)
+        .expect("host_pool_warm_ref a=8");
+    let jod_a32 = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&add_alt_noise(&ref_, 32), ppd)
+        .expect("host_pool_warm_ref a=32");
+    eprintln!(
+        "host_pool warm-ref noise sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}"
+    );
+
+    assert!(
+        jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
+        "non-finite host_pool warm-ref JOD: a2={jod_a2} a8={jod_a8} a32={jod_a32}",
+    );
+    assert!(
+        jod_a2 > jod_a8,
+        "host_pool warm-ref JOD(a=2)={jod_a2} should exceed JOD(a=8)={jod_a8}",
+    );
+    assert!(
+        jod_a8 > jod_a32,
+        "host_pool warm-ref JOD(a=8)={jod_a8} should exceed JOD(a=32)={jod_a32}",
+    );
+    assert!(
+        jod_a2 < 10.0 - 1e-4,
+        "a=2 noise should detectably drop host_pool warm-ref JOD below 10, got {jod_a2}",
+    );
+}
