@@ -47,6 +47,25 @@ const _: () = {
         GAUSS5[3].to_bits() == 0.25_f32.to_bits(),
         "GAUSS5[3] drifted from 0.25",
     );
+    // Tick 563: edge taps via compile-time derivation. The runtime
+    // test uses `(.. - ..).abs() < 1e-7` because `f32::PartialOrd`
+    // isn't const fn yet, but the underlying value is just
+    // `0.25 - KERNEL_A / 2.0` evaluated at compile time — f32 arith
+    // IS const-callable, and `to_bits()` is const fn since 1.83.
+    // So we can match the runtime expectation bit-exactly here.
+    assert!(
+        GAUSS5[0].to_bits() == (0.25_f32 - KERNEL_A / 2.0_f32).to_bits(),
+        "GAUSS5[0] drifted from compile-time 0.25 - KERNEL_A/2.0",
+    );
+    assert!(
+        GAUSS5[4].to_bits() == (0.25_f32 - KERNEL_A / 2.0_f32).to_bits(),
+        "GAUSS5[4] drifted from compile-time 0.25 - KERNEL_A/2.0",
+    );
+    // And palindrome cross-check for completeness.
+    assert!(
+        GAUSS5[0].to_bits() == GAUSS5[4].to_bits(),
+        "GAUSS5 outer taps must be palindromic",
+    );
 };
 
 #[rustfmt::skip]

@@ -326,6 +326,18 @@ runtime invariants (monotonicity, uniform-spacing-in-log10) can't
 lift without const-callable loop arithmetic. Static-assert count
 is now 89 across 11 test files.
 
+Tick 563 closed the last GAUSS5 gap: the edge taps that tick 555
+skipped because the runtime test uses an abs-diff tolerance.
+Since f32 arithmetic IS const-callable in stable Rust (only
+`f32::PartialOrd::lt` isn't), the underlying derivation
+`0.25 - KERNEL_A / 2.0` can be evaluated at compile time and
+matched bit-exactly:
+  - `GAUSS5[0].to_bits() == (0.25_f32 - KERNEL_A / 2.0_f32).to_bits()`
+  - `GAUSS5[4].to_bits() == (0.25_f32 - KERNEL_A / 2.0_f32).to_bits()`
+Plus a palindrome cross-check: `GAUSS5[0] == GAUSS5[4]`. The 5-tap
+Burt-Adelson kernel is now fully bit-pinned at compile time. Static-
+assert count is now 92 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
