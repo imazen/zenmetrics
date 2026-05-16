@@ -722,6 +722,16 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 617 — add `# Examples` doctest to
+`kernels::csf::precompute_logs_row`. Pins the return-shape
+(length `N_L_BKG`) plus the bit-identity contract with
+`sensitivity_scalar` at every L_bkg-axis grid point (no
+interpolation needed when log_L_bkg lands exactly on a sample).
+Surfaces the helper's role as the per-band precompute consumed
+by `csf_apply_per_pixel_kernel` — a reader can now see what the
+returned array MEANS without grepping the kernel call sites.
+Doctest count: 64 → 65. Docs-only change.
+
 Tick 616 — add `# Examples` doctest to
 `kernels::csf::sensitivity_scalar`. The sister function
 `sensitivity_corrected_scalar` already had a doctest covering

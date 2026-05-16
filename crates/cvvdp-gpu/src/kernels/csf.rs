@@ -314,6 +314,29 @@ pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) ->
 /// length-`N_L_BKG` vector of `log10(S)` values parameterized by
 /// `log_L_bkg`. cvvdp's `castleCSF.sensitivity` does this row
 /// pull-out before its per-pixel L_bkg interp.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{precompute_logs_row, sensitivity_scalar, CsfChannel, N_L_BKG, LOG_L_BKG_AXIS};
+///
+/// // Same (rho, channel) precompute returns N_L_BKG entries.
+/// let row = precompute_logs_row(4.0, CsfChannel::A);
+/// assert_eq!(row.len(), N_L_BKG);
+///
+/// // Each entry is `log10(S)` at the L_bkg-axis grid point. Bit-
+/// // identical to `sensitivity_scalar(rho, LOG_L_BKG_AXIS[i], cc).log10()`
+/// // at every grid point (no interpolation needed when log_L_bkg
+/// // hits an axis sample exactly).
+/// for (i, &log_s) in row.iter().enumerate() {
+///     let s_direct = sensitivity_scalar(4.0, LOG_L_BKG_AXIS[i], CsfChannel::A);
+///     let log_s_direct = s_direct.log10();
+///     assert!(
+///         (log_s - log_s_direct).abs() < 1e-5,
+///         "row[{i}] = {log_s} vs direct {log_s_direct}",
+///     );
+/// }
+/// ```
 #[must_use]
 pub fn precompute_logs_row(rho: f32, cc: CsfChannel) -> [f32; N_L_BKG] {
     let log_rho_q = rho.max(1e-6).log10();
