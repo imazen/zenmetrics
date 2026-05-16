@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/goldens_metadata.rs`** — pins the self-consistency of
+  the goldens-fetch infrastructure in `tests/common/mod.rs`:
+  `MANIFEST_URL` must embed `GOLDEN_VERSION` as a path segment
+  (`/v1/`), use https scheme, end in `.json`; `MANIFEST_SHA256`
+  must be exactly 64 chars of `[0-9a-f]` (catches truncation +
+  uppercase typos that would silently break `Sha256::finalize()`
+  comparison); `cache_dir()` must embed `GOLDEN_VERSION` and the
+  crate-specific subdir; `GOLDEN_VERSION` must follow the
+  `v<N>` convention with decimal digits. A regression that bumps
+  `GOLDEN_VERSION = "v2"` but forgets to update `MANIFEST_URL`
+  surfaces here before the goldens-feature gate runs the actual
+  fetch. Same loud-failure-on-silent-edit discipline applied to
+  test-infrastructure constants. Tick 404.
 - **`tests/shadow_jod.rs::predict_jod_still_3ch_returns_max_jod_on_identical_inputs`**
   — integration-test promotion of the lib.rs doctest's identity
   contract (scoring a buffer against itself yields JOD ≈ 10.0).
