@@ -722,6 +722,22 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 624 — add `# Examples` doctests to the `CvvdpParams` struct
++ its `PLACEHOLDER` const:
+
+- `CvvdpParams` struct doctest demonstrates the canonical override
+  pattern (`CvvdpParams { display: ..., ..PLACEHOLDER }`) for
+  callers who want to keep all other defaults while customizing
+  a single field.
+- `PLACEHOLDER` const doctest cross-references both
+  `params_placeholder.rs` and `params_placeholder_non_display.rs`
+  (the two compile-time pin files) and verifies the
+  display-inherits-STANDARD_4K + perf_mode-is-Strict contract.
+
+Both not `ignore`d — pure-host construction, no GPU dependency.
+Doctest count: 72 passed + 16 ignored (was 70 + 16). Continues
+the sweep theme of ticks 609-623. Docs-only change.
+
 Tick 623 — combined `# Examples` doctest on `LOG_S_O0_C1`
 covering all three per-channel sensitivity LUTs
 (LOG_S_O0_C1/C2/C3, A/Rg/Vy respectively). Same shared-coverage

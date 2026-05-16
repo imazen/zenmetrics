@@ -413,6 +413,27 @@ pub enum PerfMode {
 }
 
 /// Top-level cvvdp parameter bundle.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::{CvvdpParams, PerfMode};
+/// use cvvdp_gpu::params::DisplayModel;
+///
+/// // Most callers want PLACEHOLDER — STANDARD_4K display + Strict
+/// // perf mode + scaffolding scalars for the not-yet-wired fields.
+/// let p = CvvdpParams::PLACEHOLDER;
+/// assert_eq!(p.perf_mode, PerfMode::Strict);
+///
+/// // Override a single field via struct-update syntax — e.g.
+/// // opt into a custom display while keeping all other defaults.
+/// let p_hdr = CvvdpParams {
+///     display: DisplayModel { y_peak: 1000.0, ..p.display },
+///     ..p
+/// };
+/// assert_eq!(p_hdr.display.y_peak, 1000.0);
+/// assert_eq!(p_hdr.perf_mode, PerfMode::Strict); // unchanged
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct CvvdpParams {
     /// Photometric display model: peak / black luminance, ambient
@@ -458,6 +479,20 @@ impl CvvdpParams {
     /// the vendored cvvdp JSON" path which hasn't landed; the
     /// placeholder numbers below are approximate but won't affect
     /// any test because no code path reads them.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cvvdp_gpu::{CvvdpParams, PerfMode};
+    /// use cvvdp_gpu::params::DisplayModel;
+    ///
+    /// // PLACEHOLDER pins the parity-test baseline. Pinned by
+    /// // tests/params_placeholder.rs (display + perf_mode) and
+    /// // tests/params_placeholder_non_display.rs (scaffolding subs).
+    /// let p = CvvdpParams::PLACEHOLDER;
+    /// assert_eq!(p.display.y_peak, DisplayModel::STANDARD_4K.y_peak);
+    /// assert_eq!(p.perf_mode, PerfMode::Strict);
+    /// ```
     pub const PLACEHOLDER: Self = Self {
         display: DisplayModel::STANDARD_4K,
         csf: CsfParams {
