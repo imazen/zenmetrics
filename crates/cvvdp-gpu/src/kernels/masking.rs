@@ -44,6 +44,19 @@ use cubecl::prelude::*;
 /// still-image 3-channel pipeline slices to `[1, 1.45, 1]`. Apply
 /// at the masking call site — the CSF kernel itself doesn't bake
 /// this in.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::CH_GAIN;
+///
+/// // 3 channels; achromatic (A) and Vy pass through at 1.0, only
+/// // the red-green (Rg) channel gets boosted at 1.45.
+/// assert_eq!(CH_GAIN.len(), 3);
+/// assert_eq!(CH_GAIN[0], 1.0);
+/// assert_eq!(CH_GAIN[1], 1.45);
+/// assert_eq!(CH_GAIN[2], 1.0);
+/// ```
 pub const CH_GAIN: [f32; 3] = [1.0, 1.45, 1.0];
 
 /// `mask_p` exponent from cvvdp v0.5.4.

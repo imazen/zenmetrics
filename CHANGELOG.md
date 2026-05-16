@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`CH_GAIN` doctest** — added `# Examples` showing 3 channels,
+  A/Vy at 1.0 passthrough, Rg boosted at 1.45 (cvvdp's "ch_chrom_w"
+  for the red-green axis). Tick 475.
+
 - **`N_RHO` doctest** — added `# Examples` covering both axis-size
   constants: `N_L_BKG == 32`, `N_RHO == 32`, and `LOG_L_BKG_AXIS`
   / `LOG_RHO_AXIS` lengths match (the LUTs are 32×32 = 1024 entries).
