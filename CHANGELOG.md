@@ -722,6 +722,20 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 608 — tighten `srgb_byte_to_dkl_scalar`'s grayscale-chroma
+doctest tolerances. The "(255,255,255) → near-zero chroma" claim
+was `rg_white.abs() < a_white * 0.05` and `vy_white.abs() < a_white * 0.05`
+(both 5%). Actual ratios from the bit-pinned SRGB_LINEAR_TO_DKL
+matrix at (255,255,255) under STANDARD_4K are **0.36% (RG)** and
+**0.98% (VY)** — pinned by `tests/color_scalar.rs:80`'s GOLDENS
+table. Tightened to **1% (RG)** and **2% (VY)** respectively —
+~3× and ~2× the actual values, leaving room for alternate display
+models that shift `y_peak`/`y_refl` but still tight enough to
+surface a matrix row-sum drift (e.g. a sign flip in row 1 or row
+2 that would push the chroma residual above the new bounds).
+Companion to ticks 605/606/607 (same doctest-tightening theme).
+Docs-only change; doctest passes.
+
 Tick 607 — tighten `safe_pow(2.0, 2.0)` doctest tolerance from
 `< 0.01` to `< 1e-3`. The function's analytic deviation at this
 point is the cross term `2·eps·x = 4e-5` (`eps = 1e-5` in the

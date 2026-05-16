@@ -105,8 +105,14 @@ pub const SRGB8_TO_LINEAR_LUT: [f32; 256] = [
 ///     srgb_byte_to_dkl_scalar(255, 255, 255, d.y_peak, d.y_black, d.y_refl);
 /// assert!(a_white > 0.0);
 /// // RG / VY rows are mean-zero in DKL — grayscale → tiny chroma.
-/// assert!(rg_white.abs() < a_white * 0.05);
-/// assert!(vy_white.abs() < a_white * 0.05);
+/// // Actual ratios from the bit-pinned matrix: |RG|/|A| ≈ 0.36%,
+/// // |VY|/|A| ≈ 0.98% at (255,255,255) under STANDARD_4K (pinned by
+/// // the GOLDENS table in tests/color_scalar.rs). The tolerances
+/// // below are ~3× and ~2× the actual values to leave room for
+/// // alternate display models that shift `y_peak`/`y_refl`, but
+/// // still tight enough to surface a matrix row-sum drift.
+/// assert!(rg_white.abs() < a_white * 0.01);
+/// assert!(vy_white.abs() < a_white * 0.02);
 ///
 /// // Pure red → positive RG (opposes R against G + B).
 /// let (_, rg_red, _) =
