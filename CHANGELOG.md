@@ -58,6 +58,23 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (api)
 
+- **`cvvdp_gpu::recommend_parallel(free_gpu_bytes, width, height)
+  -> u32`** + **`PARALLEL_SAFETY_FACTOR`** const — bundles
+  `estimate_gpu_memory_bytes` with the documented 1.5× safety
+  factor so callers don't have to maintain the constant
+  themselves. Returns the maximum number of `Cvvdp` instances
+  that should fit on the GPU, with a `max(1)` floor (a single
+  instance always gets to attempt scoring; OOM after that is the
+  caller's signal to back off to host_pool or smaller images,
+  not a "no work" signal). Returns 0 only when image dims are
+  invalid or `free_gpu_bytes == 0`. Worked examples documented in
+  the rustdoc + pinned by `recommend_parallel_matches_documented_examples`
+  (8 GB / 1024² → PARALLEL in [10, 40]; 24 GB / 12 MP → PARALLEL
+  in [3, 10]). `PARALLEL_SAFETY_FACTOR = 1.5` is exported so
+  callers with different workload mixes can compute a tighter
+  cap manually (warm_reference batches → ~1.2; mixed CPU + GPU
+  process → ~2.0). Tick 399.
+
 - **`cvvdp_gpu::estimate_gpu_memory_bytes(width, height) -> Option<usize>`**
   — static-analysis predictor for the GPU memory `Cvvdp::new` will
   allocate. Sums every persistent buffer: source u32 bytes, three

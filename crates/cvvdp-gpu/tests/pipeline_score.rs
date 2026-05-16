@@ -1475,3 +1475,63 @@ fn estimate_gpu_memory_documents_concurrency_cap_use() {
         "8 GB GPU / 1024² → PARALLEL = {parallel}; estimate = {est} bytes",
     );
 }
+
+#[test]
+fn recommend_parallel_returns_zero_below_threshold() {
+    // Below PYRAMID_MIN_DIM × 2 = 8×8, estimate_gpu_memory_bytes
+    // returns None, so recommend_parallel must surface that as 0
+    // (the caller treats 0 as "this image is too small to be
+    // scored" — distinct from "you have memory for 1+").
+    use cvvdp_gpu::recommend_parallel;
+    assert_eq!(recommend_parallel(8 * 1024 * 1024 * 1024, 0, 0), 0);
+    assert_eq!(recommend_parallel(8 * 1024 * 1024 * 1024, 4, 4), 0);
+    assert_eq!(recommend_parallel(8 * 1024 * 1024 * 1024, 7, 8), 0);
+}
+
+#[test]
+fn recommend_parallel_zero_free_returns_zero() {
+    // 0 free memory must return 0, not 1. The min-1 floor only
+    // applies when there's *some* memory to allocate against; a
+    // literal "no GPU memory available" is a distinct signal.
+    use cvvdp_gpu::recommend_parallel;
+    assert_eq!(recommend_parallel(0, 1024, 1024), 0);
+}
+
+#[test]
+fn recommend_parallel_minimum_floor_is_one() {
+    // Even when free memory is less than the safety-factored
+    // estimate, recommend_parallel returns 1 (not 0). A single
+    // instance always gets to attempt scoring; if it OOMs, the
+    // caller backs off explicitly. Returning 0 here would mask
+    // the per-instance overrun as "no work to do".
+    use cvvdp_gpu::{PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, recommend_parallel};
+    let est = estimate_gpu_memory_bytes(1024, 1024).expect("est");
+    // Pass less than the safety-factored estimate; should still
+    // return 1, not 0.
+    let stingy_free = (est as f64 * PARALLEL_SAFETY_FACTOR / 4.0) as u64;
+    let p = recommend_parallel(stingy_free, 1024, 1024);
+    assert_eq!(p, 1, "min floor: stingy_free={stingy_free}, est={est}, got {p}");
+}
+
+#[test]
+fn recommend_parallel_matches_documented_examples() {
+    // The doc examples in the function docstring describe an
+    // 8 GB / 1024² scoring scenario. Pin the result so a refactor
+    // that changes the safety factor or the estimator silently
+    // would surface here with a mismatched recommendation.
+    use cvvdp_gpu::recommend_parallel;
+    let p_8gb_1mp = recommend_parallel(8 * 1024 * 1024 * 1024, 1024, 1024);
+    assert!(
+        (10..=40).contains(&p_8gb_1mp),
+        "8 GB / 1024²: got PARALLEL={p_8gb_1mp}, expected 10-40 range",
+    );
+
+    // 24 GB / 4096×3072 (12 MP) — RTX 3090/4090 running 12 MP
+    // scoring. With ~2.5 GB per instance and 1.5× safety factor,
+    // expect 4-8 concurrent.
+    let p_24gb_12mp = recommend_parallel(24 * 1024 * 1024 * 1024, 4096, 3072);
+    assert!(
+        (3..=10).contains(&p_24gb_12mp),
+        "24 GB / 12 MP: got PARALLEL={p_24gb_12mp}, expected 3-10 range",
+    );
+}

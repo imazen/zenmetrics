@@ -546,6 +546,78 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
     )
 }
 
+/// Safety factor applied by [`recommend_parallel`] on top of the raw
+/// [`estimate_gpu_memory_bytes`] prediction. Covers:
+///
+/// - Per-call transient uploads (`src_dist` byte buffer ≈ +0.33×
+///   `src_bytes`, per-band readback buffers when callers use
+///   `compute_dkl_*_bands`).
+/// - cubecl runtime metadata + page alignment per buffer (~hundreds
+///   of bytes × ~50 allocations = single-digit MB).
+/// - NVRTC PTX cache + kernel-module memory on the CUDA runtime
+///   (one-time ~50-100 MB per process; amortizes across instances).
+/// - Driver-side reservations that aren't reported by
+///   `cudaMemGetInfo` as "free" but are also not visible as "used".
+///
+/// `1.5` is conservative for typical sweep workloads (one-shot
+/// `score` calls). Tighten to ~1.2 when the caller batches with
+/// `warm_reference` (no per-DIST allocator churn). Loosen to ~2.0
+/// if the calling process also runs CPU-side decode/encode in the
+/// same memory namespace.
+pub const PARALLEL_SAFETY_FACTOR: f64 = 1.5;
+
+/// Recommend a `PARALLEL` instance count for running many
+/// [`Cvvdp::new`] instances against a shared GPU. Combines
+/// [`estimate_gpu_memory_bytes`] with [`PARALLEL_SAFETY_FACTOR`]
+/// so callers don't have to maintain the safety constant
+/// themselves (or forget it).
+///
+/// Inputs:
+/// - `free_gpu_bytes`: free GPU memory in bytes, typically from
+///   `cudaMemGetInfo` (or `wgpu::Limits::max_buffer_size` for the
+///   wgpu backend). Pass `0` to get a definitive 0 (caller does
+///   the boundary handling).
+/// - `(width, height)`: target image dimensions.
+///
+/// Returns the maximum number of `Cvvdp` instances that should fit
+/// concurrently, capped at `u32::MAX`. Always returns at least 1
+/// if the image dimensions are valid (a single instance always
+/// gets to run; OOM after that is the caller's signal to back off
+/// to host-pool or a smaller image).
+///
+/// Returns 0 only when:
+/// - `(width, height)` is below the [`PYRAMID_MIN_DIM`] × 2
+///   threshold (same as `Cvvdp::new` would reject), OR
+/// - `free_gpu_bytes` is literally 0 (no memory to allocate against).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::pipeline::recommend_parallel;
+///
+/// // RTX 3070 (8 GB) running 1024² scoring:
+/// let p = recommend_parallel(8 * 1024 * 1024 * 1024, 1024, 1024);
+/// assert!(p >= 2);  // 8 GB easily fits 2+ instances at 1 MP
+/// ```
+#[must_use]
+pub fn recommend_parallel(free_gpu_bytes: u64, width: u32, height: u32) -> u32 {
+    if free_gpu_bytes == 0 {
+        return 0;
+    }
+    let Some(est) = estimate_gpu_memory_bytes(width, height) else {
+        return 0;
+    };
+    if est == 0 {
+        return 0;
+    }
+    let budgeted = free_gpu_bytes as f64 / (PARALLEL_SAFETY_FACTOR * est as f64);
+    // Round down to the nearest integer, clamp to [1, u32::MAX].
+    // Returning 0 when budget < 1 would mask the per-instance
+    // overrun; the caller should see "1 instance, may OOM" and
+    // back off explicitly rather than treat 0 as "no work".
+    (budgeted.floor() as u32).max(1)
+}
+
 impl<R: Runtime> Cvvdp<R> {
     /// Allocate GPU buffers for a fixed `width × height` image and the
     /// given parameter bundle. Uses
