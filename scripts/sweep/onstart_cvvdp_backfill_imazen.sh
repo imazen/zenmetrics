@@ -50,7 +50,42 @@ fi
 : "${SWEEP_RUN_ID:?SWEEP_RUN_ID missing}"
 
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
-PARALLEL="${PARALLEL:-2}"
+PARALLEL="${PARALLEL:-0}"
+# PARALLEL=0 → auto-detect. Mirrors cvvdp-gpu's
+# `recommend_parallel(free_gpu_bytes, w, h)` heuristic (the Rust
+# predictor's `PARALLEL_SAFETY_FACTOR = 1.5` const) but in shell so
+# the chunk_worker xargs -P can use it before zen-metrics starts.
+# Profiling on a healthy worker (RTX 2060 SUPER, 12 cores, 64 GB)
+# showed GPU at 3% time-averaged + 1 of 12 CPU cores in use with
+# PARALLEL=1 — massive under-utilization. Auto-detect picks N
+# concurrent chunk workers based on free GPU and CPU caps.
+if [[ "$PARALLEL" == "0" ]]; then
+    # Free GPU memory in MiB (works on every nvidia-smi 470+).
+    FREE_GPU_MIB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+    NCPU=$(nproc)
+    if [[ -z "$FREE_GPU_MIB" || "$FREE_GPU_MIB" -lt 1024 ]]; then
+        log "auto-detect: nvidia-smi unavailable / free<1GiB; defaulting PARALLEL=2"
+        PARALLEL=2
+    else
+        # Assume per-instance cost ≈ 250 MiB GPU (cvvdp-gpu's
+        # estimate_gpu_memory_bytes returns ~208 MiB at 1024²;
+        # rounded up for transient kernel buffers). Apply 1.5×
+        # safety factor (matches PARALLEL_SAFETY_FACTOR).
+        PER_INST_MIB=375  # 250 × 1.5
+        GPU_CAP=$((FREE_GPU_MIB / PER_INST_MIB))
+        # CPU cap: leave half the cores for ssim2-gpu sweep work +
+        # encode threads + system. Floor at 1.
+        CPU_CAP=$((NCPU / 2))
+        [[ "$CPU_CAP" -lt 1 ]] && CPU_CAP=1
+        # Hard ceiling at 8 — beyond that diminishing returns vs
+        # disk I/O / R2 upload contention.
+        PARALLEL=$GPU_CAP
+        [[ "$PARALLEL" -gt "$CPU_CAP" ]] && PARALLEL=$CPU_CAP
+        [[ "$PARALLEL" -gt 8 ]] && PARALLEL=8
+        [[ "$PARALLEL" -lt 1 ]] && PARALLEL=1
+        log "auto-detect PARALLEL=$PARALLEL (free_gpu=${FREE_GPU_MIB}MiB, nproc=$NCPU, gpu_cap=$GPU_CAP, cpu_cap=$CPU_CAP)"
+    fi
+fi
 WORKDIR="${WORKDIR:-/workspace/cvvdp-backfill}"
 SCRIPTS_R2_PREFIX="${SCRIPTS_R2_PREFIX:-s3://coefficient/jobs/${SWEEP_RUN_ID}}"
 GPU_RUNTIME="${GPU_RUNTIME:-auto}"

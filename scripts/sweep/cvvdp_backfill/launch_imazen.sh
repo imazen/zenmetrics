@@ -43,7 +43,10 @@ MAX_DPH="${MAX_DPH:-0.30}"
 MIN_CORES="${MIN_CORES:-8}"
 MIN_RAM_GB="${MIN_RAM_GB:-8}"
 MIN_DISK_GB="${MIN_DISK_GB:-20}"
-PARALLEL="${PARALLEL:-2}"
+PARALLEL="${PARALLEL:-0}"
+# 0 = auto-detect at boot (see onstart_cvvdp_backfill_imazen.sh).
+# Pass an explicit integer to override (e.g. PARALLEL=1 to force
+# single-chunk-per-box mode for debugging).
 GPU_RUNTIME="${GPU_RUNTIME:-auto}"
 DRY_RUN="${DRY_RUN:-0}"
 
