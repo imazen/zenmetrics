@@ -31,7 +31,7 @@ use cubecl::prelude::*;
 use crate::eig;
 use crate::filters;
 use crate::kernels::{
-    box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine,
+    box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine, util,
 };
 use crate::{Error, GpuIwssimResult, NUM_SCALES, Result};
 
@@ -278,6 +278,7 @@ impl<R: Runtime> Iwssim<R> {
     /// floats in the 0..=255 range (matches the reference convention
     /// of `L = 255` for the SSIM constants).
     pub fn compute_gray(&mut self, ref_gray: &[f32], dis_gray: &[f32]) -> Result<GpuIwssimResult> {
+        let profile = std::env::var("IWSSIM_PROFILE").is_ok();
         let expected = (self.width * self.height) as usize;
         if ref_gray.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -293,11 +294,19 @@ impl<R: Runtime> Iwssim<R> {
         }
         // Direct upload into g_ref / g_dis (scale-0 working Gaussian).
         // Replace the handle so the new contents are visible.
+        let t = std::time::Instant::now();
         let h_ref = self.client.create_from_slice(f32::as_bytes(ref_gray));
         let h_dis = self.client.create_from_slice(f32::as_bytes(dis_gray));
         // Swap handles into scale-0. Earlier g_ref/g_dis is dropped.
         self.scales[0].g_ref = h_ref;
         self.scales[0].g_dis = h_dis;
+        if profile {
+            self.client.sync();
+            eprintln!(
+                "    stage 'upload': {:.3} ms",
+                t.elapsed().as_secs_f64() * 1e3
+            );
+        }
         self.run_pipeline()
     }
 
@@ -383,17 +392,12 @@ impl<R: Runtime> Iwssim<R> {
         }
 
         // 4. Reductions per scale.
-        // Reset the sums buffer (partials is overwritten by every
-        // kernel write; sums is sticky across calls until finalize
-        // overwrites). Easiest: re-create both.
+        // partials and sums are pre-allocated in `new()`. Each
+        // weighted_sum / iw_sum / plain_sum thread writes to its own
+        // slot (no accumulation), and the finalizer overwrites sums.
+        // So nothing needs clearing between calls.
         let partials_len =
             (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
-        self.partials = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
-        self.sums = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; NUM_SLOTS as usize]));
 
         let t = std::time::Instant::now();
         for s in 0..(self.scales.len() - 1) {
@@ -886,9 +890,17 @@ impl<R: Runtime> Iwssim<R> {
             }
         }
 
-        // 3. Reset cu_atomic and accumulate.
-        let zeros100 = vec![0.0_f32; 100];
-        self.scales[s].cu_atomic = self.client.create_from_slice(f32::as_bytes(&zeros100));
+        // 3. Reset cu_atomic via a tiny zero kernel — cheaper than
+        // re-allocating the 100-float buffer via create_from_slice
+        // each call.
+        unsafe {
+            util::zero_kernel::launch_unchecked::<R>(
+                &self.client,
+                CubeCount::Static(1, 1, 1),
+                CubeDim::new_1d(128),
+                ArrayArg::from_raw_parts(sc.cu_atomic.clone(), 100),
+            );
+        }
         let sc = &self.scales[s]; // re-borrow
         let n_blk = ((sc.iw_h as u32) * (sc.iw_w as u32)) as usize;
         unsafe {

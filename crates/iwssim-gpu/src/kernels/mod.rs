@@ -36,3 +36,4 @@ pub mod neighborhood;
 pub mod reduction;
 pub mod rgb2gray;
 pub mod ssim_combine;
+pub mod util;

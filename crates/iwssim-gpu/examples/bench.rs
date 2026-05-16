@@ -42,19 +42,30 @@ fn bench_size(w: u32, h: u32) {
         let _ = iw.compute_gray(&ref_gray, &dis_gray).unwrap();
     }
 
-    let t = Instant::now();
+    use cubecl::Runtime;
+    let client = Backend::client(&Default::default());
     let mut last_score = 0.0_f64;
+    let mut min_dt = f64::INFINITY;
+    client.sync();
+    let t = Instant::now();
     for _ in 0..n_measure {
+        let t_iter = Instant::now();
         last_score = iw.compute_gray(&ref_gray, &dis_gray).unwrap().score;
+        client.sync();
+        let dt_iter = t_iter.elapsed().as_secs_f64();
+        if dt_iter < min_dt {
+            min_dt = dt_iter;
+        }
     }
     let dt = t.elapsed().as_secs_f64() / n_measure as f64;
 
     let mp = (w as f64 * h as f64) / 1e6;
     println!(
-        "{:>5}x{:<5}  {:>7.2} ms/pair  {:>6.2} MP/s  score={:.6}",
+        "{:>5}x{:<5}  mean {:>7.2} ms  min {:>7.2} ms  {:>6.2} MP/s (mean)  score={:.6}",
         w,
         h,
         dt * 1e3,
+        min_dt * 1e3,
         mp / dt,
         last_score,
     );
