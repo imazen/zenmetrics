@@ -197,6 +197,28 @@ for stem, info in manifest["sources"].items():
 
     diffs = sorted(abs(d) for _, _, _, d in joined)
     n = len(diffs)
+
+    # Per-impl distribution stats — used by assert_parity.py to flag
+    # silent-failure modes where (e.g.) all imazen values land at
+    # exactly 10.0 because the score-pairs caller swallowed a
+    # cubecl-cpu panic and wrote the default-fail value across the
+    # board. Without min/max/std, a parity check on mean alone would
+    # report ~0.18 JOD and the gate might pass even though the
+    # cvvdp-gpu kernel never executed.
+    imazen_vals = sorted(im for _, im, _, _ in joined)
+    pycvvdp_vals = sorted(pv for _, _, pv, _ in joined)
+
+    def _stats(vals):
+        mean = sum(vals) / len(vals)
+        variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+        return {
+            "min": vals[0],
+            "max": vals[-1],
+            "mean": mean,
+            "median": vals[len(vals) // 2],
+            "stdev": variance ** 0.5,
+        }
+
     info["parity"] = {
         "joined": n,
         "mean_abs_diff": sum(diffs) / n,
@@ -204,6 +226,8 @@ for stem, info in manifest["sources"].items():
         "max_abs_diff": diffs[-1],
         "parity_tsv": parity_tsv.name,
         "imazen_col": imazen_col,
+        "imazen_stats": _stats(imazen_vals),
+        "pycvvdp_stats": _stats(pycvvdp_vals),
     }
     print(
         f"  parity {stem}: n={n}  mean={diffs[0:1] and sum(diffs)/n:.4f}  "

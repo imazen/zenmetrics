@@ -24,6 +24,12 @@ CVVDP_SIDECAR_SCHEMA.md`:
     --max-median-abs-diff  0.10   (50th percentile)
     --max-max-abs-diff     0.50   (worst single row)
     --min-joined-per-src   1      (each source must have >=1 joinable row)
+    --min-imazen-stdev     0.01   (anti-flatline: catches silent-failure modes
+                                   where score-pairs writes the same value
+                                   for every row, e.g. all-10.0 from a
+                                   cubecl-cpu atomic<f32> panic swallow.
+                                   Requires finalize.sh to have populated
+                                   imazen_stats in the manifest.)
 
 Skipped (parity == null) sources are tolerated by default — many
 sources will have only one impl present during partial runs — but
@@ -55,6 +61,12 @@ def parse_args() -> argparse.Namespace:
                    help="Fail if any source's max abs diff exceeds this (default 0.50)")
     p.add_argument("--min-joined-per-src", type=int, default=1,
                    help="Fail if any source has fewer joined rows than this (default 1)")
+    p.add_argument("--min-imazen-stdev", type=float, default=0.01,
+                   help="Anti-flatline check: fail if the cvvdp_imazen column's "
+                        "stdev is below this (default 0.01). Catches silent-failure "
+                        "modes where all rows land at the same default value "
+                        "(e.g. 10.0 from a swallowed cubecl-cpu panic). Requires "
+                        "finalize.sh's imazen_stats. Pass 0 to disable.")
     p.add_argument("--require-parity-on-all", action="store_true",
                    help="Fail when any source has parity=null (only one impl present). "
                         "By default null parity is tolerated.")
@@ -129,6 +141,19 @@ def main() -> int:
                 src_fails.append(f"median={median} > --max-median-abs-diff={args.max_median_abs_diff}")
             if worst is None or worst > args.max_max_abs_diff:
                 src_fails.append(f"max={worst} > --max-max-abs-diff={args.max_max_abs_diff}")
+            # Anti-flatline check: only enforce when the manifest has
+            # the imazen_stats field (older manifests from pre-tick-358
+            # finalize.sh runs won't), and when the user hasn't
+            # disabled it with --min-imazen-stdev=0.
+            if args.min_imazen_stdev > 0:
+                im_stats = parity.get("imazen_stats")
+                if im_stats is not None:
+                    im_stdev = im_stats.get("stdev")
+                    if im_stdev is not None and im_stdev < args.min_imazen_stdev:
+                        src_fails.append(
+                            f"imazen_stdev={im_stdev:.6f} < --min-imazen-stdev={args.min_imazen_stdev} "
+                            f"(suspicious flatline: min={im_stats.get('min')} max={im_stats.get('max')})"
+                        )
 
         if src_fails:
             for reason in src_fails:
