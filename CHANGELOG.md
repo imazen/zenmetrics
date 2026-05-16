@@ -227,6 +227,20 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (tests)
+
+- **`tests/display_geometry.rs::ppd_is_*`** — four invariant tests
+  on `DisplayGeometry::pixels_per_degree`: (1) positive + finite +
+  in realistic [5, 500] range across phone, tablet, desktop,
+  cinema, UHD-living-room viewing configs; (2) strictly
+  monotonically increasing in `distance_m` (further → less angle
+  per pixel → higher PPD); (3) strictly monotonically decreasing
+  in `diagonal_inches` (larger physical screen at same distance →
+  more angle per pixel → lower PPD); (4) strictly monotonically
+  increasing in `resolution_w` at fixed 16:9 aspect. Catches sign
+  flips and dimension-swaps that would silently mis-calibrate the
+  CSF stage's per-band rho query. Tick 415.
+
 #### cvvdp-gpu (docs)
 
 - **README "Build" section refreshed for the CUDA-version-matters

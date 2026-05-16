@@ -156,3 +156,106 @@ fn display_geometry_standard_4k_matches_pycvvdp_v0_5_4() {
         "STANDARD_4K PPD = {ppd}, expected ≈ 75.402_449",
     );
 }
+
+#[test]
+fn ppd_is_positive_for_realistic_geometries() {
+    // The CSF stage's per-band rho query depends on PPD; a negative
+    // or zero PPD would silently zero out every band's spatial-
+    // frequency contribution. Pin positivity across realistic-
+    // viewing-range geometries.
+    use cvvdp_gpu::params::DisplayGeometry;
+    let cases = [
+        ("phone-handheld", 1080u32, 1920u32, 0.30_f32, 5.5_f32),
+        ("tablet-arm-length", 2048, 1536, 0.45, 9.7),
+        ("desktop-monitor", 1920, 1080, 0.60, 27.0),
+        ("cinema-far", 3840, 2160, 3.50, 60.0),
+        ("UHD-living-room", 3840, 2160, 3.00, 65.0),
+    ];
+    for &(label, w, h, dist, diag) in &cases {
+        let g = DisplayGeometry {
+            resolution_w: w,
+            resolution_h: h,
+            distance_m: dist,
+            diagonal_inches: diag,
+        };
+        let ppd = g.pixels_per_degree();
+        assert!(
+            ppd > 0.0 && ppd.is_finite(),
+            "{label}: PPD = {ppd} must be finite + positive",
+        );
+        // Sanity: realistic PPDs are in [5, 500].
+        assert!(
+            (5.0..=500.0).contains(&ppd),
+            "{label}: PPD = {ppd} out of realistic [5, 500] range",
+        );
+    }
+}
+
+#[test]
+fn ppd_is_monotonically_increasing_in_distance() {
+    // More viewing distance → smaller angle subtended per pixel →
+    // higher PPD. Pin this monotonicity. A refactor that swaps a
+    // sign or division order would invert the relationship and
+    // silently mis-calibrate the CSF for every viewer position.
+    use cvvdp_gpu::params::DisplayGeometry;
+    let base = DisplayGeometry::STANDARD_4K;
+    let mut prev = 0.0_f32;
+    for dist_m in [0.30_f32, 0.50, 0.75, 1.0, 1.5, 2.5, 4.0] {
+        let g = DisplayGeometry {
+            distance_m: dist_m,
+            ..base
+        };
+        let ppd = g.pixels_per_degree();
+        assert!(
+            ppd > prev,
+            "monotonicity broken at distance_m={dist_m}: ppd={ppd} <= prev={prev}",
+        );
+        prev = ppd;
+    }
+}
+
+#[test]
+fn ppd_is_monotonically_decreasing_in_diagonal_inches() {
+    // Larger physical screen at the same distance → larger angle
+    // per pixel → lower PPD. Pin so a refactor that uses height/m
+    // instead of width/m in the denominator would surface here.
+    use cvvdp_gpu::params::DisplayGeometry;
+    let base = DisplayGeometry::STANDARD_4K;
+    let mut prev = f32::INFINITY;
+    for diag in [10.0_f32, 15.0, 24.0, 30.0, 55.0, 80.0] {
+        let g = DisplayGeometry {
+            diagonal_inches: diag,
+            ..base
+        };
+        let ppd = g.pixels_per_degree();
+        assert!(
+            ppd < prev,
+            "monotonicity broken at diagonal_inches={diag}: ppd={ppd} >= prev={prev}",
+        );
+        prev = ppd;
+    }
+}
+
+#[test]
+fn ppd_is_monotonically_increasing_in_resolution_width() {
+    // More horizontal pixels at the same physical size + distance
+    // → more pixels per degree. Pin so a refactor that ignores
+    // resolution and only uses physical size would surface here.
+    use cvvdp_gpu::params::DisplayGeometry;
+    let base = DisplayGeometry::STANDARD_4K;
+    let mut prev = 0.0_f32;
+    for w in [1280u32, 1920, 2560, 3840, 5120, 7680] {
+        let h = (w as f32 * 9.0 / 16.0) as u32;
+        let g = DisplayGeometry {
+            resolution_w: w,
+            resolution_h: h,
+            ..base
+        };
+        let ppd = g.pixels_per_degree();
+        assert!(
+            ppd > prev,
+            "monotonicity broken at resolution_w={w}: ppd={ppd} <= prev={prev}",
+        );
+        prev = ppd;
+    }
+}
