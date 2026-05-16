@@ -136,7 +136,7 @@ fn non_baseband_contrast_is_clamped_to_pm_thousand() {
             );
             if !is_baseband {
                 assert!(
-                    v >= -1000.0 && v <= 1000.0,
+                    (-1000.0..=1000.0).contains(&v),
                     "non-baseband level {k} [{i}] = {v} outside ±1000 clamp"
                 );
             }

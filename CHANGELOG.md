@@ -237,6 +237,20 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (tests, lint)
+
+- **Clippy clean-up across tick 416-461 test files**:
+  `weber_pyramid_invariants` + `do_pooling_invariants` rewrap to
+  `RangeInclusive::contains`; `csf_channel_invariants` +
+  `perf_mode_invariants` add per-statement `#[allow(clippy::clone_on_copy)]`
+  on the deliberate `.clone()` exercise of the Clone trait;
+  `csf_axes_invariants` adds module-level
+  `#[allow(clippy::excessive_precision)]` (intentional pycvvdp f64
+  digit preservation); `mult_mutual_band_invariants` adds module-level
+  `#[allow(clippy::needless_range_loop)]` (intentional per-channel
+  iteration); `laplacian_pyramid_invariants` drops a `.map().enumerate().map()`
+  no-op. Tests pass identically. Tick 462.
+
 #### cvvdp-gpu (docs)
 
 - **`mult_mutual_band` doctest** — added `# Examples`: 8×8 input

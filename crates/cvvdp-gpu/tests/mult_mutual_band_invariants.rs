@@ -15,6 +15,11 @@
 //! - Determinism.
 //! - Output is finite for finite input.
 
+#![allow(clippy::needless_range_loop)]
+// Intentional `for cc in 0..3` loops — the per-channel iteration is
+// part of the test's readability and the [_; 3] indexing is the
+// explicit contract being pinned.
+
 use cvvdp_gpu::kernels::masking::{D_MAX, mult_mutual_band};
 
 fn ramp(w: usize, h: usize, off: f32) -> Vec<f32> {

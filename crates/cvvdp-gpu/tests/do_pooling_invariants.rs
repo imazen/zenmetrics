@@ -124,5 +124,5 @@ fn many_levels_input_supported() {
     let q_per_ch = vec![[0.05_f32, 0.05, 0.05]; 12];
     let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
     assert!(jod.is_finite(), "12-level JOD = {jod} non-finite");
-    assert!(jod <= 10.0 + 1e-3 && jod >= 0.0, "12-level JOD = {jod} out of range");
+    assert!((0.0..=10.0 + 1e-3).contains(&jod), "12-level JOD = {jod} out of range");
 }

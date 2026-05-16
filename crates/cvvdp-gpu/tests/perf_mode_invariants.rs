@@ -34,9 +34,12 @@ fn copy_semantics_work() {
 
 #[test]
 fn clone_yields_equal_value() {
-    let mode = PerfMode::Fast;
-    let cloned = mode.clone();
-    assert_eq!(cloned, mode);
+    // (clippy::clone_on_copy: PerfMode is Copy so `.clone()` is
+    // technically unnecessary — but we explicitly want to exercise
+    // the Clone trait here.)
+    #[allow(clippy::clone_on_copy)]
+    let cloned = PerfMode::Fast.clone();
+    assert_eq!(cloned, PerfMode::Fast);
 }
 
 #[test]

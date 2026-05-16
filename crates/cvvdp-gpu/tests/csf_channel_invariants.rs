@@ -51,9 +51,12 @@ fn copy_semantics_work() {
 fn clone_yields_equal_value() {
     // Clone produces an Eq-equal value. Catches a refactor that
     // accidentally derives PartialEq but not Clone.
-    let cc = CsfChannel::Rg;
-    let cloned = cc.clone();
-    assert_eq!(cloned, cc);
+    // (clippy::clone_on_copy: CsfChannel is Copy so `.clone()` is
+    // technically unnecessary — but we explicitly want to exercise
+    // the Clone trait here.)
+    #[allow(clippy::clone_on_copy)]
+    let cloned = CsfChannel::Rg.clone();
+    assert_eq!(cloned, CsfChannel::Rg);
 }
 
 #[test]

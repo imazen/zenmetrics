@@ -10,6 +10,11 @@
 //! entries (length, scalar constants); this file pins the AXES'
 //! structural properties separately.
 
+#![allow(clippy::excessive_precision)]
+// Intentional: f32 literals carry their pycvvdp f64 source values
+// verbatim so the digits document the source even though LLVM
+// rounds to f32 at compile time.
+
 use cvvdp_gpu::kernels::csf::{LOG_L_BKG_AXIS, LOG_RHO_AXIS, N_L_BKG, N_RHO};
 
 #[test]

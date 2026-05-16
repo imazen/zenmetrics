@@ -193,7 +193,7 @@ fn band_data_length_equals_w_times_h() {
     // resize the data vector (e.g., uses uninitialized capacity).
     let src = ramp(24, 17);
     let bands = laplacian_pyramid_dec_scalar(&src, 24, 17, 0);
-    for (k, Band { w, h, data }) in bands.iter().map(|b| (0, b)).enumerate().map(|(_, b)| b) {
+    for (k, Band { w, h, data }) in bands.iter().enumerate() {
         assert_eq!(
             data.len(),
             w * h,
