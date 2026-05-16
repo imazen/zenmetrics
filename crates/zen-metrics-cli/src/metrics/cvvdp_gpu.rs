@@ -84,7 +84,17 @@ fn score_with_runtime(
         GpuRuntime::Cpu => {
             #[cfg(feature = "gpu-cpu")]
             {
-                run::<cubecl::cpu::CpuRuntime>(reference, distorted)
+                // cvvdp-gpu's pool kernel uses Atomic<f32>::fetch_add,
+                // which cubecl-cpu does not implement (panic at
+                // cubecl-cpu/compiler/visitor/elem.rs: "atomic<f32>
+                // not implemented"). The crate ships
+                // Cvvdp::compute_dkl_jod_host_pool for exactly this
+                // case — same JOD output, but pools the per-band
+                // D values on the host instead of via the atomic
+                // kernel. Without this routing the auto-dispatch
+                // fall-through (Cuda → Wgpu → Hip → Cpu) bombs the
+                // whole sweep on boxes where CUDA fails to init.
+                run_cpu_host_pool::<cubecl::cpu::CpuRuntime>(reference, distorted)
             }
             #[cfg(not(feature = "gpu-cpu"))]
             {
@@ -114,4 +124,38 @@ fn run<R: Runtime>(
         return Err(format!("cvvdp produced non-finite JOD: {jod}").into());
     }
     Ok(jod)
+}
+
+/// Sibling of `run` that routes through
+/// [`cvvdp_gpu::Cvvdp::compute_dkl_jod_host_pool`] instead of
+/// `Cvvdp::score`. Same JOD output (parity-locked at f32 noise
+/// by `compute_dkl_jod_host_pool_matches_compute_dkl_jod`), but
+/// pools per-band D values host-side so it runs on runtimes
+/// without `Atomic<f32>::fetch_add` (`cubecl-cpu`, Metal via
+/// `cubecl-wgpu` — see [`cvvdp_gpu::Cvvdp::compute_dkl_jod`]'s
+/// Backend support section).
+#[cfg(feature = "gpu-cpu")]
+fn run_cpu_host_pool<R: Runtime>(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    let client = R::client(&Default::default());
+    let mut c = cvvdp_gpu::Cvvdp::<R>::new(
+        client,
+        reference.width,
+        reference.height,
+        cvvdp_gpu::CvvdpParams::PLACEHOLDER,
+    )
+    .map_err(|e| format!("Cvvdp::new (cpu host_pool): {e}"))?;
+    // Cvvdp::new uses DisplayGeometry::STANDARD_4K (per pipeline.rs:478);
+    // mirror that here since `geometry` is a private field and there's
+    // no public accessor. Cvvdp::score does the same internally.
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let jod = c
+        .compute_dkl_jod_host_pool(&reference.pixels, &distorted.pixels, ppd)
+        .map_err(|e| format!("Cvvdp::compute_dkl_jod_host_pool: {e}"))?;
+    if !jod.is_finite() {
+        return Err(format!("cvvdp (cpu host_pool) produced non-finite JOD: {jod}").into());
+    }
+    Ok(f64::from(jod))
 }

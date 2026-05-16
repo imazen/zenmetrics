@@ -7,7 +7,9 @@
 //! - strongly distorted (~9.93 JOD)
 #![allow(clippy::excessive_precision)]
 
-use cvvdp_gpu::kernels::pool::{do_pooling_and_jod_still_3ch, lp_norm_sum, met2jod};
+use cvvdp_gpu::kernels::pool::{
+    do_pooling_and_jod_still_3ch, lp_norm_mean, lp_norm_sum, met2jod, pool_band_finalize,
+};
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
 #[path = "common/mod.rs"]
@@ -345,6 +347,154 @@ fn lp_norm_sum_zero_input_returns_zero() {
             "lp_norm_sum([0; {n}], 2) = {got}, expected 0",
         );
     }
+}
+
+// `pool_band_finalize` is a public API that wraps the host-side
+// fold for the GPU `pool_band_kernel` / `pool_band_3ch_kernel`
+// atomic partials. Its closed-form algebra is
+// `((partial / n).max(0) + eps)^(1/β) - eps^(1/β)`. Until this
+// section it was exercised only INDIRECTLY: the kernel produced
+// a partial, finalize was called, and the result was compared to
+// `lp_norm_mean`. A refactor that drops the `.max(0)` clamp
+// (atomic-noise negatives), the `- eps^(1/β)` tail (silently
+// inflating Q by ~3e-3 at β=2), or the `partial / n` division
+// (inflates Q by ~n^(1/β)) would not have surfaced in the
+// indirect tests because the kernel happened to never produce
+// those inputs. Pin the algebra directly so each invariant
+// trips its own test, not a downstream parity gate where the
+// root cause is harder to find.
+
+#[test]
+fn pool_band_finalize_zero_partial_returns_zero() {
+    // With partial=0 the formula is
+    //   ((0 / n).max(0) + eps)^(1/β) - eps^(1/β) = 0
+    // i.e. the eps^(1/β) tail subtraction must exactly cancel
+    // the eps^(1/β) head term. Pin so a refactor that drops the
+    // tail subtraction silently floors every band's Q at
+    // eps^(1/β) (~0.003 at β=2, ~0.056 at β=4) and inflates
+    // downstream JOD.
+    for &beta in &[1.0_f32, 2.0, 4.0, 8.0] {
+        for &n in &[1_usize, 64, 1024, 65536] {
+            let q = pool_band_finalize(0.0, n, beta);
+            assert!(
+                q.abs() < 1e-6,
+                "pool_band_finalize(0, {n}, {beta}) = {q}, expected 0 (eps^(1/β) tail must cancel head)",
+            );
+        }
+    }
+}
+
+#[test]
+fn pool_band_finalize_negative_partial_clamps_to_zero() {
+    // Atomic-f32 fetch_add on tiny opposing values can produce a
+    // small negative partial through rounding even when the
+    // theoretical sum is non-negative. The `.max(0)` guard keeps
+    // the (partial/n) input to safe_pow non-negative — without it,
+    // (negative + eps)^(1/β) returns NaN at non-integer β and
+    // propagates through the pool fold into the JOD score. Pin
+    // the guard explicitly.
+    for &beta in &[2.0_f32, 4.0] {
+        for &partial in &[-1e-3_f32, -1.0, -1e6] {
+            let q = pool_band_finalize(partial, 1024, beta);
+            assert!(
+                q.is_finite() && q.abs() < 1e-6,
+                "pool_band_finalize({partial}, 1024, {beta}) = {q}, expected 0 (negative-clamp safety)",
+            );
+        }
+    }
+}
+
+#[test]
+fn pool_band_finalize_matches_lp_norm_mean_on_synth_signal() {
+    // The kernel-finalize contract is: feeding the kernel's per-
+    // pixel-accumulated safe_pow partial into pool_band_finalize
+    // reproduces `lp_norm_mean(values, β)` to f32 precision. This
+    // is the exact identity the GPU pool kernels rely on; the
+    // existing `pool_band_kernel_matches_host_lp_norm_mean` test
+    // confirms it through the GPU path (which requires a backend
+    // and an atomic-f32-capable runtime), but a scalar version of
+    // the same identity belongs in pool_scalar.rs so a CPU-only
+    // test run (e.g. cubecl-cpu CI without GPU) still trips on
+    // host-side regressions.
+    let eps: f32 = 1e-5;
+    let signal: Vec<f32> = (0..256_usize)
+        .map(|i| {
+            let x = i as f32 * 0.0123;
+            x.sin() * 5.0 + 0.0005 * if i.is_multiple_of(7) { -1.0 } else { 1.0 }
+        })
+        .collect();
+    let beta = 2.0_f32;
+    // Build the kernel's per-pixel-accumulated partial in scalar
+    // form: sum over pixels of (|v| + eps)^β - eps^β.
+    let partial: f32 = signal
+        .iter()
+        .map(|&v| (v.abs() + eps).powf(beta) - eps.powf(beta))
+        .sum();
+    let from_finalize = pool_band_finalize(partial, signal.len(), beta);
+    let from_mean = lp_norm_mean(&signal, beta);
+    let rel = ((from_finalize - from_mean) / from_mean.abs().max(1e-6)).abs();
+    assert!(
+        rel < 1e-5,
+        "pool_band_finalize from partial = {from_finalize}, lp_norm_mean = {from_mean}, rel = {rel:.4e}",
+    );
+}
+
+#[test]
+fn pool_band_finalize_eps_tail_is_substantial_at_low_beta() {
+    // Same observation as `lp_norm_sum_pythagorean_triple_at_p2`:
+    // the outer `- eps^(1/β)` tail is NOT a rounding-error term.
+    // At β=1 eps^(1/β) = eps = 1e-5 (negligible), but at β=2 it
+    // becomes ~3.16e-3 and at β=4 ~0.056. Pin both so a refactor
+    // that drops the tail at β=2 (which "looks safe" because 1e-5
+    // is small) gets caught — the actual tail is 316× larger at
+    // β=2 than β=1.
+    for (beta, expected_tail) in [(1.0_f32, 1e-5_f32), (2.0, 3.162_28e-3), (4.0, 5.623_4e-2)] {
+        // partial=0 isolates the tail magnitude: result is
+        // (eps).powf(1/β) - (eps).powf(1/β) = 0, so we instead
+        // measure indirectly by computing what pool_band_finalize
+        // returns for partial = eps*n. That gives
+        //   ((eps*n/n) + eps)^(1/β) - eps^(1/β)
+        //   = (2*eps)^(1/β) - eps^(1/β)
+        //   = eps^(1/β) * (2^(1/β) - 1)
+        let n = 16usize;
+        let partial = (1e-5_f32) * n as f32;
+        let q = pool_band_finalize(partial, n, beta);
+        let expected = expected_tail * ((2.0_f32).powf(1.0 / beta) - 1.0);
+        assert!(
+            (q - expected).abs() < expected.abs() * 1e-3 + 1e-8,
+            "β={beta}: pool_band_finalize(eps*n, n, β) = {q}, expected ~{expected} (tail eps^(1/β)={expected_tail})",
+        );
+    }
+}
+
+#[test]
+fn pool_band_finalize_divides_by_n() {
+    // The `partial / n` step is what makes this lp_norm_*MEAN*
+    // (not sum). A refactor that drops the division (or uses
+    // n=1) would inflate Q by ~n^(1/β). Pin by feeding identical
+    // partials at different n: the result must shrink as n grows
+    // (because partial/n shrinks). With partial = K and varying
+    // n, expected: (K/n + eps)^(1/β) - eps^(1/β), which is
+    // strictly monotonic decreasing in n for K > 0, β > 0.
+    let partial = 100.0_f32;
+    let beta = 2.0_f32;
+    let q_n1 = pool_band_finalize(partial, 1, beta);
+    let q_n100 = pool_band_finalize(partial, 100, beta);
+    let q_n10000 = pool_band_finalize(partial, 10000, beta);
+    assert!(
+        q_n1 > q_n100 && q_n100 > q_n10000,
+        "pool_band_finalize must be strictly decreasing in n_pixels under fixed partial: q_n1={q_n1}, q_n100={q_n100}, q_n10000={q_n10000}",
+    );
+    // Exact algebra check at n=100, β=2:
+    //   ((100/100) + 1e-5)^(1/2) - (1e-5)^(1/2)
+    //   = sqrt(1.00001) - sqrt(1e-5)
+    //   ≈ 1.000005 - 0.00316228
+    let eps: f32 = 1e-5;
+    let expected_n100 = (1.0_f32 + eps).sqrt() - eps.sqrt();
+    assert!(
+        (q_n100 - expected_n100).abs() < 1e-5,
+        "pool_band_finalize(100, 100, 2) = {q_n100}, expected closed-form ~{expected_n100}",
+    );
 }
 
 #[test]

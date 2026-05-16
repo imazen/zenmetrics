@@ -158,6 +158,13 @@ for offer_id in $OFFER_IDS; do
     ENV_STR+=" -e PARALLEL=${PARALLEL}"
     ENV_STR+=" -e GPU_RUNTIME=${GPU_RUNTIME}"
     ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
+    # SWEEP_BIN_OVERRIDE: v15-style pattern. Onstart fetches this
+    # URL (s3://… or https://…) at boot and replaces
+    # /usr/local/bin/zen-metrics with it. Use when the docker
+    # image's baked-in binary has the wrong cudarc feature set
+    # (cuCoredumpDeregisterCompleteCallback gated on cuda-13020).
+    [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]] && \
+        ENV_STR+=" -e SWEEP_BIN_OVERRIDE=${SWEEP_BIN_OVERRIDE}"
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 

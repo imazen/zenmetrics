@@ -37,7 +37,7 @@ log() {
 if [[ -r /proc/1/environ ]]; then
     while IFS='=' read -r -d '' k v; do
         case "$k" in
-            R2_*|SWEEP_*|WORKER_*|PARALLEL|WORKDIR|SCRIPTS_R2_PREFIX|GPU_RUNTIME)
+            R2_*|SWEEP_*|WORKER_*|PARALLEL|WORKDIR|SCRIPTS_R2_PREFIX|GPU_RUNTIME|CUDA_PATH)
                 export "$k=$v"
                 ;;
         esac
@@ -82,6 +82,26 @@ for tool in zen-metrics s5cmd jq; do
         exit 2
     fi
 done
+
+# ── Step 1a: optional binary override (v15 pattern) ────────────────────
+# When the docker-image-baked zen-metrics has the wrong cudarc feature
+# set (cuda-13020 dlsym DlSym panic), the operator can replace it by
+# setting SWEEP_BIN_OVERRIDE to an R2 (s3://…) or HTTPS URL of a
+# locally-built binary. We swap /usr/local/bin/zen-metrics with it.
+if [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]]; then
+    log "fetching zen-metrics override from $SWEEP_BIN_OVERRIDE"
+    if [[ "$SWEEP_BIN_OVERRIDE" == s3://* ]]; then
+        R2 cp "$SWEEP_BIN_OVERRIDE" /tmp/zen-metrics.override \
+            || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
+    else
+        curl -fsSL "$SWEEP_BIN_OVERRIDE" -o /tmp/zen-metrics.override \
+            || { log "FAIL fetch SWEEP_BIN_OVERRIDE"; exit 5; }
+    fi
+    cp /tmp/zen-metrics.override /usr/local/bin/zen-metrics
+    chmod +x /usr/local/bin/zen-metrics
+    rm /tmp/zen-metrics.override
+    log "zen-metrics override installed; version: $(/usr/local/bin/zen-metrics --version 2>&1 | head -1)"
+fi
 if ! command -v python3 >/dev/null || ! command -v pip3 >/dev/null; then
     log "installing python3 + python3-pip via apt (boot image missing one or both)"
     apt-get update -q
@@ -93,6 +113,48 @@ if ! python3 -c "import pyarrow" 2>/dev/null; then
     pip3 install --quiet --break-system-packages pyarrow 2>/dev/null \
         || pip3 install --quiet pyarrow \
         || { log "FAIL pip install pyarrow"; exit 3; }
+fi
+
+# libnvrtc12: cubecl-cuda uses NVRTC at runtime to compile PTX from
+# kernel source. nvidia-container-toolkit only mounts libcuda; nvrtc
+# is a CUDA *runtime* library and must be installed in the container.
+# Ubuntu 24.04 ships libnvrtc12 via NVIDIA's CUDA repo; cuda-nvrtc-12-6
+# matches our binary's cudart (compiled against CUDA 12.6 SDK).
+if ! ldconfig -p | grep -q libnvrtc.so.12; then
+    log "installing libnvrtc12 (NVRTC runtime for cubecl-cuda kernel compilation)"
+    if ! command -v gpg >/dev/null; then
+        apt-get update -q && apt-get install -yq --no-install-recommends \
+            gnupg ca-certificates >/dev/null \
+            || { log "FAIL apt install gnupg"; exit 6; }
+    fi
+    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
+        -o /tmp/cuda-keyring.deb \
+        || { log "FAIL fetch cuda-keyring"; exit 6; }
+    dpkg -i /tmp/cuda-keyring.deb \
+        || { log "FAIL dpkg cuda-keyring"; exit 6; }
+    rm /tmp/cuda-keyring.deb
+    apt-get update -q
+    # Install cuda-nvrtc-12-6 (matches binary's cuda-12060 cudarc).
+    # libcudart-12-6 also bundled in case cubecl needs cuda runtime
+    # helpers beyond what libcuda provides.
+    apt-get install -yq --no-install-recommends \
+        cuda-nvrtc-12-6 cuda-cudart-12-6 \
+        >/dev/null \
+        || { log "FAIL apt install cuda-nvrtc"; exit 6; }
+    # apt installs to /usr/local/cuda-12.6/lib64/. Register with
+    # the dynamic linker so libnvrtc.so.12 resolves via the system
+    # search path (LD_LIBRARY_PATH alone won't propagate through
+    # zen-metrics subprocesses if shell vars don't survive).
+    echo "/usr/local/cuda-12.6/lib64" > /etc/ld.so.conf.d/cuda-12.6.conf
+    ldconfig
+    # Symlink /usr/local/cuda → cuda-12.6 so cubecl-cuda's
+    # install::cuda_path() finds the real toolkit instead of the
+    # stub directory created above.
+    if [[ ! -L /usr/local/cuda || $(readlink /usr/local/cuda) == "cuda-12.6" ]]; then
+        rm -rf /usr/local/cuda
+        ln -s /usr/local/cuda-12.6 /usr/local/cuda
+    fi
+    log "libnvrtc12 installed: $(ldconfig -p | grep libnvrtc.so.12 | head -1)"
 fi
 
 # ── Step 2: heartbeat ──────────────────────────────────────────────────
@@ -199,6 +261,21 @@ process_chunk() {
 # image builds cudarc against CUDA 12.4 SDK so the binary's
 # cudart matches what most vast.ai hosts run (driver 550+).
 log "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-unset}"
+
+# cubecl-cuda's runtime calls install::cuda_path().expect(...) which
+# panics with 'CUDA installation not found' when /usr/local/cuda
+# doesn't exist (vast.ai's ubuntu:24.04 base does not include the
+# CUDA toolkit — only nvidia-container-toolkit mounts libcuda).
+# Setting CUDA_PATH or creating /usr/local/cuda satisfies the
+# existence check. NVRTC has bundled headers so a bogus include
+# path is harmless — the --include-path=<path>/include flag is
+# additive, not the primary header source.
+if [[ ! -d /usr/local/cuda ]]; then
+    log "creating stub /usr/local/cuda to satisfy cubecl-cuda runtime check"
+    mkdir -p /usr/local/cuda/include /usr/local/cuda/include/cccl
+fi
+export CUDA_PATH="${CUDA_PATH:-/usr/local/cuda}"
+log "CUDA_PATH=${CUDA_PATH}"
 
 heartbeat run
 

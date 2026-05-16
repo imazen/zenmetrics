@@ -177,6 +177,23 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pool_scalar.rs::pool_band_finalize_*`** — five direct
+  unit tests on the previously-indirectly-exercised public
+  `pool_band_finalize`. The function was covered only via the
+  GPU-backed `pool_band_kernel_matches_host_lp_norm_mean` test,
+  which means CPU-only test runs (e.g. cubecl-cpu CI on a host
+  without atomic-f32 GPU) couldn't catch host-side regressions
+  to its algebra. New tests pin: (1) zero-partial returns 0 across
+  β ∈ {1,2,4,8} and n ∈ {1,64,1024,65536} — eps^(1/β) tail must
+  cancel head; (2) negative-partial clamping to 0 (atomic-noise
+  protection — without `.max(0)`, β=2 returns NaN at non-integer
+  exponents); (3) scalar-form identity vs `lp_norm_mean` on a
+  synthesised signal (the same identity the GPU kernels rely on,
+  now testable without a GPU); (4) eps^(1/β) tail magnitude
+  pinned at β ∈ {1,2,4} — same observation as the lp_norm_sum
+  tests, at β=2 the tail is 316× larger than at β=1; (5)
+  strict-monotonic decreasing in n_pixels under fixed partial,
+  with a closed-form check at (partial=100, n=100, β=2). Tick 383.
 - **`tests/pool_scalar.rs::lp_norm_sum_*`** — four direct unit
   tests on the previously-uncovered public `lp_norm_sum`:
   Pythagorean-triple at p=2, sign-handling via `.abs()`,
