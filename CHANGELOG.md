@@ -561,6 +561,16 @@ left over from tick 522. Adds 1 length pin + 1 byte-match pin
 (2 logical asserts). Static-assert count is now 181 across 11
 test files.
 
+Tick 584 extracted the three duplicated const-byte-loop primitives
+(`starts_with`, `ends_with`, `contains`) into a shared
+`common::const_str` module in `tests/common/mod.rs`. The pattern
+was duplicated across `column_name.rs`, `goldens_metadata.rs`,
+and `lib_reexports.rs` (ticks 577-580, 583); each call site now
+imports `common::const_str` and uses `const_str::starts_with(…)`
+etc. Pure refactor — same static-assert count (181) but the
+boilerplate per call site shrinks from ~10-30 lines to 1-3 lines.
+No behavior change.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

@@ -19,6 +19,76 @@
 // any given test compile-unit aren't dead crate-wide.
 #![allow(dead_code)]
 
+/// Const-fn helpers for compile-time `&str` validation. `str::starts_with`,
+/// `str::ends_with`, and `str::contains` aren't const fn in stable Rust, but
+/// the underlying byte-level matching IS const-callable. These helpers
+/// encapsulate the pattern used across `column_name.rs`,
+/// `goldens_metadata.rs`, and `lib_reexports.rs` so the byte-loop boilerplate
+/// doesn't have to be reimplemented at each call site.
+///
+/// Tick 584: extracted from inline duplicates in 3 test files.
+pub mod const_str {
+    /// `const fn` equivalent of `s.starts_with(prefix)`, both operating on
+    /// raw byte slices.
+    pub const fn starts_with(s: &[u8], prefix: &[u8]) -> bool {
+        if prefix.len() > s.len() {
+            return false;
+        }
+        let mut i = 0;
+        while i < prefix.len() {
+            if s[i] != prefix[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// `const fn` equivalent of `s.ends_with(suffix)`, both operating on
+    /// raw byte slices.
+    pub const fn ends_with(s: &[u8], suffix: &[u8]) -> bool {
+        if suffix.len() > s.len() {
+            return false;
+        }
+        let offset = s.len() - suffix.len();
+        let mut i = 0;
+        while i < suffix.len() {
+            if s[offset + i] != suffix[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// `const fn` equivalent of `s.contains(needle)`, both operating on
+    /// raw byte slices. O(n·m) sliding window — fine for compile-time
+    /// validation of short strings.
+    pub const fn contains(s: &[u8], needle: &[u8]) -> bool {
+        if needle.len() > s.len() {
+            return false;
+        }
+        let max = s.len() - needle.len();
+        let mut i = 0;
+        while i <= max {
+            let mut j = 0;
+            let mut matched = true;
+            while j < needle.len() {
+                if s[i + j] != needle[j] {
+                    matched = false;
+                    break;
+                }
+                j += 1;
+            }
+            if matched {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+}
+
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};

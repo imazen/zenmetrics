@@ -115,22 +115,14 @@ fn lib_constants_reexport_match_their_originals() {
     const _: () = assert!(N_CHANNELS == 3, "N_CHANNELS contract — DKL opponent count");
     const _: () = assert!(MAX_LEVELS == 9, "MAX_LEVELS contract — pyramid cap");
     const _: () = assert!(PYRAMID_MIN_DIM == 4, "PYRAMID_MIN_DIM contract");
-    const _: () = {
-        let bytes = CVVDP_COLUMN_NAME.as_bytes();
-        let prefix = b"cvvdp_";
-        assert!(
-            bytes.len() >= prefix.len(),
-            "CVVDP_COLUMN_NAME shorter than `cvvdp_` family prefix",
-        );
-        let mut i = 0;
-        while i < prefix.len() {
-            assert!(
-                bytes[i] == prefix[i],
-                "CVVDP_COLUMN_NAME must start with `cvvdp_` family prefix",
-            );
-            i += 1;
-        }
-    };
+    // Tick 584: refactored to use the shared `const_str::starts_with`
+    // helper from `common::const_str`.
+    #[path = "common/mod.rs"]
+    mod common_inline;
+    const _: () = assert!(
+        common_inline::const_str::starts_with(CVVDP_COLUMN_NAME.as_bytes(), b"cvvdp_"),
+        "CVVDP_COLUMN_NAME must start with `cvvdp_` family prefix",
+    );
     // Touchpoint that keeps the runtime test fn body non-empty so
     // the test-runner-visible name stays referenced.
     let _ = CVVDP_COLUMN_NAME;

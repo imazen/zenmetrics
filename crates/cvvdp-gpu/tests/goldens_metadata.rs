@@ -18,62 +18,35 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use common::{CACHE_DIR_SUBDIR, GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir};
+use common::{CACHE_DIR_SUBDIR, GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir, const_str};
 
-// Tick 578: compile-time pins for the goldens-metadata structural
-// invariants. `str::starts_with` / `ends_with` / `contains` are
-// not const fn, but the underlying byte-level matching IS — via
-// `str::as_bytes` (const since 1.39), integer comparison, and
-// `while` in const. Same pattern as tick 577 on CVVDP_COLUMN_NAME.
+// Tick 578 (refactored tick 584): compile-time pins for the goldens-
+// metadata structural invariants. The const-byte-loop primitives are
+// encapsulated in `common::const_str::{starts_with, ends_with, contains}`.
 //
 // These promote the previously-runtime checks in:
 //   - `manifest_url_is_well_formed_https` (https:// prefix + .json suffix)
 //   - `manifest_url_uses_documented_r2_host` (canonical R2 host prefix)
 //   - `manifest_sha256_is_64_lowercase_hex` (length 64)
 //   - `golden_version_is_non_empty_and_lowercase` (non-empty + v-prefix)
-// to compile time. The substring `.contains` checks (golden-version
-// path segment, bucket subpath) and the per-char hex validation stay
-// runtime — `.contains` requires substring search and per-char
-// `is_ascii_digit` / range-contains aren't easily const-callable.
 const _: () = {
-    // MANIFEST_URL must start with https://
     let url = MANIFEST_URL.as_bytes();
-    let https = b"https://";
-    assert!(url.len() >= https.len(), "MANIFEST_URL shorter than https:// prefix");
-    let mut i = 0;
-    while i < https.len() {
-        assert!(url[i] == https[i], "MANIFEST_URL does not start with https://");
-        i += 1;
-    }
-    // MANIFEST_URL must end with .json
-    let json = b".json";
-    assert!(url.len() >= json.len(), "MANIFEST_URL shorter than .json suffix");
-    let offset = url.len() - json.len();
-    let mut j = 0;
-    while j < json.len() {
-        assert!(url[offset + j] == json[j], "MANIFEST_URL does not end with .json");
-        j += 1;
-    }
-    // MANIFEST_URL must start with the canonical R2 host
-    let canonical_host = b"https://coefficient.r2.imazen.org/";
     assert!(
-        url.len() >= canonical_host.len(),
-        "MANIFEST_URL shorter than canonical R2 host prefix",
+        const_str::starts_with(url, b"https://"),
+        "MANIFEST_URL must start with https://",
     );
-    let mut k = 0;
-    while k < canonical_host.len() {
-        assert!(
-            url[k] == canonical_host[k],
-            "MANIFEST_URL does not start with canonical R2 host https://coefficient.r2.imazen.org/",
-        );
-        k += 1;
-    }
-    // MANIFEST_SHA256 must be exactly 64 hex chars
+    assert!(
+        const_str::ends_with(url, b".json"),
+        "MANIFEST_URL must end with .json",
+    );
+    assert!(
+        const_str::starts_with(url, b"https://coefficient.r2.imazen.org/"),
+        "MANIFEST_URL must start with canonical R2 host https://coefficient.r2.imazen.org/",
+    );
     assert!(
         MANIFEST_SHA256.len() == 64,
         "MANIFEST_SHA256 must be 64 hex chars (a typo that truncates one char silently breaks fetch validation)",
     );
-    // GOLDEN_VERSION must be non-empty and start with 'v'
     assert!(!GOLDEN_VERSION.is_empty(), "GOLDEN_VERSION must not be empty");
     let gv = GOLDEN_VERSION.as_bytes();
     assert!(
@@ -82,53 +55,24 @@ const _: () = {
     );
 };
 
-// Tick 579: const substring-search helper unlocks the
-// `.contains(...)` invariants that tick 578 left runtime-only.
-// `str::contains` isn't const fn, but a sliding-window byte
-// comparison over `as_bytes()` is — and the inner comparison loop
-// is the same primitive we used in 577-578.
-const fn bytes_contain(hay: &[u8], needle: &[u8]) -> bool {
-    if needle.len() > hay.len() {
-        return false;
-    }
-    let max = hay.len() - needle.len();
-    let mut i = 0;
-    while i <= max {
-        let mut j = 0;
-        let mut matched = true;
-        while j < needle.len() {
-            if hay[i + j] != needle[j] {
-                matched = false;
-                break;
-            }
-            j += 1;
-        }
-        if matched {
-            return true;
-        }
-        i += 1;
-    }
-    false
-}
-
+// Tick 579 (refactored tick 584): `.contains(...)` invariants via
+// the shared `const_str::contains` substring-search helper.
+//
 // Bucket subpath: catches a refactor that swapped cvvdp-gpu's
 // MANIFEST_URL to a sibling crate's bucket (e.g. /zensim-goldens/).
 // Same load-bearing semantic as the runtime test
 // `manifest_url_uses_cvvdp_goldens_bucket_subpath` (tick 520).
 const _: () = assert!(
-    bytes_contain(MANIFEST_URL.as_bytes(), b"/cvvdp-goldens/"),
+    const_str::contains(MANIFEST_URL.as_bytes(), b"/cvvdp-goldens/"),
     "MANIFEST_URL must contain bucket subpath /cvvdp-goldens/",
 );
 
 // Version segment: catches a refactor that bumps GOLDEN_VERSION
-// to v2 but forgets to update the URL (or vice versa). The
-// runtime test computes this via `format!("/{GOLDEN_VERSION}/")`;
-// at compile time we can hardcode "/v1/" because GOLDEN_VERSION is
-// statically known to be "v1" (pinned in tick 578). When
+// to v2 but forgets to update the URL (or vice versa). When
 // GOLDEN_VERSION bumps, this pin and the GOLDEN_VERSION value pin
-// will both need updating in the same commit — by design.
+// both need updating in the same commit — by design.
 const _: () = assert!(
-    bytes_contain(MANIFEST_URL.as_bytes(), b"/v1/"),
+    const_str::contains(MANIFEST_URL.as_bytes(), b"/v1/"),
     "MANIFEST_URL must contain version path segment /v1/ (matches current GOLDEN_VERSION)",
 );
 
@@ -163,7 +107,7 @@ const _: () = {
 const _: () = {
     assert!(!CACHE_DIR_SUBDIR.is_empty(), "CACHE_DIR_SUBDIR must not be empty");
     assert!(
-        bytes_contain(CACHE_DIR_SUBDIR.as_bytes(), b"cvvdp"),
+        const_str::contains(CACHE_DIR_SUBDIR.as_bytes(), b"cvvdp"),
         "CACHE_DIR_SUBDIR must contain 'cvvdp' to disambiguate from sibling crates",
     );
     let bytes = CACHE_DIR_SUBDIR.as_bytes();

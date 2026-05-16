@@ -15,6 +15,10 @@
 
 use cvvdp_gpu::CVVDP_COLUMN_NAME;
 
+#[path = "common/mod.rs"]
+mod common;
+use common::const_str;
+
 // Tick 554: compile-time pin of `!CVVDP_COLUMN_NAME.is_empty()`.
 // `str::is_empty` is `const fn` since Rust 1.39 (well below this
 // crate's MSRV 1.93). An empty column name would silently produce
@@ -30,30 +34,19 @@ const _: () = assert!(
     "CVVDP_COLUMN_NAME must be non-empty; empty would yield unnamed parquet columns",
 );
 
-// Tick 577: compile-time pin of `CVVDP_COLUMN_NAME` default-form
-// prefix `cvvdp_imazen_`. `str::starts_with` isn't const fn, but a
-// while-loop over `as_bytes()` IS — `str::as_bytes` is const since
-// 1.39, integer comparison is trivially const, and `while` in const
-// is stable. The check is gated on `option_env!("CVVDP_IMPL_TAG")`
-// being None (i.e. default-form build, no env override) because the
-// env-override path is intentionally a free-form escape hatch.
+// Tick 577 (refactored tick 584): compile-time pin of
+// `CVVDP_COLUMN_NAME` default-form prefix `cvvdp_imazen_`. The
+// byte-loop pattern is encapsulated in `common::const_str::starts_with`.
+// The check is gated on `option_env!("CVVDP_IMPL_TAG")` being None
+// (i.e. default-form build, no env override) because the env-
+// override path is intentionally a free-form escape hatch.
 // `Option::is_none` is const since 1.48.
 const _: () = {
     if option_env!("CVVDP_IMPL_TAG").is_none() {
-        let bytes = CVVDP_COLUMN_NAME.as_bytes();
-        let prefix = b"cvvdp_imazen_";
         assert!(
-            bytes.len() >= prefix.len(),
-            "CVVDP_COLUMN_NAME shorter than `cvvdp_imazen_` prefix in default-form build",
+            const_str::starts_with(CVVDP_COLUMN_NAME.as_bytes(), b"cvvdp_imazen_"),
+            "CVVDP_COLUMN_NAME does not start with `cvvdp_imazen_` in default-form build",
         );
-        let mut i = 0;
-        while i < prefix.len() {
-            assert!(
-                bytes[i] == prefix[i],
-                "CVVDP_COLUMN_NAME does not start with `cvvdp_imazen_` in default-form build",
-            );
-            i += 1;
-        }
     }
 };
 
