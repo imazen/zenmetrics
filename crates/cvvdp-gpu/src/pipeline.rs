@@ -1155,6 +1155,36 @@ impl<R: Runtime> Cvvdp<R> {
     /// pool yet). Future ticks can extend `Cvvdp::new` to allocate
     /// these once.
     ///
+    /// # Examples
+    ///
+    /// Read back the Laplacian pyramid for a 64×64 buffer; the last
+    /// level is the coarse residual (cvvdp's baseband-Laplacian
+    /// convention). `ignore` for the standard `Cvvdp::*` reason.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let bands = cvvdp.compute_dkl_laplacian_pyramid(&srgb)
+    ///     .expect("compute_dkl_laplacian_pyramid");
+    /// assert!(!bands.is_empty());
+    /// // bands[0] is the finest level (full base resolution).
+    /// assert_eq!(bands[0][0].len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
