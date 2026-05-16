@@ -47,6 +47,33 @@ const _: () = assert!(
     "SRGB8_TO_LINEAR_LUT[255] must be exactly 1.0 (sRGB byte 255 → linear 1.0 full-scale)",
 );
 
+// Tick 567: compile-time pin of the DKL opponent-color sign
+// signature on `SRGB_LINEAR_TO_DKL`. `f32::is_sign_positive` and
+// `is_sign_negative` are const fn since Rust 1.83. The matrix's
+// row sign pattern encodes the opponent-color construction:
+//   - Row 0 (A) is +++ (achromatic = weighted positive sum)
+//   - Row 1 (Rg) is +-- (red opposes green+blue)
+//   - Row 2 (Vy) is --+ (blue opposes red+green)
+// While the per-entry value bit-pins above already encode the sign
+// implicitly, this separate sign pin pins the SEMANTIC contract
+// directly — same reasoning as the channel-ordering invariants
+// (ticks 564-566).
+const _: () = {
+    use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+    // Row 0 (A) = +++
+    assert!(M[0][0].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][0] (A.R) must be positive");
+    assert!(M[0][1].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][1] (A.G) must be positive");
+    assert!(M[0][2].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][2] (A.B) must be positive");
+    // Row 1 (Rg) = +--
+    assert!(M[1][0].is_sign_positive(), "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) must be positive");
+    assert!(M[1][1].is_sign_negative(), "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) must be negative");
+    assert!(M[1][2].is_sign_negative(), "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) must be negative");
+    // Row 2 (Vy) = --+
+    assert!(M[2][0].is_sign_negative(), "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) must be negative");
+    assert!(M[2][1].is_sign_negative(), "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) must be negative");
+    assert!(M[2][2].is_sign_positive(), "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) must be positive");
+};
+
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).
 const GOLDENS: &[(u8, u8, u8, f32, f32, f32)] = &[
     (0, 0, 0, 0.628_396_27, 0.002_257_2, 0.006_174_458),

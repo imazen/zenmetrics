@@ -379,6 +379,19 @@ pattern from tick 565:
     be positive (`10^D_MAX < 1` would collapse the clamp ceiling)
 Static-assert count is now 105 across 11 test files.
 
+Tick 567 added 9 sign-signature invariants on the
+`SRGB_LINEAR_TO_DKL` matrix in `color_scalar.rs`:
+  - Row 0 (A): all 3 entries `.is_sign_positive()`
+  - Row 1 (Rg): [0]=positive, [1]=negative, [2]=negative
+  - Row 2 (Vy): [0]=negative, [1]=negative, [2]=positive
+This encodes the DKL opponent-color contract: A is weighted-
+positive sum, Rg opposes R against G+B, Vy opposes B against
+R+G. The per-entry value bit-pins already encode the sign
+implicitly, but the sign-signature pin captures the SEMANTIC
+contract directly — useful for the same documentation-of-intent
+reason as the channel-ordering invariants (564-566). Static-
+assert count is now 114 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
