@@ -722,6 +722,22 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 626 — anti-rot conversion of the only 2 remaining
+src-doctest line-refs to function-name refs:
+
+- `params.rs::pixels_per_degree` doctest:
+  `(tests/display_geometry.rs:56)` →
+  `tests/display_geometry.rs::ppd_matches_pycvvdp_standard_4k`
+- `pipeline.rs::estimate_gpu_memory_bytes` doctest:
+  `(tests/pipeline_score.rs:2077)` →
+  `tests/pipeline_score.rs::estimate_gpu_memory_scales_with_pixel_count`
+
+Line numbers go stale when test files reorganize; function-name
+refs are stable until renamed (and a rename surfaces as a compile
+error in the actual test, not a silent rot in a doc-comment).
+Companion to tick 625's CHANGELOG line-ref fix. All 72 doctests
+still pass. Docs-only change.
+
 Tick 625 — fix stale line reference in tick 605's CHANGELOG
 entry. The text claimed `tests/pipeline_score.rs:2220` for
 `recommend_parallel_matches_documented_examples`, but tick 603
