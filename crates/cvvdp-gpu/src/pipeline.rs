@@ -2508,6 +2508,44 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
     ///
+    /// # Example
+    ///
+    /// Warm against a REF once, then score N DIST candidates
+    /// against the cached state. `ignore` for the same reason as
+    /// the rest of the `Cvvdp::*` doctests — docs.rs has no GPU
+    /// and the no-default-features build path doesn't resolve
+    /// cubecl runtime types.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// // One REF, one warm dispatch.
+    /// let ref_bytes = vec![128u8; (w * h * 3) as usize];
+    /// cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+    ///
+    /// // Score many DIST candidates without re-dispatching REF.
+    /// for shift in [0u8, 4, 8, 16] {
+    ///     let dist: Vec<u8> = ref_bytes.iter().map(|b| b.saturating_add(shift)).collect();
+    ///     let jod = cvvdp.compute_dkl_jod_with_warm_ref(&dist, ppd)
+    ///         .expect("warm-ref JOD");
+    ///     assert!(jod.is_finite() && (0.0..=10.0 + 1e-3).contains(&jod));
+    /// }
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `ref_srgb.len() !=
