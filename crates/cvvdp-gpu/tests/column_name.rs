@@ -25,10 +25,13 @@ use common::const_str;
 // parquet sidecars with an unnamed score column, breaking joins
 // downstream. Same pattern as ticks 522-524, 548-552.
 //
-// `str::starts_with` (used by the cvvdp_imazen_ prefix check) is
-// NOT yet const fn in stable Rust, so that prefix assertion has
-// to stay runtime-only for now. The non-empty pin is the strict
-// subset that does lift.
+// Tick 587: corrected stale comment. The original tick-554 note
+// said `str::starts_with` "stays runtime-only" — that was wrong;
+// tick 577 lifted the prefix check via a const while-loop over
+// `as_bytes()`, and tick 584 factored the pattern into
+// `common::const_str::starts_with` (used in the `const _` block
+// below). The non-empty pin remains compile-time enforced via
+// `str::is_empty`.
 const _: () = assert!(
     !CVVDP_COLUMN_NAME.is_empty(),
     "CVVDP_COLUMN_NAME must be non-empty; empty would yield unnamed parquet columns",

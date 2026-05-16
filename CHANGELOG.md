@@ -591,6 +591,19 @@ the wrong manifest). Also adds 5 compile-time + 2 runtime tests
 on the new helper. Static-assert count is now 204 across 12 test
 files.
 
+Tick 587 fixed two stale "stays runtime-only" comments in older
+const blocks:
+  - `column_name.rs:28-31`: tick 554 originally said
+    `str::starts_with` "stays runtime-only" — but tick 577 lifted
+    the prefix check, and tick 584 factored it into
+    `common::const_str::starts_with`.
+  - `pyramid_scalar.rs:28-31`: tick 555 originally said GAUSS5
+    outer taps "stay runtime-only because they use abs+lt
+    tolerance" — but tick 563 lifted them by deriving the bit
+    pattern at compile time from `0.25 - KERNEL_A / 2.0`.
+Comment-only updates; no code change, no behavior change. Doc
+maintenance like tick 583 did for lib_reexports.rs.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

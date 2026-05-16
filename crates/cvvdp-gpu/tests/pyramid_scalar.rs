@@ -25,9 +25,15 @@ use cvvdp_gpu::kernels::pyramid::{
 // Tick 555: compile-time bit-pins for the Burt-Adelson kernel
 // constants. `f32::to_bits` is const fn since 1.83 (workspace MSRV
 // 1.93), so the exact-bit-equality value checks can move to
-// compile time. The outer taps GAUSS5[0] and GAUSS5[4] stay
-// runtime-only because they use `(.. - ..).abs() < 1e-7`
-// tolerance (`<` for f32 isn't const fn yet in stable Rust).
+// compile time.
+//
+// Tick 587: corrected stale tick-555 note. It originally said the
+// outer taps GAUSS5[0]/[4] "stay runtime-only because they use
+// abs+lt tolerance" — but tick 563 lifted them too, by deriving
+// the bit pattern at compile time from `0.25 - KERNEL_A / 2.0`
+// (f32 arith IS const-callable; only `f32::PartialOrd::lt` isn't).
+// See the tick-563 const block below for the lifted edge taps.
+//
 // Same pattern as ticks 522-524, 548-552, 554.
 const _: () = {
     use cvvdp_gpu::kernels::pyramid::{GAUSS5, KERNEL_A};
