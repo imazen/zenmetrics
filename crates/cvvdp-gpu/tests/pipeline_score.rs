@@ -504,6 +504,56 @@ fn compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm() {
     }
 }
 
+#[test]
+fn compute_dkl_jod_host_pool_with_warm_ref_reports_dim_mismatch_before_no_warm() {
+    // Tick 391: sibling pin to
+    // `compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`
+    // (tick 248) — the source-code comment on
+    // `compute_dkl_jod_host_pool_with_warm_ref` references the
+    // same ordering rationale and applies the dim check before
+    // the warm-state check, but the regression test only existed
+    // for the GPU variant. A refactor that swaps the order in
+    // the host_pool path (returns NoWarmReference first, masking
+    // the more actionable dim error) would slip past CI.
+    //
+    // host_pool variant matters because cubecl-cpu / Metal
+    // callers route through it explicitly (the GPU
+    // Atomic<f32>::fetch_add path doesn't run on those backends —
+    // see cvvdp-gpu's lib.rs Backend support section). Their
+    // production error reporting needs the same ordering
+    // contract as the GPU path.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    // No warm_reference call. Pass a buffer sized for 32×32 against
+    // a Cvvdp configured for 64×64. Expect DimensionMismatch, not
+    // NoWarmReference.
+    let expected_len = (w as usize) * (h as usize) * 3;
+    let wrong_bytes = vec![128u8; expected_len / 4];
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let err = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&wrong_bytes, ppd)
+        .expect_err("must error on wrong-size dist regardless of warm state");
+    match err {
+        cvvdp_gpu::Error::DimensionMismatch { expected, got } => {
+            assert_eq!(expected, expected_len);
+            assert_eq!(got, expected_len / 4);
+        }
+        cvvdp_gpu::Error::NoWarmReference => {
+            panic!(
+                "host_pool ordering regression: NoWarmReference reported \
+                 before DimensionMismatch on a wrong-size + no-warm call — \
+                 see compute_dkl_jod_host_pool_with_warm_ref source (tick 248 \
+                 comment) for the documented ordering contract"
+            );
+        }
+        other => panic!("expected DimensionMismatch, got {other:?}"),
+    }
+}
+
 #[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "ppd=")]

@@ -177,6 +177,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::compute_dkl_jod_host_pool_with_warm_ref_reports_dim_mismatch_before_no_warm`**
+  — sibling pin to the tick-248 GPU-variant test
+  (`compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`).
+  The source code for `compute_dkl_jod_host_pool_with_warm_ref`
+  applies the dim check before the warm-state check (the
+  comment references the tick-248 ordering rationale) but had
+  no regression test pinning the contract. A refactor that
+  swaps the order on the host_pool path — returning
+  NoWarmReference first and masking the more actionable
+  DimensionMismatch — would slip past CI. host_pool matters
+  because cubecl-cpu / Metal callers route through it
+  explicitly (the GPU Atomic<f32>::fetch_add path doesn't run
+  on those backends), so their production error reporting
+  needs the same ordering as the GPU path. Tick 391.
 - **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
   — extended to cover four additional public entry points the
   original tick-239 test acknowledged in its docstring but did
