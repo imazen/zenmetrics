@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`safe_pow` doctest** — added `# Examples` covering `safe_pow(0, p)
+  == 0` exact zero (via `(eps)^p - eps^p` cancellation), `safe_pow(2,
+  2) ≈ 4` within 0.01, and monotonicity. Tick 443.
+
 - **`srgb_byte_to_dkl_scalar` doctest** — added `# Examples`:
   pure-white → positive A + chroma < 5% of A, pure-red → RG > 0
   (red-green axis convention). Tick 442.

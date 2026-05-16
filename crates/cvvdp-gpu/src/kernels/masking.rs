@@ -77,6 +77,24 @@ pub const XCM_3X3: [[f32; 3]; 3] = [
 
 /// cvvdp's `safe_pow(x, p) = (x + eps)^p - eps^p`, with `eps = 1e-5`.
 /// Avoids zero-derivative singularities at `x = 0`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::safe_pow;
+///
+/// // safe_pow(0, p) = (eps)^p - eps^p = 0 exactly.
+/// assert_eq!(safe_pow(0.0, 2.0), 0.0);
+/// assert_eq!(safe_pow(0.0, 0.5), 0.0);
+///
+/// // Above the eps regularization point, behaves like x^p within
+/// // a small bias.
+/// let v = safe_pow(2.0, 2.0);
+/// assert!((v - 4.0).abs() < 0.01, "safe_pow(2, 2) = {v}, expected ≈ 4");
+///
+/// // Monotonically increasing in x for any positive p.
+/// assert!(safe_pow(1.0, 2.5) < safe_pow(2.0, 2.5));
+/// ```
 #[inline]
 #[must_use]
 pub fn safe_pow(x: f32, p: f32) -> f32 {
