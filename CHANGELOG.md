@@ -345,7 +345,7 @@ mention. Tick 500.
   in [3, 10]). `PARALLEL_SAFETY_FACTOR = 1.5` is exported so
   callers with different workload mixes can compute a tighter
   cap manually (warm_reference batches → ~1.2; mixed CPU + GPU
-  process → ~2.0). Tick 399.
+  process → ~2.0). Tick 399, 14d95cb4.
 
 - **`cvvdp_gpu::estimate_gpu_memory_bytes(width, height) -> Option<usize>`**
   — static-analysis predictor for the GPU memory `Cvvdp::new` will
@@ -366,7 +366,7 @@ mention. Tick 500.
   scaling (4× pixels → 4× ±10% bytes), order-of-magnitude at
   three sizes, and a worked-example concurrency-cap calc on an
   8 GB GPU. Includes `examples/cvvdp_mem_table.rs` for operators
-  to probe the table on their own hardware. Tick 398.
+  to probe the table on their own hardware. Tick 398, 9a30d97f.
 
 #### scripts/sweep (cvvdp-backfill — deployment hardening, ticks 353-376)
 
@@ -1352,7 +1352,7 @@ shipped across six commits + an operator runbook:
   absolute tolerance — well under the 6e-4 historic drift); (4)
   seam continuity around c = 0.04045 (byte 11) — pin the local
   slope ratio to (0.5, 2.0) to catch a refactor that mis-aligns
-  the piecewise branch threshold. Tick 387.
+  the piecewise branch threshold. Tick 387, 0e284715.
 - **`tests/csf_scalar.rs::precompute_logs_row_*`** — five direct
   unit tests on the previously-GPU-only-exercised public
   `precompute_logs_row`. The helper had no scalar-side coverage:
@@ -1392,7 +1392,7 @@ shipped across six commits + an operator runbook:
   pinned at β ∈ {1,2,4} — same observation as the lp_norm_sum
   tests, at β=2 the tail is 316× larger than at β=1; (5)
   strict-monotonic decreasing in n_pixels under fixed partial,
-  with a closed-form check at (partial=100, n=100, β=2). Tick 383.
+  with a closed-form check at (partial=100, n=100, β=2). Tick 383, a5218943.
 - **`tests/pool_scalar.rs::lp_norm_sum_*`** — four direct unit
   tests on the previously-uncovered public `lp_norm_sum`:
   Pythagorean-triple at p=2, sign-handling via `.abs()`,
