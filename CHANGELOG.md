@@ -364,42 +364,42 @@ shipped across six commits + an operator runbook:
 - **`mult_mutual_band` doctest** — added `# Examples`: 8×8 input
   with T == R → output identically zero bit-exact across all 3
   channels and all 64 pixels (the trivial-zero-diff contract).
-  Tick 461.
+  Tick 461, 8f8609c7.
 
 - **`weber_contrast_pyr_dec_scalar` doctest** — added `# Examples`:
   16×16 + n_levels=3 → 3 bands and 3 log_l_bkg vectors; baseband
-  log_l_bkg is bit-constant (replicated scalar mean). Tick 460.
+  log_l_bkg is bit-constant (replicated scalar mean). Tick 460, 23b64e11.
 
 - **`laplacian_pyramid_dec_scalar` doctest** — added `# Examples`:
   16×16 + n_levels=3 → 3 bands at 16×16/8×8/4×4 dims; each band's
-  `data.len() == w * h`. Tick 459.
+  `data.len() == w * h`. Tick 459, fa97e6c8.
 
 - **`phase_uncertainty_band` doctest** — added `# Examples`:
   small-band (2×2) pure-scaling branch (no blur), large-band (8×8)
-  blur-then-scale branch with output length match. Tick 458.
+  blur-then-scale branch with output length match. Tick 458, 655e623e.
 
 - **`gaussian_blur_sigma3` doctest** — added `# Examples`: output
   length matches input, DC preservation (uniform → uniform within
-  1e-5). Tick 457.
+  1e-5). Tick 457, 87f53be3.
 
 - **`gausspyr_expand_scalar` doctest** — added `# Examples`: 4×4 → 8×8
   (standard 2× upscale), 4×4 → 7×7 (odd target — supports `[2*sw-1, 2*sw]`
-  range per debug_assert). Tick 456.
+  range per debug_assert). Tick 456, 81c88a44.
 
 - **`gausspyr_reduce_scalar` doctest** — added `# Examples`: 8×8 → 4×4
-  with `dst.len() == 16`, odd-dim 7×7 → 4×4 ceil-halving. Tick 455.
+  with `dst.len() == 16`, odd-dim 7×7 → 4×4 ceil-halving. Tick 455, bfa03284.
 
 - **`flatten_band_weights` doctest** — added `# Examples`: empty
   → empty, 2-level [[1,2,3],[4,5,6]] → [1..=6], `weight_idx =
-  level * 3 + channel` indexing pin. Tick 454.
+  level * 3 + channel` indexing pin. Tick 454, a6d20ad5.
 
 - **`precomputed_band_weights` doctest** — added `# Examples`:
   length agrees with `band_frequencies`, every [A, Rg, Vy] triple is
-  positive-finite at standard 4K + 100 cd/m². Tick 453.
+  positive-finite at standard 4K + 100 cd/m². Tick 453, f3b47c93.
 
 - **`do_pooling_and_jod_still_3ch` doctest** — added `# Examples`:
   all-zero contrasts → JOD ≈ 10 within 1e-3, non-zero contrasts →
-  JOD < that. Tick 452.
+  JOD < that. Tick 452, 5ca2fc6c.
 
 - **`mult_mutual_pixel` doctest** — added `# Examples`: T == R →
   D = [0, 0, 0], argument symmetry `f(T, R) == f(R, T)`, and
