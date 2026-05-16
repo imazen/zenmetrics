@@ -227,6 +227,17 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (docs)
+
+- **`CsfChannel` variant docstrings** — `A` (achromatic /
+  luminance), `Rg` (red-green opponent), `Vy` (violet-yellow
+  opponent). Three previously-undocumented variants surfaced by
+  `RUSTDOCFLAGS="-D missing_docs" cargo doc`. Tick 436.
+
+- **`Error::DimensionMismatch` field docstrings** — `expected`
+  (`width × height × 3` byte count) and `got` (actual caller-passed
+  length). Tick 436.
+
 #### cvvdp-gpu (tests)
 
 - **`tests/params_placeholder_non_display.rs`** — 5 additional pins

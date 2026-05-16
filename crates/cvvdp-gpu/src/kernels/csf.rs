@@ -62,8 +62,11 @@ pub const CSF_BASEBAND_RHO: f32 = 0.1;
 /// Channel index for the per-channel `o0_c*` tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsfChannel {
+    /// Achromatic channel — luminance / DC.
     A = 0,
+    /// Red-green chromatic opponent channel.
     Rg = 1,
+    /// Violet-yellow chromatic opponent channel.
     Vy = 2,
 }
 

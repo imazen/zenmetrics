@@ -227,7 +227,12 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Buffer length doesn't match `width × height × 3`.
-    DimensionMismatch { expected: usize, got: usize },
+    DimensionMismatch {
+        /// Required buffer length: `width × height × 3` bytes.
+        expected: usize,
+        /// Actual length of the buffer passed by the caller.
+        got: usize,
+    },
     /// `Cvvdp::score_with_reference` was called without a prior
     /// `Cvvdp::set_reference`.
     NoCachedReference,
