@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/gausspyr_reduce_invariants.rs`** — seven structural
+  invariant pins on `gausspyr_reduce_scalar`: (1) `(dw, dh) = (4, 4)`
+  and `dst.len() == 16` for 8×8; (2) odd inputs ceil-halve correctly
+  (7×7 → 4×4; 17×13 → 9×7); (3) returned `(dw, dh)` agrees with
+  `dst.len()` across 9 size combos including non-square; (4) `dst`
+  is fully overwritten — pre-fill with NaN and confirm none survive;
+  (5) determinism via `to_bits()` bit-equality across repeated calls;
+  (6) `(4, 8)` and `(8, 4)` produce distinct dims AND distinct content
+  (width/height swap catches); (7) caller-provided `dst` capacity
+  (too-big or zero) doesn't affect output. Complements
+  `pyramid_scalar.rs::reduce_matches_pycvvdp`'s single fixed-input
+  pycvvdp parity test with broad structural coverage. Tick 418.
+
 - **`tests/laplacian_pyramid_invariants.rs`** — seven structural
   invariant pins on `laplacian_pyramid_dec_scalar`: (1) output band
   count matches requested `n_levels` for 1..=4; (2) auto-`n_levels=0`
