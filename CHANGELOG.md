@@ -190,6 +190,17 @@ mention. Tick 500.
   with the STANDARD_4K ppd, and (4) `warm_reference` +
   `compute_dkl_jod_with_warm_ref`. Tick 493.
 
+- **`params_scaffolding_types_are_public`** (in `lib_reexports.rs`)
+  — adds a 9th pin to the lib re-export coverage. `CsfParams`,
+  `MaskingParams`, `PoolingParams`, `JodParams` are documented as
+  scaffolding for a planned "load parameters from vendored cvvdp
+  JSON" path. They have no other test importing them — without
+  this pin a future refactor that downgrades them to `pub(crate)`
+  or removes them as unused would break the planned path silently.
+  Compile-time use site via `cvvdp_gpu::params::{CsfParams, ...}`
+  plus a touchpoint via `CvvdpParams::PLACEHOLDER` sub-bundle
+  access. Tick 502.
+
 - **`lib_reexports.rs` extended** — adds 3 new pins (8 total, was
   5): (1) `cvvdp_type_reexport_resolves` — `Cvvdp<R>` is the main
   scoring type; without this pin, a future refactor that moves it

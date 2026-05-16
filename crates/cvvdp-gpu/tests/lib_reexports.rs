@@ -119,3 +119,30 @@ fn error_and_result_reexport_resolve() {
     let _e = Error::NoCachedReference;
     let _r: Result<()> = Ok(());
 }
+
+#[test]
+fn params_scaffolding_types_are_public() {
+    // Tick 502: the params:: scaffolding types are currently unused
+    // by production code (the per-stage cvvdp v0.5.4 constants are
+    // inlined in `kernels::pool` / `kernels::masking` / etc.) but
+    // they exist as the documented public API for a planned
+    // "load parameters from the vendored cvvdp JSON" path. A future
+    // refactor that downgrades them to `pub(crate)` or removes them
+    // because they're unused would break that planned path silently.
+    //
+    // Pin each type's public visibility via a compile-time use site.
+    // CsfParams / MaskingParams / PoolingParams / JodParams have
+    // no other test importing them — without this pin a removal
+    // would only surface when the JSON-loading path lands.
+    use cvvdp_gpu::params::{CsfParams, JodParams, MaskingParams, PoolingParams};
+    fn _accepts_csf(_p: &CsfParams) {}
+    fn _accepts_masking(_p: &MaskingParams) {}
+    fn _accepts_pooling(_p: &PoolingParams) {}
+    fn _accepts_jod(_p: &JodParams) {}
+    // Touchpoint via the PLACEHOLDER sub-bundles to keep imports used.
+    let p = CvvdpParams::PLACEHOLDER;
+    _accepts_csf(&p.csf);
+    _accepts_masking(&p.masking);
+    _accepts_pooling(&p.pooling);
+    _accepts_jod(&p.jod);
+}
