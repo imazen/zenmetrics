@@ -722,6 +722,22 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 607 — tighten `safe_pow(2.0, 2.0)` doctest tolerance from
+`< 0.01` to `< 1e-3`. The function's analytic deviation at this
+point is the cross term `2·eps·x = 4e-5` (`eps = 1e-5` in the
+implementation), so `0.01` was 250× looser than needed. Tightening
+to `1e-3` still leaves 25× headroom for f32 rounding on the
+`(x+eps)^p` evaluation, but now a refactor that raised eps by an
+order of magnitude (e.g. `1e-4`) — which would push the deviation
+to ~4e-4, well past `1e-3` — would surface at `cargo test --doc`.
+Companion-in-spirit to ticks 605/606 (recommend_parallel,
+pixels_per_degree, estimate_gpu_memory_bytes doctest tightenings)
+— same theme: doctests should pin within an order of magnitude of
+the actual implementation tolerance, not 100-5000× looser. Other
+`< 0.01` doctest tolerances in pool.rs are CORRECTLY sized for
+the L_p-norm `eps^(1/β)` tail (~3e-3 at β=2), so left alone.
+Docs-only change; doctest passes.
+
 Tick 606 — two more doctest tightenings in the same spirit as
 tick 605:
 

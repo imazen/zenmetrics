@@ -123,9 +123,13 @@ pub const XCM_3X3: [[f32; 3]; 3] = [
 /// assert_eq!(safe_pow(0.0, 0.5), 0.0);
 ///
 /// // Above the eps regularization point, behaves like x^p within
-/// // a small bias.
+/// // a small bias. The actual deviation at (x=2, p=2) is the cross
+/// // term 2·eps·x = 4e-5; tolerance bands it 25× away to leave room
+/// // for f32 rounding on the (x+eps)^p evaluation. A refactor that
+/// // raised eps by an order of magnitude (e.g. 1e-4) would push
+/// // the deviation past this tolerance.
 /// let v = safe_pow(2.0, 2.0);
-/// assert!((v - 4.0).abs() < 0.01, "safe_pow(2, 2) = {v}, expected ≈ 4");
+/// assert!((v - 4.0).abs() < 1e-3, "safe_pow(2, 2) = {v}, expected ≈ 4");
 ///
 /// // Monotonically increasing in x for any positive p.
 /// assert!(safe_pow(1.0, 2.5) < safe_pow(2.0, 2.5));
