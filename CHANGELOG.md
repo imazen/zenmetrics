@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`flatten_band_weights` doctest** — added `# Examples`: empty
+  → empty, 2-level [[1,2,3],[4,5,6]] → [1..=6], `weight_idx =
+  level * 3 + channel` indexing pin. Tick 454.
+
 - **`precomputed_band_weights` doctest** — added `# Examples`:
   length agrees with `band_frequencies`, every [A, Rg, Vy] triple is
   positive-finite at standard 4K + 100 cd/m². Tick 453.

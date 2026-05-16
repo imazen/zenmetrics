@@ -574,6 +574,23 @@ pub fn precomputed_band_weights(
 /// `[lvl0_chA, lvl0_chRG, lvl0_chVY, lvl1_chA, …]`.
 ///
 /// `weight_idx = level * 3 + channel`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::flatten_band_weights;
+///
+/// // Empty input → empty output.
+/// assert!(flatten_band_weights(&[]).is_empty());
+///
+/// // Two-level input: `[lvl0_chA, lvl0_chRG, lvl0_chVY, lvl1_chA, …]`.
+/// let flat = flatten_band_weights(&[[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]]);
+/// assert_eq!(flat, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+///
+/// // `weight_idx = level * 3 + channel`.
+/// assert_eq!(flat[0 * 3 + 1], 2.0); // lvl0, ch_RG
+/// assert_eq!(flat[1 * 3 + 2], 6.0); // lvl1, ch_VY
+/// ```
 #[must_use]
 pub fn flatten_band_weights(weights: &[[f32; 3]]) -> Vec<f32> {
     let mut out = Vec::with_capacity(weights.len() * 3);
