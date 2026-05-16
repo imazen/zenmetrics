@@ -78,7 +78,7 @@ Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
 fixture; the test suite catches drift across every layer that pins
 mention. Tick 500.
 
-**Post-milestone long tail (ticks 501–537, summarised here so the
+**Post-milestone long tail (ticks 501–539, summarised here so the
 detailed entries below stay grep-able):**
 
 - **Re-export surface widened** (501–503): lib_reexports.rs grew
@@ -147,6 +147,23 @@ detailed entries below stay grep-able):**
   surface. Subsequent significant improvement still requires a
   fresh measurement (pycvvdp-baseline SRCC) or a directed feature
   (`CvvdpParams` JSON loader).
+
+- **Sweep finalization** (538, 539): documented the 531-537 sweep
+  in this long-tail block; caught the last remaining
+  `# Example` (singular) header in `host_scalar.rs:48` that tick
+  530's pipeline.rs-only normalization sweep had missed. The
+  `# Examples` (plural) Rust API guidelines convention is now
+  applied across every docstring in the crate.
+
+As of tick 539 the crate contains 11 `const _: () = assert!(...)`
+static asserts (3 in `csf_channel_invariants.rs` for CsfChannel
+discriminants, 4 in `lib_constants.rs` for crate-root constants
++ PYRAMID_MIN_DIM × 2 boundary, 4 in `lib_reexports.rs` covering
+the lib-root constants + N_L_BKG). These fire at compile time and
+are the load-bearing enforcement for fundamental dimension
+parameters; the runtime `#[test]` fns are preserved beside them
+to keep the test-runner-visible names referenced by older
+CHANGELOG entries resolvable.
 
 ### Changed
 
