@@ -20,6 +20,68 @@ mod common;
 
 use common::{GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir};
 
+// Tick 578: compile-time pins for the goldens-metadata structural
+// invariants. `str::starts_with` / `ends_with` / `contains` are
+// not const fn, but the underlying byte-level matching IS — via
+// `str::as_bytes` (const since 1.39), integer comparison, and
+// `while` in const. Same pattern as tick 577 on CVVDP_COLUMN_NAME.
+//
+// These promote the previously-runtime checks in:
+//   - `manifest_url_is_well_formed_https` (https:// prefix + .json suffix)
+//   - `manifest_url_uses_documented_r2_host` (canonical R2 host prefix)
+//   - `manifest_sha256_is_64_lowercase_hex` (length 64)
+//   - `golden_version_is_non_empty_and_lowercase` (non-empty + v-prefix)
+// to compile time. The substring `.contains` checks (golden-version
+// path segment, bucket subpath) and the per-char hex validation stay
+// runtime — `.contains` requires substring search and per-char
+// `is_ascii_digit` / range-contains aren't easily const-callable.
+const _: () = {
+    // MANIFEST_URL must start with https://
+    let url = MANIFEST_URL.as_bytes();
+    let https = b"https://";
+    assert!(url.len() >= https.len(), "MANIFEST_URL shorter than https:// prefix");
+    let mut i = 0;
+    while i < https.len() {
+        assert!(url[i] == https[i], "MANIFEST_URL does not start with https://");
+        i += 1;
+    }
+    // MANIFEST_URL must end with .json
+    let json = b".json";
+    assert!(url.len() >= json.len(), "MANIFEST_URL shorter than .json suffix");
+    let offset = url.len() - json.len();
+    let mut j = 0;
+    while j < json.len() {
+        assert!(url[offset + j] == json[j], "MANIFEST_URL does not end with .json");
+        j += 1;
+    }
+    // MANIFEST_URL must start with the canonical R2 host
+    let canonical_host = b"https://coefficient.r2.imazen.org/";
+    assert!(
+        url.len() >= canonical_host.len(),
+        "MANIFEST_URL shorter than canonical R2 host prefix",
+    );
+    let mut k = 0;
+    while k < canonical_host.len() {
+        assert!(
+            url[k] == canonical_host[k],
+            "MANIFEST_URL does not start with canonical R2 host https://coefficient.r2.imazen.org/",
+        );
+        k += 1;
+    }
+    // MANIFEST_SHA256 must be exactly 64 hex chars
+    assert!(
+        MANIFEST_SHA256.len() == 64,
+        "MANIFEST_SHA256 must be 64 hex chars (a typo that truncates one char silently breaks fetch validation)",
+    );
+    // GOLDEN_VERSION must be non-empty and start with 'v'
+    assert!(!GOLDEN_VERSION.is_empty(), "GOLDEN_VERSION must not be empty");
+    let gv = GOLDEN_VERSION.as_bytes();
+    assert!(
+        gv[0] == b'v',
+        "GOLDEN_VERSION must follow the v<N> convention (first byte = 'v')",
+    );
+};
+
 #[test]
 fn manifest_url_embeds_golden_version() {
     // The R2 prefix encodes the version path segment. Bumping

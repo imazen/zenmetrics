@@ -490,6 +490,20 @@ override) is const since 1.48. Adds a length pin + a loop-body
 match pin (2 logical asserts). Static-assert count is now 167
 across 11 test files.
 
+Tick 578 applied the same const-byte-loop trick to the goldens-
+metadata structural invariants in `goldens_metadata.rs`:
+  - MANIFEST_URL starts with `https://` (byte-prefix)
+  - MANIFEST_URL ends with `.json` (byte-suffix at offset)
+  - MANIFEST_URL starts with canonical R2 host
+    `https://coefficient.r2.imazen.org/`
+  - MANIFEST_SHA256 length == 64 (sha256 hex)
+  - !GOLDEN_VERSION.is_empty()
+  - GOLDEN_VERSION first byte == 'v' (the v<N> convention)
+The substring `.contains` checks (golden-version path segment,
+bucket subpath) and per-char hex validation stay runtime —
+`.contains` requires substring search not easily const-callable.
+Static-assert count is now 173 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
