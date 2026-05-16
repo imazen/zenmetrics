@@ -1837,6 +1837,69 @@ fn compute_dkl_d_bands_matches_host_on_corpus_256x256() {
 }
 
 #[test]
+fn perf_mode_fast_matches_strict_on_gpu_host_pool() {
+    // Tick 512: third-leg coverage of the PerfMode no-op contract.
+    // Existing coverage:
+    //   - `perf_mode_fast_matches_strict_today` (tick 322 + 324) —
+    //     GPU pool path with 1e-4 tolerance (atomic-add noise floor).
+    //   - `perf_mode_fast_matches_strict_on_cpu_host_pool` (tick 327)
+    //     — cpu-runtime + host_pool path with bit-equality.
+    //
+    // This test fills the missing leg: GPU runtime + host_pool path
+    // (`compute_dkl_jod_host_pool` on a Cvvdp constructed against
+    // CudaRuntime / WgpuRuntime / HipRuntime). The host_pool variant
+    // reads D bands back to host then folds via sequential
+    // `lp_norm_mean` — no GPU atomic-add involved, so the bit-equal
+    // contract from the cpu sibling should hold here too. A refactor
+    // that, say, makes Fast mode swap in a different host-fold
+    // accumulation order on the GPU runtime would surface here.
+    //
+    // When a real Fast-mode optimization lands, RELAX this to its
+    // documented drift budget (matches the per-stage policy in the
+    // existing perf_mode_fast tests).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let n = (w * h * 3) as usize;
+    let ref_bytes: Vec<u8> = (0..n).map(|i| ((i * 53 + 17) % 251) as u8).collect();
+    let dist_bytes: Vec<u8> = (0..n).map(|i| ((i * 71 + 31) % 251) as u8).collect();
+
+    let mut strict = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new (strict)");
+    let strict_jod = strict
+        .compute_dkl_jod_host_pool(&ref_bytes, &dist_bytes, ppd)
+        .expect("compute_dkl_jod_host_pool (strict)");
+
+    let mut fast = Cvvdp::<Backend>::new(
+        client,
+        w,
+        h,
+        CvvdpParams {
+            perf_mode: cvvdp_gpu::PerfMode::Fast,
+            ..CvvdpParams::PLACEHOLDER
+        },
+    )
+    .expect("Cvvdp::new (fast)");
+    let fast_jod = fast
+        .compute_dkl_jod_host_pool(&ref_bytes, &dist_bytes, ppd)
+        .expect("compute_dkl_jod_host_pool (fast)");
+
+    eprintln!(
+        "gpu_runtime host_pool: strict = {strict_jod:.6} ({:#010x}), fast = {fast_jod:.6} ({:#010x})",
+        strict_jod.to_bits(),
+        fast_jod.to_bits(),
+    );
+    assert_eq!(
+        strict_jod.to_bits(),
+        fast_jod.to_bits(),
+        "PerfMode::Fast must produce bit-identical output to PerfMode::Strict on the \
+         GPU+host_pool path (sequential lp_norm_mean — no atomic-add nondeterminism) \
+         until a Fast-mode optimization lands (strict={strict_jod}, fast={fast_jod})",
+    );
+}
+
+#[test]
 fn perf_mode_fast_matches_strict_today() {
     // Tick 322 + 324: pin the documented invariant that PerfMode::Fast
     // is currently a no-op. The original tick-322 form asserted

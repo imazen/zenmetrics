@@ -238,6 +238,21 @@ mention. Tick 500.
   — `Error` and `Result<T>` are how callers see method failures,
   both must be reachable from the crate root. Tick 501.
 
+- **`perf_mode_fast_matches_strict_on_gpu_host_pool`** (in
+  `pipeline_score.rs`) — third leg of the PerfMode no-op contract.
+  Existing coverage: `perf_mode_fast_matches_strict_today` (tick 322
+  + 324) — GPU pool path with 1e-4 tolerance against atomic-add
+  noise; `perf_mode_fast_matches_strict_on_cpu_host_pool` (tick 327)
+  — cpu-runtime + host_pool path with bit-equality. This fills the
+  missing combination: **GPU runtime + host_pool path** (e.g.
+  CudaRuntime calling `compute_dkl_jod_host_pool`). The host_pool
+  variant reads D bands back to host then folds via sequential
+  `lp_norm_mean` — no GPU atomic-add involved, so bit-equality
+  should hold even on a GPU runtime. Verified bit-equal at
+  `0x40da3d6b` on 64×64 deterministic input. Catches a refactor
+  that, say, makes Fast mode swap in a different host-fold
+  accumulation order on the GPU runtime. Tick 512.
+
 - **`cvvdp_host_pool_distinguishes_v1_corpus_q_levels`** (in
   `pipeline_score.rs`) — sibling to tick 508 for the host_pool
   scoring path (`compute_dkl_jod_host_pool`, the cubecl-cpu /
