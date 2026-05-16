@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`mult_mutual_pixel` doctest** — added `# Examples`: T == R →
+  D = [0, 0, 0], argument symmetry `f(T, R) == f(R, T)`, and
+  non-negative output. Tick 451.
+
 - **`mask_pool_pixel` doctest** — added `# Examples`: zero input
   → zero output, unit basis `[1, 0, 0]` recovers `XCM_3X3[0]` row.
   Tick 450.

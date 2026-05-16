@@ -657,6 +657,27 @@ pub fn mask_pool_pixel(term: [f32; 3]) -> [f32; 3] {
 /// in the caller; this function handles only the masking step.
 ///
 /// Returns `D[cc]` for each of the 3 channels.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::mult_mutual_pixel;
+///
+/// // T == R → no perceptible difference → D = [0, 0, 0].
+/// let same = [0.5_f32, -0.3, 1.2];
+/// assert_eq!(mult_mutual_pixel(same, same), [0.0, 0.0, 0.0]);
+///
+/// // Symmetric in arguments: f(T, R) == f(R, T) (min and abs both
+/// // commute over the operands).
+/// let t = [0.5_f32, -0.3, 1.2];
+/// let r = [0.1_f32, 0.4, -0.8];
+/// assert_eq!(mult_mutual_pixel(t, r), mult_mutual_pixel(r, t));
+///
+/// // D is always non-negative (safe_pow + clamp_diff_soft preserve sign).
+/// for v in mult_mutual_pixel(t, r) {
+///     assert!(v >= 0.0);
+/// }
+/// ```
 #[must_use]
 pub fn mult_mutual_pixel(t_p: [f32; 3], r_p: [f32; 3]) -> [f32; 3] {
     // Per-channel: M_mm = phase_uncertainty(min(|T_p|, |R_p|)).
