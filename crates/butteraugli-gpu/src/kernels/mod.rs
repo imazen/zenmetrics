@@ -14,6 +14,7 @@
 //! Stages other than `reduction` are stubs at this commit; see PORT_STATUS.md.
 
 pub mod blur;
+pub mod blur_3ch;
 pub mod colors;
 pub mod diffmap;
 pub mod downscale;
