@@ -237,6 +237,12 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (docs)
+
+- **`DisplayGeometry::pixels_per_degree` doctest** — added
+  `# Examples` showing standard 4K → ≈ 75.4 ppd (within 0.5) and
+  realistic-range invariant 5..=500. Tick 465.
+
 #### cvvdp-gpu (tests)
 
 - **`tests/lib_reexports.rs`** — 5 pins on the `lib.rs` re-export

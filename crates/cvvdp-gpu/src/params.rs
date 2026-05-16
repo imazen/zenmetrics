@@ -79,6 +79,19 @@ impl DisplayGeometry {
     /// Pixels-per-degree at the display centre (eccentricity = 0).
     /// Matches cvvdp's `vvdp_display_geometry.get_ppd()` for the
     /// no-eccentricity path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cvvdp_gpu::params::DisplayGeometry;
+    ///
+    /// // Standard 4K (3840×2160, 30 inch, 0.7472 m) → ≈ 75.4 ppd.
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// assert!((ppd - 75.4).abs() < 0.5);
+    ///
+    /// // PPD is positive and in a sane range for realistic viewing.
+    /// assert!(ppd.is_finite() && (5.0..=500.0).contains(&ppd));
+    /// ```
     #[must_use]
     pub fn pixels_per_degree(&self) -> f32 {
         let ar = self.resolution_w as f32 / self.resolution_h as f32;
