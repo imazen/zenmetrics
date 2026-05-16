@@ -423,6 +423,19 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
     let mut failed = 0usize;
     let mut succeeded = 0usize;
 
+    // Cvvdp's Cvvdp::new is expensive (allocates ~200 MB GPU at 1024²
+    // + triggers NVRTC kernel compilation). The per-pair `score_one_pair`
+    // path recreates it on every row → fleet OOMs at 100-pair chunks
+    // even with PARALLEL=1 + 16 GB RAM. Use the batched scorer for cvvdp
+    // so the instance survives across pairs of matching dims.
+    let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
+    if args.metric == crate::metrics::MetricKind::Cvvdp {
+        cvvdp_scorer = Some(
+            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new(args.gpu_runtime)
+                .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+        );
+    }
+
     for record in rdr.records() {
         let record = record?;
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
@@ -449,7 +462,21 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
-        let jod = match score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime) {
+        let pair_result: Result<f64, Box<dyn std::error::Error>> = if let Some(scorer) =
+            cvvdp_scorer.as_mut()
+        {
+            // Cvvdp fast path: decode + reuse cached Cvvdp instance.
+            match (
+                decode::decode_image_to_rgb8(&ref_path),
+                decode::decode_image_to_rgb8(&dist_path),
+            ) {
+                (Ok(r), Ok(d)) => scorer.score(&r, &d),
+                (Err(e), _) | (_, Err(e)) => Err(e),
+            }
+        } else {
+            score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+        };
+        let jod = match pair_result {
             Ok(v) => {
                 succeeded += 1;
                 v

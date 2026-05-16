@@ -135,10 +135,15 @@ if ! ldconfig -p | grep -q libnvrtc.so.12; then
     rm /tmp/cuda-keyring.deb
     apt-get update -q
     # Install cuda-nvrtc-12-6 (matches binary's cuda-12060 cudarc).
-    # libcudart-12-6 also bundled in case cubecl needs cuda runtime
-    # helpers beyond what libcuda provides.
+    # libcudart-12-6: cudart shared library.
+    # cuda-cudart-dev-12-6: CUDA runtime HEADERS — needed because
+    # cubecl emits kernels with `#include <cuda_runtime.h>` and NVRTC
+    # compiles them at launch time. Without the dev headers, every
+    # GPU kernel launch fails with "catastrophic error: cannot open
+    # source file 'cuda_runtime.h'" surfaced as `InvalidImageSize`
+    # → 100 NaN rows per chunk (v24 lesson).
     apt-get install -yq --no-install-recommends \
-        cuda-nvrtc-12-6 cuda-cudart-12-6 \
+        cuda-nvrtc-12-6 cuda-cudart-12-6 cuda-cudart-dev-12-6 \
         >/dev/null \
         || { log "FAIL apt install cuda-nvrtc"; exit 6; }
     # apt installs to /usr/local/cuda-12.6/lib64/. Register with

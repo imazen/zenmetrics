@@ -30,7 +30,7 @@ mod gpu_runtime_dispatch;
 #[cfg(feature = "gpu-butteraugli")]
 mod butteraugli_gpu;
 #[cfg(feature = "gpu-cvvdp")]
-mod cvvdp_gpu;
+pub mod cvvdp_gpu;
 #[cfg(feature = "gpu-dssim")]
 mod dssim_gpu;
 #[cfg(feature = "gpu-ssim2")]
