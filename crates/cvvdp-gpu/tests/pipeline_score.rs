@@ -339,6 +339,82 @@ fn invalid_image_size_surfaces_on_too_small_dims() {
 }
 
 #[test]
+fn all_four_scoring_paths_agree_bit_equal_on_same_input() {
+    // Tick 494: consolidation pin. The four public scoring paths
+    // documented in the lib.rs Status section should produce
+    // bit-identical f32 JOD on the same (ref, dist) input on a
+    // single Cvvdp instance:
+    //
+    //   (A) `score(ref, dist)` — f64 from f32::from(compute_dkl_jod)
+    //   (B) `compute_dkl_jod(ref, dist, ppd)` — f32
+    //   (C) `set_reference(ref)` + `score_with_reference(dist)` — f64
+    //   (D) `warm_reference(ref)` + `compute_dkl_jod_with_warm_ref(dist, ppd)` — f32
+    //
+    // Individual pins already cover pairwise relationships (tick
+    // 407: A↔B lossless widening; tick 488: A↔C bit-equal; tick 489:
+    // D self-determinism + cross-DIST isolation). This test pins
+    // the four-way intersection: all four paths produce a single
+    // canonical f32 JOD value for the same input.
+    //
+    // A refactor that, say, takes the warm-ref path through a
+    // subtly different pool kernel (e.g. forgets to use the same
+    // partials buffer) would surface here as D drifting from A/B/C
+    // even when each path's standalone determinism holds.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb: Vec<u8> = (0..n).map(|i| (i % 251) as u8).collect();
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(7)).collect();
+
+    // (A) score(ref, dist) — returns f64. Cast to f32 for cross-path
+    // comparison (lossless per tick 407 pin).
+    let jod_a_f64 = cvvdp.score(&ref_srgb, &dist_srgb).expect("score");
+    let jod_a = jod_a_f64 as f32;
+
+    // (B) compute_dkl_jod(ref, dist, ppd) — already f32.
+    let jod_b = cvvdp
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("compute_dkl_jod");
+
+    // (C) set_reference + score_with_reference — returns f64. Cast
+    // to f32 same as path A.
+    cvvdp.set_reference(&ref_srgb).expect("set_reference");
+    let jod_c_f64 = cvvdp
+        .score_with_reference(&dist_srgb)
+        .expect("score_with_reference");
+    let jod_c = jod_c_f64 as f32;
+
+    // (D) warm_reference + compute_dkl_jod_with_warm_ref — already f32.
+    cvvdp.warm_reference(&ref_srgb).expect("warm_reference");
+    let jod_d = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("compute_dkl_jod_with_warm_ref");
+
+    // All four paths must agree bit-exact on the f32 JOD.
+    let bits_a = jod_a.to_bits();
+    let bits_b = jod_b.to_bits();
+    let bits_c = jod_c.to_bits();
+    let bits_d = jod_d.to_bits();
+
+    assert_eq!(
+        bits_a, bits_b,
+        "path A (score) {jod_a} != path B (compute_dkl_jod) {jod_b}",
+    );
+    assert_eq!(
+        bits_a, bits_c,
+        "path A (score) {jod_a} != path C (set+score_with_ref) {jod_c}",
+    );
+    assert_eq!(
+        bits_a, bits_d,
+        "path A (score) {jod_a} != path D (warm-ref) {jod_d}",
+    );
+}
+
+#[test]
 fn new_equivalent_to_new_with_geometry_standard_4k() {
     // Tick 493: pin the documented contract that `Cvvdp::new` is
     // "equivalent to `new_with_geometry(..., STANDARD_4K)`" (per

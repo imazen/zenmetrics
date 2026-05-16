@@ -58,6 +58,19 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`all_four_scoring_paths_agree_bit_equal_on_same_input`** (in
+  `pipeline_score.rs`) — consolidation pin. The four documented
+  public scoring paths must produce bit-identical f32 JOD on the
+  same (ref, dist) input on a single Cvvdp instance: (A)
+  `score(ref, dist)`, (B) `compute_dkl_jod(ref, dist, ppd)`, (C)
+  `set_reference + score_with_reference`, (D) `warm_reference +
+  compute_dkl_jod_with_warm_ref`. Individual pins cover pairwise
+  relationships (tick 407: A↔B widening; tick 488: A↔C bit; tick
+  489: D determinism). This test pins the four-way intersection: a
+  refactor that, say, routes warm-ref through a subtly different
+  pool kernel would surface here as D drifting from A/B/C even when
+  each path's standalone determinism holds. Tick 494.
+
 - **`new_equivalent_to_new_with_geometry_standard_4k`** (in
   `pipeline_score.rs`) — pins the documented `Cvvdp::new` rustdoc
   contract that it is "equivalent to
