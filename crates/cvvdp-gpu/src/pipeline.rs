@@ -1748,6 +1748,35 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns `levels[k] = [a, rg, vy]` planar f32 vecs, same shape
     /// as `compute_dkl_weber_pyramid`'s `.0`.
     ///
+    /// # Examples
+    ///
+    /// Read back CSF-weighted bands for a 64×64 buffer. `ignore`
+    /// for the standard `Cvvdp::*` reason.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let bands = cvvdp.compute_dkl_t_p_bands(&srgb, ppd)
+    ///     .expect("compute_dkl_t_p_bands");
+    /// assert!(!bands.is_empty());
+    /// assert_eq!(bands[0][0].len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
