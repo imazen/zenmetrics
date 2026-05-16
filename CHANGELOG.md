@@ -1011,7 +1011,7 @@ shipped across six commits + an operator runbook:
   plausible-but-different matrix (LMS2000 instead of LMS2006),
   could pass both. Second test pins the opponent-color sign
   signature: row 0 (A) all positive, row 1 (Rg) is `(+, -, -)`,
-  row 2 (Vy) is `(-, -, +)`. Tick 397.
+  row 2 (Vy) is `(-, -, +)`. Tick 397, 616a6a8a.
 - **`tests/display_geometry.rs::display_{model,geometry}_standard_4k_*`**
   — pins the f32 bit patterns of `DisplayModel::STANDARD_4K`
   (`y_peak = 200`, `y_black = 0.2`, `y_refl = 0.397_887_36`) and
@@ -1021,7 +1021,7 @@ shipped across six commits + an operator runbook:
   to any field (e.g. swapping `y_refl` for the unrounded f64
   literal) would invalidate every shadow_jod parity test in a
   way that's hard to trace back to the display constants.
-  Companion to ticks 393 (pool) / 394 (csf) / 395 (pyramid). Tick 396.
+  Companion to ticks 393 (pool) / 394 (csf) / 395 (pyramid). Tick 396, 0b5cf789.
 - **`tests/pyramid_scalar.rs::pyramid_constants_match_pycvvdp_v0_5_4`**
   — sibling to ticks 393 (pool) / 394 (csf). Pins
   `KERNEL_A = 0.4` (the Burt-Adelson `a` parameter) by exact
@@ -1036,7 +1036,7 @@ shipped across six commits + an operator runbook:
   `KERNEL_A` to e.g. 0.375 (the Burt original) would broaden
   the kernel and silently shift every pyramid level; the
   test trips with a specific message instead of cascading
-  into shadow_jod drift. Tick 395.
+  into shadow_jod drift. Tick 395, 31eb8bbe.
 - **`tests/csf_scalar.rs::csf_constants_match_pycvvdp_v0_5_4`** —
   sibling to tick 393's pool-constant pin. Locks the exact f32
   bit patterns of `SENSITIVITY_CORRECTION_DB` (-0.279_742_33)
@@ -1048,7 +1048,7 @@ shipped across six commits + an operator runbook:
   `CSF_BASEBAND_RHO` had no direct value check at all. N_L_BKG /
   N_RHO are the LUT grid sizes the GPU kernels assume via array
   sizing — a refactor that bumps either without resizing kernel
-  buffers would corrupt every per-pixel CSF lookup. Tick 394.
+  buffers would corrupt every per-pixel CSF lookup. Tick 394, f8c962aa.
 - **`tests/pool_scalar.rs::pool_constants_match_pycvvdp_v0_5_4`** —
   pins the exact f32 bit patterns of the eight pool constants
   imported verbatim from pycvvdp v0.5.4: `BETA_SPATIAL`,
@@ -1061,7 +1061,7 @@ shipped across six commits + an operator runbook:
   drift on shadow_jod_gpu into "BASEBAND_W[Vy] = X, expected
   4.118_745_3 (cvvdp v0.5.4)". When a future cvvdp version
   (0.5.5+) ships new coefficients, update these values together
-  with the pin and re-run parity. Tick 393.
+  with the pin and re-run parity. Tick 393, 5d5d4ff3.
 - **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
   — extended once more to cover six pyramid/band intermediate-
   output methods that validate buffer length transitively through
@@ -1075,7 +1075,7 @@ shipped across six commits + an operator runbook:
   a caller but forgets to copy the length check would surface here
   before slipping into a kernel-side panic on the under-sized
   buffer read. Test now exercises all 13 documented dim-check
-  sites (was 9 after tick 390). Tick 392.
+  sites (was 9 after tick 390). Tick 392, e277f103.
 - **`tests/pipeline_score.rs::compute_dkl_jod_host_pool_with_warm_ref_reports_dim_mismatch_before_no_warm`**
   — sibling pin to the tick-248 GPU-variant test
   (`compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`).
@@ -1089,7 +1089,7 @@ shipped across six commits + an operator runbook:
   because cubecl-cpu / Metal callers route through it
   explicitly (the GPU Atomic<f32>::fetch_add path doesn't run
   on those backends), so their production error reporting
-  needs the same ordering as the GPU path. Tick 391.
+  needs the same ordering as the GPU path. Tick 391, bc65041c.
 - **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
   — extended to cover four additional public entry points the
   original tick-239 test acknowledged in its docstring but did
@@ -1103,7 +1103,7 @@ shipped across six commits + an operator runbook:
   that swaps the `!=` check for `<` on any of the four newly-
   covered entries (silently accepting smaller buffers and
   reading garbage past `srgb.len()`) would slip past the
-  original 5-site coverage. Tick 390.
+  original 5-site coverage. Tick 390, 8e4d2590.
 - **`tests/pool_scalar.rs::lp_norm_mean_*`** — four direct unit
   tests on `lp_norm_mean` (cvvdp's `lp_norm` with `normalize=True`).
   The function was exercised only through the GPU-gated
@@ -1122,7 +1122,7 @@ shipped across six commits + an operator runbook:
   the defining identity `lp_norm_sum ≈ n^(1/p) * lp_norm_mean`
   at p ∈ {2, 4} on an 8-element signal (a structural-divergence
   catcher — if either function changes its eps shift, this
-  trips). Tick 389.
+  trips). Tick 389, bfef0b2f.
 - **`tests/csf_scalar.rs::sensitivity_corrected_*` + `sensitivity_correction_*`**
   — three direct unit tests on `sensitivity_corrected_scalar`,
   which the production CSF apply path (`precomputed_band_weights`
@@ -1137,7 +1137,7 @@ shipped across six commits + an operator runbook:
   and order-of-magnitude wrong DB constants); (3) extreme-input
   finiteness (same clamping contract as `sensitivity_scalar`,
   but pinned separately so the uncorrected path and the
-  multiplicative step can each regress independently). Tick 388.
+  multiplicative step can each regress independently). Tick 388, 506f61bf.
 - **`tests/color_scalar.rs::srgb_lut_*`** — four direct unit tests
   on the public `SRGB8_TO_LINEAR_LUT` 256-entry sRGB EOTF table.
   Previously the LUT was verified only transitively through the
@@ -1176,7 +1176,7 @@ shipped across six commits + an operator runbook:
   channel_lut dispatch typo); (5) the `rho.max(1e-6)` clamp —
   rho ∈ {0, -1, 1e-6} produce bit-identical rows via
   `.to_bits()` (silent-NaN-propagation regression catcher).
-  Same gap-shape as ticks 351/383. Tick 386.
+  Same gap-shape as ticks 351/383. Tick 386, 0e284715.
 - **`tests/pool_scalar.rs::pool_band_finalize_*`** — five direct
   unit tests on the previously-indirectly-exercised public
   `pool_band_finalize`. The function was covered only via the
