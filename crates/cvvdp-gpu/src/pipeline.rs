@@ -2514,7 +2514,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// `no_run` because docs.rs has no GPU; mirrors the cpu-runtime
     /// example on [`Cvvdp::compute_dkl_jod_host_pool_with_warm_ref`]:
     ///
-    /// ```no_run
+    /// ```ignore
     /// use cvvdp_gpu::Cvvdp;
     /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
     /// use cubecl::Runtime;
@@ -2814,7 +2814,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// every cubecl backend with a working atomic-f32 pool (cuda, wgpu,
     /// hip — see [`Cvvdp::compute_dkl_jod_host_pool`] for the cpu runtime):
     ///
-    /// ```no_run
+    /// ```ignore
     /// use cvvdp_gpu::Cvvdp;
     /// use cvvdp_gpu::params::CvvdpParams;
     /// use cubecl::Runtime;
@@ -2920,9 +2920,11 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Batch-score N distorted candidates against one stashed reference
     /// on the CUDA backend (max JOD = 10 for the byte-identical pair).
-    /// `no_run` because docs.rs has no GPU:
+    /// `ignore` because docs.rs has no GPU AND the no-default-features
+    /// build path doesn't include any `cubecl` runtime feature, so
+    /// the `Backend` type alias below would fail to resolve:
     ///
-    /// ```no_run
+    /// ```ignore
     /// use cvvdp_gpu::Cvvdp;
     /// use cvvdp_gpu::params::CvvdpParams;
     /// use cubecl::Runtime;

@@ -237,6 +237,16 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (docs, fix)
+
+- **3 pre-existing `no_run` doctests on `Cvvdp::score`,
+  `score_with_reference`, `compute_dkl_jod_with_warm_ref`** changed
+  to `ignore` — they assumed a default-features build with cuda/wgpu/
+  cpu, where `Backend = cubecl::cuda::CudaRuntime` resolves. Under
+  `cargo test --doc --no-default-features` the type alias was empty
+  and all three failed to compile. `ignore` preserves the
+  documentation while skipping the compile-only step. Tick 479.
+
 #### cvvdp-gpu (docs)
 
 - **`BETA_CH` doctest** — added `# Examples` (covers all 3 pool
