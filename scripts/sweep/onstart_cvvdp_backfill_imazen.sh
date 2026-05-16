@@ -51,40 +51,81 @@ fi
 
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 PARALLEL="${PARALLEL:-0}"
-# PARALLEL=0 → auto-detect. Mirrors cvvdp-gpu's
-# `recommend_parallel(free_gpu_bytes, w, h)` heuristic (the Rust
-# predictor's `PARALLEL_SAFETY_FACTOR = 1.5` const) but in shell so
-# the chunk_worker xargs -P can use it before zen-metrics starts.
-# Profiling on a healthy worker (RTX 2060 SUPER, 12 cores, 64 GB)
-# showed GPU at 3% time-averaged + 1 of 12 CPU cores in use with
-# PARALLEL=1 — massive under-utilization. Auto-detect picks N
-# concurrent chunk workers based on free GPU and CPU caps.
+# PARALLEL=0 → auto-detect. Ports v15 onstart_v3.sh's cgroup-aware
+# scaling (cores + RAM via cgroup quotas, not just nproc) and adds
+# a GPU memory cap on top — cvvdp uses 200-250 MiB GPU per Cvvdp
+# instance via the cached scorer, so the GPU is the binding
+# constraint on small-VRAM boxes that v15's CPU+RAM logic missed.
+# Profiling (tick 412) on RTX 2060 SUPER (12 cores, 64 GB) showed
+# GPU at 3% time-avg + 1/12 cores in use with PARALLEL=1 —
+# massive under-utilization. This formula closes the gap.
 if [[ "$PARALLEL" == "0" ]]; then
-    # Free GPU memory in MiB (works on every nvidia-smi 470+).
-    FREE_GPU_MIB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
-    NCPU=$(nproc)
-    if [[ -z "$FREE_GPU_MIB" || "$FREE_GPU_MIB" -lt 1024 ]]; then
-        log "auto-detect: nvidia-smi unavailable / free<1GiB; defaulting PARALLEL=2"
-        PARALLEL=2
-    else
-        # Assume per-instance cost ≈ 250 MiB GPU (cvvdp-gpu's
-        # estimate_gpu_memory_bytes returns ~208 MiB at 1024²;
-        # rounded up for transient kernel buffers). Apply 1.5×
-        # safety factor (matches PARALLEL_SAFETY_FACTOR).
-        PER_INST_MIB=375  # 250 × 1.5
-        GPU_CAP=$((FREE_GPU_MIB / PER_INST_MIB))
-        # CPU cap: leave half the cores for ssim2-gpu sweep work +
-        # encode threads + system. Floor at 1.
-        CPU_CAP=$((NCPU / 2))
-        [[ "$CPU_CAP" -lt 1 ]] && CPU_CAP=1
-        # Hard ceiling at 8 — beyond that diminishing returns vs
-        # disk I/O / R2 upload contention.
-        PARALLEL=$GPU_CAP
-        [[ "$PARALLEL" -gt "$CPU_CAP" ]] && PARALLEL=$CPU_CAP
-        [[ "$PARALLEL" -gt 8 ]] && PARALLEL=8
-        [[ "$PARALLEL" -lt 1 ]] && PARALLEL=1
-        log "auto-detect PARALLEL=$PARALLEL (free_gpu=${FREE_GPU_MIB}MiB, nproc=$NCPU, gpu_cap=$GPU_CAP, cpu_cap=$CPU_CAP)"
+    # Quoting v15 onstart_v3.sh: `nproc` inside a vast.ai
+    # container reports the HOST's CPU count, not what's allocated
+    # to this container. Read the cgroup limit so we don't
+    # oversubscribe and thrash.
+    cores_from_cgroup() {
+        # cgroup v2: cpu.max is "<quota_us> <period_us>" or "max <period>".
+        if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+            read -r q p < /sys/fs/cgroup/cpu.max
+            [[ "$q" == "max" || -z "$q" ]] && return 1
+            echo $(( (q + p / 2) / p ))
+            return 0
+        fi
+        # cgroup v1 fallback.
+        if [[ -r /sys/fs/cgroup/cpu/cpu.cfs_quota_us && -r /sys/fs/cgroup/cpu/cpu.cfs_period_us ]]; then
+            local q p
+            q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+            p=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
+            (( q > 0 && p > 0 )) && {
+                echo $(( (q + p / 2) / p ))
+                return 0
+            }
+        fi
+        return 1
+    }
+    ram_gb_from_cgroup() {
+        if [[ -r /sys/fs/cgroup/memory.max ]]; then
+            local m
+            m=$(cat /sys/fs/cgroup/memory.max)
+            [[ "$m" == "max" ]] && return 1
+            echo $(( m / 1024 / 1024 / 1024 ))
+            return 0
+        fi
+        if [[ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]]; then
+            local m
+            m=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+            (( m > 0 && m < 1099511627776 )) && {
+                echo $(( m / 1024 / 1024 / 1024 ))
+                return 0
+            }
+        fi
+        return 1
+    }
+    # 1. CPU cap (cgroup-aware): leave 2 cores for ssim2-gpu +
+    #    system on big boxes, 1 on medium, 2 floor on tiny.
+    nc=$(cores_from_cgroup) || nc=$(nproc 2>/dev/null || echo 8)
+    cpu_cap=$(( nc > 6 ? nc - 2 : (nc > 2 ? nc - 1 : 2) ))
+    # 2. RAM cap: each chunk worker's encoder + ssim2 needs ~1.5
+    #    GB peak. Cap at 2/3 of container RAM.
+    ram_cap="$cpu_cap"
+    if rg=$(ram_gb_from_cgroup); then
+        ram_cap=$(( rg * 2 / 3 ))
     fi
+    # 3. GPU memory cap: ~375 MiB per Cvvdp instance (estimate_gpu_memory_bytes
+    #    returns ~208 MiB at 1024², ×1.5 PARALLEL_SAFETY_FACTOR).
+    gpu_cap=$cpu_cap
+    free_gpu_mib=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+    if [[ -n "$free_gpu_mib" && "$free_gpu_mib" -gt 1024 ]]; then
+        gpu_cap=$(( free_gpu_mib / 375 ))
+    fi
+    # Final: tightest cap, with [1, 8] bounds.
+    PARALLEL=$cpu_cap
+    [[ "$ram_cap" -lt "$PARALLEL" ]] && PARALLEL=$ram_cap
+    [[ "$gpu_cap" -lt "$PARALLEL" ]] && PARALLEL=$gpu_cap
+    [[ "$PARALLEL" -lt 1 ]] && PARALLEL=1
+    [[ "$PARALLEL" -gt 8 ]] && PARALLEL=8
+    log "auto-detect PARALLEL=$PARALLEL (cgroup_cpu=$nc → cpu_cap=$cpu_cap, ram_cap=$ram_cap, gpu_cap=$gpu_cap, free_gpu=${free_gpu_mib:-?}MiB)"
 fi
 WORKDIR="${WORKDIR:-/workspace/cvvdp-backfill}"
 SCRIPTS_R2_PREFIX="${SCRIPTS_R2_PREFIX:-s3://coefficient/jobs/${SWEEP_RUN_ID}}"
