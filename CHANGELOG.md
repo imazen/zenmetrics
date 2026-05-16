@@ -229,6 +229,18 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/mult_mutual_band_invariants.rs`** — 8 structural pins on
+  `mult_mutual_band` (band-level 3-channel masking; existing
+  coverage in `masking_kernel.rs` is GPU-parity only): (1) output
+  shape 3 × `w*h` across 3 sizes; (2) `T == R` → identically zero
+  bit-exact; (3) `f(T, R) == f(R, T)` symmetric (both `min(|T|,|R|)`
+  and `|T - R|` are symmetric); (4) D[cc] ≥ 0 across signed inputs;
+  (5) bounded by `d_max ≈ 366.69` even for ±1e6 contrast inputs
+  (clamp_diff_soft cap); (6) determinism via `to_bits()`; (7)
+  finite output for mixed-sign ramp ±1e3; (8) small-band branch
+  exercised at 4×4 (below PU_PADSIZE=6, triggers no-blur path).
+  Tick 431.
+
 - **`tests/gaussian_blur_sigma3_invariants.rs`** — 8 dedicated
   invariants on `gaussian_blur_sigma3`. The function previously had
   no direct tests — it was used only as a CPU reference for GPU
