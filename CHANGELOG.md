@@ -229,6 +229,17 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/csf_channel_invariants.rs`** — 7 invariant pins on the
+  `CsfChannel` enum's discriminants + trait contract. No prior
+  test pinned these — a refactor that reorders variants (e.g.,
+  `Rg = 0`) would silently shift every per-channel buffer index
+  in the CSF stage. Pins: (1) `A = 0`, `Rg = 1`, `Vy = 2` via
+  `as u32`; (2) all discriminants fit in `[0, N_CHANNELS)` for
+  `as usize` array indexing; (3) Copy semantics; (4) Clone yields
+  Eq-equal value; (5) PartialEq self-equality + cross-variant
+  inequality; (6) Debug output is non-empty and unique per variant;
+  (7) exhaustive match visits all 3 variants. Tick 428.
+
 - **`tests/precompute_logs_row_invariants.rs`** — 6 additional
   invariants on `precompute_logs_row` beyond the 3 existing tests
   in `csf_scalar.rs`: (1) determinism via `to_bits()` across 3
