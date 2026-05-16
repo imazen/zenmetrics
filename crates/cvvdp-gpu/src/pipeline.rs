@@ -491,10 +491,15 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
 /// assert!(bytes_1mp > 100_000_000);
 /// assert!(bytes_1mp < 300_000_000);
 ///
-/// // 4 MP scales roughly proportionally with the fine plane's
-/// // pixel count.
+/// // 4 MP (2048²) has 4× the pixels of 1 MP (1024²). The ratio
+/// // should be in `[3.6, 4.4]` — pinned by
+/// // `estimate_gpu_memory_scales_with_pixel_count`
+/// // (tests/pipeline_score.rs:2077). The tolerance band absorbs
+/// // the ceil-div pyramid sum overhead + fixed-cost dilution at
+/// // small sizes (srgb_lut + partials + logs_row are constant-ish).
 /// let bytes_4mp = estimate_gpu_memory_bytes(2048, 2048).expect("4MP");
-/// assert!(bytes_4mp > bytes_1mp);
+/// let ratio = bytes_4mp as f64 / bytes_1mp as f64;
+/// assert!(ratio > 3.6 && ratio < 4.4, "ratio = {ratio}");
 /// ```
 #[must_use]
 pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {

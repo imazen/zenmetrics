@@ -87,9 +87,13 @@ impl DisplayGeometry {
     /// ```
     /// use cvvdp_gpu::params::DisplayGeometry;
     ///
-    /// // Standard 4K (3840×2160, 30 inch, 0.7472 m) → ≈ 75.4 ppd.
+    /// // Standard 4K (3840×2160, 30 inch, 0.7472 m) → 75.402_449 ppd.
+    /// // The 1e-4 tolerance matches the runtime parity test
+    /// // `ppd_matches_pycvvdp_standard_4k`
+    /// // (tests/display_geometry.rs:56) — well within f32 noise
+    /// // for a value ~75.
     /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
-    /// assert!((ppd - 75.4).abs() < 0.5);
+    /// assert!((ppd - 75.402_449_f32).abs() < 1e-4);
     ///
     /// // PPD is positive and in a sane range for realistic viewing.
     /// assert!(ppd.is_finite() && (5.0..=500.0).contains(&ppd));

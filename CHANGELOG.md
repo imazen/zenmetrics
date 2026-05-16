@@ -722,6 +722,29 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 606 — two more doctest tightenings in the same spirit as
+tick 605:
+
+1. `DisplayGeometry::pixels_per_degree` (params.rs:90) — claim was
+   `assert!((ppd - 75.4).abs() < 0.5)` (loose ±0.5). The runtime
+   parity test `ppd_matches_pycvvdp_standard_4k`
+   (tests/display_geometry.rs:56) pins `< 1e-4`. Tightened the
+   doctest to the same `< 1e-4` tolerance and updated the
+   numeric reference value to the full-precision
+   `75.402_449_f32`. The old loose tolerance was 5000× too
+   wide — a refactor that drifted PPD by 0.3 (e.g. a sign flip
+   in the geometry formula at f64-precision) would still pass
+   the doctest while failing the runtime test, sending a
+   confusing signal to a contributor running `cargo test --doc`.
+2. `estimate_gpu_memory_bytes` (pipeline.rs:494) — the 4MP/1MP
+   ratio claim was the weak `bytes_4mp > bytes_1mp`. The runtime
+   pin `estimate_gpu_memory_scales_with_pixel_count`
+   (tests/pipeline_score.rs:2077) pins `ratio ∈ (3.6, 4.4)`.
+   Tightened the doctest to the same band, with a reference to
+   the runtime test for provenance.
+
+Docs-only change; all 44 doctests still pass.
+
 Tick 605 — tighten `recommend_parallel`'s doctest claim from the
 weak `assert!(p >= 2)` to the actual `(10..=40).contains(&p)`
 range that the existing runtime test
