@@ -68,13 +68,25 @@ const _: () = {
     );
 };
 
-// Auto-generated LUT file header comment.
+// Auto-generated LUT file header comment + 3-channel completeness.
 const _LUT_V0_5_4: &str = include_str!("../src/kernels/csf_lut/v0_5_4.rs");
 const _: () = {
     use common::const_str;
     assert!(
         const_str::contains(_LUT_V0_5_4.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
         "src/kernels/csf_lut/v0_5_4.rs header must contain PYCVVDP_REFERENCE_VERSION",
+    );
+    // Tick 600: the LUT file MUST contain all 3 channel-LUT
+    // declarations (LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3).
+    // Each `LOG_S_O0_C` substring appears once per channel declaration
+    // header. Counting at compile time catches an accidental file
+    // truncation that drops one of the channel LUTs (the per-channel
+    // length pins in csf_axes_invariants.rs cover the LEN per channel
+    // when each channel exists, but not the "channel missing entirely"
+    // case).
+    assert!(
+        const_str::count(_LUT_V0_5_4.as_bytes(), b"LOG_S_O0_C") >= 3,
+        "src/kernels/csf_lut/v0_5_4.rs must declare all 3 channel LUTs (LOG_S_O0_C1/C2/C3)",
     );
 };
 

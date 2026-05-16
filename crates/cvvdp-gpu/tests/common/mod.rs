@@ -94,6 +94,39 @@ pub mod const_str {
         }
         false
     }
+
+    /// `const fn` equivalent of `s.matches(needle).count()` — counts
+    /// non-overlapping occurrences of `needle` in `s`. Returns 0 if
+    /// `needle` is empty or longer than `s`. O(n·m) sliding window,
+    /// jumps by `needle.len()` after each match (non-overlapping).
+    /// Tick 600: used to verify count-of-substrings invariants
+    /// (e.g. "LUT file contains 3 channel-LUT declarations").
+    pub const fn count(s: &[u8], needle: &[u8]) -> usize {
+        if needle.is_empty() || needle.len() > s.len() {
+            return 0;
+        }
+        let max = s.len() - needle.len();
+        let mut count = 0;
+        let mut i = 0;
+        while i <= max {
+            let mut j = 0;
+            let mut matched = true;
+            while j < needle.len() {
+                if s[i + j] != needle[j] {
+                    matched = false;
+                    break;
+                }
+                j += 1;
+            }
+            if matched {
+                count += 1;
+                i += needle.len();
+            } else {
+                i += 1;
+            }
+        }
+        count
+    }
 }
 
 use std::fs;

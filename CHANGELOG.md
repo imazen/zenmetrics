@@ -708,6 +708,20 @@ Ticks 596-598 (post-595 doc cleanup):
 
 Static-assert count unchanged at 213 across 13 test files.
 
+Tick 600 added a 5th `common::const_str` helper:
+  pub const fn count(s: &[u8], needle: &[u8]) -> usize
+which counts non-overlapping occurrences of `needle` in `s`. Used
+to add a LUT-channel-completeness pin to `version_lockstep.rs`:
+the LUT file must contain at least 3 occurrences of `LOG_S_O0_C`
+(one per channel declaration: C1, C2, C3). Catches an accidental
+truncation that drops one of the channel LUTs entirely — the
+per-channel length pins in `csf_axes_invariants.rs` (tick 571)
+cover the LEN per channel WHEN each channel exists, but not the
+"channel missing entirely" case. Also adds 8 compile-time count
+asserts + 2 runtime test fns to `const_str_helpers.rs` covering
+the new helper's positive / edge cases. Static-assert count is
+now 222 across 13 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

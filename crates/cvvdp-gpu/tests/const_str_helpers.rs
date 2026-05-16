@@ -46,6 +46,17 @@ const _: () = assert!(!const_str::bytes_eq(b"hello", b"helloo")); // different l
 const _: () = assert!(!const_str::bytes_eq(b"hello", b"hellx")); // same length, different content
 const _: () = assert!(!const_str::bytes_eq(b"hello", b"")); // non-empty vs empty
 
+// count (tick 600): exact match cases
+const _: () = assert!(const_str::count(b"abcabc", b"ab") == 2);
+const _: () = assert!(const_str::count(b"aaaa", b"aa") == 2); // non-overlapping
+const _: () = assert!(const_str::count(b"hello world", b"o") == 2);
+const _: () = assert!(const_str::count(b"hello", b"hello") == 1); // exact
+// count: edge cases
+const _: () = assert!(const_str::count(b"hello", b"xyz") == 0); // not found
+const _: () = assert!(const_str::count(b"hi", b"hello") == 0); // needle longer than haystack
+const _: () = assert!(const_str::count(b"hello", b"") == 0); // empty needle → 0 (avoids infinite loop)
+const _: () = assert!(const_str::count(b"", b"hello") == 0); // empty haystack
+
 // Runtime test fns. Compile-time asserts above already guarantee
 // correctness, but the runtime fns let `cargo test` runners see
 // the test names and surface them in coverage reports / diffs.
@@ -102,4 +113,20 @@ fn bytes_eq_negative() {
     assert!(!const_str::bytes_eq(b"hello", b"helloo"));
     assert!(!const_str::bytes_eq(b"hello", b"hellx"));
     assert!(!const_str::bytes_eq(b"hello", b""));
+}
+
+#[test]
+fn count_positive() {
+    assert_eq!(const_str::count(b"abcabc", b"ab"), 2);
+    assert_eq!(const_str::count(b"aaaa", b"aa"), 2); // non-overlapping
+    assert_eq!(const_str::count(b"hello world", b"o"), 2);
+    assert_eq!(const_str::count(b"hello", b"hello"), 1);
+}
+
+#[test]
+fn count_edge_cases() {
+    assert_eq!(const_str::count(b"hello", b"xyz"), 0);
+    assert_eq!(const_str::count(b"hi", b"hello"), 0);
+    assert_eq!(const_str::count(b"hello", b""), 0); // empty needle → 0
+    assert_eq!(const_str::count(b"", b"hello"), 0);
 }
