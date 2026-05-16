@@ -2254,6 +2254,37 @@ impl<R: Runtime> Cvvdp<R> {
     /// `Atomic<f32>::fetch_add` correctly and produce the
     /// canonical JOD.
     ///
+    /// # Example
+    ///
+    /// Canonical one-shot scoring at 64×64. `ignore` because docs.rs
+    /// has no GPU and the no-default-features build path doesn't
+    /// resolve cubecl runtime types (same as the rest of the
+    /// `Cvvdp::*` examples).
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let ref_bytes = vec![128u8; (w * h * 3) as usize];
+    /// let dist_bytes: Vec<u8> = ref_bytes.iter().map(|b| b.saturating_add(8)).collect();
+    /// let jod: f32 = cvvdp.compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+    ///     .expect("compute_dkl_jod");
+    /// assert!(jod.is_finite() && (0.0..=10.0 + 1e-3).contains(&jod));
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if either input buffer's
