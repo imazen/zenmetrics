@@ -229,6 +229,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/clamp_phase_uncertainty_invariants.rs`** — 10 invariant
+  pins on two small masking primitives that previously had no
+  direct unit tests:
+  - `clamp_diff_soft(d) = d_max·d / (d_max + d)`: (1) `f(0) == 0`
+    bit-exact via `to_bits()`; (2) strict monotonicity across 200
+    samples in [0, 1000]; (3) asymptotic `f(d) < d_max` for d up
+    to 1e9, plus gap < 0.1% at d ≥ 1e6; (4) half-saturation
+    `f(d_max) == d_max/2` within 1e-5 relative; (5) determinism.
+  - `phase_uncertainty_no_blur(m) = m * 10^MASK_C`: (6) pure
+    scaling via `to_bits()` across 8 sample inputs incl. negatives;
+    (7) scale factor pinned in [0.15, 0.17] (loose bound on the
+    bit-pinned MASK_C); (8) `f(0) == 0`; (9) monotonicity over
+    [-100, 100]; (10) determinism.
+  Tick 422.
+
 - **`tests/weber_pyramid_invariants.rs`** — eight structural
   invariant pins on `weber_contrast_pyr_dec_scalar` complementing
   the full-pipeline parity coverage in `pipeline_color.rs` /
