@@ -68,6 +68,24 @@ fn manifest_url_uses_documented_r2_host() {
 }
 
 #[test]
+fn manifest_url_uses_cvvdp_goldens_bucket_subpath() {
+    // Tick 520: the canonical host check pins the domain but not the
+    // bucket subpath. Sibling crates (zensim-gpu, butteraugli-gpu,
+    // dssim-gpu, ssim2-gpu) all publish their own goldens to the same
+    // host under different subpaths. A refactor that accidentally
+    // pointed cvvdp-gpu's MANIFEST_URL at — say — `/zensim-goldens/`
+    // would still pass the host check and the version-segment check,
+    // but fetch the wrong manifest. Pin the crate-specific bucket
+    // subpath so misrouting trips here.
+    const CANONICAL_BUCKET_SUBPATH: &str = "/cvvdp-goldens/";
+    assert!(
+        MANIFEST_URL.contains(CANONICAL_BUCKET_SUBPATH),
+        "MANIFEST_URL = {MANIFEST_URL:?} must contain bucket subpath \
+         {CANONICAL_BUCKET_SUBPATH:?}",
+    );
+}
+
+#[test]
 fn manifest_sha256_is_64_lowercase_hex() {
     // sha256 hex digests are exactly 64 chars from [0-9a-f]. A
     // typo that drops a char (63 chars) silently truncates
