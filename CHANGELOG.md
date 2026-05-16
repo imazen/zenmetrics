@@ -403,44 +403,44 @@ shipped across six commits + an operator runbook:
 
 - **`mult_mutual_pixel` doctest** — added `# Examples`: T == R →
   D = [0, 0, 0], argument symmetry `f(T, R) == f(R, T)`, and
-  non-negative output. Tick 451.
+  non-negative output. Tick 451, 8c672482.
 
 - **`mask_pool_pixel` doctest** — added `# Examples`: zero input
   → zero output, unit basis `[1, 0, 0]` recovers `XCM_3X3[0]` row.
-  Tick 450.
+  Tick 450, a8a4f127.
 
 - **`pool_band_finalize` doctest** — added `# Examples`:
   zero partial → 0 (eps-tail explicitly canceled), negative partial
   clamps to 0, and uniform-|x|=c reconstruction at β=2 within 0.01.
-  Documents the eps-tail bias size relationship `~ eps^(1/β)`. Tick 449.
+  Documents the eps-tail bias size relationship `~ eps^(1/β)`. Tick 449, 184a1984.
 
 - **`phase_uncertainty_no_blur` doctest** — added `# Examples`:
   pure scaling `input × 10^MASK_C`, zero passthrough, and scale-factor
-  range pin in [0.15, 0.17]. Tick 448.
+  range pin in [0.15, 0.17]. Tick 448, 00ca7e06.
 
 - **`lp_norm_sum` doctest** — added `# Examples`: pythagorean
   `lp_norm_sum([3, 4], 2) ≈ 5` within 0.01, empty → 0,
-  sign-insensitive via abs. Tick 447.
+  sign-insensitive via abs. Tick 447, b04fd9ed.
 
 - **`lp_norm_mean` doctest** — added `# Examples`: empty → 0,
   uniform input → constant within 0.01 (eps-tail bias),
-  sign-insensitive via abs. Tick 446.
+  sign-insensitive via abs. Tick 446, 883ea3f1.
 
 - **`sensitivity_corrected_scalar` doctest** — added `# Examples`
   showing positive output at standard photopic L_bkg (100 cd/m²) and
-  that `corrected / uncorrected == 10^(DB/20)` within 1e-5. Tick 445.
+  that `corrected / uncorrected == 10^(DB/20)` within 1e-5. Tick 445, cb936c1b.
 
 - **`clamp_diff_soft` doctest** — added `# Examples`: `f(0) == 0`,
   half-saturation at `d == d_max` (relative err < 1e-5),
-  asymptotic bound `< d_max` at 1e9. Tick 444.
+  asymptotic bound `< d_max` at 1e9. Tick 444, d06a2073.
 
 - **`safe_pow` doctest** — added `# Examples` covering `safe_pow(0, p)
   == 0` exact zero (via `(eps)^p - eps^p` cancellation), `safe_pow(2,
-  2) ≈ 4` within 0.01, and monotonicity. Tick 443.
+  2) ≈ 4` within 0.01, and monotonicity. Tick 443, b5cd8d3d.
 
 - **`srgb_byte_to_dkl_scalar` doctest** — added `# Examples`:
   pure-white → positive A + chroma < 5% of A, pure-red → RG > 0
-  (red-green axis convention). Tick 442.
+  (red-green axis convention). Tick 442, 6240f767.
 
 - **`met2jod` doctest** — added `# Examples` covering perfect-quality
   limit (`met2jod(0) == 10`), monotonic decline (0 > 0.5 > 1.0 > 5.0),
