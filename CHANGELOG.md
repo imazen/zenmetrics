@@ -229,6 +229,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/laplacian_pyramid_invariants.rs`** — seven structural
+  invariant pins on `laplacian_pyramid_dec_scalar`: (1) output band
+  count matches requested `n_levels` for 1..=4; (2) auto-`n_levels=0`
+  picks `min(sw, sh).ilog2()` bands across 64² (=6) and non-square
+  64×32 / 32×64 (=5); (3) band dimensions track an independently-
+  rebuilt `gausspyr_reduce_scalar` chain on 17×13 (odd-dim);
+  (4) baseband (last band) is bit-equal to the coarsest gaussian
+  via `to_bits()` (pins the docstring contract that the baseband
+  is NOT a Laplacian residual); (5) determinism via bit-equality
+  across repeated calls; (6) `n_levels=1` returns a single band
+  bit-equal to the input (the `for k in 0..(n-1)` empty loop edge
+  case); (7) Band invariant `data.len() == w * h` for every band.
+  Complements `pyramid_scalar.rs`'s pointwise-numeric pycvvdp
+  parity tests with structural / contract coverage. Tick 417.
+
 - **`tests/band_weights_invariants.rs`** — eight invariant pins on
   `flatten_band_weights` and `precomputed_band_weights` covering
   edges + structural properties the existing pointwise test missed:
