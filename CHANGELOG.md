@@ -58,6 +58,20 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`score_with_reference_is_deterministic_across_repeated_calls`**
+  (in `pipeline_score.rs`) — 3 invariants on the `set_reference` /
+  `score_with_reference` cached fast path: (1) calling the cached
+  path twice with the same dist returns bit-identical `f64` JOD
+  (`to_bits()` equality); (2) bit-equal to the direct
+  `Cvvdp::score(ref, dist)` path — strengthens the existing
+  `score_with_reference_matches_score` (which used a 1e-6 tolerance)
+  to the documented "match exactly" contract from tick 213; (3) an
+  intervening cached-path call on a different dist does not poison
+  the per-call state — first and third dist_a calls remain
+  bit-equal. Sibling pin to
+  `score_is_deterministic_across_repeated_calls` for the cached path
+  that `CvvdpBatchScorer` relies on. Tick 488.
+
 - **`state_machine_independence.rs`** — 5 invariant pins on the
   `Cvvdp::set_reference` / `Cvvdp::warm_reference` cache state
   machine. Pins (1) fresh `Cvvdp::new()` surfaces `NoCachedReference`

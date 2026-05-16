@@ -1732,6 +1732,70 @@ fn score_is_deterministic_across_repeated_calls() {
 }
 
 #[test]
+fn score_with_reference_is_deterministic_across_repeated_calls() {
+    // Tick 488: same shape as score_is_deterministic_across_repeated_calls
+    // but for the cached fast path. The existing
+    // `score_with_reference_matches_score` pin uses a 1e-6 tolerance
+    // — that's a "matches" pin, not a determinism pin. State leakage
+    // between repeated cached-path calls (e.g., a per-call scratch
+    // buffer accidentally tied to mutable state on the cached ref
+    // bytes) would silently break batch-scoring throughput in
+    // zen-metrics-cli's CvvdpBatchScorer without surfacing the bug
+    // through the existing matches pin.
+    //
+    // Checks:
+    //   (1) score_with_reference(dist_a) twice → bit-identical
+    //   (2) Bit-equality with the direct `score(ref, dist_a)` path
+    //       (currently pinned only to 1e-6; the cached path takes
+    //       a Vec clone of the same bytes and routes through the
+    //       same compute_dkl_jod — bit-equality is the correct
+    //       contract).
+    //   (3) An intervening score_with_reference(dist_b) call must
+    //       not poison the cached ref's state — third call against
+    //       dist_a must match the first call.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_a = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(70), w, h);
+    let dist_b = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+
+    cvvdp.set_reference(&ref_bytes).expect("set_reference");
+
+    // (1) Same dist twice → bit-identical.
+    let s1 = cvvdp.score_with_reference(&dist_a).expect("swr 1");
+    let s2 = cvvdp.score_with_reference(&dist_a).expect("swr 2");
+    assert_eq!(
+        s1.to_bits(),
+        s2.to_bits(),
+        "score_with_reference(dist_a) not deterministic: first={s1}, second={s2}",
+    );
+
+    // (2) Bit-equal to direct score(ref, dist_a) — the cached path
+    // is documented to "match score(ref, dist) exactly" (tick 213).
+    // Pin the stronger bit contract here.
+    let s_direct = cvvdp.score(&ref_bytes, &dist_a).expect("score");
+    assert_eq!(
+        s1.to_bits(),
+        s_direct.to_bits(),
+        "score_with_reference {s1} not bit-equal to score(ref, dist_a) {s_direct}",
+    );
+
+    // (3) An intervening cached-path call on a different DIST must
+    // not poison the state that the next dist_a call sees.
+    let s_a1 = cvvdp.score_with_reference(&dist_a).expect("swr a1");
+    let _s_b = cvvdp.score_with_reference(&dist_b).expect("swr b");
+    let s_a2 = cvvdp.score_with_reference(&dist_a).expect("swr a2");
+    assert_eq!(
+        s_a1.to_bits(),
+        s_a2.to_bits(),
+        "state leaked from cached-path dist_b call: first={s_a1}, after-b={s_a2}",
+    );
+}
+
+#[test]
 fn score_is_deterministic_across_intervening_warm_reference() {
     // Mixing score() calls with warm_reference + cold-path calls
     // is the call pattern test workers use. Verify the warm-ref
