@@ -109,11 +109,23 @@ if ! command -v python3 >/dev/null || ! command -v pip3 >/dev/null; then
         || { log "FAIL apt-get install python3 python3-pip"; exit 3; }
 fi
 if ! python3 -c "import pyarrow" 2>/dev/null; then
-    log "installing pyarrow"
-    pip3 install --quiet --break-system-packages pyarrow 2>/dev/null \
+    log "installing pyarrow (apt python3-pyarrow first, pip fallback)"
+    # Prefer apt's python3-pyarrow build: it's compiled against the
+    # exact glibc on the host image and is more stable than pip's
+    # wheels, which segfault on certain vast.ai hosts when reading
+    # the unified parquet sidecars (v25 lesson: 17% of boxes hit
+    # `Segmentation fault` in `pq.read_table` with the pip wheel).
+    apt-get install -yq --no-install-recommends python3-pyarrow 2>/dev/null \
+        || pip3 install --quiet --break-system-packages pyarrow 2>/dev/null \
         || pip3 install --quiet pyarrow \
-        || { log "FAIL pip install pyarrow"; exit 3; }
+        || { log "FAIL install pyarrow (apt + pip both failed)"; exit 3; }
 fi
+# Verify pyarrow import succeeds without segfault before claiming
+# any chunks. If python segfaults loading pyarrow, the worker is
+# unusable for this sweep — fail loudly so the operator can
+# destroy + replace rather than burning money on retry loops.
+python3 -c "import pyarrow.parquet as pq; print('pyarrow import OK')" \
+    || { log "FAIL pyarrow import segfaults/errors on this host"; exit 3; }
 
 # libnvrtc12: cubecl-cuda uses NVRTC at runtime to compile PTX from
 # kernel source. nvidia-container-toolkit only mounts libcuda; nvrtc

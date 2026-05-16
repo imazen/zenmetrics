@@ -1,0 +1,35 @@
+{
+  "run_id": "cvvdp-backfill-2026-05-15-half",
+  "sources": {
+    "v12_zenjxl": {
+      "impls": {
+        "imazen": {
+          "chunks": 5,
+          "rows": 500,
+          "consolidated_parquet": "cvvdp_imazen_v12_zenjxl.parquet"
+        }
+      },
+      "parity": null
+    },
+    "v13_zenjpeg": {
+      "impls": {
+        "imazen": {
+          "chunks": 3,
+          "rows": 300,
+          "consolidated_parquet": "cvvdp_imazen_v13_zenjpeg.parquet"
+        }
+      },
+      "parity": null
+    },
+    "v15r_zenjpeg": {
+      "impls": {
+        "imazen": {
+          "chunks": 215,
+          "rows": 21500,
+          "consolidated_parquet": "cvvdp_imazen_v15r_zenjpeg.parquet"
+        }
+      },
+      "parity": null
+    }
+  }
+}
