@@ -239,6 +239,9 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`gausspyr_reduce_scalar` doctest** — added `# Examples`: 8×8 → 4×4
+  with `dst.len() == 16`, odd-dim 7×7 → 4×4 ceil-halving. Tick 455.
+
 - **`flatten_band_weights` doctest** — added `# Examples`: empty
   → empty, 2-level [[1,2,3],[4,5,6]] → [1..=6], `weight_idx =
   level * 3 + channel` indexing pin. Tick 454.

@@ -78,6 +78,25 @@ pub const GAUSS5: [f32; 5] = [
 ///
 /// Two-pass: vertical pass decimates h by 2 into `sw × dh` scratch,
 /// horizontal pass decimates w by 2 into the final `dw × dh` output.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar;
+///
+/// // 8×8 input → 4×4 output (ceil-halving).
+/// let src = vec![1.0_f32; 64];
+/// let mut dst = Vec::new();
+/// let (dw, dh) = gausspyr_reduce_scalar(&src, 8, 8, &mut dst);
+/// assert_eq!((dw, dh), (4, 4));
+/// assert_eq!(dst.len(), 16);
+///
+/// // Odd-dim ceil-halving: 7 → 4.
+/// let src7 = vec![1.0_f32; 49];
+/// let mut dst7 = Vec::new();
+/// let (dw7, dh7) = gausspyr_reduce_scalar(&src7, 7, 7, &mut dst7);
+/// assert_eq!((dw7, dh7), (4, 4));
+/// ```
 pub fn gausspyr_reduce_scalar(
     src: &[f32],
     sw: usize,
