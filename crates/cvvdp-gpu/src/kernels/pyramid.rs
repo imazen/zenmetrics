@@ -219,6 +219,24 @@ pub fn gausspyr_reduce_scalar(
 /// `out_w`, `out_h` may be `2*sw`, `2*sh-1`, etc. depending on the
 /// parity rule used by the matching reduce — pass the target size
 /// explicitly.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::gausspyr_expand_scalar;
+///
+/// // 4×4 → 8×8 (the standard 2× upscale).
+/// let src = vec![1.0_f32; 16];
+/// let mut dst = Vec::new();
+/// gausspyr_expand_scalar(&src, 4, 4, 8, 8, &mut dst);
+/// assert_eq!(dst.len(), 64);
+///
+/// // 4×4 → 7×7 (odd target). The function supports any
+/// // out_w ∈ [2*sw - 1, 2*sw] per the debug_assert range.
+/// let mut dst_odd = Vec::new();
+/// gausspyr_expand_scalar(&src, 4, 4, 7, 7, &mut dst_odd);
+/// assert_eq!(dst_odd.len(), 49);
+/// ```
 pub fn gausspyr_expand_scalar(
     src: &[f32],
     sw: usize,

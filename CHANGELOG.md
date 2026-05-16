@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`gausspyr_expand_scalar` doctest** — added `# Examples`: 4×4 → 8×8
+  (standard 2× upscale), 4×4 → 7×7 (odd target — supports `[2*sw-1, 2*sw]`
+  range per debug_assert). Tick 456.
+
 - **`gausspyr_reduce_scalar` doctest** — added `# Examples`: 8×8 → 4×4
   with `dst.len() == 16`, odd-dim 7×7 → 4×4 ceil-halving. Tick 455.
 
