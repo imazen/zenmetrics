@@ -1252,7 +1252,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// GPU-only Weber pyramid dispatch. Writes:
     /// - `self.bands_ref[k].planes[c]` — Weber-contrast bands per
     ///   level per channel (non-baseband levels). Baseband level
-    ///   gets the per-channel gauss[last] divided by the achromatic
+    ///   gets the per-channel `gauss[last]` divided by the achromatic
     ///   baseband's scalar mean (host-side).
     /// - `self.weber_scratch[k].log_l_bkg` — per-pixel
     ///   `log10(L_bkg)` plane per non-baseband level.
