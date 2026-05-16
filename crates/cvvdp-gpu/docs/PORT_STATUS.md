@@ -20,9 +20,36 @@ Tracking faithful-port progress against the Python reference
 
 `gfxdisp/ColorVideoVDP` **v0.5.4** (latest tag as of 2026-05-14).
 Driver script in `scripts/cvvdp_goldens/` runs `pycvvdp==0.5.4` to
-produce parity goldens. When bumping: also bump the R2 prefix
-(`v1` → `v2`), the `GOLDEN_VERSION` const in `tests/common/mod.rs`,
-and the version assertion in `tests/parity.rs`.
+produce parity goldens.
+
+### When bumping the reference version
+
+Update `cvvdp_gpu::PYCVVDP_REFERENCE_VERSION` in `src/lib.rs`.
+That const is compile-time-pinned against 7 external files via
+`tests/version_lockstep.rs` (ticks 588-595), so the build fails
+to compile until every site is updated. The lockstep-pinned
+sites are:
+
+1. `scripts/cvvdp_goldens/requirements.txt` (`cvvdp==X.Y.Z`)
+2. `src/kernels/csf_lut/v0_5_4.rs` (regenerate the LUT + update
+    the auto-generated header comment — also rename the file
+    + the `csf_lut_v0_5_4` module to match the new version)
+3. `docs/PORT_STATUS.md` (this section)
+4. `README.md` (algorithm-parity claim + Status section)
+5. `Cargo.toml` (parity-goldens feature comment)
+6. `docs/CVVDP_SIDECAR_SCHEMA.md` (reserved column-name tags)
+7. `tests/parity.rs::manifest_fetches` runtime check (auto-sourced
+   from the const — no manual edit needed)
+
+Plus 3 compile-time format invariants on the const itself
+(non-empty, starts with `v`, contains `.`) catch malformed
+values.
+
+Also bump separately (different version space): the R2 prefix
+(`v1` → `v2`) and `GOLDEN_VERSION` const in `tests/common/mod.rs`.
+Goldens under the new `/v2/` prefix get re-captured by re-running
+`scripts/cvvdp_goldens/build_goldens.py` against the bumped
+pycvvdp.
 
 The cvvdp parameter JSON gets vendored into
 `crates/cvvdp-gpu/data/cvvdp_v0.5.4.json` once the script lands (small
