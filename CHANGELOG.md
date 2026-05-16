@@ -56,6 +56,66 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### scripts/sweep (cvvdp-backfill — deployment hardening, ticks 353-376)
+
+Long arc of fleet deployment hardening between ticks 353 (backend
+support docs) and 376 (CUDA 12.4 SDK build). 18 fleet attempts in
+total, all destroyed pre-completion — each surfacing one or two
+real defects that ship as commits. Summarized here because
+walking every fleet's failure log into the changelog one-by-one
+wouldn't aid future operators; the artifacts that survived the
+arc are:
+
+  - **`Cvvdp::compute_dkl_jod` / `_with_warm_ref` / `score` docs**:
+    explicit "# Backend support" sections documenting the
+    `Atomic<f32>::fetch_add` trap (cubecl-cpu PANICS at launch;
+    Metal silently no-ops → JOD=10 for any input). Tick 353-354,
+    50fb88ca/b909365b.
+  - **`scripts/sweep/cvvdp_backfill/status.sh`** — at-a-glance
+    fleet progress aggregator (manifest size + heartbeats +
+    sidecar counts with %). Tick 357, ad8a3031.
+  - **`assert_parity.py` anti-flatline check** — detects the
+    silent-failure mode where score-pairs writes the same value
+    for every row. Pairs with new `imazen_stats`/`pycvvdp_stats`
+    fields in finalize.sh's manifest. Tick 358, b5b6f4cf.
+  - **README §Documentation pointer** to the cvvdp-backfill
+    operator runbook. Tick 359, 43cd69a3.
+  - **`chunk_worker.sh` ENTRYPOINT override** —
+    `docker run image zen-metrics ...` was hitting the production
+    image's `zen-metrics-worker` ENTRYPOINT. `--entrypoint
+    /usr/local/bin/zen-metrics` bypasses. Tick 360, b28e1f0b.
+  - **`finalize.sh` non-destructive ~/.aws/credentials write** —
+    used to overwrite the local developer box's `[default]`
+    profile. Now idempotent-append. Tick 362, 9455eee8.
+  - **`onstart_cvvdp_backfill.sh` apt-get install docker.io** —
+    boot bootstrap was bailing on missing docker. Tick 363,
+    6016441e.
+  - **`onstart_cvvdp_backfill_imazen.sh` + `launch_imazen.sh`** —
+    single-image fleet path (no docker-in-docker). vast.ai SSH
+    instances don't allow privileged dockerd; this variant boots
+    the zen-metrics-sweep image directly and skips pycvvdp
+    entirely. Ticks 364-365, 8f81895a.
+  - **`chunk_worker.sh` R2() wrapper** — bare `s5cmd` fell through
+    to AWS `[default]` profile. Now all calls go through a
+    wrapper that pins `--profile r2 --endpoint-url`. Tick 365,
+    7f3a3cb8.
+  - **`chunk_worker.sh` GROUPS → GROUP_LINES rename** — CRITICAL
+    fix. `GROUPS` is a bash special array (current process's
+    supplementary group IDs); string-assigning to it exits 1 and
+    corrupts the value. Every chunk_worker invocation pre-fix
+    silently died at this line. Tick 367, dc794de2.
+  - **`Dockerfile.sweep.v13` CUDA SDK pin** — cubecl-cuda's
+    `cudarc` 0.19.4 deps with `cuda-version-from-build-system` +
+    `fallback-latest` was binding to `cuCoredumpDeregisterCompleteCallback`
+    (cuda-13020 cfg-gated symbol that doesn't exist in any
+    released NVIDIA driver yet). Builder stage now installs
+    `cuda-nvcc-12-4` + `cuda-cudart-dev-12-4` so cudarc emits
+    cuda-12040 features — compatible with driver 550+ which
+    covers ~all vast.ai boxes. Tick 372 / 376, daa0d82e + cuda124.
+  - **`scripts/sweep/cvvdp_backfill/STATUS.md`** — diagnostic
+    chain captured so future operators don't re-burn 14 fleet
+    attempts. Tick 370/372.
+
 #### scripts/sweep (cvvdp-backfill pipeline — PINNED TASK)
 
 End-to-end vast.ai fleet pipeline to backfill cvvdp scores

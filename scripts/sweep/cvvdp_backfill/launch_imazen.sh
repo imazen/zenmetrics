@@ -19,7 +19,7 @@
 #
 # Env vars:
 #   SWEEP_RUN_ID            (default: cvvdp-backfill-imazen-<YYYY-MM-DD>)
-#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-libcuda2)
+#   ZEN_METRICS_IMAGE       (default: ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-cuda124)
 #                           — also used as BOOT_IMAGE
 #   N_BOXES                 (default: 6)
 #   MAX_DPH                 (default: 0.30)
@@ -35,7 +35,7 @@ set -euo pipefail
 source ~/.config/cloudflare/r2-credentials
 
 SWEEP_RUN_ID="${SWEEP_RUN_ID:-cvvdp-backfill-imazen-$(date -u +%Y-%m-%d)}"
-ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-libcuda2}"
+ZEN_METRICS_IMAGE="${ZEN_METRICS_IMAGE:-ghcr.io/imazen/zen-metrics-sweep:0.6.4-cvvdp-cuda124}"
 BOOT_IMAGE="$ZEN_METRICS_IMAGE"
 
 N_BOXES="${N_BOXES:-6}"

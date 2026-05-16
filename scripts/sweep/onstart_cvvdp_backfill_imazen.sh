@@ -194,13 +194,11 @@ process_chunk() {
     rm -rf "$WORKDIR/work-${chunk_id}"
 }
 
-# Belt-and-suspenders LD_LIBRARY_PATH: the new
-# nvidia/cuda:13.0-base image already ENVs this, but if the boot
-# image is bumped/replaced and the compat libs aren't on path,
-# this re-prepends them so cubecl-cuda's cudarc finds the
-# bundled libcuda.so.* with the CUDA 12.5+ symbol set.
-export LD_LIBRARY_PATH="/usr/local/cuda/compat:${LD_LIBRARY_PATH:-/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64}"
-log "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+# LD_LIBRARY_PATH inherited from Dockerfile ENV is already
+# correct (nvidia mount paths only, no compat). The cuda124
+# image builds cudarc against CUDA 12.4 SDK so the binary's
+# cudart matches what most vast.ai hosts run (driver 550+).
+log "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-unset}"
 
 heartbeat run
 
