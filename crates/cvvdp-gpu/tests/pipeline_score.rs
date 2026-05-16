@@ -415,6 +415,85 @@ fn all_four_scoring_paths_agree_bit_equal_on_same_input() {
 }
 
 #[test]
+fn new_with_geometry_stable_under_degenerate_geometry() {
+    // Tick 497: companion to tick 495's `ppd_does_not_panic_on_degenerate_inputs`.
+    // `Cvvdp::new_with_geometry` accepts an arbitrary `DisplayGeometry`
+    // and internally calls `geometry.pixels_per_degree()` to derive
+    // pyramid level count (via `pyramid_levels`). Degenerate
+    // geometries can produce NaN / Inf ppd; Cvvdp::new_with_geometry
+    // must remain a total function — it either succeeds (potentially
+    // with a degraded pyramid level count) OR returns
+    // `Error::InvalidImageSize`. It MUST NOT panic.
+    //
+    // A future refactor that adds geometry validation
+    // (`assert!(distance_m > 0.0)` or similar) would convert the
+    // current "total + degraded" contract into "panicking" — surface
+    // here.
+    use cvvdp_gpu::params::DisplayGeometry;
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let base = DisplayGeometry::STANDARD_4K;
+
+    let cases: &[(&str, DisplayGeometry)] = &[
+        (
+            "zero distance",
+            DisplayGeometry {
+                distance_m: 0.0,
+                ..base
+            },
+        ),
+        (
+            "zero diagonal",
+            DisplayGeometry {
+                diagonal_inches: 0.0,
+                ..base
+            },
+        ),
+        (
+            "zero resolution_w",
+            DisplayGeometry {
+                resolution_w: 0,
+                ..base
+            },
+        ),
+        (
+            "extreme close distance (1 cm)",
+            DisplayGeometry {
+                distance_m: 0.01,
+                ..base
+            },
+        ),
+        (
+            "extreme far distance (100 m)",
+            DisplayGeometry {
+                distance_m: 100.0,
+                ..base
+            },
+        ),
+    ];
+
+    for (label, geom) in cases {
+        // The contract is: doesn't panic. The result is either Ok
+        // (degraded pyramid count) or Err(InvalidImageSize) — both
+        // acceptable. We don't pin which because the formula at
+        // `pyramid_levels(ppd, w, h)` can shift between them as ppd
+        // boundary conditions move; a future refactor could
+        // legitimately tighten the bounds.
+        let result = Cvvdp::<Backend>::new_with_geometry(
+            client.clone(),
+            w,
+            h,
+            CvvdpParams::PLACEHOLDER,
+            *geom,
+        );
+        match result {
+            Ok(_) => eprintln!("{label}: new_with_geometry succeeded"),
+            Err(e) => eprintln!("{label}: new_with_geometry returned Err({e:?})"),
+        }
+    }
+}
+
+#[test]
 fn new_equivalent_to_new_with_geometry_standard_4k() {
     // Tick 493: pin the documented contract that `Cvvdp::new` is
     // "equivalent to `new_with_geometry(..., STANDARD_4K)`" (per

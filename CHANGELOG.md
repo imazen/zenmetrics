@@ -75,6 +75,20 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`new_with_geometry_stable_under_degenerate_geometry`** (in
+  `pipeline_score.rs`) — companion to tick 495's
+  `ppd_does_not_panic_on_degenerate_inputs`. `Cvvdp::new_with_geometry`
+  internally calls `geometry.pixels_per_degree()` to derive pyramid
+  level count via `pyramid_levels`. Degenerate geometries can
+  produce NaN/Inf ppd; the contract is that `new_with_geometry`
+  remains total — either succeeds (potentially with a degraded
+  pyramid level count) or returns `Error::InvalidImageSize`, but
+  MUST NOT panic. 5 degenerate-geometry cases pinned: zero
+  distance, zero diagonal, zero resolution_w, extreme close (1cm),
+  extreme far (100m). All currently succeed; the test does not
+  pin which path because future tightening could legitimately
+  shift them between Ok and InvalidImageSize. Tick 497.
+
 - **`ppd_does_not_panic_on_degenerate_inputs`** (in
   `display_geometry.rs`) — stability pin on
   `DisplayGeometry::pixels_per_degree` for degenerate inputs (zero
