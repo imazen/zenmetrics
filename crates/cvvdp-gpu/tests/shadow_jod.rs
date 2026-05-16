@@ -204,3 +204,50 @@ fn predict_jod_still_3ch_panics_on_dist_dim_mismatch() {
     let bad_dist = vec![128u8; w * h * 3 - 1];
     let _ = predict_jod_still_3ch(&ok_ref, &bad_dist, w, h, display, ppd);
 }
+
+#[test]
+fn predict_jod_still_3ch_returns_max_jod_on_identical_inputs() {
+    // Identity contract: scoring a buffer against itself yields
+    // the maximum JOD (≈ 10.0 — "imperceptible difference"). The
+    // doctest on `predict_jod_still_3ch` asserts this on a 64×64
+    // gray buffer; promote that to an integration test so it
+    // runs in the standard `cargo test --test shadow_jod` path
+    // (doctests are skipped when filtering by `--test <name>`).
+    //
+    // Companion to `cpu_backend.rs::compute_dkl_jod_host_pool_returns_max_jod_on_identical_inputs`
+    // (tick 350) which pins the same contract on the GPU host-pool
+    // path. This is the host-scalar reference twin: a refactor
+    // that diverges either path's identity output surfaces
+    // independently.
+    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+    use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
+
+    // Test three sizes spanning small/mid/edge:
+    //   - 8×8: the PYRAMID_MIN_DIM × 2 boundary
+    //   - 64×64: matches the lib.rs doctest example
+    //   - 73×91: the odd-dim 'gausspyr_reduce' parity case from
+    //     ticks 204-206 (pycvvdp's column-parity bug). Identity
+    //     output should still equal 10 there — if the bug-compat
+    //     boundary patches break identity, this trips.
+    for (w, h, label) in [
+        (8_usize, 8_usize, "8×8 boundary"),
+        (64, 64, "64×64 doctest size"),
+        (73, 91, "73×91 odd-dim"),
+    ] {
+        for &val in &[0_u8, 128, 255] {
+            let bytes = vec![val; w * h * 3];
+            let jod = predict_jod_still_3ch(
+                &bytes,
+                &bytes,
+                w,
+                h,
+                DisplayModel::STANDARD_4K,
+                DisplayGeometry::STANDARD_4K.pixels_per_degree(),
+            );
+            assert!(
+                (jod - 10.0).abs() < 1e-3,
+                "{label} val={val}: predict_jod_still_3ch identity = {jod}, expected ≈ 10.0",
+            );
+        }
+    }
+}

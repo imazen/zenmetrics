@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/shadow_jod.rs::predict_jod_still_3ch_returns_max_jod_on_identical_inputs`**
+  — integration-test promotion of the lib.rs doctest's identity
+  contract (scoring a buffer against itself yields JOD ≈ 10.0).
+  Doctests are skipped when filtering with `cargo test --test
+  <name>`, leaving the host-scalar identity contract uncovered
+  in the standard test path. Sweeps three sizes × three uniform
+  values: (8×8 = PYRAMID_MIN_DIM×2 boundary, 64×64 = doctest
+  size, 73×91 = odd-dim with pycvvdp `gausspyr_reduce` column-
+  parity bug-compat patches from ticks 204-206) × val ∈ {0, 128,
+  255}. Companion to tick 350's
+  `compute_dkl_jod_host_pool_returns_max_jod_on_identical_inputs`
+  (GPU host-pool path) — same contract on the host-scalar
+  reference twin. Tick 403.
 - **`tests/lib_constants.rs`** — seventh in the constants-pin
   series. Pins the three crate-level constants exposed from
   `lib.rs`: `N_CHANNELS = 3` (still-image DKL opponent count),
