@@ -227,11 +227,18 @@ while IFS='|' read -r gid codec q kj; do
     fi
 
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
+        # --entrypoint override: the production image's ENTRYPOINT is
+        # /usr/local/bin/zen-metrics-worker (the chunk-claim worker
+        # that consumes R2 env vars). For per-group sweeps we drive
+        # the underlying `zen-metrics` binary directly. Matches the
+        # pattern in dual_impl_chunk_docker.sh added at tick 340 after
+        # the agent's smoke retry surfaced this trap.
         docker run --rm $DOCKER_GPUS \
+            --entrypoint /usr/local/bin/zen-metrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$GROUP_DIR" \
             "$ZEN_METRICS_IMAGE" \
-            zen-metrics "${SWEEP_ARGS[@]}" 2>&1 | sed "s/^/  [sweep g${gid}] /" >&2
+            "${SWEEP_ARGS[@]}" 2>&1 | sed "s/^/  [sweep g${gid}] /" >&2
     else
         zen-metrics "${SWEEP_ARGS[@]}" 2>&1 | sed "s/^/  [sweep g${gid}] /" >&2
     fi
@@ -254,10 +261,11 @@ if [[ "$SKIP_IMAZEN" != "1" ]]; then
     echo "[chunk-worker $CHUNK_ID] step 5a/6: score-pairs cvvdp (imazen)" >&2
     if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
         docker run --rm $DOCKER_GPUS \
+            --entrypoint /usr/local/bin/zen-metrics \
             -v "$WORK_DIR":"$WORK_DIR":rw \
             -w "$WORK_DIR" \
             "$ZEN_METRICS_IMAGE" \
-            zen-metrics score-pairs \
+            score-pairs \
                 --metric cvvdp \
                 --pairs-tsv "$WORK_DIR/pairs.tsv" \
                 --out-parquet "$SIDECAR_IMAZEN" \
