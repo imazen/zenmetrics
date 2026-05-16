@@ -177,6 +177,18 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/csf_scalar.rs::csf_constants_match_pycvvdp_v0_5_4`** —
+  sibling to tick 393's pool-constant pin. Locks the exact f32
+  bit patterns of `SENSITIVITY_CORRECTION_DB` (-0.279_742_33)
+  and `CSF_BASEBAND_RHO` (0.1), plus integer values of
+  `N_L_BKG` and `N_RHO` (both 32). The dB correction was
+  previously checked transitively via the
+  `sensitivity_correction_is_a_small_attenuation` magnitude test
+  (tick 388) but not pinned to an exact bit pattern;
+  `CSF_BASEBAND_RHO` had no direct value check at all. N_L_BKG /
+  N_RHO are the LUT grid sizes the GPU kernels assume via array
+  sizing — a refactor that bumps either without resizing kernel
+  buffers would corrupt every per-pixel CSF lookup. Tick 394.
 - **`tests/pool_scalar.rs::pool_constants_match_pycvvdp_v0_5_4`** —
   pins the exact f32 bit patterns of the eight pool constants
   imported verbatim from pycvvdp v0.5.4: `BETA_SPATIAL`,

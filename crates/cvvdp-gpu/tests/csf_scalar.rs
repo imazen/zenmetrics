@@ -374,3 +374,50 @@ fn precompute_logs_row_clamps_rho_at_zero() {
         );
     }
 }
+
+// Pin the exact f32 bit patterns of the cvvdp v0.5.4 CSF
+// constants in `kernels::csf`. Same shape as tick 393's pool
+// constant pin: a silent edit (typo, sign flip, decimal-point
+// shift) cascades into JOD drift across every parity gate. Pin
+// each constant by `.to_bits()` so the failure message names the
+// specific constant + expected value.
+//
+// `N_L_BKG` (32) is the LUT axis size; pinning it is the
+// length-contract pin from tick 386's
+// `precompute_logs_row_returns_n_l_bkg_entries` test. The
+// numeric f32 constants here are pinned separately because they
+// drift independently of the LUT size.
+
+#[test]
+fn csf_constants_match_pycvvdp_v0_5_4() {
+    use cvvdp_gpu::kernels::csf::{CSF_BASEBAND_RHO, N_L_BKG, N_RHO, SENSITIVITY_CORRECTION_DB};
+
+    // SENSITIVITY_CORRECTION_DB: cvvdp's published
+    // `sensitivity_correction` parameter in dB. The linear-space
+    // multiplier `10^(DB / 20)` is applied to every CSF lookup
+    // via `sensitivity_corrected_scalar`. Negative dB → linear
+    // factor < 1 (small attenuation).
+    assert_eq!(
+        SENSITIVITY_CORRECTION_DB.to_bits(),
+        (-0.279_742_33_f32).to_bits(),
+        "SENSITIVITY_CORRECTION_DB = {SENSITIVITY_CORRECTION_DB}, expected -0.279_742_33 (cvvdp v0.5.4)",
+    );
+
+    // CSF_BASEBAND_RHO: pycvvdp's `process_block_of_frames`
+    // overrides `rho_band[last]` to 0.1 cy/deg for the baseband
+    // CSF lookup, separately from the geometric band frequencies.
+    // See tick 204 for the chroma_shift parity history.
+    assert_eq!(
+        CSF_BASEBAND_RHO.to_bits(),
+        0.1_f32.to_bits(),
+        "CSF_BASEBAND_RHO = {CSF_BASEBAND_RHO}, expected 0.1 (cvvdp v0.5.4 baseband override)",
+    );
+
+    // N_L_BKG and N_RHO are the LUT grid sizes (32 × 32). The
+    // GPU kernels assume these specific values via array sizing
+    // and stride arithmetic; a refactor that bumps either without
+    // resizing the kernel buffers would corrupt every per-pixel
+    // CSF lookup.
+    assert_eq!(N_L_BKG, 32, "N_L_BKG = {N_L_BKG}, expected 32 (cvvdp v0.5.4 LUT axis)");
+    assert_eq!(N_RHO, 32, "N_RHO = {N_RHO}, expected 32 (cvvdp v0.5.4 LUT axis)");
+}
