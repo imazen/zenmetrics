@@ -366,6 +366,19 @@ Tick 565 added 3 more semantic invariants of a different flavour:
     entire perceptual scale.
 Static-assert count is now 101 across 11 test files.
 
+Tick 566 added 4 more invariants extending the semantic-invariant
+pattern from tick 565:
+  - `BETA_SPATIAL.to_bits() < BETA_BAND.to_bits()` — BETA hierarchy
+  - `BETA_SPATIAL.to_bits() < BETA_CH.to_bits()` — BETA hierarchy
+    (the canonical pyramid-pool strategy raises the Minkowski
+    exponent across each nesting level; the inner spatial pool is
+    gentler than across-band / across-channel folds)
+  - `MASK_P.is_sign_positive()` — transducer exponent must be
+    positive (negative MASK_P → `pow(d, MASK_P)` → ∞ as d → 0)
+  - `D_MAX.is_sign_positive()` — soft-clamp ceiling exponent must
+    be positive (`10^D_MAX < 1` would collapse the clamp ceiling)
+Static-assert count is now 105 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

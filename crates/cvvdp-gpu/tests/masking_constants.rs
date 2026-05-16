@@ -113,6 +113,21 @@ const _: () = assert!(
     "MASK_C must be negative (10^MASK_C is an attenuator, not an amplifier)",
 );
 
+// Tick 566: MASK_P and D_MAX sign invariants. Both are exponents
+// applied to non-negative quantities (`pow(d, MASK_P)`, `10^D_MAX`)
+// where a negative value would invert the expected monotonicity:
+//   - MASK_P negative → pow(d, MASK_P) → ∞ as d → 0 (singular)
+//   - D_MAX negative → 10^D_MAX < 1 (clamp ceiling shrinks below 1)
+// `f32::is_sign_positive` is const fn since Rust 1.83.
+const _: () = assert!(
+    MASK_P.is_sign_positive(),
+    "MASK_P must be positive (transducer exponent on pow(d, MASK_P))",
+);
+const _: () = assert!(
+    D_MAX.is_sign_positive(),
+    "D_MAX must be positive (10^D_MAX is the soft-clamp ceiling)",
+);
+
 // Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
 // masking matrix (3×3 = 9 entries). Each entry is independently
 // derived from a published log2-space coefficient via 2^x; a

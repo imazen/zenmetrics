@@ -101,6 +101,22 @@ const _: () = {
         JOD_EXP.to_bits() < 1.0_f32.to_bits(),
         "JOD_EXP must be < 1.0 (sublinear saturation of met2jod)",
     );
+    // Tick 566: BETA hierarchy. The canonical pyramid-pool strategy
+    // raises the Minkowski exponent across each nesting level —
+    // inner spatial pool (BETA_SPATIAL=2.0, RMS) is gentler than
+    // the across-band fold and across-channel fold (both 4.0). A
+    // refactor that accidentally swapped a higher value into the
+    // spatial slot would homogenise the pool tower and reduce
+    // sensitivity to localised distortion. Both operands positive
+    // so u32 `<` is sound.
+    assert!(
+        BETA_SPATIAL.to_bits() < BETA_BAND.to_bits(),
+        "BETA hierarchy: BETA_SPATIAL must be < BETA_BAND",
+    );
+    assert!(
+        BETA_SPATIAL.to_bits() < BETA_CH.to_bits(),
+        "BETA hierarchy: BETA_SPATIAL must be < BETA_CH",
+    );
 };
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
