@@ -2701,3 +2701,137 @@ fn cvvdp_score_monotonically_decreases_with_noise_amplitude() {
         "a=2 noise should keep GPU JOD at or below 10, got {jod_a2}",
     );
 }
+
+#[test]
+fn score_with_reference_flat_vs_flat_yields_max_jod() {
+    // Tick 546: fourth-leg sibling of the spatial-contrast contract
+    // (host scalar tick 542, GPU score path tick 545, host_pool tick
+    // 546). Pins the contract on the cached-ref dispatch path:
+    // `set_reference(ref)` then `score_with_reference(dist)` must
+    // give JOD ≈ 10 for flat ref + flat dist regardless of brightness.
+    //
+    // Same atomic-add tolerance (1e-2) as the cold-ref GPU path —
+    // the cached-ref variant shares the same upstream kernels and the
+    // same atomic pool stage.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
+    let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
+    cvvdp.set_reference(&ref_black).expect("set_reference black");
+    let jod_bw = cvvdp
+        .score_with_reference(&dist_white)
+        .expect("score_with_reference black-vs-white");
+    eprintln!("cached-ref flat-vs-flat (black vs white): jod = {jod_bw:.4}");
+    assert!(
+        (jod_bw - 10.0).abs() < 1e-2,
+        "cached-ref flat-vs-flat should give JOD ≈ 10, got {jod_bw}",
+    );
+
+    let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
+    let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
+    cvvdp.set_reference(&ref_gray).expect("set_reference gray");
+    let jod_gg = cvvdp
+        .score_with_reference(&dist_gray)
+        .expect("score_with_reference gray-vs-gray");
+    assert!(
+        (jod_gg - 10.0).abs() < 1e-2,
+        "warm-ref flat 128 vs flat 64 should give JOD ≈ 10, got {jod_gg}",
+    );
+}
+
+#[test]
+fn score_with_reference_textured_vs_flat_detects_detail_loss() {
+    // Tick 546: fourth-leg sibling of the spatial-contrast blur pin.
+    // Cached-ref dispatch (set_reference + score_with_reference) must
+    // detect catastrophic blur (textured ref + flat dist) the same as
+    // the cold-ref path.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_textured: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
+    let dist_flat: Vec<u8> = vec![128u8; n];
+    cvvdp
+        .set_reference(&ref_textured)
+        .expect("set_reference textured");
+    let jod = cvvdp
+        .score_with_reference(&dist_flat)
+        .expect("score_with_reference textured-vs-flat");
+    eprintln!("cached-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
+    assert!(jod.is_finite(), "cached-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod < 9.0,
+        "cached-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
+    );
+    assert!(
+        jod > -10.0,
+        "cached-ref blur JOD = {jod} is extreme; sanity-check failed",
+    );
+}
+
+#[test]
+fn score_with_reference_monotonically_decreases_with_noise_amplitude() {
+    // Tick 546: fourth-leg sibling of the noise-amplitude monotonicity
+    // pin. Cached-ref dispatch (set_reference + score_with_reference)
+    // must show strict monotonicity in JOD across dense alternating-
+    // sign noise amplitudes {2, 8, 32}.
+    //
+    // The cached-ref path stores the reference srgb in the Cvvdp
+    // struct, so this also verifies the cached state correctly
+    // carries forward across multiple `score_with_reference` calls
+    // with different distorted inputs.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_: Vec<u8> = (0..n).map(|i| ((i * 13 + 7) % 256) as u8).collect();
+
+    fn add_alt_noise(src: &[u8], amplitude: u8) -> Vec<u8> {
+        src.iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let delta = sign * amplitude as i16;
+                (b as i16 + delta).clamp(0, 255) as u8
+            })
+            .collect()
+    }
+
+    cvvdp.set_reference(&ref_).expect("set_reference");
+    let jod_a2 = cvvdp
+        .score_with_reference(&add_alt_noise(&ref_, 2))
+        .expect("cached-ref a=2");
+    let jod_a8 = cvvdp
+        .score_with_reference(&add_alt_noise(&ref_, 8))
+        .expect("cached-ref a=8");
+    let jod_a32 = cvvdp
+        .score_with_reference(&add_alt_noise(&ref_, 32))
+        .expect("cached-ref a=32");
+    eprintln!(
+        "cached-ref noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}"
+    );
+
+    assert!(
+        jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
+        "non-finite cached-ref JOD: a2={jod_a2} a8={jod_a8} a32={jod_a32}",
+    );
+    assert!(
+        jod_a2 > jod_a8,
+        "cached-ref JOD(a=2)={jod_a2} should exceed JOD(a=8)={jod_a8}",
+    );
+    assert!(
+        jod_a8 > jod_a32,
+        "cached-ref JOD(a=8)={jod_a8} should exceed JOD(a=32)={jod_a32}",
+    );
+    assert!(
+        jod_a2 < 10.0 + 1e-2,
+        "a=2 noise should keep cached-ref JOD at or below 10, got {jod_a2}",
+    );
+}
