@@ -722,6 +722,20 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 621 — add `# Examples` doctest to the `Cvvdp<R>` top-level
+scorer struct. `ignore`d (the runtime needs a live CUDA driver
+which docs.rs sandboxes don't have — same pattern as the existing
+ignored doctests on `Cvvdp::new`, `score`, etc.). The example
+walks a docs.rs reader through:
+- Allocating the buffer pool once for a fixed image size.
+- One-shot `score(ref, dist)` returning a JOD.
+- Cross-references the two cached-reference fast paths for
+  multi-DIST sweeps.
+
+The struct itself was previously documented only with a 4-line
+prose docstring. Doctest count: 69 passed + 14 ignored (was
+69 + 13). Docs-only change.
+
 Tick 620 — add `# Examples` doctest to `pyramid::WeberPyramid`
 struct. Pins the dual-level-count contract (`bands.len() ==
 log_l_bkg.len()`) and the per-level spatial-shape match

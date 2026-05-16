@@ -313,6 +313,36 @@ struct CachedReference {
 /// Allocates GPU buffers up front for a fixed image size and reuses
 /// them across calls. To score images of a different size, construct
 /// a new `Cvvdp`.
+///
+/// # Examples
+///
+/// `ignore` because `cubecl::cuda::CudaRuntime` requires a live
+/// CUDA driver — docs.rs builds in a sandbox without one. The
+/// runtime-test counterpart in `tests/pipeline_score.rs` exercises
+/// this exact pattern under the `cuda` feature.
+///
+/// ```ignore
+/// use cubecl::{Runtime, cuda::CudaRuntime};
+/// use cvvdp_gpu::{Cvvdp, CvvdpParams};
+///
+/// // Allocate buffers for a 256² image. Reuse `cvvdp` for any
+/// // number of (ref, dist) pairs at THIS size — the GPU buffers
+/// // are owned by `Cvvdp` and reused per call.
+/// let client = CudaRuntime::client(&Default::default());
+/// let mut cvvdp =
+///     Cvvdp::<CudaRuntime>::new(client, 256, 256, CvvdpParams::PLACEHOLDER)?;
+///
+/// // One-shot scoring (re-uploads ref every call):
+/// let ref_bytes = vec![128_u8; 256 * 256 * 3];
+/// let dist_bytes = vec![100_u8; 256 * 256 * 3];
+/// let jod = cvvdp.score(&ref_bytes, &dist_bytes)?;
+/// assert!(jod <= 10.0 && jod >= 0.0);
+///
+/// // Cached-reference scoring for many DISTs vs one REF: see
+/// // `set_reference` + `score_with_reference`, or the faster
+/// // `warm_reference` + `compute_dkl_jod_with_warm_ref`.
+/// # Ok::<(), cvvdp_gpu::Error>(())
+/// ```
 pub struct Cvvdp<R: Runtime> {
     client: ComputeClient<R>,
     params: CvvdpParams,
