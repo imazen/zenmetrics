@@ -93,9 +93,31 @@ if ! command -v jq >/dev/null; then
     chmod +x /usr/local/bin/jq
 fi
 if ! command -v docker >/dev/null; then
-    log "ERROR: docker not on PATH and we can't reliably install it as non-root"
-    log "use a vast.ai template that already includes docker (most CUDA templates do)"
-    exit 2
+    log "installing docker.io via apt-get (ubuntu:24.04 boot image lacks it)"
+    apt-get update -q
+    # docker.io is the standard ubuntu package; --no-install-recommends
+    # to skip apparmor/containerd-recommended baggage we don't need.
+    if ! apt-get install -yq --no-install-recommends docker.io; then
+        log "ERROR: apt-get install docker.io failed"
+        log "fallback: use a vast.ai template that already includes docker"
+        exit 2
+    fi
+    # vast.ai instances usually don't have systemd; start dockerd in
+    # the background. Wait briefly for the socket so the first
+    # `docker pull` doesn't race.
+    if ! pgrep -f dockerd >/dev/null; then
+        nohup dockerd >/var/log/dockerd.log 2>&1 &
+        for i in $(seq 1 20); do
+            [[ -S /var/run/docker.sock ]] && break
+            sleep 0.5
+        done
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        log "ERROR: dockerd started but `docker info` fails — see /var/log/dockerd.log"
+        tail -40 /var/log/dockerd.log >&2 || true
+        exit 2
+    fi
+    log "docker installed and ready ($(docker --version 2>&1 | head -1))"
 fi
 if ! command -v python3 >/dev/null; then
     log "installing python3 + pyarrow"
