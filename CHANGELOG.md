@@ -411,6 +411,16 @@ negative entries while still matching the per-entry value bit-
 pins. Pinning positivity directly captures the construction
 rule. Static-assert count is now 128 across 11 test files.
 
+Tick 570 added 7 positivity invariants on the unique taps of
+`PU_BLUR_KERNEL_1D` ([0]..[6]; taps [7]..[12] inherit positivity
+via the palindrome bit-equality pins from tick 560). The σ=3
+Gaussian construction `exp(-x²/(2σ²)) / Σ` only emits positive
+values; a refactor that substituted a different kernel family
+(e.g. derivative-of-Gaussian, sinc with side lobes) would yield
+negative taps. Pinning positivity directly captures the Gaussian
+construction contract. Static-assert count is now 135 across 11
+test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

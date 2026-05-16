@@ -267,6 +267,23 @@ const _: () = {
         PU_BLUR_KERNEL_1D[5].to_bits() == PU_BLUR_KERNEL_1D[7].to_bits(),
         "PU_BLUR_KERNEL_1D [5]/[7] pair must be palindromic",
     );
+    // Tick 570: every PU_BLUR_KERNEL_1D tap must be positive. The
+    // σ=3 Gaussian construction `exp(-x²/(2σ²)) / Σ` only emits
+    // positive values (exp is strictly positive, the normaliser
+    // doesn't change sign). A refactor that substituted a different
+    // kernel family (e.g. derivative-of-Gaussian for an
+    // edge-sensitive blur, or a sinc with negative side lobes)
+    // would yield negative taps while still potentially matching
+    // some per-entry values if a typo aligned them. Pinning
+    // positivity directly captures the Gaussian construction
+    // contract. Exploit palindrome: 7 unique-tap pins cover all 13.
+    assert!(PU_BLUR_KERNEL_1D[0].is_sign_positive(), "PU_BLUR_KERNEL_1D[0] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[1].is_sign_positive(), "PU_BLUR_KERNEL_1D[1] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[2].is_sign_positive(), "PU_BLUR_KERNEL_1D[2] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[3].is_sign_positive(), "PU_BLUR_KERNEL_1D[3] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[4].is_sign_positive(), "PU_BLUR_KERNEL_1D[4] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[5].is_sign_positive(), "PU_BLUR_KERNEL_1D[5] must be positive (Gaussian tap)");
+    assert!(PU_BLUR_KERNEL_1D[6].is_sign_positive(), "PU_BLUR_KERNEL_1D[6] must be positive (Gaussian centre tap)");
 };
 
 #[test]
