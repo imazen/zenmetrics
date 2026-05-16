@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/gausspyr_expand_invariants.rs`** — seven structural
+  invariant pins on `gausspyr_expand_scalar`, mirror of
+  `gausspyr_reduce_invariants.rs`: (1) `dst.len() == out_w * out_h`
+  across the full documented `[2*sw - 1, 2*sw]` × `[2*sh - 1, 2*sh]`
+  range (4 combos of even/odd target dims); (2) `dst` fully
+  overwritten — NaN pre-fill catches; (3) determinism via
+  `to_bits()`; (4) capacity invariance; (5) `(sw=4, sh=2)` vs
+  `(sw=2, sh=4)` produce distinct content (catches width/height
+  collapse in the separable convolution); (6) both `odd_w/odd_h`
+  branches inside the function succeed (5→9 odd and 5→10 even
+  paths); (7) all-finite output across 7 typical pyramid expand
+  pairs including non-square 8×4 → 16×7 and minimal 3×3 → 5×5/6×5.
+  Tick 419.
+
 - **`tests/gausspyr_reduce_invariants.rs`** — seven structural
   invariant pins on `gausspyr_reduce_scalar`: (1) `(dw, dh) = (4, 4)`
   and `dst.len() == 16` for 8×8; (2) odd inputs ceil-halve correctly
