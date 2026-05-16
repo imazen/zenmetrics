@@ -229,6 +229,15 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/params_placeholder.rs`** — pins the two `CvvdpParams::PLACEHOLDER`
+  fields the pipeline actually consumes: `display ==
+  DisplayModel::STANDARD_4K` (field-by-field bit-pattern check
+  on y_peak/y_black/y_refl) and `perf_mode == PerfMode::Strict`.
+  Every parity test in the crate constructs `Cvvdp::new(...,
+  PLACEHOLDER)`, so a refactor that flipped the placeholder
+  default to `PerfMode::Fast` would silently change every
+  golden-test calibration baseline. Plus a contract test
+  exercising PerfMode's Copy + PartialEq derives. Tick 405.
 - **`tests/goldens_metadata.rs`** — pins the self-consistency of
   the goldens-fetch infrastructure in `tests/common/mod.rs`:
   `MANIFEST_URL` must embed `GOLDEN_VERSION` as a path segment
