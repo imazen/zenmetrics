@@ -35,6 +35,31 @@ const _: () = assert!(
 );
 const _: () = assert!(N_RHO == 32, "N_RHO drifted from canonical pycvvdp value 32");
 
+// Tick 562: compile-time bit-pins for the LUT-axis endpoints.
+// pycvvdp's `csf_lut_weber_fixed_size.json` defines the queryable
+// range of the CSF LUT — drifting either endpoint silently shifts
+// every CSF lookup. Pin endpoints at compile time so the change
+// surfaces before any per-pixel kernel runs.
+//
+// LOG_L_BKG_AXIS: log10(0.005) = -2.3010299957 → log10(1e4) = 4.0
+// LOG_RHO_AXIS:   log10(0.1) = -1.0 → log10(64) = 1.8061799740
+const _: () = assert!(
+    LOG_L_BKG_AXIS[0].to_bits() == (-2.3010299957_f32).to_bits(),
+    "LOG_L_BKG_AXIS[0] drifted from cvvdp v0.5.4 log10(0.005) = -2.301",
+);
+const _: () = assert!(
+    LOG_L_BKG_AXIS[31].to_bits() == 4.0_f32.to_bits(),
+    "LOG_L_BKG_AXIS[31] drifted from cvvdp v0.5.4 log10(1e4) = 4.0",
+);
+const _: () = assert!(
+    LOG_RHO_AXIS[0].to_bits() == (-1.0_f32).to_bits(),
+    "LOG_RHO_AXIS[0] drifted from cvvdp v0.5.4 log10(0.1) = -1.0",
+);
+const _: () = assert!(
+    LOG_RHO_AXIS[31].to_bits() == 1.8061799740_f32.to_bits(),
+    "LOG_RHO_AXIS[31] drifted from cvvdp v0.5.4 log10(64) ≈ 1.806_180",
+);
+
 #[test]
 fn log_l_bkg_axis_length_matches_n_l_bkg() {
     assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG, "axis length != N_L_BKG");

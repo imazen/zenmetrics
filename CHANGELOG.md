@@ -315,6 +315,17 @@ derived from the sRGB EOTF formula and pinned by
 because the formula's branchless conditional uses `f32::powf`
 (not const fn). Static-assert count is now 85 across 11 test files.
 
+Tick 562 promoted 4 LUT-axis endpoint bit-pins to static asserts in
+`csf_axes_invariants.rs`:
+  - `LOG_L_BKG_AXIS[0] == -2.3010299957` (log10(0.005))
+  - `LOG_L_BKG_AXIS[31] == 4.0` (log10(1e4))
+  - `LOG_RHO_AXIS[0] == -1.0` (log10(0.1))
+  - `LOG_RHO_AXIS[31] == 1.8061799740` (log10(64))
+The 60 interior entries of each axis stay runtime-only — their
+runtime invariants (monotonicity, uniform-spacing-in-log10) can't
+lift without const-callable loop arithmetic. Static-assert count
+is now 89 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
