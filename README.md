@@ -47,6 +47,12 @@ normalized so higher = better):
   — ColorVideoVDP per-stage port status against pycvvdp v0.5.4
   (host scalar reference path + GPU composition + parity test
   matrix).
+- [`scripts/sweep/cvvdp_backfill/README.md`](scripts/sweep/cvvdp_backfill/README.md)
+  — operator runbook for the vast.ai pipeline that backfills cvvdp
+  JOD scores onto the zensim training parquet store. Produces side-
+  by-side `cvvdp_imazen_*` + `cvvdp_pycvvdp_v054` sidecars with a
+  parity gate (`assert_parity.py`) that catches both threshold
+  violations and silent-failure flatlines.
 
 ## License
 
