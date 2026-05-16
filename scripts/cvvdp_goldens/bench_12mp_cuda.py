@@ -55,6 +55,33 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_1280x720_offset(w=1280, h=720):
+    """1280x720 (HD aspect, ~1 MP) non-square fixture with the same
+    offset-distortion construction as the 12 MP / 1024² fixtures.
+    Tests asymmetric pyramid clamping: `band_frequencies` uses
+    `min(w, h)` = 720 → `floor(log2(720)) - 1 = 8` raw levels, NOT
+    capped by `MAX_LEVELS=9`. Sister case to the square 1024²
+    fixture which IS clamped. Together they pin both the
+    clamped + un-clamped pyramid-depth paths at ~1 MP.
+
+    Bit-stable with Rust's `common::synth_pair_with_offset_dist(1280, 720)`.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = np.stack(
+        [
+            np.maximum(r.astype(np.int16) - 8, 0).astype(np.uint8),
+            np.maximum(g.astype(np.int16) - 4, 0).astype(np.uint8),
+            np.minimum(b.astype(np.int16) + 12, 255).astype(np.uint8),
+        ],
+        axis=-1,
+    )
+    return ref, dist
+
+
 def synth_pair_1024_offset(w=1024, h=1024):
     """1024x1024 fixture using the same modular synth-pair + offset
     distortion as `synth_pair_12mp`, at 1 MP. Fills the 256² ↔
@@ -294,8 +321,17 @@ def main():
     offset1024_ref, offset1024_dist = synth_pair_1024_offset()
     print("1024x1024 offset golden:")
     offset1024_jod, _ = metric.predict(offset1024_dist, offset1024_ref, dim_order="HWC")
-    print(f"  jod = {float(offset1024_jod):.4f}\n")
+    print(f"  jod = {float(offset1024_jod):.4f}")
     offset1024_jod_val = float(offset1024_jod)
+
+    # 1280x720 HD-aspect fixture (~1 MP, non-square). Sister to the
+    # square 1024² fixture: min(w, h)=720 → 8 raw pyramid levels,
+    # NOT MAX_LEVELS-clamped. Pins the asymmetric-aspect path.
+    hd_ref, hd_dist = synth_pair_1280x720_offset()
+    print("1280x720 (HD) offset golden:")
+    hd_jod, _ = metric.predict(hd_dist, hd_ref, dim_order="HWC")
+    print(f"  jod = {float(hd_jod):.4f}\n")
+    hd_jod_val = float(hd_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -377,6 +413,11 @@ def main():
                 "shape_hw": [1024, 1024],
                 "construction": "synth_pair_1024_offset",
                 "jod": offset1024_jod_val,
+            },
+            "synth_1280x720_offset": {
+                "shape_hw": [720, 1280],
+                "construction": "synth_pair_1280x720_offset",
+                "jod": hd_jod_val,
             },
         },
     }

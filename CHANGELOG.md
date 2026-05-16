@@ -722,6 +722,29 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 630 — add a 1280×720 (HD aspect, ~1 MP) **non-square**
+synth-offset parity fixture. Sister to the square 1024² fixture
+(tick 629): `min(w, h)=720` → `floor(log2(720)) - 1 = 8` raw
+pyramid levels, NOT MAX_LEVELS=9-clamped. Together with tick
+629's 1024² (which IS clamped), the pair pins both the clamped
+and un-clamped pyramid-depth paths at ~1 MP.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_1280x720_offset(w=1280, h=720)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.454182` (generated locally via pinned `.venv`,
+  0.4 s wallclock).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_1280x720_offset` host-scalar
+  parity test.
+
+Measured result: host_scalar JOD = 9.454183, pycvvdp golden =
+9.454182, **|diff| = 0.000001** (1 ULP at f32 precision) — 5000×
+under the 0.005 JOD canonical manifest tolerance. First parity
+test in the suite exercising a non-square asymmetric pyramid
+at ~1 MP scale.
+
 Tick 629 — add a 1024×1024 (1 MP) synth-offset parity fixture,
 filling the size gap between the 256² fixtures and the 4000×3000
 12 MP case (16× pixel-count step). Exercises the `MAX_LEVELS=9`

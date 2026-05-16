@@ -25,6 +25,38 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_1280x720_offset() {
+    // Tick 630: host-scalar parity vs pycvvdp v0.5.4 on a 1280×720
+    // (HD aspect, ~1 MP) non-square synth pair. Sister to the
+    // 1024² fixture (tick 629): min(w, h) = 720 → floor(log2(720))
+    // - 1 = 8 raw pyramid levels, NOT MAX_LEVELS=9-clamped. Tests
+    // the un-clamped asymmetric pyramid-depth path.
+    //
+    // The pycvvdp golden was generated locally via the pinned
+    // `.venv` (pycvvdp 0.5.4 on CPU torch). Stored in
+    // `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`.
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_1280x720_offset");
+    let (w, h) = (1280_usize, 720_usize);
+    let (ref_b, dist_b) = common::synth_pair_with_offset_dist(w, h);
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 1280x720 offset: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_1024x1024_offset() {
     // Tick 629: host-scalar parity vs pycvvdp v0.5.4 on a 1024×1024
     // (1 MP) synth pair using the offset construction. Fills the
