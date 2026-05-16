@@ -78,6 +78,51 @@ Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
 fixture; the test suite catches drift across every layer that pins
 mention. Tick 500.
 
+**Post-milestone long tail (ticks 501–525, summarised here so the
+detailed entries below stay grep-able):**
+
+- **Re-export surface widened** (501–503): lib_reexports.rs grew
+  from 5 to 11 pins, covering `Cvvdp<R>`, `Error`, `Result<T>`,
+  the four lib-root constants, the `params::*` scaffolding types,
+  and the `host_scalar::*` + 5 `kernels::*` submodule paths.
+- **CHANGELOG provenance finished** (504): the last 4 unhashed
+  entries (ticks 383/387/398/399) backfilled via `jj file annotate`
+  + change_id resolution. All entries from tick 383 onward are
+  now hash-tagged.
+- **Rustdoc + clippy clean** (505, 514, 516, 518): cleared the 96
+  `#[cube(launch)]` macro-emitted `missing_docs` warnings via
+  file-level `#![allow(missing_docs)]` on each kernel file; added
+  crate-level `#![warn(missing_docs)]` guard so future undocumented
+  pub items surface at `cargo doc`; fixed an unresolved intra-doc
+  link in pipeline.rs's private docs; tightened the type-complexity
+  + assertions-on-constants clippy warnings introduced by 503.
+- **State-machine + boundary smokes** (506–513): cross-instance
+  bit-equality on fresh `Cvvdp::new` instances, degenerate-input
+  stability on `pixels_per_degree` and `new_with_geometry`,
+  end-to-end smoke at extreme aspect ratios (128×8 / 8×128 / 1024×8
+  / 8×1024), GPU + host_pool perf_mode bit-equality on the cpu and
+  GPU runtime variants, doctests on the remaining user-facing
+  `Cvvdp::*` scoring methods (`new_with_geometry`, `warm_reference`,
+  `compute_dkl_jod`).
+- **Manifest URL tightening** (519–521): pinned the canonical R2
+  host (`https://coefficient.r2.imazen.org/`) + the crate-specific
+  bucket subpath (`/cvvdp-goldens/`) on `MANIFEST_URL`, closing
+  silent CDN/sibling-crate misroute gaps the existing structure
+  checks would have passed.
+- **Static-assert promotion** (522–524): the integer-typed lib-root
+  constants (`N_CHANNELS == 3`, `MAX_LEVELS == 9`,
+  `PYRAMID_MIN_DIM == 4`, `PYRAMID_MIN_DIM * 2 == 8`) and the
+  `CsfChannel` discriminants (`A == 0` / `Rg == 1` / `Vy == 2`)
+  promoted from runtime `assert_eq!` to module-level
+  `const _: () = assert!(...)` static asserts. Fundamental
+  dimension parameters now catch at compile time.
+- **Stuck-at-constant pinned across all four scoring paths**
+  (508, 509, 525): strict q-level separation (q=90 > q=20 > q=1
+  with ≥ 0.01 JOD gap) on `score()`, `compute_dkl_jod_host_pool`,
+  and `compute_dkl_jod_host_pool_with_warm_ref`. Catches
+  near-correct-but-non-discriminative collapse that the manifest
+  tolerance pin (0.005 JOD) wouldn't surface.
+
 ### Changed
 
 #### cvvdp-gpu
