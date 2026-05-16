@@ -98,10 +98,11 @@ use crate::kernels::masking::{
 };
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_kernel, pool_band_finalize,
+    pool_band_3ch_lds_kernel, pool_band_finalize, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
-    band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
+    band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
+    DOWNSCALE_TILED_BLOCK_DIM,
     subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
 };
 use crate::params::CvvdpParams;
@@ -999,7 +1000,11 @@ impl<R: Runtime> Cvvdp<R> {
     fn _dispatch_gauss_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<()> {
         self._dispatch_dkl_planes_gpu(srgb)?;
 
-        let cube_dim = CubeDim::new_1d(64);
+        // T1.B (2026-05-16): LDS-tiled downscale. 16×16 workgroup;
+        // 36×36 input tile in shared memory; 25-tap stencil from LDS.
+        // Functionally equivalent to the scalar `downscale_kernel`,
+        // including the tick-206 bug-compat delta.
+        let cube_dim = CubeDim::new_2d(DOWNSCALE_TILED_BLOCK_DIM, DOWNSCALE_TILED_BLOCK_DIM);
         for k in 1..(self.n_levels as usize) {
             let prev_w = self.gauss_ref[k - 1].w;
             let prev_h = self.gauss_ref[k - 1].h;
@@ -1007,13 +1012,17 @@ impl<R: Runtime> Cvvdp<R> {
             let curr_h = self.gauss_ref[k].h;
             let n_curr = (curr_w * curr_h) as usize;
             let n_prev = (prev_w * prev_h) as usize;
-            let cube_count = CubeCount::Static((n_curr as u32).div_ceil(64), 1, 1);
+            let cube_count = CubeCount::Static(
+                curr_w.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+                curr_h.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+                1,
+            );
 
             for c in 0..N_CHANNELS {
                 let src = self.gauss_ref[k - 1].planes[c].clone();
                 let dst = self.gauss_ref[k].planes[c].clone();
                 unsafe {
-                    downscale_kernel::launch::<R>(
+                    downscale_tiled_kernel::launch::<R>(
                         &self.client,
                         cube_count.clone(),
                         cube_dim,
@@ -2594,9 +2603,14 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
+        // T1.C (2026-05-16): LDS-reduction pool. 256-thread workgroup
+        // does pointer-jumping reduce in shared memory, then 1 atomic
+        // per workgroup per channel commits to `partials`. Cuts atomic
+        // traffic ~255× at 12 MP vs the per-pixel atomic variant.
+        let pool_cube_dim = CubeDim::new_1d(POOL_LDS_BLOCK_DIM);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
-            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+            let count = CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
             let d_a = self.d_scratch[k].d[0].clone();
             let d_rg = self.d_scratch[k].d[1].clone();
             let d_vy = self.d_scratch[k].d[2].clone();
@@ -2604,10 +2618,10 @@ impl<R: Runtime> Cvvdp<R> {
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
             unsafe {
-                pool_band_3ch_kernel::launch::<R>(
+                pool_band_3ch_lds_kernel::launch::<R>(
                     &self.client,
                     count.clone(),
-                    cube_dim,
+                    pool_cube_dim,
                     ArrayArg::from_raw_parts(d_a, n_px),
                     ArrayArg::from_raw_parts(d_rg, n_px),
                     ArrayArg::from_raw_parts(d_vy, n_px),
