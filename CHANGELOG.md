@@ -227,6 +227,23 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (tests)
+
+- **`tests/error_traits.rs`** — pins five trait-side contracts on
+  `cvvdp_gpu::Error`: (1) `impl std::error::Error` (compile-time
+  check via `&dyn` coercion); (2) `Clone` preserves variant +
+  payload across all four variants (catches a derive-to-manual-
+  impl refactor that drops a field on `DimensionMismatch`); (3)
+  `source()` returns `None` for every variant — these are leaf
+  errors with no nested cause chain (if a future variant wraps a
+  backend error, this test fails loudly + maintainer documents
+  the new contract); (4) `Debug` includes the variant name
+  verbatim across all four; (5) the `?`-bubble path through
+  `Box<dyn std::error::Error>` works and preserves the actionable
+  Display message. Sibling to tick 282's
+  `error_display_messages_are_actionable` (Display content) —
+  this tests the trait *implementations*. Tick 409.
+
 #### cvvdp-gpu (docs)
 
 - **`kernels::csf::N_RHO` gets its own docstring**, separating
