@@ -1627,3 +1627,48 @@ fn estimate_gpu_memory_grows_monotonically_with_dims() {
         prev_bytes = b;
     }
 }
+
+#[test]
+fn score_returns_lossless_f64_widening_of_compute_dkl_jod() {
+    // Documented contract from `Cvvdp::score`: it calls
+    // `compute_dkl_jod(ref, dist, self.geometry.pixels_per_degree())`
+    // and returns `f64::from(jod)`. f32 → f64 widening is lossless,
+    // so the score must equal the f32 value verbatim (no rounding,
+    // no truncation). Pin via `f32::to_bits()` on the round-trip:
+    // `(score() as f32).to_bits() == compute_dkl_jod().to_bits()`.
+    //
+    // Catches a refactor that introduces a precision-eating step
+    // (e.g. `Ok(jod as f64 * 1.0)` accidentally rounded through
+    // an intermediate or `f64::from_bits((jod.to_bits() as u64))`).
+    use cvvdp_gpu::params::DisplayGeometry;
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    for &q in &common::v1_corpus_qs() {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let from_score: f64 = cvvdp.score(&ref_bytes, &dist_bytes).expect("score");
+        let from_compute_dkl: f32 = cvvdp
+            .compute_dkl_jod(&ref_bytes, &dist_bytes, ppd)
+            .expect("compute_dkl_jod");
+        let round_trip_f32 = from_score as f32;
+        assert_eq!(
+            round_trip_f32.to_bits(),
+            from_compute_dkl.to_bits(),
+            "q={q}: score()={from_score} (round-trip f32={round_trip_f32}) \
+             != compute_dkl_jod()={from_compute_dkl}; \
+             f32 → f64 widening must be lossless",
+        );
+        // Also bounds: score must be finite + in [0, 10]. cvvdp's
+        // met2jod can produce values outside this range for
+        // catastrophic q, but for v1 corpus q=1-90 the output
+        // is bounded above 0 and below 10.
+        assert!(
+            (0.0..=10.0).contains(&from_score),
+            "q={q}: score = {from_score} out of [0, 10]",
+        );
+    }
+}

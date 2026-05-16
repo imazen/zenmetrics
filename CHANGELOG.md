@@ -229,6 +229,16 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::score_returns_lossless_f64_widening_of_compute_dkl_jod`**
+  — pins the documented `Cvvdp::score` contract: returns
+  `f64::from(compute_dkl_jod(ref, dist, ppd))` where ppd comes
+  from `self.geometry.pixels_per_degree()`. f32 → f64 widening
+  is lossless, so the round-trip `(score() as f32).to_bits() ==
+  compute_dkl_jod().to_bits()` must hold bit-for-bit. Sweeps the
+  full v1 corpus q-grid. Catches a refactor that introduces a
+  precision-eating step (e.g. `jod as f64 * 1.0` rounded
+  through an intermediate). Also asserts score ∈ [0, 10] across
+  the corpus q-range. Tick 407.
 - **`tests/pipeline_score.rs::{parallel_safety_factor_*, recommend_parallel_{monotonic,budget}_*, estimate_gpu_memory_grows_*}`**
   — four invariant tests on the GPU memory predictor + concurrency-
   cap API: (1) `PARALLEL_SAFETY_FACTOR` in [1.0, 3.0] sane-range
