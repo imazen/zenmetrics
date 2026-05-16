@@ -687,6 +687,27 @@ Real correctness improvement: the pins now fire on every
 Pure refactor — same pin count (213), same coverage. Test file
 count grows to 13.
 
+Ticks 596-598 (post-595 doc cleanup):
+- Tick 596: removed a duplicated `#[allow(dead_code)]` outer
+  attribute on `mod common;` in version_lockstep.rs. The inner
+  `tests/common/mod.rs` already has `#![allow(dead_code)]`; the
+  redundant outer attribute introduced a `duplicated attribute`
+  warning that tick 595 had missed. Lint cleanup, no code change.
+- Tick 597: rewrote the `PYCVVDP_REFERENCE_VERSION` docstring in
+  `lib.rs` to list all 7 lockstep-pinned sites + 3 format
+  invariants + 2 intentionally-unpinned historical docs + 2
+  unpinnable Rust-identifier sites + the GOLDEN_VERSION cross-
+  version-space relationship. Was listing only the 6 original
+  sites from tick 588. Contract now self-documenting at the const.
+- Tick 598: rewrote PORT_STATUS.md's "Reference version pin"
+  bump procedure. Was listing 3 update sites (R2 prefix,
+  GOLDEN_VERSION, tests/parity.rs assertion); now correctly
+  documents `PYCVVDP_REFERENCE_VERSION` as the single trigger
+  point + the 7-pin lockstep arc that surfaces the rest as
+  compile failures.
+
+Static-assert count unchanged at 213 across 13 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
