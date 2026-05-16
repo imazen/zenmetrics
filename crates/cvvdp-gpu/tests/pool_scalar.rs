@@ -637,3 +637,98 @@ fn lp_norm_mean_relates_to_lp_norm_sum_by_n_root() {
         );
     }
 }
+
+// Pin the exact f32 bit patterns of the published cvvdp v0.5.4
+// pool constants in `kernels::pool`. These constants are imported
+// verbatim from pycvvdp's source (see the module docstring) — a
+// silent edit (typo, sign flip, decimal-point shift) cascades into
+// JOD drift at every level of the parity gates, where it's hard to
+// localize. Pin each constant by `.to_bits()` so a refactor that
+// changes a value trips with a specific message identifying the
+// constant. If a future cvvdp version (0.5.5+) ships new
+// coefficients, update these values together with the doc pin and
+// re-run shadow_jod parity.
+
+#[test]
+fn pool_constants_match_pycvvdp_v0_5_4() {
+    use cvvdp_gpu::kernels::pool::{
+        BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, JOD_A, JOD_EXP, PER_CH_W,
+    };
+
+    // BETA_SPATIAL: cvvdp `beta` = 2.0 — RMS-equivalent.
+    assert_eq!(
+        BETA_SPATIAL.to_bits(),
+        2.0_f32.to_bits(),
+        "BETA_SPATIAL = {BETA_SPATIAL}, expected 2.0 (cvvdp v0.5.4)",
+    );
+
+    // BETA_BAND: cvvdp `beta_sch` = 4.0.
+    assert_eq!(
+        BETA_BAND.to_bits(),
+        4.0_f32.to_bits(),
+        "BETA_BAND = {BETA_BAND}, expected 4.0 (cvvdp v0.5.4)",
+    );
+
+    // BETA_CH: cvvdp `beta_tch` = 4.0.
+    assert_eq!(
+        BETA_CH.to_bits(),
+        4.0_f32.to_bits(),
+        "BETA_CH = {BETA_CH}, expected 4.0 (cvvdp v0.5.4)",
+    );
+
+    // IMAGE_INT: cvvdp `image_int` = 0.5779183...
+    assert_eq!(
+        IMAGE_INT.to_bits(),
+        0.577_918_3_f32.to_bits(),
+        "IMAGE_INT = {IMAGE_INT}, expected 0.577_918_3 (cvvdp v0.5.4)",
+    );
+
+    // JOD_A: cvvdp `jod_a` ≈ 0.043956...
+    assert_eq!(
+        JOD_A.to_bits(),
+        0.043_956_94_f32.to_bits(),
+        "JOD_A = {JOD_A}, expected 0.043_956_94 (cvvdp v0.5.4)",
+    );
+
+    // JOD_EXP: cvvdp `jod_exp` ≈ 0.930204...
+    assert_eq!(
+        JOD_EXP.to_bits(),
+        0.930_204_27_f32.to_bits(),
+        "JOD_EXP = {JOD_EXP}, expected 0.930_204_27 (cvvdp v0.5.4)",
+    );
+
+    // PER_CH_W: still-image 3-channel slice — all 1.0 (ch_chrom_w
+    // = 1.0 in cvvdp v0.5.4).
+    for (i, &w) in PER_CH_W.iter().enumerate() {
+        assert_eq!(
+            w.to_bits(),
+            1.0_f32.to_bits(),
+            "PER_CH_W[{i}] = {w}, expected 1.0 (cvvdp v0.5.4)",
+        );
+    }
+
+    // BASEBAND_W: per-channel baseband weight. These dominate the
+    // low-frequency contribution per channel; a typo in any single
+    // entry would shift JOD on every input. Per cvvdp v0.5.4:
+    //   A:  0.003_633_448_6
+    //   Rg: 1.662_772_4
+    //   Vy: 4.118_745_3
+    assert_eq!(
+        BASEBAND_W[0].to_bits(),
+        0.003_633_448_6_f32.to_bits(),
+        "BASEBAND_W[A] = {}, expected 0.003_633_448_6 (cvvdp v0.5.4)",
+        BASEBAND_W[0],
+    );
+    assert_eq!(
+        BASEBAND_W[1].to_bits(),
+        1.662_772_4_f32.to_bits(),
+        "BASEBAND_W[Rg] = {}, expected 1.662_772_4 (cvvdp v0.5.4)",
+        BASEBAND_W[1],
+    );
+    assert_eq!(
+        BASEBAND_W[2].to_bits(),
+        4.118_745_3_f32.to_bits(),
+        "BASEBAND_W[Vy] = {}, expected 4.118_745_3 (cvvdp v0.5.4)",
+        BASEBAND_W[2],
+    );
+}

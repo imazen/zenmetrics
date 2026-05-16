@@ -177,6 +177,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pool_scalar.rs::pool_constants_match_pycvvdp_v0_5_4`** —
+  pins the exact f32 bit patterns of the eight pool constants
+  imported verbatim from pycvvdp v0.5.4: `BETA_SPATIAL`,
+  `BETA_BAND`, `BETA_CH`, `IMAGE_INT`, `JOD_A`, `JOD_EXP`,
+  `PER_CH_W[0..3]`, `BASEBAND_W[0..3]`. A silent edit (typo,
+  sign flip, decimal-point shift) to any of these cascades into
+  JOD drift across every parity gate, where it's hard to
+  localize. The new test trips with a specific message
+  identifying which constant changed — turning a 0.001 JOD
+  drift on shadow_jod_gpu into "BASEBAND_W[Vy] = X, expected
+  4.118_745_3 (cvvdp v0.5.4)". When a future cvvdp version
+  (0.5.5+) ships new coefficients, update these values together
+  with the pin and re-run parity. Tick 393.
 - **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
   — extended once more to cover six pyramid/band intermediate-
   output methods that validate buffer length transitively through
