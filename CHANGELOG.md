@@ -115,6 +115,23 @@ mention. Tick 500.
 
 #### cvvdp-gpu (tests)
 
+- **96 missing_docs warnings on `#[cube(launch)]` macro items —
+  cleared** (in `kernels/{color,csf,masking,pool,pyramid}.rs`).
+  Each kernel file now has `#![allow(missing_docs)]` at the top,
+  immediately after the module-level `//!` block. The
+  `#[cube(launch)]` macro emits a sibling module + launcher struct
+  + associated `fn` per annotated kernel function; those items
+  don't inherit the user's rustdoc comment and triggered 4
+  warnings each × ~25 kernels × 4 emit sites ≈ 96 warnings total.
+  Tick 494's attempt at putting `#[allow]` on the individual
+  kernel functions didn't propagate through the macro; only the
+  file-level inner attribute works. Every user-written pub item
+  in these files (LUTs, scalar helpers, kernel functions
+  themselves) is already documented, so the allow only suppresses
+  macro-emitted noise — no user-doc coverage lost. Verified:
+  `RUSTDOCFLAGS="-W missing_docs" cargo doc -p cvvdp-gpu` now
+  reports 0 warnings (was 96). Tick 514.
+
 - **`compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend`**
   (in `cpu_backend.rs`) — tightened from 0.005 JOD tolerance to
   `to_bits()` bit-equality between cold-ref `compute_dkl_jod_host_pool`
