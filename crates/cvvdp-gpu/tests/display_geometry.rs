@@ -259,3 +259,80 @@ fn ppd_is_monotonically_increasing_in_resolution_width() {
         prev = ppd;
     }
 }
+
+#[test]
+fn ppd_does_not_panic_on_degenerate_inputs() {
+    // Tick 495: pin the stability contract that
+    // `DisplayGeometry::pixels_per_degree` is a total function — it
+    // doesn't panic on degenerate inputs (zero distance, zero
+    // diagonal, zero resolution). It MAY return ±∞ or NaN
+    // (mathematically appropriate for division by zero or 0/0), but
+    // it must not abort.
+    //
+    // Callers like `Cvvdp::compute_dkl_jod(ref, dist, ppd)` accept
+    // arbitrary ppd inputs and will either succeed with a degraded
+    // pyramid level count or surface an error via the dim-check
+    // path. A future refactor that adds an upfront
+    // `assert!(distance_m > 0)` (or equivalent) to ppd computation
+    // would change the contract from "total + degraded output" to
+    // "panicking" — surface that change here.
+    //
+    // Pins (no panic; output is finite-OR-Inf-OR-NaN, never aborts):
+    //   - distance_m = 0
+    //   - diagonal_inches = 0
+    //   - resolution_w = 0
+    //   - resolution_h = 0
+    //   - all-zero degenerate config
+    use cvvdp_gpu::params::DisplayGeometry;
+    let base = DisplayGeometry::STANDARD_4K;
+    let cases: &[(&str, DisplayGeometry)] = &[
+        (
+            "zero distance",
+            DisplayGeometry {
+                distance_m: 0.0,
+                ..base
+            },
+        ),
+        (
+            "zero diagonal",
+            DisplayGeometry {
+                diagonal_inches: 0.0,
+                ..base
+            },
+        ),
+        (
+            "zero resolution_w",
+            DisplayGeometry {
+                resolution_w: 0,
+                ..base
+            },
+        ),
+        (
+            "zero resolution_h",
+            DisplayGeometry {
+                resolution_h: 0,
+                ..base
+            },
+        ),
+        (
+            "all-zero",
+            DisplayGeometry {
+                resolution_w: 0,
+                resolution_h: 0,
+                distance_m: 0.0,
+                diagonal_inches: 0.0,
+            },
+        ),
+    ];
+    for (label, g) in cases {
+        // The contract is: doesn't panic. We don't pin a specific
+        // finite/Inf/NaN value because that's implementation-defined
+        // and a refactor of the formula could legitimately shift
+        // ±0 → ±Inf or vice versa without breaking the
+        // "doesn't-panic" guarantee. Calling .is_finite() exercises
+        // the result without asserting on it.
+        let ppd = g.pixels_per_degree();
+        let _ = ppd.is_finite();
+        eprintln!("{label}: ppd = {ppd}");
+    }
+}

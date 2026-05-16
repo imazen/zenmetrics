@@ -58,6 +58,23 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`ppd_does_not_panic_on_degenerate_inputs`** (in
+  `display_geometry.rs`) — stability pin on
+  `DisplayGeometry::pixels_per_degree` for degenerate inputs (zero
+  `distance_m` / `diagonal_inches` / `resolution_w` /
+  `resolution_h`, plus all-zero). The function is a total
+  computation — it MAY return ±∞ or NaN for mathematically
+  degenerate inputs, but it must not panic. Callers like
+  `Cvvdp::compute_dkl_jod(ref, dist, ppd)` accept arbitrary ppd
+  values; a future refactor that adds `assert!(distance_m > 0)` (or
+  equivalent) to ppd computation would change the contract from
+  "total + degraded output" to "panicking" — surface that change
+  here. Observed degenerate outputs (zero distance → ppd ≈
+  0.00556 = 1/180°, zero diagonal → Inf, zero resolution_*  →
+  NaN). The pin doesn't assert on the specific values because a
+  future formula refactor could legitimately shift ±0 ↔ ±Inf
+  without breaking the no-panic guarantee. Tick 495.
+
 - **`all_four_scoring_paths_agree_bit_equal_on_same_input`** (in
   `pipeline_score.rs`) — consolidation pin. The four documented
   public scoring paths must produce bit-identical f32 JOD on the
