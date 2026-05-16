@@ -722,6 +722,30 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 632 — add an 11×19 (~209 px) TINY odd-dim synth-offset
+parity fixture. Tiniest viable odd-dim pyramid case — min dim
+= 11, just above `PYRAMID_MIN_DIM*2 = 8`. The pyramid is only
+2 levels deep (`floor(log2(11)) - 1 = 2`), so every band
+exercises edge handling. Sister to the 73×91 odd-dim fixture
+(~6.6k px, 5 levels): together they pin odd-dim parity at
+BOTH extremes of pyramid depth.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_11x19_offset(w=11, h=19)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.461595` (generated locally via pinned `.venv`,
+  0.3 s wallclock).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_11x19_tiny_odd` host-scalar
+  parity test.
+
+Measured result: host_scalar JOD = 9.461595, pycvvdp golden =
+9.461595, **|diff| = 0.000000** — bit-identical at f32 precision.
+A future refactor to the edge-padding semantics or the pycvvdp
+gausspyr_reduce parity-check bug replication (tick 206) would
+surface here differently than at 73×91, narrowing the regression.
+
 Tick 631 — add a 720×1280 (TALL HD aspect, h > w) synth-offset
 parity fixture, mirroring tick 630's 1280×720 wide-HD fixture by
 swapping aspect. Same total pixel count, same per-pixel

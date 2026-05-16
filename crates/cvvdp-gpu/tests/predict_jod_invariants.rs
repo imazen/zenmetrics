@@ -25,6 +25,42 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_11x19_tiny_odd() {
+    // Tick 632: host-scalar parity vs pycvvdp v0.5.4 on an 11×19
+    // (~209 px) TINY odd-dim synth pair. Tiniest viable odd-dim
+    // pyramid case — min dim = 11 > PYRAMID_MIN_DIM*2 = 8 just
+    // barely. The pyramid is only 2 levels deep here
+    // (floor(log2(11)) - 1 = 2), so every band exercises edge
+    // handling.
+    //
+    // Sister to the 73×91 odd-dim fixture (~6.6k px, 5 levels):
+    // together they pin odd-dim parity at BOTH extremes of
+    // pyramid depth. A refactor that changed the edge-padding
+    // semantics or the pycvvdp gausspyr_reduce parity-check bug
+    // replication (tick 206) would surface here differently than
+    // at 73×91, narrowing the regression.
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_11x19_offset");
+    let (w, h) = (11_usize, 19_usize);
+    let (ref_b, dist_b) = common::synth_pair_with_offset_dist(w, h);
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 11x19 tiny odd: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_720x1280_offset() {
     // Tick 631: host-scalar parity vs pycvvdp v0.5.4 on a 720×1280
     // (TALL HD aspect, h > w) non-square synth pair. Mirrors tick

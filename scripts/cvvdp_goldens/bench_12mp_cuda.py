@@ -55,6 +55,33 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_11x19_offset(w=11, h=19):
+    """11x19 tiny-odd-dim fixture (~ 209 px) with the same modular
+    offset construction. Tiniest viable odd-dim pyramid case
+    (min dim = 11 > PYRAMID_MIN_DIM*2 = 8 just barely). The
+    pyramid is only 2 levels deep here (floor(log2(11)) - 1 = 2),
+    so every band exercises edge handling. Sister to the 73×91
+    odd-dim fixture (~ 6.6k px, 5 levels) — together they pin
+    odd-dim parity at the BOTH extremes of pyramid depth.
+
+    Bit-stable with Rust's `common::synth_pair_with_offset_dist(11, 19)`.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = np.stack(
+        [
+            np.maximum(r.astype(np.int16) - 8, 0).astype(np.uint8),
+            np.maximum(g.astype(np.int16) - 4, 0).astype(np.uint8),
+            np.minimum(b.astype(np.int16) + 12, 255).astype(np.uint8),
+        ],
+        axis=-1,
+    )
+    return ref, dist
+
+
 def synth_pair_720x1280_offset(w=720, h=1280):
     """720x1280 (TALL HD aspect, ~1 MP) non-square fixture mirroring
     `synth_pair_1280x720_offset`. Tests the OTHER asymmetric case
@@ -367,8 +394,17 @@ def main():
     tall_ref, tall_dist = synth_pair_720x1280_offset()
     print("720x1280 (tall HD) offset golden:")
     tall_jod, _ = metric.predict(tall_dist, tall_ref, dim_order="HWC")
-    print(f"  jod = {float(tall_jod):.4f}\n")
+    print(f"  jod = {float(tall_jod):.4f}")
     tall_jod_val = float(tall_jod)
+
+    # 11x19 tiny-odd-dim fixture (~ 209 px). Tiniest viable odd-dim
+    # pyramid case. Sister to the 73×91 odd-dim (~6.6k px, 5 levels);
+    # together they pin odd-dim parity at both depth extremes.
+    tiny_ref, tiny_dist = synth_pair_11x19_offset()
+    print("11x19 tiny-odd offset golden:")
+    tiny_jod, _ = metric.predict(tiny_dist, tiny_ref, dim_order="HWC")
+    print(f"  jod = {float(tiny_jod):.4f}\n")
+    tiny_jod_val = float(tiny_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -460,6 +496,11 @@ def main():
                 "shape_hw": [1280, 720],
                 "construction": "synth_pair_720x1280_offset",
                 "jod": tall_jod_val,
+            },
+            "synth_11x19_offset": {
+                "shape_hw": [19, 11],
+                "construction": "synth_pair_11x19_offset",
+                "jod": tiny_jod_val,
             },
         },
     }

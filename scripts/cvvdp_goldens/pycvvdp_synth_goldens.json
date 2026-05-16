@@ -83,6 +83,14 @@
       ],
       "construction": "synth_pair_720x1280_offset",
       "jod": 9.44536018371582
+    },
+    "synth_11x19_offset": {
+      "shape_hw": [
+        19,
+        11
+      ],
+      "construction": "synth_pair_11x19_offset",
+      "jod": 9.461594581604004
     }
   }
 }
