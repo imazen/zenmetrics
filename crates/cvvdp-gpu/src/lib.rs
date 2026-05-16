@@ -229,20 +229,47 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 };
 
 /// The pinned [`gfxdisp/ColorVideoVDP`](https://github.com/gfxdisp/ColorVideoVDP)
-/// reference version this implementation tracks for parity. Used by:
+/// reference version this implementation tracks for parity.
 ///
-/// - `kernels/csf_lut/v0_5_4.rs` (vendored sensitivity LUT)
-/// - `kernels::csf::csf_lut_v0_5_4` (re-export module)
-/// - `tests/parity.rs::manifest_fetches` (asserts manifest matches)
-/// - `tests/common/mod.rs` (`GOLDEN_VERSION = "v1"`, the R2 prefix
-///   under which goldens for THIS reference live)
-/// - `crates/cvvdp-gpu/docs/PORT_STATUS.md` ("Reference version pin")
-/// - `scripts/cvvdp_goldens/requirements.txt` (`pycvvdp==0.5.4`)
+/// Compile-time lockstep enforcement: bumping this const will FAIL
+/// TO COMPILE unless these files are updated in the same commit
+/// (ticks 588-595 added one pin per site to `tests/version_lockstep.rs`,
+/// which runs on every `cargo check / test` — NOT only under
+/// `--features parity-goldens`):
 ///
-/// When bumping the reference version: update this const + every
-/// site listed above in the same commit. See
-/// `docs/PORT_STATUS.md#reference-version-pin` for the full
-/// procedure.
+/// - `scripts/cvvdp_goldens/requirements.txt` (`cvvdp==X.Y.Z` pip
+///   pin; matched against the bare version after stripping the
+///   leading `v`)
+/// - `src/kernels/csf_lut/v0_5_4.rs` (vendored sensitivity LUT;
+///   matched against the auto-generated header comment)
+/// - `docs/PORT_STATUS.md` ("Reference version pin" section)
+/// - `README.md` (algorithm-parity claim + Status section)
+/// - `Cargo.toml` (parity-goldens feature comment)
+/// - `docs/CVVDP_SIDECAR_SCHEMA.md` (reserved column-name tags)
+/// - `tests/parity.rs::manifest_fetches` (runtime manifest version
+///   check — gated behind `--features parity-goldens`)
+///
+/// Plus 3 compile-time format invariants on the const itself:
+/// non-empty, starts with `v`, contains `.`.
+///
+/// Sites NOT pinnable to this const (Rust identifiers / paths the
+/// compiler doesn't expose as strings):
+///
+/// - `kernels::csf::csf_lut_v0_5_4` (re-export module name)
+/// - `src/kernels/csf_lut/v0_5_4.rs` (filesystem path)
+///
+/// Sites INTENTIONALLY NOT pinned (historical / abandoned material,
+/// not current-state docs):
+///
+/// - `docs/CHROMA_DRIFT_INVESTIGATION.md` (tick-200-era bug-hunt log)
+/// - `docs/BURN_PORT_PLAN.md` (abandoned tick 324)
+///
+/// Separately, `tests/common/mod.rs` has `GOLDEN_VERSION = "v1"`,
+/// which is the **R2 bucket prefix** version (a different version
+/// space from this const). Goldens under `/v1/` were captured
+/// against pycvvdp v0.5.4. Both bumps are needed when the goldens
+/// are regenerated — see `docs/PORT_STATUS.md#reference-version-pin`
+/// for the full procedure.
 pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
 
 /// Failure modes for `Cvvdp::*` methods. Implements
