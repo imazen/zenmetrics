@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`weber_contrast_pyr_dec_scalar` doctest** — added `# Examples`:
+  16×16 + n_levels=3 → 3 bands and 3 log_l_bkg vectors; baseband
+  log_l_bkg is bit-constant (replicated scalar mean). Tick 460.
+
 - **`laplacian_pyramid_dec_scalar` doctest** — added `# Examples`:
   16×16 + n_levels=3 → 3 bands at 16×16/8×8/4×4 dims; each band's
   `data.len() == w * h`. Tick 459.

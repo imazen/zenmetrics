@@ -514,6 +514,24 @@ pub struct WeberPyramid {
 /// gauss_ref_A; for dist-side bands, use gauss_dist_A). For a
 /// callee processing one image at a time, pass the image's own
 /// achromatic Gaussian pyramid.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::weber_contrast_pyr_dec_scalar;
+///
+/// // 16×16 input + n_levels=3 → 3 bands + 3 log_l_bkg vectors.
+/// let src: Vec<f32> = (0..16 * 16).map(|i| (i as f32) * 0.1 + 1.0).collect();
+/// let pyr = weber_contrast_pyr_dec_scalar(&src, &src, 16, 16, 3);
+/// assert_eq!(pyr.bands.len(), 3);
+/// assert_eq!(pyr.log_l_bkg.len(), 3);
+///
+/// // Baseband log_l_bkg is the replicated scalar mean — all entries
+/// // bit-equal.
+/// let baseband_log = pyr.log_l_bkg.last().unwrap();
+/// let first = baseband_log[0];
+/// assert!(baseband_log.iter().all(|&v| v.to_bits() == first.to_bits()));
+/// ```
 #[must_use]
 pub fn weber_contrast_pyr_dec_scalar(
     image_plane: &[f32],
