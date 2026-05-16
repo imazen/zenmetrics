@@ -1535,3 +1535,95 @@ fn recommend_parallel_matches_documented_examples() {
         "24 GB / 12 MP: got PARALLEL={p_24gb_12mp}, expected 3-10 range",
     );
 }
+
+#[test]
+fn parallel_safety_factor_is_in_sane_range() {
+    // PARALLEL_SAFETY_FACTOR multiplies the predictor's bytes
+    // estimate before dividing into free memory. Below 1.0 makes
+    // it useless (no slack for transients); above 3.0 makes it
+    // wasteful (workers under-utilise GPU memory). Documented
+    // value is 1.5. Pin sensible bounds so a refactor that drops
+    // it to 0.5 (overrun) or 5.0 (waste) trips here.
+    use cvvdp_gpu::PARALLEL_SAFETY_FACTOR;
+    assert!(
+        (1.0..=3.0).contains(&PARALLEL_SAFETY_FACTOR),
+        "PARALLEL_SAFETY_FACTOR = {PARALLEL_SAFETY_FACTOR}, expected in [1.0, 3.0]",
+    );
+    // Pin specific documented value too.
+    assert_eq!(
+        PARALLEL_SAFETY_FACTOR, 1.5,
+        "PARALLEL_SAFETY_FACTOR = {PARALLEL_SAFETY_FACTOR}, expected 1.5",
+    );
+}
+
+#[test]
+fn recommend_parallel_monotonic_in_free_bytes() {
+    // Strictly non-decreasing as free GPU memory grows. A bug
+    // that inverts the division (e.g. `free / (1.5 / est)`
+    // instead of `free / (1.5 * est)`) would make it decreasing,
+    // and `recommend_parallel(8GB, ...) > recommend_parallel(24GB, ...)`
+    // would silently mis-cap large-GPU sweeps.
+    use cvvdp_gpu::recommend_parallel;
+    let mut prev = recommend_parallel(1_000_000_000, 1024, 1024);
+    for &gb in &[2u64, 4, 8, 16, 24, 48, 80] {
+        let p = recommend_parallel(gb * 1024 * 1024 * 1024, 1024, 1024);
+        assert!(
+            p >= prev,
+            "monotonicity broken at {gb} GB: got {p}, prev {prev}",
+        );
+        prev = p;
+    }
+}
+
+#[test]
+fn recommend_parallel_budget_invariant() {
+    // The fundamental contract: if recommend_parallel returns N,
+    // then launching N concurrent Cvvdp instances should fit
+    // within free_gpu_bytes after applying the safety factor:
+    //   N × SAFETY × est ≤ free_gpu_bytes  (when N ≥ 1 floor)
+    // Verify for a variety of free-memory + image-size combos.
+    use cvvdp_gpu::{PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, recommend_parallel};
+    for &(free_gb, w, h) in &[
+        (8u64, 256u32, 256u32),
+        (8, 1024, 1024),
+        (24, 2048, 2048),
+        (24, 4096, 3072),
+        (80, 4096, 3072),
+    ] {
+        let free = free_gb * 1024 * 1024 * 1024;
+        let est = estimate_gpu_memory_bytes(w, h).unwrap();
+        let p = recommend_parallel(free, w, h);
+        // The min(1) floor lets us potentially OVERSHOOT for
+        // extremely-tight budgets (intentional — caller's signal
+        // to back off to host_pool). Check only the non-floor
+        // path: when recommend returned more than 1, the budget
+        // invariant must hold.
+        if p > 1 {
+            let budget = p as f64 * PARALLEL_SAFETY_FACTOR * est as f64;
+            assert!(
+                budget <= free as f64,
+                "{free_gb} GB / {w}×{h}: recommend={p}, budget={budget:.0} > free={free} (p × safety × est > free)",
+            );
+        }
+    }
+}
+
+#[test]
+fn estimate_gpu_memory_grows_monotonically_with_dims() {
+    // Larger images must always estimate more memory. Pin so a
+    // refactor that introduces a per-level fixed cost (e.g. one
+    // f32 per level for a "min" buffer) without scaling with
+    // pixels would not invert the relationship — and a bigger
+    // bug that DOES invert (e.g. dividing by n_levels) trips here.
+    use cvvdp_gpu::estimate_gpu_memory_bytes;
+    let sizes = [(64u32, 64u32), (128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048)];
+    let mut prev_bytes = 0_usize;
+    for &(w, h) in &sizes {
+        let b = estimate_gpu_memory_bytes(w, h).unwrap();
+        assert!(
+            b > prev_bytes,
+            "{w}×{h} estimate ({b}) not greater than previous ({prev_bytes})",
+        );
+        prev_bytes = b;
+    }
+}

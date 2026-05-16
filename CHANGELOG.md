@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::{parallel_safety_factor_*, recommend_parallel_{monotonic,budget}_*, estimate_gpu_memory_grows_*}`**
+  — four invariant tests on the GPU memory predictor + concurrency-
+  cap API: (1) `PARALLEL_SAFETY_FACTOR` in [1.0, 3.0] sane-range
+  with exact-value pin at 1.5 (catches a refactor that drops it to
+  0.5 (overrun) or 5.0 (waste)); (2) `recommend_parallel` is
+  monotonically non-decreasing in `free_gpu_bytes` (catches a sign-
+  flip / inverted-division bug that would silently mis-cap large-
+  GPU sweeps); (3) the budget invariant `N × SAFETY × est ≤ free`
+  holds whenever `recommend_parallel` returns N > 1 (the floor-1
+  case is the documented "back off explicitly" signal); (4)
+  `estimate_gpu_memory_bytes` is strictly increasing across six
+  image sizes (catches a refactor that introduces fixed-cost
+  inversion). Tick 406.
 - **`tests/params_placeholder.rs`** — pins the two `CvvdpParams::PLACEHOLDER`
   fields the pipeline actually consumes: `display ==
   DisplayModel::STANDARD_4K` (field-by-field bit-pattern check
