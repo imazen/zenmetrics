@@ -67,11 +67,20 @@ R2() {
 }
 
 mkdir -p ~/.aws
-cat > ~/.aws/credentials <<EOF
+# Idempotent: only append [r2] if not already present. The prior
+# `cat >` was destructive — running finalize.sh locally wiped any
+# existing [default] profile, which on a developer box typically
+# holds production AWS creds. The append-if-missing form is safe
+# on both fresh vast.ai instances (no creds file) and developer
+# boxes (existing creds preserved).
+if [[ ! -f ~/.aws/credentials ]] || ! grep -q '^\[r2\]' ~/.aws/credentials; then
+    cat >> ~/.aws/credentials <<EOF
+
 [r2]
 aws_access_key_id = ${R2_ACCESS_KEY_ID}
 aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
 EOF
+fi
 
 echo "[finalize] SWEEP_RUN_ID=$SWEEP_RUN_ID  WORK=$WORK"
 
