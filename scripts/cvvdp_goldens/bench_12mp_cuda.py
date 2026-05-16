@@ -55,6 +55,33 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_128_offset(w=128, h=128):
+    """128x128 fixture using the same modular synth-pair + offset
+    distortion as `synth_pair_12mp`, just at a smaller size. Fills
+    the size gap between the 73x91 odd-dim (small odd) and 256² /
+    12MP (medium / large) fixtures with a clean even-power-of-2
+    case that exercises the standard pyramid depth without odd-dim
+    edge handling.
+
+    Bit-stable with Rust's `common::synth_pair_with_offset_dist(128, 128)`
+    helper (pure modular arithmetic).
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = np.stack(
+        [
+            np.maximum(r.astype(np.int16) - 8, 0).astype(np.uint8),
+            np.maximum(g.astype(np.int16) - 4, 0).astype(np.uint8),
+            np.minimum(b.astype(np.int16) + 12, 255).astype(np.uint8),
+        ],
+        axis=-1,
+    )
+    return ref, dist
+
+
 def synth_pair_256_chroma_shift(w=256, h=256):
     """256×256 ref with a chrominance-only distortion: G channel
     gains a uniform +16 offset (clamped), R and B unchanged. Tests
@@ -224,8 +251,16 @@ def main():
     chroma256_ref, chroma256_dist = synth_pair_256_chroma_shift()
     print("256x256 chroma_shift golden:")
     chroma256_jod, _ = metric.predict(chroma256_dist, chroma256_ref, dim_order="HWC")
-    print(f"  jod = {float(chroma256_jod):.4f}\n")
+    print(f"  jod = {float(chroma256_jod):.4f}")
     chroma256_jod_val = float(chroma256_jod)
+
+    # 128x128 fixture with offset-distortion construction shared with
+    # the 12 MP case. Fills the medium-small gap (73×91 odd vs 256²).
+    offset128_ref, offset128_dist = synth_pair_128_offset()
+    print("128x128 offset golden:")
+    offset128_jod, _ = metric.predict(offset128_dist, offset128_ref, dim_order="HWC")
+    print(f"  jod = {float(offset128_jod):.4f}\n")
+    offset128_jod_val = float(offset128_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -297,6 +332,11 @@ def main():
                 "shape_hw": [256, 256],
                 "construction": "synth_pair_256_chroma_shift",
                 "jod": chroma256_jod_val,
+            },
+            "synth_128x128_offset": {
+                "shape_hw": [128, 128],
+                "construction": "synth_pair_128_offset",
+                "jod": offset128_jod_val,
             },
         },
     }

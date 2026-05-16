@@ -13,12 +13,51 @@
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::{DisplayGeometry, DisplayModel};
 
+#[path = "common/mod.rs"]
+mod common;
+
 fn ppd() -> f32 {
     DisplayGeometry::STANDARD_4K.pixels_per_degree()
 }
 
 fn dm() -> DisplayModel {
     DisplayModel::STANDARD_4K
+}
+
+#[test]
+fn predict_jod_matches_pycvvdp_at_128x128_offset() {
+    // Tick 628: host-scalar parity vs pycvvdp v0.5.4 on a 128×128
+    // synth pair using the same offset-construction as the 12 MP
+    // fixture. Fills the size gap between the 73×91 odd-dim and
+    // 256² fixtures with a clean power-of-2 case — exercises a
+    // shallower pyramid (one fewer level than 256²) without
+    // odd-dim edge handling.
+    //
+    // The pycvvdp golden was generated locally via
+    // `scripts/cvvdp_goldens/.venv/bin/python` (pycvvdp 0.5.4 on
+    // CPU torch backend) — same construction is
+    // `synth_pair_128_offset` in `bench_12mp_cuda.py`. Stored in
+    // `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`.
+    //
+    // Tolerance: 0.005 JOD — same canonical manifest-parity gate
+    // as the 12 MP / 256² / 73×91 fixtures.
+    let golden = common::pycvvdp_synth_golden_jod("synth_128x128_offset");
+    let (w, h) = (128_usize, 128_usize);
+    let (ref_b, dist_b) = common::synth_pair_with_offset_dist(w, h);
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 128x128 offset: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
 }
 
 #[test]

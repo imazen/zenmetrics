@@ -722,6 +722,29 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 628 — add a 128×128 synth-offset parity fixture, filling
+the size gap between the 73×91 odd-dim and 256² fixtures with a
+clean power-of-2 case (shallower pyramid, no odd-dim edge handling).
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_128_offset(w=128, h=128)` reusing the 12 MP modular
+  construction at a smaller size + new
+  `synth_128x128_offset` fixture entry in the manifest emit block.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new
+  `synth_128x128_offset` entry with `jod = 9.456145` generated
+  locally via the pinned `.venv` (pycvvdp 0.5.4 on CPU torch).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_128x128_offset` host-scalar
+  parity test against the new golden, with the canonical
+  0.005 JOD tolerance.
+
+Measured result: host_scalar JOD = 9.456145, pycvvdp golden =
+9.456145, **|diff| = 0.000000** — bit-identical at f32 precision.
+The shared modular-arithmetic construction with the existing
+`synth_pair_with_offset_dist` helper means no new Rust generator
+code; the helper is size-generic.
+
 Tick 627 — fix two issues in tick 619's GE_SIGMA doctest:
 
 1. Wrong tick number: said "tick 506" but the GE_SIGMA pin is at
