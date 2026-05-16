@@ -431,6 +431,15 @@ size mismatch silently corrupts every per-pixel CSF query — these
 pins catch the mismatch at compile time rather than as garbage
 JOD output. Static-assert count is now 139 across 11 test files.
 
+Tick 572 added the first test coverage for `GE_SIGMA`: a
+bit-equality pin to cvvdp v0.5.4's `ge_sigma = 1.5` and a
+positivity invariant (it's a Gaussian σ). The constant is
+documented as carried for source-JSON fidelity but not yet
+consumed by the still-image pipeline (eccentricity-aware paths
+are future work); the pins guarantee the value stays correct
+for when those paths land. Static-assert count is now 141 across
+11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

@@ -91,6 +91,25 @@ const _: () = {
     );
 };
 
+// Tick 572: GE_SIGMA = cvvdp v0.5.4's eccentricity-falloff sigma
+// = 1.5. Documented as carried for source-JSON fidelity but not
+// yet consumed by the still-image pipeline (eccentricity-aware
+// paths are future work). Still worth pinning because the value
+// will become load-bearing the moment those paths land. Previously
+// had zero test coverage; this is the first pin on it. Sigma must
+// be positive (it's a Gaussian standard-deviation).
+const _: () = {
+    use cvvdp_gpu::kernels::csf::GE_SIGMA;
+    assert!(
+        GE_SIGMA.to_bits() == 1.5_f32.to_bits(),
+        "GE_SIGMA drifted from cvvdp v0.5.4 ge_sigma = 1.5",
+    );
+    assert!(
+        GE_SIGMA.is_sign_positive(),
+        "GE_SIGMA must be positive (Gaussian σ; eccentricity-falloff is symmetric)",
+    );
+};
+
 #[test]
 fn log_l_bkg_axis_length_matches_n_l_bkg() {
     assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG, "axis length != N_L_BKG");
