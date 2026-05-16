@@ -64,7 +64,21 @@
 
 use cubecl::prelude::*;
 
-/// Burt-Adelson kernel parameter `a` used by cvvdp v0.5.4.
+/// Burt-Adelson kernel parameter `a` used by cvvdp v0.5.4. Drives
+/// the 5-tap separable Gaussian [`GAUSS5`].
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::{GAUSS5, KERNEL_A};
+///
+/// // KERNEL_A is the Burt-Adelson `a` parameter (= 0.4 in cvvdp v0.5.4).
+/// // Bit-pinned by tests/pyramid_scalar.rs. Drives GAUSS5 entirely:
+/// // center tap = a, outer taps = 0.25 - a/2, near-outer = 0.25.
+/// assert_eq!(KERNEL_A, 0.4);
+/// assert_eq!(GAUSS5[2], KERNEL_A);          // center tap
+/// assert_eq!(GAUSS5[0], 0.25 - KERNEL_A / 2.0); // outer (= 0.05)
+/// ```
 pub const KERNEL_A: f32 = 0.4;
 
 /// 5-tap separable Gaussian, evaluated from [`KERNEL_A`].

@@ -722,6 +722,21 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 614 — add `# Examples` doctests to two more public
+constants:
+
+- `kernels::pyramid::KERNEL_A` — Burt-Adelson `a` parameter
+  (= 0.4 in cvvdp v0.5.4). The doctest pins the bit-value AND
+  shows how it propagates into `GAUSS5` (center tap = a, outer
+  taps = 0.25 - a/2).
+- `pipeline::PARALLEL_SAFETY_FACTOR` — pin to 1.5 + worked
+  example showing `manual = free / (safety × est)` matches what
+  `recommend_parallel` returns, so a reader sees the role of the
+  constant in the formula without grepping the function body.
+
+Doctest count: 60 → 62. Per the per-public-item sweep theme
+(ticks 609-613). Docs-only change; `cargo test --doc` passes.
+
 Tick 613 — combined `# Examples` doctest on `MASK_P` covering
 all four scalar masking constants (`MASK_P`, `MASK_Q`, `MASK_C`,
 `D_MAX`). Follows the same shared-doctest pattern already

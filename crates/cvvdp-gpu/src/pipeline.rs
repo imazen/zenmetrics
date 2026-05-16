@@ -590,6 +590,26 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
 /// `warm_reference` (no per-DIST allocator churn). Loosen to ~2.0
 /// if the calling process also runs CPU-side decode/encode in the
 /// same memory namespace.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::{PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, recommend_parallel};
+///
+/// // The safety factor sits in [1.0, 3.0] — below 1.0 leaves no
+/// // transient slack; above 3.0 wastes GPU memory. Pinned to the
+/// // documented value 1.5 by tests/pipeline_score.rs.
+/// assert_eq!(PARALLEL_SAFETY_FACTOR, 1.5);
+///
+/// // Worked example: budget = free / (safety × per-instance estimate).
+/// // For an 8 GB GPU at 1024² scoring, the formula matches
+/// // `recommend_parallel`'s own answer.
+/// let free = 8_u64 * 1024 * 1024 * 1024;
+/// let est = estimate_gpu_memory_bytes(1024, 1024).unwrap() as f64;
+/// let manual = (free as f64 / (PARALLEL_SAFETY_FACTOR * est)).floor() as u32;
+/// let helper = recommend_parallel(free, 1024, 1024);
+/// assert_eq!(manual, helper);
+/// ```
 pub const PARALLEL_SAFETY_FACTOR: f64 = 1.5;
 
 /// Recommend a `PARALLEL` instance count for running many
