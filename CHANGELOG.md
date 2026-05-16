@@ -239,6 +239,13 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`estimate_gpu_memory_bytes` doctest** — added an `# Examples`
+  section that exercises the function on 4 inputs and validates
+  the rough magnitude: too-small (4×4, 7×8 → `None`); 1 MP at
+  ~208 MB (asserted in `[100 MB, 300 MB]`); 4 MP > 1 MP. Doubles
+  as documentation and a smoke test that runs under
+  `cargo test --doc`. Tick 439.
+
 - **`csf_lut/v0_5_4.rs` LUT constant docstrings** — six previously-
   undocumented public LUT constants re-exported via
   `pub use csf_lut_v0_5_4::*`: `LOG_L_BKG_AXIS` (uniform-in-log10

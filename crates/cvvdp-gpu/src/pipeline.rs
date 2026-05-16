@@ -475,6 +475,27 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
 ///   overhead per buffer (~hundreds of bytes per allocation × ~50
 ///   allocations = single-digit MB). Bake this into the safety
 ///   factor at the call site.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::estimate_gpu_memory_bytes;
+///
+/// // Too small — below PYRAMID_MIN_DIM × 2 = 8.
+/// assert!(estimate_gpu_memory_bytes(4, 4).is_none());
+/// assert!(estimate_gpu_memory_bytes(7, 8).is_none());
+///
+/// // 1 MP estimate is on the order of 200 MB — the float planes
+/// // (3 pyramids × 3 channels at the fine level alone) dominate.
+/// let bytes_1mp = estimate_gpu_memory_bytes(1024, 1024).expect("1MP");
+/// assert!(bytes_1mp > 100_000_000);
+/// assert!(bytes_1mp < 300_000_000);
+///
+/// // 4 MP scales roughly proportionally with the fine plane's
+/// // pixel count.
+/// let bytes_4mp = estimate_gpu_memory_bytes(2048, 2048).expect("4MP");
+/// assert!(bytes_4mp > bytes_1mp);
+/// ```
 #[must_use]
 pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
     if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
