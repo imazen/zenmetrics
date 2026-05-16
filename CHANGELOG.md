@@ -242,6 +242,16 @@ breaking joins downstream. `str::starts_with` is NOT yet const fn
 in stable Rust, so the `cvvdp_imazen_` prefix check stays runtime-
 only. Static-assert count is now 31 across 8 test files.
 
+Tick 555 promoted 4 Burt-Adelson kernel-constant bit-pins to
+static asserts in `pyramid_scalar.rs`:
+  - `KERNEL_A == 0.4_f32` (cvvdp v0.5.4 Burt-Adelson parameter)
+  - `GAUSS5[1] == 0.25_f32`, `GAUSS5[2] == 0.4_f32`,
+    `GAUSS5[3] == 0.25_f32` (inner taps of the 5-tap Gaussian)
+The outer taps `GAUSS5[0]` and `GAUSS5[4]` stay runtime because
+they use `(.. - ..).abs() < 1e-7` tolerance and `f32::PartialOrd::lt`
+is not yet `const fn` in stable Rust. Static-assert count is now
+35 across 9 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

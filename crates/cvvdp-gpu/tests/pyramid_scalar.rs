@@ -22,6 +22,33 @@ use cvvdp_gpu::kernels::pyramid::{
     band_frequencies, gausspyr_expand_scalar, gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar,
 };
 
+// Tick 555: compile-time bit-pins for the Burt-Adelson kernel
+// constants. `f32::to_bits` is const fn since 1.83 (workspace MSRV
+// 1.93), so the exact-bit-equality value checks can move to
+// compile time. The outer taps GAUSS5[0] and GAUSS5[4] stay
+// runtime-only because they use `(.. - ..).abs() < 1e-7`
+// tolerance (`<` for f32 isn't const fn yet in stable Rust).
+// Same pattern as ticks 522-524, 548-552, 554.
+const _: () = {
+    use cvvdp_gpu::kernels::pyramid::{GAUSS5, KERNEL_A};
+    assert!(
+        KERNEL_A.to_bits() == 0.4_f32.to_bits(),
+        "KERNEL_A drifted from cvvdp v0.5.4 Burt-Adelson 0.4",
+    );
+    assert!(
+        GAUSS5[1].to_bits() == 0.25_f32.to_bits(),
+        "GAUSS5[1] drifted from 0.25",
+    );
+    assert!(
+        GAUSS5[2].to_bits() == 0.4_f32.to_bits(),
+        "GAUSS5[2] drifted from 0.4 (= KERNEL_A)",
+    );
+    assert!(
+        GAUSS5[3].to_bits() == 0.25_f32.to_bits(),
+        "GAUSS5[3] drifted from 0.25",
+    );
+};
+
 #[rustfmt::skip]
 const INPUT_8X8: [f32; 64] = [
     0.0,  1.0,  2.0,  3.0,  4.0,  5.0,  6.0,  7.0,
