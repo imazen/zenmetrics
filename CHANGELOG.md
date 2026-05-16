@@ -229,6 +229,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/phase_uncertainty_band_invariants.rs`** — 7 invariant
+  pins on `phase_uncertainty_band` (the branch-on-band-size helper).
+  No prior direct tests — pipeline parity covered it indirectly.
+  Pins: (1) small-band branch (`w ≤ 6 OR h ≤ 6`) is pure scaling
+  bit-equal to `input × 10^MASK_C` across 6 size combos;
+  (2) large-band branch (`w > 6 AND h > 6`) actually applies blur
+  (impulse input → diffused output); (3) output length matches
+  input across both branches; (4) determinism in both branches via
+  `to_bits()`; (5) empty input → empty output, no panic;
+  (6) finite output for finite input; (7) **branch threshold pin
+  at `PU_PADSIZE = 6`** — `(6, 6)`, `(7, 6)`, `(6, 7)` all small;
+  `(7, 7)` is the first large case. Catches a refactor that flips
+  `&&` to `||` (would incorrectly blur degenerate strips that
+  can't fit the σ=3 kernel's 13-tap support). Tick 429.
+
 - **`tests/csf_channel_invariants.rs`** — 7 invariant pins on the
   `CsfChannel` enum's discriminants + trait contract. No prior
   test pinned these — a refactor that reorders variants (e.g.,
