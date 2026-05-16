@@ -722,7 +722,35 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
-Tick 602 (`69c1fbb6`) — docstring-accuracy fix on the
+Tick 603 — two `recommend_parallel` contract pins surfacing
+implicit-via-language-semantic guarantees that a refactor could
+silently break:
+
+1. `recommend_parallel_saturates_at_u32_max_for_unbounded_free_bytes`
+   — the function's docstring claims the result is "capped at
+   u32::MAX", but the cap is implicitly enforced by Rust's
+   saturating `f64 as u32` cast (saturating since Rust 1.45). A
+   refactor that swaps to `try_into().unwrap()` would panic on
+   u64::MAX free-bytes input. Pinned at 1024² and 8×8 (smallest
+   pyramid-valid).
+2. `recommend_parallel_monotonically_non_increasing_in_image_dims`
+   — companion to the existing `..._monotonic_in_free_bytes` pin
+   (tick 234). Holding free memory constant, larger images must
+   produce ≤ smaller-image parallel counts. Strictly-monotonic
+   decrease would be too strong (min-1 floor flattens the curve);
+   non-increasing is the load-bearing invariant. A refactor that
+   inverts the division (`est * free / safety` instead of
+   `free / (safety * est)`) would silently make bigger images
+   *more* parallelizable, masking OOM in auto-scaling sweep code
+   that picks instance count from image size.
+
+Both pins land in `tests/pipeline_score.rs` next to the existing
+recommend_parallel test cluster. Static-assert count unchanged
+(these are runtime tests, not compile-time const blocks — the
+saturation behavior depends on `as u32` rounding which isn't
+`const fn`-callable in this configuration).
+
+Tick 602 (`df0998d0`) — docstring-accuracy fix on the
 `common::const_str` module. The tick-584 module docstring was
 doubly stale: listed only 3 helpers (`starts_with` / `ends_with`
 / `contains`) when ticks 586 and 600 added `bytes_eq` and `count`,

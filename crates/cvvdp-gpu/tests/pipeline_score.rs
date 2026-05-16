@@ -2304,6 +2304,84 @@ fn recommend_parallel_budget_invariant() {
 }
 
 #[test]
+fn recommend_parallel_saturates_at_u32_max_for_unbounded_free_bytes() {
+    // Tick 603: the docstring on `recommend_parallel` says the
+    // result is "capped at u32::MAX". The implementation enforces
+    // this implicitly via Rust's saturating `f64 as u32` cast
+    // (saturating-cast semantics since Rust 1.45). A refactor that
+    // swaps the cast for `.try_into().unwrap()` or
+    // `as u32` on a wrapping path would panic / wrap on giant
+    // free-byte inputs.
+    //
+    // For a 1024² image at PARALLEL_SAFETY_FACTOR=1.5, the
+    // per-instance estimate is ~330 MB, so budgeted = u64::MAX /
+    // (1.5 × 330 MB) ≈ 3.7e10 — well above u32::MAX (≈ 4.3e9). The
+    // function must return u32::MAX, not panic, not wrap to a small
+    // number.
+    use cvvdp_gpu::recommend_parallel;
+    let p_unbounded = recommend_parallel(u64::MAX, 1024, 1024);
+    assert_eq!(
+        p_unbounded,
+        u32::MAX,
+        "recommend_parallel(u64::MAX, 1024, 1024) = {p_unbounded}, expected u32::MAX (saturating cap)",
+    );
+    // Also exercise the smallest pyramid-valid image (8×8) at u64::MAX
+    // — same saturation requirement, but the per-instance estimate
+    // is even smaller so budgeted is even further past u32::MAX.
+    let p_tiny = recommend_parallel(u64::MAX, 8, 8);
+    assert_eq!(
+        p_tiny,
+        u32::MAX,
+        "recommend_parallel(u64::MAX, 8, 8) = {p_tiny}, expected u32::MAX (saturating cap)",
+    );
+}
+
+#[test]
+fn recommend_parallel_monotonically_non_increasing_in_image_dims() {
+    // Tick 603: companion to `recommend_parallel_monotonic_in_free_bytes`.
+    // The contract: holding free memory constant, **larger images
+    // must produce ≤ smaller-image parallel counts** (each instance
+    // costs more, so fewer fit). Strictly-monotonic decrease is too
+    // strong (the min-1 floor flattens the curve once budgeted < 1),
+    // so this pins non-increasing only.
+    //
+    // A refactor that inverts the division — e.g. uses
+    // `est * free / safety` instead of `free / (safety * est)` —
+    // would silently make bigger images *more* parallelizable, masking
+    // OOM in production sweeps that auto-scale instance count from
+    // image size.
+    use cvvdp_gpu::recommend_parallel;
+    let free = 24 * 1024 * 1024 * 1024; // 24 GB, typical pro GPU
+    let mut prev = u32::MAX;
+    for &(w, h) in &[
+        (64u32, 64u32),
+        (128, 128),
+        (256, 256),
+        (512, 512),
+        (1024, 1024),
+        (2048, 2048),
+        (4096, 3072),
+        (8192, 8192),
+    ] {
+        let p = recommend_parallel(free, w, h);
+        assert!(
+            p <= prev,
+            "monotonicity broken at {w}×{h}: got {p}, prev {prev} (bigger image must NOT recommend more parallel)",
+        );
+        prev = p;
+    }
+    // Sanity: the smallest image in the sweep saturated to u32::MAX
+    // (with 24 GB free, 64² fits trivially many instances), and the
+    // largest dropped at least one order of magnitude below it.
+    let p_smallest = recommend_parallel(free, 64, 64);
+    let p_largest = recommend_parallel(free, 8192, 8192);
+    assert!(
+        p_smallest > p_largest * 10,
+        "expected 24GB/64² ({p_smallest}) >> 24GB/8192² ({p_largest}) by an order of magnitude",
+    );
+}
+
+#[test]
 fn estimate_gpu_memory_grows_monotonically_with_dims() {
     // Larger images must always estimate more memory. Pin so a
     // refactor that introduces a per-level fixed cost (e.g. one
