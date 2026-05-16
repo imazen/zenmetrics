@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/gaussian_blur_sigma3_invariants.rs`** — 8 dedicated
+  invariants on `gaussian_blur_sigma3`. The function previously had
+  no direct tests — it was used only as a CPU reference for GPU
+  parity in `masking_kernel.rs`. Pins: (1) output length matches
+  `w * h` across 4 sizes; (2) constant input → constant output
+  within 1e-5 relative (DC preservation; kernel sums to 1); (3)
+  zero input → zero output bit-exact; (4) reflect-padded 7×7 (every
+  pixel touches the boundary) stays finite; (5) non-negative input
+  → non-negative output (kernel is all-positive); (6) determinism
+  via `to_bits()`; (7) horizontal mirror-symmetric input yields
+  symmetric output within 1e-5 (the kernel + boundary are
+  symmetric); (8) impulse input concentrates max at the impulse
+  location. Tick 430.
+
 - **`tests/phase_uncertainty_band_invariants.rs`** — 7 invariant
   pins on `phase_uncertainty_band` (the branch-on-band-size helper).
   No prior direct tests — pipeline parity covered it indirectly.
