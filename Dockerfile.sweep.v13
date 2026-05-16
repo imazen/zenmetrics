@@ -21,7 +21,27 @@ FROM rust:1.93-slim-bookworm AS builder
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         ca-certificates pkg-config libssl-dev cmake git \
         clang lld build-essential \
+        curl gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install CUDA 13.0 nvcc so cudarc's `cuda-version-from-build-system`
+# detects 13.0 — matching what nvidia/cuda's bundled libcuda actually
+# ships. Without this, cudarc's `fallback-latest` picks cuda-13020
+# and the resulting binary tries to dlsym
+# `cuCoredumpDeregisterCompleteCallback`, which is gated behind the
+# cuda-13020 feature in cudarc but doesn't exist in any released
+# NVIDIA driver yet (verified 580.65.06 / 590.48.01). nvcc alone is
+# enough for cudarc's build.rs to read `nvcc --version`; we also
+# pull cuda-cudart-dev-13-0 to satisfy any header lookups.
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-nvcc-13-0 cuda-cudart-dev-13-0 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CUDA_HOME=/usr/local/cuda-13.0 \
+    CUDA_PATH=/usr/local/cuda-13.0 \
+    PATH=/usr/local/cuda-13.0/bin:$PATH
 
 WORKDIR /workspace
 
@@ -69,10 +89,19 @@ RUN curl -fsSL -o /opt/bin/jq \
         "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" && \
     chmod +x /opt/bin/jq
 
-FROM ubuntu:24.04
+FROM nvidia/cuda:13.0.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker (zenjpeg-enabled, v13)"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (zenjpeg + CUDA 13 base, v13)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+# CUDA 13 base ships /usr/local/cuda/compat/libcuda.so.* which
+# exposes the CUDA 12.5+ symbols cubecl-cuda's cudarc 0.19.4 needs
+# (e.g. cuCoredumpDeregisterCompleteCallback). The previous
+# ubuntu:24.04 base relied on the host's libcuda mounted by
+# nvidia-container-toolkit; on vast.ai that mount was a stub or
+# an older driver missing the symbols — every fleet attempt 2026-
+# 05-15 panicked at dlsym. nvidia/cuda's compat libs override the
+# host mount via LD_LIBRARY_PATH set in the image's ENV.
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
@@ -88,5 +117,11 @@ RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
 WORKDIR /workspace/sweep
 ENV WORKDIR=/workspace/sweep \
     SWEEP_GPU_RUNTIME=cpu
+# Prepend /usr/local/cuda/compat so the bundled libcuda.so.* (full
+# CUDA 13 symbol set) wins over any host-mounted libcuda the
+# nvidia-container-toolkit injects. Without this, ld.so could
+# resolve to the host's older/stub libcuda.so.1 and cudarc would
+# panic at dlsym('cuCoredumpDeregisterCompleteCallback').
+ENV LD_LIBRARY_PATH=/usr/local/cuda/compat:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
 
 ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]

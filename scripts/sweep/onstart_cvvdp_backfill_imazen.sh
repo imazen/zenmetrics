@@ -194,6 +194,14 @@ process_chunk() {
     rm -rf "$WORKDIR/work-${chunk_id}"
 }
 
+# Belt-and-suspenders LD_LIBRARY_PATH: the new
+# nvidia/cuda:13.0-base image already ENVs this, but if the boot
+# image is bumped/replaced and the compat libs aren't on path,
+# this re-prepends them so cubecl-cuda's cudarc finds the
+# bundled libcuda.so.* with the CUDA 12.5+ symbol set.
+export LD_LIBRARY_PATH="/usr/local/cuda/compat:${LD_LIBRARY_PATH:-/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64}"
+log "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+
 heartbeat run
 
 export -f process_chunk log R2
