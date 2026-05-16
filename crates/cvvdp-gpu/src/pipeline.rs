@@ -688,6 +688,39 @@ impl<R: Runtime> Cvvdp<R> {
     /// module). See [`crate::params::PerfMode`] for the parity-vs-perf
     /// opt-in.
     ///
+    /// # Example
+    ///
+    /// Construct against a phone-class geometry (1080p at 0.4 m
+    /// viewing distance on a 5.5″ panel — ≈340 ppd vs STANDARD_4K's
+    /// ≈75 ppd). `ignore` for the same reason as [`Cvvdp::new`]'s
+    /// doctest: docs.rs has no GPU and the no-default-features build
+    /// path doesn't include any `cubecl` runtime feature.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    ///
+    /// let client = Backend::client(&Default::default());
+    /// let phone = DisplayGeometry {
+    ///     resolution_w: 1920,
+    ///     resolution_h: 1080,
+    ///     distance_m: 0.40,
+    ///     diagonal_inches: 5.5,
+    /// };
+    /// let cvvdp = Cvvdp::<Backend>::new_with_geometry(
+    ///     client, 64, 64, CvvdpParams::PLACEHOLDER, phone,
+    /// )
+    /// .expect("Cvvdp::new_with_geometry");
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidImageSize`] if either dimension is
