@@ -163,12 +163,16 @@ fn kernels_submodules_are_public() {
     // which is a true static assertion checked at compile time.
     // Tick 548: added the N_RHO > 0 mirror so both CSF axis sizes
     // share the same compile-time positivity guarantee.
+    // Tick 550: promoted MASK_C/JOD_A/KERNEL_A is_finite checks to
+    // compile-time (`f32::is_finite` is const-callable in stable
+    // Rust 1.83+). Catches a refactor that accidentally substitutes
+    // f32::NAN or f32::INFINITY as a constant value.
     assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
     const _: () = assert!(N_L_BKG > 0, "N_L_BKG must be positive (CSF LUT axis size)");
     const _: () = assert!(N_RHO > 0, "N_RHO must be positive (CSF LUT axis size)");
-    assert!(MASK_C.is_finite());
-    assert!(JOD_A.is_finite());
-    assert!(KERNEL_A.is_finite());
+    const _: () = assert!(MASK_C.is_finite(), "MASK_C must be finite (no NaN/Inf)");
+    const _: () = assert!(JOD_A.is_finite(), "JOD_A must be finite (no NaN/Inf)");
+    const _: () = assert!(KERNEL_A.is_finite(), "KERNEL_A must be finite (no NaN/Inf)");
 }
 
 #[test]

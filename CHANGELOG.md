@@ -197,6 +197,14 @@ file are predicated on:
 Static-assert count is now 19 across 5 test files. Verification:
 same clippy / doc / doctest status as tick 540 — no regressions.
 
+Tick 550 promoted 3 `f32::is_finite()` runtime asserts to static
+asserts in `lib_reexports.rs` on the re-exported scalar constants
+`MASK_C`, `JOD_A`, and `KERNEL_A`. `f32::is_finite` is `const fn`
+in stable Rust 1.83+ (and this crate's MSRV is 1.85). Catches a
+refactor that accidentally substitutes `f32::NAN` or
+`f32::INFINITY` as a constant literal. Static-assert count is now
+22 across 5 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
