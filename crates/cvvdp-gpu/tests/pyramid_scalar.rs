@@ -356,3 +356,93 @@ fn band_frequencies_exceeds_max_levels_at_high_ppd_or_dim() {
         typical.len(),
     );
 }
+
+// Pin the exact f32 bit patterns of the cvvdp v0.5.4 pyramid
+// constants. Same shape as ticks 393 (pool) / 394 (csf): a
+// silent edit cascades into JOD drift on every parity gate; this
+// pin trips with a specific constant name + expected value.
+
+#[test]
+fn pyramid_constants_match_pycvvdp_v0_5_4() {
+    use cvvdp_gpu::kernels::pyramid::{GAUSS5, KERNEL_A};
+
+    // KERNEL_A: Burt-Adelson kernel parameter `a` = 0.4 in
+    // cvvdp v0.5.4. The 5-tap Gaussian is parameterised on this
+    // value via `[0.25-a/2, 0.25, a, 0.25, 0.25-a/2]`. A drift
+    // to e.g. 0.375 (the Burt original) would broaden the
+    // Gaussian and silently shift every pyramid level.
+    assert_eq!(
+        KERNEL_A.to_bits(),
+        0.4_f32.to_bits(),
+        "KERNEL_A = {KERNEL_A}, expected 0.4 (cvvdp v0.5.4 Burt-Adelson)",
+    );
+
+    // GAUSS5: derived from KERNEL_A at compile time as
+    //   [0.25 - a/2, 0.25, a, 0.25, 0.25 - a/2]
+    //   ≈ [0.05, 0.25, 0.4, 0.25, 0.05]
+    // Outer taps use abs-diff tolerance (1e-7) since
+    // `0.25 - KERNEL_A / 2.0` rounds 1 ULP below the literal
+    // `0.05_f32` at compile time (verified: 0.049999997 vs
+    // 0.05). Inner taps (0.25, 0.4) ARE exact literals so
+    // .to_bits() works.
+    let edge_expected: f32 = 0.25 - KERNEL_A / 2.0;
+    assert!(
+        (GAUSS5[0] - edge_expected).abs() < 1e-7,
+        "GAUSS5[0] = {}, expected ≈ {edge_expected} = 0.25 - 0.4/2",
+        GAUSS5[0],
+    );
+    assert_eq!(
+        GAUSS5[1].to_bits(),
+        0.25_f32.to_bits(),
+        "GAUSS5[1] = {}, expected 0.25",
+        GAUSS5[1],
+    );
+    assert_eq!(
+        GAUSS5[2].to_bits(),
+        0.4_f32.to_bits(),
+        "GAUSS5[2] = {}, expected 0.4 = KERNEL_A",
+        GAUSS5[2],
+    );
+    assert_eq!(
+        GAUSS5[3].to_bits(),
+        0.25_f32.to_bits(),
+        "GAUSS5[3] = {}, expected 0.25",
+        GAUSS5[3],
+    );
+    assert!(
+        (GAUSS5[4] - edge_expected).abs() < 1e-7,
+        "GAUSS5[4] = {}, expected ≈ {edge_expected} = 0.25 - 0.4/2",
+        GAUSS5[4],
+    );
+
+    // Kernel normalization invariant: a convolution Gaussian
+    // MUST sum to 1.0 (preserves DC component). The derived
+    // form sums to 1.0 within f32 rounding noise (the edge-tap
+    // ULP propagates into the sum). A refactor that breaks
+    // normalization would scale every pyramid level by a
+    // non-unit factor on each downscale/upscale.
+    let sum: f32 = GAUSS5.iter().sum();
+    assert!(
+        (sum - 1.0).abs() < 1e-6,
+        "GAUSS5 sum = {sum}, expected ≈ 1.0 (DC preservation)",
+    );
+
+    // Symmetry invariant: the Burt-Adelson kernel is symmetric
+    // around the center tap. Pin so a refactor that breaks
+    // symmetry (would introduce phase distortion at every
+    // pyramid level) trips here.
+    assert_eq!(
+        GAUSS5[0].to_bits(),
+        GAUSS5[4].to_bits(),
+        "GAUSS5 outer taps not symmetric: [0]={} vs [4]={}",
+        GAUSS5[0],
+        GAUSS5[4],
+    );
+    assert_eq!(
+        GAUSS5[1].to_bits(),
+        GAUSS5[3].to_bits(),
+        "GAUSS5 inner taps not symmetric: [1]={} vs [3]={}",
+        GAUSS5[1],
+        GAUSS5[3],
+    );
+}

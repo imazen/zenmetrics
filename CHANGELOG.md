@@ -177,6 +177,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pyramid_scalar.rs::pyramid_constants_match_pycvvdp_v0_5_4`**
+  — sibling to ticks 393 (pool) / 394 (csf). Pins
+  `KERNEL_A = 0.4` (the Burt-Adelson `a` parameter) by exact
+  bit pattern and verifies `GAUSS5 = [0.05, 0.25, 0.4, 0.25,
+  0.05]` is consistent with the compile-time derivation
+  `[0.25-a/2, 0.25, a, 0.25, 0.25-a/2]` — outer taps use
+  abs-diff < 1e-7 because `0.25 - 0.4/2.0` rounds one ULP
+  below the literal 0.05 at compile time; inner taps are
+  exact. Plus two structural invariants: DC-preservation
+  (sum ≈ 1.0 within 1e-6) and symmetry around the center tap
+  (bit-identical pairs `[0]==[4]`, `[1]==[3]`). A drift in
+  `KERNEL_A` to e.g. 0.375 (the Burt original) would broaden
+  the kernel and silently shift every pyramid level; the
+  test trips with a specific message instead of cascading
+  into shadow_jod drift. Tick 395.
 - **`tests/csf_scalar.rs::csf_constants_match_pycvvdp_v0_5_4`** —
   sibling to tick 393's pool-constant pin. Locks the exact f32
   bit patterns of `SENSITIVITY_CORRECTION_DB` (-0.279_742_33)
