@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/srgb_byte_to_dkl_invariants.rs`** — eight function-level
+  semantic invariants on `srgb_byte_to_dkl_scalar` beyond the
+  pointwise pycvvdp parity at `STANDARD_4K`: (1) DKL_A strictly
+  monotonic in grayscale ramp 0..256 step 16; (2) grayscale chroma
+  RG/VY < 5% of A's magnitude across 9 neutral bytes; (3) black <
+  mid < white ordering on the A channel; (4) linearity in `y_peak`
+  via Δ(100→200) = ⅓ × Δ(100→400); (5) corner-pixel safety for 8
+  corners of the RGB cube (no panic, all finite); (6) determinism
+  via `to_bits()` across 3 inputs × 3 channels; (7) pure-red → RG > 0
+  and pure-cyan → RG < 0 (pins row-1 sign convention against a row
+  swap with row 2); (8) pure-blue → VY > 0 and pure-yellow → VY < 0.
+  Complements the matrix-bit-pin in `srgb_linear_to_dkl_matrix_*` —
+  pins the FUNCTION'S shape, not just the matrix's entries. Tick 420.
+
 - **`tests/gausspyr_expand_invariants.rs`** — seven structural
   invariant pins on `gausspyr_expand_scalar`, mirror of
   `gausspyr_reduce_invariants.rs`: (1) `dst.len() == out_w * out_h`
