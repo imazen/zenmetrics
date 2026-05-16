@@ -115,12 +115,26 @@ See `cvvdp_backfill/launch.sh` env-var section for overrides.
 
 ### 4. Monitor
 
+Recommended: `cvvdp_backfill/status.sh` aggregates manifest size,
+heartbeats (boot/run/done counts + newest timestamp), per-impl
+sidecar counts with completion percentages, and any failure logs
+— one screen of output:
+
+```bash
+SWEEP_RUN_ID=cvvdp-backfill-2026-05-15 bash scripts/sweep/cvvdp_backfill/status.sh
+
+# Periodic poll (Ctrl-C to stop):
+SWEEP_RUN_ID=... watch -n 60 'bash scripts/sweep/cvvdp_backfill/status.sh'
+```
+
+Raw R2 paths if you want to drive `s5cmd` yourself:
+
 ```bash
 # Heartbeats (one .boot / .run / .done per worker):
 s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
     --profile r2 ls "s3://coefficient/heartbeats/${SWEEP_RUN_ID}/"
 
-# Per-chunk logs (only on completion or failure):
+# Per-chunk failure logs (the worker only emits these on failure):
 s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
     --profile r2 ls "s3://coefficient/logs/${SWEEP_RUN_ID}/" | tail
 
