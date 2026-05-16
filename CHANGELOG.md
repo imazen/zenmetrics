@@ -643,14 +643,22 @@ LUT (~1000+ lines of f32 literals) at compile time and
 `const_str::contains` finds the version substring. When the
 reference bumps, the LUT regen procedure updates the header —
 this pin catches a version mismatch between the const and the
-vendored data. Static-assert count is now 209 across 12 test
-files. With tick 588's docstring listing 6 sites: const itself
-(format-pinned 588), parity-test runtime check (588), requirements.txt
-(589), LUT file header (590). Site #4 (LUT module name
-`csf_lut_v0_5_4`) and site #5 (filename `csf_lut/v0_5_4.rs`) are
-Rust identifiers / paths — they can only be pinned via separate
-filename-based assertions, not via the const directly. Site #6
-(PORT_STATUS.md) is prose documentation.
+vendored data. Static-assert count is now 209 across 12 test files.
+
+Tick 591 closed the last include-able lockstep site:
+`docs/PORT_STATUS.md`. Its "Reference version pin" section
+reads "gfxdisp/ColorVideoVDP v0.5.4 (latest tag as of …)" — same
+`include_str!()` + `const_str::contains` pattern as ticks 589-590.
+Forces the prose documentation to update in the same commit as
+the const + parity-test + requirements.txt + LUT header.
+
+After ticks 588-591, the remaining unpinnable lockstep sites are
+the Rust identifier `csf_lut_v0_5_4` (module name) and the
+filesystem path `csf_lut/v0_5_4.rs` (filename) — neither
+translates to const-callable string operations on the const value.
+A build.rs that introspects the source tree could pin them, but
+the complexity isn't worth it for these identifier-shape references.
+Static-assert count is now 210 across 12 test files.
 
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's

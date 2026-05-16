@@ -91,6 +91,29 @@ const _: () = {
     );
 };
 
+// Tick 591: pin PORT_STATUS.md against PYCVVDP_REFERENCE_VERSION.
+// The "Reference version pin" section in `docs/PORT_STATUS.md`
+// reads "gfxdisp/ColorVideoVDP **v0.5.4** (latest tag as of ...)"
+// — when bumping the reference, this prose doc must update in
+// the same commit. `include_str!` reads it at compile time;
+// `const_str::contains` finds the substring.
+//
+// This closes the prose-documentation site listed in
+// PYCVVDP_REFERENCE_VERSION's docstring. The two remaining sites
+// (Rust module name `csf_lut_v0_5_4` and filesystem path
+// `csf_lut/v0_5_4.rs`) are identifier / path entities that can't
+// be string-matched at compile time via const_str — they'd need
+// a build.rs that introspects the source tree, which isn't worth
+// the complexity for these documentation-only references.
+const _PORT_STATUS: &str = include_str!("../docs/PORT_STATUS.md");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_PORT_STATUS.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        "docs/PORT_STATUS.md must contain PYCVVDP_REFERENCE_VERSION (Reference version pin section)",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);
