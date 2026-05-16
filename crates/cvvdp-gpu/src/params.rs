@@ -210,6 +210,19 @@ pub const SRGB_LINEAR_TO_DKL: [[f32; 3]; 3] = [
 /// `csf_lut_weber_fixed_size` LUT vendored in `kernels/csf_lut/`,
 /// not from this struct. See `CvvdpParams::PLACEHOLDER` for the
 /// full unused-scaffolding picture.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::CvvdpParams;
+/// // PLACEHOLDER fills these with zeroed scaffolding values.
+/// // Production CSF runs from the vendored LUT — see the struct
+/// // docs.
+/// let p = CvvdpParams::PLACEHOLDER;
+/// assert_eq!(p.csf.a_peak, 0.0);
+/// assert_eq!(p.csf.rg_peak, 0.0);
+/// assert_eq!(p.csf.vy_peak, 0.0);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct CsfParams {
     /// Sensitivity peak for the achromatic channel.
@@ -239,6 +252,22 @@ pub struct CsfParams {
 /// path will need to widen `q` to `[f32; 3]` and split `k` into
 /// the corresponding `MASK_C` / `D_MAX` fields — a breaking
 /// change tracked separately.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::CvvdpParams;
+/// // PLACEHOLDER scaffolding values; production reads from
+/// // `kernels::masking::{MASK_P, MASK_Q, MASK_C, D_MAX, XCM_3X3}`.
+/// // Pinned by tests/params_placeholder_non_display.rs.
+/// let m = CvvdpParams::PLACEHOLDER.masking;
+/// assert_eq!(m.p, 2.4);
+/// assert_eq!(m.q, 2.2);
+/// assert!((m.k - 0.04).abs() < 1e-6);
+/// // All three scaffolding fields are positive — required because
+/// // they're future exponents on non-negative quantities.
+/// assert!(m.p > 0.0 && m.q > 0.0 && m.k > 0.0);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct MaskingParams {
     /// Excitation exponent (cvvdp `p`) — matches `MASK_P`.
@@ -258,6 +287,23 @@ pub struct MaskingParams {
 /// `const`s in `kernels::pool`. See `CvvdpParams::PLACEHOLDER`.
 /// `beta_channel` here corresponds to the kernel's `BETA_CH`
 /// (cvvdp `beta_tch`).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::CvvdpParams;
+/// // PLACEHOLDER fills with the scaffolding triple 4.0/4.0/4.0
+/// // (uniform Minkowski exponents). Production reads
+/// // BETA_SPATIAL=2.0, BETA_BAND=4.0, BETA_CH=4.0 from the
+/// // kernel-level consts.
+/// let p = CvvdpParams::PLACEHOLDER.pooling;
+/// assert_eq!(p.beta_spatial, 4.0);
+/// assert_eq!(p.beta_band, 4.0);
+/// assert_eq!(p.beta_channel, 4.0);
+/// // All three must be positive (negative exponents invert Minkowski
+/// // pool semantics). Pinned by tests/params_placeholder_non_display.rs.
+/// assert!(p.beta_spatial > 0.0 && p.beta_band > 0.0 && p.beta_channel > 0.0);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct PoolingParams {
     /// Per-band spatial pooling exponent (Minkowski `beta`).
@@ -284,6 +330,21 @@ pub struct PoolingParams {
 /// `jod_a → JOD_A`, `jod_c → JOD_EXP`; `jod_b` is unused (the
 /// formula has no separate `b` coefficient). See
 /// `CvvdpParams::PLACEHOLDER`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::CvvdpParams;
+/// // PLACEHOLDER scaffolding values; production reads
+/// // JOD_A=0.0439… and JOD_EXP=0.9302… from kernels::pool.
+/// // Pinned by tests/params_placeholder_non_display.rs.
+/// let j = CvvdpParams::PLACEHOLDER.jod;
+/// assert_eq!(j.jod_a, 10.0);
+/// assert_eq!(j.jod_b, 1.0);
+/// assert!((j.jod_c - 0.30).abs() < 1e-6);
+/// // All three positive — required for the future met2jod algebra.
+/// assert!(j.jod_a > 0.0 && j.jod_b > 0.0 && j.jod_c > 0.0);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct JodParams {
     /// JOD mapping scale parameter `a` from cvvdp's

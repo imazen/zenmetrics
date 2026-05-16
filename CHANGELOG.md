@@ -722,6 +722,26 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 612 — continue the per-public-item doctest sweep (+4 more,
+closing the params.rs scaffolding-struct queue from tick 611):
+
+- `CsfParams` — all 3 sub-fields zeroed in PLACEHOLDER (production
+  reads CSF straight from the vendored LUT).
+- `MaskingParams` — scaffolding values (p=2.4, q=2.2, k=0.04) +
+  the all-positive invariant required by future Minkowski/exponent
+  algebra.
+- `PoolingParams` — uniform 4.0/4.0/4.0 scaffolding triple (vs.
+  production's BETA_SPATIAL=2.0, BETA_BAND=4.0, BETA_CH=4.0) +
+  positivity invariant.
+- `JodParams` — scaffolding values 10.0/1.0/0.30 + positivity
+  invariant. Cross-reference to the v0.5.4 production values
+  JOD_A ≈ 0.0439 and JOD_EXP ≈ 0.9302.
+
+Each doctest cross-references `tests/params_placeholder_non_display.rs`
+where the same values are bit-pinned at compile time. Doctest count:
+55 → 59. The `CvvdpParams` struct itself + its `PLACEHOLDER` const
+already had doctests in earlier ticks. Docs-only change.
+
 Tick 611 — continue the per-public-item doctest sweep (+4 more):
 
 - `DisplayModel` struct — field-access + spread-construct an
