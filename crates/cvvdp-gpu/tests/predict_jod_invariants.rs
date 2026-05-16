@@ -95,6 +95,45 @@ fn output_responds_to_distortion_magnitude() {
 }
 
 #[test]
+fn textured_ref_vs_flat_dist_detects_detail_loss() {
+    // Tick 543: pin cvvdp's blur/detail-loss detection. A textured
+    // ref + flat dist (catastrophic blur — all spatial detail
+    // collapsed to a constant) MUST give JOD significantly below 10
+    // because the ref carries Weber-pyramid energy that the dist
+    // lacks. The masking → pool chain converts this missing-band
+    // energy into a non-trivial Q, which met2jod maps below 10.
+    //
+    // Sibling to flat_vs_flat_yields_max_jod_regardless_of_brightness
+    // (tick 542): together they bracket cvvdp's spatial-contrast
+    // contract — flat vs flat is JOD=10 (no perceptible distortion),
+    // textured vs flat is JOD ≪ 10 (catastrophic blur is caught).
+    //
+    // A refactor that swallows missing-band energy (e.g. masking
+    // that always returns 0, or pool that doesn't weight by
+    // BASEBAND_W) would re-promote this to JOD ≈ 10 — a critical
+    // regression that this pin surfaces.
+    let (w, h) = (32_usize, 32_usize);
+    // Textured ref: every pixel different.
+    let ref_textured: Vec<u8> = (0..w * h * 3).map(|i| (i % 256) as u8).collect();
+    // Flat dist: mid-gray, no spatial variation.
+    let dist_flat: Vec<u8> = vec![128u8; w * h * 3];
+    let jod = predict_jod_still_3ch(&ref_textured, &dist_flat, w, h, dm(), ppd());
+    eprintln!("textured ref vs flat dist: jod = {jod:.4}");
+    assert!(jod.is_finite(), "blur JOD must be finite, got {jod}");
+    assert!(
+        jod < 9.0,
+        "textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
+    );
+    // Sanity floor — cvvdp's met2jod is unbounded below but for
+    // 32×32 inputs we'd never expect anything truly extreme; pin
+    // that we're in the realistic blur-detection regime.
+    assert!(
+        jod > -10.0,
+        "blur JOD = {jod} is extreme; sanity-check failed",
+    );
+}
+
+#[test]
 fn flat_vs_flat_yields_max_jod_regardless_of_brightness() {
     // Tick 542: pin cvvdp's spatial-contrast contract. A flat ref +
     // flat dist (even pure-black vs pure-white) gives JOD ≈ 10
