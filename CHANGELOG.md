@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/precompute_logs_row_invariants.rs`** — 6 additional
+  invariants on `precompute_logs_row` beyond the 3 existing tests
+  in `csf_scalar.rs`: (1) determinism via `to_bits()` across 3
+  channels × 3 rho; (2) distinct rows across A/Rg/Vy at 3 rho —
+  catches a refactor that collapses the channel argument;
+  (3) all-finite output across rho ∈ {0.001, 0.1, ..., 1024}
+  (sub-LUT to super-LUT extrapolation); (4) `rho=0` doesn't panic
+  or NaN (the `.max(1e-6)` clamp guards `log10(0) = -inf`); (5)
+  negative rho clamps via `.max()` (not `.abs()`) — pins by
+  matching `precompute_logs_row(-100, A)` bit-equal to
+  `precompute_logs_row(1e-6, A)`; (6) `10^row[k]` is strictly
+  positive-finite (sensitivities are physical, never zero).
+  Tick 427.
+
 - **`tests/do_pooling_invariants.rs`** — 7 flow invariants on
   `do_pooling_and_jod_still_3ch` complementing the 3 pycvvdp
   parity tests in `pool_scalar.rs`: (1) zero input → JOD ≈ 10
