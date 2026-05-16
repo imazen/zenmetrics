@@ -9,6 +9,49 @@
 
 use cvvdp_gpu::params::DisplayGeometry;
 
+// Tick 551: compile-time pin of `DisplayGeometry::STANDARD_4K` and
+// `DisplayModel::STANDARD_4K` field values. The v1 R2 manifest
+// goldens were captured under this configuration — a silent edit
+// to any field would invalidate every parity test that loads the
+// goldens, but the change would only surface at test time. Promote
+// the field-value runtime asserts (in the existing fn-tests below)
+// to compile-time `const _: () = assert!(...)`. Same pattern as
+// ticks 522-524, 548-550. Use `to_bits()` for f32 fields because
+// `f32::PartialEq::eq` isn't `const fn` in stable Rust yet, but
+// `f32::to_bits` is (since 1.83).
+const _: () = assert!(
+    DisplayGeometry::STANDARD_4K.resolution_w == 3840,
+    "STANDARD_4K resolution_w drifted from 3840 (UHD)",
+);
+const _: () = assert!(
+    DisplayGeometry::STANDARD_4K.resolution_h == 2160,
+    "STANDARD_4K resolution_h drifted from 2160 (UHD)",
+);
+const _: () = assert!(
+    DisplayGeometry::STANDARD_4K.distance_m.to_bits() == 0.7472_f32.to_bits(),
+    "STANDARD_4K distance_m drifted from pycvvdp 0.7472 m",
+);
+const _: () = assert!(
+    DisplayGeometry::STANDARD_4K.diagonal_inches.to_bits() == 30.0_f32.to_bits(),
+    "STANDARD_4K diagonal_inches drifted from 30.0",
+);
+
+const _: () = {
+    use cvvdp_gpu::params::DisplayModel;
+    assert!(
+        DisplayModel::STANDARD_4K.y_peak.to_bits() == 200.0_f32.to_bits(),
+        "DisplayModel::STANDARD_4K.y_peak drifted from cvvdp v0.5.4 200 cd/m²",
+    );
+    assert!(
+        DisplayModel::STANDARD_4K.y_black.to_bits() == 0.2_f32.to_bits(),
+        "DisplayModel::STANDARD_4K.y_black drifted from 0.2 cd/m² (= y_peak / 1000 contrast)",
+    );
+    assert!(
+        DisplayModel::STANDARD_4K.y_refl.to_bits() == 0.397_887_36_f32.to_bits(),
+        "DisplayModel::STANDARD_4K.y_refl drifted from precomputed 0.397_887_36 (= 250 lux × 0.005 / π)",
+    );
+};
+
 #[test]
 fn ppd_matches_pycvvdp_standard_4k() {
     let g = DisplayGeometry::STANDARD_4K;

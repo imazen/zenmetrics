@@ -205,6 +205,18 @@ refactor that accidentally substitutes `f32::NAN` or
 `f32::INFINITY` as a constant literal. Static-assert count is now
 22 across 5 test files.
 
+Tick 551 promoted 7 `DisplayGeometry::STANDARD_4K` +
+`DisplayModel::STANDARD_4K` field-value runtime asserts to static
+asserts in `display_geometry.rs`. u32 fields use direct `==`;
+f32 fields use `to_bits()` (because `f32::PartialEq` isn't yet
+`const fn` in stable Rust, but `f32::to_bits` is). Covered fields:
+`resolution_w == 3840`, `resolution_h == 2160`,
+`distance_m == 0.7472`, `diagonal_inches == 30.0`,
+`y_peak == 200.0`, `y_black == 0.2`, `y_refl == 0.397_887_36`. The
+v1 R2 manifest goldens were captured against these exact values;
+a silent drift now fails to compile rather than at test time.
+Static-assert count is now 29 across 6 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
