@@ -239,6 +239,22 @@ Diff per (codec, q) in the parity TSV to find which cells broke.
 The launcher sets it automatically from `gh auth token`; verify
 `gh auth status` shows `write:packages` scope.
 
+**All sidecar rows have `cvvdp_imazen` = 10.0** — the
+`zen-metrics-sweep` image's ENTRYPOINT is
+`/usr/local/bin/zen-metrics-worker` (the chunk-claim worker, NOT
+the underlying `zen-metrics` binary). Any `docker run image
+zen-metrics ...` invocation is implicitly
+`docker run --entrypoint <default> image zen-metrics ...` and
+ends up running `zen-metrics-worker zen-metrics ...` — the
+chunk-claim worker, with extra args it doesn't understand.
+Both `cvvdp_backfill_chunk_worker.sh` (tick 360) and
+`dual_impl_chunk_docker.sh` (tick 340) pass
+`--entrypoint /usr/local/bin/zen-metrics` to bypass; if you
+write a new script that runs the image, add the same flag.
+Tick 358's `--min-imazen-stdev` check in `assert_parity.py`
+catches the all-10.0 pattern in the gate but you'll want to
+fix the docker invocation first.
+
 ## When NOT to use this
 
 This pipeline is the **backfill** path — given an existing unified
