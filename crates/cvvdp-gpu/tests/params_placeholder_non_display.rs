@@ -18,6 +18,36 @@
 
 use cvvdp_gpu::CvvdpParams;
 
+// Tick 573: compile-time bit-pins for every scaffolding-placeholder
+// field on `CvvdpParams::PLACEHOLDER`. The fields are documented as
+// unused-scaffolding (production code reads from `kernels::*`
+// consts), but they're publicly-visible defaults that
+// `CvvdpParams { ..PLACEHOLDER }` callers depend on. Pinning at
+// compile time guarantees the scaffolded values stay stable until
+// they're intentionally wired through (and at that point the pin
+// surfaces the change explicitly). `f32::to_bits` is const fn
+// since Rust 1.83 (workspace MSRV 1.93). Same pattern as ticks
+// 522-524, 548-572.
+const _: () = {
+    let p = CvvdpParams::PLACEHOLDER;
+    // csf sub-bundle (all 0.0 in scaffolding)
+    assert!(p.csf.a_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.a_peak drifted from 0.0");
+    assert!(p.csf.rg_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.rg_peak drifted from 0.0");
+    assert!(p.csf.vy_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.vy_peak drifted from 0.0");
+    // masking sub-bundle (scaffolding values 2.4 / 2.2 / 0.04)
+    assert!(p.masking.p.to_bits() == 2.4_f32.to_bits(), "PLACEHOLDER.masking.p drifted from 2.4");
+    assert!(p.masking.q.to_bits() == 2.2_f32.to_bits(), "PLACEHOLDER.masking.q drifted from 2.2");
+    assert!(p.masking.k.to_bits() == 0.04_f32.to_bits(), "PLACEHOLDER.masking.k drifted from 0.04");
+    // pooling sub-bundle (uniform 4.0 in scaffolding)
+    assert!(p.pooling.beta_spatial.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_spatial drifted from 4.0");
+    assert!(p.pooling.beta_band.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_band drifted from 4.0");
+    assert!(p.pooling.beta_channel.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_channel drifted from 4.0");
+    // jod sub-bundle (scaffolding values 10.0 / 1.0 / 0.30)
+    assert!(p.jod.jod_a.to_bits() == 10.0_f32.to_bits(), "PLACEHOLDER.jod.jod_a drifted from 10.0");
+    assert!(p.jod.jod_b.to_bits() == 1.0_f32.to_bits(), "PLACEHOLDER.jod.jod_b drifted from 1.0");
+    assert!(p.jod.jod_c.to_bits() == 0.30_f32.to_bits(), "PLACEHOLDER.jod.jod_c drifted from 0.30");
+};
+
 #[test]
 fn placeholder_csf_fields_are_zero() {
     // CsfParams placeholder values are all 0.0 — the production

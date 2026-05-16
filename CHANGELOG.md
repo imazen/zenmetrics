@@ -440,6 +440,20 @@ are future work); the pins guarantee the value stays correct
 for when those paths land. Static-assert count is now 141 across
 11 test files.
 
+Tick 573 promoted 12 `CvvdpParams::PLACEHOLDER` scaffolding-field
+bit-pins to static asserts in `params_placeholder_non_display.rs`:
+  - csf sub-bundle: `a_peak`, `rg_peak`, `vy_peak` (all 0.0)
+  - masking sub-bundle: `p=2.4`, `q=2.2`, `k=0.04`
+  - pooling sub-bundle: `beta_spatial`, `beta_band`,
+    `beta_channel` (all 4.0)
+  - jod sub-bundle: `jod_a=10.0`, `jod_b=1.0`, `jod_c=0.30`
+These fields are documented as unused-scaffolding (production
+code reads from `kernels::*` consts) but they're publicly-visible
+defaults that `CvvdpParams { ..PLACEHOLDER }` callers depend on.
+Pinning at compile time keeps the scaffolded values stable until
+they're intentionally wired through. Static-assert count is now
+153 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
