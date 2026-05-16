@@ -229,6 +229,21 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/mask_pool_pixel_invariants.rs`** — 7 invariant pins on
+  `mask_pool_pixel`, the 3×3 cross-channel masking matrix-vector
+  multiply against `XCM_3X3`. No direct unit tests existed before
+  (`mult_mutual_pixel` covered it indirectly through full-pipeline
+  parity). Pins: (1) zero input → zero output bit-exact;
+  (2) determinism via `to_bits()`; (3) α-scaling linearity within
+  1e-6 relative across 5 scalars; (4) additivity `f(a+b) == f(a) +
+  f(b)` within 1e-5 relative; (5) unit-basis inputs recover the
+  rows of `XCM_3X3` exactly via `to_bits()` — catches a row-column
+  transposition that wouldn't trip pipeline parity; (6) all-finite
+  output for finite input across 6 input dynamic ranges (1e-10 to
+  1e6, positive + negative); (7) A's self-coupling dominance
+  (`out[0] > 0.5` for `[1, 0, 0]` since `XCM_3X3[0][0] = 0.877`)
+  — pins the matrix orientation. Tick 423.
+
 - **`tests/clamp_phase_uncertainty_invariants.rs`** — 10 invariant
   pins on two small masking primitives that previously had no
   direct unit tests:
