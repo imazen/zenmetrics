@@ -227,6 +227,20 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (docs)
+
+- **`kernels::csf::N_RHO` gets its own docstring**, separating
+  it from `N_L_BKG`'s. The two constants previously shared a
+  single `/// Number of grid points along each LUT axis.` comment
+  preceding `N_L_BKG` only — rustdoc attached the doc to
+  `N_L_BKG` and left `N_RHO` undocumented. Now each has its own
+  doc explaining the kernel-sizing constraint, with a cross-
+  reference between them. Verified via a python doc-coverage
+  sweep: 0 undocumented public items remain in the non-LUT
+  source (the LUT file `csf_lut/v0_5_4.rs` is auto-generated
+  from pycvvdp's JSON; comments there would not survive
+  regeneration). Tick 408.
+
 #### cvvdp-gpu (tests)
 
 - **`tests/pipeline_score.rs::score_returns_lossless_f64_widening_of_compute_dkl_jod`**

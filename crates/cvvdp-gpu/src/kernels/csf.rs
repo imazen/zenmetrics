@@ -67,8 +67,18 @@ pub enum CsfChannel {
     Vy = 2,
 }
 
-/// Number of grid points along each LUT axis.
+/// Number of grid points along the `log_L_bkg` LUT axis. The GPU
+/// kernels assume this specific size via array sizing and stride
+/// arithmetic; pinned by `csf_constants_match_pycvvdp_v0_5_4` (tick
+/// 394) — bumping it requires resizing the per-band `logs_row`
+/// buffer in `Cvvdp::new` plus the kernel's index arithmetic.
 pub const N_L_BKG: usize = 32;
+
+/// Number of grid points along the `log_rho` LUT axis. Same kernel-
+/// sizing constraints as [`N_L_BKG`] above. The two are coincidentally
+/// equal at 32 in cvvdp v0.5.4's `weber_fixed_size` variant, but
+/// they're conceptually independent — a future LUT revision could
+/// rebalance the axes.
 pub const N_RHO: usize = 32;
 
 /// 1-D linear interpolation on a UNIFORMLY-spaced axis via
