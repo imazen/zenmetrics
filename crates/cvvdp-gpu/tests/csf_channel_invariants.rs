@@ -15,12 +15,25 @@
 
 use cvvdp_gpu::kernels::csf::CsfChannel;
 
+// Tick 524: promote the discriminant pins below to compile-time
+// static asserts. The values flow into every `channel as usize`
+// per-channel buffer index across the CSF stage — a reorder must
+// be caught at compile time, not at test runtime. Same pattern as
+// tick 522 (lib_reexports) and tick 523 (lib_constants).
+const _: () = assert!(CsfChannel::A as u32 == 0, "A must be 0");
+const _: () = assert!(CsfChannel::Rg as u32 == 1, "Rg must be 1");
+const _: () = assert!(CsfChannel::Vy as u32 == 2, "Vy must be 2");
+
 #[test]
 fn discriminants_are_zero_one_two() {
-    // Pin via `as u32`. Reordering the variants would shift these.
-    assert_eq!(CsfChannel::A as u32, 0, "A must be 0");
-    assert_eq!(CsfChannel::Rg as u32, 1, "Rg must be 1");
-    assert_eq!(CsfChannel::Vy as u32, 2, "Vy must be 2");
+    // See the module-level static asserts above. This test exists
+    // for test-runner-visible naming — the CHANGELOG entry for
+    // tick 428 references `discriminants_are_zero_one_two` as the
+    // pin name. Body asserts via runtime so the test reports OK,
+    // but the load-bearing enforcement is at compile time.
+    assert_eq!(CsfChannel::A as u32, 0);
+    assert_eq!(CsfChannel::Rg as u32, 1);
+    assert_eq!(CsfChannel::Vy as u32, 2);
 }
 
 #[test]
