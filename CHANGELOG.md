@@ -634,6 +634,24 @@ requirements.txt is updated in the same commit. Closes the 6th
 lockstep site documented in the PYCVVDP_REFERENCE_VERSION
 docstring. Static-assert count is now 208 across 12 test files.
 
+Tick 590 extended the lockstep coverage to the vendored LUT file:
+`src/kernels/csf_lut/v0_5_4.rs`'s auto-generated header comment
+`"Auto-generated from pycvvdp v0.5.4's csf_lut_weber_fixed_size.json."`
+contains the full `v0.5.4` string (matches PYCVVDP_REFERENCE_VERSION
+exactly — no v-stripping needed). `include_str!()` reads the full
+LUT (~1000+ lines of f32 literals) at compile time and
+`const_str::contains` finds the version substring. When the
+reference bumps, the LUT regen procedure updates the header —
+this pin catches a version mismatch between the const and the
+vendored data. Static-assert count is now 209 across 12 test
+files. With tick 588's docstring listing 6 sites: const itself
+(format-pinned 588), parity-test runtime check (588), requirements.txt
+(589), LUT file header (590). Site #4 (LUT module name
+`csf_lut_v0_5_4`) and site #5 (filename `csf_lut/v0_5_4.rs`) are
+Rust identifiers / paths — they can only be pinned via separate
+filename-based assertions, not via the const directly. Site #6
+(PORT_STATUS.md) is prose documentation.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

@@ -69,6 +69,28 @@ const _: () = {
     );
 };
 
+// Tick 590: pin the vendored LUT file's header comment against
+// PYCVVDP_REFERENCE_VERSION. The auto-generated header in
+// `src/kernels/csf_lut/v0_5_4.rs` reads
+//   "Auto-generated from pycvvdp v0.5.4's csf_lut_weber_fixed_size.json."
+// so it should contain the FULL `v0.5.4` string (matches the const
+// exactly, no v-stripping needed). When the reference bumps, the
+// LUT file regen procedure updates the header — this pin catches a
+// version mismatch between the const and the vendored data.
+//
+// `include_str!` reads the whole LUT at compile time (~1000+ lines
+// of f32 literals), but the substring search is O(n·m) on a small
+// needle — fast enough.
+const _LUT_V0_5_4: &str = include_str!("../src/kernels/csf_lut/v0_5_4.rs");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_LUT_V0_5_4.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        "src/kernels/csf_lut/v0_5_4.rs header must contain PYCVVDP_REFERENCE_VERSION \
+         (the auto-generated header comment references the source pycvvdp version)",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);
