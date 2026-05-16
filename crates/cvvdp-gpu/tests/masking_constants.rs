@@ -26,6 +26,24 @@ const _: () = assert!(
     "PU_BLUR_KERNEL_1D length drifted from canonical 13 taps (σ=3, 3σ-trunc)",
 );
 
+// Tick 556: compile-time bit-pins for the 3 scalar masking
+// constants. `f32::to_bits` is const fn since Rust 1.83 (workspace
+// MSRV 1.93). A silent drift on any of these would cascade into
+// JOD differences across every parity gate — compile-time
+// enforcement catches the drift before any test runs.
+const _: () = assert!(
+    MASK_P.to_bits() == 2.264_355_2_f32.to_bits(),
+    "MASK_P drifted from cvvdp v0.5.4 = 2.264_355_2",
+);
+const _: () = assert!(
+    MASK_C.to_bits() == (-0.795_497_12_f32).to_bits(),
+    "MASK_C drifted from cvvdp v0.5.4 = -0.795_497_12 (sign flip would amplify masking 6×)",
+);
+const _: () = assert!(
+    D_MAX.to_bits() == 2.564_245_5_f32.to_bits(),
+    "D_MAX drifted from cvvdp v0.5.4 = 2.564_245_5 (50% clamp at 10^D_MAX ≈ 366)",
+);
+
 #[test]
 fn masking_constants_match_pycvvdp_v0_5_4() {
     // CH_GAIN: per-channel gain multiplier inside the masking

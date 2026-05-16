@@ -252,6 +252,17 @@ they use `(.. - ..).abs() < 1e-7` tolerance and `f32::PartialOrd::lt`
 is not yet `const fn` in stable Rust. Static-assert count is now
 35 across 9 test files.
 
+Tick 556 promoted 3 scalar masking-constant bit-pins to static
+asserts in `masking_constants.rs`:
+  - `MASK_P == 2.264_355_2_f32` (transducer exponent)
+  - `MASK_C == -0.795_497_12_f32` (phase-uncertainty scaling
+    exponent; a sign flip would amplify masking 6×)
+  - `D_MAX == 2.564_245_5_f32` (soft-clamp ceiling exponent)
+Array constants (`CH_GAIN`, `MASK_Q`, `XCM_3X3`) remain runtime-
+only for now — promoting them would add bulk for diminishing
+return; the runtime tests still cover them at f32-bit precision.
+Static-assert count is now 38 across 9 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
