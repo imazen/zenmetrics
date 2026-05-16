@@ -722,6 +722,18 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 616 — add `# Examples` doctest to
+`kernels::csf::sensitivity_scalar`. The sister function
+`sensitivity_corrected_scalar` already had a doctest covering
+its multiplicative-factor relationship to `sensitivity_scalar`,
+but the underlying primitive itself was undocumented at the
+example level. Pins:
+- Positive + finite output at standard photopic background
+  (100 cd/m² → log10 = 2.0) at 4 cy/deg (CSF peak).
+- High-frequency roll-off (30 cy/deg < 4 cy/deg sensitivity).
+- Per-channel independence (each of A/Rg/Vy returns positive).
+Doctest count: 63 → 64. Docs-only change.
+
 Tick 615 — add `# Examples` doctest to `kernels::csf::CsfChannel`.
 Pins the [A=0, Rg=1, Vy=2] discriminant ordering load-bearing for
 every `channel as usize` indexing site, plus the

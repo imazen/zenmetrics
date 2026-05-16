@@ -235,6 +235,29 @@ fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
 ///   log10 before the call via `weber_contrast_pyr` — host_scalar
 ///   does it explicitly.
 /// - `cc` — opponent channel.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{sensitivity_scalar, CsfChannel};
+///
+/// // Standard photopic background (100 cd/m² → log10 = 2.0) at
+/// // 4 cy/deg (near peak CSF). Achromatic sensitivity peaks here.
+/// let s_a = sensitivity_scalar(4.0, 2.0, CsfChannel::A);
+/// assert!(s_a > 0.0 && s_a.is_finite());
+///
+/// // CSF falls off at very high frequencies: 30 cy/deg << 4 cy/deg
+/// // for the achromatic channel (steep high-pass roll-off).
+/// let s_high = sensitivity_scalar(30.0, 2.0, CsfChannel::A);
+/// assert!(s_high < s_a);
+///
+/// // Channels are independent — Rg and Vy have their own LUT
+/// // tables. All three positive at typical photopic L_bkg.
+/// for cc in [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy] {
+///     let s = sensitivity_scalar(4.0, 2.0, cc);
+///     assert!(s > 0.0, "{cc:?} sensitivity should be positive");
+/// }
+/// ```
 #[must_use]
 pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let log_rho_q = rho.max(1e-6).log10();
