@@ -861,4 +861,18 @@ pub const LOG_S_O0_C3: [f32; 1024] = [
 /// Carried for fidelity with the source JSON; not consumed by the
 /// current still-image pipeline (eccentricity-aware paths are
 /// future work).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::GE_SIGMA;
+///
+/// // Pinned to 1.5 from cvvdp v0.5.4's source JSON. Bit-pinned by
+/// // tests/csf_axes_invariants.rs (tick 506 line).
+/// assert_eq!(GE_SIGMA, 1.5);
+/// // Must be positive — it's a Gaussian sigma in degrees of
+/// // eccentricity. A negative value would invert the Gaussian
+/// // falloff into an exponential blow-up at fovea.
+/// assert!(GE_SIGMA > 0.0);
+/// ```
 pub const GE_SIGMA: f32 = 1.5_f32;

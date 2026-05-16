@@ -336,6 +336,23 @@ pub fn gausspyr_expand_scalar(
 
 /// One band of a Laplacian pyramid — a flat plane plus its
 /// dimensions.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::Band;
+///
+/// // Bands are constructed by `laplacian_pyramid_dec_scalar` and
+/// // `weber_contrast_pyr_dec_scalar`. Direct construction is
+/// // for downstream callers that fold bands themselves.
+/// let b = Band {
+///     w: 8,
+///     h: 4,
+///     data: vec![0.5_f32; 8 * 4],
+/// };
+/// assert_eq!(b.data.len(), b.w * b.h, "data.len() == w × h");
+/// assert!(b.w >= 1 && b.h >= 1);
+/// ```
 pub struct Band {
     /// Width in pixels.
     pub w: usize,

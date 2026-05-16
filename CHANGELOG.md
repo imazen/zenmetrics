@@ -722,6 +722,21 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 619 — add `# Examples` doctests to two more public items:
+
+- `kernels::csf::GE_SIGMA` — pin to 1.5 + positivity invariant
+  (a negative sigma would invert the Gaussian eccentricity-
+  falloff into an exponential blow-up at fovea). Still unused
+  in the current still-image pipeline.
+- `kernels::pyramid::Band` — show direct struct construction
+  with the `data.len() == w × h` invariant. Used by
+  `laplacian_pyramid_dec_scalar` and
+  `weber_contrast_pyr_dec_scalar` to return pyramid bands; the
+  doctest now surfaces the layout contract.
+
+Doctest count: 66 → 68. Per the per-public-item sweep theme
+(ticks 609-618). Docs-only change.
+
 Tick 618 — combined `# Examples` doctest on `LOG_L_BKG_AXIS`
 covering both CSF LUT axes (`LOG_L_BKG_AXIS` + `LOG_RHO_AXIS`).
 Same shared-coverage pattern as `MASK_P` covering the four
