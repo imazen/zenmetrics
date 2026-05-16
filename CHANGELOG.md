@@ -722,6 +722,16 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 622 — add `# Examples` doctests to `Cvvdp::new` +
+`Cvvdp::set_reference`. Both `ignore`d for the same docs.rs
+GPU-sandbox reason. The `new` doctest exercises the most common
+construction (PLACEHOLDER params → STANDARD_4K geometry). The
+`set_reference` doctest shows the cached-reference pattern for
+multi-DIST scoring against one REF. Cross-references the runtime
+test counterparts in `tests/pipeline_score.rs` and
+`tests/state_machine_independence.rs`. Doctest count: 69 passed
++ 16 ignored (was 69 + 14). Docs-only change.
+
 Tick 621 — add `# Examples` doctest to the `Cvvdp<R>` top-level
 scorer struct. `ignore`d (the runtime needs a live CUDA driver
 which docs.rs sandboxes don't have — same pattern as the existing

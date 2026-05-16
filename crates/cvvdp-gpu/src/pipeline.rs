@@ -727,6 +727,23 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns [`Error::InvalidImageSize`] if either dimension is
     /// smaller than [`PYRAMID_MIN_DIM`] × 2 (no usable pyramid),
     /// or if a GPU buffer allocation / kernel dispatch fails.
+    ///
+    /// # Examples
+    ///
+    /// `ignore` — needs a live GPU runtime; docs.rs builds in a
+    /// sandbox without one. The runtime-test counterpart lives in
+    /// `tests/pipeline_score.rs`.
+    ///
+    /// ```ignore
+    /// use cubecl::{Runtime, cuda::CudaRuntime};
+    /// use cvvdp_gpu::{Cvvdp, CvvdpParams};
+    ///
+    /// let client = CudaRuntime::client(&Default::default());
+    /// // Construct for 1 MP; PLACEHOLDER selects STANDARD_4K display
+    /// // and PerfMode::Strict (the parity-calibrated baseline).
+    /// let cvvdp = Cvvdp::<CudaRuntime>::new(client, 1024, 1024, CvvdpParams::PLACEHOLDER)?;
+    /// # Ok::<(), cvvdp_gpu::Error>(())
+    /// ```
     pub fn new(
         client: ComputeClient<R>,
         width: u32,
@@ -3268,6 +3285,30 @@ impl<R: Runtime> Cvvdp<R> {
     /// != width × height × 3`. No GPU dispatch happens here — the
     /// bytes are stashed host-side until the next
     /// `score_with_reference` call.
+    ///
+    /// # Examples
+    ///
+    /// `ignore` for the same reason as [`Cvvdp::new`] — runtime needs
+    /// a live GPU. Pattern is exercised in `tests/state_machine_independence.rs`.
+    ///
+    /// ```ignore
+    /// use cubecl::{Runtime, cuda::CudaRuntime};
+    /// use cvvdp_gpu::{Cvvdp, CvvdpParams};
+    ///
+    /// let client = CudaRuntime::client(&Default::default());
+    /// let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, 256, 256, CvvdpParams::PLACEHOLDER)?;
+    /// let ref_bytes = vec![128_u8; 256 * 256 * 3];
+    /// cvvdp.set_reference(&ref_bytes)?;
+    ///
+    /// // Now multiple DISTs can score against the cached REF —
+    /// // each call re-runs the full GPU pipeline (matches
+    /// // `score(ref, dist)` bit-for-bit; the faster path is
+    /// // `warm_reference` + `compute_dkl_jod_with_warm_ref`).
+    /// for dist_bytes in &[vec![100_u8; 256 * 256 * 3], vec![120_u8; 256 * 256 * 3]] {
+    ///     let _jod = cvvdp.score_with_reference(dist_bytes)?;
+    /// }
+    /// # Ok::<(), cvvdp_gpu::Error>(())
+    /// ```
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if reference_srgb.len() != expected {
