@@ -19,6 +19,10 @@
 //! 3-channel only — temporal channel (no_frames > 1) lives outside
 //! this module.
 
+// Tick 514: silence missing_docs warnings on items emitted by the
+// #[cube(launch)] macro (see kernels/color.rs for full rationale).
+#![allow(missing_docs)]
+
 use cubecl::prelude::*;
 
 /// Spatial-pooling exponent (cvvdp `beta`). RMS-equivalent for p=2.

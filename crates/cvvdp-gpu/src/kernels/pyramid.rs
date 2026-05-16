@@ -58,6 +58,10 @@
 //!   / L_bkg)` + shared `log_l_bkg`. Production weber kernel
 //!   (replaces 3× `subtract_kernel` + 1× weber per level).
 
+// Tick 514: silence missing_docs warnings on items emitted by the
+// #[cube(launch)] macro (see kernels/color.rs for full rationale).
+#![allow(missing_docs)]
+
 use cubecl::prelude::*;
 
 /// Burt-Adelson kernel parameter `a` used by cvvdp v0.5.4.

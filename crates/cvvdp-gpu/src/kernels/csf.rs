@@ -25,6 +25,10 @@
 //! [`SENSITIVITY_CORRECTION_DB`] so per-pin tweaks don't require a
 //! recompile.
 
+// Tick 514: silence missing_docs warnings on items emitted by the
+// #[cube(launch)] macro (see kernels/color.rs for full rationale).
+#![allow(missing_docs)]
+
 use cubecl::prelude::*;
 
 mod csf_lut_v0_5_4 {

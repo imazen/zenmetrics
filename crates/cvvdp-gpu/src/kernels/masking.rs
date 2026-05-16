@@ -29,6 +29,10 @@
 //! `pu_padsize = 6`; `compute_dkl_d_bands` routes the small-band
 //! case to `mult_mutual_3ch_no_blur_kernel`.
 
+// Tick 514: silence missing_docs warnings on items emitted by the
+// #[cube(launch)] macro (see kernels/color.rs for full rationale).
+#![allow(missing_docs)]
+
 use cubecl::prelude::*;
 
 /// Per-channel gain `[1, 1.45, 1]` that cvvdp's `mult-mutual` path

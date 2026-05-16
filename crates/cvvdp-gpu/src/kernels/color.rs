@@ -18,6 +18,16 @@
 //! cvvdp keeps DKL in cd/m²-scaled units (the CSF stage handles
 //! sensitivity scaling), so no post-normalization.
 
+// Tick 514: silence missing_docs warnings on items emitted by the
+// #[cube(launch)] macro. The macro generates a sibling module +
+// launcher struct + associated fn for each annotated function;
+// those items don't inherit the user's rustdoc comment and trigger
+// 4 warnings per kernel function. Every user-written pub item in
+// this file (SRGB8_TO_LINEAR_LUT const, srgb_byte_to_dkl_scalar
+// fn, and srgb_to_dkl_kernel fn itself) IS documented, so this
+// allow only suppresses the macro-emitted noise.
+#![allow(missing_docs)]
+
 use cubecl::prelude::*;
 
 /// 256-entry sRGB byte → linear-normalized f32 LUT. Matches
