@@ -687,12 +687,13 @@ impl<R: Runtime> Cvvdp<R> {
 
         let n0 = (width as usize) * (height as usize);
         // Source-byte buffers are u32-slot arrays of length `n0 * 3`
-        // — one byte per slot, RGBRGB row-major. Matches what
-        // `srgb_to_dkl_kernel` expects.
-        let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0 * 3]));
-        // Persistent host-side widening scratch (tick 234). The fill
-        // happens per dispatch but allocation is amortised across calls.
-        let src_u32_scratch: Vec<u32> = vec![0u32; n0 * 3];
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into one u32
+        // for upload (R | G<<8 | B<<16). Length = n0, not n0*3.
+        let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0]));
+        // Persistent host-side packing scratch (tick 234 + T4.L). The
+        // pack happens per dispatch; allocation is amortised across
+        // calls. One u32 per pixel.
+        let src_u32_scratch: Vec<u32> = vec![0u32; n0];
         let srgb_lut = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
 
         let build_pyramid = |client: &ComputeClient<R>| -> Vec<Level> {
@@ -926,9 +927,18 @@ impl<R: Runtime> Cvvdp<R> {
         // replaces the per-call `Vec<u32>` alloc + collect — at 12 MP
         // that's a ~144 MB allocator round-trip the warm-ref loop
         // otherwise pays per DIST candidate.
-        debug_assert_eq!(self.src_u32_scratch.len(), n0 * 3);
-        for (dst, &b) in self.src_u32_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = u32::from(b);
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16), instead of widening each byte into its
+        // own u32 (4× expansion). Cuts the host → GPU upload from 144
+        // MB to 48 MB at 12 MP and proportionally shrinks the
+        // `create_from_slice` allocation. The kernel unpacks the 3
+        // bytes per pixel with 3 shifts + 3 ANDs — trivial vs the
+        // upload time saved (nsys showed cuMemcpyHtoDAsync was 55% of
+        // wall time pre-T4.L).
+        debug_assert_eq!(self.src_u32_scratch.len(), n0);
+        for (dst, triple) in self.src_u32_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
         self.src_ref = self
             .client
@@ -947,7 +957,7 @@ impl<R: Runtime> Cvvdp<R> {
                 &self.client,
                 cube_count,
                 cube_dim,
-                ArrayArg::from_raw_parts(self.src_ref.clone(), n0 * 3),
+                ArrayArg::from_raw_parts(self.src_ref.clone(), n0),
                 ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
                 ArrayArg::from_raw_parts(a_handle, n0),
                 ArrayArg::from_raw_parts(rg_handle, n0),

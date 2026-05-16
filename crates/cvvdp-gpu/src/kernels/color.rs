@@ -127,10 +127,16 @@ pub fn srgb_to_dkl_kernel(
         terminate!();
     }
 
-    let base = idx * 3;
-    let r = src[base];
-    let g = src[base + 1];
-    let b = src[base + 2];
+    // T4.L (2026-05-16): packed-RGBA upload. Host packs 3 sRGB bytes
+    // per pixel into one u32 (R in low byte, then G, then B; alpha
+    // unused). Cuts the H→D transfer 3× vs the prior u8-widened-to-u32
+    // path (144 MB → 48 MB at 12 MP); the per-iter `create_from_slice`
+    // alloc shrinks in proportion. 3 bit-shifts + 3 ANDs per pixel are
+    // free relative to the upload time saved.
+    let packed = src[idx];
+    let r = packed & 0xffu32;
+    let g = (packed >> 8u32) & 0xffu32;
+    let b = (packed >> 16u32) & 0xffu32;
 
     let lin_r = lut[r as usize];
     let lin_g = lut[g as usize];
