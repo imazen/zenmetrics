@@ -64,6 +64,26 @@ fn safe_pow_lp(x: f32, p: f32) -> f32 {
 
 /// cvvdp's `lp_norm` with `normalize=True`. Matches:
 /// `safe_pow(sum_i(safe_pow(x_i, p)) / N, 1/p)` where N = `values.len()`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::lp_norm_mean;
+///
+/// // Empty input → 0 (documented contract).
+/// assert_eq!(lp_norm_mean(&[], 2.0), 0.0);
+///
+/// // For a uniform constant input, lp_norm_mean ≈ that constant
+/// // (mean-of-N-copies normalization cancels). The small eps-tail
+/// // bias from safe_pow is < 0.01.
+/// let v = lp_norm_mean(&[3.0_f32; 4], 2.0);
+/// assert!((v - 3.0).abs() < 0.01, "got {v}, expected ≈ 3");
+///
+/// // Sign-insensitive via |x| — negatives don't break the result.
+/// let pos = lp_norm_mean(&[3.0_f32, 4.0], 2.0);
+/// let mixed = lp_norm_mean(&[-3.0_f32, 4.0], 2.0);
+/// assert!((pos - mixed).abs() < 1e-5);
+/// ```
 #[must_use]
 pub fn lp_norm_mean(values: &[f32], p: f32) -> f32 {
     if values.is_empty() {
