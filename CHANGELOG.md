@@ -56,6 +56,18 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### cvvdp-gpu (docs)
+
+- **README "GPU memory budgeting" section** — documents the new
+  `estimate_gpu_memory_bytes` + `recommend_parallel` +
+  `PARALLEL_SAFETY_FACTOR` API surface added in ticks 398-399.
+  Includes a size-vs-budget table at standard 4K geometry
+  showing PARALLEL caps for 8 GB and 24 GB GPUs at six image
+  sizes (64² through 12 MP), a code example for how a sweep
+  worker should derive `PARALLEL`, and guidance on when to
+  tighten / loosen the safety factor (warm-ref batches → 1.2;
+  mixed CPU+GPU process → 2.0). Tick 400.
+
 #### cvvdp-gpu (api)
 
 - **`cvvdp_gpu::recommend_parallel(free_gpu_bytes, width, height)

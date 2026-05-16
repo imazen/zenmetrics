@@ -166,6 +166,62 @@ that optimization's drift budget.
 | `hip`  | no  | Compile the cubecl-hip backend. |
 | `parity-goldens` | no | Compile `tests/parity.rs`, which fetches the pycvvdp v0.5.4 goldens manifest from R2 and checks JOD parity. Off by default so `cargo test` stays offline. |
 
+## GPU memory budgeting — concurrency cap for batch sweeps
+
+When running many `Cvvdp` instances against a shared GPU (one
+process per image-size group in a sweep, multiple worker threads
+per box, etc.), the crate exposes two helpers that let callers
+size `PARALLEL` against the device's free memory without
+reinventing the buffer-accounting math.
+
+- `cvvdp_gpu::estimate_gpu_memory_bytes(width, height) -> Option<usize>`
+  — static-analysis predictor that sums every persistent buffer
+  `Cvvdp::new` allocates: the three pyramids (`gauss_ref`,
+  `bands_ref`, `bands_dis`), per-level `d_scratch` (6 plane types
+  × 3 channels), `weber_scratch` (non-baseband levels only),
+  source byte buffers, `partials`, `srgb_lut`, `logs_row`. Uses
+  ceil-div halving so it matches the actual allocator layout.
+  Returns `None` below the `PYRAMID_MIN_DIM × 2 = 8×8` threshold
+  (same precondition as `Cvvdp::new`).
+
+- `cvvdp_gpu::recommend_parallel(free_gpu_bytes, width, height) -> u32`
+  — bundles the predictor with `PARALLEL_SAFETY_FACTOR = 1.5` so
+  callers don't maintain the constant themselves. Always returns
+  at least 1 if image dims are valid (a single instance gets to
+  attempt scoring; OOM after that is a back-off signal, not
+  "no work").
+
+Worked example at standard 4K geometry:
+
+| Size            | `estimate_gpu_memory_bytes` | 8 GB GPU PARALLEL | 24 GB GPU PARALLEL |
+|-----------------|-----------------------------|-------------------|--------------------|
+|     64×64       | 0.8 MB                      | many              | many               |
+|    256×256      | 13 MB                       | 409               | 1228               |
+|    512×512      | 52 MB                       | 102               | 307                |
+|   1024×1024     | 208 MB                      | 25                | 76                 |
+|   2048×2048     | 833 MB                      | 6                 | 19                 |
+| 4096×3072 (12MP)| 2.5 GB                      | 2                 | 6                  |
+
+For a typical sweep worker:
+
+```rust,no_run
+# fn free_gpu_bytes() -> u64 { 0 } // cudarc / wgpu query goes here
+use cvvdp_gpu::recommend_parallel;
+let parallel = recommend_parallel(free_gpu_bytes(), 1024, 1024);
+println!("running {parallel} concurrent Cvvdp instances on this GPU");
+```
+
+`examples/cvvdp_mem_table.rs` prints the full size-vs-budget
+table — useful for choosing `PARALLEL` for a specific GPU SKU.
+
+The 1.5× safety factor in `PARALLEL_SAFETY_FACTOR` covers per-call
+transient uploads (the per-DIST `srgb` byte buffer), cubecl runtime
+metadata + page alignment, NVRTC PTX cache, and driver-side
+reservations. Tighten to ~1.2 when batching with `warm_reference`
+(no per-DIST allocator churn); loosen to ~2.0 if the same process
+also runs CPU-side decode/encode in the same memory namespace —
+call `estimate_gpu_memory_bytes` directly and divide yourself.
+
 ## Sweep tooling — `CVVDP_COLUMN_NAME`
 
 The crate exports a stable column-name constant
