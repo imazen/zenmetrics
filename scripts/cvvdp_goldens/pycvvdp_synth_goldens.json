@@ -91,6 +91,14 @@
       ],
       "construction": "synth_pair_11x19_offset",
       "jod": 9.461594581604004
+    },
+    "synth_128x128_chroma_shift": {
+      "shape_hw": [
+        128,
+        128
+      ],
+      "construction": "synth_pair_128_chroma_shift",
+      "jod": 9.663602828979492
     }
   }
 }

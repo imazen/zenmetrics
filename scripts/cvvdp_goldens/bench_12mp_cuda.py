@@ -55,6 +55,25 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_128_chroma_shift(w=128, h=128):
+    """128x128 chroma-only distortion (G+16). Mirrors
+    `synth_pair_256_chroma_shift` at a smaller size — same
+    construction, different pyramid depth (6 levels at 128² vs
+    7-8 at 256²). Tests that the RG/VY isolation behavior is
+    consistent across pyramid depths.
+
+    Bit-stable with Rust's inline construction (same `+16 G` clamp).
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = ref.copy()
+    dist[..., 1] = np.clip(ref[..., 1].astype(np.int16) + 16, 0, 255).astype(np.uint8)
+    return ref, dist
+
+
 def synth_pair_11x19_offset(w=11, h=19):
     """11x19 tiny-odd-dim fixture (~ 209 px) with the same modular
     offset construction. Tiniest viable odd-dim pyramid case
@@ -403,8 +422,17 @@ def main():
     tiny_ref, tiny_dist = synth_pair_11x19_offset()
     print("11x19 tiny-odd offset golden:")
     tiny_jod, _ = metric.predict(tiny_dist, tiny_ref, dim_order="HWC")
-    print(f"  jod = {float(tiny_jod):.4f}\n")
+    print(f"  jod = {float(tiny_jod):.4f}")
     tiny_jod_val = float(tiny_jod)
+
+    # 128x128 chroma_shift fixture. Mirrors `synth_pair_256_chroma_shift`
+    # at a different pyramid depth to test RG/VY-isolation behavior
+    # across pyramid depths.
+    cs128_ref, cs128_dist = synth_pair_128_chroma_shift()
+    print("128x128 chroma_shift golden:")
+    cs128_jod, _ = metric.predict(cs128_dist, cs128_ref, dim_order="HWC")
+    print(f"  jod = {float(cs128_jod):.4f}\n")
+    cs128_jod_val = float(cs128_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -501,6 +529,11 @@ def main():
                 "shape_hw": [19, 11],
                 "construction": "synth_pair_11x19_offset",
                 "jod": tiny_jod_val,
+            },
+            "synth_128x128_chroma_shift": {
+                "shape_hw": [128, 128],
+                "construction": "synth_pair_128_chroma_shift",
+                "jod": cs128_jod_val,
             },
         },
     }

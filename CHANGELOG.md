@@ -722,6 +722,28 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 633 — add a 128×128 chroma_shift parity fixture (new
+distortion type at a non-256 size). Mirrors the existing
+`synth_256x256_chroma_shift` (G channel +16, R/B unchanged) at
+a different pyramid depth: 6 levels at 128² vs 7-8 at 256². Tests
+that the RG/VY-isolation behavior of the DKL stage is consistent
+across pyramid depths — a refactor that introduced a depth-
+dependent chroma bug would surface as a 128 vs 256 diff.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_128_chroma_shift(w=128, h=128)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.663603` (generated locally via pinned `.venv`).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_128x128_chroma_shift`
+  host-scalar parity test (inline +16 G construction same as
+  the 256² siblings in pipeline_color.rs).
+
+Measured result: host_scalar JOD = 9.663603, pycvvdp golden =
+9.663603, **|diff| = 0.000000** — bit-identical at f32 precision.
+First non-256² coverage of the chroma-only distortion type.
+
 Tick 632 — add an 11×19 (~209 px) TINY odd-dim synth-offset
 parity fixture. Tiniest viable odd-dim pyramid case — min dim
 = 11, just above `PYRAMID_MIN_DIM*2 = 8`. The pyramid is only

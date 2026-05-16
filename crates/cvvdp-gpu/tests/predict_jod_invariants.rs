@@ -25,6 +25,45 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_128x128_chroma_shift() {
+    // Tick 633: host-scalar parity vs pycvvdp v0.5.4 on a 128×128
+    // chroma-only distortion (G channel +16, R/B unchanged).
+    // Mirrors the 256² chroma_shift fixture at a different pyramid
+    // depth (6 levels at 128² vs 7-8 at 256²) — tests that the
+    // RG/VY-isolation behavior of the DKL stage is consistent
+    // across pyramid depths.
+    //
+    // The pycvvdp golden was generated locally via the pinned
+    // `.venv` (pycvvdp 0.5.4 on CPU torch). Stored in
+    // `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`.
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_128x128_chroma_shift");
+    let (w, h) = (128_usize, 128_usize);
+    let ref_b = common::synth_pair_ref(w, h);
+    // Same +16 G-channel construction as the 256² chroma_shift tests
+    // in pipeline_color.rs.
+    let dist_b: Vec<u8> = ref_b
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 128x128 chroma_shift: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_11x19_tiny_odd() {
     // Tick 632: host-scalar parity vs pycvvdp v0.5.4 on an 11×19
     // (~209 px) TINY odd-dim synth pair. Tiniest viable odd-dim
