@@ -392,6 +392,16 @@ contract directly — useful for the same documentation-of-intent
 reason as the channel-ordering invariants (564-566). Static-
 assert count is now 114 across 11 test files.
 
+Tick 568 added 5 more sign-bit invariants on the remaining major
+scalar constants:
+  - `JOD_A.is_sign_positive()` — met2jod must decrease with d
+  - `IMAGE_INT.is_sign_positive()` — multiplicative pool weight
+  - `KERNEL_A.is_sign_positive()` — Burt-Adelson parameter ∈ (0, 0.5)
+  - `CSF_BASEBAND_RHO.is_sign_positive()` — spatial frequency in cy/deg
+  - `SENSITIVITY_CORRECTION_DB.is_sign_negative()` — calibrated
+    attenuation (not amplification)
+Static-assert count is now 119 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

@@ -66,6 +66,15 @@ const _: () = {
         GAUSS5[0].to_bits() == GAUSS5[4].to_bits(),
         "GAUSS5 outer taps must be palindromic",
     );
+    // Tick 568: sign-bit invariant. KERNEL_A is the Burt-Adelson
+    // parameter `a` ∈ (0.25, 0.5) for sensible 5-tap Gaussians.
+    // Negative KERNEL_A would make GAUSS5 = [+, 0.25, -, 0.25, +]
+    // (outer taps become positive, centre tap becomes negative),
+    // breaking the low-pass character of the kernel.
+    assert!(
+        KERNEL_A.is_sign_positive(),
+        "KERNEL_A must be positive (Burt-Adelson kernel parameter ∈ (0, 0.5))",
+    );
 };
 
 #[rustfmt::skip]

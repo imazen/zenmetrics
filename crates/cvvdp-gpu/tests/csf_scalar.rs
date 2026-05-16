@@ -43,6 +43,22 @@ const _: () = {
         CSF_BASEBAND_RHO.to_bits() == 0.1_f32.to_bits(),
         "CSF_BASEBAND_RHO drifted from cvvdp v0.5.4 baseband override = 0.1 cy/deg",
     );
+    // Tick 568: sign-bit invariants on the CSF scalars. Both are
+    // semantic contracts the per-value bit-pins already capture
+    // but are worth pinning directly:
+    //   - CSF_BASEBAND_RHO > 0: it's a spatial frequency (cy/deg);
+    //     negative would be physically meaningless.
+    //   - SENSITIVITY_CORRECTION_DB < 0: cvvdp's calibrated peak-
+    //     match correction is slightly attenuating; a sign flip
+    //     would amplify the CSF instead.
+    assert!(
+        CSF_BASEBAND_RHO.is_sign_positive(),
+        "CSF_BASEBAND_RHO must be positive (spatial frequency in cy/deg)",
+    );
+    assert!(
+        SENSITIVITY_CORRECTION_DB.is_sign_negative(),
+        "SENSITIVITY_CORRECTION_DB must be negative (calibrated attenuation, not amplification)",
+    );
 };
 
 // Goldens: each tuple's L_bkg is documented in linear cd/m²; the

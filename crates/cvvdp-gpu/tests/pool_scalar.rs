@@ -117,6 +117,24 @@ const _: () = {
         BETA_SPATIAL.to_bits() < BETA_CH.to_bits(),
         "BETA hierarchy: BETA_SPATIAL must be < BETA_CH",
     );
+    // Tick 568: sign-bit invariants on the remaining pool scalars.
+    // `f32::is_sign_positive` is const fn since Rust 1.83. Each pin
+    // captures a semantic contract the per-value bit-pin already
+    // satisfies implicitly:
+    //   - JOD_A > 0: met2jod = 10 - JOD_A·d^JOD_EXP must DECREASE
+    //     with d (negative slope on d means worse distortion → lower
+    //     JOD). Negative JOD_A would make JOD INCREASE with d.
+    //   - IMAGE_INT > 0: used as a multiplicative weight in the
+    //     spatial-pool reduction; negative would flip the sign of
+    //     every pool partial.
+    assert!(
+        JOD_A.is_sign_positive(),
+        "JOD_A must be positive (negative slope on d means met2jod must decrease with d)",
+    );
+    assert!(
+        IMAGE_INT.is_sign_positive(),
+        "IMAGE_INT must be positive (multiplicative pool weight)",
+    );
 };
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
