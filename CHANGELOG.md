@@ -237,6 +237,16 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (tests)
+
+- **`tests/lib_reexports.rs`** — 5 pins on the `lib.rs` re-export
+  surface: `PerfMode::default()` resolves, `CvvdpParams::PLACEHOLDER`
+  resolves, and `PARALLEL_SAFETY_FACTOR` / `estimate_gpu_memory_bytes` /
+  `recommend_parallel` re-exports each match the original
+  `pipeline::*` value/output. A refactor that drops one of these
+  re-exports — or feature-gates them — trips here before silently
+  breaking downstream callers. Tick 464.
+
 #### cvvdp-gpu (examples)
 
 - **`examples/cvvdp_mem_table.rs`** — refactored to use the public
