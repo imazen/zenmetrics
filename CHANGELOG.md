@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`gaussian_blur_sigma3` doctest** — added `# Examples`: output
+  length matches input, DC preservation (uniform → uniform within
+  1e-5). Tick 457.
+
 - **`gausspyr_expand_scalar` doctest** — added `# Examples`: 4×4 → 8×8
   (standard 2× upscale), 4×4 → 7×7 (odd target — supports `[2*sw-1, 2*sw]`
   range per debug_assert). Tick 456.

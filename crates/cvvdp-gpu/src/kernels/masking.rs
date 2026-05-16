@@ -187,6 +187,25 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 /// `phase_uncertainty`. Allocates the intermediate buffer; not for
 /// hot paths. Returns a `w × h` `Vec<f32>`. Reflect padding at the
 /// boundary, matching torchvision.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+///
+/// // Output length matches input.
+/// let src = vec![0.0_f32; 16 * 16];
+/// let out = gaussian_blur_sigma3(&src, 16, 16);
+/// assert_eq!(out.len(), 256);
+///
+/// // DC preservation: a uniform input passes through unchanged
+/// // (the 13-tap kernel sums to 1).
+/// let uniform = vec![5.0_f32; 16 * 16];
+/// let out = gaussian_blur_sigma3(&uniform, 16, 16);
+/// for &v in &out {
+///     assert!((v - 5.0).abs() < 1e-5);
+/// }
+/// ```
 #[must_use]
 pub fn gaussian_blur_sigma3(src: &[f32], w: usize, h: usize) -> Vec<f32> {
     debug_assert_eq!(src.len(), w * h);
