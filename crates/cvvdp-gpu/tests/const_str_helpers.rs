@@ -38,6 +38,14 @@ const _: () = assert!(const_str::contains(b"abcdef", b"f")); // at end
 const _: () = assert!(!const_str::contains(b"hello world", b"xyz"));
 const _: () = assert!(!const_str::contains(b"hi", b"hello"));
 
+// bytes_eq: positive cases
+const _: () = assert!(const_str::bytes_eq(b"hello", b"hello"));
+const _: () = assert!(const_str::bytes_eq(b"", b"")); // empty == empty
+// bytes_eq: negative cases
+const _: () = assert!(!const_str::bytes_eq(b"hello", b"helloo")); // different length
+const _: () = assert!(!const_str::bytes_eq(b"hello", b"hellx")); // same length, different content
+const _: () = assert!(!const_str::bytes_eq(b"hello", b"")); // non-empty vs empty
+
 // Runtime test fns. Compile-time asserts above already guarantee
 // correctness, but the runtime fns let `cargo test` runners see
 // the test names and surface them in coverage reports / diffs.
@@ -81,4 +89,17 @@ fn contains_positive() {
 fn contains_negative() {
     assert!(!const_str::contains(b"hello world", b"xyz"));
     assert!(!const_str::contains(b"hi", b"hello"));
+}
+
+#[test]
+fn bytes_eq_positive() {
+    assert!(const_str::bytes_eq(b"hello", b"hello"));
+    assert!(const_str::bytes_eq(b"", b""));
+}
+
+#[test]
+fn bytes_eq_negative() {
+    assert!(!const_str::bytes_eq(b"hello", b"helloo"));
+    assert!(!const_str::bytes_eq(b"hello", b"hellx"));
+    assert!(!const_str::bytes_eq(b"hello", b""));
 }

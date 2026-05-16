@@ -53,6 +53,17 @@ const _: () = {
         gv[0] == b'v',
         "GOLDEN_VERSION must follow the v<N> convention (first byte = 'v')",
     );
+    // Tick 586: pin GOLDEN_VERSION to its exact current value so a
+    // version bump (e.g. to "v2") forces updating MANIFEST_URL's
+    // "/v1/" segment AND the runtime test fixtures in lockstep.
+    // Without this pin, a refactor that bumps GOLDEN_VERSION but
+    // forgets the URL would pass the "starts-with-v" check above
+    // and the version-segment contains-check below (because both
+    // would still report v1) — silently fetching the wrong manifest.
+    assert!(
+        const_str::bytes_eq(gv, b"v1"),
+        "GOLDEN_VERSION pinned to current value 'v1'; bump in lockstep with MANIFEST_URL `/v1/` segment",
+    );
 };
 
 // Tick 579 (refactored tick 584): `.contains(...)` invariants via

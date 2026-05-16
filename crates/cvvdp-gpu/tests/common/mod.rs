@@ -61,6 +61,13 @@ pub mod const_str {
         true
     }
 
+    /// `const fn` equivalent of `a == b` for byte slices. `[u8]: Eq`
+    /// isn't const-callable in stable Rust yet, but a length-check +
+    /// byte-loop is. Cheap to implement on top of `starts_with`.
+    pub const fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
+        a.len() == b.len() && starts_with(a, b)
+    }
+
     /// `const fn` equivalent of `s.contains(needle)`, both operating on
     /// raw byte slices. O(n·m) sliding window — fine for compile-time
     /// validation of short strings.

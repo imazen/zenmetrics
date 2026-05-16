@@ -580,6 +580,17 @@ haystack, needle at start/middle/end). 6 runtime test fns mirror
 the asserts so `cargo test` runners can name them in output.
 Static-assert count is now 198 across 12 test files.
 
+Tick 586 added a fourth helper `const_str::bytes_eq(a, b)` for
+const slice-equality (`[u8]: Eq` isn't const-callable). Used it
+to pin `GOLDEN_VERSION == "v1"` exactly in `goldens_metadata.rs`
+— previously only the v-prefix was pinned. With this, a refactor
+that bumps `GOLDEN_VERSION = "v2"` without also updating
+`MANIFEST_URL`'s `/v1/` path segment fails to compile (instead of
+passing both prefix and contains checks while silently fetching
+the wrong manifest). Also adds 5 compile-time + 2 runtime tests
+on the new helper. Static-assert count is now 204 across 12 test
+files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
