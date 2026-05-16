@@ -7,6 +7,11 @@
 // digits document what cvvdp shipped). The crate-wide allow on
 // `clippy::excessive_precision` lives in lib.rs.
 
+/// 32-point uniform-in-log10 axis along the background-luminance
+/// dimension of the cvvdp castleCSF LUT. Range
+/// `[log10(0.005), log10(10_000)] = [-2.301, 4.0]` cd/m². Used as
+/// the `xs` axis for `interp1_uniform` queries against
+/// `LOG_S_O0_C*[k * 32 + j]` rows.
 pub const LOG_L_BKG_AXIS: [f32; 32] = [
     -2.3010299957e+00_f32, -2.0977709635e+00_f32, -1.8945119314e+00_f32, -1.6912528993e+00_f32,
     -1.4879938672e+00_f32, -1.2847348351e+00_f32, -1.0814758030e+00_f32, -8.7821677084e-01_f32,
@@ -18,6 +23,11 @@ pub const LOG_L_BKG_AXIS: [f32; 32] = [
     3.3902229036e+00_f32, 3.5934819358e+00_f32, 3.7967409679e+00_f32, 4.0000000000e+00_f32,
 ];
 
+/// 32-point uniform-in-log10 axis along the spatial-frequency
+/// dimension of the cvvdp castleCSF LUT. Range
+/// `[log10(0.1), log10(64)] = [-1.0, 1.806]` cy/deg. Queried with
+/// `interp1_clamped` (binary search) because the underlying linear
+/// rho values aren't uniformly spaced even though log10(rho) is.
 pub const LOG_RHO_AXIS: [f32; 32] = [
     -1.0000000000e+00_f32, -9.0947806536e-01_f32, -8.1895613071e-01_f32, -7.2843419607e-01_f32,
     -6.3791226142e-01_f32, -5.4739032678e-01_f32, -4.5686839213e-01_f32, -3.6634645749e-01_f32,
@@ -29,6 +39,11 @@ pub const LOG_RHO_AXIS: [f32; 32] = [
     1.5346141700e+00_f32, 1.6251361047e+00_f32, 1.7156580393e+00_f32, 1.8061799740e+00_f32,
 ];
 
+/// Achromatic-channel (A) sensitivity LUT for cvvdp v0.5.4's
+/// `castleCSF(csf_version='weber_fixed_size')`. Layout:
+/// `LOG_S_O0_C1[l_idx * 32 + rho_idx]` returns
+/// `log10(sensitivity)` at `LOG_L_BKG_AXIS[l_idx]` and
+/// `LOG_RHO_AXIS[rho_idx]`. 32 × 32 = 1024 entries.
 pub const LOG_S_O0_C1: [f32; 1024] = [
     5.4041478972e-01_f32, 6.6136503444e-01_f32, 7.6722500215e-01_f32, 8.5664595859e-01_f32,
     9.2960058042e-01_f32, 9.8604756886e-01_f32, 1.0259246227e+00_f32, 1.0491380343e+00_f32,
@@ -288,6 +303,8 @@ pub const LOG_S_O0_C1: [f32; 1024] = [
     7.5524444794e-01_f32, 5.0821668758e-01_f32, 2.4445364777e-01_f32, -3.5926957671e-02_f32,
 ];
 
+/// Red-green chromatic-opponent (Rg) sensitivity LUT — same layout
+/// as `LOG_S_O0_C1`. 32 × 32 = 1024 entries.
 pub const LOG_S_O0_C2: [f32; 1024] = [
     4.6120119988e-01_f32, 5.0091552130e-01_f32, 5.3856127287e-01_f32, 5.7402135969e-01_f32,
     6.0712102971e-01_f32, 6.3760167537e-01_f32, 6.6508542412e-01_f32, 6.8903054489e-01_f32,
@@ -547,6 +564,8 @@ pub const LOG_S_O0_C2: [f32; 1024] = [
     1.4359855186e+00_f32, 1.3343269418e+00_f32, 1.2307772985e+00_f32, 1.1253547264e+00_f32,
 ];
 
+/// Violet-yellow chromatic-opponent (Vy) sensitivity LUT — same
+/// layout as `LOG_S_O0_C1`. 32 × 32 = 1024 entries.
 pub const LOG_S_O0_C3: [f32; 1024] = [
     5.9308493457e-02_f32, 1.0720915603e-01_f32, 1.5258869571e-01_f32, 1.9526668099e-01_f32,
     2.3497632479e-01_f32, 2.7132829645e-01_f32, 3.0376549495e-01_f32, 3.3151377628e-01_f32,
@@ -806,4 +825,8 @@ pub const LOG_S_O0_C3: [f32; 1024] = [
     7.8741828184e-01_f32, 6.8507703229e-01_f32, 5.8054022212e-01_f32, 4.7381943083e-01_f32,
 ];
 
+/// cvvdp v0.5.4's eccentricity-falloff sigma `ge_sigma = 1.5`.
+/// Carried for fidelity with the source JSON; not consumed by the
+/// current still-image pipeline (eccentricity-aware paths are
+/// future work).
 pub const GE_SIGMA: f32 = 1.5_f32;

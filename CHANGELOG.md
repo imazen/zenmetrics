@@ -239,6 +239,15 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`csf_lut/v0_5_4.rs` LUT constant docstrings** — six previously-
+  undocumented public LUT constants re-exported via
+  `pub use csf_lut_v0_5_4::*`: `LOG_L_BKG_AXIS` (uniform-in-log10
+  background-luminance axis, `[-2.301, 4.0]`), `LOG_RHO_AXIS`
+  (uniform-in-log10 spatial-frequency axis, `[-1.0, 1.806]`),
+  `LOG_S_O0_C1/C2/C3` (1024-entry A/Rg/Vy sensitivity tables with
+  the `l_idx * 32 + rho_idx` layout), `GE_SIGMA` (eccentricity-
+  falloff scaffolding). Tick 438.
+
 - **`CsfChannel` variant docstrings** — `A` (achromatic /
   luminance), `Rg` (red-green opponent), `Vy` (violet-yellow
   opponent). Three previously-undocumented variants surfaced by
