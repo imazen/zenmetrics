@@ -228,6 +228,23 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
     ),
 };
 
+/// The pinned [`gfxdisp/ColorVideoVDP`](https://github.com/gfxdisp/ColorVideoVDP)
+/// reference version this implementation tracks for parity. Used by:
+///
+/// - `kernels/csf_lut/v0_5_4.rs` (vendored sensitivity LUT)
+/// - `kernels::csf::csf_lut_v0_5_4` (re-export module)
+/// - `tests/parity.rs::manifest_fetches` (asserts manifest matches)
+/// - `tests/common/mod.rs` (`GOLDEN_VERSION = "v1"`, the R2 prefix
+///   under which goldens for THIS reference live)
+/// - `crates/cvvdp-gpu/docs/PORT_STATUS.md` ("Reference version pin")
+/// - `scripts/cvvdp_goldens/requirements.txt` (`pycvvdp==0.5.4`)
+///
+/// When bumping the reference version: update this const + every
+/// site listed above in the same commit. See
+/// `docs/PORT_STATUS.md#reference-version-pin` for the full
+/// procedure.
+pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
+
 /// Failure modes for `Cvvdp::*` methods. Implements
 /// `std::error::Error` so callers can use `?` against
 /// `Box<dyn Error>` or `anyhow::Error` as usual.

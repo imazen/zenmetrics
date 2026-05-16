@@ -604,6 +604,22 @@ const blocks:
 Comment-only updates; no code change, no behavior change. Doc
 maintenance like tick 583 did for lib_reexports.rs.
 
+Tick 588 added a new pub const `cvvdp_gpu::PYCVVDP_REFERENCE_VERSION = "v0.5.4"`
+in `lib.rs` to centralize the pinned reference-version string
+that previously appeared in 6+ places (`tests/parity.rs`,
+`kernels/csf_lut/v0_5_4.rs` filename, csf.rs module name,
+PORT_STATUS.md, CHANGELOG, requirements.txt).
+
+The runtime test `tests/parity.rs::manifest_fetches` now sources
+its expected version from `PYCVVDP_REFERENCE_VERSION` instead of
+the hardcoded string — when the reference bumps, this test
+follows automatically.
+
+Also adds 3 compile-time format invariants on the new const:
+non-empty, starts with `v`, contains `.` — catches a typo like
+`v054` that breaks the `vX.Y.Z` convention. Static-assert count
+is now 207 across 12 test files (+3 from tick 587's 204).
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
