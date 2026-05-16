@@ -112,6 +112,17 @@ fn compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend() {
     // Tick 212 follow-up: validates the warm-ref host-pool variant
     // on the cpu runtime. Batch CPU scoring against a warmed REF
     // should produce the same JOD as the cold-ref host_pool path.
+    //
+    // Tick 496: strengthened from 0.005 tolerance to bit-equality.
+    // The cpu runtime executes every kernel sequentially (no GPU
+    // atomics → no nondeterminism), and the host_pool path bypasses
+    // the GPU Atomic<f32>::fetch_add pool kernel entirely
+    // (lp_norm_mean is deterministic sequential f32). Both halves
+    // of the warm-vs-cold comparison run the same Weber+CSF+masking
+    // dispatch on REF and DIST, then fold via the same host pool
+    // — output should be bit-identical. Catches a refactor that
+    // accidentally introduces nondeterminism on the warm-ref path
+    // (e.g. accumulating across calls without resetting a scratch).
     let client = Backend::client(&Default::default());
     let (w, h) = (32u32, 32u32);
     let geom = DisplayGeometry::STANDARD_4K;
@@ -129,11 +140,16 @@ fn compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend() {
         .compute_dkl_jod_host_pool_with_warm_ref(&dist_b, ppd)
         .expect("warm host_pool on cpu");
 
-    let diff = (cold - warm).abs();
-    eprintln!("cpu cold host_pool = {cold:.6}, warm host_pool = {warm:.6}, |diff| = {diff:.6}");
-    assert!(
-        diff < 0.005,
-        "cpu warm host_pool {warm:.6} diverges from cold {cold:.6} by {diff:.6}"
+    eprintln!(
+        "cpu cold host_pool = {cold:.6} ({:#010x}), warm host_pool = {warm:.6} ({:#010x})",
+        cold.to_bits(),
+        warm.to_bits(),
+    );
+    assert_eq!(
+        cold.to_bits(),
+        warm.to_bits(),
+        "cpu warm host_pool {warm} not bit-identical to cold {cold}: the cpu runtime + \
+         sequential host pool path should be deterministic across warm/cold dispatches",
     );
 }
 

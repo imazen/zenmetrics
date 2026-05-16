@@ -54,6 +54,23 @@ Workspace conventions per the global rules:
   host reference computation — caught when running the full
   suite after tightening shadow_jod tolerances.
 
+### Changed
+
+#### cvvdp-gpu (tests)
+
+- **`compute_dkl_jod_host_pool_with_warm_ref_runs_on_cpu_backend`**
+  (in `cpu_backend.rs`) — tightened from 0.005 JOD tolerance to
+  `to_bits()` bit-equality between cold-ref `compute_dkl_jod_host_pool`
+  and warm-ref `compute_dkl_jod_host_pool_with_warm_ref` on the
+  cubecl-cpu runtime. The cpu runtime executes every kernel
+  sequentially (no GPU atomic-add nondeterminism), and the
+  host_pool path uses sequential `lp_norm_mean` (no `Atomic<f32>::fetch_add`),
+  so warm and cold dispatches MUST produce bit-identical f32 JOD
+  on the same input. Catches a refactor that introduces accidental
+  nondeterminism on the warm-ref path (e.g. accumulating across
+  calls without resetting a scratch). Confirmed bit-equal at
+  `0x4116b771` on the synth_pair 32×32 corpus. Tick 496.
+
 ### Added
 
 #### cvvdp-gpu (tests)
