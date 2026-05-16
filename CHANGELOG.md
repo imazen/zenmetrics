@@ -722,6 +722,18 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 605 — tighten `recommend_parallel`'s doctest claim from the
+weak `assert!(p >= 2)` to the actual `(10..=40).contains(&p)`
+range that the existing runtime test
+`recommend_parallel_matches_documented_examples`
+(tests/pipeline_score.rs:2220) pins. The old `>= 2` underclaim
+risked misleading callers into provisioning ~5× fewer concurrent
+instances than the formula actually recommends for the
+8 GB / 1 MP case. Also added a second example covering the
+24 GB / 12 MP (3090/4090 class) configuration with its `3..=10`
+range pin, matching the existing runtime
+`p_24gb_12mp` test case. Docs-only change; doctest passes.
+
 Tick 604 — compile-time bit-pin promotion of the 9
 `SRGB_LINEAR_TO_DKL` element magnitudes in
 `tests/color_scalar.rs`. The existing runtime test

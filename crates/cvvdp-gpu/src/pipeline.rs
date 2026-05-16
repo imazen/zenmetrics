@@ -618,7 +618,17 @@ pub const PARALLEL_SAFETY_FACTOR: f64 = 1.5;
 ///
 /// // RTX 3070 (8 GB) running 1024² scoring:
 /// let p = recommend_parallel(8 * 1024 * 1024 * 1024, 1024, 1024);
-/// assert!(p >= 2);  // 8 GB easily fits 2+ instances at 1 MP
+/// // At 1 MP per instance after the 1.5× safety factor, 8 GB
+/// // fits 10-40 concurrent. The wide band is the safety factor's
+/// // play vs. the actual per-instance cost (~330 MB at 1 MP).
+/// // Pinned by `recommend_parallel_matches_documented_examples`
+/// // in tests/pipeline_score.rs.
+/// assert!((10..=40).contains(&p));
+///
+/// // 24 GB / 12 MP (4096×3072) — RTX 3090/4090 class:
+/// let p_4090_12mp = recommend_parallel(24 * 1024 * 1024 * 1024, 4096, 3072);
+/// // 12 MP per instance is ~2.5 GB after safety, so 24 GB fits ~3-10.
+/// assert!((3..=10).contains(&p_4090_12mp));
 /// ```
 #[must_use]
 pub fn recommend_parallel(free_gpu_bytes: u64, width: u32, height: u32) -> u32 {
