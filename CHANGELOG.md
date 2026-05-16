@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/band_weights_invariants.rs`** — eight invariant pins on
+  `flatten_band_weights` and `precomputed_band_weights` covering
+  edges + structural properties the existing pointwise test missed:
+  empty input → empty output with zero capacity; length invariant
+  `out.len() == weights.len() * 3` across n ∈ {0, 1, 2, 3, 5, 8,
+  16, 50}; documented `flat[level * 3 + channel]` indexing
+  contract; NaN/±∞/-0.0 bit-passthrough; `precomputed_band_weights`
+  length agrees with `band_frequencies` across 9 image sizes
+  (square + non-square 16² up to 4K); all-finite + strictly-positive
+  output across log_L_bkg ∈ [-1.0, 3.0] (0.1 cd/m² dim through
+  1000 cd/m² HDR peak); determinism via `to_bits()` equality;
+  end-to-end flatten-then-index round-trip pinning the
+  `weight_band_kernel` consumer contract. Tick 416.
+
 - **`tests/display_geometry.rs::ppd_is_*`** — four invariant tests
   on `DisplayGeometry::pixels_per_degree`: (1) positive + finite +
   in realistic [5, 500] range across phone, tablet, desktop,
