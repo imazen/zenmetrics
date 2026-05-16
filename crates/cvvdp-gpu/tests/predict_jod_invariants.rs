@@ -95,6 +95,43 @@ fn output_responds_to_distortion_magnitude() {
 }
 
 #[test]
+fn flat_vs_flat_yields_max_jod_regardless_of_brightness() {
+    // Tick 542: pin cvvdp's spatial-contrast contract. A flat ref +
+    // flat dist (even pure-black vs pure-white) gives JOD ≈ 10
+    // because the Weber-contrast pyramid measures spatial contrast
+    // WITHIN an image, not absolute differences BETWEEN two images.
+    // Both flat inputs have zero contrast at every band → D = 0 →
+    // JOD = 10 (the ceiling).
+    //
+    // A naive intuition would expect "pure black vs pure white" to
+    // be a maximally-different pair and produce JOD ≪ 10. cvvdp's
+    // design (matching the perceptual phenomenon of luminance
+    // adaptation) explicitly returns "no perceptible distortion"
+    // for this case. The pin guards against a refactor that adds
+    // an absolute-difference term — which would be wrong vs the
+    // pycvvdp reference and break parity tests.
+    let (w, h) = (32_usize, 32_usize);
+    let ref_black: Vec<u8> = vec![0u8; w * h * 3];
+    let dist_white: Vec<u8> = vec![255u8; w * h * 3];
+    let jod = predict_jod_still_3ch(&ref_black, &dist_white, w, h, dm(), ppd());
+    eprintln!("flat-vs-flat (black vs white): jod = {jod:.4}");
+    assert!(
+        (jod - 10.0).abs() < 1e-3,
+        "flat-vs-flat should give JOD ≈ 10 (cvvdp is a spatial-contrast metric, not \
+         absolute-difference); got {jod}",
+    );
+
+    // Equivalent test with mid-gray vs mid-gray — also flat.
+    let ref_gray: Vec<u8> = vec![128u8; w * h * 3];
+    let dist_gray: Vec<u8> = vec![64u8; w * h * 3];
+    let jod_gray = predict_jod_still_3ch(&ref_gray, &dist_gray, w, h, dm(), ppd());
+    assert!(
+        (jod_gray - 10.0).abs() < 1e-3,
+        "flat 128 vs flat 64 should give JOD ≈ 10 (same reason); got {jod_gray}",
+    );
+}
+
+#[test]
 #[should_panic(expected = "assertion")]
 fn panics_on_ref_dim_mismatch() {
     // The function asserts `ref_srgb.len() == width * height * 3`.
