@@ -141,9 +141,9 @@ pub fn infow_no_parent_kernel(
         + cu_inv[80] * v8;
 
     // outer sum: Σ_k inner_k · y[k], then divide by N (= 9).
-    let ss = (i0 * v0 + i1 * v1 + i2 * v2 + i3 * v3 + i4 * v4 + i5 * v5 + i6 * v6 + i7 * v7
-        + i8 * v8)
-        * (1.0_f32 / 9.0_f32);
+    let ss =
+        (i0 * v0 + i1 * v1 + i2 * v2 + i3 * v3 + i4 * v4 + i5 * v5 + i6 * v6 + i7 * v7 + i8 * v8)
+            * (1.0_f32 / 9.0_f32);
 
     let g = g_buf[(py_us + 1) * w_us + (px_us + 1)];
     let vv = vv_buf[(py_us + 1) * w_us + (px_us + 1)];

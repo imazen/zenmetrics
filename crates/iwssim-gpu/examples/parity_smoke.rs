@@ -31,11 +31,7 @@ fn rgb2gray_bt601_round(rgba: &[u8], w: u32, h: u32) -> Vec<f32> {
         // Round-half-to-even (Python's np.round semantic).
         let rounded = if y.fract().abs() == 0.5 {
             let f = y.floor();
-            if (f as i64) % 2 == 0 {
-                f
-            } else {
-                f + 1.0
-            }
+            if (f as i64) % 2 == 0 { f } else { f + 1.0 }
         } else {
             (y + 0.5).floor()
         };
@@ -53,8 +49,12 @@ fn load_rgb(path: &str) -> (Vec<u8>, u32, u32) {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let ref_path = args.next().expect("Usage: parity_smoke REF DIST [expected]");
-    let dis_path = args.next().expect("Usage: parity_smoke REF DIST [expected]");
+    let ref_path = args
+        .next()
+        .expect("Usage: parity_smoke REF DIST [expected]");
+    let dis_path = args
+        .next()
+        .expect("Usage: parity_smoke REF DIST [expected]");
     let expected: Option<f64> = args.next().and_then(|s| s.parse().ok());
 
     let (ref_rgb, rw, rh) = load_rgb(&ref_path);
@@ -70,9 +70,7 @@ fn main() {
 
     let client = CudaRuntime::client(&Default::default());
     let mut iw = Iwssim::<CudaRuntime>::new(client, rw, rh).expect("Iwssim::new");
-    let r = iw
-        .compute_gray(&ref_gray, &dis_gray)
-        .expect("compute_gray");
+    let r = iw.compute_gray(&ref_gray, &dis_gray).expect("compute_gray");
 
     println!("IW-SSIM (gray): {:.6}", r.score);
     println!("per-scale:");

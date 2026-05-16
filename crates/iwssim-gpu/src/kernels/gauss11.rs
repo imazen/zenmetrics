@@ -23,13 +23,7 @@ const TAPS: usize = 11;
 
 /// `out = conv1d(src, gauss11_1d)` along x; valid mode (out_w = in_w − 10).
 #[cube(launch_unchecked)]
-pub fn gauss11_h_kernel(
-    src: &Array<f32>,
-    dst: &mut Array<f32>,
-    in_h: u32,
-    in_w: u32,
-    out_w: u32,
-) {
+pub fn gauss11_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, in_h: u32, in_w: u32, out_w: u32) {
     let idx = ABSOLUTE_POS;
     let total = (in_h * out_w) as usize;
     if idx >= total {
@@ -112,13 +106,7 @@ pub fn gauss11_h_prod_kernel(
 /// `out = conv1d(src, gauss11_1d)` along y; valid mode (out_h = in_h − 10).
 /// Input width has already been shrunk by the horizontal pass.
 #[cube(launch_unchecked)]
-pub fn gauss11_v_kernel(
-    src: &Array<f32>,
-    dst: &mut Array<f32>,
-    out_h: u32,
-    in_h: u32,
-    w: u32,
-) {
+pub fn gauss11_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, out_h: u32, in_h: u32, w: u32) {
     let _ = in_h; // unused; kept for API symmetry with the H kernels.
     let idx = ABSOLUTE_POS;
     let total = (out_h * w) as usize;

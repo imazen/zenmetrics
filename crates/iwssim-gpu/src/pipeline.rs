@@ -199,14 +199,16 @@ impl<R: Runtime> Iwssim<R> {
             h = h.div_ceil(2);
             w = w.div_ceil(2);
         }
-        let scales: Vec<Scale> = dims.iter().map(|&(h, w)| Scale::new(&client, h, w)).collect();
+        let scales: Vec<Scale> = dims
+            .iter()
+            .map(|&(h, w)| Scale::new(&client, h, w))
+            .collect();
 
         let n_bytes_rgb = (width * height * 3) as usize;
         let src_u32_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes_rgb]));
         let src_u32_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes_rgb]));
 
-        let partials_len =
-            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
         let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; NUM_SLOTS as usize]));
 
@@ -267,10 +269,7 @@ impl<R: Runtime> Iwssim<R> {
 
     /// Score one distortion against the cached reference. Returns
     /// `Err(NoCachedReference)` if `set_reference` hasn't been called.
-    pub fn compute_with_reference(
-        &mut self,
-        dis_gray: &[f32],
-    ) -> Result<GpuIwssimResult> {
+    pub fn compute_with_reference(&mut self, dis_gray: &[f32]) -> Result<GpuIwssimResult> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
@@ -471,8 +470,7 @@ impl<R: Runtime> Iwssim<R> {
         // weighted_sum / iw_sum / plain_sum thread writes to its own
         // slot (no accumulation), and the finalizer overwrites sums.
         // So nothing needs clearing between calls.
-        let partials_len =
-            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
         let t = std::time::Instant::now();
         for s in 0..(self.scales.len() - 1) {
@@ -875,8 +873,7 @@ impl<R: Runtime> Iwssim<R> {
             let lp_bytes = self.client.read_one(sc.lp_ref.clone()).expect("lp read");
             let lp = f32::from_bytes(&lp_bytes);
             let lp_active = &lp[..n_lp];
-            let lp_mean: f64 =
-                lp_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
+            let lp_mean: f64 = lp_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
             let lp_rms = (lp_active
                 .iter()
                 .map(|&v| (v as f64) * (v as f64))
@@ -886,8 +883,7 @@ impl<R: Runtime> Iwssim<R> {
             let g_bytes = self.client.read_one(sc.g_ref.clone()).expect("g read");
             let g = f32::from_bytes(&g_bytes);
             let g_active = &g[..n_lp];
-            let g_mean: f64 =
-                g_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
+            let g_mean: f64 = g_active.iter().map(|&v| v as f64).sum::<f64>() / (n_lp as f64);
             let g_rms = (g_active
                 .iter()
                 .map(|&v| (v as f64) * (v as f64))
@@ -1031,13 +1027,24 @@ impl<R: Runtime> Iwssim<R> {
             let lp_bytes = self.client.read_one(sc.lp_ref.clone()).expect("lp read");
             let lp = f32::from_bytes(&lp_bytes);
             let lp_active = &lp[..(h as usize) * (w as usize)];
-            let lp_rms = (lp_active.iter().map(|&v| (v as f64) * (v as f64)).sum::<f64>()
+            let lp_rms = (lp_active
+                .iter()
+                .map(|&v| (v as f64) * (v as f64))
+                .sum::<f64>()
                 / lp_active.len() as f64)
                 .sqrt();
             let lp_nan = lp_active.iter().any(|v| v.is_nan());
             eprintln!(
                 "scale {} | n_dim {} | nexp {} | C_u trace={:.6e} max|·|={:.6e} any_nan={} | LP rms={:.4} nan={} first5={:.3?} ",
-                s, n_dim, nexp, trace, max_abs, any_nan, lp_rms, lp_nan, &lp_active[..5]
+                s,
+                n_dim,
+                nexp,
+                trace,
+                max_abs,
+                any_nan,
+                lp_rms,
+                lp_nan,
+                &lp_active[..5]
             );
         }
         let eig_result = eig::decompose_and_invert(&cu_f64, n_dim);

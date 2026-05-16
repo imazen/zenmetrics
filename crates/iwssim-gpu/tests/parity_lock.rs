@@ -34,11 +34,7 @@ fn rgb2gray_bt601_round(rgba: &[u8]) -> Vec<f32> {
         let y = 0.2989 * r + 0.5870 * g + 0.1140 * b;
         let rounded = if y.fract().abs() == 0.5 {
             let f = y.floor();
-            if (f as i64) % 2 == 0 {
-                f
-            } else {
-                f + 1.0
-            }
+            if (f as i64) % 2 == 0 { f } else { f + 1.0 }
         } else {
             (y + 0.5).floor()
         };
@@ -67,8 +63,7 @@ fn ref_vs_dist_matches_python_reference() {
         eprintln!("skipping (set RUN_GPU_PARITY=1 to enable)");
         return;
     }
-    let dir =
-        std::env::var("IWSSIM_PARITY_REFS").expect("set IWSSIM_PARITY_REFS=<refs-dir>");
+    let dir = std::env::var("IWSSIM_PARITY_REFS").expect("set IWSSIM_PARITY_REFS=<refs-dir>");
     let r = format!("{dir}/Ref.bmp");
     let d = format!("{dir}/Dist.jpg");
     let (score, _per) = score_one(&r, &d);
