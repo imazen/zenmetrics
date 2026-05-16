@@ -217,6 +217,15 @@ v1 R2 manifest goldens were captured against these exact values;
 a silent drift now fails to compile rather than at test time.
 Static-assert count is now 29 across 6 test files.
 
+Tick 552 added a compile-time pin for
+`CvvdpParams::PLACEHOLDER.perf_mode == PerfMode::Strict` in
+`params_placeholder.rs`. Uses `matches!` (which is `const`-callable)
+since derived `PartialEq` on enums isn't yet `const fn` in stable
+Rust. Every parity test inherits this perf-mode through
+`Cvvdp::new(..., PLACEHOLDER)`; a silent flip to Fast would have
+changed the calibration baseline for dozens of goldens. Static-
+assert count is now 30 across 7 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

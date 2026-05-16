@@ -18,6 +18,20 @@ use cvvdp_gpu::CvvdpParams;
 use cvvdp_gpu::PerfMode;
 use cvvdp_gpu::params::DisplayModel;
 
+// Tick 552: compile-time pin of PLACEHOLDER.perf_mode = Strict.
+// Every parity test constructs `Cvvdp::new(..., PLACEHOLDER)`
+// and inherits this perf-mode default. A refactor that flipped
+// it to Fast would silently change the calibration baseline for
+// every golden test. `matches!` is `const`-callable (derived
+// `PartialEq` on enums isn't yet, in stable 1.85), so the
+// pattern-match form is the const-compatible way to pin this
+// without an enum-equality call. Same load-bearing pattern as
+// the STANDARD_4K display field pins (tick 551).
+const _: () = assert!(
+    matches!(CvvdpParams::PLACEHOLDER.perf_mode, PerfMode::Strict),
+    "PLACEHOLDER.perf_mode drifted from PerfMode::Strict (the parity-calibrated baseline)",
+);
+
 #[test]
 fn placeholder_display_is_standard_4k() {
     // PLACEHOLDER.display is the DisplayModel consumed by
