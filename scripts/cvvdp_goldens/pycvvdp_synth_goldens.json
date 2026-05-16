@@ -107,6 +107,14 @@
       ],
       "construction": "synth_pair_1024_chroma_shift",
       "jod": 9.665624618530273
+    },
+    "synth_1024x1024_noise": {
+      "shape_hw": [
+        1024,
+        1024
+      ],
+      "construction": "synth_pair_1024_noise",
+      "jod": 8.989995956420898
     }
   }
 }

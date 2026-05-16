@@ -25,6 +25,50 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_1024x1024_noise() {
+    // Tick 635: host-scalar parity vs pycvvdp v0.5.4 on a 1024×1024
+    // per-pixel-per-channel noise distortion. Mirrors the 256² noise
+    // fixture at MAX_LEVELS=9-clamped pyramid depth. Tests that
+    // high-frequency masking + CSF response is consistent across
+    // pyramid depths — noise is the worst-case input for the
+    // high-freq pyramid bands (uncorrelated per-pixel, full
+    // bandwidth).
+    //
+    // Noise formula `(x*73 + y*137 + c*211) % 64 - 32` matches the
+    // existing 256² noise tests in pipeline_color.rs.
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_1024x1024_noise");
+    let (w, h) = (1024_usize, 1024_usize);
+    let ref_b = common::synth_pair_ref(w, h);
+    let mut dist_b = vec![0u8; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) * 3;
+            for c in 0..3 {
+                let noise = ((x as i64 * 73 + y as i64 * 137 + c as i64 * 211) % 64) - 32;
+                let v = (i64::from(ref_b[i + c]) + noise).clamp(0, 255) as u8;
+                dist_b[i + c] = v;
+            }
+        }
+    }
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 1024x1024 noise: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_1024x1024_chroma_shift() {
     // Tick 634: host-scalar parity vs pycvvdp v0.5.4 on a 1024×1024
     // chroma-only distortion (G+16). Completes the 128²+256²+1024²

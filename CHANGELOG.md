@@ -722,6 +722,28 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 635 — add a 1024×1024 noise parity fixture (high-frequency
+distortion at deep pyramid). Mirrors the 256² noise fixture at
+MAX_LEVELS=9-clamped depth. Noise is the worst-case input for
+the high-freq pyramid bands (uncorrelated per-pixel, full
+bandwidth) — a refactor that introduced a depth-dependent
+masking or CSF bug would surface differently than at 256².
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_1024_noise(w=1024, h=1024)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 8.989996` (generated locally, 0.4 s wallclock).
+  Lowest JOD in the synth suite — noise is the most degrading
+  distortion at this magnitude.
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_1024x1024_noise` host-scalar
+  parity test (inline noise construction matching 256² siblings).
+
+Measured result: host_scalar JOD = 8.989994, pycvvdp golden =
+8.989996, **|diff| = 0.000002** (~2 ULP at f32). 2500× under
+the 0.005 JOD canonical tolerance.
+
 Tick 634 — add a 1024×1024 chroma_shift parity fixture
 (deep-pyramid chroma case at the MAX_LEVELS=9 clamp boundary).
 Completes the **128²+256²+1024² chroma_shift triple**, pinning

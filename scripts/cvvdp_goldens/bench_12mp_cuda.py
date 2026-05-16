@@ -55,6 +55,30 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_1024_noise(w=1024, h=1024):
+    """1024x1024 per-pixel-per-channel noise distortion. Mirrors
+    `synth_pair_256_noise` at deep pyramid depth (MAX_LEVELS=9-clamped).
+    Same modular noise formula `(x*73 + y*137 + c*211) % 64 - 32`.
+    Tests that the high-frequency masking + CSF response is
+    consistent across pyramid depths — noise is the worst-case
+    input for the high-freq pyramid bands.
+
+    Bit-stable with Rust's inline construction in
+    `tests/predict_jod_invariants.rs`.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    cc = np.arange(3, dtype=np.int64).reshape(1, 1, 3)
+    yy3 = yy.astype(np.int64)[..., None]
+    xx3 = xx.astype(np.int64)[..., None]
+    noise = ((xx3 * 73 + yy3 * 137 + cc * 211) % 64) - 32
+    dist = np.clip(ref.astype(np.int16) + noise.astype(np.int16), 0, 255).astype(np.uint8)
+    return ref, dist
+
+
 def synth_pair_1024_chroma_shift(w=1024, h=1024):
     """1024x1024 chroma-only distortion (G+16). Sister to the 128²
     and 256² chroma_shift fixtures at the MAX_LEVELS=9 pyramid-clamp
@@ -459,8 +483,17 @@ def main():
     cs1024_ref, cs1024_dist = synth_pair_1024_chroma_shift()
     print("1024x1024 chroma_shift golden:")
     cs1024_jod, _ = metric.predict(cs1024_dist, cs1024_ref, dim_order="HWC")
-    print(f"  jod = {float(cs1024_jod):.4f}\n")
+    print(f"  jod = {float(cs1024_jod):.4f}")
     cs1024_jod_val = float(cs1024_jod)
+
+    # 1024x1024 noise fixture (deep pyramid). Mirrors `synth_pair_256_noise`
+    # at MAX_LEVELS=9-clamped depth. Pins high-frequency masking +
+    # CSF response across pyramid depths.
+    n1024_ref, n1024_dist = synth_pair_1024_noise()
+    print("1024x1024 noise golden:")
+    n1024_jod, _ = metric.predict(n1024_dist, n1024_ref, dim_order="HWC")
+    print(f"  jod = {float(n1024_jod):.4f}\n")
+    n1024_jod_val = float(n1024_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -567,6 +600,11 @@ def main():
                 "shape_hw": [1024, 1024],
                 "construction": "synth_pair_1024_chroma_shift",
                 "jod": cs1024_jod_val,
+            },
+            "synth_1024x1024_noise": {
+                "shape_hw": [1024, 1024],
+                "construction": "synth_pair_1024_noise",
+                "jod": n1024_jod_val,
             },
         },
     }
