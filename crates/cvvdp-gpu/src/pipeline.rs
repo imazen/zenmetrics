@@ -1050,6 +1050,36 @@ impl<R: Runtime> Cvvdp<R> {
     /// `levels[0]` at base resolution and each subsequent level
     /// halved (cvvdp's `div_ceil(2)` convention).
     ///
+    /// # Examples
+    ///
+    /// Read back the gaussian pyramid for a 64×64 buffer; level 0 is
+    /// 64×64 = 4096 pixels per channel, level 1 is 32×32 = 1024, etc.
+    /// `ignore` because docs.rs has no GPU (same constraint as the
+    /// other `Cvvdp::*` examples).
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let levels = cvvdp.compute_dkl_gauss_pyramid(&srgb).expect("compute_dkl_gauss_pyramid");
+    /// assert!(!levels.is_empty());
+    /// // levels[0] is base resolution: 64 * 64 = 4096 per channel.
+    /// assert_eq!(levels[0][0].len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
