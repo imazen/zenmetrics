@@ -15,6 +15,21 @@
 
 use cvvdp_gpu::CVVDP_COLUMN_NAME;
 
+// Tick 554: compile-time pin of `!CVVDP_COLUMN_NAME.is_empty()`.
+// `str::is_empty` is `const fn` since Rust 1.39 (well below this
+// crate's MSRV 1.93). An empty column name would silently produce
+// parquet sidecars with an unnamed score column, breaking joins
+// downstream. Same pattern as ticks 522-524, 548-552.
+//
+// `str::starts_with` (used by the cvvdp_imazen_ prefix check) is
+// NOT yet const fn in stable Rust, so that prefix assertion has
+// to stay runtime-only for now. The non-empty pin is the strict
+// subset that does lift.
+const _: () = assert!(
+    !CVVDP_COLUMN_NAME.is_empty(),
+    "CVVDP_COLUMN_NAME must be non-empty; empty would yield unnamed parquet columns",
+);
+
 #[test]
 fn column_name_is_not_empty() {
     assert!(

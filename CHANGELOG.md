@@ -234,6 +234,14 @@ project's absolute language minimum, not the actual current
 MSRV). Updated both the CHANGELOG entry and the in-source comment
 in `params_placeholder.rs`. No code change; no test impact.
 
+Tick 554 added a compile-time pin for `!CVVDP_COLUMN_NAME.is_empty()`
+in `column_name.rs`. `str::is_empty` is `const fn` since Rust 1.39
+(well below this crate's MSRV 1.93). An empty column name would
+silently produce parquet sidecars with an unnamed score column,
+breaking joins downstream. `str::starts_with` is NOT yet const fn
+in stable Rust, so the `cvvdp_imazen_` prefix check stays runtime-
+only. Static-assert count is now 31 across 8 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
