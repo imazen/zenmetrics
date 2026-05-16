@@ -249,7 +249,7 @@ shipped across six commits + an operator runbook:
   (13×17 prime-ish, 15×15 odd-square, 73×91 — the historical tick
   206 regression case from pycvvdp's `x.shape[-2]` parity quirk in
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
-  perturbed → finite < ident + 1e-3. Tick 437.
+  perturbed → finite < ident + 1e-3. Tick 437, ec79dc49.
 
 #### cvvdp-gpu (docs)
 
@@ -458,18 +458,18 @@ shipped across six commits + an operator runbook:
 
 - **`met2jod` doctest** — added `# Examples` covering perfect-quality
   limit (`met2jod(0) == 10`), monotonic decline (0 > 0.5 > 1.0 > 5.0),
-  and extreme-input safety (`met2jod(1e6)` finite < 0). Tick 441.
+  and extreme-input safety (`met2jod(1e6)` finite < 0). Tick 441, dddf1db9.
 
 - **`band_frequencies` doctest** — added `# Examples` showing
   typical usage: at standard 4K geometry the function returns ≥ 5
-  strictly-decreasing positive cy/deg entries for 1024×1024. Tick 440.
+  strictly-decreasing positive cy/deg entries for 1024×1024. Tick 440, e8505d51.
 
 - **`estimate_gpu_memory_bytes` doctest** — added an `# Examples`
   section that exercises the function on 4 inputs and validates
   the rough magnitude: too-small (4×4, 7×8 → `None`); 1 MP at
   ~208 MB (asserted in `[100 MB, 300 MB]`); 4 MP > 1 MP. Doubles
   as documentation and a smoke test that runs under
-  `cargo test --doc`. Tick 439.
+  `cargo test --doc`. Tick 439, 8d3b4b94.
 
 - **`csf_lut/v0_5_4.rs` LUT constant docstrings** — six previously-
   undocumented public LUT constants re-exported via
@@ -478,16 +478,16 @@ shipped across six commits + an operator runbook:
   (uniform-in-log10 spatial-frequency axis, `[-1.0, 1.806]`),
   `LOG_S_O0_C1/C2/C3` (1024-entry A/Rg/Vy sensitivity tables with
   the `l_idx * 32 + rho_idx` layout), `GE_SIGMA` (eccentricity-
-  falloff scaffolding). Tick 438.
+  falloff scaffolding). Tick 438, c217ee95.
 
 - **`CsfChannel` variant docstrings** — `A` (achromatic /
   luminance), `Rg` (red-green opponent), `Vy` (violet-yellow
   opponent). Three previously-undocumented variants surfaced by
-  `RUSTDOCFLAGS="-D missing_docs" cargo doc`. Tick 436.
+  `RUSTDOCFLAGS="-D missing_docs" cargo doc`. Tick 436, 38ba643e.
 
 - **`Error::DimensionMismatch` field docstrings** — `expected`
   (`width × height × 3` byte count) and `got` (actual caller-passed
-  length). Tick 436.
+  length). Tick 436, 38ba643e.
 
 #### cvvdp-gpu (tests)
 
@@ -503,7 +503,7 @@ shipped across six commits + an operator runbook:
   ..PLACEHOLDER }` update syntax (Copy + accessible-fields
   compile-time check). A future wire-through that actually consumes
   these fields will need to swap in real values; this pin flags the
-  scaffolding state. Tick 435.
+  scaffolding state. Tick 435, e138a176.
 
 - **`tests/predict_jod_invariants.rs`** — 7 flow invariants on
   `predict_jod_still_3ch` (the composed host-scalar pipeline)
@@ -517,7 +517,7 @@ shipped across six commits + an operator runbook:
   Weber-contrast pyramid of a flat input has zero band content);
   (5–6) panics on ref / dist `len() != w*h*3` (the `assert_eq!`
   entry guards); (7) 8×8 smoke — identical → 10, perturbed < 10.
-  Tick 434.
+  Tick 434, 489751a4.
 
 - **`tests/csf_axes_invariants.rs`** — 9 structural pins on the
   public CSF LUT axis arrays `LOG_L_BKG_AXIS` and `LOG_RHO_AXIS`
@@ -531,7 +531,7 @@ shipped across six commits + an operator runbook:
   `LOG_RHO_AXIS` uniformly spaced in log10 (the source comment
   about "non-uniform first interval" is about linear-rho ratios,
   not the log10 axis itself); (8) `LOG_L_BKG_AXIS` step matches
-  the pycvvdp formula `(4.0 - (-2.301)) / 31 ≈ 0.2032`. Tick 433.
+  the pycvvdp formula `(4.0 - (-2.301)) / 31 ≈ 0.2032`. Tick 433, 1d581c28.
 
 - **`tests/perf_mode_invariants.rs`** — 6 invariants on `PerfMode`'s
   trait contract beyond the existing `params_placeholder.rs`
@@ -541,7 +541,7 @@ shipped across six commits + an operator runbook:
   (3) Clone yields Eq-equal value; (4) Strict != Fast (catches
   variant collapse); (5) Debug output is non-empty and distinct
   per variant; (6) exhaustive match visits exactly 2 variants.
-  Tick 432.
+  Tick 432, e2a37146.
 
 - **`tests/mult_mutual_band_invariants.rs`** — 8 structural pins on
   `mult_mutual_band` (band-level 3-channel masking; existing
@@ -553,7 +553,7 @@ shipped across six commits + an operator runbook:
   (clamp_diff_soft cap); (6) determinism via `to_bits()`; (7)
   finite output for mixed-sign ramp ±1e3; (8) small-band branch
   exercised at 4×4 (below PU_PADSIZE=6, triggers no-blur path).
-  Tick 431.
+  Tick 431, eec3ea81.
 
 - **`tests/gaussian_blur_sigma3_invariants.rs`** — 8 dedicated
   invariants on `gaussian_blur_sigma3`. The function previously had
@@ -567,7 +567,7 @@ shipped across six commits + an operator runbook:
   via `to_bits()`; (7) horizontal mirror-symmetric input yields
   symmetric output within 1e-5 (the kernel + boundary are
   symmetric); (8) impulse input concentrates max at the impulse
-  location. Tick 430.
+  location. Tick 430, 6f8b55de.
 
 - **`tests/phase_uncertainty_band_invariants.rs`** — 7 invariant
   pins on `phase_uncertainty_band` (the branch-on-band-size helper).
@@ -582,7 +582,7 @@ shipped across six commits + an operator runbook:
   at `PU_PADSIZE = 6`** — `(6, 6)`, `(7, 6)`, `(6, 7)` all small;
   `(7, 7)` is the first large case. Catches a refactor that flips
   `&&` to `||` (would incorrectly blur degenerate strips that
-  can't fit the σ=3 kernel's 13-tap support). Tick 429.
+  can't fit the σ=3 kernel's 13-tap support). Tick 429, 605f8ca4.
 
 - **`tests/csf_channel_invariants.rs`** — 7 invariant pins on the
   `CsfChannel` enum's discriminants + trait contract. No prior
@@ -593,7 +593,7 @@ shipped across six commits + an operator runbook:
   `as usize` array indexing; (3) Copy semantics; (4) Clone yields
   Eq-equal value; (5) PartialEq self-equality + cross-variant
   inequality; (6) Debug output is non-empty and unique per variant;
-  (7) exhaustive match visits all 3 variants. Tick 428.
+  (7) exhaustive match visits all 3 variants. Tick 428, b3f6b634.
 
 - **`tests/precompute_logs_row_invariants.rs`** — 6 additional
   invariants on `precompute_logs_row` beyond the 3 existing tests
@@ -607,7 +607,7 @@ shipped across six commits + an operator runbook:
   matching `precompute_logs_row(-100, A)` bit-equal to
   `precompute_logs_row(1e-6, A)`; (6) `10^row[k]` is strictly
   positive-finite (sensitivities are physical, never zero).
-  Tick 427.
+  Tick 427, 513c7d60.
 
 - **`tests/do_pooling_invariants.rs`** — 7 flow invariants on
   `do_pooling_and_jod_still_3ch` complementing the 3 pycvvdp
@@ -619,7 +619,7 @@ shipped across six commits + an operator runbook:
   produces ≥ 1e-3 JOD shift AND larger input gives smaller JOD;
   (6) single-level input (1 pyramid level) supported, no panic,
   JOD < 10 for non-zero; (7) 12-level stress input supported,
-  finite output in [0, 10 + ε]. Tick 426.
+  finite output in [0, 10 + ε]. Tick 426, 2100715f.
 
 - **`tests/mult_mutual_pixel_invariants.rs`** — 7 function-level
   invariants on `mult_mutual_pixel` (per-pixel cross-channel
@@ -632,7 +632,7 @@ shipped across six commits + an operator runbook:
   (clamp_diff_soft asymptote); (5) determinism; (6) any non-trivial
   `T ≠ R` produces positive `D` on at least one channel;
   (7) finite output across 5 dynamic ranges 1e-10 to ±1e6.
-  Tick 425.
+  Tick 425, 953780bd.
 
 - **`tests/met2jod_invariants.rs`** — 8 invariant pins on `met2jod`
   beyond the 2 single-point tests already in `pool_scalar.rs`
@@ -645,7 +645,7 @@ shipped across six commits + an operator runbook:
   kink; (6) linear-branch algebra `10 - jod_a_p * Q` (where
   `jod_a_p = JOD_A * 0.1^(JOD_EXP-1)`) for 5 Q below kink — pins
   the slope-matching construction; (7) determinism; (8) declining
-  finite JOD at extreme Q ∈ [1e3, 1e12]. Tick 424.
+  finite JOD at extreme Q ∈ [1e3, 1e12]. Tick 424, 2764c3d8.
 
 - **`tests/mask_pool_pixel_invariants.rs`** — 7 invariant pins on
   `mask_pool_pixel`, the 3×3 cross-channel masking matrix-vector
@@ -660,7 +660,7 @@ shipped across six commits + an operator runbook:
   output for finite input across 6 input dynamic ranges (1e-10 to
   1e6, positive + negative); (7) A's self-coupling dominance
   (`out[0] > 0.5` for `[1, 0, 0]` since `XCM_3X3[0][0] = 0.877`)
-  — pins the matrix orientation. Tick 423.
+  — pins the matrix orientation. Tick 423, f28b0455.
 
 - **`tests/clamp_phase_uncertainty_invariants.rs`** — 10 invariant
   pins on two small masking primitives that previously had no
@@ -675,7 +675,7 @@ shipped across six commits + an operator runbook:
     (7) scale factor pinned in [0.15, 0.17] (loose bound on the
     bit-pinned MASK_C); (8) `f(0) == 0`; (9) monotonicity over
     [-100, 100]; (10) determinism.
-  Tick 422.
+  Tick 422, 8c0d4bc7.
 
 - **`tests/weber_pyramid_invariants.rs`** — eight structural
   invariant pins on `weber_contrast_pyr_dec_scalar` complementing
@@ -691,7 +691,7 @@ shipped across six commits + an operator runbook:
   on 0.001 L_bkg field (baseband intentionally excluded — it's
   unclamped per source); (7) zero-image + zero-l_bkg input produces
   no NaN/Inf (the 0.01 floor guards everything); (8) determinism
-  via `to_bits()` over bands + log_l_bkg. Tick 421.
+  via `to_bits()` over bands + log_l_bkg. Tick 421, c6c30191.
 
 - **`tests/srgb_byte_to_dkl_invariants.rs`** — eight function-level
   semantic invariants on `srgb_byte_to_dkl_scalar` beyond the
@@ -705,7 +705,7 @@ shipped across six commits + an operator runbook:
   and pure-cyan → RG < 0 (pins row-1 sign convention against a row
   swap with row 2); (8) pure-blue → VY > 0 and pure-yellow → VY < 0.
   Complements the matrix-bit-pin in `srgb_linear_to_dkl_matrix_*` —
-  pins the FUNCTION'S shape, not just the matrix's entries. Tick 420.
+  pins the FUNCTION'S shape, not just the matrix's entries. Tick 420, 43bd4a18.
 
 - **`tests/gausspyr_expand_invariants.rs`** — seven structural
   invariant pins on `gausspyr_expand_scalar`, mirror of
@@ -719,7 +719,7 @@ shipped across six commits + an operator runbook:
   branches inside the function succeed (5→9 odd and 5→10 even
   paths); (7) all-finite output across 7 typical pyramid expand
   pairs including non-square 8×4 → 16×7 and minimal 3×3 → 5×5/6×5.
-  Tick 419.
+  Tick 419, a68e5c33.
 
 - **`tests/gausspyr_reduce_invariants.rs`** — seven structural
   invariant pins on `gausspyr_reduce_scalar`: (1) `(dw, dh) = (4, 4)`
@@ -732,7 +732,7 @@ shipped across six commits + an operator runbook:
   (width/height swap catches); (7) caller-provided `dst` capacity
   (too-big or zero) doesn't affect output. Complements
   `pyramid_scalar.rs::reduce_matches_pycvvdp`'s single fixed-input
-  pycvvdp parity test with broad structural coverage. Tick 418.
+  pycvvdp parity test with broad structural coverage. Tick 418, 41dae2f5.
 
 - **`tests/laplacian_pyramid_invariants.rs`** — seven structural
   invariant pins on `laplacian_pyramid_dec_scalar`: (1) output band
@@ -747,7 +747,7 @@ shipped across six commits + an operator runbook:
   bit-equal to the input (the `for k in 0..(n-1)` empty loop edge
   case); (7) Band invariant `data.len() == w * h` for every band.
   Complements `pyramid_scalar.rs`'s pointwise-numeric pycvvdp
-  parity tests with structural / contract coverage. Tick 417.
+  parity tests with structural / contract coverage. Tick 417, ae86b5e1.
 
 - **`tests/band_weights_invariants.rs`** — eight invariant pins on
   `flatten_band_weights` and `precomputed_band_weights` covering
@@ -761,7 +761,7 @@ shipped across six commits + an operator runbook:
   output across log_L_bkg ∈ [-1.0, 3.0] (0.1 cd/m² dim through
   1000 cd/m² HDR peak); determinism via `to_bits()` equality;
   end-to-end flatten-then-index round-trip pinning the
-  `weight_band_kernel` consumer contract. Tick 416.
+  `weight_band_kernel` consumer contract. Tick 416, 6b2891af.
 
 - **`tests/display_geometry.rs::ppd_is_*`** — four invariant tests
   on `DisplayGeometry::pixels_per_degree`: (1) positive + finite +
