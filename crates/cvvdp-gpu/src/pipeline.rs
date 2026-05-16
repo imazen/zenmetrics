@@ -1594,6 +1594,35 @@ impl<R: Runtime> Cvvdp<R> {
     /// of the GPU dispatch vs read-back split — zero cost when
     /// unset.
     ///
+    /// # Examples
+    ///
+    /// Read back Weber bands + log_l_bkg planes for a 64×64 buffer.
+    /// `ignore` for the standard `Cvvdp::*` reason.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let (bands, log_l_bkg) = cvvdp.compute_dkl_weber_pyramid(&srgb)
+    ///     .expect("compute_dkl_weber_pyramid");
+    /// assert_eq!(bands.len(), log_l_bkg.len());
+    /// // The first level matches base resolution per channel.
+    /// assert_eq!(bands[0][0].len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
