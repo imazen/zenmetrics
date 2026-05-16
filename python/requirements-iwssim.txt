@@ -1,0 +1,7 @@
+# Pinned for the docker/Dockerfile.iwssim build. piq 0.8.0 ships
+# `information_weighted_ssim`, the PyTorch port of Wang & Li (2011).
+# CPU torch wheels are sufficient — iwssim runs comfortably on CPU and
+# the vast.ai CPU offerings are far cheaper than GPU boxes.
+torch>=2.4
+piq>=0.8.0
+numpy>=1.26,<3

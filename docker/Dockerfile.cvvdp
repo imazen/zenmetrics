@@ -1,0 +1,128 @@
+# docker/Dockerfile.cvvdp — vast.ai-tuned image for the ColorVideoVDP
+# (pycvvdp) reference implementation, exposed to zen-metrics via the
+# external-metric subprocess plugin.
+#
+# Build context: ~/work/zen (parent of zenmetrics + zenjpeg + zenanalyze).
+#   docker build -f zenmetrics--pytorch-refs/docker/Dockerfile.cvvdp \
+#                -t ghcr.io/imazen/zen-metrics-cvvdp:0.6.0 ~/work/zen
+#
+# Stages:
+#   1. rust-builder  — Rust 1.93-slim, compiles zen-metrics with
+#                      `sweep,external-metric` (no in-process GPU metrics —
+#                      the worker pulls scores from the cvvdp subprocess).
+#   2. py-builder    — copy /opt/python and pre-fetch wheels into a cache
+#                      mount so the final image install is offline.
+#   3. final         — nvidia/cuda 12.4.1 cudnn-runtime ubuntu22.04 +
+#                      the zen-metrics binary + a /opt/venvs/cvvdp venv
+#                      with pycvvdp installed + the metric-server scripts
+#                      + onstart_v3 (relocated as zen-metrics-worker).
+#
+# vast.ai notes:
+#   - The cudnn-runtime base is ~3.5 GB. Layers above stay tiny so most
+#     workers only pull the cudnn layer once and reuse across rebuilds.
+#   - `ZEN_METRICS_EXTERNAL_CVVDP` is baked into the env so a chunk that
+#     names `--metric cvvdp` finds the server without extra orchestration.
+#   - PyTorch wheels come from download.pytorch.org/whl/cu124 — matching
+#     the cudnn-runtime CUDA major. Do NOT use the default PyPI wheels;
+#     they don't carry CUDA bindings.
+
+ARG CUDA_BASE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+############ Stage 1: Rust builder ############
+FROM rust:1.93-slim-bookworm AS rust-builder
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates pkg-config libssl-dev cmake git \
+        clang lld build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Manifests-only layer first (rare-change → high cache hit).
+COPY zenmetrics--pytorch-refs/Cargo.toml zenmetrics--pytorch-refs/Cargo.lock ./zenmetrics/
+COPY zenmetrics--pytorch-refs/crates/ ./zenmetrics/crates/.manifests-only/
+COPY zenjpeg/Cargo.toml zenjpeg/Cargo.lock ./zenjpeg/
+COPY zenanalyze/Cargo.toml zenanalyze/Cargo.lock ./zenanalyze/
+
+# Full source.
+COPY zenmetrics--pytorch-refs/ ./zenmetrics/
+COPY zenjpeg/ ./zenjpeg/
+COPY zenanalyze/ ./zenanalyze/
+
+WORKDIR /workspace/zenmetrics
+# `external-metric` adds the subprocess plugin; `sweep,png,jpeg,webp,avif,jxl`
+# keeps the codec coverage so the same image can drive any codec.
+# `cpu-metrics` stays IN — the worker may want zensim alongside cvvdp for
+# triangulation, and the extra binary size is negligible against the
+# CUDA base layer.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
+    cargo build -p zen-metrics-cli --release \
+        --no-default-features \
+        --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics,external-metric && \
+    cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
+    chmod +x /usr/local/bin/zen-metrics && \
+    /usr/local/bin/zen-metrics --version && \
+    /usr/local/bin/zen-metrics list-metrics | grep -q cvvdp
+
+############ Stage 2: helpers ############
+FROM debian:bookworm-slim AS helpers
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/bin
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz && \
+    tar xzf /tmp/s5cmd.tgz -C /opt/bin s5cmd && \
+    rm /tmp/s5cmd.tgz && chmod +x /opt/bin/s5cmd
+RUN curl -fsSL -o /opt/bin/jq \
+        "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" && \
+    chmod +x /opt/bin/jq
+
+############ Stage 3: final image ############
+FROM ${CUDA_BASE}
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (pycvvdp via external-metric plugin)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl libssl3 \
+        python3.11 python3.11-venv python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# CUDA-flavoured Python venv: pycvvdp + torch with CUDA 12.4 wheels.
+# Using a venv (not system Python) keeps the venv self-contained and
+# easy to swap if a vast.ai image baseline ever bumps Python.
+RUN python3.11 -m venv /opt/venvs/cvvdp \
+    && /opt/venvs/cvvdp/bin/pip install --no-cache-dir --upgrade pip
+
+COPY zenmetrics--pytorch-refs/python/requirements-cvvdp.txt /opt/python/requirements-cvvdp.txt
+RUN /opt/venvs/cvvdp/bin/pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cu124 \
+        -r /opt/python/requirements-cvvdp.txt \
+    && /opt/venvs/cvvdp/bin/python -c \
+        "import pycvvdp, torch; print('pycvvdp', pycvvdp.__version__, 'cuda', torch.cuda.is_available())"
+
+COPY zenmetrics--pytorch-refs/python/metric_server.py /opt/python/metric_server.py
+COPY zenmetrics--pytorch-refs/python/cvvdp_impl.py    /opt/python/cvvdp_impl.py
+
+COPY --from=rust-builder /usr/local/bin/zen-metrics /usr/local/bin/zen-metrics
+COPY --from=helpers /opt/bin/s5cmd /usr/local/bin/s5cmd
+COPY --from=helpers /opt/bin/jq    /usr/local/bin/jq
+COPY zenmetrics--pytorch-refs/scripts/sweep/onstart_v3.sh /usr/local/bin/zen-metrics-worker
+RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
+
+WORKDIR /workspace/sweep
+
+# Plugin discovery: zen-metrics reads ZEN_METRICS_EXTERNAL_CVVDP at first
+# use of `--metric cvvdp` and spawns the named command. The Python server
+# loads pycvvdp once, then serves frames on stdin until the parent exits.
+ENV WORKDIR=/workspace/sweep \
+    SWEEP_GPU_RUNTIME=cpu \
+    ZEN_METRICS_PYTHON_DIR=/opt/python \
+    ZEN_METRICS_EXTERNAL_CVVDP="/opt/venvs/cvvdp/bin/python /opt/python/metric_server.py cvvdp"
+
+ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]

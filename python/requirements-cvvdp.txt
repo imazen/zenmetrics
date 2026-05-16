@@ -1,0 +1,9 @@
+# Pinned for the docker/Dockerfile.cvvdp build. pycvvdp 1.2.0 (2024-08-19)
+# is the latest release at the time of writing and matches the upstream
+# `main` branch behaviour of Mantiuk's ColorVideoVDP. We do NOT pin torch
+# precisely — the CUDA wheel index pulls the cu124-matched build.
+torch>=2.4
+torchvision>=0.19
+pycvvdp>=1.2.0
+numpy>=1.26,<3
+pyyaml

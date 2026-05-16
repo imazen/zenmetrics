@@ -1,0 +1,99 @@
+# docker/Dockerfile.iwssim — vast.ai-tuned image for IW-SSIM (Wang & Li
+# 2011) via the `piq` PyTorch port, exposed to zen-metrics through the
+# external-metric subprocess plugin.
+#
+# IW-SSIM is light enough to run on CPU at acceptable throughput, so this
+# image targets the cheap CPU-only vast.ai offerings (typically
+# $0.02-0.05/hr). The image stays small (~1.5 GB) compared to the CUDA
+# base used for cvvdp.
+#
+# Build context: ~/work/zen (parent of zenmetrics + zenjpeg + zenanalyze).
+#   docker build -f zenmetrics--pytorch-refs/docker/Dockerfile.iwssim \
+#                -t ghcr.io/imazen/zen-metrics-iwssim:0.6.0 ~/work/zen
+
+############ Stage 1: Rust builder ############
+FROM rust:1.93-slim-bookworm AS rust-builder
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates pkg-config libssl-dev cmake git \
+        clang lld build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY zenmetrics--pytorch-refs/Cargo.toml zenmetrics--pytorch-refs/Cargo.lock ./zenmetrics/
+COPY zenmetrics--pytorch-refs/crates/ ./zenmetrics/crates/.manifests-only/
+COPY zenjpeg/Cargo.toml zenjpeg/Cargo.lock ./zenjpeg/
+COPY zenanalyze/Cargo.toml zenanalyze/Cargo.lock ./zenanalyze/
+
+COPY zenmetrics--pytorch-refs/ ./zenmetrics/
+COPY zenjpeg/ ./zenjpeg/
+COPY zenanalyze/ ./zenanalyze/
+
+WORKDIR /workspace/zenmetrics
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
+    cargo build -p zen-metrics-cli --release \
+        --no-default-features \
+        --features sweep,png,jpeg,webp,avif,jxl,cpu-metrics,external-metric && \
+    cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
+    chmod +x /usr/local/bin/zen-metrics && \
+    /usr/local/bin/zen-metrics --version && \
+    /usr/local/bin/zen-metrics list-metrics | grep -q iwssim
+
+############ Stage 2: helpers ############
+FROM debian:bookworm-slim AS helpers
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/bin
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz && \
+    tar xzf /tmp/s5cmd.tgz -C /opt/bin s5cmd && \
+    rm /tmp/s5cmd.tgz && chmod +x /opt/bin/s5cmd
+RUN curl -fsSL -o /opt/bin/jq \
+        "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" && \
+    chmod +x /opt/bin/jq
+
+############ Stage 3: final image ############
+FROM python:3.12-slim-bookworm
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (piq IW-SSIM via external-metric plugin)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# CPU-only PyTorch wheel index — pulls the `+cpu` variant which is much
+# smaller than the CUDA build (~200 MB vs ~3 GB).
+RUN python3 -m venv /opt/venvs/iwssim \
+    && /opt/venvs/iwssim/bin/pip install --no-cache-dir --upgrade pip
+
+COPY zenmetrics--pytorch-refs/python/requirements-iwssim.txt /opt/python/requirements-iwssim.txt
+RUN /opt/venvs/iwssim/bin/pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r /opt/python/requirements-iwssim.txt \
+    && /opt/venvs/iwssim/bin/python -c \
+        "import piq, torch; print('piq', piq.__version__, 'torch', torch.__version__)"
+
+COPY zenmetrics--pytorch-refs/python/metric_server.py /opt/python/metric_server.py
+COPY zenmetrics--pytorch-refs/python/iwssim_impl.py   /opt/python/iwssim_impl.py
+
+COPY --from=rust-builder /usr/local/bin/zen-metrics /usr/local/bin/zen-metrics
+COPY --from=helpers /opt/bin/s5cmd /usr/local/bin/s5cmd
+COPY --from=helpers /opt/bin/jq    /usr/local/bin/jq
+COPY zenmetrics--pytorch-refs/scripts/sweep/onstart_v3.sh /usr/local/bin/zen-metrics-worker
+RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
+
+WORKDIR /workspace/sweep
+
+ENV WORKDIR=/workspace/sweep \
+    SWEEP_GPU_RUNTIME=cpu \
+    ZEN_METRICS_PYTHON_DIR=/opt/python \
+    ZEN_METRICS_EXTERNAL_IWSSIM="/opt/venvs/iwssim/bin/python /opt/python/metric_server.py iwssim"
+
+ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]

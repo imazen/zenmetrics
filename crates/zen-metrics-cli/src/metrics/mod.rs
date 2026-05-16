@@ -33,6 +33,9 @@ mod dssim_gpu;
 #[cfg(feature = "gpu-ssim2")]
 mod ssim2_gpu;
 
+#[cfg(feature = "external-metric")]
+mod external;
+
 /// Metric identifier exposed on the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum MetricKind {
@@ -65,6 +68,21 @@ pub enum MetricKind {
     /// Zensim — CPU implementation via the `zensim` crate.
     #[value(name = "zensim")]
     Zensim,
+    /// ColorVideoVDP — Mantiuk's pycvvdp reference implementation,
+    /// invoked via a long-lived subprocess. Score is JOD (just-objectionable
+    /// differences); higher is better, 10 is "indistinguishable". Requires
+    /// `ZEN_METRICS_EXTERNAL_CVVDP` to point at a metric-server launch
+    /// command. Available only when the binary is built with
+    /// `--features external-metric`.
+    #[value(name = "cvvdp")]
+    Cvvdp,
+    /// IW-SSIM — Wang & Li (2011) Information-Weighted SSIM, invoked via
+    /// the same external-metric subprocess plugin (typically wrapping the
+    /// `piq` PyTorch port). Score is 0..1; higher is better, 1.0 is
+    /// identical. Requires `ZEN_METRICS_EXTERNAL_IWSSIM`. Available only
+    /// when the binary is built with `--features external-metric`.
+    #[value(name = "iwssim")]
+    Iwssim,
 }
 
 impl MetricKind {
@@ -77,6 +95,8 @@ impl MetricKind {
             MetricKind::Dssim,
             MetricKind::DssimGpu,
             MetricKind::Zensim,
+            MetricKind::Cvvdp,
+            MetricKind::Iwssim,
         ]
     }
 
@@ -89,12 +109,15 @@ impl MetricKind {
             MetricKind::Dssim => "dssim",
             MetricKind::DssimGpu => "dssim-gpu",
             MetricKind::Zensim => "zensim",
+            MetricKind::Cvvdp => "cvvdp",
+            MetricKind::Iwssim => "iwssim",
         }
     }
 
     pub fn backend(self) -> &'static str {
         match self {
             MetricKind::Ssim2Gpu | MetricKind::ButteraugliGpu | MetricKind::DssimGpu => "GPU",
+            MetricKind::Cvvdp | MetricKind::Iwssim => "external",
             _ => "CPU",
         }
     }
@@ -123,6 +146,8 @@ impl MetricKind {
             MetricKind::Dssim => &["dssim"],
             MetricKind::DssimGpu => &["dssim_gpu"],
             MetricKind::Zensim => &["zensim"],
+            MetricKind::Cvvdp => &["cvvdp"],
+            MetricKind::Iwssim => &["iwssim"],
         }
     }
 }
@@ -156,7 +181,8 @@ pub fn run_metric(
             feature = "cpu-metrics",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
-            feature = "gpu-dssim"
+            feature = "gpu-dssim",
+            feature = "external-metric"
         )),
         allow(unused_variables)
     )]
@@ -166,7 +192,8 @@ pub fn run_metric(
             feature = "cpu-metrics",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
-            feature = "gpu-dssim"
+            feature = "gpu-dssim",
+            feature = "external-metric"
         )),
         allow(unused_variables)
     )]
@@ -234,6 +261,16 @@ pub fn run_metric(
         MetricKind::Zensim => Ok(vec![("zensim", zensim::score(reference, distorted)?)]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
+
+        #[cfg(feature = "external-metric")]
+        MetricKind::Cvvdp => Ok(vec![("cvvdp", external::score_cvvdp(reference, distorted)?)]),
+        #[cfg(not(feature = "external-metric"))]
+        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "external-metric")),
+
+        #[cfg(feature = "external-metric")]
+        MetricKind::Iwssim => Ok(vec![("iwssim", external::score_iwssim(reference, distorted)?)]),
+        #[cfg(not(feature = "external-metric"))]
+        MetricKind::Iwssim => Err(disabled_msg("iwssim", "external-metric")),
     }
 }
 

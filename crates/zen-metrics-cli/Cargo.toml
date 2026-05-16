@@ -41,6 +41,17 @@ cpu-metrics = [
     "dep:imgref",
 ]
 
+# Plugin metric backends. Enables `--metric cvvdp` and `--metric iwssim`,
+# which forward each (reference, distorted) RGB8 frame to a long-lived
+# subprocess (typically a Python server with PyTorch + a reference
+# implementation loaded once). Configured at runtime via the
+# `ZEN_METRICS_EXTERNAL_CVVDP` / `ZEN_METRICS_EXTERNAL_IWSSIM` env vars,
+# which name the subprocess command line. See
+# `crates/zen-metrics-cli/src/metrics/external.rs` for the wire protocol
+# and `docker/Dockerfile.cvvdp` / `docker/Dockerfile.iwssim` for the
+# vast.ai-tuned container builds. No new Rust dependencies — std only.
+external-metric = []
+
 # GPU bundle: pulls every GPU metric implementation.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim"]
 gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl"]
