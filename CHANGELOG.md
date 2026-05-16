@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`clamp_diff_soft` doctest** — added `# Examples`: `f(0) == 0`,
+  half-saturation at `d == d_max` (relative err < 1e-5),
+  asymptotic bound `< d_max` at 1e9. Tick 444.
+
 - **`safe_pow` doctest** — added `# Examples` covering `safe_pow(0, p)
   == 0` exact zero (via `(eps)^p - eps^p` cancellation), `safe_pow(2,
   2) ≈ 4` within 0.01, and monotonicity. Tick 443.

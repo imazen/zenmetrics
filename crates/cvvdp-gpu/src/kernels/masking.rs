@@ -104,6 +104,23 @@ pub fn safe_pow(x: f32, p: f32) -> f32 {
 
 /// Soft clamp matching cvvdp v0.5.4's `dclamp_type = "soft"`:
 /// `D_max * D / (D_max + D)` with `D_max = 10^d_max`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{D_MAX, clamp_diff_soft};
+///
+/// // f(0) = 0.
+/// assert_eq!(clamp_diff_soft(0.0), 0.0);
+///
+/// // f(d_max) = d_max / 2 (the half-saturation point).
+/// let d_max = 10.0_f32.powf(D_MAX);
+/// let half = clamp_diff_soft(d_max);
+/// assert!((half - d_max / 2.0).abs() / d_max < 1e-5);
+///
+/// // Asymptotic: for d ≫ d_max, output stays strictly below d_max.
+/// assert!(clamp_diff_soft(1e9) < d_max);
+/// ```
 #[inline]
 #[must_use]
 pub fn clamp_diff_soft(d: f32) -> f32 {
