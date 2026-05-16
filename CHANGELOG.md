@@ -17,6 +17,62 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Milestone — tick 500 (cvvdp-gpu)
+
+The 416–500 tick arc was a deep invariant-pinning + documentation
+hardening pass. ~85 tests added, ~30 doctests added, every public
+constant + helper now has direct bit-pin / structural coverage.
+Major themes:
+
+- **Constants-pin series** (ticks 393–397, 401–402): every cvvdp
+  v0.5.4 numeric (`BETA_*`, `MASK_*`, `D_MAX`, `KERNEL_A`, `GAUSS5`,
+  `SRGB_LINEAR_TO_DKL`, `JOD_A`, `JOD_EXP`, `IMAGE_INT`, `PER_CH_W`,
+  `BASEBAND_W`, `CSF_BASEBAND_RHO`, `SENSITIVITY_CORRECTION_DB`,
+  `XCM_3X3`, `CH_GAIN`, `PU_BLUR_KERNEL_1D`, `PU_PADSIZE`,
+  `LOG_L_BKG_AXIS`, `LOG_RHO_AXIS`, `LOG_S_O0_C1/C2/C3`,
+  `GE_SIGMA`, display constants, crate-level dims) is bit-pinned
+  against pycvvdp v0.5.4. A silent edit cascades as a specific test
+  failure naming the constant, not a 0.001 JOD drift on shadow_jod.
+
+- **Function-level structural invariants** (ticks 416–434): direct
+  pin files for `flatten_band_weights`, `precomputed_band_weights`,
+  `laplacian_pyramid_dec_scalar`, `gausspyr_reduce_scalar`,
+  `gausspyr_expand_scalar`, `srgb_byte_to_dkl_scalar`,
+  `weber_contrast_pyr_dec_scalar`, `clamp_diff_soft`,
+  `phase_uncertainty_no_blur`, `mask_pool_pixel`,
+  `mult_mutual_pixel`, `met2jod`, `do_pooling_and_jod_still_3ch`,
+  `precompute_logs_row`, `phase_uncertainty_band`,
+  `gaussian_blur_sigma3`, `mult_mutual_band`,
+  `predict_jod_still_3ch`. Each pins shape, determinism via
+  `to_bits()`, branch thresholds, dynamic range, edge cases.
+
+- **Doctest coverage** (ticks 442–481): every public constant +
+  helper has a `# Examples` doctest with bit-equality / range
+  assertions. 43 doctests pass, 3 are `ignore` (Cvvdp methods need
+  a feature-gated `Backend` type alias).
+
+- **State machine pins** (ticks 486, 488, 489, 491, 493, 494, 497,
+  498, 499): `Cvvdp` cache state machine (`set_reference` vs
+  `warm_reference` independence, no-pollution from one-shot scoring),
+  bit-determinism across all 3 scoring paths
+  (`score`/`score_with_reference`/`compute_dkl_jod_with_warm_ref`),
+  four-path consolidation, `new` ↔ `new_with_geometry(STANDARD_4K)`
+  equivalence, 8×8 + 128×8 + 8×128 boundary/aspect smoke,
+  cross-instance bit-equality, degenerate-input stability.
+
+- **CHANGELOG provenance** (ticks 482–487, 490, 492): every entry
+  from tick 386 onward now references its implementing commit's
+  short hash via sed-batch backfill. Workspace convention.
+
+- **Maintenance / cleanup** (various): cargo fmt drift sweeps,
+  clippy fixes (`needless_range_loop`, `excessive_precision`,
+  `clone_on_copy`), `lib_reexports.rs` re-export surface pin,
+  `cvvdp_mem_table` example refactored onto `recommend_parallel`.
+
+Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
+fixture; the test suite catches drift across every layer that pins
+mention. Tick 500.
+
 ### Changed
 
 #### cvvdp-gpu
