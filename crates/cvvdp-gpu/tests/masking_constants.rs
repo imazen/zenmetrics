@@ -74,6 +74,32 @@ const _: () = assert!(
     "MASK_Q[Vy] drifted from cvvdp v0.5.4 = 3.680_771_3",
 );
 
+// Tick 564: semantic ordering invariants. For positive f32 values
+// IEEE 754 bit-pattern ordering matches numerical ordering, so
+// u32 `<` (const-callable) is a sound proxy for the underlying
+// ordering check.
+//
+// MASK_Q is strictly monotonic across channels (A < Rg < Vy).
+const _: () = assert!(
+    MASK_Q[0].to_bits() < MASK_Q[1].to_bits(),
+    "MASK_Q ordering invariant violated: A must be < Rg",
+);
+const _: () = assert!(
+    MASK_Q[1].to_bits() < MASK_Q[2].to_bits(),
+    "MASK_Q ordering invariant violated: Rg must be < Vy",
+);
+// CH_GAIN: Rg gets a boost above A and Vy (which are both 1.0).
+// A refactor that flipped the boost to a different channel would
+// silently shift the masking balance.
+const _: () = assert!(
+    CH_GAIN[0].to_bits() < CH_GAIN[1].to_bits(),
+    "CH_GAIN ordering invariant violated: Rg must be > A (chroma boost)",
+);
+const _: () = assert!(
+    CH_GAIN[2].to_bits() < CH_GAIN[1].to_bits(),
+    "CH_GAIN ordering invariant violated: Rg must be > Vy (chroma boost)",
+);
+
 // Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
 // masking matrix (3×3 = 9 entries). Each entry is independently
 // derived from a published log2-space coefficient via 2^x; a

@@ -338,6 +338,18 @@ Plus a palindrome cross-check: `GAUSS5[0] == GAUSS5[4]`. The 5-tap
 Burt-Adelson kernel is now fully bit-pinned at compile time. Static-
 assert count is now 92 across 11 test files.
 
+Tick 564 added 6 semantic ordering invariants leveraging the
+observation that for positive f32 values, IEEE 754 bit-pattern
+ordering matches numerical ordering — so `u32 <` (which IS const-
+callable) is a sound proxy for the underlying f32 ordering:
+  - `BASEBAND_W`: A < Rg < Vy (strict monotonicity across channels)
+  - `MASK_Q`: A < Rg < Vy (strict monotonicity across channels)
+  - `CH_GAIN`: Rg > A and Rg > Vy (chroma-boost invariant)
+These catch a class of typo the individual-entry bit-pins miss: a
+permutation that keeps every value intact but swaps which channel
+gets which weight. Static-assert count is now 98 across 11 test
+files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

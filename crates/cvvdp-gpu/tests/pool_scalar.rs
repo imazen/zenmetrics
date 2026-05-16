@@ -67,6 +67,21 @@ const _: () = {
         BASEBAND_W[2].to_bits() == 4.118_745_3_f32.to_bits(),
         "BASEBAND_W[Vy] drifted from cvvdp v0.5.4 = 4.118_745_3",
     );
+    // Tick 564: semantic ordering invariant. For positive f32 values
+    // IEEE 754 bit-pattern ordering matches numerical ordering, so
+    // u32 `<` (which IS const-callable) is a sound proxy. BASEBAND_W
+    // is strictly monotonic across channels (A < Rg < Vy); a
+    // permutation typo that happened to keep individual values intact
+    // but swapped pairs (e.g. A↔Vy) would still pass the per-entry
+    // bit-pins above but fail this ordering check.
+    assert!(
+        BASEBAND_W[0].to_bits() < BASEBAND_W[1].to_bits(),
+        "BASEBAND_W ordering invariant violated: A must be < Rg",
+    );
+    assert!(
+        BASEBAND_W[1].to_bits() < BASEBAND_W[2].to_bits(),
+        "BASEBAND_W ordering invariant violated: Rg must be < Vy",
+    );
 };
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
