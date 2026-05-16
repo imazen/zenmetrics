@@ -752,6 +752,24 @@ pub fn mult_mutual_pixel(t_p: [f32; 3], r_p: [f32; 3]) -> [f32; 3] {
 /// Applies the band-level `phase_uncertainty` (with the σ=3 blur
 /// when the band is large enough) before the cross-channel pool,
 /// matching cvvdp exactly. Returns per-channel per-pixel D values.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::mult_mutual_band;
+///
+/// // T == R → output identically zero across all channels and pixels.
+/// let (w, h) = (8_usize, 8_usize);
+/// let plane: Vec<f32> = (0..w * h).map(|i| (i as f32) * 0.01).collect();
+/// let t = [plane.clone(), plane.clone(), plane.clone()];
+/// let d = mult_mutual_band(&t, &t, w, h);
+/// for cc in 0..3 {
+///     assert_eq!(d[cc].len(), w * h);
+///     for &v in &d[cc] {
+///         assert_eq!(v.to_bits(), 0.0_f32.to_bits());
+///     }
+/// }
+/// ```
 #[must_use]
 pub fn mult_mutual_band(
     t_p_per_ch: &[Vec<f32>; 3],

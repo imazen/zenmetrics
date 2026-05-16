@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`mult_mutual_band` doctest** — added `# Examples`: 8×8 input
+  with T == R → output identically zero bit-exact across all 3
+  channels and all 64 pixels (the trivial-zero-diff contract).
+  Tick 461.
+
 - **`weber_contrast_pyr_dec_scalar` doctest** — added `# Examples`:
   16×16 + n_levels=3 → 3 bands and 3 log_l_bkg vectors; baseband
   log_l_bkg is bit-constant (replicated scalar mean). Tick 460.
