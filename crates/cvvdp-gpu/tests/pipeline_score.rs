@@ -339,6 +339,92 @@ fn invalid_image_size_surfaces_on_too_small_dims() {
 }
 
 #[test]
+fn new_equivalent_to_new_with_geometry_standard_4k() {
+    // Tick 493: pin the documented contract that `Cvvdp::new` is
+    // "equivalent to `new_with_geometry(..., STANDARD_4K)`" (per
+    // the new() rustdoc). The implementation forwards to
+    // new_with_geometry, but a future refactor that adds extra
+    // initialization to one but not the other (e.g. swapping
+    // default geometry, eagerly priming a cache on the
+    // explicit-geometry path, etc.) would silently change the
+    // documented surface.
+    //
+    // Pins: scoring the same (ref, dist) pair on two Cvvdp
+    // instances — one built via `new`, one via `new_with_geometry(..,
+    // STANDARD_4K)` — produces bit-identical f64 JOD results across
+    // every scoring path:
+    //   (1) score(ref, dist) — bit-equal
+    //   (2) set_reference + score_with_reference(dist) — bit-equal
+    //   (3) compute_dkl_jod(ref, dist, ppd) — bit-equal at ppd from
+    //       STANDARD_4K (the geometries are bit-identical, so
+    //       self.geometry.pixels_per_degree() returns the same f32 on
+    //       both instances).
+    //   (4) warm_reference + compute_dkl_jod_with_warm_ref(dist, ppd)
+    //       — bit-equal
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let standard_4k = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K;
+    let ppd = standard_4k.pixels_per_degree();
+
+    let mut a = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER).expect("new");
+    let mut b =
+        Cvvdp::<Backend>::new_with_geometry(client, w, h, CvvdpParams::PLACEHOLDER, standard_4k)
+            .expect("new_with_geometry(STANDARD_4K)");
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb: Vec<u8> = (0..n).map(|i| (i % 251) as u8).collect();
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(7)).collect();
+
+    // (1) score()
+    let ja = a.score(&ref_srgb, &dist_srgb).expect("a.score");
+    let jb = b.score(&ref_srgb, &dist_srgb).expect("b.score");
+    assert_eq!(
+        ja.to_bits(),
+        jb.to_bits(),
+        "score() bit-mismatch between new and new_with_geometry(STANDARD_4K): {ja} vs {jb}",
+    );
+
+    // (2) set_reference + score_with_reference
+    a.set_reference(&ref_srgb).expect("a.set_reference");
+    b.set_reference(&ref_srgb).expect("b.set_reference");
+    let swra = a.score_with_reference(&dist_srgb).expect("a.swr");
+    let swrb = b.score_with_reference(&dist_srgb).expect("b.swr");
+    assert_eq!(
+        swra.to_bits(),
+        swrb.to_bits(),
+        "score_with_reference() bit-mismatch: {swra} vs {swrb}",
+    );
+
+    // (3) compute_dkl_jod
+    let cja = a
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("a.compute_dkl_jod");
+    let cjb = b
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("b.compute_dkl_jod");
+    assert_eq!(
+        cja.to_bits(),
+        cjb.to_bits(),
+        "compute_dkl_jod() bit-mismatch: {cja} vs {cjb}",
+    );
+
+    // (4) warm_reference + compute_dkl_jod_with_warm_ref
+    a.warm_reference(&ref_srgb).expect("a.warm_reference");
+    b.warm_reference(&ref_srgb).expect("b.warm_reference");
+    let wa = a
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("a.warm-ref");
+    let wb = b
+        .compute_dkl_jod_with_warm_ref(&dist_srgb, ppd)
+        .expect("b.warm-ref");
+    assert_eq!(
+        wa.to_bits(),
+        wb.to_bits(),
+        "compute_dkl_jod_with_warm_ref() bit-mismatch: {wa} vs {wb}",
+    );
+}
+
+#[test]
 fn cvvdp_score_smoke_at_pyramid_min_boundary() {
     // Tick 491: end-to-end GPU smoke test on the minimum supported
     // dimensions (8×8 = PYRAMID_MIN_DIM × 2). The existing

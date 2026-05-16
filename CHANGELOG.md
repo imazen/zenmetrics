@@ -58,6 +58,21 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`new_equivalent_to_new_with_geometry_standard_4k`** (in
+  `pipeline_score.rs`) — pins the documented `Cvvdp::new` rustdoc
+  contract that it is "equivalent to
+  `new_with_geometry(..., STANDARD_4K)`". Today the implementation
+  forwards to `new_with_geometry`, but a future refactor that adds
+  extra initialization to one but not the other (different default
+  geometry, eager priming on the explicit-geometry path, etc.)
+  would silently change the documented surface. 4 invariants:
+  scoring the same (ref, dist) on two Cvvdp instances — one built
+  via `new`, the other via `new_with_geometry(STANDARD_4K)` —
+  produces bit-identical results on (1) `score()`, (2)
+  `set_reference` + `score_with_reference()`, (3) `compute_dkl_jod`
+  with the STANDARD_4K ppd, and (4) `warm_reference` +
+  `compute_dkl_jod_with_warm_ref`. Tick 493.
+
 - **`cvvdp_score_smoke_at_pyramid_min_boundary`** (in
   `pipeline_score.rs`) — end-to-end GPU smoke test on the minimum
   supported dimensions (8×8 = `PYRAMID_MIN_DIM × 2`). Existing
