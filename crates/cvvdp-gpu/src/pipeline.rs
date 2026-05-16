@@ -2932,6 +2932,37 @@ impl<R: Runtime> Cvvdp<R> {
     /// already multiplied by `sensitivity_corrected_scalar(rho_k,
     /// l_bkg, channel)`.
     ///
+    /// # Examples
+    ///
+    /// Read back CSF-weighted Laplacian bands for a 64×64 buffer at
+    /// the standard-4K ppd, with `l_bkg = 100.0` cd/m² (a typical
+    /// display midtone). `ignore` for the standard `Cvvdp::*` reason.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let bands = cvvdp.compute_dkl_csf_weighted_bands(&srgb, ppd, 100.0)
+    ///     .expect("compute_dkl_csf_weighted_bands");
+    /// assert!(!bands.is_empty());
+    /// // bands[0] is finest level, base resolution.
+    /// assert_eq!(bands[0][0].len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
