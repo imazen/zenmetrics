@@ -130,6 +130,21 @@ const _: () = {
     );
 };
 
+// Tick 593: pin Cargo.toml against PYCVVDP_REFERENCE_VERSION. The
+// `parity-goldens` feature comment reads "Enables integration
+// tests that fetch the pycvvdp v0.5.4 goldens from R2 ..."; users
+// reading the feature list see this version and expect it to
+// match the actual reference. Pinning forces the comment to
+// update in lockstep when the const bumps.
+const _CARGO_TOML: &str = include_str!("../Cargo.toml");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_CARGO_TOML.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        "crates/cvvdp-gpu/Cargo.toml must contain PYCVVDP_REFERENCE_VERSION (parity-goldens feature comment)",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);

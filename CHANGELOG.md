@@ -662,6 +662,13 @@ assert count is now 211 across 12 test files (5 cross-file
 parity-test runtime check, requirements.txt, LUT header,
 PORT_STATUS.md, README.md).
 
+Tick 593 closed the Cargo.toml feature-doc comment site. The
+`parity-goldens` feature comment reads "Enables integration tests
+that fetch the pycvvdp v0.5.4 goldens from R2 ..."; pinning
+forces the comment to update in lockstep too. The const now has
+6 cross-file `include_str!()` lockstep pins total. Static-assert
+count is now 212 across 12 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
