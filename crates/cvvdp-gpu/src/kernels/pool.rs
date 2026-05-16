@@ -314,6 +314,31 @@ pub fn fill_f32_kernel(dest: &mut Array<f32>, value: f32, n: u32) {
 /// `kernels::pool::lp_norm_mean`. Same algebra regardless of
 /// which kernel produced the partial — both write the raw
 /// `safe_pow(|x|, β)` contribution into `partials[partial_idx]`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::pool_band_finalize;
+///
+/// // Zero partial → zero output (apart from the eps-tail bias,
+/// // which the function explicitly cancels via `- eps.powf(1/β)`).
+/// assert_eq!(pool_band_finalize(0.0, 100, 2.0), 0.0);
+///
+/// // Negative partial clamps to zero (the kernel sometimes produces
+/// // a tiny negative from f32 atomic rounding).
+/// assert_eq!(pool_band_finalize(-1e-7, 100, 2.0), 0.0);
+///
+/// // For a uniform |x| = c contribution, partial = N * c^β,
+/// // and the finalized output is ≈ c minus the constant eps-tail
+/// // `eps^(1/β)` (~ 0.056 at β=4 for eps=1e-5; ~ 0.003 at β=2).
+/// // Use β=2 here so the tolerance is meaningful.
+/// let c = 2.0_f32;
+/// let n = 100_usize;
+/// let beta = 2.0_f32;
+/// let partial = (n as f32) * c.powf(beta);
+/// let v = pool_band_finalize(partial, n, beta);
+/// assert!((v - c).abs() < 0.01, "got {v}, expected ≈ {c}");
+/// ```
 #[must_use]
 pub fn pool_band_finalize(partial: f32, n_pixels: usize, beta: f32) -> f32 {
     let n = n_pixels as f32;

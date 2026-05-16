@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`pool_band_finalize` doctest** — added `# Examples`:
+  zero partial → 0 (eps-tail explicitly canceled), negative partial
+  clamps to 0, and uniform-|x|=c reconstruction at β=2 within 0.01.
+  Documents the eps-tail bias size relationship `~ eps^(1/β)`. Tick 449.
+
 - **`phase_uncertainty_no_blur` doctest** — added `# Examples`:
   pure scaling `input × 10^MASK_C`, zero passthrough, and scale-factor
   range pin in [0.15, 0.17]. Tick 448.
