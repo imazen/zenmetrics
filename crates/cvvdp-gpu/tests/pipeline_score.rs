@@ -2575,3 +2575,129 @@ fn score_is_deterministic_across_intervening_warm_reference() {
         "warm-ref dispatch poisoned cold-path scratch: first={cold_first}, second={cold_second}",
     );
 }
+
+#[test]
+fn cvvdp_score_flat_vs_flat_yields_max_jod() {
+    // Tick 545: GPU sibling of `flat_vs_flat_yields_max_jod_regardless_of_brightness`
+    // (host scalar, tick 542). cvvdp is a spatial-contrast metric:
+    // flat ref + flat dist (even pure black vs pure white) has zero
+    // Weber-band energy at every level, so the masking → pool chain
+    // emits Q ≈ 0 and met2jod returns ≈ 10.
+    //
+    // The GPU path uses atomic-add nondeterminism (~1e-7 relative at
+    // JOD~10) — but the flat-vs-flat case has degenerate atomic input
+    // (mostly zeros), so bit-equality is plausible. Pin with a 1e-2
+    // tolerance to be safely above the atomic-add noise floor while
+    // still tight enough to detect a "stuck-at-constant" regression
+    // that returns something other than ≈10.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
+    let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
+    let jod_bw = cvvdp.score(&ref_black, &dist_white).expect("score black-vs-white");
+    eprintln!("GPU flat-vs-flat (black vs white): jod = {jod_bw:.4}");
+    assert!(
+        (jod_bw - 10.0).abs() < 1e-2,
+        "GPU flat-vs-flat should give JOD ≈ 10 (cvvdp is spatial-contrast, not absolute-difference); got {jod_bw}",
+    );
+
+    let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
+    let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
+    let jod_gg = cvvdp.score(&ref_gray, &dist_gray).expect("score gray-vs-gray");
+    assert!(
+        (jod_gg - 10.0).abs() < 1e-2,
+        "GPU flat 128 vs flat 64 should give JOD ≈ 10 (same reason); got {jod_gg}",
+    );
+}
+
+#[test]
+fn cvvdp_score_textured_vs_flat_detects_detail_loss() {
+    // Tick 545: GPU sibling of `textured_ref_vs_flat_dist_detects_detail_loss`
+    // (host scalar, tick 543). Textured ref + flat dist (catastrophic
+    // blur) MUST give JOD ≪ 10 because the ref carries Weber-pyramid
+    // energy that the dist lacks; the missing-band energy converts to
+    // a non-trivial Q via masking → pool, and met2jod maps that below
+    // 10.
+    //
+    // A masking-saturation refactor (e.g. clamping Q above some bound)
+    // would re-promote this to ≈10. Pin guards against that drift on
+    // the GPU dispatch path specifically.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_textured: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
+    let dist_flat: Vec<u8> = vec![128u8; n];
+    let jod = cvvdp.score(&ref_textured, &dist_flat).expect("score textured-vs-flat");
+    eprintln!("GPU textured-ref-vs-flat-dist: jod = {jod:.4}");
+    assert!(jod.is_finite(), "GPU blur JOD must be finite, got {jod}");
+    assert!(
+        jod < 9.0,
+        "GPU textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
+    );
+    assert!(
+        jod > -10.0,
+        "GPU blur JOD = {jod} is extreme; sanity-check failed",
+    );
+}
+
+#[test]
+fn cvvdp_score_monotonically_decreases_with_noise_amplitude() {
+    // Tick 545: GPU sibling of `jod_monotonically_decreases_with_noise_amplitude`
+    // (host scalar, tick 544). Textured ref + dense alternating-sign
+    // noise of amplitude A → JOD that strictly decreases as A grows.
+    //
+    // Probes the dense-noise regime of the GPU masking + pool chain
+    // (every byte carries a ± perturbation). A masking-saturation
+    // refactor would flatten the curve at high amplitudes; three
+    // sample points are enough to surface a plateau.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (32u32, 32u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let n = (w * h * 3) as usize;
+    let ref_: Vec<u8> = (0..n).map(|i| ((i * 13 + 7) % 256) as u8).collect();
+
+    fn add_alt_noise(src: &[u8], amplitude: u8) -> Vec<u8> {
+        src.iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let delta = sign * amplitude as i16;
+                (b as i16 + delta).clamp(0, 255) as u8
+            })
+            .collect()
+    }
+
+    let jod_a2 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 2)).expect("score a=2");
+    let jod_a8 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 8)).expect("score a=8");
+    let jod_a32 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 32)).expect("score a=32");
+    eprintln!("GPU noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}");
+
+    assert!(
+        jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
+        "non-finite GPU JOD: a2={jod_a2} a8={jod_a8} a32={jod_a32}",
+    );
+    // Strict monotonicity. GPU atomic-add noise (~1e-7 abs) is far
+    // below the per-step JOD delta we expect across these amplitudes
+    // (host scalar saw ~0.03 between a=2 and a=8, ~0.28 between a=8
+    // and a=32), so direct `>` is safe.
+    assert!(
+        jod_a2 > jod_a8,
+        "GPU JOD(a=2)={jod_a2} should exceed JOD(a=8)={jod_a8} (more noise = lower JOD)",
+    );
+    assert!(
+        jod_a8 > jod_a32,
+        "GPU JOD(a=8)={jod_a8} should exceed JOD(a=32)={jod_a32} (more noise = lower JOD)",
+    );
+    assert!(
+        jod_a2 < 10.0 + 1e-2,
+        "a=2 noise should keep GPU JOD at or below 10, got {jod_a2}",
+    );
+}

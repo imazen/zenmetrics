@@ -172,6 +172,35 @@ clean across:
   - `cargo doc -p cvvdp-gpu --no-deps --document-private-items` — 0 warnings
   - `cargo test --doc -p cvvdp-gpu` — 44 passed + 13 ignored
 
+- **Spatial-contrast contract pinned (ticks 542–545).** Six new
+  hypothesis-test pins capture cvvdp's spatial-contrast contract on
+  both the host scalar (`predict_jod_still_3ch`) and GPU dispatch
+  (`Cvvdp::score`) paths:
+  - **flat-vs-flat → JOD ≈ 10** (tick 542 host, 545 GPU): pure
+    black vs pure white returns JOD ≈ 10 because cvvdp measures
+    contrast *within* an image, not absolute differences *between*
+    images. Both flat inputs have zero Weber-band energy → D = 0 →
+    JOD = 10. Guards against an "absolute-difference" refactor.
+  - **textured-vs-flat → JOD ≪ 10** (tick 543 host, 545 GPU): a
+    32×32 textured ref vs flat mid-gray dist (catastrophic blur)
+    gives JOD = 3.4402 on host scalar and 3.4389 on the GPU path.
+    The ref's missing-band energy converts to a non-trivial Q via
+    masking → pool, and met2jod maps that below 10.
+  - **noise-amplitude monotonicity** (tick 544 host, 545 GPU):
+    dense alternating-sign noise at amplitudes {2, 8, 32} produces
+    JOD {9.9941, 9.9670, 9.6885} — strictly monotonic on both
+    paths. Probes the dense-noise regime that the sparse-distortion
+    pin (`output_responds_to_distortion_magnitude`) doesn't cover.
+
+  Host/GPU agreement across the trio: within atomic-add noise floor
+  (largest divergence 0.0013 JOD on textured-vs-flat at JOD ≈ 3.4).
+  Together with the stuck-at-constant pins across all 4 scoring
+  paths (ticks 494, 508, 509, 525), the spatial-contrast contract
+  is now load-bearing-tested on every dispatch surface.
+
+  Commit hashes: `002e6958` (542), `58523a73` (543), `2ed1f4a4`
+  (544), tick 545 in this commit.
+
 ### Changed
 
 #### cvvdp-gpu
