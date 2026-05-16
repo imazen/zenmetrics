@@ -145,6 +145,26 @@ const _: () = {
     );
 };
 
+// Tick 594: pin docs/CVVDP_SIDECAR_SCHEMA.md against
+// PYCVVDP_REFERENCE_VERSION. The "Reserved column-name tags" table
+// documents that `cvvdp_pycvvdp_v054` corresponds to "upstream
+// pycvvdp v0.5.4" — load-bearing for current-state sweep tooling
+// docs.
+//
+// (CHROMA_DRIFT_INVESTIGATION.md is intentionally NOT pinned —
+// its v0.5.4 references are historical (tick-200-era bug-hunt
+// audit), not current-state. Pinning would cement that the doc
+// must always reference v0.5.4 even after future reference bumps,
+// which isn't right for an historical investigation log.)
+const _SIDECAR_SCHEMA: &str = include_str!("../docs/CVVDP_SIDECAR_SCHEMA.md");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_SIDECAR_SCHEMA.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        "docs/CVVDP_SIDECAR_SCHEMA.md must contain PYCVVDP_REFERENCE_VERSION (reserved column-name tags)",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);

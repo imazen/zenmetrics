@@ -669,6 +669,16 @@ forces the comment to update in lockstep too. The const now has
 6 cross-file `include_str!()` lockstep pins total. Static-assert
 count is now 212 across 12 test files.
 
+Tick 594 pinned `docs/CVVDP_SIDECAR_SCHEMA.md`'s "Reserved
+column-name tags" table (which documents `cvvdp_pycvvdp_v054` →
+"upstream pycvvdp v0.5.4"). CHROMA_DRIFT_INVESTIGATION.md is
+intentionally NOT pinned — its v0.5.4 references are historical
+audit material from the tick-200 chroma_shift bug hunt, not
+current-state documentation; pinning would cement that historical
+investigation against future reference bumps incorrectly. The
+const now has 7 cross-file `include_str!()` lockstep pins.
+Static-assert count is now 213 across 12 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
