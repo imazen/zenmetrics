@@ -31,6 +31,12 @@ const _: () = assert!(
 // MSRV 1.93). A silent drift on any of these would cascade into
 // JOD differences across every parity gate — compile-time
 // enforcement catches the drift before any test runs.
+//
+// Tick 558: extended to cover the 3-entry arrays CH_GAIN (the
+// per-channel masking gain — RG gets 1.45× boost vs A/VY) and
+// MASK_Q (per-channel masking exponents — three distinct values
+// where a typo swapping any pair would visibly shift chroma
+// masking). Each entry pinned independently.
 const _: () = assert!(
     MASK_P.to_bits() == 2.264_355_2_f32.to_bits(),
     "MASK_P drifted from cvvdp v0.5.4 = 2.264_355_2",
@@ -42,6 +48,30 @@ const _: () = assert!(
 const _: () = assert!(
     D_MAX.to_bits() == 2.564_245_5_f32.to_bits(),
     "D_MAX drifted from cvvdp v0.5.4 = 2.564_245_5 (50% clamp at 10^D_MAX ≈ 366)",
+);
+const _: () = assert!(
+    CH_GAIN[0].to_bits() == 1.0_f32.to_bits(),
+    "CH_GAIN[A] drifted from 1.0",
+);
+const _: () = assert!(
+    CH_GAIN[1].to_bits() == 1.45_f32.to_bits(),
+    "CH_GAIN[Rg] drifted from 1.45 (cvvdp v0.5.4 RG masking-gain boost)",
+);
+const _: () = assert!(
+    CH_GAIN[2].to_bits() == 1.0_f32.to_bits(),
+    "CH_GAIN[Vy] drifted from 1.0",
+);
+const _: () = assert!(
+    MASK_Q[0].to_bits() == 1.302_622_7_f32.to_bits(),
+    "MASK_Q[A] drifted from cvvdp v0.5.4 = 1.302_622_7",
+);
+const _: () = assert!(
+    MASK_Q[1].to_bits() == 2.888_590_8_f32.to_bits(),
+    "MASK_Q[Rg] drifted from cvvdp v0.5.4 = 2.888_590_8",
+);
+const _: () = assert!(
+    MASK_Q[2].to_bits() == 3.680_771_3_f32.to_bits(),
+    "MASK_Q[Vy] drifted from cvvdp v0.5.4 = 3.680_771_3",
 );
 
 #[test]

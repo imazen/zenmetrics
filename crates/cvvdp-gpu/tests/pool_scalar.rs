@@ -16,8 +16,16 @@ use cvvdp_gpu::kernels::pool::{
 // on any one cascades into a per-q diff visible across every parity
 // gate. `f32::to_bits` is const fn since Rust 1.83 (workspace MSRV
 // 1.93). Same pattern as ticks 522-524, 548-556.
+//
+// Tick 558: extended to cover the 3-entry arrays PER_CH_W (all
+// 1.0 — the still-image chrominance weights) and BASEBAND_W (the
+// per-channel baseband weights that dominate the low-frequency
+// contribution). Each array entry pinned independently so a typo
+// that swaps two entries surfaces at compile time.
 const _: () = {
-    use cvvdp_gpu::kernels::pool::{BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, JOD_A, JOD_EXP};
+    use cvvdp_gpu::kernels::pool::{
+        BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, JOD_A, JOD_EXP, PER_CH_W,
+    };
     assert!(
         BETA_SPATIAL.to_bits() == 2.0_f32.to_bits(),
         "BETA_SPATIAL drifted from cvvdp v0.5.4 beta=2.0 (RMS-equivalent spatial pool)",
@@ -41,6 +49,23 @@ const _: () = {
     assert!(
         JOD_EXP.to_bits() == 0.930_204_27_f32.to_bits(),
         "JOD_EXP drifted from cvvdp v0.5.4 jod_exp=0.930_204_27 (met2jod power-law exponent)",
+    );
+    // Tick 558: PER_CH_W — still-image 3-channel weights, all 1.0.
+    assert!(PER_CH_W[0].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[A] drifted from 1.0");
+    assert!(PER_CH_W[1].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[Rg] drifted from 1.0");
+    assert!(PER_CH_W[2].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[Vy] drifted from 1.0");
+    // Tick 558: BASEBAND_W — per-channel baseband weights.
+    assert!(
+        BASEBAND_W[0].to_bits() == 0.003_633_448_6_f32.to_bits(),
+        "BASEBAND_W[A] drifted from cvvdp v0.5.4 = 0.003_633_448_6",
+    );
+    assert!(
+        BASEBAND_W[1].to_bits() == 1.662_772_4_f32.to_bits(),
+        "BASEBAND_W[Rg] drifted from cvvdp v0.5.4 = 1.662_772_4",
+    );
+    assert!(
+        BASEBAND_W[2].to_bits() == 4.118_745_3_f32.to_bits(),
+        "BASEBAND_W[Vy] drifted from cvvdp v0.5.4 = 4.118_745_3",
     );
 };
 

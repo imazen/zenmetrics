@@ -273,6 +273,20 @@ Tick 557 promoted 8 more scalar bit-pins:
 Each is independently load-bearing for JOD output across every
 parity gate. Static-assert count is now 46 across 11 test files.
 
+Tick 558 promoted 12 array-element bit-pins covering 4 three-entry
+arrays:
+  - `pool_scalar.rs`:
+    - `PER_CH_W[0..3] == 1.0_f32` (still-image chrominance weights)
+    - `BASEBAND_W[A,Rg,Vy] == 0.003_633_448_6 / 1.662_772_4 /
+      4.118_745_3` (per-channel baseband weights)
+  - `masking_constants.rs`:
+    - `CH_GAIN[A,Rg,Vy] == 1.0 / 1.45 / 1.0` (RG masking-gain boost)
+    - `MASK_Q[A,Rg,Vy] == 1.302_622_7 / 2.888_590_8 / 3.680_771_3`
+      (per-channel masking exponents)
+A typo that swapped any pair of array entries (e.g. CH_GAIN[A] ↔
+CH_GAIN[Rg], muting chrominance) now surfaces at compile time.
+Static-assert count is now 58 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
