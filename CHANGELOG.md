@@ -722,6 +722,19 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 623 — combined `# Examples` doctest on `LOG_S_O0_C1`
+covering all three per-channel sensitivity LUTs
+(LOG_S_O0_C1/C2/C3, A/Rg/Vy respectively). Same shared-coverage
+pattern as `MASK_P` (tick 613) and `LOG_L_BKG_AXIS` (tick 618).
+Pins:
+- All three are 1024-entry flat arrays (32 × 32 grid =
+  N_L_BKG × N_RHO).
+- Every entry is finite (no NaN/Inf in the vendored JSON — log10
+  of sensitivity can be negative for S < 1, but never NaN).
+Cross-references tick 600's compile-time channel-completeness pin
+in `tests/version_lockstep.rs`. Doctest count: 70 passed + 16
+ignored (was 69 + 16). Docs-only change.
+
 Tick 622 — add `# Examples` doctests to `Cvvdp::new` +
 `Cvvdp::set_reference`. Both `ignore`d for the same docs.rs
 GPU-sandbox reason. The `new` doctest exercises the most common

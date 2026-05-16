@@ -76,6 +76,35 @@ pub const LOG_RHO_AXIS: [f32; 32] = [
 /// `LOG_S_O0_C1[l_idx * 32 + rho_idx]` returns
 /// `log10(sensitivity)` at `LOG_L_BKG_AXIS[l_idx]` and
 /// `LOG_RHO_AXIS[rho_idx]`. 32 × 32 = 1024 entries.
+///
+/// # Examples
+///
+/// Combined doctest covering all three per-channel sensitivity
+/// LUTs (LOG_S_O0_C1 = A, LOG_S_O0_C2 = Rg, LOG_S_O0_C3 = Vy).
+/// Same shared-coverage pattern as `MASK_P` and `LOG_L_BKG_AXIS`.
+/// Compile-time-pinned by tick 600's LUT-3-channel-completeness
+/// check in `tests/version_lockstep.rs`.
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{
+///     LOG_S_O0_C1, LOG_S_O0_C2, LOG_S_O0_C3, N_L_BKG, N_RHO,
+/// };
+///
+/// // All three are flat 1024-entry arrays (32 × 32 grid).
+/// const EXPECTED_LEN: usize = N_L_BKG * N_RHO;
+/// assert_eq!(LOG_S_O0_C1.len(), EXPECTED_LEN);
+/// assert_eq!(LOG_S_O0_C2.len(), EXPECTED_LEN);
+/// assert_eq!(LOG_S_O0_C3.len(), EXPECTED_LEN);
+///
+/// // Every entry is finite (no NaN/Inf in the vendored JSON).
+/// // The values are log10(sensitivity); they can be negative
+/// // (S < 1) or positive (S > 1), but never NaN.
+/// for lut in [&LOG_S_O0_C1, &LOG_S_O0_C2, &LOG_S_O0_C3] {
+///     for &v in lut.iter() {
+///         assert!(v.is_finite());
+///     }
+/// }
+/// ```
 pub const LOG_S_O0_C1: [f32; 1024] = [
     5.4041478972e-01_f32, 6.6136503444e-01_f32, 7.6722500215e-01_f32, 8.5664595859e-01_f32,
     9.2960058042e-01_f32, 9.8604756886e-01_f32, 1.0259246227e+00_f32, 1.0491380343e+00_f32,
