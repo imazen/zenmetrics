@@ -200,10 +200,11 @@ same clippy / doc / doctest status as tick 540 — no regressions.
 Tick 550 promoted 3 `f32::is_finite()` runtime asserts to static
 asserts in `lib_reexports.rs` on the re-exported scalar constants
 `MASK_C`, `JOD_A`, and `KERNEL_A`. `f32::is_finite` is `const fn`
-in stable Rust 1.83+ (and this crate's MSRV is 1.85). Catches a
-refactor that accidentally substitutes `f32::NAN` or
-`f32::INFINITY` as a constant literal. Static-assert count is now
-22 across 5 test files.
+in stable Rust since 1.83 (workspace pins `rust-version = "1.93"`,
+absolute language minimum per project policy is 1.85, both well
+above 1.83). Catches a refactor that accidentally substitutes
+`f32::NAN` or `f32::INFINITY` as a constant literal. Static-assert
+count is now 22 across 5 test files.
 
 Tick 551 promoted 7 `DisplayGeometry::STANDARD_4K` +
 `DisplayModel::STANDARD_4K` field-value runtime asserts to static
@@ -225,6 +226,13 @@ Rust. Every parity test inherits this perf-mode through
 `Cvvdp::new(..., PLACEHOLDER)`; a silent flip to Fast would have
 changed the calibration baseline for dozens of goldens. Static-
 assert count is now 30 across 7 test files.
+
+Tick 553 fixed two MSRV-reference factual errors introduced in
+the tick 550 / 552 entries: the original wording said "MSRV 1.85"
+but the workspace pins `rust-version = "1.93"` (with 1.85 as the
+project's absolute language minimum, not the actual current
+MSRV). Updated both the CHANGELOG entry and the in-source comment
+in `params_placeholder.rs`. No code change; no test impact.
 
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's

@@ -23,10 +23,11 @@ use cvvdp_gpu::params::DisplayModel;
 // and inherits this perf-mode default. A refactor that flipped
 // it to Fast would silently change the calibration baseline for
 // every golden test. `matches!` is `const`-callable (derived
-// `PartialEq` on enums isn't yet, in stable 1.85), so the
-// pattern-match form is the const-compatible way to pin this
-// without an enum-equality call. Same load-bearing pattern as
-// the STANDARD_4K display field pins (tick 551).
+// `PartialEq` on enums isn't yet, in stable Rust as of this
+// crate's MSRV 1.93), so the pattern-match form is the const-
+// compatible way to pin this without an enum-equality call.
+// Same load-bearing pattern as the STANDARD_4K display field
+// pins (tick 551).
 const _: () = assert!(
     matches!(CvvdpParams::PLACEHOLDER.perf_mode, PerfMode::Strict),
     "PLACEHOLDER.perf_mode drifted from PerfMode::Strict (the parity-calibrated baseline)",
