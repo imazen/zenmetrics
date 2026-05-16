@@ -64,6 +64,28 @@ pub const SRGB8_TO_LINEAR_LUT: [f32; 256] = [
 /// unit tests and by host-side debug taps.
 ///
 /// Returns `(dkl_a, dkl_rg, dkl_vy)` for one pixel.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+/// use cvvdp_gpu::params::DisplayModel;
+///
+/// let d = DisplayModel::STANDARD_4K;
+///
+/// // Pure white → positive achromatic (A), near-zero chroma.
+/// let (a_white, rg_white, vy_white) =
+///     srgb_byte_to_dkl_scalar(255, 255, 255, d.y_peak, d.y_black, d.y_refl);
+/// assert!(a_white > 0.0);
+/// // RG / VY rows are mean-zero in DKL — grayscale → tiny chroma.
+/// assert!(rg_white.abs() < a_white * 0.05);
+/// assert!(vy_white.abs() < a_white * 0.05);
+///
+/// // Pure red → positive RG (opposes R against G + B).
+/// let (_, rg_red, _) =
+///     srgb_byte_to_dkl_scalar(255, 0, 0, d.y_peak, d.y_black, d.y_refl);
+/// assert!(rg_red > 0.0);
+/// ```
 #[inline]
 #[must_use]
 pub fn srgb_byte_to_dkl_scalar(

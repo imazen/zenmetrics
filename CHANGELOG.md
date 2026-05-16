@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`srgb_byte_to_dkl_scalar` doctest** — added `# Examples`:
+  pure-white → positive A + chroma < 5% of A, pure-red → RG > 0
+  (red-green axis convention). Tick 442.
+
 - **`met2jod` doctest** — added `# Examples` covering perfect-quality
   limit (`met2jod(0) == 10`), monotonic decline (0 > 0.5 > 1.0 > 5.0),
   and extreme-input safety (`met2jod(1e6)` finite < 0). Tick 441.
