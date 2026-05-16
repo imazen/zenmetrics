@@ -43,6 +43,17 @@ pub const JOD_EXP: f32 = 0.930_204_27;
 /// Per-channel weights for still-image 3-channel. Derived from
 /// `per_ch_w_all = [1, ch_chrom_w, ch_chrom_w, ch_trans_w]` sliced
 /// to first 3 channels. `ch_chrom_w = 1.0` in cvvdp v0.5.4.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::PER_CH_W;
+///
+/// // 3 channels, all weights 1.0 (no per-channel attenuation
+/// // at the pool stage — chroma weighting happens earlier via
+/// // masking::CH_GAIN).
+/// assert_eq!(PER_CH_W, [1.0, 1.0, 1.0]);
+/// ```
 pub const PER_CH_W: [f32; 3] = [1.0, 1.0, 1.0];
 
 /// Baseband (= last spatial band) weight per channel. cvvdp uses

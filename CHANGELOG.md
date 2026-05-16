@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`PER_CH_W` doctest** — added `# Examples` showing 3 channels
+  all at 1.0 (no per-channel attenuation at the pool stage; chroma
+  weighting happens earlier via `masking::CH_GAIN`). Tick 476.
+
 - **`CH_GAIN` doctest** — added `# Examples` showing 3 channels,
   A/Vy at 1.0 passthrough, Rg boosted at 1.45 (cvvdp's "ch_chrom_w"
   for the red-green axis). Tick 475.
