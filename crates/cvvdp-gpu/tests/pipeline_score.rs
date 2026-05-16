@@ -580,6 +580,65 @@ fn new_equivalent_to_new_with_geometry_standard_4k() {
 }
 
 #[test]
+fn cvvdp_score_smoke_at_extreme_aspect_ratio() {
+    // Tick 498: end-to-end GPU smoke at extreme aspect ratios
+    // (128×8 and 8×128 skinny strips). The boundary 8×8 smoke
+    // (tick 491) covers the minimum-square case; this covers the
+    // minimum-non-square case where one dim is at the boundary and
+    // the other is wide.
+    //
+    // `pyramid_levels` is bounded by `min(w, h).ilog2()` — for 8×128
+    // and 128×8 that's `8.ilog2() = 3` levels. A pyramid construction
+    // that defaults to `max(w, h).ilog2()` (= 7) at the asymmetric
+    // edge would surface here as either an InvalidImageSize error or
+    // a NaN/Inf JOD.
+    //
+    // For each aspect: pin (1) score(ref, ref) ≈ 10 (identity);
+    // (2) score(ref, dist) finite in [0, 10], strictly less than
+    // identity.
+    let client = Backend::client(&Default::default());
+    let cases: &[(u32, u32, &str)] = &[(128, 8, "128x8 wide strip"), (8, 128, "8x128 tall strip")];
+    for &(w, h, label) in cases {
+        let mut cvvdp = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+            .unwrap_or_else(|e| panic!("{label}: Cvvdp::new failed: {e:?}"));
+
+        let n = (w * h * 3) as usize;
+        let mut ref_srgb = vec![128u8; n];
+        for i in (0..n).step_by(7) {
+            ref_srgb[i] = ref_srgb[i].saturating_add(20);
+        }
+        let mut dist_srgb = ref_srgb.clone();
+        for i in (0..n).step_by(5) {
+            dist_srgb[i] = dist_srgb[i].saturating_sub(15);
+        }
+
+        let jod_ident = cvvdp
+            .score(&ref_srgb, &ref_srgb)
+            .unwrap_or_else(|e| panic!("{label}: score(ref, ref) failed: {e:?}"));
+        assert!(
+            (jod_ident - 10.0).abs() < 1e-3,
+            "{label}: identity JOD = {jod_ident}, expected ~ 10",
+        );
+
+        let jod_pert = cvvdp
+            .score(&ref_srgb, &dist_srgb)
+            .unwrap_or_else(|e| panic!("{label}: score(ref, dist) failed: {e:?}"));
+        assert!(
+            jod_pert.is_finite(),
+            "{label}: perturbed JOD must be finite, got {jod_pert}",
+        );
+        assert!(
+            (0.0..=10.0 + 1e-3).contains(&jod_pert),
+            "{label}: perturbed JOD must be in [0, 10], got {jod_pert}",
+        );
+        assert!(
+            jod_pert < jod_ident,
+            "{label}: perturbed JOD {jod_pert} must be < identity {jod_ident}",
+        );
+    }
+}
+
+#[test]
 fn cvvdp_score_smoke_at_pyramid_min_boundary() {
     // Tick 491: end-to-end GPU smoke test on the minimum supported
     // dimensions (8×8 = PYRAMID_MIN_DIM × 2). The existing
