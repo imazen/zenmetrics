@@ -48,6 +48,24 @@ pub const PER_CH_W: [f32; 3] = [1.0, 1.0, 1.0];
 /// Baseband (= last spatial band) weight per channel. cvvdp uses
 /// the first 3 entries of `baseband_weight` for still-image
 /// 3-channel.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::BASEBAND_W;
+///
+/// // 3 channels, all positive — the achromatic channel (index 0)
+/// // is heavily attenuated at the baseband (≈ 0.004) because
+/// // low-spatial-frequency luminance is below the CSF threshold;
+/// // chroma channels (RG/VY) are weighted more (≈ 1.66 / 4.12).
+/// assert_eq!(BASEBAND_W.len(), 3);
+/// for &w in &BASEBAND_W {
+///     assert!(w > 0.0 && w.is_finite());
+/// }
+/// // Chroma dominance at baseband — Vy is the largest.
+/// assert!(BASEBAND_W[2] > BASEBAND_W[0]);
+/// assert!(BASEBAND_W[1] > BASEBAND_W[0]);
+/// ```
 pub const BASEBAND_W: [f32; 3] = [0.003_633_448_6, 1.662_772_4, 4.118_745_3];
 
 /// Epsilon used by cvvdp's `safe_pow` throughout `lp_norm`. The

@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`BASEBAND_W` doctest** — added `# Examples` showing 3 positive-
+  finite entries with chroma dominance at baseband (`[2] > [0]`,
+  `[1] > [0]` — low-spatial-freq luminance is below CSF threshold).
+  Tick 471.
+
 - **`PU_BLUR_KERNEL_1D` doctest** — added `# Examples` showing 13
   taps, symmetric around center via `to_bits()`, sum-to-1 (DC
   preservation, σ=3 Gaussian), center > 5× tail magnitude. Tick 470.
