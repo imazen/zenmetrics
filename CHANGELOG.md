@@ -229,6 +229,24 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/masking_safe_pow.rs`** — five direct unit tests on
+  `kernels::masking::safe_pow` (cvvdp's `(x + eps)^p - eps^p`
+  used in the masking chain — distinct from
+  `pool::safe_pow_lp`'s `|x|.abs() + eps` variant). Previously
+  exercised only transitively through `mult_mutual_pixel` and
+  the composed-pipeline parity tests. New tests pin: (1)
+  `safe_pow(0, p) = 0` exactly across p ∈ {1, 2, MASK_P, 4} —
+  catches a refactor that drops the `- eps^p` correction; (2)
+  `safe_pow(1, p)` matches the closed-form `(1 + eps)^p - eps^p`
+  for the same p set; (3) strictly monotonic in x for positive p
+  (catches a sign-flip on the correction term); (4) eps offset
+  dominates only near zero — for x ≫ eps, result ≈ x^p (rel <
+  1e-3) and for x = eps the closed form `eps^p × (2^p - 1)`
+  holds; (5) finite + positive at extreme x ∈ {100, 1k, 10k}
+  across p set (catches an overflow-to-inf regression). Lives
+  in a dedicated file per the tick-401 precedent (linter-revert
+  safety vs `masking_scalar.rs`). Tick 410.
+
 - **`tests/error_traits.rs`** — pins five trait-side contracts on
   `cvvdp_gpu::Error`: (1) `impl std::error::Error` (compile-time
   check via `&dyn` coercion); (2) `Clone` preserves variant +
