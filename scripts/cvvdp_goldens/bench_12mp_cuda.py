@@ -55,6 +55,33 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_720x1280_offset(w=720, h=1280):
+    """720x1280 (TALL HD aspect, ~1 MP) non-square fixture mirroring
+    `synth_pair_1280x720_offset`. Tests the OTHER asymmetric case
+    where height > width. Same modular construction so the
+    relative-JOD comparison reveals stride-asymmetric behavior in
+    the pyramid kernels — a refactor that bakes in a "width >=
+    height" assumption would surface here as a JOD that differs
+    from the wide variant by more than the f32 noise floor.
+
+    Bit-stable with Rust's `common::synth_pair_with_offset_dist(720, 1280)`.
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = np.stack(
+        [
+            np.maximum(r.astype(np.int16) - 8, 0).astype(np.uint8),
+            np.maximum(g.astype(np.int16) - 4, 0).astype(np.uint8),
+            np.minimum(b.astype(np.int16) + 12, 255).astype(np.uint8),
+        ],
+        axis=-1,
+    )
+    return ref, dist
+
+
 def synth_pair_1280x720_offset(w=1280, h=720):
     """1280x720 (HD aspect, ~1 MP) non-square fixture with the same
     offset-distortion construction as the 12 MP / 1024² fixtures.
@@ -330,8 +357,18 @@ def main():
     hd_ref, hd_dist = synth_pair_1280x720_offset()
     print("1280x720 (HD) offset golden:")
     hd_jod, _ = metric.predict(hd_dist, hd_ref, dim_order="HWC")
-    print(f"  jod = {float(hd_jod):.4f}\n")
+    print(f"  jod = {float(hd_jod):.4f}")
     hd_jod_val = float(hd_jod)
+
+    # 720x1280 TALL HD fixture (~1 MP, non-square, h > w). Mirrors
+    # 1280×720 to test the OTHER asymmetric-aspect case. Together
+    # they pin a width-vs-height-symmetric pyramid against any
+    # refactor that bakes in a w >= h assumption.
+    tall_ref, tall_dist = synth_pair_720x1280_offset()
+    print("720x1280 (tall HD) offset golden:")
+    tall_jod, _ = metric.predict(tall_dist, tall_ref, dim_order="HWC")
+    print(f"  jod = {float(tall_jod):.4f}\n")
+    tall_jod_val = float(tall_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -418,6 +455,11 @@ def main():
                 "shape_hw": [720, 1280],
                 "construction": "synth_pair_1280x720_offset",
                 "jod": hd_jod_val,
+            },
+            "synth_720x1280_offset": {
+                "shape_hw": [1280, 720],
+                "construction": "synth_pair_720x1280_offset",
+                "jod": tall_jod_val,
             },
         },
     }

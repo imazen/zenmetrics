@@ -722,6 +722,32 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 631 — add a 720×1280 (TALL HD aspect, h > w) synth-offset
+parity fixture, mirroring tick 630's 1280×720 wide-HD fixture by
+swapping aspect. Same total pixel count, same per-pixel
+distortion, but pyramid downsample strides are width/height-
+asymmetric. The two side-by-side pin width-height SYMMETRY of
+the pyramid kernels: any refactor that bakes in a `w >= h`
+assumption would surface as a tall-vs-wide JOD diff exceeding
+the f32 noise floor.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_720x1280_offset(w=720, h=1280)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.445360` (generated locally via pinned `.venv`,
+  0.3 s wallclock).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_720x1280_offset` host-scalar
+  parity test.
+
+Measured result: host_scalar JOD = 9.445363, pycvvdp golden =
+9.445360, **|diff| = 0.000003** (~3 ULP). Notably this JOD
+differs from the wide 1280×720 fixture by ~0.009 — non-trivial,
+reflecting genuinely different per-band downsampling order
+(both are bit-stable against pycvvdp v0.5.4 individually, so
+the diff is a real pyramid-stride asymmetry, not a bug).
+
 Tick 630 — add a 1280×720 (HD aspect, ~1 MP) **non-square**
 synth-offset parity fixture. Sister to the square 1024² fixture
 (tick 629): `min(w, h)=720` → `floor(log2(720)) - 1 = 8` raw

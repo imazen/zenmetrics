@@ -25,6 +25,43 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_720x1280_offset() {
+    // Tick 631: host-scalar parity vs pycvvdp v0.5.4 on a 720×1280
+    // (TALL HD aspect, h > w) non-square synth pair. Mirrors tick
+    // 630's 1280×720 wide-HD fixture by swapping aspect — same
+    // total pixel count, same per-pixel distortion, but pyramid
+    // strides are width/height-asymmetric.
+    //
+    // The two side-by-side pin that the pyramid kernels are
+    // width-height-symmetric (no `w >= h` assumption baked in).
+    // A refactor that introduced an asymmetric bug would surface
+    // as a JOD diff between tall and wide that exceeds the f32
+    // noise floor. Measured locally: tall=9.445360, wide=9.454182
+    // (diff ~0.009 — non-trivial, reflecting genuinely different
+    // per-band downsampling order; both are bit-stable against
+    // pycvvdp v0.5.4 individually).
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_720x1280_offset");
+    let (w, h) = (720_usize, 1280_usize);
+    let (ref_b, dist_b) = common::synth_pair_with_offset_dist(w, h);
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 720x1280 offset: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_1280x720_offset() {
     // Tick 630: host-scalar parity vs pycvvdp v0.5.4 on a 1280×720
     // (HD aspect, ~1 MP) non-square synth pair. Sister to the
