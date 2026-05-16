@@ -528,6 +528,18 @@ silently; a stray non-hex char fetches the wrong manifest. Now
 both are compile-time-caught. Static-assert count is now 176
 across 11 test files.
 
+Tick 581 extracted `CACHE_DIR_SUBDIR = "zenmetrics-cvvdp-goldens"`
+from `tests/common/mod.rs` to a pub const (was a magic string
+inline in `cache_dir()`), then pinned 3 structural invariants on
+it via the const-byte-loop primitives from ticks 577-580:
+  - non-empty
+  - contains "cvvdp" (disambiguation from sibling crates'
+    cache dirs that all live under `~/.cache/zenmetrics-*/`)
+  - all-ASCII alphanumerics or hyphen (filesystem-portable)
+Static-assert count is now 179 across 11 test files. Small
+refactor + pins — same shape as ticks 522-524 promoted dimension
+constants from inline literals into the lib_constants module.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

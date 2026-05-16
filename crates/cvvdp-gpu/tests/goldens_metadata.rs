@@ -18,7 +18,7 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use common::{GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir};
+use common::{CACHE_DIR_SUBDIR, GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir};
 
 // Tick 578: compile-time pins for the goldens-metadata structural
 // invariants. `str::starts_with` / `ends_with` / `contains` are
@@ -148,6 +148,34 @@ const _: () = {
         assert!(
             (c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f'),
             "MANIFEST_SHA256 must be lowercase hex (0-9, a-f) — found non-hex byte",
+        );
+        i += 1;
+    }
+};
+
+// Tick 581: CACHE_DIR_SUBDIR structural invariants. The constant
+// is the per-crate cache-dir name "zenmetrics-cvvdp-goldens" used
+// by `cache_dir()`. Pin:
+//   - non-empty
+//   - contains "cvvdp" (so sibling crates' cache dirs don't collide
+//     with this one)
+//   - all-ASCII alphanumerics or hyphen (filesystem-portable)
+const _: () = {
+    assert!(!CACHE_DIR_SUBDIR.is_empty(), "CACHE_DIR_SUBDIR must not be empty");
+    assert!(
+        bytes_contain(CACHE_DIR_SUBDIR.as_bytes(), b"cvvdp"),
+        "CACHE_DIR_SUBDIR must contain 'cvvdp' to disambiguate from sibling crates",
+    );
+    let bytes = CACHE_DIR_SUBDIR.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        assert!(
+            (c >= b'0' && c <= b'9')
+                || (c >= b'a' && c <= b'z')
+                || (c >= b'A' && c <= b'Z')
+                || c == b'-',
+            "CACHE_DIR_SUBDIR must be filesystem-portable (ASCII alphanumerics + hyphen)",
         );
         i += 1;
     }

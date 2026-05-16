@@ -41,6 +41,13 @@ pub const MANIFEST_URL: &str = "https://coefficient.r2.imazen.org/cvvdp-goldens/
 pub const MANIFEST_SHA256: &str =
     "9b8638c4cee15b79240acd8116f54d417f2a641999ca0146567b1bea5aa594c5";
 
+/// Per-crate cache-dir subdirectory name. Lives in `~/.cache/<this>/<GOLDEN_VERSION>/`
+/// (or `$XDG_CACHE_HOME/...` / `$TMPDIR/...` per the cache_dir() priority).
+/// Tick 581: extracted as a pub const so it can be pinned in
+/// `goldens_metadata.rs` rather than duplicated as a magic string
+/// in two places.
+pub const CACHE_DIR_SUBDIR: &str = "zenmetrics-cvvdp-goldens";
+
 /// Returns the per-version cache directory, creating it if needed.
 pub fn cache_dir() -> PathBuf {
     let base = if let Some(dir) = std::env::var_os("XDG_CACHE_HOME") {
@@ -50,7 +57,7 @@ pub fn cache_dir() -> PathBuf {
     } else {
         std::env::temp_dir()
     };
-    let dir = base.join("zenmetrics-cvvdp-goldens").join(GOLDEN_VERSION);
+    let dir = base.join(CACHE_DIR_SUBDIR).join(GOLDEN_VERSION);
     let _ = fs::create_dir_all(&dir);
     dir
 }
