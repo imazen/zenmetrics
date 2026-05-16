@@ -319,9 +319,19 @@ impl<R: Runtime> Iwssim<R> {
     }
 
     fn run_pipeline(&mut self) -> Result<GpuIwssimResult> {
+        let profile = std::env::var("IWSSIM_PROFILE").is_ok();
+        let total_t = std::time::Instant::now();
+        let t0 = std::time::Instant::now();
         // 1. Build Gaussian pyramid + extract LP bands.
         self.build_laplacian_pyramid(true);
         self.build_laplacian_pyramid(false);
+        if profile {
+            self.client.sync();
+            eprintln!(
+                "    stage 'lp_pyramid': {:.3} ms",
+                t0.elapsed().as_secs_f64() * 1e3
+            );
+        }
 
         // Optional per-scale pyramid stats (set `IWSSIM_DEBUG=1`). Kept
         // because the upConv DC scaling is the most failure-prone piece
@@ -332,16 +342,32 @@ impl<R: Runtime> Iwssim<R> {
         }
 
         // 2. Per-scale SSIM stats + combine.
+        let t = std::time::Instant::now();
         for s in 0..self.scales.len() {
             self.run_ssim_stats(s);
         }
+        if profile {
+            self.client.sync();
+            eprintln!(
+                "    stage 'ssim_stats': {:.3} ms",
+                t.elapsed().as_secs_f64() * 1e3
+            );
+        }
 
         // 3. Per-scale IW path (j = 0..3).
+        let t = std::time::Instant::now();
         for s in 0..(self.scales.len() - 1) {
             self.run_iw_scale(s);
             if std::env::var("IWSSIM_DEBUG").is_ok() {
                 self.debug_iw_stats(s);
             }
+        }
+        if profile {
+            self.client.sync();
+            eprintln!(
+                "    stage 'iw_scales': {:.3} ms",
+                t.elapsed().as_secs_f64() * 1e3
+            );
         }
 
         // Debug-only: bypass the IW weighting (treat all weights as 1).
@@ -369,6 +395,7 @@ impl<R: Runtime> Iwssim<R> {
             .client
             .create_from_slice(f32::as_bytes(&vec![0.0_f32; NUM_SLOTS as usize]));
 
+        let t = std::time::Instant::now();
         for s in 0..(self.scales.len() - 1) {
             let sc = &self.scales[s];
             let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
@@ -423,8 +450,16 @@ impl<R: Runtime> Iwssim<R> {
             NUM_SLOTS as usize,
             NUM_SLOTS,
         );
+        if profile {
+            self.client.sync();
+            eprintln!(
+                "    stage 'reductions': {:.3} ms",
+                t.elapsed().as_secs_f64() * 1e3
+            );
+        }
 
         // 5. Read back and finish on host.
+        let t = std::time::Instant::now();
         let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
         let sums = f32::from_bytes(&bytes);
         debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
@@ -446,6 +481,16 @@ impl<R: Runtime> Iwssim<R> {
             let b = filters::SCALE_WEIGHTS[s] as f64;
             let v = per_scale[s].abs();
             score *= v.powf(b);
+        }
+        if profile {
+            eprintln!(
+                "    stage 'readback+score': {:.3} ms",
+                t.elapsed().as_secs_f64() * 1e3
+            );
+            eprintln!(
+                "    >>> TOTAL pipeline: {:.3} ms",
+                total_t.elapsed().as_secs_f64() * 1e3
+            );
         }
         Ok(GpuIwssimResult { score, per_scale })
     }
