@@ -19,14 +19,30 @@
 // any given test compile-unit aren't dead crate-wide.
 #![allow(dead_code)]
 
-/// Const-fn helpers for compile-time `&str` validation. `str::starts_with`,
-/// `str::ends_with`, and `str::contains` aren't const fn in stable Rust, but
-/// the underlying byte-level matching IS const-callable. These helpers
-/// encapsulate the pattern used across `column_name.rs`,
-/// `goldens_metadata.rs`, and `lib_reexports.rs` so the byte-loop boilerplate
-/// doesn't have to be reimplemented at each call site.
+/// Const-fn helpers for compile-time `&str` validation. The corresponding
+/// `str` methods (`starts_with`, `ends_with`, `contains`, `eq`, plus
+/// `matches().count()`) aren't const fn in stable Rust, but the underlying
+/// byte-level matching IS const-callable.
 ///
-/// Tick 584: extracted from inline duplicates in 3 test files.
+/// Current helpers (added ticks 584-600):
+/// - `starts_with` — byte-prefix match (tick 584)
+/// - `ends_with` — byte-suffix match (tick 584)
+/// - `contains` — sliding-window substring match (tick 584)
+/// - `bytes_eq` — full slice-equality (tick 586)
+/// - `count` — non-overlapping occurrence count (tick 600)
+///
+/// Current call sites:
+/// - `column_name.rs` (CVVDP_COLUMN_NAME prefix pins)
+/// - `goldens_metadata.rs` (URL prefix / suffix / contains, hex format,
+///   CACHE_DIR_SUBDIR portability)
+/// - `lib_reexports.rs` (cvvdp_ family-prefix pin)
+/// - `version_lockstep.rs` (7 PYCVVDP_REFERENCE_VERSION lockstep pins +
+///   LUT 3-channel completeness + BURN_PORT_PLAN ABANDONED-status pin)
+/// - `const_str_helpers.rs` (unit tests for the helpers themselves)
+///
+/// Tick 584: extracted from inline duplicates that had been added in
+/// ticks 577-583. Ticks 586/600 added the 4th and 5th helpers as new
+/// lockstep pins required them.
 pub mod const_str {
     /// `const fn` equivalent of `s.starts_with(prefix)`, both operating on
     /// raw byte slices.

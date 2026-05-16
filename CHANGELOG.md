@@ -722,6 +722,18 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 602 (`69c1fbb6`) — docstring-accuracy fix on the
+`common::const_str` module. The tick-584 module docstring was
+doubly stale: listed only 3 helpers (`starts_with` / `ends_with`
+/ `contains`) when ticks 586 and 600 added `bytes_eq` and `count`,
+and listed only 3 call sites (`column_name.rs`,
+`goldens_metadata.rs`, `lib_reexports.rs`) when ticks 588–600
+added `version_lockstep.rs` (heavy user) and `const_str_helpers.rs`
+(unit tests). Rewrote to enumerate all 5 helpers with their
+tick-of-introduction and all 5 current call sites with one-line
+purpose notes. Docs-only change — no code edits, no assert count
+change.
+
 Tick 601 added a separate-purpose static assert in
 `version_lockstep.rs` pinning that `docs/BURN_PORT_PLAN.md` keeps
 its "ABANDONED" status banner. The Burn port plan was marked
