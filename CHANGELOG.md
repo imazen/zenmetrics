@@ -722,6 +722,17 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 601 added a separate-purpose static assert in
+`version_lockstep.rs` pinning that `docs/BURN_PORT_PLAN.md` keeps
+its "ABANDONED" status banner. The Burn port plan was marked
+ABANDONED at tick 324 after a cubek::conv2d separable spike
+measured 4.32× slower than the hand-written downscale_kernel at
+4000×3000 on an RTX 5070. The banner status is stable — if the
+plan is genuinely revived, the file should be renamed /
+restructured, not silently un-marked. NOT a PYCVVDP_REFERENCE_VERSION
+lockstep pin (this is about file-content stability, not version
+bumping). Static-assert count is now 223 across 13 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

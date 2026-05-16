@@ -130,6 +130,25 @@ const _: () = {
     );
 };
 
+// Tick 601: separate-purpose pin (NOT a PYCVVDP_REFERENCE_VERSION
+// lockstep). `docs/BURN_PORT_PLAN.md` was marked ABANDONED at
+// tick 324 (cubek::conv2d separable spike measured 4.32× slower
+// than hand-written downscale_kernel at 4000×3000 on RTX 5070).
+// The "ABANDONED" banner is a stable status — if someone deliberately
+// revives the plan, they should rename the file or restructure it,
+// not silently un-mark the status. This pin catches an accidental
+// un-mark.
+const _BURN_PORT_PLAN: &str = include_str!("../docs/BURN_PORT_PLAN.md");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_BURN_PORT_PLAN.as_bytes(), b"ABANDONED"),
+        "docs/BURN_PORT_PLAN.md must keep the ABANDONED status banner — \
+         if reviving the plan, rename / restructure the file, don't just \
+         un-mark the status",
+    );
+};
+
 // Runtime touchpoint so the test runner can name this file in coverage output.
 #[test]
 fn pycvvdp_reference_version_lockstep_pins_compile() {
