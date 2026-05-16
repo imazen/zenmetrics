@@ -171,6 +171,61 @@ fn flat_vs_flat_yields_max_jod_regardless_of_brightness() {
 }
 
 #[test]
+fn jod_monotonically_decreases_with_noise_amplitude() {
+    // Tick 544: pin cvvdp's noise-amplitude monotonicity. A textured
+    // reference + dist = ref + alternating-sign noise of amplitude A
+    // should give JOD that strictly decreases as A grows. Different
+    // hypothesis from `output_responds_to_distortion_magnitude` (which
+    // uses *sparse* distortion every 7th byte) — here every byte
+    // carries a ± perturbation, so we're probing the dense-noise
+    // regime of the masking + pool chain.
+    //
+    // A bug where the masking stage saturates (clamps Q above some
+    // threshold) would flatten the curve at high amplitudes. Three
+    // sample points are enough to surface a plateau; the assertion
+    // is strict monotonicity across them.
+    let (w, h) = (32_usize, 32_usize);
+    let ref_: Vec<u8> = (0..w * h * 3).map(|i| ((i * 13 + 7) % 256) as u8).collect();
+
+    fn add_alt_noise(src: &[u8], amplitude: u8) -> Vec<u8> {
+        src.iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                // deterministic ± noise: sign by hash parity, magnitude by amplitude
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let delta = sign * amplitude as i16;
+                (b as i16 + delta).clamp(0, 255) as u8
+            })
+            .collect()
+    }
+
+    let jod_a2 = predict_jod_still_3ch(&ref_, &add_alt_noise(&ref_, 2), w, h, dm(), ppd());
+    let jod_a8 = predict_jod_still_3ch(&ref_, &add_alt_noise(&ref_, 8), w, h, dm(), ppd());
+    let jod_a32 = predict_jod_still_3ch(&ref_, &add_alt_noise(&ref_, 32), w, h, dm(), ppd());
+
+    eprintln!("noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}");
+
+    assert!(
+        jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
+        "non-finite JOD: a2={jod_a2} a8={jod_a8} a32={jod_a32}",
+    );
+    // Strict monotonicity: bigger noise → lower JOD.
+    assert!(
+        jod_a2 > jod_a8,
+        "JOD(a=2)={jod_a2} should exceed JOD(a=8)={jod_a8} (more noise = lower JOD)",
+    );
+    assert!(
+        jod_a8 > jod_a32,
+        "JOD(a=8)={jod_a8} should exceed JOD(a=32)={jod_a32} (more noise = lower JOD)",
+    );
+    // All distorted samples below the JOD=10 ceiling.
+    assert!(
+        jod_a2 < 10.0 - 1e-3,
+        "a=2 noise should detectably drop JOD below 10, got {jod_a2}",
+    );
+}
+
+#[test]
 #[should_panic(expected = "assertion")]
 fn panics_on_ref_dim_mismatch() {
     // The function asserts `ref_srgb.len() == width * height * 3`.
