@@ -138,3 +138,74 @@ fn small_image_smoke() {
     assert!(jod_diff.is_finite());
     assert!(jod_diff < jod_ident + 1e-3);
 }
+
+#[test]
+fn non_square_dimensions_are_supported() {
+    // The Weber-contrast pyramid + band_frequencies are driven by
+    // `min(width, height)` for level count but reduce on both dims
+    // independently. Pin that non-square inputs don't panic and
+    // produce a finite JOD that respects the identical → 10 contract.
+    for (w, h) in [
+        (32_usize, 16_usize),
+        (16_usize, 32_usize),
+        (64, 24),
+        (24, 64),
+    ] {
+        let src: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 13 + 5) % 256) as u8)
+            .collect();
+        let jod_ident = predict_jod_still_3ch(&src, &src, w, h, dm(), ppd());
+        assert!(
+            jod_ident.is_finite() && (jod_ident - 10.0).abs() < 1e-2,
+            "({w}, {h}) identical: JOD = {jod_ident}"
+        );
+
+        let dist: Vec<u8> = src
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| if i % 5 == 0 { b.wrapping_add(64) } else { b })
+            .collect();
+        let jod_diff = predict_jod_still_3ch(&src, &dist, w, h, dm(), ppd());
+        assert!(
+            jod_diff.is_finite(),
+            "({w}, {h}) diff: JOD = {jod_diff} non-finite"
+        );
+        assert!(
+            jod_diff < jod_ident + 1e-3,
+            "({w}, {h}) diff: JOD = {jod_diff} >= ident = {jod_ident}"
+        );
+    }
+}
+
+#[test]
+fn odd_dimensions_are_supported() {
+    // gausspyr_reduce_scalar's ceil-halving + boundary patches were
+    // historically buggy at odd dims (tick 206 — `x.shape[-2]` parity
+    // quirk in pycvvdp source). Pin that the composed pipeline still
+    // accepts odd inputs through to a finite JOD.
+    for (w, h) in [
+        (13_usize, 17_usize),  // both odd, prime-like
+        (15_usize, 15_usize),  // square odd
+        (73, 91),              // the historical regression case
+    ] {
+        let src: Vec<u8> = (0..w * h * 3)
+            .map(|i| ((i * 17 + 3) % 256) as u8)
+            .collect();
+        let jod_ident = predict_jod_still_3ch(&src, &src, w, h, dm(), ppd());
+        assert!(
+            jod_ident.is_finite() && (jod_ident - 10.0).abs() < 1e-2,
+            "({w}, {h}) odd identical: JOD = {jod_ident}"
+        );
+
+        let dist: Vec<u8> = src
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| if i % 4 == 0 { b.wrapping_add(30) } else { b })
+            .collect();
+        let jod_diff = predict_jod_still_3ch(&src, &dist, w, h, dm(), ppd());
+        assert!(
+            jod_diff.is_finite(),
+            "({w}, {h}) odd diff: JOD = {jod_diff} non-finite"
+        );
+    }
+}

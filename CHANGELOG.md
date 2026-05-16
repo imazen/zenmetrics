@@ -227,6 +227,16 @@ shipped across six commits + an operator runbook:
   the exact stderr line shapes each var emits, verified against
   the `if trace` blocks in pipeline.rs (`9fb0c569`, tick 347).
 
+#### cvvdp-gpu (tests, extension)
+
+- **`tests/predict_jod_invariants.rs`** — 2 new tests extending the
+  square-only coverage: `non_square_dimensions_are_supported`
+  (32×16, 16×32, 64×24, 24×64) and `odd_dimensions_are_supported`
+  (13×17 prime-ish, 15×15 odd-square, 73×91 — the historical tick
+  206 regression case from pycvvdp's `x.shape[-2]` parity quirk in
+  `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
+  perturbed → finite < ident + 1e-3. Tick 437.
+
 #### cvvdp-gpu (docs)
 
 - **`CsfChannel` variant docstrings** — `A` (achromatic /
