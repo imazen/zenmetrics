@@ -248,12 +248,12 @@ shipped across six commits + an operator runbook:
   by production code (which reads `kernels::*` consts). Drops
   rustdoc missing-docs warnings from 110 → ~88 (rest are
   `#[cube(launch)]` macro-emitted items, not user-writable).
-  Tick 481.
+  Tick 481, b756adce.
 
 - **`PU_PADSIZE` doctest** — added `# Examples` confirming the
   threshold value (6) and the branch-condition contract
   (`phase_uncertainty_band` at 6×6 takes the no-blur branch because
-  the check is `> PU_PADSIZE` not `>=`). Tick 480.
+  the check is `> PU_PADSIZE` not `>=`). Tick 480, 6b542aaa.
 
 #### cvvdp-gpu (docs, fix)
 
@@ -263,40 +263,40 @@ shipped across six commits + an operator runbook:
   cpu, where `Backend = cubecl::cuda::CudaRuntime` resolves. Under
   `cargo test --doc --no-default-features` the type alias was empty
   and all three failed to compile. `ignore` preserves the
-  documentation while skipping the compile-only step. Tick 479.
+  documentation while skipping the compile-only step. Tick 479, 949daf00.
 
 #### cvvdp-gpu (docs)
 
 - **`BETA_CH` doctest** — added `# Examples` (covers all 3 pool
   Minkowski exponents): `BETA_SPATIAL == 2.0` (RMS), `BETA_BAND ==
-  4.0`, `BETA_CH == 4.0`; spatial is the gentler exponent. Tick 478.
+  4.0`, `BETA_CH == 4.0`; spatial is the gentler exponent. Tick 478, 18d601ad.
 
 - **`JOD_EXP` doctest** — added `# Examples` (on `JOD_EXP`; also
   cross-references `JOD_A` and `IMAGE_INT`): `met2jod(1.0)` matches
   `10 - JOD_A * 1^JOD_EXP` algebra within 1e-5, IMAGE_INT lives in
-  `(0, 1)`. Tick 477.
+  `(0, 1)`. Tick 477, c02a797c.
 
 - **`PER_CH_W` doctest** — added `# Examples` showing 3 channels
   all at 1.0 (no per-channel attenuation at the pool stage; chroma
-  weighting happens earlier via `masking::CH_GAIN`). Tick 476.
+  weighting happens earlier via `masking::CH_GAIN`). Tick 476, e0369c79.
 
 - **`CH_GAIN` doctest** — added `# Examples` showing 3 channels,
   A/Vy at 1.0 passthrough, Rg boosted at 1.45 (cvvdp's "ch_chrom_w"
-  for the red-green axis). Tick 475.
+  for the red-green axis). Tick 475, 246a862a.
 
 - **`N_RHO` doctest** — added `# Examples` covering both axis-size
   constants: `N_L_BKG == 32`, `N_RHO == 32`, and `LOG_L_BKG_AXIS`
   / `LOG_RHO_AXIS` lengths match (the LUTs are 32×32 = 1024 entries).
-  Tick 474.
+  Tick 474, da86cf51.
 
 - **`SENSITIVITY_CORRECTION_DB` doctest** — added `# Examples`:
   small negative dB, linear factor `10^(DB/20)` lands in `[0.9, 1.0)`
-  (≈ 0.9684 attenuation). Tick 473.
+  (≈ 0.9684 attenuation). Tick 473, 83c70385.
 
 - **`CSF_BASEBAND_RHO` doctest** — added `# Examples` showing the
   hard-coded `0.1` cy/deg and that it's below the typical geometric
   baseband rho (~0.19 cy/deg at standard 4K + 256² — the tick-204
-  pycvvdp parity override). Tick 472.
+  pycvvdp parity override). Tick 472, 79501377.
 
 - **`BASEBAND_W` doctest** — added `# Examples` showing 3 positive-
   finite entries with chroma dominance at baseband (`[2] > [0]`,
