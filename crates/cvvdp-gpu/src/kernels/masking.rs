@@ -629,6 +629,25 @@ fn reflect_pu_idx(i: i32, n: i32) -> usize {
 /// cvvdp's `phase_uncertainty` for an entire band. If both
 /// dimensions exceed `PU_PADSIZE = 6`, applies the σ=3 separable
 /// Gaussian blur; otherwise just scales by `10^mask_c`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{MASK_C, phase_uncertainty_band};
+///
+/// // Small band (w ≤ 6 OR h ≤ 6) → pure scaling, no blur.
+/// let scale = 10.0_f32.powf(MASK_C);
+/// let small = vec![1.0_f32, 2.0, 3.0, 4.0]; // 2×2
+/// let out = phase_uncertainty_band(&small, 2, 2);
+/// for (i, &v) in out.iter().enumerate() {
+///     assert!((v - small[i] * scale).abs() < 1e-6);
+/// }
+///
+/// // Large band (both dims > 6) → blur + scale; output length matches.
+/// let large = vec![1.0_f32; 8 * 8];
+/// let out_large = phase_uncertainty_band(&large, 8, 8);
+/// assert_eq!(out_large.len(), 64);
+/// ```
 #[must_use]
 pub fn phase_uncertainty_band(m: &[f32], w: usize, h: usize) -> Vec<f32> {
     let scale = 10.0_f32.powf(MASK_C);

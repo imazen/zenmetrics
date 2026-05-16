@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`phase_uncertainty_band` doctest** — added `# Examples`:
+  small-band (2×2) pure-scaling branch (no blur), large-band (8×8)
+  blur-then-scale branch with output length match. Tick 458.
+
 - **`gaussian_blur_sigma3` doctest** — added `# Examples`: output
   length matches input, DC preservation (uniform → uniform within
   1e-5). Tick 457.
