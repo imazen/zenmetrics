@@ -78,7 +78,7 @@ Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
 fixture; the test suite catches drift across every layer that pins
 mention. Tick 500.
 
-**Post-milestone long tail (ticks 501–527, summarised here so the
+**Post-milestone long tail (ticks 501–537, summarised here so the
 detailed entries below stay grep-able):**
 
 - **Re-export surface widened** (501–503): lib_reexports.rs grew
@@ -122,20 +122,31 @@ detailed entries below stay grep-able):**
   and `compute_dkl_jod_host_pool_with_warm_ref`. Catches
   near-correct-but-non-discriminative collapse that the manifest
   tolerance pin (0.005 JOD) wouldn't surface.
-- **Documentation polish** (526, 527, 528, 529): added this
+- **Documentation polish** (526, 527, 528, 529, 530): added this
   long-tail summary block; replaced workspace README's stale
   `TBD | TBD | TBD` cvvdp-gpu row with
-  `(pending — reference is pycvvdp v0.5.4)`; this note recording
-  the saturation point — every clippy / rustdoc / missing_docs
-  surface is clean across all feature combinations and target
-  selections, the lib_reexports surface is fully pinned at 11
-  tests, the stuck-at-constant contract is pinned across all 4
-  scoring paths, the CHANGELOG hash provenance is complete from
-  tick 383 onward, and there are no remaining TODOs / FIXMEs in
-  the source. Subsequent significant improvement would require
-  a fresh measurement (e.g. a pycvvdp-baseline SRCC run for the
-  README) or a directed feature (e.g. wiring `CvvdpParams::csf`
-  through to a JSON loader).
+  `(pending — reference is pycvvdp v0.5.4)`; recorded the saturation
+  point — every clippy / rustdoc / missing_docs surface is clean
+  across all feature combinations and target selections, the
+  lib_reexports surface is fully pinned at 11 tests, the
+  stuck-at-constant contract is pinned across all 4 scoring paths,
+  the CHANGELOG hash provenance is complete from tick 383 onward,
+  and there are no remaining TODOs / FIXMEs in the source;
+  normalized 8 `# Example` (singular) docstring headers in
+  pipeline.rs to `# Examples` (plural) to match Rust API guidelines.
+
+- **Intermediate-method doctest sweep** (531–537): every
+  `Cvvdp::compute_dkl_*` method now has a rendered `# Examples`
+  doctest. 7-tick arc adding `ignore` doctests for
+  `compute_dkl_planes` (531), `compute_dkl_gauss_pyramid` (532),
+  `compute_dkl_laplacian_pyramid` (533), `compute_dkl_weber_pyramid`
+  (534), `compute_dkl_t_p_bands` (535),
+  `compute_dkl_csf_weighted_bands` (536), and `compute_dkl_d_bands`
+  (537). Doctest count grew from 44+5 → 44+13. Closes the docs.rs
+  rendered-example gap on the advanced intermediate-stage API
+  surface. Subsequent significant improvement still requires a
+  fresh measurement (pycvvdp-baseline SRCC) or a directed feature
+  (`CvvdpParams` JSON loader).
 
 ### Changed
 
