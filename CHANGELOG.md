@@ -177,6 +177,18 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/color_scalar.rs::srgb_linear_to_dkl_*`** — fifth in
+  the constants-pin series (393 pool / 394 csf / 395 pyramid /
+  396 display). Pins all 9 entries of `SRGB_LINEAR_TO_DKL` by
+  `.to_bits()` — the f32 row-major DKL matrix composed at f64
+  precision from `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @
+  sRGB_to_XYZ`. Previously verified only transitively through
+  the 8-point byte goldens + the row-sum heuristic — a refactor
+  that swaps two entries within a row, or substitutes a
+  plausible-but-different matrix (LMS2000 instead of LMS2006),
+  could pass both. Second test pins the opponent-color sign
+  signature: row 0 (A) all positive, row 1 (Rg) is `(+, -, -)`,
+  row 2 (Vy) is `(-, -, +)`. Tick 397.
 - **`tests/display_geometry.rs::display_{model,geometry}_standard_4k_*`**
   — pins the f32 bit patterns of `DisplayModel::STANDARD_4K`
   (`y_peak = 200`, `y_black = 0.2`, `y_refl = 0.397_887_36`) and

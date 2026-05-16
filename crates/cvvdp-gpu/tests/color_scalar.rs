@@ -186,3 +186,84 @@ fn matrix_is_normalized_for_neutral_input() {
     assert!(rg.abs() < a.abs(), "RG row sum {rg} should be < A {a}");
     assert!(vy.abs() < a.abs(), "VY row sum {vy} should be < A {a}");
 }
+
+// Pin the exact f32 bit patterns of every entry in
+// `SRGB_LINEAR_TO_DKL`. The matrix is documented (in
+// `params.rs`) as the composition
+// `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ sRGB_to_XYZ` computed
+// at f64 precision and rounded to f32. The existing
+// `matrix_is_normalized_for_neutral_input` test only checks row-
+// sum signs/magnitudes — a refactor that swaps two entries
+// within a row (or substitutes different but plausible-looking
+// values from a related matrix, e.g. LMS2000 instead of LMS2006)
+// could preserve the row-sum heuristic but still drift every
+// DKL output. Pin each of the 9 entries explicitly with
+// `.to_bits()` for unambiguous regression detection.
+
+#[test]
+fn srgb_linear_to_dkl_matrix_matches_pycvvdp_v0_5_4() {
+    use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+
+    // Row 0 — achromatic (A) channel. All positive (achromatic
+    // is a weighted sum of R, G, B).
+    let row0_expected: [f32; 3] = [0.233_201_21, 0.728_830_8, 0.088_995_87];
+    for (i, (got, exp)) in M[0].iter().zip(row0_expected.iter()).enumerate() {
+        assert_eq!(
+            got.to_bits(),
+            exp.to_bits(),
+            "SRGB_LINEAR_TO_DKL[0][{i}] (A) = {got}, expected {exp}",
+        );
+    }
+
+    // Row 1 — red-green (RG) chroma. Mixed signs: opposes R
+    // against (G + B).
+    let row1_expected: [f32; 3] = [0.127_620_77, -0.087_068_09, -0.036_777_39];
+    for (i, (got, exp)) in M[1].iter().zip(row1_expected.iter()).enumerate() {
+        assert_eq!(
+            got.to_bits(),
+            exp.to_bits(),
+            "SRGB_LINEAR_TO_DKL[1][{i}] (Rg) = {got}, expected {exp}",
+        );
+    }
+
+    // Row 2 — violet-yellow (VY) chroma. Mixed signs: opposes B
+    // against (R + G).
+    let row2_expected: [f32; 3] = [-0.214_822_5, -0.626_253_7, 0.851_403_3];
+    for (i, (got, exp)) in M[2].iter().zip(row2_expected.iter()).enumerate() {
+        assert_eq!(
+            got.to_bits(),
+            exp.to_bits(),
+            "SRGB_LINEAR_TO_DKL[2][{i}] (Vy) = {got}, expected {exp}",
+        );
+    }
+}
+
+#[test]
+fn srgb_linear_to_dkl_row_sign_signature() {
+    // Per the DKL opponent-color construction:
+    //   - Row 0 (A) must have ALL three entries positive.
+    //   - Row 1 (Rg) must have a positive [0] and negative [1],
+    //     [2] (red opposed to green+blue).
+    //   - Row 2 (Vy) must have a positive [2] only ([0], [1] are
+    //     negative — blue opposed to red+green).
+    // These signs are part of the opponent-color contract.
+    // A refactor that drops a minus sign somewhere preserves
+    // magnitude-based row-sum heuristics but breaks chromaticity.
+    use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+
+    assert!(
+        M[0][0] > 0.0 && M[0][1] > 0.0 && M[0][2] > 0.0,
+        "Row 0 (A) must be all-positive: {:?}",
+        M[0],
+    );
+    assert!(
+        M[1][0] > 0.0 && M[1][1] < 0.0 && M[1][2] < 0.0,
+        "Row 1 (Rg) must be (+, -, -): {:?}",
+        M[1],
+    );
+    assert!(
+        M[2][0] < 0.0 && M[2][1] < 0.0 && M[2][2] > 0.0,
+        "Row 2 (Vy) must be (-, -, +): {:?}",
+        M[2],
+    );
+}
