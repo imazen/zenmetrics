@@ -229,6 +229,19 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/met2jod_invariants.rs`** — 8 invariant pins on `met2jod`
+  beyond the 2 single-point tests already in `pool_scalar.rs`
+  (`met2jod_continuous_at_kink` + `met2jod_clamps_at_origin`):
+  (1) `met2jod(0) == 10` bit-exact via `to_bits()`; (2) value at
+  kink Q=0.1 matches `10 - JOD_A * 0.1^JOD_EXP`; (3) strict
+  monotonic decrease over Q ∈ [0, 100] step 0.01 (10001 samples);
+  (4) `< 10` for any positive Q above f32 underflow (1e-3 onward);
+  (5) power-branch algebra `10 - JOD_A * Q^JOD_EXP` for 6 Q above
+  kink; (6) linear-branch algebra `10 - jod_a_p * Q` (where
+  `jod_a_p = JOD_A * 0.1^(JOD_EXP-1)`) for 5 Q below kink — pins
+  the slope-matching construction; (7) determinism; (8) declining
+  finite JOD at extreme Q ∈ [1e3, 1e12]. Tick 424.
+
 - **`tests/mask_pool_pixel_invariants.rs`** — 7 invariant pins on
   `mask_pool_pixel`, the 3×3 cross-channel masking matrix-vector
   multiply against `XCM_3X3`. No direct unit tests existed before
