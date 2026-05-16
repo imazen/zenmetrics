@@ -229,6 +229,22 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/weber_pyramid_invariants.rs`** — eight structural
+  invariant pins on `weber_contrast_pyr_dec_scalar` complementing
+  the full-pipeline parity coverage in `pipeline_color.rs` /
+  `pipeline_score.rs`: (1) band count matches `n_levels` 1..=4 (and
+  `log_l_bkg` matches); (2) auto-`n_levels=0` selects
+  `min(sw,sh).ilog2()` (64×32 → 5); (3) `log_l_bkg[k].len() ==
+  bands[k].w * bands[k].h` per level; (4) baseband `log_l_bkg` is
+  bit-constant (all entries equal via `to_bits()` — pins the
+  "replicated scalar mean" docstring contract); (5) baseband band
+  data is finite (division-by-zero guard via 0.01 floor); (6)
+  non-baseband contrast clamped to `[-1000, 1000]` via 1e6 impulse
+  on 0.001 L_bkg field (baseband intentionally excluded — it's
+  unclamped per source); (7) zero-image + zero-l_bkg input produces
+  no NaN/Inf (the 0.01 floor guards everything); (8) determinism
+  via `to_bits()` over bands + log_l_bkg. Tick 421.
+
 - **`tests/srgb_byte_to_dkl_invariants.rs`** — eight function-level
   semantic invariants on `srgb_byte_to_dkl_scalar` beyond the
   pointwise pycvvdp parity at `STANDARD_4K`: (1) DKL_A strictly
