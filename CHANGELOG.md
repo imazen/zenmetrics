@@ -229,6 +229,16 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/perf_mode_invariants.rs`** — 6 invariants on `PerfMode`'s
+  trait contract beyond the existing `params_placeholder.rs`
+  PLACEHOLDER check: (1) `Default::default() == PerfMode::Strict`
+  pinned explicitly (catches a refactor that moves `#[default]` to
+  Fast while updating PLACEHOLDER); (2) Copy semantics work;
+  (3) Clone yields Eq-equal value; (4) Strict != Fast (catches
+  variant collapse); (5) Debug output is non-empty and distinct
+  per variant; (6) exhaustive match visits exactly 2 variants.
+  Tick 432.
+
 - **`tests/mult_mutual_band_invariants.rs`** — 8 structural pins on
   `mult_mutual_band` (band-level 3-channel masking; existing
   coverage in `masking_kernel.rs` is GPU-parity only): (1) output
