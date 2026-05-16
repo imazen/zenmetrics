@@ -229,6 +229,17 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pyramid_scalar.rs::band_frequencies_{are_strictly_decreasing,minimum_image_dim_returns_some_bands,per_band_ratio_in_sensible_range}`**
+  — three invariant tests on `band_frequencies`: (1) output is
+  strictly decreasing (Laplacian pyramid orders finest→coarsest)
+  across 4 (ppd, dim) combos, every entry finite + positive; (2)
+  minimum image dim 8×8 returns ≥ 1 band (so Cvvdp::new never
+  builds a zero-band pyramid where the Vec-of-Level sizing would
+  silently fail); (3) mid-pyramid adjacent-band ratio in
+  [1.5, 3.5] — captures the "near-octave" Laplacian behavior
+  while accommodating the first-level Nyquist-quarter scaling
+  and the trailing MIN_FREQ=0.2 floor. Tick 412.
+
 - **`tests/pipeline_score.rs::score_is_deterministic_*`** — two
   contract tests pinning the critical "no state leakage between
   calls on the same `Cvvdp` instance" property that zen-metrics-

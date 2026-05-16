@@ -446,3 +446,82 @@ fn pyramid_constants_match_pycvvdp_v0_5_4() {
         GAUSS5[3],
     );
 }
+
+#[test]
+fn band_frequencies_are_strictly_decreasing() {
+    // The cvvdp pyramid is Laplacian — each level represents half
+    // the spatial frequency content of the previous. So
+    // `band_frequencies(...)` MUST return a strictly decreasing
+    // sequence. A refactor that confuses level ordering (e.g.
+    // returns coarsest-first instead of finest-first) would break
+    // every per-band CSF lookup.
+    let cases = [
+        (75.402_25_f32, 1024_usize, 1024_usize),
+        (75.402_25, 256, 256),
+        (37.842, 1920, 1080),
+        (100.0, 4096, 4096),
+    ];
+    for &(ppd, w, h) in &cases {
+        let freqs = band_frequencies(ppd, w, h);
+        assert!(
+            !freqs.is_empty(),
+            "ppd={ppd} {w}x{h}: empty band_frequencies",
+        );
+        for (i, &f) in freqs.iter().enumerate() {
+            assert!(
+                f > 0.0 && f.is_finite(),
+                "ppd={ppd} {w}x{h} band[{i}] = {f}: must be finite + positive",
+            );
+        }
+        for i in 1..freqs.len() {
+            assert!(
+                freqs[i] < freqs[i - 1],
+                "ppd={ppd} {w}x{h}: band[{i}] = {} not < band[{}] = {} (must be strictly decreasing)",
+                freqs[i], i - 1, freqs[i - 1],
+            );
+        }
+    }
+}
+
+#[test]
+fn band_frequencies_minimum_image_dim_returns_some_bands() {
+    // 8×8 is the smallest dim Cvvdp::new accepts (PYRAMID_MIN_DIM ×
+    // 2). band_frequencies on that input must still return at
+    // least one band — otherwise Cvvdp::new would build a zero-
+    // band pyramid, which the d_scratch + bands_ref Vec sizing
+    // doesn't handle.
+    let freqs = band_frequencies(75.402_25, 8, 8);
+    assert!(
+        !freqs.is_empty(),
+        "8x8 input returned 0 bands; Cvvdp::new would silently build an empty pyramid",
+    );
+    // Sanity: each is finite + positive.
+    for (i, &f) in freqs.iter().enumerate() {
+        assert!(
+            f > 0.0 && f.is_finite(),
+            "8x8 band[{i}] = {f}",
+        );
+    }
+}
+
+#[test]
+fn band_frequencies_per_band_ratio_in_sensible_range() {
+    // Adjacent band frequencies are not exactly 2:1 because the
+    // first level uses ppd/4 (Nyquist-quarter), not ppd/2, and the
+    // baseband floors at MIN_FREQ=0.2. But the middle levels (k >=
+    // 1, before the floor) should be within a "near-octave" ratio
+    // in (1.5, 3.5). Pin so a refactor that produces 5× or 1.1×
+    // ratios (skip-level vs over-sampled) surfaces here.
+    let freqs = band_frequencies(75.402_25, 4096, 4096);
+    assert!(freqs.len() >= 4, "need ≥ 4 bands to check ratios");
+    // Skip i=1 (first → second is 3.1× per Nyquist-quarter scaling)
+    // and the last 1-2 entries (MIN_FREQ floor). Mid-pyramid: ~2:1.
+    for i in 2..(freqs.len() - 2) {
+        let ratio = freqs[i - 1] / freqs[i];
+        assert!(
+            (1.5..=3.5).contains(&ratio),
+            "freq[{}] / freq[{i}] = {ratio} not in [1.5, 3.5] (mid-pyramid sanity)",
+            i - 1,
+        );
+    }
+}
