@@ -229,6 +229,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/csf_axes_invariants.rs`** — 9 structural pins on the
+  public CSF LUT axis arrays `LOG_L_BKG_AXIS` and `LOG_RHO_AXIS`
+  (32 entries each). `csf_constants_match_pycvvdp_v0_5_4` doesn't
+  pin axis structure. Pins: (1) `LOG_L_BKG_AXIS.len() == N_L_BKG`
+  + N_L_BKG == 32; (2) `LOG_RHO_AXIS.len() == N_RHO` + N_RHO == 32;
+  (3) both arrays strictly monotonic; (4) `LOG_L_BKG_AXIS`
+  endpoints bit-pinned to `-2.301..4.0`; (5) `LOG_RHO_AXIS`
+  endpoints bit-pinned to `-1.0..1.806`; (6) `LOG_L_BKG_AXIS`
+  uniformly spaced (`interp1_uniform` precondition); (7)
+  `LOG_RHO_AXIS` uniformly spaced in log10 (the source comment
+  about "non-uniform first interval" is about linear-rho ratios,
+  not the log10 axis itself); (8) `LOG_L_BKG_AXIS` step matches
+  the pycvvdp formula `(4.0 - (-2.301)) / 31 ≈ 0.2032`. Tick 433.
+
 - **`tests/perf_mode_invariants.rs`** — 6 invariants on `PerfMode`'s
   trait contract beyond the existing `params_placeholder.rs`
   PLACEHOLDER check: (1) `Default::default() == PerfMode::Strict`
