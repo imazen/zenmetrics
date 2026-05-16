@@ -17,57 +17,58 @@
 
 use cvvdp_gpu::{MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM};
 
+// Tick 523: promote the runtime asserts below to compile-time
+// static asserts. The constants are fundamental dimension parameters
+// that fan out through every dim calculation in the pipeline; a
+// silent edit cannot be allowed to survive even a `cargo build`
+// against this test target. Same pattern as tick 522 on lib_reexports.rs
+// and tick 505 on N_L_BKG.
+const _: () = assert!(
+    N_CHANNELS == 3,
+    "N_CHANNELS contract — still-image DKL (Achromatic, Red-Green, Violet-Yellow)",
+);
+const _: () = assert!(
+    MAX_LEVELS == 9,
+    "MAX_LEVELS cap — bumping requires resizing logs_row, partials_h, weights buffers",
+);
+const _: () = assert!(
+    PYRAMID_MIN_DIM == 4,
+    "PYRAMID_MIN_DIM contract — smallest logical level dim",
+);
+const _: () = assert!(
+    PYRAMID_MIN_DIM * 2 == 8,
+    "PYRAMID_MIN_DIM × 2 boundary — Cvvdp::new's minimum-image-dim guard",
+);
+
 #[test]
 fn n_channels_is_three_for_still_image_dkl() {
     // cvvdp's still-image path operates on three DKL opponent
-    // channels (Achromatic, Red-Green, Violet-Yellow). A bump to 4
-    // would mean adding a temporal channel (not in still-image
-    // scope) or a luminance variant (also out of scope until
-    // pycvvdp ports its own).
-    assert_eq!(
-        N_CHANNELS, 3,
-        "N_CHANNELS = {N_CHANNELS}, expected 3 (still-image DKL)"
-    );
+    // channels (Achromatic, Red-Green, Violet-Yellow). The bound
+    // is pinned at compile time via the const _: () = assert!(...)
+    // block above; this test exercises the import + leaves the
+    // CHANGELOG-tested 'tests/lib_constants.rs::n_channels_is_three_for_still_image_dkl'
+    // name resolvable from the test runner.
+    assert_eq!(N_CHANNELS, 3);
 }
 
 #[test]
 fn max_levels_cap_at_nine() {
-    // The pyramid-level cap. 9 levels handles up to ~1024×1024
-    // (each level halves; 1024 / 2^8 = 4 = PYRAMID_MIN_DIM × 1).
-    // Bumping to 10+ requires resizing the `logs_row` Vec, the
-    // `partials_h` buffer (sized `n_levels × N_CHANNELS`), and
-    // the weights buffers — none of which auto-grow on
-    // MAX_LEVELS change. Pin the literal so a refactor surfaces
-    // here instead of as silent OOB index reads.
-    assert_eq!(MAX_LEVELS, 9, "MAX_LEVELS = {MAX_LEVELS}, expected 9");
+    // See the module-level static assert. This test exists for
+    // test-runner-visible naming (the CHANGELOG referenced
+    // 'max_levels_cap_at_nine' as the pin name in tick 402).
+    assert_eq!(MAX_LEVELS, 9);
 }
 
 #[test]
 fn pyramid_min_dim_is_four() {
-    // Smallest logical width/height where the pyramid keeps
-    // building further coarse levels. Combined with the
-    // `width < PYRAMID_MIN_DIM * 2` check in `Cvvdp::new`, this
-    // makes 8×8 the absolute minimum image dimension. A bump to
-    // PYRAMID_MIN_DIM=8 would silently reject 8×8 and 16×16
-    // images, breaking the existing `invalid_image_size_*`
-    // boundary tests in `pipeline_score.rs`.
-    assert_eq!(
-        PYRAMID_MIN_DIM, 4,
-        "PYRAMID_MIN_DIM = {PYRAMID_MIN_DIM}, expected 4",
-    );
+    // See the module-level static assert. Same naming-preservation
+    // rationale as the siblings.
+    assert_eq!(PYRAMID_MIN_DIM, 4);
 }
 
 #[test]
 fn pyramid_min_image_size_is_eight() {
-    // The construction-time guard `width < PYRAMID_MIN_DIM * 2`
-    // implies a minimum-acceptable image dim of 8 pixels. Make
-    // this implicit relationship explicit so a refactor that
-    // changes the guard's multiplier (e.g. to ×4 = 16) trips
-    // here.
-    assert_eq!(
-        PYRAMID_MIN_DIM * 2,
-        8,
-        "PYRAMID_MIN_DIM × 2 = {} (minimum-image-dim), expected 8",
-        PYRAMID_MIN_DIM * 2,
-    );
+    // See the module-level static assert. Same naming-preservation
+    // rationale as the siblings.
+    assert_eq!(PYRAMID_MIN_DIM * 2, 8);
 }
