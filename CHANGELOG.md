@@ -237,6 +237,13 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (examples)
+
+- **`examples/cvvdp_mem_table.rs`** — refactored to use the public
+  `recommend_parallel` function instead of duplicating the `mem /
+  (1.5 × est)` math inline. Output is identical. Added module-level
+  docstring describing the example's purpose + invocation. Tick 463.
+
 #### cvvdp-gpu (tests, lint)
 
 - **Clippy clean-up across tick 416-461 test files**:
