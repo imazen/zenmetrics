@@ -129,11 +129,12 @@ fn host_scalar_module_is_public() {
     // CI environments without a GPU). A refactor that downgrades
     // the module to `pub(crate)` or moves the fn out of it would
     // break callers silently. Pin via compile-time use site.
+    //
+    // Tick 505: hoist the fn-pointer type out into a `type` alias to
+    // clear the `clippy::type_complexity` warning.
     use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
-    fn _accepts_predict_fn(
-        _f: fn(&[u8], &[u8], usize, usize, cvvdp_gpu::params::DisplayModel, f32) -> f32,
-    ) {
-    }
+    type PredictJodFn = fn(&[u8], &[u8], usize, usize, cvvdp_gpu::params::DisplayModel, f32) -> f32;
+    fn _accepts_predict_fn(_f: PredictJodFn) {}
     _accepts_predict_fn(predict_jod_still_3ch);
 }
 
@@ -154,9 +155,12 @@ fn kernels_submodules_are_public() {
     use cvvdp_gpu::kernels::masking::MASK_C;
     use cvvdp_gpu::kernels::pool::JOD_A;
     use cvvdp_gpu::kernels::pyramid::KERNEL_A;
-    // Touchpoint to keep imports used.
+    // Touchpoint to keep imports used. Tick 505: replaced the
+    // compile-time `assert!(N_L_BKG > 0)` (clippy: "this assertion
+    // has a constant value") with `const _: () = assert!(...)`,
+    // which is a true static assertion checked at compile time.
     assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
-    assert!(N_L_BKG > 0);
+    const _: () = assert!(N_L_BKG > 0, "N_L_BKG must be positive (CSF LUT axis size)");
     assert!(MASK_C.is_finite());
     assert!(JOD_A.is_finite());
     assert!(KERNEL_A.is_finite());

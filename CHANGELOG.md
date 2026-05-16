@@ -190,6 +190,17 @@ mention. Tick 500.
   with the STANDARD_4K ppd, and (4) `warm_reference` +
   `compute_dkl_jod_with_warm_ref`. Tick 493.
 
+- **clippy cleanup on `lib_reexports.rs` (tick 503 follow-up)** —
+  closed two warnings introduced by tick 503's additions:
+  (1) `clippy::type_complexity` on the inline
+  `fn(&[u8], &[u8], usize, usize, DisplayModel, f32) -> f32` pointer
+  type for `predict_jod_still_3ch` — hoisted into a `PredictJodFn`
+  type alias; (2) `clippy::assertions_on_constants` on
+  `assert!(N_L_BKG > 0)` — promoted to `const _: () = assert!(...)`
+  static assertion that fires at compile time instead of runtime.
+  Both warnings now clean; the 11 lib_reexports tests still pass.
+  Tick 505.
+
 - **`host_scalar_module_is_public` + `kernels_submodules_are_public`**
   (in `lib_reexports.rs`) — 2 new pins (11 total). Pins
   `cvvdp_gpu::host_scalar::predict_jod_still_3ch` (the canonical
