@@ -464,6 +464,61 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
         .compute_dkl_jod_host_pool_with_warm_ref(&wrong_bytes, ppd)
         .expect_err("compute_dkl_jod_host_pool_with_warm_ref with short dist must error");
     check_dim_err(err, "compute_dkl_jod_host_pool_with_warm_ref(short)");
+
+    // Tick 392: extend coverage to the six pyramid/band
+    // intermediate-output methods. These validate buffer length
+    // transitively through `_dispatch_dkl_planes_gpu` (the shared
+    // entry point that contains the actual `!=` check). Each
+    // method's docstring explicitly returns Error::DimensionMismatch
+    // — pin the contract so a refactor that moves the validation
+    // (e.g. inlines a dispatch helper but forgets the length check)
+    // surfaces here directly.
+
+    // compute_dkl_gauss_pyramid: validates the single srgb buffer.
+    let err = cvvdp
+        .compute_dkl_gauss_pyramid(&wrong_bytes)
+        .expect_err("compute_dkl_gauss_pyramid with short srgb must error");
+    check_dim_err(err, "compute_dkl_gauss_pyramid(short)");
+
+    // compute_dkl_laplacian_pyramid: validates the single srgb buffer.
+    let err = cvvdp
+        .compute_dkl_laplacian_pyramid(&wrong_bytes)
+        .expect_err("compute_dkl_laplacian_pyramid with short srgb must error");
+    check_dim_err(err, "compute_dkl_laplacian_pyramid(short)");
+
+    // compute_dkl_weber_pyramid: validates the single srgb buffer.
+    let err = cvvdp
+        .compute_dkl_weber_pyramid(&wrong_bytes)
+        .expect_err("compute_dkl_weber_pyramid with short srgb must error");
+    check_dim_err(err, "compute_dkl_weber_pyramid(short)");
+
+    // compute_dkl_t_p_bands: validates the single srgb buffer +
+    // takes ppd.
+    let err = cvvdp
+        .compute_dkl_t_p_bands(&wrong_bytes, ppd)
+        .expect_err("compute_dkl_t_p_bands with short srgb must error");
+    check_dim_err(err, "compute_dkl_t_p_bands(short)");
+
+    // compute_dkl_csf_weighted_bands: validates the single srgb
+    // buffer + takes ppd + l_bkg.
+    let log_l = 100.0_f32.log10();
+    let err = cvvdp
+        .compute_dkl_csf_weighted_bands(&wrong_bytes, ppd, log_l)
+        .expect_err("compute_dkl_csf_weighted_bands with short srgb must error");
+    check_dim_err(err, "compute_dkl_csf_weighted_bands(short)");
+
+    // compute_dkl_d_bands: validates both ref + dist (docstring
+    // explicitly promises "Returns Error::DimensionMismatch if
+    // either input buffer's length doesn't match").
+    let err = cvvdp
+        .compute_dkl_d_bands(&wrong_bytes, &right_bytes, ppd)
+        .expect_err("compute_dkl_d_bands with short reference must error");
+    check_dim_err(err, "compute_dkl_d_bands(short_ref, ok_dist)");
+
+    let err = cvvdp
+        .compute_dkl_d_bands(&right_bytes, &wrong_bytes, ppd)
+        .expect_err("compute_dkl_d_bands with short distorted must error");
+    check_dim_err(err, "compute_dkl_d_bands(ok_ref, short_dist)");
 }
 
 #[test]

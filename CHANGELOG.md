@@ -177,6 +177,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
+  — extended once more to cover six pyramid/band intermediate-
+  output methods that validate buffer length transitively through
+  `_dispatch_dkl_planes_gpu` (the shared entry point that contains
+  the actual `!=` check): `compute_dkl_gauss_pyramid`,
+  `compute_dkl_laplacian_pyramid`, `compute_dkl_weber_pyramid`,
+  `compute_dkl_t_p_bands`, `compute_dkl_csf_weighted_bands`, and
+  `compute_dkl_d_bands` (both ref + dist args per docstring). Each
+  method's docstring documents the `Error::DimensionMismatch`
+  return — a refactor that inlines `_dispatch_dkl_planes_gpu` into
+  a caller but forgets to copy the length check would surface here
+  before slipping into a kernel-side panic on the under-sized
+  buffer read. Test now exercises all 13 documented dim-check
+  sites (was 9 after tick 390). Tick 392.
 - **`tests/pipeline_score.rs::compute_dkl_jod_host_pool_with_warm_ref_reports_dim_mismatch_before_no_warm`**
   — sibling pin to the tick-248 GPU-variant test
   (`compute_dkl_jod_with_warm_ref_reports_dim_mismatch_before_no_warm`).
