@@ -652,13 +652,15 @@ reads "gfxdisp/ColorVideoVDP v0.5.4 (latest tag as of …)" — same
 Forces the prose documentation to update in the same commit as
 the const + parity-test + requirements.txt + LUT header.
 
-After ticks 588-591, the remaining unpinnable lockstep sites are
-the Rust identifier `csf_lut_v0_5_4` (module name) and the
-filesystem path `csf_lut/v0_5_4.rs` (filename) — neither
-translates to const-callable string operations on the const value.
-A build.rs that introspects the source tree could pin them, but
-the complexity isn't worth it for these identifier-shape references.
-Static-assert count is now 210 across 12 test files.
+Tick 592 extended the lockstep further to the crate-level
+README.md. It references `v0.5.4` in 4 places (algorithm-parity
+claim, PerfMode::Strict semantics, parity-goldens feature, Status
+section). Same `include_str!()` + `const_str::contains` pattern.
+User-facing docs now also forced to update in lockstep. Static-
+assert count is now 211 across 12 test files (5 cross-file
+`include_str!()` pins on PYCVVDP_REFERENCE_VERSION:
+parity-test runtime check, requirements.txt, LUT header,
+PORT_STATUS.md, README.md).
 
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's

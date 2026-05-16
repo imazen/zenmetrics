@@ -114,6 +114,22 @@ const _: () = {
     );
 };
 
+// Tick 592: pin crate-level README.md against PYCVVDP_REFERENCE_VERSION.
+// The README references the pycvvdp v0.5.4 reference in multiple
+// places (algorithm-parity claim, PerfMode::Strict semantics,
+// parity-goldens feature description, Status section). Pinning at
+// compile time forces user-facing docs to update in lockstep with
+// the const + parity-test + requirements.txt + LUT header +
+// PORT_STATUS.md.
+const _README: &str = include_str!("../README.md");
+const _: () = {
+    use common::const_str;
+    assert!(
+        const_str::contains(_README.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        "crates/cvvdp-gpu/README.md must contain PYCVVDP_REFERENCE_VERSION",
+    );
+};
+
 #[test]
 fn manifest_fetches() {
     let path = common::fetch("manifest.json", common::MANIFEST_SHA256);
