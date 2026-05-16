@@ -100,6 +100,19 @@ const _: () = assert!(
     "CH_GAIN ordering invariant violated: Rg must be > Vy (chroma boost)",
 );
 
+// Tick 565: MASK_C sign-bit invariant. `f32::is_sign_negative` is
+// const fn since Rust 1.83 (workspace MSRV 1.93). MASK_C is the
+// phase-uncertainty *attenuator* exponent — applied as `10^MASK_C`.
+// A positive value (sign flip) would turn the ~0.16× attenuation
+// into a ~6× amplification, fundamentally changing the masking
+// regime. Pin the sign directly so a value-equality refactor (e.g.
+// `MASK_C = +0.795_497_12` typo) is caught even before the bit-pin
+// fires on the exact magnitude.
+const _: () = assert!(
+    MASK_C.is_sign_negative(),
+    "MASK_C must be negative (10^MASK_C is an attenuator, not an amplifier)",
+);
+
 // Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
 // masking matrix (3×3 = 9 entries). Each entry is independently
 // derived from a published log2-space coefficient via 2^x; a

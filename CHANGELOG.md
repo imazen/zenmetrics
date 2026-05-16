@@ -350,6 +350,22 @@ permutation that keeps every value intact but swaps which channel
 gets which weight. Static-assert count is now 98 across 11 test
 files.
 
+Tick 565 added 3 more semantic invariants of a different flavour:
+  - `MASK_C.is_sign_negative()` — phase-uncertainty exponent must
+    be negative because `10^MASK_C` is an attenuator; a sign flip
+    would convert the 0.16× attenuation into a 6× amplification.
+    `f32::is_sign_negative` is const fn since Rust 1.83.
+  - `BETA_BAND.to_bits() == BETA_CH.to_bits()` — the across-band
+    and across-channel Minkowski exponents must remain equal (both
+    = 4.0). A drift in one without the other breaks the symmetric-
+    pool contract.
+  - `JOD_EXP.to_bits() < 1.0_f32.to_bits()` — sublinear-saturation
+    invariant on met2jod (`10 - JOD_A · d^JOD_EXP`). Both operands
+    are positive so u32 bit-ordering is sound. A regression bumping
+    JOD_EXP ≥ 1.0 would make JOD super-linear in d, changing the
+    entire perceptual scale.
+Static-assert count is now 101 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

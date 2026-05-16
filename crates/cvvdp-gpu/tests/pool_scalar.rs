@@ -82,6 +82,25 @@ const _: () = {
         BASEBAND_W[1].to_bits() < BASEBAND_W[2].to_bits(),
         "BASEBAND_W ordering invariant violated: Rg must be < Vy",
     );
+    // Tick 565: BETA_BAND and BETA_CH are both cvvdp's `beta_*ch`
+    // exponents and share the value 4.0. The semantic invariant is
+    // that the across-band Minkowski fold and across-channel Minkowski
+    // fold use the same exponent. Pin the equality directly so a
+    // refactor that drifts one but keeps the other still trips here.
+    assert!(
+        BETA_BAND.to_bits() == BETA_CH.to_bits(),
+        "BETA_BAND and BETA_CH must remain equal (both = cvvdp v0.5.4 beta_*ch = 4.0)",
+    );
+    // Tick 565: JOD_EXP < 1.0 enforces the sublinear-saturation
+    // contract on met2jod = 10 - JOD_A · d^JOD_EXP. A regression
+    // bumping JOD_EXP ≥ 1.0 would make JOD super-linear in d (bad
+    // distortion would map to extreme negative JOD with no
+    // saturation), changing the entire perceptual scale. Both
+    // operands are positive so `u32 <` on `.to_bits()` is sound.
+    assert!(
+        JOD_EXP.to_bits() < 1.0_f32.to_bits(),
+        "JOD_EXP must be < 1.0 (sublinear saturation of met2jod)",
+    );
 };
 
 #[cfg(any(feature = "cuda", feature = "wgpu", feature = "hip"))]
