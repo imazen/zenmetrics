@@ -121,6 +121,48 @@ fn error_and_result_reexport_resolve() {
 }
 
 #[test]
+fn host_scalar_module_is_public() {
+    // Tick 503: `cvvdp_gpu::host_scalar::predict_jod_still_3ch` is
+    // the canonical host-only reference pipeline. Used by shadow_jod
+    // tests, cpu_backend tests, and downstream consumers that want
+    // a pure-CPU JOD without spinning up a GPU runtime (e.g. for
+    // CI environments without a GPU). A refactor that downgrades
+    // the module to `pub(crate)` or moves the fn out of it would
+    // break callers silently. Pin via compile-time use site.
+    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+    fn _accepts_predict_fn(
+        _f: fn(&[u8], &[u8], usize, usize, cvvdp_gpu::params::DisplayModel, f32) -> f32,
+    ) {
+    }
+    _accepts_predict_fn(predict_jod_still_3ch);
+}
+
+#[test]
+fn kernels_submodules_are_public() {
+    // Tick 503: the five kernels submodules (color, csf, masking,
+    // pool, pyramid) are the documented public API for direct kernel
+    // usage. Existing per-kernel test files import specific items
+    // (e.g. `gausspyr_reduce_scalar`), but no single pin verifies
+    // the module path itself remains public. A refactor that
+    // collapses one into a parent or makes it `pub(crate)` would
+    // break callers that reach for `cvvdp_gpu::kernels::masking::*`
+    // directly.
+    //
+    // Compile-time use sites — one item per submodule:
+    use cvvdp_gpu::kernels::color::SRGB8_TO_LINEAR_LUT;
+    use cvvdp_gpu::kernels::csf::N_L_BKG;
+    use cvvdp_gpu::kernels::masking::MASK_C;
+    use cvvdp_gpu::kernels::pool::JOD_A;
+    use cvvdp_gpu::kernels::pyramid::KERNEL_A;
+    // Touchpoint to keep imports used.
+    assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
+    assert!(N_L_BKG > 0);
+    assert!(MASK_C.is_finite());
+    assert!(JOD_A.is_finite());
+    assert!(KERNEL_A.is_finite());
+}
+
+#[test]
 fn params_scaffolding_types_are_public() {
     // Tick 502: the params:: scaffolding types are currently unused
     // by production code (the per-stage cvvdp v0.5.4 constants are

@@ -190,6 +190,18 @@ mention. Tick 500.
   with the STANDARD_4K ppd, and (4) `warm_reference` +
   `compute_dkl_jod_with_warm_ref`. Tick 493.
 
+- **`host_scalar_module_is_public` + `kernels_submodules_are_public`**
+  (in `lib_reexports.rs`) — 2 new pins (11 total). Pins
+  `cvvdp_gpu::host_scalar::predict_jod_still_3ch` (the canonical
+  host-only reference pipeline used by shadow_jod, cpu_backend, and
+  GPU-less CI environments) and the five kernels submodules
+  (`color`, `csf`, `masking`, `pool`, `pyramid`) as public API
+  surfaces via compile-time use sites. Existing per-kernel test
+  files import specific items but no single pin verified that the
+  module paths themselves remain public — catches a refactor that
+  collapses one submodule into a parent or downgrades it to
+  `pub(crate)`. Tick 503.
+
 - **`params_scaffolding_types_are_public`** (in `lib_reexports.rs`)
   — adds a 9th pin to the lib re-export coverage. `CsfParams`,
   `MaskingParams`, `PoolingParams`, `JodParams` are documented as
