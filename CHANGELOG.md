@@ -229,6 +229,16 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/lib_constants.rs`** — seventh in the constants-pin
+  series. Pins the three crate-level constants exposed from
+  `lib.rs`: `N_CHANNELS = 3` (still-image DKL opponent count),
+  `MAX_LEVELS = 9` (pyramid-level cap — bumping requires
+  resizing `logs_row` + `partials_h` + weights buffers), and
+  `PYRAMID_MIN_DIM = 4` (minimum logical level dim). Plus a
+  derived-invariant test `PYRAMID_MIN_DIM × 2 = 8` so a refactor
+  that changes the `width < PYRAMID_MIN_DIM * 2` guard's
+  multiplier surfaces here instead of as a boundary-test
+  regression. Tick 402.
 - **`tests/masking_constants.rs`** — sixth in the constants-pin
   series (393 pool / 394 csf / 395 pyramid / 396 display / 397
   color matrix). New dedicated test file pins by exact f32 bit
