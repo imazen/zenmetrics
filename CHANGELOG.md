@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`band_frequencies` doctest** — added `# Examples` showing
+  typical usage: at standard 4K geometry the function returns ≥ 5
+  strictly-decreasing positive cy/deg entries for 1024×1024. Tick 440.
+
 - **`estimate_gpu_memory_bytes` doctest** — added an `# Examples`
   section that exercises the function on 4 inputs and validates
   the rough magnitude: too-small (4×4, 7×8 → `None`); 1 MP at

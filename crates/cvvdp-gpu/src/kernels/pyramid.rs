@@ -282,6 +282,28 @@ pub struct Band {
 ///
 /// Returns a `Vec<f32>` of length `height + 1` (the "base" band plus
 /// `height` subsequent reduces), each entry in cy/deg.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::band_frequencies;
+/// use cvvdp_gpu::params::DisplayGeometry;
+///
+/// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+/// let freqs = band_frequencies(ppd, 1024, 1024);
+///
+/// // Frequencies are strictly decreasing (finer → coarser).
+/// for i in 1..freqs.len() {
+///     assert!(freqs[i] < freqs[i - 1]);
+/// }
+/// // All bands are positive (the MIN_FREQ = 0.2 cy/deg cutoff
+/// // truncates the pyramid; entries may approach but stay > 0).
+/// assert!(freqs.iter().all(|&f| f > 0.0));
+/// // 1024² at standard 4K should produce ≥ 5 bands (the realistic
+/// // pyramid depth for ~1 megapixel — actual count depends on PPD
+/// // but is bounded by MAX_LEVELS = 9 and floored at 1).
+/// assert!(freqs.len() >= 5);
+/// ```
 #[must_use]
 pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
     const MIN_FREQ: f32 = 0.2;
