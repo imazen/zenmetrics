@@ -414,6 +414,56 @@ fn dimension_mismatch_surfaces_on_wrong_size_inputs() {
         .compute_dkl_jod_with_warm_ref(&wrong_bytes, ppd)
         .expect_err("compute_dkl_jod_with_warm_ref with short dist must error");
     check_dim_err(err, "compute_dkl_jod_with_warm_ref(short)");
+
+    // Tick 390: extend coverage to the four sites the original
+    // tick-239 test acknowledged in its docstring but did not
+    // actually exercise — compute_dkl_jod, compute_dkl_planes,
+    // compute_dkl_jod_host_pool, compute_dkl_jod_host_pool_with_warm_ref.
+    // Each validates buffer length at the entry point; a refactor
+    // that swaps the `!=` check for `<` (silently accepting smaller
+    // buffers + reading garbage past srgb.len()) would slip past
+    // the original 5-site coverage.
+
+    // compute_dkl_jod: both args validated; wrong reference first.
+    let err = cvvdp
+        .compute_dkl_jod(&wrong_bytes, &right_bytes, ppd)
+        .expect_err("compute_dkl_jod with short reference must error");
+    check_dim_err(err, "compute_dkl_jod(short_ref, ok_dist)");
+
+    let err = cvvdp
+        .compute_dkl_jod(&right_bytes, &wrong_bytes, ppd)
+        .expect_err("compute_dkl_jod with short distorted must error");
+    check_dim_err(err, "compute_dkl_jod(ok_ref, short_dist)");
+
+    // compute_dkl_planes: takes a single sRGB buffer. Validates
+    // its length.
+    let err = cvvdp
+        .compute_dkl_planes(&wrong_bytes)
+        .expect_err("compute_dkl_planes with short buffer must error");
+    check_dim_err(err, "compute_dkl_planes(short)");
+
+    // compute_dkl_jod_host_pool: both args validated. The cpu-
+    // runtime variant of compute_dkl_jod added in tick 208 (uses
+    // host-side pool fold instead of GPU atomic). Same validation
+    // contract — pin it explicitly so a refactor that diverges
+    // either path's dimension check surfaces here.
+    let err = cvvdp
+        .compute_dkl_jod_host_pool(&wrong_bytes, &right_bytes, ppd)
+        .expect_err("compute_dkl_jod_host_pool with short reference must error");
+    check_dim_err(err, "compute_dkl_jod_host_pool(short_ref, ok_dist)");
+
+    let err = cvvdp
+        .compute_dkl_jod_host_pool(&right_bytes, &wrong_bytes, ppd)
+        .expect_err("compute_dkl_jod_host_pool with short distorted must error");
+    check_dim_err(err, "compute_dkl_jod_host_pool(ok_ref, short_dist)");
+
+    // compute_dkl_jod_host_pool_with_warm_ref: dist buffer
+    // validated. The warm state from the earlier warm_reference
+    // call is still valid.
+    let err = cvvdp
+        .compute_dkl_jod_host_pool_with_warm_ref(&wrong_bytes, ppd)
+        .expect_err("compute_dkl_jod_host_pool_with_warm_ref with short dist must error");
+    check_dim_err(err, "compute_dkl_jod_host_pool_with_warm_ref(short)");
 }
 
 #[test]

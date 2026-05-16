@@ -177,6 +177,20 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/pipeline_score.rs::dimension_mismatch_surfaces_on_wrong_size_inputs`**
+  — extended to cover four additional public entry points the
+  original tick-239 test acknowledged in its docstring but did
+  not actually exercise: `compute_dkl_jod` (both ref/dist args),
+  `compute_dkl_planes`, `compute_dkl_jod_host_pool` (both args),
+  `compute_dkl_jod_host_pool_with_warm_ref`. The five sites
+  previously covered were `score`, `set_reference`,
+  `score_with_reference`, `warm_reference`, and
+  `compute_dkl_jod_with_warm_ref` — leaving the GPU-pool and
+  host-pool variants of `compute_dkl_jod` unchecked. A refactor
+  that swaps the `!=` check for `<` on any of the four newly-
+  covered entries (silently accepting smaller buffers and
+  reading garbage past `srgb.len()`) would slip past the
+  original 5-site coverage. Tick 390.
 - **`tests/pool_scalar.rs::lp_norm_mean_*`** — four direct unit
   tests on `lp_norm_mean` (cvvdp's `lp_norm` with `normalize=True`).
   The function was exercised only through the GPU-gated
