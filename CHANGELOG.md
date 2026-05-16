@@ -517,6 +517,17 @@ just two more layers of the `while` + byte-comparison primitive
 ticks 577-578 already used. Static-assert count is now 175 across
 11 test files.
 
+Tick 580 closed the per-char hex validation gap tick 578 left
+runtime-only. `char::is_ascii_digit` / `RangeInclusive::contains`
+aren't const fn, but raw u8 comparison IS — and MANIFEST_SHA256
+is pure ASCII so byte-iteration covers every char correctly:
+  - Every byte must satisfy `(c >= b'0' && c <= b'9') || (c >=
+    b'a' && c <= b'f')` (lowercase hex)
+A uppercase variant fails the case-sensitive sha2-Digest match
+silently; a stray non-hex char fetches the wrong manifest. Now
+both are compile-time-caught. Static-assert count is now 176
+across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

@@ -132,6 +132,27 @@ const _: () = assert!(
     "MANIFEST_URL must contain version path segment /v1/ (matches current GOLDEN_VERSION)",
 );
 
+// Tick 580: per-byte lowercase-hex validation on MANIFEST_SHA256.
+// `char::is_ascii_digit` and `RangeInclusive::contains` aren't
+// const fn yet, but raw u8 comparison is — and the sha256 string
+// is pure ASCII so the byte-loop covers every char correctly.
+// A uppercase variant (e.g. "EE52F5B...") fails the sha2-Digest
+// case-sensitive comparison silently; a stray non-hex char (e.g.
+// "g") would fetch the wrong manifest. Pin at compile time so
+// either typo class trips before the goldens-feature fetch runs.
+const _: () = {
+    let bytes = MANIFEST_SHA256.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        assert!(
+            (c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f'),
+            "MANIFEST_SHA256 must be lowercase hex (0-9, a-f) — found non-hex byte",
+        );
+        i += 1;
+    }
+};
+
 #[test]
 fn manifest_url_embeds_golden_version() {
     // The R2 prefix encodes the version path segment. Bumping
