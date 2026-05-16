@@ -722,6 +722,28 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 610 — continue the per-public-item `# Examples` doctest
+sweep from tick 609 (+3 more):
+
+- `PYCVVDP_REFERENCE_VERSION` — format invariants (starts with
+  'v', contains '.', non-empty) + the leading-'v'-strip → pip
+  version trick that `scripts/cvvdp_goldens/requirements.txt`
+  uses.
+- `Error` — exercises `DimensionMismatch` (carries `expected` +
+  `got` payload + actionable Display), the three zero-payload
+  variants' Display hints, and the `?` bubble against
+  `Box<dyn std::error::Error>`.
+- `Result<T>` type alias — Ok/Err construction + the
+  identity-`Into` `?` chaining (composes with the same return
+  type without `.map_err(Into::into)`).
+
+Doctest count: 48 → 51. Six other body-docstring-only public
+items in `params.rs` (DisplayModel / DisplayGeometry / CsfParams
+/ MaskingParams / PoolingParams / JodParams structs) are queued
+for the next pass; the per-struct doctest needs a moment of
+thought on what's load-bearing to show vs scaffolding. Docs-only
+change; `cargo test --doc` passes.
+
 Tick 609 — add `# Examples` doctests to four public crate-root
 constants that had body-level docstrings but no doctest section:
 

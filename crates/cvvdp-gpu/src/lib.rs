@@ -315,11 +315,53 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_IMPL_TAG") {
 /// against pycvvdp v0.5.4. Both bumps are needed when the goldens
 /// are regenerated — see `docs/PORT_STATUS.md#reference-version-pin`
 /// for the full procedure.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::PYCVVDP_REFERENCE_VERSION;
+/// // v<major>.<minor>.<patch> format with leading 'v'. The three
+/// // format invariants are also enforced at compile time in
+/// // `tests/version_lockstep.rs` so a malformed bump fails to
+/// // build.
+/// assert!(PYCVVDP_REFERENCE_VERSION.starts_with('v'));
+/// assert!(PYCVVDP_REFERENCE_VERSION.contains('.'));
+/// assert!(!PYCVVDP_REFERENCE_VERSION.is_empty());
+/// // Strip the leading 'v' to derive the bare pip-style version
+/// // that `scripts/cvvdp_goldens/requirements.txt` matches.
+/// assert!(PYCVVDP_REFERENCE_VERSION[1..].split('.').all(|s| s.parse::<u32>().is_ok()));
+/// ```
 pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
 
 /// Failure modes for `Cvvdp::*` methods. Implements
 /// `std::error::Error` so callers can use `?` against
 /// `Box<dyn Error>` or `anyhow::Error` as usual.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::Error;
+///
+/// // `DimensionMismatch` carries both expected + actual lengths
+/// // so callers can surface a precise diagnostic.
+/// let e = Error::DimensionMismatch { expected: 12_288, got: 3_072 };
+/// let msg = e.to_string();
+/// assert!(msg.contains("expected"));
+/// assert!(msg.contains("12288") || msg.contains("12_288"));
+///
+/// // The four zero-payload variants share a Display impl that
+/// // surfaces an actionable hint pointing at the caller-fix.
+/// assert!(Error::NoCachedReference.to_string().contains("set_reference"));
+/// assert!(Error::NoWarmReference.to_string().contains("warm_reference"));
+/// assert!(!Error::InvalidImageSize.to_string().is_empty());
+///
+/// // Error implements std::error::Error → bubbles through `?` against
+/// // any `Box<dyn Error>` / `anyhow::Error` return type.
+/// fn _bubble() -> Result<(), Box<dyn std::error::Error>> {
+///     Err(Error::NoCachedReference)?;
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Buffer length doesn't match `width × height × 3`.
@@ -374,4 +416,24 @@ impl std::error::Error for Error {}
 /// `Result<T, cvvdp_gpu::Error>` — the crate's standard fallible
 /// return type. Every `Cvvdp::*` constructor and dispatch method
 /// returns this.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::{Error, Result};
+///
+/// // Construct an Ok / Err via the type alias.
+/// let ok: Result<f32> = Ok(7.5);
+/// let err: Result<f32> = Err(Error::NoCachedReference);
+/// assert_eq!(ok.ok(), Some(7.5));
+/// assert!(err.is_err());
+///
+/// // The alias is just `std::result::Result<T, cvvdp_gpu::Error>` —
+/// // composes with `?` against the same return type without
+/// // any `.map_err(Into::into)`.
+/// fn doubles(input: Result<f32>) -> Result<f32> {
+///     Ok(input? * 2.0)
+/// }
+/// assert_eq!(doubles(Ok(3.0)).ok(), Some(6.0));
+/// ```
 pub type Result<T> = std::result::Result<T, Error>;
