@@ -78,7 +78,7 @@ Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
 fixture; the test suite catches drift across every layer that pins
 mention. Tick 500.
 
-**Post-milestone long tail (ticks 501–539, summarised here so the
+**Post-milestone long tail (ticks 501–540, summarised here so the
 detailed entries below stay grep-able):**
 
 - **Re-export surface widened** (501–503): lib_reexports.rs grew
@@ -164,6 +164,13 @@ are the load-bearing enforcement for fundamental dimension
 parameters; the runtime `#[test]` fns are preserved beside them
 to keep the test-runner-visible names referenced by older
 CHANGELOG entries resolvable.
+
+Tick 540 added a separate paragraph noting the static-assert
+count and bumping this summary's range. As of tick 540 verified
+clean across:
+  - `cargo clippy -p cvvdp-gpu --all-targets --all-features` — 0 warnings
+  - `cargo doc -p cvvdp-gpu --no-deps --document-private-items` — 0 warnings
+  - `cargo test --doc -p cvvdp-gpu` — 44 passed + 13 ignored
 
 ### Changed
 
