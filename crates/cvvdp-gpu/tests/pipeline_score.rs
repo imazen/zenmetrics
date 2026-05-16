@@ -580,6 +580,63 @@ fn new_equivalent_to_new_with_geometry_standard_4k() {
 }
 
 #[test]
+fn compute_dkl_jod_host_pool_with_warm_ref_distinguishes_v1_corpus_q_levels() {
+    // Tick 525: fourth-leg coverage of the stuck-at-constant
+    // contract.
+    //
+    // Existing coverage:
+    //   - cvvdp_score_distinguishes_v1_corpus_q_levels (tick 508):
+    //     GPU pool path via score().
+    //   - cvvdp_host_pool_distinguishes_v1_corpus_q_levels (tick 509):
+    //     GPU host_pool path (cold) via compute_dkl_jod_host_pool.
+    //
+    // This fills the missing leg: GPU host_pool WARM path via
+    // compute_dkl_jod_host_pool_with_warm_ref. Same strict-separation
+    // contract: scoring v1 corpus at q ∈ {1, 20, 90} on the warm-ref
+    // host-pool path produces strictly increasing JOD with ≥ 0.01 JOD
+    // adjacent-level gap.
+    //
+    // The warm-ref host_pool path is the cubecl-cpu / Metal-compatible
+    // batch-scoring fast path. A refactor that collapses
+    // discrimination on this path (e.g. caches the wrong DIST
+    // intermediate) would silently break batch CPU scoring.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+
+    let q_levels: &[u32] = &[1, 20, 90];
+    let mut scores = Vec::with_capacity(q_levels.len());
+    for &q in q_levels {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod = cvvdp
+            .compute_dkl_jod_host_pool_with_warm_ref(&dist_bytes, ppd)
+            .expect("compute_dkl_jod_host_pool_with_warm_ref");
+        eprintln!("warm-host-pool q={q:>2}: jod = {jod:.4}");
+        scores.push(jod);
+    }
+
+    for i in 0..scores.len() - 1 {
+        let lower = scores[i];
+        let higher = scores[i + 1];
+        let gap = higher - lower;
+        assert!(
+            gap > 0.01,
+            "warm-host-pool q={} ({}) not > q={} ({}) by ≥ 0.01 JOD; gap = {}",
+            q_levels[i + 1],
+            higher,
+            q_levels[i],
+            lower,
+            gap,
+        );
+    }
+}
+
+#[test]
 fn cvvdp_host_pool_distinguishes_v1_corpus_q_levels() {
     // Tick 509: host_pool sibling to tick 508's
     // `cvvdp_score_distinguishes_v1_corpus_q_levels`.

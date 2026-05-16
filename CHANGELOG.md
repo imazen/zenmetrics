@@ -304,6 +304,20 @@ mention. Tick 500.
   that, say, makes Fast mode swap in a different host-fold
   accumulation order on the GPU runtime. Tick 512.
 
+- **`compute_dkl_jod_host_pool_with_warm_ref_distinguishes_v1_corpus_q_levels`**
+  (in `pipeline_score.rs`) — fourth-leg stuck-at-constant pin
+  covering the warm-ref host_pool path (the batch-scoring fast path
+  used by cubecl-cpu / Metal-compatible production workers). Same
+  strict-separation contract as the GPU sibling (tick 508) and
+  cold-host_pool sibling (tick 509): scoring v1 corpus at
+  q ∈ {1, 20, 90} produces strictly increasing JOD with ≥ 0.01 JOD
+  adjacent-level gap. Catches a refactor that caches the wrong DIST
+  intermediate on the warm-ref host_pool path and silently breaks
+  batch CPU scoring without showing up on the warm/cold-equality
+  pin (which would still match within tolerance even if BOTH
+  collapsed). Observed scores identical to GPU/cold-host_pool
+  paths. Tick 525.
+
 - **`cvvdp_host_pool_distinguishes_v1_corpus_q_levels`** (in
   `pipeline_score.rs`) — sibling to tick 508 for the host_pool
   scoring path (`compute_dkl_jod_host_pool`, the cubecl-cpu /
