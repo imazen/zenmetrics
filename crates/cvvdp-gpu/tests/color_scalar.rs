@@ -31,6 +31,22 @@ const _: () = assert!(
     "SRGB8_TO_LINEAR_LUT must have one entry per u8 value (256)",
 );
 
+// Tick 561: compile-time pin of the LUT endpoints. The IEC
+// 61966-2-1 sRGB EOTF maps byte 0 → linear 0.0 exactly and byte
+// 255 → linear 1.0 exactly. A refactor that off-by-ones the byte
+// index, or accidentally drops the byte=255 boundary case, would
+// silently shift every pixel's linear-space contribution. Pinning
+// the two boundary entries at compile time catches that class of
+// error before any pipeline runs.
+const _: () = assert!(
+    SRGB8_TO_LINEAR_LUT[0].to_bits() == 0.0_f32.to_bits(),
+    "SRGB8_TO_LINEAR_LUT[0] must be exactly 0.0 (sRGB byte 0 → linear 0)",
+);
+const _: () = assert!(
+    SRGB8_TO_LINEAR_LUT[255].to_bits() == 1.0_f32.to_bits(),
+    "SRGB8_TO_LINEAR_LUT[255] must be exactly 1.0 (sRGB byte 255 → linear 1.0 full-scale)",
+);
+
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).
 const GOLDENS: &[(u8, u8, u8, f32, f32, f32)] = &[
     (0, 0, 0, 0.628_396_27, 0.002_257_2, 0.006_174_458),

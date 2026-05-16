@@ -304,6 +304,17 @@ compile if each individual tap matched its expected literal but
 the wrong half was substituted into the array. Static-assert
 count is now 83 across 11 test files.
 
+Tick 561 promoted the SRGB8_TO_LINEAR_LUT endpoint bit-pins to
+static asserts in `color_scalar.rs`: `LUT[0] == 0.0_f32` and
+`LUT[255] == 1.0_f32`. The IEC 61966-2-1 sRGB EOTF maps byte 0 →
+linear 0 exactly and byte 255 → linear 1 exactly, and these are
+the boundary cases an off-by-one byte index would silently break.
+The 254 interior LUT entries remain runtime-only — they're each
+derived from the sRGB EOTF formula and pinned by
+`srgb_lut_matches_iec_61966_2_1_formula`, which can't lift
+because the formula's branchless conditional uses `f32::powf`
+(not const fn). Static-assert count is now 85 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
