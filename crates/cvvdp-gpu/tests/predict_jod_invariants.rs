@@ -44,10 +44,7 @@ fn output_bounded_above_by_ten() {
     // Distorted = small perturbation of ref.
     let dist: Vec<u8> = ref_.iter().map(|&b| b.saturating_add(4)).collect();
     let jod = predict_jod_still_3ch(&ref_, &dist, w, h, dm(), ppd());
-    assert!(
-        jod <= 10.0 + 1e-3,
-        "JOD = {jod} should be ≤ 10 + ε"
-    );
+    assert!(jod <= 10.0 + 1e-3, "JOD = {jod} should be ≤ 10 + ε");
     assert!(jod.is_finite(), "JOD = {jod} non-finite");
 }
 
@@ -59,11 +56,7 @@ fn determinism_across_repeated_calls() {
     let dist: Vec<u8> = (0..w * h * 3).map(|i| ((i * 11) % 256) as u8).collect();
     let a = predict_jod_still_3ch(&ref_, &dist, w, h, dm(), ppd());
     let b = predict_jod_still_3ch(&ref_, &dist, w, h, dm(), ppd());
-    assert_eq!(
-        a.to_bits(),
-        b.to_bits(),
-        "non-deterministic: {a} vs {b}"
-    );
+    assert_eq!(a.to_bits(), b.to_bits(), "non-deterministic: {a} vs {b}");
 }
 
 #[test]
@@ -151,9 +144,7 @@ fn non_square_dimensions_are_supported() {
         (64, 24),
         (24, 64),
     ] {
-        let src: Vec<u8> = (0..w * h * 3)
-            .map(|i| ((i * 13 + 5) % 256) as u8)
-            .collect();
+        let src: Vec<u8> = (0..w * h * 3).map(|i| ((i * 13 + 5) % 256) as u8).collect();
         let jod_ident = predict_jod_still_3ch(&src, &src, w, h, dm(), ppd());
         assert!(
             jod_ident.is_finite() && (jod_ident - 10.0).abs() < 1e-2,
@@ -184,13 +175,11 @@ fn odd_dimensions_are_supported() {
     // quirk in pycvvdp source). Pin that the composed pipeline still
     // accepts odd inputs through to a finite JOD.
     for (w, h) in [
-        (13_usize, 17_usize),  // both odd, prime-like
-        (15_usize, 15_usize),  // square odd
-        (73, 91),              // the historical regression case
+        (13_usize, 17_usize), // both odd, prime-like
+        (15_usize, 15_usize), // square odd
+        (73, 91),             // the historical regression case
     ] {
-        let src: Vec<u8> = (0..w * h * 3)
-            .map(|i| ((i * 17 + 3) % 256) as u8)
-            .collect();
+        let src: Vec<u8> = (0..w * h * 3).map(|i| ((i * 17 + 3) % 256) as u8).collect();
         let jod_ident = predict_jod_still_3ch(&src, &src, w, h, dm(), ppd());
         assert!(
             jod_ident.is_finite() && (jod_ident - 10.0).abs() < 1e-2,

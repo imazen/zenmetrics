@@ -91,10 +91,7 @@ fn non_negative_input_yields_non_negative_output() {
     let src: Vec<f32> = (0..w * h).map(|i| (i as f32) * 0.5).collect();
     let out = gaussian_blur_sigma3(&src, w, h);
     for (i, &v) in out.iter().enumerate() {
-        assert!(
-            v >= 0.0,
-            "non-negative-input [{i}] = {v} is negative"
-        );
+        assert!(v >= 0.0, "non-negative-input [{i}] = {v} is negative");
     }
 }
 

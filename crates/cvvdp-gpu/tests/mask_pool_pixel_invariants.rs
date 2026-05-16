@@ -138,10 +138,7 @@ fn output_finite_for_finite_input() {
     ] {
         let out = mask_pool_pixel(term);
         for (i, &v) in out.iter().enumerate() {
-            assert!(
-                v.is_finite(),
-                "term={term:?}: out[{i}] = {v} non-finite"
-            );
+            assert!(v.is_finite(), "term={term:?}: out[{i}] = {v} non-finite");
         }
     }
 }

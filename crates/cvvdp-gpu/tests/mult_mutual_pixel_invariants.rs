@@ -86,10 +86,7 @@ fn non_negative_for_all_inputs() {
     for (t, r) in cases {
         let d = mult_mutual_pixel(t, r);
         for (i, &v) in d.iter().enumerate() {
-            assert!(
-                v >= 0.0,
-                "D[{i}] = {v} is negative for T={t:?}, R={r:?}"
-            );
+            assert!(v >= 0.0, "D[{i}] = {v} is negative for T={t:?}, R={r:?}");
         }
     }
 }
@@ -108,10 +105,7 @@ fn bounded_by_d_max_asymptote() {
             v < d_max,
             "D[{i}] = {v} should be strictly < d_max = {d_max}"
         );
-        assert!(
-            v.is_finite(),
-            "D[{i}] = {v} not finite"
-        );
+        assert!(v.is_finite(), "D[{i}] = {v} not finite");
     }
 }
 

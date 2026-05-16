@@ -103,7 +103,11 @@ fn output_bounded_by_d_max() {
 
     // Synthesize an extreme contrast — large positive T, large
     // negative R (diff magnitude 2e6) over a small band.
-    let t = [vec![1e6_f32; w * h], vec![1e6_f32; w * h], vec![1e6_f32; w * h]];
+    let t = [
+        vec![1e6_f32; w * h],
+        vec![1e6_f32; w * h],
+        vec![1e6_f32; w * h],
+    ];
     let r = [
         vec![-1e6_f32; w * h],
         vec![-1e6_f32; w * h],
@@ -143,16 +147,8 @@ fn determinism_across_repeated_calls() {
 fn finite_output_for_finite_input() {
     // Mix of small + large + negative inputs.
     let (w, h) = (16_usize, 16_usize);
-    let t = [
-        ramp(w, h, -1e3),
-        ramp(w, h, 0.0),
-        ramp(w, h, 1e3),
-    ];
-    let r = [
-        ramp(w, h, 1e3),
-        ramp(w, h, -1e3),
-        ramp(w, h, 0.0),
-    ];
+    let t = [ramp(w, h, -1e3), ramp(w, h, 0.0), ramp(w, h, 1e3)];
+    let r = [ramp(w, h, 1e3), ramp(w, h, -1e3), ramp(w, h, 0.0)];
     let d = mult_mutual_band(&t, &r, w, h);
     for cc in 0..3 {
         for (i, &v) in d[cc].iter().enumerate() {

@@ -89,11 +89,7 @@ fn dst_vec_capacity_can_grow_or_shrink() {
     assert_eq!(dst_small.len(), 64);
 
     for (i, (&va, &vb)) in dst_big.iter().zip(dst_small.iter()).enumerate() {
-        assert_eq!(
-            va.to_bits(),
-            vb.to_bits(),
-            "[{i}] capacity affected output"
-        );
+        assert_eq!(va.to_bits(), vb.to_bits(), "[{i}] capacity affected output");
     }
 }
 

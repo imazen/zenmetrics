@@ -21,14 +21,7 @@ fn small_band_branch_is_pure_scaling() {
     // blur and just multiply by 10^MASK_C. Output[i] should be
     // bit-equal to `input[i] * scale`.
     let scale = 10.0_f32.powf(MASK_C);
-    let cases: Vec<(usize, usize)> = vec![
-        (1, 1),
-        (6, 6),
-        (6, 100),
-        (100, 6),
-        (3, 8),
-        (4, 5),
-    ];
+    let cases: Vec<(usize, usize)> = vec![(1, 1), (6, 6), (6, 100), (100, 6), (3, 8), (4, 5)];
     for (w, h) in cases {
         let src: Vec<f32> = (0..w * h).map(|i| (i as f32) * 0.1 + 1.0).collect();
         let out = phase_uncertainty_band(&src, w, h);
@@ -127,10 +120,7 @@ fn finite_input_yields_finite_output_in_both_branches() {
         let src: Vec<f32> = (0..w * h).map(|i| (i as f32) * 0.1 - 5.0).collect();
         let out = phase_uncertainty_band(&src, w, h);
         for (i, &v) in out.iter().enumerate() {
-            assert!(
-                v.is_finite(),
-                "({w}, {h}) [{i}] = {v} non-finite"
-            );
+            assert!(v.is_finite(), "({w}, {h}) [{i}] = {v} non-finite");
         }
     }
 }

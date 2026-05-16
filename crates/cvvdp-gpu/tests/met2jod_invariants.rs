@@ -72,10 +72,7 @@ fn output_strictly_below_ten_for_any_positive_q() {
     // subtraction is < 1 ULP of 10.0. Start at 1e-3.
     for q in [1e-3_f32, 0.01, 0.05, 0.1, 0.2, 1.0, 10.0] {
         let v = met2jod(q);
-        assert!(
-            v < 10.0,
-            "met2jod({q}) = {v} should be strictly < 10.0"
-        );
+        assert!(v < 10.0, "met2jod({q}) = {v} should be strictly < 10.0");
     }
 }
 
@@ -134,10 +131,7 @@ fn declining_jod_for_large_q_stays_finite() {
     // 0.044 · 1e6^0.93 ≈ 0.044 · 4e5 ≈ 1.7e4; JOD ≈ 10 - 1.7e4 ≈ -1.7e4.
     for q in [1e3_f32, 1e6, 1e9, 1e12] {
         let v = met2jod(q);
-        assert!(
-            v.is_finite(),
-            "met2jod({q}) = {v} non-finite"
-        );
+        assert!(v.is_finite(), "met2jod({q}) = {v} non-finite");
         assert!(
             v < 0.0,
             "met2jod({q}) = {v} should be negative for very large Q"

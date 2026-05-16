@@ -20,10 +20,7 @@ fn main() {
         (4096, 3072),
     ] {
         if let Some(b) = estimate_gpu_memory_bytes(w, h) {
-            println!(
-                "  {w:>4}×{h:<4}  {b:>15} bytes  {:>8.1} MB",
-                b as f64 / 1e6
-            );
+            println!("  {w:>4}×{h:<4}  {b:>15} bytes  {:>8.1} MB", b as f64 / 1e6);
         }
     }
 
@@ -39,12 +36,7 @@ fn main() {
     ] {
         let mem_bytes = (mem_gb * 1e9) as u64;
         print!("  {mem_name:<24} ");
-        for &(w, h) in &[
-            (256_u32, 256_u32),
-            (1024, 1024),
-            (2048, 2048),
-            (4096, 3072),
-        ] {
+        for &(w, h) in &[(256_u32, 256_u32), (1024, 1024), (2048, 2048), (4096, 3072)] {
             let p = recommend_parallel(mem_bytes, w, h);
             print!("{w}²={p:>3}  ");
         }

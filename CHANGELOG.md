@@ -56,6 +56,20 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### cvvdp-gpu (tests)
+
+- **`state_machine_independence.rs`** — 5 invariant pins on the
+  `Cvvdp::set_reference` / `Cvvdp::warm_reference` cache state
+  machine. Pins (1) fresh `Cvvdp::new()` surfaces `NoCachedReference`
+  *and* `NoWarmReference` from the two fast paths independently;
+  (2) `set_reference` does NOT prime warm state (dual of tick 238's
+  `set_reference_does_not_invalidate_warm_state`); (3) `warm_reference`
+  does NOT prime the set_reference cache; (4) one-shot
+  `Cvvdp::score` does NOT pollute either cache; (5) one-shot
+  `compute_dkl_jod` does NOT pollute either cache. Catches a future
+  "eager upload" refactor that would silently change the documented
+  fast-path-error surface. Tick 486.
+
 #### cvvdp-gpu (docs)
 
 - **README "GPU memory budgeting" section** — documents the new
