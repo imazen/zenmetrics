@@ -128,6 +128,27 @@ const _: () = assert!(
     "D_MAX must be positive (10^D_MAX is the soft-clamp ceiling)",
 );
 
+// Tick 569: every XCM_3X3 entry must be positive. The cvvdp v0.5.4
+// derivation is `2^x` for some log2-space coefficient x, and 2^x
+// is positive for all real x. A refactor that substituted a
+// different formula (e.g. `1 - exp(-x)` for an attenuation
+// reframe, or a sign drift in the source coefficients) could yield
+// negative entries while still passing the per-entry value bit-
+// pins. Pinning positivity directly captures the construction
+// rule. `f32::is_sign_positive` is const fn since Rust 1.83.
+const _: () = {
+    let m = XCM_3X3;
+    assert!(m[0][0].is_sign_positive(), "XCM_3X3[0][0] must be positive (= 2^x)");
+    assert!(m[0][1].is_sign_positive(), "XCM_3X3[0][1] must be positive (= 2^x)");
+    assert!(m[0][2].is_sign_positive(), "XCM_3X3[0][2] must be positive (= 2^x)");
+    assert!(m[1][0].is_sign_positive(), "XCM_3X3[1][0] must be positive (= 2^x)");
+    assert!(m[1][1].is_sign_positive(), "XCM_3X3[1][1] must be positive (= 2^x)");
+    assert!(m[1][2].is_sign_positive(), "XCM_3X3[1][2] must be positive (= 2^x)");
+    assert!(m[2][0].is_sign_positive(), "XCM_3X3[2][0] must be positive (= 2^x)");
+    assert!(m[2][1].is_sign_positive(), "XCM_3X3[2][1] must be positive (= 2^x)");
+    assert!(m[2][2].is_sign_positive(), "XCM_3X3[2][2] must be positive (= 2^x)");
+};
+
 // Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
 // masking matrix (3×3 = 9 entries). Each entry is independently
 // derived from a published log2-space coefficient via 2^x; a

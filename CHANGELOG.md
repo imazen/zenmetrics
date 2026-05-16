@@ -402,6 +402,15 @@ scalar constants:
     attenuation (not amplification)
 Static-assert count is now 119 across 11 test files.
 
+Tick 569 added 9 positivity invariants on every `XCM_3X3` entry.
+Each is derived in cvvdp v0.5.4 as `2^x` for some log2-space
+coefficient, and `2^x > 0` always. A refactor that substituted
+a different formula (e.g. `1 - exp(-x)` for an attenuation
+reframe, or a sign drift in the source coefficients) could yield
+negative entries while still matching the per-entry value bit-
+pins. Pinning positivity directly captures the construction
+rule. Static-assert count is now 128 across 11 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
