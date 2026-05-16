@@ -722,6 +722,20 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 627 — fix two issues in tick 619's GE_SIGMA doctest:
+
+1. Wrong tick number: said "tick 506" but the GE_SIGMA pin is at
+   tick 572 (`tests/csf_axes_invariants.rs:94`).
+2. Awkward phrasing: "tick 506 line" (the word "line" was a typo
+   for "(tick 506)" parenthetical).
+
+Rewrote as "Bit-pinned at compile time in
+`tests/csf_axes_invariants.rs` (tick 572)" — accurate, stable
+under test-file reorganization, and grammatically clean. The
+GE_SIGMA pin is in a `const _: () = ...` block (not a `#[test]
+fn`), so a function-name ref doesn't apply — file-level ref is
+the right granularity here. Doctest passes. Doc-only change.
+
 Tick 626 — anti-rot conversion of the only 2 remaining
 src-doctest line-refs to function-name refs:
 

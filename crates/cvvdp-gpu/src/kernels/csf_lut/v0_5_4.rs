@@ -896,8 +896,8 @@ pub const LOG_S_O0_C3: [f32; 1024] = [
 /// ```
 /// use cvvdp_gpu::kernels::csf::GE_SIGMA;
 ///
-/// // Pinned to 1.5 from cvvdp v0.5.4's source JSON. Bit-pinned by
-/// // tests/csf_axes_invariants.rs (tick 506 line).
+/// // Pinned to 1.5 from cvvdp v0.5.4's source JSON. Bit-pinned at
+/// // compile time in `tests/csf_axes_invariants.rs` (tick 572).
 /// assert_eq!(GE_SIGMA, 1.5);
 /// // Must be positive — it's a Gaussian sigma in degrees of
 /// // eccentricity. A negative value would invert the Gaussian
