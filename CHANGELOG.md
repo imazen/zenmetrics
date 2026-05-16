@@ -56,6 +56,29 @@ Workspace conventions per the global rules:
 
 ### Added
 
+#### cvvdp-gpu (api)
+
+- **`cvvdp_gpu::estimate_gpu_memory_bytes(width, height) -> Option<usize>`**
+  — static-analysis predictor for the GPU memory `Cvvdp::new` will
+  allocate. Sums every persistent buffer: source u32 bytes, three
+  full pyramids (`gauss_ref` + `bands_ref` + `bands_dis`), 6 ×
+  d_scratch planes per level, weber_scratch (6 fine + 4 v-scratch
+  per non-baseband level), partials, baseband log_l_bkg, srgb_lut,
+  logs_row — using ceil-div halving to match the actual allocator
+  layout (tick 175 ceil-div + tick 208 d_scratch + tick 240 pre-
+  bundled handles). Worked-example table at standard 4K geometry:
+  64² = 0.8 MB, 256² = 13 MB, 512² = 52 MB, 1024² = 208 MB,
+  2048² = 833 MB, 4096×3072 (12 MP) = 2.5 GB. Use to cap fleet
+  concurrency: `PARALLEL = floor(free_gpu_bytes / (1.5 *
+  estimate))` — at 1024² on an 8 GB GPU that's 25, on 24 GB it's
+  76. Returns `None` below the [`PYRAMID_MIN_DIM`] × 2 = 8×8
+  threshold (same precondition as `Cvvdp::new`). Pinned by four
+  tests in `tests/pipeline_score.rs`: below-threshold, pixel-count
+  scaling (4× pixels → 4× ±10% bytes), order-of-magnitude at
+  three sizes, and a worked-example concurrency-cap calc on an
+  8 GB GPU. Includes `examples/cvvdp_mem_table.rs` for operators
+  to probe the table on their own hardware. Tick 398.
+
 #### scripts/sweep (cvvdp-backfill — deployment hardening, ticks 353-376)
 
 Long arc of fleet deployment hardening between ticks 353 (backend

@@ -441,6 +441,111 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
     band_count.min(MAX_LEVELS as u32)
 }
 
+/// Static-analysis predictor for the GPU memory `Cvvdp::new` will
+/// allocate for an image of `(width, height)` under the standard 4K
+/// viewing geometry. Sums every persistent buffer enumerated in
+/// `Cvvdp::new` (source bytes, three full pyramids, d_scratch,
+/// weber_scratch, partials, baseband log_l_bkg, srgb_lut, logs_row)
+/// using ceil-div halving per level — matches the actual allocator
+/// layout (tick 175's ceil-div pyramid + tick 208's d_scratch + tick
+/// 240's pre-bundled handles).
+///
+/// Use this to **cap concurrency** when running many Cvvdp instances
+/// against a shared GPU: divide free GPU memory (via
+/// `cudaMemGetInfo` or the equivalent) by `1.5 × estimate` (1.5×
+/// safety factor for transient kernel allocations + cubecl runtime
+/// overhead) to derive a safe parallel-instance count.
+///
+/// Returns `None` if `(width, height)` is below the
+/// [`PYRAMID_MIN_DIM`] × 2 threshold — same precondition as
+/// [`Cvvdp::new`].
+///
+/// # Caveats
+///
+/// - Counts only the buffers visible at `Cvvdp::new` time; transient
+///   per-call uploads (the per-DIST `srgb` byte buffer, per-band
+///   readback bytes when callers use `compute_dkl_*_bands`, etc.)
+///   are excluded. Add ~`width * height * 4` for one warm dist
+///   buffer if you `score` in a loop.
+/// - Uses `DisplayGeometry::STANDARD_4K` to derive `n_levels`. Other
+///   geometries shift PPD which shifts `band_frequencies`'s cutoff;
+///   for typical 4K-class viewing the level count is the same
+///   ±1 across realistic geometries.
+/// - The cubecl runtime adds its own metadata + page alignment
+///   overhead per buffer (~hundreds of bytes per allocation × ~50
+///   allocations = single-digit MB). Bake this into the safety
+///   factor at the call site.
+#[must_use]
+pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
+    if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
+        return None;
+    }
+    let ppd = crate::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let n_levels = pyramid_levels(ppd, width, height) as usize;
+    let n0 = (width as usize) * (height as usize);
+
+    // src_ref: u32 array of length n0 * 3 = 12 bytes/pixel.
+    let src_bytes: usize = n0 * 3 * 4;
+    // srgb_lut: 256 entries × f32.
+    let srgb_lut_bytes: usize = 256 * 4;
+    // Persistent partials buffer: n_levels × N_CHANNELS × f32.
+    let partials_bytes: usize = n_levels * crate::N_CHANNELS * 4;
+    // logs_row: per (level, channel) a length-N_L_BKG row of f32.
+    let logs_row_bytes: usize = n_levels * crate::N_CHANNELS * crate::kernels::csf::N_L_BKG * 4;
+
+    // Per-level pixel count (ceil-div halving).
+    let mut level_pixels: Vec<usize> = Vec::with_capacity(n_levels);
+    let mut w = width;
+    let mut h = height;
+    for _ in 0..n_levels {
+        level_pixels.push((w as usize) * (h as usize));
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
+    }
+    let sum_level_pixels: usize = level_pixels.iter().sum();
+
+    // gauss_ref + bands_ref + bands_dis: each is 3 channels × sum
+    // of per-level pixel counts × f32.
+    let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
+
+    // d_scratch: 6 buffer types (t_p_ref, t_p_dis, m_raw, m_mid,
+    // m_blur, d) × 3 channels per level.
+    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+
+    // weber_scratch: only non-baseband levels (n_levels - 1).
+    // Per level: 3 fine-sized planes (l_bkg_fine, log_l_bkg,
+    // log_l_bkg_dis) + 3 fine-sized upscaled_c + 1 v-scratch
+    // (vscratch_a, half-width) + 3 v-scratch (vscratch_c, half-width).
+    // v-scratch size = ceil(W/2) × H per level.
+    let mut weber_bytes: usize = 0;
+    let mut fw = width;
+    let mut fh = height;
+    for _ in 0..n_levels.saturating_sub(1) {
+        let n_fine = (fw as usize) * (fh as usize);
+        let cw = fw.div_ceil(2);
+        let n_v = (cw as usize) * (fh as usize);
+        let fine_planes = 6_usize; // l_bkg_fine + log_l_bkg + log_l_bkg_dis + 3 × upscaled_c
+        let v_planes = 4_usize; // vscratch_a + 3 × vscratch_c
+        weber_bytes += (fine_planes * n_fine + v_planes * n_v) * 4;
+        fw = cw;
+        fh = fh.div_ceil(2);
+    }
+
+    // Baseband log_l_bkg buffer: pixels at the coarsest level × f32.
+    let baseband_bytes: usize = level_pixels.last().copied().unwrap_or(0) * 4;
+
+    Some(
+        src_bytes
+            + srgb_lut_bytes
+            + partials_bytes
+            + logs_row_bytes
+            + pyramid_bytes
+            + d_scratch_bytes
+            + weber_bytes
+            + baseband_bytes,
+    )
+}
+
 impl<R: Runtime> Cvvdp<R> {
     /// Allocate GPU buffers for a fixed `width × height` image and the
     /// given parameter bundle. Uses

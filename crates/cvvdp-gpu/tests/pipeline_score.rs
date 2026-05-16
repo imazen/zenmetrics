@@ -1367,3 +1367,111 @@ fn perf_mode_fast_matches_strict_today() {
          (strict={strict_score}, fast={fast_score}, |diff|={score_diff:.2e})"
     );
 }
+
+#[test]
+fn estimate_gpu_memory_returns_none_below_threshold() {
+    // PYRAMID_MIN_DIM = 4 → lower bound is 8. Below 8×8 the
+    // function returns None (same precondition as Cvvdp::new).
+    use cvvdp_gpu::estimate_gpu_memory_bytes;
+    assert!(estimate_gpu_memory_bytes(0, 0).is_none());
+    assert!(estimate_gpu_memory_bytes(4, 4).is_none());
+    assert!(estimate_gpu_memory_bytes(7, 8).is_none());
+    assert!(estimate_gpu_memory_bytes(8, 7).is_none());
+    // 8×8 boundary: must succeed.
+    assert!(estimate_gpu_memory_bytes(8, 8).is_some());
+}
+
+#[test]
+fn estimate_gpu_memory_scales_with_pixel_count() {
+    // Doubling each dimension quadruples the pixel count, which
+    // should approximately quadruple the predicted bytes (the
+    // ceil-div pyramid sum is roughly 4/3 × n0 for both inputs,
+    // and the per-level overheads dominate over fixed costs at
+    // these magnitudes).
+    use cvvdp_gpu::estimate_gpu_memory_bytes;
+    let bytes_256 = estimate_gpu_memory_bytes(256, 256).expect("256² estimate");
+    let bytes_512 = estimate_gpu_memory_bytes(512, 512).expect("512² estimate");
+    let bytes_1024 = estimate_gpu_memory_bytes(1024, 1024).expect("1024² estimate");
+
+    // 4× ratio is the asymptotic target; allow ±10% to absorb
+    // n_levels boundary effects + fixed-cost dilution at small
+    // sizes (srgb_lut + partials + logs_row are constant-ish).
+    let ratio_512 = bytes_512 as f64 / bytes_256 as f64;
+    let ratio_1024 = bytes_1024 as f64 / bytes_512 as f64;
+    assert!(
+        ratio_512 > 3.6 && ratio_512 < 4.4,
+        "512²/256² ratio = {ratio_512:.3}, expected ≈ 4.0 (got {bytes_256} → {bytes_512})",
+    );
+    assert!(
+        ratio_1024 > 3.6 && ratio_1024 < 4.4,
+        "1024²/512² ratio = {ratio_1024:.3}, expected ≈ 4.0 (got {bytes_512} → {bytes_1024})",
+    );
+}
+
+#[test]
+fn estimate_gpu_memory_at_known_sizes() {
+    // Sanity-check the order of magnitude at three reference
+    // sizes. The Cvvdp::new docstring at line ~128 cites
+    // ~1.5 GB of "transient GPU buffers" at 12 MP (4000×3000).
+    // The static-allocation estimate should land in the same
+    // ballpark (this is what's persisted across the whole Cvvdp
+    // lifetime — the per-band scratch allocations cited in the
+    // doc were since folded into d_scratch which we count).
+    //
+    // At 1 MP (1024×1024) expect ~150-400 MB (the dominant terms
+    // are d_scratch + 3 pyramids, all ~ ~60 × n0 bytes).
+    // At 12 MP (4096×3072) expect ~1-4 GB.
+    use cvvdp_gpu::estimate_gpu_memory_bytes;
+
+    let bytes_1mp = estimate_gpu_memory_bytes(1024, 1024).expect("1 MP estimate");
+    assert!(
+        (100_000_000..500_000_000).contains(&bytes_1mp),
+        "1 MP estimate = {} bytes ({:.1} MB), expected ~100-500 MB",
+        bytes_1mp,
+        bytes_1mp as f64 / 1e6,
+    );
+
+    let bytes_12mp = estimate_gpu_memory_bytes(4096, 3072).expect("12 MP estimate");
+    assert!(
+        (1_000_000_000..5_000_000_000).contains(&bytes_12mp),
+        "12 MP estimate = {} bytes ({:.2} GB), expected ~1-5 GB",
+        bytes_12mp,
+        bytes_12mp as f64 / 1e9,
+    );
+
+    let bytes_64sq = estimate_gpu_memory_bytes(64, 64).expect("64² estimate");
+    // Small image — fixed-cost overhead dominates. Just check
+    // it's reasonable (< 1 MB) — not zero (would indicate the
+    // pyramid was excluded), not megabytes (would indicate a
+    // fixed-array bug).
+    assert!(
+        (10_000..1_000_000).contains(&bytes_64sq),
+        "64² estimate = {} bytes, expected ~10 KB - 1 MB",
+        bytes_64sq,
+    );
+}
+
+#[test]
+fn estimate_gpu_memory_documents_concurrency_cap_use() {
+    // Worked example: an 8 GB GPU running 1024² scoring should
+    // support PARALLEL ≈ floor(free / (1.5 × estimate)). The
+    // safety factor (1.5) covers per-call transient uploads +
+    // cubecl runtime metadata + the host-side u32 scratch
+    // (counted as src_bytes / 3 since u32_scratch is host-only).
+    //
+    // Pin the worked-example numbers so a refactor that changes
+    // the estimate doesn't silently shift the recommended
+    // parallel-instance count for a typical sweep workload.
+    use cvvdp_gpu::estimate_gpu_memory_bytes;
+    let est = estimate_gpu_memory_bytes(1024, 1024).expect("1024² estimate");
+    let free_gb: f64 = 8.0;
+    let safety: f64 = 1.5;
+    let parallel = (free_gb * 1e9 / (safety * est as f64)).floor() as u32;
+    // On an 8 GB GPU, PARALLEL must be at least 1 (otherwise
+    // the GPU is too small for cvvdp at 1024²) and at most a
+    // handful (otherwise the estimate is wildly under-counting).
+    assert!(
+        (1..=64).contains(&parallel),
+        "8 GB GPU / 1024² → PARALLEL = {parallel}; estimate = {est} bytes",
+    );
+}

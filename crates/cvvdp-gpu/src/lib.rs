@@ -175,7 +175,7 @@ pub mod params;
 pub mod pipeline;
 
 pub use params::{CvvdpParams, PerfMode};
-pub use pipeline::Cvvdp;
+pub use pipeline::{Cvvdp, estimate_gpu_memory_bytes};
 
 /// Number of color channels in DKL opponent space (achromatic +
 /// red-green + violet-yellow).
