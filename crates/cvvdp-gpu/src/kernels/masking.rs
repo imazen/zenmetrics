@@ -173,6 +173,25 @@ pub fn phase_uncertainty_no_blur(m: f32) -> f32 {
 /// 1D Gaussian kernel for phase-uncertainty blur. Matches the
 /// kernel `torchvision.transforms.GaussianBlur(13, 3.0)` builds —
 /// σ = 3 px, 13 taps, normalized to sum 1.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+///
+/// // 13 taps, symmetric around the center (index 6), sum to 1.
+/// assert_eq!(PU_BLUR_KERNEL_1D.len(), 13);
+/// for i in 0..6 {
+///     assert_eq!(PU_BLUR_KERNEL_1D[i].to_bits(), PU_BLUR_KERNEL_1D[12 - i].to_bits());
+/// }
+/// let sum: f32 = PU_BLUR_KERNEL_1D.iter().sum();
+/// assert!((sum - 1.0).abs() < 1e-5);
+///
+/// // Center is the largest tap; tails are smallest.
+/// let center = PU_BLUR_KERNEL_1D[6];
+/// let edge = PU_BLUR_KERNEL_1D[0];
+/// assert!(center > edge * 5.0); // ~0.137 vs ~0.019
+/// ```
 #[rustfmt::skip]
 pub const PU_BLUR_KERNEL_1D: [f32; 13] = [
     1.854_402_2e-2, 3.416_694_2e-2, 5.633_176_4e-2, 8.310_854e-2,

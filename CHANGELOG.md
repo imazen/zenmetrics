@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`PU_BLUR_KERNEL_1D` doctest** — added `# Examples` showing 13
+  taps, symmetric around center via `to_bits()`, sum-to-1 (DC
+  preservation, σ=3 Gaussian), center > 5× tail magnitude. Tick 470.
+
 - **`GAUSS5` doctest** — added `# Examples` showing 5 taps,
   symmetric around center via `to_bits()` equality, DC preservation
   (sum to 1 within 1e-6), center tap equals `KERNEL_A`. Tick 469.
