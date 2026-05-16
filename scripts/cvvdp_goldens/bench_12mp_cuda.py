@@ -55,6 +55,32 @@ def synth_pair_12mp(w=W, h=H):
     return ref, dist
 
 
+def synth_pair_1024_offset(w=1024, h=1024):
+    """1024x1024 fixture using the same modular synth-pair + offset
+    distortion as `synth_pair_12mp`, at 1 MP. Fills the 256² ↔
+    4000×3000 size gap with a clean power-of-2 1-MP case. Exercises
+    the `MAX_LEVELS = 9` pyramid-depth clamp (raw band_frequencies
+    would suggest 10 levels for 1024²; pyramid_levels caps to 9).
+
+    Bit-stable with Rust's `common::synth_pair_with_offset_dist(1024, 1024)`
+    helper (pure modular arithmetic).
+    """
+    yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    r = ((xx * 17 + yy * 5) % 251).astype(np.uint8) + 40
+    g = ((xx * 11 + yy * 13) % 247).astype(np.uint8) + 40
+    b = ((xx * 7 + yy * 19) % 241).astype(np.uint8) + 40
+    ref = np.stack([r, g, b], axis=-1)
+    dist = np.stack(
+        [
+            np.maximum(r.astype(np.int16) - 8, 0).astype(np.uint8),
+            np.maximum(g.astype(np.int16) - 4, 0).astype(np.uint8),
+            np.minimum(b.astype(np.int16) + 12, 255).astype(np.uint8),
+        ],
+        axis=-1,
+    )
+    return ref, dist
+
+
 def synth_pair_128_offset(w=128, h=128):
     """128x128 fixture using the same modular synth-pair + offset
     distortion as `synth_pair_12mp`, just at a smaller size. Fills
@@ -259,8 +285,17 @@ def main():
     offset128_ref, offset128_dist = synth_pair_128_offset()
     print("128x128 offset golden:")
     offset128_jod, _ = metric.predict(offset128_dist, offset128_ref, dim_order="HWC")
-    print(f"  jod = {float(offset128_jod):.4f}\n")
+    print(f"  jod = {float(offset128_jod):.4f}")
     offset128_jod_val = float(offset128_jod)
+
+    # 1024x1024 fixture (1 MP) with offset construction. Fills the
+    # 256² ↔ 4000×3000 gap with a clean power-of-2 case that exercises
+    # the MAX_LEVELS=9 pyramid-depth clamp.
+    offset1024_ref, offset1024_dist = synth_pair_1024_offset()
+    print("1024x1024 offset golden:")
+    offset1024_jod, _ = metric.predict(offset1024_dist, offset1024_ref, dim_order="HWC")
+    print(f"  jod = {float(offset1024_jod):.4f}\n")
+    offset1024_jod_val = float(offset1024_jod)
 
     # Warm up: first 12 MP .predict() triggers Torch graph
     # compilation, kernel JIT, allocator warmup. Don't time it.
@@ -337,6 +372,11 @@ def main():
                 "shape_hw": [128, 128],
                 "construction": "synth_pair_128_offset",
                 "jod": offset128_jod_val,
+            },
+            "synth_1024x1024_offset": {
+                "shape_hw": [1024, 1024],
+                "construction": "synth_pair_1024_offset",
+                "jod": offset1024_jod_val,
             },
         },
     }

@@ -722,6 +722,29 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 629 — add a 1024×1024 (1 MP) synth-offset parity fixture,
+filling the size gap between the 256² fixtures and the 4000×3000
+12 MP case (16× pixel-count step). Exercises the `MAX_LEVELS=9`
+pyramid-depth clamp — raw `band_frequencies` would suggest 10
+levels for 1024²; `pyramid_levels` caps to 9.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_1024_offset(w=1024, h=1024)` + fixture entry
+  `synth_1024x1024_offset`.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.458330` (generated locally via pinned `.venv`
+  pycvvdp 0.5.4 on CPU torch; 0.6 s wallclock).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_1024x1024_offset` host-scalar
+  parity test with the canonical 0.005 JOD tolerance.
+
+Measured result: host_scalar JOD = 9.458330, pycvvdp golden =
+9.458330, **|diff| = 0.000000** — bit-identical at f32 precision,
+matching the 128×128 fixture result (tick 628). Reuses the
+size-generic `common::synth_pair_with_offset_dist` helper — no
+new Rust generator code needed.
+
 Tick 628 — add a 128×128 synth-offset parity fixture, filling
 the size gap between the 73×91 odd-dim and 256² fixtures with a
 clean power-of-2 case (shallower pyramid, no odd-dim edge handling).
