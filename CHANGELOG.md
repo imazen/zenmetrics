@@ -229,6 +229,18 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (tests)
 
+- **`tests/do_pooling_invariants.rs`** — 7 flow invariants on
+  `do_pooling_and_jod_still_3ch` complementing the 3 pycvvdp
+  parity tests in `pool_scalar.rs`: (1) zero input → JOD ≈ 10
+  within 1e-5; (2) JOD ≤ 10 + 1e-3 across 4 input shapes;
+  (3) monotonic in each (level, channel) position — perturbing
+  any single element by +0.5 cannot raise JOD; (4) determinism
+  via `to_bits()`; (5) responds to magnitude — 100× scaling
+  produces ≥ 1e-3 JOD shift AND larger input gives smaller JOD;
+  (6) single-level input (1 pyramid level) supported, no panic,
+  JOD < 10 for non-zero; (7) 12-level stress input supported,
+  finite output in [0, 10 + ε]. Tick 426.
+
 - **`tests/mult_mutual_pixel_invariants.rs`** — 7 function-level
   invariants on `mult_mutual_pixel` (per-pixel cross-channel
   masking + diff). Complements the single `pycvvdp_4x4` parity
