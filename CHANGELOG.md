@@ -722,6 +722,15 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 620 — add `# Examples` doctest to `pyramid::WeberPyramid`
+struct. Pins the dual-level-count contract (`bands.len() ==
+log_l_bkg.len()`) and the per-level spatial-shape match
+(`log_l_bkg[k].len() == bands[k].w * bands[k].h` for non-baseband
+levels). Companion to tick 619's `Band` doctest — now both
+pyramid-output structs have constructor-level examples that
+surface the layout contract to docs.rs readers. Doctest count:
+68 → 69. Docs-only change.
+
 Tick 619 — add `# Examples` doctests to two more public items:
 
 - `kernels::csf::GE_SIGMA` — pin to 1.5 + positivity invariant

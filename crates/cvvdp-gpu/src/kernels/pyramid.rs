@@ -533,6 +533,35 @@ pub fn laplacian_pyramid_dec_scalar(
 /// Output of `weber_contrast_pyr_dec_scalar`: Weber-contrast bands
 /// plus the per-band per-pixel log10 background luminance the CSF
 /// stage consumes.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::{Band, WeberPyramid};
+///
+/// // A WeberPyramid built downstream of `weber_contrast_pyr_dec_scalar`
+/// // has one Band + one matching `log_l_bkg` per level. The struct
+/// // is `pub` so callers can also build mock pyramids for stage-
+/// // probe tests.
+/// let pyr = WeberPyramid {
+///     bands: vec![
+///         Band { w: 16, h: 16, data: vec![0.0; 16 * 16] },
+///         Band { w: 8, h: 8, data: vec![0.0; 8 * 8] },
+///         // ...one entry per pyramid level, finest first.
+///     ],
+///     log_l_bkg: vec![
+///         vec![1.0; 16 * 16],  // level-0 spatial map
+///         vec![1.0; 8 * 8],    // level-1 spatial map
+///     ],
+/// };
+/// // The two vectors share a level-count contract. For non-baseband
+/// // levels, log_l_bkg[k].len() matches bands[k].w * bands[k].h.
+/// assert_eq!(pyr.bands.len(), 2);
+/// assert_eq!(pyr.log_l_bkg.len(), 2);
+/// for k in 0..pyr.log_l_bkg.len() {
+///     assert_eq!(pyr.log_l_bkg[k].len(), pyr.bands[k].w * pyr.bands[k].h);
+/// }
+/// ```
 pub struct WeberPyramid {
     /// One band per pyramid level; `bands[k]` has the spatial dims
     /// of the `k`-th Gaussian-pyramid level.
