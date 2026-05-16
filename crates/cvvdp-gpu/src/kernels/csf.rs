@@ -106,6 +106,19 @@ pub const N_L_BKG: usize = 32;
 /// equal at 32 in cvvdp v0.5.4's `weber_fixed_size` variant, but
 /// they're conceptually independent — a future LUT revision could
 /// rebalance the axes.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{N_L_BKG, N_RHO, LOG_L_BKG_AXIS, LOG_RHO_AXIS};
+///
+/// // Both axes are 32 entries at cvvdp v0.5.4 — the LUTs are
+/// // N_L_BKG × N_RHO = 1024 entries.
+/// assert_eq!(N_L_BKG, 32);
+/// assert_eq!(N_RHO, 32);
+/// assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
+/// assert_eq!(LOG_RHO_AXIS.len(), N_RHO);
+/// ```
 pub const N_RHO: usize = 32;
 
 /// 1-D linear interpolation on a UNIFORMLY-spaced axis via

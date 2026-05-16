@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`N_RHO` doctest** — added `# Examples` covering both axis-size
+  constants: `N_L_BKG == 32`, `N_RHO == 32`, and `LOG_L_BKG_AXIS`
+  / `LOG_RHO_AXIS` lengths match (the LUTs are 32×32 = 1024 entries).
+  Tick 474.
+
 - **`SENSITIVITY_CORRECTION_DB` doctest** — added `# Examples`:
   small negative dB, linear factor `10^(DB/20)` lands in `[0.9, 1.0)`
   (≈ 0.9684 attenuation). Tick 473.
