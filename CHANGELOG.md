@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`laplacian_pyramid_dec_scalar` doctest** — added `# Examples`:
+  16×16 + n_levels=3 → 3 bands at 16×16/8×8/4×4 dims; each band's
+  `data.len() == w * h`. Tick 459.
+
 - **`phase_uncertainty_band` doctest** — added `# Examples`:
   small-band (2×2) pure-scaling branch (no blur), large-band (8×8)
   blur-then-scale branch with output length match. Tick 458.

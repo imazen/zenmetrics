@@ -391,6 +391,29 @@ pub fn band_frequencies(ppd: f32, width: usize, height: usize) -> Vec<f32> {
 /// `debug_assert!`. Release builds reach the
 /// `gauss.pop().expect("at least one level")` line after the
 /// gaussian-pyramid loop produced nothing.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::laplacian_pyramid_dec_scalar;
+///
+/// // 16×16 input → 3 bands. Returned Vec contains 3 Bands.
+/// let src: Vec<f32> = (0..16 * 16).map(|i| i as f32).collect();
+/// let bands = laplacian_pyramid_dec_scalar(&src, 16, 16, 3);
+/// assert_eq!(bands.len(), 3);
+///
+/// // First band dims match the input.
+/// assert_eq!((bands[0].w, bands[0].h), (16, 16));
+///
+/// // Subsequent bands halve via gausspyr_reduce_scalar's ceil-halving.
+/// assert_eq!((bands[1].w, bands[1].h), (8, 8));
+/// assert_eq!((bands[2].w, bands[2].h), (4, 4));
+///
+/// // Every band has data.len() == w * h.
+/// for b in &bands {
+///     assert_eq!(b.data.len(), b.w * b.h);
+/// }
+/// ```
 #[must_use]
 pub fn laplacian_pyramid_dec_scalar(
     src: &[f32],
