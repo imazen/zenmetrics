@@ -49,6 +49,25 @@ fn manifest_url_is_well_formed_https() {
 }
 
 #[test]
+fn manifest_url_uses_documented_r2_host() {
+    // Tick 519: the existing structure checks (https + .json + version
+    // segment) would still pass if a refactor changed the HOST — e.g.
+    // pointed to a different CDN bucket on a different cloud, or a
+    // localhost dev mirror. Pin the canonical public host so a
+    // host-swap surfaces as a test failure rather than a silent
+    // fetch redirect / 404.
+    //
+    // If the canonical host migrates (e.g. to a different Cloudflare
+    // account or off-R2 entirely), update this pin in the same commit
+    // as the URL change.
+    const CANONICAL_HOST: &str = "https://coefficient.r2.imazen.org/";
+    assert!(
+        MANIFEST_URL.starts_with(CANONICAL_HOST),
+        "MANIFEST_URL = {MANIFEST_URL:?} must start with {CANONICAL_HOST:?}",
+    );
+}
+
+#[test]
 fn manifest_sha256_is_64_lowercase_hex() {
     // sha256 hex digests are exactly 64 chars from [0-9a-f]. A
     // typo that drops a char (63 chars) silently truncates
