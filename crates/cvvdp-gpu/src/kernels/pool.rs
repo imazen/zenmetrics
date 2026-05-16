@@ -38,6 +38,22 @@ pub const IMAGE_INT: f32 = 0.577_918_3;
 pub const JOD_A: f32 = 0.043_956_94;
 
 /// JOD mapping exponent (`jod_exp`).
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::{JOD_A, JOD_EXP, IMAGE_INT, met2jod};
+///
+/// // The piecewise met2jod uses both: above Q = 0.1, output is
+/// // `10 - JOD_A * Q^JOD_EXP`. Quick sanity check at Q = 1:
+/// let q = 1.0_f32;
+/// let expected = 10.0 - JOD_A * q.powf(JOD_EXP);
+/// assert!((met2jod(q) - expected).abs() < 1e-5);
+///
+/// // IMAGE_INT is a positive correction factor in (0, 1) used
+/// // when scaling cross-band aggregates.
+/// assert!(IMAGE_INT > 0.0 && IMAGE_INT < 1.0);
+/// ```
 pub const JOD_EXP: f32 = 0.930_204_27;
 
 /// Per-channel weights for still-image 3-channel. Derived from

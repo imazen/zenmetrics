@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`JOD_EXP` doctest** — added `# Examples` (on `JOD_EXP`; also
+  cross-references `JOD_A` and `IMAGE_INT`): `met2jod(1.0)` matches
+  `10 - JOD_A * 1^JOD_EXP` algebra within 1e-5, IMAGE_INT lives in
+  `(0, 1)`. Tick 477.
+
 - **`PER_CH_W` doctest** — added `# Examples` showing 3 channels
   all at 1.0 (no per-channel attenuation at the pool stage; chroma
   weighting happens earlier via `masking::CH_GAIN`). Tick 476.
