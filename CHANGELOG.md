@@ -571,6 +571,15 @@ etc. Pure refactor — same static-assert count (181) but the
 boilerplate per call site shrinks from ~10-30 lines to 1-3 lines.
 No behavior change.
 
+Tick 585 added direct unit tests for the new `common::const_str`
+helpers in a new test file `const_str_helpers.rs`. 17 compile-time
+`const _: () = assert!(...)` cases cover positive + negative paths
+for each helper (`starts_with`, `ends_with`, `contains`), plus
+edge cases (empty prefix/suffix/needle, prefix longer than
+haystack, needle at start/middle/end). 6 runtime test fns mirror
+the asserts so `cargo test` runners can name them in output.
+Static-assert count is now 198 across 12 test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
