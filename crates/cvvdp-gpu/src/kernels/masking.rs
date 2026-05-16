@@ -64,6 +64,38 @@ use cubecl::prelude::*;
 pub const CH_GAIN: [f32; 3] = [1.0, 1.45, 1.0];
 
 /// `mask_p` exponent from cvvdp v0.5.4.
+///
+/// # Examples
+///
+/// Combined doctest covering all four scalar masking constants
+/// (`MASK_P`, `MASK_Q`, `MASK_C`, `D_MAX`). Same shared-coverage
+/// pattern as `pool::BETA_CH` covering the BETA_* triple.
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{MASK_P, MASK_Q, MASK_C, D_MAX};
+///
+/// // MASK_P is the transducer excitation exponent on pow(d, MASK_P).
+/// // Must be positive (a negative exponent makes pow(d, MASK_P)
+/// // singular at d → 0).
+/// assert!(MASK_P > 0.0);
+/// assert!((MASK_P - 2.264_355_2).abs() < 1e-6);
+///
+/// // MASK_Q is per-channel — three distinct inhibition exponents.
+/// // Strictly monotonic across channels: A < Rg < Vy.
+/// assert_eq!(MASK_Q.len(), 3);
+/// assert!(MASK_Q[0] < MASK_Q[1] && MASK_Q[1] < MASK_Q[2]);
+///
+/// // MASK_C must be negative — applied as `10^MASK_C` (≈ 0.16×),
+/// // it's an attenuator. A sign flip would turn the attenuation
+/// // into ~6× amplification.
+/// assert!(MASK_C < 0.0);
+/// assert!(10.0_f32.powf(MASK_C) < 1.0);
+///
+/// // D_MAX must be positive — applied as `10^D_MAX` (≈ 366), it
+/// // sets the soft-clamp ceiling.
+/// assert!(D_MAX > 0.0);
+/// assert!(10.0_f32.powf(D_MAX) > 100.0);
+/// ```
 pub const MASK_P: f32 = 2.264_355_2;
 
 /// `mask_q[0..3]` for the still-image 3-channel pipeline.

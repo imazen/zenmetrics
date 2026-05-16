@@ -722,6 +722,19 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 613 — combined `# Examples` doctest on `MASK_P` covering
+all four scalar masking constants (`MASK_P`, `MASK_Q`, `MASK_C`,
+`D_MAX`). Follows the same shared-doctest pattern already
+established by `pool::BETA_CH` (one doctest covers BETA_* triple)
+and `pool::JOD_EXP` (one doctest exercises JOD_A + IMAGE_INT).
+Pins:
+- `MASK_P > 0` (transducer exponent positivity) + bit-pin.
+- `MASK_Q` is per-channel `[A, Rg, Vy]` strictly monotonic.
+- `MASK_C < 0` (attenuator: `10^MASK_C` < 1).
+- `D_MAX > 0` (soft-clamp ceiling: `10^D_MAX` > 100).
+Doctest count: 59 → 60. Cross-references the compile-time bit-pins
+in `tests/masking_constants.rs`. Docs-only change.
+
 Tick 612 — continue the per-public-item doctest sweep (+4 more,
 closing the params.rs scaffolding-struct queue from tick 611):
 
