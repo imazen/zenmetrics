@@ -548,6 +548,19 @@ follows automatically and the static asserts on it still cover
 the "must contain 'cvvdp'" invariant at compile time. Pure
 dedup — no new static asserts.
 
+Tick 583 promoted the `CVVDP_COLUMN_NAME.starts_with("cvvdp_")`
+family-prefix check in `lib_reexports.rs` to compile time via
+the const-byte-loop pattern (same as ticks 577/578/579/580).
+This is the broader prefix invariant — the env-override
+`CVVDP_IMPL_TAG` is intentionally a free-form discriminator
+WITHIN the `cvvdp_*` namespace (pycvvdp uses `cvvdp_pycvvdp_v054`,
+this crate uses `cvvdp_imazen_*`, a future Burn port reserves
+`cvvdp_burn_*`); the family prefix must hold for all variants.
+Also corrected the stale "`.starts_with` isn't const fn" comment
+left over from tick 522. Adds 1 length pin + 1 byte-match pin
+(2 logical asserts). Static-assert count is now 181 across 11
+test files.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

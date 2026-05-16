@@ -99,15 +99,41 @@ fn lib_constants_reexport_match_their_originals() {
     //
     // Tick 522: integer constants promoted to `const _: () =
     // assert!(...)` static asserts so they fire at compile time
-    // rather than runtime. `CVVDP_COLUMN_NAME` stays runtime
-    // because `.starts_with` isn't `const fn` as of stable Rust.
+    // rather than runtime.
+    //
+    // Tick 583: the older "`.starts_with` isn't const fn" caveat
+    // was wrong — a const while-loop over `as_bytes()` IS const-
+    // callable (tick 577 demonstrated this on the same constant
+    // for its `cvvdp_imazen_` prefix). Promotes the broader
+    // `cvvdp_` prefix check to compile time too. This check is
+    // unconditional (no env-override gate) because the
+    // `CVVDP_IMPL_TAG` override is intentionally a free-form
+    // discriminator WITHIN the `cvvdp_*` namespace — pycvvdp uses
+    // `cvvdp_pycvvdp_v054`, our crate uses `cvvdp_imazen_*`, a
+    // future Burn port reserves `cvvdp_burn_*`. The `cvvdp_`
+    // family prefix must hold even for overrides.
     const _: () = assert!(N_CHANNELS == 3, "N_CHANNELS contract — DKL opponent count");
     const _: () = assert!(MAX_LEVELS == 9, "MAX_LEVELS contract — pyramid cap");
     const _: () = assert!(PYRAMID_MIN_DIM == 4, "PYRAMID_MIN_DIM contract");
-    assert!(
-        CVVDP_COLUMN_NAME.starts_with("cvvdp_"),
-        "CVVDP_COLUMN_NAME must start with cvvdp_; got: {CVVDP_COLUMN_NAME:?}",
-    );
+    const _: () = {
+        let bytes = CVVDP_COLUMN_NAME.as_bytes();
+        let prefix = b"cvvdp_";
+        assert!(
+            bytes.len() >= prefix.len(),
+            "CVVDP_COLUMN_NAME shorter than `cvvdp_` family prefix",
+        );
+        let mut i = 0;
+        while i < prefix.len() {
+            assert!(
+                bytes[i] == prefix[i],
+                "CVVDP_COLUMN_NAME must start with `cvvdp_` family prefix",
+            );
+            i += 1;
+        }
+    };
+    // Touchpoint that keeps the runtime test fn body non-empty so
+    // the test-runner-visible name stays referenced.
+    let _ = CVVDP_COLUMN_NAME;
 }
 
 #[test]
