@@ -16,7 +16,8 @@ build-time CPU fallback.
 | [`ssim2-gpu`](crates/ssim2-gpu/) | SSIMULACRA2 | 0–100, higher better | [`ssimulacra2`](https://crates.io/crates/ssimulacra2) v0.5 |
 | [`dssim-gpu`](crates/dssim-gpu/) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) v3.4 |
 | [`zensim-gpu`](crates/zensim-gpu/) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) v0.2.8 |
-| [`zen-metrics-cli`](crates/zen-metrics-cli/) | CLI front-end | — | uses the four metrics above |
+| [`cvvdp-gpu`](crates/cvvdp-gpu/) | ColorVideoVDP (still-image) | JOD 0–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
+| [`zen-metrics-cli`](crates/zen-metrics-cli/) | CLI front-end | — | uses the five metrics above |
 | [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | shared test images | — | (test infra) |
 
 ## SRCC sanity table
@@ -30,6 +31,7 @@ normalized so higher = better):
 | `dssim-gpu` (= DSSIM) | 0.871 | 0.856 | 0.872 |
 | `ssim2-gpu` (= SSIMULACRA2) | 0.819 | 0.785 | 0.885 |
 | `zensim-gpu` (= zensim) | (Imazen-internal benchmark) | | |
+| `cvvdp-gpu` (= ColorVideoVDP) | TBD | TBD | TBD |
 | `butteraugli-gpu` (3-norm) | 0.664 | 0.543 | 0.794 |
 
 ## Documentation
@@ -41,6 +43,16 @@ normalized so higher = better):
 - [`docs/SSIMULACRA2_PORTING_PLAN.md`](docs/SSIMULACRA2_PORTING_PLAN.md),
   [`docs/SSIM2_GPU_HANDOFF.md`](docs/SSIM2_GPU_HANDOFF.md) — the per-crate
   porting playbooks.
+- [`crates/cvvdp-gpu/docs/PORT_STATUS.md`](crates/cvvdp-gpu/docs/PORT_STATUS.md)
+  — ColorVideoVDP per-stage port status against pycvvdp v0.5.4
+  (host scalar reference path + GPU composition + parity test
+  matrix).
+- [`scripts/sweep/cvvdp_backfill/README.md`](scripts/sweep/cvvdp_backfill/README.md)
+  — operator runbook for the vast.ai pipeline that backfills cvvdp
+  JOD scores onto the zensim training parquet store. Produces side-
+  by-side `cvvdp_imazen_*` + `cvvdp_pycvvdp_v054` sidecars with a
+  parity gate (`assert_parity.py`) that catches both threshold
+  violations and silent-failure flatlines.
 
 ## License
 

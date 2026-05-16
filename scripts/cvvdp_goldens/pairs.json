@@ -1,0 +1,8 @@
+[
+  {"name": "src_vs_q1",  "ref": "source.png", "dist": "q1.jpg"},
+  {"name": "src_vs_q5",  "ref": "source.png", "dist": "q5.jpg"},
+  {"name": "src_vs_q20", "ref": "source.png", "dist": "q20.jpg"},
+  {"name": "src_vs_q45", "ref": "source.png", "dist": "q45.jpg"},
+  {"name": "src_vs_q70", "ref": "source.png", "dist": "q70.jpg"},
+  {"name": "src_vs_q90", "ref": "source.png", "dist": "q90.jpg"}
+]

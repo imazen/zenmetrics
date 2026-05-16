@@ -21,7 +21,27 @@ FROM rust:1.93-slim-bookworm AS builder
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         ca-certificates pkg-config libssl-dev cmake git \
         clang lld build-essential \
+        curl gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install CUDA 13.0 nvcc so cudarc's `cuda-version-from-build-system`
+# detects 13.0 — matching what nvidia/cuda's bundled libcuda actually
+# ships. Without this, cudarc's `fallback-latest` picks cuda-13020
+# and the resulting binary tries to dlsym
+# `cuCoredumpDeregisterCompleteCallback`, which is gated behind the
+# cuda-13020 feature in cudarc but doesn't exist in any released
+# NVIDIA driver yet (verified 580.65.06 / 590.48.01). nvcc alone is
+# enough for cudarc's build.rs to read `nvcc --version`; we also
+# pull cuda-cudart-dev-12-4 to satisfy any header lookups.
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-nvcc-12-4 cuda-cudart-dev-12-4 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CUDA_HOME=/usr/local/cuda-12.4 \
+    CUDA_PATH=/usr/local/cuda-12.4 \
+    PATH=/usr/local/cuda-12.4/bin:$PATH
 
 WORKDIR /workspace
 
@@ -48,11 +68,13 @@ WORKDIR /workspace/zenmetrics
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
-    cargo build -p zen-metrics-cli --release --features sweep && \
+    cargo build -p zen-metrics-cli --release --features sweep,gpu,gpu-cuda,gpu-cpu && \
     cp target/release/zen-metrics /usr/local/bin/zen-metrics && \
     chmod +x /usr/local/bin/zen-metrics && \
     /usr/local/bin/zen-metrics --version && \
-    /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg
+    /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg && \
+    /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp && \
+    /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv
 
 FROM debian:bookworm-slim AS helpers
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
@@ -69,8 +91,20 @@ RUN curl -fsSL -o /opt/bin/jq \
 
 FROM ubuntu:24.04
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker (zenjpeg-enabled, v13)"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (zenjpeg + CUDA 12.4 SDK build, v13)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+# Runtime base back to plain ubuntu:24.04 — nvidia-container-toolkit
+# mounts the host's libcuda.so.1 at /usr/lib/x86_64-linux-gnu/.
+# Tick 372 tried nvidia/cuda:13.0-base for its bundled libcuda
+# but that fired CUDA_ERROR_COMPAT_NOT_SUPPORTED_ON_DEVICE on
+# Pascal/Turing hosts whose kernel driver is older than the
+# bundled libcuda's compat shim expects.
+#
+# The binary is now compiled against CUDA 12.4 SDK in the builder
+# stage above — its cudart calls cudaGetDeviceCount and friends
+# against whatever libcuda the host mounts. Most vast.ai hosts
+# have driver 535+ (CUDA 12.2+) so 12.4 SDK is widely compatible.
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
@@ -86,5 +120,10 @@ RUN chmod +x /usr/local/bin/zen-metrics-worker /usr/local/bin/zen-metrics
 WORKDIR /workspace/sweep
 ENV WORKDIR=/workspace/sweep \
     SWEEP_GPU_RUNTIME=cpu
+# LD_LIBRARY_PATH for nvidia-container-toolkit mount paths. The
+# host driver's libcuda lands at /usr/lib/x86_64-linux-gnu/
+# (system search path) so doesn't need explicit listing — but
+# CUDA toolkit utility libs do.
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
 
 ENTRYPOINT ["/usr/local/bin/zen-metrics-worker"]

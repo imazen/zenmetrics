@@ -22,12 +22,15 @@ mod zensim;
 #[cfg(any(
     feature = "gpu-butteraugli",
     feature = "gpu-ssim2",
-    feature = "gpu-dssim"
+    feature = "gpu-dssim",
+    feature = "gpu-cvvdp"
 ))]
 mod gpu_runtime_dispatch;
 
 #[cfg(feature = "gpu-butteraugli")]
 mod butteraugli_gpu;
+#[cfg(feature = "gpu-cvvdp")]
+pub mod cvvdp_gpu;
 #[cfg(feature = "gpu-dssim")]
 mod dssim_gpu;
 #[cfg(feature = "gpu-ssim2")]
@@ -65,6 +68,13 @@ pub enum MetricKind {
     /// Zensim — CPU implementation via the `zensim` crate.
     #[value(name = "zensim")]
     Zensim,
+    /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) via
+    /// the `cvvdp-gpu` crate. Currently routes through the parity-locked
+    /// host scalar; the public score path is stable while the kernels for
+    /// every stage are individually parity-tested for a future fully-GPU
+    /// composition.
+    #[value(name = "cvvdp")]
+    Cvvdp,
 }
 
 impl MetricKind {
@@ -77,6 +87,7 @@ impl MetricKind {
             MetricKind::Dssim,
             MetricKind::DssimGpu,
             MetricKind::Zensim,
+            MetricKind::Cvvdp,
         ]
     }
 
@@ -89,12 +100,16 @@ impl MetricKind {
             MetricKind::Dssim => "dssim",
             MetricKind::DssimGpu => "dssim-gpu",
             MetricKind::Zensim => "zensim",
+            MetricKind::Cvvdp => "cvvdp",
         }
     }
 
     pub fn backend(self) -> &'static str {
         match self {
-            MetricKind::Ssim2Gpu | MetricKind::ButteraugliGpu | MetricKind::DssimGpu => "GPU",
+            MetricKind::Ssim2Gpu
+            | MetricKind::ButteraugliGpu
+            | MetricKind::DssimGpu
+            | MetricKind::Cvvdp => "GPU",
             _ => "CPU",
         }
     }
@@ -102,7 +117,10 @@ impl MetricKind {
     pub fn requires_gpu(self) -> bool {
         matches!(
             self,
-            MetricKind::Ssim2Gpu | MetricKind::ButteraugliGpu | MetricKind::DssimGpu
+            MetricKind::Ssim2Gpu
+                | MetricKind::ButteraugliGpu
+                | MetricKind::DssimGpu
+                | MetricKind::Cvvdp
         )
     }
 
@@ -123,9 +141,28 @@ impl MetricKind {
             MetricKind::Dssim => &["dssim"],
             MetricKind::DssimGpu => &["dssim_gpu"],
             MetricKind::Zensim => &["zensim"],
+            MetricKind::Cvvdp => CVVDP_COLUMNS,
         }
     }
 }
+
+// Versioned cvvdp column name. With the `gpu-cvvdp` feature enabled,
+// pulls the per-implementation tag from
+// [`::cvvdp_gpu::CVVDP_COLUMN_NAME`] (defaults to
+// `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; overridable at build time
+// via `CVVDP_IMPL_TAG`). Without the feature, falls back to a bare
+// `"cvvdp"` so callers that list metric names without invoking the
+// backend still see a usable identifier.
+//
+// Why versioned: parquet sidecars store cvvdp scores from multiple
+// implementations side-by-side (e.g. `cvvdp_pycvvdp_v054` for the
+// pycvvdp reference, `cvvdp_imazen_v0_0_1` for this crate's host
+// scalar path). A bare `cvvdp` column would collide on join. See the
+// PINNED TASK section in the repo-root `CLAUDE.md`.
+#[cfg(feature = "gpu-cvvdp")]
+const CVVDP_COLUMNS: &[&str] = &[::cvvdp_gpu::CVVDP_COLUMN_NAME];
+#[cfg(not(feature = "gpu-cvvdp"))]
+const CVVDP_COLUMNS: &[&str] = &["cvvdp"];
 
 /// CubeCL runtime selector for GPU metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -234,6 +271,14 @@ pub fn run_metric(
         MetricKind::Zensim => Ok(vec![("zensim", zensim::score(reference, distorted)?)]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
+
+        #[cfg(feature = "gpu-cvvdp")]
+        MetricKind::Cvvdp => Ok(vec![(
+            ::cvvdp_gpu::CVVDP_COLUMN_NAME,
+            cvvdp_gpu::score(reference, distorted, gpu_runtime)?,
+        )]),
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "gpu-cvvdp")),
     }
 }
 
@@ -263,5 +308,44 @@ pub fn run_zensim_with_features(
     #[cfg(not(feature = "cpu-metrics"))]
     {
         Err(disabled_msg("zensim", "cpu-metrics"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cvvdp_column_name_is_versioned_when_feature_on() {
+        let cols = MetricKind::Cvvdp.column_names();
+        assert_eq!(cols.len(), 1);
+        // With `gpu-cvvdp` enabled, the column carries an
+        // implementation tag so multiple cvvdp variants don't
+        // collide in joined parquet sidecars. The user-facing CLI
+        // flag (`--metric cvvdp`) remains stable.
+        #[cfg(feature = "gpu-cvvdp")]
+        {
+            assert!(
+                cols[0].starts_with("cvvdp_imazen_v")
+                    || std::env::var("CVVDP_IMPL_TAG")
+                        .map(|t| cols[0] == t)
+                        .unwrap_or(false),
+                "expected cvvdp column to start with cvvdp_imazen_v or match \
+                 CVVDP_IMPL_TAG override, got {:?}",
+                cols[0]
+            );
+        }
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        {
+            assert_eq!(cols[0], "cvvdp");
+        }
+    }
+
+    #[test]
+    fn cvvdp_cli_flag_name_is_stable() {
+        // User-facing identifier stays "cvvdp" regardless of which
+        // implementation is wired in — only the parquet column
+        // changes.
+        assert_eq!(MetricKind::Cvvdp.name(), "cvvdp");
     }
 }
