@@ -14,6 +14,18 @@ use cvvdp_gpu::kernels::masking::{
     CH_GAIN, D_MAX, MASK_C, MASK_P, MASK_Q, PU_BLUR_KERNEL_1D, XCM_3X3,
 };
 
+// Tick 549: compile-time pin of the PU blur kernel's tap count.
+// pycvvdp's σ=3 blur uses 13 taps (precomputed from 3σ truncation
+// rounded up + symmetric padding); the per-element expected[] array
+// below assumes that exact count. A refactor changing the truncation
+// rule (e.g. 4σ → 25 taps) would silently desynchronise the
+// expected[] table; this assert forces a compile-time stop instead.
+// Same pattern as ticks 522-524 + 548.
+const _: () = assert!(
+    PU_BLUR_KERNEL_1D.len() == 13,
+    "PU_BLUR_KERNEL_1D length drifted from canonical 13 taps (σ=3, 3σ-trunc)",
+);
+
 #[test]
 fn masking_constants_match_pycvvdp_v0_5_4() {
     // CH_GAIN: per-channel gain multiplier inside the masking

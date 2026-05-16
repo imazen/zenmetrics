@@ -182,6 +182,21 @@ beside the new static asserts (same compatibility rationale as
 ticks 522-524). Same clippy / doc / doctest verification as tick 540
 still passes (no new warnings introduced).
 
+Tick 549 promoted 3 further invariant runtime asserts to static
+asserts on physical-meaning constants that other tests in the same
+file are predicated on:
+  - `PU_PADSIZE == 6` in `phase_uncertainty_band_invariants.rs`
+    (the branch-boundary parameter; `branch_boundary_at_pu_padsize`
+    hardcodes the 6/7 transition pairs)
+  - `PU_BLUR_KERNEL_1D.len() == 13` in `masking_constants.rs` (the
+    σ=3 truncation tap count the per-element expected[] array
+    depends on)
+  - `SRGB8_TO_LINEAR_LUT.len() == 256` in `color_scalar.rs` (the
+    one-entry-per-u8 LUT-size contract the indexing semantics rely
+    on)
+Static-assert count is now 19 across 5 test files. Verification:
+same clippy / doc / doctest status as tick 540 — no regressions.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

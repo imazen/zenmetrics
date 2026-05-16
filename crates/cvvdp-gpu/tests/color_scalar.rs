@@ -20,6 +20,17 @@
 use cvvdp_gpu::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_byte_to_dkl_scalar};
 use cvvdp_gpu::params::DisplayModel;
 
+// Tick 549: compile-time pin of the sRGB→linear LUT size. One entry
+// per u8 byte = 256 entries; this is the byte-domain LUT contract
+// the `srgb_byte_to_dkl_scalar` and `srgb_to_dkl_kernel` paths both
+// index. A refactor that switched to a partial / sub-sampled LUT
+// would change indexing semantics silently. Same pattern as ticks
+// 522-524 + 548 + the other promotions in this tick.
+const _: () = assert!(
+    SRGB8_TO_LINEAR_LUT.len() == 256,
+    "SRGB8_TO_LINEAR_LUT must have one entry per u8 value (256)",
+);
+
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).
 const GOLDENS: &[(u8, u8, u8, f32, f32, f32)] = &[
     (0, 0, 0, 0.628_396_27, 0.002_257_2, 0.006_174_458),

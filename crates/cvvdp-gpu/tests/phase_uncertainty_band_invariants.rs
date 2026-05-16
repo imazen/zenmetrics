@@ -15,6 +15,18 @@
 
 use cvvdp_gpu::kernels::masking::{MASK_C, PU_PADSIZE, phase_uncertainty_band};
 
+// Tick 549: compile-time pin of PU_PADSIZE = 6 — the boundary
+// parameter that splits this file's small-band vs large-band tests.
+// If a refactor changes PU_PADSIZE, the (6, 6) / (7, 7) hardcoded
+// pairs in `branch_boundary_at_pu_padsize` (and "PU_PADSIZE = 6"
+// references in the docstrings) would be silently wrong. This
+// static assert makes that case fail at compile time. Same pattern
+// as ticks 522-524 + 548.
+const _: () = assert!(
+    PU_PADSIZE == 6,
+    "PU_PADSIZE drifted from pycvvdp canonical 6; this test file's hardcoded boundary pairs would be wrong",
+);
+
 #[test]
 fn small_band_branch_is_pure_scaling() {
     // PU_PADSIZE = 6. For w ≤ 6 OR h ≤ 6 the function MUST skip the
