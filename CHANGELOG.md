@@ -190,6 +190,19 @@ mention. Tick 500.
   with the STANDARD_4K ppd, and (4) `warm_reference` +
   `compute_dkl_jod_with_warm_ref`. Tick 493.
 
+- **`lib_reexports.rs` extended** — adds 3 new pins (8 total, was
+  5): (1) `cvvdp_type_reexport_resolves` — `Cvvdp<R>` is the main
+  scoring type; without this pin, a future refactor that moves it
+  behind a feature gate or into a private module would break every
+  downstream caller (zen-metrics-cli's `CvvdpBatchScorer` references
+  `cvvdp_gpu::Cvvdp` directly); (2)
+  `lib_constants_reexport_match_their_originals` — pins `N_CHANNELS`
+  (3), `MAX_LEVELS` (9), `PYRAMID_MIN_DIM` (4), and
+  `CVVDP_COLUMN_NAME` (prefix `cvvdp_`) against their documented
+  values, also as a use-site pin; (3) `error_and_result_reexport_resolve`
+  — `Error` and `Result<T>` are how callers see method failures,
+  both must be reachable from the crate root. Tick 501.
+
 - **`two_fresh_cvvdp_instances_produce_bit_equal_jod`** (in
   `pipeline_score.rs`) — pin cross-instance determinism. Two
   `Cvvdp::new` calls with the same (width, height, params,
