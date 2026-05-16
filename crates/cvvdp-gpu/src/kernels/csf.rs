@@ -527,6 +527,28 @@ pub fn weight_band_kernel(band: &mut Array<f32>, weights: &Array<f32>, weight_id
 /// luminance as a single scalar (e.g. display peak / 2, or a
 /// per-image mean). The kernel above (`weight_band_kernel`) consumes
 /// the flat-layout version of this table.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::precomputed_band_weights;
+/// use cvvdp_gpu::kernels::pyramid::band_frequencies;
+/// use cvvdp_gpu::params::DisplayGeometry;
+///
+/// let ppd = DisplayGeometry::STANDARD_4K.pixels_per_degree();
+/// let l_bkg = 100.0_f32.log10(); // photopic 100 cd/m²
+/// let weights = precomputed_band_weights(ppd, 1024, 1024, l_bkg);
+///
+/// // One [A, Rg, Vy] triple per pyramid band.
+/// assert_eq!(weights.len(), band_frequencies(ppd, 1024, 1024).len());
+///
+/// // All weights are positive sensitivities, all finite.
+/// for [a, rg, vy] in &weights {
+///     assert!(*a > 0.0 && a.is_finite());
+///     assert!(*rg > 0.0 && rg.is_finite());
+///     assert!(*vy > 0.0 && vy.is_finite());
+/// }
+/// ```
 #[must_use]
 pub fn precomputed_band_weights(
     ppd: f32,

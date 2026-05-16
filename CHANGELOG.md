@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`precomputed_band_weights` doctest** — added `# Examples`:
+  length agrees with `band_frequencies`, every [A, Rg, Vy] triple is
+  positive-finite at standard 4K + 100 cd/m². Tick 453.
+
 - **`do_pooling_and_jod_still_3ch` doctest** — added `# Examples`:
   all-zero contrasts → JOD ≈ 10 within 1e-3, non-zero contrasts →
   JOD < that. Tick 452.
