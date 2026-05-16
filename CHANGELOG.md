@@ -722,6 +722,16 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 625 — fix stale line reference in tick 605's CHANGELOG
+entry. The text claimed `tests/pipeline_score.rs:2220` for
+`recommend_parallel_matches_documented_examples`, but tick 603
+(landed BEFORE tick 605 but evidently mis-counted when I wrote
+605's changelog) inserted u32::MAX-saturation +
+image-dim-monotonicity pins above it, shifting the test to line
+2212. Updated the entry to clarify the historical-then-current
+shift rather than just pretending the line ref always was 2212.
+Doc-accuracy fix only; no code change.
+
 Tick 624 — add `# Examples` doctests to the `CvvdpParams` struct
 + its `PLACEHOLDER` const:
 
@@ -1009,7 +1019,9 @@ Tick 605 — tighten `recommend_parallel`'s doctest claim from the
 weak `assert!(p >= 2)` to the actual `(10..=40).contains(&p)`
 range that the existing runtime test
 `recommend_parallel_matches_documented_examples`
-(tests/pipeline_score.rs:2220) pins. The old `>= 2` underclaim
+(tests/pipeline_score.rs — line 2220 at time of tick 605; tick
+603's u32::MAX + image-dim-monotonicity pins shifted it to 2212
+afterward) pins. The old `>= 2` underclaim
 risked misleading callers into provisioning ~5× fewer concurrent
 instances than the formula actually recommends for the
 8 GB / 1 MP case. Also added a second example covering the
