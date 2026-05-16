@@ -940,9 +940,16 @@ impl<R: Runtime> Cvvdp<R> {
             *dst =
                 u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path. `create_from_slice_pinned`
+        // copies the scratch bytes directly into a pinned (page-locked) host
+        // buffer before the device upload, hitting CUDA's DMA fast path at
+        // 12-25 GB/s on PCIe 4.0 vs ~5-6 GB/s from pageable memory. The
+        // default `create_from_slice` was changed in the same cubecl
+        // branch to also route through pinned staging, but the explicit
+        // `_pinned` form skips the intermediate `Vec<u8>` memcpy too.
         self.src_ref = self
             .client
-            .create_from_slice(u32::as_bytes(&self.src_u32_scratch));
+            .create_from_slice_pinned(u32::as_bytes(&self.src_u32_scratch));
 
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();
