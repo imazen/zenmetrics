@@ -269,6 +269,26 @@ mention. Tick 500.
   — `Error` and `Result<T>` are how callers see method failures,
   both must be reachable from the crate root. Tick 501.
 
+- **`manifest_url_uses_cvvdp_goldens_bucket_subpath`** (in
+  `goldens_metadata.rs`) — pins the crate-specific
+  `/cvvdp-goldens/` bucket subpath on `MANIFEST_URL`. Sibling crates
+  (zensim-gpu, butteraugli-gpu, dssim-gpu, ssim2-gpu) all publish
+  their goldens to the same host under different subpaths
+  (`/zensim-goldens/`, etc.). A refactor that accidentally swapped
+  the bucket subpath would still pass the host check (tick 519) +
+  version-segment check + scheme/suffix checks, but fetch a sibling
+  crate's manifest. Tick 520.
+
+- **`manifest_url_uses_documented_r2_host`** (in
+  `goldens_metadata.rs`) — pins the canonical R2 host
+  (`https://coefficient.r2.imazen.org/`) on `MANIFEST_URL`. Closes
+  a gap where a refactor to a different CDN bucket on a different
+  cloud, or a localhost dev mirror, would pass the existing
+  structure checks (https scheme + .json suffix + `/v1/` segment +
+  64-char hex sha256) yet fetch the wrong manifest. The host
+  migration coordination is forced by requiring this pin to update
+  in the same commit as the URL change. Tick 519.
+
 - **`perf_mode_fast_matches_strict_on_gpu_host_pool`** (in
   `pipeline_score.rs`) — third leg of the PerfMode no-op contract.
   Existing coverage: `perf_mode_fast_matches_strict_today` (tick 322
