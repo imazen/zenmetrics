@@ -28,8 +28,12 @@
 //! Tick 595 also adds the const-format pin block (previously in
 //! parity.rs under the parity-goldens gate).
 
+// `common/mod.rs` has its own `#![allow(dead_code)]` inner attribute
+// to cover the case where any one test file imports only a subset
+// of the helpers — no need to repeat the outer allow here (tick 596
+// fix for the duplicated-attribute clippy warning that tick 595's
+// initial version introduced).
 #[path = "common/mod.rs"]
-#[allow(dead_code)]
 mod common;
 
 use cvvdp_gpu::PYCVVDP_REFERENCE_VERSION;
