@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`BETA_CH` doctest** — added `# Examples` (covers all 3 pool
+  Minkowski exponents): `BETA_SPATIAL == 2.0` (RMS), `BETA_BAND ==
+  4.0`, `BETA_CH == 4.0`; spatial is the gentler exponent. Tick 478.
+
 - **`JOD_EXP` doctest** — added `# Examples` (on `JOD_EXP`; also
   cross-references `JOD_A` and `IMAGE_INT`): `met2jod(1.0)` matches
   `10 - JOD_A * 1^JOD_EXP` algebra within 1e-5, IMAGE_INT lives in

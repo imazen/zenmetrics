@@ -29,6 +29,21 @@ pub const BETA_BAND: f32 = 4.0;
 
 /// Temporal/chromatic-channel pooling exponent (`beta_tch`). For
 /// still-image 3-channel use this is the across-channel exponent.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::{BETA_BAND, BETA_CH, BETA_SPATIAL};
+///
+/// // Spatial pooling is RMS (p = 2); band + channel pooling are
+/// // higher-order (p = 4) for steeper peak-emphasis.
+/// assert_eq!(BETA_SPATIAL, 2.0);
+/// assert_eq!(BETA_BAND, 4.0);
+/// assert_eq!(BETA_CH, 4.0);
+///
+/// // BETA_BAND == BETA_CH; spatial is the gentler exponent.
+/// assert!(BETA_SPATIAL < BETA_BAND);
+/// ```
 pub const BETA_CH: f32 = 4.0;
 
 /// Image integration correction (`image_int`).
