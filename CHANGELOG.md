@@ -722,6 +722,23 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 611 — continue the per-public-item doctest sweep (+4 more):
+
+- `DisplayModel` struct — field-access + spread-construct an
+  HDR400 variant from STANDARD_4K.
+- `DisplayModel::STANDARD_4K` const — pin the 3 field values
+  with cross-reference to the runtime parity test.
+- `DisplayGeometry` struct — field-access + a phone-at-arm's-
+  length example showing `pixels_per_degree()` is higher than
+  the 4K reference (smaller display + closer distance → tighter
+  pixel grid).
+- `DisplayGeometry::STANDARD_4K` const — pin the 4 field values.
+
+Doctest count: 51 → 55. Still queued for the next pass (4 more):
+`CsfParams` / `MaskingParams` / `PoolingParams` / `JodParams` —
+the scaffolding-but-public structs from
+`CvvdpParams::PLACEHOLDER`. Docs-only change.
+
 Tick 610 — continue the per-public-item `# Examples` doctest
 sweep from tick 609 (+3 more):
 

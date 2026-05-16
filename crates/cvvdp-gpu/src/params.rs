@@ -25,6 +25,23 @@
 /// ```text
 /// L_rgb = (y_peak - y_black) * srgb2lin(byte / 255) + y_black + y_refl
 /// ```
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::params::DisplayModel;
+///
+/// // The `STANDARD_4K` preset is what every v1 R2 golden was
+/// // captured against.
+/// let d = DisplayModel::STANDARD_4K;
+/// assert_eq!(d.y_peak, 200.0); // 200 cd/m² peak luminance
+/// assert_eq!(d.y_black, 0.2);  // 0.2 cd/m² black level (contrast 1000)
+///
+/// // Construct a custom display (e.g. HDR400-ish) by aggregate-
+/// // updating from STANDARD_4K:
+/// let hdr400 = DisplayModel { y_peak: 400.0, ..d };
+/// assert!(hdr400.y_peak > d.y_peak);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct DisplayModel {
     /// Peak display luminance in cd/m².
@@ -40,6 +57,19 @@ impl DisplayModel {
     /// cvvdp's `standard_4k` defaults — peak 200 cd/m², contrast 1000,
     /// 250 lux ambient, k_refl 0.005, sRGB EOTF. The v1 R2 goldens
     /// were captured under this display.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cvvdp_gpu::params::DisplayModel;
+    /// // Pinned by tests/display_geometry.rs::display_model_standard_4k_matches_pycvvdp_v0_5_4
+    /// // — all three fields bit-pinned via `.to_bits()`.
+    /// let s = DisplayModel::STANDARD_4K;
+    /// assert_eq!(s.y_peak, 200.0);
+    /// assert_eq!(s.y_black, 0.2);
+    /// // y_refl is precomputed host-side from 250 lux × 0.005 / π.
+    /// assert!((s.y_refl - 0.397_887_36).abs() < 1e-6);
+    /// ```
     pub const STANDARD_4K: Self = Self {
         y_peak: 200.0,
         y_black: 0.2,
@@ -55,6 +85,26 @@ impl DisplayModel {
 /// distance_m` path (the one the `standard_4k` JSON uses). Other
 /// cvvdp paths (`fov_diagonal`, `fov_horizontal`, etc.) are not
 /// ported until a use case appears.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::params::DisplayGeometry;
+///
+/// let g = DisplayGeometry::STANDARD_4K;
+/// assert_eq!(g.resolution_w, 3840);
+/// assert_eq!(g.resolution_h, 2160);
+///
+/// // Custom geometry — e.g. phone at arm's length:
+/// let phone = DisplayGeometry {
+///     resolution_w: 1920,
+///     resolution_h: 1080,
+///     distance_m: 0.40,
+///     diagonal_inches: 5.5,
+/// };
+/// // Smaller display at closer distance → higher PPD than 4K.
+/// assert!(phone.pixels_per_degree() > g.pixels_per_degree());
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct DisplayGeometry {
     /// Display width in pixels.
@@ -71,6 +121,20 @@ impl DisplayGeometry {
     /// cvvdp's `standard_4k`: 3840×2160, 30" diagonal, 0.7472 m. The
     /// PPD this derives to (~75.40) is what the v1 R2 manifest's
     /// `rho_band[0]` (= ppd/2 ≈ 37.70) is computed against.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cvvdp_gpu::params::DisplayGeometry;
+    /// // Pinned by tests/display_geometry.rs — all four fields
+    /// // bit-pinned, plus the derived PPD pinned to 75.402_449
+    /// // (within 1e-4) by `display_geometry_standard_4k_matches_pycvvdp_v0_5_4`.
+    /// let g = DisplayGeometry::STANDARD_4K;
+    /// assert_eq!(g.resolution_w, 3840);
+    /// assert_eq!(g.resolution_h, 2160);
+    /// assert!((g.distance_m - 0.7472).abs() < 1e-6);
+    /// assert!((g.diagonal_inches - 30.0).abs() < 1e-6);
+    /// ```
     pub const STANDARD_4K: Self = Self {
         resolution_w: 3840,
         resolution_h: 2160,
