@@ -45,7 +45,7 @@ use crate::params::DisplayModel;
 /// [`PerfMode::Strict`]: crate::PerfMode::Strict
 /// [`Cvvdp::compute_dkl_jod_host_pool`]: crate::Cvvdp::compute_dkl_jod_host_pool
 ///
-/// # Example
+/// # Examples
 ///
 /// Pure-host scoring of a 64×64 byte-identical pair (max JOD = 10):
 ///
