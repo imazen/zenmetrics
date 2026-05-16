@@ -64,6 +64,22 @@ use cubecl::prelude::*;
 pub const KERNEL_A: f32 = 0.4;
 
 /// 5-tap separable Gaussian, evaluated from [`KERNEL_A`].
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pyramid::{GAUSS5, KERNEL_A};
+///
+/// // 5 taps, symmetric around the center, sum to 1 (DC preservation).
+/// assert_eq!(GAUSS5.len(), 5);
+/// assert_eq!(GAUSS5[0].to_bits(), GAUSS5[4].to_bits());
+/// assert_eq!(GAUSS5[1].to_bits(), GAUSS5[3].to_bits());
+/// let sum: f32 = GAUSS5.iter().sum();
+/// assert!((sum - 1.0).abs() < 1e-6);
+///
+/// // Center tap equals KERNEL_A (the Burt-Adelson "a" parameter).
+/// assert_eq!(GAUSS5[2], KERNEL_A);
+/// ```
 pub const GAUSS5: [f32; 5] = [
     0.25 - KERNEL_A / 2.0,
     0.25,

@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`GAUSS5` doctest** — added `# Examples` showing 5 taps,
+  symmetric around center via `to_bits()` equality, DC preservation
+  (sum to 1 within 1e-6), center tap equals `KERNEL_A`. Tick 469.
+
 - **`XCM_3X3` doctest** — added `# Examples` showing 3×3 shape,
   all entries positive-finite, A-to-A self-coupling dominance
   `[0][0] > 0.5` (matrix orientation pin). Tick 468.
