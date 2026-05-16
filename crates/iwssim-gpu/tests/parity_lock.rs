@@ -111,3 +111,37 @@ fn ref_vs_ref_is_one() {
         "self-identity score {score} ≠ 1.0"
     );
 }
+
+/// `compute_with_reference` should return the same score as
+/// `compute_gray` on the same pair — caching the reference pyramid
+/// is a perf optimization, not a numerical change.
+#[test]
+fn cached_reference_matches_full_compute() {
+    if std::env::var("RUN_GPU_PARITY").is_err() {
+        return;
+    }
+    let dir = std::env::var("IWSSIM_PARITY_REFS").expect("set IWSSIM_PARITY_REFS");
+    let ref_path = format!("{dir}/Ref.bmp");
+    let dis_path = format!("{dir}/Dist.jpg");
+
+    let r_img = image::open(&ref_path).expect("open ref");
+    let d_img = image::open(&dis_path).expect("open dist");
+    let (w, h) = r_img.dimensions();
+    let r_rgb = r_img.to_rgb8().into_raw();
+    let d_rgb = d_img.to_rgb8().into_raw();
+    let r_gray = rgb2gray_bt601_round(&r_rgb);
+    let d_gray = rgb2gray_bt601_round(&d_rgb);
+
+    let client = CudaRuntime::client(&Default::default());
+    let mut iw = Iwssim::<CudaRuntime>::new(client, w, h).expect("Iwssim::new");
+
+    let full = iw.compute_gray(&r_gray, &d_gray).expect("full").score;
+    iw.set_reference(&r_gray).expect("set_reference");
+    let cached = iw.compute_with_reference(&d_gray).expect("cwr").score;
+
+    let rel = ((cached - full) / full).abs();
+    assert!(
+        rel < 1e-4,
+        "cached score {cached} differs from full {full} by rel={rel}"
+    );
+}

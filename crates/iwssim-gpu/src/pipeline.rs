@@ -165,6 +165,11 @@ pub struct Iwssim<R: Runtime> {
     /// the portable two-stage reduction pattern.
     partials: cubecl::server::Handle,
     sums: cubecl::server::Handle,
+
+    /// `set_reference` populates `scales[s].lp_ref` for every scale
+    /// and flips this flag. Subsequent `compute_with_reference` calls
+    /// skip the ref-side LP pyramid build.
+    has_cached_reference: bool,
 }
 
 /// Slot layout in the partials / sums buffer. Indices match the order
@@ -215,6 +220,7 @@ impl<R: Runtime> Iwssim<R> {
             scales,
             partials,
             sums,
+            has_cached_reference: false,
         })
     }
 
@@ -223,6 +229,66 @@ impl<R: Runtime> Iwssim<R> {
     }
     pub fn n_scales(&self) -> usize {
         self.scales.len()
+    }
+    pub fn has_cached_reference(&self) -> bool {
+        self.has_cached_reference
+    }
+    /// Drop any cached reference state. `compute_with_reference` will
+    /// fail with `NoCachedReference` until a fresh `set_reference` is
+    /// run.
+    pub fn clear_reference(&mut self) {
+        self.has_cached_reference = false;
+    }
+
+    /// Upload `ref_gray` and pre-compute the reference-side Laplacian
+    /// pyramid. Subsequent `compute_with_reference` calls reuse the
+    /// cached `lp_ref[s]` at every scale, skipping the ref-side
+    /// downsample + upConv work.
+    ///
+    /// Saves roughly half the LP-pyramid build time per call (and at
+    /// 4096² the much larger reference upload), with no parity impact:
+    /// the rest of the pipeline reads `lp_ref` exactly as before.
+    pub fn set_reference(&mut self, ref_gray: &[f32]) -> Result<()> {
+        let expected = (self.width * self.height) as usize;
+        if ref_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_gray.len(),
+            });
+        }
+        let h_ref = self.client.create_from_slice(f32::as_bytes(ref_gray));
+        self.scales[0].g_ref = h_ref;
+        // Build only the ref-side pyramid; the dis-side will be built
+        // in `compute_with_reference`.
+        self.build_laplacian_pyramid(true);
+        self.has_cached_reference = true;
+        Ok(())
+    }
+
+    /// Score one distortion against the cached reference. Returns
+    /// `Err(NoCachedReference)` if `set_reference` hasn't been called.
+    pub fn compute_with_reference(
+        &mut self,
+        dis_gray: &[f32],
+    ) -> Result<GpuIwssimResult> {
+        if !self.has_cached_reference {
+            return Err(Error::NoCachedReference);
+        }
+        let expected = (self.width * self.height) as usize;
+        if dis_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_gray.len(),
+            });
+        }
+        let h_dis = self.client.create_from_slice(f32::as_bytes(dis_gray));
+        self.scales[0].g_dis = h_dis;
+        // Skip the ref-side pyramid; only build dis-side.
+        self.build_laplacian_pyramid(false);
+        // Then the rest of the pipeline reads both `lp_ref[s]` (cached)
+        // and `lp_dis[s]` (just built) — same as `run_pipeline`'s
+        // post-pyramid stages.
+        self.run_pipeline_post_pyramid()
     }
 
     /// Score one RGB-u8 pair. Both buffers must be `width × height × 3`
@@ -329,7 +395,6 @@ impl<R: Runtime> Iwssim<R> {
 
     fn run_pipeline(&mut self) -> Result<GpuIwssimResult> {
         let profile = std::env::var("IWSSIM_PROFILE").is_ok();
-        let total_t = std::time::Instant::now();
         let t0 = std::time::Instant::now();
         // 1. Build Gaussian pyramid + extract LP bands.
         self.build_laplacian_pyramid(true);
@@ -341,6 +406,16 @@ impl<R: Runtime> Iwssim<R> {
                 t0.elapsed().as_secs_f64() * 1e3
             );
         }
+        self.run_pipeline_post_pyramid()
+    }
+
+    /// Stages 2-6: SSIM stats → IW path → reductions → score. Called
+    /// after `lp_ref[s]` and `lp_dis[s]` are populated at every scale
+    /// (either by the full `run_pipeline` flow or by the cached
+    /// `compute_with_reference` flow).
+    fn run_pipeline_post_pyramid(&mut self) -> Result<GpuIwssimResult> {
+        let profile = std::env::var("IWSSIM_PROFILE").is_ok();
+        let total_t = std::time::Instant::now();
 
         // Optional per-scale pyramid stats (set `IWSSIM_DEBUG=1`). Kept
         // because the upConv DC scaling is the most failure-prone piece

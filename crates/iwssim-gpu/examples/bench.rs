@@ -59,14 +59,36 @@ fn bench_size(w: u32, h: u32) {
     }
     let dt = t.elapsed().as_secs_f64() / n_measure as f64;
 
+    // ----- Cached-reference path -----
+    iw.set_reference(&ref_gray).unwrap();
+    for _ in 0..n_warmup {
+        let _ = iw.compute_with_reference(&dis_gray).unwrap();
+    }
+    client.sync();
+    let mut min_dt_cwr = f64::INFINITY;
+    let t = Instant::now();
+    for _ in 0..n_measure {
+        let t_iter = Instant::now();
+        let _ = iw.compute_with_reference(&dis_gray).unwrap();
+        client.sync();
+        let dt_iter = t_iter.elapsed().as_secs_f64();
+        if dt_iter < min_dt_cwr {
+            min_dt_cwr = dt_iter;
+        }
+    }
+    let dt_cwr = t.elapsed().as_secs_f64() / n_measure as f64;
+
     let mp = (w as f64 * h as f64) / 1e6;
     println!(
-        "{:>5}x{:<5}  mean {:>7.2} ms  min {:>7.2} ms  {:>6.2} MP/s (mean)  score={:.6}",
+        "{:>5}x{:<5}  full {:>6.2} ms (min {:>6.2})  cwr {:>6.2} ms (min {:>6.2})  cwr/full = {:.2}×  {:>6.1} MP/s (cwr)  score={:.6}",
         w,
         h,
         dt * 1e3,
         min_dt * 1e3,
-        mp / dt,
+        dt_cwr * 1e3,
+        min_dt_cwr * 1e3,
+        dt / dt_cwr,
+        mp / dt_cwr,
         last_score,
     );
 }
