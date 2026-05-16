@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`SRGB8_TO_LINEAR_LUT` doctest** — added `# Examples` showing
+  length=256, endpoints `[0]==0.0` / `[255]==1.0`, strict monotonicity
+  across the 256-entry table. Tick 467.
+
 - **`SRGB_LINEAR_TO_DKL` doctest** — added `# Examples` showing
   row-sum invariants: A row sums in [0.5, 2.0] (luminance gain);
   RG and VY row-sum absolute values < A row sum (DKL chroma rows

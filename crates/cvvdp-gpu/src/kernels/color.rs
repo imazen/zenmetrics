@@ -23,6 +23,23 @@ use cubecl::prelude::*;
 /// 256-entry sRGB byte → linear-normalized f32 LUT. Matches
 /// `zensim_gpu::kernels::color::SRGB8_TO_LINEARF32_LUT` byte-for-byte
 /// so the upload paths can share scratch.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::color::SRGB8_TO_LINEAR_LUT;
+///
+/// // Length + endpoints.
+/// assert_eq!(SRGB8_TO_LINEAR_LUT.len(), 256);
+/// assert_eq!(SRGB8_TO_LINEAR_LUT[0], 0.0);
+/// assert_eq!(SRGB8_TO_LINEAR_LUT[255], 1.0);
+///
+/// // Strictly monotonic — byte i+1 always maps to a strictly
+/// // larger linear value than byte i.
+/// for i in 1..256 {
+///     assert!(SRGB8_TO_LINEAR_LUT[i] > SRGB8_TO_LINEAR_LUT[i - 1]);
+/// }
+/// ```
 #[rustfmt::skip]
 pub const SRGB8_TO_LINEAR_LUT: [f32; 256] = [
     0.0, 0.000303526991, 0.0006070539821, 0.0009105809731, 0.001214107964, 0.001517634955, 0.001821161946, 0.002124688821,
