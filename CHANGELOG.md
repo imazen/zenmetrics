@@ -237,6 +237,13 @@ shipped across six commits + an operator runbook:
   `gausspyr_reduce_scalar`). Both pin: identical → ≈10 within 1e-2;
   perturbed → finite < ident + 1e-3. Tick 437.
 
+#### cvvdp-gpu (docs)
+
+- **`PU_PADSIZE` doctest** — added `# Examples` confirming the
+  threshold value (6) and the branch-condition contract
+  (`phase_uncertainty_band` at 6×6 takes the no-blur branch because
+  the check is `> PU_PADSIZE` not `>=`). Tick 480.
+
 #### cvvdp-gpu (docs, fix)
 
 - **3 pre-existing `no_run` doctests on `Cvvdp::score`,

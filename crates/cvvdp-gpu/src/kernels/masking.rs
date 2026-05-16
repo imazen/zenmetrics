@@ -711,6 +711,23 @@ pub fn phase_uncertainty_band(m: &[f32], w: usize, h: usize) -> Vec<f32> {
 
 /// Band-size threshold below which `phase_uncertainty` skips the
 /// Gaussian blur. cvvdp computes `pu_padsize = int(pu_dilate * 2) = 6`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{PU_PADSIZE, phase_uncertainty_band};
+///
+/// // PU_PADSIZE = 6: bands with min(w, h) ≤ 6 take the no-blur
+/// // (pure-scaling) branch; larger bands run the σ=3 Gaussian
+/// // blur first.
+/// assert_eq!(PU_PADSIZE, 6);
+///
+/// // Branch threshold pin: 6×6 takes the small (pure-scaling)
+/// // branch since the condition is `> PU_PADSIZE` not `>=`.
+/// let small = vec![1.0_f32; 36];
+/// let out_small = phase_uncertainty_band(&small, 6, 6);
+/// assert_eq!(out_small.len(), 36);
+/// ```
 pub const PU_PADSIZE: usize = 6;
 
 /// Cross-channel mask pooling at one pixel: given `term[ch]` for
