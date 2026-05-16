@@ -679,6 +679,14 @@ investigation against future reference bumps incorrectly. The
 const now has 7 cross-file `include_str!()` lockstep pins.
 Static-assert count is now 213 across 12 test files.
 
+Tick 595 moved all 7 lockstep pins + the const-format invariant
+block from `tests/parity.rs` (gated behind `parity-goldens`
+feature) to a new always-on `tests/version_lockstep.rs` file.
+Real correctness improvement: the pins now fire on every
+`cargo check / test`, not only when the goldens feature is on.
+Pure refactor — same pin count (213), same coverage. Test file
+count grows to 13.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths
