@@ -927,6 +927,36 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// but executed on the GPU.
     ///
+    /// # Examples
+    ///
+    /// Read back the three DKL planes (A, RG, VY) for a 64×64
+    /// mid-gray buffer. `ignore` because docs.rs has no GPU and
+    /// the no-default-features build path doesn't resolve cubecl
+    /// runtime types.
+    ///
+    /// ```ignore
+    /// use cvvdp_gpu::Cvvdp;
+    /// use cvvdp_gpu::params::CvvdpParams;
+    /// use cubecl::Runtime;
+    ///
+    /// # #[cfg(feature = "cuda")]
+    /// type Backend = cubecl::cuda::CudaRuntime;
+    /// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
+    /// # type Backend = cubecl::wgpu::WgpuRuntime;
+    /// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))]
+    /// # type Backend = cubecl::cpu::CpuRuntime;
+    /// let client = Backend::client(&Default::default());
+    /// let (w, h) = (64u32, 64u32);
+    /// let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+    ///     .expect("Cvvdp::new");
+    ///
+    /// let srgb = vec![128u8; (w * h * 3) as usize];
+    /// let [a, rg, vy] = cvvdp.compute_dkl_planes(&srgb).expect("compute_dkl_planes");
+    /// assert_eq!(a.len(), (w * h) as usize);
+    /// assert_eq!(rg.len(), (w * h) as usize);
+    /// assert_eq!(vy.len(), (w * h) as usize);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`Error::DimensionMismatch`] if `srgb.len() !=
