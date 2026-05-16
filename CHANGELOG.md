@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`SENSITIVITY_CORRECTION_DB` doctest** — added `# Examples`:
+  small negative dB, linear factor `10^(DB/20)` lands in `[0.9, 1.0)`
+  (≈ 0.9684 attenuation). Tick 473.
+
 - **`CSF_BASEBAND_RHO` doctest** — added `# Examples` showing the
   hard-coded `0.1` cy/deg and that it's below the typical geometric
   baseband rho (~0.19 cy/deg at standard 4K + 256² — the tick-204

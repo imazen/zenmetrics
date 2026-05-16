@@ -39,6 +39,17 @@ pub use csf_lut_v0_5_4::{
 /// effective scale on every CSF sensitivity is
 /// `10 ** (SENSITIVITY_CORRECTION_DB / 20)`. Negative values reduce
 /// metric sensitivity.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::SENSITIVITY_CORRECTION_DB;
+///
+/// // Small negative dB (~ -0.28). The linear factor is just below 1.
+/// assert!(SENSITIVITY_CORRECTION_DB < 0.0);
+/// let factor = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+/// assert!((0.9..1.0).contains(&factor)); // ≈ 0.9684
+/// ```
 pub const SENSITIVITY_CORRECTION_DB: f32 = -0.279_742_33;
 
 /// Rho (cy/deg) used for the BASEBAND CSF sensitivity lookup.
