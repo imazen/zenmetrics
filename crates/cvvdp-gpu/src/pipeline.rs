@@ -688,7 +688,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// module). See [`crate::params::PerfMode`] for the parity-vs-perf
     /// opt-in.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Construct against a phone-class geometry (1080p at 0.4 m
     /// viewing distance on a 5.5″ panel — ≈340 ppd vs STANDARD_4K's
@@ -2254,7 +2254,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// `Atomic<f32>::fetch_add` correctly and produce the
     /// canonical JOD.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Canonical one-shot scoring at 64×64. `ignore` because docs.rs
     /// has no GPU and the no-default-features build path doesn't
@@ -2342,7 +2342,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Pass it consistent with the construction-time geometry; debug
     /// builds verify the match (tick 243).
     ///
-    /// # Example
+    /// # Examples
     ///
     /// CPU-runtime scoring of a byte-identical 64×64 pair (max JOD = 10).
     /// Doctest body is gated on `feature = "cpu"` so non-cpu builds
@@ -2407,7 +2407,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Pass it consistent with the construction-time geometry; debug
     /// builds verify the match (tick 243).
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Score N distorted candidates against one warm REF on the cpu
     /// runtime — common batch-CPU pattern for sweep workers:
@@ -2539,7 +2539,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Validates that `ref_srgb.len() == width × height × 3`.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Warm against a REF once, then score N DIST candidates
     /// against the cached state. `ignore` for the same reason as
@@ -2609,7 +2609,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Pass it consistent with the construction-time geometry; debug
     /// builds verify the match (tick 243).
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Score N distorted candidates against one warm REF on the CUDA
     /// backend — canonical batch-GPU pattern for sweep workers.
@@ -2909,7 +2909,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// `Cvvdp::new_with_geometry` or defaulted to STANDARD_4K by
     /// `Cvvdp::new`.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Score a 64×64 byte-identical pair on the CUDA backend (max JOD = 10).
     /// `no_run` because docs.rs has no GPU; the call shape compiles against
@@ -3018,7 +3018,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns [`Error::NoCachedReference`] if [`Cvvdp::set_reference`]
     /// wasn't called first.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// Batch-score N distorted candidates against one stashed reference
     /// on the CUDA backend (max JOD = 10 for the byte-identical pair).
