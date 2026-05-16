@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`mask_pool_pixel` doctest** — added `# Examples`: zero input
+  → zero output, unit basis `[1, 0, 0]` recovers `XCM_3X3[0]` row.
+  Tick 450.
+
 - **`pool_band_finalize` doctest** — added `# Examples`:
   zero partial → 0 (eps-tail explicitly canceled), negative partial
   clamps to 0, and uniform-|x|=c reconstruction at β=2 within 0.01.

@@ -628,6 +628,19 @@ pub const PU_PADSIZE: usize = 6;
 /// Cross-channel mask pooling at one pixel: given `term[ch]` for
 /// each of the 3 channels (where `term[ch] = safe_pow(|M_mm[ch]|, q[ch])`),
 /// returns `m_per_out[cc] = sum_in XCM_3X3[in][cc] * term[in]`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{XCM_3X3, mask_pool_pixel};
+///
+/// // Zero input → zero output.
+/// assert_eq!(mask_pool_pixel([0.0, 0.0, 0.0]), [0.0, 0.0, 0.0]);
+///
+/// // Unit-basis input [1, 0, 0] recovers row 0 of XCM_3X3.
+/// let r0 = mask_pool_pixel([1.0, 0.0, 0.0]);
+/// assert_eq!(r0, XCM_3X3[0]);
+/// ```
 #[inline]
 #[must_use]
 pub fn mask_pool_pixel(term: [f32; 3]) -> [f32; 3] {
