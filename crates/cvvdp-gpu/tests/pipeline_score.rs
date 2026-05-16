@@ -580,6 +580,56 @@ fn new_equivalent_to_new_with_geometry_standard_4k() {
 }
 
 #[test]
+fn two_fresh_cvvdp_instances_produce_bit_equal_jod() {
+    // Tick 499: pin cross-instance determinism. Two `Cvvdp::new`
+    // calls with the same (width, height, params, geometry) scoring
+    // the same (ref, dist) pair MUST produce bit-identical JOD.
+    //
+    // The within-instance determinism contract is pinned by
+    // `score_is_deterministic_across_repeated_calls` (tick 411).
+    // The cross-instance contract is independent — a refactor that
+    // accidentally shares state via a `static` / `thread_local` /
+    // process-global counter, or one that uses a non-deterministic
+    // allocation order to seed a kernel block (e.g. via a hashmap
+    // iteration), would silently break batch scoring across multiple
+    // CvvdpBatchScorer instances on a sweep worker.
+    //
+    // Note this pin uses the cubecl-cpu runtime (via the cpu_backend
+    // path) when the default features build into a GPU runtime, the
+    // 1e-5 atomic-add nondeterminism documented in tick 324 forces
+    // a tolerance here — bit-equality only holds on the deterministic
+    // host_pool path. We score via compute_dkl_jod (GPU pool) and
+    // assert within 1e-4 absolute (matches the perf_mode_fast_matches_strict_today
+    // tolerance, well below any meaningful drift).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (64u32, 64u32);
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let n = (w * h * 3) as usize;
+    let ref_srgb: Vec<u8> = (0..n).map(|i| ((i * 53 + 17) % 251) as u8).collect();
+    let dist_srgb: Vec<u8> = ref_srgb.iter().map(|b| b.saturating_add(7)).collect();
+
+    let mut a = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new a");
+    let mut b =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("Cvvdp::new b");
+
+    let jod_a = a
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("a.compute_dkl_jod");
+    let jod_b = b
+        .compute_dkl_jod(&ref_srgb, &dist_srgb, ppd)
+        .expect("b.compute_dkl_jod");
+
+    let diff = (jod_a - jod_b).abs();
+    eprintln!("two fresh Cvvdp::new instances: jod_a = {jod_a}, jod_b = {jod_b}, |diff| = {diff}",);
+    assert!(
+        diff < 1e-4,
+        "two fresh Cvvdp instances disagreed on (ref, dist): a={jod_a}, b={jod_b}, |diff|={diff}",
+    );
+}
+
+#[test]
 fn cvvdp_score_smoke_at_extreme_aspect_ratio() {
     // Tick 498: end-to-end GPU smoke at extreme aspect ratios
     // (128×8 and 8×128 skinny strips). The boundary 8×8 smoke

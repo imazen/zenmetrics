@@ -134,6 +134,23 @@ Workspace conventions per the global rules:
   with the STANDARD_4K ppd, and (4) `warm_reference` +
   `compute_dkl_jod_with_warm_ref`. Tick 493.
 
+- **`two_fresh_cvvdp_instances_produce_bit_equal_jod`** (in
+  `pipeline_score.rs`) — pin cross-instance determinism. Two
+  `Cvvdp::new` calls with the same (width, height, params,
+  geometry) scoring the same (ref, dist) pair MUST produce
+  bit-identical JOD (within atomic-add tolerance on GPU).
+  Within-instance determinism is pinned by
+  `score_is_deterministic_across_repeated_calls` (tick 411); the
+  cross-instance contract is independent — catches a refactor that
+  accidentally shares state via `static` / `thread_local` / a
+  process-global counter, or that uses non-deterministic allocation
+  order to seed kernel blocks (e.g. via hashmap iteration). This
+  would silently break batch scoring across multiple
+  CvvdpBatchScorer instances on a sweep worker. Tolerance set to
+  1e-4 to accommodate the documented GPU atomic-add nondeterminism
+  (tick 324); first run observed |diff| = 0 (bit-equal in this
+  sample). Tick 499.
+
 - **`cvvdp_score_smoke_at_extreme_aspect_ratio`** (in
   `pipeline_score.rs`) — end-to-end GPU smoke at extreme aspect
   ratios (128×8 wide strip + 8×128 tall strip). The tick-491 8×8
