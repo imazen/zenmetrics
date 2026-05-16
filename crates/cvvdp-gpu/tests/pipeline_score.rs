@@ -580,6 +580,69 @@ fn new_equivalent_to_new_with_geometry_standard_4k() {
 }
 
 #[test]
+fn cvvdp_score_distinguishes_v1_corpus_q_levels() {
+    // Tick 508: pin that the GPU `Cvvdp::score` path produces
+    // distinct JOD values across different distortion levels on
+    // the same reference. Catches a stuck-at-constant refactor
+    // where the pipeline collapses output (e.g. forgetting to
+    // route DIST through CSF, returning the REF-against-REF JOD
+    // for every input, etc.).
+    //
+    // The existing `cvvdp_score_matches_v1_manifest` (tick 207)
+    // pins each q to the pycvvdp manifest within 0.005 JOD — if
+    // the pipeline collapsed to the q=20 manifest value uniformly,
+    // that test would FAIL for q=1, q=5, etc. So this pin is
+    // partly redundant for the BAD case. But it's not redundant
+    // for the GOOD case where a regression returns nearly-correct
+    // values that all drift toward a midpoint: the manifest test
+    // tolerates 0.005, so a pipeline that returned the q=20 value
+    // ± 0.004 for q ∈ {5, 20, 45} would pass manifest tolerance
+    // but be useless as a distortion-discriminating metric.
+    //
+    // This pin asserts pairwise STRICT separation: score(q_high) >
+    // score(q_low) (better quality = higher JOD), and the
+    // separation is at least 0.01 JOD (an order of magnitude more
+    // headroom than the manifest tolerance).
+    //
+    // The host-scalar path is already pinned by
+    // `predict_jod_invariants.rs` (tick 434, "responds to
+    // distortion magnitude"). This is the GPU sibling for the
+    // composed `Cvvdp::score` path.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    // Cover the v1 corpus q-grid: 1 (heavy distortion), 20, 90
+    // (near-lossless). Higher q = better quality = higher JOD.
+    let q_levels: &[u32] = &[1, 20, 90];
+    let mut scores = Vec::with_capacity(q_levels.len());
+    for &q in q_levels {
+        let dist_bytes = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(q), w, h);
+        let jod = cvvdp.score(&ref_bytes, &dist_bytes).expect("score");
+        eprintln!("q={q:>2}: jod = {jod:.4}");
+        scores.push(jod);
+    }
+
+    // Pairwise pin: q=90 > q=20 > q=1 with min 0.01 JOD separation.
+    for i in 0..scores.len() - 1 {
+        let lower = scores[i];
+        let higher = scores[i + 1];
+        let gap = higher - lower;
+        assert!(
+            gap > 0.01,
+            "score at q={} ({}) not > score at q={} ({}) by ≥ 0.01 JOD; gap = {}",
+            q_levels[i + 1],
+            higher,
+            q_levels[i],
+            lower,
+            gap,
+        );
+    }
+}
+
+#[test]
 fn two_fresh_cvvdp_instances_produce_bit_equal_jod() {
     // Tick 499: pin cross-instance determinism. Two `Cvvdp::new`
     // calls with the same (width, height, params, geometry) scoring

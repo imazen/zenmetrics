@@ -238,6 +238,22 @@ mention. Tick 500.
   — `Error` and `Result<T>` are how callers see method failures,
   both must be reachable from the crate root. Tick 501.
 
+- **`cvvdp_score_distinguishes_v1_corpus_q_levels`** (in
+  `pipeline_score.rs`) — stuck-at-constant pin for the GPU
+  `Cvvdp::score` path. Asserts that scoring the v1 corpus at
+  q ∈ {1, 20, 90} produces strictly increasing JOD values with
+  ≥ 0.01 JOD separation between adjacent levels. Catches a refactor
+  that collapses pipeline output (e.g. forgets to route DIST
+  through CSF, returns the REF-against-REF JOD uniformly, or drifts
+  all scores toward a midpoint within the 0.005 manifest tolerance).
+  The existing `cvvdp_score_matches_v1_manifest` pin (tick 207) is
+  partly redundant for the BAD case (a pipeline collapsed to a
+  single value would fail manifest tolerance at some q), but not
+  for the GOOD case where scores stay within tolerance but lose
+  discriminative power. Host-scalar sibling: tick 434's
+  `predict_jod_invariants` "responds to distortion magnitude" pin.
+  Observed gaps: q=1→7.65, q=20→9.71, q=90→9.99. Tick 508.
+
 - **`two_fresh_cvvdp_instances_produce_bit_equal_jod`** (in
   `pipeline_score.rs`) — pin cross-instance determinism. Two
   `Cvvdp::new` calls with the same (width, height, params,
