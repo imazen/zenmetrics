@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`phase_uncertainty_no_blur` doctest** — added `# Examples`:
+  pure scaling `input × 10^MASK_C`, zero passthrough, and scale-factor
+  range pin in [0.15, 0.17]. Tick 448.
+
 - **`lp_norm_sum` doctest** — added `# Examples`: pythagorean
   `lp_norm_sum([3, 4], 2) ≈ 5` within 0.01, empty → 0,
   sign-insensitive via abs. Tick 447.

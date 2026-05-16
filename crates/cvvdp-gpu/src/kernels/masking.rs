@@ -131,6 +131,21 @@ pub fn clamp_diff_soft(d: f32) -> f32 {
 /// Phase uncertainty for the "small band, no blur" path: multiply
 /// by `10^mask_c`. cvvdp uses this branch when the band's smallest
 /// dimension is ≤ `PU_PADSIZE`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::masking::{MASK_C, phase_uncertainty_no_blur};
+///
+/// // Pure scaling — output = input × 10^MASK_C ≈ input × 0.1603.
+/// let scale = 10.0_f32.powf(MASK_C);
+/// assert_eq!(phase_uncertainty_no_blur(1.0), scale);
+/// assert_eq!(phase_uncertainty_no_blur(0.0), 0.0);
+///
+/// // Scale factor lands in [0.15, 0.17] for the canonical
+/// // MASK_C = -0.7955.
+/// assert!(scale > 0.15 && scale < 0.17);
+/// ```
 #[inline]
 #[must_use]
 pub fn phase_uncertainty_no_blur(m: f32) -> f32 {
