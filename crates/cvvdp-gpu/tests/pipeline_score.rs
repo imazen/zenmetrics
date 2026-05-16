@@ -1796,6 +1796,66 @@ fn score_with_reference_is_deterministic_across_repeated_calls() {
 }
 
 #[test]
+fn compute_dkl_jod_with_warm_ref_is_deterministic_across_repeated_calls() {
+    // Tick 489: same shape as
+    // score_with_reference_is_deterministic_across_repeated_calls
+    // (tick 488) and score_is_deterministic_across_repeated_calls,
+    // but for the warm-ref fast path that
+    // CvvdpBatchScorer uses for batch DIST scoring on vast.ai
+    // workers. This is the hottest call pattern in the sweep — one
+    // warm_reference() + many compute_dkl_jod_with_warm_ref() — so
+    // per-call determinism + cross-DIST isolation is the
+    // safety-critical contract.
+    //
+    // Checks:
+    //   (1) compute_dkl_jod_with_warm_ref(dist_a) twice → bit-identical
+    //       (f32::to_bits() equality).
+    //   (2) An intervening compute_dkl_jod_with_warm_ref(dist_b) call
+    //       must not poison the per-call scratch — third call on
+    //       dist_a remains bit-equal to the first.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (256u32, 256u32);
+    let mut cvvdp =
+        Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER).expect("new Cvvdp");
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+
+    let ref_bytes = load_rgb_bytes(&zenmetrics_corpus::source_png(), w, h);
+    let dist_a = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(70), w, h);
+    let dist_b = load_rgb_bytes(&zenmetrics_corpus::jpeg_at_quality(20), w, h);
+
+    cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
+
+    // (1) Same dist twice → bit-identical.
+    let j1 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("warm-ref 1");
+    let j2 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("warm-ref 2");
+    assert_eq!(
+        j1.to_bits(),
+        j2.to_bits(),
+        "compute_dkl_jod_with_warm_ref(dist_a) not deterministic: first={j1}, second={j2}",
+    );
+
+    // (2) Intervening dist_b call must not poison state.
+    let j_a1 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("warm-ref a1");
+    let _j_b = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_b, ppd)
+        .expect("warm-ref b");
+    let j_a2 = cvvdp
+        .compute_dkl_jod_with_warm_ref(&dist_a, ppd)
+        .expect("warm-ref a2");
+    assert_eq!(
+        j_a1.to_bits(),
+        j_a2.to_bits(),
+        "state leaked from warm-ref dist_b call: first={j_a1}, after-b={j_a2}",
+    );
+}
+
+#[test]
 fn score_is_deterministic_across_intervening_warm_reference() {
     // Mixing score() calls with warm_reference + cold-path calls
     // is the call pattern test workers use. Verify the warm-ref

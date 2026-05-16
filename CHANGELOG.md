@@ -58,6 +58,20 @@ Workspace conventions per the global rules:
 
 #### cvvdp-gpu (tests)
 
+- **`compute_dkl_jod_with_warm_ref_is_deterministic_across_repeated_calls`**
+  (in `pipeline_score.rs`) — 2 invariants on the warm-ref fast path
+  (the `warm_reference` + `compute_dkl_jod_with_warm_ref` pattern
+  that `CvvdpBatchScorer` uses for batch DIST scoring on vast.ai
+  workers — the hottest call shape in the sweep): (1) warm-ref
+  scoring twice on the same dist returns bit-identical `f32` JOD
+  (`to_bits()` equality); (2) an intervening warm-ref call on a
+  different dist does not poison per-call scratch — first and third
+  dist_a calls remain bit-equal. Sibling pin to
+  `score_with_reference_is_deterministic_across_repeated_calls`
+  (tick 488) and `score_is_deterministic_across_repeated_calls` —
+  completes bit-determinism coverage for all three scoring paths.
+  Tick 489.
+
 - **`score_with_reference_is_deterministic_across_repeated_calls`**
   (in `pipeline_score.rs`) — 3 invariants on the `set_reference` /
   `score_with_reference` cached fast path: (1) calling the cached
