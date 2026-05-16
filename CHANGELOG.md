@@ -78,7 +78,7 @@ Branch is at parity with pycvvdp v0.5.4 to ≤0.005 JOD on every
 fixture; the test suite catches drift across every layer that pins
 mention. Tick 500.
 
-**Post-milestone long tail (ticks 501–525, summarised here so the
+**Post-milestone long tail (ticks 501–527, summarised here so the
 detailed entries below stay grep-able):**
 
 - **Re-export surface widened** (501–503): lib_reexports.rs grew
@@ -122,6 +122,10 @@ detailed entries below stay grep-able):**
   and `compute_dkl_jod_host_pool_with_warm_ref`. Catches
   near-correct-but-non-discriminative collapse that the manifest
   tolerance pin (0.005 JOD) wouldn't surface.
+- **Documentation polish** (526, 527): added this long-tail
+  summary block; replaced workspace README's stale
+  `TBD | TBD | TBD` cvvdp-gpu row with
+  `(pending — reference is pycvvdp v0.5.4)`.
 
 ### Changed
 
