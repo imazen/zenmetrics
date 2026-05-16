@@ -196,6 +196,25 @@ pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
 
 /// Sensitivity with cvvdp's published correction applied. Same
 /// log10-space `log_l_bkg` convention as `sensitivity_scalar`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::{
+///     CsfChannel, sensitivity_corrected_scalar, sensitivity_scalar,
+///     SENSITIVITY_CORRECTION_DB,
+/// };
+///
+/// // Standard photopic L_bkg = 100 cd/m² (log10 = 2.0).
+/// let s = sensitivity_corrected_scalar(4.0, 2.0_f32, CsfChannel::A);
+/// assert!(s > 0.0, "sensitivity must be positive");
+///
+/// // The correction is a constant multiplicative factor —
+/// // corrected = uncorrected × 10^(DB/20).
+/// let factor = 10.0_f32.powf(SENSITIVITY_CORRECTION_DB / 20.0);
+/// let s_unc = sensitivity_scalar(4.0, 2.0_f32, CsfChannel::A);
+/// assert!((s / s_unc - factor).abs() < 1e-5);
+/// ```
 #[must_use]
 pub fn sensitivity_corrected_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let s = sensitivity_scalar(rho, log_l_bkg, cc);

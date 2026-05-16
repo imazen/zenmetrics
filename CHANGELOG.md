@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`sensitivity_corrected_scalar` doctest** — added `# Examples`
+  showing positive output at standard photopic L_bkg (100 cd/m²) and
+  that `corrected / uncorrected == 10^(DB/20)` within 1e-5. Tick 445.
+
 - **`clamp_diff_soft` doctest** — added `# Examples`: `f(0) == 0`,
   half-saturation at `d == d_max` (relative err < 1e-5),
   asymptotic bound `< d_max` at 1e9. Tick 444.
