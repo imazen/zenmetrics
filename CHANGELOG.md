@@ -722,6 +722,13 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 615 — add `# Examples` doctest to `kernels::csf::CsfChannel`.
+Pins the [A=0, Rg=1, Vy=2] discriminant ordering load-bearing for
+every `channel as usize` indexing site, plus the
+Copy/PartialEq/Debug derive contracts. Cross-references the
+compile-time pins in `tests/csf_channel_invariants.rs`. Doctest
+count: 62 → 63. Docs-only.
+
 Tick 614 — add `# Examples` doctests to two more public
 constants:
 

@@ -88,6 +88,27 @@ pub const SENSITIVITY_CORRECTION_DB: f32 = -0.279_742_33;
 pub const CSF_BASEBAND_RHO: f32 = 0.1;
 
 /// Channel index for the per-channel `o0_c*` tables.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::CsfChannel;
+///
+/// // Discriminants pin the [A, Rg, Vy] index ordering. Many call
+/// // sites do `channel as usize` to index `[_; 3]` arrays, so a
+/// // reorder would silently corrupt every per-channel buffer.
+/// // Pinned by tests/csf_channel_invariants.rs at compile time.
+/// assert_eq!(CsfChannel::A as u32, 0);
+/// assert_eq!(CsfChannel::Rg as u32, 1);
+/// assert_eq!(CsfChannel::Vy as u32, 2);
+///
+/// // Copy + PartialEq + Debug derives ensure ergonomic use in
+/// // tests and error messages.
+/// let cc = CsfChannel::Rg;
+/// let copy = cc;
+/// assert_eq!(cc, copy);
+/// assert!(format!("{cc:?}").contains("Rg"));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsfChannel {
     /// Achromatic channel — luminance / DC.
