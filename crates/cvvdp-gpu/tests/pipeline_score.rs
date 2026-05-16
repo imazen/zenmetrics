@@ -759,7 +759,16 @@ fn cvvdp_score_smoke_at_extreme_aspect_ratio() {
     // (2) score(ref, dist) finite in [0, 10], strictly less than
     // identity.
     let client = Backend::client(&Default::default());
-    let cases: &[(u32, u32, &str)] = &[(128, 8, "128x8 wide strip"), (8, 128, "8x128 tall strip")];
+    // Tick 498: 128x8 + 8x128 (16:1 ratio at boundary on one side).
+    // Tick 511: extended to 1024x8 + 8x1024 (128:1 ratio — stresses
+    // any width-axis-specific tiling assumption that the 128:1 strip
+    // boundary smoke doesn't exercise).
+    let cases: &[(u32, u32, &str)] = &[
+        (128, 8, "128x8 wide strip"),
+        (8, 128, "8x128 tall strip"),
+        (1024, 8, "1024x8 extreme wide strip"),
+        (8, 1024, "8x1024 extreme tall strip"),
+    ];
     for &(w, h, label) in cases {
         let mut cvvdp = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
             .unwrap_or_else(|e| panic!("{label}: Cvvdp::new failed: {e:?}"));

@@ -286,17 +286,18 @@ mention. Tick 500.
 
 - **`cvvdp_score_smoke_at_extreme_aspect_ratio`** (in
   `pipeline_score.rs`) — end-to-end GPU smoke at extreme aspect
-  ratios (128×8 wide strip + 8×128 tall strip). The tick-491 8×8
-  boundary smoke covers the minimum-square case; this covers the
-  minimum-non-square case where one dim is at the
-  `PYRAMID_MIN_DIM × 2` boundary and the other is wide. `pyramid_levels`
-  is bounded by `min(w, h).ilog2()` — a pyramid construction that
-  accidentally defaults to `max(w, h).ilog2()` (= 7 instead of 3)
-  at the asymmetric edge would surface here as NaN/Inf JOD or an
-  InvalidImageSize error. 2 aspects × 4 invariants each: (1)
-  identity `score(ref, ref) ≈ 10` within 1e-3; (2) non-trivial
-  perturbation produces finite JOD in `[0, 10]` strictly less than
-  identity. Tick 498.
+  ratios. Tick 498 covered 128×8 + 8×128 (16:1 ratio at boundary
+  on one side). Tick 511 extended to 1024×8 + 8×1024 (128:1
+  ratio — stresses any width-axis-specific tiling assumption that
+  the 16:1 case doesn't exercise). The tick-491 8×8 boundary smoke
+  covers the minimum-square case; this covers asymmetric strips.
+  `pyramid_levels` is bounded by `min(w, h).ilog2()` — a pyramid
+  construction that accidentally defaults to `max(w, h).ilog2()`
+  (= 7 instead of 3) at the asymmetric edge would surface here as
+  NaN/Inf JOD or an InvalidImageSize error. 4 aspects × 4
+  invariants each: (1) identity `score(ref, ref) ≈ 10` within
+  1e-3; (2) non-trivial perturbation produces finite JOD in
+  `[0, 10]` strictly less than identity. Tick 498, 511.
 
 - **`cvvdp_score_smoke_at_pyramid_min_boundary`** (in
   `pipeline_score.rs`) — end-to-end GPU smoke test on the minimum
