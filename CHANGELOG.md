@@ -239,6 +239,10 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`met2jod` doctest** — added `# Examples` covering perfect-quality
+  limit (`met2jod(0) == 10`), monotonic decline (0 > 0.5 > 1.0 > 5.0),
+  and extreme-input safety (`met2jod(1e6)` finite < 0). Tick 441.
+
 - **`band_frequencies` doctest** — added `# Examples` showing
   typical usage: at standard 4K geometry the function returns ≥ 5
   strictly-decreasing positive cy/deg entries for 1024×1024. Tick 440.

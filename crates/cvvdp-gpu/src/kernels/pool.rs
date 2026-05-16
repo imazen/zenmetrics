@@ -88,6 +88,25 @@ pub fn lp_norm_sum(values: &[f32], p: f32) -> f32 {
 ///   (linear extension that matches the slope of the power curve
 ///   at Q = 0.1, avoiding the zero-derivative singularity).
 /// - For `Q > 0.1`: `Q_JOD = 10 - jod_a * Q^jod_exp`.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::pool::met2jod;
+///
+/// // Perfect-quality limit.
+/// assert_eq!(met2jod(0.0), 10.0);
+///
+/// // JOD declines monotonically with distortion magnitude.
+/// assert!(met2jod(0.5) < met2jod(0.0));
+/// assert!(met2jod(1.0) < met2jod(0.5));
+/// assert!(met2jod(5.0) < met2jod(1.0));
+///
+/// // Output stays finite even at extreme distortion (goes
+/// // deeply negative, but never NaN/Inf).
+/// assert!(met2jod(1e6).is_finite());
+/// assert!(met2jod(1e6) < 0.0);
+/// ```
 #[must_use]
 pub fn met2jod(q: f32) -> f32 {
     let q_t = 0.1_f32;
