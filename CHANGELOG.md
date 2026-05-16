@@ -239,6 +239,11 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **`CSF_BASEBAND_RHO` doctest** — added `# Examples` showing the
+  hard-coded `0.1` cy/deg and that it's below the typical geometric
+  baseband rho (~0.19 cy/deg at standard 4K + 256² — the tick-204
+  pycvvdp parity override). Tick 472.
+
 - **`BASEBAND_W` doctest** — added `# Examples` showing 3 positive-
   finite entries with chroma dominance at baseband (`[2] > [0]`,
   `[1] > [0]` — low-spatial-freq luminance is below CSF threshold).

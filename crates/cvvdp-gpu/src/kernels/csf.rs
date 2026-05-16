@@ -57,6 +57,19 @@ pub const SENSITIVITY_CORRECTION_DB: f32 = -0.279_742_33;
 /// rho for the baseband CSF lookup gave a 0.117 JOD drift on
 /// chroma_shift — surfaced in tick 204 by dumping pycvvdp's
 /// Q_per_ch values and tracing back to baseband.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::csf::CSF_BASEBAND_RHO;
+///
+/// // Hard-coded 0.1 cy/deg per pycvvdp's override.
+/// assert_eq!(CSF_BASEBAND_RHO, 0.1);
+///
+/// // Below the geometric baseband rho at typical viewing — e.g.
+/// // standard_4K + 256² produces a geometric ≈ 0.19 cy/deg.
+/// assert!(CSF_BASEBAND_RHO < 0.19);
+/// ```
 pub const CSF_BASEBAND_RHO: f32 = 0.1;
 
 /// Channel index for the per-channel `o0_c*` tables.
