@@ -540,6 +540,14 @@ Static-assert count is now 179 across 11 test files. Small
 refactor + pins — same shape as ticks 522-524 promoted dimension
 constants from inline literals into the lib_constants module.
 
+Tick 582 completed the tick-581 refactor by deduplicating the
+remaining inline magic-string usage in `goldens_metadata.rs`'s
+`cache_dir_path_embeds_golden_version` runtime test — now uses
+`CACHE_DIR_SUBDIR` directly. If the subdir is renamed, the test
+follows automatically and the static asserts on it still cover
+the "must contain 'cvvdp'" invariant at compile time. Pure
+dedup — no new static asserts.
+
 - **Spatial-contrast contract pinned across all 6 dispatch surfaces
   (ticks 542–547).** Eighteen hypothesis-test pins capture cvvdp's
   spatial-contrast contract — three properties × six dispatch paths

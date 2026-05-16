@@ -278,9 +278,14 @@ fn cache_dir_path_embeds_golden_version() {
         path_str.contains(GOLDEN_VERSION),
         "cache_dir() = {path_str:?} must contain GOLDEN_VERSION = {GOLDEN_VERSION:?}",
     );
+    // Tick 582: use the CACHE_DIR_SUBDIR const directly (extracted
+    // in tick 581) instead of a duplicate magic string. If
+    // CACHE_DIR_SUBDIR is renamed, this test follows automatically
+    // and the static asserts on it (also tick 581) still cover the
+    // "must contain 'cvvdp'" invariant at compile time.
     assert!(
-        path_str.contains("zenmetrics-cvvdp-goldens"),
-        "cache_dir() = {path_str:?} must contain the crate-specific subdir 'zenmetrics-cvvdp-goldens'",
+        path_str.contains(CACHE_DIR_SUBDIR),
+        "cache_dir() = {path_str:?} must contain the crate-specific subdir {CACHE_DIR_SUBDIR:?}",
     );
 }
 
