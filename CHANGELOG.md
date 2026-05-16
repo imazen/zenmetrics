@@ -722,6 +722,26 @@ asserts + 2 runtime test fns to `const_str_helpers.rs` covering
 the new helper's positive / edge cases. Static-assert count is
 now 222 across 13 test files.
 
+Tick 634 — add a 1024×1024 chroma_shift parity fixture
+(deep-pyramid chroma case at the MAX_LEVELS=9 clamp boundary).
+Completes the **128²+256²+1024² chroma_shift triple**, pinning
+chroma behavior across pyramid depths from 6 levels (128²)
+through 7-8 levels (256²) to MAX_LEVELS=9-clamped (1024²). A
+refactor that introduced a depth-dependent RG/VY bug would
+surface at one specific depth, narrowing the regression.
+
+What landed:
+- `scripts/cvvdp_goldens/bench_12mp_cuda.py`: new
+  `synth_pair_1024_chroma_shift(w=1024, h=1024)` + fixture entry.
+- `scripts/cvvdp_goldens/pycvvdp_synth_goldens.json`: new entry
+  with `jod = 9.665625` (generated locally, 0.4 s wallclock).
+- `crates/cvvdp-gpu/tests/predict_jod_invariants.rs`: new
+  `predict_jod_matches_pycvvdp_at_1024x1024_chroma_shift`
+  host-scalar parity test.
+
+Measured result: host_scalar JOD = 9.665625, pycvvdp golden =
+9.665625, **|diff| = 0.000000** — bit-identical at f32 precision.
+
 Tick 633 — add a 128×128 chroma_shift parity fixture (new
 distortion type at a non-256 size). Mirrors the existing
 `synth_256x256_chroma_shift` (G channel +16, R/B unchanged) at

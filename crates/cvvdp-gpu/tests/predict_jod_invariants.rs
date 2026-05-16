@@ -25,6 +25,43 @@ fn dm() -> DisplayModel {
 }
 
 #[test]
+fn predict_jod_matches_pycvvdp_at_1024x1024_chroma_shift() {
+    // Tick 634: host-scalar parity vs pycvvdp v0.5.4 on a 1024×1024
+    // chroma-only distortion (G+16). Completes the 128²+256²+1024²
+    // chroma_shift triple, pinning chroma behavior across pyramid
+    // depths from 6 levels (128²) through 7-8 levels (256²) to
+    // MAX_LEVELS=9-clamped (1024²).
+    //
+    // A refactor that introduced a depth-dependent RG/VY bug would
+    // surface at one specific depth, narrowing the regression. The
+    // 1024² case specifically tests the MAX_LEVELS-clamp interaction
+    // with the chroma-only path.
+    //
+    // Tolerance: 0.005 JOD — canonical manifest-parity gate.
+    let golden = common::pycvvdp_synth_golden_jod("synth_1024x1024_chroma_shift");
+    let (w, h) = (1024_usize, 1024_usize);
+    let ref_b = common::synth_pair_ref(w, h);
+    let dist_b: Vec<u8> = ref_b
+        .chunks_exact(3)
+        .flat_map(|p| [p[0], (i16::from(p[1]) + 16).clamp(0, 255) as u8, p[2]])
+        .collect();
+    let jod = predict_jod_still_3ch(&ref_b, &dist_b, w, h, dm(), ppd());
+    let diff = (jod - golden).abs();
+    eprintln!(
+        "host_scalar 1024x1024 chroma_shift: jod = {jod:.6}, pycvvdp golden = {golden:.6}, |diff| = {diff:.6}"
+    );
+    assert!(jod.is_finite(), "JOD must be finite, got {jod}");
+    assert!(
+        (0.0..=10.0).contains(&jod),
+        "JOD must be in [0, 10], got {jod}"
+    );
+    assert!(
+        diff < 0.005,
+        "host_scalar JOD {jod:.6} drifts from pycvvdp golden {golden:.6} by {diff:.6} > 0.005"
+    );
+}
+
+#[test]
 fn predict_jod_matches_pycvvdp_at_128x128_chroma_shift() {
     // Tick 633: host-scalar parity vs pycvvdp v0.5.4 on a 128×128
     // chroma-only distortion (G channel +16, R/B unchanged).
