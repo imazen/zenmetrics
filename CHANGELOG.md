@@ -301,32 +301,32 @@ shipped across six commits + an operator runbook:
 - **`BASEBAND_W` doctest** — added `# Examples` showing 3 positive-
   finite entries with chroma dominance at baseband (`[2] > [0]`,
   `[1] > [0]` — low-spatial-freq luminance is below CSF threshold).
-  Tick 471.
+  Tick 471, 5f4066a3.
 
 - **`PU_BLUR_KERNEL_1D` doctest** — added `# Examples` showing 13
   taps, symmetric around center via `to_bits()`, sum-to-1 (DC
-  preservation, σ=3 Gaussian), center > 5× tail magnitude. Tick 470.
+  preservation, σ=3 Gaussian), center > 5× tail magnitude. Tick 470, a9849af7.
 
 - **`GAUSS5` doctest** — added `# Examples` showing 5 taps,
   symmetric around center via `to_bits()` equality, DC preservation
-  (sum to 1 within 1e-6), center tap equals `KERNEL_A`. Tick 469.
+  (sum to 1 within 1e-6), center tap equals `KERNEL_A`. Tick 469, 800474bd.
 
 - **`XCM_3X3` doctest** — added `# Examples` showing 3×3 shape,
   all entries positive-finite, A-to-A self-coupling dominance
-  `[0][0] > 0.5` (matrix orientation pin). Tick 468.
+  `[0][0] > 0.5` (matrix orientation pin). Tick 468, e4881f9b.
 
 - **`SRGB8_TO_LINEAR_LUT` doctest** — added `# Examples` showing
   length=256, endpoints `[0]==0.0` / `[255]==1.0`, strict monotonicity
-  across the 256-entry table. Tick 467.
+  across the 256-entry table. Tick 467, 88210899.
 
 - **`SRGB_LINEAR_TO_DKL` doctest** — added `# Examples` showing
   row-sum invariants: A row sums in [0.5, 2.0] (luminance gain);
   RG and VY row-sum absolute values < A row sum (DKL chroma rows
-  mean-zero by construction on equal-energy input). Tick 466.
+  mean-zero by construction on equal-energy input). Tick 466, a1dc45bd.
 
 - **`DisplayGeometry::pixels_per_degree` doctest** — added
   `# Examples` showing standard 4K → ≈ 75.4 ppd (within 0.5) and
-  realistic-range invariant 5..=500. Tick 465.
+  realistic-range invariant 5..=500. Tick 465, 166aaf79.
 
 #### cvvdp-gpu (tests)
 
@@ -336,14 +336,14 @@ shipped across six commits + an operator runbook:
   `recommend_parallel` re-exports each match the original
   `pipeline::*` value/output. A refactor that drops one of these
   re-exports — or feature-gates them — trips here before silently
-  breaking downstream callers. Tick 464.
+  breaking downstream callers. Tick 464, 7eb7c956.
 
 #### cvvdp-gpu (examples)
 
 - **`examples/cvvdp_mem_table.rs`** — refactored to use the public
   `recommend_parallel` function instead of duplicating the `mem /
   (1.5 × est)` math inline. Output is identical. Added module-level
-  docstring describing the example's purpose + invocation. Tick 463.
+  docstring describing the example's purpose + invocation. Tick 463, 503fcf7b.
 
 #### cvvdp-gpu (tests, lint)
 
@@ -357,7 +357,7 @@ shipped across six commits + an operator runbook:
   digit preservation); `mult_mutual_band_invariants` adds module-level
   `#[allow(clippy::needless_range_loop)]` (intentional per-channel
   iteration); `laplacian_pyramid_invariants` drops a `.map().enumerate().map()`
-  no-op. Tests pass identically. Tick 462.
+  no-op. Tests pass identically. Tick 462, 54d791a1.
 
 #### cvvdp-gpu (docs)
 
