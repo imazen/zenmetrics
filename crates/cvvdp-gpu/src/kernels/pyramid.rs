@@ -319,8 +319,11 @@ pub fn gausspyr_expand_scalar(
 /// One band of a Laplacian pyramid — a flat plane plus its
 /// dimensions.
 pub struct Band {
+    /// Width in pixels.
     pub w: usize,
+    /// Height in pixels.
     pub h: usize,
+    /// Row-major pixel data; `data.len() == w * h`.
     pub data: Vec<f32>,
 }
 
@@ -496,6 +499,8 @@ pub fn laplacian_pyramid_dec_scalar(
 /// plus the per-band per-pixel log10 background luminance the CSF
 /// stage consumes.
 pub struct WeberPyramid {
+    /// One band per pyramid level; `bands[k]` has the spatial dims
+    /// of the `k`-th Gaussian-pyramid level.
     pub bands: Vec<Band>,
     /// `log10(L_bkg)` per band — shape matches each band's spatial
     /// dimensions for non-baseband levels, and is a 1×1 spatial

@@ -57,7 +57,9 @@ impl DisplayModel {
 /// ported until a use case appears.
 #[derive(Debug, Clone, Copy)]
 pub struct DisplayGeometry {
+    /// Display width in pixels.
     pub resolution_w: u32,
+    /// Display height in pixels.
     pub resolution_h: u32,
     /// Viewing distance in meters.
     pub distance_m: f32,
@@ -216,8 +218,15 @@ pub struct PoolingParams {
 /// `CvvdpParams::PLACEHOLDER`.
 #[derive(Debug, Clone, Copy)]
 pub struct JodParams {
+    /// JOD mapping scale parameter `a` from cvvdp's
+    /// `Q_JOD = 10 - a * Q^b`.
     pub jod_a: f32,
+    /// JOD mapping exponent parameter `b`. Production code reads
+    /// `kernels::pool::JOD_EXP` instead of this struct field.
     pub jod_b: f32,
+    /// Reserved scaffolding parameter `c`. cvvdp v0.5.4's met2jod
+    /// formula has no separate `c` coefficient — kept for future
+    /// JSON-driven parameter loading.
     pub jod_c: f32,
 }
 
@@ -277,10 +286,26 @@ pub enum PerfMode {
 /// Top-level cvvdp parameter bundle.
 #[derive(Debug, Clone, Copy)]
 pub struct CvvdpParams {
+    /// Photometric display model: peak / black luminance, ambient
+    /// reflection. Consumed by the color stage's sRGB→linear-cd/m²
+    /// conversion.
     pub display: DisplayModel,
+    /// castleCSF scaffolding parameters. **Unused** by the
+    /// production code — CSF runs from the vendored
+    /// `kernels::csf::csf_lut/v0_5_4.rs` LUT. See `PLACEHOLDER`.
     pub csf: CsfParams,
+    /// Contrast-masking scaffolding parameters. **Unused** by the
+    /// production code — masking runs from the inline `const`s in
+    /// `kernels::masking`. See `PLACEHOLDER`.
     pub masking: MaskingParams,
+    /// Spatial / band / channel pooling scaffolding parameters.
+    /// **Unused** by the production code — pooling reads the
+    /// `BETA_SPATIAL` / `BETA_BAND` / `BETA_CH` const triple in
+    /// `kernels::pool`. See `PLACEHOLDER`.
     pub pooling: PoolingParams,
+    /// JOD-mapping scaffolding parameters. **Unused** by the
+    /// production code — `met2jod` reads `JOD_A` and `JOD_EXP` from
+    /// `kernels::pool`. See `PLACEHOLDER`.
     pub jod: JodParams,
     /// Parity-vs-perf trade-off. Defaults to [`PerfMode::Strict`]
     /// via [`CvvdpParams::PLACEHOLDER`]. See [`PerfMode`] for the

@@ -239,6 +239,17 @@ shipped across six commits + an operator runbook:
 
 #### cvvdp-gpu (docs)
 
+- **Struct-field docstrings** — added field docs for
+  `Band {w, h, data}`, `WeberPyramid {bands}`, `JodParams
+  {jod_a, jod_b, jod_c}`, `DisplayGeometry {resolution_w,
+  resolution_h}`, and `CvvdpParams {display, csf, masking,
+  pooling, jod}`. The `CvvdpParams` field docs explicitly note
+  that csf/masking/pooling/jod are scaffolding placeholders unused
+  by production code (which reads `kernels::*` consts). Drops
+  rustdoc missing-docs warnings from 110 → ~88 (rest are
+  `#[cube(launch)]` macro-emitted items, not user-writable).
+  Tick 481.
+
 - **`PU_PADSIZE` doctest** — added `# Examples` confirming the
   threshold value (6) and the branch-condition contract
   (`phase_uncertainty_band` at 6×6 takes the no-blur branch because
