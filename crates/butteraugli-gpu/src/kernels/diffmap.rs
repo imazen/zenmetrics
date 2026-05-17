@@ -246,3 +246,61 @@ pub fn l2_asym_diff_kernel(
     total += vw_lt * v * v;
     dst[idx] = total;
 }
+
+/// Fused L2-asym (HF) + L2 (MF) for one channel, accumulated into the
+/// same target. Replaces two back-to-back launches that wrote to the
+/// same plane. Saves 1 launch + 1 R/W roundtrip per channel.
+///
+/// T_x.L (2026-05-17): the asym kernel was already doing one full plane
+/// R/W; folding the plain L2 into the same kernel lets the asym tail
+/// store happen once, with both contributions summed in registers.
+#[cube(launch_unchecked)]
+pub fn l2_asym_plus_l2_kernel(
+    asym_src1: &Array<f32>,
+    asym_src2: &Array<f32>,
+    l2_src1: &Array<f32>,
+    l2_src2: &Array<f32>,
+    dst: &mut Array<f32>,
+    asym_weight_gt: f32,
+    asym_weight_lt: f32,
+    l2_weight: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= dst.len() {
+        terminate!();
+    }
+    let v0 = asym_src1[idx];
+    let v1 = asym_src2[idx];
+    let vw_gt = asym_weight_gt * 0.8;
+    let vw_lt = asym_weight_lt * 0.8;
+    let diff = v0 - v1;
+    let mut total = dst[idx] + diff * diff * vw_gt;
+
+    let fabs0 = f32::abs(v0);
+    let too_small = 0.4 * fabs0;
+    let too_big = fabs0;
+
+    let v = if v0 < 0.0 {
+        if v1 > -too_small {
+            v1 + too_small
+        } else if v1 < -too_big {
+            -v1 - too_big
+        } else {
+            f32::new(0.0)
+        }
+    } else if v1 < too_small {
+        too_small - v1
+    } else if v1 > too_big {
+        v1 - too_big
+    } else {
+        f32::new(0.0)
+    };
+
+    total += vw_lt * v * v;
+
+    // L2 contribution (MF band):
+    let l2_d = l2_src1[idx] - l2_src2[idx];
+    total += l2_weight * l2_d * l2_d;
+
+    dst[idx] = total;
+}
