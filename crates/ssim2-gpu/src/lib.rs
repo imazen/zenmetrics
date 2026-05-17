@@ -164,6 +164,78 @@ pub enum Ssim2Blur {
     Fir,
 }
 
+/// Stable column-name identifier for the IIR (default) blur path.
+///
+/// Used by sweep tooling (`zen-metrics-cli` and downstream pipelines)
+/// to land ssim2 scores in parquet sidecars without colliding with
+/// other ssim2 variants — currently the FIR opt-in path
+/// ([`SSIM2_FIR_COLUMN_NAME`]). Mirrors the `CVVDP_COLUMN_NAME`
+/// pattern in `crates/cvvdp-gpu/src/lib.rs`.
+///
+/// Default form: `ssim2_imazen_iir_v<MAJOR>_<MINOR>_<PATCH>` derived
+/// from `CARGO_PKG_VERSION` with `.` rewritten to `_`. The
+/// `SSIM2_IIR_IMPL_TAG` build-time env var overrides the entire
+/// string when set (e.g. CI bakes in a git short hash to
+/// distinguish iterations within the same crate version).
+pub const SSIM2_IIR_COLUMN_NAME: &str = match option_env!("SSIM2_IIR_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "ssim2_imazen_iir_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
+/// Stable column-name identifier for the FIR (opt-in) blur path.
+///
+/// **Distinct from [`SSIM2_IIR_COLUMN_NAME`]** — the FIR is a
+/// different metric (different score scale) per Kanetaka et al. IWAIT
+/// 2026. Downstream pipelines must land FIR scores in a different
+/// parquet column than IIR scores so they aren't mixed.
+///
+/// Default form: `ssim2_imazen_fir_v<MAJOR>_<MINOR>_<PATCH>`. Override
+/// via the `SSIM2_FIR_IMPL_TAG` build-time env var.
+pub const SSIM2_FIR_COLUMN_NAME: &str = match option_env!("SSIM2_FIR_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "ssim2_imazen_fir_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
+/// Versioned column name for the score produced by a given blur mode.
+///
+/// Equivalent to:
+/// - `Ssim2Blur::Iir` → [`SSIM2_IIR_COLUMN_NAME`]
+/// - `Ssim2Blur::Fir` → [`SSIM2_FIR_COLUMN_NAME`]
+///
+/// Use this to derive the right parquet column name at runtime when
+/// the blur mode is data-driven (e.g. CLI flag, config file).
+///
+/// ```
+/// use ssim2_gpu::{Ssim2Blur, column_name_for_blur};
+///
+/// assert!(column_name_for_blur(Ssim2Blur::Iir).starts_with("ssim2_imazen_iir_v"));
+/// assert!(column_name_for_blur(Ssim2Blur::Fir).starts_with("ssim2_imazen_fir_v"));
+/// assert_ne!(
+///     column_name_for_blur(Ssim2Blur::Iir),
+///     column_name_for_blur(Ssim2Blur::Fir),
+/// );
+/// ```
+pub const fn column_name_for_blur(blur: Ssim2Blur) -> &'static str {
+    match blur {
+        Ssim2Blur::Iir => SSIM2_IIR_COLUMN_NAME,
+        Ssim2Blur::Fir => SSIM2_FIR_COLUMN_NAME,
+    }
+}
+
 
 /// Result of an SSIMULACRA2 comparison.
 ///

@@ -16,7 +16,10 @@
 //! opt-in API surface — no score values are asserted here.
 
 use cubecl::Runtime;
-use ssim2_gpu::{Error, Ssim2, Ssim2Batch, Ssim2Blur};
+use ssim2_gpu::{
+    Error, SSIM2_FIR_COLUMN_NAME, SSIM2_IIR_COLUMN_NAME, Ssim2, Ssim2Batch, Ssim2Blur,
+    column_name_for_blur,
+};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -135,6 +138,38 @@ fn ssim2batch_with_blur_round_trips() {
         .expect("Ssim2Batch::new")
         .with_blur(Ssim2Blur::Fir);
     assert_eq!(b.blur(), Ssim2Blur::Fir);
+}
+
+// ───────────────── impl-tag column names ─────────────────
+
+#[test]
+fn column_names_are_distinct() {
+    assert_ne!(SSIM2_IIR_COLUMN_NAME, SSIM2_FIR_COLUMN_NAME);
+}
+
+#[test]
+fn column_names_match_blur_helper() {
+    assert_eq!(column_name_for_blur(Ssim2Blur::Iir), SSIM2_IIR_COLUMN_NAME);
+    assert_eq!(column_name_for_blur(Ssim2Blur::Fir), SSIM2_FIR_COLUMN_NAME);
+}
+
+#[test]
+fn column_names_have_correct_prefixes() {
+    // Default form is `ssim2_imazen_<blur>_v<MAJOR>_<MINOR>_<PATCH>`.
+    // The env-var overrides can produce arbitrary strings, but in the
+    // default build (which is what every consumer sees) the prefix is
+    // load-bearing for parquet column-name discovery and for the
+    // distinction between IIR and FIR.
+    assert!(
+        SSIM2_IIR_COLUMN_NAME.starts_with("ssim2_imazen_iir_v")
+            || std::env::var("SSIM2_IIR_IMPL_TAG").is_ok(),
+        "unexpected IIR column name: {SSIM2_IIR_COLUMN_NAME}"
+    );
+    assert!(
+        SSIM2_FIR_COLUMN_NAME.starts_with("ssim2_imazen_fir_v")
+            || std::env::var("SSIM2_FIR_IMPL_TAG").is_ok(),
+        "unexpected FIR column name: {SSIM2_FIR_COLUMN_NAME}"
+    );
 }
 
 #[test]
