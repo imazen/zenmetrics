@@ -114,8 +114,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
         None => None,
     };
 
-    let cells_total =
-        (cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64;
+    let cells_total = (cfg.sources.len() * cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64;
     let stats = AtomicSweepStats::new(cells_total);
 
     // Wrap writers in Mutex so rayon tasks can flush rows under a lock.
@@ -136,9 +135,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                     "[sweep] skipping {} (decode failed: {e})",
                     src_path.display()
                 );
-                stats.add_failed_decode(
-                    (cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64,
-                );
+                stats.add_failed_decode((cfg.q_grid.len() * cfg.knob_grid.cell_count()) as u64);
                 continue;
             }
         };
@@ -212,9 +209,9 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                     if let Some((image, codec, q_, knob_json, score, features)) = feature {
                         if let Ok(mut fw_guard) = feature_writer.lock() {
                             if let Some(fw) = fw_guard.as_mut() {
-                                if let Err(e) = fw.push_row(
-                                    &image, codec, q_, &knob_json, score, &features,
-                                ) {
+                                if let Err(e) =
+                                    fw.push_row(&image, codec, q_, &knob_json, score, &features)
+                                {
                                     eprintln!(
                                         "[sweep] feature_writer push failed: {} q={q_}: {e}",
                                         image,
@@ -244,7 +241,9 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     }
 
     // Drop locks and finalize.
-    let mut wtr = wtr.into_inner().map_err(|e| format!("wtr lock poisoned: {e}"))?;
+    let mut wtr = wtr
+        .into_inner()
+        .map_err(|e| format!("wtr lock poisoned: {e}"))?;
     wtr.flush()?;
     if let Some(fw) = feature_writer
         .into_inner()

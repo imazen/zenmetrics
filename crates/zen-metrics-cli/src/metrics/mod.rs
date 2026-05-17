@@ -263,12 +263,18 @@ pub fn run_metric(
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
 
         #[cfg(feature = "external-metric")]
-        MetricKind::Cvvdp => Ok(vec![("cvvdp", external::score_cvvdp(reference, distorted)?)]),
+        MetricKind::Cvvdp => Ok(vec![(
+            "cvvdp",
+            external::score_cvvdp(reference, distorted)?,
+        )]),
         #[cfg(not(feature = "external-metric"))]
         MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "external-metric")),
 
         #[cfg(feature = "external-metric")]
-        MetricKind::Iwssim => Ok(vec![("iwssim", external::score_iwssim(reference, distorted)?)]),
+        MetricKind::Iwssim => Ok(vec![(
+            "iwssim",
+            external::score_iwssim(reference, distorted)?,
+        )]),
         #[cfg(not(feature = "external-metric"))]
         MetricKind::Iwssim => Err(disabled_msg("iwssim", "external-metric")),
     }

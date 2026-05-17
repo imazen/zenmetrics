@@ -68,10 +68,7 @@ impl ExternalServer {
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(|e| format!("failed to spawn `{program}`: {e}"))?;
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or("failed to capture child stdin")?;
+        let stdin = child.stdin.take().ok_or("failed to capture child stdin")?;
         let stdout = BufReader::new(
             child
                 .stdout
@@ -161,9 +158,13 @@ fn parse_score(line: &str) -> Result<f64, Box<dyn std::error::Error>> {
     let end = after_colon
         .find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E')))
         .unwrap_or(after_colon.len());
-    after_colon[..end]
-        .parse::<f64>()
-        .map_err(|e| format!("external metric: bad score literal `{}`: {e}", &after_colon[..end]).into())
+    after_colon[..end].parse::<f64>().map_err(|e| {
+        format!(
+            "external metric: bad score literal `{}`: {e}",
+            &after_colon[..end]
+        )
+        .into()
+    })
 }
 
 fn split_command(s: &str) -> Vec<String> {
