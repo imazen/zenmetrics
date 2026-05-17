@@ -5738,6 +5738,7 @@ dependencies = [
  "dssim-gpu",
  "enough",
  "imgref",
+ "iwssim-gpu",
  "jxl-encoder",
  "parquet",
  "rayon",

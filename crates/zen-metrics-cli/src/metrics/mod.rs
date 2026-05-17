@@ -23,7 +23,8 @@ mod zensim;
     feature = "gpu-butteraugli",
     feature = "gpu-ssim2",
     feature = "gpu-dssim",
-    feature = "gpu-cvvdp"
+    feature = "gpu-cvvdp",
+    feature = "gpu-iwssim"
 ))]
 mod gpu_runtime_dispatch;
 
@@ -33,6 +34,8 @@ mod butteraugli_gpu;
 pub mod cvvdp_gpu;
 #[cfg(feature = "gpu-dssim")]
 mod dssim_gpu;
+#[cfg(feature = "gpu-iwssim")]
+pub mod iwssim_gpu;
 #[cfg(feature = "gpu-ssim2")]
 mod ssim2_gpu;
 
@@ -75,6 +78,12 @@ pub enum MetricKind {
     /// composition.
     #[value(name = "cvvdp")]
     Cvvdp,
+    /// IW-SSIM (Information-Content Weighted SSIM, Wang & Li 2011) via
+    /// the `iwssim-gpu` crate. Score in `[0, 1]` where 1 = identical.
+    /// Requires `min(W, H) >= 176` per the paper's 5-level pyramid + 11×11
+    /// valid-mode SSIM stats constraint; smaller images return an error.
+    #[value(name = "iwssim")]
+    Iwssim,
 }
 
 impl MetricKind {
@@ -88,6 +97,7 @@ impl MetricKind {
             MetricKind::DssimGpu,
             MetricKind::Zensim,
             MetricKind::Cvvdp,
+            MetricKind::Iwssim,
         ]
     }
 
@@ -101,6 +111,7 @@ impl MetricKind {
             MetricKind::DssimGpu => "dssim-gpu",
             MetricKind::Zensim => "zensim",
             MetricKind::Cvvdp => "cvvdp",
+            MetricKind::Iwssim => "iwssim",
         }
     }
 
@@ -109,7 +120,8 @@ impl MetricKind {
             MetricKind::Ssim2Gpu
             | MetricKind::ButteraugliGpu
             | MetricKind::DssimGpu
-            | MetricKind::Cvvdp => "GPU",
+            | MetricKind::Cvvdp
+            | MetricKind::Iwssim => "GPU",
             _ => "CPU",
         }
     }
@@ -121,6 +133,7 @@ impl MetricKind {
                 | MetricKind::ButteraugliGpu
                 | MetricKind::DssimGpu
                 | MetricKind::Cvvdp
+                | MetricKind::Iwssim
         )
     }
 
@@ -142,6 +155,7 @@ impl MetricKind {
             MetricKind::DssimGpu => &["dssim_gpu"],
             MetricKind::Zensim => &["zensim"],
             MetricKind::Cvvdp => CVVDP_COLUMNS,
+            MetricKind::Iwssim => IWSSIM_COLUMNS,
         }
     }
 }
@@ -163,6 +177,17 @@ impl MetricKind {
 const CVVDP_COLUMNS: &[&str] = &[::cvvdp_gpu::CVVDP_COLUMN_NAME];
 #[cfg(not(feature = "gpu-cvvdp"))]
 const CVVDP_COLUMNS: &[&str] = &["cvvdp"];
+
+// Versioned iwssim column name — mirrors the cvvdp pattern. With the
+// `gpu-iwssim` feature on, pulls from `::iwssim_gpu::IWSSIM_COLUMN_NAME`
+// (default `iwssim_imazen_v<MAJOR>_<MINOR>_<PATCH>`, overridable at
+// build time via `IWSSIM_IMPL_TAG`). Without the feature, falls back
+// to a bare `iwssim` so callers listing metric names without the
+// backend still see a usable identifier.
+#[cfg(feature = "gpu-iwssim")]
+const IWSSIM_COLUMNS: &[&str] = &[::iwssim_gpu::IWSSIM_COLUMN_NAME];
+#[cfg(not(feature = "gpu-iwssim"))]
+const IWSSIM_COLUMNS: &[&str] = &["iwssim"];
 
 /// CubeCL runtime selector for GPU metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -279,6 +304,14 @@ pub fn run_metric(
         )]),
         #[cfg(not(feature = "gpu-cvvdp"))]
         MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "gpu-cvvdp")),
+
+        #[cfg(feature = "gpu-iwssim")]
+        MetricKind::Iwssim => Ok(vec![(
+            ::iwssim_gpu::IWSSIM_COLUMN_NAME,
+            iwssim_gpu::score(reference, distorted, gpu_runtime)?,
+        )]),
+        #[cfg(not(feature = "gpu-iwssim"))]
+        MetricKind::Iwssim => Err(disabled_msg("iwssim", "gpu-iwssim")),
     }
 }
 

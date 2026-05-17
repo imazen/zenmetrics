@@ -59,6 +59,31 @@ pub use pipeline::Iwssim;
 /// Number of pyramid scales — fixed at 5 by the IW-SSIM paper.
 pub const NUM_SCALES: usize = 5;
 
+/// Implementation-tagged column name for IW-SSIM scores in parquet
+/// sidecars. Mirrors the `cvvdp_gpu::CVVDP_COLUMN_NAME` pattern so
+/// multiple IW-SSIM implementations (e.g. a reference Python pyrtools
+/// port, this GPU port, a hypothetical Burn port) can coexist in the
+/// same joined parquet without column-name collisions. Default form:
+/// `iwssim_imazen_v<MAJOR>_<MINOR>_<PATCH>` derived from the crate's
+/// own `CARGO_PKG_VERSION`. Overridable at build time via the
+/// `IWSSIM_IMPL_TAG` env var (e.g. a Burn port can set its own tag).
+///
+/// Why not just `iwssim`: a future port may differ on numerics by
+/// 1e-3 or so without being wrong; a different column name documents
+/// that drift instead of pretending two implementations agree. The
+/// CLI flag (`--metric iwssim`) stays stable for users.
+pub const IWSSIM_COLUMN_NAME: &str = match option_env!("IWSSIM_IMPL_TAG") {
+    Some(tag) => tag,
+    None => concat!(
+        "iwssim_imazen_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
 /// Result of one IW-SSIM comparison.
 #[derive(Debug, Clone, Copy)]
 pub struct GpuIwssimResult {

@@ -435,6 +435,19 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
         );
     }
+    // Iwssim shares the same caching motivation as cvvdp:
+    // `Iwssim::new` allocates GPU buffers + triggers per-(W,H) kernel
+    // JIT. score-pairs over a 100-pair chunk on a single source dim
+    // gets a single allocation rather than 100.
+    #[cfg(feature = "gpu-iwssim")]
+    let mut iwssim_scorer: Option<crate::metrics::iwssim_gpu::IwssimBatchScorer> = None;
+    #[cfg(feature = "gpu-iwssim")]
+    if args.metric == crate::metrics::MetricKind::Iwssim {
+        iwssim_scorer = Some(
+            crate::metrics::iwssim_gpu::IwssimBatchScorer::new(args.gpu_runtime)
+                .map_err(|e| format!("IwssimBatchScorer init: {e}"))?,
+        );
+    }
 
     for record in rdr.records() {
         let record = record?;
@@ -462,8 +475,18 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
-        let pair_result: Result<f64, Box<dyn std::error::Error>> =
-            if let Some(scorer) = cvvdp_scorer.as_mut() {
+        let pair_result: Result<f64, Box<dyn std::error::Error>> = {
+            #[cfg(feature = "gpu-iwssim")]
+            if let Some(scorer) = iwssim_scorer.as_mut() {
+                // Iwssim fast path: decode + reuse cached Iwssim instance.
+                match (
+                    decode::decode_image_to_rgb8(&ref_path),
+                    decode::decode_image_to_rgb8(&dist_path),
+                ) {
+                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            } else if let Some(scorer) = cvvdp_scorer.as_mut() {
                 // Cvvdp fast path: decode + reuse cached Cvvdp instance.
                 match (
                     decode::decode_image_to_rgb8(&ref_path),
@@ -474,7 +497,20 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
                 }
             } else {
                 score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
-            };
+            }
+            #[cfg(not(feature = "gpu-iwssim"))]
+            if let Some(scorer) = cvvdp_scorer.as_mut() {
+                match (
+                    decode::decode_image_to_rgb8(&ref_path),
+                    decode::decode_image_to_rgb8(&dist_path),
+                ) {
+                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            } else {
+                score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
+            }
+        };
         let jod = match pair_result {
             Ok(v) => {
                 succeeded += 1;
