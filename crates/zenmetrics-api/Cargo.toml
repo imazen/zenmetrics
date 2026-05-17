@@ -1,0 +1,110 @@
+[package]
+name = "zenmetrics-api"
+version = "0.0.1"
+description = "Umbrella crate composing the six zen GPU image-quality metrics behind one enum-dispatched opaque API"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+# Default: every metric, CUDA backend, zenpixels integration. The opaque
+# surface stays cubecl-version-agnostic (no cubecl types leak through
+# the API). Add the `cubecl-types` feature to opt into the typed surface
+# of every enabled metric crate.
+default = ["all-metrics", "cuda", "pixels"]
+
+# Per-metric switches — let downstream consumers compile out the
+# metrics they don't need. `all-metrics` is the umbrella.
+all-metrics = ["cvvdp", "butter", "ssim2", "dssim", "iwssim", "zensim"]
+cvvdp  = ["dep:cvvdp-gpu"]
+butter = ["dep:butteraugli-gpu"]
+ssim2  = ["dep:ssim2-gpu"]
+dssim  = ["dep:dssim-gpu"]
+iwssim = ["dep:iwssim-gpu"]
+zensim = ["dep:zensim-gpu"]
+
+# Backend selection — forwards through to every enabled metric crate.
+# Default ships `cuda` only; pass `--no-default-features --features
+# all-metrics,wgpu,pixels` to swap.
+cuda = [
+    "cvvdp-gpu?/cuda",
+    "butteraugli-gpu?/cuda",
+    "ssim2-gpu?/cuda",
+    "dssim-gpu?/cuda",
+    "iwssim-gpu?/cuda",
+    "zensim-gpu?/cuda",
+]
+wgpu = [
+    "cvvdp-gpu?/wgpu",
+    "butteraugli-gpu?/wgpu",
+    "ssim2-gpu?/wgpu",
+    "dssim-gpu?/wgpu",
+    "iwssim-gpu?/wgpu",
+    "zensim-gpu?/wgpu",
+]
+hip = [
+    "cvvdp-gpu?/hip",
+    "butteraugli-gpu?/hip",
+    "ssim2-gpu?/hip",
+    "dssim-gpu?/hip",
+    "iwssim-gpu?/hip",
+    "zensim-gpu?/hip",
+]
+cpu = [
+    "cvvdp-gpu?/cpu",
+    "butteraugli-gpu?/cpu",
+    "ssim2-gpu?/cpu",
+    "dssim-gpu?/cpu",
+    "iwssim-gpu?/cpu",
+    "zensim-gpu?/cpu",
+]
+
+# zenpixels integration on the umbrella API. Forwards `pixels` to every
+# enabled metric crate so `Metric::compute_pixels` works.
+pixels = [
+    "dep:zenpixels",
+    "cvvdp-gpu?/pixels",
+    "butteraugli-gpu?/pixels",
+    "ssim2-gpu?/pixels",
+    "dssim-gpu?/pixels",
+    "iwssim-gpu?/pixels",
+    "zensim-gpu?/pixels",
+]
+
+# Opt into the typed cubecl surface of every enabled metric crate +
+# expose the umbrella `MetricContext<R>` upload-sharing scaffold.
+# Requires all enabled metric crates to resolve to the same cubecl
+# version (see build.rs check).
+cubecl-types = [
+    "dep:cubecl",
+    "cvvdp-gpu?/cubecl-types",
+    "butteraugli-gpu?/cubecl-types",
+    "ssim2-gpu?/cubecl-types",
+    "dssim-gpu?/cubecl-types",
+    "iwssim-gpu?/cubecl-types",
+    "zensim-gpu?/cubecl-types",
+]
+
+[dependencies]
+butteraugli-gpu = { workspace = true, optional = true }
+cvvdp-gpu       = { workspace = true, optional = true }
+dssim-gpu       = { workspace = true, optional = true }
+iwssim-gpu      = { workspace = true, optional = true }
+ssim2-gpu       = { workspace = true, optional = true }
+zensim-gpu      = { workspace = true, optional = true }
+
+# Re-exported pixel slice for the umbrella `compute_pixels` path.
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+
+# Typed-surface escape hatch (only pulled in when `cubecl-types` is on).
+cubecl = { workspace = true, optional = true }
+
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# Smoke tests construct a PixelBuffer for the `compute_pixels` path.
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
