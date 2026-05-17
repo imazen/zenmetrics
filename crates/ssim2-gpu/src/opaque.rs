@@ -71,6 +71,15 @@ trait Ssim2Inner: Send {
         mode: Ssim2Mode,
     ) -> Result<Score>;
     fn dims(&self) -> (u32, u32);
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+        mode: Ssim2Mode,
+    ) -> Result<Score>;
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
 }
 
 impl<R> Ssim2Inner for Ssim2<R>
@@ -94,6 +103,26 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Ssim2::dimensions(self)
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+        mode: Ssim2Mode,
+    ) -> Result<Score> {
+        let r = Ssim2::compute_handles_with_mode(self, mode, ref_handle, dis_handle)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "ssim2",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
+        Ssim2::pack_srgb_into_packed_u32_handle(self, srgb)
     }
 }
 
@@ -175,6 +204,35 @@ impl Ssim2Opaque {
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner
             .compute_srgb_u8(&ref_buf, &dis_buf, self.params.mode)
+    }
+
+    /// Score against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point.
+    ///
+    /// Handle layout MUST be the packed-u32 form produced by
+    /// [`Self::pack_srgb_into_packed_u32_handle`] (one `u32` per
+    /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
+    /// handle is expected to live on the same cubecl client that
+    /// constructed this opaque; sharing handles across clients is
+    /// undefined behaviour at the cubecl layer and not validated.
+    #[cfg(feature = "cubecl-types")]
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        self.inner
+            .compute_handles(ref_handle, dis_handle, self.params.mode)
+    }
+
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    #[cfg(feature = "cubecl-types")]
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        self.inner.pack_srgb(srgb)
     }
 }
 
