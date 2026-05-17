@@ -100,19 +100,27 @@ fn dispatch_iwssim() {
     // IW-SSIM requires min(w,h) >= 176 — bump the test image to 256
     // (already W,H so it passes).
     //
-    // IW-SSIM's per-scale information-weighting goes through a log
-    // domain; on a truly identical pair the diff is exactly zero and
-    // the log of the per-pixel weight collapses. The kernels return
-    // NaN as the "trivially identical" sentinel rather than 1.0 — see
-    // `iwssim-gpu/src/pipeline.rs::compute_rgb` and the existing
-    // opaque tests which use a NON-identical pair to side-step this
-    // edge case. We accept NaN OR ~1.0 here as long as the dispatch
-    // succeeded.
+    // The per-scale information-weighting Σ(cs·iw)/Σ(iw) is 0/0 on
+    // truly identical pairs; iwssim-gpu's pipeline detects the
+    // degenerate slot and collapses it to the perfect-score value
+    // (1.0) so the final score is well-defined. See
+    // `iwssim_gpu::pipeline::run_pipeline_post_pyramid` and the
+    // `compute_on_identical_returns_1` test in iwssim-gpu's opaque
+    // suite.
     let s = score_identity(MetricKind::Iwssim);
     assert_eq!(s.metric_name, "iwssim");
+    assert!(s.value.is_finite(), "iwssim identity score must be finite, got {}", s.value);
+    // The per-scale ratio collapses to 1.0 exactly only when the CS
+    // map is identically 1 — that requires a smooth input where the
+    // pyramid stages preserve the σ₁² == σ₁σ₂ == σ₂² invariant. The
+    // pseudo-random input above triggers the same degenerate slot
+    // but accumulates f32 noise in the IW-weighted ratio
+    // (Σ(cs·iw)/Σ(iw) with cs ≈ 1 ± f32-eps). 1e-6 covers that
+    // noise band while still catching real regressions (the prior
+    // bug returned 0 or NaN, both >>1e-6 from 1.0).
     assert!(
-        s.value.is_nan() || (s.value - 1.0).abs() < 1e-3,
-        "iwssim identity must be NaN (degenerate weighting) or ~1.0, got {}",
+        (s.value - 1.0).abs() < 1e-6,
+        "iwssim identity must be ~1.0 within f32 noise (degenerate weighting collapsed by pipeline), got {}",
         s.value
     );
 

@@ -578,16 +578,35 @@ impl<R: Runtime> Iwssim<R> {
         let sums = f32::from_bytes(&bytes);
         debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
 
-        let mut per_scale = [0.0_f64; NUM_SCALES];
+        // Degenerate-pair handling: on truly identical (ref, dis) pairs,
+        // the per-scale IW-weighting collapses — Σ(iw) can be 0 (or
+        // non-finite via underflow) when the reference LP signal carries
+        // negligible information content at that scale, and the CS map
+        // is exactly 1 everywhere by construction (σ_{12} = σ_1² = σ_2²
+        // → cs = (2σ + C₂)/(2σ + C₂) = 1). In that regime the Σ(cs·iw)
+        // / Σ(iw) ratio is 0/0 and the per-scale wmcs is undefined. The
+        // correct IW-SSIM value for an identical pair is 1.0 (every
+        // component of the product Π |wmcs_j|^β_j → 1); treat the
+        // degenerate slot as 1.0 so the final score lands on 1.0
+        // instead of collapsing through 0.0^β = 0 or NaN.
+        let mut per_scale = [1.0_f64; NUM_SCALES];
         for s in 0..(self.scales.len() - 1) {
             let num = sums[(SLOT_CSIW_BASE + s as u32) as usize] as f64;
             let den = sums[(SLOT_IW_BASE + s as u32) as usize] as f64;
             // Reference Python:  wmcs[s] = Σ(cs·iw) / Σ(iw)
-            per_scale[s] = if den != 0.0 { num / den } else { 0.0 };
+            per_scale[s] = if den == 0.0 || !den.is_finite() {
+                1.0
+            } else {
+                num / den
+            };
         }
         let top_sum = sums[SLOT_CSL as usize] as f64;
         let top_n = (sc_top.cs_h as usize * sc_top.cs_w as usize) as f64;
-        per_scale[top] = top_sum / top_n;
+        per_scale[top] = if top_n == 0.0 || !top_sum.is_finite() {
+            1.0
+        } else {
+            top_sum / top_n
+        };
 
         // 6. Final product: score = Π |wmcs[s]|^β[s]
         let mut score = 1.0_f64;
