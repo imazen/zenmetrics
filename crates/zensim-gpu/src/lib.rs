@@ -227,7 +227,10 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
-            Error::ExtendedPlaneBudgetExceeded { needed_bytes, max_bytes } => write!(
+            Error::ExtendedPlaneBudgetExceeded {
+                needed_bytes,
+                max_bytes,
+            } => write!(
                 f,
                 "extended-regime persist planes need {needed_bytes} bytes, \
                  over budget {max_bytes} (cap configured via \

@@ -159,7 +159,12 @@ fn identical_input_all_zeros() {
 
     // compute_extended_features returns 300 (basic 156 + peak 72 + masked 72);
     // we only compare the first 228 (basic + peak).
-    assert!(cpu.len() >= TOTAL_FEATURES, "cpu features len {} < {}", cpu.len(), TOTAL_FEATURES);
+    assert!(
+        cpu.len() >= TOTAL_FEATURES,
+        "cpu features len {} < {}",
+        cpu.len(),
+        TOTAL_FEATURES
+    );
     // CPU short-circuits to zeros; the first 228 must match GPU within
     // a tight bound for the SSIM term (mu1 == mu2 → sd == 0 analytically)
     // even though GPU runs the kernel. The HF terms can pick up sub-ULP
@@ -280,6 +285,9 @@ fn checkerboard_corpus_per_slot() {
             );
         }
         eprintln!("({} failed in total)", failed.len());
-        panic!("per-feature parity failed on {} slots at 128²", failed.len());
+        panic!(
+            "per-feature parity failed on {} slots at 128²",
+            failed.len()
+        );
     }
 }

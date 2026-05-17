@@ -172,42 +172,119 @@ At 12 MP scale 0 padded ≈ 4080×3000 = 12.24 MP →
 `Zensim::new_with_regime_budget` which returns
 `ExtendedPlaneBudgetExceeded` if the cap is over budget.
 
-### CPU strip-overlap divergence (known)
+### CPU strip-overlap parity (fixed 2026-05-17)
 
 CPU `zensim::streaming::process_strip_channel` processes the image
 in `STRIP_INNER = 32`-row strips with `overlap = R = 5` rows above
-and below. Within each strip, the V-blur of `mu1` mirrors STRIP-
-LOCALLY (`mirror_idx(i, r, strip_h)`). For non-first strips, the
-overlap rows' `mu1` therefore reflects strip-local rather than
-image-wide reflection. When `activity = blur(|src - mu1|)` is then
-computed per-strip, the activity at inner rows is biased by the
-overlap rows' mismatched `mu1`.
+and below. The masked + IW path runs `activity = blur(|src - mu1|)`
+on the strip buffer, where `bufs.mu1` at the strip's OVERLAP rows
+contains stale/garbage data (not the real V-blurred mu1 at those
+image rows). Specifically:
 
-The GPU implementation uses `n_strips=1` per scale (single-strip),
-mirroring image-wide throughout. The activity it produces matches
-what a single-strip CPU run would emit — but DIFFERS from the
-multi-strip default by ~5-15 % relative on X/B channels at scales
-whose height ≥ 64 (where CPU produces ≥ 2 strips).
+- For the FIRST processed channel (X), `bufs.mu1` at overlap rows
+  is zero (fresh band-scoped buffer).
+- For SUBSEQUENT channels (Y, B), `bufs.mu1` at overlap rows holds
+  the PREVIOUS channel's H-blurred mu1 — a side effect of CPU's
+  `swap(&mut bufs.mu1, &mut bufs.mask)` after each channel's V-blur,
+  combined with the V-blur only writing the inner rows of its
+  `mu1_out` target.
 
-For the 64×64 noisy-gradient fixture used by `cpu_parity` /
-`extended_parity` tests, the divergence is largest at scale 0 X/B
-(~5-7 % rel). At scales 1+ where CPU also uses 1 strip the
-divergence drops to f32 noise (< 1 % rel).
+The 2026-05-17 strip-local kernel
+(`kernels::masked_iw_strip::masked_iw_strip_kernel`) replays this
+behavior on the GPU:
 
-Two principled fixes (out of scope for this regime landing):
+1. Launches `(ceil(pw / TX), num_cpu_strips, 3)` where
+   `num_cpu_strips = ceil(h / STRIP_INNER)` — matches CPU's strip
+   count exactly.
+2. Per strip, splits strip-rows into inner `[inner_off,
+   inner_off + inner_h)` vs overlap. At inner rows, reads the
+   per-channel persist mu1 plane (image-wide V-blur). At overlap
+   rows:
+   - Channel 0 (X): `mu1 = 0`.
+   - Channels 1/2 (Y/B): computes H-blur of the previous channel's
+     source on the fly via a wider `prev_src_wide[TX + 4R]` shared
+     tile + per-thread H-blur fill of `mu1_row[TX + 2R]`.
+3. Computes activity via the standard H-then-V box blur with
+   strip-local mirror at strip boundaries (period = `2*(strip_h-1)`).
 
-- GPU mirrors CPU's STRIP_INNER=32 + overlap layout and uses strip-
-  local mirror inside the persist kernel. Significant per-strip-
-  launch refactor.
-- CPU is patched to use image-wide mirror (would change every
-  existing CPU score by the same delta).
+### Parity status after the fix (64×64 noisy-gradient + 128×128
+checkerboard fixtures, parallel CPU)
 
-The current test loosens the rel tolerance to 1.5e-1 (15 %) at
-scale 0 masked-block slots; basic-block and peak-block parity at all
-scales remains within the 2e-3 rel budget. **The bias is structural
-not stochastic** — bake-comparison consumers that need bit-exact
-parity should account for it, and 12 MP production sweeps will see
-the same offset distribution.
+- **X channel (channel 0, first processed)**: rel ≤ 1e-4 at all
+  scales.
+- **Y channel (channel 1, prev = X)**: rel ≤ 2e-4 at all scales.
+  X is smooth-in-y in the test fixture, so persist V-blurred X mu1
+  is essentially identical to H-blurred X mu1 — on-the-fly H-blur
+  closes Y from V0_2's 5 % residual to f32 noise (~2e-6 rel).
+- **B channel (channel 2, prev = Y)**: rel ≤ 4e-2 at multi-strip
+  scales (scale 0 of 64×64 / 128×128; scale 1 of 128×128). Rel
+  ≤ 5e-3 at single-strip scales. The 3-4 % residual is documented
+  in the next section.
+
+The `extended_parity` tests use 5e-3 rel for X/Y at all scales and
+5e-2 rel for B at multi-strip scales; all other masked slots
+(single-strip B; max-pooled; L8) stay at 5e-3 rel.
+
+### Principled per-channel H-blur activity — 2026-05-17 redesign
+
+The 2026-05-17 RCA (see `examples/b_channel_diagnostic.rs` for the
+methodology — instrumented CPU+GPU shadow per-row dumps to TSV)
+identified the original CPU activity computation as an accidental
+cross-channel buffer-reuse cascade, NOT a designed algorithm:
+
+  - X (channel 0) overlap mu1 = 0 (initial `ScaleBuffers::new` zeros)
+  - Y (channel 1) overlap mu1 = `src_X(gy, x)` (RAW, not H-blurred)
+  - B (channel 2) overlap mu1 = `|src_Y(gy, x) - src_X(gy, x)|`
+  - Strip K≥1 inherits leftover `bufs.mask` state from prev strip's B.
+
+CPU was changed (commit `caf52d36` on `feat/principled-activity`) to
+use a **per-channel strip-local H_blur(src)** as the activity-map
+reference at ALL strip rows (inner + overlap). Channels are now
+decoupled; the activity for each channel sees only its own
+H-blurred source. See the zensim repo's `docs/PRINCIPLED_ACTIVITY.md`
+for the rationale.
+
+### GPU implementation: on-the-fly H_blur(src) per channel per row
+
+`kernels::masked_iw_strip::masked_iw_strip_kernel` now:
+
+1. Loads a DIAM-wider source window per (row, channel) into shared
+   memory: `wide_src[TX + 4R]` (84 f32s with R = 5).
+2. Each thread cooperatively computes `H_blur(src)` at TILE_COLS
+   = TX + 2R = 74 column positions by averaging DIAM = 11 adjacent
+   `wide_src` values. Result lives in `mu1_row[TILE_COLS]`.
+3. Per-column H-sum of `|src - H_blur(src)|` over DIAM uses the same
+   `mu1_row` as before. Strip-local V-blur of the resulting activity
+   map is unchanged.
+4. Inner-row pixel features still read `mu1` / `mu2` / `ssq` / `s12`
+   from the persist planes (image-wide V-blur-of-H-blur values used
+   by masked-SSIM and masked-edge math).
+
+The cross-channel cascade, strip-K-vs-strip-0 branch, and host-side
+carryover-plane simulator (`pipeline.rs::populate_carryover`) are
+all **deleted** — the new algorithm doesn't need them. The carry
+`Array<f32>` parameter (~23 MB max at 12 MP per scale) is gone too,
+bringing the kernel back to 12 Array args naturally (no
+arg-count-collapsing workaround needed).
+
+### Parity result
+
+All masked-block features (slots 228..300) and IW-block features
+(slots 300..372) match CPU within **5e-3 rel at every scale and
+every fixture size**, including multi-strip scales (128×128 scale 0
++ scale 1; 12 MP scale 0 + scale 1 + scale 2). No per-channel,
+per-scale tolerance widening needed.
+
+### Perf cost (12 MP RTX 5070, WithIw 372-feature)
+
+- Pre-2026-05-17 strip-local (with carryover branches + carry plane
+  loads): ~26.92 ms / iter mean baseline.
+- Post-redesign (principled per-channel H-blur, no carry, no
+  cross-channel cascade): ~22.9 ms / iter mean (warm iters 1-4).
+- **Faster by ~15 %** — the kernel does slightly more work
+  per-thread (DIAM extra src loads to compute H-blur on the fly) but
+  loses all the per-channel branches in the hot path AND drops a
+  ~23 MB device buffer that was being read every iteration.
 
 ### IW block validation
 

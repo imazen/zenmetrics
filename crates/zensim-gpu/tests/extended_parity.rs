@@ -217,7 +217,7 @@ fn extended_noisy_gradient_64() {
 
     let mut failed = Vec::new();
     for i in 0..TOTAL_FEATURES_EXTENDED {
-        let (s, _c, kind, off) = decode_extended_idx(i);
+        let (s, c, kind, off) = decode_extended_idx(i);
         let cv = cpu[i];
         let gv = gpu[i];
         let abs = (cv - gv).abs();
@@ -226,44 +226,21 @@ fn extended_noisy_gradient_64() {
         //   basic mean / L4 / L2 / mse / HF — 2e-3 rel
         //   max-pooled (kind 1, off 0..3) — 3e-2 rel (1 outlier flips max)
         //   L8 pool (kind 1, off 3..6) — 5e-3 rel
-        //   masked block (kind 2) — see strip-overlap divergence note below
+        //   masked block (kind 2) — 5e-3 rel (principled per-channel
+        //     H-blur activity, see masked_iw_strip kernel docstring)
         //
-        // ## CPU strip-overlap divergence (masked block)
+        // ## Principled per-channel H-blur activity (2026-05-17)
         //
-        // CPU's `process_strip_channel` splits the image into
-        // STRIP_INNER=32-row strips with overlap=R=5. Within each strip,
-        // the V-blur of `mu1` uses STRIP-LOCAL mirroring. The overlap
-        // rows of a non-first-strip therefore see a strip-local mu1
-        // that differs from image-wide mu1 (the mirror reflects nearby
-        // strip rows instead of out-of-strip real rows). When CPU then
-        // computes `activity = blur(|src - mu1|)` and blurs it across
-        // strip rows including the overlap, the activity at inner rows
-        // is "biased" by the overlap rows' mismatched mu1.
-        //
-        // The GPU implementation uses image-wide mirror throughout —
-        // it doesn't reproduce the per-strip mu1 artifact. The result
-        // is a "cleaner" activity that LOOKS like what a 1-strip CPU
-        // run would produce. The two diverge at scale 0 by ~5-7 % on
-        // X/B channels where mu1 has small magnitude. Y (luminance) is
-        // affected far less because its magnitude is much larger.
-        //
-        // Two principled fixes (both out of scope for this regime
-        // landing):
-        //   - GPU could mirror CPU's STRIP_INNER=32 + overlap=R layout
-        //     and use strip-local mirror inside the persist kernel.
-        //     Significant kernel-launch / pipeline refactor.
-        //   - CPU could be patched to use image-wide mirror (would
-        //     change every existing CPU score by the same delta).
-        //
-        // For the current parity test, we loosen the masked-block
-        // tolerance to 1.5e-1 rel (15 %) at scale 0 X/B channels and
-        // keep 5e-3 rel elsewhere. The IW block inherits the same
-        // structural divergence and will be validated separately.
-        let (abs_budget, rel_budget) = match (kind, off, s) {
-            (1, 0, _) | (1, 1, _) | (1, 2, _) => (5e-3, 3e-2),
-            (1, _, _) => (3e-3, 5e-3),
-            (2, _, 0) => (2e-2, 1.5e-1),
-            (2, _, _) => (5e-3, 5e-3),
+        // CPU now computes activity as `box_blur(|src - H_blur(src)|)`
+        // per channel at all strip rows (inner + overlap). GPU mirrors
+        // this exactly — no cross-channel cascade, no carry plane. All
+        // masked slots match CPU within 5e-3 rel at every fixture size.
+        let (abs_budget, rel_budget) = match (kind, off, s, c) {
+            // peak / max-pooled
+            (1, 0, _, _) | (1, 1, _, _) | (1, 2, _, _) => (5e-3, 3e-2),
+            (1, _, _, _) => (3e-3, 5e-3),
+            // masked block — principled per-channel H-blur
+            (2, _, _, _) => (5e-3, 5e-3),
             _ => (2e-3, 2e-3),
         };
         // skip clamped-to-zero slots
@@ -321,24 +298,21 @@ fn extended_checkerboard_128() {
 
     let mut failed = Vec::new();
     for i in 0..TOTAL_FEATURES_EXTENDED {
-        let (s, _c, kind, off) = decode_extended_idx(i);
+        let (s, c, kind, off) = decode_extended_idx(i);
         let cv = cpu[i];
         let gv = gpu[i];
         let abs = (cv - gv).abs();
         let rel = abs / cv.abs().max(1e-6);
-        // Same budget as 64² case — see strip-overlap divergence note.
-        // At 128² scale 0 there are MORE CPU strip boundaries (4 vs 2),
-        // so loosen the masked-block tolerance at scale 0 even further.
-        // 128² has CPU strip boundaries at scale 0 (4 strips) and
-        // scale 1 (2 strips). Widen the masked tolerance for any scale
-        // whose image-height >= 64 (so >= 2 CPU strips). Scale 2 (32)
-        // and scale 3 (16) have 1 strip → no divergence.
-        let (abs_budget, rel_budget) = match (kind, off, s) {
-            (1, 0, _) | (1, 1, _) | (1, 2, _) => (5e-3, 3e-2),
-            (1, _, _) => (3e-3, 5e-3),
-            (2, _, 0) => (5e-2, 2.0e-1),
-            (2, _, 1) => (2e-2, 8e-2),
-            (2, _, _) => (5e-3, 2e-2),
+        // Principled per-channel H-blur activity (2026-05-17): all
+        // masked slots match CPU within 5e-3 rel at every scale,
+        // including multi-strip scales 0 and 1 on 128². No
+        // strip-boundary cross-channel cascade and no persist-plane vs
+        // strip-local-V-blur mismatch — every channel sees its own
+        // H_blur(src) at every strip row.
+        let (abs_budget, rel_budget) = match (kind, off, s, c) {
+            (1, 0, _, _) | (1, 1, _, _) | (1, 2, _, _) => (5e-3, 3e-2),
+            (1, _, _, _) => (3e-3, 5e-3),
+            (2, _, _, _) => (5e-3, 5e-3),
             _ => (2e-3, 2e-3),
         };
         if cv.abs() < 1e-6 && gv.abs() < abs_budget {

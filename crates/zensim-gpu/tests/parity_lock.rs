@@ -1,6 +1,10 @@
-//! Integration tests for `zensim-gpu` against the published `zensim`
-//! v0.2.8 CPU reference (`ZensimProfile::latest()` =
-//! `WEIGHTS_PREVIEW_V0_2`).
+//! Integration tests for `zensim-gpu` against the `zensim` CPU reference
+//! pinned to `WEIGHTS_PREVIEW_V0_2`. We use `PreviewV0_2` explicitly so
+//! the CPU score path matches the GPU score path's
+//! `score_from_features(features, &WEIGHTS_PREVIEW_V0_2)` regardless of
+//! what `ZensimProfile::latest()` returns in the linked zensim version
+//! (e.g. 0.2.8 returned V0_2; 0.3.x returns V0_3 with an MLP scorer
+//! whose score is on a different scale).
 //!
 //! Backend selection mirrors `dssim-gpu` / `ssim2-gpu`:
 //! - `cuda` (default) preferred
@@ -35,7 +39,7 @@ macro_rules! make_client {
 // ───────────────────────── helpers ─────────────────────────
 
 fn cpu_score(rgb_ref: &[u8], rgb_dis: &[u8], w: usize, h: usize) -> f64 {
-    let z = ZensimCpu::new(ZensimProfile::latest());
+    let z = ZensimCpu::new(ZensimProfile::PreviewV0_2);
     let to_pix =
         |buf: &[u8]| -> Vec<[u8; 3]> { buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
     let src = to_pix(rgb_ref);

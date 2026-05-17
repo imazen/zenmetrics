@@ -31,7 +31,11 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{color, downscale, fused, masked_iw, reduce};
+use crate::kernels::{self, color, downscale, fused, masked_iw_strip, reduce};
+// `masked_iw` retained for back-compat in tests; not used in the
+// production extended path.
+#[allow(unused_imports)]
+use crate::kernels::masked_iw;
 use crate::{
     Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_IW, FEATURES_PER_CHANNEL_MASKED,
     FEATURES_PER_CHANNEL_PEAKS, Result, SCALES, TOTAL_FEATURES, ZensimFeatureRegime,
@@ -51,6 +55,12 @@ struct Scale {
     h: u32,
     n_padded: usize,
     n_strips: u32,
+    /// Strip count for the **extended (masked + IW) kernel**. Differs
+    /// from `n_strips` (which is tuned for GPU occupancy of the basic
+    /// kernel) because the masked path reproduces CPU's CPU-shaped
+    /// strip layout for parity. Equals `ceil(h / STRIP_INNER)` from
+    /// [`kernels::masked_iw_strip::cpu_strip_count`].
+    n_strips_ext: u32,
 
     /// Three planar XYB planes per side at `padded_w × h`. Allocated
     /// `empty()` — `srgb_to_positive_xyb_kernel` writes every pixel
@@ -76,7 +86,7 @@ struct Scale {
     /// Offset of this scale's masked + IW partials within the
     /// `partials_ext_f64` buffer. `0` (unused) when regime == Basic.
     partials_ext_off: usize,
-    partials_ext_per_scale: usize, // = pw × n_strips × 3 channels × 12
+    partials_ext_per_scale: usize, // = pw × n_strips_ext × 3 channels × 12
 }
 
 /// Allocate an uninitialised f32 plane on-device. Use only when the
@@ -127,6 +137,8 @@ impl Scale {
         };
         let pad_count = padded_w - logical_w;
         let n_strips = pick_n_strips(padded_w, h);
+        // Extended kernel uses CPU's strip layout for parity.
+        let n_strips_ext = kernels::masked_iw_strip::cpu_strip_count(h);
 
         // Mirror-offset table matching CPU zensim
         // (streaming.rs:591-601):
@@ -164,8 +176,9 @@ impl Scale {
             partials_f64_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 17,
             partials_max_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 3,
             partials_ext_off,
-            partials_ext_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 12,
+            partials_ext_per_scale: (padded_w as usize) * (n_strips_ext as usize) * 3 * 12,
             n_strips,
+            n_strips_ext,
         }
     }
 }
@@ -305,19 +318,21 @@ impl<R: Runtime> Zensim<R> {
         let mut partials_ext_total: usize = 0;
         for &(_, pw, ph) in &plan {
             let ns = pick_n_strips(pw, ph) as usize;
+            let ns_ext = kernels::masked_iw_strip::cpu_strip_count(ph) as usize;
             partials_f64_total += (pw as usize) * ns * 3 * 17;
             partials_max_total += (pw as usize) * ns * 3 * 3;
-            partials_ext_total += (pw as usize) * ns * 3 * 12;
+            partials_ext_total += (pw as usize) * ns_ext * 3 * 12;
         }
         let mut f64_off: usize = 0;
         let mut max_off: usize = 0;
         let mut ext_off: usize = 0;
         for &(lw, pw, ph) in &plan {
             let ns = pick_n_strips(pw, ph) as usize;
+            let ns_ext = kernels::masked_iw_strip::cpu_strip_count(ph) as usize;
             scales.push(Scale::new(&client, lw, pw, ph, f64_off, max_off, ext_off));
             f64_off += (pw as usize) * ns * 3 * 17;
             max_off += (pw as usize) * ns * 3 * 3;
-            ext_off += (pw as usize) * ns * 3 * 12;
+            ext_off += (pw as usize) * ns_ext * 3 * 12;
         }
 
         // Budget check: 4 planes × 3 channels × 2 sides (ref + dis) ×
@@ -385,6 +400,8 @@ impl<R: Runtime> Zensim<R> {
             // than 0-element to dodge any backend-side zero-len checks.
             partials_ext_f64 = alloc_empty_f64(&client, 1);
             finals_ext_f64 = alloc_empty_f64(&client, 1);
+            // Empty placeholder vecs — code paths that read these check
+            // `regime.needs_extended_kernel()` before indexing.
         }
 
         Ok(Self {
@@ -445,6 +462,26 @@ impl<R: Runtime> Zensim<R> {
         all[ch_start..ch_start + pt].to_vec()
     }
 
+    /// Debug-only: read back the per-scale, per-channel `ref_xyb` (or
+    /// `dis_xyb`) plane after `set_reference` / `compute_with_reference`
+    /// has been called. Returns a `Vec<f32>` of length `padded_w * height`.
+    pub fn debug_read_xyb(&self, scale: usize, channel: usize, ref_side: bool) -> Vec<f32> {
+        let s = &self.scales[scale];
+        let plane = if ref_side {
+            &s.ref_xyb[channel]
+        } else {
+            &s.dis_xyb[channel]
+        };
+        let bytes = self.client.read_one(plane.clone()).expect("read xyb plane");
+        f32::from_bytes(&bytes).to_vec()
+    }
+
+    /// Debug-only: get the padded width and image height for a scale.
+    pub fn debug_scale_dims(&self, scale: usize) -> (u32, u32) {
+        let s = &self.scales[scale];
+        (s.padded_w, s.h)
+    }
+
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
@@ -471,11 +508,7 @@ impl<R: Runtime> Zensim<R> {
     /// Compute the regime-appropriate feature vector for one (reference,
     /// distorted) pair. Length matches `self.regime().total_features()`:
     /// 228 / 300 / 372.
-    pub fn compute_features_vec(
-        &mut self,
-        ref_srgb: &[u8],
-        dist_srgb: &[u8],
-    ) -> Result<Vec<f64>> {
+    pub fn compute_features_vec(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<Vec<f64>> {
         self.set_reference(ref_srgb)?;
         self.compute_with_reference_vec(dist_srgb)
     }
@@ -870,20 +903,35 @@ impl<R: Runtime> Zensim<R> {
     /// Launch the masked + IW pooling kernel for one scale. Requires
     /// the persist planes to already be filled by
     /// `launch_blur_and_features_persist`.
+    ///
+    /// Uses the **strip-local** variant
+    /// [`masked_iw_strip::masked_iw_strip_kernel`] which reproduces
+    /// CPU's per-strip semantics. Per the 2026-05-17 principled
+    /// per-channel H-blur redesign, the activity computation uses
+    /// on-the-fly `H_blur(src[channel])` instead of any cross-channel
+    /// cascade — see the kernel's docstring and zensim's
+    /// `docs/PRINCIPLED_ACTIVITY.md`. No carryover plane needed.
     fn launch_masked_iw(&self, scale: usize) {
         const TX: u32 = 64;
+
         let s = &self.scales[scale];
         let pad_total = s.n_padded;
         let plane_len = pad_total * 3;
         let planes = &self.persist_planes_ref[scale];
 
         let cube_x = s.padded_w.div_ceil(TX).max(1);
-        let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
+        // Grid Y dimension matches CPU's strip count (n_strips_ext),
+        // NOT the basic kernel's GPU-occupancy strip count.
+        let cube_count = CubeCount::Static(cube_x, s.n_strips_ext, 3);
         let cube_dim = CubeDim::new_3d(TX, 1, 1);
-        let do_ext = if self.regime.needs_masked() { 1u32 } else { 0u32 };
+        let do_ext = if self.regime.needs_masked() {
+            1u32
+        } else {
+            0u32
+        };
         let do_iw = if self.regime.needs_iw() { 1u32 } else { 0u32 };
         unsafe {
-            masked_iw::masked_iw_kernel::launch_unchecked::<R>(
+            masked_iw_strip::masked_iw_strip_kernel::launch_unchecked::<R>(
                 &self.client,
                 cube_count,
                 cube_dim,
@@ -900,7 +948,7 @@ impl<R: Runtime> Zensim<R> {
                 ArrayArg::from_raw_parts(self.partials_ext_f64.clone(), self.partials_ext_f64_len),
                 s.padded_w,
                 s.h,
-                s.n_strips,
+                s.n_strips_ext,
                 pad_total as u32,
                 s.partials_ext_off as u32,
                 do_ext,
@@ -919,7 +967,11 @@ impl<R: Runtime> Zensim<R> {
         for s in 0..n_scales {
             let sc = &self.scales[s];
             let pw = sc.padded_w as usize;
-            let ns = sc.n_strips as usize;
+            // Use the **extended kernel's** strip count, NOT the basic
+            // kernel's GPU-occupancy strip count. The strip-local
+            // masked + IW kernel writes `pw × n_strips_ext` partials
+            // per channel.
+            let ns = sc.n_strips_ext as usize;
             let n_partials_per_ch = (pw * ns) as u32;
             let cube_count = CubeCount::Static(36, 1, 1);
             unsafe {

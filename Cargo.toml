@@ -42,7 +42,7 @@ cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"
 butteraugli = { version = "0.9.2" }
 dssim-core = { version = "3.4", default-features = false }
 ssimulacra2 = { version = "0.5" }
-zensim = { version = "0.2.8" }
+zensim = { version = "0.3.0" }
 
 # Common deps.
 bytemuck = "1"
@@ -81,7 +81,16 @@ codegen-units = 1
 # publishes. Same patch applies transitively to zenjxl, which
 # pulls jxl-encoder via Cargo.toml.
 [patch.crates-io]
-zensim = { git = "https://github.com/imazen/zensim", rev = "e295d7fb4098" }
+# Local worktree of feat/principled-activity (HEAD = e16d541a as of
+# 2026-05-17) to avoid needing a published zenpredict for the git-rev
+# patch to resolve. The sibling worktree is at
+# ../zensim--principled-activity which has the zenpredict path dep that
+# resolves locally.
+#
+# Equivalent git ref (use post-merge when the sibling worktree is gone,
+# AND after zensim's Cargo.toml has a git-ref zenpredict dep):
+#   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
+zensim = { path = "../zensim--principled-activity/zensim" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cb5d9e4" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
 # fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks

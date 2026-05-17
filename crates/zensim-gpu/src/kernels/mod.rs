@@ -26,4 +26,5 @@ pub mod color;
 pub mod downscale;
 pub mod fused;
 pub mod masked_iw;
+pub mod masked_iw_strip;
 pub mod reduce;
