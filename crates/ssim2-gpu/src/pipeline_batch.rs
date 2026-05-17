@@ -26,7 +26,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::pipeline::{Ssim2, score_from_stats};
-use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
+use crate::{Error, GpuSsim2Result, NUM_SCALES, Result, Ssim2Blur};
 
 /// Per-scale batched buffer set. Each plane is `batch_size · n_pixels`
 /// f32, stored as `batch_size` contiguous planes (stride =
@@ -208,6 +208,25 @@ impl<R: Runtime> Ssim2Batch<R> {
         self.batch_size
     }
 
+    /// Builder-style blur selector. Delegates to the embedded `Ssim2`'s
+    /// blur state — `compute_batch` honours whichever mode is set.
+    /// Switching modes invalidates the cached reference (see
+    /// `Ssim2::with_blur`).
+    pub fn with_blur(mut self, blur: Ssim2Blur) -> Self {
+        self.set_blur(blur);
+        self
+    }
+
+    /// In-place blur selector. See `with_blur` for semantics.
+    pub fn set_blur(&mut self, blur: Ssim2Blur) {
+        self.inner.set_blur(blur);
+    }
+
+    /// Currently-selected blur mode.
+    pub fn blur(&self) -> Ssim2Blur {
+        self.inner.blur()
+    }
+
     /// Cache the reference image. Required before any
     /// `compute_batch` call.
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
@@ -252,6 +271,9 @@ impl<R: Runtime> Ssim2Batch<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute_batch(&mut self, dis: &[Vec<u8>]) -> Result<Vec<GpuSsim2Result>> {
+        if matches!(self.inner.blur(), Ssim2Blur::Fir) {
+            return Err(Error::FirNotYetImplemented);
+        }
         if !self.inner.has_cached_reference() {
             return Err(Error::NoCachedReference);
         }

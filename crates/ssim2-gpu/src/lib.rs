@@ -106,6 +106,65 @@ pub use pipeline_batch::Ssim2Batch;
 /// Number of pyramid scales — matches both the CPU and CUDA references.
 pub const NUM_SCALES: usize = 6;
 
+/// Blur-kernel implementation selector.
+///
+/// SSIMULACRA2's per-scale Gaussian blur (σ = 1.5) admits multiple
+/// algorithmic realisations that produce different per-pixel responses.
+/// This enum picks which one a given `Ssim2` / `Ssim2Batch` instance
+/// uses. The choice is INVISIBLE to the score's interpretation only if
+/// the chosen kernel matches the canonical libjxl recursive Gaussian
+/// — i.e. `Iir`. Other modes (currently `Fir`) produce scores on a
+/// **different scale** and should be tagged distinctly downstream (see
+/// `column_name_for_blur`).
+///
+/// Default is `Iir`, which matches the published CPU `ssimulacra2`
+/// crate's behaviour bit-identically modulo f32 rounding (the
+/// pre-T_y.B opt-in baseline).
+///
+/// ```no_run
+/// use cubecl::Runtime;
+/// use cubecl::wgpu::WgpuRuntime;
+/// use ssim2_gpu::{Ssim2, Ssim2Blur};
+///
+/// let client = WgpuRuntime::client(&Default::default());
+/// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
+///     .with_blur(Ssim2Blur::default()); // == Iir
+/// # Ok::<(), ssim2_gpu::Error>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum Ssim2Blur {
+    /// Charalampidis 2016 truncated-cosine recursive IIR Gaussian.
+    ///
+    /// The canonical libjxl SSIMULACRA2 blur, ported to GPU verbatim
+    /// from `ssimulacra2-cuda`. Produces scores that match the
+    /// published CPU `ssimulacra2` crate to f32-reduction noise
+    /// (≤ 0.06 % relative on JPEG q5..q90; see
+    /// `tests/parity_lock.rs::parity_jpeg_corpus`).
+    ///
+    /// Default. Use this unless you have a specific reason to opt in
+    /// to a different blur metric.
+    #[default]
+    Iir,
+    /// Separable 5-tap (D = 5) truncated Gaussian FIR at σ = 1.5,
+    /// per Kanetaka et al. "Fast Implementation of SSIMULACRA2 for
+    /// Image Quality Assessment", IWAIT 2026 (DOI 10.1117/12.3100969).
+    ///
+    /// **This is a distinct metric.** Per-image scores diverge from
+    /// `Iir` because the FIR's effective impulse-response support is
+    /// narrower than the IIR's (~2 vs ~5 effective radius). The paper
+    /// reports SROCC vs MOS on CID22 of 0.890387 for D=5 — slightly
+    /// higher than the libjxl IIR baseline's 0.889297 — but the
+    /// per-image score values are NOT the same scale. Downstream
+    /// pipelines must tag this implementation distinctly (see
+    /// `column_name_for_blur(Ssim2Blur::Fir)`).
+    ///
+    /// **Skeleton (T_y.B.2 commit 1): not yet implemented.** Calling
+    /// `compute*` on an instance with `Blur::Fir` set returns
+    /// `Error::FirNotYetImplemented` until commit 3 lands the kernel.
+    Fir,
+}
+
+
 /// Result of an SSIMULACRA2 comparison.
 ///
 /// `score` is in roughly the 0–100 range — higher = better quality, 100 =
@@ -128,6 +187,12 @@ pub enum Error {
     /// `Ssim2Batch::new` was called with `batch_size == 0`, or
     /// `compute_batch` got more inputs than the instance's batch_size.
     InvalidBatchSize { got: usize, max: usize },
+    /// `compute*` was called on an instance whose blur mode is
+    /// `Ssim2Blur::Fir`, but the FIR kernel hasn't been wired yet
+    /// (T_y.B.2 commit 1 ships the skeleton; commit 3 lands the
+    /// kernel). Set the blur back to `Ssim2Blur::Iir` (the default)
+    /// to compute scores, or upgrade to a later crate version.
+    FirNotYetImplemented,
 }
 
 impl std::fmt::Display for Error {
@@ -142,6 +207,11 @@ impl std::fmt::Display for Error {
             Error::InvalidBatchSize { got, max } => write!(
                 f,
                 "invalid batch size: got {got} images for batch_size = {max}"
+            ),
+            Error::FirNotYetImplemented => write!(
+                f,
+                "Ssim2Blur::Fir is reserved but not yet implemented in this build; \
+                 use Ssim2Blur::Iir (default) or upgrade"
             ),
         }
     }

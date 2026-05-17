@@ -28,7 +28,7 @@
 use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
-use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
+use crate::{Error, GpuSsim2Result, NUM_SCALES, Result, Ssim2Blur};
 
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
 /// (one buffer per channel of a 3-channel image).
@@ -170,6 +170,14 @@ pub struct Ssim2<R: Runtime> {
     sums: cubecl::server::Handle,
 
     has_cached_reference: bool,
+
+    /// Selected blur kernel. Defaults to `Ssim2Blur::Iir` (the canonical
+    /// libjxl recursive Gaussian — bit-identical to the pre-T_y.B
+    /// behaviour). Set via `with_blur` / `set_blur`. The non-default
+    /// `Ssim2Blur::Fir` is currently a reserved skeleton and returns
+    /// `Error::FirNotYetImplemented` from `compute*` until commit 3
+    /// of T_y.B.2.
+    blur: Ssim2Blur,
 }
 
 const NUM_SLOTS: usize = NUM_SCALES * 3 * 3; // 54
@@ -236,11 +244,48 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            blur: Ssim2Blur::default(),
         })
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// Builder-style blur selector. Returns `self` so callers can chain:
+    ///
+    /// ```no_run
+    /// use cubecl::Runtime;
+    /// use cubecl::wgpu::WgpuRuntime;
+    /// use ssim2_gpu::{Ssim2, Ssim2Blur};
+    ///
+    /// let client = WgpuRuntime::client(&Default::default());
+    /// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
+    ///     .with_blur(Ssim2Blur::Iir);
+    /// # Ok::<(), ssim2_gpu::Error>(())
+    /// ```
+    ///
+    /// **Switching the blur mode invalidates any cached reference.**
+    /// Subsequent `compute_with_reference` calls will fail with
+    /// `Error::NoCachedReference` until `set_reference` is called again
+    /// — the cached pyramid + XYB + ref²-blur state is blur-specific.
+    pub fn with_blur(mut self, blur: Ssim2Blur) -> Self {
+        self.set_blur(blur);
+        self
+    }
+
+    /// In-place blur selector. See `with_blur` for semantics and the
+    /// cache-invalidation note.
+    pub fn set_blur(&mut self, blur: Ssim2Blur) {
+        if blur != self.blur {
+            self.has_cached_reference = false;
+        }
+        self.blur = blur;
+    }
+
+    /// Currently-selected blur mode.
+    pub fn blur(&self) -> Ssim2Blur {
+        self.blur
     }
 
     /// Number of active pyramid scales (≤ NUM_SCALES; smaller for
@@ -300,6 +345,9 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuSsim2Result> {
+        if matches!(self.blur, Ssim2Blur::Fir) {
+            return Err(Error::FirNotYetImplemented);
+        }
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
 
@@ -340,6 +388,9 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        if matches!(self.blur, Ssim2Blur::Fir) {
+            return Err(Error::FirNotYetImplemented);
+        }
         self.check_dims(ref_srgb)?;
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.build_linear_pyramid(true);
@@ -386,6 +437,9 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuSsim2Result> {
+        if matches!(self.blur, Ssim2Blur::Fir) {
+            return Err(Error::FirNotYetImplemented);
+        }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
