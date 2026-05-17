@@ -97,13 +97,22 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
 pub mod skipmap;
 
-pub use pipeline::Ssim2;
-pub use pipeline_batch::Ssim2Batch;
+// Uniform opaque API (Phase 2). See `opaque.rs`.
+pub use opaque::{Backend, Score, Ssim2Opaque, Ssim2Params};
+// Ssim2Mode is part of the opaque public params, so re-export it
+// unconditionally.
 pub use skipmap::Ssim2Mode;
+
+// Typed-generic API (gated behind `cubecl-types`).
+#[cfg(feature = "cubecl-types")]
+pub use pipeline::Ssim2;
+#[cfg(feature = "cubecl-types")]
+pub use pipeline_batch::Ssim2Batch;
 
 #[cfg(feature = "fir")]
 pub use blur_mode::Ssim2Blur;
