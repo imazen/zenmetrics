@@ -175,6 +175,11 @@ almost-enough = { version = "0.4.3", optional = true }
 # zenpixels exposes the PixelBuffer / PixelSlice types returned by zen
 # decoders. We pin to a version compatible with the decoders above.
 zenpixels = "0.2.11"
+# zenpixels-convert handles every supported source pixel layout (u8/u16/f32,
+# Gray/RGB/RGBA, premul/straight, sRGB/linear) → RGB8 sRGB through a single
+# RowConverter. This is the canonical path; the CLI used to ship bespoke
+# u16/f32 → u8 helpers that have all been deleted in favour of delegation.
+zenpixels-convert = "0.2.11"
 # enough provides the cooperative cancellation token zenpng's decode wants.
 enough = "0.4.4"
 

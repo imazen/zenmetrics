@@ -5752,6 +5752,7 @@ dependencies = [
  "zenjpeg",
  "zenjxl",
  "zenpixels",
+ "zenpixels-convert",
  "zenpng",
  "zensim",
  "zenwebp",
