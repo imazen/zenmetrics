@@ -28,12 +28,22 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
 
+// Uniform opaque API (Phase 2 of API uniformity refactor). See
+// `opaque.rs` and the matching shim in `dssim-gpu`.
+pub use opaque::{Backend, ButteraugliOpaque, Score};
+
+// Typed-generic API (gated behind `cubecl-types`). Internal callers
+// can still reach the types via `butteraugli_gpu::pipeline::Butteraugli`.
+#[cfg(feature = "cubecl-types")]
 pub use pipeline::Butteraugli;
+#[cfg(feature = "cubecl-types")]
 pub use pipeline_batch::ButteraugliBatch;
 
+#[cfg(feature = "cubecl-types")]
 use cubecl::prelude::*;
 
 /// Result of a butteraugli comparison.
@@ -138,6 +148,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// Diffmap values must be non-negative finite f32 (the butteraugli pipeline
 /// guarantees this — diffmap is `sqrt` of sums of squares).
+///
+/// Gated behind the `cubecl-types` feature — the cubecl `Runtime` /
+/// `ComputeClient` / `Handle` types in this signature pin the caller
+/// to a specific cubecl version, which the opaque API hides.
+#[cfg(feature = "cubecl-types")]
 pub fn reduce_diffmap_to_score<R: Runtime>(
     client: &ComputeClient<R>,
     diffmap_handle: cubecl::server::Handle,

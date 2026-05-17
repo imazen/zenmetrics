@@ -11,11 +11,17 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu", "fast-reduction"]
+default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
 cuda = ["cubecl/cuda"]
 wgpu = ["cubecl/wgpu"]
 hip = ["cubecl/hip"]
 cpu = ["cubecl/cpu"]
+# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Exposes the generic typed `Butteraugli<R: Runtime>` API publicly.
+# Off by default — opaque `ButteraugliOpaque` is the supported
+# surface. See dssim-gpu/Cargo.toml for the full rationale.
+cubecl-types = []
 # Use Atomic<f32>::fetch_add for the per-octave reduction. Works on
 # CUDA / Windows DX12 (real driver) / HIP. Silently no-ops on Metal —
 # disable when targeting Metal:
@@ -35,6 +41,8 @@ internals = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 butteraugli = { workspace = true }
@@ -43,3 +51,62 @@ imgref = { workspace = true }
 rgb = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+
+# Examples and tests consuming the typed Butteraugli<R> require
+# the cubecl-types feature.
+[[example]]
+name = "batch_parity"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_dim_switch"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_t4_warm"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_warm_ref"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "blur_parity"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "colors_parity"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "diffmap_inspect"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "end_to_end"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "options_smoke"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "parity_real_image"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "parity_vs_cpu"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "reduction_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "reduction_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque"
+required-features = ["cubecl-types"]
