@@ -154,7 +154,11 @@ pub struct Iwssim<R: Runtime> {
     /// instance has only ever consumed grayscale planes.
     src_u32_a: cubecl::server::Handle,
     src_u32_b: cubecl::server::Handle,
-    pack_scratch: Vec<u32>,
+    // T_x.O (2026-05-17): `pack_scratch: Vec<u32>` removed. The
+    // upload path now packs u8×3 → u32 directly into the pinned
+    // staging buffer reserved per call (`client.reserve_staging`),
+    // collapsing two host-side passes (pack to pageable + memcpy to
+    // pinned) into one. Mirrors butter T_x.O (10a5b996).
 
     /// One Scale per pyramid level. `scales.len() == NUM_SCALES` for
     /// validly-sized inputs.
@@ -223,8 +227,6 @@ impl<R: Runtime> Iwssim<R> {
             height,
             src_u32_a,
             src_u32_b,
-            // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
-            pack_scratch: vec![0_u32; n_pixels_usize],
             scales,
             partials,
             sums,
@@ -313,16 +315,20 @@ impl<R: Runtime> Iwssim<R> {
                 got: dis_rgb.len(),
             });
         }
-        // T4.L+M (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
-        // (R | G<<8 | B<<16), upload via pinned-host fast path. Cuts
-        // upload 3× and routes through DMA at 12-25 GB/s (vs 5-6 GB/s
-        // pageable). See docs/CUBECL_GOTCHAS.md G6.5 and G6.6.
-        Self::pack_u8_rgb_to_u32(&mut self.pack_scratch, ref_rgb);
-        let bytes_a = u32::as_bytes(&self.pack_scratch);
-        self.src_u32_a = self.client.create_from_slice_pinned(bytes_a);
-        Self::pack_u8_rgb_to_u32(&mut self.pack_scratch, dis_rgb);
-        let bytes_b = u32::as_bytes(&self.pack_scratch);
-        self.src_u32_b = self.client.create_from_slice_pinned(bytes_b);
+        // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
+        // pinned staging buffer (one host-side pass instead of two).
+        // Previously we packed into `self.pack_scratch` and then
+        // `create_from_slice_pinned` copied that scratch into a
+        // pinned buffer — two ~48 MB host writes per upload. The
+        // reserve_staging path lets us produce the packed bytes
+        // straight into the pinned buffer. T4.M's pinned-DMA fast
+        // path is preserved (handle from `client.create`).
+        //
+        // Layout (unchanged from T4.L): 4 bytes per pixel — R | G<<8
+        // | B<<16 (alpha unused). Reader (`rgb_u32_to_gray_kernel`)
+        // sees the same `[u32]` packing.
+        self.src_u32_a = Self::pack_into_pinned(&self.client, ref_rgb);
+        self.src_u32_b = Self::pack_into_pinned(&self.client, dis_rgb);
 
         // Convert to grayscale into scale-0 LP buffers (we'll then
         // build the Gaussian pyramid in-place via the lp/g cycle).
@@ -394,16 +400,33 @@ impl<R: Runtime> Iwssim<R> {
     fn cube_dim_1d() -> CubeDim {
         CubeDim::new_1d(256)
     }
-    /// T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
-    /// (R | G<<8 | B<<16). Replaces the old `widen_u8_to_u32` which
-    /// kept one byte per u32 and cost 3× the upload bandwidth.
-    fn pack_u8_rgb_to_u32(dst: &mut [u32], src: &[u8]) {
-        debug_assert_eq!(dst.len() * 3, src.len());
-        for (d, triple) in dst.iter_mut().zip(src.chunks_exact(3)) {
-            *d = u32::from(triple[0])
-                | (u32::from(triple[1]) << 8)
-                | (u32::from(triple[2]) << 16);
+    /// T_x.O (2026-05-17): pack 3 sRGB bytes per pixel into ONE u32
+    /// (R | G<<8 | B<<16), writing the packed bytes directly into a
+    /// freshly-reserved pinned staging buffer and handing the buffer
+    /// to `client.create` for DMA. One host-side pass for the data,
+    /// no intermediate `Vec<u32>` allocation.
+    ///
+    /// Layout is little-endian by construction: the kernel reader
+    /// `rgb_u32_to_gray_kernel` sees one u32 per pixel.
+    fn pack_into_pinned(client: &ComputeClient<R>, src: &[u8]) -> cubecl::server::Handle {
+        debug_assert!(src.len().is_multiple_of(3));
+        let n_pixels = src.len() / 3;
+        let pinned_len = n_pixels * 4;
+        let mut staging = client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(src.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
         }
+        client.create(bytes)
     }
 
     fn run_pipeline(&mut self) -> Result<GpuIwssimResult> {
