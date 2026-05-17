@@ -440,6 +440,15 @@ impl<R: Runtime> Ssim2<R> {
     fn blur_cube_dim() -> CubeDim {
         CubeDim::new_1d(blur::BLOCK_WIDTH)
     }
+    /// T_x.B (2026-05-17): 2D launch geometry for the tiled transpose.
+    fn transpose_cube_count(width: u32, height: u32) -> CubeCount {
+        let x_cubes = width.div_ceil(transpose::TILE_DIM).max(1);
+        let y_cubes = height.div_ceil(transpose::TILE_DIM).max(1);
+        CubeCount::Static(x_cubes, y_cubes, 1)
+    }
+    fn transpose_cube_dim() -> CubeDim {
+        CubeDim::new_2d(transpose::TPB_X, transpose::TPB_Y)
+    }
 
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
@@ -571,41 +580,43 @@ impl<R: Runtime> Ssim2<R> {
         self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
     }
 
-    /// One-plane two-pass blur: `src → fused-v+transpose → t_buf →
-    /// v_pass → full`. The first pass uses `blur_pass_t_kernel` which
-    /// fuses the column-walk with the row→column-major write, removing
-    /// the explicit `transpose_kernel` launch between passes.
-    ///
-    /// T_x.B (2026-05-17): saves 1 transpose per blur. With 5 blurs ×
-    /// 6 scales × 3 channels = 90 blurs per `compute()`, eliminates 90
-    /// transpose launches (out of 134 baseline) — ~70%.
-    ///
-    /// `v_buf` is no longer needed by this path but kept in the Scale
-    /// struct for now (it's just allocated, never written). A future
-    /// commit can drop those allocations.
+    /// One-plane two-pass blur: `src → v_pass → tiled-transpose → t_buf →
+    /// v_pass → full`. Caller supplies all 4 same-channel buffers.
     fn blur_plane_two_pass(
         &self,
         width: u32,
         height: u32,
         n: usize,
         src: &cubecl::server::Handle,
-        _v_buf: &cubecl::server::Handle,
+        v_buf: &cubecl::server::Handle,
         t_buf: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
         unsafe {
-            // 1. Fused v-pass + transpose on src (walks columns of
-            //    width × height, writes col-major == h × w row-major) → t_buf.
-            blur::blur_pass_t_kernel::launch_unchecked::<R>(
+            // 1. v-pass on src (walks columns of width × height) → v_buf.
+            blur::blur_pass_kernel::launch_unchecked::<R>(
                 &self.client,
                 Self::blur_cube_count(width),
                 Self::blur_cube_dim(),
                 ArrayArg::from_raw_parts(src.clone(), n),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                width,
+                height,
+            );
+            // 2. tiled transpose v_buf → t_buf (now height × width).
+            //    T_x.B (2026-05-17): 32×32 LDS tile with +1 col pad to
+            //    avoid bank conflicts; both loads and stores coalesced.
+            //    Was ~600 µs scale-0 (uncoalesced); now ~150 µs.
+            transpose::transpose_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::transpose_cube_count(width, height),
+                Self::transpose_cube_dim(),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
                 ArrayArg::from_raw_parts(t_buf.clone(), n),
                 width,
                 height,
             );
-            // 2. v-pass on t_buf (walks columns of height × width) → full.
+            // 3. v-pass on t_buf (walks columns of height × width) → full.
             //    Note: the transposed buffer's "width" is the original height.
             blur::blur_pass_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -631,8 +642,8 @@ impl<R: Runtime> Ssim2<R> {
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
-                        Self::cube_count_1d(n),
-                        Self::cube_dim_1d(),
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
                         ArrayArg::from_raw_parts(s.ref_xyb[ch].clone(), n),
                         ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), n),
                         w,
@@ -646,8 +657,8 @@ impl<R: Runtime> Ssim2<R> {
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
-                        Self::cube_count_1d(n),
-                        Self::cube_dim_1d(),
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
                         ArrayArg::from_raw_parts(s.dis_xyb[ch].clone(), n),
                         ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), n),
                         w,
