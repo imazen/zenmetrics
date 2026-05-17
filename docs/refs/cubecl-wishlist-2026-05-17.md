@@ -39,11 +39,17 @@ Gotcha G1.7 currently notes "split into two kernel entry points sharing a non-la
 
 ## Tier 2 — significant friction, manageable workarounds exist
 
-### W5. CUDA stream priorities (full surface)
+### W5. CUDA stream priorities (full surface) — narrower scope than originally claimed
 
-Partially landed via lilith/cubecl PR #1324 (merged upstream as `feat(streaming): add stream priority hint`). The remaining piece: multi-stream concurrency for ref/dist pipelines. Vship runs reference and distorted on separate CUDA streams with event-based sync at convergence; our `Cvvdp::compute_dkl_jod` serializes them. Estimated 1.3-1.5× upper bound at 12 MP.
+Partially landed via lilith/cubecl PR #1324 (merged upstream as `feat(streaming): add stream priority hint`). The remaining piece: multi-stream concurrency for ref/dist pipelines.
 
-Needs: convenient `client.with_stream(StreamId::A) { ... }` scope or equivalent.
+**Audit (2026-05-17, butter Phase 2 agent):** vship metric-by-metric:
+- vship **cvvdp** + **ssimu2**: do split ref/dist across `stream1/stream2` with event sync (confirmed in `HIP/cvvdp/main.hpp:23-94` + `HIP/ssimu2/main.hpp:25-180`).
+- vship **butter**: does NOT split — single `hipStream_t` throughout `butterprocess`. Two-stream butter would have to be invented, not ported.
+
+So the ROI for W5 is bounded to cvvdp-gpu + ssim2-gpu only. Estimated 1.3-1.5× upper bound at 12 MP for those two. Butter doesn't benefit from this feature — its remaining gains are kernel-fusion / upload-side, which Phase 2 (T_x.J–O, -22% wall) captured.
+
+Needs: convenient `client.with_stream(StreamId::A) { ... }` scope or equivalent, plus cross-stream event API (see W23).
 
 ### W6. `cubecl-cpu` atomic<f32> support
 

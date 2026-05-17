@@ -251,25 +251,20 @@ The fusion costs zero bandwidth (we'd have loaded both R and T anyway for the bl
 
 **Port:** when porting the tiled PU blur (Tier 2 below), do the min-abs in the same kernel during LDS tile fill. Net savings per band per call: ~144 MB R/W at 12 MP × 3 channels.
 
-### 4. Cross-stream concurrency
+### 4. Cross-stream concurrency (partial — vship metric-dependent)
 
-**Vship's pattern** (`HIP/ssimu2/main.hpp:32-50`, `HIP/cvvdp/main.hpp:24-94`):
+**Correction (2026-05-17, after butter Phase 2 agent audit):** earlier drafts of this doc claimed all vship metrics use two-stream concurrency. Verified by reading vship 5.x:
 
-Each handler owns N CUDA streams (typically 2-4). The orchestrator splits work that's independent between reference and distorted:
+- **vship cvvdp** (`HIP/cvvdp/main.hpp:23-94`): YES — takes `stream1, stream2, event, event2` as args; per-side `hipMallocAsync` on the appropriate stream; resize/temporal/pyramid stages dispatched per-stream; events sync at the masking convergence point.
+- **vship ssimu2** (`HIP/ssimu2/main.hpp:25-180`): YES — `streams[2]` + `events[4]` for ref/dist with per-stream pyramid scales (stream[0] scale 0, stream[1] scales 1-5).
+- **vship butter** (`HIP/butter/main.hpp:23-113`): NO — `butterprocess` takes a single `hipStream_t stream`; both `opsinDynamicsImage` calls, both `separateFrequencies` calls, all 6 maltas, MaskPsychoImage, and diffmap all run on it. **Two-stream butter would have to be invented, not ported.**
 
-```c
-// Stream 0: ref pipeline
-// Stream 1: dist pipeline  (downsample, pyramid, csf)
-// hipEventRecord on stream 1's completion
-// hipStreamWaitEvent on stream 0 to merge
-// Stream 0: cross-channel masking, pool (needs both)
-```
+**Equivalent in our crates:**
+- `cvvdp-gpu`: no intra-call stream split. `_dispatch_d_bands_dist_and_band_loop` (`pipeline.rs:1792-2085`) runs on a single default stream. `recommend_parallel` exposes cross-call parallelism (different image pairs in different threads) but not within one call. **vship ssimu2 / cvvdp do split; we could.**
+- `ssim2-gpu` (our SSIMU2 port): same as cvvdp-gpu — single stream.
+- `butter-gpu`: single stream — matches vship. Not a missing port.
 
-On RTX 5070, the front of the pipeline (downscale, color, weber) is fully bandwidth-bound. Splitting ref and dist onto separate streams lets the GPU overlap them — the SM scheduler keeps both warps in flight.
-
-**Equivalent in cvvdp-gpu**: there is no intra-call stream split. `_dispatch_d_bands_dist_and_band_loop` (`pipeline.rs:1792-2085`) runs everything on one default stream. `recommend_parallel` exposes cross-call parallelism (different image pairs in different threads) but not within one call.
-
-**Port:** CubeCL 0.10 supports multiple queues via `ComputeStream::new` (or whatever the equivalent — check cubecl-cuda's API). Refactor to assign ref-side dispatches to stream A and dist-side to stream B, sync at the band-loop merge. Lower-priority because it's complex and the LDS wins above are bigger.
+**Port (cvvdp + ssimu2 only):** CubeCL 0.10 supports stream priority hints (merged via PR #1324 contributed from our `feat/cuda-stream-priority`). For full intra-call ref/dist split, also need a `client.with_stream(StreamId)` scope or equivalent — see W5 in `docs/refs/cubecl-wishlist-2026-05-17.md`. Lower-priority because the upload-side T4 wins were bigger and the LDS wins above are bigger still. Estimated 1.3-1.5× upper bound at 12 MP if/when implemented.
 
 ### 5. Float2-packed FMA
 
