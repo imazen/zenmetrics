@@ -1,0 +1,10 @@
+# vship CVVDP scaling on RTX 5070 (CUDA 13.2, sm_75 nvcc binary, JIT to sm_120)
+# vship 5.0.1, commit 96b2750, built with: nvcc -x cu src/VshipLib.cpp -arch=sm_75 -shared
+# 5 warmup iters dropped, 20 measured, median reported, single-frame ResetCVVDP between iters
+# Random uint8 sRGB planar input, standard_4k display model, fps=30, resizeToDisplay=false
+width,height,megapixels,ms_median,ms_mean,ms_p25,ms_p75,ns_per_pixel_median,ns_per_pixel_mean,score
+256,256,0.066,2.505,2.743,2.099,3.504,38.22,41.85,4.9335
+512,512,0.262,3.456,3.887,3.242,4.175,13.18,14.83,4.9048
+1024,1024,1.049,4.283,4.659,4.018,5.343,4.08,4.44,4.9417
+2048,1536,3.146,8.708,8.509,8.280,8.932,2.77,2.70,4.9374
+4000,3000,12.000,28.819,28.638,27.713,29.467,2.40,2.39,4.9415

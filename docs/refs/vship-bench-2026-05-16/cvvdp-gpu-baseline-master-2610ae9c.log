@@ -1,0 +1,262 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling autocfg v1.5.0
+   Compiling libm v0.2.16
+   Compiling libc v0.2.186
+   Compiling serde v1.0.228
+   Compiling zerocopy v0.8.48
+   Compiling ident_case v1.0.1
+   Compiling cfg_aliases v0.2.1
+   Compiling version_check v0.9.5
+   Compiling memchr v2.8.0
+   Compiling simd-adler32 v0.3.9
+   Compiling adler2 v2.0.1
+   Compiling unicode-segmentation v1.13.2
+   Compiling itoa v1.0.18
+   Compiling unicode-xid v0.2.6
+   Compiling fnv v1.0.7
+   Compiling parking v2.2.1
+   Compiling strsim v0.11.1
+   Compiling crossbeam-utils v0.8.21
+   Compiling pin-project-lite v0.2.17
+   Compiling zmij v1.0.21
+   Compiling equivalent v1.0.2
+   Compiling scopeguard v1.2.0
+   Compiling regex-syntax v0.8.10
+   Compiling serde_json v1.0.149
+   Compiling getrandom v0.4.2
+   Compiling object v0.37.3
+   Compiling rand_core v0.10.1
+   Compiling parking_lot_core v0.9.12
+   Compiling log v0.4.29
+   Compiling option-ext v0.2.0
+   Compiling cpufeatures v0.3.0
+   Compiling miniz_oxide v0.8.9
+   Compiling gimli v0.32.3
+   Compiling winnow v1.0.2
+   Compiling ciborium-io v0.2.2
+   Compiling lock_api v0.4.14
+   Compiling futures-core v0.3.32
+   Compiling cubecl-common v0.10.0-pre.4
+   Compiling chacha20 v0.10.0
+   Compiling allocator-api2 v0.2.21
+   Compiling futures-io v0.3.32
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling getrandom v0.3.4
+   Compiling foldhash v0.2.0
+   Compiling fastrand v2.4.1
+   Compiling rustc-demangle v0.1.27
+   Compiling once_cell v1.21.4
+   Compiling num-traits v0.2.19
+   Compiling convert_case v0.10.0
+   Compiling portable-atomic v1.13.1
+   Compiling prettyplease v0.2.37
+   Compiling spin v0.10.0
+   Compiling ahash v0.8.12
+   Compiling thiserror v2.0.18
+   Compiling nom v8.0.0
+   Compiling futures-lite v2.6.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling embassy-futures v0.1.2
+   Compiling oneshot v0.2.1
+   Compiling float4 v0.2.0
+   Compiling xxhash-rust v0.8.15
+   Compiling web-time v1.1.0
+   Compiling cudarc v0.19.4
+   Compiling concurrent-queue v2.5.0
+   Compiling rand v0.10.1
+   Compiling cubecl-runtime v0.10.0-pre.4
+   Compiling float-ord v0.3.2
+   Compiling find-msvc-tools v0.1.9
+   Compiling cubecl-macros v0.10.0-pre.4
+   Compiling paste v1.0.15
+   Compiling shlex v1.3.0
+   Compiling event-listener v5.4.1
+   Compiling md5 v0.8.0
+   Compiling hashbrown v0.17.0
+   Compiling foldhash v0.1.5
+   Compiling hashbrown v0.16.1
+   Compiling inflections v1.1.1
+   Compiling syn v2.0.117
+   Compiling cc v1.2.61
+   Compiling generic-array v0.14.7
+   Compiling libloading v0.9.0
+   Compiling rustc-hash v2.1.2
+   Compiling crc32fast v1.5.0
+   Compiling fixedbitset v0.5.7
+   Compiling hashbrown v0.15.5
+   Compiling stable-vec v0.4.2
+   Compiling either v1.15.0
+   Compiling rustix v1.1.4
+   Compiling event-listener-strategy v0.5.4
+   Compiling zeroize v1.8.2
+   Compiling utf8parse v0.2.2
+   Compiling type-map v0.5.1
+   Compiling typenum v1.20.0
+   Compiling async-channel v2.5.0
+   Compiling itertools v0.14.0
+   Compiling anstyle-parse v1.0.0
+   Compiling rustls-pki-types v1.14.1
+   Compiling dirs-sys v0.5.0
+   Compiling getrandom v0.2.17
+   Compiling untrusted v0.9.0
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling dirs v6.0.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling httparse v1.10.1
+   Compiling anstyle v1.0.14
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling rustls v0.23.40
+   Compiling flate2 v1.1.9
+   Compiling heck v0.5.0
+   Compiling cubecl v0.10.0-pre.4
+   Compiling clap_lex v1.1.0
+   Compiling bytes v1.11.1
+   Compiling fdeflate v0.3.7
+   Compiling indexmap v2.14.0
+   Compiling pxfm v0.1.29
+   Compiling anstream v1.0.0
+   Compiling subtle v2.6.1
+   Compiling base64 v0.22.1
+   Compiling zune-core v0.5.1
+   Compiling webpki-roots v1.0.7
+   Compiling sysinfo v0.36.1
+   Compiling percent-encoding v2.3.2
+   Compiling cpufeatures v0.2.17
+   Compiling regex-automata v0.4.14
+   Compiling utf8-zero v0.8.1
+   Compiling byteorder-lite v0.1.0
+   Compiling zune-jpeg v0.5.15
+   Compiling zenmetrics-corpus v0.1.0 (/home/lilith/work/zen/zenmetrics--cvvdp-perf/crates/zenmetrics-corpus)
+   Compiling clap_builder v4.6.0
+   Compiling num-integer v0.1.46
+   Compiling num-complex v0.4.6
+   Compiling http v1.4.0
+   Compiling ring v0.17.14
+   Compiling num-bigint v0.4.6
+   Compiling num-iter v0.1.45
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling petgraph v0.8.3
+   Compiling bitflags v2.11.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling serde_bytes v0.11.19
+   Compiling sha2 v0.10.9
+   Compiling png v0.18.1
+   Compiling addr2line v0.25.1
+   Compiling toml v1.1.2+spec-1.1.0
+   Compiling ureq-proto v0.6.0
+   Compiling tynm v0.2.0
+   Compiling regex v1.12.3
+   Compiling num-rational v0.4.2
+   Compiling sanitize-filename v0.6.0
+   Compiling num v0.4.3
+   Compiling moxcms v0.8.1
+   Compiling backtrace v0.3.76
+   Compiling darling_core v0.21.3
+   Compiling darling_core v0.23.0
+   Compiling fs4 v1.1.0
+   Compiling terminal_size v0.4.4
+   Compiling serde_derive v1.0.228
+   Compiling zerocopy-derive v0.8.48
+   Compiling bytemuck_derive v1.10.2
+   Compiling derive_more-impl v2.1.1
+   Compiling derive-new v0.7.0
+   Compiling variadics_please v1.1.0
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling cubecl-cuda v0.10.0-pre.4
+   Compiling bytemuck v1.25.0
+   Compiling darling_macro v0.23.0
+   Compiling clap v4.6.1
+   Compiling darling_macro v0.21.3
+   Compiling darling v0.23.0
+   Compiling cubecl-macros-internal v0.10.0-pre.4
+   Compiling darling v0.21.3
+   Compiling enumset_derive v0.14.0
+   Compiling derive_more v2.1.1
+   Compiling image v0.25.10
+   Compiling smallvec v1.15.1
+   Compiling enumset v1.1.10
+   Compiling zenbench v0.1.8
+   Compiling cubecl-zspace v0.10.0-pre.4
+   Compiling parking_lot v0.12.5
+   Compiling half v2.7.1
+   Compiling rustls-webpki v0.103.13
+   Compiling ciborium-ll v0.2.2
+   Compiling float8 v0.7.0
+   Compiling ciborium v0.2.2
+   Compiling cubecl-ir v0.10.0-pre.4
+   Compiling ureq v3.3.0
+   Compiling cubecl-core v0.10.0-pre.4
+   Compiling cubecl-opt v0.10.0-pre.4
+   Compiling cubecl-cpp v0.10.0-pre.4
+   Compiling cvvdp-gpu v0.0.1 (/home/lilith/work/zen/zenmetrics--cvvdp-perf/crates/cvvdp-gpu)
+    Finished `bench` profile [optimized] target(s) in 1m 20s
+     Running benches/score.rs (target/release/deps/score-069550d49d6f8c29)
+
+  cvvdp_jod_256x256_q20  0 rounds ⚠ only 0 rounds
+                                 mean ±mad ms  95% CI vs base 
+  ├─ host_scalar                  53.1 ±3.9ms  [51.5–54.7]ms  
+  ├─ gpu_compute_dkl_d_bands       6.7 ±1.6ms                  [1]
+  ├─ gpu_compute_dkl_jod           4.9 ±1.3ms                  [2]
+  ╰─ gpu_compute_dkl_jod_with_…    3.1 ±0.8ms                  [3]
+
+  gpu_compute_dkl_jod_with_…  ██ 3.11ms
+  gpu_compute_dkl_jod         ████ 4.91ms
+  gpu_compute_dkl_d_bands     █████ 6.72ms
+  host_scalar                 ██████████████████████████████████████████ 53.05ms
+  [1] CV=32%
+  [2] CV=29%
+  [3] CV=37%
+
+  cvvdp_jod_256x256_q1  0 rounds ⚠ only 0 rounds
+                                 mean ±mad ms  95% CI vs base 
+  ├─ host_scalar                  46.0 ±3.2ms  [44.8–47.2]ms  
+  ├─ gpu_compute_dkl_d_bands       6.1 ±1.3ms                  [1]
+  ├─ gpu_compute_dkl_jod           4.7 ±1.4ms                  [2]
+  ╰─ gpu_compute_dkl_jod_with_…    2.6 ±0.8ms                  [3]
+
+  gpu_compute_dkl_jod_with_…  ██ 2.63ms
+  gpu_compute_dkl_jod         ████ 4.65ms
+  gpu_compute_dkl_d_bands     ██████ 6.13ms
+  host_scalar                 ██████████████████████████████████████████ 45.97ms
+  [1] CV=30%
+  [2] CV=38%
+  [3] CV=40%
+
+  cvvdp_jod_1mp_1024x1024  0 rounds ⚠ only 0 rounds
+                                   mean ±mad ms  95% CI vs base   
+  ├─ host_scalar                  855.4 ±32.6ms  [846.5–866.0]ms  
+  ├─ gpu_compute_dkl_jod            30.5 ±7.3ms                    [1]
+  ╰─ gpu_compute_dkl_jod_with_…     17.5 ±4.0ms                   
+
+  gpu_compute_dkl_jod_with_…  █ 17.48ms
+  gpu_compute_dkl_jod         █ 30.46ms
+  host_scalar                 █████████████████████████████████████████ 855.40ms
+  [1] CV=24%
+
+  cvvdp_jod_12mp_4000x3000  0 rounds ⚠ only 0 rounds
+                                   mean ±mad ms  95% CI vs base   
+  ├─ gpu_compute_dkl_jod          655.9 ±43.1ms  [646.6–665.7]ms  
+  ╰─ gpu_compute_dkl_jod_with_…   351.7 ±22.6ms                   
+
+  gpu_compute_dkl_jod_with_…  ██████████████████████ 351.74ms
+  gpu_compute_dkl_jod         █████████████████████████████████████████ 655.94ms
+[zenbench] calibration: int=0.20ns/iter mem_bw=65.6GiB/s mem_lat=10.3ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.37ns/iter, TSC: 4.490 ticks/ns (invariant)
+[zenbench] results → /tmp/zenbench/zenbench-1778917832-29db4.txt
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1778917832-29db4
+═══════════════════════════════════════════════════════════════
+
+  total: 0.0s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
