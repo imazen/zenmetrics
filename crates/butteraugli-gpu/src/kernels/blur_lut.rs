@@ -437,6 +437,191 @@ pub fn vertical_blur_3ch_lf_split_lut_kernel(
     lf_b_out[idx] = lf_b_mixed;
 }
 
+/// 2-channel fused horizontal blur for UHF (X + Y). B doesn't get
+/// UHF, so we only blur the X and Y channels.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn horizontal_blur_2ch_lut_kernel(
+    src_x: &Array<f32>,
+    src_y: &Array<f32>,
+    dst_x: &mut Array<f32>,
+    dst_y: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let row = idx / w;
+    let x = idx - row * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(x, r);
+    let end = u32::min((x + r) as u32, (w - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - x;
+    let b = end + r + 1 - x;
+    let wsum = table[integ_off + b] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let row_off = row * w;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - x];
+        let off = row_off + i;
+        sum_x += src_x[off] * weight;
+        sum_y += src_y[off] * weight;
+        i += 1;
+    }
+    dst_x[idx] = sum_x / wsum;
+    dst_y[idx] = sum_y / wsum;
+}
+
+/// 2-channel fused vertical UHF blur + UHF/HF split (X and Y).
+///
+/// Replaces the per-channel V-blur + split_uhf_hf_x + split_uhf_hf_y
+/// sequence with a single launch. 4 launches saved per side per call
+/// (2 V-blurs + 2 splits → 1 fused).
+///
+/// X split (remove_range):
+///   hf_x_orig = freq[1][0] at entry
+///   uhf_x = remove_range(hf_x_orig - blurred_x, REMOVE_UHF_RANGE) → freq[0][0]
+///   hf_x_new = remove_range(blurred_x, REMOVE_HF_RANGE)           → freq[1][0]
+///
+/// Y split (maximum_clamp + amplify):
+///   hf_y_orig = freq[1][1] at entry
+///   hf_clamped = maximum_clamp(blurred_y, KMAXCLAMP_HF)
+///   uhf_val = hf_y_orig - hf_clamped
+///   uhf_y = maximum_clamp(uhf_val, KMAXCLAMP_UHF) * UHF_MUL  → freq[0][1]
+///   hf_y_new = amplify_range(hf_clamped * HF_MUL, HF_AMPLIFY)    → freq[1][1]
+///
+/// Per-thread orig reads are pointwise (idx-local); the V-blur window
+/// reads only h-blurred temp planes, so writing freq[1][X,Y] back
+/// in-place is safe.
+///
+/// Constants baked-in (must match `kernels::frequency`):
+///   KMAXCLAMP_HF = 28.469181
+///   KMAXCLAMP_UHF = 5.191753
+///   KMUL (inside maximum_clamp) = 0.72421615
+///   UHF_MUL = 2.6931376
+///   HF_MUL = 2.155
+///   HF_AMPLIFY = 0.132
+///   suppress_x_by_y is run AFTER this kernel (still a separate launch).
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_2ch_uhf_split_lut_kernel(
+    h_src_x: &Array<f32>,
+    h_src_y: &Array<f32>,
+    hf_x_orig: &Array<f32>,
+    hf_y_orig: &Array<f32>,
+    out_uhf_x: &mut Array<f32>,
+    out_uhf_y: &mut Array<f32>,
+    out_hf_x: &mut Array<f32>,
+    out_hf_y: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+    remove_uhf_range: f32,
+    remove_hf_range: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b_idx = end + r + 1 - y;
+    let wsum = table[integ_off + b_idx] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        let off = i * w + x;
+        sum_x += h_src_x[off] * weight;
+        sum_y += h_src_y[off] * weight;
+        i += 1;
+    }
+    let bx = sum_x / wsum;
+    let by = sum_y / wsum;
+
+    // ── X split: remove_range on both UHF and HF ──
+    let orig_x = hf_x_orig[idx];
+    let diff_x = orig_x - bx;
+    let uhf_x = if diff_x > remove_uhf_range {
+        diff_x - remove_uhf_range
+    } else if diff_x < -remove_uhf_range {
+        diff_x + remove_uhf_range
+    } else {
+        f32::new(0.0)
+    };
+    out_uhf_x[idx] = uhf_x;
+    let new_hf_x = if bx > remove_hf_range {
+        bx - remove_hf_range
+    } else if bx < -remove_hf_range {
+        bx + remove_hf_range
+    } else {
+        f32::new(0.0)
+    };
+    out_hf_x[idx] = new_hf_x;
+
+    // ── Y split: maximum_clamp + amplify ──
+    // Constants from frequency.rs (KMAXCLAMP_HF, _UHF, UHF_MUL, HF_MUL,
+    // HF_AMPLIFY) baked here as f32 literals.
+    let orig_y = hf_y_orig[idx];
+
+    // maximum_clamp(by, 28.469181) with KMUL=0.72421615
+    let max_hf = f32::new(28.469_181);
+    let hf_clamped = if by >= max_hf {
+        (by - max_hf) * f32::new(0.724_216_15) + max_hf
+    } else if by < -max_hf {
+        (by + max_hf) * f32::new(0.724_216_15) - max_hf
+    } else {
+        by
+    };
+    let uhf_val = orig_y - hf_clamped;
+    let max_uhf = f32::new(5.191_753);
+    let uhf_clamped = if uhf_val >= max_uhf {
+        (uhf_val - max_uhf) * f32::new(0.724_216_15) + max_uhf
+    } else if uhf_val < -max_uhf {
+        (uhf_val + max_uhf) * f32::new(0.724_216_15) - max_uhf
+    } else {
+        uhf_val
+    };
+    out_uhf_y[idx] = uhf_clamped * f32::new(2.693_137_6);
+
+    // amplify_range_around_zero(hf_clamped * HF_MUL, HF_AMPLIFY)
+    let scaled = hf_clamped * f32::new(2.155);
+    let hf_amp = f32::new(0.132);
+    let new_hf_y = if scaled > hf_amp {
+        scaled + hf_amp
+    } else if scaled < -hf_amp {
+        scaled - hf_amp
+    } else {
+        f32::new(2.0) * scaled
+    };
+    out_hf_y[idx] = new_hf_y;
+}
+
 /// 3-channel fused vertical blur + MF/HF split for the
 /// SIGMA_HF separation step.
 ///

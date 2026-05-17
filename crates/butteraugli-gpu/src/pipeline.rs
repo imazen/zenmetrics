@@ -1167,51 +1167,47 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // ── Step 3: HF/UHF separation ──
-        // T_x.D (2026-05-17): write the HF output back into freq[1][ch]
-        // directly. Each thread only touches its own idx, so reading
-        // hf_orig and writing out_hf to the same plane is safe — the
-        // read finishes before the write within one thread. Eliminates
-        // the temp2 → freq[1][ch] copy_plane launch (4 launches saved
-        // per separate_frequencies call).
-        //
-        // X (ch=0): blur(HF_X) → temp1; split → UHF_X (freq[0][0]),
-        //           final HF_X (freq[1][0]) — same buffer as orig input.
-        self.blur_plane_via(
-            &freq[1][0],
-            &self.temp1.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_UHF,
-        );
+        // T_x.H (2026-05-17): fuse the two single-channel UHF blurs
+        // (X and Y) into one 2-channel blur, and fuse the V-pass with
+        // the X and Y split kernels into one launch. 4 launches saved
+        // per side per call (2 V-blurs + 2 splits → 1 fused; 1 H-blur
+        // for both channels vs 2 separate). Plus the 2 copy_planes
+        // already removed by T_x.D.
+        let table_uhf = &self.blur_tables[BlurKind::Uhf as usize];
+        let table_uhf_len = self.blur_table_lens[BlurKind::Uhf as usize];
+        let radius_uhf = self.blur_radii[BlurKind::Uhf as usize];
         unsafe {
-            frequency::split_uhf_hf_x_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_2ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(table_uhf.clone(), table_uhf_len),
+                self.width,
+                self.height,
+                radius_uhf,
+            );
+            blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
                 ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(table_uhf.clone(), table_uhf_len),
+                self.width,
+                self.height,
+                radius_uhf,
                 REMOVE_UHF_RANGE,
                 REMOVE_HF_RANGE,
-            );
-        }
-
-        // Y (ch=1): same shape, Y kernel with maximum_clamp + amplify_range.
-        self.blur_plane_via(
-            &freq[1][1],
-            &self.temp1.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_UHF,
-        );
-        unsafe {
-            frequency::split_uhf_hf_y_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
             );
         }
     }
