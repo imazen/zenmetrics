@@ -1145,8 +1145,15 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // ── Step 3: HF/UHF separation ──
+        // T_x.D (2026-05-17): write the HF output back into freq[1][ch]
+        // directly. Each thread only touches its own idx, so reading
+        // hf_orig and writing out_hf to the same plane is safe — the
+        // read finishes before the write within one thread. Eliminates
+        // the temp2 → freq[1][ch] copy_plane launch (4 launches saved
+        // per separate_frequencies call).
+        //
         // X (ch=0): blur(HF_X) → temp1; split → UHF_X (freq[0][0]),
-        //           final HF_X (temp2); copy temp2 → freq[1][0].
+        //           final HF_X (freq[1][0]) — same buffer as orig input.
         self.blur_plane_via(
             &freq[1][0],
             &self.temp1.clone(),
@@ -1161,12 +1168,11 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
                 ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
                 REMOVE_UHF_RANGE,
                 REMOVE_HF_RANGE,
             );
         }
-        self.copy_plane(&self.temp2.clone(), &freq[1][0]);
 
         // Y (ch=1): same shape, Y kernel with maximum_clamp + amplify_range.
         self.blur_plane_via(
@@ -1183,10 +1189,9 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
                 ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
             );
         }
-        self.copy_plane(&self.temp2.clone(), &freq[1][1]);
     }
 
     /// Compute the AC half of the diffmap: 6 Malta diffs + 2 L2-asym
