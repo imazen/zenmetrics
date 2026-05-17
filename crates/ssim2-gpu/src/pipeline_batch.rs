@@ -27,7 +27,9 @@ use cubecl::prelude::*;
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::pipeline::{Ssim2, score_from_stats};
 use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
-use crate::{Error, GpuSsim2Result, NUM_SCALES, Result, Ssim2Blur};
+use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
+#[cfg(feature = "fir")]
+use crate::Ssim2Blur;
 
 /// Per-scale batched buffer set. Each plane is `batch_size · n_pixels`
 /// f32, stored as `batch_size` contiguous planes (stride =
@@ -209,21 +211,26 @@ impl<R: Runtime> Ssim2Batch<R> {
         self.batch_size
     }
 
-    /// Builder-style blur selector. Delegates to the embedded `Ssim2`'s
-    /// blur state — `compute_batch` honours whichever mode is set.
-    /// Switching modes invalidates the cached reference (see
-    /// `Ssim2::with_blur`).
+    /// Builder-style blur selector — **gated behind the `fir` Cargo
+    /// feature**. Delegates to the embedded `Ssim2`'s blur state —
+    /// `compute_batch` honours whichever mode is set. Switching modes
+    /// invalidates the cached reference (see `Ssim2::with_blur`).
+    #[cfg(feature = "fir")]
     pub fn with_blur(mut self, blur: Ssim2Blur) -> Self {
         self.set_blur(blur);
         self
     }
 
-    /// In-place blur selector. See `with_blur` for semantics.
+    /// In-place blur selector — **gated behind the `fir` Cargo
+    /// feature**. See `with_blur` for semantics.
+    #[cfg(feature = "fir")]
     pub fn set_blur(&mut self, blur: Ssim2Blur) {
         self.inner.set_blur(blur);
     }
 
-    /// Currently-selected blur mode.
+    /// Currently-selected blur mode — **gated behind the `fir` Cargo
+    /// feature**.
+    #[cfg(feature = "fir")]
     pub fn blur(&self) -> Ssim2Blur {
         self.inner.blur()
     }
@@ -604,9 +611,11 @@ impl<R: Runtime> Ssim2Batch<R> {
     /// t_scratch; pass-1(t_scratch) → dst`. Output stays in transposed
     /// orientation (consumed by error_maps without a final transpose).
     ///
-    /// Dispatches on `self.inner.blur()` — IIR (default) uses the
-    /// Charalampidis recursive column-walk; FIR uses the 5-tap
-    /// horizontal FIR pass per Kanetaka et al. IWAIT 2026.
+    /// Without the `fir` Cargo feature, calls the IIR batched kernel
+    /// directly. With the feature on, dispatches on `self.inner.blur()`
+    /// — IIR (default) uses the Charalampidis recursive column-walk;
+    /// FIR uses the 5-tap horizontal FIR pass per Kanetaka et al.
+    /// IWAIT 2026.
     fn blur_batched_two_pass(
         &self,
         s: usize,
@@ -621,36 +630,17 @@ impl<R: Runtime> Ssim2Batch<R> {
         let v = bs.v_scratch[ch].clone();
         let t = bs.t_scratch[ch].clone();
 
-        let blur_mode = self.inner.blur();
-
         unsafe {
             // 1. pass-0 on src.
-            match blur_mode {
-                Ssim2Blur::Iir => {
-                    blur::blur_pass_batched_kernel::launch_unchecked::<R>(
-                        client,
-                        blur_cube_count(bs.width, self.batch_size),
-                        blur_cube_dim(),
-                        ArrayArg::from_raw_parts(src, n_total),
-                        ArrayArg::from_raw_parts(v.clone(), n_total),
-                        bs.width,
-                        bs.height,
-                        plane_stride,
-                    );
-                }
-                Ssim2Blur::Fir => {
-                    blur::blur_h_fir5_batched_kernel::launch_unchecked::<R>(
-                        client,
-                        fir_batched_cube_count(plane_stride, self.batch_size),
-                        fir_batched_cube_dim(),
-                        ArrayArg::from_raw_parts(src, n_total),
-                        ArrayArg::from_raw_parts(v.clone(), n_total),
-                        bs.width,
-                        bs.height,
-                        plane_stride,
-                    );
-                }
-            }
+            self.blur_batched_pass(
+                client,
+                src,
+                v.clone(),
+                bs.width,
+                bs.height,
+                plane_stride,
+                n_total,
+            );
             // 2. transpose to height × width.
             transpose::transpose_batched_kernel::launch_unchecked::<R>(
                 client,
@@ -663,32 +653,77 @@ impl<R: Runtime> Ssim2Batch<R> {
                 plane_stride,
             );
             // 3. pass-1 on transposed: width swapped with height.
-            match blur_mode {
-                Ssim2Blur::Iir => {
+            self.blur_batched_pass(
+                client,
+                t,
+                dst,
+                bs.height,
+                bs.width,
+                plane_stride,
+                n_total,
+            );
+        }
+    }
+
+    /// Single batched blur pass — dispatches on the inner Ssim2's
+    /// blur mode (gated behind the `fir` Cargo feature). When the
+    /// feature is off, only the IIR batched kernel is reachable.
+    ///
+    /// # Safety
+    /// Caller must ensure `src` and `dst` are valid handles of length
+    /// `n_total` floats and that `plane_stride * batch_size == n_total`.
+    #[inline]
+    unsafe fn blur_batched_pass(
+        &self,
+        client: &ComputeClient<R>,
+        src: cubecl::server::Handle,
+        dst: cubecl::server::Handle,
+        width: u32,
+        height: u32,
+        plane_stride: u32,
+        n_total: usize,
+    ) {
+        #[cfg(feature = "fir")]
+        {
+            match self.inner.blur() {
+                Ssim2Blur::Iir => unsafe {
                     blur::blur_pass_batched_kernel::launch_unchecked::<R>(
                         client,
-                        blur_cube_count(bs.height, self.batch_size),
+                        blur_cube_count(width, self.batch_size),
                         blur_cube_dim(),
-                        ArrayArg::from_raw_parts(t, n_total),
+                        ArrayArg::from_raw_parts(src, n_total),
                         ArrayArg::from_raw_parts(dst, n_total),
-                        bs.height,
-                        bs.width,
+                        width,
+                        height,
                         plane_stride,
                     );
-                }
-                Ssim2Blur::Fir => {
+                },
+                Ssim2Blur::Fir => unsafe {
                     blur::blur_h_fir5_batched_kernel::launch_unchecked::<R>(
                         client,
                         fir_batched_cube_count(plane_stride, self.batch_size),
                         fir_batched_cube_dim(),
-                        ArrayArg::from_raw_parts(t, n_total),
+                        ArrayArg::from_raw_parts(src, n_total),
                         ArrayArg::from_raw_parts(dst, n_total),
-                        bs.height,
-                        bs.width,
+                        width,
+                        height,
                         plane_stride,
                     );
-                }
+                },
             }
+        }
+        #[cfg(not(feature = "fir"))]
+        unsafe {
+            blur::blur_pass_batched_kernel::launch_unchecked::<R>(
+                client,
+                blur_cube_count(width, self.batch_size),
+                blur_cube_dim(),
+                ArrayArg::from_raw_parts(src, n_total),
+                ArrayArg::from_raw_parts(dst, n_total),
+                width,
+                height,
+                plane_stride,
+            );
         }
     }
 
@@ -746,10 +781,14 @@ fn blur_cube_dim() -> CubeDim {
 /// FIR batched launch geometry: one thread per output pixel per image
 /// in the batch. `cube_count = (ceil(plane_stride / FIR_BLOCK_WIDTH),
 /// batch_size, 1)` — `CUBE_POS_Y` picks the batch slot.
+///
+/// Gated behind the `fir` Cargo feature.
+#[cfg(feature = "fir")]
 fn fir_batched_cube_count(plane_stride: u32, batch_size: u32) -> CubeCount {
     let cubes = plane_stride.div_ceil(blur::FIR_BLOCK_WIDTH);
     CubeCount::Static(cubes.max(1), batch_size, 1)
 }
+#[cfg(feature = "fir")]
 fn fir_batched_cube_dim() -> CubeDim {
     CubeDim::new_1d(blur::FIR_BLOCK_WIDTH)
 }

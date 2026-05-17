@@ -3,13 +3,16 @@
 //! last `cargo build --example bench_t4_warm` writes to the same path).
 //! Use this file when running ssim2-gpu performance comparisons.
 //!
-//! Reports steady-state per-call ms at 12 MP across the full
-//! `Ssim2Mode × Ssim2Blur` grid (4 × 2 = 8 cells):
+//! Reports steady-state per-call ms at 12 MP across:
 //!
 //! - `Ssim2Mode::{Full, Lossless, Fast, Faster}` (Kanetaka et al.
-//!   IWAIT 2026 Technique 2: skip-map dispatch).
+//!   IWAIT 2026 Technique 2: skip-map dispatch). Always present.
+//!
 //! - `Ssim2Blur::{Iir, Fir}` (Kanetaka et al. IWAIT 2026 Technique 1:
-//!   separable FIR D=5 blur as an opt-in distinct metric).
+//!   separable FIR D=5 blur as an opt-in distinct metric). The Fir
+//!   axis is **gated behind the `fir` Cargo feature** — without it
+//!   only the mode sweep (4 rows) runs; with it the full 4 × 2 = 8
+//!   cells run.
 //!
 //! Two harnesses:
 //! - **Warm-ref** (`compute_with_reference`): the encoder rate-distortion
@@ -24,7 +27,9 @@
 use std::time::{Duration, Instant};
 use cubecl::Runtime;
 use cubecl::cuda::CudaRuntime;
-use ssim2_gpu::{Ssim2, Ssim2Blur, Ssim2Mode};
+use ssim2_gpu::{Ssim2, Ssim2Mode};
+#[cfg(feature = "fir")]
+use ssim2_gpu::Ssim2Blur;
 
 const W: u32 = 4000;
 const H: u32 = 3000;
@@ -42,16 +47,21 @@ fn median(mut xs: Vec<Duration>) -> Duration {
 }
 
 /// Warm-ref bench: cache reference once, measure compute_with_reference_with_mode.
+/// When `fir` is enabled, accepts a `blur` selector and applies it via
+/// `with_blur`; otherwise the IIR path is the only path.
 fn bench_warm(
-    blur: Ssim2Blur,
+    #[cfg(feature = "fir")] blur: Ssim2Blur,
     mode: Ssim2Mode,
     r: &[u8],
     d: &[u8],
 ) -> (Duration, Duration, f64) {
     let client = CudaRuntime::client(&Default::default());
     let mut s = Ssim2::<CudaRuntime>::new(client, W, H)
-        .expect("Ssim2::new")
-        .with_blur(blur);
+        .expect("Ssim2::new");
+    #[cfg(feature = "fir")]
+    {
+        s = s.with_blur(blur);
+    }
     s.set_reference(r).expect("set_reference");
 
     let mut last_score = 0.0_f64;
@@ -77,15 +87,18 @@ fn bench_warm(
 
 /// Cold bench: full pipeline each call (compute_with_mode).
 fn bench_cold(
-    blur: Ssim2Blur,
+    #[cfg(feature = "fir")] blur: Ssim2Blur,
     mode: Ssim2Mode,
     r: &[u8],
     d: &[u8],
 ) -> (Duration, f64) {
     let client = CudaRuntime::client(&Default::default());
     let mut s = Ssim2::<CudaRuntime>::new(client, W, H)
-        .expect("Ssim2::new")
-        .with_blur(blur);
+        .expect("Ssim2::new");
+    #[cfg(feature = "fir")]
+    {
+        s = s.with_blur(blur);
+    }
 
     let mut last_score = 0.0_f64;
     for _ in 0..WARMUP {
@@ -113,7 +126,16 @@ fn main() {
         Ssim2Mode::Fast,
         Ssim2Mode::Faster,
     ];
-    let blurs = [Ssim2Blur::Iir, Ssim2Blur::Fir];
+
+    // Blur axis: only present when `fir` is enabled. The bench harness
+    // is parametric over `Ssim2Blur` only in that build; without the
+    // feature there's a single (implicit IIR) row per mode.
+    #[cfg(feature = "fir")]
+    let blurs: &[Ssim2Blur] = &[Ssim2Blur::Iir, Ssim2Blur::Fir];
+    #[cfg(not(feature = "fir"))]
+    let n_blurs = 1_usize;
+    #[cfg(feature = "fir")]
+    let n_blurs = blurs.len();
 
     eprintln!(
         "ssim2 {W}x{H} ({:.1} MP) — warm-ref (compute_with_reference_with_mode):",
@@ -124,18 +146,28 @@ fn main() {
         "blur", "mode", "median (ms)", "min (ms)", "score"
     );
     // Capture median per (blur, mode) for the speedup summary table.
-    let mut warm_med_ms = [[0.0_f64; 4]; 2];
-    let mut warm_scores = [[0.0_f64; 4]; 2];
-    for (bi, &blur) in blurs.iter().enumerate() {
+    let mut warm_med_ms = vec![vec![0.0_f64; modes.len()]; n_blurs];
+    let mut warm_scores = vec![vec![0.0_f64; modes.len()]; n_blurs];
+    for bi in 0..n_blurs {
         for (mi, &mode) in modes.iter().enumerate() {
-            let (med, min, score) = bench_warm(blur, mode, &r, &d);
+            #[cfg(feature = "fir")]
+            let (med, min, score) = bench_warm(blurs[bi], mode, &r, &d);
+            #[cfg(not(feature = "fir"))]
+            let (med, min, score) = {
+                let _ = bi;
+                bench_warm(mode, &r, &d)
+            };
             let med_ms = med.as_secs_f64() * 1000.0;
             let min_ms = min.as_secs_f64() * 1000.0;
             warm_med_ms[bi][mi] = med_ms;
             warm_scores[bi][mi] = score;
+            #[cfg(feature = "fir")]
+            let blur_label = format!("{:?}", blurs[bi]);
+            #[cfg(not(feature = "fir"))]
+            let blur_label = "Iir".to_string();
             eprintln!(
-                "{:>6?}  {:>10?}  {:>11.3}  {:>10.3}  {:>14.6}",
-                blur, mode, med_ms, min_ms, score
+                "{:>6}  {:>10?}  {:>11.3}  {:>10.3}  {:>14.6}",
+                blur_label, mode, med_ms, min_ms, score
             );
         }
     }
@@ -146,45 +178,66 @@ fn main() {
         (n as f64 / 3.0) / 1e6
     );
     eprintln!("{:>6}  {:>10}  {:>11}  {:>14}", "blur", "mode", "median (ms)", "score");
-    let mut cold_med_ms = [[0.0_f64; 4]; 2];
-    for (bi, &blur) in blurs.iter().enumerate() {
+    let mut cold_med_ms = vec![vec![0.0_f64; modes.len()]; n_blurs];
+    for bi in 0..n_blurs {
         for (mi, &mode) in modes.iter().enumerate() {
-            let (med, score) = bench_cold(blur, mode, &r, &d);
+            #[cfg(feature = "fir")]
+            let (med, score) = bench_cold(blurs[bi], mode, &r, &d);
+            #[cfg(not(feature = "fir"))]
+            let (med, score) = {
+                let _ = bi;
+                bench_cold(mode, &r, &d)
+            };
             let med_ms = med.as_secs_f64() * 1000.0;
             cold_med_ms[bi][mi] = med_ms;
+            #[cfg(feature = "fir")]
+            let blur_label = format!("{:?}", blurs[bi]);
+            #[cfg(not(feature = "fir"))]
+            let blur_label = "Iir".to_string();
             eprintln!(
-                "{:>6?}  {:>10?}  {:>11.3}  {:>14.6}",
-                blur, mode, med_ms, score
+                "{:>6}  {:>10?}  {:>11.3}  {:>14.6}",
+                blur_label, mode, med_ms, score
             );
         }
     }
 
     eprintln!();
-    eprintln!("Speedup summary (warm-ref median, all ratios vs IIR/Full):");
-    let base_warm = warm_med_ms[0][0]; // IIR + Full
+    eprintln!("Speedup summary (warm-ref median, all ratios vs (Iir|default)/Full):");
+    let base_warm = warm_med_ms[0][0];
     let base_cold = cold_med_ms[0][0];
     eprintln!(
         "  {:>6}  {:>10}  {:>10}  {:>10}",
         "blur", "mode", "warm-ref", "cold"
     );
-    for bi in 0..2 {
-        for mi in 0..4 {
+    for bi in 0..n_blurs {
+        for (mi, &mode) in modes.iter().enumerate() {
             let warm_ratio = base_warm / warm_med_ms[bi][mi];
             let cold_ratio = base_cold / cold_med_ms[bi][mi];
+            #[cfg(feature = "fir")]
+            let blur_label = format!("{:?}", blurs[bi]);
+            #[cfg(not(feature = "fir"))]
+            let blur_label = "Iir".to_string();
             eprintln!(
-                "  {:>6?}  {:>10?}  {:>9.3}x  {:>9.3}x",
-                blurs[bi], modes[mi], warm_ratio, cold_ratio
+                "  {:>6}  {:>10?}  {:>9.3}x  {:>9.3}x",
+                blur_label, mode, warm_ratio, cold_ratio
             );
         }
     }
 
     eprintln!();
+    #[cfg(feature = "fir")]
     eprintln!("Score scale (FIR is a DISTINCT metric — different scale by design):");
-    for bi in 0..2 {
-        for mi in 0..4 {
+    #[cfg(not(feature = "fir"))]
+    eprintln!("Score scale (IIR only — enable `fir` Cargo feature for FIR rows):");
+    for bi in 0..n_blurs {
+        for (mi, &mode) in modes.iter().enumerate() {
+            #[cfg(feature = "fir")]
+            let blur_label = format!("{:?}", blurs[bi]);
+            #[cfg(not(feature = "fir"))]
+            let blur_label = "Iir".to_string();
             eprintln!(
-                "  {:>6?} / {:>10?}: {:.6}",
-                blurs[bi], modes[mi], warm_scores[bi][mi]
+                "  {:>6} / {:>10?}: {:.6}",
+                blur_label, mode, warm_scores[bi][mi]
             );
         }
     }

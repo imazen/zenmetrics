@@ -29,7 +29,9 @@ use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
-use crate::{Error, GpuSsim2Result, NUM_SCALES, Result, Ssim2Blur};
+use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
+#[cfg(feature = "fir")]
+use crate::Ssim2Blur;
 
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
 /// (one buffer per channel of a 3-channel image).
@@ -178,6 +180,11 @@ pub struct Ssim2<R: Runtime> {
     /// `Ssim2Blur::Fir` is the separable 5-tap truncated Gaussian D=5
     /// from Kanetaka et al. IWAIT 2026 — a **distinct metric** with a
     /// different per-image score scale; tag via [`crate::SSIM2_FIR_COLUMN_NAME`].
+    ///
+    /// Field is gated behind the `fir` Cargo feature — without the
+    /// feature the IIR path is the only blur and there's no per-instance
+    /// blur state to carry.
+    #[cfg(feature = "fir")]
     blur: Ssim2Blur,
 }
 
@@ -245,6 +252,7 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            #[cfg(feature = "fir")]
             blur: Ssim2Blur::default(),
         })
     }
@@ -253,7 +261,8 @@ impl<R: Runtime> Ssim2<R> {
         (self.width, self.height)
     }
 
-    /// Builder-style blur selector. Returns `self` so callers can chain:
+    /// Builder-style blur selector — **gated behind the `fir` Cargo
+    /// feature**. Returns `self` so callers can chain:
     ///
     /// ```no_run
     /// use cubecl::Runtime;
@@ -270,13 +279,15 @@ impl<R: Runtime> Ssim2<R> {
     /// Subsequent `compute_with_reference` calls will fail with
     /// `Error::NoCachedReference` until `set_reference` is called again
     /// — the cached pyramid + XYB + ref²-blur state is blur-specific.
+    #[cfg(feature = "fir")]
     pub fn with_blur(mut self, blur: Ssim2Blur) -> Self {
         self.set_blur(blur);
         self
     }
 
-    /// In-place blur selector. See `with_blur` for semantics and the
-    /// cache-invalidation note.
+    /// In-place blur selector — **gated behind the `fir` Cargo feature**.
+    /// See `with_blur` for semantics and the cache-invalidation note.
+    #[cfg(feature = "fir")]
     pub fn set_blur(&mut self, blur: Ssim2Blur) {
         if blur != self.blur {
             self.has_cached_reference = false;
@@ -284,7 +295,9 @@ impl<R: Runtime> Ssim2<R> {
         self.blur = blur;
     }
 
-    /// Currently-selected blur mode.
+    /// Currently-selected blur mode — **gated behind the `fir` Cargo
+    /// feature**.
+    #[cfg(feature = "fir")]
     pub fn blur(&self) -> Ssim2Blur {
         self.blur
     }
@@ -700,7 +713,9 @@ impl<R: Runtime> Ssim2<R> {
     /// One-plane two-pass blur: `src → pass-0 → tiled-transpose → t_buf →
     /// pass-1 → full`. Caller supplies all 4 same-channel buffers.
     ///
-    /// Dispatches on `self.blur`:
+    /// Without the `fir` Cargo feature this calls the IIR path
+    /// directly (no per-instance blur knob). With the feature enabled
+    /// it dispatches on `self.blur`:
     /// - `Ssim2Blur::Iir`: the column-walking Charalampidis recursive
     ///   Gaussian (default — bit-identical to the published CPU
     ///   `ssimulacra2` reference).
@@ -718,13 +733,20 @@ impl<R: Runtime> Ssim2<R> {
         t_buf: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
-        match self.blur {
-            Ssim2Blur::Iir => {
-                self.blur_plane_two_pass_iir(width, height, n, src, v_buf, t_buf, full)
+        #[cfg(feature = "fir")]
+        {
+            match self.blur {
+                Ssim2Blur::Iir => {
+                    self.blur_plane_two_pass_iir(width, height, n, src, v_buf, t_buf, full)
+                }
+                Ssim2Blur::Fir => {
+                    self.blur_plane_two_pass_fir(width, height, n, src, v_buf, t_buf, full)
+                }
             }
-            Ssim2Blur::Fir => {
-                self.blur_plane_two_pass_fir(width, height, n, src, v_buf, t_buf, full)
-            }
+        }
+        #[cfg(not(feature = "fir"))]
+        {
+            self.blur_plane_two_pass_iir(width, height, n, src, v_buf, t_buf, full)
         }
     }
 
@@ -777,13 +799,15 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    /// Opt-in FIR D=5 path (Kanetaka et al. IWAIT 2026).
+    /// Opt-in FIR D=5 path (Kanetaka et al. IWAIT 2026) — **gated
+    /// behind the `fir` Cargo feature**.
     ///
     /// Uses the horizontal 5-tap FIR for both passes: the second pass
     /// runs on the transposed intermediate, so the kernel's horizontal
     /// walk corresponds to a vertical walk in the original frame. The
     /// 2D blur result lands in transposed orientation in `full`, exactly
     /// matching the IIR path's output convention.
+    #[cfg(feature = "fir")]
     fn blur_plane_two_pass_fir(
         &self,
         width: u32,
@@ -831,10 +855,12 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
+    #[cfg(feature = "fir")]
     fn fir_cube_count(n: usize) -> CubeCount {
         let cubes = (n as u32).div_ceil(blur::FIR_BLOCK_WIDTH);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
+    #[cfg(feature = "fir")]
     fn fir_cube_dim() -> CubeDim {
         CubeDim::new_1d(blur::FIR_BLOCK_WIDTH)
     }

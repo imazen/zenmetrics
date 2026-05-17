@@ -1,4 +1,10 @@
+#![cfg(feature = "fir")]
 //! API-level tests for the `Ssim2Blur` opt-in mode selector.
+//!
+//! Gated behind the `fir` Cargo feature — without it the `Ssim2Blur`
+//! enum and its surfaces (`with_blur` / `set_blur` / `blur()` /
+//! `SSIM2_FIR_COLUMN_NAME` / `column_name_for_blur`) are not exported,
+//! so this whole file compiles to nothing in the default build.
 //!
 //! These tests pin the contract for commit 1 of T_y.B.2:
 //!

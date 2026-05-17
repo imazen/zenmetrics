@@ -1392,6 +1392,16 @@ bumping). Static-assert count is now 223 across 13 test files.
   score) + `crates/ssim2-gpu/tests/blur_mode_api.rs` (API
   contract). Default IIR path bit-identical to pre-merge.
 
+- **`fir` Cargo feature gates the FIR opt-in API** (default OFF) —
+  housekeeping refactor of the FIR landing immediately above so the
+  default build surface matches the pre-FIR-v2 state. Without the
+  feature `Ssim2` / `Ssim2Batch` have no `with_blur` / `set_blur` /
+  `blur()` knobs and the crate doesn't export `Ssim2Blur`,
+  `SSIM2_FIR_COLUMN_NAME`, or `column_name_for_blur`. With
+  `--features fir` everything from the prior entry is restored; the
+  IIR + skip-map default path is unchanged either way (all 28
+  no-fir / 50 fir tests pass).
+
 ### Changed
 
 #### cvvdp-gpu

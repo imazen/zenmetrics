@@ -34,6 +34,17 @@ cpu = ["cubecl/cpu"]
 # Windows DX12, and HIP. Mac / Metal users (or anyone unsure of their
 # wgpu sub-backend's float-atomic support) should disable it.
 fast-reduction = []
+# Opt-in separable FIR D=5 Gaussian blur path
+# (Kanetaka et al. IWAIT 2026 Technique 1). OFF by default — the
+# default surface remains the canonical libjxl IIR + skip-map only.
+#
+# The FIR is a **distinct metric** (per-image scores diverge from the
+# IIR's by design — different impulse-response support); enabling this
+# feature surfaces `Ssim2Blur`, `with_blur` / `set_blur` / `blur()`,
+# `SSIM2_FIR_COLUMN_NAME`, and `column_name_for_blur`. Users sweeping
+# both should land FIR scores in a dedicated parquet column via
+# `SSIM2_FIR_COLUMN_NAME` to avoid mixing with IIR's column.
+fir = []
 
 [dependencies]
 cubecl = { workspace = true }

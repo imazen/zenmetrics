@@ -99,17 +99,21 @@ const RING_SIZE_USIZE: usize = consts::RADIUS * 2 + 1;
 const TWO_N: u32 = 2 * RADIUS_U32;
 
 /// FIR kernel radius (taps on each side of centre). 2 means 5 taps total.
+#[cfg(feature = "fir")]
 pub const FIR_RADIUS: u32 = consts::FIR_RADIUS as u32;
 /// FIR kernel diameter (total taps).
+#[cfg(feature = "fir")]
 pub const FIR_TAPS: u32 = consts::FIR_TAPS as u32;
 /// Compile-time check that the build-side `FIR_RADIUS` is 2 (5 taps).
 /// If you change the kernel diameter, the boundary-clamp logic in the
 /// FIR kernels below needs to be regeneralised.
+#[cfg(feature = "fir")]
 const _: () = assert!(consts::FIR_RADIUS == 2);
 
 /// Threads-per-block for the FIR kernels. 256 is a round-warp count
 /// that matches the rest of the pipeline's pointwise kernels and gives
 /// good occupancy on every modern GPU (32-wide SIMD = 8 warps per cube).
+#[cfg(feature = "fir")]
 pub const FIR_BLOCK_WIDTH: u32 = 256;
 
 /// One thread = one column. Walks `y` from `−N + 1` to `height − 1` and
@@ -322,6 +326,9 @@ pub fn blur_pass_batched_kernel(
 
 // ───────────────── Ssim2Blur::Fir — separable D=5 FIR ─────────────────
 //
+// **Gated behind the `fir` Cargo feature** — off by default, the IIR
+// path above is the only blur surface.
+//
 // One thread per output pixel; 5 reads along the row; symmetric taps
 // folded; ZERO padding at the borders (libjxl-IIR convention).
 //
@@ -338,6 +345,7 @@ pub fn blur_pass_batched_kernel(
 /// Launch geometry: `cube_count_1d(width * height)`,
 /// `cube_dim_1d(FIR_BLOCK_WIDTH)`. The kernel's per-thread `idx`
 /// decomposes into `(y, x)` via `y = idx / width`, `x = idx % width`.
+#[cfg(feature = "fir")]
 #[cube(launch_unchecked)]
 pub fn blur_h_fir5_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
     let idx = ABSOLUTE_POS;
@@ -384,6 +392,7 @@ pub fn blur_h_fir5_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, he
 /// `batch_size` planes packed contiguously in `src` / `dst`. Launch
 /// geometry: `cube_count = (ceil(plane_stride / FIR_BLOCK_WIDTH),
 /// batch_size, 1)` — same per-image work, batched by `CUBE_POS_Y`.
+#[cfg(feature = "fir")]
 #[cube(launch_unchecked)]
 pub fn blur_h_fir5_batched_kernel(
     src: &Array<f32>,

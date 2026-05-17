@@ -14,6 +14,9 @@ use std::path::Path;
 use std::{env, io};
 
 fn main() {
+    // Rerun if the `fir` feature flips (CARGO_FEATURE_FIR being set or
+    // unset toggles whether the FIR tap constants get emitted).
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_FIR");
     let out_dir = env::var("OUT_DIR").expect("can read OUT_DIR");
     init_recursive_gaussian(&out_dir).expect("init recursive gaussian");
 }
@@ -36,22 +39,30 @@ fn init_recursive_gaussian(out_path: &str) -> io::Result<()> {
     //
     // Coefficients are g(x) = exp(-x² / (2σ²)) for x ∈ {-2,-1,0,1,2}
     // normalized so the sum is 1.0.
+    //
+    // Gated behind the `fir` Cargo feature (default OFF). We still need
+    // `FIR_RADIUS` / `FIR_TAPS` in the emitted file so blur.rs's
+    // `#[cfg(feature = "fir")]` block can name them, but the costly
+    // computation + tap emission only fires when the feature is on.
     const FIR_RADIUS: usize = 2;
     const FIR_TAPS: usize = 2 * FIR_RADIUS + 1; // 5
+    let fir_enabled = env::var_os("CARGO_FEATURE_FIR").is_some();
     let mut fir = [0.0_f64; FIR_TAPS];
-    let inv_two_sigma2 = 1.0 / (2.0 * SIGMA * SIGMA);
-    for i in 0..FIR_TAPS {
-        let x = (i as f64) - (FIR_RADIUS as f64);
-        fir[i] = (-x * x * inv_two_sigma2).exp();
-    }
-    let fir_sum: f64 = fir.iter().sum();
-    for f in &mut fir {
-        *f /= fir_sum;
-    }
-    // Sanity: symmetric and sums to 1.
-    assert!((fir.iter().sum::<f64>() - 1.0).abs() < 1e-12);
-    for i in 0..FIR_RADIUS {
-        assert!((fir[i] - fir[FIR_TAPS - 1 - i]).abs() < 1e-12);
+    if fir_enabled {
+        let inv_two_sigma2 = 1.0 / (2.0 * SIGMA * SIGMA);
+        for i in 0..FIR_TAPS {
+            let x = (i as f64) - (FIR_RADIUS as f64);
+            fir[i] = (-x * x * inv_two_sigma2).exp();
+        }
+        let fir_sum: f64 = fir.iter().sum();
+        for f in &mut fir {
+            *f /= fir_sum;
+        }
+        // Sanity: symmetric and sums to 1.
+        assert!((fir.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        for i in 0..FIR_RADIUS {
+            assert!((fir[i] - fir[FIR_TAPS - 1 - i]).abs() < 1e-12);
+        }
     }
 
     let radius = 3.2795_f64.mul_add(SIGMA, 0.2546).round();
@@ -127,13 +138,18 @@ fn init_recursive_gaussian(out_path: &str) -> io::Result<()> {
 
     // T_y.B.2 commit 3: separable FIR D=5 taps for the opt-in FIR
     // blur path (Ssim2Blur::Fir). See top of this file for derivation.
-    write_const_usize(&mut out_file, "FIR_RADIUS", FIR_RADIUS)?;
-    write_const_usize(&mut out_file, "FIR_TAPS", FIR_TAPS)?;
-    write_const_f32(&mut out_file, "FIR_TAP_0", fir[0] as f32)?;
-    write_const_f32(&mut out_file, "FIR_TAP_1", fir[1] as f32)?;
-    write_const_f32(&mut out_file, "FIR_TAP_2", fir[2] as f32)?;
-    write_const_f32(&mut out_file, "FIR_TAP_3", fir[3] as f32)?;
-    write_const_f32(&mut out_file, "FIR_TAP_4", fir[4] as f32)?;
+    // Only emitted when the `fir` Cargo feature is on; without it the
+    // consuming code in blur.rs is cfg'd out so these consts would be
+    // dead.
+    if fir_enabled {
+        write_const_usize(&mut out_file, "FIR_RADIUS", FIR_RADIUS)?;
+        write_const_usize(&mut out_file, "FIR_TAPS", FIR_TAPS)?;
+        write_const_f32(&mut out_file, "FIR_TAP_0", fir[0] as f32)?;
+        write_const_f32(&mut out_file, "FIR_TAP_1", fir[1] as f32)?;
+        write_const_f32(&mut out_file, "FIR_TAP_2", fir[2] as f32)?;
+        write_const_f32(&mut out_file, "FIR_TAP_3", fir[3] as f32)?;
+        write_const_f32(&mut out_file, "FIR_TAP_4", fir[4] as f32)?;
+    }
 
     write_const_f32(&mut out_file, "VERT_MUL_IN_1", n2[0] as f32)?;
     write_const_f32(&mut out_file, "VERT_MUL_IN_3", n2[1] as f32)?;

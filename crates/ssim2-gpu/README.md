@@ -36,6 +36,22 @@ for dis in distorted_candidates {
 
 The `Ssim2Batch<R>` wrapper exposes the same API for batched scoring.
 
+## Cargo features
+
+- `cuda` / `wgpu` / `hip` / `cpu` — runtime backends; pick whichever
+  your target platform supports. Default is `cuda + wgpu + cpu +
+  fast-reduction`.
+- `fast-reduction` — `Atomic<f32>::fetch_add` per-octave reduction.
+  See `Cargo.toml` for the per-backend correctness matrix
+  (disable on Metal).
+- `fir` — **opt-in** separable FIR D=5 Gaussian blur path per Kanetaka
+  et al. IWAIT 2026. Off by default. When enabled, exposes the
+  `Ssim2Blur` enum, `with_blur` / `set_blur` / `blur()` accessors,
+  `SSIM2_FIR_COLUMN_NAME`, and `column_name_for_blur`. The FIR is a
+  **distinct metric** — per-image scores diverge from the IIR's by
+  design (different impulse-response support); sweep tooling lands FIR
+  scores in a separate parquet column to avoid mixing.
+
 ## Score interpretation
 
 Output is in roughly the 0–100 range:

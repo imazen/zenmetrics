@@ -1,5 +1,11 @@
+#![cfg(feature = "fir")]
 //! Integration tests for the opt-in FIR D=5 blur path
 //! (`Ssim2Blur::Fir`) per Kanetaka et al. IWAIT 2026.
+//!
+//! Gated behind the `fir` Cargo feature — the FIR API surface
+//! (`Ssim2Blur`, `with_blur`, `set_blur`, `blur()`) is not exported
+//! without the feature, so this whole file compiles to nothing in the
+//! default build.
 //!
 //! **The FIR is a distinct metric**, not a faster reimplementation
 //! of the IIR. These tests cover the FIR's own contract:
