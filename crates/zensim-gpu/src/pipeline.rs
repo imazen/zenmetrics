@@ -37,14 +37,12 @@ use crate::{
     simd_padded_width,
 };
 
-// Some fields here (`logical_w`, the per-channel `h_mu1..h_sigma12`
-// buffers, `partials_*_per_scale` sizes) were used by the older
-// pre-fused-kernel pipeline; the tile-fused `fused_features_kernel`
-// allocates its working set in shared memory instead and only reads
-// `padded_w / h / n_padded / n_strips / partials_*_off`. Keeping the
-// allocations + bookkeeping around so future tooling (e.g. the
-// in-progress per-channel intermediate dump for debugging) can land
-// without reshaping the struct.
+// `logical_w` and `partials_*_per_scale` are bookkeeping kept for
+// future debug tooling (per-channel intermediate dump). The
+// pre-fused-kernel `h_mu1..h_sigma12` H-blur scratch planes were
+// removed in T_z.B (2026-05-16): the tile-fused `fused_features_kernel`
+// allocates its working set in shared memory, so 12 padded-f32 planes
+// per scale (~576 MB of zero-fill traffic at 12 MP) were dead weight.
 #[allow(dead_code)]
 struct Scale {
     logical_w: u32,
@@ -53,15 +51,12 @@ struct Scale {
     n_padded: usize,
     n_strips: u32,
 
-    /// Three planar XYB planes per side at `padded_w × h`.
+    /// Three planar XYB planes per side at `padded_w × h`. Allocated
+    /// `empty()` — `srgb_to_positive_xyb_kernel` writes every pixel
+    /// in `[0, padded_w) × [0, h)` (including the mirror-padded
+    /// columns) so zero-fill on the host side is unnecessary.
     ref_xyb: [cubecl::server::Handle; 3],
     dis_xyb: [cubecl::server::Handle; 3],
-
-    /// Per-channel H-blur scratch (4 outputs × 3 channels).
-    h_mu1: [cubecl::server::Handle; 3],
-    h_mu2: [cubecl::server::Handle; 3],
-    h_sigma_sq: [cubecl::server::Handle; 3],
-    h_sigma12: [cubecl::server::Handle; 3],
 
     /// Mirror-offset table (one u32 per padding column). `None` when
     /// `padded_w == logical_w`.
@@ -78,13 +73,18 @@ struct Scale {
     partials_max_per_scale: usize, // = pw × n_strips × 3 channels × 3
 }
 
-fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
-    client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
+/// Allocate an uninitialised f32 plane on-device. Use only when the
+/// caller writes every element before the next kernel reads any —
+/// the fused features pipeline matches that contract for every plane
+/// (xyb produced by `srgb_to_positive_xyb_kernel`, downscale outputs
+/// produced by `downscale_2x_3ch_kernel`, partials overwritten by
+/// `fused_features_kernel`'s per-thread store).
+fn alloc_empty_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
+    client.empty(n * core::mem::size_of::<f32>())
 }
-fn alloc_zeros_u32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
-    client.create_from_slice(u32::as_bytes(&vec![0_u32; n]))
+fn alloc_empty_f64<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
+    client.empty(n * core::mem::size_of::<f64>())
 }
-
 /// Choose a per-scale strip count to keep V-blur GPU-occupied at all
 /// resolutions. The kernel's parallelism is `padded_w × n_strips × 3
 /// channels`. RTX-5070-class GPUs want ≥ 16 K resident threads to
@@ -111,11 +111,11 @@ impl Scale {
         partials_max_off: usize,
     ) -> Self {
         let n = (padded_w as usize) * (h as usize);
-        let alloc3 = || -> [cubecl::server::Handle; 3] {
+        let alloc3_empty = || -> [cubecl::server::Handle; 3] {
             [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
+                alloc_empty_f32(client, n),
+                alloc_empty_f32(client, n),
+                alloc_empty_f32(client, n),
             ]
         };
         let pad_count = padded_w - logical_w;
@@ -148,12 +148,8 @@ impl Scale {
             padded_w,
             h,
             n_padded: n,
-            ref_xyb: alloc3(),
-            dis_xyb: alloc3(),
-            h_mu1: alloc3(),
-            h_mu2: alloc3(),
-            h_sigma_sq: alloc3(),
-            h_sigma12: alloc3(),
+            ref_xyb: alloc3_empty(),
+            dis_xyb: alloc3_empty(),
             mirror_offsets,
             pad_count,
             partials_f64_off,
@@ -248,9 +244,11 @@ impl<R: Runtime> Zensim<R> {
 
         // u8 staging is uploaded via host-side widening to u32 (WGSL
         // can't index `Array<u8>`), matching the dssim-gpu / ssim2-gpu
-        // shape.
-        let src_u8_a = alloc_zeros_u32(&client, pixels);
-        let src_u8_b = alloc_zeros_u32(&client, pixels);
+        // shape. The initial handles are `empty()` placeholders — the
+        // first `upload_u8` replaces them via `create_from_slice_pinned`
+        // before any kernel reads them, so no zero-fill is needed here.
+        let src_u8_a = client.empty(pixels * core::mem::size_of::<u32>());
+        let src_u8_b = client.empty(pixels * core::mem::size_of::<u32>());
 
         // Upload the 256-entry LUT once at construction.
         let srgb_lut = client.create_from_slice(f32::as_bytes(
@@ -261,15 +259,14 @@ impl<R: Runtime> Zensim<R> {
         // call overwrites them via the V-blur+features kernel (one
         // slot per thread, no zeroing required), then the on-device
         // reduction kernel folds them into the small `finals_*` for
-        // host read-back.
-        let partials_f64 =
-            client.create_from_slice(f64::as_bytes(&vec![0.0_f64; partials_f64_total]));
-        let partials_max =
-            client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_max_total]));
+        // host read-back. Use `empty()` to skip the host→device
+        // zero-fill (would be ~120 MB at 12 MP per construction).
+        let partials_f64 = alloc_empty_f64(&client, partials_f64_total);
+        let partials_max = alloc_empty_f32(&client, partials_max_total);
         let n_finals_f64 = scales.len() * 3 * 17;
         let n_finals_max = scales.len() * 3 * 3;
-        let finals_f64 = client.create_from_slice(f64::as_bytes(&vec![0.0_f64; n_finals_f64]));
-        let finals_max = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n_finals_max]));
+        let finals_f64 = alloc_empty_f64(&client, n_finals_f64);
+        let finals_max = alloc_empty_f32(&client, n_finals_max);
 
         Ok(Self {
             client,
