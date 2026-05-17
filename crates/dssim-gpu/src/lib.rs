@@ -72,10 +72,23 @@
 // layer. No raw pointer / transmute / get_unchecked is used.
 
 pub mod kernels;
+pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
 
+// Uniform opaque API (Phase 2 of API uniformity refactor). The
+// `<Metric>Opaque` shim hides the cubecl `Runtime` generic from
+// downstream consumers, so they don't pin to a specific cubecl
+// version through their public types. See `opaque.rs`.
+pub use opaque::{Backend, DssimOpaque, DssimParams, Score};
+
+// Typed-generic API (gated behind `cubecl-types` for advanced callers
+// that want to control the cubecl runtime explicitly). The same types
+// are still reachable as `dssim_gpu::pipeline::Dssim` for in-tree
+// callers regardless of the feature.
+#[cfg(feature = "cubecl-types")]
 pub use pipeline::Dssim;
+#[cfg(feature = "cubecl-types")]
 pub use pipeline_batch::DssimBatch;
 
 /// Number of pyramid scales — matches `dssim-core` and `dssim-cuda`.

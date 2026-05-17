@@ -1435,6 +1435,8 @@ dependencies = [
  "imgref",
  "rgb",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
