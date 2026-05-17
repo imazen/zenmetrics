@@ -1049,51 +1049,50 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // ── Step 2: MF/HF separation ──
-        // X (ch=0): blur(MF_X) into temp1; split: HF_X = orig - blur,
-        //           MF_X = remove_range(blur, REMOVE_MF_RANGE)
-        self.blur_plane_via(
+        // T_x.B (2026-05-17): fuse the 3 SIGMA_HF blurs into ONE
+        // 3-channel call (2 launches vs 6 — H+V each handle all
+        // channels at once). Outputs land in scratch planes
+        // freq[0][0..3], which UHF will overwrite in Step 3 so they're
+        // free here. Scratches for the H-pass are temp1 / temp2 /
+        // mask_scratch.
+        self.blur_3ch_via(
             &freq[2][0],
+            &freq[2][1],
+            &freq[2][2],
+            &freq[0][0],
+            &freq[0][1],
+            &freq[0][2],
             &self.temp1.clone(),
             &self.temp2.clone(),
+            &self.mask_scratch.clone(),
             SIGMA_HF,
         );
+        // X (ch=0): HF_X = orig - blur, MF_X = remove_range(blur, REMOVE_MF_RANGE)
         unsafe {
             frequency::split_band_remove_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
                 REMOVE_MF_RANGE,
             );
         }
-        // Y (ch=1): blur(MF_Y); HF_Y = orig - blur, MF_Y = amplify_range(blur, ADD_MF_RANGE)
-        self.blur_plane_via(
-            &freq[2][1],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            SIGMA_HF,
-        );
+        // Y (ch=1): HF_Y = orig - blur, MF_Y = amplify_range(blur, ADD_MF_RANGE)
         unsafe {
             frequency::split_band_amplify_inplace_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
                 ADD_MF_RANGE,
             );
         }
-        // B (ch=2): blur(MF_B) → temp1; copy temp1 → MF_B (no HF for B)
-        self.blur_plane_via(
-            &freq[2][2],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            SIGMA_HF,
-        );
-        self.copy_plane(&self.temp1.clone(), &freq[2][2]);
+        // B (ch=2): copy blurred → MF_B (no HF for B).
+        self.copy_plane(&freq[0][2].clone(), &freq[2][2]);
 
         // suppress_x_by_y(HF_y → HF_x)
         unsafe {
