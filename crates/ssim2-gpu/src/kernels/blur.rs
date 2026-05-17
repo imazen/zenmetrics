@@ -164,6 +164,103 @@ pub fn blur_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, heig
     }
 }
 
+/// T_x.B (2026-05-17): Fused column-walk + transpose. Identical IIR
+/// math to `blur_pass_kernel` but writes col-major instead of row-major,
+/// eliminating the explicit `transpose_kernel` between the two blur
+/// passes. After this kernel, the host runs the second blur_pass on the
+/// `h × w` row-major output directly — same final orientation as the
+/// old "blur → transpose → blur" sequence but one fewer launch per blur.
+///
+/// `dst` has dimensions `w × h` written as `h` rows of `w` cells in
+/// transposed layout — i.e., `dst[x * h + y]` for input column `x`,
+/// row `y`. Equivalently `dst` is `h × w` row-major with `(yt, xt) =
+/// (xt_old, yt_old)` = `(x, y)` swap.
+#[cube(launch_unchecked)]
+pub fn blur_pass_t_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
+    let x = ABSOLUTE_POS;
+    if x >= width as usize {
+        terminate!();
+    }
+
+    let mut ring = SharedMemory::<f32>::new(BLOCK_TIMES_RING_USIZE);
+    let tx = UNIT_POS_X as usize;
+    let ring_base = tx * RING_SIZE_USIZE;
+
+    let mut k: u32 = 0;
+    while k < RING_SIZE {
+        ring[ring_base + (k as usize)] = f32::new(0.0);
+        k += 1;
+    }
+
+    let mut prev_1 = 0.0_f32;
+    let mut prev_3 = 0.0_f32;
+    let mut prev_5 = 0.0_f32;
+    let mut prev2_1 = 0.0_f32;
+    let mut prev2_3 = 0.0_f32;
+    let mut prev2_5 = 0.0_f32;
+
+    let h = height;
+    let w = width as usize;
+    let h_us = height as usize;
+    let dst_col_off = x * h_us;
+
+    let span = h + RADIUS_U32 - 1;
+    let mut i: u32 = 0;
+    while i < span {
+        let right = i;
+        let left_present = i >= TWO_N;
+        let y_emit = i + 1 >= RADIUS_U32;
+
+        let right_val = if right < h {
+            src[(right as usize) * w + x]
+        } else {
+            f32::new(0.0)
+        };
+
+        let left_val = if left_present {
+            let slot = (i - TWO_N) % RING_SIZE;
+            ring[ring_base + (slot as usize)]
+        } else {
+            f32::new(0.0)
+        };
+
+        let sum = left_val + right_val;
+
+        let mut out_1 = sum * consts::MUL_IN_1;
+        let mut out_3 = sum * consts::MUL_IN_3;
+        let mut out_5 = sum * consts::MUL_IN_5;
+
+        out_1 += consts::MUL_PREV2_1 * prev2_1;
+        out_3 += consts::MUL_PREV2_3 * prev2_3;
+        out_5 += consts::MUL_PREV2_5 * prev2_5;
+        prev2_1 = prev_1;
+        prev2_3 = prev_3;
+        prev2_5 = prev_5;
+
+        out_1 += consts::MUL_PREV_1 * prev_1;
+        out_3 += consts::MUL_PREV_3 * prev_3;
+        out_5 += consts::MUL_PREV_5 * prev_5;
+        prev_1 = out_1;
+        prev_3 = out_3;
+        prev_5 = out_5;
+
+        if y_emit {
+            let y = i + 1 - RADIUS_U32;
+            if y < h {
+                // T_x.B: write col-major (= transposed row-major). Each
+                // thread (= one source column) writes a contiguous run
+                // of `h` outputs into `dst[x * h .. x * h + h]`.
+                dst[dst_col_off + (y as usize)] = out_1 + out_3 + out_5;
+            }
+        }
+
+        let slot = right % RING_SIZE;
+        ring[ring_base + (slot as usize)] = right_val;
+
+        i += 1;
+    }
+}
+
 /// Threads-per-block for the blur kernel. Must match the launch dim
 /// chosen on the host. 96 = 3 warps of 32, the same value the CUDA
 /// reference uses (`BLOCK_WIDTH = 3 * 32`).

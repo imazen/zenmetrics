@@ -1,0 +1,274 @@
+// Copyright (c) Imazen LLC and the JPEG XL Project Authors.
+// Licensed under AGPL-3.0-or-later. Commercial licenses at https://www.imazen.io/pricing
+
+//! LUT-based separable Gaussian blur.
+//!
+//! Mathematically identical to [`super::blur`] / [`super::blur_3ch`], but
+//! reads pre-computed weights and integral-table values from a small
+//! GPU buffer instead of evaluating `exp` per tap.
+//!
+//! The two-fold win:
+//!
+//! 1. **No transcendentals in the hot loop.** The existing kernels call
+//!    `f32::powf(2.0, x*LOG2_E)` once per tap per pixel; for the σ=7.16
+//!    LF blur that's ~33 `powf` calls per output pixel × 12 MP × 2
+//!    passes ≈ 800M transcendentals per blur direction. The LUT kernel
+//!    replaces each with a single small-array load.
+//!
+//! 2. **O(1) edge weight via integral table** (vship-style — see
+//!    `~/work/refs/Vship/src/HIP/butter/gaussianblur.hpp:8-22`). Instead
+//!    of summing weights with the partial-window loop, we look up
+//!    `integral[end_offset + 1] - integral[begin_offset]` — one
+//!    subtraction. Removes a `wsum += weight` per tap.
+//!
+//! Inspired by vship's `GaussianHandle` pattern but the GPU code is
+//! rewritten in CubeCL idioms (no line-for-line port, vship is MIT NON-AI).
+//!
+//! ## Weight table layout
+//!
+//! For a given sigma the host computes `radius = max(1, floor(2.25 * sigma))`
+//! and writes:
+//!
+//! - `weights[0..=2R]`        — Gaussian weights at offsets `-R..=R`.
+//!   Stored UN-normalized so the kernel's per-output normalization
+//!   (`sum/wsum`) is bit-equivalent to the on-the-fly path.
+//! - `integral[0..=2R+1]`     — `integral[k] = Σ_{i<k} weights[i]`.
+//!
+//! Both tables are packed into a single `Array<f32>` of length `4R+3`:
+//! `weights` occupy `[0..=2R]`, `integral` occupies `[2R+1..=4R+2]`.
+//! Use the helpers below to lay them out.
+
+#![allow(clippy::assign_op_pattern)]
+
+use cubecl::prelude::*;
+
+/// Kernel-extent multiplier — matches libjxl's `M = 2.25` (same as
+/// `super::blur`). Public so the host helper agrees on radius.
+pub const M: f32 = 2.25;
+
+/// Compute `radius = max(1, floor(M * sigma))` host-side.
+pub fn radius_for(sigma: f32) -> usize {
+    let raw = (M * sigma) as u32;
+    raw.max(1) as usize
+}
+
+/// Compute the un-normalized Gaussian weights + their integral table on
+/// the host. The layout matches what the kernels below expect. Returns
+/// `(packed_table, radius)`.
+///
+/// Weight formula: `gauss(d, s) = exp(-0.5 * (d/s)^2)`. Matches
+/// [`super::blur::gauss`] / [`super::blur_3ch::gauss`] which use the
+/// equivalent `exp(x) = 2^(x*log2(e))` substitution; the resulting
+/// floats are within ulp on every backend the CUDA toolchain targets.
+pub fn make_table(sigma: f32) -> (Vec<f32>, usize) {
+    let r = radius_for(sigma);
+    let inv_s = 1.0_f32 / sigma;
+    let mut table = vec![0.0_f32; 4 * r + 3];
+    let mut acc = 0.0_f32;
+    // weights[0..=2R]
+    for k in 0..=(2 * r) {
+        let d = (k as i32 - r as i32) as f32;
+        let z = d * inv_s;
+        let w = (-0.5_f32 * z * z).exp();
+        table[k] = w;
+    }
+    // integral[0..=2R+1] follows the weights region.
+    let integ_off = 2 * r + 1;
+    for k in 0..=(2 * r + 1) {
+        table[integ_off + k] = acc;
+        if k <= 2 * r {
+            acc += table[k];
+        }
+    }
+    (table, r)
+}
+
+/// Horizontal Gaussian blur with precomputed weight LUT + integral table.
+///
+/// `radius` is the half-window size (same definition as
+/// [`super::blur::horizontal_blur_kernel`]'s `radius_us`). `table` is
+/// the packed `[weights || integral]` array; weights occupy
+/// `[0..=2R]`, integral occupies `[2R+1..=4R+2]`.
+#[cube(launch_unchecked)]
+pub fn horizontal_blur_lut_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let row = idx / w;
+    let x = idx - row * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(x, r);
+    let end = u32::min((x + r) as u32, (w - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    // Edge-clamped weight sum via integral table:
+    //   wsum = integral[(end - x) + r + 1] - integral[(begin - x) + r]
+    // (begin-x can be negative; adding r shifts to non-negative.)
+    let a = begin + r - x;
+    let b = end + r + 1 - x;
+    let wsum = table[integ_off + b] - table[integ_off + a];
+
+    let mut sum = 0.0f32;
+    let row_off = row * w;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - x];
+        sum += src[row_off + i] * weight;
+        i += 1;
+    }
+    // sum / wsum (NOT sum * (1/wsum)) — bit-rounding agreement with
+    // the original blur kernel matters for downstream tie-breakers.
+    dst[idx] = sum / wsum;
+}
+
+/// Vertical Gaussian blur with precomputed weight LUT + integral table.
+#[cube(launch_unchecked)]
+pub fn vertical_blur_lut_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b = end + r + 1 - y;
+    let wsum = table[integ_off + b] - table[integ_off + a];
+
+    let mut sum = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        sum += src[i * w + x] * weight;
+        i += 1;
+    }
+    dst[idx] = sum / wsum;
+}
+
+/// 3-channel fused horizontal blur (LUT variant).
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn horizontal_blur_3ch_lut_kernel(
+    src_x: &Array<f32>,
+    src_y: &Array<f32>,
+    src_b: &Array<f32>,
+    dst_x: &mut Array<f32>,
+    dst_y: &mut Array<f32>,
+    dst_b: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let row = idx / w;
+    let x = idx - row * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(x, r);
+    let end = u32::min((x + r) as u32, (w - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - x;
+    let b = end + r + 1 - x;
+    let wsum = table[integ_off + b] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let row_off = row * w;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - x];
+        let off = row_off + i;
+        sum_x += src_x[off] * weight;
+        sum_y += src_y[off] * weight;
+        sum_b += src_b[off] * weight;
+        i += 1;
+    }
+    dst_x[idx] = sum_x / wsum;
+    dst_y[idx] = sum_y / wsum;
+    dst_b[idx] = sum_b / wsum;
+}
+
+/// 3-channel fused vertical blur (LUT variant).
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_3ch_lut_kernel(
+    src_x: &Array<f32>,
+    src_y: &Array<f32>,
+    src_b: &Array<f32>,
+    dst_x: &mut Array<f32>,
+    dst_y: &mut Array<f32>,
+    dst_b: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b = end + r + 1 - y;
+    let wsum = table[integ_off + b] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        let off = i * w + x;
+        sum_x += src_x[off] * weight;
+        sum_y += src_y[off] * weight;
+        sum_b += src_b[off] * weight;
+        i += 1;
+    }
+    dst_x[idx] = sum_x / wsum;
+    dst_y[idx] = sum_y / wsum;
+    dst_b[idx] = sum_b / wsum;
+}

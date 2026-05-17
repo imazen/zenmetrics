@@ -15,6 +15,7 @@
 
 pub mod blur;
 pub mod blur_3ch;
+pub mod blur_lut;
 pub mod colors;
 pub mod diffmap;
 pub mod downscale;

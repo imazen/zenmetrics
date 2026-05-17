@@ -18,7 +18,9 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{blur, colors, diffmap, downscale, frequency, malta, masking, reduction};
+use crate::kernels::{
+    blur, blur_lut, colors, diffmap, downscale, frequency, malta, masking, reduction,
+};
 use crate::{ButteraugliParams, Error, GpuButteraugliResult, Result};
 
 /// Default intensity multiplier — value of one display nit relative to
@@ -168,6 +170,57 @@ pub struct Butteraugli<R: Runtime> {
     /// Stored on the struct so internal helpers can read it without
     /// threading the value through every call.
     params: ButteraugliParams,
+
+    /// Pre-computed Gaussian weight + integral tables, one per fixed
+    /// sigma the pipeline uses. Uploaded once at construction; the LUT
+    /// blur kernels read them per tap instead of calling `powf`. See
+    /// [`crate::kernels::blur_lut`] for the layout. Indices match
+    /// [`BLUR_SIGMAS`] below.
+    blur_tables: [cubecl::server::Handle; 5],
+    blur_radii: [u32; 5],
+    blur_table_lens: [usize; 5],
+}
+
+/// Fixed sigmas referenced by the LUT blur tables, indexed via
+/// [`BlurKind`]. Stored as `f32` so the tables match the kernels'
+/// `f32::exp(-0.5*(d/s)^2)` exactly.
+const BLUR_SIGMAS: [f32; 5] = [
+    SIGMA_OPSIN,
+    SIGMA_LF,
+    SIGMA_HF,
+    SIGMA_UHF,
+    MASK_RADIUS,
+];
+
+/// Index into [`BLUR_SIGMAS`] / [`Butteraugli::blur_tables`].
+#[derive(Clone, Copy)]
+#[repr(usize)]
+enum BlurKind {
+    Opsin = 0,
+    Lf = 1,
+    Hf = 2,
+    Uhf = 3,
+    Mask = 4,
+}
+
+/// Exact-bit match against [`BLUR_SIGMAS`]. Returns `None` for an
+/// unrecognised sigma; the caller then falls back to the powf-per-tap
+/// blur kernel (preserves correctness for any future caller passing a
+/// novel sigma).
+fn blur_kind_for_sigma(sigma: f32) -> Option<BlurKind> {
+    if sigma == SIGMA_OPSIN {
+        Some(BlurKind::Opsin)
+    } else if sigma == SIGMA_LF {
+        Some(BlurKind::Lf)
+    } else if sigma == SIGMA_HF {
+        Some(BlurKind::Hf)
+    } else if sigma == SIGMA_UHF {
+        Some(BlurKind::Uhf)
+    } else if sigma == MASK_RADIUS {
+        Some(BlurKind::Mask)
+    } else {
+        None
+    }
 }
 
 fn alloc_plane<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
@@ -285,6 +338,21 @@ impl<R: Runtime> Butteraugli<R> {
         let temp1 = alloc_plane(&client, n);
         let temp2 = alloc_plane(&client, n);
 
+        // Pre-compute and upload one Gaussian LUT per fixed sigma. Each
+        // table is small (≤ 67 floats for σ=7.16, the largest), so the
+        // five allocs are negligible. Reused across every blur call.
+        let mut blur_tables: [Option<cubecl::server::Handle>; 5] =
+            [None, None, None, None, None];
+        let mut blur_radii = [0_u32; 5];
+        let mut blur_table_lens = [0_usize; 5];
+        for (i, &sigma) in BLUR_SIGMAS.iter().enumerate() {
+            let (table, r) = blur_lut::make_table(sigma);
+            blur_table_lens[i] = table.len();
+            blur_radii[i] = r as u32;
+            blur_tables[i] = Some(client.create_from_slice(f32::as_bytes(&table)));
+        }
+        let blur_tables = blur_tables.map(|h| h.unwrap());
+
         Self {
             client,
             width,
@@ -311,6 +379,9 @@ impl<R: Runtime> Butteraugli<R> {
             // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
             pack_scratch: vec![0_u32; n],
             params: ButteraugliParams::default(),
+            blur_tables,
+            blur_radii,
+            blur_table_lens,
         }
     }
 
@@ -733,6 +804,11 @@ impl<R: Runtime> Butteraugli<R> {
 
     /// H+V blur with a caller-supplied scratch (so we can blur into
     /// `temp1` without overwriting it mid-pass).
+    ///
+    /// Uses the LUT-based kernels with the precomputed weight table
+    /// for `sigma`. `sigma` must be one of [`BLUR_SIGMAS`]; the dispatch
+    /// is exact-equality so a typo silently falls back to the old
+    /// powf-per-tap path (no panic — preserves correctness).
     fn blur_plane_via(
         &self,
         src: &cubecl::server::Handle,
@@ -740,6 +816,36 @@ impl<R: Runtime> Butteraugli<R> {
         scratch: &cubecl::server::Handle,
         sigma: f32,
     ) {
+        if let Some(kind) = blur_kind_for_sigma(sigma) {
+            let table = &self.blur_tables[kind as usize];
+            let table_len = self.blur_table_lens[kind as usize];
+            let radius = self.blur_radii[kind as usize];
+            unsafe {
+                blur_lut::horizontal_blur_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(src.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+                blur_lut::vertical_blur_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(scratch.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+            }
+            return;
+        }
         unsafe {
             blur::horizontal_blur_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -768,6 +874,11 @@ impl<R: Runtime> Butteraugli<R> {
     /// same scratch buffer pair (temp1/temp2 typed; here we need 3
     /// distinct H→V scratches per channel — caller must supply).
     /// Two launches total instead of six.
+    ///
+    /// LUT-based fast path: if `sigma` is one of [`BLUR_SIGMAS`], uses
+    /// the precomputed weight table; otherwise falls back to the
+    /// powf-per-tap path. The two paths produce bit-identical output
+    /// on every backend we test (CUDA, DX12, HIP, WGPU Vulkan).
     #[allow(clippy::too_many_arguments)]
     fn blur_3ch_via(
         &self,
@@ -782,6 +893,44 @@ impl<R: Runtime> Butteraugli<R> {
         scratch_b: &cubecl::server::Handle,
         sigma: f32,
     ) {
+        if let Some(kind) = blur_kind_for_sigma(sigma) {
+            let table = &self.blur_tables[kind as usize];
+            let table_len = self.blur_table_lens[kind as usize];
+            let radius = self.blur_radii[kind as usize];
+            unsafe {
+                blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(src_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(src_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(src_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+                blur_lut::vertical_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+            }
+            return;
+        }
         unsafe {
             crate::kernels::blur_3ch::horizontal_blur_3ch_kernel::launch_unchecked::<R>(
                 &self.client,

@@ -571,42 +571,41 @@ impl<R: Runtime> Ssim2<R> {
         self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
     }
 
-    /// One-plane two-pass blur: `src → v_pass → tv → tv → full` where
-    /// `tv` is the transpose of the first pass output, and `full`
-    /// receives the second vertical-walk result (in transposed
-    /// orientation). Caller supplies all 3 same-channel buffers.
+    /// One-plane two-pass blur: `src → fused-v+transpose → t_buf →
+    /// v_pass → full`. The first pass uses `blur_pass_t_kernel` which
+    /// fuses the column-walk with the row→column-major write, removing
+    /// the explicit `transpose_kernel` launch between passes.
+    ///
+    /// T_x.B (2026-05-17): saves 1 transpose per blur. With 5 blurs ×
+    /// 6 scales × 3 channels = 90 blurs per `compute()`, eliminates 90
+    /// transpose launches (out of 134 baseline) — ~70%.
+    ///
+    /// `v_buf` is no longer needed by this path but kept in the Scale
+    /// struct for now (it's just allocated, never written). A future
+    /// commit can drop those allocations.
     fn blur_plane_two_pass(
         &self,
         width: u32,
         height: u32,
         n: usize,
         src: &cubecl::server::Handle,
-        v_buf: &cubecl::server::Handle,
+        _v_buf: &cubecl::server::Handle,
         t_buf: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
         unsafe {
-            // 1. v-pass on src (walks columns of width × height) → v_buf.
-            blur::blur_pass_kernel::launch_unchecked::<R>(
+            // 1. Fused v-pass + transpose on src (walks columns of
+            //    width × height, writes col-major == h × w row-major) → t_buf.
+            blur::blur_pass_t_kernel::launch_unchecked::<R>(
                 &self.client,
                 Self::blur_cube_count(width),
                 Self::blur_cube_dim(),
                 ArrayArg::from_raw_parts(src.clone(), n),
-                ArrayArg::from_raw_parts(v_buf.clone(), n),
-                width,
-                height,
-            );
-            // 2. transpose v_buf → t_buf (now height × width).
-            transpose::transpose_kernel::launch_unchecked::<R>(
-                &self.client,
-                Self::cube_count_1d(n),
-                Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(v_buf.clone(), n),
                 ArrayArg::from_raw_parts(t_buf.clone(), n),
                 width,
                 height,
             );
-            // 3. v-pass on t_buf (walks columns of height × width) → full.
+            // 2. v-pass on t_buf (walks columns of height × width) → full.
             //    Note: the transposed buffer's "width" is the original height.
             blur::blur_pass_kernel::launch_unchecked::<R>(
                 &self.client,
