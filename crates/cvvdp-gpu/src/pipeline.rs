@@ -367,12 +367,11 @@ pub struct Cvvdp<R: Runtime> {
     /// `&[u8]` sRGB bytes to `u32` slots (one byte per slot —
     /// `srgb_to_dkl_kernel` reads `Array<u32>` because the LUT
     /// indexing wants the byte as an integer). Tick 234 replaces
-    /// the per-call `srgb.iter().map(|b| b as u32).collect()`
-    /// host alloc with an in-place fill of this buffer, saving
-    /// `width × height × 3 × 4` bytes of allocator pressure per
-    /// JOD-side dispatch (~144 MB at 12 MP). Capacity is fixed
-    /// at construction time (`Cvvdp::new_with_geometry`).
-    src_u32_scratch: Vec<u32>,
+    // T_x.O (2026-05-17): `src_u32_scratch: Vec<u32>` removed. The
+    // upload path now packs u8×3 → u32 directly into the pinned
+    // staging buffer reserved per call (`client.reserve_staging`),
+    // collapsing two host-side passes (pack to pageable + memcpy to
+    // pinned) into one. Saves a ~48 MB host write per upload at 12 MP.
 
     /// 256-entry sRGB→linear LUT, uploaded once.
     srgb_lut: cubecl::server::Handle,
@@ -826,10 +825,10 @@ impl<R: Runtime> Cvvdp<R> {
         // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into one u32
         // for upload (R | G<<8 | B<<16). Length = n0, not n0*3.
         let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0]));
-        // Persistent host-side packing scratch (tick 234 + T4.L). The
-        // pack happens per dispatch; allocation is amortised across
-        // calls. One u32 per pixel.
-        let src_u32_scratch: Vec<u32> = vec![0u32; n0];
+        // T_x.O (2026-05-17): the per-call pack now writes directly
+        // into a pinned staging buffer reserved via
+        // `client.reserve_staging` (see `_dispatch_dkl_planes_gpu`),
+        // so the persistent `src_u32_scratch: Vec<u32>` is gone.
         let srgb_lut = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
 
         let build_pyramid = |client: &ComputeClient<R>| -> Vec<Level> {
@@ -928,7 +927,6 @@ impl<R: Runtime> Cvvdp<R> {
             height,
             n_levels,
             src_ref,
-            src_u32_scratch,
             srgb_lut,
             gauss_ref,
             bands_ref,
@@ -1088,34 +1086,37 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let n0 = (self.width as usize) * (self.height as usize);
 
-        // Widen sRGB bytes into the persistent host scratch buffer
-        // (sized at construction time for `n0 * 3` slots). Tick 234
-        // replaces the per-call `Vec<u32>` alloc + collect — at 12 MP
-        // that's a ~144 MB allocator round-trip the warm-ref loop
-        // otherwise pays per DIST candidate.
-        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
-        // (R | G<<8 | B<<16), instead of widening each byte into its
-        // own u32 (4× expansion). Cuts the host → GPU upload from 144
-        // MB to 48 MB at 12 MP and proportionally shrinks the
-        // `create_from_slice` allocation. The kernel unpacks the 3
-        // bytes per pixel with 3 shifts + 3 ANDs — trivial vs the
-        // upload time saved (nsys showed cuMemcpyHtoDAsync was 55% of
-        // wall time pre-T4.L).
-        debug_assert_eq!(self.src_u32_scratch.len(), n0);
-        for (dst, triple) in self.src_u32_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
-            *dst =
-                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+        // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
+        // pinned staging buffer (one host-side pass instead of two).
+        // Previously we packed into `self.src_u32_scratch` and then
+        // `create_from_slice_pinned` copied that scratch into a
+        // pinned buffer — two full ~48 MB host writes for the same
+        // data at 12 MP. `reserve_staging` lets us produce the
+        // packed bytes straight into the pinned buffer.
+        //
+        // Layout (unchanged from T4.L): 4 bytes per pixel — R | G<<8
+        // | B<<16 (alpha unused). Reader
+        // (`srgb_to_dkl_kernel`) sees the same `[u32]` packing.
+        let pinned_len = n0 * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
         }
-        // T4.M (2026-05-16): pinned-host fast path. `create_from_slice_pinned`
-        // copies the scratch bytes directly into a pinned (page-locked) host
-        // buffer before the device upload, hitting CUDA's DMA fast path at
-        // 12-25 GB/s on PCIe 4.0 vs ~5-6 GB/s from pageable memory. The
-        // default `create_from_slice` was changed in the same cubecl
-        // branch to also route through pinned staging, but the explicit
-        // `_pinned` form skips the intermediate `Vec<u8>` memcpy too.
-        self.src_ref = self
-            .client
-            .create_from_slice_pinned(u32::as_bytes(&self.src_u32_scratch));
+        // T4.M (2026-05-16): pinned-host fast path — direct DMA
+        // (12-25 GB/s on PCIe 4.0 vs 5-6 GB/s from pageable).
+        // T_x.O: skipping the per-call scratch intermediate saves
+        // one ~48 MB host write per upload.
+        self.src_ref = self.client.create(bytes);
 
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();
