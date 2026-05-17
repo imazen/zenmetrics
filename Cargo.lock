@@ -6095,6 +6095,8 @@ dependencies = [
  "cubecl",
  "image",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
  "zensim",
 ]
 

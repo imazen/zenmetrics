@@ -11,11 +11,15 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu", "fast-reduction"]
+default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
 cuda = ["cubecl/cuda"]
 wgpu = ["cubecl/wgpu"]
 hip  = ["cubecl/hip"]
 cpu  = ["cubecl/cpu"]
+# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Exposes the generic typed Zensim<R>. Off by default.
+cubecl-types = []
 # Use Atomic<u32>::fetch_max + per-block partials for the per-column
 # accumulators. Same backend reality as dssim-gpu / ssim2-gpu: works on
 # CUDA / DX12 / HIP; Metal silently no-ops Atomic<f32>::fetch_add. The
@@ -26,9 +30,40 @@ fast-reduction = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 zensim = { workspace = true }
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+
+[[example]]
+name = "bench"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "debug_features"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "end_to_end"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "zensim_bench_t4_warm"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "cpu_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "parity_lock"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque"
+required-features = ["cubecl-types"]
