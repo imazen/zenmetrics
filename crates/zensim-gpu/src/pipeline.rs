@@ -567,6 +567,7 @@ impl<R: Runtime> Zensim<R> {
     /// Eliminates the 12 H-blur scratch planes from DRAM — H-blur
     /// outputs live in shared memory across the V-blur slide.
     fn launch_blur_and_features(&self, scale: usize) {
+        // Keep in sync with `kernels::fused::TX`.
         const TX: u32 = 64;
         let s = &self.scales[scale];
         let pad_total = s.n_padded;
