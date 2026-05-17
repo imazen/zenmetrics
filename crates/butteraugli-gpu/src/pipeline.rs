@@ -707,30 +707,68 @@ impl<R: Runtime> Butteraugli<R> {
 
     /// Apply opsin: blur(σ=1.2) for sensitivity input, then opsin
     /// dynamics → planar XYB (overwrites `lin_a` / `lin_b` in place).
+    ///
+    /// T_x.C (2026-05-17): vertical blur and opsin dynamics fused into
+    /// one kernel. The intermediate fully-blurred plane is no longer
+    /// materialised; opsin reads the per-output-pixel blur sum
+    /// directly. Saves a ~144 MB write+read pair at 12 MP.
     fn apply_opsin(&self, is_a: bool) {
         let (lin, bl) = if is_a {
             (&self.lin_a, &self.blur_a)
         } else {
             (&self.lin_b, &self.blur_b)
         };
-        // Fused 3-channel blur (2 launches instead of 6). Uses temp1,
-        // temp2, mask_scratch as the H→V scratches; all 3 are written
-        // here in full and not relied on across this call.
-        self.blur_3ch_via(
-            &lin[0].clone(),
-            &lin[1].clone(),
-            &lin[2].clone(),
-            &bl[0].clone(),
-            &bl[1].clone(),
-            &bl[2].clone(),
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_OPSIN,
-        );
+        // H-pass: fused 3-channel horizontal blur into temp planes.
+        let table = &self.blur_tables[BlurKind::Opsin as usize];
+        let table_len = self.blur_table_lens[BlurKind::Opsin as usize];
+        let radius = self.blur_radii[BlurKind::Opsin as usize];
         unsafe {
-            self.launch_opsin(is_a);
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+            );
+            // V-pass + opsin fused: reads h-blurred from temp planes
+            // AND original linear-RGB from lin (per-thread, idx-local
+            // only — NOT a window). Writes XYB back into lin
+            // in-place; each thread only writes its own idx so the
+            // overlapping V-blur window reads (which only touch the
+            // h-blurred temp planes, not lin) are safe.
+            blur_lut::vertical_blur_3ch_opsin_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+                self.params.intensity_target,
+            );
         }
+        // The `bl` planes (blur_a/blur_b) are no longer used for the
+        // opsin sensitivity — they're free to be reused as scratch by
+        // later steps. (Kept allocated so future pipeline refactors
+        // can re-purpose them without alloc churn.)
+        let _ = bl;
     }
 
     unsafe fn launch_srgb_to_linear(&self, is_a: bool) {

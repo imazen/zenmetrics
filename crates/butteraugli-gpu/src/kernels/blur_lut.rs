@@ -222,6 +222,119 @@ pub fn horizontal_blur_3ch_lut_kernel(
     dst_b[idx] = sum_b / wsum;
 }
 
+/// 3-channel fused vertical blur + opsin dynamics (LUT variant).
+///
+/// Combines the σ=1.2 vertical blur with the opsin-dynamics XYB
+/// conversion into a single launch. Eliminates the intermediate
+/// `blur_*` buffer write/read pair (3 channels × n × 4 B = 144 MB at
+/// 12 MP) that the standalone `vertical_blur_3ch_lut_kernel` +
+/// `opsin_dynamics_planar_kernel` pair generates.
+///
+/// Inputs:
+/// - `h_src_*`: horizontal-blurred linear RGB (output of the H-pass).
+/// - `orig_*`: original linear RGB (pre-blur). Read-only here.
+/// - `table`, `width`, `height`, `radius`: same shape as
+///   [`vertical_blur_3ch_lut_kernel`].
+/// - `intensity_multiplier`: same as [`super::colors::opsin_dynamics_planar_kernel`].
+///
+/// Output:
+/// - `xyb_*`: planar XYB after opsin. Same `(sx-sy, sx+sy, sz)` layout
+///   as `opsin_dynamics_planar_kernel`.
+///
+/// Math matches the explicit two-kernel sequence bit-for-bit (same
+/// f32 op tree, same FMA-vs-mul boundaries).
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_3ch_opsin_lut_kernel(
+    h_src_x: &Array<f32>,
+    h_src_y: &Array<f32>,
+    h_src_b: &Array<f32>,
+    orig_x: &Array<f32>,
+    orig_y: &Array<f32>,
+    orig_b: &Array<f32>,
+    xyb_x: &mut Array<f32>,
+    xyb_y: &mut Array<f32>,
+    xyb_z: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+    intensity_multiplier: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b_idx = end + r + 1 - y;
+    let wsum = table[integ_off + b_idx] - table[integ_off + a];
+
+    // ── vertical blur of the horizontally-pre-blurred inputs ──
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        let off = i * w + x;
+        sum_x += h_src_x[off] * weight;
+        sum_y += h_src_y[off] * weight;
+        sum_b += h_src_b[off] * weight;
+        i += 1;
+    }
+    let br = (sum_x / wsum) * intensity_multiplier;
+    let bg = (sum_y / wsum) * intensity_multiplier;
+    let bb = (sum_b / wsum) * intensity_multiplier;
+
+    // ── opsin dynamics (clamp-absorbance path on the blurred sample) ──
+    // CPU butteraugli's exact matrix + bias-floor + gamma + sensitivity.
+    let bx_pre = 0.299_565_5_f32 * br + 0.633_730_9 * bg + 0.077_705_614 * bb + 1.755_748_4;
+    let by_pre = 0.221_586_91 * br + 0.693_913_9 * bg + 0.098_731_36 * bb + 1.755_748_4;
+    let bz_pre = 0.02 * br + 0.02 * bg + 0.204_801_29 * bb + 12.226_455;
+    let bx = f32::max(f32::max(bx_pre, 1.755_748_4), 1e-4);
+    let by = f32::max(f32::max(by_pre, 1.755_748_4), 1e-4);
+    let bz = f32::max(f32::max(bz_pre, 12.226_455), 1e-4);
+    let sens_x = f32::max(gamma(bx) / bx, 1e-4);
+    let sens_y = f32::max(gamma(by) / by, 1e-4);
+    let sens_z = f32::max(gamma(bz) / bz, 1e-4);
+
+    // ── original-sample absorbance (no clamp) ──
+    let or = orig_x[idx] * intensity_multiplier;
+    let og = orig_y[idx] * intensity_multiplier;
+    let ob = orig_b[idx] * intensity_multiplier;
+    let sx_pre = 0.299_565_5_f32 * or + 0.633_730_9 * og + 0.077_705_614 * ob + 1.755_748_4;
+    let sy_pre = 0.221_586_91 * or + 0.693_913_9 * og + 0.098_731_36 * ob + 1.755_748_4;
+    let sz_pre = 0.02 * or + 0.02 * og + 0.204_801_29 * ob + 12.226_455;
+
+    let mut sx = sx_pre * sens_x;
+    let mut sy = sy_pre * sens_y;
+    let mut sz = sz_pre * sens_z;
+    sx = f32::max(sx, 1.755_748_4);
+    sy = f32::max(sy, 1.755_748_4);
+    sz = f32::max(sz, 12.226_455);
+
+    xyb_x[idx] = sx - sy;
+    xyb_y[idx] = sx + sy;
+    xyb_z[idx] = sz;
+}
+
+/// Butteraugli's `gamma` — matches `super::colors::gamma` exactly.
+#[cube]
+fn gamma(v: f32) -> f32 {
+    19.245_014_f32 * f32::ln(v + 9.971_064) - 23.160_463
+}
+
 /// 3-channel fused vertical blur (LUT variant).
 #[cube(launch_unchecked)]
 #[allow(clippy::too_many_arguments)]
