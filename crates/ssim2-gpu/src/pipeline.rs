@@ -153,10 +153,11 @@ pub struct Ssim2<R: Runtime> {
     src_u8_a: cubecl::server::Handle,
     src_u8_b: cubecl::server::Handle,
 
-    /// Persistent host-side packing scratch for sRGB → u32 widening.
-    /// Sized to `n × 3` at construction; reused on every upload to
-    /// avoid per-call `Vec<u32>` alloc churn. Same shape as zensim-gpu.
-    pack_scratch: Vec<u32>,
+    // T_x.O (2026-05-17): `pack_scratch: Vec<u32>` removed. The
+    // upload path now packs u8×3 → u32 directly into the pinned
+    // staging buffer reserved per call (`client.reserve_staging`),
+    // collapsing two host-side passes (pack to pageable + memcpy to
+    // pinned) into one. Same shape as butter T_x.O (10a5b996).
 
     /// Per-scale buffer sets.
     scales: Vec<Scale>,
@@ -247,7 +248,6 @@ impl<R: Runtime> Ssim2<R> {
             n,
             src_u8_a,
             src_u8_b,
-            pack_scratch: vec![0_u32; n],
             scales,
             partials,
             sums,
@@ -578,24 +578,42 @@ impl<R: Runtime> Ssim2<R> {
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
         debug_assert_eq!(srgb.len(), n_bytes);
-        debug_assert_eq!(self.pack_scratch.len(), self.n);
-        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
-        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
-        // one-byte-per-u32 widening. Kernel unpacks with 3 shifts +
-        // 3 ANDs — free vs the saved upload time.
-        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
-            *dst =
-                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+        // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
+        // pinned staging buffer (one host-side pass instead of two).
+        // Previously we packed into `self.pack_scratch` and then
+        // `create_from_slice_pinned` copied that scratch into a
+        // pinned buffer — two ~48 MB host writes at 12 MP. The
+        // reserve_staging path lets us produce the packed bytes
+        // straight into the pinned buffer.
+        //
+        // Layout (unchanged from T4.L): 4 bytes per pixel — R | G<<8
+        // | B<<16 (alpha unused). Reader
+        // (`srgb_u8_to_linear_planar_kernel`) sees the same `[u32]`
+        // packing.
+        let pinned_len = self.n * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
         }
-        // T4.M (2026-05-16): pinned-host fast path. The `_pinned` form
-        // copies straight into a pinned staging buffer (12-25 GB/s DMA
-        // on PCIe 4.0 vs 5-6 GB/s from pageable), skipping one host
-        // memcpy. See CUBECL_GOTCHAS.md G6.5.
-        let bytes = u32::as_bytes(&self.pack_scratch);
+        // T4.M (2026-05-16): pinned-host fast path — direct DMA (12-25
+        // GB/s on PCIe 4.0 vs 5-6 GB/s from pageable).
+        // T_x.O: skipping the pack_scratch intermediate saves one
+        // ~48 MB host write per upload at 12 MP.
+        let handle = self.client.create(bytes);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
+            self.src_u8_a = handle;
         } else {
-            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
+            self.src_u8_b = handle;
         }
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.scales[0].ref_lin)

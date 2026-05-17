@@ -131,11 +131,12 @@ pub struct Ssim2Batch<R: Runtime> {
     /// bytes, image-1 bytes, … image-{N-1} bytes — each `n_pixels × 3`
     /// bytes). Re-uploaded per `compute_batch`.
     src_u8_batch: cubecl::server::Handle,
-    /// Persistent host-side packing scratch sized to `n_pixels × 3 ×
-    /// batch_size` u32s. Reused on every `compute_batch` upload to
-    /// avoid per-call `Vec<u32>` alloc churn (matches the per-instance
-    /// pack_scratch in `Ssim2`).
-    pack_scratch: Vec<u32>,
+    // T_x.O (2026-05-17): both the concat `packed: Vec<u8>` and the
+    // per-batch `pack_scratch: Vec<u32>` are gone. The upload path
+    // now packs u8×3 → u32 directly into the pinned staging buffer
+    // reserved per call (`client.reserve_staging`), so each input
+    // image is read once (straight into pinned memory) and zero-pad
+    // for short batches is a fast pinned-byte fill.
     /// Stage-1 partials scratch — never read by the host.
     /// `batch_size × num_slots × PARTIALS_PER_REDUCTION` floats.
     partials: cubecl::server::Handle,
@@ -181,7 +182,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             .checked_mul(batch_size as usize)
             .expect("n_full × 3 × batch_size overflows usize");
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_u32]));
-        let pack_scratch = vec![0_u32; total_u32];
+        // T_x.O (2026-05-17): no more `pack_scratch: Vec<u32>` — the
+        // per-call pack writes directly into a pinned staging buffer
+        // reserved at upload time. See `compute_batch_with_mode`.
         let partials = client.create_from_slice(f32::as_bytes(&vec![
             0.0_f32;
             PARTIALS_PER_IMAGE_FLOATS
@@ -198,7 +201,6 @@ impl<R: Runtime> Ssim2Batch<R> {
             batch_size,
             bscales,
             src_u8_batch,
-            pack_scratch,
             partials,
             sums,
         })
@@ -309,9 +311,8 @@ impl<R: Runtime> Ssim2Batch<R> {
         let n_full = (w as usize) * (h as usize);
         let bytes_per_image = n_full * 3;
 
-        // Concatenate per-image byte buffers and zero-pad up to batch_size.
-        let total_bytes = bytes_per_image * (self.batch_size as usize);
-        let mut packed = Vec::with_capacity(total_bytes);
+        // Dimension check up front so we don't allocate a pinned
+        // staging buffer for a request we'll reject.
         for d in dis {
             if d.len() != bytes_per_image {
                 return Err(Error::DimensionMismatch {
@@ -319,30 +320,50 @@ impl<R: Runtime> Ssim2Batch<R> {
                     got: d.len(),
                 });
             }
-            packed.extend_from_slice(d);
-        }
-        let pad = total_bytes - packed.len();
-        if pad > 0 {
-            packed.resize(total_bytes, 0);
         }
 
-        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
-        // before upload. pack_scratch is `n_total_full` u32 entries
-        // (not n_total_full × 3). Cuts upload 3×.
         let client = self.inner.client().clone();
         let n_total_full = n_full * (self.batch_size as usize);
-        debug_assert_eq!(self.pack_scratch.len(), n_total_full);
-        for (dst, triple) in self
-            .pack_scratch
-            .iter_mut()
-            .zip(packed.chunks_exact(3))
+
+        // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
+        // pinned staging buffer, one image at a time, then zero-pad
+        // any unused batch slots. Collapses the prior
+        // concat-to-Vec<u8> + pack-to-Vec<u32> + memcpy-into-pinned
+        // sequence into a single host-side pass per image.
+        //
+        // Layout (unchanged from T4.L): 4 bytes per pixel — R | G<<8
+        // | B<<16. Reader (`srgb_u8_to_linear_planar_kernel`) sees
+        // one u32 per pixel for `n_total_full` pixels.
+        let pinned_len = n_total_full * 4;
+        let mut staging = client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
         {
-            *dst =
-                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            let stride = n_full * 4;
+            for (i, d) in dis.iter().enumerate() {
+                let slot = &mut dst[i * stride..(i + 1) * stride];
+                for (chunk_out, triple) in slot.chunks_exact_mut(4).zip(d.chunks_exact(3)) {
+                    chunk_out[0] = triple[0];
+                    chunk_out[1] = triple[1];
+                    chunk_out[2] = triple[2];
+                    chunk_out[3] = 0;
+                }
+            }
+            // Zero-pad unused batch slots so kernels see deterministic
+            // bytes (matches the prior `packed.resize(.., 0)` behaviour).
+            if dis.len() < self.batch_size as usize {
+                let pad_start = dis.len() * stride;
+                dst[pad_start..].fill(0);
+            }
         }
-        // T4.M (2026-05-16): pinned-host fast path.
-        self.src_u8_batch =
-            client.create_from_slice_pinned(u32::as_bytes(&self.pack_scratch));
+        // T4.M (2026-05-16): pinned-host fast path — direct DMA
+        // (12-25 GB/s on PCIe 4.0 vs 5-6 GB/s from pageable).
+        // T_x.O: pack-direct-to-pinned eliminates the concat+scratch
+        // intermediates (saves ~2 × N_total_bytes of host writes).
+        self.src_u8_batch = client.create(bytes);
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &client,
