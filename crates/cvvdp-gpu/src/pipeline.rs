@@ -759,6 +759,12 @@ impl<R: Runtime> Cvvdp<R> {
         )
     }
 
+    /// Configured image `(width, height)`. Matches the values passed
+    /// to [`Self::new`] / [`Self::new_with_geometry`].
+    pub fn dimensions(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     /// Allocate GPU buffers + record a custom viewing geometry. The
     /// geometry is used by `score` to derive PPD (and thus the
     /// per-band spatial frequencies the CSF table is queried with).
@@ -1118,6 +1124,17 @@ impl<R: Runtime> Cvvdp<R> {
         // one ~48 MB host write per upload.
         self.src_ref = self.client.create(bytes);
 
+        self._launch_srgb_to_dkl_from_src_ref();
+        Ok(())
+    }
+
+    /// Dispatch the sRGB→DKL color kernel reading from whatever
+    /// packed-u32 handle currently sits in `self.src_ref`. Split out
+    /// of [`Self::_dispatch_dkl_planes_gpu`] so [`Self::compute_handles`]
+    /// (Phase 4 upload-once path) can reuse the dispatch step without
+    /// re-uploading bytes.
+    fn _launch_srgb_to_dkl_from_src_ref(&self) {
+        let n0 = (self.width as usize) * (self.height as usize);
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();
         let vy_handle = self.gauss_ref[0].planes[2].clone();
@@ -1143,7 +1160,16 @@ impl<R: Runtime> Cvvdp<R> {
                 display.y_refl,
             );
         }
-        Ok(())
+    }
+
+    /// Install a caller-supplied packed-u32 device handle as
+    /// `self.src_ref` (the input slot read by
+    /// [`Self::_launch_srgb_to_dkl_from_src_ref`]) and dispatch the
+    /// color kernel. Internal helper for the upload-once
+    /// `compute_handles` path.
+    fn _install_src_ref_and_dispatch_dkl(&mut self, handle: &cubecl::server::Handle) {
+        self.src_ref = handle.clone();
+        self._launch_srgb_to_dkl_from_src_ref();
     }
 
     /// Run color stage + Gaussian-pyramid reduce loop. Returns the
@@ -1213,7 +1239,17 @@ impl<R: Runtime> Cvvdp<R> {
     /// populated on GPU for `k = 0..n_levels`. No host readback.
     fn _dispatch_gauss_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<()> {
         self._dispatch_dkl_planes_gpu(srgb)?;
+        self._reduce_gauss_pyramid_from_level0();
+        Ok(())
+    }
 
+    /// Reduce the Gaussian pyramid starting from already-populated
+    /// `gauss_ref[0].planes[*]`. Split out of
+    /// [`Self::_dispatch_gauss_pyramid_gpu`] so the upload-once
+    /// `compute_handles` path can populate level 0 from a caller-
+    /// supplied packed-u32 handle and then run the same downscale
+    /// chain bit-for-bit.
+    fn _reduce_gauss_pyramid_from_level0(&self) {
         // T1.B (2026-05-16): LDS-tiled downscale. 16×16 workgroup;
         // 36×36 input tile in shared memory; 25-tap stencil from LDS.
         // Functionally equivalent to the scalar `downscale_kernel`,
@@ -1250,7 +1286,17 @@ impl<R: Runtime> Cvvdp<R> {
                 }
             }
         }
-        Ok(())
+    }
+
+    /// Equivalent to [`Self::_dispatch_gauss_pyramid_gpu`] but starts
+    /// from a caller-supplied packed-u32 device handle (one `u32`
+    /// per pixel, `R | G<<8 | B<<16`, length `width × height`).
+    fn _dispatch_gauss_pyramid_gpu_from_handle(
+        &mut self,
+        packed_u32: &cubecl::server::Handle,
+    ) {
+        self._install_src_ref_and_dispatch_dkl(packed_u32);
+        self._reduce_gauss_pyramid_from_level0();
     }
 
     /// Run color + full Laplacian-pyramid decomposition. Returns
@@ -2078,6 +2124,215 @@ impl<R: Runtime> Cvvdp<R> {
         result.map(|_| ())
     }
 
+    /// Variant of [`Self::_dispatch_weber_pyramid_gpu`] that starts
+    /// from a caller-supplied packed-u32 device handle instead of
+    /// host bytes. The handle's layout MUST match
+    /// [`Self::_dispatch_gauss_pyramid_gpu_from_handle`] — one
+    /// `u32` per pixel, `R | G<<8 | B<<16`, length `width × height`.
+    /// Internal helper for the upload-once `compute_handles` path.
+    fn _dispatch_weber_pyramid_gpu_from_handle(
+        &mut self,
+        packed_u32: &cubecl::server::Handle,
+        log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
+    ) -> Result<f32> {
+        // Replace the byte-upload step with a handle install + reduce.
+        // Everything past gauss-pyramid-build is identical to the
+        // byte-flavored path; we inline the body so we can swap the
+        // first stage without duplicating the rest of the kernel
+        // graph. See `_dispatch_weber_pyramid_gpu` for the running
+        // commentary on each stage — this method mirrors it 1:1.
+        self._dispatch_gauss_pyramid_gpu_from_handle(packed_u32);
+        self._finalize_weber_pyramid_after_gauss(log_l_bkg_dest, dest_is_dis)
+    }
+
+    /// Weber-pyramid stage that assumes `self.gauss_ref[k].planes[c]`
+    /// is already populated for `k = 0..n_levels`. Shared body of
+    /// [`Self::_dispatch_weber_pyramid_gpu`] (byte-upload path) and
+    /// [`Self::_dispatch_weber_pyramid_gpu_from_handle`] (Phase 4
+    /// upload-once path). Returns the scalar `log10(L_bkg)` baseband
+    /// value the band loop needs.
+    fn _finalize_weber_pyramid_after_gauss(
+        &mut self,
+        log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
+    ) -> Result<f32> {
+        let cube_dim = CubeDim::new_1d(64);
+        let n_levels = self.n_levels as usize;
+
+        for k in 0..n_levels.saturating_sub(1) {
+            let coarse_w = self.gauss_ref[k + 1].w;
+            let coarse_h = self.gauss_ref[k + 1].h;
+            let fine_w = self.gauss_ref[k].w;
+            let fine_h = self.gauss_ref[k].h;
+            let n_v = (coarse_w * fine_h) as usize;
+            let n_fine = (fine_w * fine_h) as usize;
+            let n_coarse = (coarse_w * coarse_h) as usize;
+
+            let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
+            let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+
+            let scratch = &self.weber_scratch[k];
+            let l_bkg_fine = scratch.l_bkg_fine.clone();
+            let vscratch_a = scratch.vscratch_a.clone();
+            let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+            unsafe {
+                upscale_v_kernel::launch::<R>(
+                    &self.client,
+                    count_v.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                    ArrayArg::from_raw_parts(vscratch_a.clone(), n_v),
+                    coarse_w,
+                    coarse_h,
+                    fine_h,
+                );
+                upscale_h_kernel::launch::<R>(
+                    &self.client,
+                    count_fine.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(vscratch_a, n_v),
+                    ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
+                    coarse_w,
+                    fine_w,
+                    fine_h,
+                );
+            }
+            let log_l_bkg = log_l_bkg_dest[k].clone();
+            for c in 0..N_CHANNELS {
+                let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                let vscratch_c = scratch.vscratch_c[c].clone();
+                let upscaled_c = scratch.upscaled_c[c].clone();
+                unsafe {
+                    upscale_v_kernel::launch::<R>(
+                        &self.client,
+                        count_v.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(coarse, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch_c.clone(), n_v),
+                        coarse_w,
+                        coarse_h,
+                        fine_h,
+                    );
+                    upscale_h_kernel::launch::<R>(
+                        &self.client,
+                        count_fine.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(vscratch_c, n_v),
+                        ArrayArg::from_raw_parts(upscaled_c, n_fine),
+                        coarse_w,
+                        fine_w,
+                        fine_h,
+                    );
+                }
+            }
+            let fine_a = self.gauss_ref[k].planes[0].clone();
+            let fine_rg = self.gauss_ref[k].planes[1].clone();
+            let fine_vy = self.gauss_ref[k].planes[2].clone();
+            let upsc_a = scratch.upscaled_c[0].clone();
+            let upsc_rg = scratch.upscaled_c[1].clone();
+            let upsc_vy = scratch.upscaled_c[2].clone();
+            let bands_dest = if dest_is_dis {
+                &self.bands_dis
+            } else {
+                &self.bands_ref
+            };
+            let band_a = bands_dest[k].planes[0].clone();
+            let band_rg = bands_dest[k].planes[1].clone();
+            let band_vy = bands_dest[k].planes[2].clone();
+            unsafe {
+                subtract_weber_3ch_kernel::launch::<R>(
+                    &self.client,
+                    count_fine.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(fine_a, n_fine),
+                    ArrayArg::from_raw_parts(fine_rg, n_fine),
+                    ArrayArg::from_raw_parts(fine_vy, n_fine),
+                    ArrayArg::from_raw_parts(upsc_a, n_fine),
+                    ArrayArg::from_raw_parts(upsc_rg, n_fine),
+                    ArrayArg::from_raw_parts(upsc_vy, n_fine),
+                    ArrayArg::from_raw_parts(l_bkg_fine, n_fine),
+                    ArrayArg::from_raw_parts(band_a, n_fine),
+                    ArrayArg::from_raw_parts(band_rg, n_fine),
+                    ArrayArg::from_raw_parts(band_vy, n_fine),
+                    ArrayArg::from_raw_parts(log_l_bkg, n_fine),
+                    n_fine as u32,
+                );
+            }
+        }
+
+        // Baseband — bit-identical to `_dispatch_weber_pyramid_gpu`.
+        let last = n_levels - 1;
+        let baseband_w = self.gauss_ref[last].w as usize;
+        let baseband_h = self.gauss_ref[last].h as usize;
+        let baseband_n = baseband_w * baseband_h;
+
+        let gauss_a_last = self.gauss_ref[last].planes[0].clone();
+        let bytes_a = self
+            .client
+            .read_one(gauss_a_last)
+            .map_err(|_| Error::InvalidImageSize)?;
+        let gauss_a_data: &[f32] = f32::from_bytes(&bytes_a);
+        let l_bkg_sum: f32 = gauss_a_data.iter().map(|v| v.max(0.01)).sum();
+        let l_bkg_mean = l_bkg_sum / baseband_n as f32;
+        let log_l_bkg_baseband = l_bkg_mean.log10();
+
+        let inv_l_bkg_mean = 1.0_f32 / l_bkg_mean;
+        let gauss_a = self.gauss_ref[last].planes[0].clone();
+        let gauss_rg = self.gauss_ref[last].planes[1].clone();
+        let gauss_vy = self.gauss_ref[last].planes[2].clone();
+        let bands_dest = if dest_is_dis {
+            &self.bands_dis
+        } else {
+            &self.bands_ref
+        };
+        let band_a = bands_dest[last].planes[0].clone();
+        let band_rg = bands_dest[last].planes[1].clone();
+        let band_vy = bands_dest[last].planes[2].clone();
+        let baseband_count = CubeCount::Static((baseband_n as u32).div_ceil(64), 1, 1);
+        unsafe {
+            baseband_divide_3ch_kernel::launch::<R>(
+                &self.client,
+                baseband_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(gauss_a, baseband_n),
+                ArrayArg::from_raw_parts(gauss_rg, baseband_n),
+                ArrayArg::from_raw_parts(gauss_vy, baseband_n),
+                ArrayArg::from_raw_parts(band_a, baseband_n),
+                ArrayArg::from_raw_parts(band_rg, baseband_n),
+                ArrayArg::from_raw_parts(band_vy, baseband_n),
+                inv_l_bkg_mean,
+                baseband_n as u32,
+            );
+        }
+
+        Ok(log_l_bkg_baseband)
+    }
+
+    /// Handle-flavored sibling of [`Self::_dispatch_ref_weber_pyramid_only`]
+    /// — takes a packed-u32 device handle instead of host bytes.
+    fn _dispatch_ref_weber_pyramid_only_from_handle(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+    ) -> Result<f32> {
+        self.warm_ref_baseband_log_l_bkg = None;
+        let dests = std::mem::take(&mut self.log_l_bkg_ref_dests);
+        let result = self._dispatch_weber_pyramid_gpu_from_handle(ref_handle, &dests, false);
+        self.log_l_bkg_ref_dests = dests;
+        result
+    }
+
+    /// Handle-flavored sibling of [`Self::_dispatch_dist_weber_pyramid_only`].
+    fn _dispatch_dist_weber_pyramid_only_from_handle(
+        &mut self,
+        dist_handle: &cubecl::server::Handle,
+    ) -> Result<()> {
+        let dests = std::mem::take(&mut self.log_l_bkg_dis_dests);
+        let result = self._dispatch_weber_pyramid_gpu_from_handle(dist_handle, &dests, true);
+        self.log_l_bkg_dis_dests = dests;
+        result.map(|_| ())
+    }
+
     fn _dispatch_d_bands_into_scratch(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let t_weber_ref = std::time::Instant::now();
@@ -2086,6 +2341,23 @@ impl<R: Runtime> Cvvdp<R> {
             eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
         }
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)
+    }
+
+    /// Handle-flavored sibling of [`Self::_dispatch_d_bands_into_scratch`].
+    /// Both inputs are caller-uploaded packed-u32 device handles. Used
+    /// by the Phase 4 [`Self::compute_handles`] upload-once path.
+    fn _dispatch_d_bands_into_scratch_from_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dist_handle: &cubecl::server::Handle,
+    ) -> Result<()> {
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+        let t_weber_ref = std::time::Instant::now();
+        let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only_from_handle(ref_handle)?;
+        if trace {
+            eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
+        }
+        self._dispatch_d_bands_dist_and_band_loop_from_handle(dist_handle, log_l_bkg_baseband)
     }
 
     /// DIST weber + band loop. Reads REF-side state from
@@ -2116,6 +2388,35 @@ impl<R: Runtime> Cvvdp<R> {
             eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
         }
 
+        self._run_d_bands_band_loop(log_l_bkg_baseband)
+    }
+
+    /// Handle-flavored sibling of [`Self::_dispatch_d_bands_dist_and_band_loop`].
+    /// Takes a packed-u32 device handle for the dist side instead of
+    /// host bytes; both methods then run the same band loop after the
+    /// dist-weber dispatch lands `self.bands_dis[*]`.
+    fn _dispatch_d_bands_dist_and_band_loop_from_handle(
+        &mut self,
+        dist_handle: &cubecl::server::Handle,
+        log_l_bkg_baseband: f32,
+    ) -> Result<()> {
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+        let t_weber_dis = std::time::Instant::now();
+        self._dispatch_dist_weber_pyramid_only_from_handle(dist_handle)?;
+        if trace {
+            eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
+        }
+        self._run_d_bands_band_loop(log_l_bkg_baseband)
+    }
+
+    /// Per-level CSF + masking band loop. Both REF and DIST weber
+    /// pyramids must already be resident in `self.bands_ref[*]` /
+    /// `self.bands_dis[*]`. Shared body of
+    /// [`Self::_dispatch_d_bands_dist_and_band_loop`] (byte path) and
+    /// [`Self::_dispatch_d_bands_dist_and_band_loop_from_handle`]
+    /// (handle path).
+    fn _run_d_bands_band_loop(&mut self, log_l_bkg_baseband: f32) -> Result<()> {
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let n_levels = self.n_levels as usize;
         let cube_dim = CubeDim::new_1d(64);
         // `10^MASK_C` post-blur scale for the PU stage — constant
@@ -2599,6 +2900,89 @@ impl<R: Runtime> Cvvdp<R> {
         // GPU→host transfer at 12 MP — JOD skips that.
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
         self._pool_and_finalize_jod()
+    }
+
+    /// Pack the caller's `width × height × 3` sRGB-u8 bytes into a
+    /// `width × height` packed-u32 device handle (`R | G<<8 | B<<16`),
+    /// using the same pinned-staging fast path the internal upload
+    /// uses. Cheaper than [`Self::score`] / [`Self::compute_dkl_jod`]
+    /// when scoring the same pair through multiple metrics — pack
+    /// once via [`Self::pack_srgb_into_packed_u32_handle`] on any one
+    /// metric's client, then thread the handle through
+    /// [`Self::compute_handles`] on every metric that shares the same
+    /// client.
+    ///
+    /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
+    /// height * 3`.
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            });
+        }
+        let n0 = (self.width as usize) * (self.height as usize);
+        let pinned_len = n0 * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
+        }
+        Ok(self.client.create(bytes))
+    }
+
+    /// Handle-flavored sibling of [`Self::compute_dkl_jod`] —
+    /// upload-once Phase 4 entry point. Skips the
+    /// `client.reserve_staging` + byte-pack work that
+    /// [`Self::compute_dkl_jod`] does internally, letting one
+    /// `(ref, dist)` upload feed several metrics on the same client.
+    ///
+    /// Handle layout MUST be the packed-u32 form produced by
+    /// [`Self::pack_srgb_into_packed_u32_handle`] (one `u32` per
+    /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
+    /// handle is expected to live on the same cubecl client that
+    /// constructed this `Cvvdp<R>`; sharing handles across clients
+    /// is undefined behaviour at the cubecl layer and is not
+    /// validated here.
+    pub fn compute_dkl_jod_from_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dist_handle: &cubecl::server::Handle,
+        ppd: f32,
+    ) -> Result<f32> {
+        self.debug_assert_ppd_matches_geometry(ppd);
+        self._dispatch_d_bands_into_scratch_from_handles(ref_handle, dist_handle)?;
+        self._pool_and_finalize_jod()
+    }
+
+    /// Score from caller-supplied packed-u32 device handles — the
+    /// upload-once Phase 4 entry point matching the layout produced
+    /// by [`Self::pack_srgb_into_packed_u32_handle`]. Equivalent to
+    /// [`Self::score`] but skips the host-to-device upload (use it
+    /// when one packed-pair feeds several metrics on the same
+    /// client). Returns the JOD score as `f64` to match
+    /// [`Self::score`].
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<f64> {
+        let ppd = self.geometry.pixels_per_degree();
+        let jod = self.compute_dkl_jod_from_handles(ref_handle, dis_handle, ppd)?;
+        Ok(f64::from(jod))
     }
 
     /// Portable-backend variant of [`Cvvdp::compute_dkl_jod`] that

@@ -330,8 +330,55 @@ impl<R: Runtime> Iwssim<R> {
         self.src_u32_a = Self::pack_into_pinned(&self.client, ref_rgb);
         self.src_u32_b = Self::pack_into_pinned(&self.client, dis_rgb);
 
-        // Convert to grayscale into scale-0 LP buffers (we'll then
-        // build the Gaussian pyramid in-place via the lp/g cycle).
+        self.rgb_u32_to_gray_from_packed();
+        self.run_pipeline()
+    }
+
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    /// Uses the same pinned-staging fast path as the internal upload.
+    ///
+    /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
+    /// height * 3`.
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        let expected = (self.width * self.height * 3) as usize;
+        if srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            });
+        }
+        Ok(Self::pack_into_pinned(&self.client, srgb))
+    }
+
+    /// Compute against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. Equivalent to
+    /// [`Self::compute_rgb`] but skips the internal byte pack/upload.
+    ///
+    /// Handle layout MUST be the packed-u32 form produced by
+    /// [`Self::pack_srgb_into_packed_u32_handle`] (one `u32` per
+    /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
+    /// handle is expected to live on the same cubecl client that
+    /// constructed this `Iwssim<R>`.
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<GpuIwssimResult> {
+        self.src_u32_a = ref_handle.clone();
+        self.src_u32_b = dis_handle.clone();
+        self.rgb_u32_to_gray_from_packed();
+        self.run_pipeline()
+    }
+
+    /// Run the packed-u32 → grayscale kernel on whichever handles
+    /// currently sit in `src_u32_a` / `src_u32_b`. Split out of
+    /// [`Self::compute_rgb`] so [`Self::compute_handles`] can reuse
+    /// the dispatch step without re-packing bytes.
+    fn rgb_u32_to_gray_from_packed(&self) {
         let n_pixels = (self.width * self.height) as usize;
         let s0 = &self.scales[0];
         unsafe {
@@ -351,7 +398,6 @@ impl<R: Runtime> Iwssim<R> {
                 ArrayArg::from_raw_parts(s0.g_dis.clone(), n_pixels),
             );
         }
-        self.run_pipeline()
     }
 
     /// Score one grayscale-f32 pair. Both buffers must be `width × height`

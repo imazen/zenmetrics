@@ -51,6 +51,14 @@ impl IwssimParams {
 trait IwssimInner: Send {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score>;
     fn dims(&self) -> (u32, u32);
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score>;
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
 }
 
 impl<R> IwssimInner for Iwssim<R>
@@ -69,6 +77,25 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Iwssim::dimensions(self)
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        let r = Iwssim::compute_handles(self, ref_handle, dis_handle)?;
+        Ok(Score {
+            value: r.score,
+            metric_name: "iwssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
+        Iwssim::pack_srgb_into_packed_u32_handle(self, srgb)
     }
 }
 
@@ -146,6 +173,28 @@ impl IwssimOpaque {
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_srgb_u8(&ref_buf, &dis_buf)
+    }
+
+    /// Score against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. See per-crate typed
+    /// `Iwssim::compute_handles` for the layout contract.
+    #[cfg(feature = "cubecl-types")]
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        self.inner.compute_handles(ref_handle, dis_handle)
+    }
+
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    #[cfg(feature = "cubecl-types")]
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        self.inner.pack_srgb(srgb)
     }
 }
 
