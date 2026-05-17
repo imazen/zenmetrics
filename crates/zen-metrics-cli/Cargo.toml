@@ -41,47 +41,37 @@ cpu-metrics = [
     "dep:imgref",
 ]
 
-# GPU bundle: pulls every GPU metric implementation.
-gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp"]
-# Each gpu-* feature pulls in the typed cubecl-types surface of the
-# matching metric crate because zen-metrics-cli's score/batch helpers
-# call into Cvvdp::<R>::new / Butteraugli::<R>::new_multires / etc.
-# directly. The Phase 3 umbrella crate (zenmetrics-api) will switch
-# us over to the opaque API; until then we depend on cubecl-types.
-gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl", "butteraugli-gpu/cubecl-types"]
-gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl", "ssim2-gpu/cubecl-types"]
-gpu-dssim = ["dep:dssim-gpu", "dep:cubecl", "dssim-gpu/cubecl-types"]
-gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl", "cvvdp-gpu/cubecl-types"]
-# Pick CubeCL backends. Default forwards through the GPU metric crates which
-# already enable cuda/wgpu/cpu when their default features are kept.
-gpu-cuda = [
-    "butteraugli-gpu?/cuda",
-    "ssim2-gpu?/cuda",
-    "dssim-gpu?/cuda",
-    "cvvdp-gpu?/cuda",
-    "cubecl?/cuda",
-]
-gpu-wgpu = [
-    "butteraugli-gpu?/wgpu",
-    "ssim2-gpu?/wgpu",
-    "dssim-gpu?/wgpu",
-    "cvvdp-gpu?/wgpu",
-    "cubecl?/wgpu",
-]
-gpu-hip = [
-    "butteraugli-gpu?/hip",
-    "ssim2-gpu?/hip",
-    "dssim-gpu?/hip",
-    "cvvdp-gpu?/hip",
-    "cubecl?/hip",
-]
-gpu-cpu = [
-    "butteraugli-gpu?/cpu",
-    "ssim2-gpu?/cpu",
-    "dssim-gpu?/cpu",
-    "cvvdp-gpu?/cpu",
-    "cubecl?/cpu",
-]
+# GPU bundle: pulls every GPU metric implementation via the umbrella.
+gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "gpu-zensim"]
+# Per-metric feature flags forward to the corresponding `zenmetrics-api`
+# per-metric feature, which in turn pulls in the underlying per-crate
+# dep. The CLI now talks to the umbrella's opaque API (`Metric::new`,
+# `Metric::compute_srgb_u8`) for the common single-shot path and never
+# touches `cubecl::Runtime` directly in steady-state operation.
+#
+# Two paths still reach into the per-crate typed cubecl-types surface
+# via the umbrella's `zenmetrics_api::{butter,cvvdp}` re-exports:
+#   - butteraugli's two-column emit (`butteraugli_max_gpu` +
+#     `butteraugli_pnorm3_gpu`) needs `ButteraugliResult.pnorm_3`, which
+#     the opaque `Score` does not surface.
+#   - `CvvdpBatchScorer` caches a `Cvvdp::<R>` instance across pairs of
+#     matching dims to avoid the ~200 MB / NVRTC compile per-pair cost
+#     that produces fleet OOMs at 100-pair chunks.
+# Both go through `zenmetrics-api/cubecl-types` to keep a single
+# umbrella dep line; the CLI does not depend on `cubecl`, `cvvdp-gpu`,
+# or `butteraugli-gpu` directly.
+gpu-butteraugli = ["dep:zenmetrics-api", "zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl"]
+gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
+gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
+gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
+gpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/iwssim"]
+gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim"]
+# Pick CubeCL backends. Forward through the umbrella so every enabled
+# per-crate gets the right backend feature.
+gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]
+gpu-wgpu = ["zenmetrics-api?/wgpu", "cubecl?/wgpu"]
+gpu-hip = ["zenmetrics-api?/hip", "cubecl?/hip"]
+gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
 
 # `sweep` enables the codec-driving subcommand that encodes a source image
 # across a (q, knob_tuple) Cartesian grid and scores each variant via the
@@ -192,15 +182,27 @@ dssim-core = { workspace = true, optional = true }
 rgb = { version = "0.8", optional = true }
 imgref = { version = "1", optional = true }
 
-# GPU metric backends (path deps in this workspace)
-butteraugli-gpu = { path = "../butteraugli-gpu", optional = true, default-features = false }
-ssim2-gpu = { path = "../ssim2-gpu", optional = true, default-features = false }
-dssim-gpu = { path = "../dssim-gpu", optional = true, default-features = false }
-cvvdp-gpu = { path = "../cvvdp-gpu", optional = true, default-features = false }
-
-# CubeCL is required to construct GPU clients when any GPU backend is enabled.
-# Optional — pulled in by the gpu-* feature flags.
-cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"], optional = true }
+# GPU metric backends are routed through the `zenmetrics-api` umbrella
+# crate. The umbrella's opaque API is cubecl-version-agnostic, so this
+# CLI no longer depends on the individual `*-gpu` crates and the common
+# scoring paths (ssim2, dssim, iwssim, zensim, single-call cvvdp) never
+# name a cubecl type.
+#
+# Two paths still reach the per-crate typed cubecl-types surface via
+# the umbrella's `zenmetrics_api::{butter,cvvdp}` re-exports:
+#   - butteraugli's two-column emit (`butteraugli_max_gpu` +
+#     `butteraugli_pnorm3_gpu`) needs `ButteraugliResult.pnorm_3`,
+#     which the opaque `Score` does not surface.
+#   - `CvvdpBatchScorer` caches a `Cvvdp::<R>` instance across pairs of
+#     matching dims to avoid the ~200 MB / NVRTC compile per-pair cost
+#     that produces fleet OOMs at 100-pair chunks.
+# These two paths still need to name `R: cubecl::Runtime` for the
+# generic, so an optional `cubecl` dep is pulled in by `gpu-butteraugli`
+# / `gpu-cvvdp`. Keeping it optional means a CLI build with neither of
+# those two metrics enabled (e.g. ssim2-only worker) still avoids the
+# cubecl dependency entirely.
+zenmetrics-api = { workspace = true, optional = true, default-features = false }
+cubecl = { workspace = true, optional = true }
 
 # tempfile is used by the `sweep` runner to round-trip encoded bytes
 # through the path-based decoder. It is also used in the test suite,

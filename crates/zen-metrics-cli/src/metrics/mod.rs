@@ -5,6 +5,35 @@
 //! `MetricKind` is the user-facing enum (parsed from the CLI's `--metric`
 //! flag). `run_metric` resolves it to the actual backend and runs the
 //! comparison on the supplied RGB8 image pair.
+//!
+//! ## GPU path: one umbrella, one switch
+//!
+//! Every GPU metric routes through the [`zenmetrics_api`] umbrella crate.
+//! The umbrella exposes an opaque `Metric::new(MetricKind, Backend, w, h,
+//! params)` constructor and a `Metric::compute_srgb_u8(&r, &d) -> Score`
+//! method that hide the per-crate `<Metric><R: Runtime>::new` /
+//! `<Metric><R: Runtime>::compute` typed surface. The CLI keeps a single
+//! `match kind { ... }` to translate its [`MetricKind`] into the
+//! umbrella's `MetricKind` + per-metric default `MetricParams`. There is
+//! no per-metric `gpu` module any more; one [`run_gpu_via_umbrella`]
+//! helper handles ssim2/dssim/iwssim/zensim/cvvdp single-shot and butter
+//! max-norm scoring.
+//!
+//! Two typed-path escape hatches stay for the cases the opaque API does
+//! not cover today:
+//!
+//! - [`butter_pnorm3`] uses the typed `butteraugli_gpu::Butteraugli<R>`
+//!   pipeline (reached via the umbrella's `zenmetrics_api::butter`
+//!   re-export) to extract the libjxl 3-norm aggregation
+//!   (`ButteraugliResult.pnorm_3`) alongside the max-norm in one
+//!   `compute()` call. The umbrella's opaque `Score` only carries the
+//!   max-norm value.
+//! - [`cvvdp_gpu`] (this directory) keeps `CvvdpBatchScorer`, which
+//!   caches a `cvvdp_gpu::Cvvdp<R>` instance across pairs of matching
+//!   dims to avoid the ~200 MB / NVRTC compile per-pair cost (fleet
+//!   OOMs at 100-pair chunks otherwise). The instance type comes from
+//!   the umbrella's `zenmetrics_api::cvvdp` re-export, so the CLI
+//!   still has no direct `cvvdp-gpu` dependency.
 
 use clap::ValueEnum;
 
@@ -19,22 +48,10 @@ mod ssim2;
 #[cfg(feature = "cpu-metrics")]
 mod zensim;
 
-#[cfg(any(
-    feature = "gpu-butteraugli",
-    feature = "gpu-ssim2",
-    feature = "gpu-dssim",
-    feature = "gpu-cvvdp"
-))]
-mod gpu_runtime_dispatch;
-
 #[cfg(feature = "gpu-butteraugli")]
-mod butteraugli_gpu;
+mod butter_pnorm3;
 #[cfg(feature = "gpu-cvvdp")]
 pub mod cvvdp_gpu;
-#[cfg(feature = "gpu-dssim")]
-mod dssim_gpu;
-#[cfg(feature = "gpu-ssim2")]
-mod ssim2_gpu;
 
 /// Metric identifier exposed on the CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -42,7 +59,8 @@ pub enum MetricKind {
     /// SSIMULACRA2 — CPU implementation via the `ssimulacra2` crate.
     #[value(name = "ssim2")]
     Ssim2,
-    /// SSIMULACRA2 — GPU implementation via the `ssim2-gpu` crate.
+    /// SSIMULACRA2 — GPU implementation via the `ssim2-gpu` crate
+    /// (dispatched through the `zenmetrics-api` umbrella).
     #[value(name = "ssim2-gpu")]
     Ssim2Gpu,
     /// Butteraugli — CPU implementation via the `butteraugli` crate.
@@ -62,17 +80,27 @@ pub enum MetricKind {
     /// DSSIM — CPU implementation via the `dssim-core` crate. Distance metric: 0 = identical.
     #[value(name = "dssim")]
     Dssim,
-    /// DSSIM — GPU implementation via the `dssim-gpu` crate. Distance metric: 0 = identical.
+    /// DSSIM — GPU implementation via the `dssim-gpu` crate
+    /// (dispatched through the `zenmetrics-api` umbrella).
+    /// Distance metric: 0 = identical.
     #[value(name = "dssim-gpu")]
     DssimGpu,
+    /// IW-SSIM — GPU implementation via the `iwssim-gpu` crate
+    /// (dispatched through the `zenmetrics-api` umbrella).
+    /// Range `[0, 1]`; 1.0 = identical.
+    #[value(name = "iwssim-gpu")]
+    IwssimGpu,
     /// Zensim — CPU implementation via the `zensim` crate.
     #[value(name = "zensim")]
     Zensim,
+    /// Zensim — GPU implementation via the `zensim-gpu` crate
+    /// (dispatched through the `zenmetrics-api` umbrella).
+    #[value(name = "zensim-gpu")]
+    ZensimGpu,
     /// ColorVideoVDP (still-image, JOD scale 0–10, 10 = imperceptible) via
-    /// the `cvvdp-gpu` crate. Currently routes through the parity-locked
-    /// host scalar; the public score path is stable while the kernels for
-    /// every stage are individually parity-tested for a future fully-GPU
-    /// composition.
+    /// the `cvvdp-gpu` crate (dispatched through the umbrella by default;
+    /// `score-pairs` uses the typed `CvvdpBatchScorer` for instance
+    /// reuse across pairs).
     #[value(name = "cvvdp")]
     Cvvdp,
 }
@@ -86,7 +114,9 @@ impl MetricKind {
             MetricKind::ButteraugliGpu,
             MetricKind::Dssim,
             MetricKind::DssimGpu,
+            MetricKind::IwssimGpu,
             MetricKind::Zensim,
+            MetricKind::ZensimGpu,
             MetricKind::Cvvdp,
         ]
     }
@@ -99,7 +129,9 @@ impl MetricKind {
             MetricKind::ButteraugliGpu => "butteraugli-gpu",
             MetricKind::Dssim => "dssim",
             MetricKind::DssimGpu => "dssim-gpu",
+            MetricKind::IwssimGpu => "iwssim-gpu",
             MetricKind::Zensim => "zensim",
+            MetricKind::ZensimGpu => "zensim-gpu",
             MetricKind::Cvvdp => "cvvdp",
         }
     }
@@ -109,6 +141,8 @@ impl MetricKind {
             MetricKind::Ssim2Gpu
             | MetricKind::ButteraugliGpu
             | MetricKind::DssimGpu
+            | MetricKind::IwssimGpu
+            | MetricKind::ZensimGpu
             | MetricKind::Cvvdp => "GPU",
             _ => "CPU",
         }
@@ -120,6 +154,8 @@ impl MetricKind {
             MetricKind::Ssim2Gpu
                 | MetricKind::ButteraugliGpu
                 | MetricKind::DssimGpu
+                | MetricKind::IwssimGpu
+                | MetricKind::ZensimGpu
                 | MetricKind::Cvvdp
         )
     }
@@ -140,7 +176,9 @@ impl MetricKind {
             MetricKind::ButteraugliGpu => &["butteraugli_max_gpu", "butteraugli_pnorm3_gpu"],
             MetricKind::Dssim => &["dssim"],
             MetricKind::DssimGpu => &["dssim_gpu"],
+            MetricKind::IwssimGpu => &["iwssim_gpu"],
             MetricKind::Zensim => &["zensim"],
+            MetricKind::ZensimGpu => &["zensim_gpu"],
             MetricKind::Cvvdp => CVVDP_COLUMNS,
         }
     }
@@ -148,7 +186,7 @@ impl MetricKind {
 
 // Versioned cvvdp column name. With the `gpu-cvvdp` feature enabled,
 // pulls the per-implementation tag from
-// [`::cvvdp_gpu::CVVDP_COLUMN_NAME`] (defaults to
+// [`zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME`] (defaults to
 // `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`; overridable at build time
 // via `CVVDP_IMPL_TAG`). Without the feature, falls back to a bare
 // `"cvvdp"` so callers that list metric names without invoking the
@@ -160,11 +198,16 @@ impl MetricKind {
 // scalar path). A bare `cvvdp` column would collide on join. See the
 // PINNED TASK section in the repo-root `CLAUDE.md`.
 #[cfg(feature = "gpu-cvvdp")]
-const CVVDP_COLUMNS: &[&str] = &[::cvvdp_gpu::CVVDP_COLUMN_NAME];
+const CVVDP_COLUMNS: &[&str] = &[zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME];
 #[cfg(not(feature = "gpu-cvvdp"))]
 const CVVDP_COLUMNS: &[&str] = &["cvvdp"];
 
 /// CubeCL runtime selector for GPU metrics.
+///
+/// Maps onto [`zenmetrics_api::Backend`] inside [`run_gpu_via_umbrella`];
+/// kept on the CLI side as its own enum so the `--gpu-runtime` flag
+/// surface stays stable and the existing `auto` discovery logic does
+/// not leak through to callers that only want a fixed backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum GpuRuntime {
     /// First runtime that initialises successfully.
@@ -177,6 +220,153 @@ pub enum GpuRuntime {
     Hip,
     /// CPU-fallback runtime in CubeCL. Requires `gpu-cpu`.
     Cpu,
+}
+
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+fn auto_order() -> &'static [GpuRuntime] {
+    &[
+        GpuRuntime::Cuda,
+        GpuRuntime::Wgpu,
+        GpuRuntime::Hip,
+        GpuRuntime::Cpu,
+    ]
+}
+
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+pub(crate) fn runtime_label(rt: GpuRuntime) -> &'static str {
+    match rt {
+        GpuRuntime::Auto => "auto",
+        GpuRuntime::Cuda => "cuda",
+        GpuRuntime::Wgpu => "wgpu",
+        GpuRuntime::Hip => "hip",
+        GpuRuntime::Cpu => "cpu",
+    }
+}
+
+/// Translate a CLI [`GpuRuntime`] selection into the umbrella's
+/// [`zenmetrics_api::Backend`]. `Auto` is expanded by the caller.
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::Backend, String> {
+    match rt {
+        GpuRuntime::Auto => Err("Auto is expanded by the caller".to_string()),
+        GpuRuntime::Cuda => Ok(zenmetrics_api::Backend::Cuda),
+        GpuRuntime::Wgpu => Ok(zenmetrics_api::Backend::Wgpu),
+        GpuRuntime::Hip => Ok(zenmetrics_api::Backend::Hip),
+        GpuRuntime::Cpu => Ok(zenmetrics_api::Backend::Cpu),
+    }
+}
+
+/// Single dispatch point for every GPU metric that fits the
+/// "construct → `compute_srgb_u8` → unwrap one `Score`" shape:
+/// ssim2-gpu, dssim-gpu, iwssim-gpu, zensim-gpu, cvvdp single-shot,
+/// and butter max-norm. `auto` walks the compiled-in runtime list and
+/// returns the first that produces a finite score. Replaces the
+/// per-metric `score_with_runtime` / `run::<R>` cascade that used to
+/// live one file per metric.
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+fn run_gpu_via_umbrella(
+    umbrella_kind: zenmetrics_api::MetricKind,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    gpu_runtime: GpuRuntime,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "{}: reference ({}×{}) and distorted ({}×{}) differ in size",
+            umbrella_kind.tag(),
+            reference.width,
+            reference.height,
+            distorted.width,
+            distorted.height
+        )
+        .into());
+    }
+    let candidates: Vec<GpuRuntime> = match gpu_runtime {
+        GpuRuntime::Auto => auto_order().to_vec(),
+        other => vec![other],
+    };
+    let mut last_error: Option<String> = None;
+    for rt in candidates {
+        let backend = match gpu_runtime_to_backend(rt) {
+            Ok(b) => b,
+            Err(e) => {
+                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
+        };
+        // Per-metric default params from the umbrella. The CLI does
+        // not expose per-metric tuning today — the score subcommand is
+        // a "is the metric wired in" smoke test.
+        let params = match zenmetrics_api::MetricParams::try_default_for(umbrella_kind) {
+            Ok(p) => p,
+            Err(e) => {
+                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
+        };
+        let metric = zenmetrics_api::Metric::new(
+            umbrella_kind,
+            backend,
+            reference.width,
+            reference.height,
+            params,
+        );
+        let mut m = match metric {
+            Ok(m) => m,
+            Err(e) => {
+                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
+        };
+        match m.compute_srgb_u8(&reference.pixels, &distorted.pixels) {
+            Ok(score) => {
+                if !score.value.is_finite() {
+                    last_error = Some(format!(
+                        "{}: non-finite score {}",
+                        runtime_label(rt),
+                        score.value
+                    ));
+                    continue;
+                }
+                return Ok(score.value);
+            }
+            Err(e) => last_error = Some(format!("{}: {e}", runtime_label(rt))),
+        }
+    }
+    Err(format!(
+        "{}: no runtime succeeded; last error: {}",
+        umbrella_kind.tag(),
+        last_error.unwrap_or_else(|| "none".into())
+    )
+    .into())
 }
 
 /// Run `kind` on a `(reference, distorted)` RGB8 pair. GPU metrics route
@@ -193,7 +383,10 @@ pub fn run_metric(
             feature = "cpu-metrics",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
-            feature = "gpu-dssim"
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
         )),
         allow(unused_variables)
     )]
@@ -203,7 +396,10 @@ pub fn run_metric(
             feature = "cpu-metrics",
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
-            feature = "gpu-dssim"
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
         )),
         allow(unused_variables)
     )]
@@ -212,7 +408,10 @@ pub fn run_metric(
         not(any(
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
-            feature = "gpu-dssim"
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
         )),
         allow(unused_variables)
     )]
@@ -227,7 +426,12 @@ pub fn run_metric(
         #[cfg(feature = "gpu-ssim2")]
         MetricKind::Ssim2Gpu => Ok(vec![(
             "ssim2_gpu",
-            ssim2_gpu::score(reference, distorted, gpu_runtime)?,
+            run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Ssim2,
+                reference,
+                distorted,
+                gpu_runtime,
+            )?,
         )]),
         #[cfg(not(feature = "gpu-ssim2"))]
         MetricKind::Ssim2Gpu => Err(disabled_msg("ssim2-gpu", "gpu-ssim2")),
@@ -245,7 +449,14 @@ pub fn run_metric(
 
         #[cfg(feature = "gpu-butteraugli")]
         MetricKind::ButteraugliGpu => {
-            let (max, pnorm3) = butteraugli_gpu::score_both(reference, distorted, gpu_runtime)?;
+            // Butteraugli is the only GPU metric the CLI still drives
+            // through the typed cubecl-types surface — the opaque
+            // `Score` only carries the max-norm, but our TSV emits
+            // both max-norm AND the libjxl 3-norm (`pnorm_3`) so the
+            // sweep parquet schema stays unchanged. The typed call
+            // reaches `ButteraugliResult.pnorm_3` directly. Lives in
+            // `butter_pnorm3.rs` to keep this dispatch readable.
+            let (max, pnorm3) = butter_pnorm3::score_both(reference, distorted, gpu_runtime)?;
             Ok(vec![
                 ("butteraugli_max_gpu", max),
                 ("butteraugli_pnorm3_gpu", pnorm3),
@@ -262,20 +473,56 @@ pub fn run_metric(
         #[cfg(feature = "gpu-dssim")]
         MetricKind::DssimGpu => Ok(vec![(
             "dssim_gpu",
-            dssim_gpu::score(reference, distorted, gpu_runtime)?,
+            run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Dssim,
+                reference,
+                distorted,
+                gpu_runtime,
+            )?,
         )]),
         #[cfg(not(feature = "gpu-dssim"))]
         MetricKind::DssimGpu => Err(disabled_msg("dssim-gpu", "gpu-dssim")),
+
+        #[cfg(feature = "gpu-iwssim")]
+        MetricKind::IwssimGpu => Ok(vec![(
+            "iwssim_gpu",
+            run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Iwssim,
+                reference,
+                distorted,
+                gpu_runtime,
+            )?,
+        )]),
+        #[cfg(not(feature = "gpu-iwssim"))]
+        MetricKind::IwssimGpu => Err(disabled_msg("iwssim-gpu", "gpu-iwssim")),
 
         #[cfg(feature = "cpu-metrics")]
         MetricKind::Zensim => Ok(vec![("zensim", zensim::score(reference, distorted)?)]),
         #[cfg(not(feature = "cpu-metrics"))]
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
 
+        #[cfg(feature = "gpu-zensim")]
+        MetricKind::ZensimGpu => Ok(vec![(
+            "zensim_gpu",
+            run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Zensim,
+                reference,
+                distorted,
+                gpu_runtime,
+            )?,
+        )]),
+        #[cfg(not(feature = "gpu-zensim"))]
+        MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "gpu-zensim")),
+
         #[cfg(feature = "gpu-cvvdp")]
         MetricKind::Cvvdp => Ok(vec![(
-            ::cvvdp_gpu::CVVDP_COLUMN_NAME,
-            cvvdp_gpu::score(reference, distorted, gpu_runtime)?,
+            zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME,
+            run_gpu_via_umbrella(
+                zenmetrics_api::MetricKind::Cvvdp,
+                reference,
+                distorted,
+                gpu_runtime,
+            )?,
         )]),
         #[cfg(not(feature = "gpu-cvvdp"))]
         MetricKind::Cvvdp => Err(disabled_msg("cvvdp", "gpu-cvvdp")),
