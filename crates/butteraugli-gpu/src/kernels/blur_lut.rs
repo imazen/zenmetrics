@@ -335,6 +335,108 @@ fn gamma(v: f32) -> f32 {
     19.245_014_f32 * f32::ln(v + 9.971_064) - 23.160_463
 }
 
+/// 3-channel fused vertical blur + MF subtract + xyb_low_freq_to_vals
+/// for the LF separation stage.
+///
+/// Eliminates the `subtract_arrays(lin, LF) → MF` triple-launch and the
+/// `xyb_low_freq_to_vals(LF)` launch by doing both inside the V-blur:
+///
+///   for each output pixel (x, y):
+///     lf_x = Σ_i  table[i] · h_src_x[(y+i)·w + x]   (vertical blur)
+///     lf_y = ...                                                "
+///     lf_b = ...                                                "
+///     mf_x = orig_x[idx] - lf_x  → write mf_x_out[idx]
+///     mf_y = orig_y[idx] - lf_y  → write mf_y_out[idx]
+///     mf_b = orig_b[idx] - lf_b  → write mf_b_out[idx]
+///     // xyb_low_freq_to_vals on the LF triple:
+///     lf_b += Y_TO_B_MULI · lf_y
+///     lf_b *= BMULI
+///     lf_x *= XMULI
+///     lf_y *= YMULI
+///     write (lf_x, lf_y, lf_b) → lf_*_out[idx]
+///
+/// No R/W hazard: `orig_*` reads are pointwise (`[idx]` only) and don't
+/// touch the V-blur window; MF outputs are independent from LF outputs.
+///
+/// Replaces 5 separate launches (V-blur 3ch + 3× subtract + 1× xyb-mul)
+/// with one. At 12 MP each saved kernel was ~220 µs; net saving per
+/// `compute()` call is ~5 × (215+215+215+445) µs ≈ 5.5 ms (across both
+/// sides). The fused V-blur itself stays at the V-blur's existing cost
+/// since the post-blur math is cheap pointwise FMAs.
+///
+/// Constants below MUST match
+/// [`crate::kernels::frequency::xyb_low_freq_to_vals_kernel`]:
+/// `XMULI = 33.832837`, `YMULI = 14.458268`, `BMULI = 49.879845`,
+/// `Y_TO_B_MULI = -0.36226705`.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_3ch_lf_split_lut_kernel(
+    h_src_x: &Array<f32>,
+    h_src_y: &Array<f32>,
+    h_src_b: &Array<f32>,
+    orig_x: &Array<f32>,
+    orig_y: &Array<f32>,
+    orig_b: &Array<f32>,
+    lf_x_out: &mut Array<f32>,
+    lf_y_out: &mut Array<f32>,
+    lf_b_out: &mut Array<f32>,
+    mf_x_out: &mut Array<f32>,
+    mf_y_out: &mut Array<f32>,
+    mf_b_out: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b_idx = end + r + 1 - y;
+    let wsum = table[integ_off + b_idx] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        let off = i * w + x;
+        sum_x += h_src_x[off] * weight;
+        sum_y += h_src_y[off] * weight;
+        sum_b += h_src_b[off] * weight;
+        i += 1;
+    }
+    let lf_x_raw = sum_x / wsum;
+    let lf_y_raw = sum_y / wsum;
+    let lf_b_raw = sum_b / wsum;
+
+    // MF = orig - LF (pre-xyb-mul). Read orig_*[idx] once; that read
+    // doesn't overlap the V-blur window so it's race-free.
+    mf_x_out[idx] = orig_x[idx] - lf_x_raw;
+    mf_y_out[idx] = orig_y[idx] - lf_y_raw;
+    mf_b_out[idx] = orig_b[idx] - lf_b_raw;
+
+    // xyb_low_freq_to_vals on the LF triple (in-the-same-kernel,
+    // matches the standalone kernel bit-for-bit).
+    let lf_b_mixed = (lf_b_raw + (-0.362_267_05_f32) * lf_y_raw) * 49.879_845;
+    lf_x_out[idx] = lf_x_raw * 33.832_837;
+    lf_y_out[idx] = lf_y_raw * 14.458_268;
+    lf_b_out[idx] = lf_b_mixed;
+}
+
 /// 3-channel fused vertical blur (LUT variant).
 #[cube(launch_unchecked)]
 #[allow(clippy::too_many_arguments)]

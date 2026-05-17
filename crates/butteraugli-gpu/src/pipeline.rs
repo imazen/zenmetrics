@@ -1056,33 +1056,50 @@ impl<R: Runtime> Butteraugli<R> {
         let freq = if is_a { &self.freq_a } else { &self.freq_b };
 
         // ── Step 1: LF (low-pass) and MF = XYB − LF ──
-        // Fused 3-channel LF blur (2 launches instead of 6). Uses
-        // temp1/temp2/mask_scratch as H→V scratches.
-        self.blur_3ch_via(
-            &lin[0],
-            &lin[1],
-            &lin[2],
-            &freq[3][0],
-            &freq[3][1],
-            &freq[3][2],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_LF,
-        );
-        // MF = XYB − LF (still per-channel; small kernel).
-        for ch in 0..3 {
-            self.subtract_arrays(&lin[ch], &freq[3][ch], &freq[2][ch]);
-        }
-        // xyb_low_freq_to_vals on LF — CPU `xyb_low_freq_to_vals`.
+        // T_x.F (2026-05-17): the SIGMA_LF blur, the MF = XYB − LF
+        // subtracts (×3), and the xyb_low_freq_to_vals in-place mul
+        // are all fused into the V-pass of the LF blur. The H pass
+        // still runs separately (it's a separable reduction);
+        // V-pass + post-blur math runs in one kernel.
+        let table = &self.blur_tables[BlurKind::Lf as usize];
+        let table_len = self.blur_table_lens[BlurKind::Lf as usize];
+        let radius = self.blur_radii[BlurKind::Lf as usize];
         unsafe {
-            frequency::xyb_low_freq_to_vals_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+            );
+            blur_lut::vertical_blur_3ch_lf_split_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][1].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][2].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
             );
         }
 
