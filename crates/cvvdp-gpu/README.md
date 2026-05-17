@@ -53,8 +53,10 @@ candidates:
 - `Cvvdp::warm_reference` + `Cvvdp::compute_dkl_jod_with_warm_ref`
   materialises the REF Weber-contrast pyramid on the GPU once and
   skips that half of the pipeline per candidate — ~1.8× faster per
-  DIST at 12 MP (~62 → ~34 ns/px on an RTX 5070; see `src/lib.rs`'s
-  "How we compare to the canonical reference" section).
+  DIST at 12 MP (~17-22 ns/px warm-ref on an RTX 5070 post the
+  T4.L+M upload-pinning + T1.B/T1.C/T4.K LDS work, vs ~62 ns/px
+  on the pre-perf-push baseline; see `src/lib.rs`'s "How we compare
+  to the canonical reference" section).
 
 ```rust,no_run
 use cubecl::Runtime;
