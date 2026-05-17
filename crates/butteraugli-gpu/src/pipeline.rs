@@ -1089,17 +1089,21 @@ impl<R: Runtime> Butteraugli<R> {
         // ── Step 2: MF/HF separation ──
         // T_x.B (2026-05-17): fuse the 3 SIGMA_HF blurs into ONE
         // 3-channel call (2 launches vs 6 — H+V each handle all
-        // channels at once). Outputs land in scratch planes
-        // freq[0][0..3], which UHF will overwrite in Step 3 so they're
-        // free here. Scratches for the H-pass are temp1 / temp2 /
-        // mask_scratch.
+        // channels at once).
+        // T_x.E (2026-05-17): for the B channel, write the blur
+        // output DIRECTLY into freq[2][2] (the eventual MF_B target).
+        // The V-blur reads only from the h-pass temp planes (no
+        // window into freq[2][2]), and each thread only writes its
+        // own idx, so reading freq[2][2] in the H pass + writing it
+        // in the V pass is safe per-thread. Eliminates the trailing
+        // copy_plane B → MF_B launch.
         self.blur_3ch_via(
             &freq[2][0],
             &freq[2][1],
             &freq[2][2],
             &freq[0][0],
             &freq[0][1],
-            &freq[0][2],
+            &freq[2][2],
             &self.temp1.clone(),
             &self.temp2.clone(),
             &self.mask_scratch.clone(),
@@ -1129,8 +1133,7 @@ impl<R: Runtime> Butteraugli<R> {
                 ADD_MF_RANGE,
             );
         }
-        // B (ch=2): copy blurred → MF_B (no HF for B).
-        self.copy_plane(&freq[0][2].clone(), &freq[2][2]);
+        // B (ch=2): no further work — the V-blur already wrote to MF_B.
 
         // suppress_x_by_y(HF_y → HF_x)
         unsafe {
