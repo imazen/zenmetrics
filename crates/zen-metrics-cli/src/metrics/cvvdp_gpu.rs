@@ -173,6 +173,25 @@ impl CvvdpBatchScorer {
             Self::Hip(state) => score_pair_cached_gpu(state, reference, distorted),
             #[cfg(feature = "gpu-cpu")]
             Self::Cpu(state) => score_pair_cached_cpu(state, reference, distorted),
+            // When none of the gpu-cuda/wgpu/hip/cpu features are enabled the
+            // enum has zero constructable variants, but `&mut Self` is still
+            // an inhabited type so the match would be non-exhaustive without
+            // a wildcard. `Self::new()` always errors in that configuration,
+            // so this arm is unreachable in practice — keep it as a runtime
+            // guard rather than a `todo!()` panic.
+            #[cfg(not(any(
+                feature = "gpu-cuda",
+                feature = "gpu-wgpu",
+                feature = "gpu-hip",
+                feature = "gpu-cpu",
+            )))]
+            _ => {
+                let _ = (reference, distorted);
+                Err("no CubeCL runtime feature enabled at build time \
+                     (rebuild with at least one of `gpu-cuda`, `gpu-wgpu`, \
+                     `gpu-hip`, `gpu-cpu`)"
+                    .into())
+            }
         }
     }
 }
