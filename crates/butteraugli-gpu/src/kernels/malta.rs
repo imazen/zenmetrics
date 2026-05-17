@@ -554,6 +554,94 @@ pub fn malta_diff_map_hf_batched_kernel(
     block_diff_ac[out_idx] = block_diff_ac[out_idx] + result;
 }
 
+/// Per-channel triple-Malta fused kernel: one UHF (HF-correlator) +
+/// one HF (LF-correlator) + one MF (LF-correlator) all into the same
+/// per-channel accumulator, in a single launch. **Overwrites** the
+/// accumulator (no read-modify-write), so callers don't need a separate
+/// zero_plane pass.
+///
+/// Saves per channel:
+///  - 2 kernel launches (3 maltas → 1)
+///  - 2 R/W roundtrips on block_diff_ac (accumulator only written once)
+///  - 1 zero_plane launch (the fused kernel overwrites)
+///
+/// LDS usage: 3 × 576 f32 = 6.9 KB per cube — well under the 48 KB
+/// budget. Per-thread register pressure scales as 3× a single malta
+/// (~144 LDS reads), still safely below a typical sm_86 spill threshold.
+///
+/// T_x.K (2026-05-17): mirrors vship's "process all bands per channel
+/// in one place" structure (see src/HIP/butter/main.hpp:59-79 — vship
+/// has 3 launches per channel; we collapse them to 1).
+#[cube(launch_unchecked)]
+pub fn malta_diff_map_triple_kernel(
+    uhf_a: &Array<f32>,
+    uhf_b: &Array<f32>,
+    hf_a: &Array<f32>,
+    hf_b: &Array<f32>,
+    mf_a: &Array<f32>,
+    mf_b: &Array<f32>,
+    block_diff_ac: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    uhf_norm2_0gt1: f32,
+    uhf_norm2_0lt1: f32,
+    uhf_norm1: f32,
+    hf_norm2_0gt1: f32,
+    hf_norm2_0lt1: f32,
+    hf_norm1: f32,
+    mf_norm2_0gt1: f32,
+    mf_norm2_0lt1: f32,
+    mf_norm1: f32,
+) {
+    let mut tile_uhf = SharedMemory::<f32>::new(SHARED_TOTAL_USIZE);
+    let mut tile_hf = SharedMemory::<f32>::new(SHARED_TOTAL_USIZE);
+    let mut tile_mf = SharedMemory::<f32>::new(SHARED_TOTAL_USIZE);
+    load_tile(
+        uhf_a,
+        uhf_b,
+        width,
+        height,
+        uhf_norm1,
+        uhf_norm2_0gt1,
+        uhf_norm2_0lt1,
+        &mut tile_uhf,
+    );
+    load_tile(
+        hf_a,
+        hf_b,
+        width,
+        height,
+        hf_norm1,
+        hf_norm2_0gt1,
+        hf_norm2_0lt1,
+        &mut tile_hf,
+    );
+    load_tile(
+        mf_a,
+        mf_b,
+        width,
+        height,
+        mf_norm1,
+        mf_norm2_0gt1,
+        mf_norm2_0lt1,
+        &mut tile_mf,
+    );
+    sync_cube();
+
+    let x = CUBE_POS_X * TILE_SIZE + UNIT_POS_X;
+    let y = CUBE_POS_Y * TILE_SIZE + UNIT_POS_Y;
+    if x >= width || y >= height {
+        terminate!();
+    }
+    let pos = ((UNIT_POS_Y + HALO) * SHARED_SIZE + (UNIT_POS_X + HALO)) as i32;
+    let r_uhf = malta_unit_hf(&tile_uhf, pos, SHARED_SIZE as i32);
+    let r_hf = malta_unit_lf(&tile_hf, pos, SHARED_SIZE as i32);
+    let r_mf = malta_unit_lf(&tile_mf, pos, SHARED_SIZE as i32);
+    let out_idx = (y * width + x) as usize;
+    // Overwrite — caller relies on this to skip the zero_plane pass.
+    block_diff_ac[out_idx] = r_uhf + r_hf + r_mf;
+}
+
 /// Batched Malta LF kernel — see `malta_diff_map_hf_batched_kernel`.
 #[cube(launch_unchecked)]
 pub fn malta_diff_map_lf_batched_kernel(

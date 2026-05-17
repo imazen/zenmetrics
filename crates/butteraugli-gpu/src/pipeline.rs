@@ -1220,88 +1220,73 @@ impl<R: Runtime> Butteraugli<R> {
 
         // Index conventions: freq[k] where k ∈ {0=UHF, 1=HF, 2=MF, 3=LF};
         //                    freq[k][0]=X, freq[k][1]=Y, freq[k][2]=B.
+        //
+        // T_x.K (2026-05-17): the 3 maltas per channel (UHF/HF/MF) used
+        // to be 3 launches + 1 zero_plane each = 8 launches. Now collapsed
+        // to 1 launch per channel via malta_diff_map_triple_kernel, which
+        // loads all 3 diff tiles into LDS and overwrites the accumulator
+        // (eliminating the zero_plane prelude).
 
-        // UHF Y (use_lf=false, 9-tap = "_hf" kernel)
-        let (g, l, n1) = malta_norm(W_UHF_MALTA * asym, W_UHF_MALTA / asym, NORM1_UHF, false);
-        self.zero_plane(&self.block_diff_ac[1]);
-        self.malta_hf(
-            &self.freq_a[0][1],
-            &self.freq_b[0][1],
-            &self.block_diff_ac[1],
-            g,
-            l,
-            n1,
-        );
-
-        // UHF X
-        let (g, l, n1) = malta_norm(
-            W_UHF_MALTA_X * asym,
-            W_UHF_MALTA_X / asym,
-            NORM1_UHF_X,
-            false,
-        );
-        self.zero_plane(&self.block_diff_ac[0]);
-        self.malta_hf(
-            &self.freq_a[0][0],
-            &self.freq_b[0][0],
-            &self.block_diff_ac[0],
-            g,
-            l,
-            n1,
-        );
-
-        // HF Y (use_lf=true, 5-tap = "_lf" kernel)
-        let (g, l, n1) = malta_norm(
+        // Y channel triple-malta (UHF hf-pattern + HF lf-pattern + MF lf-pattern)
+        let (uhf_g, uhf_l, uhf_n) =
+            malta_norm(W_UHF_MALTA * asym, W_UHF_MALTA / asym, NORM1_UHF, false);
+        let (hf_g, hf_l, hf_n) = malta_norm(
             W_HF_MALTA * sqrt_asym,
             W_HF_MALTA / sqrt_asym,
             NORM1_HF,
             true,
         );
-        self.malta_lf(
+        let (mf_g, mf_l, mf_n) = malta_norm(W_MF_MALTA, W_MF_MALTA, NORM1_MF, true);
+        self.malta_triple(
+            &self.freq_a[0][1],
+            &self.freq_b[0][1],
             &self.freq_a[1][1],
             &self.freq_b[1][1],
+            &self.freq_a[2][1],
+            &self.freq_b[2][1],
             &self.block_diff_ac[1],
-            g,
-            l,
-            n1,
+            uhf_g,
+            uhf_l,
+            uhf_n,
+            hf_g,
+            hf_l,
+            hf_n,
+            mf_g,
+            mf_l,
+            mf_n,
         );
 
-        // HF X
-        let (g, l, n1) = malta_norm(
+        // X channel triple-malta
+        let (uhf_g, uhf_l, uhf_n) = malta_norm(
+            W_UHF_MALTA_X * asym,
+            W_UHF_MALTA_X / asym,
+            NORM1_UHF_X,
+            false,
+        );
+        let (hf_g, hf_l, hf_n) = malta_norm(
             W_HF_MALTA_X * sqrt_asym,
             W_HF_MALTA_X / sqrt_asym,
             NORM1_HF_X,
             true,
         );
-        self.malta_lf(
+        let (mf_g, mf_l, mf_n) = malta_norm(W_MF_MALTA_X, W_MF_MALTA_X, NORM1_MF_X, true);
+        self.malta_triple(
+            &self.freq_a[0][0],
+            &self.freq_b[0][0],
             &self.freq_a[1][0],
             &self.freq_b[1][0],
-            &self.block_diff_ac[0],
-            g,
-            l,
-            n1,
-        );
-
-        // MF Y (symmetric, use_lf=true)
-        let (g, l, n1) = malta_norm(W_MF_MALTA, W_MF_MALTA, NORM1_MF, true);
-        self.malta_lf(
-            &self.freq_a[2][1],
-            &self.freq_b[2][1],
-            &self.block_diff_ac[1],
-            g,
-            l,
-            n1,
-        );
-
-        // MF X
-        let (g, l, n1) = malta_norm(W_MF_MALTA_X, W_MF_MALTA_X, NORM1_MF_X, true);
-        self.malta_lf(
             &self.freq_a[2][0],
             &self.freq_b[2][0],
             &self.block_diff_ac[0],
-            g,
-            l,
-            n1,
+            uhf_g,
+            uhf_l,
+            uhf_n,
+            hf_g,
+            hf_l,
+            hf_n,
+            mf_g,
+            mf_l,
+            mf_n,
         );
 
         // L2_asym on HF X (WMUL[0]) and HF Y (WMUL[1])
@@ -1347,13 +1332,29 @@ impl<R: Runtime> Butteraugli<R> {
     /// DC contributions: per-channel `WMUL[6+ch] · (LF_a[ch] − LF_b[ch])²`
     /// written into `block_diff_dc[ch]`. CPU folds this into
     /// `combine_channels_to_diffmap_fused`; we do it as a separate pass.
+    ///
+    /// T_x.J (2026-05-17): all three channels fused into a single launch
+    /// (was 3 × l2_diff_write_kernel). Saves 2 kernel launches + 2
+    /// launch-latency roundtrips per iter; the per-pixel work itself is
+    /// trivial (one FMA per channel) so the launch overhead dominated.
     fn compute_dc_diff(&self) {
-        for ch in 0..3 {
-            self.l2_diff_write(
-                &self.freq_a[3][ch],
-                &self.freq_b[3][ch],
-                &self.block_diff_dc[ch],
-                WMUL[6 + ch] as f32,
+        unsafe {
+            diffmap::l2_diff_write_3ch_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.freq_a[3][0].clone(), self.n),
+                ArrayArg::from_raw_parts(self.freq_b[3][0].clone(), self.n),
+                ArrayArg::from_raw_parts(self.block_diff_dc[0].clone(), self.n),
+                ArrayArg::from_raw_parts(self.freq_a[3][1].clone(), self.n),
+                ArrayArg::from_raw_parts(self.freq_b[3][1].clone(), self.n),
+                ArrayArg::from_raw_parts(self.block_diff_dc[1].clone(), self.n),
+                ArrayArg::from_raw_parts(self.freq_a[3][2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.freq_b[3][2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.block_diff_dc[2].clone(), self.n),
+                WMUL[6] as f32,
+                WMUL[7] as f32,
+                WMUL[8] as f32,
             );
         }
     }
@@ -1513,6 +1514,55 @@ impl<R: Runtime> Butteraugli<R> {
                 norm2_0gt1,
                 norm2_0lt1,
                 norm1,
+            );
+        }
+    }
+
+    /// T_x.K (2026-05-17): single-launch UHF (hf-pattern) + HF (lf-pattern)
+    /// + MF (lf-pattern) per channel. Overwrites the accumulator.
+    #[allow(clippy::too_many_arguments)]
+    fn malta_triple(
+        &self,
+        uhf_a: &cubecl::server::Handle,
+        uhf_b: &cubecl::server::Handle,
+        hf_a: &cubecl::server::Handle,
+        hf_b: &cubecl::server::Handle,
+        mf_a: &cubecl::server::Handle,
+        mf_b: &cubecl::server::Handle,
+        acc: &cubecl::server::Handle,
+        uhf_norm2_0gt1: f32,
+        uhf_norm2_0lt1: f32,
+        uhf_norm1: f32,
+        hf_norm2_0gt1: f32,
+        hf_norm2_0lt1: f32,
+        hf_norm1: f32,
+        mf_norm2_0gt1: f32,
+        mf_norm2_0lt1: f32,
+        mf_norm1: f32,
+    ) {
+        unsafe {
+            malta::malta_diff_map_triple_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_2d(),
+                self.cube_dim_2d(),
+                ArrayArg::from_raw_parts(uhf_a.clone(), self.n),
+                ArrayArg::from_raw_parts(uhf_b.clone(), self.n),
+                ArrayArg::from_raw_parts(hf_a.clone(), self.n),
+                ArrayArg::from_raw_parts(hf_b.clone(), self.n),
+                ArrayArg::from_raw_parts(mf_a.clone(), self.n),
+                ArrayArg::from_raw_parts(mf_b.clone(), self.n),
+                ArrayArg::from_raw_parts(acc.clone(), self.n),
+                self.width,
+                self.height,
+                uhf_norm2_0gt1,
+                uhf_norm2_0lt1,
+                uhf_norm1,
+                hf_norm2_0gt1,
+                hf_norm2_0lt1,
+                hf_norm1,
+                mf_norm2_0gt1,
+                mf_norm2_0lt1,
+                mf_norm1,
             );
         }
     }
