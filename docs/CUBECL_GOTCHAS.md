@@ -969,6 +969,285 @@ optimisations don't move the needle.
 
 ---
 
+### G6.4 — Profile with `nsys` BEFORE you tile-tune any kernel
+
+**Symptom.** You spend a day adding LDS tiles or kernel fusion to
+"the obvious hot kernel" and the bench number barely moves. Or you
+revert the change because it regressed.
+
+**Cause.** Host-side `Instant::now()` lies about GPU work — GPU APIs
+are async-submit, so `eprintln!("kernel X: {:?}", t.elapsed())`
+measures host issue time, not GPU execution. The bench-wall-time
+delta vs the trace numbers can be 80×: in the cvvdp-gpu chase
+(2026-05-16) host trace said 3 ms per warm-ref iter while bench
+reported 244 ms — the 240 ms gap was invisible.
+
+`CUDA_LAUNCH_BLOCKING=1` is supposed to force sync launches but
+cubecl 0.10's runtime queue doesn't honour it.
+
+**Detect.** Wall-time bench delta differs sharply from your traced
+per-stage times. Or you can't explain where ≥20% of per-iter time
+goes.
+
+**Fix.** Run `nsys` once before any kernel work. The whole story is in
+one command:
+
+```bash
+nsys profile -t cuda --stats=true --force-overwrite=true \
+  -o /tmp/prof ./your_binary
+```
+
+Read the **`cuda_api_sum`** table first (host-side CUDA calls). If
+`cuMemcpyHtoDAsync` or `cuMemAllocAsync` is > 20 % of total time,
+the GPU is idle waiting for uploads/allocs — see G6.5 / G6.6 / G6.7.
+Only after that, read **`cuda_gpu_kern_sum`** for per-kernel
+execution time. That's the table where tile-tuning helps.
+
+The 2026-05-16 cvvdp-gpu session lost hours to "LDS-tile the PU blur"
+(which regressed) before nsys revealed the 55.7 % bottleneck was
+`cuMemcpyHtoDAsync` from pageable host memory. One nsys run pointed
+straight at it; the fix (T4.L+T4.M) gave 12.8× while no kernel-tile
+change had moved the bench number by more than 8 %.
+
+**`nvprof` is deprecated** (since CUDA 11). Use `nsys`. `ncu` (Nsight
+Compute) is for per-kernel deep dives (occupancy, warp stalls); only
+useful *after* `nsys` identifies which kernel matters.
+
+---
+
+### G6.5 — Pinned host memory is the difference between 5 GB/s and 25 GB/s
+
+**Symptom.** `cuMemcpyHtoDAsync` accounts for > 30 % of wall time
+even though per-iter upload is "only" tens of MB. nsys shows mean
+transfer bandwidth around 1–6 GB/s while PCIe 4×16 advertises 32 GB/s.
+
+**Cause.** CUDA copies *from pageable* host memory at ~5–6 GB/s because
+the driver internally stages through a hidden pinned bounce buffer.
+Pinned (page-locked) host memory via `cuMemAllocHost` DMAs directly
+at 12–25 GB/s on PCIe 4.0.
+
+`client.create_from_slice(&[u8])` in stock cubecl 0.10 builds a
+pageable `Vec<u8>` and hits the slow path. There is no in-place
+write API to reuse an allocated GPU buffer either, so every
+`compute()` call re-allocates AND re-uploads pageably.
+
+**Detect.** nsys `cuda_api_sum` shows `cuMemcpyHtoDAsync` and/or
+`cuMemAllocAsync` totaling more than your actual `cuLaunchKernel`
+time. Per-iter byte volume divided by per-iter memcpy time is well
+below PCIe theoretical (32 GB/s for PCIe 4×16).
+
+**Fix.** Use the `lilith/cubecl` fork (`feat/pinned-upload`,
+commit `08d34ac0`, upstream PR
+[tracel-ai/cubecl#1030](https://github.com/tracel-ai/cubecl/pull/1030)
+closed). It adds two things:
+
+1. **`client.create_from_slice_pinned(&[u8]) -> Handle`** — copies
+   the input directly into a pinned staging buffer, then issues the
+   device upload. Skips the intermediate `Vec<u8>` host memcpy that
+   stock `create_from_slice` pays.
+2. **Default `create_from_slice` was patched to also route through
+   pinned staging** — anything you already had using the default API
+   gets a transparent speedup, no source change.
+
+Wire via `Cargo.toml`:
+
+```toml
+[patch.crates-io]
+cubecl = { git = "https://github.com/lilith/cubecl.git", rev = "08d34ac0ba72c0ff1f9351e2f1e4d4ce32db2b0f" }
+cubecl-runtime = { git = "https://github.com/lilith/cubecl.git", rev = "08d34ac0ba72c0ff1f9351e2f1e4d4ce32db2b0f" }
+# ... patch every cubecl-* crate your dep tree pulls
+```
+
+For hot per-call uploads (e.g. per-frame DIST sRGB), switch the call
+to `create_from_slice_pinned` for the extra "skip the intermediate
+`Vec<u8>` memcpy" gain.
+
+Measured impact (RTX 5070, cvvdp-gpu 12 MP warm-ref): 95 ms → 22 ms
+(4.3×) from this change alone, on top of T4.L's pre-existing 2.5×
+packing win.
+
+Pinned host memory is a limited system resource — only allocate it
+for buffers you actually upload, and drop the handle after.
+
+---
+
+### G6.6 — Don't widen u8 → u32 on host when the kernel can unpack
+
+**Symptom.** A color/byte-input kernel takes `&Array<u32>`; the host
+expands `&[u8]` 4× into a `Vec<u32>` so each byte gets its own
+slot. nsys shows the per-iter HtoD is several × the raw byte count.
+
+**Cause.** A kernel author wrote `src: &Array<u32>` and reads
+`src[base], src[base+1], src[base+2]` for R/G/B — natural Rust style
+but causes 4× upload inflation. At 12 MP × 3 channels that's 36 MB
+of sRGB bytes inflating to 144 MB on the wire.
+
+**Detect.** Per-iter upload byte count is dramatically larger than
+the actual source bytes you care about.
+
+**Fix.** Pack on host into one u32 per pixel (R | G<<8 | B<<16; alpha
+free). Kernel unpacks with 3 bit-shifts + 3 ANDs, which is free vs
+the upload time saved (saved ~50 ms/iter on cvvdp-gpu 12 MP).
+
+```rust
+// Host:
+src_packed[i] = u32::from(rgb[3*i]) | (u32::from(rgb[3*i+1]) << 8)
+              | (u32::from(rgb[3*i+2]) << 16);
+
+// Kernel:
+let p = src[idx];
+let r = p & 0xffu32;
+let g = (p >> 8u32) & 0xffu32;
+let b = (p >> 16u32) & 0xffu32;
+```
+
+Allocator length drops 3×, persistent host scratch shrinks 3×,
+upload bytes drop 3×. The `n` you pass to `ArrayArg::from_raw_parts`
+becomes `n0` (pixel count) instead of `n0 * 3` (byte count).
+
+Even simpler when cubecl supports it: `Array<u8>` directly drops
+upload to the raw 36 MB. Worth trying first.
+
+---
+
+### G6.7 — Workgroup-LDS reduction with per-size dispatch (the pool pattern)
+
+**Symptom.** A reduction kernel atomically adds one value per pixel
+into a small set of global slots. At 12 MP per band per channel,
+that's 12M atomic-adds contending on 3 slots per band — measurable
+in nsys as a slow kernel.
+
+**Cause.** Per-pixel `Atomic<f32>::fetch_add` serialises through the
+atomic hardware. Even uncontended atomics are slower than register
+arithmetic; contended ones are dramatically slower.
+
+**Fix (two-step):** Replace the per-pixel atomic with a workgroup-LDS
+pointer-jumping reduce that does ONE atomic-add per workgroup per
+output slot. Then route small bands back to the original kernel —
+LDS reduction has overhead (8 syncs at 256 threads) that exceeds the
+per-pixel atomic cost at < ~16K pixels.
+
+**Kernel skeleton:**
+
+```rust
+pub const POOL_LDS_BLOCK_DIM: u32 = 256;
+const POOL_LDS_BLOCK_DIM_USIZE: usize = 256;
+
+#[cube(launch)]
+pub fn pool_kernel_lds(
+    input: &Array<f32>,
+    partials: &mut Array<Atomic<f32>>,
+    partial_idx: u32,
+    n: u32,
+) {
+    let tx = UNIT_POS_X;
+    let idx = ABSOLUTE_POS;
+    let n_usize = n as usize;
+    let in_range = idx < n_usize;
+    // `idx - idx` yields a typed-zero of the same `NativeExpand<usize>`
+    // type as `idx` — sidesteps the `0usize` literal type mismatch
+    // CubeCL surfaces in mixed-arm `if` expressions (see G1.5 sibling).
+    let zero_idx = idx - idx;
+    let safe_idx = if in_range { idx } else { zero_idx };
+
+    let v = input[safe_idx];
+    let contrib = if in_range { /* your reduction op */ v } else { f32::new(0.0) };
+
+    let mut lds = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);
+    lds[tx as usize] = contrib;
+    sync_cube();
+
+    // Active-contiguous reduction (avoid the warp-divergent
+    // `tx % (stride*2) == 0` form). 8 passes for 256 threads.
+    let mut stride: u32 = 128u32;
+    while stride > 0u32 {
+        if tx < stride {
+            lds[tx as usize] = lds[tx as usize] + lds[(tx + stride) as usize];
+        }
+        sync_cube();
+        stride /= 2u32;
+    }
+
+    if tx == 0u32 {
+        partials[partial_idx as usize].fetch_add(lds[0]);
+    }
+}
+```
+
+**Per-size dispatch (T4.K pattern):**
+
+```rust
+const POOL_LDS_MIN_PIXELS: usize = 16_384;
+if n_px >= POOL_LDS_MIN_PIXELS {
+    pool_kernel_lds::launch::<R>(/* CubeDim::new_1d(256), count = n.div_ceil(256) */);
+} else {
+    pool_kernel_atomic::launch::<R>(/* CubeDim::new_1d(64), count = n.div_ceil(64) */);
+}
+```
+
+Measured (cvvdp-gpu 12 MP warm-ref): 351.7 → 277.3 ms (1.27×) from
+the LDS reduction alone; T4.K's per-size split additionally improved
+12 MP by routing small pyramid bands back to the atomic kernel.
+
+**Pre-existing flaky test warning.** GPU atomic-add ordering is
+non-deterministic; per-pixel-atomic pool kernels produce slightly
+different f32 sums across runs. Any test that asserts bit-exact
+equality between two `compute()` calls (e.g. comparing two methods
+that both go through `compute_dkl_jod`) will be flaky on those
+sums. Switching to the LDS reduction reduced flakiness in cvvdp-gpu
+because the workgroup-level pointer-jumping reduce is deterministic
+order; the leftover non-determinism is the per-workgroup atomic add
+to global, which fires N/256 times instead of N times.
+
+---
+
+### G6.8 — LDS-tiled separable stencil pattern (when, when not)
+
+**Symptom-driven:** When *should* you LDS-tile a separable stencil
+kernel? Naïve per-thread-per-output reads K samples per channel from
+global memory; adjacent threads share K-1 of those reads — looks like
+the classic LDS-tile case. But two of three cvvdp-gpu tile attempts
+(T1.B downscale: 1.06×; T2.D PU blur: 0.87× regression) gave much
+less than the textbook 3-5× speedup.
+
+**Why it sometimes regresses.** Modern dGPU L1 cache (~128 KB per
+Ampere/Ada/Blackwell SM) already absorbs the K-1 shared loads from
+adjacent threads when warps are scheduled densely. Adding LDS tile
+load + barrier serialises what was already cache-hot, and the
+barrier reduces warp-level latency hiding the SM scheduler was
+doing for free.
+
+**Heuristic for when LDS-tile wins:**
+
+- Stencil radius is large (≥ 5 on each side, i.e. ≥ 11 taps per
+  output). At small radii, L1 wins.
+- Output tile is at most one warp wide so loads coalesce cleanly
+  into shared memory.
+- The shared-mem version *also* fuses something else (e.g. min-abs
+  during the load, like vship's `GaussianSmartSharedLoadMinAbs`).
+  Pure load-then-blur rarely wins.
+- Per-channel kernels (vs 3-channel fused) — the larger LDS budget
+  of a 3-channel kernel can push down occupancy below 50%.
+
+**When NOT to LDS-tile:**
+
+- 5×5 / 5-tap separable on RTX-class CUDA without fusion — T1.B
+  measured 1.06× on cvvdp-gpu's downscale.
+- 13-tap PU blur with no fusion opportunity — T2.D regressed
+  12 MP cold by 37 ms vs the cache-friendly direct-load kernel.
+- Anything when the actual hot path is elsewhere (per G6.4, check
+  `nsys cuda_api_sum` first).
+
+**Reference (vship)**: the SSIMU2 fused 12 KiB shared tile +
+17-tap blur + per-block reduction kernel
+(`src/HIP/ssimu2/score.hpp::planescale_map_Kernel`) is the best
+example of how to do this *with* fusion. Three things in one tile +
+sync + reduce = a real win. The kernel does the gaussian blur, the
+SSIM stats, AND the block-level reduce in one shot — that's the
+shape that justifies the LDS overhead.
+
+---
+
 ## 7. Toolchain & build
 
 ### G7.1 — Cargo feature flags must be forwarded explicitly to cubecl

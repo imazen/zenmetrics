@@ -43,12 +43,18 @@ const _: () = assert!(
 #[test]
 fn n_channels_is_three_for_still_image_dkl() {
     // cvvdp's still-image path operates on three DKL opponent
-    // channels (Achromatic, Red-Green, Violet-Yellow). The bound
-    // is pinned at compile time via the const _: () = assert!(...)
-    // block above; this test exercises the import + leaves the
-    // CHANGELOG-tested 'tests/lib_constants.rs::n_channels_is_three_for_still_image_dkl'
+    // channels (Achromatic, Red-Green, Violet-Yellow). A bump to 4
+    // would mean adding a temporal channel (not in still-image
+    // scope) or a luminance variant (also out of scope until
+    // pycvvdp ports its own). The bound is pinned at compile time
+    // via the const _: () = assert!(...) block above; this test
+    // exercises the import + leaves the CHANGELOG-tested
+    // 'tests/lib_constants.rs::n_channels_is_three_for_still_image_dkl'
     // name resolvable from the test runner.
-    assert_eq!(N_CHANNELS, 3);
+    assert_eq!(
+        N_CHANNELS, 3,
+        "N_CHANNELS = {N_CHANNELS}, expected 3 (still-image DKL)"
+    );
 }
 
 #[test]

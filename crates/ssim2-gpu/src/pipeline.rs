@@ -28,6 +28,7 @@
 use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
+use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
 
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
@@ -215,11 +216,11 @@ impl<R: Runtime> Ssim2<R> {
             .map(|&(w, h)| Scale::new(&client, w, h))
             .collect::<Vec<_>>();
 
-        let n_bytes = n * 3;
-        // sRGB bytes uploaded as u32 because wgpu's WGSL backend has
-        // no `u8` storage type (Array<u8> reads zero on Metal).
-        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
-        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into one u32
+        // (R | G<<8 | B<<16). Length = n, not n*3. Cuts the per-call
+        // host→device upload from `n_pixels × 12 B` to `n_pixels × 4 B`.
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
 
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
         let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
@@ -231,7 +232,7 @@ impl<R: Runtime> Ssim2<R> {
             n,
             src_u8_a,
             src_u8_b,
-            pack_scratch: vec![0_u32; n_bytes],
+            pack_scratch: vec![0_u32; n],
             scales,
             partials,
             sums,
@@ -300,20 +301,62 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuSsim2Result> {
+        self.compute_with_mode(Ssim2Mode::default(), ref_srgb, dist_srgb)
+    }
+
+    /// Score one image pair under the chosen [`Ssim2Mode`]. Identical
+    /// to [`Ssim2::compute`] but with explicit control over the
+    /// skip-map dispatch — `Ssim2Mode::Full` matches the pre-skip-map
+    /// behaviour bit-for-bit; the more aggressive modes skip cells
+    /// whose contribution to the final score is bounded below the
+    /// mode's threshold.
+    ///
+    /// See `crates/ssim2-gpu/docs/SKIP_MAP_AUDIT.md` for the per-cell
+    /// audit and the threshold rationale.
+    pub fn compute_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
+
+        // Per-call zero-fill of partials so:
+        // (a) Skipped reduction slots in non-Full mode contribute
+        //     exactly 0 to the host's weighted-sum fold.
+        // (b) Fast-reduction `Atomic<f32>::fetch_add` accumulates on
+        //     top of a clean zero (otherwise the prior call's per-slot
+        //     sum would carry over).
+        // Promoting this to a per-call pre-step subsumes the previous
+        // end-of-call zero in `read_and_aggregate` (now removed) and
+        // makes the portable-reduction path safe for skip-map dispatch
+        // as well — neither mode is sensitive to whether the prior
+        // call zeroed partials or not.
+        reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
 
         // Upload + sRGB → linear for both sides into scale-0 buffers.
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.upload_and_srgb_to_linear(false, dist_srgb);
 
-        // Build linear pyramid.
-        self.build_linear_pyramid(true);
-        self.build_linear_pyramid(false);
+        // Build linear pyramid only up to the deepest non-skipped
+        // scale. The downscale chain is recursive, so if scale `S+1`
+        // is the deepest active scale we still need to downscale into
+        // `S+1`; if scale `S+2` and beyond are all skip-scale, those
+        // downscales are wasted compute.
+        let last_active = (0..self.scales.len())
+            .rev()
+            .find(|&s| !skip_scale(mode, s))
+            .unwrap_or(0);
+        self.build_linear_pyramid_until(true, last_active);
+        self.build_linear_pyramid_until(false, last_active);
 
         // Per-scale processing — populates per-thread partials.
         for s in 0..self.scales.len() {
-            self.process_scale(s, true, true);
+            if skip_scale(mode, s) {
+                continue;
+            }
+            self.process_scale(s, mode);
         }
         // Stage-2 finalizer folds partials → small (slot, sum, p4) buffer.
         self.run_finalizer();
@@ -386,23 +429,47 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuSsim2Result> {
+        self.compute_with_reference_with_mode(Ssim2Mode::default(), dist_srgb)
+    }
+
+    /// Score against the cached reference under the chosen
+    /// [`Ssim2Mode`]. Same skip-map semantics as
+    /// [`Ssim2::compute_with_mode`]. `set_reference` caches every
+    /// scale × channel so a single cached reference can be re-used
+    /// across calls with different modes.
+    pub fn compute_with_reference_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
 
+        // See `compute_with_mode` for the rationale on per-call zeroing.
+        reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
+
         self.upload_and_srgb_to_linear(false, dist_srgb);
-        self.build_linear_pyramid(false);
+
+        let last_active = (0..self.scales.len())
+            .rev()
+            .find(|&s| !skip_scale(mode, s))
+            .unwrap_or(0);
+        self.build_linear_pyramid_until(false, last_active);
 
         for s in 0..self.scales.len() {
-            self.run_xyb(s, false);
-            self.run_self_products(s, false); // sigma22
-            self.run_cross_product(s); // sigma12
-            self.run_blur_dis_only(s);
+            if skip_scale(mode, s) {
+                continue;
+            }
+            self.run_xyb_masked(s, false, mode);
+            self.run_self_products_masked(s, false, mode); // sigma22
+            self.run_cross_product_masked(s, mode); // sigma12
+            self.run_blur_dis_only_masked(s, mode);
             // ref_xyb_t was cached by set_reference; only transpose dis.
-            self.run_transpose_raw_xyb_pair(s, false, true);
-            self.run_error_maps(s);
-            self.run_reductions(s);
+            self.run_transpose_raw_xyb_pair_masked(s, false, true, mode);
+            self.run_error_maps_masked(s, mode);
+            self.run_reductions_masked(s, mode);
         }
         self.run_finalizer();
 
@@ -440,22 +507,37 @@ impl<R: Runtime> Ssim2<R> {
     fn blur_cube_dim() -> CubeDim {
         CubeDim::new_1d(blur::BLOCK_WIDTH)
     }
+    /// T_x.B (2026-05-17): 2D launch geometry for the tiled transpose.
+    fn transpose_cube_count(width: u32, height: u32) -> CubeCount {
+        let x_cubes = width.div_ceil(transpose::TILE_DIM).max(1);
+        let y_cubes = height.div_ceil(transpose::TILE_DIM).max(1);
+        CubeCount::Static(x_cubes, y_cubes, 1)
+    }
+    fn transpose_cube_dim() -> CubeDim {
+        CubeDim::new_2d(transpose::TPB_X, transpose::TPB_Y)
+    }
 
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
         debug_assert_eq!(srgb.len(), n_bytes);
-        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
-        // Widen each sRGB byte into the persistent `pack_scratch`
-        // instead of allocating a fresh `Vec<u32>` per upload (WGSL has
-        // no u8 storage type, so the widening can't be skipped).
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = src as u32;
+        debug_assert_eq!(self.pack_scratch.len(), self.n);
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
+        // one-byte-per-u32 widening. Kernel unpacks with 3 shifts +
+        // 3 ANDs — free vs the saved upload time.
+        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path. The `_pinned` form
+        // copies straight into a pinned staging buffer (12-25 GB/s DMA
+        // on PCIe 4.0 vs 5-6 GB/s from pageable), skipping one host
+        // memcpy. See CUBECL_GOTCHAS.md G6.5.
         let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(bytes);
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(bytes);
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
         }
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.scales[0].ref_lin)
@@ -467,7 +549,7 @@ impl<R: Runtime> Ssim2<R> {
                 &self.client,
                 Self::cube_count_1d(self.n),
                 Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), n_bytes),
+                ArrayArg::from_raw_parts(src.clone(), self.n),
                 ArrayArg::from_raw_parts(lin[0].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[1].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[2].clone(), self.n),
@@ -476,7 +558,17 @@ impl<R: Runtime> Ssim2<R> {
     }
 
     fn build_linear_pyramid(&self, is_a: bool) {
-        for s in 1..self.scales.len() {
+        let last = self.scales.len().saturating_sub(1);
+        self.build_linear_pyramid_until(is_a, last);
+    }
+
+    /// Build linear pyramid up to (and including) `last_scale`. Saves
+    /// downscale launches for scales beyond `last_scale` when the
+    /// skip-map elides them. `last_scale` is inclusive — must be in
+    /// `0..self.scales.len()`.
+    fn build_linear_pyramid_until(&self, is_a: bool, last_scale: usize) {
+        let stop = last_scale.min(self.scales.len().saturating_sub(1));
+        for s in 1..=stop {
             let (prev_w, prev_h) = (self.scales[s - 1].width, self.scales[s - 1].height);
             let (curr_w, curr_h) = (self.scales[s].width, self.scales[s].height);
             let (prev_lin, curr_lin) = if is_a {
@@ -560,15 +652,8 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    fn run_cross_product(&self, scale: usize) {
-        let s = &self.scales[scale];
-        self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
-    }
-
-    /// One-plane two-pass blur: `src → v_pass → tv → tv → full` where
-    /// `tv` is the transpose of the first pass output, and `full`
-    /// receives the second vertical-walk result (in transposed
-    /// orientation). Caller supplies all 3 same-channel buffers.
+    /// One-plane two-pass blur: `src → v_pass → tiled-transpose → t_buf →
+    /// v_pass → full`. Caller supplies all 4 same-channel buffers.
     fn blur_plane_two_pass(
         &self,
         width: u32,
@@ -590,11 +675,14 @@ impl<R: Runtime> Ssim2<R> {
                 width,
                 height,
             );
-            // 2. transpose v_buf → t_buf (now height × width).
+            // 2. tiled transpose v_buf → t_buf (now height × width).
+            //    T_x.B (2026-05-17): 32×32 LDS tile with +1 col pad to
+            //    avoid bank conflicts; both loads and stores coalesced.
+            //    Was ~600 µs scale-0 (uncoalesced); now ~150 µs.
             transpose::transpose_kernel::launch_unchecked::<R>(
                 &self.client,
-                Self::cube_count_1d(n),
-                Self::cube_dim_1d(),
+                Self::transpose_cube_count(width, height),
+                Self::transpose_cube_dim(),
                 ArrayArg::from_raw_parts(v_buf.clone(), n),
                 ArrayArg::from_raw_parts(t_buf.clone(), n),
                 width,
@@ -626,8 +714,8 @@ impl<R: Runtime> Ssim2<R> {
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
-                        Self::cube_count_1d(n),
-                        Self::cube_dim_1d(),
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
                         ArrayArg::from_raw_parts(s.ref_xyb[ch].clone(), n),
                         ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), n),
                         w,
@@ -641,8 +729,8 @@ impl<R: Runtime> Ssim2<R> {
                 unsafe {
                     transpose::transpose_kernel::launch_unchecked::<R>(
                         &self.client,
-                        Self::cube_count_1d(n),
-                        Self::cube_dim_1d(),
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
                         ArrayArg::from_raw_parts(s.dis_xyb[ch].clone(), n),
                         ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), n),
                         w,
@@ -705,66 +793,184 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    /// Distorted-only blur pass: sigma22, mu2, sigma12. Used by
-    /// `compute_with_reference` (assumes sigma11_full + mu1_full are
-    /// cached).
-    fn run_blur_dis_only(&self, scale: usize) {
+    // (Unmasked variants `run_blur_dis_only`, `run_blur_full`,
+    // `run_error_maps`, `run_reductions`, `run_cross_product` were
+    // removed when the skip-map pass landed — the masked variants
+    // below subsume them. `Ssim2Mode::Full` selects the no-skip
+    // behaviour bit-for-bit if needed by tests.)
+
+    // ───────────────────── skip-map masked variants ─────────────────────
+    //
+    // These wrap the per-channel launch loops with `skip_error_map` and
+    // `skip_reduction` predicates so masked channels never pay for the
+    // upstream blur / transpose / pointwise-mul that feeds them. See
+    // `crate::skipmap` for the per-cell skip table.
+
+    fn run_xyb_masked(&self, scale: usize, is_a: bool, mode: Ssim2Mode) {
+        // XYB is a 3-in 3-out fused kernel. Skip only if EVERY channel
+        // at this scale is `skip_error_map` — no downstream consumer
+        // anywhere. (`skip_scale` already gates the whole scale at
+        // the caller, so this triggers when `skip_scale` is false but
+        // every channel happens to be inactive, which currently never
+        // happens — kept for completeness.)
+        if (0..3).all(|c| skip_error_map(mode, scale, c)) {
+            return;
+        }
+        self.run_xyb(scale, is_a);
+    }
+
+    /// Pointwise product `a · b → out` for one scale × selected channels.
+    fn pointwise_mul_masked(
+        &self,
+        scale: usize,
+        a: &[cubecl::server::Handle; 3],
+        b: &[cubecl::server::Handle; 3],
+        out: &[cubecl::server::Handle; 3],
+        mode: Ssim2Mode,
+    ) {
+        let n = self.scales[scale].n;
+        for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
+            unsafe {
+                pointwise_mul_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(a[ch].clone(), n),
+                    ArrayArg::from_raw_parts(b[ch].clone(), n),
+                    ArrayArg::from_raw_parts(out[ch].clone(), n),
+                );
+            }
+        }
+    }
+
+    fn run_self_products_masked(&self, scale: usize, is_a: bool, mode: Ssim2Mode) {
+        let s = &self.scales[scale];
+        if is_a {
+            self.pointwise_mul_masked(scale, &s.ref_xyb, &s.ref_xyb, &s.sigma11_in, mode);
+        } else {
+            self.pointwise_mul_masked(scale, &s.dis_xyb, &s.dis_xyb, &s.sigma22_in, mode);
+        }
+    }
+
+    fn run_cross_product_masked(&self, scale: usize, mode: Ssim2Mode) {
+        let s = &self.scales[scale];
+        self.pointwise_mul_masked(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in, mode);
+    }
+
+    fn run_transpose_raw_xyb_pair_masked(
+        &self,
+        scale: usize,
+        do_ref: bool,
+        do_dis: bool,
+        mode: Ssim2Mode,
+    ) {
         let s = &self.scales[scale];
         let n = s.n;
         let w = s.width;
         let h = s.height;
         for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
+            if do_ref {
+                unsafe {
+                    transpose::transpose_kernel::launch_unchecked::<R>(
+                        &self.client,
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
+                        ArrayArg::from_raw_parts(s.ref_xyb[ch].clone(), n),
+                        ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), n),
+                        w,
+                        h,
+                    );
+                }
+            }
+            if do_dis {
+                unsafe {
+                    transpose::transpose_kernel::launch_unchecked::<R>(
+                        &self.client,
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
+                        ArrayArg::from_raw_parts(s.dis_xyb[ch].clone(), n),
+                        ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), n),
+                        w,
+                        h,
+                    );
+                }
+            }
+        }
+    }
+
+    fn run_blur_full_masked(&self, scale: usize, mode: Ssim2Mode) {
+        let s = &self.scales[scale];
+        let n = s.n;
+        let w = s.width;
+        let h = s.height;
+        for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
+            // sigma11 = ref²
             self.blur_plane_two_pass(
-                w,
-                h,
-                n,
-                &s.sigma22_in[ch],
-                &s.sigma22_v[ch],
-                &s.sigma22_t[ch],
-                &s.sigma22_full[ch],
+                w, h, n,
+                &s.sigma11_in[ch], &s.sigma11_v[ch], &s.sigma11_t[ch], &s.sigma11_full[ch],
             );
+            // mu1 = blur(ref)
             self.blur_plane_two_pass(
-                w,
-                h,
-                n,
-                &s.dis_xyb[ch],
-                &s.mu2_v[ch],
-                &s.mu2_t[ch],
-                &s.mu2_full[ch],
+                w, h, n,
+                &s.ref_xyb[ch], &s.mu1_v[ch], &s.mu1_t[ch], &s.mu1_full[ch],
             );
+            // sigma22 = dis²
             self.blur_plane_two_pass(
-                w,
-                h,
-                n,
-                &s.sigma12_in[ch],
-                &s.sigma12_v[ch],
-                &s.sigma12_t[ch],
-                &s.sigma12_full[ch],
+                w, h, n,
+                &s.sigma22_in[ch], &s.sigma22_v[ch], &s.sigma22_t[ch], &s.sigma22_full[ch],
+            );
+            // mu2 = blur(dis)
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.dis_xyb[ch], &s.mu2_v[ch], &s.mu2_t[ch], &s.mu2_full[ch],
+            );
+            // sigma12 = ref·dis
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.sigma12_in[ch], &s.sigma12_v[ch], &s.sigma12_t[ch], &s.sigma12_full[ch],
             );
         }
     }
 
-    /// Run all 5 blurs (ref+dis paths) for one scale.
-    fn run_blur_full(&self, scale: usize) {
-        self.run_blur_pair(scale, true);
-        self.run_blur_pair(scale, false);
+    fn run_blur_dis_only_masked(&self, scale: usize, mode: Ssim2Mode) {
         let s = &self.scales[scale];
+        let n = s.n;
+        let w = s.width;
+        let h = s.height;
         for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
             self.blur_plane_two_pass(
-                s.width,
-                s.height,
-                s.n,
-                &s.sigma12_in[ch],
-                &s.sigma12_v[ch],
-                &s.sigma12_t[ch],
-                &s.sigma12_full[ch],
+                w, h, n,
+                &s.sigma22_in[ch], &s.sigma22_v[ch], &s.sigma22_t[ch], &s.sigma22_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.dis_xyb[ch], &s.mu2_v[ch], &s.mu2_t[ch], &s.mu2_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.sigma12_in[ch], &s.sigma12_v[ch], &s.sigma12_t[ch], &s.sigma12_full[ch],
             );
         }
     }
 
-    fn run_error_maps(&self, scale: usize) {
+    fn run_error_maps_masked(&self, scale: usize, mode: Ssim2Mode) {
         let s = &self.scales[scale];
         for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
             unsafe {
                 error_maps::error_maps_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -785,11 +991,14 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    fn run_reductions(&self, scale: usize) {
+    fn run_reductions_masked(&self, scale: usize, mode: Ssim2Mode) {
         let s = &self.scales[scale];
         for ch in 0..3 {
             let plane_handles = [&s.ssim[ch], &s.artifact[ch], &s.detail[ch]];
             for map_type in 0..3 {
+                if skip_reduction(mode, scale, ch, map_type) {
+                    continue;
+                }
                 // Slot encoding: (scale * 3 + ch) * 3 + map_type ∈ [0, 54).
                 let slot = ((scale * 3 + ch) * 3 + map_type) as u32;
                 reduction::launch_sum_p4::<R>(
@@ -820,25 +1029,29 @@ impl<R: Runtime> Ssim2<R> {
     }
 
     /// Per-scale processing for `compute()`: XYB, products, blurs,
-    /// error maps, reduction. Called for every pyramid scale.
-    fn process_scale(&self, scale: usize, _do_ref: bool, _do_dis: bool) {
-        let s = &self.scales[scale];
-        // 1. linear → XYB for both sides.
-        self.run_xyb(scale, true);
-        self.run_xyb(scale, false);
+    /// error maps, reduction. Called for every non-skipped pyramid
+    /// scale. The `mode` selects which `(channel, map_type)` cells
+    /// can be skipped — see `crate::skipmap` for the per-cell table.
+    fn process_scale(&self, scale: usize, mode: Ssim2Mode) {
+        // 1. linear → XYB for both sides (XYB is fused per-channel,
+        //    cannot be skipped at sub-channel granularity — but if
+        //    NO channel at this scale is active, the entire scale was
+        //    already skipped by `compute_with_mode`'s outer guard).
+        self.run_xyb_masked(scale, true, mode);
+        self.run_xyb_masked(scale, false, mode);
         // 2. Pointwise products: sigma11 = ref²; sigma22 = dis²; sigma12 = ref·dis.
-        self.pointwise_mul(scale, &s.ref_xyb, &s.ref_xyb, &s.sigma11_in);
-        self.pointwise_mul(scale, &s.dis_xyb, &s.dis_xyb, &s.sigma22_in);
-        self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
+        self.run_self_products_masked(scale, true, mode);
+        self.run_self_products_masked(scale, false, mode);
+        self.run_cross_product_masked(scale, mode);
         // 3. Blur all 5: sigma11/22/12 + ref_xyb (mu1) + dis_xyb (mu2).
-        self.run_blur_full(scale);
+        self.run_blur_full_masked(scale, mode);
         // 4. Transpose raw XYB so error_maps reads them in the same
         //    orientation as the (transposed) blurred buffers.
-        self.run_transpose_raw_xyb_pair(scale, true, true);
+        self.run_transpose_raw_xyb_pair_masked(scale, true, true, mode);
         // 5. Per-pixel error maps.
-        self.run_error_maps(scale);
+        self.run_error_maps_masked(scale, mode);
         // 6. Reduce to (Σ, Σ⁴) per (channel × map type).
-        self.run_reductions(scale);
+        self.run_reductions_masked(scale, mode);
     }
 
     /// Read the sums buffer back to host and compute the final SSIMULACRA2
@@ -852,17 +1065,11 @@ impl<R: Runtime> Ssim2<R> {
         let raw = f32::from_bytes(&bytes);
         debug_assert_eq!(raw.len(), SUMS_LEN);
 
-        // Reset both buffers for the next call. In fast mode the
-        // partials buffer is the atomic-add target so accumulators
-        // need zeroing; in portable mode each thread writes its slot
-        // unconditionally so partials reset is technically optional
-        // but cheap.
-        self.partials = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
-        self.sums = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
+        // T_y.A (2026-05-17): the per-call zero-fill moved to the
+        // START of `compute_with_mode` / `compute_with_reference_with_mode`
+        // (subsumes both the prior post-call zero used by the
+        // fast-reduction path AND the need-to-zero for skip-map
+        // dispatch in portable mode).
 
         // Layout post-finalizer: `raw[slot * 2]` = Σ, `raw[slot * 2 + 1]` = Σ⁴.
         // Total length = NUM_SLOTS * 2 = 108 floats. The 4096 per-thread

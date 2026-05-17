@@ -99,9 +99,11 @@
 pub mod kernels;
 pub mod pipeline;
 pub mod pipeline_batch;
+pub mod skipmap;
 
 pub use pipeline::Ssim2;
 pub use pipeline_batch::Ssim2Batch;
+pub use skipmap::Ssim2Mode;
 
 /// Number of pyramid scales — matches both the CPU and CUDA references.
 pub const NUM_SCALES: usize = 6;

@@ -43,8 +43,13 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
     let n = (w * h) as usize;
     let rgb_bytes = rgb_input(w, h);
 
-    // Kernel expects bytes packed one-per-u32 slot, RGBRGB order.
-    let src_u32: Vec<u32> = rgb_bytes.iter().copied().map(u32::from).collect();
+    // T4.L: kernel expects RGBA-packed u32, one per pixel
+    // (R | G<<8 | B<<16, alpha = 0). Cuts upload 3× vs the prior
+    // byte-widened-to-u32 layout.
+    let src_u32: Vec<u32> = rgb_bytes
+        .chunks_exact(3)
+        .map(|t| u32::from(t[0]) | (u32::from(t[1]) << 8) | (u32::from(t[2]) << 16))
+        .collect();
     let src_h = client.create_from_slice(u32::as_bytes(&src_u32));
 
     let lut_h = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
@@ -62,7 +67,7 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
             &client,
             cube_count,
             cube_dim,
-            ArrayArg::from_raw_parts(src_h.clone(), n * 3),
+            ArrayArg::from_raw_parts(src_h.clone(), n),
             ArrayArg::from_raw_parts(lut_h.clone(), SRGB8_TO_LINEAR_LUT.len()),
             ArrayArg::from_raw_parts(a_h.clone(), n),
             ArrayArg::from_raw_parts(rg_h.clone(), n),

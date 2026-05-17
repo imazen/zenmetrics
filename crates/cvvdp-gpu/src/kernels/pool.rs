@@ -373,6 +373,112 @@ pub fn pool_band_3ch_kernel(
     partials[partial_idx_vy as usize].fetch_add(c_vy);
 }
 
+/// Workgroup size for the LDS-reduction pool kernel.
+pub const POOL_LDS_BLOCK_DIM: u32 = 256;
+const POOL_LDS_BLOCK_DIM_USIZE: usize = 256;
+
+/// LDS-reduction 3-channel pool kernel (T1.C). Same math as
+/// [`pool_band_3ch_kernel`] but with workgroup-level reduction in
+/// shared memory, then one atomic add per workgroup per channel
+/// to commit to the global partial.
+///
+/// At 12 MP per band per channel that drops the atomic count from
+/// 12M to 12M/256 ≈ 47K — about a 255× reduction in atomic traffic.
+///
+/// **Workgroup**: `POOL_LDS_BLOCK_DIM = 256` threads, 1D. Each thread
+/// loads one pixel (or contributes 0 if out of bounds), accumulates
+/// `safe_pow(|v|, β) - eps^β` into `groupshared[lid]` per channel,
+/// runs a 256→1 pointer-jumping reduce, and thread 0 atomic-adds
+/// the three workgroup sums.
+///
+/// **Launch**:
+///
+/// ```text
+/// cube_dim   = CubeDim::new_1d(POOL_LDS_BLOCK_DIM)
+/// cube_count = (n.div_ceil(POOL_LDS_BLOCK_DIM), 1, 1)
+/// ```
+///
+/// Produces the same `partials[slot]` value as the per-pixel-atomic
+/// kernel (to f32 rounding). The host-side fold via
+/// [`pool_band_finalize`] is unchanged.
+#[cube(launch)]
+pub fn pool_band_3ch_lds_kernel(
+    band_diff_a: &Array<f32>,
+    band_diff_rg: &Array<f32>,
+    band_diff_vy: &Array<f32>,
+    partials: &mut Array<Atomic<f32>>,
+    beta: f32,
+    partial_idx_a: u32,
+    partial_idx_rg: u32,
+    partial_idx_vy: u32,
+    n: u32,
+) {
+    let tx = UNIT_POS_X;
+    let idx = ABSOLUTE_POS;
+    let n_usize = n as usize;
+
+    let eps = f32::new(1e-5);
+    let eps_pow_beta = f32::powf(eps, beta);
+
+    // Safe-load index: read from `idx` if in range, else from 0 (and
+    // mask the contribution to 0 below). Avoids OOB Array access.
+    // `idx - idx` produces a typed-zero of `ABSOLUTE_POS`' tracked
+    // `usize` type, sidestepping the `0usize` literal type mismatch
+    // CubeCL surfaces in mixed-arm `if` expressions.
+    let in_range = idx < n_usize;
+    let zero_idx = idx - idx;
+    let safe_idx = if in_range { idx } else { zero_idx };
+
+    let v_a = band_diff_a[safe_idx];
+    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let c_a_raw = f32::powf(abs_a + eps, beta) - eps_pow_beta;
+    let c_a = if in_range { c_a_raw } else { f32::new(0.0) };
+
+    let v_rg = band_diff_rg[safe_idx];
+    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let c_rg_raw = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
+    let c_rg = if in_range { c_rg_raw } else { f32::new(0.0) };
+
+    let v_vy = band_diff_vy[safe_idx];
+    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let c_vy_raw = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
+    let c_vy = if in_range { c_vy_raw } else { f32::new(0.0) };
+
+    let mut lds_a = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);
+    let mut lds_rg = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);
+    let mut lds_vy = SharedMemory::<f32>::new(POOL_LDS_BLOCK_DIM_USIZE);
+
+    let tx_us = tx as usize;
+    lds_a[tx_us] = c_a;
+    lds_rg[tx_us] = c_rg;
+    lds_vy[tx_us] = c_vy;
+    sync_cube();
+
+    // Pointer-jumping reduce. Active-contiguous form (`tx < stride`),
+    // which keeps active threads in a contiguous range and avoids the
+    // warp-divergence of `tx % (stride*2) == 0`. Eight passes for
+    // POOL_LDS_BLOCK_DIM = 256: stride 128 → 64 → 32 → 16 → 8 → 4 → 2 → 1.
+    let mut stride: u32 = 128u32;
+    while stride > 0u32 {
+        if tx < stride {
+            let other = (tx + stride) as usize;
+            lds_a[tx_us] = lds_a[tx_us] + lds_a[other];
+            lds_rg[tx_us] = lds_rg[tx_us] + lds_rg[other];
+            lds_vy[tx_us] = lds_vy[tx_us] + lds_vy[other];
+        }
+        sync_cube();
+        stride /= 2u32;
+    }
+
+    // Thread 0 commits this workgroup's three sums to the global
+    // atomic partials.
+    if tx == 0u32 {
+        partials[partial_idx_a as usize].fetch_add(lds_a[0]);
+        partials[partial_idx_rg as usize].fetch_add(lds_rg[0]);
+        partials[partial_idx_vy as usize].fetch_add(lds_vy[0]);
+    }
+}
+
 /// Write the same `value` to every slot of `dest`. Used by the
 /// baseband CSF path in `_dispatch_d_bands_into_scratch` to fill
 /// `baseband_log_l_bkg` from the host-computed scalar

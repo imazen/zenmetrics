@@ -21,13 +21,15 @@ const SRGB_BETA: f32 = 0.003_041_282_5;
 
 /// Per-pixel sRGB byte → planar linear f32 RGB.
 ///
-/// `src` holds `n_pixels × 3` byte values, each widened to `u32` on
-/// the host so wgpu's WGSL backend can read them as native scalars
-/// (WGSL has no `u8` storage type — `Array<u8>` reads zero on Metal).
-/// CUDA's u8 buffer path works either way; storing as u32 costs 4× the
-/// staging bandwidth (still trivial for typical SSIMULACRA2 inputs)
-/// in exchange for a kernel that runs identically on every cubecl
-/// backend. Output: `dst_r/g/b` each `n_pixels` f32 in [0, 1].
+/// T4.L (2026-05-16): `src` is one packed-RGBA u32 per pixel
+/// (R | G<<8 | B<<16; alpha unused). Cuts host→device upload 3× vs
+/// the prior one-byte-per-u32 layout (12 bytes/pixel → 4 bytes/pixel),
+/// which nsys identified as the dominant warm-loop cost on cvvdp-gpu
+/// before the same fix landed there. See `docs/CUBECL_GOTCHAS.md` G6.6.
+/// 3 bit-shifts + 3 ANDs per pixel are free relative to the saved
+/// upload bandwidth.
+///
+/// Output: `dst_r/g/b` each `n_pixels` f32 in [0, 1].
 #[cube(launch_unchecked)]
 pub fn srgb_u8_to_linear_planar_kernel(
     src: &Array<u32>,
@@ -40,10 +42,13 @@ pub fn srgb_u8_to_linear_planar_kernel(
     if idx >= n {
         terminate!();
     }
-    let i3 = idx * 3;
-    dst_r[idx] = srgb_byte_to_linear(src[i3]);
-    dst_g[idx] = srgb_byte_to_linear(src[i3 + 1]);
-    dst_b[idx] = srgb_byte_to_linear(src[i3 + 2]);
+    let packed = src[idx];
+    let r = packed & 0xffu32;
+    let g = (packed >> 8u32) & 0xffu32;
+    let b = (packed >> 16u32) & 0xffu32;
+    dst_r[idx] = srgb_byte_to_linear(r);
+    dst_g[idx] = srgb_byte_to_linear(g);
+    dst_b[idx] = srgb_byte_to_linear(b);
 }
 
 /// sRGB transfer function with linear toe; gamma 2.4 (SSIMULACRA's

@@ -1,0 +1,28 @@
+[package]
+name = "iwssim-gpu"
+version = "0.0.1"
+description = "Multi-vendor GPU implementation of IW-SSIM (Information-content Weighted SSIM, Wang & Li 2011), via CubeCL"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["cuda", "wgpu", "cpu"]
+cuda = ["cubecl/cuda"]
+wgpu = ["cubecl/wgpu"]
+hip = ["cubecl/hip"]
+cpu = ["cubecl/cpu"]
+
+[dependencies]
+cubecl = { workspace = true }
+
+[build-dependencies]
+# Gaussian / binomial coefficient generation at build time.
+
+[dev-dependencies]
+bytemuck = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg", "bmp"] }

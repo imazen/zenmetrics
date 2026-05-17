@@ -28,6 +28,30 @@ pub fn combine_channels_for_masking_kernel(
     dst[idx] = f32::sqrt(xdiff * xdiff + ydiff * ydiff);
 }
 
+/// `combine_channels_for_masking` + `diff_precompute` fused into one kernel.
+///
+/// T_x.I (2026-05-17): both are pointwise and always run back-to-back
+/// in the mask pipeline; fusing them saves one launch + one
+/// intermediate full-plane write+read pair (~3 × 48 MB at 12 MP).
+#[cube(launch_unchecked)]
+pub fn combine_channels_and_diff_precompute_kernel(
+    hf_x: &Array<f32>,
+    uhf_x: &Array<f32>,
+    hf_y: &Array<f32>,
+    uhf_y: &Array<f32>,
+    dst: &mut Array<f32>,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= dst.len() {
+        terminate!();
+    }
+    let xdiff = (uhf_x[idx] + hf_x[idx]) * COMBINE_MUL_X;
+    let ydiff = uhf_y[idx] * COMBINE_MUL_Y_UHF + hf_y[idx] * COMBINE_MUL_Y_HF;
+    let combined = f32::sqrt(xdiff * xdiff + ydiff * ydiff);
+    let bias = DIFF_PRECOMPUTE_MUL * DIFF_PRECOMPUTE_BIAS;
+    dst[idx] = f32::sqrt(DIFF_PRECOMPUTE_MUL * f32::abs(combined) + bias) - f32::sqrt(bias);
+}
+
 /// Add the squared diff of blurred-UHF Y planes (× 10) into the AC-Y diff accumulator.
 #[cube(launch_unchecked)]
 pub fn mask_to_error_mul_kernel(

@@ -888,6 +888,206 @@ pub fn downscale_kernel(
     dst[idx] = total_v;
 }
 
+/// Workgroup size (output pixels per side) for the LDS-tiled downscale.
+pub const DOWNSCALE_TILED_BLOCK_DIM: u32 = 16;
+const DOWNSCALE_TILED_BLOCK_DIM_USIZE: usize = 16;
+/// Input tile width = `2 · BLOCK + 4` (5-tap stencil halo on each side).
+const DOWNSCALE_TILED_TILE_DIM_USIZE: usize = 2 * DOWNSCALE_TILED_BLOCK_DIM_USIZE + 4;
+const DOWNSCALE_TILED_TILE_DIM_U32: u32 = 2 * DOWNSCALE_TILED_BLOCK_DIM + 4;
+const DOWNSCALE_TILED_TILE_LEN_USIZE: usize =
+    DOWNSCALE_TILED_TILE_DIM_USIZE * DOWNSCALE_TILED_TILE_DIM_USIZE;
+const DOWNSCALE_TILED_TILE_LEN_U32: u32 =
+    DOWNSCALE_TILED_TILE_DIM_U32 * DOWNSCALE_TILED_TILE_DIM_U32;
+const DOWNSCALE_TILED_BLOCK_LIN_U32: u32 =
+    DOWNSCALE_TILED_BLOCK_DIM * DOWNSCALE_TILED_BLOCK_DIM;
+/// Loads per thread to cover the full tile (256 threads × 6 = 1536 ≥ 1296).
+const DOWNSCALE_TILED_LOAD_ITERS: u32 =
+    DOWNSCALE_TILED_TILE_LEN_U32.div_ceil(DOWNSCALE_TILED_BLOCK_LIN_U32);
+
+/// LDS-tiled 2× downscale (T1.B). Functionally equivalent to
+/// [`downscale_kernel`] including the tick-206 bug-compat delta;
+/// trades 25-load-per-thread global access for a shared-memory
+/// tile load followed by 25 LDS reads.
+///
+/// **Workgroup**: 16×16 = 256 threads. Each thread emits one output
+/// pixel at `(dx, dy) = (CUBE_POS_X·16 + UNIT_POS_X, CUBE_POS_Y·16 +
+/// UNIT_POS_Y)`. A 36×36 input tile (= 2·16 + 4 halo per side, 5.2 KB
+/// per workgroup) is loaded cooperatively into shared memory with
+/// symmetric reflection at borders, then each output thread runs a
+/// 5×5 unrolled stencil from LDS.
+///
+/// **Launch**:
+///
+/// ```text
+/// cube_dim   = CubeDim::new_2d(BLOCK_DIM, BLOCK_DIM)
+/// cube_count = (dst_w.div_ceil(BLOCK_DIM), dst_h.div_ceil(BLOCK_DIM), 1)
+/// ```
+///
+/// Boundary handling matches [`downscale_kernel`] exactly: reflect
+/// during LDS load (`-i-1` low side, `2·n - i - 1` high side); at
+/// `dx == dst_w - 1` apply the parity-mismatched delta correction
+/// for pycvvdp's `gausspyr_reduce` bug-compat.
+#[cube(launch)]
+pub fn downscale_tiled_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+) {
+    let tx = UNIT_POS_X;
+    let ty = UNIT_POS_Y;
+    let dx_base = CUBE_POS_X * DOWNSCALE_TILED_BLOCK_DIM;
+    let dy_base = CUBE_POS_Y * DOWNSCALE_TILED_BLOCK_DIM;
+
+    // First source col/row covered by this workgroup's input tile.
+    // Each output `dx` reads `2·dx ± 2`, so the workgroup spans
+    // `[2·dx_base - 2, 2·(dx_base + 15) + 2]` (35 unique cols; we
+    // allocate 36 for `2·BLOCK + 4` alignment).
+    let sx_base_i = 2 * (dx_base as i32) - 2;
+    let sy_base_i = 2 * (dy_base as i32) - 2;
+
+    let sw = src_w as usize;
+    let sw_i = src_w as i32;
+    let sh_i = src_h as i32;
+
+    let mut tile = SharedMemory::<f32>::new(DOWNSCALE_TILED_TILE_LEN_USIZE);
+
+    // Cooperative tile load with symmetric reflection. 256 threads ×
+    // 6 iterations = 1536 ≥ 1296 tile pixels.
+    let lid = ty * DOWNSCALE_TILED_BLOCK_DIM + tx;
+    let mut iter: u32 = 0;
+    while iter < DOWNSCALE_TILED_LOAD_ITERS {
+        let i = lid + iter * DOWNSCALE_TILED_BLOCK_LIN_U32;
+        if i < DOWNSCALE_TILED_TILE_LEN_U32 {
+            let tile_y = i / DOWNSCALE_TILED_TILE_DIM_U32;
+            let tile_x = i - tile_y * DOWNSCALE_TILED_TILE_DIM_U32;
+
+            let sy_raw = sy_base_i + tile_y as i32;
+            let sx_raw = sx_base_i + tile_x as i32;
+
+            let sy_i = if sy_raw < 0 {
+                -sy_raw - 1
+            } else if sy_raw >= sh_i {
+                2 * sh_i - sy_raw - 1
+            } else {
+                sy_raw
+            };
+            let sx_i = if sx_raw < 0 {
+                -sx_raw - 1
+            } else if sx_raw >= sw_i {
+                2 * sw_i - sx_raw - 1
+            } else {
+                sx_raw
+            };
+
+            tile[i as usize] = src[(sy_i as usize) * sw + (sx_i as usize)];
+        }
+        iter += 1;
+    }
+    sync_cube();
+
+    let dx = dx_base + tx;
+    let dy = dy_base + ty;
+    if dx >= dst_w || dy >= dst_h {
+        terminate!();
+    }
+
+    // Tile-local center for this thread's output. The tile starts
+    // at sx_base = 2·dx_base - 2 in source coords; the center input
+    // for output `dx = dx_base + tx` is `2·(dx_base+tx) = 2·dx_base
+    // + 2·tx`, which is tile-col `2·tx + 2` (since the tile offsets
+    // by -2).
+    let tcx = 2 * tx as usize + 2;
+    let tcy = 2 * ty as usize + 2;
+    let stride = DOWNSCALE_TILED_TILE_DIM_USIZE;
+
+    let k0 = f32::new(0.05);
+    let k1 = f32::new(0.25);
+    let k2 = f32::new(0.40);
+    let k3 = f32::new(0.25);
+    let k4 = f32::new(0.05);
+
+    let r0 = tcy - 2;
+    let r1 = tcy - 1;
+    let r2 = tcy;
+    let r3 = tcy + 1;
+    let r4 = tcy + 2;
+    let c0 = tcx - 2;
+    let c1 = tcx - 1;
+    let c2 = tcx;
+    let c3 = tcx + 1;
+    let c4 = tcx + 2;
+
+    let col0 = k0 * tile[r0 * stride + c0]
+        + k1 * tile[r1 * stride + c0]
+        + k2 * tile[r2 * stride + c0]
+        + k3 * tile[r3 * stride + c0]
+        + k4 * tile[r4 * stride + c0];
+    let col1 = k0 * tile[r0 * stride + c1]
+        + k1 * tile[r1 * stride + c1]
+        + k2 * tile[r2 * stride + c1]
+        + k3 * tile[r3 * stride + c1]
+        + k4 * tile[r4 * stride + c1];
+    let col2 = k0 * tile[r0 * stride + c2]
+        + k1 * tile[r1 * stride + c2]
+        + k2 * tile[r2 * stride + c2]
+        + k3 * tile[r3 * stride + c2]
+        + k4 * tile[r4 * stride + c2];
+    let col3 = k0 * tile[r0 * stride + c3]
+        + k1 * tile[r1 * stride + c3]
+        + k2 * tile[r2 * stride + c3]
+        + k3 * tile[r3 * stride + c3]
+        + k4 * tile[r4 * stride + c3];
+    let col4 = k0 * tile[r0 * stride + c4]
+        + k1 * tile[r1 * stride + c4]
+        + k2 * tile[r2 * stride + c4]
+        + k3 * tile[r3 * stride + c4]
+        + k4 * tile[r4 * stride + c4];
+
+    let mut total_v = k0 * col0 + k1 * col1 + k2 * col2 + k3 * col3 + k4 * col4;
+
+    // Tick-206 bug-compat delta. Same logic as `downscale_kernel`.
+    // At dx == dst_w - 1 with mismatched (sw, sh) parity, pycvvdp's
+    // gausspyr_reduce uses the wrong patch branch; we reproduce it.
+    // The patch needs blur5 of cols sw-1 and sw-2 — these are valid
+    // (non-reflected) source columns, and they fall inside the LDS
+    // tile when the workgroup contains dx == dst_w - 1 (always true
+    // since dx_base ≤ dst_w-1 < dx_base+16 implies sw - 1 ≤
+    // 2·dx_base + 32 + bounded margin). Read from LDS.
+    if dx == dst_w - 1 && src_w >= 2 {
+        let last_tile_col_i = (sw_i - 1) - sx_base_i;
+        let last2_tile_col_i = (sw_i - 2) - sx_base_i;
+        let tc_last = last_tile_col_i as usize;
+        let tc_last2 = last2_tile_col_i as usize;
+
+        let vs_last = k0 * tile[r0 * stride + tc_last]
+            + k1 * tile[r1 * stride + tc_last]
+            + k2 * tile[r2 * stride + tc_last]
+            + k3 * tile[r3 * stride + tc_last]
+            + k4 * tile[r4 * stride + tc_last];
+        let vs_last2 = k0 * tile[r0 * stride + tc_last2]
+            + k1 * tile[r1 * stride + tc_last2]
+            + k2 * tile[r2 * stride + tc_last2]
+            + k3 * tile[r3 * stride + tc_last2]
+            + k4 * tile[r4 * stride + tc_last2];
+
+        let sw_odd = src_w % 2 == 1;
+        let sh_odd = src_h % 2 == 1;
+        if sw_odd && !sh_odd {
+            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+        } else if !sw_odd && sh_odd {
+            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+        }
+    }
+
+    let dw = dst_w as usize;
+    let dy_u = dy as usize;
+    let dx_u = dx as usize;
+    dst[dy_u * dw + dx_u] = total_v;
+}
+
 /// Vertical pass of the cvvdp expand. Produces a `src_w × dst_h`
 /// buffer from a `src_w × src_h` input. Each output pixel runs a
 /// 5-tap conv of the implicit zero-interleaved column with cvvdp's

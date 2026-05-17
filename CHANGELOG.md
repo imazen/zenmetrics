@@ -1347,6 +1347,31 @@ bumping). Static-assert count is now 223 across 13 test files.
   Commit hashes: `002e6958` (542), `58523a73` (543), `2ed1f4a4`
   (544), `2da874bf` (545), `35594044` (546), tick 547 in this commit.
 
+### Added
+
+#### ssim2-gpu
+
+- **`Ssim2Mode` skip-map dispatch (Technique 2 of Kanetaka et al.
+  IWAIT 2026)** — new `compute_with_mode` / `compute_with_reference_with_mode`
+  / `compute_batch_with_mode` entry points selecting one of four
+  modes (`Full`, `Lossless`, `Fast`, `Faster`, default `Faster`).
+  The non-`Full` modes skip per-channel error-map + reduction
+  launches (and the upstream sigma11/sigma22/sigma12/mu1/mu2
+  blurs that feed them) for cells whose weight is below the
+  mode's threshold. The default `compute` / `compute_with_reference`
+  / `compute_batch` now route through `Faster`. `Lossless` is
+  bit-identical to `Full` (only skips literal-zero weights).
+  Measured on RTX 5070 at 4000×3000 (median of 10, 3 warmup):
+  Full 59.9 ms → Lossless 53.5 ms (×1.12) → Fast 35.1 ms (×1.71)
+  → Faster 35.2 ms (×1.70). Matches the IWAIT paper's ×1.13
+  Lossless figure; the Fast / Faster GPU ratio is below the
+  paper's CPU ×1.45 but goes further on the absolute reduction.
+  See `crates/ssim2-gpu/docs/SKIP_MAP_AUDIT.md`. Tests:
+  `crates/ssim2-gpu/tests/ssim2_skipmap_audit.rs` — verifies
+  Lossless == Full bit-identical; Fast / Faster within 5e-4
+  relative across the JPEG corpus.
+
+
 ### Changed
 
 #### cvvdp-gpu

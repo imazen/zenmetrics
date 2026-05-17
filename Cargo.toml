@@ -3,6 +3,7 @@ members = [
     "crates/butteraugli-gpu",
     "crates/cvvdp-gpu",
     "crates/dssim-gpu",
+    "crates/iwssim-gpu",
     "crates/ssim2-gpu",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-corpus",
@@ -29,6 +30,7 @@ rust-version = "1.93"
 butteraugli-gpu = { version = "0.0.1", path = "crates/butteraugli-gpu", default-features = false }
 cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
+iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
 ssim2-gpu = { version = "0.0.1", path = "crates/ssim2-gpu", default-features = false }
 zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }
@@ -81,3 +83,22 @@ codegen-units = 1
 [patch.crates-io]
 zensim = { git = "https://github.com/imazen/zensim", rev = "e295d7fb4098" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cb5d9e4" }
+# T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
+# fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks
+# `create_from_slice_pinned` + default-path pinned-staging routing onto
+# the upstream **v0.10.0 release tag** (was 0.10.0-pre.4 prior to this
+# repoint). Upstream PR #1030 landed the base `staging()` API in
+# v0.10.0 but not these convenience wrappers; PR #1334 (against post-
+# v0.10.0 main, which is now 0.11.0-pre.x post-mega-refactor) is the
+# upstream submission for the wrappers — drop these patches when that
+# lands and we migrate to the next cubecl release.
+cubecl = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-runtime = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-core = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-common = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-ir = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cuda = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cpu = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-wgpu = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-hip = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cpp = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }

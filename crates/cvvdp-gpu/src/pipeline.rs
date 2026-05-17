@@ -98,10 +98,11 @@ use crate::kernels::masking::{
 };
 use crate::kernels::pool::{
     BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_kernel, pool_band_finalize,
+    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_finalize, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
-    band_frequencies, baseband_divide_3ch_kernel, downscale_kernel, subtract_kernel,
+    band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
+    DOWNSCALE_TILED_BLOCK_DIM,
     subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
 };
 use crate::params::CvvdpParams;
@@ -822,12 +823,13 @@ impl<R: Runtime> Cvvdp<R> {
 
         let n0 = (width as usize) * (height as usize);
         // Source-byte buffers are u32-slot arrays of length `n0 * 3`
-        // — one byte per slot, RGBRGB row-major. Matches what
-        // `srgb_to_dkl_kernel` expects.
-        let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0 * 3]));
-        // Persistent host-side widening scratch (tick 234). The fill
-        // happens per dispatch but allocation is amortised across calls.
-        let src_u32_scratch: Vec<u32> = vec![0u32; n0 * 3];
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into one u32
+        // for upload (R | G<<8 | B<<16). Length = n0, not n0*3.
+        let src_ref = client.create_from_slice(u32::as_bytes(&vec![0u32; n0]));
+        // Persistent host-side packing scratch (tick 234 + T4.L). The
+        // pack happens per dispatch; allocation is amortised across
+        // calls. One u32 per pixel.
+        let src_u32_scratch: Vec<u32> = vec![0u32; n0];
         let srgb_lut = client.create_from_slice(f32::as_bytes(&SRGB8_TO_LINEAR_LUT));
 
         let build_pyramid = |client: &ComputeClient<R>| -> Vec<Level> {
@@ -1091,13 +1093,29 @@ impl<R: Runtime> Cvvdp<R> {
         // replaces the per-call `Vec<u32>` alloc + collect — at 12 MP
         // that's a ~144 MB allocator round-trip the warm-ref loop
         // otherwise pays per DIST candidate.
-        debug_assert_eq!(self.src_u32_scratch.len(), n0 * 3);
-        for (dst, &b) in self.src_u32_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = u32::from(b);
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16), instead of widening each byte into its
+        // own u32 (4× expansion). Cuts the host → GPU upload from 144
+        // MB to 48 MB at 12 MP and proportionally shrinks the
+        // `create_from_slice` allocation. The kernel unpacks the 3
+        // bytes per pixel with 3 shifts + 3 ANDs — trivial vs the
+        // upload time saved (nsys showed cuMemcpyHtoDAsync was 55% of
+        // wall time pre-T4.L).
+        debug_assert_eq!(self.src_u32_scratch.len(), n0);
+        for (dst, triple) in self.src_u32_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path. `create_from_slice_pinned`
+        // copies the scratch bytes directly into a pinned (page-locked) host
+        // buffer before the device upload, hitting CUDA's DMA fast path at
+        // 12-25 GB/s on PCIe 4.0 vs ~5-6 GB/s from pageable memory. The
+        // default `create_from_slice` was changed in the same cubecl
+        // branch to also route through pinned staging, but the explicit
+        // `_pinned` form skips the intermediate `Vec<u8>` memcpy too.
         self.src_ref = self
             .client
-            .create_from_slice(u32::as_bytes(&self.src_u32_scratch));
+            .create_from_slice_pinned(u32::as_bytes(&self.src_u32_scratch));
 
         let a_handle = self.gauss_ref[0].planes[0].clone();
         let rg_handle = self.gauss_ref[0].planes[1].clone();
@@ -1112,7 +1130,7 @@ impl<R: Runtime> Cvvdp<R> {
                 &self.client,
                 cube_count,
                 cube_dim,
-                ArrayArg::from_raw_parts(self.src_ref.clone(), n0 * 3),
+                ArrayArg::from_raw_parts(self.src_ref.clone(), n0),
                 ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
                 ArrayArg::from_raw_parts(a_handle, n0),
                 ArrayArg::from_raw_parts(rg_handle, n0),
@@ -1195,7 +1213,11 @@ impl<R: Runtime> Cvvdp<R> {
     fn _dispatch_gauss_pyramid_gpu(&mut self, srgb: &[u8]) -> Result<()> {
         self._dispatch_dkl_planes_gpu(srgb)?;
 
-        let cube_dim = CubeDim::new_1d(64);
+        // T1.B (2026-05-16): LDS-tiled downscale. 16×16 workgroup;
+        // 36×36 input tile in shared memory; 25-tap stencil from LDS.
+        // Functionally equivalent to the scalar `downscale_kernel`,
+        // including the tick-206 bug-compat delta.
+        let cube_dim = CubeDim::new_2d(DOWNSCALE_TILED_BLOCK_DIM, DOWNSCALE_TILED_BLOCK_DIM);
         for k in 1..(self.n_levels as usize) {
             let prev_w = self.gauss_ref[k - 1].w;
             let prev_h = self.gauss_ref[k - 1].h;
@@ -1203,13 +1225,17 @@ impl<R: Runtime> Cvvdp<R> {
             let curr_h = self.gauss_ref[k].h;
             let n_curr = (curr_w * curr_h) as usize;
             let n_prev = (prev_w * prev_h) as usize;
-            let cube_count = CubeCount::Static((n_curr as u32).div_ceil(64), 1, 1);
+            let cube_count = CubeCount::Static(
+                curr_w.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+                curr_h.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+                1,
+            );
 
             for c in 0..N_CHANNELS {
                 let src = self.gauss_ref[k - 1].planes[c].clone();
                 let dst = self.gauss_ref[k].planes[c].clone();
                 unsafe {
-                    downscale_kernel::launch::<R>(
+                    downscale_tiled_kernel::launch::<R>(
                         &self.client,
                         cube_count.clone(),
                         cube_dim,
@@ -2978,30 +3004,62 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
+        // T1.C + T4.K (2026-05-16): per-size pool dispatch. The
+        // LDS-reduction kernel (`pool_band_3ch_lds_kernel`, 256-thread
+        // workgroup, pointer-jumping reduce, 1 atomic per workgroup
+        // per channel) wins at large bands by cutting atomic traffic
+        // ~255×; at tiny bands (≤ ~16 K pixels) its 8-sync overhead
+        // exceeds the per-pixel-atomic cost. POOL_LDS_MIN_PIXELS sets
+        // the crossover; benched on RTX 5070 (256² regressed under
+        // unconditional LDS; 1 MP and 12 MP win cleanly).
+        const POOL_LDS_MIN_PIXELS: usize = 16_384;
+        let pool_lds_cube_dim = CubeDim::new_1d(POOL_LDS_BLOCK_DIM);
+        let pool_atomic_cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
-            let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
             let d_a = self.d_scratch[k].d[0].clone();
             let d_rg = self.d_scratch[k].d[1].clone();
             let d_vy = self.d_scratch[k].d[2].clone();
             let partial_idx_a = (k * N_CHANNELS) as u32;
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-            unsafe {
-                pool_band_3ch_kernel::launch::<R>(
-                    &self.client,
-                    count.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(d_a, n_px),
-                    ArrayArg::from_raw_parts(d_rg, n_px),
-                    ArrayArg::from_raw_parts(d_vy, n_px),
-                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                    BETA_SPATIAL,
-                    partial_idx_a,
-                    partial_idx_rg,
-                    partial_idx_vy,
-                    n_px as u32,
-                );
+            if n_px >= POOL_LDS_MIN_PIXELS {
+                let count =
+                    CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
+                unsafe {
+                    pool_band_3ch_lds_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        pool_lds_cube_dim,
+                        ArrayArg::from_raw_parts(d_a, n_px),
+                        ArrayArg::from_raw_parts(d_rg, n_px),
+                        ArrayArg::from_raw_parts(d_vy, n_px),
+                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        n_px as u32,
+                    );
+                }
+            } else {
+                let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                unsafe {
+                    pool_band_3ch_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        pool_atomic_cube_dim,
+                        ArrayArg::from_raw_parts(d_a, n_px),
+                        ArrayArg::from_raw_parts(d_rg, n_px),
+                        ArrayArg::from_raw_parts(d_vy, n_px),
+                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        n_px as u32,
+                    );
+                }
             }
         }
 

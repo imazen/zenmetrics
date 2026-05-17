@@ -26,6 +26,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::pipeline::{Ssim2, score_from_stats};
+use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
 
 /// Per-scale batched buffer set. Each plane is `batch_size · n_pixels`
@@ -171,12 +172,11 @@ impl<R: Runtime> Ssim2Batch<R> {
             .collect();
 
         let n_full = (width as usize) * (height as usize);
-        // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
-        // has no u8 storage type, so we keep all platforms on a u32
-        // path (CUDA happily handles either).
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16). Length = n_pixels (per image × batch),
+        // not n_pixels × 3. Cuts upload 3×; see CUBECL_GOTCHAS.md G6.6.
         let total_u32 = n_full
-            .checked_mul(3)
-            .and_then(|n| n.checked_mul(batch_size as usize))
+            .checked_mul(batch_size as usize)
             .expect("n_full × 3 × batch_size overflows usize");
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_u32]));
         let pack_scratch = vec![0_u32; total_u32];
@@ -253,6 +253,18 @@ impl<R: Runtime> Ssim2Batch<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn compute_batch(&mut self, dis: &[Vec<u8>]) -> Result<Vec<GpuSsim2Result>> {
+        self.compute_batch_with_mode(Ssim2Mode::default(), dis)
+    }
+
+    /// Batched scoring under the chosen [`Ssim2Mode`]. See
+    /// [`Ssim2::compute_with_mode`] for the per-mode semantics. The
+    /// cached reference is mode-agnostic — set once, reuse across
+    /// modes.
+    pub fn compute_batch_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        dis: &[Vec<u8>],
+    ) -> Result<Vec<GpuSsim2Result>> {
         if !self.inner.has_cached_reference() {
             return Err(Error::NoCachedReference);
         }
@@ -288,30 +300,51 @@ impl<R: Runtime> Ssim2Batch<R> {
             packed.resize(total_bytes, 0);
         }
 
-        // Upload + sRGB → linear into bscales[0].dis_lin. Bytes are
-        // widened to u32 for cross-vendor (wgpu) compatibility, into
-        // the persistent `pack_scratch` to avoid per-call alloc churn.
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // before upload. pack_scratch is `n_total_full` u32 entries
+        // (not n_total_full × 3). Cuts upload 3×.
         let client = self.inner.client().clone();
-        debug_assert_eq!(self.pack_scratch.len(), packed.len());
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(packed.iter()) {
-            *dst = src as u32;
-        }
-        self.src_u8_batch = client.create_from_slice(u32::as_bytes(&self.pack_scratch));
         let n_total_full = n_full * (self.batch_size as usize);
+        debug_assert_eq!(self.pack_scratch.len(), n_total_full);
+        for (dst, triple) in self
+            .pack_scratch
+            .iter_mut()
+            .zip(packed.chunks_exact(3))
+        {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+        }
+        // T4.M (2026-05-16): pinned-host fast path.
+        self.src_u8_batch =
+            client.create_from_slice_pinned(u32::as_bytes(&self.pack_scratch));
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &client,
                 cube_count_1d(n_total_full),
                 cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.src_u8_batch.clone(), n_total_full * 3),
+                // T4.L: one u32 per pixel.
+                ArrayArg::from_raw_parts(self.src_u8_batch.clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[0].clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[1].clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[2].clone(), n_total_full),
             );
         }
 
-        // Build dis_lin pyramid (batched downscale).
-        for s in 1..self.bscales.len() {
+        // Per-call partials zero-fill. Required for:
+        // (a) Skipped reduction slots in non-Full mode (skip-map).
+        // (b) Fast-reduction atomic_add accumulating on a clean zero
+        //     regardless of mode.
+        // See `Ssim2::compute_with_mode` for the unified rationale.
+        let p_len = PARTIALS_PER_IMAGE_FLOATS * (self.batch_size as usize);
+        reduction::launch_zero_fill_f32(&client, self.partials.clone(), p_len);
+
+        // Build dis_lin pyramid (batched downscale) only up to the
+        // deepest non-skipped scale.
+        let last_active = (0..self.bscales.len())
+            .rev()
+            .find(|&s| !skip_scale(mode, s))
+            .unwrap_or(0);
+        for s in 1..=last_active {
             let prev = &self.bscales[s - 1];
             let curr = &self.bscales[s];
             let prev_w = prev.width;
@@ -345,7 +378,10 @@ impl<R: Runtime> Ssim2Batch<R> {
 
         // Per-scale: XYB → products → blurs → transposes → error_maps → reductions.
         for s in 0..self.bscales.len() {
-            self.process_scale_batched(s);
+            if skip_scale(mode, s) {
+                continue;
+            }
+            self.process_scale_batched(s, mode);
         }
         // Stage-2 finalizer folds the per-thread partials region into a
         // small per-image stats block that the host reads back.
@@ -369,20 +405,9 @@ impl<R: Runtime> Ssim2Batch<R> {
             STATS_PER_IMAGE_FLOATS * (self.batch_size as usize)
         );
 
-        // Reset both buffers for the next call. partials is the
-        // atomic-add target in fast mode (needs zeroing); sums is the
-        // finalizer's output (overwritten anyway, reset for safety).
-        self.partials = client.create_from_slice(f32::as_bytes(&vec![
-            0.0_f32;
-            PARTIALS_PER_IMAGE_FLOATS
-                * (self.batch_size
-                    as usize)
-        ]));
-        self.sums = client.create_from_slice(f32::as_bytes(&vec![
-            0.0_f32;
-            STATS_PER_IMAGE_FLOATS
-                * (self.batch_size as usize)
-        ]));
+        // T_y.A (2026-05-17): per-call partials zero-fill moved to the
+        // START of `compute_batch_with_mode` (see `Ssim2::compute_with_mode`
+        // for the rationale).
 
         let mut results = Vec::with_capacity(n_in);
         for img_idx in 0..n_in {
@@ -395,14 +420,19 @@ impl<R: Runtime> Ssim2Batch<R> {
 
     /// Per-scale batched processing: one image's worth of work, expanded
     /// across `batch_size` slots in parallel via the batched kernels.
-    fn process_scale_batched(&self, s: usize) {
+    /// `mode` selects which `(channel, map_type)` cells can be skipped
+    /// — see `crate::skipmap` for the per-cell table.
+    fn process_scale_batched(&self, s: usize, mode: Ssim2Mode) {
         let bs = &self.bscales[s];
         let plane_stride = bs.plane_stride;
         let n_total = bs.n * (self.batch_size as usize);
         let ref_n = bs.n; // single-image ref plane length
         let client = self.inner.client();
 
-        // 1. linear → positive XYB (pointwise on a flat batched array).
+        // 1. linear → positive XYB (3-in / 3-out fused; can't skip per-channel).
+        //    If every channel is skip-error_map at this scale, the whole scale
+        //    was already gated out at the caller, so reaching here means at
+        //    least one channel is active.
         unsafe {
             xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
                 client,
@@ -419,6 +449,9 @@ impl<R: Runtime> Ssim2Batch<R> {
 
         // 2. sigma22_in = dis · dis (plain pointwise on flat array).
         for ch in 0..3 {
+            if skip_error_map(mode, s, ch) {
+                continue;
+            }
             unsafe {
                 crate::pipeline::pointwise_mul_kernel::launch_unchecked::<R>(
                     client,
@@ -434,6 +467,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         // 3. sigma12_in = ref_xyb_broadcast · dis_xyb_batched.
         let ref_xyb = self.inner.cached_ref_xyb(s);
         for ch in 0..3 {
+            if skip_error_map(mode, s, ch) {
+                continue;
+            }
             unsafe {
                 error_maps::pointwise_mul_broadcast_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -452,6 +488,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         //    {sigma22_full, sigma12_full, mu2_full}. Three blurs reuse
         //    one (v_scratch, t_scratch) per channel.
         for ch in 0..3 {
+            if skip_error_map(mode, s, ch) {
+                continue;
+            }
             self.blur_batched_two_pass(
                 s,
                 ch,
@@ -471,6 +510,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         //    `distorted` in the same orientation as the blurred mu2/
         //    sigma22/sigma12 buffers).
         for ch in 0..3 {
+            if skip_error_map(mode, s, ch) {
+                continue;
+            }
             unsafe {
                 transpose::transpose_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -493,6 +535,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         let mu1_full = self.inner.cached_mu1_full(s);
         let sigma11_full = self.inner.cached_sigma11_full(s);
         for ch in 0..3 {
+            if skip_error_map(mode, s, ch) {
+                continue;
+            }
             unsafe {
                 error_maps::error_maps_broadcast_batched_kernel::launch_unchecked::<R>(
                     client,
@@ -514,12 +559,13 @@ impl<R: Runtime> Ssim2Batch<R> {
         }
 
         // 7. Per-image batched reductions. Slot encoding matches
-        //    `Ssim2::run_reductions`: slot = scale*9 + ch*3 + map_type,
-        //    so per-image stats line up byte-for-byte with the
-        //    single-image layout.
+        //    `Ssim2::run_reductions_masked`: slot = scale*9 + ch*3 + map_type.
         for ch in 0..3 {
             let plane_handles = [&bs.ssim[ch], &bs.artifact[ch], &bs.detail[ch]];
             for map_type in 0..3 {
+                if skip_reduction(mode, s, ch, map_type) {
+                    continue;
+                }
                 let slot = (s as u32) * 9 + (ch as u32) * 3 + map_type as u32;
                 reduction::launch_sum_p4_batched::<R>(
                     client,

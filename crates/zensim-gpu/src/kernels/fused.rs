@@ -74,6 +74,12 @@
 
 use cubecl::prelude::*;
 
+// TX=64 (2 warps/block). Bumping to 128 was tried in T_z.B —
+// nsys showed kernel time was indistinguishable (47.27 vs 47.43 ms
+// at 12 MP scale 0) because the fused kernel is already bandwidth-
+// limited on the per-row cooperative load, not launch-overhead
+// limited. Reverted to keep shared-mem footprint small (10 blocks/
+// SM resident on RTX-5070 vs 4).
 const TX: u32 = 64;
 const R: u32 = 5;
 const DIAM: u32 = 11;

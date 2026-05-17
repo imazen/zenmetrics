@@ -18,7 +18,9 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{blur, colors, diffmap, downscale, frequency, malta, masking, reduction};
+use crate::kernels::{
+    blur, blur_lut, colors, diffmap, downscale, frequency, malta, masking, reduction,
+};
 use crate::{ButteraugliParams, Error, GpuButteraugliResult, Result};
 
 /// Default intensity multiplier — value of one display nit relative to
@@ -168,6 +170,57 @@ pub struct Butteraugli<R: Runtime> {
     /// Stored on the struct so internal helpers can read it without
     /// threading the value through every call.
     params: ButteraugliParams,
+
+    /// Pre-computed Gaussian weight + integral tables, one per fixed
+    /// sigma the pipeline uses. Uploaded once at construction; the LUT
+    /// blur kernels read them per tap instead of calling `powf`. See
+    /// [`crate::kernels::blur_lut`] for the layout. Indices match
+    /// [`BLUR_SIGMAS`] below.
+    blur_tables: [cubecl::server::Handle; 5],
+    blur_radii: [u32; 5],
+    blur_table_lens: [usize; 5],
+}
+
+/// Fixed sigmas referenced by the LUT blur tables, indexed via
+/// [`BlurKind`]. Stored as `f32` so the tables match the kernels'
+/// `f32::exp(-0.5*(d/s)^2)` exactly.
+const BLUR_SIGMAS: [f32; 5] = [
+    SIGMA_OPSIN,
+    SIGMA_LF,
+    SIGMA_HF,
+    SIGMA_UHF,
+    MASK_RADIUS,
+];
+
+/// Index into [`BLUR_SIGMAS`] / [`Butteraugli::blur_tables`].
+#[derive(Clone, Copy)]
+#[repr(usize)]
+enum BlurKind {
+    Opsin = 0,
+    Lf = 1,
+    Hf = 2,
+    Uhf = 3,
+    Mask = 4,
+}
+
+/// Exact-bit match against [`BLUR_SIGMAS`]. Returns `None` for an
+/// unrecognised sigma; the caller then falls back to the powf-per-tap
+/// blur kernel (preserves correctness for any future caller passing a
+/// novel sigma).
+fn blur_kind_for_sigma(sigma: f32) -> Option<BlurKind> {
+    if sigma == SIGMA_OPSIN {
+        Some(BlurKind::Opsin)
+    } else if sigma == SIGMA_LF {
+        Some(BlurKind::Lf)
+    } else if sigma == SIGMA_HF {
+        Some(BlurKind::Hf)
+    } else if sigma == SIGMA_UHF {
+        Some(BlurKind::Uhf)
+    } else if sigma == MASK_RADIUS {
+        Some(BlurKind::Mask)
+    } else {
+        None
+    }
 }
 
 fn alloc_plane<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
@@ -202,20 +255,24 @@ fn populate_half_res_linear<R: Runtime>(full: &Butteraugli<R>, half: &Butteraugl
     let cubes = (half.n as u32).div_ceil(TPB);
     let dim = CubeCount::Static(cubes, 1, 1);
     let block = CubeDim::new_1d(TPB);
-    for ch in 0..3 {
-        unsafe {
-            downscale::downsample_2x_kernel::launch_unchecked::<R>(
-                &full.client,
-                dim.clone(),
-                block,
-                ArrayArg::from_raw_parts(full_lin[ch].clone(), full.n),
-                ArrayArg::from_raw_parts(half_lin[ch].clone(), half.n),
-                full.width,
-                full.height,
-                half.width,
-                half.height,
-            );
-        }
+    // Fused 3-channel downsample (1 launch instead of 3). Bit-exact
+    // with the single-channel kernel (sum/count, not sum*(1/count)).
+    unsafe {
+        downscale::downsample_2x_3ch_kernel::launch_unchecked::<R>(
+            &full.client,
+            dim,
+            block,
+            ArrayArg::from_raw_parts(full_lin[0].clone(), full.n),
+            ArrayArg::from_raw_parts(full_lin[1].clone(), full.n),
+            ArrayArg::from_raw_parts(full_lin[2].clone(), full.n),
+            ArrayArg::from_raw_parts(half_lin[0].clone(), half.n),
+            ArrayArg::from_raw_parts(half_lin[1].clone(), half.n),
+            ArrayArg::from_raw_parts(half_lin[2].clone(), half.n),
+            full.width,
+            full.height,
+            half.width,
+            half.height,
+        );
     }
 }
 
@@ -247,11 +304,11 @@ impl<R: Runtime> Butteraugli<R> {
         let n_bytes = n
             .checked_mul(3)
             .expect("width × height × 3 overflows usize");
-        // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
-        // has no u8 storage type, so we keep all platforms on a u32
-        // path (CUDA happily handles either).
-        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
-        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16; alpha unused). Length = n, not n*3. Cuts
+        // per-call host→device upload from `n × 12 B` to `n × 4 B`.
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
 
         let lin_a = alloc_3(&client, n);
         let lin_b = alloc_3(&client, n);
@@ -281,6 +338,21 @@ impl<R: Runtime> Butteraugli<R> {
         let temp1 = alloc_plane(&client, n);
         let temp2 = alloc_plane(&client, n);
 
+        // Pre-compute and upload one Gaussian LUT per fixed sigma. Each
+        // table is small (≤ 67 floats for σ=7.16, the largest), so the
+        // five allocs are negligible. Reused across every blur call.
+        let mut blur_tables: [Option<cubecl::server::Handle>; 5] =
+            [None, None, None, None, None];
+        let mut blur_radii = [0_u32; 5];
+        let mut blur_table_lens = [0_usize; 5];
+        for (i, &sigma) in BLUR_SIGMAS.iter().enumerate() {
+            let (table, r) = blur_lut::make_table(sigma);
+            blur_table_lens[i] = table.len();
+            blur_radii[i] = r as u32;
+            blur_tables[i] = Some(client.create_from_slice(f32::as_bytes(&table)));
+        }
+        let blur_tables = blur_tables.map(|h| h.unwrap());
+
         Self {
             client,
             width,
@@ -304,8 +376,12 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             has_cached_reference: false,
-            pack_scratch: vec![0_u32; n_bytes],
+            // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
+            pack_scratch: vec![0_u32; n],
             params: ButteraugliParams::default(),
+            blur_tables,
+            blur_radii,
+            blur_table_lens,
         }
     }
 
@@ -437,6 +513,61 @@ impl<R: Runtime> Butteraugli<R> {
         self.compute_with_reference_inner(dist_srgb)
     }
 
+    /// Compute butteraugli against the cached reference, taking the
+    /// distorted side as **3 already-uploaded planar f32 GPU handles**
+    /// in linear-RGB space (each `width × height × 4` bytes, in `[0, 1]`
+    /// pre-opsin). Skips the sRGB-bytes upload + sRGB→linear GPU
+    /// conversion that [`compute_with_reference`] does internally.
+    ///
+    /// The provided handles' contents are **mutated in place** by the
+    /// opsin / frequency separation kernels (which write back into
+    /// `lin_b` per the existing pipeline). If the caller wants to keep
+    /// them intact, clone the handles before calling — cubecl `Handle`
+    /// is reference-counted so a clone is cheap, but the underlying
+    /// GPU buffer will then be allocated separately by the next
+    /// downstream consumer.
+    ///
+    /// **Use case**: encoder rate-distortion search where the encoder
+    /// already produces the reconstructed image as planar linear-RGB
+    /// GPU planes (e.g. jxl-encoder-gpu's recon planes). Eliminates the
+    /// recon-download → host sRGB-convert → re-upload boundary work
+    /// (~30-60 ms per iter at 1 MP, scales linearly with size — at
+    /// 16 MP this can save several hundred ms per refinement iter).
+    ///
+    /// Each caller-supplied plane MUST hold exactly `width × height`
+    /// f32 values in row-major order, contiguous, no padding.
+    ///
+    /// Gated behind the `internals` cargo feature (mirrors the existing
+    /// CPU `butteraugli` crate's `internals` escape hatch). Not part of
+    /// the stable API; field layout / kernel order may shift with
+    /// internal pipeline refactors.
+    #[cfg(feature = "internals")]
+    pub fn compute_with_reference_from_linear_planes(
+        &mut self,
+        dist_r: cubecl::server::Handle,
+        dist_g: cubecl::server::Handle,
+        dist_b: cubecl::server::Handle,
+    ) -> Result<GpuButteraugliResult> {
+        if !self.has_cached_reference {
+            return Err(Error::NoCachedReference);
+        }
+        // Replace the distorted-side linear-RGB plane handles. The
+        // existing apply_opsin / separate_frequencies / mask kernels
+        // overwrite these in-place — see this struct's pipeline
+        // documentation for the chain.
+        self.lin_b[0] = dist_r;
+        self.lin_b[1] = dist_g;
+        self.lin_b[2] = dist_b;
+        // do_a=false: reference side cached; do_b=true: distorted side
+        // needs full opsin / frequency / mask / diff pipeline run.
+        self.run_pipeline_from_linear(false, true);
+        Ok(reduction::reduce::<R>(
+            &self.client,
+            self.diffmap_buf.clone(),
+            self.n,
+        ))
+    }
+
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
@@ -551,19 +682,23 @@ impl<R: Runtime> Butteraugli<R> {
         // `check_dims` first, so a release-mode panic here would only
         // fire on a buggy internal caller. Demoted to debug_assert.
         debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
-        // Widen each sRGB byte to a u32 in the persistent `pack_scratch`
-        // vec instead of allocating a fresh `Vec<u32>` per upload. Same
-        // 4× host memory cost as before, but no per-call alloc churn.
-        // (WGSL has no `Array<u8>` storage type, hence the widening.)
-        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = src as u32;
+        // T4.L (2026-05-16): pack 3 sRGB bytes into ONE u32
+        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
+        // one-byte-per-u32 layout — was the dominant warm-loop cost
+        // per nsys (see docs/CUBECL_GOTCHAS.md G6.6).
+        debug_assert_eq!(self.pack_scratch.len(), self.n);
+        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path — copies straight
+        // into a pinned staging buffer (12-25 GB/s DMA on PCIe 4.0 vs
+        // 5-6 GB/s from pageable). See CUBECL_GOTCHAS.md G6.5.
         let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(bytes);
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(bytes);
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
         }
         unsafe {
             self.launch_srgb_to_linear(is_a);
@@ -572,22 +707,71 @@ impl<R: Runtime> Butteraugli<R> {
 
     /// Apply opsin: blur(σ=1.2) for sensitivity input, then opsin
     /// dynamics → planar XYB (overwrites `lin_a` / `lin_b` in place).
+    ///
+    /// T_x.C (2026-05-17): vertical blur and opsin dynamics fused into
+    /// one kernel. The intermediate fully-blurred plane is no longer
+    /// materialised; opsin reads the per-output-pixel blur sum
+    /// directly. Saves a ~144 MB write+read pair at 12 MP.
     fn apply_opsin(&self, is_a: bool) {
         let (lin, bl) = if is_a {
             (&self.lin_a, &self.blur_a)
         } else {
             (&self.lin_b, &self.blur_b)
         };
-        for ch in 0..3 {
-            self.blur_plane(&lin[ch].clone(), &bl[ch].clone(), SIGMA_OPSIN);
-        }
+        // H-pass: fused 3-channel horizontal blur into temp planes.
+        let table = &self.blur_tables[BlurKind::Opsin as usize];
+        let table_len = self.blur_table_lens[BlurKind::Opsin as usize];
+        let radius = self.blur_radii[BlurKind::Opsin as usize];
         unsafe {
-            self.launch_opsin(is_a);
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+            );
+            // V-pass + opsin fused: reads h-blurred from temp planes
+            // AND original linear-RGB from lin (per-thread, idx-local
+            // only — NOT a window). Writes XYB back into lin
+            // in-place; each thread only writes its own idx so the
+            // overlapping V-blur window reads (which only touch the
+            // h-blurred temp planes, not lin) are safe.
+            blur_lut::vertical_blur_3ch_opsin_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+                self.params.intensity_target,
+            );
         }
+        // The `bl` planes (blur_a/blur_b) are no longer used for the
+        // opsin sensitivity — they're free to be reused as scratch by
+        // later steps. (Kept allocated so future pipeline refactors
+        // can re-purpose them without alloc churn.)
+        let _ = bl;
     }
 
     unsafe fn launch_srgb_to_linear(&self, is_a: bool) {
-        let n_bytes = self.n * 3;
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.lin_a)
         } else {
@@ -598,7 +782,8 @@ impl<R: Runtime> Butteraugli<R> {
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), n_bytes),
+                // T4.L: one u32 per pixel, not n_bytes.
+                ArrayArg::from_raw_parts(src.clone(), self.n),
                 ArrayArg::from_raw_parts(lin[0].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[1].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[2].clone(), self.n),
@@ -657,6 +842,11 @@ impl<R: Runtime> Butteraugli<R> {
 
     /// H+V blur with a caller-supplied scratch (so we can blur into
     /// `temp1` without overwriting it mid-pass).
+    ///
+    /// Uses the LUT-based kernels with the precomputed weight table
+    /// for `sigma`. `sigma` must be one of [`BLUR_SIGMAS`]; the dispatch
+    /// is exact-equality so a typo silently falls back to the old
+    /// powf-per-tap path (no panic — preserves correctness).
     fn blur_plane_via(
         &self,
         src: &cubecl::server::Handle,
@@ -664,6 +854,36 @@ impl<R: Runtime> Butteraugli<R> {
         scratch: &cubecl::server::Handle,
         sigma: f32,
     ) {
+        if let Some(kind) = blur_kind_for_sigma(sigma) {
+            let table = &self.blur_tables[kind as usize];
+            let table_len = self.blur_table_lens[kind as usize];
+            let radius = self.blur_radii[kind as usize];
+            unsafe {
+                blur_lut::horizontal_blur_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(src.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+                blur_lut::vertical_blur_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(scratch.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+            }
+            return;
+        }
         unsafe {
             blur::horizontal_blur_kernel::launch_unchecked::<R>(
                 &self.client,
@@ -681,6 +901,99 @@ impl<R: Runtime> Butteraugli<R> {
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(scratch.clone(), self.n),
                 ArrayArg::from_raw_parts(dst.clone(), self.n),
+                self.width,
+                self.height,
+                sigma,
+            );
+        }
+    }
+
+    /// 3-channel fused variant of [`Self::blur_plane_via`]. Uses the
+    /// same scratch buffer pair (temp1/temp2 typed; here we need 3
+    /// distinct H→V scratches per channel — caller must supply).
+    /// Two launches total instead of six.
+    ///
+    /// LUT-based fast path: if `sigma` is one of [`BLUR_SIGMAS`], uses
+    /// the precomputed weight table; otherwise falls back to the
+    /// powf-per-tap path. The two paths produce bit-identical output
+    /// on every backend we test (CUDA, DX12, HIP, WGPU Vulkan).
+    #[allow(clippy::too_many_arguments)]
+    fn blur_3ch_via(
+        &self,
+        src_x: &cubecl::server::Handle,
+        src_y: &cubecl::server::Handle,
+        src_b: &cubecl::server::Handle,
+        dst_x: &cubecl::server::Handle,
+        dst_y: &cubecl::server::Handle,
+        dst_b: &cubecl::server::Handle,
+        scratch_x: &cubecl::server::Handle,
+        scratch_y: &cubecl::server::Handle,
+        scratch_b: &cubecl::server::Handle,
+        sigma: f32,
+    ) {
+        if let Some(kind) = blur_kind_for_sigma(sigma) {
+            let table = &self.blur_tables[kind as usize];
+            let table_len = self.blur_table_lens[kind as usize];
+            let radius = self.blur_radii[kind as usize];
+            unsafe {
+                blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(src_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(src_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(src_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+                blur_lut::vertical_blur_3ch_lut_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    self.cube_count_1d(),
+                    self.cube_dim_1d(),
+                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_x.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_y.clone(), self.n),
+                    ArrayArg::from_raw_parts(dst_b.clone(), self.n),
+                    ArrayArg::from_raw_parts(table.clone(), table_len),
+                    self.width,
+                    self.height,
+                    radius,
+                );
+            }
+            return;
+        }
+        unsafe {
+            crate::kernels::blur_3ch::horizontal_blur_3ch_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(src_x.clone(), self.n),
+                ArrayArg::from_raw_parts(src_y.clone(), self.n),
+                ArrayArg::from_raw_parts(src_b.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                self.width,
+                self.height,
+                sigma,
+            );
+            crate::kernels::blur_3ch::vertical_blur_3ch_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
+                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_x.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_y.clone(), self.n),
+                ArrayArg::from_raw_parts(dst_b.clone(), self.n),
                 self.width,
                 self.height,
                 sigma,
@@ -743,70 +1056,103 @@ impl<R: Runtime> Butteraugli<R> {
         let freq = if is_a { &self.freq_a } else { &self.freq_b };
 
         // ── Step 1: LF (low-pass) and MF = XYB − LF ──
-        for ch in 0..3 {
-            // Blur into freq[3][ch] using temp1 as the H→V scratch.
-            self.blur_plane_via(&lin[ch], &freq[3][ch], &self.temp1, SIGMA_LF);
-            // MF = XYB − LF
-            self.subtract_arrays(&lin[ch], &freq[3][ch], &freq[2][ch]);
-        }
-        // xyb_low_freq_to_vals on LF — CPU `xyb_low_freq_to_vals`.
+        // T_x.F (2026-05-17): the SIGMA_LF blur, the MF = XYB − LF
+        // subtracts (×3), and the xyb_low_freq_to_vals in-place mul
+        // are all fused into the V-pass of the LF blur. The H pass
+        // still runs separately (it's a separable reduction);
+        // V-pass + post-blur math runs in one kernel.
+        let table = &self.blur_tables[BlurKind::Lf as usize];
+        let table_len = self.blur_table_lens[BlurKind::Lf as usize];
+        let radius = self.blur_radii[BlurKind::Lf as usize];
         unsafe {
-            frequency::xyb_low_freq_to_vals_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
+            );
+            blur_lut::vertical_blur_3ch_lf_split_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
+                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][1].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[3][2].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
+                ArrayArg::from_raw_parts(table.clone(), table_len),
+                self.width,
+                self.height,
+                radius,
             );
         }
 
         // ── Step 2: MF/HF separation ──
-        // X (ch=0): blur(MF_X) into temp1; split: HF_X = orig - blur,
-        //           MF_X = remove_range(blur, REMOVE_MF_RANGE)
-        self.blur_plane_via(
-            &freq[2][0],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            SIGMA_HF,
-        );
+        // T_x.G (2026-05-17): the SIGMA_HF V-blur and the 3 downstream
+        // split kernels (split_band_remove for X, split_band_amplify
+        // for Y, copy-equivalent for B) are all fused into a single
+        // V-pass kernel. The H-pass stays separate (it's a separable
+        // reduction). 4 launches saved per side per call.
+        let table_hf = &self.blur_tables[BlurKind::Hf as usize];
+        let table_hf_len = self.blur_table_lens[BlurKind::Hf as usize];
+        let radius_hf = self.blur_radii[BlurKind::Hf as usize];
         unsafe {
-            frequency::split_band_remove_inplace_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
-                REMOVE_MF_RANGE,
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table_hf.clone(), table_hf_len),
+                self.width,
+                self.height,
+                radius_hf,
             );
-        }
-        // Y (ch=1): blur(MF_Y); HF_Y = orig - blur, MF_Y = amplify_range(blur, ADD_MF_RANGE)
-        self.blur_plane_via(
-            &freq[2][1],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            SIGMA_HF,
-        );
-        unsafe {
-            frequency::split_band_amplify_inplace_kernel::launch_unchecked::<R>(
+            // V-pass + 3 splits fused: reads h-blurred temp planes
+            // (window) + orig freq[2][X,Y] (idx-local); writes 5
+            // outputs (HF_X, HF_Y, MF_X, MF_Y, MF_B).
+            blur_lut::vertical_blur_3ch_hf_split_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
+                ArrayArg::from_raw_parts(table_hf.clone(), table_hf_len),
+                self.width,
+                self.height,
+                radius_hf,
+                REMOVE_MF_RANGE,
                 ADD_MF_RANGE,
             );
         }
-        // B (ch=2): blur(MF_B) → temp1; copy temp1 → MF_B (no HF for B)
-        self.blur_plane_via(
-            &freq[2][2],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            SIGMA_HF,
-        );
-        self.copy_plane(&self.temp1.clone(), &freq[2][2]);
 
         // suppress_x_by_y(HF_y → HF_x)
         unsafe {
@@ -821,48 +1167,49 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // ── Step 3: HF/UHF separation ──
-        // X (ch=0): blur(HF_X) → temp1; split → UHF_X (freq[0][0]),
-        //           final HF_X (temp2); copy temp2 → freq[1][0].
-        self.blur_plane_via(
-            &freq[1][0],
-            &self.temp1.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_UHF,
-        );
+        // T_x.H (2026-05-17): fuse the two single-channel UHF blurs
+        // (X and Y) into one 2-channel blur, and fuse the V-pass with
+        // the X and Y split kernels into one launch. 4 launches saved
+        // per side per call (2 V-blurs + 2 splits → 1 fused; 1 H-blur
+        // for both channels vs 2 separate). Plus the 2 copy_planes
+        // already removed by T_x.D.
+        let table_uhf = &self.blur_tables[BlurKind::Uhf as usize];
+        let table_uhf_len = self.blur_table_lens[BlurKind::Uhf as usize];
+        let radius_uhf = self.blur_radii[BlurKind::Uhf as usize];
         unsafe {
-            frequency::split_uhf_hf_x_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_2ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(table_uhf.clone(), table_uhf_len),
+                self.width,
+                self.height,
+                radius_uhf,
+            );
+            blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(table_uhf.clone(), table_uhf_len),
+                self.width,
+                self.height,
+                radius_uhf,
                 REMOVE_UHF_RANGE,
                 REMOVE_HF_RANGE,
             );
         }
-        self.copy_plane(&self.temp2.clone(), &freq[1][0]);
-
-        // Y (ch=1): same shape, Y kernel with maximum_clamp + amplify_range.
-        self.blur_plane_via(
-            &freq[1][1],
-            &self.temp1.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_UHF,
-        );
-        unsafe {
-            frequency::split_uhf_hf_y_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
-            );
-        }
-        self.copy_plane(&self.temp2.clone(), &freq[1][1]);
     }
 
     /// Compute the AC half of the diffmap: 6 Malta diffs + 2 L2-asym
@@ -1019,7 +1366,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// reusable across many `compute_with_reference` calls.
     fn compute_mask_pipeline_reference_only(&self) {
         unsafe {
-            masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
+            // T_x.I: combine + diff_precompute fused (both pointwise,
+            // saves one launch + one full-plane R/W roundtrip).
+            masking::combine_channels_and_diff_precompute_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
@@ -1027,13 +1376,6 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(self.freq_a[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_a[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_a[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-            );
-            masking::diff_precompute_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
                 ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
             );
         }
@@ -1066,7 +1408,8 @@ impl<R: Runtime> Butteraugli<R> {
     /// [`compute_mask_pipeline_reference_only`].
     fn compute_mask_pipeline_distorted_only(&self) {
         unsafe {
-            masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
+            // T_x.I: combine + diff_precompute fused.
+            masking::combine_channels_and_diff_precompute_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
@@ -1074,13 +1417,6 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(self.freq_b[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_b[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_b[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
-            );
-            masking::diff_precompute_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
             );
         }
