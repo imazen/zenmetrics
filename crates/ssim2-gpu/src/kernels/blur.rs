@@ -1,8 +1,44 @@
-//! Recursive Gaussian blur — Charalampidis [2016] truncated cosine IIR.
+//! Gaussian blur kernels for SSIMULACRA2 at σ = 1.5.
 //!
-//! This is the algorithmic centrepiece of SSIMULACRA2's blur (the
-//! `Blur::blur` / `RecursiveGaussian` types in the published `ssimulacra2`
-//! crate). The IIR carries six floats of state per column-walker
+//! Two implementations live here:
+//!
+//! - **Recursive IIR** (default, `Ssim2Blur::Iir`). The Charalampidis
+//!   [2016] truncated-cosine sliding-DCT recursive Gaussian — bit-identical
+//!   to the published `ssimulacra2` CPU crate and to the `ssimulacra2-cuda`
+//!   GPU reference. Kernels: `blur_pass_kernel`, `blur_pass_batched_kernel`.
+//!
+//! - **Separable 5-tap FIR** (opt-in, `Ssim2Blur::Fir`). The truncated
+//!   Gaussian D=5 from Kanetaka et al., "Fast Implementation of
+//!   SSIMULACRA2 for Image Quality Assessment", IWAIT 2026 (DOI
+//!   10.1117/12.3100969). Per the paper's Table 2 on CID22, D=5 hits
+//!   SROCC 0.890387 — slightly **higher** than the libjxl reference's
+//!   0.889297 — but the per-image score values are NOT the same scale
+//!   as the IIR (the FIR's effective impulse-response support is
+//!   narrower). Treat as a **distinct metric**, not a faster/equivalent
+//!   reimplementation. Kernels: `blur_h_fir5_kernel`,
+//!   `blur_h_fir5_batched_kernel`.
+//!
+//! Both modes use the same `vpass → transpose → vpass` pipeline
+//! structure, just with different per-pass kernels. The FIR's
+//! horizontal pass is reused as the "vertical" pass via the
+//! intermediate transpose — see `pipeline.rs::blur_plane_two_pass`.
+//!
+//! ## FIR boundary handling — ZERO PADDING
+//!
+//! The libjxl SSIMULACRA2 recursive Gaussian (the CPU reference our
+//! IIR path matches bit-for-bit) **does NOT reflect-pad**. It seeds
+//! the IIR state to zero and walks in-place, producing a darkened
+//! "halo" at borders. The FIR uses the same **zero-padding**
+//! convention: out-of-frame samples contribute zero. This is the
+//! simplest convention to evaluate (single branch per sample) AND the
+//! one most consistent with the libjxl SSIM stat normalization
+//! downstream. The remaining IIR-vs-FIR per-image divergence is
+//! algorithmic (5-tap truncated Gaussian vs 4-radius recursive
+//! Gaussian impulse response), not a boundary-handling artefact.
+//!
+//! ## IIR file-level notes (legacy detail)
+//!
+//! The recursive Gaussian carries six floats of state per column-walker
 //! (`prev_{1,3,5}`, `prev2_{1,3,5}`) and a `2·N + 1` ring buffer for
 //! the lookback term `y − N − 1`.
 //!
@@ -61,6 +97,20 @@ pub const RADIUS_U32: u32 = consts::RADIUS as u32;
 const RING_SIZE: u32 = RADIUS_U32 * 2 + 1;
 const RING_SIZE_USIZE: usize = consts::RADIUS * 2 + 1;
 const TWO_N: u32 = 2 * RADIUS_U32;
+
+/// FIR kernel radius (taps on each side of centre). 2 means 5 taps total.
+pub const FIR_RADIUS: u32 = consts::FIR_RADIUS as u32;
+/// FIR kernel diameter (total taps).
+pub const FIR_TAPS: u32 = consts::FIR_TAPS as u32;
+/// Compile-time check that the build-side `FIR_RADIUS` is 2 (5 taps).
+/// If you change the kernel diameter, the boundary-clamp logic in the
+/// FIR kernels below needs to be regeneralised.
+const _: () = assert!(consts::FIR_RADIUS == 2);
+
+/// Threads-per-block for the FIR kernels. 256 is a round-warp count
+/// that matches the rest of the pipeline's pointwise kernels and gives
+/// good occupancy on every modern GPU (32-wide SIMD = 8 warps per cube).
+pub const FIR_BLOCK_WIDTH: u32 = 256;
 
 /// One thread = one column. Walks `y` from `−N + 1` to `height − 1` and
 /// emits one output per non-negative `y`.
@@ -268,4 +318,119 @@ pub fn blur_pass_batched_kernel(
 
         i += 1;
     }
+}
+
+// ───────────────── Ssim2Blur::Fir — separable D=5 FIR ─────────────────
+//
+// One thread per output pixel; 5 reads along the row; symmetric taps
+// folded; ZERO padding at the borders (libjxl-IIR convention).
+//
+// Used in pairs: H-pass → transpose → H-pass(transposed) yields a 2D
+// blur in transposed orientation (the rest of the pipeline expects
+// transposed). See pipeline.rs::blur_plane_two_pass for orchestration.
+
+/// Horizontal 5-tap FIR pass with ZERO padding (libjxl-IIR convention).
+///
+/// One thread per output pixel. Reads 5 samples along the row (zero
+/// outside the frame) and accumulates a normalized Gaussian
+/// convolution. Output is row-major, same orientation as input.
+///
+/// Launch geometry: `cube_count_1d(width * height)`,
+/// `cube_dim_1d(FIR_BLOCK_WIDTH)`. The kernel's per-thread `idx`
+/// decomposes into `(y, x)` via `y = idx / width`, `x = idx % width`.
+#[cube(launch_unchecked)]
+pub fn blur_h_fir5_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
+    let idx = ABSOLUTE_POS;
+    let n = (width * height) as usize;
+    if idx >= n {
+        terminate!();
+    }
+    let idx_u = idx as u32;
+    let y = idx_u / width;
+    let x = idx_u % width;
+    let row_base = (y * width) as usize;
+
+    // Unrolled 5-tap H pass: x-2, x-1, x, x+1, x+2 with ZERO padding.
+    let s_m2 = if x >= 2u32 {
+        src[row_base + ((x - 2u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_m1 = if x >= 1u32 {
+        src[row_base + ((x - 1u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_0 = src[row_base + (x as usize)];
+    let s_p1 = if x + 1u32 < width {
+        src[row_base + ((x + 1u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_p2 = if x + 2u32 < width {
+        src[row_base + ((x + 2u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+
+    // Symmetric taps: |k|=2 → FIR_TAP_0, |k|=1 → FIR_TAP_1, |k|=0 → FIR_TAP_2.
+    let acc = s_0 * consts::FIR_TAP_2
+        + (s_m1 + s_p1) * consts::FIR_TAP_1
+        + (s_m2 + s_p2) * consts::FIR_TAP_0;
+    dst[idx] = acc;
+}
+
+/// Batched horizontal 5-tap FIR. `plane_stride = width * height`;
+/// `batch_size` planes packed contiguously in `src` / `dst`. Launch
+/// geometry: `cube_count = (ceil(plane_stride / FIR_BLOCK_WIDTH),
+/// batch_size, 1)` — same per-image work, batched by `CUBE_POS_Y`.
+#[cube(launch_unchecked)]
+pub fn blur_h_fir5_batched_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    plane_stride: u32,
+) {
+    let batch_idx = CUBE_POS_Y;
+    let local = UNIT_POS_X + CUBE_POS_X * CUBE_DIM_X;
+    if local >= plane_stride {
+        terminate!();
+    }
+    let y = local / width;
+    let x = local % width;
+    let plane_off = (batch_idx * plane_stride) as usize;
+    let row_base = (y * width) as usize;
+
+    let s_m2 = if x >= 2u32 {
+        src[plane_off + row_base + ((x - 2u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_m1 = if x >= 1u32 {
+        src[plane_off + row_base + ((x - 1u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_0 = src[plane_off + row_base + (x as usize)];
+    let s_p1 = if x + 1u32 < width {
+        src[plane_off + row_base + ((x + 1u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+    let s_p2 = if x + 2u32 < width {
+        src[plane_off + row_base + ((x + 2u32) as usize)]
+    } else {
+        f32::new(0.0)
+    };
+
+    let acc = s_0 * consts::FIR_TAP_2
+        + (s_m1 + s_p1) * consts::FIR_TAP_1
+        + (s_m2 + s_p2) * consts::FIR_TAP_0;
+    dst[plane_off + (local as usize)] = acc;
+
+    // height is in the signature for symmetry with the IIR's batched
+    // kernel — the FIR doesn't need it because it walks one output per
+    // thread and the boundary clamp uses width only.
+    let _ = height;
 }

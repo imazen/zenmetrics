@@ -62,51 +62,49 @@ fn ssim2_set_blur_round_trips() {
     assert_eq!(s.blur(), Ssim2Blur::Iir);
 }
 
+/// Pre-commit-3 behaviour was `Err(Error::FirNotYetImplemented)`;
+/// from commit 3 onward the FIR kernel exists and `compute` returns
+/// `Ok`. The score value is asserted by the dedicated FIR test file
+/// (`fir_path.rs`); here we just pin that the API call succeeds.
 #[test]
-fn ssim2_fir_compute_returns_not_implemented() {
+fn ssim2_fir_compute_returns_ok() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new(client, 64, 64)
         .expect("Ssim2::new")
         .with_blur(Ssim2Blur::Fir);
     let buf = vec![0_u8; 64 * 64 * 3];
-    let r = s.compute(&buf, &buf);
-    assert!(
-        matches!(r, Err(Error::FirNotYetImplemented)),
-        "expected FirNotYetImplemented, got {r:?}"
-    );
+    let r = s.compute(&buf, &buf).expect("FIR compute should succeed");
+    assert!(r.score.is_finite(), "FIR score must be finite, got {}", r.score);
 }
 
 #[test]
-fn ssim2_fir_set_reference_returns_not_implemented() {
+fn ssim2_fir_set_reference_returns_ok() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new(client, 64, 64)
         .expect("Ssim2::new")
         .with_blur(Ssim2Blur::Fir);
     let buf = vec![0_u8; 64 * 64 * 3];
-    let r = s.set_reference(&buf);
-    assert!(
-        matches!(r, Err(Error::FirNotYetImplemented)),
-        "expected FirNotYetImplemented, got {r:?}"
-    );
+    s.set_reference(&buf).expect("FIR set_reference should succeed");
+    assert!(s.has_cached_reference());
 }
 
 #[test]
-fn ssim2_fir_compute_with_reference_returns_not_implemented() {
+fn ssim2_fir_compute_with_reference_returns_ok() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new(client, 64, 64).expect("Ssim2::new");
     let buf = vec![0_u8; 64 * 64 * 3];
-    // Cache a reference in IIR mode first so we'd otherwise pass the
-    // NoCachedReference check.
+    // Cache a reference in IIR mode first so we observe the
+    // mode-switch cache invalidation.
     s.set_reference(&buf).expect("iir set_reference");
     assert!(s.has_cached_reference());
-    // Switching modes invalidates the cache.
     s.set_blur(Ssim2Blur::Fir);
-    assert!(!s.has_cached_reference());
-    let r = s.compute_with_reference(&buf);
-    assert!(
-        matches!(r, Err(Error::FirNotYetImplemented)),
-        "expected FirNotYetImplemented, got {r:?}"
-    );
+    assert!(!s.has_cached_reference(), "switching modes must invalidate");
+    // Re-arm under FIR.
+    s.set_reference(&buf).expect("fir set_reference");
+    let r = s
+        .compute_with_reference(&buf)
+        .expect("FIR compute_with_reference should succeed");
+    assert!(r.score.is_finite());
 }
 
 #[test]
@@ -173,15 +171,23 @@ fn column_names_have_correct_prefixes() {
 }
 
 #[test]
-fn ssim2batch_fir_compute_batch_returns_not_implemented() {
+fn ssim2batch_fir_compute_batch_returns_ok() {
     let client = Backend::client(&Default::default());
     let mut b = Ssim2Batch::<Backend>::new(client, 64, 64, 2).expect("Ssim2Batch::new");
     let buf = vec![0_u8; 64 * 64 * 3];
     b.set_reference(&buf).expect("set_reference iir");
     b.set_blur(Ssim2Blur::Fir);
+    // Mode switch invalidated cache → expect NoCachedReference.
     let r = b.compute_batch(&[buf.clone()]);
     assert!(
-        matches!(r, Err(Error::FirNotYetImplemented)),
-        "expected FirNotYetImplemented, got {r:?}"
+        matches!(r, Err(Error::NoCachedReference)),
+        "expected NoCachedReference after mode switch, got {r:?}"
     );
+    // Re-arm under FIR.
+    b.set_reference(&buf).expect("set_reference fir");
+    let r = b
+        .compute_batch(&[buf.clone()])
+        .expect("FIR compute_batch should succeed");
+    assert_eq!(r.len(), 1);
+    assert!(r[0].score.is_finite());
 }

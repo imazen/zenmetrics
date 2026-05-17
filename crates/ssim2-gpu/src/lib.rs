@@ -158,9 +158,14 @@ pub enum Ssim2Blur {
     /// pipelines must tag this implementation distinctly (see
     /// `column_name_for_blur(Ssim2Blur::Fir)`).
     ///
-    /// **Skeleton (T_y.B.2 commit 1): not yet implemented.** Calling
-    /// `compute*` on an instance with `Blur::Fir` set returns
-    /// `Error::FirNotYetImplemented` until commit 3 lands the kernel.
+    /// Implementation: a single horizontal 5-tap FIR kernel is used
+    /// for both passes — the second pass runs on a transposed
+    /// intermediate, so its horizontal walk is a vertical walk in the
+    /// original frame. Same `pass → transpose → pass` structure as the
+    /// IIR path; same `*_full` output orientation; just a different
+    /// per-pass kernel. See `kernels::blur::blur_h_fir5_kernel`.
+    ///
+    /// Available as of T_y.B.2 commit 3.
     Fir,
 }
 
