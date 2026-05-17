@@ -29,7 +29,7 @@ use cubecl::prelude::*;
 
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
-use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
+use crate::{Error, GpuSsim2Result, NUM_SCALES, Result, Ssim2Blur};
 
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
 /// (one buffer per channel of a 3-channel image).
@@ -171,6 +171,14 @@ pub struct Ssim2<R: Runtime> {
     sums: cubecl::server::Handle,
 
     has_cached_reference: bool,
+
+    /// Selected blur kernel. Defaults to `Ssim2Blur::Iir` (the canonical
+    /// libjxl recursive Gaussian — bit-identical to the pre-T_y.B
+    /// behaviour). Set via `with_blur` / `set_blur`. The non-default
+    /// `Ssim2Blur::Fir` is the separable 5-tap truncated Gaussian D=5
+    /// from Kanetaka et al. IWAIT 2026 — a **distinct metric** with a
+    /// different per-image score scale; tag via [`crate::SSIM2_FIR_COLUMN_NAME`].
+    blur: Ssim2Blur,
 }
 
 const NUM_SLOTS: usize = NUM_SCALES * 3 * 3; // 54
@@ -237,11 +245,48 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            blur: Ssim2Blur::default(),
         })
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// Builder-style blur selector. Returns `self` so callers can chain:
+    ///
+    /// ```no_run
+    /// use cubecl::Runtime;
+    /// use cubecl::wgpu::WgpuRuntime;
+    /// use ssim2_gpu::{Ssim2, Ssim2Blur};
+    ///
+    /// let client = WgpuRuntime::client(&Default::default());
+    /// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
+    ///     .with_blur(Ssim2Blur::Iir);
+    /// # Ok::<(), ssim2_gpu::Error>(())
+    /// ```
+    ///
+    /// **Switching the blur mode invalidates any cached reference.**
+    /// Subsequent `compute_with_reference` calls will fail with
+    /// `Error::NoCachedReference` until `set_reference` is called again
+    /// — the cached pyramid + XYB + ref²-blur state is blur-specific.
+    pub fn with_blur(mut self, blur: Ssim2Blur) -> Self {
+        self.set_blur(blur);
+        self
+    }
+
+    /// In-place blur selector. See `with_blur` for semantics and the
+    /// cache-invalidation note.
+    pub fn set_blur(&mut self, blur: Ssim2Blur) {
+        if blur != self.blur {
+            self.has_cached_reference = false;
+        }
+        self.blur = blur;
+    }
+
+    /// Currently-selected blur mode.
+    pub fn blur(&self) -> Ssim2Blur {
+        self.blur
     }
 
     /// Number of active pyramid scales (≤ NUM_SCALES; smaller for
@@ -652,9 +697,39 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    /// One-plane two-pass blur: `src → v_pass → tiled-transpose → t_buf →
-    /// v_pass → full`. Caller supplies all 4 same-channel buffers.
+    /// One-plane two-pass blur: `src → pass-0 → tiled-transpose → t_buf →
+    /// pass-1 → full`. Caller supplies all 4 same-channel buffers.
+    ///
+    /// Dispatches on `self.blur`:
+    /// - `Ssim2Blur::Iir`: the column-walking Charalampidis recursive
+    ///   Gaussian (default — bit-identical to the published CPU
+    ///   `ssimulacra2` reference).
+    /// - `Ssim2Blur::Fir`: the separable 5-tap truncated Gaussian D=5
+    ///   per Kanetaka et al. IWAIT 2026. Distinct metric — see the
+    ///   file-level doc on `kernels::blur` and the `Ssim2Blur::Fir`
+    ///   variant doc on `crate::Ssim2Blur`.
     fn blur_plane_two_pass(
+        &self,
+        width: u32,
+        height: u32,
+        n: usize,
+        src: &cubecl::server::Handle,
+        v_buf: &cubecl::server::Handle,
+        t_buf: &cubecl::server::Handle,
+        full: &cubecl::server::Handle,
+    ) {
+        match self.blur {
+            Ssim2Blur::Iir => {
+                self.blur_plane_two_pass_iir(width, height, n, src, v_buf, t_buf, full)
+            }
+            Ssim2Blur::Fir => {
+                self.blur_plane_two_pass_fir(width, height, n, src, v_buf, t_buf, full)
+            }
+        }
+    }
+
+    /// Default IIR path (Charalampidis recursive Gaussian).
+    fn blur_plane_two_pass_iir(
         &self,
         width: u32,
         height: u32,
@@ -700,6 +775,68 @@ impl<R: Runtime> Ssim2<R> {
                 width,
             );
         }
+    }
+
+    /// Opt-in FIR D=5 path (Kanetaka et al. IWAIT 2026).
+    ///
+    /// Uses the horizontal 5-tap FIR for both passes: the second pass
+    /// runs on the transposed intermediate, so the kernel's horizontal
+    /// walk corresponds to a vertical walk in the original frame. The
+    /// 2D blur result lands in transposed orientation in `full`, exactly
+    /// matching the IIR path's output convention.
+    fn blur_plane_two_pass_fir(
+        &self,
+        width: u32,
+        height: u32,
+        n: usize,
+        src: &cubecl::server::Handle,
+        v_buf: &cubecl::server::Handle,
+        t_buf: &cubecl::server::Handle,
+        full: &cubecl::server::Handle,
+    ) {
+        unsafe {
+            // 1. H-FIR on src (one thread per output pixel, 5 reads
+            //    along the row, zero-padded at borders) → v_buf.
+            blur::blur_h_fir5_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::fir_cube_count(n),
+                Self::fir_cube_dim(),
+                ArrayArg::from_raw_parts(src.clone(), n),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                width,
+                height,
+            );
+            // 2. Tiled transpose v_buf → t_buf (now height × width).
+            transpose::transpose_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::transpose_cube_count(width, height),
+                Self::transpose_cube_dim(),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                ArrayArg::from_raw_parts(t_buf.clone(), n),
+                width,
+                height,
+            );
+            // 3. H-FIR on t_buf → full. Note: the transposed buffer's
+            //    "width" is the original height. This second H-FIR is
+            //    a vertical FIR in original coordinates.
+            blur::blur_h_fir5_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::fir_cube_count(n),
+                Self::fir_cube_dim(),
+                ArrayArg::from_raw_parts(t_buf.clone(), n),
+                ArrayArg::from_raw_parts(full.clone(), n),
+                height,
+                width,
+            );
+        }
+    }
+
+    fn fir_cube_count(n: usize) -> CubeCount {
+        let cubes = (n as u32).div_ceil(blur::FIR_BLOCK_WIDTH);
+        CubeCount::Static(cubes.max(1), 1, 1)
+    }
+    fn fir_cube_dim() -> CubeDim {
+        CubeDim::new_1d(blur::FIR_BLOCK_WIDTH)
     }
 
     /// Pointwise transpose for the `ref_xyb` / `dis_xyb` planes (raw,

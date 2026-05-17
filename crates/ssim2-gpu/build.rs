@@ -29,6 +29,31 @@ fn write_const_usize<W: Write>(w: &mut W, name: &str, val: usize) -> io::Result<
 fn init_recursive_gaussian(out_path: &str) -> io::Result<()> {
     const SIGMA: f64 = 1.5_f64;
 
+    // T_y.B.2 commit 3 (2026-05-17): separable FIR D=5 truncated-Gaussian taps.
+    // Per Kanetaka et al. IWAIT 2026 §3 / Table 2 — D=5 (5 taps, radius
+    // 2) at σ=1.5 hits SROCC 0.890387 on CID22, better than libjxl's
+    // recursive Charalampidis baseline (0.889297). D=11+ slowly regresses.
+    //
+    // Coefficients are g(x) = exp(-x² / (2σ²)) for x ∈ {-2,-1,0,1,2}
+    // normalized so the sum is 1.0.
+    const FIR_RADIUS: usize = 2;
+    const FIR_TAPS: usize = 2 * FIR_RADIUS + 1; // 5
+    let mut fir = [0.0_f64; FIR_TAPS];
+    let inv_two_sigma2 = 1.0 / (2.0 * SIGMA * SIGMA);
+    for i in 0..FIR_TAPS {
+        let x = (i as f64) - (FIR_RADIUS as f64);
+        fir[i] = (-x * x * inv_two_sigma2).exp();
+    }
+    let fir_sum: f64 = fir.iter().sum();
+    for f in &mut fir {
+        *f /= fir_sum;
+    }
+    // Sanity: symmetric and sums to 1.
+    assert!((fir.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    for i in 0..FIR_RADIUS {
+        assert!((fir[i] - fir[FIR_TAPS - 1 - i]).abs() < 1e-12);
+    }
+
     let radius = 3.2795_f64.mul_add(SIGMA, 0.2546).round();
 
     let pi_div_2r = PI / (2.0 * radius);
@@ -99,6 +124,16 @@ fn init_recursive_gaussian(out_path: &str) -> io::Result<()> {
     let mut out_file = File::create(file_path)?;
 
     write_const_usize(&mut out_file, "RADIUS", radius as usize)?;
+
+    // T_y.B.2 commit 3: separable FIR D=5 taps for the opt-in FIR
+    // blur path (Ssim2Blur::Fir). See top of this file for derivation.
+    write_const_usize(&mut out_file, "FIR_RADIUS", FIR_RADIUS)?;
+    write_const_usize(&mut out_file, "FIR_TAPS", FIR_TAPS)?;
+    write_const_f32(&mut out_file, "FIR_TAP_0", fir[0] as f32)?;
+    write_const_f32(&mut out_file, "FIR_TAP_1", fir[1] as f32)?;
+    write_const_f32(&mut out_file, "FIR_TAP_2", fir[2] as f32)?;
+    write_const_f32(&mut out_file, "FIR_TAP_3", fir[3] as f32)?;
+    write_const_f32(&mut out_file, "FIR_TAP_4", fir[4] as f32)?;
 
     write_const_f32(&mut out_file, "VERT_MUL_IN_1", n2[0] as f32)?;
     write_const_f32(&mut out_file, "VERT_MUL_IN_3", n2[1] as f32)?;

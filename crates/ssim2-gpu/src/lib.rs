@@ -108,6 +108,139 @@ pub use skipmap::Ssim2Mode;
 /// Number of pyramid scales — matches both the CPU and CUDA references.
 pub const NUM_SCALES: usize = 6;
 
+/// Blur-kernel implementation selector.
+///
+/// SSIMULACRA2's per-scale Gaussian blur (σ = 1.5) admits multiple
+/// algorithmic realisations that produce different per-pixel responses.
+/// This enum picks which one a given `Ssim2` / `Ssim2Batch` instance
+/// uses. The choice is INVISIBLE to the score's interpretation only if
+/// the chosen kernel matches the canonical libjxl recursive Gaussian
+/// — i.e. `Iir`. Other modes (currently `Fir`) produce scores on a
+/// **different scale** and should be tagged distinctly downstream (see
+/// `column_name_for_blur`).
+///
+/// Default is `Iir`, which matches the published CPU `ssimulacra2`
+/// crate's behaviour bit-identically modulo f32 rounding (the
+/// pre-T_y.B opt-in baseline).
+///
+/// ```no_run
+/// use cubecl::Runtime;
+/// use cubecl::wgpu::WgpuRuntime;
+/// use ssim2_gpu::{Ssim2, Ssim2Blur};
+///
+/// let client = WgpuRuntime::client(&Default::default());
+/// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
+///     .with_blur(Ssim2Blur::default()); // == Iir
+/// # Ok::<(), ssim2_gpu::Error>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum Ssim2Blur {
+    /// Charalampidis 2016 truncated-cosine recursive IIR Gaussian.
+    ///
+    /// The canonical libjxl SSIMULACRA2 blur, ported to GPU verbatim
+    /// from `ssimulacra2-cuda`. Produces scores that match the
+    /// published CPU `ssimulacra2` crate to f32-reduction noise
+    /// (≤ 0.06 % relative on JPEG q5..q90; see
+    /// `tests/parity_lock.rs::parity_jpeg_corpus`).
+    ///
+    /// Default. Use this unless you have a specific reason to opt in
+    /// to a different blur metric.
+    #[default]
+    Iir,
+    /// Separable 5-tap (D = 5) truncated Gaussian FIR at σ = 1.5,
+    /// per Kanetaka et al. "Fast Implementation of SSIMULACRA2 for
+    /// Image Quality Assessment", IWAIT 2026 (DOI 10.1117/12.3100969).
+    ///
+    /// **This is a distinct metric.** Per-image scores diverge from
+    /// `Iir` because the FIR's effective impulse-response support is
+    /// narrower than the IIR's (~2 vs ~5 effective radius). The paper
+    /// reports SROCC vs MOS on CID22 of 0.890387 for D=5 — slightly
+    /// higher than the libjxl IIR baseline's 0.889297 — but the
+    /// per-image score values are NOT the same scale. Downstream
+    /// pipelines must tag this implementation distinctly (see
+    /// `column_name_for_blur(Ssim2Blur::Fir)`).
+    ///
+    /// Implementation: a single horizontal 5-tap FIR kernel is used
+    /// for both passes — the second pass runs on a transposed
+    /// intermediate, so its horizontal walk is a vertical walk in the
+    /// original frame. Same `pass → transpose → pass` structure as the
+    /// IIR path; same `*_full` output orientation; just a different
+    /// per-pass kernel. See `kernels::blur::blur_h_fir5_kernel`.
+    Fir,
+}
+
+/// Stable column-name identifier for the IIR (default) blur path.
+///
+/// Used by sweep tooling (`zen-metrics-cli` and downstream pipelines)
+/// to land ssim2 scores in parquet sidecars without colliding with
+/// other ssim2 variants — currently the FIR opt-in path
+/// ([`SSIM2_FIR_COLUMN_NAME`]). Mirrors the `CVVDP_COLUMN_NAME`
+/// pattern in `crates/cvvdp-gpu/src/lib.rs`.
+///
+/// Default form: `ssim2_imazen_iir_v<MAJOR>_<MINOR>_<PATCH>` derived
+/// from `CARGO_PKG_VERSION` with `.` rewritten to `_`. The
+/// `SSIM2_IIR_IMPL_TAG` build-time env var overrides the entire
+/// string when set (e.g. CI bakes in a git short hash to
+/// distinguish iterations within the same crate version).
+pub const SSIM2_IIR_COLUMN_NAME: &str = match option_env!("SSIM2_IIR_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "ssim2_imazen_iir_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
+/// Stable column-name identifier for the FIR (opt-in) blur path.
+///
+/// **Distinct from [`SSIM2_IIR_COLUMN_NAME`]** — the FIR is a
+/// different metric (different score scale) per Kanetaka et al. IWAIT
+/// 2026. Downstream pipelines must land FIR scores in a different
+/// parquet column than IIR scores so they aren't mixed.
+///
+/// Default form: `ssim2_imazen_fir_v<MAJOR>_<MINOR>_<PATCH>`. Override
+/// via the `SSIM2_FIR_IMPL_TAG` build-time env var.
+pub const SSIM2_FIR_COLUMN_NAME: &str = match option_env!("SSIM2_FIR_IMPL_TAG") {
+    Some(t) => t,
+    None => concat!(
+        "ssim2_imazen_fir_v",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_MINOR"),
+        "_",
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ),
+};
+
+/// Versioned column name for the score produced by a given blur mode.
+///
+/// Equivalent to:
+/// - `Ssim2Blur::Iir` → [`SSIM2_IIR_COLUMN_NAME`]
+/// - `Ssim2Blur::Fir` → [`SSIM2_FIR_COLUMN_NAME`]
+///
+/// Use this to derive the right parquet column name at runtime when
+/// the blur mode is data-driven (e.g. CLI flag, config file).
+///
+/// ```
+/// use ssim2_gpu::{Ssim2Blur, column_name_for_blur};
+///
+/// assert!(column_name_for_blur(Ssim2Blur::Iir).starts_with("ssim2_imazen_iir_v"));
+/// assert!(column_name_for_blur(Ssim2Blur::Fir).starts_with("ssim2_imazen_fir_v"));
+/// assert_ne!(
+///     column_name_for_blur(Ssim2Blur::Iir),
+///     column_name_for_blur(Ssim2Blur::Fir),
+/// );
+/// ```
+pub const fn column_name_for_blur(blur: Ssim2Blur) -> &'static str {
+    match blur {
+        Ssim2Blur::Iir => SSIM2_IIR_COLUMN_NAME,
+        Ssim2Blur::Fir => SSIM2_FIR_COLUMN_NAME,
+    }
+}
+
 /// Result of an SSIMULACRA2 comparison.
 ///
 /// `score` is in roughly the 0–100 range — higher = better quality, 100 =

@@ -1371,6 +1371,26 @@ bumping). Static-assert count is now 223 across 13 test files.
   Lossless == Full bit-identical; Fast / Faster within 5e-4
   relative across the JPEG corpus.
 
+- **`Ssim2Blur` opt-in separable FIR D=5 (Technique 1 of Kanetaka
+  et al. IWAIT 2026)** — new `with_blur` / `set_blur` / `blur()`
+  accessors on `Ssim2` and `Ssim2Batch` selecting one of two
+  Gaussian implementations: `Iir` (default — the canonical
+  Charalampidis recursive Gaussian, bit-identical to libjxl) and
+  `Fir` (separable 5-tap truncated Gaussian σ=1.5, normalized,
+  zero-padded at borders). The FIR is a **distinct metric** — its
+  per-image scores diverge from the IIR's by design (different
+  impulse-response support). Tagged via new `SSIM2_IIR_COLUMN_NAME`
+  / `SSIM2_FIR_COLUMN_NAME` consts + `column_name_for_blur` helper
+  so sweep tooling lands FIR scores in a separate parquet column.
+  Switching blur modes invalidates the cached reference.
+  Composes orthogonally with `Ssim2Mode`: `Ssim2Blur::Fir`
+  combined with `Ssim2Mode::Faster` (the default skip-map mode)
+  hits 17.0 ms / 12 MP warm-ref on RTX 5070 — vs 20.8 ms for
+  IIR+Faster (skip-map alone) and 40.6 ms for IIR+Full (baseline).
+  Tests: `crates/ssim2-gpu/tests/fir_path.rs` (FIR-specific
+  determinism, monotonicity, batch parity, identical-image
+  score) + `crates/ssim2-gpu/tests/blur_mode_api.rs` (API
+  contract). Default IIR path bit-identical to pre-merge.
 
 ### Changed
 

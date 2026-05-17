@@ -1,0 +1,46 @@
+# ssim2-gpu Ssim2Blur × Ssim2Mode sweep — 12 MP
+# Date: 2026-05-17
+# Host: water-cooled AMD Ryzen 9 7950X + RTX 5070, CUDA 13.2.1, cubecl 0.10
+# Binary: ./target/release/examples/ssim2_bench_warm
+# Build:  cargo build --release -p ssim2-gpu --features cuda --no-default-features --example ssim2_bench_warm
+# Image:  synthetic 4000×3000 RGB u8 (sRGB), deterministic LCG content
+# Repeats: 10 measured + 3 warmup; per-call wall clock via Instant::now()
+
+# Warm-ref (compute_with_reference_with_mode) — encoder rate-distortion hot path
+#  blur     mode     median_ms   min_ms       score
+   Iir      Full     40.566      40.066      -73.011710
+   Iir      Lossless 35.499      34.873      -73.011710
+   Iir      Fast     22.091      21.772      -73.011408
+   Iir      Faster   20.844      20.174      -73.011369
+   Fir      Full     33.159      32.046      -73.672372
+   Fir      Lossless 27.471      26.813      -73.672372
+   Fir      Fast     17.862      17.193      -73.672052
+   Fir      Faster   17.046      16.638      -73.672011
+
+# Cold (compute_with_mode) — full pipeline including reference build
+#  blur     mode     median_ms   score
+   Iir      Full     61.079      -73.011710
+   Iir      Lossless 55.404      -73.011710
+   Iir      Fast     36.819      -73.011408
+   Iir      Faster   41.656      -73.011369
+   Fir      Full     48.897      -73.672372
+   Fir      Lossless 46.478      -73.672372
+   Fir      Fast     35.449      -73.672052
+   Fir      Faster   67.386      -73.672011
+
+# Speedup vs IIR+Full (warm-ref median):
+#  IIR  Lossless  ×1.143    (skip-map: literal-zero only)
+#  IIR  Fast      ×1.836    (skip-map: |w| < 1e-3)
+#  IIR  Faster    ×1.946    (skip-map: |w| < 1e-2, default)
+#  FIR  Full      ×1.223    (FIR alone, no skipping)
+#  FIR  Lossless  ×1.477
+#  FIR  Fast      ×2.271
+#  FIR  Faster    ×2.380    (combined: skip-map + FIR)
+
+# Parity:
+#  IIR Full and Lossless score identical (-73.011710) — bit-identical, skip-map
+#    only skips literal-zero weights under Lossless mode.
+#  FIR Full and Lossless score identical (-73.672372) — FIR's own internal parity.
+#  Fast/Faster scores drift by < 5e-4 vs Full/Lossless (per skip-map audit).
+#  IIR and FIR produce distinct scores (~0.66 absolute) — FIR is by design
+#    a different metric with different impulse-response support.
