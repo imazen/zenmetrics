@@ -204,9 +204,14 @@ impl<R: Runtime> Iwssim<R> {
             .map(|&(h, w)| Scale::new(&client, h, w))
             .collect();
 
-        let n_bytes_rgb = (width * height * 3) as usize;
-        let src_u32_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes_rgb]));
-        let src_u32_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes_rgb]));
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16). Length = n_pixels, not n_pixels × 3.
+        // Cuts per-call host→device upload from 12 B/pixel to 4 B/pixel.
+        let n_pixels_usize = (width * height) as usize;
+        let src_u32_a =
+            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
+        let src_u32_b =
+            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
 
         let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
@@ -218,7 +223,8 @@ impl<R: Runtime> Iwssim<R> {
             height,
             src_u32_a,
             src_u32_b,
-            pack_scratch: vec![0_u32; n_bytes_rgb],
+            // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
+            pack_scratch: vec![0_u32; n_pixels_usize],
             scales,
             partials,
             sums,
@@ -307,14 +313,16 @@ impl<R: Runtime> Iwssim<R> {
                 got: dis_rgb.len(),
             });
         }
-        // Widen u8 → u32 (WGSL has no u8 storage). Re-uses the
-        // persistent pack_scratch to avoid per-call alloc churn.
-        Self::widen_u8_to_u32(&mut self.pack_scratch, ref_rgb);
+        // T4.L+M (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16), upload via pinned-host fast path. Cuts
+        // upload 3× and routes through DMA at 12-25 GB/s (vs 5-6 GB/s
+        // pageable). See docs/CUBECL_GOTCHAS.md G6.5 and G6.6.
+        Self::pack_u8_rgb_to_u32(&mut self.pack_scratch, ref_rgb);
         let bytes_a = u32::as_bytes(&self.pack_scratch);
-        self.src_u32_a = self.client.create_from_slice(bytes_a);
-        Self::widen_u8_to_u32(&mut self.pack_scratch, dis_rgb);
+        self.src_u32_a = self.client.create_from_slice_pinned(bytes_a);
+        Self::pack_u8_rgb_to_u32(&mut self.pack_scratch, dis_rgb);
         let bytes_b = u32::as_bytes(&self.pack_scratch);
-        self.src_u32_b = self.client.create_from_slice(bytes_b);
+        self.src_u32_b = self.client.create_from_slice_pinned(bytes_b);
 
         // Convert to grayscale into scale-0 LP buffers (we'll then
         // build the Gaussian pyramid in-place via the lp/g cycle).
@@ -325,14 +333,15 @@ impl<R: Runtime> Iwssim<R> {
                 &self.client,
                 Self::cube_count_1d(n_pixels),
                 Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.src_u32_a.clone(), n_pixels * 3),
+                // T4.L: one u32 per pixel.
+                ArrayArg::from_raw_parts(self.src_u32_a.clone(), n_pixels),
                 ArrayArg::from_raw_parts(s0.g_ref.clone(), n_pixels),
             );
             rgb2gray::rgb_u32_to_gray_kernel::launch_unchecked::<R>(
                 &self.client,
                 Self::cube_count_1d(n_pixels),
                 Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.src_u32_b.clone(), n_pixels * 3),
+                ArrayArg::from_raw_parts(self.src_u32_b.clone(), n_pixels),
                 ArrayArg::from_raw_parts(s0.g_dis.clone(), n_pixels),
             );
         }
@@ -385,10 +394,15 @@ impl<R: Runtime> Iwssim<R> {
     fn cube_dim_1d() -> CubeDim {
         CubeDim::new_1d(256)
     }
-    fn widen_u8_to_u32(dst: &mut [u32], src: &[u8]) {
-        debug_assert_eq!(dst.len(), src.len());
-        for (d, &b) in dst.iter_mut().zip(src.iter()) {
-            *d = b as u32;
+    /// T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+    /// (R | G<<8 | B<<16). Replaces the old `widen_u8_to_u32` which
+    /// kept one byte per u32 and cost 3× the upload bandwidth.
+    fn pack_u8_rgb_to_u32(dst: &mut [u32], src: &[u8]) {
+        debug_assert_eq!(dst.len() * 3, src.len());
+        for (d, triple) in dst.iter_mut().zip(src.chunks_exact(3)) {
+            *d = u32::from(triple[0])
+                | (u32::from(triple[1]) << 8)
+                | (u32::from(triple[2]) << 16);
         }
     }
 

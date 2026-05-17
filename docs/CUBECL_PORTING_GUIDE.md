@@ -549,6 +549,108 @@ Based on the butteraugli numbers:
 - **Cold compile** is the worst pain point — first build of a new
   CubeCL kernel module is 5–9 minutes on a Ryzen 9. Plan for that.
 
+## Performance checklist — apply in this order
+
+Order matters. The 2026-05-16 cvvdp-gpu chase (15.8× speedup at 12 MP
+warm-ref) hit a wall doing T1.B/T2.D kernel-tile work; switching to
+this order would have saved a day. Each step has a dedicated gotcha
+entry in `CUBECL_GOTCHAS.md` (G6.4–G6.8).
+
+### 1. Profile first (G6.4)
+
+```bash
+nsys profile -t cuda --stats=true --force-overwrite=true \
+  -o /tmp/prof ./your_warm_loop_binary
+```
+
+Read **`cuda_api_sum`** before `cuda_gpu_kern_sum`. If
+`cuMemcpyHtoDAsync` or `cuMemAllocAsync` is > 20 % of total time, the
+GPU is idle waiting on host → device. Fix that before touching any
+kernel. Host-side `Instant::now()` traces miss this — they print
+issue time, not GPU wait.
+
+`CUDA_LAUNCH_BLOCKING=1` does NOT make cubecl 0.10's host traces
+trustworthy; cubecl has its own queue.
+
+### 2. Pinned host memory (G6.5) — almost always biggest win
+
+Patch `[patch.crates-io]` to the `lilith/cubecl` `feat/pinned-upload`
+fork (commit `08d34ac0`). It transparently routes `create_from_slice`
+through pinned staging AND adds an explicit
+`create_from_slice_pinned(&[u8]) -> Handle` for the hot per-iter
+upload path. CUDA pageable HtoD is ~5–6 GB/s; pinned is 12–25 GB/s
+on PCIe 4.0.
+
+cvvdp-gpu measured 4.3× on 12 MP warm-ref from this single change.
+
+### 3. Eliminate u8→u32 host widening (G6.6)
+
+If a kernel takes `&Array<u32>` for byte data, the host probably
+inflates `&[u8]` 4× into `Vec<u32>` before upload. Pack into one
+u32 per 3-byte pixel (R | G<<8 | B<<16) and unpack in the kernel
+with 3 shifts + 3 ANDs. Cuts upload 3× for any color stage with byte
+input.
+
+cvvdp-gpu measured 2.5× on 12 MP from this alone.
+
+### 4. Persistent GPU scratch (G6.2)
+
+Don't `create_from_slice` *every* iteration if the buffer size never
+changes. Allocate the GPU handle in `new()` and reuse. The upload
+into it still happens; only the alloc churn disappears (~5–15 ms
+per iter at 12 MP).
+
+cubecl 0.10 has no in-place buffer write API, so you can't avoid
+the `create_from_slice` call entirely — but you CAN cap the live
+allocation count to one per scratch slot. The pinned fork's
+`reserve_staging(&[usize]) -> Vec<Bytes>` plus `create(Bytes)` lets
+you pre-reserve a pinned host buffer once and reuse it across calls
+(only the device-side handle changes).
+
+### 5. Workgroup-LDS reductions with per-size dispatch (G6.7)
+
+Per-pixel `Atomic<f32>::fetch_add` contends on a small slot count.
+Replace with a 256-thread LDS pointer-jumping reduce that does one
+atomic per workgroup. At 12 MP that cuts 12M atomics per band per
+channel to ~47K (255× reduction).
+
+Per-size dispatch matters: under 16K pixels, the LDS reduction's
+8 syncs cost more than the atomic-direct kernel. Keep BOTH kernels
+and route by `n_px` at the dispatch site.
+
+cvvdp-gpu measured 1.27× on 12 MP warm-ref from the LDS reduction,
+plus T4.K (per-size dispatch) fixed a 256² regression while
+*additionally* improving 12 MP (because the deepest pyramid bands
+also benefit from atomic-direct).
+
+### 6. LDS-tiled separable stencils — only with fusion (G6.8)
+
+Modern dGPU L1 cache (~128 KB per SM on RTX 50-class) already
+absorbs the K-1 shared loads in a separable stencil where adjacent
+threads need overlapping inputs. Plain LDS-tile-and-blur typically
+ties or regresses on these GPUs.
+
+Only LDS-tile when you can ALSO fuse another operation into the tile
+load — vship's `GaussianSmartSharedLoadMinAbs` (which computes
+`min(|R|, |T|)` during tile fill, eliminating a separate kernel and
+buffer) is the canonical example. Pure load-then-blur is L1-cache
+territory; let the cache do its job.
+
+The cvvdp-gpu chase confirmed this: T1.B (5-tap downscale tiled,
+no fusion) was 1.06×; T2.D (13-tap PU blur tiled, no fusion) was
+a 0.87× regression and got reverted.
+
+### 7. Multi-stream concurrency (T3.H, not yet attempted)
+
+If REF and DIST pipelines are independent (most metric crates),
+they can run on parallel CUDA streams with event-based merge. cubecl
+0.10 exposes a `stream` API but the path through `ComputeClient`
+needs the `feat/cuda-stream-priority` branch (sibling to
+`feat/pinned-upload`). Estimated 1.3–1.5× upper bound; deferred
+until other crates need to push past pinned + LDS-pool gains.
+
+## Cross-references
+
 ## Cross-references
 
 - Worked example: `crates/butteraugli-gpu/src/{pipeline.rs, pipeline_batch.rs, kernels/}`

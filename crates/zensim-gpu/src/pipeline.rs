@@ -478,19 +478,22 @@ impl<R: Runtime> Zensim<R> {
     }
 
     fn upload_u8(&mut self, is_a: bool, srgb: &[u8]) {
-        // Pack 3 u8 bytes into one u32 per pixel: R | G<<8 | B<<16.
-        // The kernel masks the bytes back out, so on-device math is
-        // unchanged. Saves 3× the H2D bandwidth vs the older "widen
-        // each u8 to its own u32" layout — significant on WSL2 where
-        // PCIe throughput is virtualised down to ~3 GB/s.
+        // T4.L (pre-dates this session): pack 3 u8 bytes into one u32
+        // per pixel: R | G<<8 | B<<16. Kernel masks the bytes back
+        // out; on-device math is unchanged. 3× H2D bandwidth saving
+        // vs the older "widen each u8 to its own u32" layout —
+        // significant on WSL2 where PCIe is virtualised to ~3 GB/s.
         for (dst, chunk) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
             *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
         }
+        // T4.M (2026-05-16): pinned-host upload via the lilith/cubecl
+        // feat/pinned-upload fork — DMAs at 12-25 GB/s on PCIe 4.0 vs
+        // 5-6 GB/s pageable. See docs/CUBECL_GOTCHAS.md G6.5.
         let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(bytes);
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(bytes);
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
         }
     }
 

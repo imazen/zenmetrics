@@ -171,12 +171,11 @@ impl<R: Runtime> Ssim2Batch<R> {
             .collect();
 
         let n_full = (width as usize) * (height as usize);
-        // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
-        // has no u8 storage type, so we keep all platforms on a u32
-        // path (CUDA happily handles either).
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16). Length = n_pixels (per image × batch),
+        // not n_pixels × 3. Cuts upload 3×; see CUBECL_GOTCHAS.md G6.6.
         let total_u32 = n_full
-            .checked_mul(3)
-            .and_then(|n| n.checked_mul(batch_size as usize))
+            .checked_mul(batch_size as usize)
             .expect("n_full × 3 × batch_size overflows usize");
         let src_u8_batch = client.create_from_slice(u32::as_bytes(&vec![0_u32; total_u32]));
         let pack_scratch = vec![0_u32; total_u32];
@@ -288,22 +287,30 @@ impl<R: Runtime> Ssim2Batch<R> {
             packed.resize(total_bytes, 0);
         }
 
-        // Upload + sRGB → linear into bscales[0].dis_lin. Bytes are
-        // widened to u32 for cross-vendor (wgpu) compatibility, into
-        // the persistent `pack_scratch` to avoid per-call alloc churn.
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // before upload. pack_scratch is `n_total_full` u32 entries
+        // (not n_total_full × 3). Cuts upload 3×.
         let client = self.inner.client().clone();
-        debug_assert_eq!(self.pack_scratch.len(), packed.len());
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(packed.iter()) {
-            *dst = src as u32;
-        }
-        self.src_u8_batch = client.create_from_slice(u32::as_bytes(&self.pack_scratch));
         let n_total_full = n_full * (self.batch_size as usize);
+        debug_assert_eq!(self.pack_scratch.len(), n_total_full);
+        for (dst, triple) in self
+            .pack_scratch
+            .iter_mut()
+            .zip(packed.chunks_exact(3))
+        {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+        }
+        // T4.M (2026-05-16): pinned-host fast path.
+        self.src_u8_batch =
+            client.create_from_slice_pinned(u32::as_bytes(&self.pack_scratch));
         unsafe {
             srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
                 &client,
                 cube_count_1d(n_total_full),
                 cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.src_u8_batch.clone(), n_total_full * 3),
+                // T4.L: one u32 per pixel.
+                ArrayArg::from_raw_parts(self.src_u8_batch.clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[0].clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[1].clone(), n_total_full),
                 ArrayArg::from_raw_parts(self.bscales[0].dis_lin[2].clone(), n_total_full),

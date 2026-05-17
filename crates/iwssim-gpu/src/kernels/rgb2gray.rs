@@ -16,8 +16,12 @@
 
 use cubecl::prelude::*;
 
-/// `src_rgb_u32` is laid out as `[r0, g0, b0, r1, g1, b1, ...]`, each
-/// entry one widened sRGB byte (WGSL has no `u8` storage type).
+/// `src_rgb_u32` is one packed-RGBA u32 per pixel
+/// (R | G<<8 | B<<16; alpha unused).
+///
+/// T4.L (2026-05-16): packed layout cuts host→device upload 3× vs the
+/// prior one-byte-per-u32 widening (12 B/pixel → 4 B/pixel). See
+/// `docs/CUBECL_GOTCHAS.md` G6.6.
 #[cube(launch_unchecked)]
 pub fn rgb_u32_to_gray_kernel(src_rgb_u32: &Array<u32>, dst_gray: &mut Array<f32>) {
     let idx = ABSOLUTE_POS;
@@ -25,9 +29,10 @@ pub fn rgb_u32_to_gray_kernel(src_rgb_u32: &Array<u32>, dst_gray: &mut Array<f32
     if idx >= n {
         terminate!();
     }
-    let r = src_rgb_u32[idx * 3] as f32;
-    let g = src_rgb_u32[idx * 3 + 1] as f32;
-    let b = src_rgb_u32[idx * 3 + 2] as f32;
+    let packed = src_rgb_u32[idx];
+    let r = (packed & 0xffu32) as f32;
+    let g = ((packed >> 8u32) & 0xffu32) as f32;
+    let b = ((packed >> 16u32) & 0xffu32) as f32;
     let y = 0.2989_f32 * r + 0.5870_f32 * g + 0.1140_f32 * b;
     dst_gray[idx] = f32::floor(y + 0.5_f32);
 }

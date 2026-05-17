@@ -16,12 +16,17 @@ const GAMMA_MUL: f32 = 19.245_014;
 const GAMMA_ADD: f32 = 9.971_064;
 const GAMMA_SUB: f32 = 23.160_463;
 
-/// Per-element sRGB → linear RGB. `src` holds `n_pixels × 3` bytes
-/// widened to `u32` on the host (WGSL has no `u8` storage type, so
-/// `Array<u8>` reads zero on cubecl-wgpu's Metal backend). Output:
-/// planar f32 RGB — `dst_r[idx]`, `dst_g[idx]`, `dst_b[idx]` per pixel.
+/// Per-element sRGB → linear RGB.
 ///
-/// Each thread handles one pixel; launch with `n_pixels` total units.
+/// T4.L (2026-05-16): `src` is one packed-RGBA u32 per pixel
+/// (R | G<<8 | B<<16; alpha unused). Cuts host→device upload 3× vs
+/// the prior one-byte-per-u32 widening (12 B/pixel → 4 B/pixel). See
+/// `docs/CUBECL_GOTCHAS.md` G6.6. 3 bit-shifts + 3 ANDs per pixel are
+/// free relative to the saved upload bandwidth.
+///
+/// Output: planar f32 RGB — `dst_r[idx]`, `dst_g[idx]`, `dst_b[idx]`
+/// per pixel. Each thread handles one pixel; launch with `n_pixels`
+/// total units.
 #[cube(launch_unchecked)]
 pub fn srgb_u8_to_linear_planar_kernel(
     src: &Array<u32>,
@@ -34,10 +39,10 @@ pub fn srgb_u8_to_linear_planar_kernel(
     if idx >= n {
         terminate!();
     }
-    let i3 = idx * 3;
-    let r = srgb_byte_to_linear(src[i3]);
-    let g = srgb_byte_to_linear(src[i3 + 1]);
-    let b = srgb_byte_to_linear(src[i3 + 2]);
+    let packed = src[idx];
+    let r = srgb_byte_to_linear(packed & 0xffu32);
+    let g = srgb_byte_to_linear((packed >> 8u32) & 0xffu32);
+    let b = srgb_byte_to_linear((packed >> 16u32) & 0xffu32);
     dst_r[idx] = r;
     dst_g[idx] = g;
     dst_b[idx] = b;

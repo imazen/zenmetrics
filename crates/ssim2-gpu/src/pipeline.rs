@@ -215,11 +215,11 @@ impl<R: Runtime> Ssim2<R> {
             .map(|&(w, h)| Scale::new(&client, w, h))
             .collect::<Vec<_>>();
 
-        let n_bytes = n * 3;
-        // sRGB bytes uploaded as u32 because wgpu's WGSL backend has
-        // no `u8` storage type (Array<u8> reads zero on Metal).
-        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
-        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into one u32
+        // (R | G<<8 | B<<16). Length = n, not n*3. Cuts the per-call
+        // host→device upload from `n_pixels × 12 B` to `n_pixels × 4 B`.
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
 
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
         let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
@@ -231,7 +231,7 @@ impl<R: Runtime> Ssim2<R> {
             n,
             src_u8_a,
             src_u8_b,
-            pack_scratch: vec![0_u32; n_bytes],
+            pack_scratch: vec![0_u32; n],
             scales,
             partials,
             sums,
@@ -444,18 +444,24 @@ impl<R: Runtime> Ssim2<R> {
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
         debug_assert_eq!(srgb.len(), n_bytes);
-        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
-        // Widen each sRGB byte into the persistent `pack_scratch`
-        // instead of allocating a fresh `Vec<u32>` per upload (WGSL has
-        // no u8 storage type, so the widening can't be skipped).
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = src as u32;
+        debug_assert_eq!(self.pack_scratch.len(), self.n);
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
+        // one-byte-per-u32 widening. Kernel unpacks with 3 shifts +
+        // 3 ANDs — free vs the saved upload time.
+        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path. The `_pinned` form
+        // copies straight into a pinned staging buffer (12-25 GB/s DMA
+        // on PCIe 4.0 vs 5-6 GB/s from pageable), skipping one host
+        // memcpy. See CUBECL_GOTCHAS.md G6.5.
         let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(bytes);
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(bytes);
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
         }
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.scales[0].ref_lin)
@@ -467,7 +473,7 @@ impl<R: Runtime> Ssim2<R> {
                 &self.client,
                 Self::cube_count_1d(self.n),
                 Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), n_bytes),
+                ArrayArg::from_raw_parts(src.clone(), self.n),
                 ArrayArg::from_raw_parts(lin[0].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[1].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[2].clone(), self.n),

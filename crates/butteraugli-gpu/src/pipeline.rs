@@ -251,11 +251,11 @@ impl<R: Runtime> Butteraugli<R> {
         let n_bytes = n
             .checked_mul(3)
             .expect("width × height × 3 overflows usize");
-        // sRGB bytes are uploaded widened to u32 — wgpu's WGSL backend
-        // has no u8 storage type, so we keep all platforms on a u32
-        // path (CUDA happily handles either).
-        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
-        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_bytes]));
+        // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
+        // (R | G<<8 | B<<16; alpha unused). Length = n, not n*3. Cuts
+        // per-call host→device upload from `n × 12 B` to `n × 4 B`.
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
 
         let lin_a = alloc_3(&client, n);
         let lin_b = alloc_3(&client, n);
@@ -308,7 +308,8 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             has_cached_reference: false,
-            pack_scratch: vec![0_u32; n_bytes],
+            // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
+            pack_scratch: vec![0_u32; n],
             params: ButteraugliParams::default(),
         }
     }
@@ -610,19 +611,23 @@ impl<R: Runtime> Butteraugli<R> {
         // `check_dims` first, so a release-mode panic here would only
         // fire on a buggy internal caller. Demoted to debug_assert.
         debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
-        // Widen each sRGB byte to a u32 in the persistent `pack_scratch`
-        // vec instead of allocating a fresh `Vec<u32>` per upload. Same
-        // 4× host memory cost as before, but no per-call alloc churn.
-        // (WGSL has no `Array<u8>` storage type, hence the widening.)
-        debug_assert_eq!(self.pack_scratch.len(), n_bytes);
-        for (dst, &src) in self.pack_scratch.iter_mut().zip(srgb.iter()) {
-            *dst = src as u32;
+        // T4.L (2026-05-16): pack 3 sRGB bytes into ONE u32
+        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
+        // one-byte-per-u32 layout — was the dominant warm-loop cost
+        // per nsys (see docs/CUBECL_GOTCHAS.md G6.6).
+        debug_assert_eq!(self.pack_scratch.len(), self.n);
+        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
+            *dst =
+                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
         }
+        // T4.M (2026-05-16): pinned-host fast path — copies straight
+        // into a pinned staging buffer (12-25 GB/s DMA on PCIe 4.0 vs
+        // 5-6 GB/s from pageable). See CUBECL_GOTCHAS.md G6.5.
         let bytes = u32::as_bytes(&self.pack_scratch);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice(bytes);
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
         } else {
-            self.src_u8_b = self.client.create_from_slice(bytes);
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
         }
         unsafe {
             self.launch_srgb_to_linear(is_a);
@@ -658,7 +663,6 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     unsafe fn launch_srgb_to_linear(&self, is_a: bool) {
-        let n_bytes = self.n * 3;
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.lin_a)
         } else {
@@ -669,7 +673,8 @@ impl<R: Runtime> Butteraugli<R> {
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), n_bytes),
+                // T4.L: one u32 per pixel, not n_bytes.
+                ArrayArg::from_raw_parts(src.clone(), self.n),
                 ArrayArg::from_raw_parts(lin[0].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[1].clone(), self.n),
                 ArrayArg::from_raw_parts(lin[2].clone(), self.n),
