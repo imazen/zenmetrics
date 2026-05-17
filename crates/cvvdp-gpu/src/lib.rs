@@ -178,10 +178,19 @@
 
 pub mod host_scalar;
 pub mod kernels;
+pub mod opaque;
 pub mod params;
 pub mod pipeline;
 
+// CvvdpParams stays unconditionally public — it's part of the opaque
+// API surface and contains no cubecl types.
 pub use params::{CvvdpParams, PerfMode};
+
+// Uniform opaque API (Phase 2). See `opaque.rs`.
+pub use opaque::{Backend, CvvdpOpaque, Score};
+
+// Typed-generic API (gated behind `cubecl-types`).
+#[cfg(feature = "cubecl-types")]
 pub use pipeline::{Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, recommend_parallel};
 
 /// Number of color channels in DKL opponent space (achromatic +

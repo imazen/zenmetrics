@@ -11,7 +11,7 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu"]
+default = ["cuda", "wgpu", "cpu", "pixels"]
 cuda = ["cubecl/cuda"]
 wgpu = ["cubecl/wgpu"]
 hip  = ["cubecl/hip"]
@@ -22,9 +22,17 @@ cpu  = ["cubecl/cpu"]
 # the "silent runtime skip" anti-pattern: when this feature isn't
 # enabled, the parity tests aren't compiled in at all.
 parity-goldens = []
+# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Exposes the generic typed Cvvdp<R> + helpers (estimate_gpu_memory_bytes,
+# recommend_parallel, PARALLEL_SAFETY_FACTOR). Off by default — opaque
+# CvvdpOpaque is the supported surface.
+cubecl-types = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png", "jpeg"] }
@@ -36,7 +44,218 @@ zenmetrics-corpus = { workspace = true }
 sha2 = "0.10.9"
 ureq = "3.3.0"
 zenbench = { version = "0.1.8", features = ["criterion-compat"] }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 
 [[bench]]
 name = "score"
 harness = false
+
+# Examples + tests consuming the typed Cvvdp<R> require the
+# cubecl-types feature.
+[[example]]
+name = "bench_warm_ref"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "cvvdp_mem_table"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "manifest_parity_probe"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "time_12mp"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "time_size_sweep"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "band_weights_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "clamp_phase_uncertainty_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "color_kernel"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "color_scalar"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "column_name"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "const_str_helpers"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "cpu_backend"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "csf_axes_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "csf_channel_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "csf_kernel"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "csf_scalar"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "display_geometry"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "do_pooling_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "error_traits"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "gaussian_blur_sigma3_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "gausspyr_expand_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "gausspyr_reduce_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "goldens_metadata"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "laplacian_pyramid_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "lib_constants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "lib_reexports"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "masking_constants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "masking_kernel"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "masking_safe_pow"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "masking_scalar"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "mask_pool_pixel_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "met2jod_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "mult_mutual_band_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "mult_mutual_pixel_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "params_placeholder_non_display"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "params_placeholder"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "perf_mode_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "phase_uncertainty_band_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "pipeline_color"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "pipeline_score"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "pool_scalar"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "precompute_logs_row_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "predict_jod_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "pyramid_kernel"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "pyramid_scalar"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "shadow_jod"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "srgb_byte_to_dkl_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "state_machine_independence"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "version_lockstep"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "weber_pyramid_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque"
+required-features = ["cubecl-types"]

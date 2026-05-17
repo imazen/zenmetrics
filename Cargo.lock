@@ -1235,6 +1235,8 @@ dependencies = [
  "ureq",
  "zenbench",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]

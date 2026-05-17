@@ -43,10 +43,15 @@ cpu-metrics = [
 
 # GPU bundle: pulls every GPU metric implementation.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp"]
-gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl"]
-gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl"]
-gpu-dssim = ["dep:dssim-gpu", "dep:cubecl"]
-gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl"]
+# Each gpu-* feature pulls in the typed cubecl-types surface of the
+# matching metric crate because zen-metrics-cli's score/batch helpers
+# call into Cvvdp::<R>::new / Butteraugli::<R>::new_multires / etc.
+# directly. The Phase 3 umbrella crate (zenmetrics-api) will switch
+# us over to the opaque API; until then we depend on cubecl-types.
+gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl", "butteraugli-gpu/cubecl-types"]
+gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl", "ssim2-gpu/cubecl-types"]
+gpu-dssim = ["dep:dssim-gpu", "dep:cubecl", "dssim-gpu/cubecl-types"]
+gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl", "cvvdp-gpu/cubecl-types"]
 # Pick CubeCL backends. Default forwards through the GPU metric crates which
 # already enable cuda/wgpu/cpu when their default features are kept.
 gpu-cuda = [
