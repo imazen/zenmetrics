@@ -11,33 +11,42 @@
 //!
 //! Cargo's resolver normally unifies on one version per workspace
 //! anyway, but the patch table can drive different metric crates to
-//! different forks. This check catches that case at build time.
+//! different forks. This check is intended to catch that case at
+//! build time.
 //!
-//! The check is best-effort: we read `DEP_<NAME>_PKG_VERSION` for each
-//! metric crate's transitive cubecl when available, else fall back to
-//! the umbrella's own `cubecl` version (set by the feature). If we
-//! can't determine the versions, we emit a `cargo:warning=` and move
-//! on rather than hard-erroring.
+//! ## Why this is an advisory warning, not a hard error
+//!
+//! A *real* check would shell out to `cargo metadata --format-version 1`
+//! and parse the resulting JSON to enumerate every transitive
+//! `cubecl-*` package and verify they all resolve to one version.
+//! Implementing that correctly requires either:
+//!   - adding `cargo_metadata` as a build-dep (~10 transitive crates,
+//!     including `serde_json` and `semver`, just to drive a sanity
+//!     check that almost never trips), or
+//!   - hand-rolling a JSON parser in the build script (brittle and
+//!     adds a new failure mode), or
+//!   - calling `cargo tree --duplicates -i cubecl` and parsing
+//!     human-readable output (brittle — `cargo tree`'s formatting is
+//!     not stable across Cargo versions).
+//!
+//! The workspace's `cubecl = { workspace = true }` line in every
+//! metric crate's `Cargo.toml` already enforces single-version
+//! unification in-tree. The advisory below is what the cross-tree
+//! patch case (a downstream `[patch.crates-io]` entry forking one
+//! metric crate onto a different cubecl) needs to surface — and that
+//! case is rare enough that a warning + README note is the right
+//! tradeoff vs. a build-dep that bloats every check by ~10 crates.
+//!
+//! If this check trips often enough to matter, upgrade to the real
+//! `cargo metadata` parse and bail with `cargo:error=` instead.
 
 fn main() {
-    // Cargo re-runs this script if its source changes; we don't need to
-    // monitor anything else.
     println!("cargo:rerun-if-changed=build.rs");
 
-    // Skip the check entirely when `cubecl-types` is off — the opaque
-    // surface doesn't expose cubecl types, so per-metric-crate cubecl
-    // version drift doesn't affect us.
     if std::env::var_os("CARGO_FEATURE_CUBECL_TYPES").is_none() {
         return;
     }
 
-    // The umbrella's own `cubecl` dep is the workspace-pinned version
-    // because every metric crate also uses `workspace = true` in their
-    // Cargo.toml. If a future patch table forks one of them onto a
-    // different cubecl, this check is the surface that would notice —
-    // currently it just records intent. A `cargo metadata`-driven
-    // check is the proper fix and is documented in the README under
-    // "cubecl version guard" as a known follow-up.
     println!(
         "cargo:warning=zenmetrics-api `cubecl-types` is enabled — \
          the umbrella assumes every enabled metric crate resolves to \

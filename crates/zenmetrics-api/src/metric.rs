@@ -418,6 +418,84 @@ impl Metric {
         }
     }
 
+    /// Score against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. Both handles MUST come from
+    /// a [`crate::MetricContext::upload_pair`] call on the same
+    /// cubecl client this scorer was constructed against (sharing
+    /// handles across clients is undefined behaviour at the cubecl
+    /// layer and is not validated here).
+    ///
+    /// Equivalent to [`Self::compute_srgb_u8`] but skips the
+    /// host-to-device upload, so one packed `(ref, dist)` upload
+    /// can feed several metrics on the same GPU.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Metric`] if the underlying metric crate's
+    /// dispatch fails.
+    #[cfg(feature = "cubecl-types")]
+    pub fn compute_handles(
+        &mut self,
+        pair: &crate::context::PairHandles,
+    ) -> Result<Score> {
+        let ref_h = &pair.ref_handle;
+        let dis_h = &pair.dist_handle;
+        match self {
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(m) => m
+                .compute_handles(ref_h, dis_h)
+                .map(convert_score)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "butter")]
+            Metric::Butter(m) => m
+                .compute_handles(ref_h, dis_h)
+                .map(convert_score_butter)
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(m) => m
+                .compute_handles(ref_h, dis_h)
+                .map(convert_score_ssim2)
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(m) => m
+                .compute_handles(ref_h, dis_h)
+                .map(convert_score_dssim)
+                .map_err(|e| Error::Metric {
+                    kind: "dssim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(m) => m
+                .compute_handles(ref_h, dis_h)
+                .map(convert_score_iwssim)
+                .map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(_) => {
+                // zensim-gpu compute_handles is parked while the parallel
+                // rework lands — fall back to compute_srgb_u8 isn't
+                // available without the original bytes, so surface a
+                // clear "not yet wired" error rather than silently
+                // running a different code path.
+                Err(Error::Metric {
+                    kind: "zensim",
+                    message: "compute_handles not wired for zensim-gpu (Phase 4 deferred — see umbrella commit)".into(),
+                })
+            }
+        }
+    }
+
     /// Score one reference / distorted pair from [`PixelSlice`]
     /// inputs. Per-crate conversion semantics apply — see each
     /// metric crate's `compute_pixels` docs.
