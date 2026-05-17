@@ -1366,7 +1366,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// reusable across many `compute_with_reference` calls.
     fn compute_mask_pipeline_reference_only(&self) {
         unsafe {
-            masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
+            // T_x.I: combine + diff_precompute fused (both pointwise,
+            // saves one launch + one full-plane R/W roundtrip).
+            masking::combine_channels_and_diff_precompute_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
@@ -1374,13 +1376,6 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(self.freq_a[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_a[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_a[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-            );
-            masking::diff_precompute_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
                 ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
             );
         }
@@ -1413,7 +1408,8 @@ impl<R: Runtime> Butteraugli<R> {
     /// [`compute_mask_pipeline_reference_only`].
     fn compute_mask_pipeline_distorted_only(&self) {
         unsafe {
-            masking::combine_channels_for_masking_kernel::launch_unchecked::<R>(
+            // T_x.I: combine + diff_precompute fused.
+            masking::combine_channels_and_diff_precompute_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
@@ -1421,13 +1417,6 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(self.freq_b[0][0].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_b[1][1].clone(), self.n),
                 ArrayArg::from_raw_parts(self.freq_b[0][1].clone(), self.n),
-                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
-            );
-            masking::diff_precompute_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
             );
         }
