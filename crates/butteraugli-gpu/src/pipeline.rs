@@ -1104,53 +1104,55 @@ impl<R: Runtime> Butteraugli<R> {
         }
 
         // ── Step 2: MF/HF separation ──
-        // T_x.B (2026-05-17): fuse the 3 SIGMA_HF blurs into ONE
-        // 3-channel call (2 launches vs 6 — H+V each handle all
-        // channels at once).
-        // T_x.E (2026-05-17): for the B channel, write the blur
-        // output DIRECTLY into freq[2][2] (the eventual MF_B target).
-        // The V-blur reads only from the h-pass temp planes (no
-        // window into freq[2][2]), and each thread only writes its
-        // own idx, so reading freq[2][2] in the H pass + writing it
-        // in the V pass is safe per-thread. Eliminates the trailing
-        // copy_plane B → MF_B launch.
-        self.blur_3ch_via(
-            &freq[2][0],
-            &freq[2][1],
-            &freq[2][2],
-            &freq[0][0],
-            &freq[0][1],
-            &freq[2][2],
-            &self.temp1.clone(),
-            &self.temp2.clone(),
-            &self.mask_scratch.clone(),
-            SIGMA_HF,
-        );
-        // X (ch=0): HF_X = orig - blur, MF_X = remove_range(blur, REMOVE_MF_RANGE)
+        // T_x.G (2026-05-17): the SIGMA_HF V-blur and the 3 downstream
+        // split kernels (split_band_remove for X, split_band_amplify
+        // for Y, copy-equivalent for B) are all fused into a single
+        // V-pass kernel. The H-pass stays separate (it's a separable
+        // reduction). 4 launches saved per side per call.
+        let table_hf = &self.blur_tables[BlurKind::Hf as usize];
+        let table_hf_len = self.blur_table_lens[BlurKind::Hf as usize];
+        let radius_hf = self.blur_radii[BlurKind::Hf as usize];
         unsafe {
-            frequency::split_band_remove_inplace_kernel::launch_unchecked::<R>(
+            blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
                 ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][0].clone(), self.n),
-                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
-                REMOVE_MF_RANGE,
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(table_hf.clone(), table_hf_len),
+                self.width,
+                self.height,
+                radius_hf,
             );
-        }
-        // Y (ch=1): HF_Y = orig - blur, MF_Y = amplify_range(blur, ADD_MF_RANGE)
-        unsafe {
-            frequency::split_band_amplify_inplace_kernel::launch_unchecked::<R>(
+            // V-pass + 3 splits fused: reads h-blurred temp planes
+            // (window) + orig freq[2][X,Y] (idx-local); writes 5
+            // outputs (HF_X, HF_Y, MF_X, MF_Y, MF_B).
+            blur_lut::vertical_blur_3ch_hf_split_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
                 self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
+                ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
+                ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
-                ArrayArg::from_raw_parts(freq[0][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[1][0].clone(), self.n),
                 ArrayArg::from_raw_parts(freq[1][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][0].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][1].clone(), self.n),
+                ArrayArg::from_raw_parts(freq[2][2].clone(), self.n),
+                ArrayArg::from_raw_parts(table_hf.clone(), table_hf_len),
+                self.width,
+                self.height,
+                radius_hf,
+                REMOVE_MF_RANGE,
                 ADD_MF_RANGE,
             );
         }
-        // B (ch=2): no further work — the V-blur already wrote to MF_B.
 
         // suppress_x_by_y(HF_y → HF_x)
         unsafe {

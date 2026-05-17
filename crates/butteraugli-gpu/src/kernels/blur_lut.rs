@@ -437,6 +437,109 @@ pub fn vertical_blur_3ch_lf_split_lut_kernel(
     lf_b_out[idx] = lf_b_mixed;
 }
 
+/// 3-channel fused vertical blur + MF/HF split for the
+/// SIGMA_HF separation step.
+///
+/// Replaces the V-pass of `vertical_blur_3ch_lut_kernel` + 3 downstream
+/// split kernels:
+///
+///   X: blur(MF_X) → blurred_X
+///      → HF_X = orig_X - blurred_X                       (write freq[1][0])
+///      → MF_X = remove_range(blurred_X, REMOVE_MF_RANGE) (write freq[2][0])
+///   Y: blur(MF_Y) → blurred_Y
+///      → HF_Y = orig_Y - blurred_Y                       (write freq[1][1])
+///      → MF_Y = amplify_range(blurred_Y, ADD_MF_RANGE)   (write freq[2][1])
+///   B: blur(MF_B) → blurred_B
+///      → MF_B = blurred_B                                (write freq[2][2])
+///
+/// 5 outputs total (HF_X, HF_Y, MF_X, MF_Y, MF_B). Per-thread reads
+/// of `orig_*[idx]` are pointwise (no overlap with V-blur window) so
+/// reading and writing freq[2][ch] within the same thread is safe.
+///
+/// Saves 3 split-kernel launches per `separate_frequencies` HF step.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_3ch_hf_split_lut_kernel(
+    h_src_x: &Array<f32>,
+    h_src_y: &Array<f32>,
+    h_src_b: &Array<f32>,
+    orig_x: &Array<f32>,
+    orig_y: &Array<f32>,
+    out_hf_x: &mut Array<f32>,
+    out_hf_y: &mut Array<f32>,
+    out_mf_x: &mut Array<f32>,
+    out_mf_y: &mut Array<f32>,
+    out_mf_b: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+    remove_mf_range: f32,
+    add_mf_range: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let y = idx / w;
+    let x = idx - y * w;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y, r);
+    let end = u32::min((y + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y;
+    let b_idx = end + r + 1 - y;
+    let wsum = table[integ_off + b_idx] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y];
+        let off = i * w + x;
+        sum_x += h_src_x[off] * weight;
+        sum_y += h_src_y[off] * weight;
+        sum_b += h_src_b[off] * weight;
+        i += 1;
+    }
+    let bx = sum_x / wsum;
+    let by = sum_y / wsum;
+    let bb = sum_b / wsum;
+
+    // X: HF + MF (remove-range MF).
+    let ox = orig_x[idx];
+    out_hf_x[idx] = ox - bx;
+    let mx = if bx > remove_mf_range {
+        bx - remove_mf_range
+    } else if bx < -remove_mf_range {
+        bx + remove_mf_range
+    } else {
+        f32::new(0.0)
+    };
+    out_mf_x[idx] = mx;
+
+    // Y: HF + MF (amplify-range MF).
+    let oy = orig_y[idx];
+    out_hf_y[idx] = oy - by;
+    let my = if by > add_mf_range {
+        by + add_mf_range
+    } else if by < -add_mf_range {
+        by - add_mf_range
+    } else {
+        f32::new(2.0) * by
+    };
+    out_mf_y[idx] = my;
+
+    // B: MF only (no HF accumulated for B).
+    out_mf_b[idx] = bb;
+}
+
 /// 3-channel fused vertical blur (LUT variant).
 #[cube(launch_unchecked)]
 #[allow(clippy::too_many_arguments)]
