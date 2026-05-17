@@ -86,6 +86,38 @@ pub fn l2_diff_write_kernel(
     dst[idx] = weight * diff * diff;
 }
 
+/// Write-only L2 diff for THREE channels in a single launch — overwrites
+/// all three `dst` planes. Used by `compute_dc_diff` (which always runs
+/// all three LF channels back-to-back). Saves 2 kernel launches + 2
+/// launch-latency round-trips per iter vs three separate l2_diff_write
+/// launches. Each channel can have a different weight.
+#[cube(launch_unchecked)]
+pub fn l2_diff_write_3ch_kernel(
+    src1_0: &Array<f32>,
+    src2_0: &Array<f32>,
+    dst_0: &mut Array<f32>,
+    src1_1: &Array<f32>,
+    src2_1: &Array<f32>,
+    dst_1: &mut Array<f32>,
+    src1_2: &Array<f32>,
+    src2_2: &Array<f32>,
+    dst_2: &mut Array<f32>,
+    weight_0: f32,
+    weight_1: f32,
+    weight_2: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= dst_0.len() {
+        terminate!();
+    }
+    let d0 = src1_0[idx] - src2_0[idx];
+    let d1 = src1_1[idx] - src2_1[idx];
+    let d2 = src1_2[idx] - src2_2[idx];
+    dst_0[idx] = weight_0 * d0 * d0;
+    dst_1[idx] = weight_1 * d1 * d1;
+    dst_2[idx] = weight_2 * d2 * d2;
+}
+
 /// Batched broadcast l2_diff: `src1` is one plane (cached reference),
 /// `src2` and `dst` are `N` planes packed contiguously. Accumulates.
 #[cube(launch_unchecked)]
