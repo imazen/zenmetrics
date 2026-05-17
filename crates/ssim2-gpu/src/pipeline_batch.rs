@@ -24,13 +24,19 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
+use crate::kernels::{blur, downscale, error_maps, reduction, srgb, xyb};
 use crate::pipeline::{Ssim2, score_from_stats};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
 
 /// Per-scale batched buffer set. Each plane is `batch_size · n_pixels`
 /// f32, stored as `batch_size` contiguous planes (stride =
 /// `plane_stride = n_pixels`).
+///
+/// T_y.B.1: with the separable FIR D=5, the prior `dis_xyb_t` (raw
+/// distorted XYB transposed) and the `v_scratch` / `t_scratch`
+/// intermediate-orientation scratch are gone. The FIR runs in input
+/// orientation, so raw XYB is read directly by `error_maps`. The H
+/// pass needs ONE scratch per channel.
 struct BatchScale {
     width: u32,
     height: u32,
@@ -41,15 +47,14 @@ struct BatchScale {
 
     dis_lin: [cubecl::server::Handle; 3],
     dis_xyb: [cubecl::server::Handle; 3],
-    dis_xyb_t: [cubecl::server::Handle; 3],
     sigma22_in: [cubecl::server::Handle; 3],
     sigma12_in: [cubecl::server::Handle; 3],
     sigma22_full: [cubecl::server::Handle; 3],
     sigma12_full: [cubecl::server::Handle; 3],
     mu2_full: [cubecl::server::Handle; 3],
-    /// Rolling scratch buffers reused across the three two-pass blurs.
-    v_scratch: [cubecl::server::Handle; 3],
-    t_scratch: [cubecl::server::Handle; 3],
+    /// T_y.B.1: shared H-pass scratch reused across the three blurs
+    /// for one channel (sigma22 / sigma12 / mu2 H pass).
+    h_scratch: [cubecl::server::Handle; 3],
     /// Error map outputs — one batched plane each.
     ssim: [cubecl::server::Handle; 3],
     artifact: [cubecl::server::Handle; 3],
@@ -83,14 +88,12 @@ impl BatchScale {
             plane_stride: n as u32,
             dis_lin: alloc_3(client, n_total),
             dis_xyb: alloc_3(client, n_total),
-            dis_xyb_t: alloc_3(client, n_total),
             sigma22_in: alloc_3(client, n_total),
             sigma12_in: alloc_3(client, n_total),
             sigma22_full: alloc_3(client, n_total),
             sigma12_full: alloc_3(client, n_total),
             mu2_full: alloc_3(client, n_total),
-            v_scratch: alloc_3(client, n_total),
-            t_scratch: alloc_3(client, n_total),
+            h_scratch: alloc_3(client, n_total),
             ssim: alloc_3(client, n_total),
             artifact: alloc_3(client, n_total),
             detail: alloc_3(client, n_total),
@@ -453,10 +456,10 @@ impl<R: Runtime> Ssim2Batch<R> {
             }
         }
 
-        // 4. Blur each of {sigma22_in, sigma12_in, dis_xyb} via
-        //    batched-vpass → batched-transpose → batched-vpass into
-        //    {sigma22_full, sigma12_full, mu2_full}. Three blurs reuse
-        //    one (v_scratch, t_scratch) per channel.
+        // 4. T_y.B.1: blur each of {sigma22_in, sigma12_in, dis_xyb}
+        //    via batched separable FIR D=5 H→V into {sigma22_full,
+        //    sigma12_full, mu2_full}. Three blurs reuse the one
+        //    `h_scratch[ch]` per channel.
         for ch in 0..3 {
             self.blur_batched_two_pass(
                 s,
@@ -473,28 +476,14 @@ impl<R: Runtime> Ssim2Batch<R> {
             self.blur_batched_two_pass(s, ch, bs.dis_xyb[ch].clone(), bs.mu2_full[ch].clone());
         }
 
-        // 5. Transpose raw dis_xyb → dis_xyb_t (so error_maps reads
-        //    `distorted` in the same orientation as the blurred mu2/
-        //    sigma22/sigma12 buffers).
-        for ch in 0..3 {
-            unsafe {
-                transpose::transpose_batched_kernel::launch_unchecked::<R>(
-                    client,
-                    cube_count_1d(n_total),
-                    cube_dim_1d(),
-                    ArrayArg::from_raw_parts(bs.dis_xyb[ch].clone(), n_total),
-                    ArrayArg::from_raw_parts(bs.dis_xyb_t[ch].clone(), n_total),
-                    bs.width,
-                    bs.height,
-                    plane_stride,
-                );
-            }
-        }
+        // 5. T_y.B.1: FIR keeps raw XYB in input orientation; both
+        //    sides feed error_maps directly. No transpose step needed.
 
-        // 6. error_maps: ref-side broadcast (source=ref_xyb_t cached,
+        // 6. error_maps: ref-side broadcast (source=ref_xyb cached,
         //    mu1=mu1_full cached, sigma11=sigma11_full cached);
-        //    dis-side batched (distorted=dis_xyb_t, mu2=mu2_full,
-        //    sigma22=sigma22_full, sigma12=sigma12_full).
+        //    dis-side batched (distorted=dis_xyb, mu2=mu2_full,
+        //    sigma22=sigma22_full, sigma12=sigma12_full). All inputs
+        //    share original row-major orientation.
         let ref_xyb_t = self.inner.cached_ref_xyb_t(s);
         let mu1_full = self.inner.cached_mu1_full(s);
         let sigma11_full = self.inner.cached_sigma11_full(s);
@@ -505,7 +494,7 @@ impl<R: Runtime> Ssim2Batch<R> {
                     cube_count_1d(n_total),
                     cube_dim_1d(),
                     ArrayArg::from_raw_parts(ref_xyb_t[ch].clone(), ref_n),
-                    ArrayArg::from_raw_parts(bs.dis_xyb_t[ch].clone(), n_total),
+                    ArrayArg::from_raw_parts(bs.dis_xyb[ch].clone(), n_total),
                     ArrayArg::from_raw_parts(mu1_full[ch].clone(), ref_n),
                     ArrayArg::from_raw_parts(bs.mu2_full[ch].clone(), n_total),
                     ArrayArg::from_raw_parts(sigma11_full[ch].clone(), ref_n),
@@ -541,9 +530,9 @@ impl<R: Runtime> Ssim2Batch<R> {
         }
     }
 
-    /// Two-pass batched blur: `vpass(src) → v_scratch; transpose →
-    /// t_scratch; vpass(t_scratch) → dst`. Output stays in transposed
-    /// orientation (consumed by error_maps without a final transpose).
+    /// T_y.B.1: batched separable FIR D=5 blur. `src → blur_h_fir5
+    /// → h_scratch[ch] → blur_v_fir5 → dst`. All three buffers stay
+    /// in input row-major orientation.
     fn blur_batched_two_pass(
         &self,
         s: usize,
@@ -555,41 +544,29 @@ impl<R: Runtime> Ssim2Batch<R> {
         let plane_stride = bs.plane_stride;
         let n_total = bs.n * (self.batch_size as usize);
         let client = self.inner.client();
-        let v = bs.v_scratch[ch].clone();
-        let t = bs.t_scratch[ch].clone();
+        let h_scratch = bs.h_scratch[ch].clone();
 
         unsafe {
-            // 1. v-pass (per-image columns of width × height).
-            blur::blur_pass_batched_kernel::launch_unchecked::<R>(
+            // 1. Horizontal 5-tap FIR per image plane.
+            blur::blur_h_fir5_batched_kernel::launch_unchecked::<R>(
                 client,
-                blur_cube_count(bs.width, self.batch_size),
-                blur_cube_dim(),
+                fir_batched_cube_count(bs.n, self.batch_size),
+                fir_batched_cube_dim(),
                 ArrayArg::from_raw_parts(src, n_total),
-                ArrayArg::from_raw_parts(v.clone(), n_total),
+                ArrayArg::from_raw_parts(h_scratch.clone(), n_total),
                 bs.width,
                 bs.height,
                 plane_stride,
             );
-            // 2. transpose to height × width.
-            transpose::transpose_batched_kernel::launch_unchecked::<R>(
+            // 2. Vertical 5-tap FIR per image plane.
+            blur::blur_v_fir5_batched_kernel::launch_unchecked::<R>(
                 client,
-                cube_count_1d(n_total),
-                cube_dim_1d(),
-                ArrayArg::from_raw_parts(v, n_total),
-                ArrayArg::from_raw_parts(t.clone(), n_total),
-                bs.width,
-                bs.height,
-                plane_stride,
-            );
-            // 3. v-pass on transposed: width swapped with height.
-            blur::blur_pass_batched_kernel::launch_unchecked::<R>(
-                client,
-                blur_cube_count(bs.height, self.batch_size),
-                blur_cube_dim(),
-                ArrayArg::from_raw_parts(t, n_total),
+                fir_batched_cube_count(bs.n, self.batch_size),
+                fir_batched_cube_dim(),
+                ArrayArg::from_raw_parts(h_scratch, n_total),
                 ArrayArg::from_raw_parts(dst, n_total),
-                bs.height,
                 bs.width,
+                bs.height,
                 plane_stride,
             );
         }
@@ -638,10 +615,14 @@ fn cube_count_1d(n: usize) -> CubeCount {
 fn cube_dim_1d() -> CubeDim {
     CubeDim::new_1d(256)
 }
-fn blur_cube_count(width: u32, batch_size: u32) -> CubeCount {
-    let cubes = width.div_ceil(blur::BLOCK_WIDTH);
-    CubeCount::Static(cubes.max(1), batch_size, 1)
+/// T_y.B.1: batched FIR launch — one cube per (256-pixel chunk) ×
+/// `batch_size` image. The kernel uses `CUBE_POS_Y` to pick which
+/// image plane; `CUBE_POS_X` to pick which chunk within the plane.
+fn fir_batched_cube_count(n_per_plane: usize, batch_size: u32) -> CubeCount {
+    const TPB: u32 = 256;
+    let x_cubes = (n_per_plane as u32).div_ceil(TPB).max(1);
+    CubeCount::Static(x_cubes, batch_size, 1)
 }
-fn blur_cube_dim() -> CubeDim {
-    CubeDim::new_1d(blur::BLOCK_WIDTH)
+fn fir_batched_cube_dim() -> CubeDim {
+    CubeDim::new_1d(256)
 }

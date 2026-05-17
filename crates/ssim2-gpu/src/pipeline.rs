@@ -13,13 +13,12 @@
 //!   2. linear → positive XYB.
 //!   3. sigma11 = ref²; sigma22 = dis²; sigma12 = ref·dis.
 //!   4. Blur 5 planes: ref, dis, sigma11, sigma22, sigma12.
-//!      Implementation: vertical IIR pass → transpose → vertical IIR pass.
-//!      Output is in transposed orientation (saves a final transpose);
-//!      compute_error_maps + reduction don't care about orientation.
-//!   5. Transpose ref/dis (raw, unblurred) so error_maps can read them
-//!      alongside the already-transposed mu1/mu2/sigma planes.
-//!   6. compute_error_maps → ssim, artifact, detail_loss (per channel).
-//!   7. Reduce each → (Σ, Σ⁴) per (scale, channel, error-map).
+//!      T_y.B.1 (2026-05-17): separable FIR D=5 (`blur_h_fir5_kernel`
+//!      then `blur_v_fir5_kernel`). Output stays in input orientation
+//!      — no transpose between passes, no transpose of raw XYB.
+//!   5. compute_error_maps → ssim, artifact, detail_loss (per channel).
+//!      All inputs share row-major original orientation.
+//!   6. Reduce each → (Σ, Σ⁴) per (scale, channel, error-map).
 //!
 //! Final score: weighted dot product of all 108 sub-stats with the
 //! published SSIMULACRA2 weights, then the standard sigmoid-like remap.
@@ -27,7 +26,7 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
+use crate::kernels::{blur, downscale, error_maps, reduction, srgb, xyb};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
 
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
@@ -51,36 +50,21 @@ struct Scale {
     sigma22_in: [cubecl::server::Handle; 3], // dis·dis
     sigma12_in: [cubecl::server::Handle; 3], // ref·dis
 
-    /// First-pass (vertical-walk) blur outputs. Same orientation as input.
-    sigma11_v: [cubecl::server::Handle; 3],
-    sigma22_v: [cubecl::server::Handle; 3],
-    sigma12_v: [cubecl::server::Handle; 3],
-    mu1_v: [cubecl::server::Handle; 3],
-    mu2_v: [cubecl::server::Handle; 3],
+    /// T_y.B.1: shared intermediate for the H pass of the separable
+    /// FIR. Each blurred plane runs H→`h_scratch[ch]`→V→`*_full`,
+    /// and we only need one channel's worth of intermediate live at a
+    /// time since the two passes are issued sequentially per channel.
+    /// One per channel keeps the launches independent across channels.
+    h_scratch: [cubecl::server::Handle; 3],
 
-    /// Transposed first-pass outputs (`width` becomes height and vice
-    /// versa, stored as a `height × width` row-major buffer of size
-    /// `n` floats — same total length).
-    sigma11_t: [cubecl::server::Handle; 3],
-    sigma22_t: [cubecl::server::Handle; 3],
-    sigma12_t: [cubecl::server::Handle; 3],
-    mu1_t: [cubecl::server::Handle; 3],
-    mu2_t: [cubecl::server::Handle; 3],
-
-    /// Second-pass (vertical-walk on transposed) outputs. Orientation
-    /// is "transposed" — for a `width × height` source these now live
-    /// in `height × width` row-major.
+    /// Final blur outputs (H then V), row-major in original orientation.
     sigma11_full: [cubecl::server::Handle; 3],
     sigma22_full: [cubecl::server::Handle; 3],
     sigma12_full: [cubecl::server::Handle; 3],
     mu1_full: [cubecl::server::Handle; 3],
     mu2_full: [cubecl::server::Handle; 3],
 
-    /// Raw XYB transposed (input to compute_error_maps' `source`/`distorted`).
-    ref_xyb_t: [cubecl::server::Handle; 3],
-    dis_xyb_t: [cubecl::server::Handle; 3],
-
-    /// Error maps (in transposed orientation).
+    /// Error maps (in original orientation).
     ssim: [cubecl::server::Handle; 3],
     artifact: [cubecl::server::Handle; 3],
     detail: [cubecl::server::Handle; 3],
@@ -112,23 +96,12 @@ impl Scale {
             sigma11_in: alloc_3(client, n),
             sigma22_in: alloc_3(client, n),
             sigma12_in: alloc_3(client, n),
-            sigma11_v: alloc_3(client, n),
-            sigma22_v: alloc_3(client, n),
-            sigma12_v: alloc_3(client, n),
-            mu1_v: alloc_3(client, n),
-            mu2_v: alloc_3(client, n),
-            sigma11_t: alloc_3(client, n),
-            sigma22_t: alloc_3(client, n),
-            sigma12_t: alloc_3(client, n),
-            mu1_t: alloc_3(client, n),
-            mu2_t: alloc_3(client, n),
+            h_scratch: alloc_3(client, n),
             sigma11_full: alloc_3(client, n),
             sigma22_full: alloc_3(client, n),
             sigma12_full: alloc_3(client, n),
             mu1_full: alloc_3(client, n),
             mu2_full: alloc_3(client, n),
-            ref_xyb_t: alloc_3(client, n),
-            dis_xyb_t: alloc_3(client, n),
             ssim: alloc_3(client, n),
             artifact: alloc_3(client, n),
             detail: alloc_3(client, n),
@@ -257,15 +230,21 @@ impl<R: Runtime> Ssim2<R> {
 
     /// Cached reference handles needed by `Ssim2Batch`. After
     /// `set_reference`, these hold:
-    /// - `ref_xyb_t[ch]`: transposed raw reference XYB (`source` input
-    ///   to `error_maps`).
-    /// - `mu1_full[ch]`: fully-blurred reference XYB (transposed
-    ///   orientation, `mu1` input to `error_maps`).
+    /// - `cached_ref_xyb`: raw reference XYB (used as `source` input
+    ///   to `error_maps` AND as the broadcast multiplicand for
+    ///   `sigma12 = ref_xyb · dis_xyb_batched`).
+    /// - `mu1_full[ch]`: fully-blurred reference XYB (`mu1` input to
+    ///   `error_maps`).
     /// - `sigma11_full[ch]`: fully-blurred ref·ref (`sigma11` input).
-    /// - `ref_xyb[ch]`: raw reference XYB (used by `Ssim2Batch` for
-    ///   the broadcast `sigma12 = ref_xyb · dis_xyb_batched` mul).
+    ///
+    /// T_y.B.1: the separable FIR keeps everything in original
+    /// row-major orientation, so the previously-distinct
+    /// `cached_ref_xyb_t` (transposed) and `cached_ref_xyb` (raw)
+    /// accessors now both return the same buffer. Kept as two named
+    /// accessors so `Ssim2Batch`'s call sites (`source` vs broadcast-
+    /// mul operand) read the same semantically as they always did.
     pub(crate) fn cached_ref_xyb_t(&self, s: usize) -> &[cubecl::server::Handle; 3] {
-        &self.scales[s].ref_xyb_t
+        &self.scales[s].ref_xyb
     }
     pub(crate) fn cached_mu1_full(&self, s: usize) -> &[cubecl::server::Handle; 3] {
         &self.scales[s].mu1_full
@@ -387,10 +366,9 @@ impl<R: Runtime> Ssim2<R> {
             self.run_xyb(s, true);
             self.run_self_products(s, true);
             self.run_blur_pair(s, true);
-            // Pre-transpose the raw reference XYB so subsequent
-            // compute_with_reference / Ssim2Batch::compute_batch calls
-            // can read it directly without re-transposing.
-            self.run_transpose_raw_xyb_pair(s, true, false);
+            // T_y.B.1: FIR keeps raw XYB in input orientation, so the
+            // ref_xyb buffer doubles as the (formerly transposed)
+            // `source` input to error_maps. No transpose step needed.
         }
         self.has_cached_reference = true;
         Ok(())
@@ -439,8 +417,9 @@ impl<R: Runtime> Ssim2<R> {
             self.run_self_products(s, false); // sigma22
             self.run_cross_product(s); // sigma12
             self.run_blur_dis_only(s);
-            // ref_xyb_t was cached by set_reference; only transpose dis.
-            self.run_transpose_raw_xyb_pair(s, false, true);
+            // T_y.B.1: FIR keeps raw XYB in input orientation; both
+            // ref_xyb (cached) and dis_xyb (just computed) feed
+            // error_maps directly. No transpose step needed.
             self.run_error_maps(s);
             self.run_reductions(s);
         }
@@ -472,22 +451,6 @@ impl<R: Runtime> Ssim2<R> {
     }
     fn cube_dim_1d() -> CubeDim {
         CubeDim::new_1d(256)
-    }
-    fn blur_cube_count(width: u32) -> CubeCount {
-        let cubes = width.div_ceil(blur::BLOCK_WIDTH);
-        CubeCount::Static(cubes.max(1), 1, 1)
-    }
-    fn blur_cube_dim() -> CubeDim {
-        CubeDim::new_1d(blur::BLOCK_WIDTH)
-    }
-    /// T_x.B (2026-05-17): 2D launch geometry for the tiled transpose.
-    fn transpose_cube_count(width: u32, height: u32) -> CubeCount {
-        let x_cubes = width.div_ceil(transpose::TILE_DIM).max(1);
-        let y_cubes = height.div_ceil(transpose::TILE_DIM).max(1);
-        CubeCount::Static(x_cubes, y_cubes, 1)
-    }
-    fn transpose_cube_dim() -> CubeDim {
-        CubeDim::new_2d(transpose::TPB_X, transpose::TPB_Y)
     }
 
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
@@ -620,92 +583,44 @@ impl<R: Runtime> Ssim2<R> {
         self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
     }
 
-    /// One-plane two-pass blur: `src → v_pass → tiled-transpose → t_buf →
-    /// v_pass → full`. Caller supplies all 4 same-channel buffers.
+    /// T_y.B.1: one-plane separable FIR D=5 blur.
+    /// `src → blur_h_fir5 → h_scratch[ch] → blur_v_fir5 → full`.
+    /// All three buffers are row-major in input orientation; the
+    /// kernel emits one output per pixel and reflect-pads the edges.
+    ///
+    /// Caller supplies the H-scratch buffer dedicated to this channel
+    /// so independent channels can issue their H/V launches without
+    /// stalling on a shared intermediate.
     fn blur_plane_two_pass(
         &self,
         width: u32,
         height: u32,
         n: usize,
         src: &cubecl::server::Handle,
-        v_buf: &cubecl::server::Handle,
-        t_buf: &cubecl::server::Handle,
+        h_scratch: &cubecl::server::Handle,
         full: &cubecl::server::Handle,
     ) {
         unsafe {
-            // 1. v-pass on src (walks columns of width × height) → v_buf.
-            blur::blur_pass_kernel::launch_unchecked::<R>(
+            // 1. Horizontal 5-tap FIR → h_scratch.
+            blur::blur_h_fir5_kernel::launch_unchecked::<R>(
                 &self.client,
-                Self::blur_cube_count(width),
-                Self::blur_cube_dim(),
+                Self::cube_count_1d(n),
+                Self::cube_dim_1d(),
                 ArrayArg::from_raw_parts(src.clone(), n),
-                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                ArrayArg::from_raw_parts(h_scratch.clone(), n),
                 width,
                 height,
             );
-            // 2. tiled transpose v_buf → t_buf (now height × width).
-            //    T_x.B (2026-05-17): 32×32 LDS tile with +1 col pad to
-            //    avoid bank conflicts; both loads and stores coalesced.
-            //    Was ~600 µs scale-0 (uncoalesced); now ~150 µs.
-            transpose::transpose_kernel::launch_unchecked::<R>(
+            // 2. Vertical 5-tap FIR → full.
+            blur::blur_v_fir5_kernel::launch_unchecked::<R>(
                 &self.client,
-                Self::transpose_cube_count(width, height),
-                Self::transpose_cube_dim(),
-                ArrayArg::from_raw_parts(v_buf.clone(), n),
-                ArrayArg::from_raw_parts(t_buf.clone(), n),
-                width,
-                height,
-            );
-            // 3. v-pass on t_buf (walks columns of height × width) → full.
-            //    Note: the transposed buffer's "width" is the original height.
-            blur::blur_pass_kernel::launch_unchecked::<R>(
-                &self.client,
-                Self::blur_cube_count(height),
-                Self::blur_cube_dim(),
-                ArrayArg::from_raw_parts(t_buf.clone(), n),
+                Self::cube_count_1d(n),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(h_scratch.clone(), n),
                 ArrayArg::from_raw_parts(full.clone(), n),
-                height,
                 width,
+                height,
             );
-        }
-    }
-
-    /// Pointwise transpose for the `ref_xyb` / `dis_xyb` planes (raw,
-    /// unblurred — used as `source` / `distorted` inputs to compute_error_maps).
-    fn run_transpose_raw_xyb_pair(&self, scale: usize, do_ref: bool, do_dis: bool) {
-        let s = &self.scales[scale];
-        let n = s.n;
-        let w = s.width;
-        let h = s.height;
-        if do_ref {
-            for ch in 0..3 {
-                unsafe {
-                    transpose::transpose_kernel::launch_unchecked::<R>(
-                        &self.client,
-                        Self::transpose_cube_count(w, h),
-                        Self::transpose_cube_dim(),
-                        ArrayArg::from_raw_parts(s.ref_xyb[ch].clone(), n),
-                        ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), n),
-                        w,
-                        h,
-                    );
-                }
-            }
-        }
-        if do_dis {
-            for ch in 0..3 {
-                unsafe {
-                    transpose::transpose_kernel::launch_unchecked::<R>(
-                        &self.client,
-                        Self::transpose_cube_count(w, h),
-                        Self::transpose_cube_dim(),
-                        ArrayArg::from_raw_parts(s.dis_xyb[ch].clone(), n),
-                        ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), n),
-                        w,
-                        h,
-                    );
-                }
-            }
         }
     }
 
@@ -723,8 +638,7 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.sigma11_in[ch],
-                    &s.sigma11_v[ch],
-                    &s.sigma11_t[ch],
+                    &s.h_scratch[ch],
                     &s.sigma11_full[ch],
                 );
                 self.blur_plane_two_pass(
@@ -732,8 +646,7 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.ref_xyb[ch],
-                    &s.mu1_v[ch],
-                    &s.mu1_t[ch],
+                    &s.h_scratch[ch],
                     &s.mu1_full[ch],
                 );
             }
@@ -744,8 +657,7 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.sigma22_in[ch],
-                    &s.sigma22_v[ch],
-                    &s.sigma22_t[ch],
+                    &s.h_scratch[ch],
                     &s.sigma22_full[ch],
                 );
                 self.blur_plane_two_pass(
@@ -753,8 +665,7 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.dis_xyb[ch],
-                    &s.mu2_v[ch],
-                    &s.mu2_t[ch],
+                    &s.h_scratch[ch],
                     &s.mu2_full[ch],
                 );
             }
@@ -775,8 +686,7 @@ impl<R: Runtime> Ssim2<R> {
                 h,
                 n,
                 &s.sigma22_in[ch],
-                &s.sigma22_v[ch],
-                &s.sigma22_t[ch],
+                &s.h_scratch[ch],
                 &s.sigma22_full[ch],
             );
             self.blur_plane_two_pass(
@@ -784,8 +694,7 @@ impl<R: Runtime> Ssim2<R> {
                 h,
                 n,
                 &s.dis_xyb[ch],
-                &s.mu2_v[ch],
-                &s.mu2_t[ch],
+                &s.h_scratch[ch],
                 &s.mu2_full[ch],
             );
             self.blur_plane_two_pass(
@@ -793,8 +702,7 @@ impl<R: Runtime> Ssim2<R> {
                 h,
                 n,
                 &s.sigma12_in[ch],
-                &s.sigma12_v[ch],
-                &s.sigma12_t[ch],
+                &s.h_scratch[ch],
                 &s.sigma12_full[ch],
             );
         }
@@ -811,8 +719,7 @@ impl<R: Runtime> Ssim2<R> {
                 s.height,
                 s.n,
                 &s.sigma12_in[ch],
-                &s.sigma12_v[ch],
-                &s.sigma12_t[ch],
+                &s.h_scratch[ch],
                 &s.sigma12_full[ch],
             );
         }
@@ -826,8 +733,10 @@ impl<R: Runtime> Ssim2<R> {
                     &self.client,
                     Self::cube_count_1d(s.n),
                     Self::cube_dim_1d(),
-                    ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), s.n),
-                    ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), s.n),
+                    // T_y.B.1: FIR keeps everything in original
+                    // orientation; raw XYB feeds error_maps directly.
+                    ArrayArg::from_raw_parts(s.ref_xyb[ch].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.dis_xyb[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.mu1_full[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.mu2_full[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.sigma11_full[ch].clone(), s.n),
@@ -886,14 +795,14 @@ impl<R: Runtime> Ssim2<R> {
         self.pointwise_mul(scale, &s.ref_xyb, &s.ref_xyb, &s.sigma11_in);
         self.pointwise_mul(scale, &s.dis_xyb, &s.dis_xyb, &s.sigma22_in);
         self.pointwise_mul(scale, &s.ref_xyb, &s.dis_xyb, &s.sigma12_in);
-        // 3. Blur all 5: sigma11/22/12 + ref_xyb (mu1) + dis_xyb (mu2).
+        // 3. T_y.B.1 FIR D=5: blur all 5 planes (sigma11/22/12 +
+        //    ref_xyb=mu1 + dis_xyb=mu2). Output stays in input
+        //    orientation; no intermediate transpose.
         self.run_blur_full(scale);
-        // 4. Transpose raw XYB so error_maps reads them in the same
-        //    orientation as the (transposed) blurred buffers.
-        self.run_transpose_raw_xyb_pair(scale, true, true);
-        // 5. Per-pixel error maps.
+        // 4. Per-pixel error maps. All inputs (raw + blurred) share
+        //    original row-major orientation.
         self.run_error_maps(scale);
-        // 6. Reduce to (Σ, Σ⁴) per (channel × map type).
+        // 5. Reduce to (Σ, Σ⁴) per (channel × map type).
         self.run_reductions(scale);
     }
 

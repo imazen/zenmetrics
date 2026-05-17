@@ -125,8 +125,24 @@ fn parity_jpeg_corpus() {
         } else {
             0.0
         };
+        // T_y.B.1 (2026-05-17): the GPU pipeline now uses the
+        // separable FIR D=5 Gaussian (per Kanetaka et al., IWAIT
+        // 2026 Table 2: D=5 SROCC 0.890387 > libjxl reference
+        // 0.889297 on CID22). The CPU `ssimulacra2` crate retains
+        // the original Charalampidis recursive Gaussian, whose
+        // effective impulse-response support is wider than σ=1.5
+        // (radius ≈ 5 vs FIR radius 2), so per-image scores
+        // diverge non-trivially at low q. The paper explicitly
+        // notes: "we do not evaluate differences between the
+        // reference and proposed implementations" — only SROCC vs
+        // MOS. Tolerance below is loose to cover the kernel-shape
+        // mismatch while still catching real regressions (e.g. a
+        // zero-out, NaN, or wrong-channel bug). Tighter equivalence
+        // checks happen via `cached_reference_matches_direct` and
+        // `batch_matches_single_image` (which compare GPU paths
+        // to each other, all using the FIR).
         assert!(
-            d < 0.1 || rel < 0.5,
+            d < 25.0 || rel < 20.0,
             "q{q}: cpu={cpu:.4}, gpu={gpu:.4}, Δ={d:.5}, rel={rel:.3}%"
         );
     }
@@ -452,8 +468,14 @@ fn dim_odd_non_square() {
     } else {
         0.0
     };
+    // T_y.B.1 (2026-05-17): see parity_jpeg_corpus's tolerance
+    // comment — the GPU FIR D=5 has a tighter effective support
+    // than the CPU IIR's recursive Gaussian (~5-radius), so the
+    // per-image score diverges at heavy distortion. Loose bound
+    // catches real regressions; tight equivalence is covered by
+    // the GPU-vs-GPU tests below.
     assert!(
-        d < 0.1 || rel < 0.5,
+        d < 25.0 || rel < 20.0,
         "200×150: cpu={cpu:.4}, gpu={gpu:.4}, Δ={d:.5}, rel={rel:.3}%"
     );
 }
@@ -480,8 +502,13 @@ fn dim_minimum_supported() {
     } else {
         0.0
     };
+    // T_y.B.1: FIR-vs-IIR drift, see parity_jpeg_corpus. Very small
+    // images (16×16) have a disproportionate border fraction, so the
+    // boundary-handling divergence dominates — but the zero-padding
+    // convention matches the CPU's IIR seeded-to-zero behavior so the
+    // delta still stays bounded.
     assert!(
-        d < 0.5 || rel < 5.0,
+        d < 25.0 || rel < 25.0,
         "16×16: cpu={cpu:.4}, gpu={gpu:.4}, Δ={d:.5}, rel={rel:.3}%"
     );
     // Only 2 active scales (16, 8) — confirm.
@@ -508,8 +535,9 @@ fn dim_larger_512x384() {
     } else {
         0.0
     };
+    // T_y.B.1: FIR-vs-IIR drift, see parity_jpeg_corpus.
     assert!(
-        d < 0.1 || rel < 0.5,
+        d < 25.0 || rel < 20.0,
         "512×384: cpu={cpu:.4}, gpu={gpu:.4}, Δ={d:.5}, rel={rel:.3}%"
     );
 }
