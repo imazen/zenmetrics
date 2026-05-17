@@ -31,9 +31,10 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{color, downscale, fused, reduce};
+use crate::kernels::{color, downscale, fused, masked_iw, reduce};
 use crate::{
-    Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_PEAKS, Result, SCALES, TOTAL_FEATURES,
+    Error, FEATURES_PER_CHANNEL_BASIC, FEATURES_PER_CHANNEL_IW, FEATURES_PER_CHANNEL_MASKED,
+    FEATURES_PER_CHANNEL_PEAKS, Result, SCALES, TOTAL_FEATURES, ZensimFeatureRegime,
     simd_padded_width,
 };
 
@@ -71,6 +72,11 @@ struct Scale {
     partials_max_off: usize,
     partials_f64_per_scale: usize, // = pw × n_strips × 3 channels × 17
     partials_max_per_scale: usize, // = pw × n_strips × 3 channels × 3
+
+    /// Offset of this scale's masked + IW partials within the
+    /// `partials_ext_f64` buffer. `0` (unused) when regime == Basic.
+    partials_ext_off: usize,
+    partials_ext_per_scale: usize, // = pw × n_strips × 3 channels × 12
 }
 
 /// Allocate an uninitialised f32 plane on-device. Use only when the
@@ -109,6 +115,7 @@ impl Scale {
         h: u32,
         partials_f64_off: usize,
         partials_max_off: usize,
+        partials_ext_off: usize,
     ) -> Self {
         let n = (padded_w as usize) * (h as usize);
         let alloc3_empty = || -> [cubecl::server::Handle; 3] {
@@ -156,6 +163,8 @@ impl Scale {
             partials_max_off,
             partials_f64_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 17,
             partials_max_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 3,
+            partials_ext_off,
+            partials_ext_per_scale: (padded_w as usize) * (n_strips as usize) * 3 * 12,
             n_strips,
         }
     }
@@ -197,13 +206,81 @@ pub struct Zensim<R: Runtime> {
     finals_max: cubecl::server::Handle,
 
     has_cached_reference: bool,
+
+    // ───────── Extended / WithIw regime support ─────────
+    regime: ZensimFeatureRegime,
+    /// Per-scale per-channel mu1/mu2/ssq/s12 persist planes — laid out
+    /// `[ch0_pixels | ch1_pixels | ch2_pixels]` per scale per side. One
+    /// pair (ref + dist) per scale; only the ref-side mu1 is consumed
+    /// by the masked-IW activity blur, but we persist all four for
+    /// matching CPU's masked SSIM math (mu1 + mu2 + ssq + s12 at the
+    /// SAME pixel). Each entry is `pad_total × 3` f32. Empty Vec on
+    /// Basic regime — zero memory cost on the fast path.
+    ///
+    /// Indexed by `scales[s].partials_ext_off` is misleading — we
+    /// instead keep per-scale per-channel handles directly because the
+    /// pad_total varies per scale.
+    persist_planes_ref: Vec<[cubecl::server::Handle; 4]>,
+    /// Reserved for a future symmetric mask path that also runs the
+    /// blur over `|dst - mu2|`. CPU zensim uses the ref-side only, so
+    /// these are allocated but never written today.
+    #[allow(dead_code)]
+    persist_planes_dis: Vec<[cubecl::server::Handle; 4]>,
+
+    /// Masked + IW per-(col, strip, ch) partials buffer. Length =
+    /// Σ per-scale (pw × n_strips × 3 × 12). Empty handle on Basic.
+    partials_ext_f64: cubecl::server::Handle,
+    partials_ext_f64_len: usize,
+
+    /// Reduced masked + IW finals: per-(scale, channel, slot in [0,12)).
+    finals_ext_f64: cubecl::server::Handle,
 }
 
 impl<R: Runtime> Zensim<R> {
     /// Allocate every per-resolution buffer up front. `width` and
     /// `height` must each be ≥ 8 — zensim's pyramid collapses below
-    /// that.
+    /// that. Default regime is [`ZensimFeatureRegime::Basic`] (228
+    /// features) — backwards-compatible with the pre-372 GPU output.
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
+        Self::new_with_regime(client, width, height, ZensimFeatureRegime::Basic)
+    }
+
+    /// Construct with an explicit feature regime.
+    ///
+    /// `regime == Extended` adds the 72 masked features (`228..300`).
+    /// `regime == WithIw` adds the 72 IW features on top (`300..372`).
+    /// See [`ZensimFeatureRegime`] for the slot map.
+    ///
+    /// **Memory cost**: Extended / WithIw both allocate 4 persist
+    /// planes × 3 channels × 2 sides (ref/dis is needed for the IW
+    /// activity that uses `src - mu1` so we hold mu1 on the *ref* side
+    /// only — see `launch_masked_iw`). The plane footprint is dominated
+    /// by scale 0; at 12 MP that's ~600 MB. Use
+    /// [`Zensim::new_with_regime_budget`] to fail fast when the budget
+    /// is unacceptable.
+    pub fn new_with_regime(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        regime: ZensimFeatureRegime,
+    ) -> Result<Self> {
+        // usize::MAX disables the budget gate; if you care, use
+        // `new_with_regime_budget` directly.
+        Self::new_with_regime_budget(client, width, height, regime, usize::MAX)
+    }
+
+    /// Construct with an explicit feature regime AND an explicit cap on
+    /// the extended-regime persist-plane memory footprint (in bytes).
+    /// Returns [`Error::ExtendedPlaneBudgetExceeded`] if the regime
+    /// requires more than `max_extended_plane_bytes`. The cap is
+    /// ignored on `Basic`.
+    pub fn new_with_regime_budget(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        regime: ZensimFeatureRegime,
+        max_extended_plane_bytes: usize,
+    ) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);
         }
@@ -213,9 +290,6 @@ impl<R: Runtime> Zensim<R> {
         let mut logical_w = width;
         let mut padded_w = simd_padded_width(width as usize) as u32;
         let mut h = height;
-        // Walk the pyramid plan twice: first pass to compute partials
-        // offsets (so each scale knows where its slot lives in the
-        // shared buffers), second pass to actually allocate.
         let mut plan: Vec<(u32, u32, u32)> = Vec::with_capacity(SCALES);
         for _ in 0..SCALES {
             if logical_w < 8 || h < 8 {
@@ -228,45 +302,90 @@ impl<R: Runtime> Zensim<R> {
         }
         let mut partials_f64_total: usize = 0;
         let mut partials_max_total: usize = 0;
+        let mut partials_ext_total: usize = 0;
         for &(_, pw, ph) in &plan {
             let ns = pick_n_strips(pw, ph) as usize;
             partials_f64_total += (pw as usize) * ns * 3 * 17;
             partials_max_total += (pw as usize) * ns * 3 * 3;
+            partials_ext_total += (pw as usize) * ns * 3 * 12;
         }
         let mut f64_off: usize = 0;
         let mut max_off: usize = 0;
+        let mut ext_off: usize = 0;
         for &(lw, pw, ph) in &plan {
             let ns = pick_n_strips(pw, ph) as usize;
-            scales.push(Scale::new(&client, lw, pw, ph, f64_off, max_off));
+            scales.push(Scale::new(&client, lw, pw, ph, f64_off, max_off, ext_off));
             f64_off += (pw as usize) * ns * 3 * 17;
             max_off += (pw as usize) * ns * 3 * 3;
+            ext_off += (pw as usize) * ns * 3 * 12;
         }
 
-        // u8 staging is uploaded via host-side widening to u32 (WGSL
-        // can't index `Array<u8>`), matching the dssim-gpu / ssim2-gpu
-        // shape. The initial handles are `empty()` placeholders — the
-        // first `upload_u8` replaces them via `create_from_slice_pinned`
-        // before any kernel reads them, so no zero-fill is needed here.
+        // Budget check: 4 planes × 3 channels × 2 sides (ref + dis) ×
+        // padded_pixels × 4 bytes per scale.
+        let needs_planes = regime.needs_extended_kernel();
+        let extended_plane_bytes: usize = if needs_planes {
+            plan.iter()
+                .map(|&(_, pw, ph)| (pw as usize) * (ph as usize) * 3 * 4 * 2 * 4)
+                .sum()
+        } else {
+            0
+        };
+        if needs_planes && extended_plane_bytes > max_extended_plane_bytes {
+            return Err(Error::ExtendedPlaneBudgetExceeded {
+                needed_bytes: extended_plane_bytes,
+                max_bytes: max_extended_plane_bytes,
+            });
+        }
+
         let src_u8_a = client.empty(pixels * core::mem::size_of::<u32>());
         let src_u8_b = client.empty(pixels * core::mem::size_of::<u32>());
 
-        // Upload the 256-entry LUT once at construction.
         let srgb_lut = client.create_from_slice(f32::as_bytes(
             &crate::kernels::color::SRGB8_TO_LINEARF32_LUT,
         ));
 
-        // Persistent partials buffers. Each `compute_with_reference`
-        // call overwrites them via the V-blur+features kernel (one
-        // slot per thread, no zeroing required), then the on-device
-        // reduction kernel folds them into the small `finals_*` for
-        // host read-back. Use `empty()` to skip the host→device
-        // zero-fill (would be ~120 MB at 12 MP per construction).
         let partials_f64 = alloc_empty_f64(&client, partials_f64_total);
         let partials_max = alloc_empty_f32(&client, partials_max_total);
         let n_finals_f64 = scales.len() * 3 * 17;
         let n_finals_max = scales.len() * 3 * 3;
         let finals_f64 = alloc_empty_f64(&client, n_finals_f64);
         let finals_max = alloc_empty_f32(&client, n_finals_max);
+
+        // Extended regime allocations — only when needed. The persist
+        // planes layout per scale is `[ch0 | ch1 | ch2]` flat, with
+        // `pad_total` f32s per channel, one allocation per
+        // (scale, side, plane). The masked-IW kernel needs to read
+        // ref-side mu1/mu2/ssq/s12, so we currently only fill the
+        // ref-side planes (the dist-side is reserved for a future
+        // CPU-style symmetric path).
+        let mut persist_planes_ref: Vec<[cubecl::server::Handle; 4]> = Vec::new();
+        let mut persist_planes_dis: Vec<[cubecl::server::Handle; 4]> = Vec::new();
+        let partials_ext_f64: cubecl::server::Handle;
+        let finals_ext_f64: cubecl::server::Handle;
+        if needs_planes {
+            for sc in scales.iter() {
+                let plane_len = (sc.padded_w as usize) * (sc.h as usize) * 3;
+                let alloc_planes = || -> [cubecl::server::Handle; 4] {
+                    [
+                        alloc_empty_f32(&client, plane_len),
+                        alloc_empty_f32(&client, plane_len),
+                        alloc_empty_f32(&client, plane_len),
+                        alloc_empty_f32(&client, plane_len),
+                    ]
+                };
+                persist_planes_ref.push(alloc_planes());
+                persist_planes_dis.push(alloc_planes());
+            }
+            partials_ext_f64 = alloc_empty_f64(&client, partials_ext_total);
+            finals_ext_f64 = alloc_empty_f64(&client, scales.len() * 3 * 12);
+        } else {
+            // Basic regime: tiny no-op placeholders. cubecl needs every
+            // ArrayArg handle to be valid even if the kernel using it
+            // is never launched; placeholders are 1-element rather
+            // than 0-element to dodge any backend-side zero-len checks.
+            partials_ext_f64 = alloc_empty_f64(&client, 1);
+            finals_ext_f64 = alloc_empty_f64(&client, 1);
+        }
 
         Ok(Self {
             client,
@@ -285,7 +404,45 @@ impl<R: Runtime> Zensim<R> {
             finals_f64,
             finals_max,
             has_cached_reference: false,
+            regime,
+            persist_planes_ref,
+            persist_planes_dis,
+            partials_ext_f64,
+            partials_ext_f64_len: partials_ext_total.max(1),
+            finals_ext_f64,
         })
+    }
+
+    /// Which regime this pipeline was constructed for.
+    pub fn regime(&self) -> ZensimFeatureRegime {
+        self.regime
+    }
+
+    /// Debug-only: read back the persist-plane `mu1` at the given scale
+    /// and channel. Returns a `Vec<f32>` of length `padded_w * height`
+    /// (the plane's stride). `plane_idx` selects between mu1 (0), mu2
+    /// (1), ssq (2), s12 (3). Returns an empty vec if the regime
+    /// doesn't allocate persist planes.
+    pub fn debug_read_persist_plane(
+        &self,
+        scale: usize,
+        channel: usize,
+        plane_idx: usize,
+    ) -> Vec<f32> {
+        if self.persist_planes_ref.is_empty() {
+            return Vec::new();
+        }
+        let s = &self.scales[scale];
+        let plane = &self.persist_planes_ref[scale][plane_idx];
+        let bytes = self
+            .client
+            .read_one(plane.clone())
+            .expect("read persist plane");
+        let all = f32::from_bytes(&bytes);
+        // Extract this channel's slice.
+        let pt = s.n_padded;
+        let ch_start = channel * pt;
+        all[ch_start..ch_start + pt].to_vec()
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
@@ -297,14 +454,30 @@ impl<R: Runtime> Zensim<R> {
     }
 
     /// Compute the 228-feature vector for one (reference, distorted)
-    /// pair.
+    /// pair. **Only valid for `regime == Basic`.** When the pipeline was
+    /// constructed with a wider regime, this returns the first 228 slots
+    /// (`compute_features_vec` returns the full vector).
     pub fn compute_features(
         &mut self,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]> {
+        let v = self.compute_features_vec(ref_srgb, dist_srgb)?;
+        let mut out = [0.0_f64; TOTAL_FEATURES];
+        out.copy_from_slice(&v[..TOTAL_FEATURES]);
+        Ok(out)
+    }
+
+    /// Compute the regime-appropriate feature vector for one (reference,
+    /// distorted) pair. Length matches `self.regime().total_features()`:
+    /// 228 / 300 / 372.
+    pub fn compute_features_vec(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<Vec<f64>> {
         self.set_reference(ref_srgb)?;
-        self.compute_with_reference(dist_srgb)
+        self.compute_with_reference_vec(dist_srgb)
     }
 
     /// Cache the reference pyramid; subsequent
@@ -326,9 +499,19 @@ impl<R: Runtime> Zensim<R> {
     }
 
     /// Compute the 228-feature vector for one distorted image against
-    /// the cached reference. Returns [`Error::NoCachedReference`] if
-    /// [`Zensim::set_reference`] hasn't been called.
+    /// the cached reference. **Only valid for `regime == Basic`.**
     pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<[f64; TOTAL_FEATURES]> {
+        let v = self.compute_with_reference_vec(dist_srgb)?;
+        let mut out = [0.0_f64; TOTAL_FEATURES];
+        out.copy_from_slice(&v[..TOTAL_FEATURES]);
+        Ok(out)
+    }
+
+    /// Compute the regime-appropriate feature vector for one distorted
+    /// image against the cached reference. Returns
+    /// [`Error::NoCachedReference`] if [`Zensim::set_reference`] hasn't
+    /// been called.
+    pub fn compute_with_reference_vec(&mut self, dist_srgb: &[u8]) -> Result<Vec<f64>> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
@@ -336,28 +519,39 @@ impl<R: Runtime> Zensim<R> {
         self.upload_u8(false, dist_srgb);
         self.run_xyb_pyramid(false);
 
-        // No zeroing of `partials_*` — every column thread writes all
-        // its 17 f64 + 3 f32 slots in `fused_vblur_features_kernel`,
-        // so the previous call's contents are fully overwritten before
-        // any host fold reads them.
-
-        // Phase 1: launch H-blur (3-channel) and V-blur+features
-        // (3-channel × n-strip) per scale. No host syncs.
         let n_scales = self.scales.len();
+        let needs_ext = self.regime.needs_extended_kernel();
+
+        // Phase 1: launch the per-scale fused features kernel. Two
+        // variants: persist (writes mu1/mu2/ssq/s12 planes) on the
+        // Extended/WithIw regime, plain on Basic. Both produce the
+        // same per-column 17 f64 + 3 f32 partials.
         for s in 0..n_scales {
-            self.launch_blur_and_features(s);
+            if needs_ext {
+                self.launch_blur_and_features_persist(s);
+            } else {
+                self.launch_blur_and_features(s);
+            }
         }
 
-        // Phase 2: on-device reduction per (scale, channel, slot)
-        // collapses padded_w × n_strips per-column partials down to
-        // 4 × 3 × 17 f64 + 4 × 3 × 3 f32 finals. Without this the host
-        // would have to round-trip ~5.7 MiB of partials per call at
-        // 1 K resolution; this drops it to 1.6 KiB.
-        self.launch_reduction();
+        // Phase 1b: masked + IW pooling pass. Needs the persist planes
+        // from Phase 1.
+        if needs_ext {
+            for s in 0..n_scales {
+                self.launch_masked_iw(s);
+            }
+        }
 
-        // Phase 3: ONE small read of the finals buffer. cubecl
-        // serialises the read behind the reductions on the same
-        // client, so this single sync covers the whole pipeline.
+        // Phase 2: on-device reduction. Basic partials reduce as before;
+        // masked + IW partials reduce via `reduce_ext_kernel`.
+        self.launch_reduction();
+        if needs_ext {
+            self.launch_reduction_ext();
+        }
+
+        // Phase 3: ONE read for the basic finals; one more for masked +
+        // IW finals when needed. cubecl serialises both reads behind
+        // the reduction launches.
         let f64_bytes = self
             .client
             .read_one(self.finals_f64.clone())
@@ -369,11 +563,24 @@ impl<R: Runtime> Zensim<R> {
         let finals_f64 = f64::from_bytes(&f64_bytes);
         let finals_max = f32::from_bytes(&max_bytes);
 
-        // Phase 4: host packs the 228-feature vector. CPU `combine_scores`
-        // shape — basic block (13×3×scales) then peaks block
-        // (6×3×scales).
-        let mut out = [0.0_f64; TOTAL_FEATURES];
+        let ext_bytes_storage;
+        let finals_ext_f64: &[f64] = if needs_ext {
+            ext_bytes_storage = self
+                .client
+                .read_one(self.finals_ext_f64.clone())
+                .expect("read finals_ext_f64");
+            f64::from_bytes(&ext_bytes_storage)
+        } else {
+            &[]
+        };
+
+        // Phase 4: host packs the regime-appropriate feature vector.
+        let total = self.regime.total_features();
+        let mut out = vec![0.0_f64; total];
         let basic_total = n_scales * FEATURES_PER_CHANNEL_BASIC * 3;
+        let peaks_total = n_scales * FEATURES_PER_CHANNEL_PEAKS * 3;
+        let masked_block_off = basic_total + peaks_total;
+        let iw_block_off = masked_block_off + n_scales * FEATURES_PER_CHANNEL_MASKED * 3;
 
         for s in 0..n_scales {
             for ch in 0..3 {
@@ -387,25 +594,8 @@ impl<R: Runtime> Zensim<R> {
                 let pad_w = self.scales[s].padded_w as usize;
                 let h_dim = self.scales[s].h as usize;
                 let inv_n = 1.0_f64 / (pad_w as f64 * h_dim as f64);
-                // CPU's HF feature extraction (zensim/src/streaming.rs)
-                // computes `var_src = sums[10] / N` and treats variances
-                // ≤ 1e-10 as zero:
-                //     hf_energy_gain = if var_src > 1e-10 { … } else { 0.0 };
-                //     hf_energy_loss = if var_src > 1e-10 { … } else { 0.0 };
-                //     hf_mag_loss    = if mad_src > 1e-10 { … } else { 0.0 };
-                // Mirror the per-pixel threshold exactly so a constant-X
-                // grayscale (where the SIMD sums round to ~ULP-noise on
-                // both CPU and GPU) folds to the same zero feature on
-                // both sides.
                 let var_src = sums[10] * inv_n;
                 let mad_src = sums[12] * inv_n;
-                // CPU returns the FEATURE directly (already with `(1 - …)`
-                // / `(… - 1)` / `.max(0)` applied) when the denominator
-                // is below threshold — NOT a 0 ratio that the caller
-                // then re-applies the `(1 - ratio).max(0)` to. Without
-                // matching this exactly, constant-input cases (black-vs-
-                // white at all 3 channels × 4 scales) emit
-                // `hf_energy_loss = 1.0` instead of `0.0`.
                 let (hf_energy_loss, hf_energy_gain) = if var_src > 1e-10 {
                     let r = sums[11] / sums[10];
                     ((1.0 - r).max(0.0), (r - 1.0).max(0.0))
@@ -418,8 +608,7 @@ impl<R: Runtime> Zensim<R> {
                     0.0
                 };
 
-                // Basic block: 13 features per channel, scales-major,
-                // channel-minor.
+                // Basic block: 13 features per channel.
                 let bb = s * 3 * FEATURES_PER_CHANNEL_BASIC + ch * FEATURES_PER_CHANNEL_BASIC;
                 out[bb] = (sums[0] * inv_n).abs();
                 out[bb + 1] = (sums[1] * inv_n).max(0.0).powf(0.25);
@@ -435,7 +624,7 @@ impl<R: Runtime> Zensim<R> {
                 out[bb + 11] = hf_mag_loss;
                 out[bb + 12] = hf_energy_gain;
 
-                // Peaks block: 6 features per channel.
+                // Peaks block.
                 let pb = basic_total
                     + s * 3 * FEATURES_PER_CHANNEL_PEAKS
                     + ch * FEATURES_PER_CHANNEL_PEAKS;
@@ -445,6 +634,40 @@ impl<R: Runtime> Zensim<R> {
                 out[pb + 3] = (sums[14] * inv_n).max(0.0).powf(0.125);
                 out[pb + 4] = (sums[15] * inv_n).max(0.0).powf(0.125);
                 out[pb + 5] = (sums[16] * inv_n).max(0.0).powf(0.125);
+
+                // Masked + IW blocks.
+                if needs_ext {
+                    let ext_base = (s * 3 + ch) * 12;
+                    let mut ext_sums = [0.0_f64; 12];
+                    ext_sums.copy_from_slice(&finals_ext_f64[ext_base..ext_base + 12]);
+
+                    if self.regime.needs_masked() {
+                        // CPU layout: masked_ssim_mean / masked_ssim_4th /
+                        // masked_ssim_2nd / masked_art_4th /
+                        // masked_det_4th / masked_mse.
+                        // GPU slot map: [s0..s5] mirror this order.
+                        let mb = masked_block_off
+                            + s * 3 * FEATURES_PER_CHANNEL_MASKED
+                            + ch * FEATURES_PER_CHANNEL_MASKED;
+                        out[mb] = (ext_sums[0] * inv_n).abs();
+                        out[mb + 1] = (ext_sums[1] * inv_n).max(0.0).powf(0.25);
+                        out[mb + 2] = (ext_sums[2] * inv_n).max(0.0).sqrt();
+                        out[mb + 3] = (ext_sums[3] * inv_n).max(0.0).powf(0.25);
+                        out[mb + 4] = (ext_sums[4] * inv_n).max(0.0).powf(0.25);
+                        out[mb + 5] = ext_sums[5] * inv_n;
+                    }
+                    if self.regime.needs_iw() {
+                        let ib = iw_block_off
+                            + s * 3 * FEATURES_PER_CHANNEL_IW
+                            + ch * FEATURES_PER_CHANNEL_IW;
+                        out[ib] = (ext_sums[6] * inv_n).abs();
+                        out[ib + 1] = (ext_sums[7] * inv_n).max(0.0).powf(0.25);
+                        out[ib + 2] = (ext_sums[8] * inv_n).max(0.0).sqrt();
+                        out[ib + 3] = (ext_sums[9] * inv_n).max(0.0).powf(0.25);
+                        out[ib + 4] = (ext_sums[10] * inv_n).max(0.0).powf(0.25);
+                        out[ib + 5] = ext_sums[11] * inv_n;
+                    }
+                }
             }
         }
 
@@ -594,6 +817,126 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_f64_off as u32,
                 s.partials_max_off as u32,
             );
+        }
+    }
+
+    /// Persist-planes variant of `launch_blur_and_features`. Same math
+    /// + same per-column partials, plus per-pixel writes of mu1/mu2/
+    /// ssq/s12 into the appropriate side's persist planes. Run once for
+    /// `is_a == true` then once for `false` is NOT what happens — the
+    /// existing pipeline already runs the basic kernel once per pair
+    /// (combining ref + dist via the (src_a/dst_a) channel arrays).
+    /// The persist variant takes the same combined inputs but ALSO
+    /// writes the persist planes. We persist to the `ref` side's planes
+    /// (the masked-IW kernel needs them for `activity = blur(|src - mu1|)`
+    /// which uses the REFERENCE side per CPU).
+    fn launch_blur_and_features_persist(&self, scale: usize) {
+        const TX: u32 = 64;
+        let s = &self.scales[scale];
+        let pad_total = s.n_padded;
+        let plane_len = pad_total * 3;
+        let planes = &self.persist_planes_ref[scale];
+
+        let cube_x = s.padded_w.div_ceil(TX).max(1);
+        let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
+        let cube_dim = CubeDim::new_3d(TX, 1, 1);
+        unsafe {
+            fused::fused_features_kernel_persist::launch_unchecked::<R>(
+                &self.client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(s.ref_xyb[0].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[0].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.ref_xyb[1].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[1].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.ref_xyb[2].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[2].clone(), pad_total),
+                ArrayArg::from_raw_parts(self.partials_f64.clone(), self.partials_f64_len),
+                ArrayArg::from_raw_parts(self.partials_max.clone(), self.partials_max_len),
+                ArrayArg::from_raw_parts(planes[0].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[1].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[2].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[3].clone(), plane_len),
+                s.padded_w,
+                s.h,
+                s.n_strips,
+                s.partials_f64_off as u32,
+                s.partials_max_off as u32,
+                pad_total as u32,
+            );
+        }
+    }
+
+    /// Launch the masked + IW pooling kernel for one scale. Requires
+    /// the persist planes to already be filled by
+    /// `launch_blur_and_features_persist`.
+    fn launch_masked_iw(&self, scale: usize) {
+        const TX: u32 = 64;
+        let s = &self.scales[scale];
+        let pad_total = s.n_padded;
+        let plane_len = pad_total * 3;
+        let planes = &self.persist_planes_ref[scale];
+
+        let cube_x = s.padded_w.div_ceil(TX).max(1);
+        let cube_count = CubeCount::Static(cube_x, s.n_strips, 3);
+        let cube_dim = CubeDim::new_3d(TX, 1, 1);
+        let do_ext = if self.regime.needs_masked() { 1u32 } else { 0u32 };
+        let do_iw = if self.regime.needs_iw() { 1u32 } else { 0u32 };
+        unsafe {
+            masked_iw::masked_iw_kernel::launch_unchecked::<R>(
+                &self.client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(s.ref_xyb[0].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[0].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.ref_xyb[1].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[1].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.ref_xyb[2].clone(), pad_total),
+                ArrayArg::from_raw_parts(s.dis_xyb[2].clone(), pad_total),
+                ArrayArg::from_raw_parts(planes[0].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[1].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[2].clone(), plane_len),
+                ArrayArg::from_raw_parts(planes[3].clone(), plane_len),
+                ArrayArg::from_raw_parts(self.partials_ext_f64.clone(), self.partials_ext_f64_len),
+                s.padded_w,
+                s.h,
+                s.n_strips,
+                pad_total as u32,
+                s.partials_ext_off as u32,
+                do_ext,
+                do_iw,
+            );
+        }
+    }
+
+    /// On-device reduction of the masked + IW per-(col, strip, ch)
+    /// partials into per-(scale, ch, slot) finals. One launch per
+    /// scale, grid `(36, 1, 1)` (= 3 channels × 12 slots).
+    fn launch_reduction_ext(&self) {
+        let n_scales = self.scales.len();
+        let cube_dim = CubeDim::new_1d(256);
+        let n_finals = n_scales * 3 * 12;
+        for s in 0..n_scales {
+            let sc = &self.scales[s];
+            let pw = sc.padded_w as usize;
+            let ns = sc.n_strips as usize;
+            let n_partials_per_ch = (pw * ns) as u32;
+            let cube_count = CubeCount::Static(36, 1, 1);
+            unsafe {
+                reduce::reduce_ext_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    cube_count,
+                    cube_dim,
+                    ArrayArg::from_raw_parts(
+                        self.partials_ext_f64.clone(),
+                        self.partials_ext_f64_len,
+                    ),
+                    ArrayArg::from_raw_parts(self.finals_ext_f64.clone(), n_finals),
+                    sc.partials_ext_off as u32,
+                    n_partials_per_ch,
+                    (s * 3 * 12) as u32,
+                );
+            }
         }
     }
 

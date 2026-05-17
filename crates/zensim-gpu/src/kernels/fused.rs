@@ -438,3 +438,372 @@ pub fn fused_features_kernel(
     partials_max[max_base + 1] = peak1;
     partials_max[max_base + 2] = peak2;
 }
+
+/// Persist-planes sibling of [`fused_features_kernel`].
+///
+/// Identical math + identical partials emit, with one addition: writes
+/// the per-pixel `mu1 / mu2 / sigma_sq / sigma12` to dedicated DRAM
+/// planes at offset `ch_off + y * width + col`. The four planes are the
+/// inputs that the masked + IW pooling kernel needs to derive
+/// `activity = blur(|src - mu1|)` and to re-run the SSIM math against the
+/// masked + IW weights.
+///
+/// We can't toggle the persist write inside `fused_features_kernel`
+/// itself — cubecl requires every Array argument to be a real handle
+/// even when the kernel never reads it, so adding the four planes as
+/// "always present but never written when off" would still cost 4
+/// allocations per scale. The cheaper move is to split the kernel: pay
+/// the persist write only when Extended / WithIw is requested.
+///
+/// Memory cost: 4 planes × 3 channels × padded f32 per scale. At 12 MP
+/// scale 0 padded ≈ 4080×3000 = 12.24 M pixels → 4 × 3 × 4 B × 12.24 M
+/// ≈ 587 MB per scale. Caller must pre-budget; `Zensim::new_with_regime`
+/// allocates this when `regime != Basic` and returns an error if the
+/// allocation can't be honored.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn fused_features_kernel_persist(
+    src_a: &Array<f32>,
+    dst_a: &Array<f32>,
+    src_b: &Array<f32>,
+    dst_b: &Array<f32>,
+    src_c: &Array<f32>,
+    dst_c: &Array<f32>,
+    partials_f64: &mut Array<f64>,
+    partials_max: &mut Array<f32>,
+    // Per-pixel persist planes (3 channels concatenated).
+    mu1_all: &mut Array<f32>,
+    mu2_all: &mut Array<f32>,
+    ssq_all: &mut Array<f32>,
+    s12_all: &mut Array<f32>,
+    width: u32, // padded_w
+    height: u32,
+    n_strips: u32,
+    slot_off_f64: u32,
+    slot_off_max: u32,
+    pad_total: u32,
+) {
+    let tx = UNIT_POS_X;
+    let col_block = CUBE_POS_X;
+    let strip = CUBE_POS_Y;
+    let channel = CUBE_POS_Z;
+    let col_base = col_block * TX;
+    let col = col_base + tx;
+    let in_bounds = col < width;
+
+    let w = width as usize;
+    let n_strips_us = n_strips as usize;
+    let pw = width as usize;
+    let pt = pad_total as usize;
+    let ch_base = (channel as usize) * pt;
+    let period_x = 2u32 * (width - 1u32);
+    let period_y = 2u32 * (height - 1u32);
+
+    let strip_h_base = height / n_strips;
+    let strip_rem = height - strip_h_base * n_strips;
+    let y_start = strip * strip_h_base + u32::min(strip, strip_rem);
+    let y_end_unclamp = y_start + strip_h_base + (if strip < strip_rem { 1u32 } else { 0u32 });
+    let y_end = u32::min(y_end_unclamp, height);
+
+    let mut src_row = SharedMemory::<f32>::new(TILE_COLS_US);
+    let mut dst_row = SharedMemory::<f32>::new(TILE_COLS_US);
+    let mut buf_mu1 = SharedMemory::<f32>::new(BUF_LEN_US);
+    let mut buf_mu2 = SharedMemory::<f32>::new(BUF_LEN_US);
+    let mut buf_sq = SharedMemory::<f32>::new(BUF_LEN_US);
+    let mut buf_s12 = SharedMemory::<f32>::new(BUF_LEN_US);
+
+    let mut sum_m1 = 0.0_f32;
+    let mut sum_m2 = 0.0_f32;
+    let mut sum_sq = 0.0_f32;
+    let mut sum_s12 = 0.0_f32;
+
+    let mut a0 = 0.0_f64;
+    let mut a1 = 0.0_f64;
+    let mut a2 = 0.0_f64;
+    let mut a3 = 0.0_f64;
+    let mut a4 = 0.0_f64;
+    let mut a5 = 0.0_f64;
+    let mut a6 = 0.0_f64;
+    let mut a7 = 0.0_f64;
+    let mut a8 = 0.0_f64;
+    let mut a9 = 0.0_f64;
+    let mut a10 = 0.0_f64;
+    let mut a11 = 0.0_f64;
+    let mut a12 = 0.0_f64;
+    let mut a13 = 0.0_f64;
+    let mut a14 = 0.0_f64;
+    let mut a15 = 0.0_f64;
+    let mut a16 = 0.0_f64;
+    let mut peak0 = 0.0_f32;
+    let mut peak1 = 0.0_f32;
+    let mut peak2 = 0.0_f32;
+
+    // ============================ PREFIX INIT ============================
+    let mut k: u32 = 0u32;
+    while k < DIAM {
+        let raw_y = (y_start + k + period_y - R) % period_y;
+        let y_in = if raw_y < height {
+            raw_y
+        } else {
+            period_y - raw_y
+        };
+
+        sync_cube();
+        let mut i: u32 = 0u32;
+        while i * TX + tx < TILE_COLS {
+            let load_x = i * TX + tx;
+            let raw_x = (col_base + load_x + period_x - R) % period_x;
+            let gx = if raw_x < width {
+                raw_x
+            } else {
+                period_x - raw_x
+            };
+            let off = (y_in as usize) * w + (gx as usize);
+            let s_val = if channel == 0u32 {
+                src_a[off]
+            } else if channel == 1u32 {
+                src_b[off]
+            } else {
+                src_c[off]
+            };
+            let d_val = if channel == 0u32 {
+                dst_a[off]
+            } else if channel == 1u32 {
+                dst_b[off]
+            } else {
+                dst_c[off]
+            };
+            src_row[load_x as usize] = s_val;
+            dst_row[load_x as usize] = d_val;
+            i += 1u32;
+        }
+        sync_cube();
+
+        let mut m1 = 0.0_f32;
+        let mut m2 = 0.0_f32;
+        let mut sq = 0.0_f32;
+        let mut s12 = 0.0_f32;
+        let mut j: u32 = 0u32;
+        while j < DIAM {
+            let s = src_row[(tx + j) as usize];
+            let d = dst_row[(tx + j) as usize];
+            m1 += s;
+            m2 += d;
+            sq = fma(s, s, fma(d, d, sq));
+            s12 = fma(s, d, s12);
+            j += 1u32;
+        }
+        m1 *= INV_DIAM;
+        m2 *= INV_DIAM;
+        sq *= INV_DIAM;
+        s12 *= INV_DIAM;
+
+        let buf_idx = (k * TX + tx) as usize;
+        buf_mu1[buf_idx] = m1;
+        buf_mu2[buf_idx] = m2;
+        buf_sq[buf_idx] = sq;
+        buf_s12[buf_idx] = s12;
+
+        sum_m1 += m1;
+        sum_m2 += m2;
+        sum_sq += sq;
+        sum_s12 += s12;
+
+        k += 1u32;
+    }
+
+    // ============================ WALK Y ============================
+    let mut slot: u32 = 0u32;
+    let mut y: u32 = y_start;
+    while y < y_end {
+        let mu1 = sum_m1 * INV_DIAM;
+        let mu2 = sum_m2 * INV_DIAM;
+        let ssq = sum_sq * INV_DIAM;
+        let s12_v = sum_s12 * INV_DIAM;
+
+        // Persist plane write: every pixel (including padded-x columns)
+        // gets the V-blurred values. This is the WHOLE reason this
+        // kernel variant exists.
+        let off = (y as usize) * w + (col as usize);
+        if in_bounds {
+            mu1_all[ch_base + off] = mu1;
+            mu2_all[ch_base + off] = mu2;
+            ssq_all[ch_base + off] = ssq;
+            s12_all[ch_base + off] = s12_v;
+        }
+
+        let mut sv: f32 = 0.0;
+        let mut dv: f32 = 0.0;
+        if in_bounds {
+            if channel == 0u32 {
+                sv = src_a[off];
+                dv = dst_a[off];
+            } else {
+                if channel == 1u32 {
+                    sv = src_b[off];
+                    dv = dst_b[off];
+                } else {
+                    sv = src_c[off];
+                    dv = dst_c[off];
+                }
+            }
+        }
+
+        let mu_diff = mu1 - mu2;
+        let num_m = fma(mu_diff, -mu_diff, 1.0);
+        let inner_ns = fma(-mu1, mu2, s12_v);
+        let num_s = fma(2.0, inner_ns, C2);
+        let inner_ds_inner = fma(-mu1, mu1, ssq);
+        let denom_s = fma(-mu2, mu2, inner_ds_inner) + C2;
+        let sd_raw = 1.0 - (num_m * num_s) / denom_s;
+        let sd = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        let sd2 = sd * sd;
+        let sd4 = sd2 * sd2;
+        a0 += sd as f64;
+        a1 += sd4 as f64;
+        a2 += sd2 as f64;
+        a14 += (sd4 * sd4) as f64;
+        if sd > peak0 {
+            peak0 = sd;
+        }
+
+        let diff1 = f32::abs(sv - mu1);
+        let diff2 = f32::abs(dv - mu2);
+        let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
+        let artifact = if ed > 0.0 { ed } else { f32::new(0.0) };
+        let detail_lost = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let a2_v = artifact * artifact;
+        let dl2 = detail_lost * detail_lost;
+        let a4_v = a2_v * a2_v;
+        let dl4 = dl2 * dl2;
+        a3 += artifact as f64;
+        a4 += a4_v as f64;
+        a5 += a2_v as f64;
+        a6 += detail_lost as f64;
+        a7 += dl4 as f64;
+        a8 += dl2 as f64;
+        a15 += (a4_v * a4_v) as f64;
+        a16 += (dl4 * dl4) as f64;
+        if artifact > peak1 {
+            peak1 = artifact;
+        }
+        if detail_lost > peak2 {
+            peak2 = detail_lost;
+        }
+
+        let vs = sv - mu1;
+        let vd = dv - mu2;
+        a10 += (vs * vs) as f64;
+        a11 += (vd * vd) as f64;
+        a12 += diff1 as f64;
+        a13 += diff2 as f64;
+
+        let pd = sv - dv;
+        a9 += (pd * pd) as f64;
+
+        // Slide
+        let buf_idx = (slot * TX + tx) as usize;
+        let old_m1 = buf_mu1[buf_idx];
+        let old_m2 = buf_mu2[buf_idx];
+        let old_sq = buf_sq[buf_idx];
+        let old_s12 = buf_s12[buf_idx];
+
+        let raw_y = (y + R + 1u32 + period_y) % period_y;
+        let y_in = if raw_y < height {
+            raw_y
+        } else {
+            period_y - raw_y
+        };
+
+        sync_cube();
+        let mut i: u32 = 0u32;
+        while i * TX + tx < TILE_COLS {
+            let load_x = i * TX + tx;
+            let raw_x = (col_base + load_x + period_x - R) % period_x;
+            let gx = if raw_x < width {
+                raw_x
+            } else {
+                period_x - raw_x
+            };
+            let off2 = (y_in as usize) * w + (gx as usize);
+            let s_val = if channel == 0u32 {
+                src_a[off2]
+            } else if channel == 1u32 {
+                src_b[off2]
+            } else {
+                src_c[off2]
+            };
+            let d_val = if channel == 0u32 {
+                dst_a[off2]
+            } else if channel == 1u32 {
+                dst_b[off2]
+            } else {
+                dst_c[off2]
+            };
+            src_row[load_x as usize] = s_val;
+            dst_row[load_x as usize] = d_val;
+            i += 1u32;
+        }
+        sync_cube();
+
+        let mut nm1 = 0.0_f32;
+        let mut nm2 = 0.0_f32;
+        let mut nsq = 0.0_f32;
+        let mut ns12 = 0.0_f32;
+        let mut j: u32 = 0u32;
+        while j < DIAM {
+            let s = src_row[(tx + j) as usize];
+            let d = dst_row[(tx + j) as usize];
+            nm1 += s;
+            nm2 += d;
+            nsq = fma(s, s, fma(d, d, nsq));
+            ns12 = fma(s, d, ns12);
+            j += 1u32;
+        }
+        nm1 *= INV_DIAM;
+        nm2 *= INV_DIAM;
+        nsq *= INV_DIAM;
+        ns12 *= INV_DIAM;
+
+        sum_m1 = sum_m1 + nm1 - old_m1;
+        sum_m2 = sum_m2 + nm2 - old_m2;
+        sum_sq = sum_sq + nsq - old_sq;
+        sum_s12 = sum_s12 + ns12 - old_s12;
+
+        buf_mu1[buf_idx] = nm1;
+        buf_mu2[buf_idx] = nm2;
+        buf_sq[buf_idx] = nsq;
+        buf_s12[buf_idx] = ns12;
+
+        slot = (slot + 1u32) % DIAM;
+        y += 1u32;
+    }
+
+    if !in_bounds {
+        terminate!();
+    }
+    let slot_idx_us =
+        (channel as usize) * n_strips_us * pw + (strip as usize) * pw + (col as usize);
+    let f64_base = (slot_off_f64 as usize) + slot_idx_us * 17;
+    partials_f64[f64_base] = a0;
+    partials_f64[f64_base + 1] = a1;
+    partials_f64[f64_base + 2] = a2;
+    partials_f64[f64_base + 3] = a3;
+    partials_f64[f64_base + 4] = a4;
+    partials_f64[f64_base + 5] = a5;
+    partials_f64[f64_base + 6] = a6;
+    partials_f64[f64_base + 7] = a7;
+    partials_f64[f64_base + 8] = a8;
+    partials_f64[f64_base + 9] = a9;
+    partials_f64[f64_base + 10] = a10;
+    partials_f64[f64_base + 11] = a11;
+    partials_f64[f64_base + 12] = a12;
+    partials_f64[f64_base + 13] = a13;
+    partials_f64[f64_base + 14] = a14;
+    partials_f64[f64_base + 15] = a15;
+    partials_f64[f64_base + 16] = a16;
+    let max_base = (slot_off_max as usize) + slot_idx_us * 3;
+    partials_max[max_base] = peak0;
+    partials_max[max_base + 1] = peak1;
+    partials_max[max_base + 2] = peak2;
+}

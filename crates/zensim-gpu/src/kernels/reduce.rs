@@ -100,3 +100,52 @@ pub fn reduce_scale_kernel(
         }
     }
 }
+
+/// Reduces the masked + IW per-(col, strip, channel) partials produced
+/// by `masked_iw_kernel` into per-(scale, channel, slot) finals.
+///
+/// Slot layout matches `kernels::masked_iw::SLOTS_PER_COL = 12`. Grid:
+/// `(3 channels × 12 slots, 1, 1) = 36` cubes. Each cube reduces its
+/// own slot via a 256-thread tree reduction.
+#[cube(launch_unchecked)]
+pub fn reduce_ext_kernel(
+    partials_ext_f64: &Array<f64>,
+    finals_ext_f64: &mut Array<f64>,
+    f64_slot_off: u32,
+    n_partials_per_ch: u32, // = pw × n_strips
+    final_f64_base: u32,    // base index into finals_ext_f64 for this scale
+) {
+    const SLOTS: u32 = 12u32;
+    let cube_idx = CUBE_POS_X;
+    let channel = cube_idx / SLOTS;
+    let inner = (cube_idx - channel * SLOTS) as usize;
+    let tid = UNIT_POS_X;
+    let tid_us = tid as usize;
+
+    let f64_ch_off =
+        (f64_slot_off as usize) + (channel as usize) * (n_partials_per_ch as usize) * 12;
+
+    let mut shared = SharedMemory::<f64>::new(256usize);
+    let mut sum = 0.0_f64;
+    let mut i = tid;
+    while i < n_partials_per_ch {
+        sum += partials_ext_f64[f64_ch_off + (i as usize) * 12 + inner];
+        i += 256u32;
+    }
+    shared[tid_us] = sum;
+    let mut step: u32 = 128u32;
+    while step > 0u32 {
+        sync_cube();
+        if tid < step {
+            let lhs = shared[tid_us];
+            let rhs = shared[tid_us + (step as usize)];
+            shared[tid_us] = lhs + rhs;
+        }
+        step /= 2u32;
+    }
+    sync_cube();
+    if tid == 0u32 {
+        let final_idx = (final_f64_base as usize) + (channel as usize) * 12 + inner;
+        finals_ext_f64[final_idx] = shared[0];
+    }
+}
