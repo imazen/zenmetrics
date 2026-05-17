@@ -335,6 +335,7 @@ fn gamma(v: f32) -> f32 {
     19.245_014_f32 * f32::ln(v + 9.971_064) - 23.160_463
 }
 
+
 /// 3-channel fused vertical blur + MF subtract + xyb_low_freq_to_vals
 /// for the LF separation stage.
 ///
@@ -431,6 +432,91 @@ pub fn vertical_blur_3ch_lf_split_lut_kernel(
 
     // xyb_low_freq_to_vals on the LF triple (in-the-same-kernel,
     // matches the standalone kernel bit-for-bit).
+    let lf_b_mixed = (lf_b_raw + (-0.362_267_05_f32) * lf_y_raw) * 49.879_845;
+    lf_x_out[idx] = lf_x_raw * 33.832_837;
+    lf_y_out[idx] = lf_y_raw * 14.458_268;
+    lf_b_out[idx] = lf_b_mixed;
+}
+
+/// T_x.M (2026-05-17): 2D-launched variant of the LF V-blur split
+/// fusion kernel. Identical math to
+/// `vertical_blur_3ch_lf_split_lut_kernel` but uses a 2D cube layout
+/// (32 cols × 8 rows = 256 threads) instead of a 1D 256-wide cube.
+///
+/// Why this helps: the 1D layout's 256 threads span a 256-pixel chunk
+/// of one row, so each thread reads a UNIQUE column's vertical strip
+/// (33 taps at σ=7.16). With 256 unique columns per cube the L1 working
+/// set is ~33 KB × 3 channels = 99 KB — over a typical sm_86 L1 of
+/// 128 KB and constantly evicting.
+///
+/// The 2D layout's 32 threads/row share each column's vertical strip:
+/// only 32 unique columns × 33 taps × 4 B × 3 channels = ~12 KB working
+/// set per cube — fits in L1 with room to spare. Mirrors vship's
+/// verticalBlur_Kernel cube_dim (32, 8) in
+/// src/HIP/butter/gaussianblur.hpp:227-228.
+///
+/// Cube count must be `(width.div_ceil(32), height.div_ceil(8), 1)`.
+/// Cube dim must be `(32, 8, 1)`.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn vertical_blur_3ch_lf_split_lut_kernel_2d(
+    h_src_x: &Array<f32>,
+    h_src_y: &Array<f32>,
+    h_src_b: &Array<f32>,
+    orig_x: &Array<f32>,
+    orig_y: &Array<f32>,
+    orig_b: &Array<f32>,
+    lf_x_out: &mut Array<f32>,
+    lf_y_out: &mut Array<f32>,
+    lf_b_out: &mut Array<f32>,
+    mf_x_out: &mut Array<f32>,
+    mf_y_out: &mut Array<f32>,
+    mf_b_out: &mut Array<f32>,
+    table: &Array<f32>,
+    width: u32,
+    height: u32,
+    radius: u32,
+) {
+    let x = CUBE_POS_X * CUBE_DIM_X + UNIT_POS_X;
+    let y = CUBE_POS_Y * CUBE_DIM_Y + UNIT_POS_Y;
+    if x >= width || y >= height {
+        terminate!();
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let x_us = x as usize;
+    let y_us = y as usize;
+    let idx = y_us * w + x_us;
+
+    let r = radius as usize;
+    let begin = usize::saturating_sub(y_us, r);
+    let end = u32::min((y_us + r) as u32, (h - 1) as u32) as usize;
+
+    let integ_off = 2 * r + 1;
+    let a = begin + r - y_us;
+    let b_idx = end + r + 1 - y_us;
+    let wsum = table[integ_off + b_idx] - table[integ_off + a];
+
+    let mut sum_x = 0.0f32;
+    let mut sum_y = 0.0f32;
+    let mut sum_b = 0.0f32;
+    let mut i = begin;
+    while i <= end {
+        let weight = table[i + r - y_us];
+        let off = i * w + x_us;
+        sum_x += h_src_x[off] * weight;
+        sum_y += h_src_y[off] * weight;
+        sum_b += h_src_b[off] * weight;
+        i += 1;
+    }
+    let lf_x_raw = sum_x / wsum;
+    let lf_y_raw = sum_y / wsum;
+    let lf_b_raw = sum_b / wsum;
+
+    mf_x_out[idx] = orig_x[idx] - lf_x_raw;
+    mf_y_out[idx] = orig_y[idx] - lf_y_raw;
+    mf_b_out[idx] = orig_b[idx] - lf_b_raw;
+
     let lf_b_mixed = (lf_b_raw + (-0.362_267_05_f32) * lf_y_raw) * 49.879_845;
     lf_x_out[idx] = lf_x_raw * 33.832_837;
     lf_y_out[idx] = lf_y_raw * 14.458_268;

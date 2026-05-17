@@ -157,13 +157,6 @@ pub struct Butteraugli<R: Runtime> {
     /// are valid and `compute_with_reference` may skip recomputing them.
     has_cached_reference: bool,
 
-    /// Persistent host-side packing scratch for sRGB → u32 widening
-    /// (one u32 per byte; WGSL has no `Array<u8>` storage type). Sized
-    /// to `n × 3` at construction; reused across uploads instead of
-    /// allocating a fresh `Vec<u32>` per `populate_linear_from_srgb`.
-    /// Same shape as zensim-gpu's `pack_scratch`.
-    pack_scratch: Vec<u32>,
-
     /// Active comparison parameters. Overwritten by
     /// `compute_with_options` and `set_reference_with_options`; the
     /// non-`_with_options` entry points use [`ButteraugliParams::default`].
@@ -376,8 +369,9 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             has_cached_reference: false,
-            // T4.L: one u32 per pixel (packed RGBA), not 3 u32 per pixel.
-            pack_scratch: vec![0_u32; n],
+            // T_x.O (2026-05-17): pack_scratch is gone — packing now
+            // writes directly into the pinned staging buffer reserved
+            // each upload, saving one host-side R/W roundtrip per call.
             params: ButteraugliParams::default(),
             blur_tables,
             blur_radii,
@@ -682,23 +676,45 @@ impl<R: Runtime> Butteraugli<R> {
         // `check_dims` first, so a release-mode panic here would only
         // fire on a buggy internal caller. Demoted to debug_assert.
         debug_assert_eq!(srgb.len(), n_bytes, "input length mismatch");
-        // T4.L (2026-05-16): pack 3 sRGB bytes into ONE u32
-        // (R | G<<8 | B<<16). Cuts host→device upload 3× vs the prior
-        // one-byte-per-u32 layout — was the dominant warm-loop cost
-        // per nsys (see docs/CUBECL_GOTCHAS.md G6.6).
-        debug_assert_eq!(self.pack_scratch.len(), self.n);
-        for (dst, triple) in self.pack_scratch.iter_mut().zip(srgb.chunks_exact(3)) {
-            *dst =
-                u32::from(triple[0]) | (u32::from(triple[1]) << 8) | (u32::from(triple[2]) << 16);
+
+        // T_x.O (2026-05-17): pack u8×3 → u32 directly into the pinned
+        // staging buffer (one host-side pass instead of two). Previously
+        // we packed into `self.pack_scratch` and then
+        // `create_from_slice_pinned` copied that scratch into a pinned
+        // buffer — two full 48 MB host writes for the same data. The
+        // reserve_staging path lets us produce the packed bytes
+        // straight into the pinned buffer.
+        //
+        // Layout: 4 bytes per pixel — R | G<<8 | B<<16 (alpha unused).
+        // Reader (srgb_u8_to_linear_planar_kernel) sees the same `[u32]`
+        // packing T4.L put in place.
+        let pinned_len = self.n * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            // Write four bytes per pixel (R, G, B, 0) directly into the
+            // pinned buffer. Endianness: u32 packing `R | G<<8 | B<<16`
+            // is little-endian, which matches every supported runtime.
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
         }
-        // T4.M (2026-05-16): pinned-host fast path — copies straight
-        // into a pinned staging buffer (12-25 GB/s DMA on PCIe 4.0 vs
-        // 5-6 GB/s from pageable). See CUBECL_GOTCHAS.md G6.5.
-        let bytes = u32::as_bytes(&self.pack_scratch);
+        // T4.M (2026-05-16): pinned-host fast path — direct DMA (12-25
+        // GB/s on PCIe 4.0 vs 5-6 GB/s from pageable).
+        // T_x.O: skipping the pack_scratch intermediate saves one
+        // ~48 MB host write per upload.
+        let handle = self.client.create(bytes);
         if is_a {
-            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
+            self.src_u8_a = handle;
         } else {
-            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
+            self.src_u8_b = handle;
         }
         unsafe {
             self.launch_srgb_to_linear(is_a);
@@ -744,6 +760,11 @@ impl<R: Runtime> Butteraugli<R> {
             // in-place; each thread only writes its own idx so the
             // overlapping V-blur window reads (which only touch the
             // h-blurred temp planes, not lin) are safe.
+            // T_x.N attempted a 2D 32×8 launch for the opsin V-blur
+            // (σ=1.2, radius=2-3); profiling showed unchanged GPU time
+            // (669 µs both layouts). The small window already fits L1
+            // with the 1D layout. Keeping 1D since a 2D variant adds
+            // kernel binary size without measurable benefit. Per G6.8.
             blur_lut::vertical_blur_3ch_opsin_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
@@ -1080,10 +1101,18 @@ impl<R: Runtime> Butteraugli<R> {
                 self.height,
                 radius,
             );
-            blur_lut::vertical_blur_3ch_lf_split_lut_kernel::launch_unchecked::<R>(
+            // T_x.M: 2D launch (32×8 = 256 threads) for better L1 cache
+            // sharing on the σ=7.16 V-blur (33-tap window). With the
+            // 1D 256-wide cube layout, each thread of the cube reads a
+            // unique column's 33-row strip (~99 KB total per cube,
+            // evicting L1). With the 2D 32×8 layout each column is
+            // shared by 8 threads; working set drops to ~12 KB/cube.
+            let bx = self.width.div_ceil(32);
+            let by = self.height.div_ceil(8);
+            blur_lut::vertical_blur_3ch_lf_split_lut_kernel_2d::launch_unchecked::<R>(
                 &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
+                CubeCount::Static(bx, by, 1),
+                CubeDim::new_2d(32, 8),
                 ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
                 ArrayArg::from_raw_parts(self.temp2.clone(), self.n),
                 ArrayArg::from_raw_parts(self.mask_scratch.clone(), self.n),
@@ -1131,6 +1160,11 @@ impl<R: Runtime> Butteraugli<R> {
             // V-pass + 3 splits fused: reads h-blurred temp planes
             // (window) + orig freq[2][X,Y] (idx-local); writes 5
             // outputs (HF_X, HF_Y, MF_X, MF_Y, MF_B).
+            // T_x.N attempted a 2D 32×8 launch for this kernel; profiling
+            // showed a ~13 µs regression (782 vs 768 µs), so kept the 1D
+            // path. The smaller-radius HF window (σ=1.564, radius=3-4)
+            // already fits L1 with the 1D layout, and 2D apparently adds
+            // address-arithmetic overhead. Per docs/CUBECL_GOTCHAS.md G6.8.
             blur_lut::vertical_blur_3ch_hf_split_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
@@ -1190,6 +1224,9 @@ impl<R: Runtime> Butteraugli<R> {
                 self.height,
                 radius_uhf,
             );
+            // T_x.N attempted 2D 32×8 launch for UHF V-blur + split;
+            // unchanged GPU time (615 µs both layouts) since the σ=1.564
+            // window (radius 3-4) already fits L1. Kept 1D per G6.8.
             blur_lut::vertical_blur_2ch_uhf_split_lut_kernel::launch_unchecked::<R>(
                 &self.client,
                 self.cube_count_1d(),
@@ -1289,34 +1326,32 @@ impl<R: Runtime> Butteraugli<R> {
             mf_n,
         );
 
-        // L2_asym on HF X (WMUL[0]) and HF Y (WMUL[1])
-        self.l2_diff_asym(
+        // T_x.L (2026-05-17): fuse l2_asym (HF) + l2 (MF) per channel.
+        // WMUL[2] = 0.0 (HF B is skipped) so only X and Y get the
+        // fused asym+l2; B-channel MF still uses write-only l2_diff
+        // since block_diff_ac[2] hasn't been touched yet.
+
+        // X channel: l2_asym(HF X, WMUL[0]) + l2(MF X, WMUL[3])
+        self.l2_asym_plus_l2(
             &self.freq_a[1][0],
             &self.freq_b[1][0],
-            &self.block_diff_ac[0],
-            (WMUL[0] as f32) * self.params.hf_asymmetry,
-            (WMUL[0] as f32) / self.params.hf_asymmetry,
-        );
-        self.l2_diff_asym(
-            &self.freq_a[1][1],
-            &self.freq_b[1][1],
-            &self.block_diff_ac[1],
-            (WMUL[1] as f32) * self.params.hf_asymmetry,
-            (WMUL[1] as f32) / self.params.hf_asymmetry,
-        );
-        // WMUL[2] = 0.0, skip HF B.
-
-        // L2 on MF X (WMUL[3]) and MF Y (WMUL[4]) — accumulate.
-        self.l2_diff(
             &self.freq_a[2][0],
             &self.freq_b[2][0],
             &self.block_diff_ac[0],
+            (WMUL[0] as f32) * self.params.hf_asymmetry,
+            (WMUL[0] as f32) / self.params.hf_asymmetry,
             WMUL[3] as f32,
         );
-        self.l2_diff(
+
+        // Y channel: l2_asym(HF Y, WMUL[1]) + l2(MF Y, WMUL[4])
+        self.l2_asym_plus_l2(
+            &self.freq_a[1][1],
+            &self.freq_b[1][1],
             &self.freq_a[2][1],
             &self.freq_b[2][1],
             &self.block_diff_ac[1],
+            (WMUL[1] as f32) * self.params.hf_asymmetry,
+            (WMUL[1] as f32) / self.params.hf_asymmetry,
             WMUL[4] as f32,
         );
 
@@ -1583,6 +1618,36 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(b.clone(), self.n),
                 ArrayArg::from_raw_parts(acc.clone(), self.n),
                 weight,
+            );
+        }
+    }
+
+    /// T_x.L: fused asym(HF) + l2(MF) accumulator per channel.
+    #[allow(clippy::too_many_arguments)]
+    fn l2_asym_plus_l2(
+        &self,
+        asym_a: &cubecl::server::Handle,
+        asym_b: &cubecl::server::Handle,
+        l2_a: &cubecl::server::Handle,
+        l2_b: &cubecl::server::Handle,
+        acc: &cubecl::server::Handle,
+        asym_weight_gt: f32,
+        asym_weight_lt: f32,
+        l2_weight: f32,
+    ) {
+        unsafe {
+            diffmap::l2_asym_plus_l2_kernel::launch_unchecked::<R>(
+                &self.client,
+                self.cube_count_1d(),
+                self.cube_dim_1d(),
+                ArrayArg::from_raw_parts(asym_a.clone(), self.n),
+                ArrayArg::from_raw_parts(asym_b.clone(), self.n),
+                ArrayArg::from_raw_parts(l2_a.clone(), self.n),
+                ArrayArg::from_raw_parts(l2_b.clone(), self.n),
+                ArrayArg::from_raw_parts(acc.clone(), self.n),
+                asym_weight_gt,
+                asym_weight_lt,
+                l2_weight,
             );
         }
     }
