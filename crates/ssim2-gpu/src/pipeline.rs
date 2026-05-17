@@ -857,17 +857,19 @@ impl<R: Runtime> Ssim2<R> {
         let raw = f32::from_bytes(&bytes);
         debug_assert_eq!(raw.len(), SUMS_LEN);
 
-        // Reset both buffers for the next call. In fast mode the
-        // partials buffer is the atomic-add target so accumulators
-        // need zeroing; in portable mode each thread writes its slot
-        // unconditionally so partials reset is technically optional
-        // but cheap.
-        self.partials = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
-        self.sums = self
-            .client
-            .create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
+        // T_x.A (2026-05-17): Reset partials on-device instead of
+        // re-uploading from host. In portable mode each thread writes
+        // its slot unconditionally and the finalizer fully overwrites
+        // `sums`, so neither buffer needs a reset there at all. In
+        // fast mode the partials buffer is the atomic-add target and
+        // MUST be zeroed; `sums` is unconditionally overwritten by
+        // the `copy_kernel` finalize path so it never needs zeroing.
+        //
+        // Previously: `create_from_slice(&vec![0.0_f32; PARTIALS_LEN])`
+        // every call sent a fresh ~1.77 MB host→device copy. The
+        // on-device kernel runs in ~5-10 µs and stays on the GPU.
+        #[cfg(feature = "fast-reduction")]
+        reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
 
         // Layout post-finalizer: `raw[slot * 2]` = Σ, `raw[slot * 2 + 1]` = Σ⁴.
         // Total length = NUM_SLOTS * 2 = 108 floats. The 4096 per-thread

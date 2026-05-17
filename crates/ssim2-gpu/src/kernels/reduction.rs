@@ -425,3 +425,38 @@ pub use fast::{launch_finalize, launch_finalize_batched, launch_sum_p4, launch_s
 pub use portable::{
     launch_finalize, launch_finalize_batched, launch_sum_p4, launch_sum_p4_batched,
 };
+
+// =====================================================================
+// On-device zero-fill (T_x.A). Avoids per-call host→device upload of a
+// fresh `vec![0.0_f32; PARTIALS_LEN]` (~1.77 MB for the 54-slot
+// partials buffer). On CUDA this saves a cuMemcpyHtoDAsync per call.
+// =====================================================================
+
+#[cube(launch_unchecked)]
+fn zero_fill_f32_kernel(buf: &mut Array<f32>) {
+    let i = ABSOLUTE_POS;
+    if i >= buf.len() {
+        terminate!();
+    }
+    buf[i] = 0.0_f32;
+}
+
+/// Zero a flat f32 buffer on-device. Equivalent to uploading a
+/// `vec![0.0_f32; len]` from the host but doesn't touch host memory or
+/// the PCIe bus.
+pub fn launch_zero_fill_f32<R: Runtime>(
+    client: &ComputeClient<R>,
+    buf: cubecl::server::Handle,
+    len: usize,
+) {
+    const TPB: u32 = 256;
+    let cubes = ((len as u32) + TPB - 1) / TPB;
+    unsafe {
+        zero_fill_f32_kernel::launch_unchecked::<R>(
+            client,
+            CubeCount::Static(cubes.max(1), 1, 1),
+            CubeDim::new_1d(TPB),
+            ArrayArg::from_raw_parts(buf, len),
+        );
+    }
+}

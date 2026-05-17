@@ -376,20 +376,19 @@ impl<R: Runtime> Ssim2Batch<R> {
             STATS_PER_IMAGE_FLOATS * (self.batch_size as usize)
         );
 
-        // Reset both buffers for the next call. partials is the
-        // atomic-add target in fast mode (needs zeroing); sums is the
-        // finalizer's output (overwritten anyway, reset for safety).
-        self.partials = client.create_from_slice(f32::as_bytes(&vec![
-            0.0_f32;
-            PARTIALS_PER_IMAGE_FLOATS
-                * (self.batch_size
-                    as usize)
-        ]));
-        self.sums = client.create_from_slice(f32::as_bytes(&vec![
-            0.0_f32;
-            STATS_PER_IMAGE_FLOATS
-                * (self.batch_size as usize)
-        ]));
+        // T_x.A (2026-05-17): Zero partials on-device only when needed
+        // (fast-reduction atomic_add target). In portable mode each
+        // thread overwrites its slot and the finalizer overwrites
+        // `sums`, so neither needs a reset; in fast mode `sums` is
+        // overwritten by the copy_kernel finalize path so it doesn't
+        // need a reset either. The previous per-call host upload of
+        // a fresh `vec![0.0_f32; partials_len]` was big — batch_size
+        // × ~1.77 MB. The on-device zero-fill stays on the GPU.
+        #[cfg(feature = "fast-reduction")]
+        {
+            let p_len = PARTIALS_PER_IMAGE_FLOATS * (self.batch_size as usize);
+            reduction::launch_zero_fill_f32(client, self.partials.clone(), p_len);
+        }
 
         let mut results = Vec::with_capacity(n_in);
         for img_idx in 0..n_in {
