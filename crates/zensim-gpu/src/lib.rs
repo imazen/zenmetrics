@@ -70,6 +70,11 @@
 pub mod kernels;
 pub mod opaque;
 pub mod pipeline;
+pub mod weights;
+
+// Re-export the canonical default-weights array so callers can wire
+// custom params without rebuilding it themselves.
+pub use weights::WEIGHTS_PREVIEW_V0_2;
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};

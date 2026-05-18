@@ -21,7 +21,7 @@
 use crate::pipeline::Zensim;
 #[cfg(feature = "pixels")]
 use crate::Error;
-use crate::{Result, TOTAL_FEATURES, score_from_features};
+use crate::{Result, TOTAL_FEATURES, score_from_features, weights::WEIGHTS_PREVIEW_V0_2};
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -71,9 +71,33 @@ pub struct ZensimParams {
 impl ZensimParams {
     /// Default parameter bundle (no weights — uniform `compute_*`
     /// methods return NaN). Use [`Self::with_weights`] to wire a
-    /// trained profile.
+    /// custom trained profile, or [`Self::default_weights`] /
+    /// [`Self::with_canonical_v0_2`] to get the canonical
+    /// `WEIGHTS_PREVIEW_V0_2` baked in.
     pub fn new() -> Self {
         Self { weights: None }
+    }
+
+    /// Bundle the canonical 228-element default weights
+    /// ([`crate::WEIGHTS_PREVIEW_V0_2`]) — same constants the CPU
+    /// `zensim` crate ships as the stable basic-regime default.
+    /// Returns finite scores from [`ZensimOpaque::compute_srgb_u8`]
+    /// / [`ZensimOpaque::compute_pixels`] without further wiring.
+    ///
+    /// This is what the umbrella's `MetricParams::default_for(Zensim)`
+    /// returns so the metric is usable out of the box.
+    pub fn default_weights() -> Self {
+        Self::with_canonical_v0_2()
+    }
+
+    /// Explicit version-tagged variant of [`Self::default_weights`] —
+    /// loads [`crate::WEIGHTS_PREVIEW_V0_2`]. Reach for this when the
+    /// version tag matters to the caller (e.g., audit logs, sweep
+    /// metadata).
+    pub fn with_canonical_v0_2() -> Self {
+        Self {
+            weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
+        }
     }
 
     /// Attach a trained weight vector.

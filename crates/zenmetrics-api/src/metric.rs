@@ -169,7 +169,7 @@ impl MetricParams {
             #[cfg(feature = "iwssim")]
             MetricKind::Iwssim => Ok(Self::Iwssim(iwssim_gpu::IwssimParams::DEFAULT)),
             #[cfg(feature = "zensim")]
-            MetricKind::Zensim => Ok(Self::Zensim(zensim_gpu::ZensimParams::new())),
+            MetricKind::Zensim => Ok(Self::Zensim(zensim_gpu::ZensimParams::default_weights())),
             #[allow(unreachable_patterns)]
             other => Err(Error::MetricNotEnabled { kind: other.tag() }),
         }

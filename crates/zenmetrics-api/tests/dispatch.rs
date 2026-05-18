@@ -163,15 +163,39 @@ fn dispatch_iwssim() {
 #[cfg(feature = "zensim")]
 #[test]
 fn dispatch_zensim() {
-    // Zensim with no weights returns NaN — that's the documented
-    // "you forgot to wire weights" contract. Test that the metric
-    // dispatches successfully and returns the expected NaN sentinel
-    // rather than crashing.
+    // The umbrella's MetricParams::default_for(Zensim) bakes in the
+    // canonical WEIGHTS_PREVIEW_V0_2 weights, so the score must be
+    // finite. identity_inputs() returns the SAME bytes for ref and
+    // dist (let d = r.clone()) — all difference features collapse to
+    // ~0, so the per-scale raw distance is ~0 and score_from_features
+    // returns ~100 (the perfect-similarity sentinel for the basic-
+    // regime linear score). Allow a small f32-noise band around 100.
+    //
+    // Tolerance note: the CPU `zensim` crate short-circuits identical
+    // inputs to all-zero features (and thus score == 100.0 exactly),
+    // but zensim-gpu has no such short-circuit and runs the full f32
+    // SSIM / blur / max-pool kernel on byte-equal inputs. That picks
+    // up sub-ULP rounding at the coarsest pyramid scales (peak-pooled
+    // SSIM `sd`, `artifact`, `detail_lost` and `hf_mag_loss` powf(0.125)
+    // accumulators), producing ~0.2 score drift on identity. This is
+    // f32-precision, not algorithmic divergence; see
+    // `crates/zensim-gpu/tests/cpu_parity.rs::identical_input_all_zeros`
+    // which already documents the same behaviour with `max_abs < 5e-2`
+    // per-feature (which weights up to ~1.0 in score-domain). Using
+    // `< 1.0` here keeps regression coverage (NaN / channel-swap / zeroed
+    // weights would all far exceed it) while not re-investigating an
+    // already-documented f32-noise band. See investigation memory
+    // `zensim_gpu_identity_drift_investigation_2026-05-19.md`.
     let s = score_identity(MetricKind::Zensim);
     assert_eq!(s.metric_name, "zensim");
     assert!(
-        s.value.is_nan(),
-        "zensim with default (no weights) params must return NaN, got {}",
+        s.value.is_finite(),
+        "zensim default-weights identity score must be finite, got {}",
+        s.value
+    );
+    assert!(
+        (s.value - 100.0).abs() < 1.0,
+        "zensim default-weights identity score must be ~100 within f32 noise (no distortion), got {}",
         s.value
     );
 }

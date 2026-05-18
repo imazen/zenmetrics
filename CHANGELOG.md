@@ -17,6 +17,25 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zensim-gpu — 2026-05-18 (`feat/zensim-weights-and-handles`)
+
+- **`zensim-gpu` — canonical default weights baked in** (commit pending,
+  rebased from `74329e71`). Adds `crates/zensim-gpu/src/weights.rs`
+  with the 228-element `WEIGHTS_PREVIEW_V0_2` array (byte-equal copy
+  of `zensim::profile::WEIGHTS_PREVIEW_V0_2`), re-exports it from the
+  crate root, and ships `ZensimParams::default_weights()` /
+  `::with_canonical_v0_2()` ctors. `MetricParams::default_for(Zensim)`
+  in `zenmetrics-api` now returns finite scores out of the box
+  (previously NaN). Drift guard `tests/weights_parity.rs` asserts
+  byte-equality with the CPU crate's static so a future profile
+  rotation fails loud. Tolerance on `dispatch_zensim` identity test
+  is `< 1.0` (loosened from `< 1e-3`) — see commit message and
+  investigation memo `zensim_gpu_identity_drift_investigation_2026-05-19.md`
+  for the f32-noise rationale (CPU short-circuits identical-input,
+  GPU runs the full kernel and picks up ~0.2 score drift in coarse-
+  pyramid peak-pool features; class already documented in
+  `cpu_parity.rs::identical_input_all_zeros`).
+
 ### sweep infra v2 — 2026-05-18 (`feat/sweep-infra-unified`)
 
 Operational fixes after the iwssim / cvvdp / ssim2 backfill sessions
