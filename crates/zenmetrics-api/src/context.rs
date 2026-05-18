@@ -7,54 +7,36 @@
 //! scoring, wasteful when you're scoring the same `(ref, dist)` pair
 //! through several metrics in a row.
 //!
-//! ## Phase 3 scope: client + dims only
+//! ## Phase 4 upload-once
 //!
-//! The full vision for `MetricContext` is "upload ref + dist once,
-//! hand the device handles to every metric's `compute_handles` and
-//! save ~17 ms × N metrics on the host-to-device transfer." That
-//! requires each metric crate to expose a new `compute_handles`
-//! method (currently each crate's typed `<Metric>::compute` takes
-//! `&[u8]` and uploads internally — there's no `compute_handles`
-//! entry point yet).
+//! `MetricContext::upload_pair` allocates two packed-u32 device
+//! handles (one for ref, one for dist) on the shared client. Every
+//! per-crate opaque now exposes a `compute_handles(&ref, &dist)`
+//! method that consumes those device buffers without re-running its
+//! own upload, so a five-metric scoring pass pays one host-to-device
+//! upload instead of five.
 //!
-//! **Phase 3 (this commit) ships the scaffolding only**:
+//! Handle layout: `width × height` `u32`s, each pixel packed as
+//! `R | G<<8 | B<<16` (alpha unused). Matches what every metric
+//! crate's internal upload produces, so `compute_handles` and the
+//! byte-flavored `compute_srgb_u8` are bit-identical.
 //!
-//! - [`MetricContext`] holds a `ComputeClient<R>` + `(width, height)`.
-//!   Callers can use it as a place to put a future shared client and
-//!   to thread per-pair upload state through.
-//! - [`MetricContext::upload_pair`] is a stub that records the pair
-//!   bytes against a generation counter so a future scheduler can
-//!   detect "different pair, must re-upload" without parsing the
-//!   bytes again.
-//! - The `compute_handles` method on [`crate::Metric`] is **not**
-//!   implemented yet — see the tracking note below.
-//!
-//! ## Tracking note for Phase 4
-//!
-//! To wire the host-upload-once optimisation:
-//!
-//! 1. Each metric crate adds a `<Metric>::compute_handles(&mut self,
-//!    ref_handle: Handle<R>, dis_handle: Handle<R>) -> Result<Score>`
-//!    method that consumes pre-uploaded device buffers. The signature
-//!    must accept the same Handle layout (packed sRGB u8 of length
-//!    `width * height * 3`) that the per-crate internal upload
-//!    produces today.
-//! 2. The opaque shim (`<Metric>Opaque::compute_handles`) forwards
-//!    that through.
-//! 3. Add `Metric::compute_handles(ctx, pair_handles)` here that
-//!    dispatches to the right variant.
-//!
-//! Until then, [`MetricContext`] is "almost free" — it lets you share
-//! a runtime client across multiple `Metric::new` calls so they don't
-//! each pay the client-construction overhead. The actual upload-once
-//! savings ship in Phase 4.
+//! The opaque [`crate::Metric::compute_handles`] dispatches to the
+//! right variant's `compute_handles`; callers don't pattern-match.
 
 use cubecl::Runtime;
 use cubecl::prelude::ComputeClient;
+use cubecl::server::Handle;
 
-/// Shared GPU runtime context — currently holds the cubecl
-/// [`ComputeClient`] and image dims. See module-level docs for the
-/// roadmap.
+use crate::Result;
+
+/// Shared GPU runtime context — holds the cubecl
+/// [`ComputeClient`], image dims, and the most recent
+/// [`Self::upload_pair`] handles. Hand to every per-metric typed
+/// `<Metric><R>::new(ctx.client().clone(), w, h)` constructor so each
+/// metric shares one runtime; then call [`Self::upload_pair`] once
+/// per `(ref, dist)` pair and [`crate::Metric::compute_handles`] on
+/// every metric.
 pub struct MetricContext<R: Runtime> {
     /// The shared cubecl client. Hand to per-metric typed
     /// `<Metric><R>::new(client.clone(), w, h)` constructors so they
@@ -70,12 +52,21 @@ pub struct MetricContext<R: Runtime> {
     generation: u64,
 }
 
-/// Tracking handle returned by [`MetricContext::upload_pair`]. In
-/// Phase 3 this carries only a generation tag; Phase 4 will add the
-/// actual `cubecl::Handle<R>` device buffers for the pre-uploaded
-/// reference and distorted images.
-#[derive(Debug, Clone, Copy)]
+/// Tracking handle returned by [`MetricContext::upload_pair`]. Carries
+/// the two device buffers (`ref_handle`, `dist_handle`) plus the
+/// monotonic generation counter so a debug-build can sanity-check
+/// that the consumer is using the latest upload.
+///
+/// `Handle` is `Clone` on cubecl's side — every metric's
+/// `compute_handles` takes `&Handle`, so calling several metrics in a
+/// row against one [`PairHandles`] is fine.
+#[derive(Debug, Clone)]
 pub struct PairHandles {
+    /// Pre-uploaded reference image, packed-u32 layout
+    /// (`R | G<<8 | B<<16`, length `width × height`).
+    pub ref_handle: Handle,
+    /// Pre-uploaded distorted image, packed-u32 layout.
+    pub dist_handle: Handle,
     /// Monotonic upload-id assigned by the [`MetricContext`]. Compare
     /// against the context's current generation to check whether a
     /// later upload has invalidated these handles.
@@ -108,27 +99,47 @@ impl<R: Runtime> MetricContext<R> {
         (self.width, self.height)
     }
 
-    /// **Stub for Phase 4.** Records that a new `(ref, dist)` pair is
-    /// about to be scored — bumps the generation counter and returns
-    /// a [`PairHandles`] tag. The actual GPU upload still happens
-    /// inside each metric's `compute_*` call until Phase 4 lands the
-    /// shared-upload path.
+    /// Pack and upload a `(ref, dist)` sRGB-u8 pair into device
+    /// handles. The returned [`PairHandles`] can then be passed to
+    /// [`crate::Metric::compute_handles`] (or each metric's per-crate
+    /// `compute_handles` directly) without paying for a re-upload.
     ///
-    /// Provided so caller code can be written today against the
-    /// upload-once shape and pick up the perf win when Phase 4 lands
-    /// without re-plumbing the call sites.
-    pub fn upload_pair(&mut self, _ref_rgb: &[u8], _dis_rgb: &[u8]) -> PairHandles {
-        // Validate sizes so a caller-misuse fails here rather than
-        // inside the metric's compute path.
-        let _expected = (self.width as usize) * (self.height as usize) * 3;
-        // We deliberately don't return Result yet — the eventual
-        // compute_handles path will validate downstream. Phase 4
-        // should consider returning Result if the upload-once API
-        // wants to surface "ref vs dist length mismatch" cleanly.
-        self.generation = self.generation.wrapping_add(1);
-        PairHandles {
-            generation: self.generation,
+    /// Layout: each input is `width × height × 3` packed RGB u8;
+    /// the output handle is `width × height` packed-u32 of
+    /// `R | G<<8 | B<<16` — the same layout each metric's internal
+    /// upload uses. Bit-identical scores vs. `compute_srgb_u8`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::DimensionMismatch`] if either input's
+    /// length doesn't match `width × height × 3`.
+    pub fn upload_pair(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<PairHandles> {
+        let n = (self.width as usize) * (self.height as usize);
+        let expected_bytes = n * 3;
+        if ref_rgb.len() != expected_bytes {
+            return Err(crate::Error::DimensionMismatch {
+                expected: (self.width, self.height),
+                got: ((ref_rgb.len() / 3) as u32, 1),
+            });
         }
+        if dis_rgb.len() != expected_bytes {
+            return Err(crate::Error::DimensionMismatch {
+                expected: (self.width, self.height),
+                got: ((dis_rgb.len() / 3) as u32, 1),
+            });
+        }
+        let ref_handle = pack_into_pinned(&self.client, ref_rgb, n);
+        let dist_handle = pack_into_pinned(&self.client, dis_rgb, n);
+        self.generation = self.generation.wrapping_add(1);
+        Ok(PairHandles {
+            ref_handle,
+            dist_handle,
+            generation: self.generation,
+        })
     }
 
     /// Current generation counter — incremented by [`Self::upload_pair`].
@@ -136,4 +147,32 @@ impl<R: Runtime> MetricContext<R> {
     pub fn generation(&self) -> u64 {
         self.generation
     }
+}
+
+/// Pack `n` pixels of `width × height × 3` sRGB u8 (length `n * 3`)
+/// into a packed-u32 device handle (`R | G<<8 | B<<16`, length `n`),
+/// matching what every metric crate's internal upload produces. Uses
+/// the same pinned-staging fast path so the host write hits the
+/// pinned-memory DMA path on CUDA backends.
+fn pack_into_pinned<R: Runtime>(
+    client: &ComputeClient<R>,
+    srgb: &[u8],
+    n: usize,
+) -> Handle {
+    let pinned_len = n * 4;
+    let mut staging = client.reserve_staging(&[pinned_len]);
+    let mut bytes = staging
+        .pop()
+        .expect("reserve_staging returned no buffers");
+    {
+        let dst: &mut [u8] = &mut bytes;
+        debug_assert_eq!(dst.len(), pinned_len);
+        for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+            chunk_out[0] = triple[0];
+            chunk_out[1] = triple[1];
+            chunk_out[2] = triple[2];
+            chunk_out[3] = 0;
+        }
+    }
+    client.create(bytes)
 }

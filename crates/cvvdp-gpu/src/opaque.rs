@@ -44,6 +44,15 @@ pub struct Score {
 
 trait CvvdpInner: Send {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score>;
+    fn dims(&self) -> (u32, u32);
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score>;
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
 }
 
 impl<R> CvvdpInner for Cvvdp<R>
@@ -58,6 +67,29 @@ where
             metric_name: "cvvdp",
             metric_version: env!("CARGO_PKG_VERSION"),
         })
+    }
+
+    fn dims(&self) -> (u32, u32) {
+        Cvvdp::dimensions(self)
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        let jod = Cvvdp::compute_handles(self, ref_handle, dis_handle)?;
+        Ok(Score {
+            value: jod,
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
+        Cvvdp::pack_srgb_into_packed_u32_handle(self, srgb)
     }
 }
 
@@ -116,7 +148,11 @@ impl CvvdpOpaque {
 
     /// Configured `(width, height)`.
     pub fn dims(&self) -> (u32, u32) {
-        (self.width, self.height)
+        // Stored width/height and inner.dims() are equivalent — the
+        // inner is constructed with the same w/h passed to Self::new.
+        // Prefer the inner dispatch so the trait method isn't dead
+        // code (for future inner types that compute dims dynamically).
+        self.inner.dims()
     }
 
     /// Score one reference / distorted pair (packed sRGB RGB8).
@@ -138,6 +174,29 @@ impl CvvdpOpaque {
         let ref_buf = to_srgb_rgb8(&r, self.width, self.height)?;
         let dis_buf = to_srgb_rgb8(&d, self.width, self.height)?;
         self.inner.compute_srgb_u8(&ref_buf, &dis_buf)
+    }
+
+    /// Score against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. See the typed
+    /// [`Cvvdp::compute_handles`](crate::pipeline::Cvvdp::compute_handles)
+    /// for the layout contract.
+    #[cfg(feature = "cubecl-types")]
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        self.inner.compute_handles(ref_handle, dis_handle)
+    }
+
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    #[cfg(feature = "cubecl-types")]
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        self.inner.pack_srgb(srgb)
     }
 }
 

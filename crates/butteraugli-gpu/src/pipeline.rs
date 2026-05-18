@@ -435,6 +435,80 @@ impl<R: Runtime> Butteraugli<R> {
         ))
     }
 
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    /// Uses the same pinned-staging fast path as the internal upload.
+    ///
+    /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
+    /// height * 3`.
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        let expected = self.n * 3;
+        if srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            });
+        }
+        let pinned_len = self.n * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
+        }
+        Ok(self.client.create(bytes))
+    }
+
+    /// Compute against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. Skips the
+    /// `client.reserve_staging` + byte-pack work that
+    /// [`Self::compute`] does internally, letting one
+    /// `(ref, dist)` upload feed several metrics on the same client.
+    ///
+    /// Handle layout MUST be the packed-u32 form produced by
+    /// [`Self::pack_srgb_into_packed_u32_handle`] (one `u32` per
+    /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
+    /// handle is expected to live on the same cubecl client that
+    /// constructed this `Butteraugli<R>`.
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<GpuButteraugliResult> {
+        self.compute_handles_with_options(ref_handle, dis_handle, &ButteraugliParams::default())
+    }
+
+    /// Mode-explicit counterpart of [`Self::compute_handles`] — same
+    /// param-validation semantics as [`Self::compute_with_options`].
+    pub fn compute_handles_with_options(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+        params: &ButteraugliParams,
+    ) -> Result<GpuButteraugliResult> {
+        validate_params(params)?;
+        self.set_params_recursive(params);
+        self.install_packed_handle_and_srgb_to_linear(true, ref_handle);
+        self.install_packed_handle_and_srgb_to_linear(false, dis_handle);
+        self.run_pipeline_from_linear(true, true);
+        Ok(reduction::reduce::<R>(
+            &self.client,
+            self.diffmap_buf.clone(),
+            self.n,
+        ))
+    }
+
     /// Cache the reference image's intermediate state. After this call,
     /// [`Butteraugli::compute_with_reference`] can be called any number
     /// of times with different distorted images; each one skips the
@@ -670,6 +744,27 @@ impl<R: Runtime> Butteraugli<R> {
     /// Upload sRGB u8 input and convert to planar linear RGB into
     /// `lin_a` / `lin_b`. Linear values stay in [0, 1] until opsin
     /// scales by `intensity_multiplier=80`.
+    /// Install a caller-supplied packed-u32 device handle as the
+    /// ref/dist input AND run the sRGB→linear kernel. Handle layout
+    /// MUST match what [`Self::populate_linear_from_srgb`] produces:
+    /// `width × height` `u32`s, each `R | G<<8 | B<<16` (alpha
+    /// unused). After return `lin_a` (or `lin_b`) holds the linear
+    /// RGB planes and the rest of the pipeline can run.
+    fn install_packed_handle_and_srgb_to_linear(
+        &mut self,
+        is_a: bool,
+        handle: &cubecl::server::Handle,
+    ) {
+        if is_a {
+            self.src_u8_a = handle.clone();
+        } else {
+            self.src_u8_b = handle.clone();
+        }
+        unsafe {
+            self.launch_srgb_to_linear(is_a);
+        }
+    }
+
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {
         let n_bytes = self.n * 3;
         // Defense-in-depth check: every public caller goes through

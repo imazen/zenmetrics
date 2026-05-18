@@ -362,6 +362,103 @@ impl<R: Runtime> Ssim2<R> {
         self.compute_with_mode(Ssim2Mode::default(), ref_srgb, dist_srgb)
     }
 
+    /// Pack the caller's `width × height × 3` sRGB-u8 bytes into a
+    /// `width × height` packed-u32 device handle (`R | G<<8 | B<<16`),
+    /// using the same pinned-staging fast path the internal upload
+    /// uses. Cheaper than [`Self::compute`] when scoring the same
+    /// pair through multiple metrics — pack once via
+    /// [`Self::pack_srgb_into_packed_u32_handle`] on any one metric's
+    /// client, then thread the handle through
+    /// [`Self::compute_handles`] on every metric that shares the
+    /// same client.
+    ///
+    /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
+    /// height * 3`.
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        let expected = self.n * 3;
+        if srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            });
+        }
+        let pinned_len = self.n * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
+        }
+        Ok(self.client.create(bytes))
+    }
+
+    /// Compute against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. Skips the
+    /// `client.reserve_staging` + byte-pack work that
+    /// [`Self::compute`] does internally, letting one
+    /// `(ref, dist)` upload feed several metrics on the same client.
+    ///
+    /// Handle layout MUST be the packed-u32 form produced by
+    /// [`Self::pack_srgb_into_packed_u32_handle`] (one `u32` per
+    /// pixel, `R | G<<8 | B<<16`, length `width × height`). The
+    /// handle is also expected to live on the same cubecl client
+    /// that constructed this `Ssim2<R>`; sharing handles across
+    /// clients is undefined behaviour at the cubecl layer and is
+    /// not validated here.
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<GpuSsim2Result> {
+        self.compute_handles_with_mode(Ssim2Mode::default(), ref_handle, dis_handle)
+    }
+
+    /// Mode-explicit counterpart of [`Self::compute_handles`] — same
+    /// skip-map semantics as [`Self::compute_with_mode`].
+    pub fn compute_handles_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<GpuSsim2Result> {
+        // Same zero-fill discipline as `compute_with_mode`. See that
+        // method's comment for rationale.
+        reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
+
+        self.install_packed_handle(true, ref_handle);
+        self.install_packed_handle(false, dis_handle);
+
+        let last_active = (0..self.scales.len())
+            .rev()
+            .find(|&s| !skip_scale(mode, s))
+            .unwrap_or(0);
+        self.build_linear_pyramid_until(true, last_active);
+        self.build_linear_pyramid_until(false, last_active);
+
+        for s in 0..self.scales.len() {
+            if skip_scale(mode, s) {
+                continue;
+            }
+            self.process_scale(s, mode);
+        }
+        self.run_finalizer();
+
+        Ok(GpuSsim2Result {
+            score: self.read_and_aggregate(),
+        })
+    }
+
     /// Score one image pair under the chosen [`Ssim2Mode`]. Identical
     /// to [`Ssim2::compute`] but with explicit control over the
     /// skip-map dispatch — `Ssim2Mode::Full` matches the pre-skip-map
@@ -615,6 +712,15 @@ impl<R: Runtime> Ssim2<R> {
         } else {
             self.src_u8_b = handle;
         }
+        self.srgb_to_linear_from_packed(is_a);
+    }
+
+    /// Run the sRGB-u8 → linear-planar conversion from whichever
+    /// packed-u32 handle currently sits in `src_u8_a` / `src_u8_b`.
+    /// Split out of [`Self::upload_and_srgb_to_linear`] so that
+    /// [`Self::compute_handles`] (Phase 4 upload-once path) can skip
+    /// the byte-copy step and reuse a caller-supplied device buffer.
+    fn srgb_to_linear_from_packed(&self, is_a: bool) {
         let (src, lin) = if is_a {
             (&self.src_u8_a, &self.scales[0].ref_lin)
         } else {
@@ -631,6 +737,21 @@ impl<R: Runtime> Ssim2<R> {
                 ArrayArg::from_raw_parts(lin[2].clone(), self.n),
             );
         }
+    }
+
+    /// Install a caller-supplied packed-u32 device handle as the
+    /// ref/dist input. The handle layout MUST match what
+    /// [`Self::upload_and_srgb_to_linear`] produces: `width × height`
+    /// `u32`s, each `R | G<<8 | B<<16` (alpha unused). After this
+    /// returns the sRGB→linear kernel has been dispatched and the
+    /// pipeline can run from scale-0 linear planes onwards.
+    fn install_packed_handle(&mut self, is_a: bool, handle: &cubecl::server::Handle) {
+        if is_a {
+            self.src_u8_a = handle.clone();
+        } else {
+            self.src_u8_b = handle.clone();
+        }
+        self.srgb_to_linear_from_packed(is_a);
     }
 
     fn build_linear_pyramid(&self, is_a: bool) {

@@ -57,6 +57,15 @@ trait ButteraugliInner: Send {
         params: &ButteraugliParams,
     ) -> Result<Score>;
     fn dims(&self) -> (u32, u32);
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+        params: &ButteraugliParams,
+    ) -> Result<Score>;
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
 }
 
 impl<R> ButteraugliInner for Butteraugli<R>
@@ -80,6 +89,26 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Butteraugli::dimensions(self)
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+        params: &ButteraugliParams,
+    ) -> Result<Score> {
+        let r = Butteraugli::compute_handles_with_options(self, ref_handle, dis_handle, params)?;
+        Ok(Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    #[cfg(feature = "cubecl-types")]
+    fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
+        Butteraugli::pack_srgb_into_packed_u32_handle(self, srgb)
     }
 }
 
@@ -161,6 +190,29 @@ impl ButteraugliOpaque {
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_srgb_u8(&ref_buf, &dis_buf, &self.params)
+    }
+
+    /// Score against pre-uploaded packed-u32 device handles —
+    /// upload-once Phase 4 entry point. See per-crate typed
+    /// `Butteraugli::compute_handles` for the layout contract.
+    #[cfg(feature = "cubecl-types")]
+    pub fn compute_handles(
+        &mut self,
+        ref_handle: &cubecl::server::Handle,
+        dis_handle: &cubecl::server::Handle,
+    ) -> Result<Score> {
+        self.inner
+            .compute_handles(ref_handle, dis_handle, &self.params)
+    }
+
+    /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
+    /// device handle layout that [`Self::compute_handles`] expects.
+    #[cfg(feature = "cubecl-types")]
+    pub fn pack_srgb_into_packed_u32_handle(
+        &self,
+        srgb: &[u8],
+    ) -> Result<cubecl::server::Handle> {
+        self.inner.pack_srgb(srgb)
     }
 }
 

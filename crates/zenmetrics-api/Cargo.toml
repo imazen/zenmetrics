@@ -108,3 +108,11 @@ thiserror = { workspace = true }
 [dev-dependencies]
 # Smoke tests construct a PixelBuffer for the `compute_pixels` path.
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+# Phase 4 compute_handles test needs the cubecl runtime to build a
+# shared client. Only used by `tests/compute_handles.rs`, which is
+# gated on `cuda,cubecl-types`.
+cubecl = { workspace = true }
+
+[[test]]
+name = "compute_handles"
+required-features = ["cuda", "cubecl-types"]
