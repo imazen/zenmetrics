@@ -11,14 +11,20 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu"]
+default = ["cuda", "wgpu", "cpu", "pixels"]
 cuda = ["cubecl/cuda"]
 wgpu = ["cubecl/wgpu"]
 hip = ["cubecl/hip"]
 cpu = ["cubecl/cpu"]
+# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Exposes the generic typed Iwssim<R>. Off by default.
+cubecl-types = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [build-dependencies]
 # Gaussian / binomial coefficient generation at build time.
@@ -26,3 +32,28 @@ cubecl = { workspace = true }
 [dev-dependencies]
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg", "bmp"] }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+
+[[example]]
+name = "bench"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_profile"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_t4_warm"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "parity_smoke"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "parity_lock"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque"
+required-features = ["cubecl-types"]

@@ -68,8 +68,14 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod opaque;
 pub mod pipeline;
 
+// Uniform opaque API (Phase 2). See `opaque.rs`.
+pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
+
+// Typed-generic API (gated behind `cubecl-types`).
+#[cfg(feature = "cubecl-types")]
 pub use pipeline::Zensim;
 
 /// Number of pyramid scales — matches CPU zensim's `WEIGHTS_PREVIEW_V0_2`.

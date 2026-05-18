@@ -43,15 +43,20 @@ cpu-metrics = [
 
 # GPU bundle: pulls every GPU metric implementation.
 gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim"]
-gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl"]
-gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl"]
-gpu-dssim = ["dep:dssim-gpu", "dep:cubecl"]
-gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl"]
+# Each gpu-* feature pulls in the typed cubecl-types surface of the
+# matching metric crate because zen-metrics-cli's score/batch helpers
+# call into Cvvdp::<R>::new / Butteraugli::<R>::new_multires / etc.
+# directly. The Phase 3 umbrella crate (zenmetrics-api) will switch
+# us over to the opaque API; until then we depend on cubecl-types.
+gpu-butteraugli = ["dep:butteraugli-gpu", "dep:cubecl", "butteraugli-gpu/cubecl-types"]
+gpu-ssim2 = ["dep:ssim2-gpu", "dep:cubecl", "ssim2-gpu/cubecl-types"]
+gpu-dssim = ["dep:dssim-gpu", "dep:cubecl", "dssim-gpu/cubecl-types"]
+gpu-cvvdp = ["dep:cvvdp-gpu", "dep:cubecl", "cvvdp-gpu/cubecl-types"]
 # IW-SSIM (Information-Content Weighted SSIM, Wang & Li 2011). GPU
 # implementation via the in-workspace `iwssim-gpu` crate. Score is
 # in [0, 1] where 1 = identical. Requires `min(W,H) >= 176` per the
 # paper's 5-level pyramid + 11×11 valid-mode SSIM stats constraint.
-gpu-iwssim = ["dep:iwssim-gpu", "dep:cubecl"]
+gpu-iwssim = ["dep:iwssim-gpu", "dep:cubecl", "iwssim-gpu/cubecl-types"]
 # Pick CubeCL backends. Default forwards through the GPU metric crates which
 # already enable cuda/wgpu/cpu when their default features are kept.
 gpu-cuda = [

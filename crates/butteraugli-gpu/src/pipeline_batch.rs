@@ -15,7 +15,8 @@
 use cubecl::prelude::*;
 
 use crate::kernels::{blur, colors, diffmap, downscale, frequency, malta, masking, reduction};
-use crate::{Butteraugli, ButteraugliParams, Result};
+use crate::pipeline::Butteraugli;
+use crate::{ButteraugliParams, Result};
 
 const SIGMA_LF: f32 = 7.155_933_4;
 const SIGMA_OPSIN: f32 = 1.2;

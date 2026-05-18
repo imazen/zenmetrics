@@ -52,8 +52,14 @@
 pub mod eig;
 pub mod filters;
 pub mod kernels;
+pub mod opaque;
 pub mod pipeline;
 
+// Uniform opaque API (Phase 2). See `opaque.rs`.
+pub use opaque::{Backend, IwssimOpaque, IwssimParams, Score};
+
+// Typed-generic API (gated behind `cubecl-types`).
+#[cfg(feature = "cubecl-types")]
 pub use pipeline::Iwssim;
 
 /// Number of pyramid scales — fixed at 5 by the IW-SSIM paper.

@@ -534,6 +534,8 @@ dependencies = [
  "imgref",
  "rgb",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -1233,6 +1235,8 @@ dependencies = [
  "ureq",
  "zenbench",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -1435,6 +1439,8 @@ dependencies = [
  "imgref",
  "rgb",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -2345,6 +2351,8 @@ dependencies = [
  "bytemuck",
  "cubecl",
  "image",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -4107,6 +4115,8 @@ dependencies = [
  "ssimulacra2",
  "yuvxyb 0.5.0",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -6120,6 +6130,8 @@ dependencies = [
  "cubecl",
  "image",
  "zenmetrics-corpus",
+ "zenpixels",
+ "zenpixels-convert",
  "zensim 0.3.0",
 ]
 
