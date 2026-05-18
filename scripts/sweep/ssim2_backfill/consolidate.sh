@@ -12,7 +12,7 @@ mkdir -p "$LOCAL_DIR" "$(dirname "$OUT_PARQUET")"
 
 echo "[consolidate-ssim2] step 1: sync R2 → local"
 s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --profile r2 \
-    sync "$R2_PREFIX" "$LOCAL_DIR" 2>&1 | tail -10
+    sync "${R2_PREFIX}*" "$LOCAL_DIR" 2>&1 | tail -10
 
 NUM=$(ls "$LOCAL_DIR"*.parquet 2>/dev/null | wc -l)
 echo "[consolidate-ssim2] step 1 done: $NUM sidecars in $LOCAL_DIR"
