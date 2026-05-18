@@ -1,5 +1,10 @@
 #!/bin/bash
 #
+# PARTIAL DEPRECATION: for single-impl cvvdp backfills (imazen-only),
+# use scripts/sweep/launch_backfill.sh --metric cvvdp instead. This
+# launch.sh stays canonical for the dual-impl (cvvdp-gpu + pycvvdp
+# parity) flow, which the unified launcher does not yet cover.
+#
 # launch.sh — host-side vast.ai launcher for the cvvdp-backfill fleet
 # (PINNED TASK).
 #

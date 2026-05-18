@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 #
+# DEPRECATED: use scripts/sweep/launch_backfill.sh --metric iwssim ...
+# instead. This file is retained for in-flight runners and reference.
+# New launches should use the unified launcher.
+#
 # iwssim_backfill/launch.sh — vast.ai fleet launcher for the IW-SSIM
 # backfill (1.17M pairs from cvvdp_imazen_consolidated.parquet).
 # Mirrors cvvdp_backfill/launch_imazen.sh — single-image flow, no

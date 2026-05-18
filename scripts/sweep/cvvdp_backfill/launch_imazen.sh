@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 #
+# DEPRECATED: use scripts/sweep/launch_backfill.sh --metric cvvdp ...
+# instead. This file is retained for in-flight runners and reference.
+# New launches should use the unified launcher.
+#
 # cvvdp_backfill/launch_imazen.sh — vast.ai fleet launcher for the
 # IMAZEN-ONLY variant. Sibling to launch.sh; trades the pycvvdp
 # parity column for a working single-image flow that standard
