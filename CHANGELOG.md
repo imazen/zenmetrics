@@ -17,6 +17,33 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+## zenmetrics-api (new crate, Phase 3)
+
+### Added
+
+- New `zenmetrics-api` umbrella crate at `crates/zenmetrics-api/`.
+  Composes the six GPU metric crates (cvvdp-gpu, butteraugli-gpu,
+  ssim2-gpu, dssim-gpu, iwssim-gpu, zensim-gpu) behind a single
+  enum-dispatched `Metric` + `MetricKind` + `MetricParams` API. Per-
+  metric Cargo switches (`cvvdp`/`butter`/…), backend forwarding
+  (`cuda`/`wgpu`/`hip`/`cpu`), `pixels` opt-in, and a `cubecl-types`
+  feature that re-exports each metric's typed `<Metric><R>` and
+  exposes a `MetricContext<R>` scaffold (client + dims + generation
+  counter) for future shared-upload work. 7 dispatch tests + 3
+  `compute_pixels` smoke tests + 1 doctest all pass against CUDA on
+  RTX 5070.
+
+### Phase 4 candidates
+
+- `Metric::compute_handles(&ctx, pair_handles)` — requires each metric
+  crate to add a `compute_handles(handle_r, handle_d) -> Score` entry
+  point that consumes pre-uploaded device buffers (today every
+  metric's typed `compute` re-uploads internally).
+- Flip `zen-metrics-cli` over to depend on `zenmetrics-api` instead of
+  the four individual gpu-* crate deps.
+- `build.rs` cubecl version cross-check via `cargo metadata` instead
+  of the current advisory `cargo:warning=`.
+
 ### Milestone — tick 500 (cvvdp-gpu)
 
 The 416–500 tick arc was a deep invariant-pinning + documentation
