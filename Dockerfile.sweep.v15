@@ -1,105 +1,41 @@
-# Dockerfile.sweep.v15 — v14 + self-destroy CLI + error-trap wrapper.
+# Dockerfile.sweep.v15 — thin layer over v14 + self-destroy CLI.
 #
-# Adds on top of v14:
-#   - vastai-fleet binary (with new `self-destroy` subcommand) at
-#     /usr/local/bin/vastai-fleet so the worker EXIT trap can upload
-#     stderr to R2 + destroy own instance on non-zero exit.
-#   - metric_backfill_chunk_worker.sh (the unified per-metric worker
-#     from the 2026-05-18 sweep infra v2 cycle).
-#   - onstart_cvvdp_picker_corpus.sh — new onstart variant targeting
-#     the CID22 picker pareto on R2 (not the 1024px gen-chart sweep).
-#   - run_with_error_trap.sh — small shell wrapper that callers can
-#     use as `ENTRYPOINT [run_with_error_trap.sh, <real-onstart>]` to
-#     get self-destroy-on-error behavior without modifying the
-#     underlying onstart script.
+# v15 = v14 image (all the heavy lifting: ubuntu + cuda-nvrtc + pyarrow
+# + s5cmd + zen-metrics) + a small layer adding:
+#   - vastai-fleet binary with new `self-destroy` subcommand
+#   - run_with_error_trap.sh wrapper
+#   - cvvdp + metric chunk worker scripts (v14 only baked the
+#     iwssim worker; cvvdp / generic flows need their own)
 #
-# v15 reuses v14's `runtime-base` stage byte-for-byte, so L1-L4 layer
-# cache hits transfer cleanly. Only L5b (vastai-fleet) + L6 (extra
-# scripts) re-pull on push.
+# Building this image is fast (~5s + ~5 MB push) because the v14
+# base layer is already cached on GHCR.
 #
-# Build (precompiled binary path):
+# Build (no Rust rebuild — only vastai-fleet, which is ~3 MB):
 #
 #   cd ~/work/zen/zenmetrics
-#   cargo build --release -p zen-metrics-cli \
-#       --features 'sweep,gpu,gpu-cuda,gpu-cpu'
 #   cargo build --release -p vastai-fleet
-#   cp target/release/zen-metrics  ./zen-metrics
 #   cp target/release/vastai-fleet ./vastai-fleet
 #
 #   docker build -f Dockerfile.sweep.v15 \
-#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
+#       --build-arg V14_TAG=v14 \
 #       --build-arg VASTAI_FLEET_BINARY=./vastai-fleet \
-#       -t ghcr.io/imazen/zen-metrics-sweep:v15-$(git rev-parse --short HEAD) .
+#       -t ghcr.io/imazen/zen-metrics-sweep:v15-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v15 \
+#       .
 #
-# ─────────────────────────────────────────────────────────────────────
-# Stage A: runtime base — INHERIT v14's STABLE LAYERS (L1-L4)
-# ─────────────────────────────────────────────────────────────────────
+#   docker push ghcr.io/imazen/zen-metrics-sweep:v15-$(git rev-parse --short HEAD)
+#   docker push ghcr.io/imazen/zen-metrics-sweep:v15
 
-FROM ubuntu:24.04 AS runtime-base
+ARG V14_TAG=v14
+FROM ghcr.io/imazen/zen-metrics-sweep:${V14_TAG}
 
-LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker base — v15 (CUDA NVRTC + python pyarrow + helpers + curl baked)"
-LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# L1a: base OS packages. v15 explicitly adds `curl` to the baked set
-# because vastai-fleet self-destroy shells out to it for the
-# vast.ai REST DELETE call.
+# Curl wasn't in v14's apt set. vastai-fleet self-destroy shells out
+# to it for the vast.ai REST DELETE call. Single-RUN with cleanup.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg \
-        libssl3 \
-        python3 python3-pip \
-        jq \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# L1b: pyarrow via pip.
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
-        'pyarrow>=15,<18'
-
-# L2: CUDA nvrtc + cudart for GPU metric kernels.
-RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
-        -o /tmp/cuda-keyring.deb \
-    && dpkg -i /tmp/cuda-keyring.deb \
-    && rm /tmp/cuda-keyring.deb \
-    && apt-get update -qq \
-    && apt-get install -y --no-install-recommends \
-        cuda-nvrtc-12-6 cuda-cudart-12-6 \
-    && rm -rf /var/lib/apt/lists/* \
-    && ldconfig
-
-# Standard cuda symlink so library lookups don't depend on the
-# version-specific path.
-RUN ln -sfn /usr/local/cuda-12.6 /usr/local/cuda
-
-# L4: s5cmd (R2 transfers).
-ARG S5CMD_VERSION=2.2.2
-RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v${S5CMD_VERSION}/s5cmd_${S5CMD_VERSION}_Linux-64bit.tar.gz" \
-        -o /tmp/s5cmd.tar.gz \
-    && tar -xzf /tmp/s5cmd.tar.gz -C /usr/local/bin s5cmd \
-    && rm /tmp/s5cmd.tar.gz \
-    && /usr/local/bin/s5cmd version
-
-# ─────────────────────────────────────────────────────────────────────
-# Stage B: final — adds the worker binaries + scripts
-# ─────────────────────────────────────────────────────────────────────
-
-FROM runtime-base AS final
-
-# L5: zen-metrics binary (~280 MB).
-ARG ZEN_METRICS_BINARY=./zen-metrics
-COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
-
-# Sanity check the binary runs.
-RUN /usr/local/bin/zen-metrics --version \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
-    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q ssim2 \
-    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv \
-    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q fail-on-bogus \
-    && echo "L5 zen-metrics smoke passed"
-
-# L5b: vastai-fleet binary (~5 MB). The new `self-destroy` subcommand
+# L5b: vastai-fleet binary (~3 MB). The new self-destroy subcommand
 # is what the EXIT trap calls.
 ARG VASTAI_FLEET_BINARY=./vastai-fleet
 COPY --chmod=0755 ${VASTAI_FLEET_BINARY} /usr/local/bin/vastai-fleet
@@ -108,22 +44,19 @@ RUN /usr/local/bin/vastai-fleet --help 2>&1 | grep -q self-destroy \
     && /usr/local/bin/vastai-fleet self-destroy --help 2>&1 | grep -q error-log \
     && echo "L5b vastai-fleet smoke passed"
 
-# L6: scripts. The existing onstart_cvvdp_backfill_imazen.sh is
-# corpus-AGNOSTIC — it reads each chunk's `source_dir_r2` from
-# chunks.jsonl, so a new corpus = a new chunks.jsonl, not a new
-# onstart. Same for ssim2 / iwssim variants.
-COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh   /usr/local/bin/onstart_iwssim.sh
+# L6: scripts. cvvdp + unified worker (v14 only had iwssim) + the new
+# error-trap wrapper. Run_with_error_trap is what callers point
+# vast.ai's --entrypoint at.
 COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill_imazen.sh /usr/local/bin/onstart_cvvdp_imazen.sh
 COPY --chmod=0755 scripts/sweep/cvvdp_backfill_chunk_worker.sh   /usr/local/bin/cvvdp_chunk_worker.sh
 COPY --chmod=0755 scripts/sweep/metric_backfill_chunk_worker.sh  /usr/local/bin/metric_chunk_worker.sh
 COPY --chmod=0755 scripts/sweep/run_with_error_trap.sh           /usr/local/bin/run_with_error_trap.sh
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker (v15: self-destroy CLI + error-trap wrapper)"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v15: v14 + self-destroy CLI + error-trap wrapper)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-# Default entrypoint = the cvvdp imazen onstart wrapped by the error
-# trap. Caller overrides via `--entrypoint /usr/local/bin/onstart_iwssim.sh`
-# (or any other) for non-cvvdp flows. The wrapper passes through
-# argv[1+] to the onstart.
+# Default entrypoint = cvvdp imazen onstart wrapped by the error trap.
+# Caller overrides with `--entrypoint /usr/local/bin/onstart_iwssim.sh`
+# for the iwssim flow, etc.
 ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh", "/usr/local/bin/onstart_cvvdp_imazen.sh"]
