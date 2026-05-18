@@ -92,7 +92,10 @@ for tool in zen-metrics s5cmd jq python3; do
     command -v "$tool" >/dev/null || MISSING+=("$tool")
 done
 python3 -c "import pyarrow" 2>/dev/null || MISSING+=("python3-pyarrow")
-ldconfig -p | grep -q libnvrtc.so.12 || MISSING+=("libnvrtc12")
+# /sbin/ldconfig because PATH inside an Ubuntu 24.04 minimal container
+# doesn't include /sbin by default for non-root users; the binary is
+# always there.
+/sbin/ldconfig -p | grep -q libnvrtc.so.12 || MISSING+=("libnvrtc12")
 if (( ${#MISSING[@]} > 0 )); then
     log "FATAL: image missing baked dependencies: ${MISSING[*]}"
     log "       this onstart MUST run inside an image built from Dockerfile.sweep.v14+"

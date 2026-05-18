@@ -67,20 +67,27 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# L1: base OS packages — TLS, http, gnupg (for cuda-keyring later),
-# libssl3 (zen-metrics runtime), python3 + pyarrow (chunk worker step
-# 3 slices parquet via pyarrow). Bundled in one RUN so they share a
-# single apt-get update + cleanup. python3-pyarrow lives in `universe`
-# on ubuntu 24.04 — enable it before install. awscli has been removed;
-# s5cmd (baked in L4a) covers R2 transfers without any python deps.
+# L1a: base OS packages — TLS, http, gnupg (for cuda-keyring later),
+# libssl3 (zen-metrics runtime), python3 + pip. Bundled in one RUN so
+# they share a single apt-get update + cleanup. s5cmd (baked in L4a)
+# covers R2 transfers without any python deps.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-        software-properties-common \
-    && add-apt-repository -y universe \
-    && apt-get update -qq && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg \
         libssl3 \
-        python3 python3-pip python3-pyarrow \
+        python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# L1b: pyarrow via pip — debian/ubuntu 24.04 noble does not package
+# python3-pyarrow in any apt repo (universe-search returns nothing).
+# Bake the pip install into the image so it runs ONCE at image build,
+# never at container boot. --break-system-packages bypasses PEP 668's
+# "external management" guard which would otherwise block pip in a
+# container that has system python. The wheel install is reproducible
+# (pinned major) and lives in /usr/lib/python3/dist-packages — readable
+# without venv setup.
+RUN pip3 install --quiet --break-system-packages --no-cache-dir \
+        'pyarrow>=15.0,<22.0' \
+    && python3 -c "import pyarrow.parquet as pq; print('pyarrow', pq.__doc__.split()[0] if pq.__doc__ else 'OK')"
 
 # L3: CUDA NVRTC + cudart — cubecl-cuda dlopens libnvrtc.so.12 at
 # runtime to JIT-compile kernels. nvidia-container-toolkit mounts
@@ -99,7 +106,7 @@ RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu24
         cuda-nvrtc-12-6 cuda-cudart-12-6 \
     && rm -rf /var/lib/apt/lists/* \
     && echo "/usr/local/cuda-12.6/lib64" > /etc/ld.so.conf.d/cuda-12.6.conf \
-    && ldconfig \
+    && /sbin/ldconfig \
     && ln -sf /usr/local/cuda-12.6 /usr/local/cuda
 
 # L4a: s5cmd (R2 transfers) — fetched directly from upstream release
@@ -133,7 +140,7 @@ WORKDIR /workspace/sweep
 RUN python3 -c "import pyarrow.parquet as pq; print('pyarrow OK')" \
     && s5cmd version \
     && jq --version \
-    && ldconfig -p | grep -q libnvrtc.so.12 \
+    && /sbin/ldconfig -p | grep -q libnvrtc.so.12 \
     && echo "L1-L4 smoke passed"
 
 # ─────────────────────────────────────────────────────────────────────
