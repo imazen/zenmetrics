@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 #
+# PARTIAL DEPRECATION: for single-metric cvvdp backfills (the imazen-only
+# path), use scripts/sweep/metric_backfill_chunk_worker.sh --metric cvvdp.
+# This file remains canonical for the dual-impl flow (cvvdp-gpu +
+# pycvvdp side-by-side with parity logging) — the unified worker does
+# not cover that two-scorer shape.
+#
 # cvvdp_backfill_chunk_worker.sh — process one chunk of the
 # cvvdp-backfill fleet (PINNED TASK).
 #
