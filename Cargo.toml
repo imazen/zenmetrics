@@ -5,6 +5,7 @@ members = [
     "crates/dssim-gpu",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",
+    "crates/vastai-fleet",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",

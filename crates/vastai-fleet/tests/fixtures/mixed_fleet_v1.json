@@ -1,0 +1,10 @@
+{"instances": [
+    {"id": 100001, "label": "ssim2-backfill-2026-05-18-w1", "actual_status": "running", "dph_total": 0.0852, "gpu_name": "RTX 4090"},
+    {"id": 100002, "label": "ssim2-backfill-2026-05-18-w2", "actual_status": "running", "dph_total": 0.0911, "gpu_name": "RTX 4090"},
+    {"id": 100003, "label": "ssim2-backfill-2026-05-18-w3", "actual_status": "loading", "dph_total": 0.1023, "gpu_name": "RTX 4070 Ti"},
+    {"id": 100004, "label": "ssim2-backfill-2026-05-18-w4", "actual_status": "exited", "dph_total": 0.0, "gpu_name": "RTX 3090"},
+    {"id": 100005, "label": "iwssim-backfill-2026-05-17-w1", "actual_status": "running", "dph_total": 0.075, "gpu_name": "RTX 3070"},
+    {"id": 100006, "label": "", "actual_status": "running", "dph_total": 0.05, "gpu_name": "RTX 4060"},
+    null,
+    {"id": 100007, "label": "ssim2-backfill-2026-05-18-w5", "actual_status": "loading", "dph_total": "0.095", "gpu_name": "RTX 4090"}
+], "instances_found": 8, "label_counts": {}, "next_token": null}

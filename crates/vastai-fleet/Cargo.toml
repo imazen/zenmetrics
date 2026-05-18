@@ -1,0 +1,29 @@
+[package]
+name = "vastai-fleet"
+version = "0.0.1"
+description = "Robust vast.ai fleet status / destroy / watch CLI for zenmetrics backfill sweeps"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "vastai-fleet"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+# serde_json::Value gives us tolerant parsing — when one instance row is
+# malformed we can skip it with a warning instead of aborting (the bug
+# this crate exists to fix).
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+# anyhow keeps the binary small and the error model simple. This is a CLI
+# helper, not a library.
+anyhow = "1.0.102"
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,0 +1,2 @@
+DEPRECATED: `vastai show instances` will be removed in a future release. Use `vastai show instances-v1` for the new paginated command.
+[{"id": 200001, "label": "test-fleet-w1", "actual_status": "running", "dph_total": 0.10}]
