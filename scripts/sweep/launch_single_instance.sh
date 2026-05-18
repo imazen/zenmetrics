@@ -165,6 +165,12 @@ ENV_STR+=" -e METRIC=${METRIC}"
 ENV_STR+=" -e PARALLEL=${PARALLEL}"
 ENV_STR+=" -e GPU_RUNTIME=${GPU_RUNTIME}"
 ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
+# Forward optional run-time toggles when set in the launcher's env. The
+# omni onstart reads SKIP_CLAIMS to bypass the R2 claim check (useful
+# for single-instance smoke runs against a claim namespace already
+# populated by a prior aborted run).
+[[ -n "${SKIP_CLAIMS:-}" ]] && ENV_STR+=" -e SKIP_CLAIMS=${SKIP_CLAIMS}"
+[[ -n "${METRICS:-}" ]]      && ENV_STR+=" -e METRICS=${METRICS}"
 LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
 echo "[launch_single] creating instance"
