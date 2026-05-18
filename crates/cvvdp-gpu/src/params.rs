@@ -492,6 +492,12 @@ impl CvvdpParams {
     /// assert_eq!(p.display.y_peak, DisplayModel::STANDARD_4K.y_peak);
     /// assert_eq!(p.perf_mode, PerfMode::Strict);
     /// ```
+    ///
+    /// Prefer `CvvdpParams::default()` in new code — it returns the
+    /// same values and reads more idiomatically. `PLACEHOLDER` is
+    /// kept as a `const` for callers that need a const context
+    /// (`const`-initialized statics, match-arm constants, etc.) where
+    /// `Default::default()` isn't usable.
     pub const PLACEHOLDER: Self = Self {
         display: DisplayModel::STANDARD_4K,
         csf: CsfParams {
@@ -516,4 +522,35 @@ impl CvvdpParams {
         },
         perf_mode: PerfMode::Strict,
     };
+}
+
+/// Default returns the canonical `standard_4k` display geometry +
+/// `PerfMode::Strict` — what every v1 R2 parity golden was captured
+/// against. Bit-identical to [`CvvdpParams::PLACEHOLDER`].
+///
+/// Most callers should configure for their target display before
+/// computing — the perceptual model is sensitive to peak luminance,
+/// black level, ambient, and viewing distance. Use the default for
+/// quick-start work and parity tests that match the standard_4k
+/// reference; replace the [`DisplayModel`] field for any production
+/// scoring where the actual viewing conditions are known.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::{CvvdpParams, PerfMode};
+///
+/// // Default and PLACEHOLDER are bit-identical.
+/// let d = CvvdpParams::default();
+/// let p = CvvdpParams::PLACEHOLDER;
+/// assert_eq!(d.display.y_peak, p.display.y_peak);
+/// assert_eq!(d.display.y_black, p.display.y_black);
+/// assert_eq!(d.display.y_refl, p.display.y_refl);
+/// assert_eq!(d.perf_mode, p.perf_mode);
+/// assert_eq!(d.perf_mode, PerfMode::Strict);
+/// ```
+impl Default for CvvdpParams {
+    fn default() -> Self {
+        Self::PLACEHOLDER
+    }
 }

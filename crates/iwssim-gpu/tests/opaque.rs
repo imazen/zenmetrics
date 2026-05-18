@@ -118,3 +118,36 @@ fn opaque_pixels_handles_stride() {
         rel
     );
 }
+
+/// Identity pair must score 1.0 (within f32 noise). The per-scale
+/// information-weighted ratio Σ(cs·iw)/Σ(iw) is 0/0 in the degenerate
+/// case — pipeline-level handling collapses both `Σ(iw) == 0` and a
+/// non-finite numerator to the perfect-score value (1.0) so the final
+/// Π |wmcs_j|^β_j product lands on 1.0 instead of 0 or NaN.
+#[test]
+fn compute_on_identical_returns_1() {
+    let w = 256_u32;
+    let h = 256_u32;
+    // Use a spatially-structured sRGB image (not a flat constant) so
+    // the test exercises the real pyramid path; the "identical"
+    // contract has to hold for any input, not just trivial ones.
+    let img = make_image(w, h, 42);
+
+    let mut opaque =
+        IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
+    let score = opaque
+        .compute_srgb_u8(&img, &img)
+        .expect("opaque compute_srgb_u8 identical");
+
+    assert!(
+        score.value.is_finite(),
+        "identical pair must produce a finite score, got {}",
+        score.value,
+    );
+    assert!(
+        (score.value - 1.0).abs() < 1e-9,
+        "identical pair must score 1.0 within 1e-9, got {}",
+        score.value,
+    );
+    assert_eq!(score.metric_name, "iwssim");
+}

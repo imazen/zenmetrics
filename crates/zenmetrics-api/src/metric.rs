@@ -159,7 +159,7 @@ impl MetricParams {
     pub fn try_default_for(kind: MetricKind) -> Result<Self> {
         match kind {
             #[cfg(feature = "cvvdp")]
-            MetricKind::Cvvdp => Ok(Self::Cvvdp(cvvdp_gpu::CvvdpParams::PLACEHOLDER)),
+            MetricKind::Cvvdp => Ok(Self::Cvvdp(cvvdp_gpu::CvvdpParams::default())),
             #[cfg(feature = "butter")]
             MetricKind::Butter => Ok(Self::Butter(butteraugli_gpu::ButteraugliParams::default())),
             #[cfg(feature = "ssim2")]
