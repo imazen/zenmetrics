@@ -62,11 +62,18 @@ process_chunk() {
     local line="$1"
     local cid
     cid=$(jq -r '.chunk_id' <<< "$line")
-    local claim="${SCRIPTS_R2_PREFIX%/}/../../claims/${SWEEP_RUN_ID}/${cid}"
-    # Atomic claim: try to upload a marker; ignore failure (another
-    # worker claimed).
-    if ! echo "$WORKER_ID" | R2 cp - "${claim}" 2>/dev/null; then
-        return 0
+    local claim="s3://coefficient/claims/${SWEEP_RUN_ID}/${cid}"
+    # Atomic claim. SKIP_CLAIMS=1 disables for single-instance smoke
+    # runs where the operator wants to process everything regardless
+    # of any prior partial run's claim markers.
+    if [[ "${SKIP_CLAIMS:-0}" != "1" ]]; then
+        if R2 ls "$claim" >/dev/null 2>&1; then
+            return 0  # already claimed
+        fi
+        if ! echo "$WORKER_ID" | R2 cp - "$claim" 2>/dev/null; then
+            log "WARN: claim upload failed for $cid; skipping"
+            return 0
+        fi
     fi
     log "claimed $cid; running worker"
     if PARALLEL="$PARALLEL" GPU_RUNTIME="$GPU_RUNTIME" \
