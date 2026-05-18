@@ -176,6 +176,14 @@ OUT=$(vastai create instance "$OFFER_ID" \
 ID=$(echo "$OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('new_contract', d.get('id','')))")
 [[ -z "$ID" ]] && { echo "ERROR: launch failed: $OUT" | head -c 500; exit 1; }
 
+# vast.ai instances in ssh runtype are created in `stopped` state and
+# need an explicit start to fire the onstart-cmd. (Without this, the
+# instance sits at actual_status=created indefinitely. Observed
+# 2026-05-18 — past sweeps may have started instances via a different
+# vastai CLI version that auto-started.)
+echo "[launch_single] starting instance $ID"
+vastai start instance "$ID" 2>&1 | head -2
+
 echo
 echo "[launch_single] launched instance $ID (offer $OFFER_ID, label $LABEL)"
 echo
