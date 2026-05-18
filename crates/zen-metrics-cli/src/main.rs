@@ -256,6 +256,25 @@ struct ScorePairsArgs {
     /// Only iwssim honours this flag today; other metrics ignore it.
     #[arg(long, default_value_t = false)]
     allow_small_images: bool,
+    /// Gate sidecar emission on a post-scoring distribution sanity check.
+    /// When set, after the parquet is written, [`bogus_check`] inspects the
+    /// score column and exits with rc=2 (NOT rc=1) if any of these hold:
+    ///
+    /// - any `NaN` rows (workers should not silently retain NaN);
+    /// - ≥ 50% of scores are exactly 0 (or, for distance metrics, exactly the
+    ///   identity value) — a strong sign the kernel hit a default-fail
+    ///   short-circuit path;
+    /// - score range `max - min < 0.01` over ≥ 4 rows (constant output is
+    ///   the iwssim "NaN-on-identical → 0" failure mode);
+    /// - mean falls outside the metric's documented valid range.
+    ///
+    /// On rc=2 the parquet is still written (callers can inspect it) and a
+    /// structured warning goes to stderr listing every failed check. The
+    /// distinct exit code lets the chunk worker upload a failure log to
+    /// `s3://zentrain/<run>/failures/<chunk>.log` instead of the bogus
+    /// sidecar.
+    #[arg(long, default_value_t = false)]
+    fail_on_bogus: bool,
 }
 
 fn main() -> ExitCode {
@@ -302,7 +321,13 @@ fn main() -> ExitCode {
         },
         #[cfg(feature = "sweep")]
         Command::ScorePairs(args) => match cmd_score_pairs(args) {
-            Ok(()) => ExitCode::SUCCESS,
+            Ok(ScorePairsOutcome::Ok) => ExitCode::SUCCESS,
+            // rc=2 means scores were written but failed the bogus-data
+            // sanity check. Distinct from rc=1 (hard error before any
+            // parquet was written) so the chunk worker can route the
+            // chunk to a failure-log upload instead of treating the
+            // sidecar as authoritative training data.
+            Ok(ScorePairsOutcome::Bogus) => ExitCode::from(2),
             Err(e) => {
                 eprintln!("error: {e}");
                 ExitCode::FAILURE
@@ -380,8 +405,167 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Outcome of [`cmd_score_pairs`] that lets `main` distinguish a successful
+/// scoring run from a "data is bogus, retry/fail this chunk" result.
+///
+/// `rc=0` (Ok) means the parquet was written and the score distribution
+/// passed every sanity check (or `--fail-on-bogus` was not set).
+/// `rc=2` (Bogus) means the parquet was still written, but one or more
+/// distribution checks failed and the caller should treat the chunk as
+/// poisoned — chunk workers translate this into a failure-log upload to
+/// `s3://zentrain/<run>/failures/<chunk>.log` instead of accepting the
+/// sidecar.
 #[cfg(feature = "sweep")]
-fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error>> {
+enum ScorePairsOutcome {
+    Ok,
+    Bogus,
+}
+
+/// Per-metric expected-range bounds for the [`bogus_check`] mean-in-range
+/// gate. Returns `(min_mean, max_mean, identity_value)` where:
+///
+/// - `min_mean..=max_mean` is the metric's documented valid score range.
+///   `bogus_check` flags a chunk if the column mean falls outside this.
+/// - `identity_value` is what the metric outputs for "identical inputs".
+///   The "majority-of-rows-at-identity" check (≥ 50% rows exactly at the
+///   identity value) catches the iwssim NaN-on-identical → 0 mode and
+///   the cvvdp-on-cpu atomic-panic → JOD 10.0 default-fail mode.
+///
+/// Returns `None` for metrics whose range we haven't characterised yet —
+/// callers must then skip the mean / identity checks.
+#[cfg(feature = "sweep")]
+fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, f64)> {
+    use crate::metrics::MetricKind;
+    match metric {
+        // SSIMULACRA2: [0, 100] roughly, 100 = identical. Real corpus
+        // means usually fall in 30..95. Bound widely so we only catch
+        // truly bogus distributions.
+        MetricKind::Ssim2 | MetricKind::Ssim2Gpu => Some((-50.0, 100.5, 100.0)),
+        // Butteraugli: [0, ~30+]; 0 = identical. Distance metric, no
+        // upper bound is hard but real-world rarely exceeds 30.
+        MetricKind::Butteraugli | MetricKind::ButteraugliGpu => Some((-0.001, 100.0, 0.0)),
+        // DSSIM: [0, 1ish]; 0 = identical.
+        MetricKind::Dssim | MetricKind::DssimGpu => Some((-0.001, 1.5, 0.0)),
+        // IW-SSIM: [0, 1]; 1 = identical. Real distributions hover
+        // 0.6..0.99 — anything < 0 or > 1.001 is suspicious.
+        MetricKind::IwssimGpu | MetricKind::Iwssim => Some((-0.001, 1.001, 1.0)),
+        // Zensim: [0, ~100]; 100 = identical (similarity).
+        MetricKind::Zensim | MetricKind::ZensimGpu => Some((-1.0, 110.0, 100.0)),
+        // CVVDP: JOD scale, [0, 10]; 10 = imperceptible (identical).
+        MetricKind::Cvvdp => Some((-0.5, 10.5, 10.0)),
+    }
+}
+
+/// Inspect the post-scoring score column and report bogus-data failures.
+///
+/// Returns `Ok(true)` if every check passed, `Ok(false)` if at least one
+/// failed (caller should treat the sidecar as poisoned). Always emits one
+/// line per failing check to stderr so vast.ai worker logs explain why a
+/// chunk got marked failed.
+///
+/// Checks implemented:
+///
+/// 1. `n_nan == 0` — score writer never emits NaN except on per-pair
+///    decode/score errors. > 0 NaNs means the kernel failed on at least
+///    one pair without surfacing a hard error.
+/// 2. `n_at_identity / n_total < 0.5` — for metrics with an identity
+///    value (`IwssimGpu` → 1.0, `Cvvdp` → 10.0, `Ssim2*` → 100.0, etc.).
+///    50% of rows at exactly the identity value means the kernel hit a
+///    default-fail short-circuit on at least half the chunk.
+/// 3. `max - min > 0.01` (over ≥ 4 rows) — a real metric on a quality
+///    sweep produces variance; a constant column means the kernel never
+///    ran (returned the same default every time).
+/// 4. Mean is within `metric_range_bounds(metric)`.
+///
+/// All checks are tolerant of unknown / experimental metrics: if
+/// `metric_range_bounds` returns `None`, checks #2 and #4 are skipped.
+#[cfg(feature = "sweep")]
+fn bogus_check(
+    metric: crate::metrics::MetricKind,
+    scores: &[f64],
+    out_parquet: &Path,
+) -> bool {
+    let n_total = scores.len();
+    if n_total == 0 {
+        eprintln!("[fail-on-bogus] FAIL: empty score column in {}", out_parquet.display());
+        return false;
+    }
+
+    let n_nan = scores.iter().filter(|s| s.is_nan()).count();
+    let finite: Vec<f64> = scores.iter().copied().filter(|s| s.is_finite()).collect();
+
+    let mut ok = true;
+
+    if n_nan > 0 {
+        eprintln!(
+            "[fail-on-bogus] FAIL ({}): {n_nan}/{n_total} rows are NaN — kernel failed without surfacing a hard error",
+            out_parquet.display()
+        );
+        ok = false;
+    }
+
+    if finite.is_empty() {
+        eprintln!(
+            "[fail-on-bogus] FAIL ({}): zero finite rows after NaN filter — column is unusable",
+            out_parquet.display()
+        );
+        return false;
+    }
+
+    if let Some((min_mean, max_mean, identity)) = metric_range_bounds(metric) {
+        let eps = 1e-9_f64;
+        let n_at_identity = finite
+            .iter()
+            .filter(|s| (**s - identity).abs() <= eps)
+            .count();
+        // 50% threshold — flag clearly-pathological distributions like the
+        // cvvdp-on-cpu atomic-panic mode (all rows fall through to JOD
+        // 10.0). Real sweeps over quality grids never put half the chunk
+        // at the identity value (that would mean half the encodes were
+        // bit-identical to the source, which only happens at q=100 +
+        // lossless, not a realistic backfill chunk).
+        let identity_frac = n_at_identity as f64 / finite.len() as f64;
+        if identity_frac >= 0.5 {
+            eprintln!(
+                "[fail-on-bogus] FAIL ({}): {n_at_identity}/{} rows at identity value {} ({:.1}% ≥ 50%) — default-fail short-circuit suspected",
+                out_parquet.display(),
+                finite.len(),
+                identity,
+                identity_frac * 100.0
+            );
+            ok = false;
+        }
+
+        let mean: f64 = finite.iter().sum::<f64>() / finite.len() as f64;
+        if mean < min_mean || mean > max_mean {
+            eprintln!(
+                "[fail-on-bogus] FAIL ({}): mean {mean:.4} outside expected range [{min_mean}, {max_mean}] for {}",
+                out_parquet.display(),
+                metric.name()
+            );
+            ok = false;
+        }
+    }
+
+    if finite.len() >= 4 {
+        let min = finite.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = finite.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let range = max - min;
+        if range < 0.01 {
+            eprintln!(
+                "[fail-on-bogus] FAIL ({}): score range {range:.6} < 0.01 across {} finite rows — constant output (kernel never ran?)",
+                out_parquet.display(),
+                finite.len()
+            );
+            ok = false;
+        }
+    }
+
+    ok
+}
+
+#[cfg(feature = "sweep")]
+fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn std::error::Error>> {
     use std::fs::File;
     use std::sync::Arc;
 
@@ -551,6 +735,11 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
         Field::new(score_col_name, DataType::Float64, false),
     ]));
 
+    // Snapshot the score column before it's moved into the Arrow array so
+    // `bogus_check` can inspect it post-write without needing to round-trip
+    // through parquet. Cheap (one Vec<f64> copy) and keeps the sanity
+    // check in-process — important on workers that may not have R2 set up.
+    let scores_snapshot: Vec<f64> = scores.clone();
     let arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(image_paths)),
         Arc::new(StringArray::from(codecs)),
@@ -580,7 +769,23 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
          to {} with score column `{score_col_name}`",
         args.out_parquet.display(),
     );
-    Ok(())
+
+    if args.fail_on_bogus {
+        let passed = bogus_check(args.metric, &scores_snapshot, &args.out_parquet);
+        if !passed {
+            eprintln!(
+                "[score-pairs] --fail-on-bogus: sanity checks FAILED — exiting rc=2; sidecar at {} is suspect",
+                args.out_parquet.display()
+            );
+            return Ok(ScorePairsOutcome::Bogus);
+        }
+        eprintln!(
+            "[score-pairs] --fail-on-bogus: sanity checks PASSED for {}",
+            args.out_parquet.display()
+        );
+    }
+
+    Ok(ScorePairsOutcome::Ok)
 }
 
 #[cfg(feature = "sweep")]
@@ -755,5 +960,115 @@ fn print_format_list() {
         for f in formats {
             println!("{f}");
         }
+    }
+}
+
+#[cfg(all(test, feature = "sweep"))]
+mod fail_on_bogus_tests {
+    //! Unit tests for [`bogus_check`]. These do not need GPU — they
+    //! synthesise score vectors directly and check the gating logic.
+    //!
+    //! Backstop for the iwssim NaN-on-identical regression: 525 sidecars
+    //! were uploaded with every score at 0 or NaN, undetected for 3 hr
+    //! until V_24 training failed. Each test below corresponds to one
+    //! failure mode that should trip the gate.
+    use super::*;
+    use crate::metrics::MetricKind;
+
+    fn p() -> std::path::PathBuf {
+        std::path::PathBuf::from("/tmp/test_sidecar.parquet")
+    }
+
+    #[test]
+    fn bogus_check_passes_clean_iwssim_distribution() {
+        // Real iwssim distribution from a 100-cell quality sweep: scores
+        // spread 0.7..0.99 with mean ~0.88. Should pass every gate.
+        let scores: Vec<f64> = (0..100)
+            .map(|i| 0.70 + (i as f64) * 0.0028) // 0.70..0.978
+            .collect();
+        assert!(bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_any_nan() {
+        // Even one NaN means the kernel failed silently on at least one
+        // pair without a hard error — must trip the gate.
+        let mut scores: Vec<f64> = (0..50).map(|i| 0.70 + (i as f64) * 0.005).collect();
+        scores[12] = f64::NAN;
+        assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_all_zero_iwssim() {
+        // The exact 525-sidecar failure mode: NaN-on-identical wrote 0.0
+        // for every row. Identity for iwssim is 1.0, so this trips the
+        // "constant + mean out of range" but NOT the identity check.
+        let scores: Vec<f64> = vec![0.0; 100];
+        assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_majority_at_identity() {
+        // The cvvdp-on-cpu atomic-panic mode: kernel panics, default-fail
+        // path writes JOD=10.0 (the identity for CVVDP). 60% at identity
+        // means the gate must fire.
+        let mut scores: Vec<f64> = vec![10.0; 60];
+        scores.extend((0..40).map(|i| 7.0 + (i as f64) * 0.02));
+        assert!(!bogus_check(MetricKind::Cvvdp, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_constant_output() {
+        // 100 rows all at exactly 0.8 — no kernel variation. The
+        // "max - min < 0.01" check trips even though 0.8 isn't the
+        // identity value, because real metrics on real data ALWAYS
+        // produce some variance across a quality sweep.
+        let scores: Vec<f64> = vec![0.8; 100];
+        assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_mean_out_of_range() {
+        // Iwssim mean of -0.5 with variance: clearly broken.
+        let scores: Vec<f64> = (0..100).map(|i| -0.6 + (i as f64) * 0.001).collect();
+        assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_passes_clean_cvvdp_distribution() {
+        // Real cvvdp distribution: JOD scores spread 6.0..9.8 with mean
+        // ~8.0. Should pass every gate.
+        let scores: Vec<f64> = (0..50).map(|i| 6.0 + (i as f64) * 0.076).collect();
+        assert!(bogus_check(MetricKind::Cvvdp, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_passes_clean_ssim2_distribution() {
+        let scores: Vec<f64> = (0..100).map(|i| 30.0 + (i as f64) * 0.65).collect();
+        assert!(bogus_check(MetricKind::Ssim2, &scores, &p()));
+    }
+
+    #[test]
+    fn bogus_check_handles_few_rows() {
+        // < 4 rows: the constant-output check is skipped (can't
+        // distinguish a real 3-pair chunk from kernel-failure). Other
+        // checks still apply. A 3-cell chunk producing 0.85, 0.85, 0.85
+        // is plausibly real (q=95 outputs are often near-identical for
+        // simple sources) so the gate cannot reject it. This is the
+        // intended trade-off for tiny chunks: a real production chunk
+        // is hundreds of rows, where the constant-output check fires
+        // reliably on kernel failures.
+        let scores: Vec<f64> = vec![0.85, 0.85, 0.85];
+        assert!(bogus_check(MetricKind::IwssimGpu, &scores, &p()));
+        // Cvvdp 3 rows all at JOD 10.0 (identity) trips the identity
+        // check (3/3 = 100% ≥ 50%).
+        let cvvdp_identity: Vec<f64> = vec![10.0, 10.0, 10.0];
+        assert!(!bogus_check(MetricKind::Cvvdp, &cvvdp_identity, &p()));
+    }
+
+    #[test]
+    fn bogus_check_rejects_empty_column() {
+        let scores: Vec<f64> = vec![];
+        assert!(!bogus_check(MetricKind::IwssimGpu, &scores, &p()));
     }
 }
