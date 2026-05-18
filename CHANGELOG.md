@@ -17,6 +17,55 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### sweep infra v2 — 2026-05-18 (`feat/sweep-infra-unified`)
+
+Operational fixes after the iwssim / cvvdp / ssim2 backfill sessions
+exposed three load-bearing bugs:
+
+- **`zen-metrics-cli` — `score-pairs --fail-on-bogus`** (commit
+  `242d4b4a`). New per-metric distribution sanity check gate that
+  inspects the score column after parquet write and exits rc=2
+  (distinct from rc=1) when n_NaN > 0, ≥ 50% of rows are exactly at
+  the metric's identity value, range < 0.01 across ≥ 4 rows, or
+  the mean falls outside the metric's documented range. Catches the
+  iwssim NaN-on-identical mode (525 sidecars uploaded with every
+  score at 0 or NaN before V_24 training surfaced the failure) and
+  the cvvdp-on-cpu atomic-panic mode (all rows fall through to JOD
+  10.0). 10 unit tests in `fail_on_bogus_tests`.
+- **`scripts/sweep/metric_backfill_chunk_worker.sh`** (commit
+  `5b98e50c`). Single unified worker that dispatches by `--metric`,
+  replacing `iwssim_backfill_chunk_worker.sh` /
+  `ssim2_backfill_chunk_worker.sh` / the single-metric portion of
+  `cvvdp_backfill_chunk_worker.sh`. Calls `score-pairs
+  --fail-on-bogus` by default and uploads a structured failure log
+  to `s3://zentrain/<run>/failures/<chunk>.log` on rc=2 instead of
+  treating the sidecar as authoritative training data. Per-metric
+  files marked DEPRECATED but retained for in-flight runners.
+- **`crates/vastai-fleet/`** (commit `3a849a69`). Rust binary
+  replacing the bash + python heredoc destroyers under
+  `/tmp/cvvdp-resume/run_destroy_*.sh`. Three subcommands —
+  `status` / `destroy` / `watch` — all driven by a defensive
+  parser (`crates/vastai-fleet/src/parse.rs`) that tolerates every
+  failure mode the bash destroyer hit: empty stdout, deprecation
+  banner glued onto JSON, individual malformed rows, dph as string
+  vs float, v0 vs v1 envelope shape. 22 tests (15 parse + 7 cli)
+  using `--raw-input` fixtures so no real vast.ai API access is
+  needed in CI.
+- **`scripts/sweep/launch_backfill.sh`** (commit `50982c33`).
+  Single launcher with `--metric / --run-id / --chunks / --docker /
+  --max-dph / --n-boxes / ...` flags replacing the per-metric
+  `launch.sh` / `launch_imazen.sh` files. Auto-derives the
+  destroy-target as `(n_chunks - 10 grace)` from the chunks file
+  and prints (or runs, with `--watch`) the `vastai-fleet watch`
+  invocation. Per-metric launchers marked DEPRECATED.
+- **`scripts/sweep/fleet_status.sh`** (commit `5de4c676`).
+  One-shot dashboard combining fleet status, R2 sidecar count vs
+  chunks total, failure-log count, and sample sidecar validity
+  check (3 random sidecars: score-column min/max/mean/NaN-count;
+  flag constant or NaN-containing chunks). Second backstop against
+  the bogus-data failure mode — even without `--fail-on-bogus` on
+  the worker, this surfaces broken sidecars on a sample.
+
 ### iwssim-gpu / zen-metrics-cli — 2026-05-17 adaptive small-image support
 
 - `4e01232c` — adaptive IW-SSIM via reflect-pad to `MIN_NATIVE_DIM`
