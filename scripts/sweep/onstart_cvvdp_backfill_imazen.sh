@@ -51,6 +51,11 @@ fi
 
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 PARALLEL="${PARALLEL:-0}"
+# Treat "auto" as a synonym for 0 — callers may pass either to ask
+# for auto-detect (the launch_single_instance.sh default was "auto"
+# before 2026-05-18). Without this, xargs -P "auto" hard-fails with
+# "invalid number" and the loop exits clean with 0 chunks processed.
+[[ "$PARALLEL" == "auto" ]] && PARALLEL=0
 # PARALLEL=0 → auto-detect. Ports v15 onstart_v3.sh's cgroup-aware
 # scaling (cores + RAM via cgroup quotas, not just nproc) and adds
 # a GPU memory cap on top — cvvdp uses 200-250 MiB GPU per Cvvdp
@@ -380,8 +385,25 @@ export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
 # claim-race on the same chunk_id at startup.
 shuf "$WORKDIR/chunks.jsonl" > "$WORKDIR/chunks.shuf.jsonl"
 
+# Fail loudly if PARALLEL is not numeric — xargs will exit non-zero
+# but its rc is masked by the pipe below if we don't pre-validate.
+case "$PARALLEL" in
+    ''|*[!0-9]*)
+        log "FATAL: PARALLEL='$PARALLEL' is not numeric (after auto-detect). Refusing to run."
+        exit 7
+        ;;
+esac
+log "running xargs with PARALLEL=$PARALLEL over $(wc -l < "$WORKDIR/chunks.shuf.jsonl") chunks"
+
 xargs -I {} -P "$PARALLEL" -d '\n' bash -c 'process_chunk "$@"' _ {} \
     < "$WORKDIR/chunks.shuf.jsonl"
+xargs_rc=$?
 
 heartbeat done
-log "all chunks processed"
+log "all chunks processed (xargs rc=$xargs_rc)"
+# Propagate xargs failure so the trap self-destroys the box rather
+# than idling at $/hr after a silent breakage.
+if (( xargs_rc != 0 )); then
+    log "FATAL: xargs returned non-zero — failing the onstart"
+    exit "$xargs_rc"
+fi
