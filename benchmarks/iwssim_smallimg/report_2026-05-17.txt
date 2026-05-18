@@ -1,0 +1,117 @@
+Adaptive IW-SSIM small-image validation — 2026-05-17 22:17:54
+================================================================================
+
+Pass criteria: Spearman ρ ≥ 0.85 vs ssim2 at every native_dim;
+               rank-flip rate ≤ 0.1 vs ssim2.
+
+Sources: 100 CID22 refs (seed=20260517)
+Native dims: [64, 96, 128, 176]
+Q steps: [5, 20, 50, 80, 95]
+
+Per-source Spearman (sanity — monotonic in q means ~1.0):
+
+── native_dim = 64 px ──
+  strategy                   ρ vs q  flip vs q
+  iwssim_reflect             1.0000     0.0000
+  iwssim_upscale             1.0000     0.0000
+  iwssim_tile                1.0000     0.0000
+  butteraugli_gpu               nan        nan
+  ssim2_gpu (anchor)         1.0000     0.0000
+
+── native_dim = 96 px ──
+  strategy                   ρ vs q  flip vs q
+  iwssim_reflect             1.0000     0.0000
+  iwssim_upscale             1.0000     0.0000
+  iwssim_tile                1.0000     0.0000
+  butteraugli_gpu               nan        nan
+  ssim2_gpu (anchor)         1.0000     0.0000
+
+── native_dim = 128 px ──
+  strategy                   ρ vs q  flip vs q
+  iwssim_reflect             1.0000     0.0000
+  iwssim_upscale             1.0000     0.0000
+  iwssim_tile                1.0000     0.0000
+  butteraugli_gpu               nan        nan
+  ssim2_gpu (anchor)         1.0000     0.0000
+
+── native_dim = 176 px ──
+  strategy                   ρ vs q  flip vs q
+  iwssim_reflect             1.0000     0.0000
+  iwssim_upscale             1.0000     0.0000
+  iwssim_tile                1.0000     0.0000
+  butteraugli_gpu               nan        nan
+  ssim2_gpu (anchor)         1.0000     0.0000
+
+Pooled across (src × q) per native_dim — the headline:
+
+── native_dim = 64 px ──
+  strategy                   ρ vs q  flip vs q   ρ vs ssim2  flip vs ssim2
+  iwssim_reflect             0.9568     0.0234       0.9277         0.1229
+  iwssim_upscale             0.9628     0.0173       0.9351         0.1165
+  iwssim_tile                0.9604     0.0198       0.9374         0.1148
+  butteraugli_gpu               nan        nan          nan            nan
+  ssim2_gpu (anchor)         0.9443     0.0359            -              -
+
+── native_dim = 96 px ──
+  strategy                   ρ vs q  flip vs q   ρ vs ssim2  flip vs ssim2
+  iwssim_reflect             0.9595     0.0207       0.9384         0.1099
+  iwssim_upscale             0.9615     0.0186       0.9373         0.1116
+  iwssim_tile                0.9606     0.0196       0.9421         0.1063
+  butteraugli_gpu               nan        nan          nan            nan
+  ssim2_gpu (anchor)         0.9461     0.0341            -              -
+
+── native_dim = 128 px ──
+  strategy                   ρ vs q  flip vs q   ρ vs ssim2  flip vs ssim2
+  iwssim_reflect             0.9570     0.0233       0.9328         0.1164
+  iwssim_upscale             0.9593     0.0209       0.9350         0.1153
+  iwssim_tile                0.9601     0.0201       0.9395         0.1101
+  butteraugli_gpu               nan        nan          nan            nan
+  ssim2_gpu (anchor)         0.9441     0.0356            -              -
+
+── native_dim = 176 px ──
+  strategy                   ρ vs q  flip vs q   ρ vs ssim2  flip vs ssim2
+  iwssim_reflect             0.9594     0.0207       0.9341         0.1137
+  iwssim_upscale             0.9594     0.0207       0.9341         0.1137
+  iwssim_tile                0.9594     0.0207       0.9341         0.1137
+  butteraugli_gpu               nan        nan          nan            nan
+  ssim2_gpu (anchor)         0.9432     0.0366            -              -
+
+
+Pass/fail per strategy (using POOLED ρ vs ssim2):
+  Absolute thresholds (ρ ≥ 0.85, flip ≤ 0.1):
+    iwssim_reflect:
+      dim=64: ρ=0.9277 flip=0.1229 FAIL
+      dim=96: ρ=0.9384 flip=0.1099 FAIL
+      dim=128: ρ=0.9328 flip=0.1164 FAIL
+      dim=176: ρ=0.9341 flip=0.1137 FAIL
+    iwssim_upscale:
+      dim=64: ρ=0.9351 flip=0.1165 FAIL
+      dim=96: ρ=0.9373 flip=0.1116 FAIL
+      dim=128: ρ=0.9350 flip=0.1153 FAIL
+      dim=176: ρ=0.9341 flip=0.1137 FAIL
+    iwssim_tile:
+      dim=64: ρ=0.9374 flip=0.1148 FAIL
+      dim=96: ρ=0.9421 flip=0.1063 FAIL
+      dim=128: ρ=0.9395 flip=0.1101 FAIL
+      dim=176: ρ=0.9341 flip=0.1137 FAIL
+
+  Relative to dim=176 stock iwssim baseline (Δρ vs baseline_rho, Δflip vs baseline_flip):
+    iwssim_reflect (baseline: ρ=0.9341 flip=0.1137):
+      dim=64: Δρ=-0.0065 Δflip=+0.0092 PASS
+      dim=96: Δρ=+0.0043 Δflip=-0.0038 PASS
+      dim=128: Δρ=-0.0013 Δflip=+0.0027 PASS
+    iwssim_upscale (baseline: ρ=0.9341 flip=0.1137):
+      dim=64: Δρ=+0.0010 Δflip=+0.0028 PASS
+      dim=96: Δρ=+0.0032 Δflip=-0.0021 PASS
+      dim=128: Δρ=+0.0008 Δflip=+0.0016 PASS
+    iwssim_tile (baseline: ρ=0.9341 flip=0.1137):
+      dim=64: Δρ=+0.0032 Δflip=+0.0011 PASS
+      dim=96: Δρ=+0.0080 Δflip=-0.0074 PASS
+      dim=128: Δρ=+0.0053 Δflip=-0.0036 PASS
+
+Strategy ranking at each sub-176 native_dim (best ρ vs ssim2 first):
+  dim=64: iwssim_tile(0.9374), iwssim_upscale(0.9351), iwssim_reflect(0.9277)
+  dim=96: iwssim_tile(0.9421), iwssim_reflect(0.9384), iwssim_upscale(0.9373)
+  dim=128: iwssim_tile(0.9395), iwssim_upscale(0.9350), iwssim_reflect(0.9328)
+
+Full report: /home/lilith/iwssim-val/report.txt

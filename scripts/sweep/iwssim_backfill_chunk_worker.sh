@@ -230,6 +230,16 @@ done <<< "$GROUP_LINES"
 SIDECAR_IWSSIM="$WORK_DIR/out/iwssim_imazen_v0_0_1.parquet"
 
 echo "[iwssim-chunk-worker $CHUNK_ID] step 5/6: score-pairs iwssim" >&2
+# IWSSIM_ALLOW_SMALL toggles `--allow-small-images` so sub-176-px pairs
+# go through the reflect-pad adaptive path instead of returning NaN.
+# Default ON for backfill — the 754-chunk filtered set already excludes
+# the very-small-image chunks (image_basenames pre-screened), but for
+# safety we keep adaptive mode on so future relaxations don't trip on
+# the size guard. Stock-size inputs (≥176 on both axes) are unaffected.
+IWSSIM_EXTRA_ARGS=()
+if [[ "${IWSSIM_ALLOW_SMALL:-1}" == "1" ]]; then
+    IWSSIM_EXTRA_ARGS+=(--allow-small-images)
+fi
 if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
     docker run --rm $DOCKER_GPUS \
         --entrypoint /usr/local/bin/zen-metrics \
@@ -240,13 +250,15 @@ if [[ -n "$ZEN_METRICS_IMAGE" ]]; then
             --metric iwssim \
             --pairs-tsv "$WORK_DIR/pairs.tsv" \
             --out-parquet "$SIDECAR_IWSSIM" \
-            --gpu-runtime "$GPU_RUNTIME" 2>&1 | sed 's/^/  [iwssim] /' >&2
+            --gpu-runtime "$GPU_RUNTIME" \
+            "${IWSSIM_EXTRA_ARGS[@]}" 2>&1 | sed 's/^/  [iwssim] /' >&2
 else
     zen-metrics score-pairs \
         --metric iwssim \
         --pairs-tsv "$WORK_DIR/pairs.tsv" \
         --out-parquet "$SIDECAR_IWSSIM" \
-        --gpu-runtime "$GPU_RUNTIME" 2>&1 | sed 's/^/  [iwssim] /' >&2
+        --gpu-runtime "$GPU_RUNTIME" \
+        "${IWSSIM_EXTRA_ARGS[@]}" 2>&1 | sed 's/^/  [iwssim] /' >&2
 fi
 
 if [[ "$SKIP_UPLOAD" != "1" ]]; then

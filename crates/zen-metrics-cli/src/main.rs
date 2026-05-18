@@ -398,7 +398,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
     if args.allow_small_images {
         crate::metrics::set_allow_small_images();
         eprintln!(
-            "[score-pairs] --allow-small-images set: IW-SSIM will reflect-pad sub-176 inputs"
+            "[score-pairs] --allow-small-images set: IW-SSIM will tile-pad sub-176 inputs to 176×176"
         );
     }
 

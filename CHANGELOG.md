@@ -17,6 +17,37 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### iwssim-gpu / zen-metrics-cli — 2026-05-17 adaptive small-image support
+
+- `4e01232c` — adaptive IW-SSIM via reflect-pad to `MIN_NATIVE_DIM`
+  (176). New `pub const MIN_NATIVE_DIM`, `pub struct IwssimConfig {
+  allow_small: bool }`, `Iwssim::with_config`,
+  `Iwssim::padded_dimensions`, `Iwssim::is_padded` on the typed
+  pipeline; `IwssimParams { allow_small: bool }` +
+  `IwssimParams::allow_small(bool)` on the opaque API; default is
+  `false` (rejects sub-176 inputs, matches historical behaviour
+  byte-for-byte). When `allow_small = true` and a native axis is
+  below `MIN_NATIVE_DIM`, host-side `reflect_pad_f32` /
+  `reflect_pad_rgb_u8` extends the input to `(max(W, 176), max(H,
+  176))` before upload; the GPU pipeline runs at padded dims with
+  unchanged kernels. The resulting score is the IW-SSIM of the
+  padded image — informational, not bit-exact stock IW-SSIM. New
+  tests: 9 host-side unit tests (`reflect_pad_*`, `reflect_index`)
+  + 7 GPU integration tests (dims {22, 44, 88, 132, 175, 176} +
+  rectangular {80×100, 200×80, 80×200}, gated on
+  `RUN_GPU_ADAPTIVE=1`). Stock 1024×1024 drift between flag-on and
+  flag-off measured at 3.4e-8 (GPU non-determinism floor); the
+  pre-existing parity-lock tests still pass.
+- `4e01232c` — `zen-metrics-cli score-pairs`: new
+  `--allow-small-images` flag wires through a process-wide
+  `AtomicBool` to `resolve_default_params`, which swaps
+  `IwssimParams::DEFAULT` for `IwssimParams::allow_small(true)` at
+  metric construction. Other metrics ignore the flag.
+- `6227c1a8` — `iwssim_backfill_chunk_worker.sh` defaults
+  `IWSSIM_ALLOW_SMALL=1` so the new docker image's `score-pairs`
+  call surfaces the adaptive path. Override with
+  `IWSSIM_ALLOW_SMALL=0` to keep stock-only behaviour.
+
 ### Workspace — 2026-05-17 merge wave
 
 Seven branches landed on master in dependency order. Each was tested
