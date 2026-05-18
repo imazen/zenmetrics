@@ -52,6 +52,7 @@ COPY zenmetrics/Cargo.toml zenmetrics/Cargo.lock ./zenmetrics/
 COPY zenmetrics/crates/ ./zenmetrics/crates/.manifests-only/
 COPY zenjpeg/Cargo.toml zenjpeg/Cargo.lock ./zenjpeg/
 COPY zenanalyze/Cargo.toml zenanalyze/Cargo.lock ./zenanalyze/
+COPY zensim--principled-activity/Cargo.toml zensim--principled-activity/Cargo.lock ./zensim--principled-activity/
 
 # ── Step B: full source copy (changes most often → smallest re-build cost) ──
 # This invalidates most layers below but leaves the registry+git mount caches
@@ -59,6 +60,10 @@ COPY zenanalyze/Cargo.toml zenanalyze/Cargo.lock ./zenanalyze/
 COPY zenmetrics/ ./zenmetrics/
 COPY zenjpeg/ ./zenjpeg/
 COPY zenanalyze/ ./zenanalyze/
+# zenmetrics/Cargo.toml [patch.crates-io] points zensim at
+# ../zensim--principled-activity/zensim — the sibling worktree must
+# be present in the build context for cargo to resolve the patch.
+COPY zensim--principled-activity/ ./zensim--principled-activity/
 
 # ── Step C: build with persistent cache mounts ──
 # /usr/local/cargo/registry — registry index + downloaded crates (persists)
