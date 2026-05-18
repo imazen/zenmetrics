@@ -120,7 +120,7 @@ if [[ -f "$UNIFIED_WORKER" ]]; then
 fi
 
 # ── pick the cheapest viable offer ──────────────────────────────────
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=${MIN_GPU_RAM_MB} cuda_vers>=12.5 num_gpus=1"
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_vers>=12.5 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \
@@ -145,8 +145,7 @@ cat > ~/.aws/credentials <<CREDS
 aws_access_key_id = \$R2_ACCESS_KEY_ID
 aws_secret_access_key = \$R2_SECRET_ACCESS_KEY
 CREDS
-s5cmd --endpoint-url "https://\${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \\
-    --profile r2 cp $ONSTART_R2_KEY /usr/local/bin/onstart.sh
+s5cmd --endpoint-url "https://\${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" --profile r2 cp $ONSTART_R2_KEY /usr/local/bin/onstart.sh
 chmod +x /usr/local/bin/onstart.sh
 if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then
     exec /usr/local/bin/run_with_error_trap.sh /usr/local/bin/onstart.sh
