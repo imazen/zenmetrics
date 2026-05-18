@@ -29,11 +29,44 @@
 ARG V14_TAG=v14
 FROM ghcr.io/imazen/zen-metrics-sweep:${V14_TAG}
 
-# Curl wasn't in v14's apt set. vastai-fleet self-destroy shells out
-# to it for the vast.ai REST DELETE call. Single-RUN with cleanup.
+# Curl + cuda-cudart-dev: v14 has cuda-cudart-12-6 runtime but NOT the
+# dev headers. cubecl-cuda emits kernels with `#include <cuda_runtime.h>`
+# and NVRTC compiles them at launch — without the headers every kernel
+# launch fails with InvalidImageSize → 100% NaN rows per chunk (v24
+# lesson). Baking the headers here makes the runtime install path in
+# onstart_cvvdp_backfill_imazen.sh a no-op (good — matches "BAKE
+# EVERYTHING, NEVER APT-INSTALL AT BOOT" per CLAUDE.md).
+#
+# curl is needed for vastai-fleet self-destroy's REST DELETE call.
+#
+# NVIDIA cuda-keyring is fetched here at BUILD time (not boot time) so
+# the apt install can resolve the cuda-cudart-dev-12-6 package.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-        curl \
+        curl ca-certificates gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# v14 base ships /bin/sh with PATH missing /sbin, which breaks dpkg.
+# Prepend the standard sbin dirs for this RUN.
+RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
+    && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
+        -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-cudart-dev-12-6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ldconfig
+
+# Also bake the /sbin PATH for runtime (so onstart's ldconfig probe works).
+ENV PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin
+
+# Sanity: confirm the dev headers landed where the onstart script
+# expects, AND the cuda symlink is intact so cubecl's resolver finds
+# libcuda_runtime.so / cuda_runtime.h via /usr/local/cuda/.
+RUN test -f /usr/local/cuda/include/cuda_runtime.h \
+    && test -f /usr/local/cuda/lib64/libcudart.so.12 \
+    && ldconfig -p | grep -q libnvrtc.so.12 \
+    && echo "v15 cuda dev/runtime sanity passed"
 
 # L5b: vastai-fleet binary (~3 MB). The new self-destroy subcommand
 # is what the EXIT trap calls.

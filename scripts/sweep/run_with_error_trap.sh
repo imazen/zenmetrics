@@ -32,6 +32,12 @@
 
 set -uo pipefail
 
+# Some vast.ai container init paths drop /sbin from PATH. dpkg needs
+# /sbin/ldconfig + /sbin/start-stop-daemon at install time, and the
+# onstart's `ldconfig -p | grep libnvrtc.so.12` probe needs ldconfig
+# itself. Prepend the standard sbin dirs unconditionally.
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH:-/usr/local/bin:/usr/bin:/bin}"
+
 # Hydrate env from PID 1 (vast.ai injects credentials into pid-1 env).
 if [[ -r /proc/1/environ ]]; then
     while IFS='=' read -r -d '' k v; do
