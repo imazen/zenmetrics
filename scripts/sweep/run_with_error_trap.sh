@@ -70,6 +70,35 @@ log "starting $ONSTART (stderr -> $STDERR_LOG)"
 log "instance ID: ${CONTAINER_ID:-<unset>}"
 log "run ID:      ${SWEEP_RUN_ID:-<unset>}"
 
+# ── GPU pre-flight ─────────────────────────────────────────────────
+# We rent GPU boxes. CPU fallback at runtime silently turns a GPU-paid
+# box into a slow CPU worker — wastes the user's budget. Refuse to
+# start without a visible CUDA device, unless explicitly told otherwise
+# via $ALLOW_CPU_FALLBACK=1.
+if [[ "${ALLOW_CPU_FALLBACK:-0}" != "1" ]]; then
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        log "ERROR: nvidia-smi not found — this image expects a GPU host."
+        log "       (set ALLOW_CPU_FALLBACK=1 to override)"
+        exit 4
+    fi
+    if ! nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1; then
+        log "ERROR: nvidia-smi present but no GPU visible to this container."
+        log "       (set ALLOW_CPU_FALLBACK=1 to override)"
+        nvidia-smi 2>&1 | sed 's/^/  /' | head -10 >&2
+        exit 4
+    fi
+    # Pin the gpu runtime to cuda so zen-metrics' auto-fallback chain
+    # ([Cuda, Wgpu, Hip, Cpu]) can't silently land on CPU when cuda
+    # init throws. Downstream scripts read $GPU_RUNTIME.
+    if [[ -z "${GPU_RUNTIME:-}" || "$GPU_RUNTIME" == "auto" ]]; then
+        export GPU_RUNTIME=cuda
+        log "GPU_RUNTIME pinned to 'cuda' (no CPU fallback). Set ALLOW_CPU_FALLBACK=1 to relax."
+    fi
+    log "GPU pre-flight: $(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | head -1)"
+else
+    log "WARN: ALLOW_CPU_FALLBACK=1 set — runtime will use 'auto' GPU selection (may fall back to CPU)."
+fi
+
 self_destroy_on_error() {
     local rc=$?
     if (( rc == 0 )); then
