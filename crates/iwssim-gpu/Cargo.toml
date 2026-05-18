@@ -57,3 +57,7 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "opaque"
 required-features = ["cubecl-types"]
+
+[[test]]
+name = "small_image_adaptive"
+required-features = ["cubecl-types"]

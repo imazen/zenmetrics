@@ -17,6 +17,58 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Workspace — 2026-05-17 merge wave
+
+Seven branches landed on master in dependency order. Each was tested
+locally on RTX 5070 (CUDA 13.2) before merging; cross-platform CI
+runs on push.
+
+- `26a5ae79` + `1b8ccab8` — zensim-gpu: 372-feature regimes
+  (Basic/Extended/WithIw) + principled per-channel H-blur activity
+  (mirrors zensim CPU `feat/principled-activity` at `2dab8f30`).
+  Parity tightened to ≤5e-3 rel on the masked block at every (scale,
+  channel) (was 1.5e-1 / 2.0e-1 worst case). 12 MP WithIw bench
+  steady-state 24.53 ms / iter (−5.5% vs image-wide mirror, −8.9%
+  vs cascade approach).
+- `caa4a147` — Merge Phase 2 (`feat/api-uniformity-zenpixels`):
+  uniform `Backend` enum + opaque `<Metric>Opaque` shim types +
+  `zenpixels::PixelSlice` integration across all six GPU metric
+  crates. Existing typed `<Metric><R: Runtime>` API gated behind
+  `cubecl-types`. 12/12 opaque integration tests pass.
+- `8b04b642` — Merge Phase 3 (`feat/zenmetrics-api-umbrella`):
+  new `zenmetrics-api` umbrella crate, enum-dispatched `Metric`,
+  per-metric `MetricParams`. 7/7 dispatch + 3/3 pixels_smoke tests.
+- `78b162f6` — Merge `feat/metric-defaults-fix`: `impl Default for
+  CvvdpParams` (PLACEHOLDER deprecated); iwssim returns 1.0 instead
+  of NaN on identical inputs; umbrella `dispatch_iwssim` now
+  asserts ≈1.0.
+- `cc862e7a` — Merge `feat/compute-handles` (Phase 4 device path):
+  `compute_handles` on five typed pipelines (cvvdp/butter/ssim2/
+  dssim/iwssim, gated behind `cubecl-types`). Real
+  `MetricContext::upload_pair` + `Metric::compute_handles` wired
+  in the umbrella. Smoke verifies `compute_handles` ≡
+  `compute_srgb_u8` within 1e-3 rel. Saves ~17 ms × (N-1) metrics
+  per pair in batch mode. zensim deferred to a follow-up.
+- `75913cec` — Merge `feat/cli-umbrella-flip` (Phase 4 CLI):
+  zen-metrics-cli drops direct per-crate `gpu-*` feature deps,
+  routes through `zenmetrics-api` umbrella. iwssim and zensim
+  now supported through the CLI (were absent before). 29/29 CLI
+  tests pass. Two typed-path escape hatches stay (cvvdp batch
+  scorer, butter pnorm3 two-column emit) via the umbrella's
+  `zenmetrics_api::{butter,cvvdp}` re-exports.
+- Stale `origin/main` branch (last touched 2026-05-07, strict
+  ancestor of master) deleted; `master` remains the only branch.
+
+### Known issues (not blocking merge)
+
+- `crates/zen-metrics-cli/src/main.rs`: the iwssim batch-caching
+  scorer was removed during merge conflict resolution because its
+  source file depended on infra cli-flip had deleted. iwssim
+  through `score-pairs` now re-allocates per-pair instead of
+  caching per `(W, H)`. Documented as a TODO; restore via the
+  umbrella's `zenmetrics_api::iwssim` re-export when batch perf
+  matters.
+
 ## zenmetrics-api (new crate, Phase 3)
 
 ### Added

@@ -65,6 +65,43 @@ pub use pipeline::Iwssim;
 /// Number of pyramid scales — fixed at 5 by the IW-SSIM paper.
 pub const NUM_SCALES: usize = 5;
 
+/// Minimum native pyramid dimension required by the reference algorithm.
+///
+/// The paper's `iwssim.m` requires `min(W, H) ≥ 11 · 2^(Nsc-1) = 176` so
+/// the coarsest scale (`L_5`) still has enough pixels for a valid-mode
+/// 11×11 Gaussian. For inputs smaller than this along either axis we
+/// either reject (default — bit-exact stock IW-SSIM) or reflect-pad up
+/// to `MIN_NATIVE_DIM` on the short axis (`IwssimConfig::allow_small`).
+pub const MIN_NATIVE_DIM: u32 = 176;
+
+/// Pipeline configuration knobs surfaced to callers.
+///
+/// `Default` produces the historical behaviour: reject any input with
+/// `min(width, height) < MIN_NATIVE_DIM`. Enabling `allow_small` makes
+/// the pipeline reflect-pad short axes up to `MIN_NATIVE_DIM` (the
+/// padded image is then run through the unchanged kernels). The score
+/// for a padded pair is the IW-SSIM of the padded image and is
+/// **informational, not bit-exact stock IW-SSIM** — see
+/// `Iwssim::with_config` for the contract.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IwssimConfig {
+    /// When true, allow inputs with either axis below `MIN_NATIVE_DIM`
+    /// by reflect-padding the short axis up to `MIN_NATIVE_DIM`. When
+    /// false (default), `Iwssim::new` / `Iwssim::with_config` returns
+    /// `Err(InvalidImageSize)` for sub-176 inputs.
+    pub allow_small: bool,
+}
+
+impl IwssimConfig {
+    /// Construct a config with `allow_small` set explicitly.
+    ///
+    /// Convenience constructor matching the
+    /// `IwssimConfig::allow_small(true)` style used in calling code.
+    pub const fn allow_small(allow: bool) -> Self {
+        Self { allow_small: allow }
+    }
+}
+
 /// Implementation-tagged column name for IW-SSIM scores in parquet
 /// sidecars. Mirrors the `cvvdp_gpu::CVVDP_COLUMN_NAME` pattern so
 /// multiple IW-SSIM implementations (e.g. a reference Python pyrtools

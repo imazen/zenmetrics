@@ -299,6 +299,61 @@ fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::Backend, Str
     }
 }
 
+/// Process-wide flag toggled by `score-pairs --allow-small-images`.
+/// Read by [`resolve_default_params`] to switch iwssim into adaptive
+/// reflect-pad mode at metric construction. Defaults to false; tests
+/// never set it. Using `AtomicBool` so we can flip-then-spawn-threads
+/// without a `&mut`.
+static ALLOW_SMALL_IMAGES: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Set the process-wide allow-small-images flag. Called once from
+/// `cmd_score_pairs` when `--allow-small-images` is on the CLI. Safe
+/// to call from non-main if scoping changes.
+pub fn set_allow_small_images() {
+    ALLOW_SMALL_IMAGES.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Read the flag. Used by [`resolve_default_params`] and re-exposed
+/// for the integration tests' debug paths.
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+fn allow_small_images() -> bool {
+    ALLOW_SMALL_IMAGES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Resolve the default [`zenmetrics_api::MetricParams`] for a kind,
+/// applying per-CLI overrides from the CLI's process-wide flags where
+/// it exposes them. Currently this is just `--allow-small-images` for
+/// the iwssim metric.
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+fn resolve_default_params(
+    kind: zenmetrics_api::MetricKind,
+) -> Result<zenmetrics_api::MetricParams, zenmetrics_api::Error> {
+    #[cfg(feature = "gpu-iwssim")]
+    {
+        if matches!(kind, zenmetrics_api::MetricKind::Iwssim) && allow_small_images() {
+            return Ok(zenmetrics_api::MetricParams::Iwssim(
+                zenmetrics_api::iwssim::IwssimParams::allow_small(true),
+            ));
+        }
+    }
+    zenmetrics_api::MetricParams::try_default_for(kind)
+}
+
 /// Single dispatch point for every GPU metric that fits the
 /// "construct → `compute_srgb_u8` → unwrap one `Score`" shape:
 /// ssim2-gpu, dssim-gpu, iwssim-gpu, zensim-gpu, cvvdp single-shot,
@@ -335,22 +390,33 @@ fn run_gpu_via_umbrella(
         GpuRuntime::Auto => auto_order().to_vec(),
         other => vec![other],
     };
-    let mut last_error: Option<String> = None;
+    // Collect EVERY runtime's failure so the user can see what each one
+    // tried — surfacing only the last error hides the actual problem
+    // when (e.g.) cuda fails for an interesting reason but cpu trips
+    // on a feature-not-enabled error later in the fallback chain.
+    let mut errors: Vec<String> = Vec::with_capacity(candidates.len());
     for rt in candidates {
         let backend = match gpu_runtime_to_backend(rt) {
             Ok(b) => b,
             Err(e) => {
-                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                errors.push(format!("{}: {e}", runtime_label(rt)));
                 continue;
             }
         };
         // Per-metric default params from the umbrella. The CLI does
         // not expose per-metric tuning today — the score subcommand is
         // a "is the metric wired in" smoke test.
-        let params = match zenmetrics_api::MetricParams::try_default_for(umbrella_kind) {
+        //
+        // Exception: for iwssim, honour the `IWSSIM_ALLOW_SMALL=1`
+        // env var by switching to `IwssimParams::allow_small(true)`.
+        // The score-pairs `--allow-small-images` flag sets that env var
+        // in-process before invoking this dispatcher. Default behaviour
+        // (env unset) is unchanged — `IwssimParams::DEFAULT` rejects
+        // sub-176 inputs exactly as before.
+        let params = match resolve_default_params(umbrella_kind) {
             Ok(p) => p,
             Err(e) => {
-                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                errors.push(format!("{}: {e}", runtime_label(rt)));
                 continue;
             }
         };
@@ -364,14 +430,14 @@ fn run_gpu_via_umbrella(
         let mut m = match metric {
             Ok(m) => m,
             Err(e) => {
-                last_error = Some(format!("{}: {e}", runtime_label(rt)));
+                errors.push(format!("{}: {e}", runtime_label(rt)));
                 continue;
             }
         };
         match m.compute_srgb_u8(&reference.pixels, &distorted.pixels) {
             Ok(score) => {
                 if !score.value.is_finite() {
-                    last_error = Some(format!(
+                    errors.push(format!(
                         "{}: non-finite score {}",
                         runtime_label(rt),
                         score.value
@@ -380,13 +446,17 @@ fn run_gpu_via_umbrella(
                 }
                 return Ok(score.value);
             }
-            Err(e) => last_error = Some(format!("{}: {e}", runtime_label(rt))),
+            Err(e) => errors.push(format!("{}: {e}", runtime_label(rt))),
         }
     }
     Err(format!(
-        "{}: no runtime succeeded; last error: {}",
+        "{}: no runtime succeeded; tried [{}]",
         umbrella_kind.tag(),
-        last_error.unwrap_or_else(|| "none".into())
+        if errors.is_empty() {
+            "none".to_string()
+        } else {
+            errors.join("; ")
+        }
     )
     .into())
 }

@@ -246,6 +246,16 @@ struct ScorePairsArgs {
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
+    /// Allow sub-176-pixel images for IW-SSIM via reflect-pad adaptive
+    /// mode. Default `false` rejects small inputs (stock IW-SSIM
+    /// requires `min(W, H) ≥ 176` per the 5-level pyramid + 11×11 valid
+    /// blur). When set, the pipeline reflect-pads short axes up to 176
+    /// before evaluation — the resulting score is the IW-SSIM of the
+    /// padded image and is **informational, not bit-exact stock
+    /// IW-SSIM**. Stock-size inputs (≥ 176 on both axes) are unaffected.
+    /// Only iwssim honours this flag today; other metrics ignore it.
+    #[arg(long, default_value_t = false)]
+    allow_small_images: bool,
 }
 
 fn main() -> ExitCode {
@@ -380,6 +390,17 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
     use parquet::arrow::ArrowWriter;
     use parquet::basic::{Compression, ZstdLevel};
     use parquet::file::properties::WriterProperties;
+
+    // Propagate `--allow-small-images` to the metric construction site
+    // via a process-wide `OnceLock` flag set by the CLI. Read by
+    // `resolve_default_params` in the metrics dispatcher; today only
+    // iwssim honours it.
+    if args.allow_small_images {
+        crate::metrics::set_allow_small_images();
+        eprintln!(
+            "[score-pairs] --allow-small-images set: IW-SSIM will reflect-pad sub-176 inputs"
+        );
+    }
 
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b'\t')

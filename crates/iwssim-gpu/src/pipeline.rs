@@ -33,7 +33,107 @@ use crate::filters;
 use crate::kernels::{
     box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine, util,
 };
-use crate::{Error, GpuIwssimResult, NUM_SCALES, Result};
+use crate::{Error, GpuIwssimResult, IwssimConfig, MIN_NATIVE_DIM, NUM_SCALES, Result};
+
+/// Reflect-pad index map (`reflect1` boundary convention, matching
+/// pyrtools): index `i` outside `[0, n)` is folded back via mirror
+/// reflection without repeating the boundary sample. For `n == 1`
+/// returns 0.
+///
+/// Examples for `n = 5`:
+/// - `i = -1` → 1, `i = -2` → 2, `i = -3` → 3
+/// - `i = 5` → 3, `i = 6` → 2, `i = 7` → 1
+///
+/// The mapping is the standard "ping-pong" reflection along
+/// `period = 2 * (n - 1)`.
+#[inline]
+pub(crate) fn reflect_index(i: isize, n: usize) -> usize {
+    if n <= 1 {
+        return 0;
+    }
+    let n_i = n as isize;
+    let period = 2 * (n_i - 1);
+    // Modulo-into-period.
+    let mut r = i.rem_euclid(period);
+    if r >= n_i {
+        r = period - r;
+    }
+    r as usize
+}
+
+/// Reflect-pad a tightly-packed `sw × sh` f32 image to `dw × dh`,
+/// where `dw ≥ sw` and `dh ≥ sh`. Returns a fresh `Vec<f32>` of
+/// length `dw * dh`. The native image lives in the top-left corner
+/// `[0..sh, 0..sw]`; the trailing rows/columns are filled with the
+/// reflect1 mapping.
+pub(crate) fn reflect_pad_f32(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+) -> Vec<f32> {
+    debug_assert_eq!(src.len(), sw * sh);
+    debug_assert!(dw >= sw && dh >= sh);
+    let mut out = vec![0.0_f32; dw * dh];
+    // For each destination row, compute the source row via
+    // reflect_index along the height axis, then fill columns.
+    for dy in 0..dh {
+        let sy = if dy < sh {
+            dy
+        } else {
+            reflect_index(dy as isize, sh)
+        };
+        let src_row = &src[sy * sw..sy * sw + sw];
+        let dst_row = &mut out[dy * dw..dy * dw + dw];
+        // Copy the in-range columns directly, fill the rest via
+        // reflect_index along the width axis.
+        dst_row[..sw].copy_from_slice(src_row);
+        for dx in sw..dw {
+            let sx = reflect_index(dx as isize, sw);
+            dst_row[dx] = src_row[sx];
+        }
+    }
+    out
+}
+
+/// Reflect-pad a tightly-packed `sw × sh × 3` u8 RGB image to
+/// `dw × dh × 3`. Same boundary convention as
+/// [`reflect_pad_f32`]. Returned buffer length is `dw * dh * 3`.
+pub(crate) fn reflect_pad_rgb_u8(
+    src: &[u8],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+) -> Vec<u8> {
+    debug_assert_eq!(src.len(), sw * sh * 3);
+    debug_assert!(dw >= sw && dh >= sh);
+    let mut out = vec![0_u8; dw * dh * 3];
+    for dy in 0..dh {
+        let sy = if dy < sh {
+            dy
+        } else {
+            reflect_index(dy as isize, sh)
+        };
+        let src_row_start = sy * sw * 3;
+        let src_row = &src[src_row_start..src_row_start + sw * 3];
+        let dst_row_start = dy * dw * 3;
+        let dst_row = &mut out[dst_row_start..dst_row_start + dw * 3];
+        // In-range columns: byte-copy.
+        dst_row[..sw * 3].copy_from_slice(src_row);
+        // Out-of-range columns: per-pixel reflect on x.
+        for dx in sw..dw {
+            let sx = reflect_index(dx as isize, sw);
+            let s = sx * 3;
+            let d = dx * 3;
+            dst_row[d] = src_row[s];
+            dst_row[d + 1] = src_row[s + 1];
+            dst_row[d + 2] = src_row[s + 2];
+        }
+    }
+    out
+}
 
 /// MS-SSIM Gaussian window radius — used to compute `bound1` (the
 /// crop applied to `iw_j` so it aligns with `cs_j`).
@@ -147,8 +247,20 @@ impl Scale {
 /// for a given `(width, height)`, reuse across many image pairs.
 pub struct Iwssim<R: Runtime> {
     client: ComputeClient<R>,
+    /// Native (caller-supplied) image width.
     width: u32,
+    /// Native (caller-supplied) image height.
     height: u32,
+    /// Padded width fed to the GPU pipeline. Equal to `width` for
+    /// stock-size inputs (≥ MIN_NATIVE_DIM on both axes). When
+    /// `IwssimConfig::allow_small` is enabled and the native width is
+    /// below `MIN_NATIVE_DIM`, `pad_width = MIN_NATIVE_DIM`; the
+    /// `compute_*` entry points reflect-pad the input from `width` to
+    /// `pad_width` on the host before upload.
+    pad_width: u32,
+    /// Padded height fed to the GPU pipeline. Same contract as
+    /// `pad_width`.
+    pad_height: u32,
 
     /// sRGB u8 staging — re-uploaded per RGB call. None when the
     /// instance has only ever consumed grayscale planes.
@@ -184,20 +296,63 @@ const SLOT_CSL: u32 = 8; // 1 slot: j = 4
 const NUM_SLOTS: u32 = 9;
 
 impl<R: Runtime> Iwssim<R> {
-    /// Allocate the pipeline for the given image dimensions. Returns
-    /// `Err(InvalidImageSize)` if either dimension is too small for a
-    /// 5-level pyramid with 11×11 valid-mode SSIM stats at the
-    /// coarsest scale.
+    /// Allocate the pipeline for the given image dimensions with the
+    /// default config (reject inputs below `MIN_NATIVE_DIM` on either
+    /// axis). Returns `Err(InvalidImageSize)` if either dimension is
+    /// too small for a 5-level pyramid with 11×11 valid-mode SSIM
+    /// stats at the coarsest scale.
+    ///
+    /// Equivalent to `Self::with_config(client, width, height,
+    /// IwssimConfig::default())`.
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
+        Self::with_config(client, width, height, IwssimConfig::default())
+    }
+
+    /// Allocate the pipeline for the given image dimensions with an
+    /// explicit configuration.
+    ///
+    /// When `cfg.allow_small` is false (the default), behaves exactly
+    /// like the historical `new`: inputs below `MIN_NATIVE_DIM` on
+    /// either axis return `Err(InvalidImageSize)` and the pipeline
+    /// runs at `(width, height)` (zero overhead vs the pre-feature
+    /// build).
+    ///
+    /// When `cfg.allow_small` is true and either axis is below
+    /// `MIN_NATIVE_DIM`, the pipeline is constructed at the **padded**
+    /// dimensions `(max(width, MIN_NATIVE_DIM), max(height,
+    /// MIN_NATIVE_DIM))`. Every subsequent `compute_*` call
+    /// reflect-pads the input on the host from the native dimensions
+    /// to the padded dimensions before upload. The resulting score is
+    /// the IW-SSIM of the **padded** image — it is **not bit-exact
+    /// stock IW-SSIM** for the native input, since the pyramid sees
+    /// reflected content past the native border. Treat the score as
+    /// informational / monotonic for small inputs (still suitable for
+    /// codec sweeps where the same pair of distortions is being
+    /// compared) but do not compare it against scores from a true
+    /// stock-size run on the same content.
+    pub fn with_config(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        cfg: IwssimConfig,
+    ) -> Result<Self> {
         // Coarsest scale needs at least 11 pixels per axis for a
         // valid-mode 11×11 conv. With 5 pyramid levels that's
         // 11 · 2^(NUM_SCALES − 1) = 11 · 16 = 176 at the input.
-        if width < 176 || height < 176 {
-            return Err(Error::InvalidImageSize);
-        }
+        let (pad_width, pad_height) = if width < MIN_NATIVE_DIM || height < MIN_NATIVE_DIM {
+            if !cfg.allow_small {
+                return Err(Error::InvalidImageSize);
+            }
+            // Reflect-pad the short axis up to MIN_NATIVE_DIM. The
+            // long axis (if already ≥ MIN_NATIVE_DIM) stays native.
+            (width.max(MIN_NATIVE_DIM), height.max(MIN_NATIVE_DIM))
+        } else {
+            (width, height)
+        };
+
         let mut dims = Vec::with_capacity(NUM_SCALES);
-        let mut h = height;
-        let mut w = width;
+        let mut h = pad_height;
+        let mut w = pad_width;
         for _ in 0..NUM_SCALES {
             dims.push((h, w));
             h = h.div_ceil(2);
@@ -211,7 +366,7 @@ impl<R: Runtime> Iwssim<R> {
         // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
         // (R | G<<8 | B<<16). Length = n_pixels, not n_pixels × 3.
         // Cuts per-call host→device upload from 12 B/pixel to 4 B/pixel.
-        let n_pixels_usize = (width * height) as usize;
+        let n_pixels_usize = (pad_width * pad_height) as usize;
         let src_u32_a =
             client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
         let src_u32_b =
@@ -225,6 +380,8 @@ impl<R: Runtime> Iwssim<R> {
             client,
             width,
             height,
+            pad_width,
+            pad_height,
             src_u32_a,
             src_u32_b,
             scales,
@@ -234,8 +391,23 @@ impl<R: Runtime> Iwssim<R> {
         })
     }
 
+    /// Native `(width, height)` the caller supplied to `new` /
+    /// `with_config`. Use this for input buffer length checks.
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// Padded `(width, height)` actually fed to the GPU pipeline.
+    /// Equal to `dimensions()` when not in `allow_small` mode, or
+    /// when both native axes already meet `MIN_NATIVE_DIM`.
+    pub fn padded_dimensions(&self) -> (u32, u32) {
+        (self.pad_width, self.pad_height)
+    }
+
+    /// True when the pipeline is reflect-padding native inputs to
+    /// reach `MIN_NATIVE_DIM` on at least one axis.
+    pub fn is_padded(&self) -> bool {
+        self.pad_width != self.width || self.pad_height != self.height
     }
     pub fn n_scales(&self) -> usize {
         self.scales.len()
@@ -258,6 +430,10 @@ impl<R: Runtime> Iwssim<R> {
     /// Saves roughly half the LP-pyramid build time per call (and at
     /// 4096² the much larger reference upload), with no parity impact:
     /// the rest of the pipeline reads `lp_ref` exactly as before.
+    ///
+    /// `ref_gray.len()` must equal `width * height` (native dims). If
+    /// `is_padded()` is true, the buffer is reflect-padded on the host
+    /// to `pad_width × pad_height` before upload.
     pub fn set_reference(&mut self, ref_gray: &[f32]) -> Result<()> {
         let expected = (self.width * self.height) as usize;
         if ref_gray.len() != expected {
@@ -266,8 +442,19 @@ impl<R: Runtime> Iwssim<R> {
                 got: ref_gray.len(),
             });
         }
-        let h_ref = self.client.create_from_slice(f32::as_bytes(ref_gray));
-        self.scales[0].g_ref = h_ref;
+        let uploaded = if self.is_padded() {
+            let padded = reflect_pad_f32(
+                ref_gray,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            self.client.create_from_slice(f32::as_bytes(&padded))
+        } else {
+            self.client.create_from_slice(f32::as_bytes(ref_gray))
+        };
+        self.scales[0].g_ref = uploaded;
         // Build only the ref-side pyramid; the dis-side will be built
         // in `compute_with_reference`.
         self.build_laplacian_pyramid(true);
@@ -277,6 +464,10 @@ impl<R: Runtime> Iwssim<R> {
 
     /// Score one distortion against the cached reference. Returns
     /// `Err(NoCachedReference)` if `set_reference` hasn't been called.
+    ///
+    /// `dis_gray.len()` must equal `width * height` (native dims).
+    /// Reflect-padded when `is_padded()` is true (same contract as
+    /// [`set_reference`]).
     pub fn compute_with_reference(&mut self, dis_gray: &[f32]) -> Result<GpuIwssimResult> {
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
@@ -288,8 +479,19 @@ impl<R: Runtime> Iwssim<R> {
                 got: dis_gray.len(),
             });
         }
-        let h_dis = self.client.create_from_slice(f32::as_bytes(dis_gray));
-        self.scales[0].g_dis = h_dis;
+        let uploaded = if self.is_padded() {
+            let padded = reflect_pad_f32(
+                dis_gray,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            self.client.create_from_slice(f32::as_bytes(&padded))
+        } else {
+            self.client.create_from_slice(f32::as_bytes(dis_gray))
+        };
+        self.scales[0].g_dis = uploaded;
         // Skip the ref-side pyramid; only build dis-side.
         self.build_laplacian_pyramid(false);
         // Then the rest of the pipeline reads both `lp_ref[s]` (cached)
@@ -299,8 +501,12 @@ impl<R: Runtime> Iwssim<R> {
     }
 
     /// Score one RGB-u8 pair. Both buffers must be `width × height × 3`
-    /// in RGB byte order. The pipeline performs the BT.601 rgb→gray
-    /// + half-up rounding step on the GPU.
+    /// in RGB byte order (native dimensions). The pipeline performs the
+    /// BT.601 rgb→gray + half-up rounding step on the GPU.
+    ///
+    /// When `is_padded()` is true, the inputs are host-side
+    /// reflect-padded RGB to `pad_width × pad_height × 3` before being
+    /// packed and uploaded.
     pub fn compute_rgb(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<GpuIwssimResult> {
         let expected = (self.width * self.height * 3) as usize;
         if ref_rgb.len() != expected {
@@ -327,8 +533,27 @@ impl<R: Runtime> Iwssim<R> {
         // Layout (unchanged from T4.L): 4 bytes per pixel — R | G<<8
         // | B<<16 (alpha unused). Reader (`rgb_u32_to_gray_kernel`)
         // sees the same `[u32]` packing.
-        self.src_u32_a = Self::pack_into_pinned(&self.client, ref_rgb);
-        self.src_u32_b = Self::pack_into_pinned(&self.client, dis_rgb);
+        if self.is_padded() {
+            let ref_pad = reflect_pad_rgb_u8(
+                ref_rgb,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            let dis_pad = reflect_pad_rgb_u8(
+                dis_rgb,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            self.src_u32_a = Self::pack_into_pinned(&self.client, &ref_pad);
+            self.src_u32_b = Self::pack_into_pinned(&self.client, &dis_pad);
+        } else {
+            self.src_u32_a = Self::pack_into_pinned(&self.client, ref_rgb);
+            self.src_u32_b = Self::pack_into_pinned(&self.client, dis_rgb);
+        }
 
         self.rgb_u32_to_gray_from_packed();
         self.run_pipeline()
@@ -337,6 +562,10 @@ impl<R: Runtime> Iwssim<R> {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     /// Uses the same pinned-staging fast path as the internal upload.
+    ///
+    /// When `is_padded()` is true the host-side reflect-pad is applied
+    /// before packing; the returned handle has length `pad_width *
+    /// pad_height` u32s, not `width * height`.
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
@@ -351,7 +580,18 @@ impl<R: Runtime> Iwssim<R> {
                 got: srgb.len(),
             });
         }
-        Ok(Self::pack_into_pinned(&self.client, srgb))
+        if self.is_padded() {
+            let padded = reflect_pad_rgb_u8(
+                srgb,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            Ok(Self::pack_into_pinned(&self.client, &padded))
+        } else {
+            Ok(Self::pack_into_pinned(&self.client, srgb))
+        }
     }
 
     /// Compute against pre-uploaded packed-u32 device handles —
@@ -378,8 +618,12 @@ impl<R: Runtime> Iwssim<R> {
     /// currently sit in `src_u32_a` / `src_u32_b`. Split out of
     /// [`Self::compute_rgb`] so [`Self::compute_handles`] can reuse
     /// the dispatch step without re-packing bytes.
+    ///
+    /// Uses padded dimensions — the packed buffers are sized for the
+    /// padded image, and scale-0 `g_ref`/`g_dis` are sized for the
+    /// padded image (see `Scale::new`).
     fn rgb_u32_to_gray_from_packed(&self) {
-        let n_pixels = (self.width * self.height) as usize;
+        let n_pixels = (self.pad_width * self.pad_height) as usize;
         let s0 = &self.scales[0];
         unsafe {
             rgb2gray::rgb_u32_to_gray_kernel::launch_unchecked::<R>(
@@ -403,6 +647,9 @@ impl<R: Runtime> Iwssim<R> {
     /// Score one grayscale-f32 pair. Both buffers must be `width × height`
     /// floats in the 0..=255 range (matches the reference convention
     /// of `L = 255` for the SSIM constants).
+    ///
+    /// When `is_padded()` is true, both inputs are reflect-padded on
+    /// the host from native to padded dims before upload.
     pub fn compute_gray(&mut self, ref_gray: &[f32], dis_gray: &[f32]) -> Result<GpuIwssimResult> {
         let profile = std::env::var("IWSSIM_PROFILE").is_ok();
         let expected = (self.width * self.height) as usize;
@@ -421,8 +668,31 @@ impl<R: Runtime> Iwssim<R> {
         // Direct upload into g_ref / g_dis (scale-0 working Gaussian).
         // Replace the handle so the new contents are visible.
         let t = std::time::Instant::now();
-        let h_ref = self.client.create_from_slice(f32::as_bytes(ref_gray));
-        let h_dis = self.client.create_from_slice(f32::as_bytes(dis_gray));
+        let (h_ref, h_dis) = if self.is_padded() {
+            let r = reflect_pad_f32(
+                ref_gray,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            let d = reflect_pad_f32(
+                dis_gray,
+                self.width as usize,
+                self.height as usize,
+                self.pad_width as usize,
+                self.pad_height as usize,
+            );
+            (
+                self.client.create_from_slice(f32::as_bytes(&r)),
+                self.client.create_from_slice(f32::as_bytes(&d)),
+            )
+        } else {
+            (
+                self.client.create_from_slice(f32::as_bytes(ref_gray)),
+                self.client.create_from_slice(f32::as_bytes(dis_gray)),
+            )
+        };
         // Swap handles into scale-0. Earlier g_ref/g_dis is dropped.
         self.scales[0].g_ref = h_ref;
         self.scales[0].g_dis = h_dis;
@@ -1229,5 +1499,130 @@ impl<R: Runtime> Iwssim<R> {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod reflect_pad_tests {
+    use super::*;
+
+    #[test]
+    fn reflect_index_inside_range_is_identity() {
+        for n in 1..=8usize {
+            for i in 0..n {
+                assert_eq!(reflect_index(i as isize, n), i);
+            }
+        }
+    }
+
+    #[test]
+    fn reflect_index_n1_returns_zero() {
+        assert_eq!(reflect_index(-3, 1), 0);
+        assert_eq!(reflect_index(0, 1), 0);
+        assert_eq!(reflect_index(5, 1), 0);
+    }
+
+    #[test]
+    fn reflect_index_ping_pong_n5() {
+        // n=5, period=8, expected sequence around the boundary:
+        // ..., 3, 2, 1, [0, 1, 2, 3, 4], 3, 2, 1, 0, 1, 2, ...
+        assert_eq!(reflect_index(-1, 5), 1);
+        assert_eq!(reflect_index(-2, 5), 2);
+        assert_eq!(reflect_index(-3, 5), 3);
+        assert_eq!(reflect_index(-4, 5), 4);
+        assert_eq!(reflect_index(5, 5), 3);
+        assert_eq!(reflect_index(6, 5), 2);
+        assert_eq!(reflect_index(7, 5), 1);
+        assert_eq!(reflect_index(8, 5), 0);
+        assert_eq!(reflect_index(9, 5), 1);
+    }
+
+    #[test]
+    fn reflect_pad_f32_identity_when_sizes_match() {
+        let src: Vec<f32> = (0..(3 * 4)).map(|i| i as f32).collect();
+        let out = reflect_pad_f32(&src, 4, 3, 4, 3);
+        assert_eq!(out, src);
+    }
+
+    #[test]
+    fn reflect_pad_f32_extends_width() {
+        // Row major: source 3×2 = [[0,1,2],[3,4,5]], pad to width 5.
+        let src: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let out = reflect_pad_f32(&src, 3, 2, 5, 2);
+        // Expected per row: [0, 1, 2, reflect(3, 3)=1, reflect(4, 3)=0]
+        assert_eq!(out, vec![0.0, 1.0, 2.0, 1.0, 0.0, 3.0, 4.0, 5.0, 4.0, 3.0]);
+    }
+
+    #[test]
+    fn reflect_pad_f32_extends_height() {
+        // Source 3×2; pad to height 4.
+        let src: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let out = reflect_pad_f32(&src, 3, 2, 3, 4);
+        // Row 0: src row 0.
+        // Row 1: src row 1.
+        // Row 2: reflect_index(2, 2) = 0 (period=2, 2%2=0, 0<2 → 0)? wait
+        //        period=2*(2-1)=2, r=2%2=0, 0<2 → row 0. So row 2 = src row 0.
+        // Row 3: reflect_index(3, 2): period=2, r=3%2=1, 1<2 → row 1.
+        assert_eq!(
+            out,
+            vec![
+                0.0, 1.0, 2.0, // row 0
+                3.0, 4.0, 5.0, // row 1
+                0.0, 1.0, 2.0, // row 2 reflected back to src 0
+                3.0, 4.0, 5.0, // row 3 reflected back to src 1
+            ]
+        );
+    }
+
+    #[test]
+    fn reflect_pad_f32_extends_both_axes() {
+        // 2×2 source extended to 4×4.
+        let src: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
+        let out = reflect_pad_f32(&src, 2, 2, 4, 4);
+        // reflect_index(2, 2) = 0; reflect_index(3, 2) = 1.
+        // Row 0: 1 2 | reflect col 2 = src col 0 = 1, reflect col 3 = src col 1 = 2.
+        // Row 1: 3 4 | 3 4.
+        // Row 2: reflect_index row 2 = 0 → row 0 contents.
+        // Row 3: reflect_index row 3 = 1 → row 1 contents.
+        assert_eq!(
+            out,
+            vec![
+                1.0, 2.0, 1.0, 2.0, // row 0
+                3.0, 4.0, 3.0, 4.0, // row 1
+                1.0, 2.0, 1.0, 2.0, // row 2
+                3.0, 4.0, 3.0, 4.0, // row 3
+            ]
+        );
+    }
+
+    #[test]
+    fn reflect_pad_rgb_u8_extends_width() {
+        // Source 2 px wide × 1 high RGB: [(10,20,30),(40,50,60)]. Pad to 4 wide.
+        let src: Vec<u8> = vec![10, 20, 30, 40, 50, 60];
+        let out = reflect_pad_rgb_u8(&src, 2, 1, 4, 1);
+        // Width 2 → period 2, reflect(2,2)=0, reflect(3,2)=1.
+        // Row 0: (10,20,30) (40,50,60) | (10,20,30) (40,50,60)
+        assert_eq!(
+            out,
+            vec![10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60]
+        );
+    }
+
+    #[test]
+    fn reflect_pad_rgb_u8_extends_height_3x2() {
+        // 2px × 2 rows RGB: row 0 = [(1,2,3),(4,5,6)]; row 1 = [(7,8,9),(10,11,12)].
+        // Pad to height 4.
+        let src: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let out = reflect_pad_rgb_u8(&src, 2, 2, 2, 4);
+        // Same reflect map as f32 test: rows [0,1,0,1].
+        assert_eq!(
+            out,
+            vec![
+                1, 2, 3, 4, 5, 6, // row 0
+                7, 8, 9, 10, 11, 12, // row 1
+                1, 2, 3, 4, 5, 6, // row 2 reflected to 0
+                7, 8, 9, 10, 11, 12, // row 3 reflected to 1
+            ]
+        );
     }
 }

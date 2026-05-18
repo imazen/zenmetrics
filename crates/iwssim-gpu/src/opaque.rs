@@ -5,7 +5,7 @@
 use crate::pipeline::Iwssim;
 #[cfg(feature = "pixels")]
 use crate::Error;
-use crate::{NUM_SCALES, Result};
+use crate::{IwssimConfig, NUM_SCALES, Result};
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -37,15 +37,29 @@ pub struct Score {
     pub metric_version: &'static str,
 }
 
-/// Configuration for [`IwssimOpaque`]. Currently empty — IW-SSIM
-/// has no user-tunable knobs. Exists for API uniformity.
+/// Configuration for [`IwssimOpaque`].
+///
+/// `allow_small` mirrors [`IwssimConfig::allow_small`] on the typed
+/// API: when true, sub-176-px inputs are reflect-padded to
+/// `MIN_NATIVE_DIM` on the short axis. When false (default) the
+/// constructor returns `Err(InvalidImageSize)` for sub-176 inputs.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct IwssimParams;
+pub struct IwssimParams {
+    /// Forward to [`IwssimConfig::allow_small`]. Default is false
+    /// (reject sub-176 inputs, exactly as historical behaviour).
+    pub allow_small: bool,
+}
 
 impl IwssimParams {
-    /// Default parameter bundle (unit struct).
-    pub const DEFAULT: Self = Self;
+    /// Default parameter bundle — `allow_small = false`. Kept for
+    /// backwards compatibility with `IwssimParams::DEFAULT` callsites.
+    pub const DEFAULT: Self = Self { allow_small: false };
+
+    /// Construct with `allow_small` set explicitly.
+    pub const fn allow_small(allow: bool) -> Self {
+        Self { allow_small: allow }
+    }
 }
 
 trait IwssimInner: Send {
@@ -111,32 +125,45 @@ impl IwssimOpaque {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidImageSize`] if `min(width, height) <
-    /// 176` (the paper's 5-level pyramid + 11×11 valid blur minimum).
+    /// Returns [`Error::InvalidImageSize`] when `min(width, height) <
+    /// 176` and `params.allow_small == false`. When `allow_small` is
+    /// true, the pipeline is built at the reflect-padded dimensions
+    /// `(max(width, 176), max(height, 176))` and small inputs succeed
+    /// (with the small-image score caveat documented on
+    /// [`Iwssim::with_config`]).
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
-        _params: IwssimParams,
+        params: IwssimParams,
     ) -> Result<Self> {
+        let cfg = IwssimConfig {
+            allow_small: params.allow_small,
+        };
         let inner: Box<dyn IwssimInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Iwssim::<cubecl::cuda::CudaRuntime>::new(client, width, height)?)
+                Box::new(Iwssim::<cubecl::cuda::CudaRuntime>::with_config(
+                    client, width, height, cfg,
+                )?)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Iwssim::<cubecl::wgpu::WgpuRuntime>::new(client, width, height)?)
+                Box::new(Iwssim::<cubecl::wgpu::WgpuRuntime>::with_config(
+                    client, width, height, cfg,
+                )?)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Iwssim::<cubecl::cpu::CpuRuntime>::new(client, width, height)?)
+                Box::new(Iwssim::<cubecl::cpu::CpuRuntime>::with_config(
+                    client, width, height, cfg,
+                )?)
             }
         };
         Ok(Self { inner, backend })
