@@ -79,6 +79,55 @@ enum Cmd {
         #[arg(long, default_value_t = false)]
         dry_run: bool,
     },
+    /// Self-destroy: upload an error log to R2 then destroy this
+    /// vast.ai instance via the REST API. Called from the worker's
+    /// EXIT trap on non-zero exit so a broken box doesn't keep
+    /// burning money. Idempotent: if either step fails, the other
+    /// still runs.
+    ///
+    /// Required env vars (or pass `--instance-id` + `--api-key`):
+    ///   - `CONTAINER_ID`            — vast.ai sets this in the container
+    ///   - `CONTAINER_API_KEY`       — container-scoped vast.ai key
+    ///   - `R2_ACCOUNT_ID`           — R2 endpoint derivation
+    ///   - `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` — for s5cmd
+    ///
+    /// On success: log uploaded to `<r2-prefix>/<instance-id>.log`,
+    /// instance destroyed via DELETE
+    /// `https://console.vast.ai/api/v0/instances/<id>/`.
+    SelfDestroy {
+        /// Path to the error log to upload before destroy. If the file
+        /// doesn't exist, upload is skipped (still destroys).
+        #[arg(long)]
+        error_log: std::path::PathBuf,
+        /// R2 prefix to upload the log under (e.g.
+        /// `s3://zentrain/<run>/errors/`). The log is named
+        /// `<instance-id>.log` under this prefix.
+        #[arg(long)]
+        r2_prefix: String,
+        /// Instance ID. Defaults to `$CONTAINER_ID`. Fail if neither set.
+        #[arg(long)]
+        instance_id: Option<String>,
+        /// vast.ai container API key. Defaults to `$CONTAINER_API_KEY`.
+        /// Fail if neither set.
+        #[arg(long)]
+        api_key: Option<String>,
+        /// R2 endpoint URL. Default derived from `$R2_ACCOUNT_ID`.
+        #[arg(long)]
+        r2_endpoint: Option<String>,
+        /// s5cmd profile. Default `r2`.
+        #[arg(long, default_value = "r2")]
+        s5cmd_profile: String,
+        /// Skip the actual destroy call. Used for testing the upload
+        /// path without burning the box.
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+        /// Path to the `curl` binary. Default `curl` on PATH.
+        #[arg(long, default_value = "curl")]
+        curl_bin: String,
+        /// Path to the `s5cmd` binary. Default `s5cmd` on PATH.
+        #[arg(long, default_value = "s5cmd")]
+        s5cmd_bin: String,
+    },
     /// Poll fleet until a target sidecar count is reached, then destroy
     /// every matching instance. Replaces the per-sweep
     /// `run_destroy_<metric>_<chunks>.sh` heredocs.
@@ -117,6 +166,27 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Cmd::Status { label_prefix, format } => cmd_status(&cli.vastai_bin, cli.raw_input.as_deref(), &label_prefix, &format),
         Cmd::Destroy { label_prefix, dry_run } => cmd_destroy(&cli.vastai_bin, cli.raw_input.as_deref(), &label_prefix, dry_run),
+        Cmd::SelfDestroy {
+            error_log,
+            r2_prefix,
+            instance_id,
+            api_key,
+            r2_endpoint,
+            s5cmd_profile,
+            dry_run,
+            curl_bin,
+            s5cmd_bin,
+        } => cmd_self_destroy(SelfDestroyArgs {
+            error_log,
+            r2_prefix,
+            instance_id,
+            api_key,
+            r2_endpoint,
+            s5cmd_profile,
+            dry_run,
+            curl_bin,
+            s5cmd_bin,
+        }),
         Cmd::Watch {
             label_prefix,
             target_sidecars,
@@ -364,6 +434,139 @@ fn cmd_watch(args: WatchArgs) -> anyhow::Result<()> {
 
         std::thread::sleep(poll);
     }
+}
+
+struct SelfDestroyArgs {
+    error_log: std::path::PathBuf,
+    r2_prefix: String,
+    instance_id: Option<String>,
+    api_key: Option<String>,
+    r2_endpoint: Option<String>,
+    s5cmd_profile: String,
+    dry_run: bool,
+    curl_bin: String,
+    s5cmd_bin: String,
+}
+
+fn cmd_self_destroy(args: SelfDestroyArgs) -> anyhow::Result<()> {
+    // Resolve instance ID + API key. Fail loudly if neither is set —
+    // we never want to silently "succeed" without destroying the box.
+    let instance_id = args
+        .instance_id
+        .clone()
+        .or_else(|| std::env::var("CONTAINER_ID").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("instance-id: pass --instance-id or set $CONTAINER_ID (vast.ai sets this in the container)")
+        })?;
+    let api_key = args
+        .api_key
+        .clone()
+        .or_else(|| std::env::var("CONTAINER_API_KEY").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "api-key: pass --api-key or set $CONTAINER_API_KEY (vast.ai sets this in the container)"
+            )
+        })?;
+
+    eprintln!(
+        "[vastai-fleet self-destroy] instance_id={instance_id} dry_run={}",
+        args.dry_run
+    );
+
+    // Step 1: upload error log (best effort — don't fail destroy if
+    // upload bombs). Use the standard R2 endpoint pattern other
+    // workers use.
+    let log_exists = args.error_log.exists();
+    if log_exists {
+        let endpoint = args
+            .r2_endpoint
+            .clone()
+            .or_else(|| {
+                std::env::var("R2_ACCOUNT_ID")
+                    .ok()
+                    .map(|aid| format!("https://{aid}.r2.cloudflarestorage.com"))
+            });
+        // Normalize prefix to have trailing slash, then append <id>.log.
+        let prefix = if args.r2_prefix.ends_with('/') {
+            args.r2_prefix.clone()
+        } else {
+            format!("{}/", args.r2_prefix)
+        };
+        let target = format!("{prefix}{instance_id}.log");
+        eprintln!("  step 1/2: uploading {} -> {target}", args.error_log.display());
+        let mut cmd = Command::new(&args.s5cmd_bin);
+        if let Some(ep) = endpoint.as_deref() {
+            cmd.args(["--endpoint-url", ep]);
+        }
+        cmd.args([
+            "--profile",
+            &args.s5cmd_profile,
+            "cp",
+            args.error_log.to_str().expect("non-utf8 error-log path"),
+            &target,
+        ]);
+        match cmd.output() {
+            Ok(out) if out.status.success() => {
+                eprintln!("  log uploaded: {target}");
+            }
+            Ok(out) => {
+                eprintln!(
+                    "  WARN log upload exited {}: {}",
+                    out.status,
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            }
+            Err(e) => {
+                eprintln!("  WARN log upload spawn: {e}");
+            }
+        }
+    } else {
+        eprintln!(
+            "  step 1/2: skipped (error-log {} does not exist)",
+            args.error_log.display()
+        );
+    }
+
+    // Step 2: destroy via vast.ai REST API. The instance management
+    // endpoint accepts DELETE with the API key in the Authorization
+    // header. See https://docs.vast.ai/api/v0/instances/.
+    let url = format!("https://console.vast.ai/api/v0/instances/{instance_id}/");
+    eprintln!("  step 2/2: DELETE {url}");
+    if args.dry_run {
+        eprintln!("  DRY-RUN — not calling DELETE; destroy skipped");
+        return Ok(());
+    }
+    let out = Command::new(&args.curl_bin)
+        .args([
+            "-fsSL",
+            "--max-time",
+            "30",
+            "-X",
+            "DELETE",
+            "-H",
+            &format!("Authorization: Bearer {api_key}"),
+            "-H",
+            "Accept: application/json",
+            &url,
+        ])
+        .output()
+        .map_err(|e| anyhow::anyhow!("curl spawn: {e}"))?;
+    if !out.status.success() {
+        // curl returns nonzero on HTTP 4xx/5xx with -f. Don't bail —
+        // the box is going down anyway; print the body for the
+        // sidecar-error log so the operator sees the failure.
+        anyhow::bail!(
+            "curl DELETE exited {}: stdout={:?} stderr={:?}",
+            out.status,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    eprintln!(
+        "  destroyed: {}",
+        String::from_utf8_lossy(&out.stdout).trim()
+    );
+    Ok(())
 }
 
 /// Count objects under `prefix` in R2 by shelling out to `s5cmd ls`.
