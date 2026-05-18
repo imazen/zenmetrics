@@ -1,0 +1,267 @@
+# Dockerfile.sweep.v14 — fully-baked sweep worker image (no runtime apt)
+#
+# Goal: every dependency a vast.ai worker needs is baked in this image
+# so boot-to-first-claim is seconds (docker pull cached) instead of
+# minutes (5-15 min of per-box apt installs). Layers are ordered cheap
+# (changes rarely) → expensive (changes per push) so the heavy
+# CUDA/python layers are reused across hundreds of image revs and only
+# the ~280 MB zen-metrics binary layer transfers per code change.
+#
+# Layer plan (top of stack = changes most often):
+#
+#   ┌──────────────────────────────────────────────────────────┐
+#   │  L7: ENTRYPOINT + ENV          0 KB    changes ~never    │
+#   │  L6: scripts (onstart + chunk worker)  ~30 KB   per push │
+#   │  L5: zen-metrics binary       ~280 MB   per code change  │ ← only thing
+#   │  L4: helpers (s5cmd + jq)     ~18 MB    per quarter      │   re-pulled
+#   │  L3: cuda-nvrtc-12-6 + cudart ~250 MB   per CUDA bump    │   on most
+#   │  L2: python3 + python3-pyarrow ~70 MB   per quarter      │   builds
+#   │  L1: ubuntu:24.04 + base apt  ~80 MB    per quarter      │
+#   └──────────────────────────────────────────────────────────┘
+#
+# Once L1-L4 are pulled on a vast.ai datacenter node, they sit in the
+# local docker cache forever. New code pushes re-pull only L5 + L6
+# (~280 MB on the wire). Boot is then: docker pull (~5s) → onstart
+# fetches chunks.jsonl + claims → score. No apt at runtime, ever.
+#
+# Build (precompiled binary path — preferred, see also CI workflow
+# .github/workflows/sweep-image.yml):
+#
+#   # Build binary once on CI (or locally):
+#   cargo build --release -p zen-metrics-cli \
+#       --features 'sweep,gpu,gpu-cuda,gpu-cpu'
+#   cp target/release/zen-metrics ./zen-metrics
+#
+#   # Build image (context: zenmetrics dir):
+#   cd ~/work/zen/zenmetrics
+#   docker build -f Dockerfile.sweep.v14 \
+#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v14-$(git rev-parse --short HEAD) .
+#
+# Build (legacy from-source path — for one-offs without precompiled
+# binary, NOT the production path):
+#
+#   cd ~/work/zen
+#   docker build -f zenmetrics/Dockerfile.sweep.v14 \
+#       --target from-source \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v14-src-$(git -C zenmetrics rev-parse --short HEAD) .
+
+# ─────────────────────────────────────────────────────────────────────
+# Stage A: runtime base — STABLE LAYERS (L1-L4)
+#
+# These layers change only when:
+# - Ubuntu LTS bumps (every 2 years)
+# - CUDA bumps (every ~6 months we'd consider it)
+# - python3-pyarrow gets a major version that needs testing
+# - s5cmd / jq get a security update
+#
+# Bake everything the onstart script previously installed at runtime,
+# so the runtime onstart can shrink to "fetch chunks + score".
+# ─────────────────────────────────────────────────────────────────────
+
+FROM ubuntu:24.04 AS runtime-base
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker base (CUDA NVRTC + python pyarrow + helpers baked)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# L1: base OS packages — TLS, http, gnupg (for cuda-keyring later),
+# libssl3 (zen-metrics runtime), python3 + pyarrow (chunk worker step
+# 3 slices parquet via pyarrow). Bundled in one RUN so they share a
+# single apt-get update + cleanup. python3-pyarrow lives in `universe`
+# on ubuntu 24.04 — enable it before install. awscli has been removed;
+# s5cmd (baked in L4a) covers R2 transfers without any python deps.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        software-properties-common \
+    && add-apt-repository -y universe \
+    && apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg \
+        libssl3 \
+        python3 python3-pip python3-pyarrow \
+    && rm -rf /var/lib/apt/lists/*
+
+# L3: CUDA NVRTC + cudart — cubecl-cuda dlopens libnvrtc.so.12 at
+# runtime to JIT-compile kernels. nvidia-container-toolkit mounts
+# libcuda.so.1 from the host driver; everything else (NVRTC, cudart)
+# must come from the image. Pinned to 12-6 because that's what every
+# vast.ai host's libcuda has compat-shim support for (CUDA 12.6 + 13.x
+# drivers are 99% of vast inventory; the cuda 12.4-built v13 binary
+# works fine against the 12.6 runtime because cudart is
+# forward-compatible within major).
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
+        -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends \
+        cuda-nvrtc-12-6 cuda-cudart-12-6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "/usr/local/cuda-12.6/lib64" > /etc/ld.so.conf.d/cuda-12.6.conf \
+    && ldconfig \
+    && ln -sf /usr/local/cuda-12.6 /usr/local/cuda
+
+# L4a: s5cmd (R2 transfers) — fetched directly from upstream release
+# rather than via apt (no debian package). Pinned version for
+# reproducibility; bump only when needed.
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz \
+    && tar xzf /tmp/s5cmd.tgz -C /usr/local/bin s5cmd \
+    && rm /tmp/s5cmd.tgz \
+    && chmod +x /usr/local/bin/s5cmd
+
+# L4b: jq (chunk JSON parsing) — same rationale. Static binary, no deps.
+RUN curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" \
+        -o /usr/local/bin/jq \
+    && chmod +x /usr/local/bin/jq
+
+# Environment for the chunk worker — set here so descendant stages
+# don't need to repeat them. LD_LIBRARY_PATH lets cubecl-cuda dlopen
+# libnvrtc.so.12 from /usr/local/cuda/lib64; nvidia-container-toolkit
+# mounts /usr/local/nvidia/lib{,64} for libcuda.so.1.
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64 \
+    CUDA_PATH=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin \
+    WORKDIR=/workspace/sweep
+
+WORKDIR /workspace/sweep
+
+# Smoke: every package we declared at runtime needed actually is
+# importable / runnable. Fail the build now so we don't ship a broken
+# base layer.
+RUN python3 -c "import pyarrow.parquet as pq; print('pyarrow OK')" \
+    && s5cmd version \
+    && jq --version \
+    && ldconfig -p | grep -q libnvrtc.so.12 \
+    && echo "L1-L4 smoke passed"
+
+# ─────────────────────────────────────────────────────────────────────
+# Stage B: from-source builder — LEGACY PATH for one-offs without a
+# precompiled binary. NOT used by the production CI image. Tagged so
+# explicit `--target` calls can opt in (`docker build --target
+# from-source ...`); a plain `docker build` skips this stage entirely.
+# ─────────────────────────────────────────────────────────────────────
+
+FROM rust:1.93-slim-bookworm AS builder-from-source
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates pkg-config libssl-dev cmake git \
+        clang lld build-essential curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# nvcc 12.4 SDK so cudarc's build.rs reads a sensible CUDA version
+# (matches what host libcuda ships). cudarc dlopens at runtime so
+# only nvcc + headers are needed at build time, not libcuda.
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends cuda-nvcc-12-4 cuda-cudart-dev-12-4 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CUDA_HOME=/usr/local/cuda-12.4 \
+    CUDA_PATH=/usr/local/cuda-12.4 \
+    PATH=/usr/local/cuda-12.4/bin:$PATH
+
+WORKDIR /workspace
+COPY zenmetrics/  ./zenmetrics/
+COPY zenjpeg/     ./zenjpeg/
+COPY zenanalyze/  ./zenanalyze/
+COPY zensim--principled-activity/ ./zensim--principled-activity/
+
+WORKDIR /workspace/zenmetrics
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/workspace/zenmetrics/target,sharing=locked \
+    CARGO_PROFILE_RELEASE_LTO=thin \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+    cargo build -p zen-metrics-cli --release --features sweep,gpu,gpu-cuda,gpu-cpu \
+    && cp target/release/zen-metrics /usr/local/bin/zen-metrics \
+    && /usr/local/bin/zen-metrics --version
+
+# Named alias so the precompiled and from-source paths both feed the
+# same final stage.
+FROM builder-from-source AS from-source
+
+# ─────────────────────────────────────────────────────────────────────
+# Stage C: final image — VOLATILE LAYERS (L5-L7)
+#
+# Only the zen-metrics binary + scripts change per code push. Pulling
+# from runtime-base, layers L1-L4 are shared across every image rev.
+#
+# The precompiled-binary path is the default — set
+# `--build-arg ZEN_METRICS_BINARY=./path/to/binary` to override.
+# ─────────────────────────────────────────────────────────────────────
+
+FROM runtime-base AS final
+
+# L5: zen-metrics binary — the ONLY layer that should re-pull on most
+# code pushes. ~280 MB.
+#
+# ZEN_METRICS_BINARY defaults to a path inside the build context;
+# CI sets it to the freshly-built artifact. Manual builds without an
+# artifact should use `--target from-source` and a multi-stage COPY
+# (see `from-source-final` stage below).
+ARG ZEN_METRICS_BINARY=./zen-metrics
+COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
+
+# Sanity: the binary actually runs in the runtime image. If this
+# fails the build aborts before we ship a broken image.
+RUN /usr/local/bin/zen-metrics --version \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
+    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv \
+    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q allow-small-images \
+    && echo "L5 binary smoke passed"
+
+# L6: onstart + chunk worker scripts — small, fast layer, changes
+# per script edit without invalidating the binary layer above.
+# v14 onstart trusts the baked image (no runtime apt). The legacy v3
+# onstart is also copied for backward compatibility but not the default.
+COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh /usr/local/bin/onstart_iwssim.sh
+COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill.sh    /usr/local/bin/onstart_iwssim_v3.sh
+COPY --chmod=0755 scripts/sweep/iwssim_backfill_chunk_worker.sh /usr/local/bin/iwssim_chunk_worker.sh
+COPY --chmod=0755 scripts/sweep/onstart_v3.sh                /usr/local/bin/zen-metrics-worker
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (fully baked, no runtime apt; layered for cache hits)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+# Default entrypoint = v14 onstart for the iwssim backfill flow.
+# Callers can override with `--entrypoint /usr/local/bin/zen-metrics`
+# for ad-hoc score / sweep invocations, or
+# `--entrypoint /usr/local/bin/onstart_iwssim_v3.sh` to fall back to
+# the v3 path with runtime apt installs (for diagnostics, NOT
+# production — defeats the v14 cache plan).
+ENTRYPOINT ["/usr/local/bin/onstart_iwssim.sh"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Stage D (optional): from-source-final — for one-off builds that
+# materialize the binary via from-source builder. Use:
+#
+#   docker build --target from-source-final -f Dockerfile.sweep.v14 \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v14-src-<sha> ~/work/zen
+#
+# The build context must be ~/work/zen (parent of zenmetrics).
+# ─────────────────────────────────────────────────────────────────────
+
+FROM runtime-base AS from-source-final
+
+COPY --from=from-source --chmod=0755 /usr/local/bin/zen-metrics /usr/local/bin/zen-metrics
+
+RUN /usr/local/bin/zen-metrics --version \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
+    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q allow-small-images \
+    && echo "from-source final L5 smoke passed"
+
+COPY --chmod=0755 zenmetrics/scripts/sweep/onstart_iwssim_backfill_v14.sh /usr/local/bin/onstart_iwssim.sh
+COPY --chmod=0755 zenmetrics/scripts/sweep/onstart_iwssim_backfill.sh    /usr/local/bin/onstart_iwssim_v3.sh
+COPY --chmod=0755 zenmetrics/scripts/sweep/iwssim_backfill_chunk_worker.sh /usr/local/bin/iwssim_chunk_worker.sh
+COPY --chmod=0755 zenmetrics/scripts/sweep/onstart_v3.sh                /usr/local/bin/zen-metrics-worker
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (built from source, layered for cache hits)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENTRYPOINT ["/usr/local/bin/onstart_iwssim.sh"]

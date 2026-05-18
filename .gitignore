@@ -19,3 +19,8 @@
 **/__pycache__/
 *.pyc
 scripts/cvvdp_goldens/out/
+
+# Repo-root staging for Dockerfile.sweep.v14 precompiled-binary builds.
+# The CI workflow downloads the artifact to this path; local builds
+# `cp target/release/zen-metrics ./zen-metrics`. Never commit it.
+/zen-metrics

@@ -1,0 +1,177 @@
+name: Sweep image (Dockerfile.sweep.v14)
+
+# Builds the production ready-to-run vast.ai sweep image on every push
+# to master + every tag. Image layers follow the v14 plan: stable base
+# (ubuntu + python-pyarrow + cuda-nvrtc + s5cmd + jq) is rebuilt only
+# when the Dockerfile's base stage changes; the per-push delta is the
+# zen-metrics binary (~280 MB) + scripts (~30 KB).
+#
+# Tag scheme:
+#   ghcr.io/imazen/zen-metrics-sweep:v14-<short-sha>      (every push)
+#   ghcr.io/imazen/zen-metrics-sweep:v14                  (latest master)
+#   ghcr.io/imazen/zen-metrics-sweep:v14-<release-tag>    (tagged releases)
+#
+# Why this exists: vast.ai workers used to run a 5-15 min apt-install
+# script on every boot (python3-pyarrow + cuda-nvrtc + libcuda support
+# libs). With this workflow + v14 layering, boot-to-first-claim is ~5 s.
+# That's the difference between burning $0.10/hr × 30 boxes × 15 min on
+# apt = $0.75 per launch, vs essentially free per launch. Compounding
+# over months of fleet relaunches that adds up.
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      # Rebuild when any of these change. Cargo source, the Dockerfile
+      # itself, or the worker scripts.
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Dockerfile.sweep.v14"
+      - "scripts/sweep/onstart_iwssim_backfill*.sh"
+      - "scripts/sweep/iwssim_backfill_chunk_worker.sh"
+      - "scripts/sweep/onstart_v3.sh"
+      - ".github/workflows/sweep-image.yml"
+  push:
+    tags:
+      - "zen-metrics-cli-v*"
+  workflow_dispatch:
+    inputs:
+      force_rebuild_base:
+        description: "Rebuild the base layer (no cache hit even if Dockerfile base stage unchanged)"
+        type: boolean
+        default: false
+
+env:
+  IMAGE_NAME: ghcr.io/imazen/zen-metrics-sweep
+  REGISTRY: ghcr.io
+
+jobs:
+  build-binary:
+    name: Build zen-metrics binary (Linux x86_64)
+    runs-on: ubuntu-latest
+    outputs:
+      sha-short: ${{ steps.meta.outputs.sha-short }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # zenmetrics workspace has [patch.crates-io] entries pointing at
+      # sibling worktrees. Clone them at pinned commits so the cargo
+      # build inside CI resolves the same versions a local build does.
+      # The pins live in zenmetrics/CLAUDE.md + the [patch] block.
+      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim--principled-activity)
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
+          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # zensim principled-activity branch — required by the
+          # [patch.crates-io] zensim = { path = ... } line.
+          git clone --quiet --branch feat/principled-activity \
+              https://github.com/imazen/zensim.git ../zensim--principled-activity
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zen-metrics-sweep-image
+          workspaces: . -> target
+
+      - name: Build zen-metrics (release, sweep + GPU features)
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
+        run: |
+          cargo build --release -p zen-metrics-cli \
+              --features 'sweep,gpu,gpu-cuda,gpu-cpu'
+          mkdir -p artifacts
+          cp target/release/zen-metrics artifacts/zen-metrics
+          chmod +x artifacts/zen-metrics
+          ./artifacts/zen-metrics --version
+          ./artifacts/zen-metrics list-metrics | grep -q iwssim
+          ./artifacts/zen-metrics score-pairs --help | grep -q allow-small-images
+
+      - name: Extract short SHA
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha-short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binary artifact for image job
+        uses: actions/upload-artifact@v4
+        with:
+          name: zen-metrics-binary
+          path: artifacts/zen-metrics
+          retention-days: 7
+
+  build-image:
+    name: Build + push sweep image
+    runs-on: ubuntu-latest
+    needs: build-binary
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download zen-metrics binary
+        uses: actions/download-artifact@v4
+        with:
+          name: zen-metrics-binary
+          path: ./
+      - run: chmod +x ./zen-metrics
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA_SHORT="${{ needs.build-binary.outputs.sha-short }}"
+          TAGS="${IMAGE_NAME}:v14-${SHA_SHORT}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              TAGS="${TAGS},${IMAGE_NAME}:v14"
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/zen-metrics-cli-v* ]]; then
+              VERSION="${GITHUB_REF#refs/tags/zen-metrics-cli-v}"
+              TAGS="${TAGS},${IMAGE_NAME}:v14-${VERSION}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "Tags: $TAGS"
+
+      - name: Build + push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.sweep.v14
+          build-args: |
+            ZEN_METRICS_BINARY=./zen-metrics
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # Cache the base layer (L1-L4 ~330 MB) across runs. registry
+          # cache means we don't re-apt-install python+cuda+helpers on
+          # every push, only when the base RUN steps change.
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v14
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v14,mode=max
+          # No layer should reference the build-binary stage so the
+          # final image is small. Only stable runtime layers + binary +
+          # scripts.
+          provenance: false
+
+      - name: Verify pushed image
+        run: |
+          docker pull ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }}
+          docker run --rm --entrypoint /usr/local/bin/zen-metrics \
+              ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }} \
+              --version
+          docker run --rm --entrypoint /usr/local/bin/zen-metrics \
+              ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }} \
+              score-pairs --help | grep -q allow-small-images
+          echo "Image OK: ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }}"
