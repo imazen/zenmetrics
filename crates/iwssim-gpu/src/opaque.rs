@@ -5,7 +5,7 @@
 use crate::pipeline::Iwssim;
 #[cfg(feature = "pixels")]
 use crate::Error;
-use crate::{IwssimConfig, NUM_SCALES, Result};
+use crate::{IwssimConfig, IwssimStrategy, NUM_SCALES, Result};
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -127,10 +127,11 @@ impl IwssimOpaque {
     ///
     /// Returns [`Error::InvalidImageSize`] when `min(width, height) <
     /// 176` and `params.allow_small == false`. When `allow_small` is
-    /// true, the pipeline is built at the reflect-padded dimensions
-    /// `(max(width, 176), max(height, 176))` and small inputs succeed
-    /// (with the small-image score caveat documented on
-    /// [`Iwssim::with_config`]).
+    /// true, the pipeline is built at the padded dimensions
+    /// `(max(width, 176), max(height, 176))` with the **tile** small-
+    /// image strategy (changed from reflect-pad in this revision per
+    /// `benchmarks/iwssim_smallimg/`; see
+    /// [`IwssimConfig::allow_small`] for the back-compat contract).
     pub fn new(
         backend: Backend,
         width: u32,
@@ -138,7 +139,11 @@ impl IwssimOpaque {
         params: IwssimParams,
     ) -> Result<Self> {
         let cfg = IwssimConfig {
-            allow_small: params.allow_small,
+            strategy: if params.allow_small {
+                IwssimStrategy::Tile
+            } else {
+                IwssimStrategy::Reject
+            },
         };
         let inner: Box<dyn IwssimInner + Send> = match backend {
             #[cfg(feature = "cuda")]

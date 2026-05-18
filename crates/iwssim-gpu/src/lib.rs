@@ -74,31 +74,81 @@ pub const NUM_SCALES: usize = 5;
 /// to `MIN_NATIVE_DIM` on the short axis (`IwssimConfig::allow_small`).
 pub const MIN_NATIVE_DIM: u32 = 176;
 
+/// How to handle inputs smaller than [`MIN_NATIVE_DIM`] on either axis.
+///
+/// Validated empirically on a 980-pair CID22-JPEG corpus (see
+/// `benchmarks/iwssim_smallimg/README.md` in the workspace). At dims
+/// {64, 96, 128} all three "adapt" strategies stay within ±0.01
+/// Spearman ρ and ±0.01 rank-flip rate of the stock 176-px baseline
+/// against ssim2_gpu. **Tile is the best of the three by 0.005-0.010 ρ**
+/// at every sub-176 dim and is what [`IwssimConfig::adaptive()`] uses.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum IwssimStrategy {
+    /// Reject sub-176 inputs at `Iwssim::new` / `Iwssim::with_config`
+    /// time with `Err(InvalidImageSize)`. **Default**. Preserves the
+    /// historical (and crates.io API) behaviour exactly. Zero overhead
+    /// on stock-size inputs; no host-side preprocessing branch.
+    #[default]
+    Reject,
+    /// Repeat (tile) the native content along each axis until both
+    /// dimensions reach `MIN_NATIVE_DIM`, then run stock IW-SSIM on the
+    /// tiled image. The pyramid sees a periodic signal whose boundary
+    /// statistics match the interior; this is the empirically best
+    /// strategy on the validation corpus.
+    Tile,
+    /// Reflect-pad (pyrtools `reflect1` boundary) the native content
+    /// out to `MIN_NATIVE_DIM` on the short axis, then run stock
+    /// IW-SSIM on the padded image. Was the only adaptive strategy
+    /// in iwssim-gpu 0.0.1; kept for callers that need bit-exact-to-
+    /// that behaviour. ~0.005-0.010 ρ worse than [`Tile`] on the
+    /// validation corpus.
+    ReflectPad,
+}
+
 /// Pipeline configuration knobs surfaced to callers.
 ///
-/// `Default` produces the historical behaviour: reject any input with
-/// `min(width, height) < MIN_NATIVE_DIM`. Enabling `allow_small` makes
-/// the pipeline reflect-pad short axes up to `MIN_NATIVE_DIM` (the
-/// padded image is then run through the unchanged kernels). The score
-/// for a padded pair is the IW-SSIM of the padded image and is
-/// **informational, not bit-exact stock IW-SSIM** — see
-/// `Iwssim::with_config` for the contract.
+/// `Default` is the historical behaviour: reject any input with
+/// `min(width, height) < MIN_NATIVE_DIM`. Switch to
+/// [`IwssimConfig::adaptive()`] for the tile-based small-image path.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IwssimConfig {
-    /// When true, allow inputs with either axis below `MIN_NATIVE_DIM`
-    /// by reflect-padding the short axis up to `MIN_NATIVE_DIM`. When
-    /// false (default), `Iwssim::new` / `Iwssim::with_config` returns
-    /// `Err(InvalidImageSize)` for sub-176 inputs.
-    pub allow_small: bool,
+    /// Which strategy to use for inputs below `MIN_NATIVE_DIM` on
+    /// either axis. See [`IwssimStrategy`].
+    pub strategy: IwssimStrategy,
 }
 
 impl IwssimConfig {
-    /// Construct a config with `allow_small` set explicitly.
+    /// Use the tile-based adaptive small-image strategy — the
+    /// empirically best of the three on the validation corpus.
+    /// Equivalent to `IwssimConfig { strategy: IwssimStrategy::Tile }`.
+    pub const fn adaptive() -> Self {
+        Self { strategy: IwssimStrategy::Tile }
+    }
+
+    /// Use the reflect-pad small-image strategy — kept for callers
+    /// that depend on the iwssim-gpu 0.0.1 behaviour. [`adaptive()`]
+    /// is recommended for new code.
+    pub const fn reflect_pad() -> Self {
+        Self { strategy: IwssimStrategy::ReflectPad }
+    }
+
+    /// Compatibility shim: `allow_small(true) → IwssimStrategy::Tile`,
+    /// `allow_small(false) → IwssimStrategy::Reject`. Existing call
+    /// sites do not need to change; new code should reach for
+    /// [`adaptive()`] or [`reflect_pad()`] instead.
     ///
-    /// Convenience constructor matching the
-    /// `IwssimConfig::allow_small(true)` style used in calling code.
+    /// **Note: the underlying strategy changed from ReflectPad to Tile
+    /// in this revision** based on the 2026-05-17 validation
+    /// (`benchmarks/iwssim_smallimg/`). Callers that need the exact
+    /// 0.0.1 behaviour must explicitly use [`reflect_pad()`].
     pub const fn allow_small(allow: bool) -> Self {
-        Self { allow_small: allow }
+        Self {
+            strategy: if allow {
+                IwssimStrategy::Tile
+            } else {
+                IwssimStrategy::Reject
+            },
+        }
     }
 }
 

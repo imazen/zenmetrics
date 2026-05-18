@@ -26,7 +26,7 @@
 
 #![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
-use iwssim_gpu::{IwssimConfig, MIN_NATIVE_DIM};
+use iwssim_gpu::{IwssimConfig, IwssimStrategy, MIN_NATIVE_DIM};
 
 // Re-imported via the typed API on cuda/wgpu builds.
 #[cfg(feature = "cuda")]
@@ -265,4 +265,65 @@ fn compute_gray_adaptive_path() {
         "distinct gray score must be in (0, 1), got {}",
         r_d.score
     );
+}
+
+/// `allow_small(true)` resolves to `IwssimStrategy::Tile` post-
+/// 2026-05-17 (the validation showed tile beats reflect by 0.005-0.010
+/// Spearman ρ at every sub-176 dim — see
+/// `benchmarks/iwssim_smallimg/`).
+#[test]
+fn allow_small_now_uses_tile_strategy() {
+    let client = BackendT::client(&Default::default());
+    let i = Iwssim::<BackendT>::with_config(
+        client.clone(),
+        100, 100,
+        IwssimConfig::allow_small(true),
+    ).expect("allow_small must accept");
+    assert_eq!(i.strategy(), IwssimStrategy::Tile);
+
+    // The explicit reflect_pad() builder still produces ReflectPad,
+    // for callers who need the iwssim-gpu 0.0.1 behaviour.
+    let i2 = Iwssim::<BackendT>::with_config(
+        client.clone(),
+        100, 100,
+        IwssimConfig::reflect_pad(),
+    ).expect("reflect_pad must accept");
+    assert_eq!(i2.strategy(), IwssimStrategy::ReflectPad);
+
+    // adaptive() == Tile (the empirically-best strategy).
+    let i3 = Iwssim::<BackendT>::with_config(
+        client, 100, 100, IwssimConfig::adaptive(),
+    ).expect("adaptive must accept");
+    assert_eq!(i3.strategy(), IwssimStrategy::Tile);
+}
+
+/// All three non-Reject strategies should produce finite scores in
+/// (0, 1) for distinct sub-176 pairs. Tile is the default since
+/// 2026-05-17 — see `benchmarks/iwssim_smallimg/` — but the other
+/// two paths must remain functional too.
+#[test]
+fn all_strategies_score_distinct_small_pairs() {
+    if std::env::var("RUN_GPU_ADAPTIVE").is_err() {
+        println!("skip: set RUN_GPU_ADAPTIVE=1 to run GPU adaptive tests");
+        return;
+    }
+
+    let dim = 88_u32;
+    let ref_img = deterministic_rgb(dim, dim, 1);
+    let dis_img = deterministic_rgb(dim, dim, 7);
+
+    for &strategy in &[IwssimStrategy::Tile, IwssimStrategy::ReflectPad] {
+        let client = BackendT::client(&Default::default());
+        let cfg = IwssimConfig { strategy };
+        let mut i = Iwssim::<BackendT>::with_config(client, dim, dim, cfg)
+            .unwrap_or_else(|e| panic!("{strategy:?}: {e:?}"));
+        let r = i
+            .compute_rgb(&ref_img, &dis_img)
+            .unwrap_or_else(|e| panic!("{strategy:?} compute_rgb: {e:?}"));
+        assert!(
+            r.score.is_finite() && r.score > 0.0 && r.score < 1.0,
+            "{strategy:?}: score not in (0,1), got {}",
+            r.score
+        );
+    }
 }

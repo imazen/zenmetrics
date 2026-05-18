@@ -33,7 +33,7 @@ use crate::filters;
 use crate::kernels::{
     box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine, util,
 };
-use crate::{Error, GpuIwssimResult, IwssimConfig, MIN_NATIVE_DIM, NUM_SCALES, Result};
+use crate::{Error, GpuIwssimResult, IwssimConfig, IwssimStrategy, MIN_NATIVE_DIM, NUM_SCALES, Result};
 
 /// Reflect-pad index map (`reflect1` boundary convention, matching
 /// pyrtools): index `i` outside `[0, n)` is folded back via mirror
@@ -92,6 +92,75 @@ pub(crate) fn reflect_pad_f32(
         for dx in sw..dw {
             let sx = reflect_index(dx as isize, sw);
             dst_row[dx] = src_row[sx];
+        }
+    }
+    out
+}
+
+/// Tile a tightly-packed `sw × sh` f32 image to `dw × dh` by repeating
+/// the source content (toroidal wrap). For `dw == sw` and `dh == sh`
+/// this is identity. The native image starts at the top-left corner;
+/// trailing rows/columns repeat from `(dy mod sh, dx mod sw)`.
+///
+/// Empirically the best small-image strategy on the validation corpus
+/// (`benchmarks/iwssim_smallimg/README.md`): the pyramid sees a
+/// periodic signal whose boundary statistics match the interior.
+pub(crate) fn tile_pad_f32(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+) -> Vec<f32> {
+    debug_assert_eq!(src.len(), sw * sh);
+    debug_assert!(dw >= sw && dh >= sh);
+    let mut out = vec![0.0_f32; dw * dh];
+    for dy in 0..dh {
+        let sy = dy % sh;
+        let src_row = &src[sy * sw..sy * sw + sw];
+        let dst_row = &mut out[dy * dw..dy * dw + dw];
+        let mut dx = 0;
+        // Bulk-copy whole source rows where they fit.
+        while dx + sw <= dw {
+            dst_row[dx..dx + sw].copy_from_slice(src_row);
+            dx += sw;
+        }
+        // Wrap the trailing partial column block.
+        for k in dx..dw {
+            dst_row[k] = src_row[k % sw];
+        }
+    }
+    out
+}
+
+/// Tile a tightly-packed `sw × sh × 3` u8 RGB image to `dw × dh × 3`.
+/// Same boundary convention as [`tile_pad_f32`].
+pub(crate) fn tile_pad_rgb_u8(
+    src: &[u8],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+) -> Vec<u8> {
+    debug_assert_eq!(src.len(), sw * sh * 3);
+    debug_assert!(dw >= sw && dh >= sh);
+    let mut out = vec![0_u8; dw * dh * 3];
+    for dy in 0..dh {
+        let sy = dy % sh;
+        let src_row_start = sy * sw * 3;
+        let src_row = &src[src_row_start..src_row_start + sw * 3];
+        let dst_row_start = dy * dw * 3;
+        let dst_row = &mut out[dst_row_start..dst_row_start + dw * 3];
+        let mut dx = 0;
+        while dx + sw <= dw {
+            dst_row[dx * 3..(dx + sw) * 3].copy_from_slice(src_row);
+            dx += sw;
+        }
+        for k in dx..dw {
+            let sx = k % sw;
+            dst_row[k * 3] = src_row[sx * 3];
+            dst_row[k * 3 + 1] = src_row[sx * 3 + 1];
+            dst_row[k * 3 + 2] = src_row[sx * 3 + 2];
         }
     }
     out
@@ -252,15 +321,20 @@ pub struct Iwssim<R: Runtime> {
     /// Native (caller-supplied) image height.
     height: u32,
     /// Padded width fed to the GPU pipeline. Equal to `width` for
-    /// stock-size inputs (≥ MIN_NATIVE_DIM on both axes). When
-    /// `IwssimConfig::allow_small` is enabled and the native width is
-    /// below `MIN_NATIVE_DIM`, `pad_width = MIN_NATIVE_DIM`; the
-    /// `compute_*` entry points reflect-pad the input from `width` to
-    /// `pad_width` on the host before upload.
+    /// stock-size inputs (≥ MIN_NATIVE_DIM on both axes). When the
+    /// strategy is non-`Reject` and the native width is below
+    /// `MIN_NATIVE_DIM`, `pad_width = MIN_NATIVE_DIM`; the
+    /// `compute_*` entry points apply the chosen padding strategy
+    /// from `width` to `pad_width` on the host before upload.
     pad_width: u32,
     /// Padded height fed to the GPU pipeline. Same contract as
     /// `pad_width`.
     pad_height: u32,
+    /// How sub-176 inputs are padded to fill `(pad_width, pad_height)`.
+    /// `Reject` is never observed at this point — construction would
+    /// have failed earlier. Stored to dispatch the right host-side
+    /// pad helper at every `compute_*` entry.
+    strategy: IwssimStrategy,
 
     /// sRGB u8 staging — re-uploaded per RGB call. None when the
     /// instance has only ever consumed grayscale planes.
@@ -340,12 +414,14 @@ impl<R: Runtime> Iwssim<R> {
         // valid-mode 11×11 conv. With 5 pyramid levels that's
         // 11 · 2^(NUM_SCALES − 1) = 11 · 16 = 176 at the input.
         let (pad_width, pad_height) = if width < MIN_NATIVE_DIM || height < MIN_NATIVE_DIM {
-            if !cfg.allow_small {
-                return Err(Error::InvalidImageSize);
+            match cfg.strategy {
+                IwssimStrategy::Reject => return Err(Error::InvalidImageSize),
+                IwssimStrategy::Tile | IwssimStrategy::ReflectPad => {
+                    // Pad the short axis up to MIN_NATIVE_DIM. The
+                    // long axis (if already ≥ MIN_NATIVE_DIM) stays native.
+                    (width.max(MIN_NATIVE_DIM), height.max(MIN_NATIVE_DIM))
+                }
             }
-            // Reflect-pad the short axis up to MIN_NATIVE_DIM. The
-            // long axis (if already ≥ MIN_NATIVE_DIM) stays native.
-            (width.max(MIN_NATIVE_DIM), height.max(MIN_NATIVE_DIM))
         } else {
             (width, height)
         };
@@ -382,6 +458,7 @@ impl<R: Runtime> Iwssim<R> {
             height,
             pad_width,
             pad_height,
+            strategy: cfg.strategy,
             src_u32_a,
             src_u32_b,
             scales,
@@ -404,10 +481,44 @@ impl<R: Runtime> Iwssim<R> {
         (self.pad_width, self.pad_height)
     }
 
-    /// True when the pipeline is reflect-padding native inputs to
-    /// reach `MIN_NATIVE_DIM` on at least one axis.
+    /// True when the pipeline is padding native inputs to reach
+    /// `MIN_NATIVE_DIM` on at least one axis.
     pub fn is_padded(&self) -> bool {
         self.pad_width != self.width || self.pad_height != self.height
+    }
+
+    /// Which small-image strategy this instance is using. `Reject`
+    /// is impossible at this point — construction would have failed.
+    pub fn strategy(&self) -> IwssimStrategy {
+        self.strategy
+    }
+
+    /// Dispatch host-side f32 padding by strategy. Caller guarantees
+    /// `src.len() == sw*sh`, `dw >= sw`, `dh >= sh`.
+    fn pad_f32(&self, src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
+        match self.strategy {
+            IwssimStrategy::Reject => {
+                // Should never reach here; with Reject we don't pad.
+                debug_assert_eq!(sw, dw);
+                debug_assert_eq!(sh, dh);
+                src.to_vec()
+            }
+            IwssimStrategy::Tile => tile_pad_f32(src, sw, sh, dw, dh),
+            IwssimStrategy::ReflectPad => reflect_pad_f32(src, sw, sh, dw, dh),
+        }
+    }
+
+    /// Dispatch host-side RGB-u8 padding by strategy.
+    fn pad_rgb_u8(&self, src: &[u8], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<u8> {
+        match self.strategy {
+            IwssimStrategy::Reject => {
+                debug_assert_eq!(sw, dw);
+                debug_assert_eq!(sh, dh);
+                src.to_vec()
+            }
+            IwssimStrategy::Tile => tile_pad_rgb_u8(src, sw, sh, dw, dh),
+            IwssimStrategy::ReflectPad => reflect_pad_rgb_u8(src, sw, sh, dw, dh),
+        }
     }
     pub fn n_scales(&self) -> usize {
         self.scales.len()
@@ -443,7 +554,7 @@ impl<R: Runtime> Iwssim<R> {
             });
         }
         let uploaded = if self.is_padded() {
-            let padded = reflect_pad_f32(
+            let padded = self.pad_f32(
                 ref_gray,
                 self.width as usize,
                 self.height as usize,
@@ -480,7 +591,7 @@ impl<R: Runtime> Iwssim<R> {
             });
         }
         let uploaded = if self.is_padded() {
-            let padded = reflect_pad_f32(
+            let padded = self.pad_f32(
                 dis_gray,
                 self.width as usize,
                 self.height as usize,
@@ -534,14 +645,14 @@ impl<R: Runtime> Iwssim<R> {
         // | B<<16 (alpha unused). Reader (`rgb_u32_to_gray_kernel`)
         // sees the same `[u32]` packing.
         if self.is_padded() {
-            let ref_pad = reflect_pad_rgb_u8(
+            let ref_pad = self.pad_rgb_u8(
                 ref_rgb,
                 self.width as usize,
                 self.height as usize,
                 self.pad_width as usize,
                 self.pad_height as usize,
             );
-            let dis_pad = reflect_pad_rgb_u8(
+            let dis_pad = self.pad_rgb_u8(
                 dis_rgb,
                 self.width as usize,
                 self.height as usize,
@@ -581,7 +692,7 @@ impl<R: Runtime> Iwssim<R> {
             });
         }
         if self.is_padded() {
-            let padded = reflect_pad_rgb_u8(
+            let padded = self.pad_rgb_u8(
                 srgb,
                 self.width as usize,
                 self.height as usize,
@@ -669,14 +780,14 @@ impl<R: Runtime> Iwssim<R> {
         // Replace the handle so the new contents are visible.
         let t = std::time::Instant::now();
         let (h_ref, h_dis) = if self.is_padded() {
-            let r = reflect_pad_f32(
+            let r = self.pad_f32(
                 ref_gray,
                 self.width as usize,
                 self.height as usize,
                 self.pad_width as usize,
                 self.pad_height as usize,
             );
-            let d = reflect_pad_f32(
+            let d = self.pad_f32(
                 dis_gray,
                 self.width as usize,
                 self.height as usize,
@@ -1622,6 +1733,65 @@ mod reflect_pad_tests {
                 7, 8, 9, 10, 11, 12, // row 1
                 1, 2, 3, 4, 5, 6, // row 2 reflected to 0
                 7, 8, 9, 10, 11, 12, // row 3 reflected to 1
+            ]
+        );
+    }
+
+    // ─── tile_pad tests ───
+
+    #[test]
+    fn tile_pad_f32_identity_when_sizes_match() {
+        let src: Vec<f32> = (0..(3 * 4)).map(|i| i as f32).collect();
+        let out = tile_pad_f32(&src, 4, 3, 4, 3);
+        assert_eq!(out, src);
+    }
+
+    #[test]
+    fn tile_pad_f32_extends_width_by_repeat() {
+        // Source 3×2 = [[0,1,2],[3,4,5]], pad to width 5.
+        // Tile wraps so x=3 → src col 0, x=4 → src col 1.
+        let src: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let out = tile_pad_f32(&src, 3, 2, 5, 2);
+        assert_eq!(out, vec![0.0, 1.0, 2.0, 0.0, 1.0, 3.0, 4.0, 5.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn tile_pad_f32_extends_height_by_repeat() {
+        // Source 3×2 → pad to height 4. Rows 0,1,0,1.
+        let src: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let out = tile_pad_f32(&src, 3, 2, 3, 4);
+        assert_eq!(
+            out,
+            vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+        );
+    }
+
+    #[test]
+    fn tile_pad_f32_extends_both_axes() {
+        // 2×2 source → 5×5 tile. Row mapping: 0,1,0,1,0; col: 0,1,0,1,0.
+        let src: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
+        let out = tile_pad_f32(&src, 2, 2, 5, 5);
+        // Build expected manually.
+        let mut expected = Vec::with_capacity(25);
+        for dy in 0..5 {
+            for dx in 0..5 {
+                let sy = dy % 2; let sx = dx % 2;
+                expected.push(src[sy * 2 + sx]);
+            }
+        }
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn tile_pad_rgb_u8_extends_width() {
+        // 2×1 RGB: [(10,20,30),(40,50,60)] → tile to width 5.
+        let src: Vec<u8> = vec![10, 20, 30, 40, 50, 60];
+        let out = tile_pad_rgb_u8(&src, 2, 1, 5, 1);
+        // Cols 0..5: (10,20,30) (40,50,60) (10,20,30) (40,50,60) (10,20,30)
+        assert_eq!(
+            out,
+            vec![
+                10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60, 10, 20, 30
             ]
         );
     }
