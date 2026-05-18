@@ -42,7 +42,7 @@ MIN_DISK_GB="${MIN_DISK_GB:-20}"
 MIN_GPU_RAM_MB="${MIN_GPU_RAM_MB:-10000}"
 GHCR_USER="${GHCR_USER:-lilith}"
 GPU_RUNTIME="${GPU_RUNTIME:-cuda}"   # pin cuda — block CPU fallback by default
-PARALLEL="${PARALLEL:-auto}"
+PARALLEL="${PARALLEL:-0}"
 
 usage() {
     sed -n '2,30p' "$0" >&2

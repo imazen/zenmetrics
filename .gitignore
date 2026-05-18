@@ -24,3 +24,5 @@ scripts/cvvdp_goldens/out/
 # The CI workflow downloads the artifact to this path; local builds
 # `cp target/release/zen-metrics ./zen-metrics`. Never commit it.
 /zen-metrics
+vastai-fleet
+zen-metrics

@@ -87,6 +87,19 @@ pub struct SweepConfig {
     /// need on-disk `(ref, dist)` pairs. See
     /// `crates/cvvdp-gpu/docs/CVVDP_SIDECAR_SCHEMA.md`.
     pub distorted_out_dir: Option<PathBuf>,
+    /// When set, every successfully encoded cell writes the **encoded
+    /// codec bytes** (the actual .jpg / .webp / .avif / .jxl / .png the
+    /// codec produced) into this directory. Filenames are
+    /// `<src_stem>_<src_path_hash16>_<codec>_q<q>_<knob_hash16>.<ext>`
+    /// — same hash scheme as `distorted_out_dir` so a row in the
+    /// output TSV can address both the decoded PNG and the encoded
+    /// blob from the same `(src_path, codec, q, knob_json)` tuple.
+    ///
+    /// Pairs with the new `encoded_filename` column added to the
+    /// output TSV. Designed for sweeps that intend to upload encoded
+    /// variants to R2 once and reuse them across N future metric
+    /// backfills (skip the encode step in subsequent runs).
+    pub encoded_out_dir: Option<PathBuf>,
     /// When set, a parallel TSV is written with the columns
     /// `image_path  codec  q  knob_tuple_json  ref_path  dist_path`
     /// — one row per successfully-decoded cell, mirroring the main
@@ -365,6 +378,7 @@ fn compute_cell(
             );
             row.push("".to_string()); // encoded_bytes
             row.push("".to_string()); // encode_ms
+            row.push("".to_string()); // encoded_filename
             row.push("".to_string()); // decode_ms
             for m in &cfg.metrics {
                 for _ in m.column_names() {
@@ -377,6 +391,31 @@ fn compute_cell(
 
     row.push(cell.bytes.len().to_string());
     row.push(format!("{:.3}", cell.encode_ms));
+
+    // Optionally persist the encoded codec bytes. The filename matches
+    // the same `<stem>_<src_hash>_<codec>_q<q>_<knob_hash>.<ext>` scheme
+    // as save_distorted_png so an external tool can pair them up by
+    // identity tuple alone. Failure to write demotes the encoded_filename
+    // column to empty — the score columns are still valid.
+    let encoded_filename = match &cfg.encoded_out_dir {
+        Some(dir) => save_encoded_variant(
+            dir,
+            src_path,
+            cfg.codec,
+            q,
+            &knob_json,
+            &cell.bytes,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "[sweep] save encoded variant failed: {} q={q}: {e}",
+                src_path.display(),
+            );
+            String::new()
+        }),
+        None => String::new(),
+    };
+    row.push(encoded_filename);
 
     // Decode-back through the path-based decoder for format-sniff parity
     // with production. Tempfile lifetime ends when this function returns.
@@ -561,6 +600,39 @@ fn save_distorted_png(
     }
 }
 
+/// Write the raw encoded codec bytes into `dir` using the same hash
+/// scheme as `save_distorted_png`. Returns the saved file's basename
+/// (relative to `dir`) so the per-cell row can record an addressable
+/// reference without leaking the absolute path.
+fn save_encoded_variant(
+    dir: &Path,
+    src_path: &Path,
+    codec: CodecKind,
+    q: u32,
+    knob_json: &str,
+    bytes: &[u8],
+) -> Result<String, Box<dyn Error>> {
+    std::fs::create_dir_all(dir)?;
+    let stem = src_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("source");
+    let src_hash = hex_hash16(src_path.to_string_lossy().as_ref());
+    let knob_hash = hex_hash16(knob_json);
+    let ext = match codec {
+        CodecKind::Zenpng => "png",
+        CodecKind::Zenjpeg => "jpg",
+        CodecKind::Zenwebp => "webp",
+        CodecKind::Zenavif => "avif",
+        CodecKind::Zenjxl => "jxl",
+    };
+    let codec_name = codec.name();
+    let filename = format!("{stem}_{src_hash}_{codec_name}_q{q}_{knob_hash}.{ext}");
+    let out_path = dir.join(&filename);
+    std::fs::write(&out_path, bytes)?;
+    Ok(filename)
+}
+
 fn decode_encoded_bytes(bytes: &[u8], codec: CodecKind) -> Result<Rgb8Image, Box<dyn Error>> {
     // Path-based decode_image_to_rgb8 sniffs format and dispatches through
     // the per-codec decoder. We write to a tempfile to reuse it unchanged.
@@ -593,6 +665,7 @@ fn write_header(
         "knob_tuple_json".to_string(),
         "encoded_bytes".to_string(),
         "encode_ms".to_string(),
+        "encoded_filename".to_string(),
         "decode_ms".to_string(),
     ];
     // Each metric expands to one column per name in `column_names()`. For

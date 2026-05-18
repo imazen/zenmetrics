@@ -189,6 +189,16 @@ struct SweepArgs {
     /// `(ref, dist)` image pairs.
     #[arg(long)]
     distorted_out_dir: Option<PathBuf>,
+    /// Optional directory to receive the **encoded codec bytes** for
+    /// every successfully encoded cell (the actual .jpg / .webp /
+    /// .avif / .jxl / .png file the codec produced, not the decoded
+    /// PNG). Same filename scheme as `--distorted-out-dir` so a row
+    /// addresses both by identity tuple. The output TSV gains an
+    /// `encoded_filename` column with the basename. Intended for one-
+    /// time sweeps that upload encoded variants to R2 and reuse them
+    /// across N future metric backfills.
+    #[arg(long)]
+    encoded_out_dir: Option<PathBuf>,
     /// Optional TSV path emitting one row per successfully decoded
     /// cell with columns `image_path codec q knob_tuple_json
     /// ref_path dist_path`. The `ref_path` is the source image's
@@ -389,6 +399,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         output: args.output,
         feature_output: args.feature_output,
         distorted_out_dir: args.distorted_out_dir,
+        encoded_out_dir: args.encoded_out_dir,
         pairs_tsv: args.pairs_tsv,
         jobs,
     };
