@@ -435,19 +435,12 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
         );
     }
-    // Iwssim shares the same caching motivation as cvvdp:
-    // `Iwssim::new` allocates GPU buffers + triggers per-(W,H) kernel
-    // JIT. score-pairs over a 100-pair chunk on a single source dim
-    // gets a single allocation rather than 100.
-    #[cfg(feature = "gpu-iwssim")]
-    let mut iwssim_scorer: Option<crate::metrics::iwssim_gpu::IwssimBatchScorer> = None;
-    #[cfg(feature = "gpu-iwssim")]
-    if args.metric == crate::metrics::MetricKind::Iwssim {
-        iwssim_scorer = Some(
-            crate::metrics::iwssim_gpu::IwssimBatchScorer::new(args.gpu_runtime)
-                .map_err(|e| format!("IwssimBatchScorer init: {e}"))?,
-        );
-    }
+    // NOTE: IwssimBatchScorer used to be wired here for per-(W,H) JIT
+    // caching, but the local CLI iwssim_gpu module depended on the
+    // deleted gpu_runtime_dispatch infra. Iwssim now goes through the
+    // umbrella's per-pair Metric::compute_srgb_u8 path — slower in
+    // batch mode but correct. TODO: port the caching scorer to use
+    // zenmetrics_api::iwssim re-export when batch perf matters.
 
     for record in rdr.records() {
         let record = record?;
@@ -476,17 +469,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<(), Box<dyn std::error::Error
             .unwrap_or_else(|| "{}".to_string());
 
         let pair_result: Result<f64, Box<dyn std::error::Error>> = {
-            #[cfg(feature = "gpu-iwssim")]
-            if let Some(scorer) = iwssim_scorer.as_mut() {
-                // Iwssim fast path: decode + reuse cached Iwssim instance.
-                match (
-                    decode::decode_image_to_rgb8(&ref_path),
-                    decode::decode_image_to_rgb8(&dist_path),
-                ) {
-                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
-                    (Err(e), _) | (_, Err(e)) => Err(e),
-                }
-            } else if let Some(scorer) = cvvdp_scorer.as_mut() {
+            if let Some(scorer) = cvvdp_scorer.as_mut() {
                 // Cvvdp fast path: decode + reuse cached Cvvdp instance.
                 match (
                     decode::decode_image_to_rgb8(&ref_path),
