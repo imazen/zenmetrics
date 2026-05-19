@@ -140,11 +140,29 @@ pub async fn backfill_features_for_chunk(
         .context("download omni sidecar")?;
 
     let omni_path_for_blocking = omni_local.clone();
-    let rows: Vec<OmniRow> = tokio::task::spawn_blocking(move || {
-        read_omni_rows(&omni_path_for_blocking)
-    })
-    .await
-    .map_err(|e| anyhow!("read omni task panicked: {e}"))??;
+    let rows_result: std::result::Result<Result<Vec<OmniRow>>, tokio::task::JoinError> =
+        tokio::task::spawn_blocking(move || read_omni_rows(&omni_path_for_blocking)).await;
+    let rows: Vec<OmniRow> = match rows_result {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            warn!(chunk_id = %rec.chunk_id, error = %e, "skip: omni read failed");
+            if std::env::var_os("KEEP_WORK").is_none() {
+                let _ = tokio::fs::remove_dir_all(&scratch).await;
+            }
+            return Ok(());
+        }
+        Err(e) => {
+            warn!(
+                chunk_id = %rec.chunk_id,
+                error = %e,
+                "skip: omni read task panicked"
+            );
+            if std::env::var_os("KEEP_WORK").is_none() {
+                let _ = tokio::fs::remove_dir_all(&scratch).await;
+            }
+            return Ok(());
+        }
+    };
     info!(chunk_id = %rec.chunk_id, n_rows = rows.len(), "omni rows parsed");
 
     // Build the unique-basename + unique-encoded-filename sets so we
@@ -242,6 +260,16 @@ fn read_omni_rows(path: &Path) -> Result<Vec<OmniRow>> {
         if schema.index_of(col).is_err() {
             return Err(anyhow!("omni sidecar missing column `{col}`"));
         }
+    }
+    // Early-out: if encoded_filename is the all-null arrow type, the
+    // chunk has no encoded variants saved and feature backfill is
+    // impossible without re-encoding. Fail loud so the dispatcher
+    // logs + skips.
+    let enc_idx = schema.index_of("encoded_filename")?;
+    if matches!(schema.field(enc_idx).data_type(), arrow_schema::DataType::Null) {
+        return Err(anyhow!(
+            "encoded_filename column is Null type — no encoded variants on R2 to score"
+        ));
     }
     let reader = builder.build().context("build reader")?;
 
