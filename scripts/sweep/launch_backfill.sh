@@ -286,6 +286,8 @@ for offer_id in $OFFER_IDS; do
     ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
     [[ -n "${SWEEP_BIN_OVERRIDE:-}" ]] && \
         ENV_STR+=" -e SWEEP_BIN_OVERRIDE=${SWEEP_BIN_OVERRIDE}"
+    [[ -n "${PARALLEL_CHUNKS:-}" ]] && \
+        ENV_STR+=" -e PARALLEL_CHUNKS=${PARALLEL_CHUNKS}"
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
