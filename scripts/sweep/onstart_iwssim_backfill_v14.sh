@@ -146,6 +146,9 @@ trap on_exit EXIT
 
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 PARALLEL="${PARALLEL:-0}"
+# Accept "auto" as a synonym for 0 (matches cvvdp / omni onstarts).
+# xargs -P auto otherwise hard-fails 'invalid number'.
+[[ "$PARALLEL" == "auto" ]] && PARALLEL=0
 GPU_RUNTIME="${GPU_RUNTIME:-auto}"
 WORKDIR="${WORKDIR:-/workspace/sweep}"
 SCRIPTS_R2_PREFIX="${SCRIPTS_R2_PREFIX:-s3://coefficient/jobs/${SWEEP_RUN_ID}}"
@@ -321,6 +324,14 @@ export -f process_chunk log R2 heartbeat
 export WORKDIR WORKER_ID SWEEP_RUN_ID GPU_RUNTIME PARALLEL
 export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 log "running $N_CHUNKS chunks at parallel=$PARALLEL"
+# Pre-validate PARALLEL is numeric — xargs -P "auto" or "" exits
+# non-zero with 0 chunks processed.
+case "$PARALLEL" in
+    ''|*[!0-9]*)
+        log "FATAL: PARALLEL='$PARALLEL' is not numeric (after auto-detect). Refusing to run."
+        exit 7
+        ;;
+esac
 < "$WORKDIR/chunks.jsonl" xargs -P "$PARALLEL" -d '\n' -I {} bash -c 'process_chunk "$@"' _ {}
 xargs_rc=$?
 

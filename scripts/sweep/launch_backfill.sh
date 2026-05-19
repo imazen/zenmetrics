@@ -231,7 +231,16 @@ s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
     cp __ONSTART_R2_KEY__ \
        /usr/local/bin/onstart.sh
 chmod +x /usr/local/bin/onstart.sh
-exec /usr/local/bin/onstart.sh
+# Route through the trap wrapper when the image bakes it (v15+). This
+# gives the fleet self-destroy-on-crash semantics matching what
+# launch_single_instance.sh has: a panicked onstart uploads stderr to
+# s3://zentrain/<run>/errors/<instance>.log and DELETEs its own
+# vast.ai instance so a broken box doesn't keep burning $/hr.
+if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then
+    exec /usr/local/bin/run_with_error_trap.sh /usr/local/bin/onstart.sh
+else
+    exec /usr/local/bin/onstart.sh
+fi
 BOOT
 )
 # Substitute the R2 key into the placeholder.
@@ -274,6 +283,12 @@ for offer_id in $OFFER_IDS; do
         --raw 2>&1) || { echo "  $i fail: $(echo "$OUT" | head -c 200)"; continue; }
     ID=$(echo "$OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('new_contract', d.get('id','')))" 2>/dev/null || echo "")
     [[ -z "$ID" ]] && { echo "  $i parse-fail: $(echo "$OUT" | head -c 200)"; continue; }
+    # ssh-runtype instances are created in stopped state — explicit
+    # start is required for the onstart-cmd to fire. (Matches the fix
+    # in launch_single_instance.sh:185; without this every box in
+    # the fleet sits in actual_status=created indefinitely.)
+    vastai start instance "$ID" >/dev/null 2>&1 || \
+        echo "  $i WARN: start instance $ID failed (instance may still auto-start)"
     echo "$ID $offer_id $WORKER_ID" >> "$INSTANCE_FILE"
     echo "  $i -> instance $ID ($WORKER_ID)"
 done

@@ -43,6 +43,10 @@ fi
 
 WORKER_ID="${WORKER_ID:-$(hostname)-$$}"
 PARALLEL="${PARALLEL:-0}"
+# Accept "auto" as a synonym for 0 (matches cvvdp / omni onstarts).
+# Without this, xargs -P "auto" hard-fails with 'invalid number' and
+# every chunk silently 'processes' with zero scoring.
+[[ "$PARALLEL" == "auto" ]] && PARALLEL=0
 if [[ "$PARALLEL" == "0" ]]; then
     cores_from_cgroup() {
         if [[ -r /sys/fs/cgroup/cpu.max ]]; then
@@ -287,8 +291,26 @@ export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
 
 shuf "$WORKDIR/chunks.jsonl" > "$WORKDIR/chunks.shuf.jsonl"
 
+# Pre-validate PARALLEL is numeric before xargs sees it (matches the
+# guard added to onstart_cvvdp_backfill_imazen.sh). xargs -P "auto"
+# fails non-zero with 0 chunks processed — bad signal for the trap.
+case "$PARALLEL" in
+    ''|*[!0-9]*)
+        log "FATAL: PARALLEL='$PARALLEL' is not numeric (after auto-detect). Refusing to run."
+        exit 7
+        ;;
+esac
+log "running xargs with PARALLEL=$PARALLEL"
+
 xargs -I {} -P "$PARALLEL" -d '\n' bash -c 'process_chunk "$@"' _ {} \
     < "$WORKDIR/chunks.shuf.jsonl"
+xargs_rc=$?
 
 heartbeat done
-log "all chunks processed"
+log "all chunks processed (xargs rc=$xargs_rc)"
+# Propagate xargs failure so the trap wrapper self-destroys instead
+# of idling at $/hr after a silent breakage.
+if (( xargs_rc != 0 )); then
+    log "FATAL: xargs returned non-zero — failing the onstart"
+    exit "$xargs_rc"
+fi
