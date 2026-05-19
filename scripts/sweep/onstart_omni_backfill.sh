@@ -60,18 +60,70 @@ shuf "$WORKDIR/chunks.jsonl" > "$WORKDIR/chunks.shuf.jsonl"
 
 process_chunk() {
     local line="$1"
-    local cid
+    local cid out_sidecar
     cid=$(jq -r '.chunk_id' <<< "$line")
-    local claim="s3://coefficient/claims/${SWEEP_RUN_ID}/${cid}"
-    # Atomic claim. SKIP_CLAIMS=1 disables for single-instance smoke
-    # runs where the operator wants to process everything regardless
-    # of any prior partial run's claim markers.
+    # The omni worker uploads its sidecar to
+    # s3://zentrain/<run>/omni/<cid>.parquet by default; respect any
+    # override the chunk JSON specifies.
+    out_sidecar=$(jq -r --arg r "$SWEEP_RUN_ID" --arg c "$cid" \
+        '.out_sidecar_omni // ("s3://zentrain/" + $r + "/omni/" + $c + ".parquet")' \
+        <<< "$line")
+
+    local CLAIM_KEY="s3://coefficient/claims/${SWEEP_RUN_ID}/${cid}.claim"
+
+    # Idempotency: skip if the sidecar is already uploaded (covers
+    # resumes after crashes + dedups across concurrent workers).
+    if R2 ls "$out_sidecar" >/dev/null 2>&1; then
+        log "[skip-done] $cid sidecar already in R2"
+        return 0
+    fi
+
     if [[ "${SKIP_CLAIMS:-0}" != "1" ]]; then
-        if R2 ls "$claim" >/dev/null 2>&1; then
-            return 0  # already claimed
+        # Token-based claim with read-back verification. Matches the
+        # pattern in onstart_cvvdp_backfill_imazen.sh which has been
+        # battle-tested across iwssim + cvvdp fleets:
+        #   1. Write a unique token (worker-id + pid + nanos).
+        #   2. Sleep briefly so any concurrent writers settle.
+        #   3. Read back the claim; if our token survived, we own it.
+        #      Otherwise another worker won the race — skip this chunk.
+        # A claim older than CLAIM_STALE_SEC is treated as abandoned
+        # (worker crashed) and overwritten.
+        local claim_body=/tmp/claim-${cid}.txt
+        local token="${WORKER_ID}-$$-$(date +%s%N)"
+        local now_epoch; now_epoch=$(date +%s)
+        local CLAIM_STALE_SEC="${CLAIM_STALE_SEC:-600}"
+        printf '%s\t%s\t%s' "$token" "$now_epoch" "$WORKER_ID" > "$claim_body"
+
+        local existing
+        existing=$(R2 cat "$CLAIM_KEY" 2>/dev/null) || existing=""
+        if [[ -n "$existing" ]]; then
+            local existing_epoch existing_worker
+            existing_epoch=$(printf '%s' "$existing" | awk -F'\t' '{print $2}')
+            existing_worker=$(printf '%s' "$existing" | awk -F'\t' '{print $3}')
+            if [[ -n "$existing_epoch" ]] \
+                    && (( now_epoch - existing_epoch < CLAIM_STALE_SEC )) \
+                    && [[ "$existing_worker" != "$WORKER_ID" ]]; then
+                # Fresh claim held by another worker.
+                rm -f "$claim_body"
+                return 0
+            fi
+            # Stale claim or own claim — overwrite below.
         fi
-        if ! echo "$WORKER_ID" | R2 cp - "$claim" 2>/dev/null; then
+
+        if ! R2 cp "$claim_body" "$CLAIM_KEY" 2>/dev/null; then
             log "WARN: claim upload failed for $cid; skipping"
+            rm -f "$claim_body"
+            return 0
+        fi
+        rm -f "$claim_body"
+
+        # Read-back verification — guard against last-writer-wins on
+        # near-simultaneous writes.
+        sleep 1.5
+        local verified
+        verified=$(R2 cat "$CLAIM_KEY" 2>/dev/null | awk -F'\t' '{print $1}')
+        if [[ "$verified" != "$token" ]]; then
+            log "[lost-race] $cid (claim now=$verified)"
             return 0
         fi
     fi
