@@ -192,6 +192,12 @@ ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
 [[ -n "${SKIP_CLAIMS:-}" ]]      && ENV_STR+=" -e SKIP_CLAIMS=${SKIP_CLAIMS}"
 [[ -n "${METRICS:-}" ]]          && ENV_STR+=" -e METRICS=${METRICS}"
 [[ -n "${PARALLEL_CHUNKS:-}" ]]  && ENV_STR+=" -e PARALLEL_CHUNKS=${PARALLEL_CHUNKS}"
+# Pass the chunks URL through env. The unified Rust worker reads
+# CHUNKS_R2; the bash onstart workers ignored it and derived from
+# the SWEEP_RUN_ID. Forwarding here lets the smoke flow point at
+# a different chunks namespace than the run ID without changing
+# either codepath.
+ENV_STR+=" -e CHUNKS_R2=${CHUNKS}"
 LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
 echo "[launch_single] creating instance"

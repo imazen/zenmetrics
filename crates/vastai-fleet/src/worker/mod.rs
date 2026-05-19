@@ -103,7 +103,18 @@ pub struct WorkerArgs {
     /// Skip the R2 token-race claim. Used only by single-instance
     /// smoke runs that want to bypass claim contention with an
     /// already-running fleet. Production fleets MUST set this false.
-    #[arg(long, env = "SKIP_CLAIMS", default_value_t = false)]
+    ///
+    /// Accepts the union of bool forms our launchers historically
+    /// passed: `0`/`1`, `yes`/`no`, `true`/`false`. The bash worker
+    /// did `[[ "$SKIP_CLAIMS" != "0" ]]`; clap's default bool parser
+    /// is strict (only "true"/"false"), so we use BoolishValueParser
+    /// to match the bash semantics exactly.
+    #[arg(
+        long,
+        env = "SKIP_CLAIMS",
+        default_value_t = false,
+        value_parser = clap::builder::BoolishValueParser::new()
+    )]
     pub skip_claims: bool,
 
     /// Path to the bash chunk-processor script. Phase A subproc-call
