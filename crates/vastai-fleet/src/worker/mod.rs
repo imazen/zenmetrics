@@ -60,6 +60,8 @@ mod chunk_output;
 mod claim;
 #[cfg(feature = "inline-sweep")]
 mod inline;
+#[cfg(feature = "source-features")]
+mod source_features;
 mod r2;
 #[cfg(feature = "inline-sweep")]
 mod sweep_runner;

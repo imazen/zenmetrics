@@ -100,6 +100,45 @@ pub async fn process_chunk_inline(
     );
     sync_sources(r2, &rec.source_dir_r2, &rec.image_basenames, &sources).await?;
 
+    // Source-image features (zenanalyze) — feature-gated. Computed
+    // here, after sources are on disk, in parallel-friendly tokio
+    // tasks. Failures are non-fatal: the omni sidecar still ships
+    // even if source_features doesn't.
+    #[cfg(feature = "source-features")]
+    {
+        let sf_local = scratch.join(format!("{}.source_features.parquet", rec.chunk_id));
+        let sf_uri = format!(
+            "s3://zentrain/{run_id}/source_features/{}.parquet",
+            rec.chunk_id
+        );
+        // Skip if the sidecar already exists in R2 (idempotency).
+        if r2.exists(&sf_uri).await {
+            info!(chunk_id = %rec.chunk_id, "skip: source_features sidecar already in R2");
+        } else {
+            match super::source_features::compute_and_write(
+                &sources,
+                &rec.image_basenames,
+                &sf_local,
+                &rec.chunk_id,
+                &run_id,
+            )
+            .await
+            {
+                Ok(n) => {
+                    info!(chunk_id = %rec.chunk_id, n_sources = n, "source_features built");
+                    if let Err(e) = r2.upload(&sf_local, &sf_uri).await {
+                        warn!(chunk_id = %rec.chunk_id, error = %e, "source_features upload failed");
+                    } else {
+                        info!(chunk_id = %rec.chunk_id, uri = %sf_uri, "source_features uploaded");
+                    }
+                }
+                Err(e) => {
+                    warn!(chunk_id = %rec.chunk_id, error = %e, "source_features skipped");
+                }
+            }
+        }
+    }
+
     info!(chunk_id = %rec.chunk_id, "step 3/5: group by (codec, knob_tuple_json)");
     let groups = {
         let p = input_parquet.clone();
