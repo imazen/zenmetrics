@@ -113,8 +113,31 @@ pub async fn process_chunk(
         info!(chunk_id = %rec.chunk_id, "SKIP_CLAIMS: processing without claim");
     }
 
-    // Execute phase. Phase A: shell out to bash worker.
+    // Execute phase. Phase B: prefer in-process inline pipeline
+    // when compiled in. Phase A bash-subprocess path stays as the
+    // fallback so a feature-gated build can run either.
     let started = Instant::now();
+    #[cfg(feature = "inline-sweep")]
+    {
+        match super::inline::process_chunk_inline(args, r2, line).await {
+            Ok(()) => {
+                info!(
+                    chunk_id = %rec.chunk_id,
+                    elapsed_sec = started.elapsed().as_secs_f32(),
+                    "done (inline)"
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                warn!(
+                    chunk_id = %rec.chunk_id,
+                    error = %e,
+                    "inline pipeline failed; falling back to bash subprocess"
+                );
+                // Fall through to bash subprocess as a safety net.
+            }
+        }
+    }
     let mut cmd = Command::new(&args.chunk_worker_bin);
     cmd.arg("--chunk-json").arg(line);
     // Pass through env vars the bash worker reads. We don't override
