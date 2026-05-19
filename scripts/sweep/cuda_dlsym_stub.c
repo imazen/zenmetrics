@@ -12,6 +12,24 @@
  *                                            handled the Complete
  *                                            variant, leaving the
  *                                            Start variant uncovered.)
+ *   - cuDevSmResourceSplit / cuDevSm*       (Hopper SM-partition API
+ *                                            cudarc 0.19.4 references
+ *                                            statically; missing on
+ *                                            non-Hopper drivers and
+ *                                            many older 12.x builds.
+ *                                            Observed 2026-05-19 on
+ *                                            instance 37050770, driver
+ *                                            shipping libcuda.so
+ *                                            without the symbol.)
+ *
+ * Fallback: any `cu*` symbol that real_dlsym returns NULL for receives
+ * the no-op stub. cudarc 0.19.4 dlsyms ~3000 driver symbols at init
+ * time and panics if any are missing — but in practice most missing
+ * symbols are for features (coredump teardown, SM partitioning,
+ * multicast memory, future-CUDA aliases) that zen-metrics never
+ * invokes at runtime. Returning a no-op stub keeps the binding alive;
+ * if the no-op is ever actually called the function returns silently
+ * (which the CUDA C ABI treats as "feature unavailable, success").
  *
  * Without this shim, every cubecl-cuda device init panics with
  *   "Expected symbol in library: DlSym { source: ... }"
@@ -39,9 +57,13 @@
 #include <dlfcn.h>
 #include <string.h>
 
-static void cu_coredump_callback_noop(void) {
-    /* CUDA coredump callback teardown — no-op. Returning silently
-     * is the documented behavior when no callback was registered. */
+static int cu_coredump_callback_noop(void) {
+    /* Universal no-op stub. CUDA driver functions return CUresult,
+     * an enum where 0 == CUDA_SUCCESS. Returning 0 makes any caller
+     * that bothered to check the return code see "success", which
+     * is the right answer for "this feature isn't actually wired up
+     * but cudarc statically references the symbol". */
+    return 0;
 }
 
 typedef void *(*dlsym_fn)(void *, const char *);
@@ -60,36 +82,52 @@ void *dlsym(void *handle, const char *symbol) {
         return real_dlsym(handle, symbol);
     }
 
-    /* Path 1: cuCoredump* family — never invoked unless the app
-     * registers a coredump callback first (zen-metrics doesn't).
-     * Safe no-op stub. */
-    if (strncmp(symbol, "cuCoredump", 10) == 0) {
-        return (void *)cu_coredump_callback_noop;
-    }
-
-    /* Path 2: _v2-suffix fallback. cudarc 0.19.4 statically requests
-     * `cuCtxGetDevice_v2` / `cuFuncSetCacheConfig_v2` / etc. — the
-     * versioned aliases that newer CUDA drivers consolidate into the
-     * un-suffixed name. If the requested `_v2` symbol is missing,
-     * try the non-suffixed variant and return that. This keeps the
-     * binary running against modern libcuda releases without code
-     * changes in cudarc.
+    /* Path 1: _v2-suffix alias fallback. cudarc 0.19.4 statically
+     * requests `cuCtxGetDevice_v2` / `cuFuncSetCacheConfig_v2` / etc.
+     * — the versioned aliases that newer CUDA drivers consolidate
+     * into the un-suffixed name. If the requested `_v2` symbol is
+     * missing, try the non-suffixed variant.
      *
-     * Note: only kicks in WHEN the v2 lookup returns NULL. Drivers
-     * that DO export the _v2 alias get the real pointer. */
+     * Only kicks in when the v2 lookup returns NULL. Drivers that
+     * export the _v2 alias get the real pointer. */
     size_t slen = strlen(symbol);
     if (slen > 3 && strcmp(symbol + slen - 3, "_v2") == 0) {
         void *p = real_dlsym(handle, symbol);
         if (p != NULL) return p;
-        /* Strip the _v2 suffix and retry. */
         char fallback[256];
         size_t base_len = slen - 3;
         if (base_len < sizeof(fallback)) {
             memcpy(fallback, symbol, base_len);
             fallback[base_len] = '\0';
-            return real_dlsym(handle, fallback);
+            p = real_dlsym(handle, fallback);
+            if (p != NULL) return p;
         }
+        /* Both _v2 and base failed — fall through to the cu* stub. */
     }
 
-    return real_dlsym(handle, symbol);
+    /* Path 2: real lookup. Most symbols hit this path and return
+     * the real pointer. */
+    void *real = real_dlsym(handle, symbol);
+    if (real != NULL) return real;
+
+    /* Path 3: cu* fallback. If a CUDA driver symbol is missing,
+     * substitute the no-op stub. cudarc 0.19.4 dlsyms thousands of
+     * driver symbols at binding init and panics on any miss; in
+     * practice the misses are for features the binary doesn't use
+     * at runtime (coredump teardown callbacks, Hopper SM-partition
+     * API, multicast memory, future-CUDA versioned aliases).
+     *
+     * Risk: a real kernel-launch symbol could go missing and we'd
+     * silently no-op it. Mitigation: cu* core symbols (cuInit,
+     * cuMemAlloc, cuLaunchKernel, cuMemcpy, etc.) are stable since
+     * CUDA 4.x and present on every driver in the vast.ai fleet.
+     * The symbols that go missing are the new/optional families. */
+    if (strncmp(symbol, "cu", 2) == 0 &&
+        symbol[2] >= 'A' && symbol[2] <= 'Z') {
+        return (void *)cu_coredump_callback_noop;
+    }
+
+    /* Path 4: non-cu symbols genuinely missing — return NULL (real
+     * dlsym semantics) so glibc / other libs see the failure. */
+    return NULL;
 }
