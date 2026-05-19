@@ -11,16 +11,37 @@ turbo-metrics into the standalone zenmetrics workspace
 only the CUDA-specific crates and upstream-tracking pieces. All
 new sweep work happens in this repo.
 
-## Key files
+## Key files (current — 2026-05-19)
 
-- `onstart_v3.sh` — main worker entrypoint, static-binary, cgroup-aware,
-  invoked by vast.ai via `--onstart-cmd`.
-- `generate_jobspecs_v06.py` — chunk generator (image × knob_combo grid
-  → `chunks.jsonl` uploaded to `s3://coefficient/jobs/<sweep>/`).
-- `vastai_zen_metrics_sweep.sh` — original v04 launcher (see `/tmp/launch_v0X.sh`
-  for newer per-sweep variants).
-- `Dockerfile.sweep` — historical; v3 onstart bypasses docker, runs
-  directly on `ubuntu:24.04`.
+The **unified Rust worker** in `crates/vastai-fleet` is the
+production entrypoint. Sweep operations are:
+
+- `onstart_unified.sh` — execs `vastai-fleet worker --mode omni`
+  (the default mode). Replaces the bash `onstart_omni_backfill.sh`
+  chain. Used with `Dockerfile.sweep.v22+`.
+- `onstart_feature_backfill.sh` — execs `vastai-fleet worker
+  --mode feature-backfill`. Reads existing omni sidecars + cached
+  encoded variants from R2, writes zensim 300-feature parquets
+  without re-encoding. Used with `Dockerfile.sweep.v24+`.
+- `generate_cvvdp_backfill_chunks.py` — chunk generator (slices
+  the unified-V_X parquet into 200-row chunks, emits
+  `chunks.jsonl` for upload to `s3://coefficient/jobs/<run>/`).
+- `launch_single_instance.sh` / `launch_backfill.sh` — single-box
+  smoke + N-box fleet fanout. Both pass through `PARALLEL_CHUNKS`,
+  `SKIP_CLAIMS`, `METRICS`, `CHUNKS_R2` env vars to the worker.
+- `fleet_util_snapshot.sh` — per-box util dashboard.
+- `vast_cost_watch.sh` — continuous burn-rate monitor.
+
+Legacy bash workers (`omni_backfill_chunk_worker.sh`,
+`metric_backfill_chunk_worker.sh`, etc.) and onstarts
+(`onstart_omni_backfill.sh`, `onstart_v3.sh`) remain in tree as
+the Rust worker's fallback path + for the dual-impl cvvdp parity
+flow (`onstart_cvvdp_backfill.sh`).
+
+See `README.md` in this directory for the full Dockerfile.sweep
+version map (`v22` → `v23` → `v24`) and the proven end-to-end
+pipeline that landed 2933 omni sidecars + 2933 zensim feature
+parquets across two production runs on 2026-05-19.
 
 ## CRITICAL: every onstart MUST self-destroy on failure
 

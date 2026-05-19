@@ -1,9 +1,102 @@
 # vast.ai metric backfill — operator guide
 
-**This directory contains everything needed to score a corpus of (source,
-distorted) image pairs against one or more GPU metrics on rented vast.ai
-boxes.** If you've never run this before, READ THE WHOLE FILE before
-typing any `vastai` command. It can spend real money fast.
+**This directory contains everything needed to score a corpus of
+(source, distorted) image pairs against one or more GPU metrics on
+rented vast.ai boxes.** If you've never run this before, READ THE
+WHOLE FILE before typing any `vastai` command. It can spend real
+money fast.
+
+## Architecture (post 2026-05-19)
+
+The sweep infra is now a **unified Rust worker** living in
+`crates/vastai-fleet`. One binary, two operational modes:
+
+| Mode | Purpose | When to use |
+|---|---|---|
+| `omni` (default) | Encode each cell + score 6 GPU metrics + save encoded variant + write sidecar | Fresh sweeps; first pass against new chunks.jsonl |
+| `feature-backfill` | Read existing omni sidecar from R2, download cached encoded variants, compute CPU zensim's 300-feature vector per cell **without re-encoding** | Get features for an already-encoded corpus |
+
+The dispatch loop, claim mechanism, R2 IO, parquet IO, and CubeCL
+session all live in this one binary. The previous bash chain
+(`onstart_omni_backfill.sh` + `omni_backfill_chunk_worker.sh`) is
+kept as a fallback path but **production uses the Rust worker**.
+
+**Why this matters:** Phase B's in-process pipeline ships one CubeCL
+init per worker process (was: one per group, ~30× per chunk).
+Measured 2.7× throughput vs the bash predecessor (442 vs 165
+chunks/hr on the same 6-box fleet) with GPU util 47-65% / CPU util
+90-95% (was: 0-6% / 42-78%). See task #73 commit notes for
+details.
+
+## Container images
+
+| Tag | What it ships | Pin for |
+|---|---|---|
+| `v22` | Inline-sweep Rust worker (Phase B) + 6 GPU metrics CUDA-12.0-bound | First-gen omni runs |
+| `v23` | v22 + all-local codec deps (no crates.io codec versions); zenavif + zenjxl from `--main` worktrees | Recommended for new omni runs |
+| `v24` | v23 + `feature-backfill` mode (zensim 300-feat extraction from cached encoded variants) | Required for feature-backfill |
+
+Always pin the tag — `:latest` doesn't exist. Build from
+`Dockerfile.sweep.v{22,23,24}` against the corresponding base.
+
+## The proven end-to-end pipeline (2026-05-19)
+
+This is the path that landed 2933 omni sidecars + 2933 zensim
+feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
+`omni-multi-codec-2026-05-19`):
+
+1. **Generate chunks.jsonl** — `generate_cvvdp_backfill_chunks.py
+   --filter-codec v15rc_zenjpeg` (or per codec). Upload to
+   `s3://coefficient/jobs/<run-id>/chunks.jsonl`.
+2. **Single-instance smoke (omni mode)** — `launch_single_instance.sh
+   --docker ghcr.io/imazen/zen-metrics-sweep:v23 --onstart
+   onstart_unified.sh`. Verify the first sidecar lands at
+   `s3://zentrain/<run-id>/omni/<chunk>.parquet`. Schema check
+   should show all 6 metric columns + `encoded_filename` non-empty.
+3. **Fleet fanout (omni)** — `launch_backfill.sh --n-boxes 6
+   --docker :v23 --onstart onstart_unified.sh`. PC=2 default; AIMD
+   tunes between 1-4 based on `nvidia-smi` util.
+4. **Watch omni sidecars** populate. ~50 chunks/hr/box with v23.
+   `vastai-fleet watch --target-sidecars <N>` auto-destroys at end.
+5. **Single-instance smoke (feature-backfill mode)** —
+   `launch_single_instance.sh --docker :v24 --onstart
+   onstart_feature_backfill.sh`. Verifies the feature parquet
+   lands at `s3://zentrain/<run-id>/zensim_features/<chunk>.parquet`.
+6. **Fleet fanout (feature-backfill)** — same launcher with v24
+   image. Per-chunk runtime is dominated by encoded-variant
+   download from R2 + CPU zensim compute (~5 sec/chunk on a
+   modern CPU).
+7. **Auto-destroy + verify** — `vastai-fleet watch` + a sidecar
+   count check.
+
+## Known constraint: chunks with `encoded_filename: null`
+
+The v22 omni runs that pre-date the `--distorted-out-dir` worker
+fix produced omni sidecars where every row's `encoded_filename` is
+the arrow Null dtype — no encoded variants were ever uploaded to
+R2 for those chunks. Feature-backfill mode cannot process them
+(nothing to score). The fix is a **re-encode pass**:
+
+```bash
+# 1. Find affected chunks
+omni=$(s5cmd ls s3://zentrain/<run-id>/omni/ | awk '{print $NF}' | sed 's/.parquet//')
+feat=$(s5cmd ls s3://zentrain/<run-id>/zensim_features/ | awk '{print $NF}' | sed 's/.parquet//')
+missing=$(comm -23 <(echo "$omni" | sort) <(echo "$feat" | sort))
+
+# 2. Build a chunks.jsonl with just those, upload to a fresh run prefix
+# 3. Launch omni-mode fleet against that file:
+launch_backfill.sh --docker :v23 --onstart onstart_unified.sh \
+    --run-id v15rc-reencode-<DATE> --chunks <fresh-prefix>/chunks.jsonl
+# This overwrites the omni sidecars + uploads encoded variants to
+# the original run's encoded/ prefix (because each chunk record's
+# run_id field is preserved). The freshly-updated omni sidecars
+# now have string-typed encoded_filename.
+# 4. Then run feature-backfill against those chunks.
+```
+
+Cost for a 346-chunk reencode pass: ~$2 (5 boxes × 90 min).
+
+---
 
 ---
 
@@ -98,8 +191,12 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 
 | File | Tag | Status | Notes |
 |---|---|---|---|
-| `Dockerfile.sweep.v15` (extends v14) | **`v17` (current)** | ✅ shipping | v14 base + vastai-fleet + run_with_error_trap + cuda_dlsym_stub LD_PRELOAD + omni worker + cvvdp worker. **Use this.** |
-| `Dockerfile.sweep.v14` | `v14-omni` | active | Base image for v15-v17. Bakes zen-metrics + cuda-cudart-dev-12-6. Rebuilt when zen-metrics binary changes. |
+| `Dockerfile.sweep.v24` | **`v24` (recommended)** | ✅ shipping | v23 + feature-backfill mode in the Rust worker. Required for zensim 300-feat extraction. |
+| `Dockerfile.sweep.v23` | `v23` | active | v22 + all-local codec deps (no crates.io codec versions; zenavif + zenjxl from `--main` worktrees with `__expert` features). Required for new omni runs. |
+| `Dockerfile.sweep.v22` (extends v21) | `v22` | active | v21 base + unified Rust worker (Phase B inline run_sweep). |
+| `Dockerfile.sweep.v21` (extends v20) | `v21` | active | v20 + zen-metrics binary built with CUDARC_CUDA_VERSION=12000 (drops v2-suffix dlsym refs). |
+| `Dockerfile.sweep.v15` (extends v14) | `v17` | legacy | v14 base + vastai-fleet + run_with_error_trap + cuda_dlsym_stub LD_PRELOAD + bash omni worker + cvvdp worker. Pre-Phase-B; use v22+ for new work. |
+| `Dockerfile.sweep.v14` | `v14-omni` | active | Base image for v15-v23. Bakes zen-metrics + cuda-cudart-dev-12-6. Rebuilt when zen-metrics binary changes. |
 | `Dockerfile.sweep.v13` | `v13` | deprecated | Single-stage from-source build. Slow rebuild; superseded by v14's precompiled-binary path. |
 | `Dockerfile.sweep` (root) | — | deprecated | Vestigial pre-v13 prototype. Slated for deletion (P5d). |
 | `scripts/sweep/Dockerfile.sweep` | — | deprecated | Same. |
@@ -109,7 +206,9 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 
 | File | Used by | Status |
 |---|---|---|
-| `onstart_omni_backfill.sh` | **omni (all 6 GPU metrics + encoded variants)** | ✅ current |
+| `onstart_unified.sh` | **omni mode via the Rust `vastai-fleet worker` binary** | ✅ recommended (v22+) |
+| `onstart_feature_backfill.sh` | **feature-backfill mode via the Rust worker (sets WORKER_MODE=feature-backfill)** | ✅ recommended (v24+) |
+| `onstart_omni_backfill.sh` | Legacy bash dispatcher for the omni pipeline | active (fallback) |
 | `onstart_cvvdp_backfill_imazen.sh` | cvvdp single-impl backfill | active |
 | `onstart_cvvdp_backfill.sh` | cvvdp dual-impl (cvvdp-gpu + pycvvdp) | active (rare) |
 | `onstart_iwssim_backfill_v14.sh` | iwssim backfill (v14 image baseline) | active |
@@ -118,9 +217,16 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 
 ### Chunk workers (process one chunk = 100-200 rows)
 
+The Rust worker (`crates/vastai-fleet/src/worker/`) replaces these
+bash scripts when the container runs `onstart_unified.sh` or
+`onstart_feature_backfill.sh`. The bash workers stay in the image
+as safety-net fallbacks (`vastai-fleet worker` falls through to
+the bash `omni_backfill_chunk_worker.sh` if the inline path
+fails — defence in depth).
+
 | File | Used by | Status |
 |---|---|---|
-| `omni_backfill_chunk_worker.sh` | omni onstart | ✅ current |
+| `omni_backfill_chunk_worker.sh` | Legacy bash worker (now: Rust fallback path only) | active (fallback) |
 | `metric_backfill_chunk_worker.sh` | single-metric backfills (iwssim/ssim2/cvvdp-imazen) | active |
 | `cvvdp_backfill_chunk_worker.sh` | cvvdp dual-impl onstart | active |
 | `iwssim_backfill_chunk_worker.sh` | legacy iwssim-only onstart | deprecated (superseded by metric_backfill) |
@@ -149,10 +255,11 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 |---|---|
 | `run_with_error_trap.sh` | EXIT-trap wrapper. nvidia-smi pre-flight + self-destroy on rc!=0 + stderr upload. **Every onstart should be invoked through this.** |
 | `cuda_dlsym_stub.c` | LD_PRELOAD shim. Fixes cudarc 0.19.4 vs CUDA 13.x driver symbol mismatch. Baked into v17 image. |
+| `fleet_util_snapshot.sh` | Per-box GPU/CPU/RAM/uptime dump. Auto-detects fleet boxes by label prefix. Use to verify util after launch. |
 | `sweep_janitor.py` | Sidecar consolidation + dedup |
 | `fleet_status.sh` | One-shot dashboard wrapping `vastai-fleet status` |
 | `finalize.sh` | Post-sweep R2-sidecar consolidation into per-codec parquets |
-| `vast_cost_watch.sh` (new — this PR) | Continuous burn-rate monitor; alerts if total cost exceeds threshold |
+| `vast_cost_watch.sh` | Continuous burn-rate monitor; alerts if total cost exceeds threshold |
 
 ---
 
@@ -167,6 +274,8 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 | Sidecars don't appear; box idles at 0% GPU | Claim markers from a previous run blocked all chunks | Set `SKIP_CLAIMS=1` for smoke runs, OR clear `s3://coefficient/claims/<run-id>/` first. |
 | Bandwidth charges crush the budget | Each box re-downloads source images redundantly | Use a sharded chunk file (one source per shard) OR launch with `WORKER_INDEX`/`WORKER_COUNT` so each box owns a slice. (Sharding pending — see task #72.) |
 | GHCR pull fails with 401 unauthorized | Image is private + the `--login` flag's GHCR token is stale | Make image public OR refresh `gh auth token` and re-launch. |
+| feature-backfill worker panics `as_string::<i32>()` / `"string array"` | omni sidecar's `encoded_filename` column inferred as Null type (no encoded variants ever saved for this chunk). | The Rust worker now skips these gracefully (`fix(feature-backfill)` 2026-05-19). To populate features for those chunks, **re-encode them** — see "Known constraint" section above. |
+| feature-backfill SIGSEGV on older Xeon CPUs | Initially blamed on archmage SIMD dispatch; actually traced to the panic above leaking through tokio's task abort. Fixed 2026-05-19. | Use v24+ image. |
 
 ---
 
