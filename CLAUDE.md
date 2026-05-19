@@ -277,6 +277,14 @@ GPU info: `nvidia-smi` driver 596.21 / CUDA capability runtime 13.2.
 - **Onstart script**: `scripts/sweep/onstart_v3.sh`. Fans out N parallel
   zen-metrics processes per box (one per CPU core) sharing the GPU for
   scoring; each claims its own chunk from `chunks.jsonl` on R2.
+- **Every onstart MUST self-destroy on failure** — upload tail log to
+  R2 + issue `vastai destroy instance ${CONTAINER_ID}`. See
+  `scripts/sweep/CLAUDE.md#critical-every-onstart-must-self-destroy-on-failure`
+  for the two acceptable patterns (image-level
+  `run_with_error_trap.sh` wrapper on v15+, or inline `on_exit` trap
+  as in `onstart_iwssim_backfill_v14.sh`). Workers that exit without
+  destroying burn \$/hr until externally cleaned up — that's the
+  cost-leak the 2026-05-18 EXP-LARGER-LARGE incident chased.
 
 ## CHANGELOG.md
 

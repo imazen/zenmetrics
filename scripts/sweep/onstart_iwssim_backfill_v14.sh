@@ -30,15 +30,114 @@ log() {
 }
 
 # Hydrate env from PID 1 (where vast.ai injects worker env vars).
+# CONTAINER_* are injected directly by vast.ai (CONTAINER_ID +
+# CONTAINER_API_KEY) and feed the self-destroy trap below.
 if [[ -r /proc/1/environ ]]; then
     while IFS='=' read -r -d '' k v; do
         case "$k" in
-            R2_*|SWEEP_*|WORKER_*|PARALLEL|WORKDIR|SCRIPTS_R2_PREFIX|GPU_RUNTIME|CUDA_PATH)
+            R2_*|SWEEP_*|WORKER_*|PARALLEL|WORKDIR|SCRIPTS_R2_PREFIX|GPU_RUNTIME|CUDA_PATH|CONTAINER_*)
                 export "$k=$v"
                 ;;
         esac
     done < /proc/1/environ
 fi
+
+# ─────────────────────────────────────────────────────────────────────
+# EXIT trap: on any non-zero exit, upload the last 200 lines of the
+# captured log to R2 and self-destroy the vast.ai instance via REST
+# DELETE. Without this, failed workers idle at $/hr until an external
+# `vastai-fleet destroy` cleans them up. The trap is installed BEFORE
+# any other work so even early-exit failures (missing env, image-broken
+# sanity check, R2-download fail) are captured + destroyed.
+#
+# Replicates the contract of scripts/sweep/run_with_error_trap.sh, but
+# inline so this script works on v14 image (which does not bake
+# vastai-fleet + run_with_error_trap.sh; v15 does, and v15 callers
+# should prefer the wrapper). curl IS baked into v14 (cuda-keyring
+# needs it at build time).
+# ─────────────────────────────────────────────────────────────────────
+
+ONSTART_LOG="${ONSTART_LOG:-/tmp/onstart_v14.log}"
+# Mirror stdout + stderr through tee to ONSTART_LOG so the trap can
+# upload the tail. We deliberately do NOT use `exec 1>` redirection —
+# that would also swallow vast.ai's console view. tee keeps the live
+# stream visible AND captures to disk.
+exec > >(tee -a "$ONSTART_LOG") 2> >(tee -a "$ONSTART_LOG" >&2)
+
+on_exit() {
+    local rc=$?
+    # Stop the heartbeat thread (was the only thing the prior trap did).
+    if [[ -n "${HEARTBEAT_PID:-}" ]]; then
+        kill "$HEARTBEAT_PID" 2>/dev/null || true
+    fi
+    if (( rc == 0 )); then
+        printf '[%s] [on_exit] rc=0 — clean exit, no self-destroy\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+        return
+    fi
+    printf '[%s] [on_exit] rc=%d — uploading log + self-destroying\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" >&2
+
+    # Drain any in-flight tee output.
+    sync || true
+    sleep 1
+
+    local run_id="${SWEEP_RUN_ID:-unknown-run}"
+    local worker_id="${WORKER_ID:-$(hostname)-$$}"
+    local container_id="${CONTAINER_ID:-unknown-container}"
+    local r2_key="s3://coefficient/jobs/${run_id}/worker-logs/${worker_id}-failure.log"
+
+    # Compose the upload: exit context + last 200 lines of the log.
+    local upload_tmp=/tmp/on_exit_upload.log
+    {
+        echo "# === onstart_v14 exit context ==="
+        echo "# exit_code:    $rc"
+        echo "# worker_id:    $worker_id"
+        echo "# container_id: $container_id"
+        echo "# run_id:       $run_id"
+        echo "# host:         $(hostname)"
+        echo "# timestamp:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "# onstart:      $0"
+        echo "# === last 200 lines of $ONSTART_LOG ==="
+        tail -n 200 "$ONSTART_LOG" 2>/dev/null || echo "(log unavailable)"
+    } > "$upload_tmp"
+
+    # Upload via s5cmd if creds are present + R2() is defined; fall
+    # back to silently skipping if anything is missing (still destroy).
+    if [[ -n "${R2_ACCOUNT_ID:-}" && -n "${R2_ACCESS_KEY_ID:-}" \
+          && -n "${R2_SECRET_ACCESS_KEY:-}" ]] \
+        && command -v s5cmd >/dev/null 2>&1; then
+        s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --profile r2 cp "$upload_tmp" "$r2_key" >&2 2>&1 \
+            && printf '[%s] [on_exit] log uploaded to %s\n' \
+                "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$r2_key" >&2 \
+            || printf '[%s] [on_exit] WARN: log upload failed (continuing to destroy)\n' \
+                "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+    else
+        printf '[%s] [on_exit] WARN: R2 creds or s5cmd missing — skipping upload\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+    fi
+
+    # Self-destroy via vast.ai REST DELETE. Matches the call vastai-fleet
+    # self-destroy makes (crates/vastai-fleet/src/main.rs:533).
+    if [[ -z "${CONTAINER_ID:-}" || -z "${CONTAINER_API_KEY:-}" ]]; then
+        printf '[%s] [on_exit] ERROR: CONTAINER_ID or CONTAINER_API_KEY unset — cannot self-destroy. Box will keep running.\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+        return
+    fi
+    local url="https://console.vast.ai/api/v0/instances/${CONTAINER_ID}/"
+    printf '[%s] [on_exit] DELETE %s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$url" >&2
+    curl -fsSL --max-time 30 -X DELETE \
+        -H "Authorization: Bearer ${CONTAINER_API_KEY}" \
+        -H "Accept: application/json" \
+        "$url" >&2 \
+        && printf '[%s] [on_exit] destroy DELETE accepted\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2 \
+        || printf '[%s] [on_exit] WARN: destroy DELETE failed (box may stay alive)\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+}
+trap on_exit EXIT
 
 : "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing}"
 : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing}"
@@ -211,7 +310,7 @@ heartbeat run
     done
 ) &
 HEARTBEAT_PID=$!
-trap 'kill $HEARTBEAT_PID 2>/dev/null || true' EXIT
+# Heartbeat-thread cleanup is handled by on_exit (installed above).
 
 # Fan out chunks across PARALLEL workers via xargs.
 # Export shell functions + env so each xargs-spawned `bash -c` subshell
@@ -223,6 +322,14 @@ export WORKDIR WORKER_ID SWEEP_RUN_ID GPU_RUNTIME PARALLEL
 export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 log "running $N_CHUNKS chunks at parallel=$PARALLEL"
 < "$WORKDIR/chunks.jsonl" xargs -P "$PARALLEL" -d '\n' -I {} bash -c 'process_chunk "$@"' _ {}
+xargs_rc=$?
 
-log "all chunks processed"
 heartbeat done
+log "all chunks processed (xargs rc=$xargs_rc)"
+# Propagate xargs failure so on_exit trap self-destroys the box rather
+# than idling at $/hr after a silent breakage. Mirror the pattern in
+# scripts/sweep/onstart_cvvdp_backfill_imazen.sh:404-409.
+if (( xargs_rc != 0 )); then
+    log "FATAL: xargs returned non-zero — failing the onstart"
+    exit "$xargs_rc"
+fi

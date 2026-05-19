@@ -22,6 +22,45 @@ new sweep work happens in this repo.
 - `Dockerfile.sweep` — historical; v3 onstart bypasses docker, runs
   directly on `ubuntu:24.04`.
 
+## CRITICAL: every onstart MUST self-destroy on failure
+
+Every new sweep onstart script MUST wrap its main loop with an
+EXIT trap that, on any non-zero exit, (a) uploads the tail of its
+captured log to R2 under
+`s3://coefficient/jobs/${SWEEP_RUN_ID}/worker-logs/${WORKER_ID}-failure.log`
+and (b) issues a `vastai destroy instance ${CONTAINER_ID}` (or the
+equivalent REST DELETE) so the box stops billing the moment its
+work fails. Without this, a worker that exits in 6-80 s leaves the
+vast.ai instance running at \$/hr until an external `vastai-fleet
+destroy` cleans it up — which is exactly the failure mode the
+2026-05-18 EXP-LARGER-LARGE cascade hit four times.
+
+Two equivalent ways to satisfy the contract:
+
+1. **Image-level wrapper (preferred for v15+):** the v15 image's
+   `ENTRYPOINT` already chains through
+   `/usr/local/bin/run_with_error_trap.sh`, which installs the EXIT
+   trap, captures stderr, and shells out to the baked
+   `/usr/local/bin/vastai-fleet self-destroy` on rc≠0. New onstarts
+   running in v15+ inherit this automatically — no changes needed in
+   the script itself.
+
+2. **Inline trap (required for v14 image or anything that runs
+   without `run_with_error_trap.sh`):** install an `on_exit` trap
+   directly in the onstart script. See
+   `onstart_iwssim_backfill_v14.sh` lines 60-140 as the canonical
+   pattern: tee stdout+stderr to `$ONSTART_LOG`, hydrate
+   `CONTAINER_*` from `/proc/1/environ`, then `trap on_exit EXIT`
+   where `on_exit` composes a context header + last 200 lines and
+   calls `curl -X DELETE` against `console.vast.ai/api/v0/instances/${CONTAINER_ID}/`.
+
+Whichever path you pick, **xargs return code MUST propagate to the
+script's exit**. The default `xargs ... < chunks` at end-of-script
+discards rc on its own line; capture into `xargs_rc=$?` and `exit
+"$xargs_rc"` if non-zero (mirror `onstart_cvvdp_backfill_imazen.sh:404-409`).
+Without this, a chunk loop that fails every chunk in 6 s still ends
+the onstart with rc=0 and the trap does nothing.
+
 ## Worker mechanics
 
 1. vast.ai pulls `ubuntu:24.04` (~10 s on warm host).
