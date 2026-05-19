@@ -54,9 +54,22 @@ fi
 N_CHUNKS=$(wc -l < "$WORKDIR/chunks.jsonl")
 log "$N_CHUNKS chunks; worker=$WORKER_ID; PARALLEL=$PARALLEL; GPU_RUNTIME=$GPU_RUNTIME"
 
-# Shuffle + claim loop. One chunk at a time; the worker handles
-# per-group parallelism inside via --parallel.
-shuf "$WORKDIR/chunks.jsonl" > "$WORKDIR/chunks.shuf.jsonl"
+# Shuffle + claim loop. By default PARALLEL_CHUNKS=2 runs two chunks
+# concurrently per box: while chunk A's encode is CPU-bound, chunk B
+# can score on GPU. Empirically this lifts a chunk that runs at ~30%
+# GPU util in serial mode to ~60-80% util in parallel mode. Set
+# PARALLEL_CHUNKS=1 to disable.
+#
+# Seeded shuffle. Each box gets a deterministic-but-distinct ordering
+# so we don't have all 4 workers fighting over the first ~10 chunks
+# at boot. The seed is hashed from $WORKER_ID. Same worker always
+# sees the same order — useful for resumability — but different
+# workers see uncorrelated orders.
+PARALLEL_CHUNKS="${PARALLEL_CHUNKS:-2}"
+SHUFFLE_SEED=$(printf '%s' "$WORKER_ID" | sha256sum | awk '{print $1}' | head -c 16)
+shuf --random-source=<(yes "$SHUFFLE_SEED") "$WORKDIR/chunks.jsonl" \
+    > "$WORKDIR/chunks.shuf.jsonl"
+log "parallel_chunks=$PARALLEL_CHUNKS seed=$SHUFFLE_SEED"
 
 process_chunk() {
     local line="$1"
@@ -142,8 +155,16 @@ export -f process_chunk log ts R2
 export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
     SWEEP_RUN_ID WORKER_ID PARALLEL GPU_RUNTIME SCRIPTS_R2_PREFIX
 
+# Bounded-concurrency dispatch. `wait -n` blocks until ANY background
+# job finishes, so we never overshoot $PARALLEL_CHUNKS in-flight.
 while IFS= read -r line; do
-    process_chunk "$line"
+    while (( $(jobs -rp 2>/dev/null | wc -l) >= PARALLEL_CHUNKS )); do
+        wait -n 2>/dev/null || true
+    done
+    process_chunk "$line" &
 done < "$WORKDIR/chunks.shuf.jsonl"
+
+# Drain remaining in-flight jobs.
+wait
 
 log "all chunks processed"
