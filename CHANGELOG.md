@@ -90,6 +90,22 @@ minimum driver release is compiled in.
     boxes with driver <555 from producing sidecars. Fix the floor
     OR ship a CUDA-12-built nvrtc before fanning out.
 
+### sweep infra v21.1 — 2026-05-19 (`fix(sweep): bump driver_version floor to 555 (CUDA 12.5+) for PTX compat`)
+
+PTX-version fix per the v21 smoke "ready-to-fanout flag" follow-up.
+Three launchers bumped `driver_version>=525.0.0` -> `driver_version>=555.0.0`:
+
+- `scripts/sweep/launch_backfill.sh:187`
+- `scripts/sweep/launch_single_instance.sh:141`
+- `scripts/sweep/v15/launch_gpu.sh:19`
+
+Driver 555.42 is the first NVIDIA release supporting the CUDA 12.5
+PTX ISA that cubecl-cuda's nvrtc emits from the local CUDA 13.2
+toolchain. Older drivers reject those modules at load time with
+`CUDA_ERROR_UNSUPPORTED_PTX_VERSION` even though the runtime symbol
+surface is fine (v21 binary covers them via the universal cu*
+dlsym stub). This unblocks the multi-codec EXP fleet sweep.
+
 ### sweep infra v20 — 2026-05-19 (`fix(cuda-shim): universal cu* dlsym fallback to no-op stub`) — landed on master 2026-05-19 by parallel agent
 
 Master commit `c7af4dae`. Drops the per-family allowlist (cuCoredump*)

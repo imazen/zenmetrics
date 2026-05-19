@@ -182,9 +182,15 @@ fi
 #   /usr/local/lib/cuda_dlsym_stub.so papered over the latter but
 #   not the former, so the v18 smoke still panicked on driver 555.
 #
-#   We now floor at driver 525 (first CUDA 12 ABI) and keep
-#   `cuda_max_good>=12.0` so the pool stays sensible.
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=525.0.0 num_gpus=1"
+#   We now floor at driver 555 (CUDA 12.5+ ABI) — cudarc 0.19.4 emits
+#   PTX with the CUDA 12.5+ minor version directive, and drivers older
+#   than 555.42 reject the PTX with CUDA_ERROR_UNSUPPORTED_PTX_VERSION
+#   at module load. The v21 smoke confirmed runtime-symbol panics were
+#   eliminated; the surviving blocker on cheap-driver boxes is PTX-
+#   version rejection. Bumping the floor from 525 -> 555 keeps
+#   `cuda_max_good>=12.0` consistent with the actual driver ABI we
+#   require. Historical note: 525 was the CUDA 12.0 first-release floor.
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=555.0.0 num_gpus=1"
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "

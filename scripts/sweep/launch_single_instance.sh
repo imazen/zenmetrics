@@ -130,15 +130,17 @@ fi
 #   drivers from 525.x through 580.x. We therefore relax the filter
 #   compared to launch_backfill.sh's `driver_version<570.0.0` gate.
 #
-#   We still floor at driver 525 (the first NVIDIA release that ships
-#   the CUDA 12 ABI cudarc needs) and `cuda_max_good>=12.0` to keep
-#   pre-CUDA-12 hosts out. Together these cover every box where the
-#   reduced symbol surface load-cleanly.
+#   2026-05-19 update: floor bumped 525 -> 555 (CUDA 12.5+ ABI). cudarc
+#   0.19.4 emits PTX with the CUDA 12.5+ minor version directive, and
+#   drivers older than 555.42 reject the PTX at module load with
+#   CUDA_ERROR_UNSUPPORTED_PTX_VERSION. v21 smoke eliminated runtime
+#   symbol panics; PTX-version mismatch is the surviving blocker on
+#   cheap-driver boxes. See launch_backfill.sh for full rationale.
 #
-#   If a NEW dlsym panic surfaces on a driver in this band, narrow
-#   the floor (driver_version>=535 was the next stable cut) rather
+#   If a NEW dlsym panic surfaces on a driver in this band, narrow the
+#   floor further (driver_version>=570 is the next stable cut) rather
 #   than re-imposing the upper ceiling.
-QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_max_good>=12.0 driver_version>=525.0.0 dlperf>=12 num_gpus=1"
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_max_good>=12.0 driver_version>=555.0.0 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \

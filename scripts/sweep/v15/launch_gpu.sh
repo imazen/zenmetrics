@@ -12,11 +12,13 @@ DRY_RUN="${DRY_RUN:-0}"
 GHCR_TOKEN="$(gh auth token)"
 GHCR_USER="lilithriver"
 
-# Driver floor 525 = first NVIDIA release shipping CUDA 12 ABI. The
-# v19 binary is built with CUDARC_CUDA_VERSION=12090 so no CUDA-13
-# symbols are referenced; the previous upper ceiling on driver_version
-# is no longer required. See launch_backfill.sh for full rationale.
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=525.0.0 num_gpus=1"
+# Driver floor 555 = first NVIDIA release shipping CUDA 12.5 ABI. The
+# v21 binary is built with CUDARC_CUDA_VERSION=12000 (no CUDA-13 dlsyms)
+# but cudarc 0.19.4 emits PTX requiring the CUDA 12.5+ minor version
+# directive — drivers <555.42 fail at module load with
+# CUDA_ERROR_UNSUPPORTED_PTX_VERSION. See launch_backfill.sh for full
+# rationale.
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=555.0.0 num_gpus=1"
 echo "[v15] querying: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "
