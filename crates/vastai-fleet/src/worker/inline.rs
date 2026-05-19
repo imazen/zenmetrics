@@ -160,6 +160,26 @@ pub async fn process_chunk_inline(
         "step 4/5: run sweep per group (in-process, shared cubecl)"
     );
     let metrics = parse_metrics_env_or_default();
+    // If CPU `zensim` is in the metric set, also write the 372-feature
+    // extended vector to a parquet sidecar at
+    // s3://zentrain/<run>/zensim_features/<chunk>.parquet. Joins back
+    // to the omni sidecar by `(image_path, codec, q, knob_tuple_json)`.
+    // Skipped silently if metrics is GPU-only (e.g. zensim-gpu).
+    let want_features = metrics.contains(&MetricKind::Zensim);
+    let feature_out_path = if want_features {
+        Some(scratch.join(format!("{}.zensim_features.parquet", rec.chunk_id)))
+    } else {
+        None
+    };
+    let feature_out_r2 = if want_features {
+        Some(format!(
+            "s3://zentrain/{run_id}/zensim_features/{}.parquet",
+            rec.chunk_id
+        ))
+    } else {
+        None
+    };
+
     let mut groups_ok: usize = 0;
     let mut groups_fail: usize = 0;
     for (gid, group) in groups.iter().enumerate() {
@@ -210,7 +230,13 @@ pub async fn process_chunk_inline(
             metrics: metrics.clone(),
             gpu_runtime: GpuRuntime::Cuda,
             output_tsv: sweeps.join(format!("g{gid_str}.tsv")),
-            feature_output: None,
+            // Per-group feature parquet — one per group; the final
+            // chunk-level upload concatenates them. zen-metrics-cli's
+            // `run_sweep` writes features inline when this is set
+            // AND the metric list contains CPU zensim.
+            feature_output: feature_out_path
+                .as_ref()
+                .map(|_| sweeps.join(format!("g{gid_str}.features.parquet"))),
             encoded_out_dir: Some(encoded.clone()),
             jobs: 0,
         };
@@ -271,6 +297,40 @@ pub async fn process_chunk_inline(
         .await
         .context("upload sidecar")?;
     info!(chunk_id = %rec.chunk_id, sidecar = %out_sidecar, "sidecar uploaded");
+
+    // Optional zensim feature parquet — concat per-group feature
+    // sidecars + upload. Schema produced by zen-metrics-cli's
+    // `feature_writer.rs`: `image_path codec q knob_tuple_json f0..f<N>`
+    // joinable to the omni sidecar on the identity tuple.
+    if let (Some(out_local), Some(out_uri)) = (&feature_out_path, &feature_out_r2) {
+        let sweeps_clone = sweeps.clone();
+        let out_local_clone = out_local.clone();
+        let concat_result = tokio::task::spawn_blocking(move || {
+            concat_feature_parquets(&sweeps_clone, &out_local_clone)
+        })
+        .await
+        .map_err(|e| anyhow!("feature concat task panicked: {e}"))?;
+        match concat_result {
+            Ok(0) => {
+                info!(chunk_id = %rec.chunk_id, "no zensim feature rows produced");
+            }
+            Ok(n) => {
+                if let Err(e) = r2.upload(out_local, out_uri).await {
+                    warn!(chunk_id = %rec.chunk_id, error = %e, "feature parquet upload failed");
+                } else {
+                    info!(
+                        chunk_id = %rec.chunk_id,
+                        n_rows = n,
+                        feature_sidecar = %out_uri,
+                        "zensim features uploaded"
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(chunk_id = %rec.chunk_id, error = %e, "feature concat failed");
+            }
+        }
+    }
 
     // Encoded variants — only if any files actually got written.
     if encoded_dir_has_files(&encoded).await {
@@ -396,4 +456,79 @@ async fn upload_encoded_variants(
         );
     }
     Ok(())
+}
+
+/// Concatenate per-group zensim feature parquets into one chunk-level
+/// parquet. Each group's `g<gid>.features.parquet` has the schema
+/// emitted by `zen_metrics_cli::sweep::feature_writer` —
+/// `image_path:Utf8, codec:Utf8, q:UInt32, knob_tuple_json:Utf8,
+/// zensim_score:Float32, feat_0..feat_299:Float32`. We read all
+/// of them with arrow-rs's parquet reader, concat into one batch,
+/// and write a single zstd parquet at `output_path`.
+///
+/// Returns the row count written. Returns Ok(0) if no per-group
+/// feature parquets exist (e.g. CPU zensim wasn't in the metric
+/// set, or all groups failed before writing any features).
+#[cfg(feature = "inline-sweep")]
+fn concat_feature_parquets(sweep_dir: &std::path::Path, output_path: &std::path::Path) -> Result<usize> {
+    use arrow::compute::concat_batches;
+    use arrow_array::RecordBatch;
+    use parquet::arrow::ArrowWriter;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+    use parquet::basic::Compression;
+    use parquet::file::properties::WriterProperties;
+    use std::sync::Arc;
+
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(sweep_dir)
+        .with_context(|| format!("read sweep dir {}", sweep_dir.display()))?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let p = e.path();
+            let name = p.file_name()?.to_string_lossy().into_owned();
+            // Per-group feature parquets are named "g<gid>.features.parquet".
+            if name.starts_with('g') && name.ends_with(".features.parquet") {
+                Some(p)
+            } else {
+                None
+            }
+        })
+        .collect();
+    files.sort();
+    if files.is_empty() {
+        return Ok(0);
+    }
+
+    let mut batches: Vec<RecordBatch> = Vec::new();
+    let mut schema_arc: Option<Arc<arrow_schema::Schema>> = None;
+    for f in &files {
+        let file = std::fs::File::open(f)
+            .with_context(|| format!("open {}", f.display()))?;
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+            .with_context(|| format!("init reader {}", f.display()))?;
+        if schema_arc.is_none() {
+            schema_arc = Some(builder.schema().clone());
+        }
+        let reader = builder.build()
+            .with_context(|| format!("build reader {}", f.display()))?;
+        for batch in reader {
+            batches.push(batch.with_context(|| format!("read batch from {}", f.display()))?);
+        }
+    }
+    if batches.is_empty() {
+        return Ok(0);
+    }
+    let schema = schema_arc.expect("schema set when batches present");
+    let merged = concat_batches(&schema, &batches).context("concat feature batches")?;
+    let n_rows = merged.num_rows();
+
+    let out_file = std::fs::File::create(output_path)
+        .with_context(|| format!("create {}", output_path.display()))?;
+    let props = WriterProperties::builder()
+        .set_compression(Compression::ZSTD(Default::default()))
+        .build();
+    let mut wtr = ArrowWriter::try_new(out_file, schema, Some(props))
+        .context("arrow writer for features")?;
+    wtr.write(&merged).context("write feature batch")?;
+    wtr.close().context("close feature writer")?;
+    Ok(n_rows)
 }
