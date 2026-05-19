@@ -55,6 +55,8 @@ mod adapt;
 mod chunk;
 #[cfg(feature = "inline-sweep")]
 mod chunk_input;
+#[cfg(feature = "inline-sweep")]
+mod chunk_output;
 mod claim;
 mod r2;
 #[cfg(feature = "inline-sweep")]
