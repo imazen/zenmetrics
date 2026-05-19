@@ -113,12 +113,33 @@ pub async fn process_chunk(
         info!(chunk_id = %rec.chunk_id, "SKIP_CLAIMS: processing without claim");
     }
 
-    // Execute phase. Phase B: prefer in-process inline pipeline
-    // when compiled in. Phase A bash-subprocess path stays as the
-    // fallback so a feature-gated build can run either.
+    // Execute phase. Mode-dispatch:
+    //   - `feature-backfill` reads existing omni sidecar + encoded
+    //     variants and computes zensim features without re-encoding.
+    //   - `omni` (default) runs the full encode+score+upload pipeline.
     let started = Instant::now();
     #[cfg(feature = "inline-sweep")]
     {
+        if args.mode == "feature-backfill" {
+            match super::backfill_features_for_chunk(args, r2, line).await {
+                Ok(()) => {
+                    info!(
+                        chunk_id = %rec.chunk_id,
+                        elapsed_sec = started.elapsed().as_secs_f32(),
+                        "done (feature-backfill)"
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        chunk_id = %rec.chunk_id,
+                        error = %e,
+                        "feature-backfill failed"
+                    );
+                    return Err(e);
+                }
+            }
+        }
         match super::inline::process_chunk_inline(args, r2, line).await {
             Ok(()) => {
                 info!(

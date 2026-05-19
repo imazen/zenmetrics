@@ -59,9 +59,14 @@ mod chunk_input;
 mod chunk_output;
 mod claim;
 #[cfg(feature = "inline-sweep")]
+mod feature_backfill;
+#[cfg(feature = "inline-sweep")]
 mod inline;
 #[cfg(feature = "source-features")]
 mod source_features;
+
+#[cfg(feature = "inline-sweep")]
+pub use feature_backfill::backfill_features_for_chunk;
 mod r2;
 #[cfg(feature = "inline-sweep")]
 mod sweep_runner;
@@ -101,6 +106,16 @@ pub struct WorkerArgs {
     /// derived from `nproc / 2` clamped to [1, 8].
     #[arg(long, env = "PARALLEL_CHUNKS_MAX")]
     pub parallel_chunks_max: Option<usize>,
+
+    /// What kind of work to do per chunk. `omni` (default) re-encodes
+    /// + scores + writes the omni sidecar. `feature-backfill` reads
+    /// the existing omni sidecar from R2, downloads the already-saved
+    /// encoded variants, computes zensim 300-feature vectors, writes
+    /// a feature parquet to s3://zentrain/<run>/zensim_features/.
+    /// Use feature-backfill when the omni sidecars exist already and
+    /// you just want the features — saves the encode cost entirely.
+    #[arg(long, env = "WORKER_MODE", default_value = "omni")]
+    pub mode: String,
 
     /// Skip the R2 token-race claim. Used only by single-instance
     /// smoke runs that want to bypass claim contention with an
