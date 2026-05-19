@@ -15,7 +15,9 @@ name = "vastai-fleet"
 path = "src/main.rs"
 
 [dependencies]
-clap = { workspace = true }
+# Need the `env` feature on top of the workspace flag set so worker-mode
+# CLI args can fall back to env vars like `$SWEEP_RUN_ID`.
+clap = { workspace = true, features = ["env"] }
 # serde_json::Value gives us tolerant parsing — when one instance row is
 # malformed we can skip it with a warning instead of aborting (the bug
 # this crate exists to fix).
@@ -24,6 +26,20 @@ serde_json = { workspace = true }
 # anyhow keeps the binary small and the error model simple. This is a CLI
 # helper, not a library.
 anyhow = "1.0.102"
+
+# Worker-mode deps. Gated under the `worker` feature so the lightweight
+# fleet-management subcommands (self-destroy, watch, status) keep their
+# small binary footprint when built without --features worker.
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "signal", "sync", "time"], optional = true }
+tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"], optional = true }
+sha2 = { version = "0.10", default-features = false, optional = true }
+hex = { version = "0.4", default-features = false, features = ["std"], optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
+
+[features]
+default = ["worker"]
+worker = ["dep:tokio", "dep:tracing", "dep:tracing-subscriber", "dep:sha2", "dep:hex", "dep:chrono"]
 
 [dev-dependencies]
 serde_json = { workspace = true }

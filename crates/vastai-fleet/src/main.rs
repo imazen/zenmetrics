@@ -27,6 +27,8 @@
 //! instances-v1` directly.
 
 mod parse;
+#[cfg(feature = "worker")]
+mod worker;
 
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -128,6 +130,15 @@ enum Cmd {
         #[arg(long, default_value = "s5cmd")]
         s5cmd_bin: String,
     },
+    /// Run as a sweep worker on a vast.ai box. Replaces the bash
+    /// `onstart_omni_backfill.sh` dispatch loop. See the
+    /// `worker::WorkerArgs` doc for env vars + CLI flags.
+    ///
+    /// Built into the `vastai-fleet` binary so the v22+ docker image
+    /// can boot directly into `vastai-fleet worker --run-id $RUN_ID ...`
+    /// with no bash glue.
+    #[cfg(feature = "worker")]
+    Worker(worker::WorkerArgs),
     /// Poll fleet until a target sidecar count is reached, then destroy
     /// every matching instance. Replaces the per-sweep
     /// `run_destroy_<metric>_<chunks>.sh` heredocs.
@@ -187,6 +198,8 @@ fn main() -> anyhow::Result<()> {
             curl_bin,
             s5cmd_bin,
         }),
+        #[cfg(feature = "worker")]
+        Cmd::Worker(wargs) => worker::cmd_worker(wargs),
         Cmd::Watch {
             label_prefix,
             target_sidecars,
