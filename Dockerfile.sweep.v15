@@ -42,8 +42,24 @@ FROM ghcr.io/imazen/zen-metrics-sweep:${V14_TAG}
 # NVIDIA cuda-keyring is fetched here at BUILD time (not boot time) so
 # the apt install can resolve the cuda-cudart-dev-12-6 package.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-        curl ca-certificates gnupg \
+        curl ca-certificates gnupg gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Build the cuda_dlsym_stub LD_PRELOAD shim. Routes cudarc 0.19.4's
+# lookup of cuCoredumpDeregisterCompleteCallback (removed in CUDA
+# 13.x libcuda) to a no-op stub instead of NULL — keeps the cubecl
+# device dispatcher alive on modern vast.ai drivers. See the file
+# header for safety analysis.
+COPY scripts/sweep/cuda_dlsym_stub.c /tmp/cuda_dlsym_stub.c
+RUN gcc -shared -fPIC -O2 -o /usr/local/lib/cuda_dlsym_stub.so \
+        /tmp/cuda_dlsym_stub.c -ldl \
+    && rm /tmp/cuda_dlsym_stub.c \
+    && test -f /usr/local/lib/cuda_dlsym_stub.so
+
+# LD_PRELOAD the shim system-wide so every zen-metrics invocation
+# in the container inherits it. Operators can override per-process
+# by clearing $LD_PRELOAD if they're debugging the symbol path.
+ENV LD_PRELOAD=/usr/local/lib/cuda_dlsym_stub.so
 
 # v14 base ships /bin/sh with PATH missing /sbin, which breaks dpkg.
 # Prepend the standard sbin dirs for this RUN.
