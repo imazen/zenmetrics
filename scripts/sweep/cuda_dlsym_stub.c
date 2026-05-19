@@ -56,11 +56,13 @@ void *dlsym(void *handle, const char *symbol) {
     if (!real_dlsym) {
         real_dlsym = (dlsym_fn)dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
     }
-    if (symbol != NULL
-        && (strcmp(symbol, "cuCoredumpDeregisterCompleteCallback") == 0
-         || strcmp(symbol, "cuCoredumpDeregisterStartCallback") == 0
-         || strcmp(symbol, "cuCoredumpRegisterCompleteCallback") == 0
-         || strcmp(symbol, "cuCoredumpRegisterStartCallback") == 0)) {
+    /* Prefix-match the entire cuCoredump* family. cudarc 0.19.4 also
+     * looks up cuCoredumpGetAttribute, cuCoredumpSetAttributeGlobal,
+     * etc., all removed from libcuda 13.x. Returning the same no-op
+     * stub for all is safe because none of them are invoked unless
+     * the application explicitly registers a coredump callback first
+     * (and zen-metrics doesn't). */
+    if (symbol != NULL && strncmp(symbol, "cuCoredump", 10) == 0) {
         return (void *)cu_coredump_callback_noop;
     }
     return real_dlsym(handle, symbol);
