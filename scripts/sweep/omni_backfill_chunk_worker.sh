@@ -25,8 +25,14 @@
 #   R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY
 #
 # CLI flags (most also accept env-var alternatives in shouty case):
-#   --metrics m1,m2,...    comma-list (default: zensim,ssim2-gpu,
+#   --metrics m1,m2,...    comma-list (default: zensim-gpu,ssim2-gpu,
 #                          butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu)
+#                          NOTE: zensim is the CPU variant which is
+#                          disabled in the production sweep binary
+#                          (built without `cpu-metrics`). zensim-gpu
+#                          gives the same score column; the 300-feat
+#                          extended vector requires CPU zensim and
+#                          would need a binary rebuild.
 #   --gpu-runtime cuda     (default; CPU fallback blocked at the trap
 #                          level — see run_with_error_trap.sh)
 #   --parallel N           cells/group concurrency (default 0 = rayon
@@ -39,7 +45,7 @@
 
 set -euo pipefail
 
-METRICS="${METRICS:-zensim,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu}"
+METRICS="${METRICS:-zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu}"
 GPU_RUNTIME="${GPU_RUNTIME:-cuda}"
 PARALLEL="${PARALLEL:-0}"
 WORK_DIR="${WORK_DIR:-}"
@@ -287,12 +293,24 @@ if [[ "$SKIP_UPLOAD" == "1" ]]; then
     exit 0
 fi
 
-echo "$LOG uploading encoded variants → $OUT_ENCODED_PREFIX" >&2
-( cd "$WORK_DIR/encoded" && R2 cp --concurrency 8 '*' "$OUT_ENCODED_PREFIX" >&2 ) || {
-    echo "$LOG FAIL: encoded upload"; exit 5
-}
-
+# Upload the sidecar FIRST — it's the primary artifact. Encoded
+# variants are bonus output; failing their upload must not strand
+# the sidecar.
 echo "$LOG uploading sidecar → $OUT_SIDECAR_R2" >&2
 R2 cp "$WORK_DIR/$CHUNK_ID.omni.parquet" "$OUT_SIDECAR_R2" >&2
+
+# Encoded variants: tolerate empty directory (--distorted-out-dir
+# only writes when paired with --pairs-tsv, which the worker doesn't
+# pass — so the dir is usually empty in the current pipeline). Use
+# `find` to gate the s5cmd call; never let an empty upload fail the
+# whole chunk.
+ENC_FILES=$(find "$WORK_DIR/encoded" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l)
+if (( ENC_FILES > 0 )); then
+    echo "$LOG uploading $ENC_FILES encoded variants → $OUT_ENCODED_PREFIX" >&2
+    ( cd "$WORK_DIR/encoded" && R2 cp --concurrency 8 '*' "$OUT_ENCODED_PREFIX" >&2 ) || \
+        echo "$LOG WARN: encoded upload failed (continuing)" >&2
+else
+    echo "$LOG no encoded variants to upload (skipping)" >&2
+fi
 
 echo "$LOG done." >&2
