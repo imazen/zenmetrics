@@ -120,7 +120,15 @@ if [[ -f "$UNIFIED_WORKER" ]]; then
 fi
 
 # ── pick the cheapest viable offer ──────────────────────────────────
-QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_vers>=12.5 dlperf>=12 num_gpus=1"
+# driver_version<570: avoid hosts running CUDA 13.x drivers where
+# the `cuCoredumpDeregisterCompleteCallback` symbol cudarc-0.19.4
+# expects has been removed. Observed dlsym panic on driver 580.142
+# (instance 37035295, Oklahoma): every cubecl device init kills the
+# dispatcher thread → all subsequent GPU metric scoring fails with
+# RecvError → zero sidecars produced. Filtering to driver <570
+# keeps us on CUDA 12.6-era hosts where the symbol still exists.
+# cuda_vers>=12.5 stays so we also exclude very-old CUDA <12.5.
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_vers>=12.5 driver_version<575.0.0 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \
