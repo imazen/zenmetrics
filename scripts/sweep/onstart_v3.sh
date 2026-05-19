@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# DEPRECATED — DO NOT USE FOR NEW WORK.
+# See scripts/sweep/README.md "File map" for the current happy path.
+# This file is retained for compatibility with in-flight backfill runs
+# and historical references in CHANGELOG.md / docs/. Slated for
+# deletion per task #69 (P5d).
+#
 # v3 onstart: zero apt-get. Static binaries only.
 #
 # Replaces awscli + jq + vulkan with:

@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# DEPRECATED — DO NOT USE FOR NEW WORK.
+# See scripts/sweep/README.md "File map" for the current happy path.
+# This file is retained for compatibility with in-flight backfill runs
+# and historical references in CHANGELOG.md / docs/. Slated for
+# deletion per task #69 (P5d).
+#
 # v2 onstart for vast.ai zen-metrics sweep workers.
 #
 # Improvements over vastai_zen_metrics_sweep.sh:
