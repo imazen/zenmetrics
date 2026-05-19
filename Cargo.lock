@@ -2441,8 +2441,8 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder"
-version = "0.3.1"
-source = "git+https://github.com/imazen/jxl-encoder?rev=cb5d9e4#cb5d9e4a509a3635bb870e3fd7630eee7f6a8e7b"
+version = "0.3.2"
+source = "git+https://github.com/imazen/jxl-encoder?rev=6b8eefc1563f2bac540ee0be1e1f87c3b14931ed#6b8eefc1563f2bac540ee0be1e1f87c3b14931ed"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2463,10 +2463,11 @@ dependencies = [
 
 [[package]]
 name = "jxl-encoder-simd"
-version = "0.3.1"
-source = "git+https://github.com/imazen/jxl-encoder?rev=cb5d9e4#cb5d9e4a509a3635bb870e3fd7630eee7f6a8e7b"
+version = "0.3.2"
+source = "git+https://github.com/imazen/jxl-encoder?rev=6b8eefc1563f2bac540ee0be1e1f87c3b14931ed#6b8eefc1563f2bac540ee0be1e1f87c3b14931ed"
 dependencies = [
  "archmage",
+ "libm",
  "magetypes",
 ]
 
@@ -5909,8 +5910,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c771e952ca4acc3a45944f8be12dfbf3c96fbf06baa03a585b56158c6284306"
+source = "git+https://github.com/imazen/zenjxl?rev=9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4#9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4"
 dependencies = [
  "enough",
  "imgref",

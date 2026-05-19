@@ -83,6 +83,13 @@ codegen-units = 1
 # ~17% rate observed in v08/v09/v11. Drop this patch once 0.3.2
 # publishes. Same patch applies transitively to zenjxl, which
 # pulls jxl-encoder via Cargo.toml.
+#
+# 2026-05-18 (EXP-MULTI-CODEC): bumped from cb5d9e4 → 6b8eefc1 to
+# pick up W44-1..W44-45 bench-driven RD changes on main. User
+# explicitly requested "latest main jxlencoder which has a
+# different rd than stored data" so the multi-codec sweep
+# re-collects with the post-W44 RD curves rather than reusing
+# the pre-W44 cached sidecars.
 [patch.crates-io]
 # Local worktree of feat/principled-activity (HEAD = e16d541a as of
 # 2026-05-17) to avoid needing a published zenpredict for the git-rev
@@ -94,7 +101,19 @@ codegen-units = 1
 # AND after zensim's Cargo.toml has a git-ref zenpredict dep):
 #   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
 zensim = { path = "../zensim--principled-activity/zensim" }
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "cb5d9e4" }
+jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "6b8eefc1563f2bac540ee0be1e1f87c3b14931ed" }
+# 2026-05-18 (EXP-MULTI-CODEC): zenjxl 0.2.1 on crates.io was written
+# against jxl-encoder 0.3.1 — bumping the jxl-encoder pin above to
+# 6b8eefc1 (post-W12-4 a1-audit) adds `premultiplied_alpha` to
+# `AnimationParams` and expands `AnimationFrame` with 6 new fields
+# (blend_mode, blend_source, save_as_reference, reference_only, name,
+# timecode — jxl-encoder commit d0e47838). The wrapper's struct
+# literals stopped compiling. Patched at imazen/zenjxl#main
+# (commit 9ac0cd5a) where the two struct literals were switched to
+# `AnimationParams::default()` + `AnimationFrame::new(...)` so the
+# default field values follow upstream as the API evolves. Drop
+# once zenjxl 0.2.2 ships with the same fix.
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
 # fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks
 # `create_from_slice_pinned` + default-path pinned-staging routing onto

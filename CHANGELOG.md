@@ -17,6 +17,77 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### sweep infra v18 — 2026-05-18 (`infra(sweep): widen cuda_dlsym_stub + bump jxl-encoder`)
+
+- **`scripts/sweep/cuda_dlsym_stub.c` widened from 1 → 4 intercepts**
+  (commit pending on master). Now stubs the full
+  `cuCoredump{Register,Deregister}{Start,Complete}Callback` family,
+  not just the Complete-Deregister symbol that v17 (`4831093`) caught.
+  Surfaced 2026-05-18 in an EXP-MULTI-CODEC smoke on driver 580.x:
+  cubecl-cuda's static lookup of `cuCoredumpDeregisterStartCallback`
+  panicked even with v17's shim live, killing the device dispatcher.
+  v18 fixes the immediate cause.
+- **`Cargo.toml` jxl-encoder pin bumped `cb5d9e4` → `6b8eefc1`**
+  (commit pending). Pulls in W44-1..W44-45 RD-affecting commits on
+  jxl-encoder main since the Feb-2026 security release: gaborish
+  ordering / global_scale / EPF sharpness / animation-path patches +
+  CfL / butteraugli-loop / patches default-on. The multi-codec sweep
+  re-collects training data against the encoder we actually ship; the
+  pre-W44 cached sidecars are stale.
+- **`Cargo.toml [patch.crates-io] zenjxl = path-patch to local
+  `../zenjxl`** (commit pending). zenjxl 0.2.1 on crates.io was
+  written against jxl-encoder 0.3.1 — bumping the pin above to
+  6b8eefc1 adds `premultiplied_alpha` to `AnimationParams` and 6 new
+  fields (`blend_mode`, `blend_source`, `save_as_reference`,
+  `reference_only`, `name`, `timecode`) to `AnimationFrame` per
+  jxl-encoder commits `f3b042f7` (alpha) and `d0e47838` (frame-header
+  API expansion). zenjxl's struct literals stopped compiling. The
+  local zenjxl path-patch switches the two literals to
+  `AnimationParams::default()` and `AnimationFrame::new(...)` so the
+  optional fields follow upstream as the API evolves. Drop once
+  zenjxl 0.2.2 ships with the same fix.
+- **New `Dockerfile.sweep.v18`** (commit pending). Inherits from
+  `ghcr.io/imazen/zen-metrics-sweep:v17`, overlays:
+  - the widened `cuda_dlsym_stub.so` (rebuilt from the patched C
+    source with a 4-symbol verification step in the same RUN), and
+  - a fresh `/usr/local/bin/zen-metrics` baked from the jxl-encoder
+    6b8eefc1 build (multi-codec smoke verifies `zenjpeg / zenwebp /
+    zenavif / zenjxl` all appear in `sweep --help`).
+  Built + pushed to GHCR as
+  `ghcr.io/imazen/zen-metrics-sweep:v18-f4d28e9` and `:v18`
+  (sha256:e7043763e8934ae5).
+- **Binary on R2**:
+  `s3://coefficient/binaries/zen-metrics-0.6.0-multicodec-f4d28e9-linux-x86_64-gpu`
+  (97 MB, fastest-link feature set
+  `sweep,png,gpu,gpu-cuda`).
+- **Smoke verdict: partial pass / new failure mode discovered.**
+  - v18 stub successfully eliminates all `cuCoredump*` DlSym panics
+    that were the v17 blocker (smoke at instance 37049180 on driver
+    555.58.02 produced ZERO Coredump errors across 5 cells / 3
+    chunks).
+  - NEW DlSym panic surfaced one layer deeper: cudarc 0.19.4 (compiled
+    with the `cuda-13000` feature) calls
+    `cuCtxGetDevice_v2` at runtime. Driver 555.58.02 (CUDA 12-era)
+    doesn't export that v2 symbol — `cuCtxGetDevice` (v1) is the
+    available one. v18's stub returns `RTLD_NEXT/dlsym` for anything
+    not in the Coredump set, so the v2 lookup fails and the dispatcher
+    panics with `Expected symbol in library: cuCtxGetDevice_v2`.
+    Worker logs at
+    `s3://coefficient/jobs/multi-codec-smoke-v18-2026-05-18/worker-logs/37049180-failure.log`.
+  - This is NOT a v18 regression — the cuCtxGetDevice_v2 symbol issue
+    has always been there, but was previously masked by the Coredump
+    panic landing first. Fixing it cleanly requires either (a) bumping
+    cudarc past 0.19.4 (which dropped the CUDA-13-feature gate on
+    several v2 symbols), or (b) extending the shim to redirect
+    `cuCtxGetDevice_v2` lookups to `cuCtxGetDevice` (semantic
+    redirect, not a no-op — the v2 signature is identical to v1 per
+    cudarc's binding). Option (b) is ~10 lines but crosses the smoke
+    budget's >20-line non-trivial-fix gate (more v2 symbols may also
+    need redirection — cudarc's CUDA-13 feature set is ~80 symbols),
+    so it's deferred for user direction.
+
+### zensim-gpu — 2026-05-18 (`feat/zensim-weights-and-handles`)
+
 ### zensim-gpu — 2026-05-18 (`feat/zensim-weights-and-handles`)
 
 - **`zensim-gpu` — canonical default weights baked in** (commit pending,

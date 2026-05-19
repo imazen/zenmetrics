@@ -1,7 +1,17 @@
 /*
  * cuda_dlsym_stub.c — LD_PRELOAD shim that stubs out cudarc 0.19.4's
- * lookup of `cuCoredumpDeregisterCompleteCallback`, removed from
+ * lookup of CUDA coredump-callback symbols that were removed from
  * libcuda.so in CUDA 13.x driver releases.
+ *
+ * Symbols intercepted (all return a no-op function pointer):
+ *   - cuCoredumpDeregisterCompleteCallback  (observed on driver 580.142)
+ *   - cuCoredumpDeregisterStartCallback     (observed on driver 580.x
+ *                                            during EXP-MULTI-CODEC
+ *                                            smoke 2026-05-18; the
+ *                                            first stub revision only
+ *                                            handled the Complete
+ *                                            variant, leaving the
+ *                                            Start variant uncovered.)
  *
  * Without this shim, every cubecl-cuda device init panics with
  *   "Expected symbol in library: DlSym { source: ... }"
@@ -10,13 +20,13 @@
  * 580.142 (instance 37035295) and 570.x (instance 37041995); fix
  * unblocks the entire vast.ai offer pool.
  *
- * Safety: cuCoredumpDeregisterCompleteCallback is for CUDA's
- * coredump-completion-callback teardown — only invoked during
- * process shutdown if the application has registered a coredump
- * callback (cuCoredumpRegisterCompleteCallback). zen-metrics never
- * does. A no-op stub is therefore safe: cudarc's static lookup
- * succeeds, the dispatcher stays alive, and the function pointer
- * is never actually called at runtime.
+ * Safety: the Register/Deregister Start/Complete callbacks are part
+ * of CUDA's coredump-callback teardown API — only invoked during
+ * process shutdown if the application has registered a callback
+ * (cuCoredumpRegisterStartCallback / cuCoredumpRegisterCompleteCallback).
+ * zen-metrics never does. No-op stubs are therefore safe: cudarc's
+ * static lookup succeeds, the dispatcher stays alive, and the
+ * function pointers are never actually called at runtime.
  *
  * Build:
  *   gcc -shared -fPIC -O2 -o /usr/local/lib/cuda_dlsym_stub.so \
@@ -29,7 +39,7 @@
 #include <dlfcn.h>
 #include <string.h>
 
-static void cu_coredump_deregister_complete_callback_stub(void) {
+static void cu_coredump_callback_noop(void) {
     /* CUDA coredump callback teardown — no-op. Returning silently
      * is the documented behavior when no callback was registered. */
 }
@@ -47,8 +57,11 @@ void *dlsym(void *handle, const char *symbol) {
         real_dlsym = (dlsym_fn)dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
     }
     if (symbol != NULL
-        && strcmp(symbol, "cuCoredumpDeregisterCompleteCallback") == 0) {
-        return (void *)cu_coredump_deregister_complete_callback_stub;
+        && (strcmp(symbol, "cuCoredumpDeregisterCompleteCallback") == 0
+         || strcmp(symbol, "cuCoredumpDeregisterStartCallback") == 0
+         || strcmp(symbol, "cuCoredumpRegisterCompleteCallback") == 0
+         || strcmp(symbol, "cuCoredumpRegisterStartCallback") == 0)) {
+        return (void *)cu_coredump_callback_noop;
     }
     return real_dlsym(handle, symbol);
 }
