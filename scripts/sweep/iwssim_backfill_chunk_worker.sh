@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-#
-# DEPRECATED: use scripts/sweep/metric_backfill_chunk_worker.sh --metric iwssim
-# instead. This file is retained for in-flight runners that already pulled
-# it via SWEEP_BIN_OVERRIDE; new launches should call the unified worker.
-# Slated for removal once feat/sweep-infra-unified has been the default
-# for one full backfill cycle.
-#
 # iwssim_backfill_chunk_worker.sh — process one chunk of the
 # iwssim-backfill fleet (V_22-mix retrain dependency).
 #
