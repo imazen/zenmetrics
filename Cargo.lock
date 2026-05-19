@@ -2569,7 +2569,6 @@ dependencies = [
 [[package]]
 name = "jxl-encoder"
 version = "0.3.2"
-source = "git+https://github.com/imazen/jxl-encoder?rev=6b8eefc1563f2bac540ee0be1e1f87c3b14931ed#6b8eefc1563f2bac540ee0be1e1f87c3b14931ed"
 dependencies = [
  "archmage",
  "butteraugli",
@@ -2591,7 +2590,6 @@ dependencies = [
 [[package]]
 name = "jxl-encoder-simd"
 version = "0.3.2"
-source = "git+https://github.com/imazen/jxl-encoder?rev=6b8eefc1563f2bac540ee0be1e1f87c3b14931ed#6b8eefc1563f2bac540ee0be1e1f87c3b14931ed"
 dependencies = [
  "archmage",
  "libm",
@@ -6192,7 +6190,6 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.2.1"
-source = "git+https://github.com/imazen/zenjxl?rev=9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4#9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4"
 dependencies = [
  "enough",
  "imgref",
@@ -6301,8 +6298,6 @@ dependencies = [
 [[package]]
 name = "zenpng"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ef0ff0cfac28ce74a9241dbe8ba3abe60f385819d55675c4daced1ac8ac4bd"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -6310,6 +6305,7 @@ dependencies = [
  "enough",
  "imgref",
  "linear-srgb",
+ "magetypes",
  "memchr",
  "rgb",
  "safe_unaligned_simd",
@@ -6441,8 +6437,6 @@ dependencies = [
 [[package]]
 name = "zenwebp"
 version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "386cc47146909d4965c924f3dfdf9c8cdb60a21e913038510c37497fb343fe90"
 dependencies = [
  "archmage",
  "bytemuck",

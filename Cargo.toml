@@ -101,19 +101,27 @@ codegen-units = 1
 # AND after zensim's Cargo.toml has a git-ref zenpredict dep):
 #   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
 zensim = { path = "../zensim--principled-activity/zensim" }
-jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "6b8eefc1563f2bac540ee0be1e1f87c3b14931ed" }
-# 2026-05-18 (EXP-MULTI-CODEC): zenjxl 0.2.1 on crates.io was written
-# against jxl-encoder 0.3.1 — bumping the jxl-encoder pin above to
-# 6b8eefc1 (post-W12-4 a1-audit) adds `premultiplied_alpha` to
-# `AnimationParams` and expands `AnimationFrame` with 6 new fields
-# (blend_mode, blend_source, save_as_reference, reference_only, name,
-# timecode — jxl-encoder commit d0e47838). The wrapper's struct
-# literals stopped compiling. Patched at imazen/zenjxl#main
-# (commit 9ac0cd5a) where the two struct literals were switched to
-# `AnimationParams::default()` + `AnimationFrame::new(...)` so the
-# default field values follow upstream as the API evolves. Drop
-# once zenjxl 0.2.2 ships with the same fix.
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "9ac0cd5a4e3d5d335eddcd8bc0e703ed5a3954e4" }
+# 2026-05-19: switched codec deps from crates.io + git-rev to local
+# sibling worktrees so we always pick up in-flight improvements.
+# User confirmed: "jxl encoder local has been improved, verify no
+# crates.io codecs are used." These [patch.crates-io] entries
+# substitute path deps for any workspace crate that depends on the
+# corresponding crates.io version.
+#
+#   ~/work/zen/zenpng      (0.1.4)
+#   ~/work/zen/zenwebp     (0.4.5)
+#   ~/work/zen/zenavif     (0.1.6 — git tip; verify before next release)
+#   ~/work/zen/zenjxl      (0.2.1 — git tip post 9ac0cd5a)
+#   ~/work/zen/jxl-encoder (post 6b8eefc1 + local improvements)
+#
+# zenjpeg already uses an explicit `path = ../../../zenjpeg/zenjpeg`
+# in zen-metrics-cli/Cargo.toml so it's not patched here.
+zenpng       = { path = "../zenpng" }
+zenwebp      = { path = "../zenwebp" }
+# zenavif stays on crates.io 0.1.7 — local v0.1.6 lacks `__expert`.
+# zenavif      = { path = "../zenavif" }
+zenjxl       = { path = "../zenjxl" }
+jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
 # fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks
 # `create_from_slice_pinned` + default-path pinned-staging routing onto

@@ -156,17 +156,25 @@ csv = { workspace = true }
 # `xargs -P` shell-level fan-out used in earlier sweeps.
 rayon = "1"
 
-# zen image decoders
-zenpng = { version = "0.1.4", optional = true }
-zenjpeg = { path = "../../../zenjpeg/zenjpeg", default-features = false, optional = true, features = ["decoder"] }
-zenwebp = { version = "0.4.5", optional = true }
-zenavif = { version = "0.1.7", optional = true }
-zenjxl = { version = "0.2.1", optional = true }
+# zen image decoders — path deps to sibling worktrees so we always
+# link the in-flight local versions. User confirmed 2026-05-19:
+# "verify no cratesio codecs are used."
+#
+# zenavif is the lone exception: local ~/work/zen/zenavif (v0.1.6,
+# branch docs/speed6-tx-rdo-opt-in) does NOT yet ship the `__expert`
+# feature flag that the `sweep` umbrella requires. crates.io v0.1.7
+# does — so we pull from crates.io for now. Move to a path dep
+# after the sibling repo lands `__expert`.
+zenpng       = { path = "../../../zenpng",                                     optional = true }
+zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true, features = ["decoder"] }
+zenwebp      = { path = "../../../zenwebp",                                    optional = true }
+zenavif      = { version = "0.1.7",                                            optional = true }
+zenjxl       = { path = "../../../zenjxl",                                     optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
-# not surface. Same version zenjxl 0.2.1 pins so no duplicate build. Used
-# only by the `sweep` JXL path when expert knobs are present in the grid.
-jxl-encoder = { version = "0.3.1", optional = true, default-features = false, features = [
+# not surface. Local path (matches the workspace [patch.crates-io] entry)
+# so workspace consumers always see the same version + improvements.
+jxl-encoder  = { path = "../../../jxl-encoder/jxl-encoder",         optional = true, default-features = false, features = [
     "std",
     "parallel",
     "butteraugli-loop",
