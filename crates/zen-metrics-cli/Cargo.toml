@@ -14,6 +14,22 @@ publish = false
 name = "zen-metrics"
 path = "src/main.rs"
 
+# Library target: re-exports `sweep::*` + `metrics::*` so the fleet
+# worker (and any future in-process scorer) can call run_sweep without
+# spawning a subprocess. The bin and lib share src/ — main.rs is the
+# CLI entry point, lib.rs re-exports the module tree for library use.
+#
+# Why bother:
+#   - The bash worker calls `zen-metrics sweep` ~30 times per chunk
+#     (one per knob_tuple). Each subprocess re-initialises cubecl
+#     (~3-5s). On a typical chunk that's 90-150s of pure overhead.
+#   - Linking the same code as a library into vastai-fleet's
+#     worker subcommand means one cubecl init *per worker process*
+#     (not per group, not per chunk). 30× fewer inits.
+[lib]
+name = "zen_metrics_cli"
+path = "src/lib.rs"
+
 [features]
 # Defaults are CPU-only with the zen decoders available on crates.io that
 # build cleanly against the latest archmage / magetypes. JPEG is omitted
