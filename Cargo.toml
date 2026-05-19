@@ -118,8 +118,11 @@ zensim = { path = "../zensim--principled-activity/zensim" }
 # in zen-metrics-cli/Cargo.toml so it's not patched here.
 zenpng       = { path = "../zenpng" }
 zenwebp      = { path = "../zenwebp" }
-# zenavif stays on crates.io 0.1.7 — local v0.1.6 lacks `__expert`.
-# zenavif      = { path = "../zenavif" }
+# zenavif: pointed at ~/work/zen/zenavif--main, a worktree of the
+# zenavif main branch (HEAD 37a529e). The default zenavif checkout
+# at ../zenavif is on docs/speed6-tx-rdo-opt-in which removed
+# `pub mod expert` + `__expert` feature. main retains both.
+zenavif      = { path = "../zenavif--main" }
 zenjxl       = { path = "../zenjxl" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer

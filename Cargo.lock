@@ -6077,8 +6077,6 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5348811a51ff8f59c15e69acd6513783564eb188fdc60f44bbe88bafcb120afa"
 dependencies = [
  "almost-enough",
  "archmage",
