@@ -56,14 +56,40 @@ void *dlsym(void *handle, const char *symbol) {
     if (!real_dlsym) {
         real_dlsym = (dlsym_fn)dlvsym(RTLD_NEXT, "dlsym", "GLIBC_2.2.5");
     }
-    /* Prefix-match the entire cuCoredump* family. cudarc 0.19.4 also
-     * looks up cuCoredumpGetAttribute, cuCoredumpSetAttributeGlobal,
-     * etc., all removed from libcuda 13.x. Returning the same no-op
-     * stub for all is safe because none of them are invoked unless
-     * the application explicitly registers a coredump callback first
-     * (and zen-metrics doesn't). */
-    if (symbol != NULL && strncmp(symbol, "cuCoredump", 10) == 0) {
+    if (symbol == NULL) {
+        return real_dlsym(handle, symbol);
+    }
+
+    /* Path 1: cuCoredump* family — never invoked unless the app
+     * registers a coredump callback first (zen-metrics doesn't).
+     * Safe no-op stub. */
+    if (strncmp(symbol, "cuCoredump", 10) == 0) {
         return (void *)cu_coredump_callback_noop;
     }
+
+    /* Path 2: _v2-suffix fallback. cudarc 0.19.4 statically requests
+     * `cuCtxGetDevice_v2` / `cuFuncSetCacheConfig_v2` / etc. — the
+     * versioned aliases that newer CUDA drivers consolidate into the
+     * un-suffixed name. If the requested `_v2` symbol is missing,
+     * try the non-suffixed variant and return that. This keeps the
+     * binary running against modern libcuda releases without code
+     * changes in cudarc.
+     *
+     * Note: only kicks in WHEN the v2 lookup returns NULL. Drivers
+     * that DO export the _v2 alias get the real pointer. */
+    size_t slen = strlen(symbol);
+    if (slen > 3 && strcmp(symbol + slen - 3, "_v2") == 0) {
+        void *p = real_dlsym(handle, symbol);
+        if (p != NULL) return p;
+        /* Strip the _v2 suffix and retry. */
+        char fallback[256];
+        size_t base_len = slen - 3;
+        if (base_len < sizeof(fallback)) {
+            memcpy(fallback, symbol, base_len);
+            fallback[base_len] = '\0';
+            return real_dlsym(handle, fallback);
+        }
+    }
+
     return real_dlsym(handle, symbol);
 }
