@@ -1,0 +1,98 @@
+# Dockerfile.sweep.v21 — multi-codec sweep image with cudarc fully locked
+# to the CUDA 12.0 binding surface, layered on top of v20's universal
+# cu* dlsym fallback.
+#
+# v21 = v20 base PLUS a binary rebuild with CUDARC_CUDA_VERSION=12000.
+#
+# Defense-in-depth pairing:
+#
+#   - v20 (commit c7af4dae) ships a universal LD_PRELOAD shim that
+#     returns a no-op stub for any missing cu* symbol. Defends against
+#     panic at runtime if a CUDA-13 driver builds a new cu* symbol cudarc
+#     references statically.
+#
+#   - v21 ships a binary that compiles in only the CUDA 12.0 cudarc
+#     binding surface — no _v2 symbols above the cuda-12000 gate end up
+#     in the binary at all. Defends against the panic at compile time
+#     by never asking for a missing symbol.
+#
+#   The two are complementary. v21 catches everything in a clean way at
+#   the binary, v20's stub is still loaded as a belt-and-suspenders for
+#   any future panic that slips past the binary check.
+#
+# Background — what was incomplete in v19:
+#
+#   v19 set CUDARC_CUDA_VERSION=12090 to drop the v13-only symbols
+#   (cuCtxGetDevice_v2, cuCoredump{Register,Deregister}{Start,Complete}Callback).
+#   That fixed the immediate cuCtxGetDevice_v2 panic that the 2026-05-18
+#   smoke on driver 555 surfaced. But the next smoke run on driver
+#   560.35.03 surfaced a third panic family: cuEventElapsedTime_v2.
+#
+#   cudarc 0.19.4's eager static loader (Lib::new at runtime) tries to
+#   dlsym every symbol that's compiled in. cuEventElapsedTime_v2 is
+#   gated `cuda-12080` in cudarc, so the 12090 surface still pulls it
+#   in. The driver 560 box (CUDA 12.6 era) doesn't export the v2
+#   variant — it only has the v1 cuEventElapsedTime. Static load
+#   panicked, and the chain repeats.
+#
+#   Root cause: any time cudarc declares a "_v2" symbol behind a cuda
+#   feature, the static loader will try to resolve it at runtime. Old
+#   drivers won't have it, and the panic cascade continues until we
+#   either (a) drop the feature flag to a version low enough that no
+#   such symbol exists, or (b) get rid of the eager loader entirely
+#   (which is what cudarc 0.19.7 does — per-function lazy dlsym).
+#
+# How v21 picks (a):
+#
+#   `CUDARC_CUDA_VERSION=12000` is the smallest CUDA 12 binding cudarc
+#   supports. At this level, the static Lib struct only has _v2 symbols
+#   that landed in CUDA 12.0 or earlier (cuGetProcAddress_v2,
+#   cuGraph*KernelNode_v2, the cuMem*_v2 family, cuStream*Value_v2,
+#   etc.). All of these are present in NVIDIA drivers from 525.x
+#   onward (when the CUDA 12 ABI shipped), so the static load succeeds
+#   on every box in our `driver_version>=525.0.0` filter.
+#
+#   Sanity: a list of _v2 symbols still compiled in (76 total) was
+#   audited against driver 525 (CUDA 12.0 release notes); every one
+#   ships in libcuda.so.1 from 525.85.05 onward.
+#
+# Build:
+#
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+#       --no-default-features \
+#       --features 'sweep,png,gpu,gpu-cuda'
+#   cp target/release/zen-metrics ./zen-metrics-v21
+#
+#   docker build -f Dockerfile.sweep.v21 \
+#       --build-arg V20_TAG=v20 \
+#       --build-arg ZEN_METRICS_BINARY=./zen-metrics-v21 \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v21-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v21 \
+#       .
+
+ARG V20_TAG=v20
+FROM ghcr.io/imazen/zen-metrics-sweep:${V20_TAG}
+
+# ── L9: replace the zen-metrics binary with a CUDA-12.0-bound build ──
+ARG ZEN_METRICS_BINARY=./zen-metrics-v21
+COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
+
+# Sanity: the binary must NOT reference any of the four known panic-
+# triggering _v2 symbols. Each grep is a hard gate.
+RUN /usr/local/bin/zen-metrics --version \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q zensim \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenwebp \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenavif \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjxl \
+    && for sym in cuCtxGetDevice_v2 cuEventElapsedTime_v2 cuCoredumpDeregisterStartCallback cuCoredumpDeregisterCompleteCallback ; do \
+        if strings /usr/local/bin/zen-metrics 2>/dev/null | grep -q "^${sym}$"; then \
+            echo "v21: ${sym} still referenced -- cudarc bind override didn't take effect" >&2 ; \
+            exit 1 ; \
+        fi ; \
+    done \
+    && echo "v21 zen-metrics multi-codec smoke + cudarc-bind check passed"
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v21: v20 + cudarc 0.19.4 forced onto CUDA 12.0 binding surface — eliminates cuEventElapsedTime_v2 panic on driver 560 in addition to v19's cuCtxGetDevice_v2 fix; pairs with v20's universal cu* dlsym fallback as belt-and-suspenders)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"

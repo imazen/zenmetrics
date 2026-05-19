@@ -17,6 +17,88 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### sweep infra v21 — 2026-05-19 (`infra(sweep): drop cudarc to CUDA-12.0 binding to evict cuEventElapsedTime_v2`)
+
+Layers a CUDA-12.0-bound zen-metrics binary on top of v20's universal
+cu* dlsym fallback (commit `c7af4dae`). The two fixes are complementary:
+
+- v20's universal stub catches *runtime* misses on any cu* symbol cudarc
+  statically references but the driver doesn't ship. Tolerates any new
+  CUDA-N-only symbol cudarc starts dlsym'ing without rebuild.
+- v21's binary eliminates the *compile-time* references to CUDA-13-only
+  and CUDA-12.8+ _v2 symbols, so the runtime stub never needs to fire
+  for those families. Restores clean stack traces if cubecl ever DOES
+  call a v2 we hadn't anticipated (the stub would silently no-op,
+  hiding the real bug).
+
+Concrete trigger that drove the v21 layer:
+
+The v19 smoke (instance 37050972 → first try 37050280) showed the
+problem repeats one layer deeper. With CUDARC_CUDA_VERSION=12090 the
+v2 symbols from cuda-13000 (cuCtxGetDevice_v2 + cuCoredump*) were
+indeed evicted, but cudarc's `cuda-12080` gate ALSO pulls in
+`cuEventElapsedTime_v2`, which driver 560.35.03 (CUDA 12.6 era) doesn't
+export. cudarc 0.19.4's eager `Lib::new` loader dlsyms it at startup
+and panics.
+
+This is structurally the same bug as v19 — cudarc 0.19.4 declares any
+`_v2` symbol gated `cuda-XXXXX`, then the eager loader resolves it at
+startup. Older drivers won't have it. The CUDA version selection is
+load-bearing: it must be low enough that no symbol gated above the
+minimum driver release is compiled in.
+
+- **`CUDARC_CUDA_VERSION=12000`** drops the binding to CUDA 12.0,
+  the lowest CUDA 12 binding cudarc supports. Only `_v2` symbols
+  that exist in CUDA 12.0 (and earlier) are compiled, and every one
+  of those is present in NVIDIA drivers from 525.x onward (the
+  CUDA-12 ABI cut-in). Audit: 76 `_v2` symbols still in the binary,
+  all from CUDA 4-11 era + a handful gated `cuda-12000` (the
+  `cuGraph*KernelNode_v2` family and `cuGetProcAddress_v2`); all
+  ship in libcuda.so.1 525.85.05+.
+- **`Dockerfile.sweep.v21`** (commit pending). Inherits from `v20`
+  base, overlays a fresh `zen-metrics` binary built with
+  `CUDARC_CUDA_VERSION=12000`. Build sanity expanded vs v19 — checks
+  for cuCtxGetDevice_v2 + cuEventElapsedTime_v2 +
+  cuCoredumpDeregister{Start,Complete}Callback in the binary's
+  string table; any positive match fails the build.
+  Image: `ghcr.io/imazen/zen-metrics-sweep:v21-c7af4da` / `:v21`
+  (sha256:d3af6316c12ec637bb94485a619cb8c118e0b569ea45b39bebe9f20fa4e668c2).
+  Earlier `:v20-cuda12000-6e3b0d9` retag of the same binary (built
+  before c7af4dae landed) preserved for archival reference but
+  superseded by v21 which sits on the universal-stub base.
+- Driver filter stays `driver_version>=525.0.0` from v19.
+- The LD_PRELOAD `cuda_dlsym_stub.so` universal cu* fallback (v20)
+  stays in the image as defense-in-depth for any future cu* symbol
+  cudarc adds that v21's strings check doesn't yet cover.
+- **Smoke verdict (instance 37050972, v20-6e3b0d9 image, driver
+  535.154.05, RTX 3060)**:
+  - Zero `cuCtxGetDevice_v2` / `cuEventElapsedTime_v2` / `cuCoredump*`
+    dlsym panics across all three chunks. The cudarc panic family is
+    confirmed eliminated. (`grep -E "cuCtxGetDevice|cuEventElapsedTime|cuCoredump|Expected symbol"`
+    on the container logs returned zero hits.)
+  - NEW error class surfaced: `CUDA_ERROR_UNSUPPORTED_PTX_VERSION`.
+    cubecl-cuda's runtime nvrtc generates PTX from the host CUDA
+    toolchain (13.2) which embeds PTX ISA above what driver 535's
+    libcuda can load. The fix is either to lift the floor to
+    driver >=555 (CUDA 12.5+) OR to bake a lower-PTX-version nvrtc
+    into the image. **Out of scope for this commit** — the cudarc
+    panic family is the deliverable; the PTX class is a separate
+    blocker the next session can take.
+  - Cost: instance ran ~5 minutes at $0.0544/hr = $0.0045. Well
+    under the $1 cap.
+  - **Ready-to-fanout flag**: NO. The PTX class blocks all current
+    boxes with driver <555 from producing sidecars. Fix the floor
+    OR ship a CUDA-12-built nvrtc before fanning out.
+
+### sweep infra v20 — 2026-05-19 (`fix(cuda-shim): universal cu* dlsym fallback to no-op stub`) — landed on master 2026-05-19 by parallel agent
+
+Master commit `c7af4dae`. Drops the per-family allowlist (cuCoredump*)
+for a universal `cu*` cu-prefix fallback: any cu* symbol the real driver
+doesn't export gets a no-op stub returning CUDA_SUCCESS (0). Also adds
+a _v2-suffix retry path that first tries `cu*_v2`, then falls back to
+the unsuffixed `cu*`, before resorting to the universal no-op stub.
+Image: `ghcr.io/imazen/zen-metrics-sweep:v20` (sha256:8e92d1ec6e23…).
+
 ### sweep infra v19 — 2026-05-18 (`infra(sweep): bump cudarc past _v2 gate + restore driver_version filter`)
 
 Targets the SECOND DlSym panic family surfaced by the v18 EXP-MULTI-CODEC
