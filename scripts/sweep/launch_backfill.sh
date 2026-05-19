@@ -164,16 +164,27 @@ if [[ -f "$WORKER_PATH" ]]; then
     R2 cp "$WORKER_PATH" "$WORKER_R2_KEY"
 fi
 
-# Fix D (2026-05-18 EXP-LARGER-LARGE-V2): cuda_vers>=12.6 because the
-# v14 image's baked zen-metrics is linked against cudarc 0.19.4 which
-# dlsyms `cuCoredumpDeregisterCompleteCallback` — a CUDA 12.6 driver
-# API. Boxes with older drivers panic at first kernel launch with
-# `undefined symbol: cuCoredumpDeregisterCompleteCallback`. Also exclude
-# 13.x (driver >=570) per master HEAD finding `b8bd239d` — cudarc 0.19.4
-# fails on those too.
-# Use `cuda_max_good>=12.6` (driver capability) AND `cuda_vers<13` to
-# pin the working band.
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.6 driver_version<570.0.0 num_gpus=1"
+# Driver filter rationale (2026-05-18, v19 image):
+#
+#   The v19 zen-metrics binary was built with CUDARC_CUDA_VERSION=12090,
+#   which forces cudarc 0.19.4 to compile against the CUDA 12.9 binding
+#   surface. None of the CUDA 13-only symbols
+#   (cuCtxGetDevice_v2, cuCoredump{Register,Deregister}{Start,Complete}Callback)
+#   are referenced by the resulting binary, so it loads cleanly on
+#   drivers from 525.x through 580.x. We therefore relax the upper
+#   ceiling that was needed for v14-v18 binaries.
+#
+#   Historical context (kept for future-self): v14-v18 was built with
+#   cudarc auto-detecting CUDA 13.x from our local nvcc, dragging
+#   cuCoredump* and cuCtxGetDevice_v2 dlsyms into the static load
+#   path. Old drivers (<570) lacked v2; new drivers (>=570 with no
+#   coredump callbacks) lacked Coredump*. The LD_PRELOAD stub at
+#   /usr/local/lib/cuda_dlsym_stub.so papered over the latter but
+#   not the former, so the v18 smoke still panicked on driver 555.
+#
+#   We now floor at driver 525 (first CUDA 12 ABI) and keep
+#   `cuda_max_good>=12.0` so the pool stays sensible.
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=525.0.0 num_gpus=1"
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "

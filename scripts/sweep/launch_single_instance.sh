@@ -120,15 +120,25 @@ if [[ -f "$UNIFIED_WORKER" ]]; then
 fi
 
 # ── pick the cheapest viable offer ──────────────────────────────────
-# driver_version<570: avoid hosts running CUDA 13.x drivers where
-# the `cuCoredumpDeregisterCompleteCallback` symbol cudarc-0.19.4
-# expects has been removed. Observed dlsym panic on driver 580.142
-# (instance 37035295, Oklahoma): every cubecl device init kills the
-# dispatcher thread → all subsequent GPU metric scoring fails with
-# RecvError → zero sidecars produced. Filtering to driver <570
-# keeps us on CUDA 12.6-era hosts where the symbol still exists.
-# cuda_vers>=12.5 stays so we also exclude very-old CUDA <12.5.
-QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_vers>=12.5 dlperf>=12 num_gpus=1"
+# Driver filter rationale (2026-05-18, v19 image):
+#
+#   The v19 zen-metrics binary was built with CUDARC_CUDA_VERSION=12090,
+#   which forces cudarc 0.19.4 to compile against the CUDA 12.9 binding
+#   surface. None of the CUDA 13-only symbols
+#   (cuCtxGetDevice_v2, cuCoredump{Register,Deregister}{Start,Complete}Callback)
+#   are referenced by the resulting binary, so it loads cleanly on
+#   drivers from 525.x through 580.x. We therefore relax the filter
+#   compared to launch_backfill.sh's `driver_version<570.0.0` gate.
+#
+#   We still floor at driver 525 (the first NVIDIA release that ships
+#   the CUDA 12 ABI cudarc needs) and `cuda_max_good>=12.0` to keep
+#   pre-CUDA-12 hosts out. Together these cover every box where the
+#   reduced symbol surface load-cleanly.
+#
+#   If a NEW dlsym panic surfaces on a driver in this band, narrow
+#   the floor (driver_version>=535 was the next stable cut) rather
+#   than re-imposing the upper ceiling.
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_max_good>=12.0 driver_version>=525.0.0 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \

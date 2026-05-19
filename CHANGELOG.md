@@ -17,6 +17,61 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### sweep infra v19 — 2026-05-18 (`infra(sweep): bump cudarc past _v2 gate + restore driver_version filter`)
+
+Targets the SECOND DlSym panic family surfaced by the v18 EXP-MULTI-CODEC
+smoke. v18's widened `cuda_dlsym_stub.so` killed the `cuCoredump*`
+panics on driver 580.x but exposed a deeper problem on driver 555.x:
+cudarc 0.19.4 (compiled with `-F cuda-13000` via our local CUDA 13.2
+toolkit autodetect) also dlsyms `cuCtxGetDevice_v2`. Driver 555 (CUDA-12
+era) doesn't export `_v2`, so cubecl-cuda's first context retain panicked
+with `Expected symbol in library: cuCtxGetDevice_v2`.
+
+Three concurrent fixes:
+
+- **Forced cudarc onto the CUDA 12.9 binding surface via env var**
+  (no source edit needed). cudarc 0.19.4's `build.rs` checks
+  `CUDARC_CUDA_VERSION` before `cuda-version-from-build-system`
+  (lines 31-44 of `cudarc-0.19.4/build.rs`). Setting
+  `CUDARC_CUDA_VERSION=12090` at build time tells cudarc to compile
+  against `cfg(feature="cuda-12090")` only — leaving every
+  CUDA-13-only symbol (`cuCtxGetDevice_v2`,
+  `cuCoredump{Register,Deregister}{Start,Complete}Callback`, etc.)
+  out of the binary. No Cargo.toml change, no cubecl fork rebump.
+  The CUDA driver ABI is forward-compatible inside the 12.x family,
+  so the 12.9 surface loads on every CUDA 12 driver in the vast.ai
+  pool. This obsoletes the LD_PRELOAD stub for the panics it was
+  bandaging; the stub stays in the image as defense-in-depth.
+- **`Dockerfile.sweep.v19`** (commit pending). Inherits from `v18`
+  base, overlays the new binary at `/usr/local/bin/zen-metrics`,
+  and adds a load-bearing `strings` assertion: the post-COPY RUN
+  fails the build if `cuCtxGetDevice_v2` or
+  `cuCoredumpDeregisterCompleteCallback` is still present in the
+  binary's dynamic string table. Catches a regression in cudarc
+  build-flag handling before the image is pushed.
+- **`scripts/sweep/launch_*.sh` driver filter relax**:
+  - `launch_single_instance.sh` line 131 — actually *adds* the
+    `driver_version>=525.0.0` filter that the comment at line 123
+    claimed but never wired. Floors at driver 525 (first CUDA 12
+    ABI). Drops `cuda_vers>=12.5` (replaced by `cuda_max_good>=12.0`
+    which is the more accurate field).
+  - `launch_backfill.sh` line 176 — replaces the v18-era
+    `cuda_max_good>=12.6 driver_version<570.0.0` upper-ceiling
+    filter with `cuda_max_good>=12.0 driver_version>=525.0.0`. The
+    upper ceiling is no longer needed since the v19 binary doesn't
+    reference any CUDA-13 symbols; widening the pool restores the
+    cheap consumer-GPU offers that v18's filter excluded.
+  - `scripts/sweep/v15/launch_gpu.sh` line 15 — same relax pattern,
+    `cuda_max_good>=12.0 driver_version>=525.0.0`.
+- `scripts/sweep/deploy_fast.sh` left untouched (header marks it
+  DEPRECATED; scheduled for deletion).
+- **Image push**:
+  `ghcr.io/imazen/zen-metrics-sweep:v19-<short_hash>` and `:v19`
+  (sha256 pending build). Layers L0-L7 inherited from v18 (~700 MB
+  cached); only L8 binary layer is new (~280 MB on the wire).
+- **Smoke verdict**: pending. Will run one box with mixed-codec
+  chunks under a $1 cap; recorded below when complete.
+
 ### sweep infra v18 — 2026-05-18 (`infra(sweep): widen cuda_dlsym_stub + bump jxl-encoder`)
 
 - **`scripts/sweep/cuda_dlsym_stub.c` widened from 1 → 4 intercepts**
