@@ -188,7 +188,7 @@ while IFS=$'\t' read -r gid codec kj q_grid n_q n_bn; do
         --sources "$GD/sources"
         --q-grid "$q_grid"
         --output "$SWEEP_DIR/g${gid}.tsv"
-        --encoded-out-dir "$WORK_DIR/encoded"
+        --distorted-out-dir "$WORK_DIR/encoded"
         --gpu-runtime "$GPU_RUNTIME"
         --jobs "$PARALLEL" )
     if [[ "$kj" != "{}" && -n "$kj" ]]; then
