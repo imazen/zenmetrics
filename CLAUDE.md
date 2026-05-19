@@ -2,6 +2,22 @@
 
 See global ~/.claude/CLAUDE.md for general instructions.
 
+## Data provenance — READ BEFORE TRAINING
+
+**[`~/work/zen/DATA_PROVENANCE.md`](../DATA_PROVENANCE.md)** is the
+canonical record of which R2 sidecars came from which codec commits.
+Consult before training any picker / metric / regression on the
+backfilled data — codecs like `jxl-encoder` shift RD curves between
+commits, so mixing v22-produced and v23-produced JXL rows poisons the
+fit. The doc records:
+
+- R2 paths (input parquets, sidecars, encoded variants)
+- Codec HEAD commit SHAs per backfill image (v22 / v23)
+- Sidecar schema (column types + meanings)
+- Reading recipes (pyarrow + s3fs)
+
+Append a new section to that doc when you start a new backfill.
+
 ## PINNED TASK — CVVDP scoring on zensim training datasets
 
 **Status: queued, multi-tick. Survives context compaction.** Do not
