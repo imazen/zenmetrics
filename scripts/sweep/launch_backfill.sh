@@ -173,7 +173,7 @@ fi
 # fails on those too.
 # Use `cuda_max_good>=12.6` (driver capability) AND `cuda_vers<13` to
 # pin the working band.
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.6 cuda_vers<13.0 driver_version<570 num_gpus=1"
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.6 driver_version<570.0.0 num_gpus=1"
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "
