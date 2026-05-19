@@ -124,16 +124,24 @@ jq -r --arg src "$SOURCE_DIR_R2" '.image_basenames[] | "cp \($src)/\(.) \(.)"' <
     echo "$LOG FAIL: source sync"; exit 3
 }
 
-echo "$LOG step 3/5: slice + group" >&2
+echo "$LOG step 3/5: slice + group by (codec, knob_tuple_json)" >&2
+# Group by (codec, knob_tuple_json) — same encoder config, multiple q
+# values + multiple source images per group. The previous (codec, q,
+# knob_tuple_json) grouping spawned one zen-metrics-sweep invocation
+# per (q, knob), eating ~3-5s of cubecl-cuda init per call. For a
+# 200-row chunk with mostly-unique (q, knob) tuples that was ~200
+# inits × 4s ≈ 13 min of overhead per chunk before any real work.
+# Wider grouping lets each sweep call score many cells against one
+# warm cubecl device.
 python3 - "$WORK_DIR/$INPUT_PARQUET" "$ROW_START" "$ROW_END" \
         "$WORK_DIR/_groups.tsv" "$WORK_DIR/_keys.tsv" <<'PY'
-import sys, json
+import sys
 import pyarrow.parquet as pq
 p, rs, re_, out_groups, out_keys = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4], sys.argv[5]
 t = pq.read_table(p, columns=['image_path','codec','q','knob_tuple_json']).slice(rs, re_ - rs)
-# Group by (codec, q, knob_tuple_json) — same encoding for many images.
 from collections import defaultdict
-groups = defaultdict(list)
+# Each group: {(codec, knob_tuple_json) -> {'qs': set, 'basenames': set}}
+groups = defaultdict(lambda: {'qs': set(), 'basenames': set()})
 key_rows = []
 for i in range(t.num_rows):
     ip = t['image_path'][i].as_py()
@@ -141,17 +149,22 @@ for i in range(t.num_rows):
     qv = int(t['q'][i].as_py())
     kt = t['knob_tuple_json'][i].as_py()
     basename = ip.rsplit('/', 1)[-1]
-    groups[(cd, qv, kt)].append(basename)
+    key = (cd, kt)
+    groups[key]['qs'].add(qv)
+    groups[key]['basenames'].add(basename)
     key_rows.append((ip, cd, qv, kt, basename))
 with open(out_groups, 'w') as f:
-    f.write('gid\tcodec\tq\tknob_tuple_json\tn\n')
-    for gid, ((cd, qv, kt), bs) in enumerate(groups.items()):
-        f.write(f'{gid}\t{cd}\t{qv}\t{kt}\t{len(bs)}\n')
+    # q_grid is now a comma-list (e.g. '5,10,15,...'); each group covers
+    # the full q range it actually needs.
+    f.write('gid\tcodec\tknob_tuple_json\tq_grid\tn_q\tn_basenames\n')
+    for gid, ((cd, kt), v) in enumerate(groups.items()):
+        qs = sorted(v['qs'])
+        f.write(f'{gid}\t{cd}\t{kt}\t{",".join(str(q) for q in qs)}\t{len(qs)}\t{len(v["basenames"])}\n')
 with open(out_keys, 'w') as f:
     f.write('image_path\tcodec\tq\tknob_tuple_json\tbasename\n')
     for r in key_rows:
         f.write('\t'.join(str(x) for x in r) + '\n')
-print(f'{t.num_rows} rows, {len(groups)} groups', file=sys.stderr)
+print(f'{t.num_rows} rows, {len(groups)} groups (avg q/grp={sum(len(v["qs"]) for v in groups.values())/max(1,len(groups)):.1f}, avg images/grp={sum(len(v["basenames"]) for v in groups.values())/max(1,len(groups)):.1f})', file=sys.stderr)
 PY
 
 echo "$LOG step 4/5: sweep per group (multi-metric + encoded-out)" >&2
@@ -161,19 +174,19 @@ G_TOTAL=$(awk 'NR>1' "$WORK_DIR/_groups.tsv" | wc -l)
 G_IDX=0
 GROUPS_OK=0
 GROUPS_FAIL=0
-while IFS=$'\t' read -r gid codec q kj n; do
+while IFS=$'\t' read -r gid codec kj q_grid n_q n_bn; do
     [[ "$gid" == "gid" ]] && continue
     G_IDX=$((G_IDX + 1))
     GD="$WORK_DIR/g$gid"
     mkdir -p "$GD/sources"
-    awk -F'\t' -v c="$codec" -v qv="$q" -v k="$kj" 'NR>1 && $2==c && $3==qv && $4==k {print $5}' \
+    awk -F'\t' -v c="$codec" -v k="$kj" 'NR>1 && $2==c && $4==k {print $5}' \
         "$WORK_DIR/_keys.tsv" | sort -u | while read -r b; do
         ln -sf "$WORK_DIR/sources/$b" "$GD/sources/$b" 2>/dev/null || true
     done
     SWEEP_ARGS=( sweep
         --codec "$codec"
         --sources "$GD/sources"
-        --q-grid "$q"
+        --q-grid "$q_grid"
         --output "$SWEEP_DIR/g${gid}.tsv"
         --encoded-out-dir "$WORK_DIR/encoded"
         --gpu-runtime "$GPU_RUNTIME"
@@ -185,7 +198,7 @@ while IFS=$'\t' read -r gid codec q kj n; do
     IFS=',' read -ra MARR <<< "$METRICS"
     for m in "${MARR[@]}"; do SWEEP_ARGS+=( --metric "$m" ); done
 
-    echo "$LOG   group $G_IDX/$G_TOTAL  codec=$codec q=$q n=$n" >&2
+    echo "$LOG   group $G_IDX/$G_TOTAL  codec=$codec knobs=${kj:0:40} qs=$n_q imgs=$n_bn" >&2
     # Tolerate per-group failures. The omni design is "produce whatever
     # we can; the next backfill pass picks up the rest." A panic in
     # group g123 must not poison groups g0..g122's already-written
