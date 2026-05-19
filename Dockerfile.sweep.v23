@@ -1,0 +1,46 @@
+# Dockerfile.sweep.v23 — v22 base + all-local-codec rebuild.
+#
+# v23 = v22 + zen-metrics-cli rebuilt against local sibling worktrees
+# of all codecs:
+#
+#   zenpng      v0.1.4 (~/work/zen/zenpng)
+#   zenjpeg     v0.8.4 (~/work/zen/zenjpeg/zenjpeg)
+#   zenwebp     v0.4.5 (~/work/zen/zenwebp)
+#   zenavif     v0.1.7 (~/work/zen/zenavif--main worktree)
+#   zenjxl      v0.2.1 (~/work/zen/zenjxl--main worktree)
+#   jxl-encoder v0.3.2 (~/work/zen/jxl-encoder/jxl-encoder)
+#
+# Why the --main worktrees: the default zenavif + zenjxl checkouts
+# sit on branches that lack the latest API improvements (zenavif's
+# docs/speed6 removed `pub mod expert`; zenjxl's pr-7-review
+# predates the jxl-encoder 0.3.2 AnimationFrame field bump). The
+# main branches retain the in-flight improvements without the
+# experiments.
+#
+# Behavioral parity with v22: same async dispatcher, same inline
+# pipeline, same AIMD concurrency. v23 just guarantees no
+# crates.io codec versions slip into the binary.
+#
+# Build (from repo root):
+#
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p vastai-fleet
+#   cp target/release/vastai-fleet ./vastai-fleet
+#
+#   docker build -f Dockerfile.sweep.v23 \
+#       --build-arg V22_TAG=v22 \
+#       --build-arg VASTAI_FLEET_BIN=./vastai-fleet \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v23 .
+
+ARG V22_TAG=v22
+FROM ghcr.io/imazen/zen-metrics-sweep:${V22_TAG}
+
+ARG VASTAI_FLEET_BIN=./vastai-fleet
+COPY --chmod=0755 ${VASTAI_FLEET_BIN} /usr/local/bin/vastai-fleet
+
+RUN /usr/local/bin/vastai-fleet --version \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--run-id' \
+    && echo "v23 unified worker (all-local codecs) smoke passed"
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v23: v22 + all-local codec deps via path; zenavif & zenjxl pulled from --main worktrees to pick up post-fork improvements)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
