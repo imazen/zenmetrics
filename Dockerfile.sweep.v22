@@ -1,0 +1,71 @@
+# Dockerfile.sweep.v22 — Unified Rust worker on top of v21 base.
+#
+# v22 = v21 (CUDA-12.0-bound zen-metrics + universal cu* shim) PLUS a
+# rebuilt vastai-fleet binary that contains the unified async worker
+# (`vastai-fleet worker`). The worker handles:
+#
+#   - Chunks.jsonl fetch from R2
+#   - Token-race chunk claim with stale-claim recovery
+#   - Sidecar-exists idempotency gate
+#   - Adaptive per-box PARALLEL_CHUNKS (boot-time auto-detect from
+#     nproc + GPU VRAM; AIMD adjustment from nvidia-smi sampling)
+#   - In-process `run_sweep` via the zen-metrics-cli library facade —
+#     no subprocess fan-out, cubecl init pays ONCE per worker process
+#     instead of once per (codec, knob_tuple) group (~30x savings)
+#   - arrow-rs native parquet IO (no pyarrow / no python3 spawned)
+#   - Bounded async dispatch via tokio Semaphore
+#
+# Designed to deprecate the bash dispatch chain:
+#
+#   onstart_omni_backfill.sh     → vastai-fleet worker
+#   omni_backfill_chunk_worker.sh → (in-process)
+#   run_with_error_trap.sh        → still wraps for self-destroy on crash
+#
+# The bash worker binary stays in the image as a safety-net fallback;
+# `vastai-fleet worker` only falls through to it if the inline-sweep
+# pipeline returns an error. Production runs should never hit the
+# fallback — it's there for the rollout-week debugging window.
+#
+# Build (from repo root):
+#
+#   cargo build --release -p vastai-fleet --features inline-sweep
+#   cp target/release/vastai-fleet ./vastai-fleet
+#
+#   docker build -f Dockerfile.sweep.v22 \
+#       --build-arg V21_TAG=v21 \
+#       --build-arg VASTAI_FLEET_BIN=./vastai-fleet \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v22-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v22 \
+#       .
+#
+# Run (from launchers — single instance smoke):
+#
+#   vastai-fleet worker \
+#       --run-id $SWEEP_RUN_ID \
+#       --chunks-r2 s3://coefficient/jobs/$SWEEP_RUN_ID/chunks.jsonl
+#
+# All other args have env-var fallbacks matching the bash worker's
+# contract: SWEEP_RUN_ID, WORKER_ID, PARALLEL_CHUNKS, METRICS,
+# SKIP_CLAIMS, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.
+
+ARG V21_TAG=v21
+FROM ghcr.io/imazen/zen-metrics-sweep:${V21_TAG}
+
+# ── L10: drop the new vastai-fleet binary in alongside zen-metrics ──
+ARG VASTAI_FLEET_BIN=./vastai-fleet
+COPY --chmod=0755 ${VASTAI_FLEET_BIN} /usr/local/bin/vastai-fleet
+
+# Sanity: worker subcommand must exist + help text must mention the
+# expected flags. Each grep is a hard gate; CI / image push fails
+# loud if the binary regressed.
+RUN /usr/local/bin/vastai-fleet --version \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--chunks-r2' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--parallel-chunks' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--adapt-interval-sec' \
+    && /usr/local/bin/vastai-fleet self-destroy --help 2>&1 | grep -q -- '--error-log' \
+    && echo "v22 vastai-fleet unified worker smoke passed"
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v22: v21 + unified Rust async worker subcommand in vastai-fleet. In-process run_sweep via zen-metrics-cli lib, AIMD adaptive concurrency, native arrow-rs parquet IO. Replaces the bash onstart + chunk_worker chain. Bash worker kept as safety-net fallback during rollout.)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
