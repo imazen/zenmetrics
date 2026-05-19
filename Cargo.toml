@@ -123,7 +123,12 @@ zenwebp      = { path = "../zenwebp" }
 # at ../zenavif is on docs/speed6-tx-rdo-opt-in which removed
 # `pub mod expert` + `__expert` feature. main retains both.
 zenavif      = { path = "../zenavif--main" }
-zenjxl       = { path = "../zenjxl" }
+# zenjxl: pointed at ~/work/zen/zenjxl--main (worktree of main,
+# HEAD 9ac0cd5). The default ../zenjxl checkout sits on
+# pr-7-review which predates the AnimationParams/AnimationFrame
+# API bump for jxl-encoder 0.3.2 — codec.rs struct literals don't
+# match the new field shape. main has the fix.
+zenjxl       = { path = "../zenjxl--main" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
 # fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks
