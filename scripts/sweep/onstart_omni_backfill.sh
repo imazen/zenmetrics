@@ -54,22 +54,44 @@ fi
 N_CHUNKS=$(wc -l < "$WORKDIR/chunks.jsonl")
 log "$N_CHUNKS chunks; worker=$WORKER_ID; PARALLEL=$PARALLEL; GPU_RUNTIME=$GPU_RUNTIME"
 
-# Shuffle + claim loop. By default PARALLEL_CHUNKS=2 runs two chunks
-# concurrently per box: while chunk A's encode is CPU-bound, chunk B
-# can score on GPU. Empirically this lifts a chunk that runs at ~30%
-# GPU util in serial mode to ~60-80% util in parallel mode. Set
-# PARALLEL_CHUNKS=1 to disable.
+# Adaptive PARALLEL_CHUNKS. The fleet runs on heterogeneous hardware
+# (6 vCPU GTX 1660 boxes through 24 vCPU Xeon w/ Titan Xp). A fixed
+# PC value over-saturates the small boxes and under-utilises the
+# large ones.
 #
+# Heuristic: each concurrent chunk consumes ~4 CPU cores during encode
+# and ~2 GB GPU VRAM during cubecl device init. Bound by the more
+# restrictive of the two; floor at 1, ceiling at 4 (above 4, rayon
+# thread-pool contention starts costing more than it saves).
+#
+# Override with PARALLEL_CHUNKS=<int> env if the heuristic is wrong
+# for a specific run.
+auto_parallel_chunks() {
+    local cores gpu_ram_mb pc_cpu pc_gpu pc
+    cores=$(nproc 2>/dev/null || echo 4)
+    gpu_ram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null \
+        | head -1 | tr -d ' ' || echo 4096)
+    pc_cpu=$(( cores / 4 ))
+    pc_gpu=$(( gpu_ram_mb / 2048 ))
+    pc="$pc_cpu"
+    (( pc_gpu < pc )) && pc="$pc_gpu"
+    (( pc < 1 )) && pc=1
+    (( pc > 4 )) && pc=4
+    echo "$pc"
+}
+if [[ -z "${PARALLEL_CHUNKS:-}" ]]; then
+    PARALLEL_CHUNKS=$(auto_parallel_chunks)
+fi
+
 # Seeded shuffle. Each box gets a deterministic-but-distinct ordering
 # so we don't have all 4 workers fighting over the first ~10 chunks
 # at boot. The seed is hashed from $WORKER_ID. Same worker always
 # sees the same order — useful for resumability — but different
 # workers see uncorrelated orders.
-PARALLEL_CHUNKS="${PARALLEL_CHUNKS:-2}"
 SHUFFLE_SEED=$(printf '%s' "$WORKER_ID" | sha256sum | awk '{print $1}' | head -c 16)
 shuf --random-source=<(yes "$SHUFFLE_SEED") "$WORKDIR/chunks.jsonl" \
     > "$WORKDIR/chunks.shuf.jsonl"
-log "parallel_chunks=$PARALLEL_CHUNKS seed=$SHUFFLE_SEED"
+log "parallel_chunks=$PARALLEL_CHUNKS (auto-detected from $(nproc) cores + $(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')MB GPU) seed=$SHUFFLE_SEED"
 
 process_chunk() {
     local line="$1"
@@ -155,11 +177,59 @@ export -f process_chunk log ts R2
 export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY \
     SWEEP_RUN_ID WORKER_ID PARALLEL GPU_RUNTIME SCRIPTS_R2_PREFIX
 
+# Adaptive AIMD concurrency.
+#
+# Every ADAPT_INTERVAL_SEC seconds (default 60), we sample
+# nvidia-smi for the avg GPU util over the last 5s. Adjustment rule:
+#   gpu_util < 30 AND PC < PC_MAX  -> PC += 1   (slow GPU, push more)
+#   gpu_util > 90 AND PC > 1       -> PC -= 1   (saturated, back off)
+#   else: hold.
+#
+# State lives in $WORKDIR/_pc_state. The dispatcher reads it each
+# iteration. PC_MAX is clamped by host specs to avoid pathological
+# memory pressure or rayon contention.
+PC_MAX=$(( $(nproc) / 2 ))
+(( PC_MAX < 1 )) && PC_MAX=1
+(( PC_MAX > 8 )) && PC_MAX=8
+echo "$PARALLEL_CHUNKS" > "$WORKDIR/_pc_state"
+ADAPT_INTERVAL_SEC="${ADAPT_INTERVAL_SEC:-60}"
+last_adapt=$(date +%s)
+
+read_pc() { cat "$WORKDIR/_pc_state" 2>/dev/null || echo "$PARALLEL_CHUNKS"; }
+write_pc() { echo "$1" > "$WORKDIR/_pc_state"; }
+
+adapt_concurrency() {
+    local now=$(date +%s)
+    (( now - last_adapt < ADAPT_INTERVAL_SEC )) && return
+    last_adapt=$now
+    # 5x 1s polls (handles bursty kernels better than one sample).
+    local util
+    util=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits \
+        -lms 1000 -c 5 2>/dev/null \
+        | awk 'NF{sum+=$1; n++} END {if(n>0) print int(sum/n); else print 0}')
+    [[ -z "$util" ]] && util=0
+    local pc=$(read_pc)
+    local new_pc=$pc
+    if (( util < 30 && pc < PC_MAX )); then
+        new_pc=$(( pc + 1 ))
+    elif (( util > 90 && pc > 1 )); then
+        new_pc=$(( pc - 1 ))
+    fi
+    if (( new_pc != pc )); then
+        write_pc "$new_pc"
+        log "[adapt] gpu_util=${util}% pc ${pc}->${new_pc} (max=${PC_MAX})"
+    fi
+}
+
 # Bounded-concurrency dispatch. `wait -n` blocks until ANY background
-# job finishes, so we never overshoot $PARALLEL_CHUNKS in-flight.
+# job finishes; the bound is the latest value from _pc_state so the
+# AIMD loop can grow/shrink concurrency between chunks.
 while IFS= read -r line; do
-    while (( $(jobs -rp 2>/dev/null | wc -l) >= PARALLEL_CHUNKS )); do
+    adapt_concurrency
+    local_pc=$(read_pc)
+    while (( $(jobs -rp 2>/dev/null | wc -l) >= local_pc )); do
         wait -n 2>/dev/null || true
+        local_pc=$(read_pc)  # PC may have shrunk while we were waiting
     done
     process_chunk "$line" &
 done < "$WORKDIR/chunks.shuf.jsonl"
