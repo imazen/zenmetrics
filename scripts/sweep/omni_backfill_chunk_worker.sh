@@ -155,16 +155,17 @@ print(f'{t.num_rows} rows, {len(groups)} groups', file=sys.stderr)
 PY
 
 echo "$LOG step 4/5: sweep per group (multi-metric + encoded-out)" >&2
-MERGED_TSV="$WORK_DIR/sweeps/merged.tsv"
-HEADER_WRITTEN=0
+SWEEP_DIR="$WORK_DIR/sweeps"
+mkdir -p "$SWEEP_DIR"
 G_TOTAL=$(awk 'NR>1' "$WORK_DIR/_groups.tsv" | wc -l)
 G_IDX=0
+GROUPS_OK=0
+GROUPS_FAIL=0
 while IFS=$'\t' read -r gid codec q kj n; do
     [[ "$gid" == "gid" ]] && continue
     G_IDX=$((G_IDX + 1))
     GD="$WORK_DIR/g$gid"
     mkdir -p "$GD/sources"
-    awk -F'\t' -v g="$gid" 'NR>1 && $1==g {print $5}' "$WORK_DIR/_groups.tsv" >/dev/null  # placeholder
     awk -F'\t' -v c="$codec" -v qv="$q" -v k="$kj" 'NR>1 && $2==c && $3==qv && $4==k {print $5}' \
         "$WORK_DIR/_keys.tsv" | sort -u | while read -r b; do
         ln -sf "$WORK_DIR/sources/$b" "$GD/sources/$b" 2>/dev/null || true
@@ -173,7 +174,7 @@ while IFS=$'\t' read -r gid codec q kj n; do
         --codec "$codec"
         --sources "$GD/sources"
         --q-grid "$q"
-        --output "$GD/sweep.tsv"
+        --output "$SWEEP_DIR/g${gid}.tsv"
         --encoded-out-dir "$WORK_DIR/encoded"
         --gpu-runtime "$GPU_RUNTIME"
         --jobs "$PARALLEL" )
@@ -185,41 +186,86 @@ while IFS=$'\t' read -r gid codec q kj n; do
     for m in "${MARR[@]}"; do SWEEP_ARGS+=( --metric "$m" ); done
 
     echo "$LOG   group $G_IDX/$G_TOTAL  codec=$codec q=$q n=$n" >&2
-    if ! /usr/local/bin/zen-metrics "${SWEEP_ARGS[@]}" 2>&1 \
+    # Tolerate per-group failures. The omni design is "produce whatever
+    # we can; the next backfill pass picks up the rest." A panic in
+    # group g123 must not poison groups g0..g122's already-written
+    # sweep.tsv files. Track success/fail counts; final parquet
+    # conversion reads only the surviving group TSVs.
+    if /usr/local/bin/zen-metrics "${SWEEP_ARGS[@]}" 2>&1 \
             | sed "s/^/  [g$gid] /" >&2; then
-        echo "$LOG FAIL: sweep group g$gid"; exit 4
+        GROUPS_OK=$((GROUPS_OK + 1))
+    else
+        GROUPS_FAIL=$((GROUPS_FAIL + 1))
+        # Salvage: if zen-metrics wrote ANY rows before dying, keep
+        # the file. Otherwise drop the stub to avoid header-only
+        # files cluttering the merge.
+        if [[ -f "$SWEEP_DIR/g${gid}.tsv" ]] && \
+           (( $(wc -l < "$SWEEP_DIR/g${gid}.tsv") <= 1 )); then
+            rm -f "$SWEEP_DIR/g${gid}.tsv"
+        fi
     fi
-
-    if [[ "$HEADER_WRITTEN" == "0" ]]; then
-        head -1 "$GD/sweep.tsv" > "$MERGED_TSV"
-        HEADER_WRITTEN=1
-    fi
-    tail -n +2 "$GD/sweep.tsv" >> "$MERGED_TSV"
     rm -rf "$GD"  # free group scratch immediately (sources are symlinks)
 done < "$WORK_DIR/_groups.tsv"
 
+SWEEP_TSV_COUNT=$(ls "$SWEEP_DIR"/g*.tsv 2>/dev/null | wc -l)
 ENC_COUNT=$(ls "$WORK_DIR/encoded/" 2>/dev/null | wc -l)
-echo "$LOG step 5/5: $(wc -l < "$MERGED_TSV") rows scored; $ENC_COUNT encoded variants" >&2
+echo "$LOG step 5/5: $GROUPS_OK ok, $GROUPS_FAIL fail; $SWEEP_TSV_COUNT TSVs; $ENC_COUNT encoded variants" >&2
 
-# Convert merged TSV → parquet sidecar (single file, all metric columns
-# + encoded_filename + identity tuple).
-python3 - "$MERGED_TSV" "$WORK_DIR/$CHUNK_ID.omni.parquet" "$CHUNK_ID" "$RUN_ID" "$OUT_ENCODED_PREFIX" <<'PY'
-import sys
-import pyarrow as pa, pyarrow.csv as pa_csv, pyarrow.parquet as pq, pyarrow.compute as pc
-tsv_p, out_p, chunk_id, run_id, enc_prefix = sys.argv[1:6]
-t = pa_csv.read_csv(tsv_p, parse_options=pa_csv.ParseOptions(delimiter='\t'))
-# Add chunk_id, run_id, encoded_r2_uri columns.
+if (( SWEEP_TSV_COUNT == 0 )); then
+    echo "$LOG ERROR: no group produced output — exiting non-zero to trigger trap" >&2
+    exit 6
+fi
+
+# Convert per-group TSVs → one parquet sidecar. Reading each TSV
+# separately + concat (instead of bash-merging then reading once) means
+# one corrupt group can't take down the whole chunk: pa_csv's
+# invalid_row_handler skips malformed rows; a fully-broken group's
+# file gets caught + logged + skipped.
+python3 - "$SWEEP_DIR" "$WORK_DIR/$CHUNK_ID.omni.parquet" "$CHUNK_ID" "$RUN_ID" "$OUT_ENCODED_PREFIX" <<'PY'
+import os, sys, glob
+import pyarrow as pa
+import pyarrow.csv as pa_csv
+import pyarrow.parquet as pq
+
+sweep_dir, out_p, chunk_id, run_id, enc_prefix = sys.argv[1:6]
+
+n_bad_rows = [0]
+def on_bad_row(row):
+    n_bad_rows[0] += 1
+    if n_bad_rows[0] <= 5:
+        sys.stderr.write(f'WARN: skipping malformed row (#{n_bad_rows[0]}): {row}\n')
+    return 'skip'
+
+parse_opts = pa_csv.ParseOptions(delimiter='\t', invalid_row_handler=on_bad_row)
+conv_opts = pa_csv.ConvertOptions(strings_can_be_null=True)
+
+tables = []
+group_files = sorted(glob.glob(os.path.join(sweep_dir, 'g*.tsv')))
+sys.stderr.write(f'reading {len(group_files)} group TSVs\n')
+for gf in group_files:
+    try:
+        t = pa_csv.read_csv(gf, parse_options=parse_opts, convert_options=conv_opts)
+        if t.num_rows > 0:
+            tables.append(t)
+    except Exception as e:
+        sys.stderr.write(f'WARN: skipping {os.path.basename(gf)} (parse failed: {e})\n')
+
+if not tables:
+    sys.stderr.write('ERROR: zero usable rows after parse\n')
+    sys.exit(7)
+
+# Concat. Schema mismatches across groups (e.g. one group dropped a
+# metric column) get the promote=True treatment so missing columns
+# fill with NULL.
+t = pa.concat_tables(tables, promote_options='default')
 n = t.num_rows
 t = t.append_column('chunk_id', pa.array([chunk_id]*n))
 t = t.append_column('run_id',   pa.array([run_id]*n))
-# encoded_r2_uri = enc_prefix + encoded_filename (where present).
 fn = t['encoded_filename']
-def to_uri(s):
-    return enc_prefix + s if s else ''
-uri = [to_uri(v) for v in fn.to_pylist()]
+uri = [(enc_prefix + s) if s else '' for s in fn.to_pylist()]
 t = t.append_column('encoded_r2_uri', pa.array(uri))
 pq.write_table(t, out_p, compression='zstd')
-print(f'wrote {out_p} ({t.num_rows} rows)', file=sys.stderr)
+sys.stderr.write(f'wrote {out_p} ({t.num_rows} rows, {n_bad_rows[0]} bad rows skipped)\n')
 PY
 
 if [[ "$SKIP_UPLOAD" == "1" ]]; then
