@@ -214,6 +214,13 @@ HEARTBEAT_PID=$!
 trap 'kill $HEARTBEAT_PID 2>/dev/null || true' EXIT
 
 # Fan out chunks across PARALLEL workers via xargs.
+# Export shell functions + env so each xargs-spawned `bash -c` subshell
+# inherits them. Without these exports the subshell fails with
+# `process_chunk: command not found` and every chunk no-ops in ~6s.
+# (Matches the v3 onstart pattern at onstart_iwssim_backfill.sh:284.)
+export -f process_chunk log R2 heartbeat
+export WORKDIR WORKER_ID SWEEP_RUN_ID GPU_RUNTIME PARALLEL
+export R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 log "running $N_CHUNKS chunks at parallel=$PARALLEL"
 < "$WORKDIR/chunks.jsonl" xargs -P "$PARALLEL" -d '\n' -I {} bash -c 'process_chunk "$@"' _ {}
 

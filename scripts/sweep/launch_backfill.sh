@@ -164,7 +164,16 @@ if [[ -f "$WORKER_PATH" ]]; then
     R2 cp "$WORKER_PATH" "$WORKER_R2_KEY"
 fi
 
-QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_vers>=12.5 num_gpus=1"
+# Fix D (2026-05-18 EXP-LARGER-LARGE-V2): cuda_vers>=12.6 because the
+# v14 image's baked zen-metrics is linked against cudarc 0.19.4 which
+# dlsyms `cuCoredumpDeregisterCompleteCallback` — a CUDA 12.6 driver
+# API. Boxes with older drivers panic at first kernel launch with
+# `undefined symbol: cuCoredumpDeregisterCompleteCallback`. Also exclude
+# 13.x (driver >=570) per master HEAD finding `b8bd239d` — cudarc 0.19.4
+# fails on those too.
+# Use `cuda_max_good>=12.6` (driver capability) AND `cuda_vers<13` to
+# pin the working band.
+QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.6 cuda_vers<13.0 driver_version<570 num_gpus=1"
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "
@@ -194,24 +203,41 @@ fi
 
 [[ "$n" -lt 3 ]] && { echo "Not enough offers; relax filters." >&2; exit 1; }
 
-ONSTART_BOOTSTRAP=$(cat <<BOOT
+# Fix A (2026-05-18 EXP-LARGER-LARGE-V2): the prior heredoc-as-onstart-cmd
+# pattern lost embedded `$` characters in vast.ai's API call (the box
+# received an empty/truncated bootstrap, /var/log/onstart.log showed only
+# `ERROR " ": command not found`). Replace with a base64-encoded payload
+# so no quote escaping needs to survive the API hop. The payload writes
+# the AWS credentials file from env vars (injected via --env) and execs
+# the onstart pulled from R2.
+ONSTART_BOOTSTRAP_RAW=$(cat <<'BOOT'
 set -e
-export AWS_ACCESS_KEY_ID="\$R2_ACCESS_KEY_ID"
-export AWS_SECRET_ACCESS_KEY="\$R2_SECRET_ACCESS_KEY"
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 mkdir -p ~/.aws
 cat > ~/.aws/credentials <<CREDS
 [r2]
-aws_access_key_id = \$R2_ACCESS_KEY_ID
-aws_secret_access_key = \$R2_SECRET_ACCESS_KEY
+aws_access_key_id = $R2_ACCESS_KEY_ID
+aws_secret_access_key = $R2_SECRET_ACCESS_KEY
 CREDS
-s5cmd --endpoint-url "https://\${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \\
-    --profile r2 \\
-    cp $ONSTART_R2_KEY \\
+# Wait for s5cmd to be present (the v14 docker image bakes it; some
+# upstream images install it at runtime — sleep briefly if absent).
+for try in 1 2 3 4 5; do
+    command -v s5cmd >/dev/null && break
+    sleep 3
+done
+s5cmd --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+    --profile r2 \
+    cp __ONSTART_R2_KEY__ \
        /usr/local/bin/onstart.sh
 chmod +x /usr/local/bin/onstart.sh
 exec /usr/local/bin/onstart.sh
 BOOT
 )
+# Substitute the R2 key into the placeholder.
+ONSTART_BOOTSTRAP_RAW="${ONSTART_BOOTSTRAP_RAW//__ONSTART_R2_KEY__/$ONSTART_R2_KEY}"
+# Base64-encode the entire payload so the bash -c arg is a fixed token.
+ONSTART_BOOTSTRAP_B64=$(printf '%s' "$ONSTART_BOOTSTRAP_RAW" | base64 -w0)
 
 INSTANCE_FILE="/tmp/${RUN_ID}/instances.txt"
 mkdir -p "$(dirname "$INSTANCE_FILE")"
@@ -237,9 +263,13 @@ for offer_id in $OFFER_IDS; do
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
+    # Use base64-decoded bootstrap to dodge vast.ai's API arg-mangling
+    # of embedded `$` chars in the heredoc. Single quotes around the
+    # base64 string keep the API-side parser from interpreting anything.
+    ONSTART_CMD="bash -c 'echo ${ONSTART_BOOTSTRAP_B64} | base64 -d | bash'"
     OUT=$(vastai create instance "$offer_id" \
         --image "$BOOT_IMAGE" --login "$LOGIN_STR" \
-        --onstart-cmd "bash -c '$ONSTART_BOOTSTRAP'" \
+        --onstart-cmd "$ONSTART_CMD" \
         --disk "$MIN_DISK_GB" --label "$LABEL" --env "$ENV_STR" \
         --raw 2>&1) || { echo "  $i fail: $(echo "$OUT" | head -c 200)"; continue; }
     ID=$(echo "$OUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('new_contract', d.get('id','')))" 2>/dev/null || echo "")
