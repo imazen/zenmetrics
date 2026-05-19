@@ -55,6 +55,8 @@ mod adapt;
 mod chunk;
 mod claim;
 mod r2;
+#[cfg(feature = "inline-sweep")]
+mod sweep_runner;
 mod util;
 
 /// CLI arguments for the `vastai-fleet worker` subcommand.
