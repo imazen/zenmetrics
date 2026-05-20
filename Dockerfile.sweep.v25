@@ -1,0 +1,8 @@
+ARG V24_TAG=v24
+FROM ghcr.io/imazen/zen-metrics-sweep:${V24_TAG}
+ARG VASTAI_FLEET_BIN=./vastai-fleet
+COPY --chmod=0755 ${VASTAI_FLEET_BIN} /usr/local/bin/vastai-fleet
+RUN /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--mode' \
+    && echo "v25 unified worker (source-features + feature-backfill + omni) smoke passed"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v25: v24 + source-features-only mode for zenanalyze 62-feature extraction on source PNGs, no scoring)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
