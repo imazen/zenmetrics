@@ -140,6 +140,27 @@ pub async fn process_chunk(
                 }
             }
         }
+        #[cfg(feature = "source-features")]
+        if args.mode == "source-features" {
+            match super::backfill_source_features_for_chunk(args, r2, line).await {
+                Ok(()) => {
+                    info!(
+                        chunk_id = %rec.chunk_id,
+                        elapsed_sec = started.elapsed().as_secs_f32(),
+                        "done (source-features)"
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(
+                        chunk_id = %rec.chunk_id,
+                        error = %e,
+                        "source-features failed"
+                    );
+                    return Err(e);
+                }
+            }
+        }
         match super::inline::process_chunk_inline(args, r2, line).await {
             Ok(()) => {
                 info!(

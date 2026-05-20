@@ -64,9 +64,13 @@ mod feature_backfill;
 mod inline;
 #[cfg(feature = "source-features")]
 mod source_features;
+#[cfg(feature = "source-features")]
+mod source_features_only;
 
 #[cfg(feature = "inline-sweep")]
 pub use feature_backfill::backfill_features_for_chunk;
+#[cfg(feature = "source-features")]
+pub use source_features_only::backfill_source_features_for_chunk;
 mod r2;
 #[cfg(feature = "inline-sweep")]
 mod sweep_runner;
