@@ -44,6 +44,10 @@ bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+# For extract_acumen_features example — parquet output of 228 features
+arrow-array = "58.3"
+arrow-schema = "58.3"
+parquet = { version = "58.3", features = ["arrow"] }
 
 [[example]]
 name = "bench"
