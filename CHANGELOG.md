@@ -17,6 +17,31 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added — acumen Mode A castleCSF wiring through zensim-gpu — 2026-05-21 (`feat/acumen-gpu`)
+
+Pairs with `imazen/zensim feat/acumen-foundation`. Tracking issue:
+[imazen/zensim#40](https://github.com/imazen/zensim/issues/40).
+
+**`zensim-gpu` (`cb477cd`)**: `ZensimParams::acumen_mode_a` field
+(default `None` → V_22 path bit-stable), `set_acumen_viewing` API,
+Phase 4 applies per-(scale, channel) castleCSF weights to the 3
+HF band-energy slots (basic 10/11/12). Vendored binary LUT at
+`crates/zensim-gpu/data/castle_csf_v0_5_4_cvvdp.lut` (sha256
+matches zensim copy). 3 wgpu integration tests pass.
+
+**`zen-metrics-cli` (`50288c9`)**: `score-pairs --acumen-mode-a`
++ viewing flags; thread-local config dispatched to
+`resolve_default_params`. Smoke-tested on 5 KADID pairs: identical
+pair unchanged, distorted pairs diverge 3-6 zensim units.
+
+**Sweep infrastructure (`d10e328`, `46841eb`, `b93c6cf`,
+`495c7a0`)**: `onstart_acumen_modea.sh` baked into v26 image,
+`metric_backfill_chunk_worker.sh` forwards `ACUMEN_*` env vars,
+`generate_acumen_chunks.py` slices canonical-2026-05-21 parquets,
+`launch_acumen.sh` fans out vast.ai instances. CI workflow
+`sweep-image.yml` produces `v26-acumen-<sha>` images on
+feat/acumen-gpu pushes.
+
 ### Changed — sweep image Dockerfile chain collapsed to single file `v26` — 2026-05-21
 
 Replaces the `v14 → v15 → v18 → v19 → v20 → v21 → v22 → v23 → v24 → v25`
