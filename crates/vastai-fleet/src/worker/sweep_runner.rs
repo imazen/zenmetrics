@@ -28,7 +28,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use zen_metrics_cli::metrics::{GpuRuntime, MetricKind};
+use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
 use zen_metrics_cli::sweep::{CodecKind, KnobGrid, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
 
 /// One sweep-call's worth of work: a single (codec, knob_tuple)
@@ -58,10 +58,15 @@ pub struct InlineGroupSpec {
     /// Where to write the per-group output TSV. Caller is expected
     /// to concat these across all groups in the chunk.
     pub output_tsv: PathBuf,
-    /// Optional path for the 300-feature zensim parquet sidecar.
-    /// Only meaningful if `metrics` contains `Zensim` (CPU). The GPU
-    /// variant doesn't emit extended features.
+    /// Optional path for the zensim feature parquet sidecar.
+    /// Only meaningful if `metrics` contains `Zensim` (CPU, 300-D) or
+    /// `ZensimGpu` (GPU, [`Self::feature_regime`]-controlled: 228 /
+    /// 300 / 372). When both are in the metric set, GPU wins.
     pub feature_output: Option<PathBuf>,
+    /// Zensim feature regime for the GPU path. Defaults to
+    /// [`ZensimFeatureRegime::WithIw`] (372). Ignored when GPU zensim
+    /// is not in `metrics` OR `feature_output` is None.
+    pub feature_regime: ZensimFeatureRegime,
     /// Optional directory to receive the raw encoded codec bytes
     /// per cell (.jpg / .webp / .avif / .jxl / .png). Phase A
     /// disabled this because the v21 binary built before the
@@ -119,6 +124,7 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
         gpu_runtime: spec.gpu_runtime,
         output: spec.output_tsv.clone(),
         feature_output: spec.feature_output,
+        feature_regime: spec.feature_regime,
         // The bash worker added --distorted-out-dir for sidecar
         // PNGs but the v21 binary lacked --encoded-out-dir. The
         // Rust in-process call has direct access to both fields.

@@ -84,8 +84,16 @@ struct FeatureRow {
     features: Vec<f32>,
 }
 
-/// Number of zensim features. Matches
-/// `zen_metrics_cli::sweep::feature_writer::NUM_FEATURES`.
+/// Number of zensim features the CPU `compute_extended_features`
+/// path returns: 300 (Extended regime, 4 scales × 3 channels × 25
+/// features/channel). Kept at 300 because this backfill mode runs CPU
+/// zensim against existing R2-resident encodes — the CPU crate's
+/// public API does not expose the 372-D WithIw regime today. v26+
+/// **fresh** sweeps use GPU zensim with the WithIw regime via the
+/// inline-sweep pipeline (see `worker/inline.rs`), producing 372
+/// columns; the join key `(image_path, codec, q, knob_tuple_json)`
+/// stays the same so consumers can union backfill (300) + inline
+/// (372) parquets with a left-join + nullable feat_300..feat_371.
 const NUM_FEATURES: usize = 300;
 
 /// Top-level: read chunk JSON, do the feature backfill, upload.

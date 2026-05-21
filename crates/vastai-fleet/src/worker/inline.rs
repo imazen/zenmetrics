@@ -34,7 +34,7 @@ use anyhow::{Context, Result, anyhow};
 use clap::ValueEnum;
 use serde::Deserialize;
 use tracing::{info, warn};
-use zen_metrics_cli::metrics::{GpuRuntime, MetricKind};
+use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
 use zen_metrics_cli::sweep::CodecKind;
 
 use super::WorkerArgs;
@@ -160,12 +160,15 @@ pub async fn process_chunk_inline(
         "step 4/5: run sweep per group (in-process, shared cubecl)"
     );
     let metrics = parse_metrics_env_or_default();
-    // If CPU `zensim` is in the metric set, also write the 372-feature
-    // extended vector to a parquet sidecar at
-    // s3://zentrain/<run>/zensim_features/<chunk>.parquet. Joins back
-    // to the omni sidecar by `(image_path, codec, q, knob_tuple_json)`.
-    // Skipped silently if metrics is GPU-only (e.g. zensim-gpu).
-    let want_features = metrics.contains(&MetricKind::Zensim);
+    let feature_regime = parse_feature_regime_env_or_default();
+    // If CPU `zensim` OR GPU `zensim-gpu` is in the metric set, also
+    // write the regime-appropriate feature vector to a parquet sidecar
+    // at s3://zentrain/<run>/zensim_features/<chunk>.parquet. Joins
+    // back to the omni sidecar by
+    // `(image_path, codec, q, knob_tuple_json)`. CPU emits 300 floats;
+    // GPU honours `feature_regime` (default WithIw = 372).
+    let want_features = metrics.contains(&MetricKind::Zensim)
+        || metrics.contains(&MetricKind::ZensimGpu);
     let feature_out_path = if want_features {
         Some(scratch.join(format!("{}.zensim_features.parquet", rec.chunk_id)))
     } else {
@@ -233,10 +236,11 @@ pub async fn process_chunk_inline(
             // Per-group feature parquet — one per group; the final
             // chunk-level upload concatenates them. zen-metrics-cli's
             // `run_sweep` writes features inline when this is set
-            // AND the metric list contains CPU zensim.
+            // AND the metric list contains CPU zensim OR ZensimGpu.
             feature_output: feature_out_path
                 .as_ref()
                 .map(|_| sweeps.join(format!("g{gid_str}.features.parquet"))),
+            feature_regime,
             encoded_out_dir: Some(encoded.clone()),
             jobs: 0,
         };
@@ -345,6 +349,28 @@ pub async fn process_chunk_inline(
         let _ = tokio::fs::remove_dir_all(&scratch).await;
     }
     Ok(())
+}
+
+/// Parse the `ZENSIM_FEATURES_REGIME` env var (`basic` / `extended` /
+/// `with_iw`) into the typed enum. Defaults to
+/// [`ZensimFeatureRegime::WithIw`] (372 features) — the v26+ default.
+fn parse_feature_regime_env_or_default() -> ZensimFeatureRegime {
+    let raw = match std::env::var("ZENSIM_FEATURES_REGIME") {
+        Ok(s) => s,
+        Err(_) => return ZensimFeatureRegime::WithIw,
+    };
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "basic" => ZensimFeatureRegime::Basic,
+        "extended" => ZensimFeatureRegime::Extended,
+        "with-iw" | "with_iw" | "withiw" | "iw" => ZensimFeatureRegime::WithIw,
+        other => {
+            warn!(
+                value = %other,
+                "unknown ZENSIM_FEATURES_REGIME; falling back to with-iw (372)"
+            );
+            ZensimFeatureRegime::WithIw
+        }
+    }
 }
 
 /// Parse the METRICS env (comma-list) into the typed enum. The
