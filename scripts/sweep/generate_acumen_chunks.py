@@ -34,7 +34,7 @@ Then upload via s5cmd:
 
 NOTES:
 
-- Reuses identity tuples (image_path, codec, q, knob_tuple_json)
+- Reuses identity tuples (ref_basename, codec, q, knob_tuple_json)
   from each canonical parquet — same shape as
   generate_cvvdp_backfill_chunks.py. Caller can filter by
   `--filter-parquet safesyn` to limit to one parquet for smoke
@@ -71,18 +71,18 @@ def chunks_from_parquet(
     run_id: str,
 ):
     """Yield one chunk dict per chunk_size-row slice of the parquet."""
-    table = pq.read_table(parquet_path, columns=["image_path"])
-    # image_path here is the *ref* image; the worker derives dist
+    table = pq.read_table(parquet_path, columns=["ref_basename"])
+    # ref_basename here is the *ref* image; the worker derives dist
     # images by re-encoding per the identity tuple. For Gate A we
     # only need basenames to sync.
-    image_paths = table.column("image_path").to_pylist()
-    n_rows = len(image_paths)
+    ref_basenames = table.column("ref_basename").to_pylist()
+    n_rows = len(ref_basenames)
     n_chunks = (n_rows + chunk_size - 1) // chunk_size
 
     for ci in range(n_chunks):
         start = ci * chunk_size
         end = min(start + chunk_size, n_rows)
-        chunk_rows = image_paths[start:end]
+        chunk_rows = ref_basenames[start:end]
         # Unique basenames within the chunk — the worker syncs only
         # these from R2 rather than the whole source dir.
         basenames = sorted({Path(p).name for p in chunk_rows})
