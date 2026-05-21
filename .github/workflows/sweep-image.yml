@@ -198,6 +198,24 @@ jobs:
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "Tags: $TAGS"
 
+      # Push to ghcr.io requires the package's "Manage Actions access"
+      # to include this branch as an allowed source. mainline (master /
+      # main) has it; feat branches need explicit add. If push is
+      # forbidden, build-only so CI verifies the image still
+      # *assembles* (which is most of the load-bearing check).
+      - name: Decide push policy
+        id: push_policy
+        run: |
+          REF="${{ github.ref }}"
+          if [ "$REF" = "refs/heads/master" ] || [ "$REF" = "refs/heads/main" ] \
+              || [[ "$REF" == refs/tags/zen-metrics-cli-v* ]]; then
+              echo "push=true" >> "$GITHUB_OUTPUT"
+              echo "Push enabled for $REF"
+          else
+              echo "push=false" >> "$GITHUB_OUTPUT"
+              echo "Push disabled for $REF (build-only; promote by merging to master OR adding the branch to the package's allowed Actions sources)"
+          fi
+
       - name: Build + push image
         uses: docker/build-push-action@v5
         with:
@@ -206,7 +224,7 @@ jobs:
           build-args: |
             ZEN_METRICS_BINARY=./zen-metrics
             VASTAI_FLEET_BINARY=./vastai-fleet
-          push: true
+          push: ${{ steps.push_policy.outputs.push == 'true' }}
           tags: ${{ steps.tags.outputs.tags }}
           # Cache the base layer (L1-L7 ~530 MB) across runs. registry
           # cache means we don't re-apt-install python+cuda+helpers or
