@@ -21,7 +21,7 @@ name: Sweep image (Dockerfile.sweep.v26)
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, feat/acumen-gpu]
     tags:
       - "zen-metrics-cli-v*"
     paths:
@@ -60,16 +60,19 @@ jobs:
       # sibling worktrees. Clone them at pinned commits so the cargo
       # build inside CI resolves the same versions a local build does.
       # The pins live in zenmetrics/CLAUDE.md + the [patch] block.
-      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim--principled-activity)
+      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim acumen)
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
-          # zensim principled-activity branch — required by the
-          # [patch.crates-io] zensim = { path = ... } line.
-          git clone --quiet --branch feat/principled-activity \
-              https://github.com/imazen/zensim.git ../zensim--principled-activity
+          # zensim feat/acumen-foundation — paired branch carrying the
+          # `acumen` module wired through zensim-gpu by this branch.
+          # When acumen-foundation merges to zensim main, switch this
+          # line to `--branch main` (or remove `--branch` for default).
+          # Path matches workspace Cargo.toml's zensim path dep.
+          git clone --quiet --branch feat/acumen-foundation \
+              https://github.com/imazen/zensim.git ../zensim--acumen-foundation
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -99,6 +102,7 @@ jobs:
           ./artifacts/zen-metrics list-metrics | grep -q cvvdp
           ./artifacts/zen-metrics list-metrics | grep -q zensim
           ./artifacts/zen-metrics score-pairs --help | grep -q allow-small-images
+          ./artifacts/zen-metrics score-pairs --help | grep -q acumen-mode-a
           ./artifacts/zen-metrics sweep --help | grep -q zenjpeg
 
       # vastai-fleet ships the unified Rust worker (`worker --mode
@@ -163,11 +167,21 @@ jobs:
         id: tags
         run: |
           SHA_SHORT="${{ needs.build-binary.outputs.sha-short }}"
-          TAGS="${IMAGE_NAME}:v26-${SHA_SHORT}"
-          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          # Branch-aware tagging: the acumen-gpu branch publishes
+          # images tagged `v26-acumen-<sha>` so they coexist with
+          # mainline `v26-<sha>` images on ghcr.io. The acumen-gpu
+          # binary supports --acumen-mode-a (verified by the help-text
+          # sanity check); the legacy v26 binary does not.
+          REF="${{ github.ref }}"
+          if [[ "$REF" == "refs/heads/feat/acumen-gpu" ]]; then
+              TAGS="${IMAGE_NAME}:v26-acumen-${SHA_SHORT}"
+          else
+              TAGS="${IMAGE_NAME}:v26-${SHA_SHORT}"
+          fi
+          if [ "$REF" = "refs/heads/master" ] || [ "$REF" = "refs/heads/main" ]; then
               TAGS="${TAGS},${IMAGE_NAME}:v26"
           fi
-          if [[ "${{ github.ref }}" == refs/tags/zen-metrics-cli-v* ]]; then
+          if [[ "$REF" == refs/tags/zen-metrics-cli-v* ]]; then
               VERSION="${GITHUB_REF#refs/tags/zen-metrics-cli-v}"
               TAGS="${TAGS},${IMAGE_NAME}:v26-${VERSION}"
           fi
