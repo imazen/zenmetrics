@@ -231,7 +231,9 @@ jobs:
           # recompile cuda_dlsym_stub.so on every push, only when the
           # base RUN steps change.
           cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v26
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v26,mode=max
+          # cache-to write is also subject to the package's allowed-source
+          # rule; skip writing it on feature branches that can't push.
+          cache-to: ${{ steps.push_policy.outputs.push == 'true' && format('type=registry,ref={0}:buildcache-v26,mode=max', env.IMAGE_NAME) || '' }}
           # No layer should reference the build-binary stage so the
           # final image is small. Only stable runtime layers + binary +
           # scripts.
