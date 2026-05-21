@@ -5,23 +5,27 @@
 //! shapes:
 //!
 //! - `compute_features_srgb_u8` / `compute_features_pixels` — return
-//!   the 228-element feature vector directly. This is the "natural"
-//!   zensim API; the score lookup needs trained weights that don't
-//!   live in this crate.
+//!   the regime-appropriate feature vector directly (228 / 300 / 372
+//!   floats depending on [`ZensimParams::regime`]). This is the
+//!   "natural" zensim API; the score lookup needs trained weights
+//!   that don't live in this crate.
 //! - `compute_srgb_u8` / `compute_pixels` — uniform with the other
 //!   metric crates' opaque API. Apply
-//!   [`crate::score_from_features`] to the feature vector using the
-//!   caller-provided weights in [`ZensimParams::weights`]. If weights
-//!   are `None`, returns `Score { value: f64::NAN, .. }` so callers
-//!   notice they forgot to wire weights (no silent zero-score
-//!   shipping).
+//!   [`crate::score_from_features`] to the **first 228 slots** of the
+//!   feature vector using the caller-provided weights in
+//!   [`ZensimParams::weights`]. If weights are `None`, returns
+//!   `Score { value: f64::NAN, .. }` so callers notice they forgot
+//!   to wire weights (no silent zero-score shipping).
 //!
 //! See `dssim-gpu/src/opaque.rs` for the full Phase 2 design.
 
 use crate::pipeline::Zensim;
 #[cfg(feature = "pixels")]
 use crate::Error;
-use crate::{Result, TOTAL_FEATURES, score_from_features, weights::WEIGHTS_PREVIEW_V0_2};
+use crate::{
+    Result, TOTAL_FEATURES, ZensimFeatureRegime, score_from_features,
+    weights::WEIGHTS_PREVIEW_V0_2,
+};
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -57,7 +61,7 @@ pub struct Score {
 
 /// Configuration for [`ZensimOpaque`].
 #[non_exhaustive]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ZensimParams {
     /// Optional 228-element trained weights for converting the
     /// feature vector into a scalar score. Pass
@@ -65,17 +69,36 @@ pub struct ZensimParams {
     /// from the `zensim` crate) to land scores comparable to CPU
     /// zensim's `PreviewV0_2` profile. `None` => uniform
     /// `compute_*` methods return `Score { value: NaN, .. }`.
+    ///
+    /// Weights are 228 entries regardless of [`Self::regime`] — the
+    /// scoring inner product runs over the basic block only.
     pub weights: Option<Box<[f64; TOTAL_FEATURES]>>,
+    /// Feature regime: which slot map the underlying `Zensim` pipeline
+    /// computes. Default is [`ZensimFeatureRegime::Basic`] (228) for
+    /// backwards compatibility. Set to [`ZensimFeatureRegime::Extended`]
+    /// (300) or [`ZensimFeatureRegime::WithIw`] (372) to also fill the
+    /// masked / IW blocks — needed for picker training data and the
+    /// v26+ sweep schema.
+    pub regime: ZensimFeatureRegime,
+}
+
+impl Default for ZensimParams {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ZensimParams {
     /// Default parameter bundle (no weights — uniform `compute_*`
-    /// methods return NaN). Use [`Self::with_weights`] to wire a
-    /// custom trained profile, or [`Self::default_weights`] /
-    /// [`Self::with_canonical_v0_2`] to get the canonical
-    /// `WEIGHTS_PREVIEW_V0_2` baked in.
+    /// methods return NaN, [`ZensimFeatureRegime::Basic`] regime).
+    /// Use [`Self::with_weights`] to wire a custom trained profile,
+    /// or [`Self::default_weights`] / [`Self::with_canonical_v0_2`]
+    /// to get the canonical `WEIGHTS_PREVIEW_V0_2` baked in.
     pub fn new() -> Self {
-        Self { weights: None }
+        Self {
+            weights: None,
+            regime: ZensimFeatureRegime::Basic,
+        }
     }
 
     /// Bundle the canonical 228-element default weights
@@ -97,12 +120,26 @@ impl ZensimParams {
     pub fn with_canonical_v0_2() -> Self {
         Self {
             weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
+            regime: ZensimFeatureRegime::Basic,
         }
     }
 
     /// Attach a trained weight vector.
     pub fn with_weights(mut self, weights: [f64; TOTAL_FEATURES]) -> Self {
         self.weights = Some(Box::new(weights));
+        self
+    }
+
+    /// Set the feature regime: [`ZensimFeatureRegime::Basic`] (228, the
+    /// default), [`ZensimFeatureRegime::Extended`] (300, adds 72 masked
+    /// features), or [`ZensimFeatureRegime::WithIw`] (372, adds 72
+    /// information-weighted features on top of Extended).
+    ///
+    /// **Memory cost on Extended / WithIw**: ~600 MB at 12 MP for the
+    /// per-scale persist planes. See
+    /// [`crate::Zensim::new_with_regime_budget`] for the budget gate.
+    pub fn with_regime(mut self, regime: ZensimFeatureRegime) -> Self {
+        self.regime = regime;
         self
     }
 }
@@ -113,6 +150,13 @@ trait ZensimInner: Send {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]>;
+    /// Regime-appropriate feature vector — length matches
+    /// `regime.total_features()` (228 / 300 / 372).
+    fn compute_features_vec(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
 }
 
@@ -129,6 +173,14 @@ where
         Zensim::compute_features(self, ref_rgb, dis_rgb)
     }
 
+    fn compute_features_vec(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>> {
+        Zensim::compute_features_vec(self, ref_rgb, dis_rgb)
+    }
+
     fn dims(&self) -> (u32, u32) {
         Zensim::dimensions(self)
     }
@@ -143,31 +195,40 @@ pub struct ZensimOpaque {
 }
 
 impl ZensimOpaque {
-    /// Construct an opaque zensim instance.
+    /// Construct an opaque zensim instance. Reads
+    /// [`ZensimParams::regime`] to choose the pipeline regime —
+    /// Basic (228, default) / Extended (300) / WithIw (372).
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
         params: ZensimParams,
     ) -> Result<Self> {
+        let regime = params.regime;
         let inner: Box<dyn ZensimInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::cuda::CudaRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::cuda::CudaRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::wgpu::WgpuRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::wgpu::WgpuRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
         };
         Ok(Self {
@@ -182,7 +243,16 @@ impl ZensimOpaque {
         self.inner.dims()
     }
 
-    /// Compute the 228-feature vector for one pair from packed sRGB.
+    /// Configured feature regime (set at construction time via
+    /// [`ZensimParams::with_regime`]).
+    pub fn regime(&self) -> ZensimFeatureRegime {
+        self.params.regime
+    }
+
+    /// Compute the **first 228** features for one pair from packed
+    /// sRGB regardless of regime. Truncates the Extended / WithIw
+    /// output to the basic block — same behaviour as the legacy
+    /// pre-regime API.
     pub fn compute_features_srgb_u8(
         &mut self,
         ref_rgb: &[u8],
@@ -191,7 +261,8 @@ impl ZensimOpaque {
         self.inner.compute_features(ref_rgb, dis_rgb)
     }
 
-    /// Compute the 228-feature vector from [`PixelSlice`] inputs.
+    /// Compute the **first 228** features from [`PixelSlice`] inputs.
+    /// Truncates the Extended / WithIw output to the basic block.
     #[cfg(feature = "pixels")]
     pub fn compute_features_pixels(
         &mut self,
@@ -202,6 +273,41 @@ impl ZensimOpaque {
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_features(&ref_buf, &dis_buf)
+    }
+
+    /// Compute the regime-appropriate feature vector for one pair from
+    /// packed sRGB. Length matches [`Self::regime`]:
+    ///
+    /// - 228 floats on [`ZensimFeatureRegime::Basic`]
+    /// - 300 floats on [`ZensimFeatureRegime::Extended`]
+    /// - 372 floats on [`ZensimFeatureRegime::WithIw`]
+    ///
+    /// Use this entry point when the caller needs the full extended /
+    /// IW feature block (picker training, v26+ sweep schema). The
+    /// fixed-length [`Self::compute_features_srgb_u8`] is kept for
+    /// backwards compatibility but only returns the basic block.
+    pub fn compute_features_vec_srgb_u8(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>> {
+        self.inner.compute_features_vec(ref_rgb, dis_rgb)
+    }
+
+    /// Compute the regime-appropriate feature vector from
+    /// [`PixelSlice`] inputs. See
+    /// [`Self::compute_features_vec_srgb_u8`] for the regime → length
+    /// table.
+    #[cfg(feature = "pixels")]
+    pub fn compute_features_vec_pixels(
+        &mut self,
+        r: PixelSlice<'_>,
+        d: PixelSlice<'_>,
+    ) -> Result<Vec<f64>> {
+        let (w, h) = self.inner.dims();
+        let ref_buf = to_srgb_rgb8(&r, w, h)?;
+        let dis_buf = to_srgb_rgb8(&d, w, h)?;
+        self.inner.compute_features_vec(&ref_buf, &dis_buf)
     }
 
     /// Compute the uniform [`Score`] from packed sRGB. Returns
