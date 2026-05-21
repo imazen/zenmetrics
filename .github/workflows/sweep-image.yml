@@ -22,6 +22,8 @@ name: Sweep image (Dockerfile.sweep.v26)
 on:
   push:
     branches: [master, main]
+    tags:
+      - "zen-metrics-cli-v*"
     paths:
       # Rebuild when any of these change. Cargo source, the Dockerfile
       # itself, the cuda_dlsym_stub source, or the worker scripts.
@@ -34,9 +36,6 @@ on:
       - "scripts/sweep/*chunk_worker.sh"
       - "scripts/sweep/run_with_error_trap.sh"
       - ".github/workflows/sweep-image.yml"
-  push:
-    tags:
-      - "zen-metrics-cli-v*"
   workflow_dispatch:
     inputs:
       force_rebuild_base:
