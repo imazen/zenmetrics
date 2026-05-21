@@ -240,6 +240,7 @@ jobs:
           provenance: false
 
       - name: Verify pushed image
+        if: steps.push_policy.outputs.push == 'true'
         run: |
           docker pull ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }}
           docker run --rm --entrypoint /usr/local/bin/zen-metrics \
