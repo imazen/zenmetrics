@@ -60,7 +60,7 @@ jobs:
       # sibling worktrees. Clone them at pinned commits so the cargo
       # build inside CI resolves the same versions a local build does.
       # The pins live in zenmetrics/CLAUDE.md + the [patch] block.
-      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim--principled-activity)
+      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim--principled-activity + jxl-encoder)
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
@@ -70,6 +70,9 @@ jobs:
           # [patch.crates-io] zensim = { path = ... } line.
           git clone --quiet --branch feat/principled-activity \
               https://github.com/imazen/zensim.git ../zensim--principled-activity
+          # jxl-encoder — direct path dep from zen-metrics-cli (Cargo.toml:176)
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 42833a05ac58fd1b3ce6ff27095bc2160378c72d
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
