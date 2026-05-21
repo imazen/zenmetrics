@@ -279,6 +279,7 @@ COPY --chmod=0755 scripts/sweep/onstart_omni_backfill.sh          /usr/local/bin
 COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill_imazen.sh  /usr/local/bin/onstart_cvvdp_imazen.sh
 COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill.sh         /usr/local/bin/onstart_cvvdp.sh
 COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh    /usr/local/bin/onstart_iwssim.sh
+COPY --chmod=0755 scripts/sweep/onstart_acumen_modea.sh           /usr/local/bin/onstart_acumen.sh
 COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill.sh        /usr/local/bin/onstart_iwssim_v3.sh
 COPY --chmod=0755 scripts/sweep/onstart_v3.sh                     /usr/local/bin/zen-metrics-worker
 COPY --chmod=0755 scripts/sweep/omni_backfill_chunk_worker.sh     /usr/local/bin/omni_chunk_worker.sh

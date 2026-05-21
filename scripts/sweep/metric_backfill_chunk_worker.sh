@@ -321,6 +321,18 @@ SCORE_ARGS=(
 if [[ "$FAIL_ON_BOGUS" == "1" ]]; then
     SCORE_ARGS+=(--fail-on-bogus)
 fi
+# Acumen Mode A is per-metric (only zensim-gpu honours it). Surface as
+# a per-worker env var so the launcher / onstart can opt in without
+# threading another flag through. ACUMEN_MODE_A=1 enables. Viewing
+# defaults can be overridden via ACUMEN_PPD / ACUMEN_PEAK_NITS /
+# ACUMEN_AMBIENT_NITS (otherwise zen-metrics applies its own defaults
+# of 56 / 100 / 5 = lab reference).
+if [[ "${ACUMEN_MODE_A:-0}" == "1" ]]; then
+    SCORE_ARGS+=(--acumen-mode-a)
+    [[ -n "${ACUMEN_PPD:-}" ]] && SCORE_ARGS+=(--acumen-ppd "$ACUMEN_PPD")
+    [[ -n "${ACUMEN_PEAK_NITS:-}" ]] && SCORE_ARGS+=(--acumen-peak-nits "$ACUMEN_PEAK_NITS")
+    [[ -n "${ACUMEN_AMBIENT_NITS:-}" ]] && SCORE_ARGS+=(--acumen-ambient-nits "$ACUMEN_AMBIENT_NITS")
+fi
 # iwssim's --allow-small-images is a per-metric concern; allow callers
 # to inject extra flags via EXTRA_SCORE_PAIRS_ARGS. The launcher / onstart
 # script sets this when needed (e.g. IWSSIM_ALLOW_SMALL=1).
