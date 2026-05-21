@@ -108,6 +108,15 @@ while read -r offer_id dph gpu_name; do
 
     echo "[launch] $WORKER_ID → vast.ai offer $offer_id (\$$dph/hr, $gpu_name)" >&2
 
+    # Wrap onstart in `bash -c` (matches the proven
+    # launch_single_instance.sh pattern). vast.ai's CLI hits
+    # `docker_build() error writing dockerfile` when --onstart-cmd
+    # is a bare path; the bash -c wrapper avoids that. Also wraps
+    # `exec` to the baked onstart_acumen.sh AND falls through to
+    # the image's run_with_error_trap.sh wrapper so the self-
+    # destroy contract works on rc!=0.
+    ONSTART_CMD='bash -c "if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then exec /usr/local/bin/run_with_error_trap.sh /usr/local/bin/onstart_acumen.sh; else exec /usr/local/bin/onstart_acumen.sh; fi"'
+
     if [[ -n "$LOGIN_ARG" ]]; then
         create_out=$(vastai create instance "$offer_id" \
             --image "$IMAGE" \
@@ -116,7 +125,7 @@ while read -r offer_id dph gpu_name; do
             --label "$SWEEP_RUN_ID" \
             --raw \
             --env "$ENV_STR" \
-            --onstart-cmd "/usr/local/bin/onstart_acumen.sh" \
+            --onstart-cmd "$ONSTART_CMD" \
             2>&1)
         rc=$?
     else
@@ -126,7 +135,7 @@ while read -r offer_id dph gpu_name; do
             --label "$SWEEP_RUN_ID" \
             --raw \
             --env "$ENV_STR" \
-            --onstart-cmd "/usr/local/bin/onstart_acumen.sh" \
+            --onstart-cmd "$ONSTART_CMD" \
             2>&1)
         rc=$?
     fi
