@@ -37,7 +37,8 @@ CHUNKS_R2="${CHUNKS_R2:-s3://coefficient/jobs/${SWEEP_RUN_ID}/chunks.jsonl}"
 
 echo "[onstart-feature-backfill] worker=${WORKER_ID:-$(hostname)} run=${SWEEP_RUN_ID} mode=feature-backfill" >&2
 
-export RUST_LOG="${RUST_LOG:-info}"
+export RUST_LOG="${RUST_LOG:-debug}"
+export RUST_BACKTRACE="${RUST_BACKTRACE:-full}"
 export WORKER_MODE=feature-backfill
 
 exec /usr/local/bin/vastai-fleet worker \

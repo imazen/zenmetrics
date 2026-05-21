@@ -5050,7 +5050,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zen-metrics-cli",
- "zenanalyze 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenanalyze",
 ]
 
 [[package]]
@@ -6061,20 +6061,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenanalyze"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9711cf1c3363003dd436f5b5dc113f7881f9b377613eecbf41f91b6b85626442"
-dependencies = [
- "archmage",
- "garb",
- "linear-srgb",
- "magetypes",
- "zenpixels",
- "zenpixels-convert",
-]
-
-[[package]]
 name = "zenavif"
 version = "0.1.7"
 dependencies = [
@@ -6179,7 +6165,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze 0.1.0",
+ "zenanalyze",
  "zencodec",
  "zenpixels",
  "zenyuv 0.1.3",
