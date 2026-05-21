@@ -31,13 +31,13 @@ run_score() {
 }
 
 echo "=== PHASE 1: val corpora with --acumen-mode-a ===" >&2
-for corpus in kadid tid aic3 cid22 konjnd; do
+for corpus in kadid tid aic3 cid22; do
     run_score "${corpus}_acumen" "/tmp/${corpus}_pairs.tsv" \
         "$OUT_DIR/${corpus}_acumen_modea_2026-05-21.parquet" "--acumen-mode-a"
 done
 
 echo "=== PHASE 2: val corpora baseline ===" >&2
-for corpus in kadid tid aic3 cid22 konjnd; do
+for corpus in kadid tid aic3 cid22; do
     run_score "${corpus}_baseline" "/tmp/${corpus}_pairs.tsv" \
         "$OUT_DIR/${corpus}_baseline_2026-05-21.parquet" ""
 done
