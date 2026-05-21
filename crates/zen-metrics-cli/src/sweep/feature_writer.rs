@@ -3,20 +3,28 @@
 //! Per-cell zensim feature vector → Parquet sidecar.
 //!
 //! When the sweep subcommand is invoked with `--feature-output <path.parquet>`,
-//! every cell that runs the zensim metric also persists its 300-feature
-//! extended vector here. The TSV row continues to carry the human-readable
+//! every cell that runs the zensim metric also persists its 228 / 300 / 372
+//! feature vector here. The TSV row continues to carry the human-readable
 //! `score_*` columns (ssim2, butteraugli, zensim, etc.) and the parquet sidecar
 //! is joined back to the TSV by `(image_path, codec, q, knob_tuple_json)`.
 //!
 //! Schema (one row per encoded cell):
 //! ```text
-//! image_path       : utf8
-//! codec            : utf8
-//! q                : uint32
-//! knob_tuple_json  : utf8
-//! zensim_score     : float32
-//! feat_0..feat_299 : float32   (300 columns)
+//! image_path           : utf8
+//! codec                : utf8
+//! q                    : uint32
+//! knob_tuple_json      : utf8
+//! zensim_score         : float32
+//! feat_0..feat_<N-1>   : float32   (N = num_features, 228 / 300 / 372)
 //! ```
+//!
+//! `N` is set at writer construction via [`FeatureParquetWriter::create_with_n`]
+//! (older `create(...)` keeps the legacy 300 default for back-compat). Sweep
+//! callers pass the regime they configured zensim with:
+//!
+//! - `Basic`   → 228 columns (legacy CPU zensim, no extended block)
+//! - `Extended`→ 300 columns (legacy CPU `compute_extended_features`)
+//! - `WithIw`  → 372 columns (v26+ default; adds IW block on top of Extended)
 //!
 //! Each `run_sweep` invocation owns one writer and produces one parquet file.
 //! For chunked / distributed sweeps each worker writes its own file
@@ -39,9 +47,33 @@ use parquet::arrow::ArrowWriter;
 use parquet::basic::{Compression, ZstdLevel};
 use parquet::file::properties::WriterProperties;
 
-/// Number of features in the extended vector (4 scales × 3 channels × 25
-/// features/channel at the default profile).
-pub const NUM_FEATURES: usize = 300;
+/// Default number of features when the caller uses the legacy
+/// [`FeatureParquetWriter::create`] constructor. Matches CPU zensim's
+/// `compute_extended_features` 300-D block (4 scales × 3 channels × 25
+/// features/channel). New callers should use
+/// [`FeatureParquetWriter::create_with_n`] and pass the regime's
+/// `total_features()` (228 / 300 / 372) explicitly.
+#[allow(dead_code)]
+pub const NUM_FEATURES_DEFAULT: usize = 300;
+
+/// Legacy alias for [`NUM_FEATURES_DEFAULT`]. Kept so downstream
+/// references (`vastai-fleet::feature_backfill::NUM_FEATURES`) continue
+/// to compile; new code should not depend on a single global feature
+/// count.
+#[allow(dead_code)]
+pub const NUM_FEATURES: usize = NUM_FEATURES_DEFAULT;
+
+/// Common zensim feature counts. Pass one of these to
+/// [`FeatureParquetWriter::create_with_n`].
+#[allow(dead_code)]
+pub mod num_features {
+    /// 228 — `Basic` regime (no extended / IW block).
+    pub const BASIC: usize = 228;
+    /// 300 — `Extended` regime (Basic + 72 masked features).
+    pub const EXTENDED: usize = 300;
+    /// 372 — `WithIw` regime (Extended + 72 information-weighted features).
+    pub const WITH_IW: usize = 372;
+}
 
 /// Flush an Arrow record batch to disk every `FLUSH_EVERY` rows. 256 keeps
 /// memory bounded (≈ 256 × 304 floats × 4 B = 311 KiB per batch) while
@@ -59,6 +91,10 @@ pub struct FeatureParquetWriter {
     schema: Arc<Schema>,
     writer: ArrowWriter<File>,
     buf: RowBuffer,
+    /// Configured feature count (228 / 300 / 372). Set once at
+    /// construction; every `push_row` must pass exactly this many
+    /// features or the call returns an error.
+    n_features: usize,
 }
 
 struct RowBuffer {
@@ -73,14 +109,14 @@ struct RowBuffer {
 }
 
 impl RowBuffer {
-    fn new() -> Self {
+    fn new(n_features: usize) -> Self {
         Self {
             image_path: Vec::with_capacity(FLUSH_EVERY),
             codec: Vec::with_capacity(FLUSH_EVERY),
             q: Vec::with_capacity(FLUSH_EVERY),
             knob_tuple_json: Vec::with_capacity(FLUSH_EVERY),
             zensim_score: Vec::with_capacity(FLUSH_EVERY),
-            feature_columns: (0..NUM_FEATURES)
+            feature_columns: (0..n_features)
                 .map(|_| Vec::with_capacity(FLUSH_EVERY))
                 .collect(),
             rows: 0,
@@ -101,9 +137,25 @@ impl RowBuffer {
 }
 
 impl FeatureParquetWriter {
-    /// Create a new parquet writer at `path`. Overwrites if the file exists.
+    /// Create a new parquet writer at `path` with the legacy 300-feature
+    /// schema. Overwrites if the file exists. Prefer
+    /// [`Self::create_with_n`] in new code so the schema matches the
+    /// regime the GPU/CPU zensim is actually running.
+    #[allow(dead_code)]
     pub fn create(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
-        let schema = Arc::new(build_schema());
+        Self::create_with_n(path, NUM_FEATURES_DEFAULT)
+    }
+
+    /// Create a new parquet writer at `path` with `n` feature columns
+    /// (`feat_0..feat_<n-1>`). Pass `num_features::WITH_IW` (372) for
+    /// the v26+ default, `num_features::EXTENDED` (300) for the legacy
+    /// CPU zensim block, or `num_features::BASIC` (228) for the
+    /// no-extended-block fast path. Overwrites if the file exists.
+    pub fn create_with_n(
+        path: &Path,
+        n: usize,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let schema = Arc::new(build_schema(n));
         let file = File::create(path)?;
         let props = WriterProperties::builder()
             // zstd is a compromise: smaller than snappy, slower than lz4 but
@@ -116,13 +168,20 @@ impl FeatureParquetWriter {
         Ok(Self {
             schema,
             writer,
-            buf: RowBuffer::new(),
+            buf: RowBuffer::new(n),
+            n_features: n,
         })
     }
 
-    /// Append one cell to the buffer. `features` must have length
-    /// [`NUM_FEATURES`]; mismatch returns an error rather than silently
-    /// truncating or padding.
+    /// Configured feature count for this writer (228 / 300 / 372).
+    #[allow(dead_code)]
+    pub fn num_features(&self) -> usize {
+        self.n_features
+    }
+
+    /// Append one cell to the buffer. `features` must have length matching
+    /// [`Self::num_features`]; mismatch returns an error rather than
+    /// silently truncating or padding.
     pub fn push_row(
         &mut self,
         image_path: &str,
@@ -132,9 +191,10 @@ impl FeatureParquetWriter {
         zensim_score: f32,
         features: &[f64],
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if features.len() != NUM_FEATURES {
+        let n = self.n_features;
+        if features.len() != n {
             return Err(format!(
-                "feature_writer: expected {NUM_FEATURES} features, got {}",
+                "feature_writer: expected {n} features, got {}",
                 features.len()
             )
             .into());
@@ -173,14 +233,14 @@ impl FeatureParquetWriter {
     }
 }
 
-fn build_schema() -> Schema {
-    let mut fields: Vec<Field> = Vec::with_capacity(5 + NUM_FEATURES);
+fn build_schema(n: usize) -> Schema {
+    let mut fields: Vec<Field> = Vec::with_capacity(5 + n);
     fields.push(Field::new("image_path", DataType::Utf8, false));
     fields.push(Field::new("codec", DataType::Utf8, false));
     fields.push(Field::new("q", DataType::UInt32, false));
     fields.push(Field::new("knob_tuple_json", DataType::Utf8, false));
     fields.push(Field::new("zensim_score", DataType::Float32, false));
-    for i in 0..NUM_FEATURES {
+    for i in 0..n {
         fields.push(Field::new(format!("feat_{i}"), DataType::Float32, false));
     }
     Schema::new(fields)
@@ -190,7 +250,8 @@ fn build_record_batch(
     schema: &Arc<Schema>,
     buf: &RowBuffer,
 ) -> Result<RecordBatch, Box<dyn std::error::Error>> {
-    let mut cols: Vec<ArrayRef> = Vec::with_capacity(5 + NUM_FEATURES);
+    let n = buf.feature_columns.len();
+    let mut cols: Vec<ArrayRef> = Vec::with_capacity(5 + n);
     cols.push(Arc::new(StringArray::from(buf.image_path.clone())));
     cols.push(Arc::new(StringArray::from(buf.codec.clone())));
     cols.push(Arc::new(UInt32Array::from(buf.q.clone())));

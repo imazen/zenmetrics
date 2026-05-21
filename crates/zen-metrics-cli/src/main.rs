@@ -176,12 +176,25 @@ struct SweepArgs {
     #[arg(long)]
     output: PathBuf,
     /// Optional path for a per-cell zensim feature parquet sidecar. When
-    /// set, every cell that runs the `zensim` metric also persists its
-    /// 300-feature extended vector to this parquet file. Joins back to
-    /// `--output` (TSV) on `(image_path, codec, q, knob_tuple_json)`.
-    /// The metric list must include `zensim` for any rows to be written.
+    /// set, every cell that runs the `zensim` (CPU) or `zensim-gpu`
+    /// metric also persists its feature vector to this parquet file.
+    /// Joins back to `--output` (TSV) on
+    /// `(image_path, codec, q, knob_tuple_json)`. The metric list must
+    /// include one of those variants for any rows to be written.
+    ///
+    /// Width depends on the source: CPU `zensim` always emits 300 floats;
+    /// `zensim-gpu` honours `--zensim-features-regime` (default
+    /// `with-iw` = 372). When both variants are in the metric set, GPU
+    /// wins and CPU's feature output is dropped to keep the sidecar's
+    /// schema consistent.
     #[arg(long)]
     feature_output: Option<PathBuf>,
+    /// Zensim feature regime for the GPU path: `basic` (228), `extended`
+    /// (300), or `with-iw` (372). Default = `with-iw` for the v26+
+    /// picker-training schema. Ignored when neither `--feature-output`
+    /// nor `zensim-gpu` is in the metric set.
+    #[arg(long, value_enum, default_value = "with-iw")]
+    zensim_features_regime: crate::metrics::ZensimFeatureRegime,
     /// Optional directory to receive a PNG of every successfully
     /// decoded cell's distorted image. Filenames are deterministic
     /// per `(src_path, codec, q, knobs)`. Pairs with `--pairs-tsv`
@@ -398,6 +411,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
         gpu_runtime: args.gpu_runtime,
         output: args.output,
         feature_output: args.feature_output,
+        feature_regime: args.zensim_features_regime,
         distorted_out_dir: args.distorted_out_dir,
         encoded_out_dir: args.encoded_out_dir,
         pairs_tsv: args.pairs_tsv,

@@ -50,7 +50,10 @@ use std::time::Instant;
 use rayon::prelude::*;
 
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
-use crate::metrics::{GpuRuntime, MetricKind, run_metric, run_zensim_with_features};
+use crate::metrics::{
+    GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_zensim_gpu_with_features,
+    run_zensim_with_features,
+};
 use crate::sweep::encode::{CodecKind, encode};
 use crate::sweep::feature_writer::FeatureParquetWriter;
 use crate::sweep::grid::{KnobGrid, KnobTuple};
@@ -65,16 +68,30 @@ pub struct SweepConfig {
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
     pub output: PathBuf,
-    /// When set, every cell that runs the [`MetricKind::Zensim`] metric
-    /// also persists its 300-feature extended vector to a parquet sidecar
-    /// at this path. Joins back to `output` (TSV) by
+    /// When set, every cell that runs the [`MetricKind::Zensim`] (CPU)
+    /// **or** [`MetricKind::ZensimGpu`] metric also persists its
+    /// regime-appropriate feature vector to a parquet sidecar at this
+    /// path. Joins back to `output` (TSV) by
     /// `(image_path, codec, q, knob_tuple_json)`.
     ///
-    /// Cells that do not run zensim emit nothing to the parquet. If the
-    /// metric list does not include `MetricKind::Zensim`, the parquet file
-    /// is created but receives no rows; we don't auto-add zensim because
-    /// callers may have explicit reasons for the metric set they passed.
+    /// The vector length is `feature_regime.total_features()`
+    /// (228 / 300 / 372). CPU zensim always emits 300 features (its
+    /// `compute_extended_features` returns the Extended block); the GPU
+    /// path honours [`Self::feature_regime`].
+    ///
+    /// Cells that do not run any zensim variant emit nothing to the
+    /// parquet. If the metric list contains neither variant, the parquet
+    /// file is created but receives no rows; we don't auto-add zensim
+    /// because callers may have explicit reasons for the metric set
+    /// they passed.
     pub feature_output: Option<PathBuf>,
+    /// Feature regime for the **GPU** zensim feature path. Defaults to
+    /// [`ZensimFeatureRegime::WithIw`] (372) — the v26+ training schema.
+    /// Ignored when GPU zensim is not in the metric set OR
+    /// `feature_output` is None. CPU zensim always emits 300 features
+    /// regardless of this flag (its CPU API doesn't expose the regime
+    /// knob).
+    pub feature_regime: ZensimFeatureRegime,
     /// When set, every successfully decoded cell writes its
     /// **distorted** image (the result of encode + decode-back) as
     /// PNG into this directory. Filenames are
@@ -143,8 +160,21 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     write_header(&mut wtr, &cfg.metrics)?;
 
     let zensim_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::Zensim);
+    let zensim_gpu_in_metrics = cfg.metrics.iter().any(|m| *m == MetricKind::ZensimGpu);
+    // Feature-vector width depends on which path is producing them.
+    // CPU zensim's `compute_extended_features` returns 300 floats; GPU
+    // honours `feature_regime`. When both are in the metric set we
+    // prefer the GPU regime (matches the v26+ schema) and CPU zensim's
+    // extra emit (if any) is ignored — only one variant is allowed to
+    // write per cell to keep the sidecar's `feat_*` count consistent.
+    let feature_n: usize = if zensim_gpu_in_metrics {
+        cfg.feature_regime.total_features()
+    } else {
+        // CPU zensim path — fixed at 300.
+        crate::sweep::feature_writer::num_features::EXTENDED
+    };
     let feature_writer_inner = match &cfg.feature_output {
-        Some(path) => Some(FeatureParquetWriter::create(path)?),
+        Some(path) => Some(FeatureParquetWriter::create_with_n(path, feature_n)?),
         None => None,
     };
 
@@ -209,7 +239,15 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
             // a single bad knob combo would tear down a chunk's worth of
             // good rows mid-flight.
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                compute_cell(cfg, src_path, &source, *q, tuple, zensim_in_metrics)
+                compute_cell(
+                    cfg,
+                    src_path,
+                    &source,
+                    *q,
+                    tuple,
+                    zensim_in_metrics,
+                    zensim_gpu_in_metrics,
+                )
             }))
             .unwrap_or_else(|panic_payload| {
                 let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
@@ -351,7 +389,8 @@ enum CellOutcome {
 ///   - decoded `Rgb8Image` (≈ source dimensions × 3 bytes; held during
 ///     metric scoring then dropped)
 ///   - row `Vec<String>` (small)
-///   - optional feature `Vec<f64>` (300 entries when zensim_features_wanted)
+///   - optional feature `Vec<f64>` (228 / 300 / 372 entries when a
+///     zensim variant is in the metric set and `feature_output` is on)
 fn compute_cell(
     cfg: &SweepConfig,
     src_path: &Path,
@@ -359,6 +398,7 @@ fn compute_cell(
     q: u32,
     tuple: &KnobTuple,
     zensim_in_metrics: bool,
+    zensim_gpu_in_metrics: bool,
 ) -> CellOutcome {
     let knob_json = tuple.to_canonical_json();
     let mut row: Vec<String> = vec![
@@ -460,15 +500,38 @@ fn compute_cell(
 
     // Score every selected metric.
     let mut any_score_failed = false;
-    let zensim_features_wanted = cfg.feature_output.is_some() && zensim_in_metrics;
+    // GPU zensim takes precedence when both variants are in the
+    // metric set — its `feature_regime` matches the v26+ schema
+    // (typically 372). CPU zensim's `compute_extended_features`
+    // emits 300, so collecting features from both at once would
+    // require two distinct sidecar widths (we don't support that;
+    // ship one).
+    let want_features_gpu =
+        cfg.feature_output.is_some() && zensim_gpu_in_metrics;
+    let want_features_cpu = cfg.feature_output.is_some()
+        && zensim_in_metrics
+        && !zensim_gpu_in_metrics;
     let mut zensim_features: Option<(f32, Vec<f64>)> = None;
     for &metric in &cfg.metrics {
         let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> =
-            if metric == MetricKind::Zensim && zensim_features_wanted {
+            if metric == MetricKind::Zensim && want_features_cpu {
                 match run_zensim_with_features(source, &decoded) {
                     Ok((score, features)) => {
                         zensim_features = Some((score as f32, features));
                         Ok(vec![("zensim", score)])
+                    }
+                    Err(e) => Err(e),
+                }
+            } else if metric == MetricKind::ZensimGpu && want_features_gpu {
+                match run_zensim_gpu_with_features(
+                    source,
+                    &decoded,
+                    cfg.gpu_runtime,
+                    cfg.feature_regime,
+                ) {
+                    Ok((score, features)) => {
+                        zensim_features = Some((score as f32, features));
+                        Ok(vec![("zensim_gpu", score)])
                     }
                     Err(e) => Err(e),
                 }

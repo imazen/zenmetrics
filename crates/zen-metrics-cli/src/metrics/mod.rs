@@ -649,6 +649,7 @@ fn disabled_msg(metric: &str, feature: &str) -> Box<dyn std::error::Error> {
 /// so a sweep that scores zensim today and migrates to this entry point
 /// later sees no shift in the TSV `score_zensim` column.
 #[cfg(feature = "sweep")]
+#[allow(unused_variables)]
 pub fn run_zensim_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -661,6 +662,155 @@ pub fn run_zensim_with_features(
     {
         Err(disabled_msg("zensim", "cpu-metrics"))
     }
+}
+
+/// Selects which zensim feature regime the GPU path emits.
+///
+/// Maps onto [`zenmetrics_api::zensim::ZensimFeatureRegime`]. Each
+/// variant determines the per-cell feature-vector width (228 / 300 /
+/// 372) and the parquet sidecar's `feat_<i>` column count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ZensimFeatureRegime {
+    /// 228 features — basic + peak only. Matches the legacy
+    /// `compute_features` output of CPU zensim's default profile.
+    Basic,
+    /// 300 features — basic + peak + masked. Matches CPU
+    /// `compute_extended_features` (pre-v26 sweep schema).
+    Extended,
+    /// 372 features — basic + peak + masked + IW. v26+ default for
+    /// picker training; supersedes Extended.
+    WithIw,
+}
+
+impl ZensimFeatureRegime {
+    /// Feature-vector length (228 / 300 / 372).
+    pub fn total_features(self) -> usize {
+        match self {
+            ZensimFeatureRegime::Basic => 228,
+            ZensimFeatureRegime::Extended => 300,
+            ZensimFeatureRegime::WithIw => 372,
+        }
+    }
+}
+
+#[cfg(feature = "gpu-zensim")]
+impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
+    fn from(r: ZensimFeatureRegime) -> Self {
+        match r {
+            ZensimFeatureRegime::Basic => {
+                zenmetrics_api::zensim::ZensimFeatureRegime::Basic
+            }
+            ZensimFeatureRegime::Extended => {
+                zenmetrics_api::zensim::ZensimFeatureRegime::Extended
+            }
+            ZensimFeatureRegime::WithIw => {
+                zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
+            }
+        }
+    }
+}
+
+/// Run **GPU** zensim and return the score + the regime-appropriate
+/// feature vector (228 / 300 / 372). Mirrors
+/// [`run_zensim_with_features`] but goes through the GPU pipeline so
+/// the encoded sweep doesn't pay the CPU-zensim cost twice (once for
+/// the score column, once for the features).
+///
+/// The `gpu_runtime = Auto` case walks the compiled-in runtime list
+/// and returns the first that produces a finite score.
+#[cfg(feature = "sweep")]
+#[cfg(feature = "gpu-zensim")]
+pub fn run_zensim_gpu_with_features(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    gpu_runtime: GpuRuntime,
+    regime: ZensimFeatureRegime,
+) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "zensim-gpu: reference ({}×{}) and distorted ({}×{}) differ in size",
+            reference.width, reference.height, distorted.width, distorted.height
+        )
+        .into());
+    }
+    let candidates: Vec<GpuRuntime> = match gpu_runtime {
+        GpuRuntime::Auto => auto_order().to_vec(),
+        other => vec![other],
+    };
+    let mut errors: Vec<String> = Vec::with_capacity(candidates.len());
+    for rt in candidates {
+        let backend = match gpu_runtime_to_backend(rt) {
+            Ok(b) => b,
+            Err(e) => {
+                errors.push(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
+        };
+        // Construct ZensimParams with the requested regime + the
+        // canonical default weights (so the basic-block score matches
+        // `run_gpu_via_umbrella(MetricKind::Zensim, ...)` exactly).
+        let zp = zenmetrics_api::zensim::ZensimParams::default_weights()
+            .with_regime(regime.into());
+        let params = zenmetrics_api::MetricParams::Zensim(zp);
+        let metric = zenmetrics_api::Metric::new(
+            zenmetrics_api::MetricKind::Zensim,
+            backend,
+            reference.width,
+            reference.height,
+            params,
+        );
+        let mut m = match metric {
+            Ok(m) => m,
+            Err(e) => {
+                errors.push(format!("{}: {e}", runtime_label(rt)));
+                continue;
+            }
+        };
+        match m.compute_features_srgb_u8(&reference.pixels, &distorted.pixels) {
+            Ok((score, features)) => {
+                if !score.value.is_finite() {
+                    errors.push(format!(
+                        "{}: non-finite score {}",
+                        runtime_label(rt),
+                        score.value
+                    ));
+                    continue;
+                }
+                if features.len() != regime.total_features() {
+                    errors.push(format!(
+                        "{}: expected {} features, got {}",
+                        runtime_label(rt),
+                        regime.total_features(),
+                        features.len()
+                    ));
+                    continue;
+                }
+                return Ok((score.value, features));
+            }
+            Err(e) => errors.push(format!("{}: {e}", runtime_label(rt))),
+        }
+    }
+    Err(format!(
+        "zensim-gpu: no runtime succeeded; tried [{}]",
+        if errors.is_empty() {
+            "none".to_string()
+        } else {
+            errors.join("; ")
+        }
+    )
+    .into())
+}
+
+#[cfg(feature = "sweep")]
+#[cfg(not(feature = "gpu-zensim"))]
+#[allow(unused_variables)]
+pub fn run_zensim_gpu_with_features(
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+    gpu_runtime: GpuRuntime,
+    regime: ZensimFeatureRegime,
+) -> Result<(f64, Vec<f64>), Box<dyn std::error::Error>> {
+    Err(disabled_msg("zensim-gpu", "gpu-zensim"))
 }
 
 #[cfg(test)]
