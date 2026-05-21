@@ -76,11 +76,45 @@ pub struct ZensimParams {
 
     /// Acumen Mode A: when set, the pipeline computes per-image
     /// castleCSF weights at this viewing condition and applies them
-    /// to the HF band-energy features (basic slots 10-12 per scale
-    /// per channel). See `zensim::acumen` and tracking issue
-    /// `imazen/zensim#40` Gate A. Default `None` → no weighting,
-    /// V_22-shipped path bit-stable.
+    /// based on [`Self::acumen_arch`]. Default `None` → no weighting,
+    /// V_22-shipped path bit-stable. See `zensim::acumen` and tracking
+    /// issue `imazen/zensim#40` Gate A.
     pub acumen_mode_a: Option<zensim::acumen::viewing::ViewingCondition>,
+
+    /// How acumen weights are applied. Only consulted when
+    /// `acumen_mode_a` is `Some`. Default = HfPost (the original
+    /// Mode A wiring — multiply HF band-energy slots 10/11/12 per
+    /// scale-channel by per-(scale, channel) castleCSF weight).
+    ///
+    /// Alternatives investigated for Gate A architectural ablation:
+    /// - `WideModulation`: scale ALL 19 features per scale-channel
+    ///   by the per-band weight (broader application).
+    /// - `AuxFeatures`: leave features unchanged; expose the 12
+    ///   per-(channel, scale) weights as a separate getter for the
+    ///   caller to append as auxiliary feature columns. The MLP
+    ///   then learns to use CSF weights as CONTEXT instead of as
+    ///   a multiplicative modulation.
+    pub acumen_arch: AcumenArch,
+}
+
+/// Acumen Mode A application strategy. See [`ZensimParams::acumen_arch`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AcumenArch {
+    /// Multiply basic feature slots 10/11/12 per (scale, channel)
+    /// by per-(scale, channel) castleCSF weight. The original Mode
+    /// A wiring; preserved as the default for backward compat.
+    #[default]
+    HfPost,
+    /// Multiply all 19 basic+peaks features per (scale, channel)
+    /// by per-(scale, channel) castleCSF weight. Broader
+    /// application — every band-relative statistic gets weighted.
+    WideModulation,
+    /// Leave features unchanged. Caller fetches
+    /// [`crate::ZensimOpaque::acumen_band_weights_flat`] separately
+    /// and appends to its training/inference vector as auxiliary
+    /// features. The MLP learns to USE the CSF weights as input
+    /// signal rather than have them applied as a multiplier.
+    AuxFeatures,
 }
 
 // Manual Debug impl because `Option<ViewingCondition>` doesn't
@@ -105,7 +139,17 @@ impl ZensimParams {
         Self {
             weights: None,
             acumen_mode_a: None,
+            acumen_arch: AcumenArch::default(),
         }
+    }
+
+    /// Set the acumen application strategy. Only meaningful when
+    /// [`Self::acumen_mode_a`] is `Some`. Default `HfPost` matches
+    /// the original Mode A wiring; pass `WideModulation` or
+    /// `AuxFeatures` for the architectural ablation variants.
+    pub fn with_acumen_arch(mut self, arch: AcumenArch) -> Self {
+        self.acumen_arch = arch;
+        self
     }
 
     /// Enable acumen Mode A at the given viewing condition. Per-image
@@ -140,6 +184,7 @@ impl ZensimParams {
         Self {
             weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
             acumen_mode_a: None,
+            acumen_arch: AcumenArch::default(),
         }
     }
 
@@ -161,6 +206,12 @@ trait ZensimInner: Send {
         &mut self,
         viewing: Option<zensim::acumen::viewing::ViewingCondition>,
     );
+    fn set_acumen_arch(&mut self, arch: AcumenArch);
+    /// Returns the 12 cached per-(channel, scale) castleCSF weights
+    /// from the most recent reference, flattened in
+    /// `[channel * SCALES + scale]` order. `None` if no reference
+    /// has been set or acumen is disabled.
+    fn acumen_band_weights_flat(&self) -> Option<[f32; 12]>;
 }
 
 impl<R> ZensimInner for Zensim<R>
@@ -185,6 +236,14 @@ where
         viewing: Option<zensim::acumen::viewing::ViewingCondition>,
     ) {
         Zensim::set_acumen_viewing(self, viewing);
+    }
+
+    fn set_acumen_arch(&mut self, arch: AcumenArch) {
+        Zensim::set_acumen_arch(self, arch);
+    }
+
+    fn acumen_band_weights_flat(&self) -> Option<[f32; 12]> {
+        Zensim::acumen_band_weights_flat(self)
     }
 }
 
@@ -229,13 +288,22 @@ impl ZensimOpaque {
             params,
             backend,
         };
-        // Push acumen viewing through to the inner pipeline so that
-        // subsequent `set_reference` calls compute per-image
-        // castleCSF band weights. When `params.acumen_mode_a` is
-        // None this is a no-op.
+        // Push acumen viewing + arch through to the inner pipeline
+        // so subsequent `set_reference` calls compute per-image
+        // castleCSF band weights and Phase 4 dispatches correctly.
         let viewing = shim.params.acumen_mode_a;
+        let arch = shim.params.acumen_arch;
         shim.inner.set_acumen_viewing(viewing);
+        shim.inner.set_acumen_arch(arch);
         Ok(shim)
+    }
+
+    /// Expose the cached per-(channel, scale) castleCSF weights.
+    /// Returns `None` if no reference has been set or acumen is
+    /// disabled. Used by `AuxFeatures` arch callers to append the
+    /// 12 weights as additional feature columns.
+    pub fn acumen_band_weights_flat(&self) -> Option<[f32; 12]> {
+        self.inner.acumen_band_weights_flat()
     }
 
     /// Configured `(width, height)`.

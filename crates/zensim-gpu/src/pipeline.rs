@@ -233,6 +233,10 @@ pub struct Zensim<R: Runtime> {
     /// per-image weights using this viewing.
     acumen_viewing: Option<zensim::acumen::viewing::ViewingCondition>,
 
+    /// Acumen application strategy — see [`crate::AcumenArch`].
+    /// Default `HfPost` matches the original Mode A wiring.
+    acumen_arch: crate::opaque::AcumenArch,
+
     /// Loaded once per process for acumen Mode A lookups. `None` until
     /// the first time the caller enables Mode A via
     /// [`Zensim::set_acumen_viewing`].
@@ -441,6 +445,7 @@ impl<R: Runtime> Zensim<R> {
             has_cached_reference: false,
             acumen_band_weights: None,
             acumen_viewing: None,
+            acumen_arch: crate::opaque::AcumenArch::default(),
             acumen_lut_bytes: include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut"),
             regime,
             persist_planes_ref,
@@ -553,6 +558,27 @@ impl<R: Runtime> Zensim<R> {
         self.run_xyb_pyramid(true);
         self.has_cached_reference = true;
         Ok(())
+    }
+
+    /// Configure acumen application strategy. See
+    /// [`crate::AcumenArch`] for variants. Default `HfPost` matches
+    /// the original Mode A wiring (scale slots 10/11/12).
+    pub fn set_acumen_arch(&mut self, arch: crate::opaque::AcumenArch) {
+        self.acumen_arch = arch;
+    }
+
+    /// Flattened cached per-(channel, scale) castleCSF weights, in
+    /// `[channel * SCALES + scale]` order. Returns `None` when
+    /// acumen is disabled or no reference has been set.
+    pub fn acumen_band_weights_flat(&self) -> Option<[f32; 12]> {
+        let w = self.acumen_band_weights.as_ref()?;
+        let mut out = [0.0_f32; 12];
+        for ch in 0..3 {
+            for s in 0..SCALES {
+                out[ch * SCALES + s] = w[ch][s];
+            }
+        }
+        Some(out)
     }
 
     /// Configure acumen Mode A: subsequent [`Self::set_reference`]
@@ -740,21 +766,47 @@ impl<R: Runtime> Zensim<R> {
                 out[bb + 7] = (sums[7] * inv_n).max(0.0).powf(0.25);
                 out[bb + 8] = (sums[8] * inv_n).max(0.0).sqrt();
                 out[bb + 9] = sums[9] * inv_n;
-                // Slots 10/11/12 are HF band-energy losses/gains —
-                // the closest analog to the CPU CVVDP-features'
-                // CSF-weighted band-ratios. Acumen Mode A weights
-                // them by per-(channel, scale) castleCSF
-                // sensitivity. When acumen is disabled (default),
-                // the multiplier is 1.0 and the V_22-shipped path
-                // is bit-stable.
+                // Acumen Mode A application dispatched on
+                // `acumen_arch`. `HfPost` (default) multiplies only
+                // slots 10/11/12 (HF band-energy stats — the
+                // closest analog to CVVDP-features' band-ratios).
+                // `WideModulation` multiplies ALL 13 basic slots
+                // 0..12 by the same weight to test "wider
+                // application". `AuxFeatures` is a no-op here;
+                // the caller fetches the 12 weights via
+                // `Zensim::acumen_band_weights_flat()` and appends
+                // them as auxiliary feature columns. When acumen
+                // is disabled, the multiplier is 1.0 and the
+                // V_22-shipped path is bit-stable.
+                use crate::opaque::AcumenArch;
                 let acumen_w = self
                     .acumen_band_weights
                     .as_ref()
                     .map(|w| w[ch][s] as f64)
                     .unwrap_or(1.0);
-                out[bb + 10] = hf_energy_loss * acumen_w;
-                out[bb + 11] = hf_mag_loss * acumen_w;
-                out[bb + 12] = hf_energy_gain * acumen_w;
+                match self.acumen_arch {
+                    AcumenArch::HfPost => {
+                        out[bb + 10] = hf_energy_loss * acumen_w;
+                        out[bb + 11] = hf_mag_loss * acumen_w;
+                        out[bb + 12] = hf_energy_gain * acumen_w;
+                    }
+                    AcumenArch::WideModulation => {
+                        for slot in 0..=12 {
+                            out[bb + slot] *= acumen_w;
+                        }
+                    }
+                    AcumenArch::AuxFeatures => {
+                        // Leave HF features unmodified — the caller
+                        // appends `acumen_band_weights_flat()` to
+                        // its training/inference vector. We still
+                        // store the raw `hf_*` values below; they
+                        // get written verbatim like in
+                        // the baseline (no-acumen) path.
+                        out[bb + 10] = hf_energy_loss;
+                        out[bb + 11] = hf_mag_loss;
+                        out[bb + 12] = hf_energy_gain;
+                    }
+                }
 
                 // Peaks block.
                 let pb = basic_total

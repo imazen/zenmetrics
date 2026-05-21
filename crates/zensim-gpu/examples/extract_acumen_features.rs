@@ -31,7 +31,7 @@ use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
-use zensim_gpu::{Backend, TOTAL_FEATURES, ZensimOpaque, ZensimParams};
+use zensim_gpu::{AcumenArch, Backend, TOTAL_FEATURES, ZensimOpaque, ZensimParams};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pairs_tsv: Option<PathBuf> = None;
@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut acumen_ppd = 56.0_f32;
     let mut acumen_peak = 100.0_f32;
     let mut acumen_ambient = 5.0_f32;
+    let mut acumen_arch = AcumenArch::HfPost;
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -50,6 +51,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--acumen-ppd" => acumen_ppd = args.next().unwrap().parse()?,
             "--acumen-peak-nits" => acumen_peak = args.next().unwrap().parse()?,
             "--acumen-ambient-nits" => acumen_ambient = args.next().unwrap().parse()?,
+            "--acumen-arch" => {
+                let v = args.next().unwrap();
+                acumen_arch = match v.as_str() {
+                    "hf_post" | "hf-post" => AcumenArch::HfPost,
+                    "wide_modulation" | "wide" => AcumenArch::WideModulation,
+                    "aux_features" | "aux" => AcumenArch::AuxFeatures,
+                    _ => return Err(format!("unknown --acumen-arch: {v}").into()),
+                };
+            }
             _ => return Err(format!("unknown arg: {arg}").into()),
         }
     }
@@ -73,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pairs.push((PathBuf::from(parts[ref_idx]), PathBuf::from(parts[dist_idx])));
     }
     eprintln!("[extract_acumen_features] {} pairs from {pairs_tsv:?}", pairs.len());
-    eprintln!("[extract_acumen_features] acumen-mode-a: {acumen_mode_a}");
+    eprintln!("[extract_acumen_features] acumen-mode-a: {acumen_mode_a}, arch: {acumen_arch:?}");
     if acumen_mode_a {
         eprintln!(
             "[extract_acumen_features] viewing: ppd={acumen_ppd} peak={acumen_peak} ambient={acumen_ambient}"
@@ -93,9 +103,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    // Output schema
+    // Output schema. Append 12 aux CSF weight columns when
+    // arch == AuxFeatures (so the trainer sees f228..f239 as
+    // additional per-pair context).
+    let n_aux = if matches!(acumen_arch, AcumenArch::AuxFeatures) && acumen_mode_a {
+        12usize
+    } else {
+        0
+    };
+    let n_features_total = TOTAL_FEATURES + n_aux;
     let mut fields = vec![Field::new("ref_basename", DataType::Utf8, false)];
-    for i in 0..TOTAL_FEATURES {
+    for i in 0..n_features_total {
         fields.push(Field::new(&format!("f{i}"), DataType::Float64, true));
     }
     let schema = Arc::new(Schema::new(fields));
@@ -112,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut current_z: Option<ZensimOpaque> = None;
     let mut basenames = Vec::with_capacity(pairs.len());
     let mut feature_cols: Vec<Vec<Option<f64>>> =
-        (0..TOTAL_FEATURES).map(|_| Vec::with_capacity(pairs.len())).collect();
+        (0..n_features_total).map(|_| Vec::with_capacity(pairs.len())).collect();
 
     let mut ok = 0usize;
     let mut fail = 0usize;
@@ -148,7 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if current_dims != Some((w_r, h_r)) {
             // Rebuild ZensimOpaque for new dimensions.
-            let mut params = ZensimParams::new();
+            let mut params = ZensimParams::new().with_acumen_arch(acumen_arch);
             if let Some(v) = viewing {
                 params = params.with_acumen_mode_a(v);
             }
@@ -172,6 +190,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         basenames.push(basename);
         for i in 0..TOTAL_FEATURES {
             feature_cols[i].push(Some(feats[i]));
+        }
+        // Aux columns: 12 castleCSF weights cached in ZensimOpaque
+        // for the current reference. AuxFeatures arch only.
+        if n_aux > 0 {
+            let weights = z
+                .acumen_band_weights_flat()
+                .ok_or("acumen-mode-a + AuxFeatures but weights unavailable")?;
+            for i in 0..12 {
+                feature_cols[TOTAL_FEATURES + i].push(Some(weights[i] as f64));
+            }
         }
         ok += 1;
         if (idx + 1) % 100 == 0 {

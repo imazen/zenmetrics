@@ -77,7 +77,7 @@ pub mod weights;
 pub use weights::WEIGHTS_PREVIEW_V0_2;
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.
-pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
+pub use opaque::{AcumenArch, Backend, Score, ZensimOpaque, ZensimParams};
 
 // Re-export the acumen ViewingCondition so `zen-metrics-cli` can
 // construct one without a direct `zensim` dep. Doc-hidden mirrors
