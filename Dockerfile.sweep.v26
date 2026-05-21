@@ -1,0 +1,300 @@
+# Dockerfile.sweep.v26 — collapsed single-file sweep image.
+#
+# Replaces the chain v14 → v15 → v18 → v19 → v20 → v21 → v22 → v23 → v24 → v25.
+# All deltas from those incremental Dockerfiles are inlined here in proper
+# layer order. v0 (root Dockerfile.sweep) + scripts/sweep/Dockerfile.sweep
+# (v0 duplicate) + Dockerfile.sweep.v13 (legacy from-source builder) are
+# also retired by this collapse. See `git log` of the deleted files for
+# the incremental change history.
+#
+# This is the SINGLE source of truth for the vast.ai sweep worker image.
+#
+# Layer plan (cheap-changes-rarely → expensive-changes-often, so docker
+# layer cache + ghcr.io layer dedup work for us):
+#
+#   ┌──────────────────────────────────────────────────────────────┐
+#   │ L1: ubuntu:24.04                       ~80 MB   biennial      │
+#   │ L2: stable apt deps                    ~150 MB  per quarter   │
+#   │ L3: pyarrow via pip                    ~70 MB   per quarter   │
+#   │ L4: CUDA runtime (NVRTC + cudart 12-6) ~250 MB  per CUDA bump │
+#   │ L5: CUDA dev headers (cudart-dev-12-6) ~30 MB   per CUDA bump │
+#   │ L6: helpers (s5cmd 2.2.2 + jq 1.7.1)   ~18 MB   per quarter   │
+#   │ L7: cuda_dlsym_stub.so (compiled here) ~15 KB   rare          │
+#   │ L8: zen-metrics binary                 ~280 MB  per code push │
+#   │ L9: vastai-fleet binary                ~5 MB    per code push │
+#   │ L10: onstart + worker scripts          ~50 KB   per script    │
+#   │ L11: ENV + LABELs + ENTRYPOINT         0 B      ~never        │
+#   └──────────────────────────────────────────────────────────────┘
+#
+# Once L1-L7 are pulled on a vast.ai datacenter node they sit in the
+# local docker cache forever. New code pushes re-pull only L8-L10
+# (~285 MB on the wire). Boot is then: docker pull (~5 s) → onstart
+# fetches chunks.jsonl + claims → score. No apt at runtime, ever.
+#
+# Build:
+#
+#   # 1. Build zen-metrics binary with CUDARC_CUDA_VERSION=12000 so cudarc
+#   #    0.19.4's eager Lib::new loader never references any _v2 symbol
+#   #    that's missing on the vast.ai driver pool (≥525.x). See v19/v20/v21
+#   #    history in git for the panic chain that motivated this pin.
+#
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+#       --no-default-features \
+#       --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
+#   cp target/release/zen-metrics ./zen-metrics
+#
+#   # 2. Build vastai-fleet with inline-sweep so `vastai-fleet worker
+#   #    --mode {omni,feature-backfill,source-features}` is wired up.
+#
+#   cargo build --release -p vastai-fleet --features inline-sweep
+#   cp target/release/vastai-fleet ./vastai-fleet
+#
+#   # 3. Build the image (context: zenmetrics dir):
+#
+#   docker build -f Dockerfile.sweep.v26 \
+#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
+#       --build-arg VASTAI_FLEET_BINARY=./vastai-fleet \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v26-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v26 \
+#       .
+#
+# Run: ENTRYPOINT is `vastai-fleet worker` (the unified Rust worker).
+# Callers override with `--entrypoint /usr/local/bin/onstart_iwssim.sh`
+# (legacy iwssim flow), `/usr/local/bin/onstart_cvvdp_imazen.sh`
+# (cvvdp backfill), or `/usr/local/bin/zen-metrics` (ad-hoc CLI).
+
+FROM ubuntu:24.04
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v26: collapsed single-file image replacing the v14→v25 chain; CUDA NVRTC + pyarrow + cuda_dlsym_stub + vastai-fleet unified worker)"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── L2: stable apt deps ─────────────────────────────────────────────────
+#
+# Everything the runtime + cuda_dlsym_stub build needs. One RUN keeps
+# them in a single layer that only invalidates when the package set
+# changes (rare). gcc + libc6-dev are here so the cuda_dlsym_stub
+# layer below has no apt at build time.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg \
+        libssl3 \
+        python3 python3-pip \
+        gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── L3: pyarrow via pip ─────────────────────────────────────────────────
+#
+# debian/ubuntu 24.04 noble does not package python3-pyarrow in apt.
+# Bake the pip install so it runs ONCE at image build, never at
+# container boot. --break-system-packages bypasses PEP 668's
+# external-management guard which would otherwise block pip in a
+# container with system python. Wheel install is reproducible
+# (pinned major) and lives in /usr/lib/python3/dist-packages.
+RUN pip3 install --quiet --break-system-packages --no-cache-dir \
+        'pyarrow>=15.0,<22.0' \
+    && python3 -c "import pyarrow.parquet as pq; print('pyarrow', pq.__doc__.split()[0] if pq.__doc__ else 'OK')"
+
+# ── L4 + L5: CUDA NVRTC + cudart 12-6 + dev headers ─────────────────────
+#
+# cubecl-cuda dlopens libnvrtc.so.12 at runtime to JIT-compile kernels;
+# the dev headers (cuda-cudart-dev-12-6) are required so cubecl can
+# emit `#include <cuda_runtime.h>` in its generated kernels and have
+# NVRTC find them. nvidia-container-toolkit mounts libcuda.so.1 from
+# the host driver; NVRTC + cudart + headers come from the image.
+#
+# Pinned to 12-6 because that's what every vast.ai host's libcuda has
+# compat-shim support for. The cuda 12.4-built v13 binary worked fine
+# against the 12.6 runtime because cudart is forward-compatible within
+# major; the v19/v20/v21 binaries pinned cudarc to CUDA_VERSION=12000
+# to keep _v2 symbol lookups safe on driver 525+ boxes.
+#
+# PATH override here is so dpkg can find /sbin tools during the apt
+# install. v14 shipped /bin/sh with PATH missing /sbin, breaking dpkg —
+# fixed inline + baked into the final ENV at the bottom.
+RUN export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}" \
+    && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
+        -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update -qq \
+    && apt-get install -y --no-install-recommends \
+        cuda-nvrtc-12-6 cuda-cudart-12-6 cuda-cudart-dev-12-6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "/usr/local/cuda-12.6/lib64" > /etc/ld.so.conf.d/cuda-12.6.conf \
+    && ldconfig \
+    && ln -sf /usr/local/cuda-12.6 /usr/local/cuda \
+    && test -f /usr/local/cuda/include/cuda_runtime.h \
+    && test -f /usr/local/cuda/lib64/libcudart.so.12 \
+    && ldconfig -p | grep -q libnvrtc.so.12
+
+# ── L6: helpers (s5cmd + jq) ────────────────────────────────────────────
+#
+# Fetched directly from upstream releases rather than via apt
+# (no debian package). Pinned versions for reproducibility; bump only
+# when needed. Static binaries, no deps.
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz" \
+        -o /tmp/s5cmd.tgz \
+    && tar xzf /tmp/s5cmd.tgz -C /usr/local/bin s5cmd \
+    && rm /tmp/s5cmd.tgz \
+    && chmod +x /usr/local/bin/s5cmd \
+    && curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" \
+        -o /usr/local/bin/jq \
+    && chmod +x /usr/local/bin/jq
+
+# ── L7: cuda_dlsym_stub.so LD_PRELOAD shim ──────────────────────────────
+#
+# Compiled here from `scripts/sweep/cuda_dlsym_stub.c`. Catches the
+# cudarc-0.19.4 eager Lib::new panic when libcuda.so.1 on a given
+# vast.ai box lacks a symbol cudarc references statically. The C
+# source ships a 4-symbol explicit shim for the cuCoredump callback
+# family PLUS a universal cu* fallback that returns a no-op stub for
+# any missing `cu[A-Z]…` symbol — covers cuDevSm*, cuEventElapsedTime_v2
+# fallbacks, future _v2 surprises, etc.
+#
+# This is defense-in-depth: the zen-metrics binary itself is built
+# with CUDARC_CUDA_VERSION=12000 so cudarc's _v2 symbol references are
+# limited to those that ship in libcuda.so 525+ — but the shim absorbs
+# anything that slips past.
+#
+# See ${cuda_dlsym_stub.c}'s header for the safety analysis (Register/
+# Deregister callbacks are coredump teardown the binary never invokes;
+# no-op stubs are safe).
+COPY scripts/sweep/cuda_dlsym_stub.c /tmp/cuda_dlsym_stub.c
+RUN gcc -shared -fPIC -O2 -o /usr/local/lib/cuda_dlsym_stub.so \
+        /tmp/cuda_dlsym_stub.c -ldl \
+    && rm /tmp/cuda_dlsym_stub.c \
+    && test -s /usr/local/lib/cuda_dlsym_stub.so \
+    && nm -D --defined-only /usr/local/lib/cuda_dlsym_stub.so 2>/dev/null \
+        | grep -q ' T dlsym$' \
+        || (echo "v26 cuda_dlsym_stub.so missing exported dlsym override" >&2 && exit 1) \
+    && echo "v26 cuda_dlsym_stub universal cu* shim baked"
+
+# ── Environment for the runtime worker ──────────────────────────────────
+#
+# LD_LIBRARY_PATH lets cubecl-cuda dlopen libnvrtc.so.12 from
+# /usr/local/cuda/lib64; nvidia-container-toolkit mounts
+# /usr/local/nvidia/lib{,64} for libcuda.so.1.
+#
+# LD_PRELOAD wires in the cuda_dlsym_stub so every zen-metrics /
+# vastai-fleet invocation in the container inherits it. Operators
+# can override per-process by clearing $LD_PRELOAD when debugging
+# the symbol path.
+#
+# PATH includes /sbin so onstart scripts that call ldconfig find it.
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64 \
+    CUDA_PATH=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin \
+    LD_PRELOAD=/usr/local/lib/cuda_dlsym_stub.so \
+    WORKDIR=/workspace/sweep
+
+WORKDIR /workspace/sweep
+
+# Smoke: every base-layer package must be importable / runnable before
+# we put expensive binaries on top.
+RUN python3 -c "import pyarrow.parquet as pq; print('pyarrow OK')" \
+    && s5cmd version \
+    && jq --version \
+    && ldconfig -p | grep -q libnvrtc.so.12 \
+    && test -f /usr/local/lib/cuda_dlsym_stub.so \
+    && echo "v26 base-layer smoke passed"
+
+# ── L8: zen-metrics binary ──────────────────────────────────────────────
+#
+# The ONLY layer (alongside L9) that should re-pull on most code
+# pushes. ~280 MB. ZEN_METRICS_BINARY defaults to a path inside the
+# build context; CI sets it to the freshly-built artifact. Must be
+# built with CUDARC_CUDA_VERSION=12000 (see header) to keep cudarc's
+# eager loader from referencing _v2 symbols missing on driver 525+
+# vast.ai hosts. Features: sweep,png,gpu,gpu-cuda,gpu-cpu so every
+# metric + every codec wired through the unified worker is available.
+ARG ZEN_METRICS_BINARY=./zen-metrics
+COPY --chmod=0755 ${ZEN_METRICS_BINARY} /usr/local/bin/zen-metrics
+
+# Sanity gate: binary runs + every CLI surface the unified worker /
+# legacy onstart scripts depend on is wired up. Also asserts the
+# cudarc-12000 binding pin held by grepping for known panic-triggering
+# _v2 symbols — build fails loud if any slipped back in.
+RUN /usr/local/bin/zen-metrics --version \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q zensim \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q cvvdp \
+    && /usr/local/bin/zen-metrics list-metrics 2>&1 | grep -q iwssim \
+    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q pairs-tsv \
+    && /usr/local/bin/zen-metrics score-pairs --help 2>&1 | grep -q allow-small-images \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjpeg \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenwebp \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenavif \
+    && /usr/local/bin/zen-metrics sweep --help 2>&1 | grep -q zenjxl \
+    && for sym in cuCtxGetDevice_v2 cuEventElapsedTime_v2 cuCoredumpDeregisterStartCallback cuCoredumpDeregisterCompleteCallback ; do \
+        if strings /usr/local/bin/zen-metrics 2>/dev/null | grep -q "^${sym}$"; then \
+            echo "v26: ${sym} still referenced -- rebuild with CUDARC_CUDA_VERSION=12000" >&2 ; \
+            exit 1 ; \
+        fi ; \
+    done \
+    && echo "v26 zen-metrics smoke + cudarc-bind check passed"
+
+# ── L9: vastai-fleet binary (unified Rust worker + self-destroy CLI) ────
+#
+# The production entrypoint. `vastai-fleet worker --mode {omni,
+# feature-backfill,source-features}` runs the inline-sweep pipeline:
+# chunks.jsonl fetch, atomic claim, in-process run_sweep via
+# zen-metrics-cli lib, AIMD adaptive concurrency, arrow-rs parquet IO,
+# bounded async dispatch. Replaces the bash onstart + chunk_worker
+# chain. Must be built with `--features inline-sweep` so the `worker`
+# subcommand and `--mode` flag are present. `self-destroy` is what the
+# run_with_error_trap.sh wrapper calls on rc≠0 to free the vast.ai
+# instance immediately (avoids billing-while-broken).
+ARG VASTAI_FLEET_BINARY=./vastai-fleet
+COPY --chmod=0755 ${VASTAI_FLEET_BINARY} /usr/local/bin/vastai-fleet
+
+# Sanity gate: vastai-fleet exposes the unified worker subcommand
+# + the self-destroy CLI. CI / image push fails loud if either
+# regressed.
+RUN /usr/local/bin/vastai-fleet --version \
+    && /usr/local/bin/vastai-fleet --help 2>&1 | grep -q self-destroy \
+    && /usr/local/bin/vastai-fleet self-destroy --help 2>&1 | grep -q -- '--error-log' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--chunks-r2' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--parallel-chunks' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--adapt-interval-sec' \
+    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--mode' \
+    && echo "v26 vastai-fleet unified worker smoke passed"
+
+# ── L10: onstart + worker scripts ───────────────────────────────────────
+#
+# Unified Rust worker entrypoint + every legacy script kept as
+# fallback / override target. Operators can `--entrypoint` to any
+# of these for diagnostics or the dual-impl cvvdp parity flow.
+#
+# run_with_error_trap.sh installs the EXIT trap that uploads log
+# tail to R2 + invokes vastai-fleet self-destroy on rc≠0 (see
+# scripts/sweep/CLAUDE.md "every onstart MUST self-destroy on
+# failure" for the contract).
+COPY --chmod=0755 scripts/sweep/run_with_error_trap.sh           /usr/local/bin/run_with_error_trap.sh
+COPY --chmod=0755 scripts/sweep/onstart_unified.sh                /usr/local/bin/onstart_unified.sh
+COPY --chmod=0755 scripts/sweep/onstart_feature_backfill.sh       /usr/local/bin/onstart_feature_backfill.sh
+COPY --chmod=0755 scripts/sweep/onstart_source_features.sh        /usr/local/bin/onstart_source_features.sh
+COPY --chmod=0755 scripts/sweep/onstart_omni_backfill.sh          /usr/local/bin/onstart_omni_backfill.sh
+COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill_imazen.sh  /usr/local/bin/onstart_cvvdp_imazen.sh
+COPY --chmod=0755 scripts/sweep/onstart_cvvdp_backfill.sh         /usr/local/bin/onstart_cvvdp.sh
+COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill_v14.sh    /usr/local/bin/onstart_iwssim.sh
+COPY --chmod=0755 scripts/sweep/onstart_iwssim_backfill.sh        /usr/local/bin/onstart_iwssim_v3.sh
+COPY --chmod=0755 scripts/sweep/onstart_v3.sh                     /usr/local/bin/zen-metrics-worker
+COPY --chmod=0755 scripts/sweep/omni_backfill_chunk_worker.sh     /usr/local/bin/omni_chunk_worker.sh
+COPY --chmod=0755 scripts/sweep/cvvdp_backfill_chunk_worker.sh    /usr/local/bin/cvvdp_chunk_worker.sh
+COPY --chmod=0755 scripts/sweep/metric_backfill_chunk_worker.sh   /usr/local/bin/metric_chunk_worker.sh
+COPY --chmod=0755 scripts/sweep/iwssim_backfill_chunk_worker.sh   /usr/local/bin/iwssim_chunk_worker.sh
+
+# ── L11: ENTRYPOINT ─────────────────────────────────────────────────────
+#
+# Default = unified Rust worker (vastai-fleet worker --mode omni)
+# wrapped by the error trap so failures self-destroy the vast.ai
+# instance instead of billing-while-broken. Callers override:
+#
+#   --entrypoint /usr/local/bin/onstart_iwssim.sh        (iwssim flow)
+#   --entrypoint /usr/local/bin/onstart_cvvdp_imazen.sh  (cvvdp backfill)
+#   --entrypoint /usr/local/bin/onstart_feature_backfill.sh
+#   --entrypoint /usr/local/bin/onstart_source_features.sh
+#   --entrypoint /usr/local/bin/zen-metrics              (ad-hoc CLI)
+ENTRYPOINT ["/usr/local/bin/run_with_error_trap.sh", "/usr/local/bin/onstart_unified.sh"]

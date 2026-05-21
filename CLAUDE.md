@@ -52,8 +52,9 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
    convention (`image_path / codec / q / knob_tuple_json /
    <metric>_score / feat_*`).
 4. **Compute infra: vast.ai docker images.** Reuse
-   `Dockerfile.sweep.v13` + `scripts/sweep/v15/launch_gpu.sh` +
-   `scripts/sweep/onstart_v3.sh` per "Sweep runner discipline".
+   `Dockerfile.sweep.v26` (collapsed single-file image; replaced
+   the v14→v25 chain on 2026-05-21) + `scripts/sweep/v15/launch_gpu.sh`
+   + `scripts/sweep/onstart_v3.sh` per "Sweep runner discipline".
    pycvvdp installs ~3 GB of pytorch — its image must be separate
    from the cvvdp-gpu image to keep cold-start fetch under control.
 
@@ -78,7 +79,7 @@ drop until shipped. User ask (verbatim, 2026-05-14, three messages):
 - [x] zen-metrics-cli `score-pairs` subcommand consumes the pairs
       TSV and writes parquet sidecars directly with the metric's
       versioned column name (cvvdp → `cvvdp_imazen_v<VER>`). The
-      existing `Dockerfile.sweep` bakes `zen-metrics`, so the
+      `Dockerfile.sweep.v26` image bakes `zen-metrics`, so the
       cvvdp-gpu scorer ships in that image with no new Dockerfile.
       Verified n=4 against pycvvdp on the same pairs: implementations
       agree within 0.03 JOD (q50–90, 64×64 noise images).

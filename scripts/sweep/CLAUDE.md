@@ -18,11 +18,11 @@ production entrypoint. Sweep operations are:
 
 - `onstart_unified.sh` — execs `vastai-fleet worker --mode omni`
   (the default mode). Replaces the bash `onstart_omni_backfill.sh`
-  chain. Used with `Dockerfile.sweep.v22+`.
+  chain. Used with `Dockerfile.sweep.v26`.
 - `onstart_feature_backfill.sh` — execs `vastai-fleet worker
   --mode feature-backfill`. Reads existing omni sidecars + cached
   encoded variants from R2, writes zensim 300-feature parquets
-  without re-encoding. Used with `Dockerfile.sweep.v24+`.
+  without re-encoding. Used with `Dockerfile.sweep.v26`.
 - `generate_cvvdp_backfill_chunks.py` — chunk generator (slices
   the unified-V_X parquet into 200-row chunks, emits
   `chunks.jsonl` for upload to `s3://coefficient/jobs/<run>/`).
@@ -38,10 +38,13 @@ Legacy bash workers (`omni_backfill_chunk_worker.sh`,
 the Rust worker's fallback path + for the dual-impl cvvdp parity
 flow (`onstart_cvvdp_backfill.sh`).
 
-See `README.md` in this directory for the full Dockerfile.sweep
-version map (`v22` → `v23` → `v24`) and the proven end-to-end
-pipeline that landed 2933 omni sidecars + 2933 zensim feature
-parquets across two production runs on 2026-05-19.
+The v14→v25 chain was collapsed into single-file
+`Dockerfile.sweep.v26` on 2026-05-21; all earlier vNN Dockerfiles
+were deleted. See `README.md` for the v26 image's layer plan and
+the proven end-to-end pipeline that landed 2933 omni sidecars +
+2933 zensim feature parquets across two production runs on
+2026-05-19 (those runs used v24, which v26 supersedes with the
+same runtime contract).
 
 ## CRITICAL: every onstart MUST self-destroy on failure
 
@@ -58,15 +61,15 @@ destroy` cleans it up — which is exactly the failure mode the
 
 Two equivalent ways to satisfy the contract:
 
-1. **Image-level wrapper (preferred for v15+):** the v15 image's
+1. **Image-level wrapper (preferred for v26):** the v26 image's
    `ENTRYPOINT` already chains through
    `/usr/local/bin/run_with_error_trap.sh`, which installs the EXIT
    trap, captures stderr, and shells out to the baked
    `/usr/local/bin/vastai-fleet self-destroy` on rc≠0. New onstarts
-   running in v15+ inherit this automatically — no changes needed in
+   running in v26 inherit this automatically — no changes needed in
    the script itself.
 
-2. **Inline trap (required for v14 image or anything that runs
+2. **Inline trap (required for anything that runs
    without `run_with_error_trap.sh`):** install an `on_exit` trap
    directly in the onstart script. See
    `onstart_iwssim_backfill_v14.sh` lines 60-140 as the canonical

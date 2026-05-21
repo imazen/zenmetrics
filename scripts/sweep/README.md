@@ -32,12 +32,17 @@ details.
 
 | Tag | What it ships | Pin for |
 |---|---|---|
-| `v22` | Inline-sweep Rust worker (Phase B) + 6 GPU metrics CUDA-12.0-bound | First-gen omni runs |
-| `v23` | v22 + all-local codec deps (no crates.io codec versions); zenavif + zenjxl from `--main` worktrees | Recommended for new omni runs |
-| `v24` | v23 + `feature-backfill` mode (zensim 300-feat extraction from cached encoded variants) | Required for feature-backfill |
+| `v26` | Single-file collapsed image: Inline-sweep Rust worker (omni / feature-backfill / source-features modes) + 6 GPU metrics CUDA-12.0-bound + all-local codec deps + cuda_dlsym_stub LD_PRELOAD | All new sweep work |
 
 Always pin the tag — `:latest` doesn't exist. Build from
-`Dockerfile.sweep.v{22,23,24}` against the corresponding base.
+`Dockerfile.sweep.v26` (single source of truth — no chain).
+
+**History (2026-05-21):** the v14→v25 incremental chain was
+collapsed into single-file `Dockerfile.sweep.v26`. All earlier
+vNN Dockerfiles were deleted; their deltas are inlined in v26 in
+proper layer order. See the git log of those deleted files for
+incremental change history (cuda_dlsym_stub evolution, jxl-encoder
+bumps, cudarc binding pin chase, vastai-fleet worker rollouts).
 
 ## The proven end-to-end pipeline (2026-05-19)
 
@@ -49,17 +54,17 @@ feature parquets across two runs (`cvvdp-v15rc-2026-05-18` and
    --filter-codec v15rc_zenjpeg` (or per codec). Upload to
    `s3://coefficient/jobs/<run-id>/chunks.jsonl`.
 2. **Single-instance smoke (omni mode)** — `launch_single_instance.sh
-   --docker ghcr.io/imazen/zen-metrics-sweep:v23 --onstart
+   --docker ghcr.io/imazen/zen-metrics-sweep:v26 --onstart
    onstart_unified.sh`. Verify the first sidecar lands at
    `s3://zentrain/<run-id>/omni/<chunk>.parquet`. Schema check
    should show all 6 metric columns + `encoded_filename` non-empty.
 3. **Fleet fanout (omni)** — `launch_backfill.sh --n-boxes 6
-   --docker :v23 --onstart onstart_unified.sh`. PC=2 default; AIMD
+   --docker :v26 --onstart onstart_unified.sh`. PC=2 default; AIMD
    tunes between 1-4 based on `nvidia-smi` util.
 4. **Watch omni sidecars** populate. ~50 chunks/hr/box with v23.
    `vastai-fleet watch --target-sidecars <N>` auto-destroys at end.
 5. **Single-instance smoke (feature-backfill mode)** —
-   `launch_single_instance.sh --docker :v24 --onstart
+   `launch_single_instance.sh --docker :v26 --onstart
    onstart_feature_backfill.sh`. Verifies the feature parquet
    lands at `s3://zentrain/<run-id>/zensim_features/<chunk>.parquet`.
 6. **Fleet fanout (feature-backfill)** — same launcher with v24
@@ -85,7 +90,7 @@ missing=$(comm -23 <(echo "$omni" | sort) <(echo "$feat" | sort))
 
 # 2. Build a chunks.jsonl with just those, upload to a fresh run prefix
 # 3. Launch omni-mode fleet against that file:
-launch_backfill.sh --docker :v23 --onstart onstart_unified.sh \
+launch_backfill.sh --docker :v26 --onstart onstart_unified.sh \
     --run-id v15rc-reencode-<DATE> --chunks <fresh-prefix>/chunks.jsonl
 # This overwrites the omni sidecars + uploads encoded variants to
 # the original run's encoded/ prefix (because each chunk record's
@@ -191,23 +196,25 @@ vastai-fleet status --label-prefix <YYYY-MM-DD-NICK>
 
 | File | Tag | Status | Notes |
 |---|---|---|---|
-| `Dockerfile.sweep.v24` | **`v24` (recommended)** | ✅ shipping | v23 + feature-backfill mode in the Rust worker. Required for zensim 300-feat extraction. |
-| `Dockerfile.sweep.v23` | `v23` | active | v22 + all-local codec deps (no crates.io codec versions; zenavif + zenjxl from `--main` worktrees with `__expert` features). Required for new omni runs. |
-| `Dockerfile.sweep.v22` (extends v21) | `v22` | active | v21 base + unified Rust worker (Phase B inline run_sweep). |
-| `Dockerfile.sweep.v21` (extends v20) | `v21` | active | v20 + zen-metrics binary built with CUDARC_CUDA_VERSION=12000 (drops v2-suffix dlsym refs). |
-| `Dockerfile.sweep.v15` (extends v14) | `v17` | legacy | v14 base + vastai-fleet + run_with_error_trap + cuda_dlsym_stub LD_PRELOAD + bash omni worker + cvvdp worker. Pre-Phase-B; use v22+ for new work. |
-| `Dockerfile.sweep.v14` | `v14-omni` | active | Base image for v15-v23. Bakes zen-metrics + cuda-cudart-dev-12-6. Rebuilt when zen-metrics binary changes. |
-| `Dockerfile.sweep.v13` | `v13` | deprecated | Single-stage from-source build. Slow rebuild; superseded by v14's precompiled-binary path. |
-| `Dockerfile.sweep` (root) | — | deprecated | Vestigial pre-v13 prototype. Slated for deletion (P5d). |
-| `scripts/sweep/Dockerfile.sweep` | — | deprecated | Same. |
-| `scripts/sweep/Dockerfile.pycvvdp` | `pycvvdp` | active (rare) | Only used by the dual-impl cvvdp parity flow. |
+| `Dockerfile.sweep.v26` | **`v26` (recommended)** | ✅ shipping | Single-file collapsed image (replaces the v14→v25 chain). FROM ubuntu:24.04 directly. Bakes apt deps + CUDA NVRTC+dev 12-6 + pyarrow + s5cmd + jq + cuda_dlsym_stub.so + zen-metrics (CUDARC_CUDA_VERSION=12000) + vastai-fleet (inline-sweep) + all onstart/worker scripts. Supports omni, feature-backfill, source-features modes. |
+| `scripts/sweep/Dockerfile.pycvvdp` | `pycvvdp` | active (rare) | Only used by the dual-impl cvvdp parity flow. Separate from the main sweep image because pycvvdp pulls in ~3 GB of pytorch. |
+
+**Historical (deleted 2026-05-21):** the v14→v25 chain (Dockerfile.sweep
++ Dockerfile.sweep.v13 + Dockerfile.sweep.v14 + .v15 + .v18 + .v19 +
+.v21 + .v22 + .v23 + .v24 + .v25) was collapsed into single-file v26.
+Each prior file FROMed the previous tag on ghcr.io — fine for shipping
+deltas as small layers, but bad for new contributors trying to
+understand what the image is. v26 inlines every delta in proper layer
+order. See `git log -- Dockerfile.sweep.v*` for the incremental
+history (cuda_dlsym_stub evolution, jxl-encoder bumps, cudarc binding
+pin chase, vastai-fleet worker rollouts).
 
 ### Onstart scripts (entrypoint for each container)
 
 | File | Used by | Status |
 |---|---|---|
-| `onstart_unified.sh` | **omni mode via the Rust `vastai-fleet worker` binary** | ✅ recommended (v22+) |
-| `onstart_feature_backfill.sh` | **feature-backfill mode via the Rust worker (sets WORKER_MODE=feature-backfill)** | ✅ recommended (v24+) |
+| `onstart_unified.sh` | **omni mode via the Rust `vastai-fleet worker` binary** | ✅ recommended (v26) |
+| `onstart_feature_backfill.sh` | **feature-backfill mode via the Rust worker (sets WORKER_MODE=feature-backfill)** | ✅ recommended (v26) |
 | `onstart_omni_backfill.sh` | Legacy bash dispatcher for the omni pipeline | active (fallback) |
 | `onstart_cvvdp_backfill_imazen.sh` | cvvdp single-impl backfill | active |
 | `onstart_cvvdp_backfill.sh` | cvvdp dual-impl (cvvdp-gpu + pycvvdp) | active (rare) |
@@ -275,7 +282,7 @@ fails — defence in depth).
 | Bandwidth charges crush the budget | Each box re-downloads source images redundantly | Use a sharded chunk file (one source per shard) OR launch with `WORKER_INDEX`/`WORKER_COUNT` so each box owns a slice. (Sharding pending — see task #72.) |
 | GHCR pull fails with 401 unauthorized | Image is private + the `--login` flag's GHCR token is stale | Make image public OR refresh `gh auth token` and re-launch. |
 | feature-backfill worker panics `as_string::<i32>()` / `"string array"` | omni sidecar's `encoded_filename` column inferred as Null type (no encoded variants ever saved for this chunk). | The Rust worker now skips these gracefully (`fix(feature-backfill)` 2026-05-19). To populate features for those chunks, **re-encode them** — see "Known constraint" section above. |
-| feature-backfill SIGSEGV on older Xeon CPUs | Initially blamed on archmage SIMD dispatch; actually traced to the panic above leaking through tokio's task abort. Fixed 2026-05-19. | Use v24+ image. |
+| feature-backfill SIGSEGV on older Xeon CPUs | Initially blamed on archmage SIMD dispatch; actually traced to the panic above leaking through tokio's task abort. Fixed 2026-05-19. | Use v26 image. |
 
 ---
 

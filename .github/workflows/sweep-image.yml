@@ -1,19 +1,20 @@
-name: Sweep image (Dockerfile.sweep.v14)
+name: Sweep image (Dockerfile.sweep.v26)
 
 # Builds the production ready-to-run vast.ai sweep image on every push
-# to master + every tag. Image layers follow the v14 plan: stable base
-# (ubuntu + python-pyarrow + cuda-nvrtc + s5cmd + jq) is rebuilt only
-# when the Dockerfile's base stage changes; the per-push delta is the
-# zen-metrics binary (~280 MB) + scripts (~30 KB).
+# to master + every tag. Single-file image (v26) replaces the v14→v25
+# chain: stable base (ubuntu + python-pyarrow + cuda-nvrtc + cuda-dev
+# headers + s5cmd + jq + cuda_dlsym_stub) is rebuilt only when those
+# RUN steps change; the per-push delta is the zen-metrics binary
+# (~280 MB) + vastai-fleet binary (~5 MB) + scripts (~50 KB).
 #
 # Tag scheme:
-#   ghcr.io/imazen/zen-metrics-sweep:v14-<short-sha>      (every push)
-#   ghcr.io/imazen/zen-metrics-sweep:v14                  (latest master)
-#   ghcr.io/imazen/zen-metrics-sweep:v14-<release-tag>    (tagged releases)
+#   ghcr.io/imazen/zen-metrics-sweep:v26-<short-sha>      (every push)
+#   ghcr.io/imazen/zen-metrics-sweep:v26                  (latest master)
+#   ghcr.io/imazen/zen-metrics-sweep:v26-<release-tag>    (tagged releases)
 #
 # Why this exists: vast.ai workers used to run a 5-15 min apt-install
 # script on every boot (python3-pyarrow + cuda-nvrtc + libcuda support
-# libs). With this workflow + v14 layering, boot-to-first-claim is ~5 s.
+# libs). With this workflow + v26 layering, boot-to-first-claim is ~5 s.
 # That's the difference between burning $0.10/hr × 30 boxes × 15 min on
 # apt = $0.75 per launch, vs essentially free per launch. Compounding
 # over months of fleet relaunches that adds up.
@@ -23,14 +24,15 @@ on:
     branches: [master, main]
     paths:
       # Rebuild when any of these change. Cargo source, the Dockerfile
-      # itself, or the worker scripts.
+      # itself, the cuda_dlsym_stub source, or the worker scripts.
       - "crates/**"
       - "Cargo.toml"
       - "Cargo.lock"
-      - "Dockerfile.sweep.v14"
-      - "scripts/sweep/onstart_iwssim_backfill*.sh"
-      - "scripts/sweep/iwssim_backfill_chunk_worker.sh"
-      - "scripts/sweep/onstart_v3.sh"
+      - "Dockerfile.sweep.v26"
+      - "scripts/sweep/cuda_dlsym_stub.c"
+      - "scripts/sweep/onstart_*.sh"
+      - "scripts/sweep/*chunk_worker.sh"
+      - "scripts/sweep/run_with_error_trap.sh"
       - ".github/workflows/sweep-image.yml"
   push:
     tags:
@@ -48,7 +50,7 @@ env:
 
 jobs:
   build-binary:
-    name: Build zen-metrics binary (Linux x86_64)
+    name: Build zen-metrics + vastai-fleet binaries (Linux x86_64)
     runs-on: ubuntu-latest
     outputs:
       sha-short: ${{ steps.meta.outputs.sha-short }}
@@ -76,20 +78,42 @@ jobs:
           shared-key: zen-metrics-sweep-image
           workspaces: . -> target
 
-      - name: Build zen-metrics (release, sweep + GPU features)
+      # CUDARC_CUDA_VERSION=12000 pins cudarc 0.19.4's eager Lib::new
+      # loader to the CUDA 12.0 binding surface. See v19/v20/v21 git
+      # history for the panic chain (cuCtxGetDevice_v2, cuEventElapsedTime_v2,
+      # cuCoredump* family) this avoids on driver 525+ vast.ai hosts.
+      - name: Build zen-metrics (release, sweep + GPU features, cudarc-12000-pinned)
         env:
           CARGO_PROFILE_RELEASE_LTO: thin
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
           CARGO_PROFILE_RELEASE_DEBUG: "false"
+          CUDARC_CUDA_VERSION: "12000"
         run: |
           cargo build --release -p zen-metrics-cli \
-              --features 'sweep,gpu,gpu-cuda,gpu-cpu'
+              --no-default-features \
+              --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
           mkdir -p artifacts
           cp target/release/zen-metrics artifacts/zen-metrics
           chmod +x artifacts/zen-metrics
           ./artifacts/zen-metrics --version
           ./artifacts/zen-metrics list-metrics | grep -q iwssim
+          ./artifacts/zen-metrics list-metrics | grep -q cvvdp
+          ./artifacts/zen-metrics list-metrics | grep -q zensim
           ./artifacts/zen-metrics score-pairs --help | grep -q allow-small-images
+          ./artifacts/zen-metrics sweep --help | grep -q zenjpeg
+
+      # vastai-fleet ships the unified Rust worker (`worker --mode
+      # {omni,feature-backfill,source-features}`) + self-destroy CLI.
+      # --features inline-sweep enables the in-process run_sweep path.
+      - name: Build vastai-fleet (release, inline-sweep)
+        run: |
+          cargo build --release -p vastai-fleet --features inline-sweep
+          cp target/release/vastai-fleet artifacts/vastai-fleet
+          chmod +x artifacts/vastai-fleet
+          ./artifacts/vastai-fleet --version
+          ./artifacts/vastai-fleet --help | grep -q self-destroy
+          ./artifacts/vastai-fleet worker --help | grep -q -- '--mode'
+          ./artifacts/vastai-fleet worker --help | grep -q -- '--run-id'
 
       - name: Extract short SHA
         id: meta
@@ -97,11 +121,13 @@ jobs:
           SHA_SHORT=$(git rev-parse --short HEAD)
           echo "sha-short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
 
-      - name: Upload binary artifact for image job
+      - name: Upload binary artifacts for image job
         uses: actions/upload-artifact@v4
         with:
-          name: zen-metrics-binary
-          path: artifacts/zen-metrics
+          name: sweep-binaries
+          path: |
+            artifacts/zen-metrics
+            artifacts/vastai-fleet
           retention-days: 7
 
   build-image:
@@ -114,12 +140,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download zen-metrics binary
+      - name: Download sweep binaries
         uses: actions/download-artifact@v4
         with:
-          name: zen-metrics-binary
+          name: sweep-binaries
           path: ./
-      - run: chmod +x ./zen-metrics
+      - run: |
+          chmod +x ./zen-metrics ./vastai-fleet
+          ./zen-metrics --version
+          ./vastai-fleet --version
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -135,13 +164,13 @@ jobs:
         id: tags
         run: |
           SHA_SHORT="${{ needs.build-binary.outputs.sha-short }}"
-          TAGS="${IMAGE_NAME}:v14-${SHA_SHORT}"
+          TAGS="${IMAGE_NAME}:v26-${SHA_SHORT}"
           if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              TAGS="${TAGS},${IMAGE_NAME}:v14"
+              TAGS="${TAGS},${IMAGE_NAME}:v26"
           fi
           if [[ "${{ github.ref }}" == refs/tags/zen-metrics-cli-v* ]]; then
               VERSION="${GITHUB_REF#refs/tags/zen-metrics-cli-v}"
-              TAGS="${TAGS},${IMAGE_NAME}:v14-${VERSION}"
+              TAGS="${TAGS},${IMAGE_NAME}:v26-${VERSION}"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "Tags: $TAGS"
@@ -150,16 +179,18 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.sweep.v14
+          file: Dockerfile.sweep.v26
           build-args: |
             ZEN_METRICS_BINARY=./zen-metrics
+            VASTAI_FLEET_BINARY=./vastai-fleet
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          # Cache the base layer (L1-L4 ~330 MB) across runs. registry
-          # cache means we don't re-apt-install python+cuda+helpers on
-          # every push, only when the base RUN steps change.
-          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v14
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v14,mode=max
+          # Cache the base layer (L1-L7 ~530 MB) across runs. registry
+          # cache means we don't re-apt-install python+cuda+helpers or
+          # recompile cuda_dlsym_stub.so on every push, only when the
+          # base RUN steps change.
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v26
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v26,mode=max
           # No layer should reference the build-binary stage so the
           # final image is small. Only stable runtime layers + binary +
           # scripts.
@@ -167,11 +198,14 @@ jobs:
 
       - name: Verify pushed image
         run: |
-          docker pull ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }}
+          docker pull ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }}
           docker run --rm --entrypoint /usr/local/bin/zen-metrics \
-              ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }} \
+              ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
               --version
           docker run --rm --entrypoint /usr/local/bin/zen-metrics \
-              ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }} \
+              ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
               score-pairs --help | grep -q allow-small-images
-          echo "Image OK: ${IMAGE_NAME}:v14-${{ needs.build-binary.outputs.sha-short }}"
+          docker run --rm --entrypoint /usr/local/bin/vastai-fleet \
+              ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
+              worker --help | grep -q -- '--mode'
+          echo "Image OK: ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }}"

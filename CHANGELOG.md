@@ -17,6 +17,43 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed — sweep image Dockerfile chain collapsed to single file `v26` — 2026-05-21
+
+Replaces the `v14 → v15 → v18 → v19 → v20 → v21 → v22 → v23 → v24 → v25`
+incremental chain (plus the legacy `v0` and `v13` root files) with a
+single `Dockerfile.sweep.v26` that goes `FROM ubuntu:24.04` and inlines
+every delta in proper layer order:
+
+1. ubuntu:24.04 + stable apt deps (ca-certificates, curl, gnupg,
+   libssl3, python3, python3-pip, gcc, libc6-dev)
+2. pyarrow via pip
+3. CUDA NVRTC + cudart + cudart-dev 12-6 (+ ldconfig + symlink)
+4. s5cmd 2.2.2 + jq 1.7.1
+5. cuda_dlsym_stub.so compiled from `scripts/sweep/cuda_dlsym_stub.c`
+6. zen-metrics binary (CUDARC_CUDA_VERSION=12000 build)
+7. vastai-fleet binary (inline-sweep features)
+8. onstart + worker scripts
+9. ENTRYPOINT = run_with_error_trap → onstart_unified.sh
+
+Same runtime contract as v25. CI workflow (`sweep-image.yml`) updated
+to build v26 (was v14) and to also build the `vastai-fleet` binary
+alongside `zen-metrics`. Tag scheme: `ghcr.io/imazen/zen-metrics-sweep:v26`
++ `:v26-<short-sha>`.
+
+Deleted files (commit pending): `Dockerfile.sweep`,
+`scripts/sweep/Dockerfile.sweep`, `Dockerfile.sweep.v13`,
+`Dockerfile.sweep.v14`, `Dockerfile.sweep.v15`, `Dockerfile.sweep.v18`,
+`Dockerfile.sweep.v19`, `Dockerfile.sweep.v21`, `Dockerfile.sweep.v22`,
+`Dockerfile.sweep.v23`, `Dockerfile.sweep.v24`, `Dockerfile.sweep.v25`.
+
+Updated: `scripts/sweep/CLAUDE.md`, `scripts/sweep/README.md`, root
+`CLAUDE.md` (current-state references; historical retro notes in
+2026-05-15 sections left as-is).
+
+Smoke build (local docker, base layers L1-L7 through `v26 base-layer
+smoke passed`): PASSED (583 MB base image including ubuntu + CUDA
+runtime+dev + pyarrow + stub).
+
 ### sweep infra v21 — 2026-05-19 (`infra(sweep): drop cudarc to CUDA-12.0 binding to evict cuEventElapsedTime_v2`)
 
 Layers a CUDA-12.0-bound zen-metrics binary on top of v20's universal
