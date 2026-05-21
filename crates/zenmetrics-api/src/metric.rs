@@ -496,6 +496,80 @@ impl Metric {
         }
     }
 
+    /// Score one reference / distorted pair of packed sRGB buffers
+    /// AND return the regime-appropriate feature vector when the
+    /// configured metric is [`MetricKind::Zensim`]. Other metrics
+    /// return `(Score, Vec::new())` so a single call-site can collect
+    /// features when present without branching on `kind()`.
+    ///
+    /// Zensim feature vector length matches the configured
+    /// `ZensimFeatureRegime`:
+    ///
+    /// - 228 floats on `Basic` (default)
+    /// - 300 floats on `Extended`
+    /// - 372 floats on `WithIw`
+    ///
+    /// Pass the regime via `MetricParams::Zensim(ZensimParams::new().with_regime(...))`
+    /// or the [`zensim_params_with_regime`] helper when constructing
+    /// the metric.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::Metric`] if the underlying metric crate's
+    ///   dispatch fails.
+    #[cfg(feature = "zensim")]
+    pub fn compute_features_srgb_u8(
+        &mut self,
+        r: &[u8],
+        d: &[u8],
+    ) -> Result<(Score, Vec<f64>)> {
+        match self {
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => {
+                // One pipeline pass: compute the regime-appropriate
+                // feature vector, then derive the basic-block score
+                // from the same data (matches what `compute_srgb_u8`
+                // does internally on the basic block).
+                let features = m
+                    .compute_features_vec_srgb_u8(r, d)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    })?;
+                // Re-derive the umbrella Score from the basic block so
+                // the value is identical to `compute_srgb_u8` for the
+                // same pair. We must score externally because the
+                // opaque shim holds the weights privately.
+                let score = m.compute_srgb_u8(r, d).map(convert_score_zensim).map_err(
+                    |e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    },
+                )?;
+                // NB: the second call above is cheap-ish — `Zensim`
+                // re-runs the pyramid + features pass. If this becomes
+                // a hot path, refactor `ZensimOpaque` to expose a
+                // combined "score + features" entry point. For sweep
+                // workloads (one call per cell, GPU dominates) the
+                // double-dispatch overhead is negligible.
+                Ok((score, features))
+            }
+            // All other metric variants: score normally, return an
+            // empty feature vector. Pattern lets one call-site collect
+            // features-when-present without branching on `kind()`.
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            #[cfg(feature = "butter")]
+            Metric::Butter(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(_) => self.compute_srgb_u8(r, d).map(|s| (s, Vec::new())),
+        }
+    }
+
     /// Score one reference / distorted pair from [`PixelSlice`]
     /// inputs. Per-crate conversion semantics apply — see each
     /// metric crate's `compute_pixels` docs.
