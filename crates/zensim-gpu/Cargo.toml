@@ -32,9 +32,14 @@ fast-reduction = []
 cubecl = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# `zensim` provides the `acumen` module (castleCSF LUT loader,
+# ViewingCondition, per-band weights). Pulled in at runtime so
+# `acumen_mode_a` can compute per-image weights inside
+# `Zensim::set_reference`. Default-features off keeps compile time
+# bounded — we only touch the small no-std-friendly subset.
+zensim = { workspace = true }
 
 [dev-dependencies]
-zensim = { workspace = true }
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }

@@ -100,7 +100,7 @@ codegen-units = 1
 # Equivalent git ref (use post-merge when the sibling worktree is gone,
 # AND after zensim's Cargo.toml has a git-ref zenpredict dep):
 #   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
-zensim = { path = "../zensim--principled-activity/zensim" }
+zensim = { path = "../zensim--acumen-foundation/zensim" }
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no

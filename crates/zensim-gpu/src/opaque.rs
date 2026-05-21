@@ -56,8 +56,15 @@ pub struct Score {
 }
 
 /// Configuration for [`ZensimOpaque`].
+///
+/// `acumen_mode_a`: when `Some`, the pipeline runs the castleCSF
+/// LUT lookup per-image at the given viewing condition and applies
+/// per-(scale, channel) weights to the HF band-energy features
+/// before they reach the trained MLP. Used for Gate A in
+/// `imazen/zensim#40`. Default `None` → legacy V_22-shipped path
+/// is byte-identical to pre-acumen behavior.
 #[non_exhaustive]
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ZensimParams {
     /// Optional 228-element trained weights for converting the
     /// feature vector into a scalar score. Pass
@@ -66,6 +73,26 @@ pub struct ZensimParams {
     /// zensim's `PreviewV0_2` profile. `None` => uniform
     /// `compute_*` methods return `Score { value: NaN, .. }`.
     pub weights: Option<Box<[f64; TOTAL_FEATURES]>>,
+
+    /// Acumen Mode A: when set, the pipeline computes per-image
+    /// castleCSF weights at this viewing condition and applies them
+    /// to the HF band-energy features (basic slots 10-12 per scale
+    /// per channel). See `zensim::acumen` and tracking issue
+    /// `imazen/zensim#40` Gate A. Default `None` → no weighting,
+    /// V_22-shipped path bit-stable.
+    pub acumen_mode_a: Option<zensim::acumen::viewing::ViewingCondition>,
+}
+
+// Manual Debug impl because `Option<ViewingCondition>` doesn't
+// participate in the derive's auto layout when the field type
+// comes from a path-dep crate that may not impl Debug uniformly.
+impl core::fmt::Debug for ZensimParams {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ZensimParams")
+            .field("weights", &self.weights.as_ref().map(|_| "<228 f64>"))
+            .field("acumen_mode_a", &self.acumen_mode_a)
+            .finish()
+    }
 }
 
 impl ZensimParams {
@@ -75,7 +102,22 @@ impl ZensimParams {
     /// [`Self::with_canonical_v0_2`] to get the canonical
     /// `WEIGHTS_PREVIEW_V0_2` baked in.
     pub fn new() -> Self {
-        Self { weights: None }
+        Self {
+            weights: None,
+            acumen_mode_a: None,
+        }
+    }
+
+    /// Enable acumen Mode A at the given viewing condition. Per-image
+    /// castleCSF weights are computed at feature-extract time and
+    /// applied to HF band-energy features. Used for Gate A training
+    /// and inference paths in `imazen/zensim#40`.
+    pub fn with_acumen_mode_a(
+        mut self,
+        viewing: zensim::acumen::viewing::ViewingCondition,
+    ) -> Self {
+        self.acumen_mode_a = Some(viewing);
+        self
     }
 
     /// Bundle the canonical 228-element default weights
@@ -97,6 +139,7 @@ impl ZensimParams {
     pub fn with_canonical_v0_2() -> Self {
         Self {
             weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
+            acumen_mode_a: None,
         }
     }
 
@@ -114,6 +157,10 @@ trait ZensimInner: Send {
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]>;
     fn dims(&self) -> (u32, u32);
+    fn set_acumen_viewing(
+        &mut self,
+        viewing: Option<zensim::acumen::viewing::ViewingCondition>,
+    );
 }
 
 impl<R> ZensimInner for Zensim<R>
@@ -131,6 +178,13 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Zensim::dimensions(self)
+    }
+
+    fn set_acumen_viewing(
+        &mut self,
+        viewing: Option<zensim::acumen::viewing::ViewingCondition>,
+    ) {
+        Zensim::set_acumen_viewing(self, viewing);
     }
 }
 
@@ -170,11 +224,18 @@ impl ZensimOpaque {
                 Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new(client, width, height)?)
             }
         };
-        Ok(Self {
+        let mut shim = Self {
             inner,
             params,
             backend,
-        })
+        };
+        // Push acumen viewing through to the inner pipeline so that
+        // subsequent `set_reference` calls compute per-image
+        // castleCSF band weights. When `params.acumen_mode_a` is
+        // None this is a no-op.
+        let viewing = shim.params.acumen_mode_a;
+        shim.inner.set_acumen_viewing(viewing);
+        Ok(shim)
     }
 
     /// Configured `(width, height)`.

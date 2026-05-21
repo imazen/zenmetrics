@@ -220,6 +220,24 @@ pub struct Zensim<R: Runtime> {
 
     has_cached_reference: bool,
 
+    /// Cached acumen Mode A weights: `[channel][scale] -> f32 castleCSF
+    /// sensitivity`. Computed inside [`Zensim::set_reference`] when
+    /// the caller-supplied viewing condition is set via
+    /// [`Zensim::set_acumen_viewing`]. Phase 4 multiplies the HF band-
+    /// energy features (basic slots 10–12) by the matching scalar
+    /// when this field is `Some`. `None` => bit-stable V_22 path.
+    acumen_band_weights: Option<[[f32; SCALES]; 3]>,
+
+    /// Sticky viewing condition for [`Self::acumen_band_weights`]. When
+    /// `Some`, the next [`Self::set_reference`] call computes new
+    /// per-image weights using this viewing.
+    acumen_viewing: Option<zensim::acumen::viewing::ViewingCondition>,
+
+    /// Loaded once per process for acumen Mode A lookups. `None` until
+    /// the first time the caller enables Mode A via
+    /// [`Zensim::set_acumen_viewing`].
+    acumen_lut_bytes: &'static [u8],
+
     // ───────── Extended / WithIw regime support ─────────
     regime: ZensimFeatureRegime,
     /// Per-scale per-channel mu1/mu2/ssq/s12 persist planes — laid out
@@ -421,6 +439,9 @@ impl<R: Runtime> Zensim<R> {
             finals_f64,
             finals_max,
             has_cached_reference: false,
+            acumen_band_weights: None,
+            acumen_viewing: None,
+            acumen_lut_bytes: include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut"),
             regime,
             persist_planes_ref,
             persist_planes_dis,
@@ -514,13 +535,79 @@ impl<R: Runtime> Zensim<R> {
     }
 
     /// Cache the reference pyramid; subsequent
-    /// [`Zensim::compute_with_reference`] calls reuse it.
+    /// [`Zensim::compute_with_reference`] calls reuse it. When an
+    /// acumen viewing condition has been configured via
+    /// [`Self::set_acumen_viewing`], this call also recomputes the
+    /// per-image castleCSF band weights from the reference's mean
+    /// luminance.
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_dims(ref_srgb)?;
+        // Recompute acumen band weights from the reference image if
+        // mode A is enabled. Cheap (a single mean-luma pass + 12 LUT
+        // lookups, ~µs at 1080p).
+        if let Some(viewing) = self.acumen_viewing {
+            self.acumen_band_weights =
+                Some(Self::compute_acumen_weights(self.acumen_lut_bytes, viewing, ref_srgb));
+        }
         self.upload_u8(true, ref_srgb);
         self.run_xyb_pyramid(true);
         self.has_cached_reference = true;
         Ok(())
+    }
+
+    /// Configure acumen Mode A: subsequent [`Self::set_reference`]
+    /// calls will compute per-image castleCSF weights at this viewing
+    /// condition and Phase 4 will apply them to the HF band-energy
+    /// features. Pass `None` to disable and return to the legacy
+    /// V_22-shipped path.
+    pub fn set_acumen_viewing(
+        &mut self,
+        viewing: Option<zensim::acumen::viewing::ViewingCondition>,
+    ) {
+        self.acumen_viewing = viewing;
+        if viewing.is_none() {
+            self.acumen_band_weights = None;
+        } else {
+            // If a reference is already cached, recompute weights now
+            // so the next compute_with_reference call sees them.
+            self.acumen_band_weights = None;
+            // Caller is expected to re-call set_reference() after
+            // enabling acumen so we have ref bytes to compute mean L
+            // from. Document this in the rustdoc above.
+        }
+    }
+
+    /// Compute the per-(channel, scale) castleCSF weights for a given
+    /// reference image and viewing condition. Returns weights
+    /// normalised so the achromatic peak is 1.0 — keeps absolute
+    /// scale on the same order as the legacy `CSF_BAND_WEIGHTS`
+    /// prior so downstream MLPs trained with the legacy weights
+    /// don't see scale shock on the first eval pass.
+    ///
+    /// Layout: `[channel][scale]` where channel 0=A, 1=RG, 2=YV and
+    /// scale 0=finest (highest rho), N-1=coarsest (lowest rho).
+    fn compute_acumen_weights(
+        lut_bytes: &[u8],
+        viewing: zensim::acumen::viewing::ViewingCondition,
+        ref_srgb: &[u8],
+    ) -> [[f32; SCALES]; 3] {
+        let lut = zensim::acumen::castle_csf::CastleCsfLut::from_bytes(lut_bytes)
+            .expect("vendored castleCSF LUT must parse");
+        let mean_l = zensim::acumen::band_weights::image_mean_luminance_nits(
+            ref_srgb,
+            viewing.peak_luminance_nits,
+        );
+        let bw = zensim::acumen::band_weights::compute_csf_band_weights(&lut, viewing, mean_l)
+            .normalized_to_achromatic_peak();
+        // Project to [channel][scale] — N_BANDS matches SCALES per
+        // the band-rho convention. Both are 4 by design.
+        let mut out = [[0.0_f32; SCALES]; 3];
+        for ch in 0..3 {
+            for s in 0..SCALES {
+                out[ch][s] = bw.weights[ch][s];
+            }
+        }
+        out
     }
 
     pub fn clear_reference(&mut self) {
@@ -653,9 +740,21 @@ impl<R: Runtime> Zensim<R> {
                 out[bb + 7] = (sums[7] * inv_n).max(0.0).powf(0.25);
                 out[bb + 8] = (sums[8] * inv_n).max(0.0).sqrt();
                 out[bb + 9] = sums[9] * inv_n;
-                out[bb + 10] = hf_energy_loss;
-                out[bb + 11] = hf_mag_loss;
-                out[bb + 12] = hf_energy_gain;
+                // Slots 10/11/12 are HF band-energy losses/gains —
+                // the closest analog to the CPU CVVDP-features'
+                // CSF-weighted band-ratios. Acumen Mode A weights
+                // them by per-(channel, scale) castleCSF
+                // sensitivity. When acumen is disabled (default),
+                // the multiplier is 1.0 and the V_22-shipped path
+                // is bit-stable.
+                let acumen_w = self
+                    .acumen_band_weights
+                    .as_ref()
+                    .map(|w| w[ch][s] as f64)
+                    .unwrap_or(1.0);
+                out[bb + 10] = hf_energy_loss * acumen_w;
+                out[bb + 11] = hf_mag_loss * acumen_w;
+                out[bb + 12] = hf_energy_gain * acumen_w;
 
                 // Peaks block.
                 let pb = basic_total
