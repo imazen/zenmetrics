@@ -108,14 +108,24 @@ while read -r offer_id dph gpu_name; do
 
     echo "[launch] $WORKER_ID → vast.ai offer $offer_id (\$$dph/hr, $gpu_name)" >&2
 
-    # Wrap onstart in `bash -c` (matches the proven
-    # launch_single_instance.sh pattern). vast.ai's CLI hits
-    # `docker_build() error writing dockerfile` when --onstart-cmd
-    # is a bare path; the bash -c wrapper avoids that. Also wraps
-    # `exec` to the baked onstart_acumen.sh AND falls through to
-    # the image's run_with_error_trap.sh wrapper so the self-
-    # destroy contract works on rc!=0.
-    ONSTART_CMD='bash -c "if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then exec /usr/local/bin/run_with_error_trap.sh /usr/local/bin/onstart_acumen.sh; else exec /usr/local/bin/onstart_acumen.sh; fi"'
+    # Base64-encoded bootstrap script — vast.ai's API arg parser
+    # mangles embedded $-chars and semicolons in --onstart-cmd if
+    # we pass the script directly. Match the production
+    # launch_backfill.sh pattern: build the bootstrap, b64 it,
+    # invoke as `bash -c 'echo <b64> | base64 -d | bash'`. The
+    # bootstrap routes through run_with_error_trap.sh when present
+    # so self-destroy-on-crash semantics hold.
+    BOOTSTRAP=$(cat <<'BOOT'
+set -e
+if [[ -x /usr/local/bin/run_with_error_trap.sh ]]; then
+    exec /usr/local/bin/run_with_error_trap.sh /usr/local/bin/onstart_acumen.sh
+else
+    exec /usr/local/bin/onstart_acumen.sh
+fi
+BOOT
+)
+    BOOTSTRAP_B64=$(printf '%s' "$BOOTSTRAP" | base64 -w0)
+    ONSTART_CMD="bash -c 'echo ${BOOTSTRAP_B64} | base64 -d | bash'"
 
     if [[ -n "$LOGIN_ARG" ]]; then
         create_out=$(vastai create instance "$offer_id" \
