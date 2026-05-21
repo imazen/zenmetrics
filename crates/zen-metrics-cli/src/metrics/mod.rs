@@ -364,10 +364,11 @@ pub fn set_acumen_mode_a(ppd: f32, peak_nits: f32, ambient_nits: f32) {
 }
 
 #[cfg(feature = "gpu-zensim")]
-fn acumen_viewing() -> Option<zensim::acumen::viewing::ViewingCondition> {
+fn acumen_viewing() -> Option<zenmetrics_api::zensim::ViewingCondition> {
     ACUMEN_MODE_A.with(|c| {
-        c.get()
-            .map(|s| zensim::acumen::viewing::ViewingCondition::new(s.ppd, s.peak_nits, s.ambient_nits))
+        c.get().map(|s| {
+            zenmetrics_api::zensim::ViewingCondition::new(s.ppd, s.peak_nits, s.ambient_nits)
+        })
     })
 }
 

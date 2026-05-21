@@ -79,6 +79,13 @@ pub use weights::WEIGHTS_PREVIEW_V0_2;
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
 
+// Re-export the acumen ViewingCondition so `zen-metrics-cli` can
+// construct one without a direct `zensim` dep. Doc-hidden mirrors
+// the upstream's `#[doc(hidden)]` on the module. See
+// `imazen/zensim#40` for the Gate A surface.
+#[doc(hidden)]
+pub use zensim::acumen::viewing::ViewingCondition;
+
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]
 pub use pipeline::Zensim;
