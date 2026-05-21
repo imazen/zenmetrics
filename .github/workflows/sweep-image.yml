@@ -60,17 +60,27 @@ jobs:
       # sibling worktrees. Clone them at pinned commits so the cargo
       # build inside CI resolves the same versions a local build does.
       # The pins live in zenmetrics/CLAUDE.md + the [patch] block.
-      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim acumen)
+      - name: Clone sibling repos (codec siblings + zensim acumen)
         run: |
+          # Codec siblings — match the workspace Cargo.toml path-dep
+          # layout. Each sibling's last-known-good HEAD is fine for
+          # the sweep build; pin if a downstream sweep regression
+          # points at codec drift.
           git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git clone --quiet https://github.com/imazen/zenpng.git     ../zenpng
+          git clone --quiet https://github.com/imazen/zenwebp.git    ../zenwebp
+          git clone --quiet https://github.com/imazen/zenavif.git    ../zenavif--main
+          git clone --quiet https://github.com/imazen/zenjxl.git     ../zenjxl--main
+          # jxl-encoder lives one directory deeper at its repo root —
+          # workspace path is `../jxl-encoder/jxl-encoder` per Cargo.toml.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           # zensim feat/acumen-foundation — paired branch carrying the
           # `acumen` module wired through zensim-gpu by this branch.
           # When acumen-foundation merges to zensim main, switch this
           # line to `--branch main` (or remove `--branch` for default).
-          # Path matches workspace Cargo.toml's zensim path dep.
           git clone --quiet --branch feat/acumen-foundation \
               https://github.com/imazen/zensim.git ../zensim--acumen-foundation
 
