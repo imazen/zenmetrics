@@ -87,29 +87,53 @@ while read -r offer_id dph gpu_name; do
 
     WORKER_ID="acumen-$(date +%s)-${i}"
 
+    # Build single ENV_STR per vast.ai's preferred form (matches
+    # launch_single_instance.sh) — multiple `--env "-e ..."` flags
+    # cause "docker_build() error writing dockerfile" failures.
+    ENV_STR="-e R2_ACCOUNT_ID=$R2_ACCOUNT_ID"
+    ENV_STR+=" -e R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID"
+    ENV_STR+=" -e R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY"
+    ENV_STR+=" -e SWEEP_RUN_ID=$SWEEP_RUN_ID"
+    ENV_STR+=" -e WORKER_ID=$WORKER_ID"
+    ENV_STR+=" -e GPU_RUNTIME=$GPU_RUNTIME"
+    ENV_STR+=" -e ACUMEN_PPD=$ACUMEN_PPD"
+    ENV_STR+=" -e ACUMEN_PEAK_NITS=$ACUMEN_PEAK_NITS"
+    ENV_STR+=" -e ACUMEN_AMBIENT_NITS=$ACUMEN_AMBIENT_NITS"
+    ENV_STR+=" -e CONTAINER_API_KEY=$CONTAINER_API_KEY"
+
+    LOGIN_ARG=""
+    if [[ -n "${GHCR_USER:-}" && -n "${GHCR_TOKEN:-}" ]]; then
+        LOGIN_ARG="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
+    fi
+
     echo "[launch] $WORKER_ID → vast.ai offer $offer_id (\$$dph/hr, $gpu_name)" >&2
 
-    # Create instance with our env vars + onstart override.
-    create_out=$(vastai create instance "$offer_id" \
-        --image "$IMAGE" \
-        --disk "$DISK_GB" \
-        --label "$SWEEP_RUN_ID" \
-        --raw \
-        --env "-e R2_ACCOUNT_ID=$R2_ACCOUNT_ID" \
-        --env "-e R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID" \
-        --env "-e R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY" \
-        --env "-e SWEEP_RUN_ID=$SWEEP_RUN_ID" \
-        --env "-e WORKER_ID=$WORKER_ID" \
-        --env "-e GPU_RUNTIME=$GPU_RUNTIME" \
-        --env "-e ACUMEN_PPD=$ACUMEN_PPD" \
-        --env "-e ACUMEN_PEAK_NITS=$ACUMEN_PEAK_NITS" \
-        --env "-e ACUMEN_AMBIENT_NITS=$ACUMEN_AMBIENT_NITS" \
-        --env "-e CONTAINER_API_KEY=$CONTAINER_API_KEY" \
-        --onstart-cmd "/usr/local/bin/onstart_acumen.sh" \
-        2>&1) || {
+    if [[ -n "$LOGIN_ARG" ]]; then
+        create_out=$(vastai create instance "$offer_id" \
+            --image "$IMAGE" \
+            --login "$LOGIN_ARG" \
+            --disk "$DISK_GB" \
+            --label "$SWEEP_RUN_ID" \
+            --raw \
+            --env "$ENV_STR" \
+            --onstart-cmd "/usr/local/bin/onstart_acumen.sh" \
+            2>&1)
+        rc=$?
+    else
+        create_out=$(vastai create instance "$offer_id" \
+            --image "$IMAGE" \
+            --disk "$DISK_GB" \
+            --label "$SWEEP_RUN_ID" \
+            --raw \
+            --env "$ENV_STR" \
+            --onstart-cmd "/usr/local/bin/onstart_acumen.sh" \
+            2>&1)
+        rc=$?
+    fi
+    if [[ $rc -ne 0 ]]; then
         echo "[launch] WARN: create failed for $offer_id: $create_out" >&2
         continue
-    }
+    fi
 
     instance_id=$(echo "$create_out" | python3 -c "
 import sys, json
@@ -121,6 +145,15 @@ except Exception:
 " || echo "")
 
     if [[ -n "$instance_id" ]]; then
+        # vast.ai creates instances in `stopped` state — explicit
+        # start is required to fire the onstart-cmd. Observed
+        # 2026-05-18+; without this, instances sit at
+        # actual_status=loading + cur_state=stopped + the
+        # `docker_build() error writing dockerfile` placeholder
+        # message indefinitely.
+        echo "[launch] starting instance $instance_id" >&2
+        vastai start instance "$instance_id" >&2 || true
+
         echo "$instance_id $offer_id $WORKER_ID" >> "$INSTANCE_FILE"
         echo "[launch] OK $WORKER_ID instance=$instance_id" >&2
         i=$(( i + 1 ))
