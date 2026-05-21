@@ -328,6 +328,49 @@ fn allow_small_images() -> bool {
     ALLOW_SMALL_IMAGES.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+// ---- Acumen Mode A configuration (zensim-gpu only) ----
+//
+// Set by `cmd_score_pairs` when --acumen-mode-a is on the CLI; read
+// by `resolve_default_params` when constructing zensim params.
+// Stored thread-local: score-pairs runs serially on the main thread
+// today, so the producer + consumer always agree. If a future caller
+// dispatches scoring via rayon, the per-worker init code will need
+// to mirror this thread-local (or switch to per-call passing).
+
+use std::cell::Cell;
+
+thread_local! {
+    static ACUMEN_MODE_A: Cell<Option<AcumenSettings>> = const { Cell::new(None) };
+}
+
+#[derive(Clone, Copy)]
+struct AcumenSettings {
+    ppd: f32,
+    peak_nits: f32,
+    ambient_nits: f32,
+}
+
+/// Configure thread-local acumen Mode A for subsequent zensim-gpu
+/// instantiations on this thread. Called once at CLI dispatch when
+/// the `--acumen-mode-a` flag is present.
+pub fn set_acumen_mode_a(ppd: f32, peak_nits: f32, ambient_nits: f32) {
+    ACUMEN_MODE_A.with(|c| {
+        c.set(Some(AcumenSettings {
+            ppd,
+            peak_nits,
+            ambient_nits,
+        }))
+    });
+}
+
+#[cfg(feature = "gpu-zensim")]
+fn acumen_viewing() -> Option<zensim::acumen::viewing::ViewingCondition> {
+    ACUMEN_MODE_A.with(|c| {
+        c.get()
+            .map(|s| zensim::acumen::viewing::ViewingCondition::new(s.ppd, s.peak_nits, s.ambient_nits))
+    })
+}
+
 /// Resolve the default [`zenmetrics_api::MetricParams`] for a kind,
 /// applying per-CLI overrides from the CLI's process-wide flags where
 /// it exposes them. Currently this is just `--allow-small-images` for
@@ -349,6 +392,20 @@ fn resolve_default_params(
             return Ok(zenmetrics_api::MetricParams::Iwssim(
                 zenmetrics_api::iwssim::IwssimParams::allow_small(true),
             ));
+        }
+    }
+    #[cfg(feature = "gpu-zensim")]
+    {
+        if matches!(kind, zenmetrics_api::MetricKind::Zensim) {
+            // Build the standard default, then layer acumen on if
+            // the CLI set the process-wide flags.
+            let base = zenmetrics_api::MetricParams::try_default_for(kind)?;
+            if let (zenmetrics_api::MetricParams::Zensim(p), Some(viewing)) =
+                (base, acumen_viewing())
+            {
+                let p_with_acumen = p.with_acumen_mode_a(viewing);
+                return Ok(zenmetrics_api::MetricParams::Zensim(p_with_acumen));
+            }
         }
     }
     zenmetrics_api::MetricParams::try_default_for(kind)

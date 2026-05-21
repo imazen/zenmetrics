@@ -81,7 +81,7 @@ gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
 gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
 gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
 gpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/iwssim"]
-gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim"]
+gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim", "dep:zensim"]
 # Pick CubeCL backends. Forward through the umbrella so every enabled
 # per-crate gets the right backend feature.
 gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]

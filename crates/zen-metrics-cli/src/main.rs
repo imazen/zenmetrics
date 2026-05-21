@@ -266,6 +266,29 @@ struct ScorePairsArgs {
     /// Only iwssim honours this flag today; other metrics ignore it.
     #[arg(long, default_value_t = false)]
     allow_small_images: bool,
+    /// Enable acumen Mode A: when the metric is `zensim-gpu`,
+    /// pre-applies per-image castleCSF weights to the HF band-energy
+    /// features at the configured viewing condition. Default off;
+    /// V_22-shipped path is bit-stable when this flag is absent. See
+    /// imazen/zensim#40 Gate A. Other metrics ignore this flag.
+    #[arg(long, default_value_t = false)]
+    acumen_mode_a: bool,
+
+    /// Pixels per visual degree for `--acumen-mode-a`. Default 56
+    /// (lab reference; the canonical training anchor).
+    #[arg(long, default_value_t = 56.0)]
+    acumen_ppd: f32,
+
+    /// Display peak luminance in cd/m² for `--acumen-mode-a`.
+    /// Default 100 (SDR sRGB).
+    #[arg(long, default_value_t = 100.0)]
+    acumen_peak_nits: f32,
+
+    /// Ambient surround luminance in cd/m² for `--acumen-mode-a`.
+    /// Default 5 (dim room).
+    #[arg(long, default_value_t = 5.0)]
+    acumen_ambient_nits: f32,
+
     /// Gate sidecar emission on a post-scoring distribution sanity check.
     /// When set, after the parquet is written, [`bogus_check`] inspects the
     /// score column and exits with rc=2 (NOT rc=1) if any of these hold:
@@ -594,6 +617,21 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         crate::metrics::set_allow_small_images();
         eprintln!(
             "[score-pairs] --allow-small-images set: IW-SSIM will tile-pad sub-176 inputs to 176×176"
+        );
+    }
+
+    // Propagate --acumen-mode-a + viewing parameters to the metric
+    // construction site via process-wide atomics. Only zensim honours
+    // these today; other metrics ignore them. See zensim#40 Gate A.
+    if args.acumen_mode_a {
+        crate::metrics::set_acumen_mode_a(
+            args.acumen_ppd,
+            args.acumen_peak_nits,
+            args.acumen_ambient_nits,
+        );
+        eprintln!(
+            "[score-pairs] --acumen-mode-a set: castleCSF weighting at ppd={} peak={}cd/m² ambient={}cd/m²",
+            args.acumen_ppd, args.acumen_peak_nits, args.acumen_ambient_nits,
         );
     }
 
