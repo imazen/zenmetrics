@@ -17,6 +17,28 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Fixed — launch_acumen.sh launch quirks — 2026-05-21 (`2617c61`, `310db33`)
+
+Three launch failures discovered + fixed against vast.ai's
+`create instance`:
+
+- **Multiple `--env` flags trip docker-build.** vast.ai's CLI
+  expects ONE `--env` passed as a quoted string with `-e KEY=VAL`
+  tokens. Multiple `--env` args cause cur_state=stopped +
+  status_msg='docker_build() error writing dockerfile'.
+- **Bare-path `--onstart-cmd` trips the same docker-build error.**
+  vast.ai's quote-escaping needs `bash -c "..."` wrapping per
+  the proven `launch_single_instance.sh` pattern.
+- **Instances created in `stopped` state.** Need explicit
+  `vastai start instance <id>` after create — `--onstart-cmd`
+  only fires on start, not create. Observed since some 2026 CLI
+  version per CLAUDE.md note in scripts/sweep/.
+
+All three fixed in `launch_acumen.sh`. Verified: 1-box smoke
+(instance 37247081) reached cur=running with status_msg pointing
+at the image pull immediately on launch, where prior attempts
+sat stuck.
+
 ### Added — acumen Mode A castleCSF wiring through zensim-gpu — 2026-05-21 (`feat/acumen-gpu`)
 
 Pairs with `imazen/zensim feat/acumen-foundation`. Tracking issue:
