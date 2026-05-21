@@ -42,6 +42,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 def _torch():
@@ -54,18 +55,35 @@ def _torch():
 # ----------------------------------------------------------------------------
 
 
-def load(parquet_path: Path, codec: str) -> dict:
+def load(parquet_path: Path, codec: str, metric_col: str = "score_cvvdp_imazen_v0_0_1") -> dict:
     """Load + filter parquet to per-row training records."""
     import pyarrow.compute as pc
 
     t = pq.read_table(parquet_path)
     print(f"  loaded {t.num_rows} rows × {t.num_columns} cols")
-    t = t.filter(pc.equal(t["codec"], codec))
-    t = t.filter(pc.is_valid(t["score_cvvdp_imazen_v0_0_1"]))
-    t = t.filter(pc.is_finite(t["score_cvvdp_imazen_v0_0_1"]))
+    # codec may be encoded as zenwebp, v12_zenwebp, v13_zenjpeg, v15rc_zenjpeg, etc.
+    # Accept any codec column value whose tail matches the requested codec.
+    import re
+    canonical_re = re.compile(rf"^(v\d+(?:rc)?_)?{re.escape(codec)}$")
+    codecs_present = set(t["codec"].to_pylist())
+    matching = [c for c in codecs_present if canonical_re.match(c)]
+    print(f"  matching codec aliases: {matching}")
+    if not matching:
+        print(f"  WARN no rows match codec={codec}")
+        return None
+    keep = pc.is_in(t["codec"], value_set=pa.array(matching))
+    t = t.filter(keep)
+    # The metric + ancillary score columns may be string-typed across runs
+    # (mc18 shipped them as strings); cast every score_* column to double once.
+    score_cols = [c for c in t.column_names if c.startswith("score_") or c == "zensim_score"]
+    for c in score_cols:
+        if pa.types.is_string(t[c].type):
+            t = t.set_column(t.column_names.index(c), c, pc.cast(t[c], pa.float64()))
+    t = t.filter(pc.is_valid(t[metric_col]))
+    t = t.filter(pc.is_finite(t[metric_col]))
     t = t.filter(pc.is_valid(t["encoded_bytes"]))
     t = t.filter(pc.greater(t["encoded_bytes"], 0))
-    print(f"  after filter codec={codec} + non-null cvvdp + bytes>0: {t.num_rows} rows")
+    print(f"  after filter codec~={codec} + non-null {metric_col} + bytes>0: {t.num_rows} rows")
 
     src_feat_cols = sorted(
         [c for c in t.column_names if c.startswith("src_feat_")],
@@ -75,7 +93,7 @@ def load(parquet_path: Path, codec: str) -> dict:
     # Materialize columns
     qs = np.array(t["q"].to_pylist(), dtype=np.int32)
     bytes_ = np.array(t["encoded_bytes"].to_pylist(), dtype=np.float64)
-    cvvdp = np.array(t["score_cvvdp_imazen_v0_0_1"].to_pylist(), dtype=np.float32)
+    cvvdp = np.array(t[metric_col].to_pylist(), dtype=np.float32)
     knob_tuples = t["knob_tuple_json"].to_pylist()
     image_paths = t["image_path"].to_pylist()
 
@@ -285,6 +303,8 @@ def save_json(
     codec: str,
     data: dict,
     trained: dict,
+    metric_col: str = "score_cvvdp_imazen_v0_0_1",
+    metric_dir: str = "higher_better",
 ):
     state = trained["model"].state_dict()
     layers = []
@@ -293,8 +313,9 @@ def save_json(
 
     out = {
         "codec": codec,
-        "schema_version": "cvvdp_dual_head_v1",
-        "target_metric": "cvvdp_imazen_v0_0_1",
+        "schema_version": "metric_dual_head_v2",
+        "target_metric": metric_col,
+        "metric_direction": metric_dir,
         "src_feat_names": data["src_feat_names"],
         "knobs": data["knobs"],
         "Xmu": trained["Xmu"],
@@ -325,6 +346,15 @@ def main():
     ap.add_argument("--parquet", required=True, type=Path)
     ap.add_argument("--codec", required=True)
     ap.add_argument("--out-dir", required=True, type=Path)
+    ap.add_argument("--metric-column", default="score_cvvdp_imazen_v0_0_1",
+                    help="Which column to use as the quality target (e.g. score_ssim2_gpu, "
+                         "score_butteraugli_pnorm3_gpu, score_iwssim_gpu, score_zensim_gpu).")
+    ap.add_argument("--metric-direction", default="higher_better",
+                    choices=["higher_better", "lower_better"],
+                    help="Whether higher metric values mean better quality. "
+                         "butteraugli + dssim are lower_better; everything else is higher_better.")
+    ap.add_argument("--name-suffix", default=None,
+                    help="Suffix appended to output filename. Defaults to a metric-derived short name.")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--hidden", default="256,256,256")
@@ -334,13 +364,26 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=True)
     hidden = tuple(int(x) for x in args.hidden.split(","))
 
-    print(f"=== loading {args.parquet} ===")
-    data = load(args.parquet, args.codec)
-    if len(data["knobs"]) < 1 or data["src"].shape[0] < 100:
-        print(f"  SKIP: insufficient data (knobs={len(data['knobs'])}, rows={data['src'].shape[0]})")
+    # Derive a short metric tag for output filenames.
+    if args.name_suffix is not None:
+        suffix = args.name_suffix
+    else:
+        # score_cvvdp_imazen_v0_0_1 → cvvdp
+        # score_butteraugli_pnorm3_gpu → butter_p3
+        # score_ssim2_gpu → ssim2
+        s = args.metric_column.replace("score_", "").replace("_gpu", "")
+        s = s.replace("_imazen_v0_0_1", "").replace("butteraugli_", "butter_")
+        suffix = s
+
+    print(f"=== loading {args.parquet} (metric={args.metric_column}, dir={args.metric_direction}) ===")
+    data = load(args.parquet, args.codec, metric_col=args.metric_column)
+    if data is None or len(data["knobs"]) < 1 or data["src"].shape[0] < 100:
+        n_rows = 0 if data is None else data["src"].shape[0]
+        n_k = 0 if data is None else len(data["knobs"])
+        print(f"  SKIP: insufficient data (knobs={n_k}, rows={n_rows})")
         return
 
-    print(f"\n=== training dual-head MLP ({args.codec}) ===")
+    print(f"\n=== training dual-head MLP ({args.codec} / {suffix}) ===")
     trained = train(
         data,
         device=args.device,
@@ -350,10 +393,11 @@ def main():
     )
 
     print("\n=== saving ===")
-    out_path = args.out_dir / f"{args.codec}_cvvdp_picker.json"
-    save_json(out_path, args.codec, data, trained)
+    out_path = args.out_dir / f"{args.codec}_{suffix}_picker.json"
+    save_json(out_path, args.codec, data, trained,
+              metric_col=args.metric_column, metric_dir=args.metric_direction)
     print(f"  wrote {out_path}  ({out_path.stat().st_size/1e6:.2f} MB)")
-    print(f"  held-out R²:  log-bytes {trained['r2_bytes_holdout']:.4f}  cvvdp {trained['r2_cvvdp_holdout']:.4f}")
+    print(f"  held-out R²:  log-bytes {trained['r2_bytes_holdout']:.4f}  metric {trained['r2_cvvdp_holdout']:.4f}")
     print("✅ done")
 
 
