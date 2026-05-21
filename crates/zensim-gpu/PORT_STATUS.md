@@ -19,23 +19,106 @@ scales × 3 channels × 19 features).
 
 ## Validated parity (RTX 5070, CUDA 13.2, host-side `zensim` v0.2.8)
 
-`tests/parity_lock.rs` — **8 / 8 pass on CUDA**:
+Full test suite — **19 / 19 pass on CUDA** (verified 2026-05-20):
+
+| Test file | Tests | Coverage |
+|---|--:|---|
+| `tests/cpu_parity.rs` | 3 | Basic + peak 228-feat per-slot parity (identical / noisy-gradient 64² / checkerboard 128² multi-strip) |
+| `tests/extended_parity.rs` | 6 | Extended 300-feat (incl. masked block 228..300) + WithIw 372-feat structural |
+| `tests/parity_lock.rs` | 8 | Aggregate score: synthetic edges + cached-vs-direct + JPEG corpus q70/q90 |
+| `tests/weights_parity.rs` | 1 | Byte-for-byte CPU/GPU weights match `WEIGHTS_PREVIEW_V0_2` |
+| `tests/opaque.rs` | 1 | `Zensim::compute_features_srgb_u8` opaque-API path |
+
+`tests/parity_lock.rs` aggregate-score numbers (2026-05-20 re-run):
 
 | Case | CPU score | GPU score | rel error |
 |---|---|---|---|
-| 32×32 identical gradient | 100.0 | 100.0 | ≤ 1e-6 |
+| 32×32 identical gradient | 100.0 | 99.9531 | 4.7e-4 |
 | 64×64 black vs white | -208.4879 | -208.4871 | 4.0e-6 |
-| 64×64 noisy gradient (±8) | 63.6834 | 63.6860 | 4.1e-5 |
-| `dssim-cuda` corpus q70.jpg | 80.9018 | 80.8892 | 1.6e-4 |
-| `dssim-cuda` corpus q90.jpg | 91.3509 | 91.3482 | 3.0e-5 |
+| 64×64 noisy gradient (±8) | 63.6834 | 63.6830 | 6.3e-5 |
+| `dssim-cuda` corpus q70.jpg | 80.9018 | 80.8850 | 2.1e-4 |
+| `dssim-cuda` corpus q90.jpg | 91.3509 | 91.3486 | 2.5e-5 |
 | Cached-vs-direct drift | (n/a) | (n/a) | ≤ 1e-3 score |
+
+`tests/extended_parity.rs` per-feature parity numbers
+(2026-05-20 re-run):
+
+| Case | max \|gpu − cpu\| | Slot budget |
+|---|---|---|
+| 64² identical input (300 slots) | 6.80e-4 | 5e-2 abs |
+| 64² noisy gradient (300 slots) | within budget on every slot | basic 2e-3 rel · peak/max 3e-2 rel · L8 5e-3 rel · **masked 5e-3 rel** |
+| 128² checkerboard multi-strip (300 slots) | within budget on every slot | same as above |
+| 64² WithIw[0..300] vs Extended[0..300] | 0.0 (bit-identical) | 5e-3 abs |
+| 64² WithIw IW block (300..372) on noisy input | 72/72 non-zero, max \|val\| 0.236 | finite + magnitude < 1e3 |
 
 Synthetic edge cases (grayscale, polar opposite, low-magnitude X
 channels) sit comfortably under 1e-4 relative error. Real-image
-corpus parity at q70 is ≈ 1.6e-4 (0.016 %) — within the cross-arch
+corpus parity at q70 is ≈ 2.1e-4 (0.021 %) — within the cross-arch
 FMA contraction floor that bounds CUDA-PTX vs CPU AVX-512 (the
 `zensim-cuda` crate documents the same regime as "~ULP of cross-arch
-FMA drift"). q90 and the synthetic cases land at ≤ 4e-5.
+FMA drift"). q90 and the synthetic cases land at ≤ 6e-5.
+
+## Principled per-channel H-blur activity (2026-05-17, masked + IW blocks)
+
+The masked-block (slots 228..300) and IW-block (slots 300..372) both
+compute a per-channel "activity map" as
+`activity[c] = box_blur(|src[c] - mu1[c]|)` and weight per-pixel
+SSIM by `1/(1+k·a)` (masked) or `1+k·a` (IW). The CPU's pre-2026-
+05-17 implementation had an accidental cross-channel cascade at
+strip-overlap rows — `bufs.mu1` was reused across X→Y→B channels
+via `std::mem::swap(&mut bufs.mu1, &mut bufs.mask)`, and the fused
+V-blur only wrote inner rows of `mu1`, leaving overlap rows holding
+the previous channel's stale state (or zero for X / prior-strip B
+mask state for strip K≥1). See zensim's
+`docs/PRINCIPLED_ACTIVITY.md` for the full RCA.
+
+CPU was redesigned (commit `caf52d36` on
+`feat/principled-activity`, shipped 2026-05-17 as
+`2dab8f3` on zensim main) to use a per-channel strip-local
+`H_blur(src)` as the activity-map reference at ALL strip rows
+(inner + overlap). Channels are decoupled; the activity for each
+channel sees only its own H-blurred source.
+
+GPU `kernels::masked_iw_strip` was re-aligned (zenmetrics `1b8ccab`,
+2026-05-17). The pre-fix host-side `populate_carryover` simulator,
+the `carry: Array<f32>` kernel parameter, and the strip-K-vs-strip-0
+branch in `masked_iw_strip_kernel` are all **deleted**. The new
+kernel loads a DIAM-wider `wide_src[TX + 4R]` per (row, channel)
+into shared memory and computes `H_blur(src)` on-the-fly into
+`mu1_row[TX + 2R]`.
+
+### Parity result after the redesign
+
+All masked-block (228..300) and IW-block (300..372) features match
+CPU within **5e-3 rel at every scale and every fixture size**,
+including multi-strip scales (128² scale 0 + scale 1; 12 MP scale
+0 + scale 1 + scale 2). No per-channel, per-scale tolerance
+widening needed.
+
+### Perf side effect
+
+12 MP RTX 5070 WithIw 372-feature steady-state:
+
+- Pre-redesign (with carryover plane + cross-channel branches):
+  ~26.92 ms / iter.
+- Post-redesign (principled per-channel H-blur, no carry, no
+  cross-channel cascade): **~22.9 ms / iter**.
+- **~15 % faster.** The kernel does DIAM extra src loads per row
+  to compute H-blur on the fly but loses all per-channel branches
+  in the hot path AND drops the ~23 MB device buffer that was
+  being read every iteration.
+
+### Caveat for downstream
+
+Any sweep parquet data that pre-dates the 2026-05-17 fix and
+includes masked/IW features (slots 228..372) was scored against
+the **old cascade semantics**. The magnitude of shift in the
+affected slots is bounded by the pre-fix 1.5-4 % rel GPU residual
+that the fix eliminated. Re-bake any V_X model whose training
+corpus consumed pre-2026-05-17 masked/IW values where those
+features are load-bearing. CPU and GPU runtimes agree on the new
+semantics, so current production scoring is consistent across the
+two paths.
 
 ## The HF feature thresholds
 
@@ -210,7 +293,10 @@ Optimisations applied since the initial port:
   sweeps. Not implemented yet because `zensim-cuda` itself doesn't
   expose a batched API; would be a workspace-level addition rather than
   a port.
-- **`zen-metrics-cli` integration** — register `zensim-gpu` alongside
-  `dssim-gpu`, `ssim2-gpu`, `butteraugli-gpu` in the metric registry.
 - **Tighten `cached_reference_matches_direct` to 1e-5** once the
   fma-ordering match is in place. Currently `< 1e-3`.
+
+`zen-metrics-cli` integration is **done** — zensim-gpu is wired
+alongside `dssim-gpu`, `ssim2-gpu`, `butteraugli-gpu` in
+`crates/zen-metrics-cli/src/metrics/mod.rs` (see the
+`#[value(name = "zensim-gpu")]` variant on the Metric enum).
