@@ -288,6 +288,12 @@ for offer_id in $OFFER_IDS; do
         ENV_STR+=" -e SWEEP_BIN_OVERRIDE=${SWEEP_BIN_OVERRIDE}"
     [[ -n "${PARALLEL_CHUNKS:-}" ]] && \
         ENV_STR+=" -e PARALLEL_CHUNKS=${PARALLEL_CHUNKS}"
+    [[ -n "${PARALLEL_CHUNKS_MAX:-}" ]] && \
+        ENV_STR+=" -e PARALLEL_CHUNKS_MAX=${PARALLEL_CHUNKS_MAX}"
+    [[ -n "${ADAPT_INTERVAL_SEC:-}" ]] && \
+        ENV_STR+=" -e ADAPT_INTERVAL_SEC=${ADAPT_INTERVAL_SEC}"
+    [[ -n "${ZENSIM_FEATURES_REGIME:-}" ]] && \
+        ENV_STR+=" -e ZENSIM_FEATURES_REGIME=${ZENSIM_FEATURES_REGIME}"
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 

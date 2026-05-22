@@ -191,7 +191,10 @@ ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
 # populated by a prior aborted run).
 [[ -n "${SKIP_CLAIMS:-}" ]]      && ENV_STR+=" -e SKIP_CLAIMS=${SKIP_CLAIMS}"
 [[ -n "${METRICS:-}" ]]          && ENV_STR+=" -e METRICS=${METRICS}"
-[[ -n "${PARALLEL_CHUNKS:-}" ]]  && ENV_STR+=" -e PARALLEL_CHUNKS=${PARALLEL_CHUNKS}"
+[[ -n "${PARALLEL_CHUNKS:-}" ]]      && ENV_STR+=" -e PARALLEL_CHUNKS=${PARALLEL_CHUNKS}"
+[[ -n "${PARALLEL_CHUNKS_MAX:-}" ]]  && ENV_STR+=" -e PARALLEL_CHUNKS_MAX=${PARALLEL_CHUNKS_MAX}"
+[[ -n "${ADAPT_INTERVAL_SEC:-}" ]]   && ENV_STR+=" -e ADAPT_INTERVAL_SEC=${ADAPT_INTERVAL_SEC}"
+[[ -n "${ZENSIM_FEATURES_REGIME:-}" ]] && ENV_STR+=" -e ZENSIM_FEATURES_REGIME=${ZENSIM_FEATURES_REGIME}"
 # Pass the chunks URL through env. The unified Rust worker reads
 # CHUNKS_R2; the bash onstart workers ignored it and derived from
 # the SWEEP_RUN_ID. Forwarding here lets the smoke flow point at
