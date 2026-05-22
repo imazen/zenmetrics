@@ -5,8 +5,8 @@ The v26 sweep targets the R²=0.69 butter_p3 weakness identified in
 the cvvdp-v15rc / mc18 picker analyses. zenavif's `lrf` (loop
 restoration filter) is the key knob — at high q the default preset
 turns LRF off, but turning it back on can recover edge quality that
-butter_p3 is sensitive to. We sweep 8 knob tuples × 10 q × 1332
-sources = 106,560 cells.
+butter_p3 is sensitive to. We sweep 5 knob tuples × 10 q × 1332
+sources = 66,600 cells.
 
 Output schema per the unified-worker pipeline (see
 crates/vastai-fleet/src/worker/inline.rs::ChunkRecord):
@@ -39,10 +39,11 @@ from pathlib import Path
 # Targets the R²=0.69 butter_p3 weakness — `lrf=true` at high q is
 # the recovery knob (default preset turns LRF off at q ≥ 85).
 #
-# 6 knob tuples × 10 q × 1332 sources = 79,920 cells. Fits the
-# $3 budget at $0.06/hr × 8 boxes × ~7 hr. Dropped from initial 8
-# tuples: `speed=3+complex=true` (slowest, archival-only) and
-# `speed=8` (redundant with speed=7 at fastest tier).
+# 5 knob tuples × 10 q × 1332 sources = 66,600 cells. Trimmed from 6:
+# the archival `speed=5 + complex=true + lrf=true + fast_deblock=false`
+# tuple was dropped (Option A, 2026-05-22) — too slow per-cell at our
+# budget and the LRF-only and slow-deblock-only tuples isolate its
+# components individually. $5.50 hard ceiling on 24 GB boxes.
 KNOB_TUPLES = [
     # baseline default — speed 5, no expert overrides
     {"speed": 5, "complex_prediction_modes": False, "lrf": False, "fast_deblock": True},
@@ -50,8 +51,6 @@ KNOB_TUPLES = [
     {"speed": 5, "complex_prediction_modes": False, "lrf": True, "fast_deblock": True},
     # + slow deblock search (edge-sensitive)
     {"speed": 5, "complex_prediction_modes": False, "lrf": False, "fast_deblock": False},
-    # speed 5 max-quality: complex prediction + LRF + slow deblock
-    {"speed": 5, "complex_prediction_modes": True, "lrf": True, "fast_deblock": False},
     # fast default — speed 7
     {"speed": 7, "complex_prediction_modes": False, "lrf": False, "fast_deblock": True},
     # fast + LRF (the same recovery knob at the fast tier)
@@ -143,9 +142,9 @@ def main() -> int:
     # in the order we built them — outer loop = image, then knob,
     # then q — a chunk's row range is contiguous in image space.
     #
-    # With cells_per_chunk=300 and 8 knobs × 10 q = 80 cells per
-    # image, each chunk spans ~3.75 images. Round to whole images:
-    # 4 images per chunk → 320 cells/chunk; 333 chunks total.
+    # With cells_per_chunk=300 and 5 knobs × 10 q = 50 cells per
+    # image, each chunk spans exactly 6 images = 300 cells/chunk.
+    # 1332 / 6 = 222 chunks total.
     cells_per_image = len(KNOB_TUPLES) * len(Q_GRID)
     images_per_chunk = max(1, args.cells_per_chunk // cells_per_image)
     chunk_n_cells = images_per_chunk * cells_per_image
