@@ -57,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "hf_post" | "hf-post" => AcumenArch::HfPost,
                     "wide_modulation" | "wide" => AcumenArch::WideModulation,
                     "aux_features" | "aux" => AcumenArch::AuxFeatures,
+                    "mode_b" | "mode-b" | "modeb" => AcumenArch::ModeB,
                     _ => return Err(format!("unknown --acumen-arch: {v}").into()),
                 };
             }
@@ -174,7 +175,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             current_dims = Some((w_r, h_r));
         }
         let z = current_z.as_mut().unwrap();
-        let feats = match z.compute_features_srgb_u8(&r, &d) {
+        // Mode B: pre-multiply BOTH ref and dist by their respective
+        // per-pixel achromatic CSF weights. Each image gets its OWN
+        // adaptation map based on its own local luminance — that's
+        // what Mode B per-pixel L_adapt means.
+        let (r_used, d_used);
+        if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
+            let v = viewing.unwrap();
+            r_used = apply_mode_b_premultiply(&r, w_r, h_r, v)?;
+            d_used = apply_mode_b_premultiply(&d, w_r, h_r, v)?;
+        } else {
+            r_used = r.clone();
+            d_used = d.clone();
+        }
+        let feats = match z.compute_features_srgb_u8(&r_used, &d_used) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  compute_features failed [{}/{}]: {e:?}", idx + 1, pairs.len());
@@ -239,4 +253,121 @@ fn decode_image(path: &Path) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::
     let rgb = img.to_rgb8();
     let (w, h) = (rgb.width(), rgb.height());
     Ok((rgb.into_raw(), w, h))
+}
+
+/// Apply per-pixel achromatic castleCSF weighting to an RGB image.
+/// For each pixel:
+///   1. Compute linear luminance L(x,y) from sRGB-encoded RGB.
+///   2. Apply local Gaussian blur to L (radius ~8 pixels) to get
+///      the adapted luminance L_adapt(x,y).
+///   3. Look up castleCSF achromatic at L_adapt(x,y) at the average
+///      band rho (band 2 = ~7 cy/deg at ppd=56) — this is the band
+///      with peak CSF for typical viewing.
+///   4. Multiply pixel RGB by that scalar weight.
+///
+/// The output remains 8-bit RGB (clamped). The kernel sees a
+/// spatially-CSF-weighted image instead of the raw input. This is
+/// an approximation of true Mode B (which would weight per-band
+/// per-pixel inside the kernel). It tests whether spatial CSF
+/// adaptation carries signal at all; if yes, the full kernel-level
+/// per-band Mode B becomes worth the effort.
+fn apply_mode_b_premultiply(
+    rgb: &[u8],
+    w: u32,
+    h: u32,
+    viewing: zensim_gpu::ViewingCondition,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    use zensim::acumen::castle_csf::{CastleCsfLut, Channel};
+    const LUT_BYTES: &[u8] = include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
+    let lut = CastleCsfLut::from_bytes(LUT_BYTES).map_err(|e| format!("LUT: {e:?}"))?;
+
+    let n = (w as usize) * (h as usize);
+    assert_eq!(rgb.len(), n * 3);
+
+    // Step 1: per-pixel linear luminance.
+    let mut lum = vec![0.0_f32; n];
+    for i in 0..n {
+        let r = srgb_u8_to_linear(rgb[3 * i]);
+        let g = srgb_u8_to_linear(rgb[3 * i + 1]);
+        let b = srgb_u8_to_linear(rgb[3 * i + 2]);
+        lum[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+
+    // Step 2: Gaussian blur over luminance for local-adaptation.
+    // Radius 8 → adapts over ~1° at ppd=56. Box-blur 3-pass
+    // approximation; cheap, separable.
+    let blurred = box_blur_3pass(&lum, w as usize, h as usize, 8);
+
+    // Step 3 + 4: per-pixel CSF lookup + multiply.
+    // Use band 2 (rho = ppd/8) — the typical CSF peak band at
+    // photopic L. Normalize by the CSF at the IMAGE-MEAN L so the
+    // output is comparable in scale to the un-weighted path.
+    let peak_nits = viewing.peak_luminance_nits;
+    let rho = viewing.ppd / 8.0;
+    let log_rho = rho.log10();
+    let mean_l_nits =
+        (lum.iter().sum::<f32>() / n as f32) * peak_nits;
+    let norm_l = viewing.adapted_luminance_nits(mean_l_nits).max(1e-3);
+    let csf_at_mean = lut.sensitivity(log_rho, norm_l.log10(), Channel::Achromatic);
+
+    let mut out = Vec::with_capacity(n * 3);
+    for i in 0..n {
+        let l_nits = (blurred[i] * peak_nits).max(1e-3);
+        let l_adapt = viewing.adapted_luminance_nits(l_nits).max(1e-3);
+        let csf_here = lut.sensitivity(log_rho, l_adapt.log10(), Channel::Achromatic);
+        // Normalized weight: 1.0 at image-mean L (matches Mode A
+        // at this pixel), <1 in shadows where CSF rolls off, >1 in
+        // mid-tones where CSF peaks.
+        let w_scalar = (csf_here / csf_at_mean).clamp(0.1, 4.0);
+        for ch in 0..3 {
+            let v = rgb[3 * i + ch] as f32 * w_scalar;
+            out.push(v.clamp(0.0, 255.0) as u8);
+        }
+    }
+
+    Ok(out)
+}
+
+fn srgb_u8_to_linear(v: u8) -> f32 {
+    let u = v as f32 / 255.0;
+    if u <= 0.040_45 { u / 12.92 } else { ((u + 0.055) / 1.055).powf(2.4) }
+}
+
+/// Approximate Gaussian blur via 3 passes of box blur of half-radius r/3.
+/// Separable, O(N) per pass.
+fn box_blur_3pass(input: &[f32], w: usize, h: usize, sigma: usize) -> Vec<f32> {
+    let r = sigma; // approx σ
+    let mut buf = input.to_vec();
+    let mut tmp = vec![0.0_f32; input.len()];
+    for _ in 0..3 {
+        // Horizontal
+        for y in 0..h {
+            let row = y * w;
+            for x in 0..w {
+                let lo = x.saturating_sub(r);
+                let hi = (x + r + 1).min(w);
+                let mut s = 0.0;
+                for xx in lo..hi {
+                    s += buf[row + xx];
+                }
+                tmp[row + x] = s / (hi - lo) as f32;
+            }
+        }
+        std::mem::swap(&mut buf, &mut tmp);
+        // Vertical
+        for y in 0..h {
+            let row = y * w;
+            for x in 0..w {
+                let lo = y.saturating_sub(r);
+                let hi = (y + r + 1).min(h);
+                let mut s = 0.0;
+                for yy in lo..hi {
+                    s += buf[yy * w + x];
+                }
+                tmp[row + x] = s / (hi - lo) as f32;
+            }
+        }
+        std::mem::swap(&mut buf, &mut tmp);
+    }
+    buf
 }

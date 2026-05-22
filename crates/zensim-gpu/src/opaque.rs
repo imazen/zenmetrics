@@ -115,6 +115,21 @@ pub enum AcumenArch {
     /// features. The MLP learns to USE the CSF weights as input
     /// signal rather than have them applied as a multiplier.
     AuxFeatures,
+    /// Mode B (per-pixel L_adapt). Pre-multiply the input RGB by
+    /// a per-pixel achromatic CSF weight derived from each pixel's
+    /// local adapted luminance (Gaussian-blurred luma). Introduces
+    /// spatial CSF variation that Mode A's per-image-mean L can
+    /// never capture. Approximation of the full castleCSF Mode B —
+    /// applies the same scalar weight uniformly across the 3 color
+    /// channels and 4 pyramid scales at each pixel. The full
+    /// per-band-per-pixel version requires kernel modification and
+    /// is deferred until/unless this approximation shows signal.
+    ///
+    /// Implementation: caller of `compute_features` is responsible
+    /// for pre-multiplying the image bytes before this codepath
+    /// runs. The kernel itself is unmodified; the `compute_features`
+    /// entry point sees pre-weighted RGB.
+    ModeB,
 }
 
 // Manual Debug impl because `Option<ViewingCondition>` doesn't

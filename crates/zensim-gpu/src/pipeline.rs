@@ -806,6 +806,18 @@ impl<R: Runtime> Zensim<R> {
                         out[bb + 11] = hf_mag_loss;
                         out[bb + 12] = hf_energy_gain;
                     }
+                    AcumenArch::ModeB => {
+                        // Mode B applies CSF weighting OUTSIDE this
+                        // post-pool stage — the caller pre-multiplies
+                        // the input RGB by per-pixel achromatic CSF.
+                        // From Phase 4's perspective the features
+                        // come in already spatially-weighted; emit
+                        // the raw HF stats verbatim (no additional
+                        // post-multiply).
+                        out[bb + 10] = hf_energy_loss;
+                        out[bb + 11] = hf_mag_loss;
+                        out[bb + 12] = hf_energy_gain;
+                    }
                 }
 
                 // Peaks block.
