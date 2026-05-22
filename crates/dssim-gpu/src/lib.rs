@@ -72,9 +72,15 @@
 // layer. No raw pointer / transmute / get_unchecked is used.
 
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
+
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 
 // Uniform opaque API (Phase 2 of API uniformity refactor). The
 // `<Metric>Opaque` shim hides the cubecl `Runtime` generic from
@@ -116,6 +122,13 @@ pub enum Error {
     /// Image is smaller than 8×8 — the pyramid would collapse before
     /// reaching scale 0.
     InvalidImageSize,
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet (e.g. `Tile {...}`).
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit either
+    /// Full or Strip into the VRAM cap. `needed` is the smaller of
+    /// the two estimates; `cap` is the configured cap.
+    TooBigForFull { needed: usize, cap: usize },
 }
 
 impl std::fmt::Display for Error {
@@ -127,6 +140,16 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidImageSize => write!(f, "image must be at least 8×8 pixels"),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in dssim-gpu"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; \
+                 needs at least {needed} bytes (set ZENMETRICS_VRAM_CAP_BYTES or \
+                 use MemoryMode::Strip explicitly)"
+            ),
         }
     }
 }

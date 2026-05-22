@@ -28,6 +28,7 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
@@ -36,6 +37,10 @@ pub mod strip;
 
 // Uniform opaque API (Phase 2 of API uniformity refactor). See
 // `opaque.rs` and the matching shim in `dssim-gpu`.
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 pub use opaque::{Backend, ButteraugliOpaque, Score};
 
 // Typed-generic API (gated behind `cubecl-types`). Internal callers
@@ -128,6 +133,17 @@ pub enum Error {
     /// pair-only — re-allocate via `new` if you need the cached-
     /// reference / multi-resolution paths.
     StripModeUnsupported(&'static str),
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet in this crate (e.g. `Tile {...}`). The string
+    /// names the unsupported variant for diagnostics.
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't satisfy the
+    /// caller's image size — the Full allocation exceeds the VRAM cap
+    /// AND the Strip walker can't fit either. Surface the gap so the
+    /// caller can either raise `ZENMETRICS_VRAM_CAP_BYTES`, drop to a
+    /// smaller image, or pick [`MemoryMode::Strip`](crate::MemoryMode)
+    /// with an explicit `h_body`.
+    TooBigForFull { needed: usize, cap: usize },
 }
 
 impl std::fmt::Display for Error {
@@ -143,6 +159,16 @@ impl std::fmt::Display for Error {
                 f,
                 "strip-mode instance does not support `{api}` (single-resolution pair-only); \
                 use `Butteraugli::new` for whole-image / cached-reference / multi-resolution paths"
+            ),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in butteraugli-gpu"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; \
+                 estimated whole-image working set is {needed} bytes \
+                 (set ZENMETRICS_VRAM_CAP_BYTES or pass MemoryMode::Strip explicitly)"
             ),
         }
     }

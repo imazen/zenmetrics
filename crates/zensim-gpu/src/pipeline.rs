@@ -253,6 +253,32 @@ impl<R: Runtime> Zensim<R> {
         Self::new_with_regime(client, width, height, ZensimFeatureRegime::Basic)
     }
 
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
+    /// zensim-gpu has **no Strip implementation** — Strip and Tile
+    /// return [`crate::Error::ModeUnsupported`]. Auto resolves to
+    /// Full when it fits the cap, else
+    /// [`crate::Error::TooBigForFull`].
+    pub fn new_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        match mode {
+            MemoryMode::Full => Self::new(client, width, height),
+            MemoryMode::Strip { .. } => Err(crate::Error::ModeUnsupported("Strip")),
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Self::new(client, width, height),
+                }
+            }
+        }
+    }
+
     /// Construct with an explicit feature regime.
     ///
     /// `regime == Extended` adds the 72 masked features (`228..300`).

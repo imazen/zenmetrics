@@ -97,11 +97,16 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
 pub mod skipmap;
 
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, Score, Ssim2Opaque, Ssim2Params};
 // Ssim2Mode is part of the opaque public params, so re-export it
@@ -288,6 +293,14 @@ pub enum Error {
     /// `Ssim2Batch::new` was called with `batch_size == 0`, or
     /// `compute_batch` got more inputs than the instance's batch_size.
     InvalidBatchSize { got: usize, max: usize },
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet (Strip and Tile in ssim2-gpu's current
+    /// revision — see `docs/STRIP_PROCESSING.md`).
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
+    /// into the VRAM cap. ssim2-gpu has no Strip implementation, so
+    /// `needed` is the Full estimate.
+    TooBigForFull { needed: usize, cap: usize },
 }
 
 impl std::fmt::Display for Error {
@@ -302,6 +315,16 @@ impl std::fmt::Display for Error {
             Error::InvalidBatchSize { got, max } => write!(
                 f,
                 "invalid batch size: got {got} images for batch_size = {max}"
+            ),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in ssim2-gpu \
+                 (Phase 2 strip work is a planned follow-up)"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
+                 (ssim2-gpu has no Strip path yet — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
             ),
         }
     }

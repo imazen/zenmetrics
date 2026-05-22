@@ -52,8 +52,14 @@
 pub mod eig;
 pub mod filters;
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
+
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, IwssimOpaque, IwssimParams, Score};
@@ -212,6 +218,12 @@ pub enum Error {
     /// scoring, or construct the pipeline via [`Iwssim::new_strip`]
     /// for the strip-processing path.
     NotStripMode,
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet (e.g. `Tile {...}`).
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit either
+    /// Full or Strip into the VRAM cap.
+    TooBigForFull { needed: usize, cap: usize },
 }
 
 impl std::fmt::Display for Error {
@@ -235,6 +247,15 @@ impl std::fmt::Display for Error {
             Error::NotStripMode => write!(
                 f,
                 "compute_gray_stripped requires an instance built via Iwssim::new_strip"
+            ),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in iwssim-gpu"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
+                 (set ZENMETRICS_VRAM_CAP_BYTES or use MemoryMode::Strip explicitly)"
             ),
         }
     }

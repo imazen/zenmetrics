@@ -85,6 +85,31 @@ For Metal targets:
 cargo build -p dssim-gpu --no-default-features --features wgpu
 ```
 
+## Memory modes
+
+dssim-gpu implements both whole-image and strip processing. `MemoryMode::Auto`
+(default via `Dssim::new`) picks **Full whenever it fits the VRAM cap** —
+strip mode is 2-5× slower on this crate, so it's only engaged when Full
+exceeds the cap. Cap policy: `ZENMETRICS_VRAM_CAP_BYTES` env var, else
+8 GB default.
+
+```rust
+use dssim_gpu::{DssimOpaque, MemoryMode};
+
+// Force whole-image regardless of cap.
+let scorer = DssimOpaque::new_with_memory_mode(
+    backend, w, h, params, MemoryMode::Full,
+)?;
+
+// Pin an explicit strip body. h_body must be a positive multiple of 16
+// (matches `Dssim::new_strip`'s pyramid-alignment contract).
+let scorer = DssimOpaque::new_with_memory_mode(
+    backend, w, h, params, MemoryMode::Strip { h_body: Some(128) },
+)?;
+```
+
+See the workspace README for the cross-crate matrix.
+
 ## Status
 
 Initial port from `dssim-cuda`. See `PORT_STATUS.md` for the

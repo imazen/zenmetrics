@@ -68,9 +68,15 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
 pub mod weights;
+
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 
 // Re-export the canonical default-weights array so callers can wire
 // custom params without rebuilding it themselves.
@@ -227,6 +233,13 @@ pub enum Error {
         needed_bytes: usize,
         max_bytes: usize,
     },
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet (Strip and Tile in zensim-gpu's current
+    /// revision).
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
+    /// into the VRAM cap. zensim-gpu has no Strip implementation.
+    TooBigForFull { needed: usize, cap: usize },
 }
 
 impl std::fmt::Display for Error {
@@ -246,6 +259,15 @@ impl std::fmt::Display for Error {
                 "extended-regime persist planes need {needed_bytes} bytes, \
                  over budget {max_bytes} (cap configured via \
                  Zensim::new_with_regime_budget)"
+            ),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in zensim-gpu"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
+                 (zensim-gpu has no Strip path — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
             ),
         }
     }

@@ -2578,6 +2578,7 @@ dependencies = [
  "fast-ssim2",
  "hashbrown 0.16.1",
  "imgref",
+ "jxl-encoder-macros",
  "jxl-encoder-simd",
  "jxl-oxide",
  "once_cell",
@@ -2586,6 +2587,15 @@ dependencies = [
  "thiserror",
  "whereat",
  "zensim 0.2.7",
+]
+
+[[package]]
+name = "jxl-encoder-macros"
+version = "0.3.2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

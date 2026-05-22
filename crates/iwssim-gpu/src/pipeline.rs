@@ -618,6 +618,51 @@ impl<R: Runtime> Iwssim<R> {
         })
     }
 
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
+    /// iwssim-gpu is **NOT strip-preferred** — strip mode is ~1.7×
+    /// slower than whole-image (the cached-reference strip path is
+    /// deferred; see `docs/STRIP_PROCESSING.md`). Auto picks Full
+    /// whenever it fits the VRAM cap.
+    ///
+    /// - `MemoryMode::Auto`: Full if it fits, else Strip (when
+    ///   `min(w, h) ≥ MIN_NATIVE_DIM = 176`; small images that can't
+    ///   use strip surface [`crate::Error::TooBigForFull`]).
+    /// - `MemoryMode::Full`: constructs via [`Self::new`].
+    /// - `MemoryMode::Strip { h_body }`: constructs via
+    ///   [`Self::new_strip`]. `h_body == None` auto-sizes within the
+    ///   cap.
+    /// - `MemoryMode::Tile {..}` returns
+    ///   [`crate::Error::ModeUnsupported`].
+    pub fn new_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        match mode {
+            MemoryMode::Full => Self::new(client, width, height),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                });
+                Self::new_strip(client, width, height, body)
+            }
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Self::new(client, width, height),
+                    ResolvedMode::Strip { h_body } => {
+                        Self::new_strip(client, width, height, h_body)
+                    }
+                }
+            }
+        }
+    }
+
     /// Construct a strip-processing pipeline for an `image_w × image_h`
     /// image, with each strip carrying `h_body` body rows + the default
     /// halo per side ([`STRIP_DEFAULT_HALO`]). Per-scale GPU buffers
@@ -910,6 +955,29 @@ impl<R: Runtime> Iwssim<R> {
     /// reflect-padded RGB to `pad_width × pad_height × 3` before being
     /// packed and uploaded.
     pub fn compute_rgb(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<GpuIwssimResult> {
+        // Strip-mode instances need a separate dispatch path — the
+        // strip walker requires f32 gray inputs (the on-device
+        // rgb→gray kernel only sees the strip-sized staging buffer).
+        // Convert host-side using BT.601 rounded (matches the on-
+        // device `rgb_u32_to_gray_kernel`).
+        if self.strip.is_some() {
+            let expected = (self.width * self.height * 3) as usize;
+            if ref_rgb.len() != expected {
+                return Err(Error::DimensionMismatch {
+                    expected,
+                    got: ref_rgb.len(),
+                });
+            }
+            if dis_rgb.len() != expected {
+                return Err(Error::DimensionMismatch {
+                    expected,
+                    got: dis_rgb.len(),
+                });
+            }
+            let ref_gray = rgb_u8_to_gray_bt601(ref_rgb);
+            let dis_gray = rgb_u8_to_gray_bt601(dis_rgb);
+            return self.compute_gray_stripped(&ref_gray, &dis_gray);
+        }
         let expected = (self.width * self.height * 3) as usize;
         if ref_rgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -2268,6 +2336,24 @@ fn scale_cu(cu_raw: &[f32], n_dim: usize, has_parent: bool, nexp: f64) -> Vec<f6
             let src_idx = i * device_stride + j;
             out[i * n_dim + j] = (cu_raw[src_idx] as f64) / nexp;
         }
+    }
+    out
+}
+
+/// Host-side BT.601 rgb→gray (rounded) matching
+/// `crate::kernels::rgb2gray::rgb_u32_to_gray_kernel`. Used by the
+/// strip-mode dispatch in [`Iwssim::compute_rgb`] when the instance
+/// was built via [`Iwssim::new_strip`] — the strip walker only takes
+/// f32 gray, so we convert on the host before handing off.
+fn rgb_u8_to_gray_bt601(rgb: &[u8]) -> Vec<f32> {
+    let n = rgb.len() / 3;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let r = rgb[i * 3] as f32;
+        let g = rgb[i * 3 + 1] as f32;
+        let b = rgb[i * 3 + 2] as f32;
+        let y = 0.2989_f32 * r + 0.5870_f32 * g + 0.1140_f32 * b;
+        out.push((y + 0.5_f32).floor());
     }
     out
 }

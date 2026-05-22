@@ -68,6 +68,18 @@ See [`PORT_STATUS.md`](PORT_STATUS.md) and [`HANDOFF.md`](HANDOFF.md).
 Validated against CPU `ssimulacra2` to ≤ 0.06 % relative error on the
 JPEG q5..q90 corpus; cached vs direct path drift ≤ 8e-6.
 
+## Memory modes
+
+ssim2-gpu exposes the workspace's unified `MemoryMode` enum but has
+**no Strip implementation yet** — strip support is a planned follow-up
+(Phase 2 — see `docs/STRIP_PROCESSING.md`). `MemoryMode::Auto` (the
+default) always resolves to Full; `MemoryMode::Strip` and
+`MemoryMode::Tile` return `Error::ModeUnsupported`. When the image's
+working set exceeds the VRAM cap (`ZENMETRICS_VRAM_CAP_BYTES` env
+var, default 8 GB), Auto surfaces `Error::TooBigForFull`.
+
+See the workspace README for the cross-crate matrix.
+
 ## Build
 
 CUDA 13.2 required for cubecl 0.10's CUDA backend. RTX 50-series

@@ -155,26 +155,46 @@ impl DssimOpaque {
         backend: Backend,
         width: u32,
         height: u32,
+        params: DssimParams,
+    ) -> Result<Self> {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque DSSIM scorer with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). dssim-gpu is **NOT
+    /// strip-preferred** — see
+    /// [`Dssim::new_with_memory_mode`](crate::pipeline::Dssim::new_with_memory_mode).
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
         _params: DssimParams,
+        mode: crate::MemoryMode,
     ) -> Result<Self> {
         let inner: Box<dyn DssimInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Dssim::<cubecl::cuda::CudaRuntime>::new(client, width, height)?)
+                Box::new(Dssim::<cubecl::cuda::CudaRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Dssim::<cubecl::wgpu::WgpuRuntime>::new(client, width, height)?)
+                Box::new(Dssim::<cubecl::wgpu::WgpuRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Dssim::<cubecl::cpu::CpuRuntime>::new(client, width, height)?)
+                Box::new(Dssim::<cubecl::cpu::CpuRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?)
             }
         };
         Ok(Self { inner, backend })

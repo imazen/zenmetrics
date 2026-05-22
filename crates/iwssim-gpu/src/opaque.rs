@@ -138,6 +138,38 @@ impl IwssimOpaque {
         height: u32,
         params: IwssimParams,
     ) -> Result<Self> {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque IW-SSIM scorer with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). iwssim-gpu is **NOT
+    /// strip-preferred** — see
+    /// [`Iwssim::new_with_memory_mode`](crate::pipeline::Iwssim::new_with_memory_mode).
+    /// Auto picks Full whenever it fits the VRAM cap.
+    ///
+    /// Note: small-image adaptive padding (`params.allow_small`) is
+    /// honored only on `MemoryMode::Full` / Auto-resolved-to-Full.
+    /// Strip mode requires `min(w, h) ≥ MIN_NATIVE_DIM`; small
+    /// images requested as Strip return
+    /// [`crate::Error::InvalidImageSize`].
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: IwssimParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        let cap = crate::memory_mode::vram_cap_bytes();
+        let resolved = match mode {
+            crate::MemoryMode::Full => crate::ResolvedMode::Full,
+            crate::MemoryMode::Strip { h_body } => crate::ResolvedMode::Strip {
+                h_body: h_body.unwrap_or_else(|| {
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                }),
+            },
+            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
+            crate::MemoryMode::Auto => crate::memory_mode::resolve_auto(width, height, cap)?,
+        };
         let cfg = IwssimConfig {
             strategy: if params.allow_small {
                 IwssimStrategy::Tile
@@ -145,31 +177,57 @@ impl IwssimOpaque {
                 IwssimStrategy::Reject
             },
         };
-        let inner: Box<dyn IwssimInner + Send> = match backend {
+        let inner: Box<dyn IwssimInner + Send> = match (backend, resolved) {
             #[cfg(feature = "cuda")]
-            Backend::Cuda => {
+            (Backend::Cuda, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
                 Box::new(Iwssim::<cubecl::cuda::CudaRuntime>::with_config(
                     client, width, height, cfg,
                 )?)
             }
+            #[cfg(feature = "cuda")]
+            (Backend::Cuda, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cuda::CudaRuntime::client(&Default::default());
+                Box::new(Iwssim::<cubecl::cuda::CudaRuntime>::new_strip(
+                    client, width, height, h_body,
+                )?)
+            }
             #[cfg(feature = "wgpu")]
-            Backend::Wgpu => {
+            (Backend::Wgpu, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
                 Box::new(Iwssim::<cubecl::wgpu::WgpuRuntime>::with_config(
                     client, width, height, cfg,
                 )?)
             }
+            #[cfg(feature = "wgpu")]
+            (Backend::Wgpu, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
+                Box::new(Iwssim::<cubecl::wgpu::WgpuRuntime>::new_strip(
+                    client, width, height, h_body,
+                )?)
+            }
             #[cfg(feature = "cpu")]
-            Backend::Cpu => {
+            (Backend::Cpu, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
                 Box::new(Iwssim::<cubecl::cpu::CpuRuntime>::with_config(
                     client, width, height, cfg,
                 )?)
             }
+            #[cfg(feature = "cpu")]
+            (Backend::Cpu, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+                Box::new(Iwssim::<cubecl::cpu::CpuRuntime>::new_strip(
+                    client, width, height, h_body,
+                )?)
+            }
+            #[allow(unreachable_patterns)]
+            _ => return Err(crate::Error::ModeUnsupported("no-backend-enabled")),
         };
         Ok(Self { inner, backend })
     }

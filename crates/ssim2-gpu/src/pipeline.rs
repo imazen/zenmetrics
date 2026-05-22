@@ -205,6 +205,32 @@ impl<R: Runtime> Ssim2<R> {
     /// assert_eq!(s.dimensions(), (1024, 768));
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
+    /// ssim2-gpu has **no Strip implementation** yet — Strip and Tile
+    /// return [`crate::Error::ModeUnsupported`]. Auto can only
+    /// resolve to Full; oversized images surface
+    /// [`crate::Error::TooBigForFull`].
+    pub fn new_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        match mode {
+            MemoryMode::Full => Self::new(client, width, height),
+            MemoryMode::Strip { .. } => Err(crate::Error::ModeUnsupported("Strip")),
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Self::new(client, width, height),
+                }
+            }
+        }
+    }
+
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);

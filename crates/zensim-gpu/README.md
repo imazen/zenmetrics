@@ -89,6 +89,19 @@ For Metal targets:
 cargo build -p zensim-gpu --no-default-features --features wgpu
 ```
 
+## Memory modes
+
+zensim-gpu exposes the workspace's unified `MemoryMode` enum but has
+**no Strip implementation** — the multi-channel, multi-scale,
+Extended-regime allocator is interlocked enough that strip processing
+would need a dedicated design pass. `MemoryMode::Auto` (the default)
+resolves to Full; `Strip` / `Tile` return `Error::ModeUnsupported`.
+When the working set exceeds the VRAM cap
+(`ZENMETRICS_VRAM_CAP_BYTES` env var, default 8 GB), Auto surfaces
+`Error::TooBigForFull`. The pre-existing
+`Zensim::new_with_regime_budget` helper continues to handle the
+Extended-regime persist-plane budget independently.
+
 ## Status
 
 Initial port from `zensim-cuda`. See `PORT_STATUS.md` for the

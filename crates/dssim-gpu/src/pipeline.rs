@@ -292,6 +292,52 @@ impl<R: Runtime> Dssim<R> {
         })
     }
 
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
+    /// dssim-gpu is **NOT strip-preferred** — Strip is 2-5× slower
+    /// than Full on this crate, so Auto picks Full whenever it fits
+    /// the VRAM cap. Set `ZENMETRICS_VRAM_CAP_BYTES` to override the
+    /// 8 GB default cap.
+    ///
+    /// - `MemoryMode::Auto`: picks Full when it fits, Strip when
+    ///   not, errors with [`crate::Error::TooBigForFull`] when
+    ///   neither fits.
+    /// - `MemoryMode::Full`: constructs via [`Self::new`].
+    /// - `MemoryMode::Strip { h_body }`: constructs via
+    ///   [`Self::new_strip`]. `h_body == None` auto-sizes within the
+    ///   cap; `Some(n)` pins to `n` (must satisfy `new_strip`'s
+    ///   pyramid-alignment contract).
+    /// - `MemoryMode::Tile {..}` returns
+    ///   [`crate::Error::ModeUnsupported`].
+    pub fn new_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        match mode {
+            MemoryMode::Full => Self::new(client, width, height),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                });
+                Self::new_strip(client, width, height, body)
+            }
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Self::new(client, width, height),
+                    ResolvedMode::Strip { h_body } => {
+                        Self::new_strip(client, width, height, h_body)
+                    }
+                }
+            }
+        }
+    }
+
     /// Strip-processing constructor. Allocates working set for a
     /// single `(h_body + 2 * halo) × image_w` strip rather than the
     /// full image; reuses across strips for the same

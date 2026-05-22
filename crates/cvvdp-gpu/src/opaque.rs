@@ -105,13 +105,41 @@ pub struct CvvdpOpaque {
 impl CvvdpOpaque {
     /// Construct an opaque cvvdp scorer for `width × height` images
     /// using the standard 4K viewing geometry (see
-    /// `params::DisplayGeometry::STANDARD_4K`).
+    /// `params::DisplayGeometry::STANDARD_4K`). Equivalent to
+    /// `new_with_memory_mode(.., MemoryMode::Auto)`.
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
         params: CvvdpParams,
     ) -> Result<Self> {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque cvvdp scorer with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). cvvdp-gpu has no Strip
+    /// implementation — `MemoryMode::Strip` / `Tile` return
+    /// [`crate::Error::ModeUnsupported`].
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        // Resolve the mode host-side to surface ModeUnsupported /
+        // TooBigForFull before the backend allocation runs.
+        let cap = crate::memory_mode::vram_cap_bytes();
+        match mode {
+            crate::MemoryMode::Strip { .. } => {
+                return Err(crate::Error::ModeUnsupported("Strip"));
+            }
+            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
+            crate::MemoryMode::Full => {}
+            crate::MemoryMode::Auto => {
+                let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
+            }
+        }
         let inner: Box<dyn CvvdpInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {

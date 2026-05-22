@@ -178,9 +178,16 @@
 
 pub mod host_scalar;
 pub mod kernels;
+pub mod memory_mode;
 pub mod opaque;
 pub mod params;
 pub mod pipeline;
+
+// Unified MemoryMode surface — see `memory_mode.rs`.
+pub use memory_mode::{
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, estimate_strip_gpu_memory_bytes,
+    vram_cap_bytes,
+};
 
 // CvvdpParams stays unconditionally public — it's part of the opaque
 // API surface and contains no cubecl types.
@@ -398,6 +405,18 @@ pub enum Error {
     /// callers in tests / production should treat this as "GPU
     /// pipeline failed, retry or surface to user".
     InvalidImageSize,
+    /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
+    /// implemented yet (Strip and Tile in cvvdp-gpu — architecturally
+    /// blocked at 24 MP square per `docs/STRIP_PROCESSING.md`).
+    ModeUnsupported(&'static str),
+    /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
+    /// into the VRAM cap. cvvdp-gpu has no Strip implementation.
+    TooBigForFull {
+        /// Estimated working-set bytes Full would allocate.
+        needed: usize,
+        /// Configured VRAM cap.
+        cap: usize,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -415,6 +434,16 @@ impl std::fmt::Display for Error {
             Error::InvalidImageSize => write!(
                 f,
                 "image too small for the configured pyramid, or GPU readback/dispatch failed (see the InvalidImageSize variant docs — cubecl's read errors aren't separable yet so both surface as this variant)"
+            ),
+            Error::ModeUnsupported(variant) => write!(
+                f,
+                "MemoryMode::{variant} is not yet implemented in cvvdp-gpu \
+                 (architecturally blocked at 24 MP square per STRIP_PROCESSING.md)"
+            ),
+            Error::TooBigForFull { needed, cap } => write!(
+                f,
+                "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
+                 (cvvdp-gpu has no Strip path — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
             ),
         }
     }

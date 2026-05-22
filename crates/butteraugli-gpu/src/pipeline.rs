@@ -455,6 +455,78 @@ impl<R: Runtime> Butteraugli<R> {
         inst
     }
 
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor for the
+    /// single-resolution path. butteraugli-gpu is **strip-preferred**:
+    /// when Strip fits the VRAM cap, Auto picks Strip even if Full
+    /// would also fit (Strip is 1.9-4.9× faster than whole-image on
+    /// this crate per the bench at
+    /// `benchmarks/butter_strip_vs_whole_2026-05-21.md`).
+    ///
+    /// - `MemoryMode::Auto` picks between Full and Strip via
+    ///   [`crate::memory_mode::resolve_auto`].
+    /// - `MemoryMode::Full` constructs via [`Self::new`].
+    /// - `MemoryMode::Strip { h_body }` constructs via [`Self::new_strip`].
+    ///   `h_body == None` auto-sizes within the cap.
+    /// - `MemoryMode::Tile {..}` returns
+    ///   [`Error::ModeUnsupported`](crate::Error::ModeUnsupported) —
+    ///   the variant is reserved for a future implementation.
+    ///
+    /// Note: this constructor does NOT engage the half-resolution
+    /// sibling. Use [`Self::new_multires_with_memory_mode`] for the
+    /// CPU-butteraugli-default multi-resolution path (currently only
+    /// supported with `MemoryMode::Full` or `Auto` since the
+    /// half-res strip walker isn't implemented yet — Auto falls
+    /// through to Full for the multi-res variant).
+    pub fn new_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> crate::Result<Self> {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        match mode {
+            MemoryMode::Full => Ok(Self::new(client, width, height)),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                });
+                Ok(Self::new_strip(client, width, height, body))
+            }
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Ok(Self::new(client, width, height)),
+                    ResolvedMode::Strip { h_body } => {
+                        Ok(Self::new_strip(client, width, height, h_body))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Multi-resolution [`MemoryMode`](crate::MemoryMode) constructor.
+    /// Currently only `MemoryMode::Full` and `MemoryMode::Auto`
+    /// (which falls through to Full) are supported — the half-
+    /// resolution sibling does NOT have a strip walker yet. Strip
+    /// mode on multires returns
+    /// [`Error::StripModeUnsupported`](crate::Error::StripModeUnsupported).
+    pub fn new_multires_with_memory_mode(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        mode: crate::MemoryMode,
+    ) -> crate::Result<Self> {
+        use crate::MemoryMode;
+        match mode {
+            MemoryMode::Full | MemoryMode::Auto => Ok(Self::new_multires(client, width, height)),
+            MemoryMode::Strip { .. } => Err(crate::Error::StripModeUnsupported("new_multires")),
+            MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+        }
+    }
+
     /// Construct a multi-resolution `Butteraugli` instance — same as
     /// [`Butteraugli::new`] plus a `(w/2)×(h/2)` sibling whose diffmap
     /// is supersample-added into the full-res diffmap before reduction.

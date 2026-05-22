@@ -79,7 +79,13 @@ where
         dis_rgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<Score> {
-        let r = Butteraugli::compute_with_options(self, ref_rgb, dis_rgb, params)?;
+        // Route to the strip-mode entry point on strip-mode instances
+        // (constructed via MemoryMode::Strip or Auto-resolved-to-Strip).
+        let r = if self.is_strip_mode() {
+            Butteraugli::compute_strip_with_options(self, ref_rgb, dis_rgb, params)?
+        } else {
+            Butteraugli::compute_with_options(self, ref_rgb, dis_rgb, params)?
+        };
         Ok(Score {
             value: r.score as f64,
             metric_name: "butter",
@@ -123,37 +129,102 @@ pub struct ButteraugliOpaque {
 impl ButteraugliOpaque {
     /// Construct an opaque butteraugli scorer. Uses the multi-
     /// resolution pipeline (matches CPU butteraugli's default
-    /// non-`single_resolution` mode).
+    /// non-`single_resolution` mode). Backwards-compatible alias for
+    /// `new_with_memory_mode(.., MemoryMode::Auto)`.
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
         params: ButteraugliParams,
     ) -> Result<Self> {
-        let inner: Box<dyn ButteraugliInner + Send> = match backend {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque butteraugli scorer with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). butteraugli-gpu is
+    /// **strip-preferred** — see
+    /// [`Butteraugli::new_with_memory_mode`](crate::pipeline::Butteraugli::new_with_memory_mode).
+    ///
+    /// `MemoryMode::Full` and `MemoryMode::Auto` (when Auto picks
+    /// Full) engage the multi-resolution sibling; `MemoryMode::Strip`
+    /// and Auto-resolved-to-Strip drop to single-resolution since the
+    /// half-res strip walker isn't implemented yet.
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: ButteraugliParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        // Resolve the mode once on the host (resolution doesn't depend
+        // on the runtime) so the three backends agree on what they
+        // allocate.
+        let cap = crate::memory_mode::vram_cap_bytes();
+        let resolved = match mode {
+            crate::MemoryMode::Full => crate::ResolvedMode::Full,
+            crate::MemoryMode::Strip { h_body } => crate::ResolvedMode::Strip {
+                h_body: h_body.unwrap_or_else(|| {
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                }),
+            },
+            crate::MemoryMode::Tile { .. } => {
+                return Err(crate::Error::ModeUnsupported("Tile"));
+            }
+            crate::MemoryMode::Auto => crate::memory_mode::resolve_auto(width, height, cap)?,
+        };
+        let inner: Box<dyn ButteraugliInner + Send> = match (backend, resolved) {
             #[cfg(feature = "cuda")]
-            Backend::Cuda => {
+            (Backend::Cuda, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
                 Box::new(Butteraugli::<cubecl::cuda::CudaRuntime>::new_multires(
                     client, width, height,
                 ))
             }
+            #[cfg(feature = "cuda")]
+            (Backend::Cuda, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cuda::CudaRuntime::client(&Default::default());
+                Box::new(Butteraugli::<cubecl::cuda::CudaRuntime>::new_strip(
+                    client, width, height, h_body,
+                ))
+            }
             #[cfg(feature = "wgpu")]
-            Backend::Wgpu => {
+            (Backend::Wgpu, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
                 Box::new(Butteraugli::<cubecl::wgpu::WgpuRuntime>::new_multires(
                     client, width, height,
                 ))
             }
+            #[cfg(feature = "wgpu")]
+            (Backend::Wgpu, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
+                Box::new(Butteraugli::<cubecl::wgpu::WgpuRuntime>::new_strip(
+                    client, width, height, h_body,
+                ))
+            }
             #[cfg(feature = "cpu")]
-            Backend::Cpu => {
+            (Backend::Cpu, crate::ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
                 Box::new(Butteraugli::<cubecl::cpu::CpuRuntime>::new_multires(
                     client, width, height,
                 ))
+            }
+            #[cfg(feature = "cpu")]
+            (Backend::Cpu, crate::ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+                Box::new(Butteraugli::<cubecl::cpu::CpuRuntime>::new_strip(
+                    client, width, height, h_body,
+                ))
+            }
+            #[allow(unreachable_patterns)]
+            _ => {
+                let _ = (width, height);
+                return Err(crate::Error::ModeUnsupported("no-backend-enabled"));
             }
         };
         Ok(Self {

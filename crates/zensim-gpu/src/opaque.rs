@@ -198,12 +198,42 @@ impl ZensimOpaque {
     /// Construct an opaque zensim instance. Reads
     /// [`ZensimParams::regime`] to choose the pipeline regime —
     /// Basic (228, default) / Extended (300) / WithIw (372).
+    /// Equivalent to `new_with_memory_mode(.., MemoryMode::Auto)`.
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
         params: ZensimParams,
     ) -> Result<Self> {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque zensim instance with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). zensim-gpu has no Strip
+    /// implementation — `MemoryMode::Strip` / `Tile` return
+    /// [`crate::Error::ModeUnsupported`].
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: ZensimParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        // Route through the typed `new_with_memory_mode` to surface
+        // Mode errors before regime allocation.
+        let cap = crate::memory_mode::vram_cap_bytes();
+        match mode {
+            crate::MemoryMode::Strip { .. } => {
+                return Err(crate::Error::ModeUnsupported("Strip"));
+            }
+            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
+            crate::MemoryMode::Full => {} // pass through
+            crate::MemoryMode::Auto => {
+                // Validate via resolve_auto so a too-tight cap surfaces
+                // TooBigForFull before regime allocation runs.
+                let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
+            }
+        }
         let regime = params.regime;
         let inner: Box<dyn ZensimInner + Send> = match backend {
             #[cfg(feature = "cuda")]

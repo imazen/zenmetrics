@@ -311,6 +311,21 @@ For Metal (Apple) or non-NVIDIA GPUs, build wgpu-only:
 cargo build -p cvvdp-gpu --no-default-features --features wgpu
 ```
 
+## Memory modes
+
+cvvdp-gpu exposes the workspace's unified `MemoryMode` enum but has
+**no Strip implementation** — the spatial-frequency decomposition is
+full-image by construction and architecturally blocked at 24 MP
+square (see `docs/STRIP_PROCESSING.md`). `MemoryMode::Auto` (the
+default) resolves to Full; `Strip` / `Tile` return
+`Error::ModeUnsupported`. When the image's working set exceeds the
+VRAM cap (`ZENMETRICS_VRAM_CAP_BYTES` env var, default 8 GB), Auto
+surfaces `Error::TooBigForFull` with the gap.
+
+The pre-existing `recommend_parallel(free_gpu_bytes, w, h)` helper
+already handles per-instance VRAM budgeting for parallel sweeps and
+is unaffected by the new mode surface.
+
 ## License
 
 AGPL-3.0-only OR LicenseRef-Imazen-Commercial.

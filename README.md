@@ -34,6 +34,93 @@ normalized so higher = better):
 | `cvvdp-gpu` (= ColorVideoVDP) | (pending — reference is pycvvdp v0.5.4) | | |
 | `butteraugli-gpu` (3-norm) | 0.664 | 0.543 | 0.794 |
 
+## Memory modes
+
+Every metric crate exposes a `MemoryMode` enum + `new_with_memory_mode`
+constructor so callers can choose how the GPU working set is laid
+out. The shape is uniform across the six metric crates:
+
+```rust
+pub enum MemoryMode {
+    /// Pick Full or Strip based on a VRAM cap. Default.
+    Auto,
+    /// Allocate one working set for the whole image.
+    Full,
+    /// Allocate one working set for a strip of `h_body` body rows
+    /// plus the crate's halo per side. `h_body == None` lets the
+    /// resolver pick the largest body that fits the cap.
+    Strip { h_body: Option<u32> },
+    /// 2-D tile mode. Reserved — returns `Error::ModeUnsupported`.
+    Tile { h: u32, w: u32 },
+}
+```
+
+### Per-crate support matrix
+
+| Crate | Strip available | Strip-preferred when Full fits | Auto picks Full when cap is generous |
+|---|---|---|---|
+| `butteraugli-gpu` | yes | **yes** (Strip is 1.9-4.9× faster) | no — Strip first |
+| `dssim-gpu` | yes | no (Strip is 2-5× slower) | yes |
+| `iwssim-gpu` | yes | no (Strip is ~1.7× slower; cached-ref strip path deferred) | yes |
+| `ssim2-gpu` | no — `MemoryMode::Strip` → `Error::ModeUnsupported` | n/a | yes (always Full) |
+| `zensim-gpu` | no — `MemoryMode::Strip` → `Error::ModeUnsupported` | n/a | yes (always Full) |
+| `cvvdp-gpu` | no — architecturally blocked at 24 MP square | n/a | yes (always Full) |
+
+### Auto policy
+
+`MemoryMode::Auto` resolves by:
+
+1. Reading `ZENMETRICS_VRAM_CAP_BYTES` (decimal usize). When unset,
+   defaults to 8 GB.
+2. Estimating the whole-image working-set bytes via the per-crate
+   `estimate_gpu_memory_bytes` helper.
+3. Picking Full when it fits AND the crate is not strip-preferred;
+   else picking Strip with an auto-sized `h_body` that fits the cap.
+4. Returning `Error::TooBigForFull { needed, cap }` when neither
+   mode fits.
+
+`butteraugli-gpu` is **strip-preferred** — Auto picks Strip even when
+Full would fit, because the strip walker is the faster path on this
+crate.
+
+### Backwards compatibility
+
+The historical `Metric::new(client, w, h, ...)` constructor is
+preserved and now delegates through `new_with_memory_mode(..,
+MemoryMode::Auto)`. Existing call sites compile and behave the same
+unless `ZENMETRICS_VRAM_CAP_BYTES` is set tight enough to force a
+mode change.
+
+### Explicit override
+
+To force a specific mode, use the per-crate
+`new_with_memory_mode` (typed) or the opaque shim's same-named
+constructor:
+
+```rust
+use butteraugli_gpu::{ButteraugliOpaque, ButteraugliParams, MemoryMode};
+
+// Force whole-image even when the Auto cap would pick Strip.
+let scorer = ButteraugliOpaque::new_with_memory_mode(
+    backend,
+    width,
+    height,
+    ButteraugliParams::default(),
+    MemoryMode::Full,
+)?;
+```
+
+For per-row body size control:
+
+```rust
+use dssim_gpu::{DssimOpaque, MemoryMode};
+
+let scorer = DssimOpaque::new_with_memory_mode(
+    backend, width, height, params,
+    MemoryMode::Strip { h_body: Some(256) },
+)?;
+```
+
 ## Documentation
 
 - [`docs/CUBECL_PORTING_GUIDE.md`](docs/CUBECL_PORTING_GUIDE.md) — patterns

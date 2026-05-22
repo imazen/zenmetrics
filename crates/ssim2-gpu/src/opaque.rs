@@ -135,19 +135,37 @@ pub struct Ssim2Opaque {
 }
 
 impl Ssim2Opaque {
-    /// Construct an opaque SSIMULACRA2 scorer.
+    /// Construct an opaque SSIMULACRA2 scorer. Equivalent to
+    /// `new_with_memory_mode(.., MemoryMode::Auto)`.
     pub fn new(
         backend: Backend,
         width: u32,
         height: u32,
         params: Ssim2Params,
     ) -> Result<Self> {
+        Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
+    }
+
+    /// Construct an opaque SSIMULACRA2 scorer with an explicit
+    /// [`MemoryMode`](crate::MemoryMode). ssim2-gpu has no Strip
+    /// implementation yet — `MemoryMode::Strip` / `Tile` return
+    /// [`crate::Error::ModeUnsupported`].
+    pub fn new_with_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: Ssim2Params,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
         let inner: Box<dyn Ssim2Inner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                let s = Ssim2::<cubecl::cuda::CudaRuntime>::new(client, width, height)?;
+                let s =
+                    Ssim2::<cubecl::cuda::CudaRuntime>::new_with_memory_mode(
+                        client, width, height, mode,
+                    )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
@@ -156,7 +174,10 @@ impl Ssim2Opaque {
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                let s = Ssim2::<cubecl::wgpu::WgpuRuntime>::new(client, width, height)?;
+                let s =
+                    Ssim2::<cubecl::wgpu::WgpuRuntime>::new_with_memory_mode(
+                        client, width, height, mode,
+                    )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
@@ -165,7 +186,10 @@ impl Ssim2Opaque {
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                let s = Ssim2::<cubecl::cpu::CpuRuntime>::new(client, width, height)?;
+                let s =
+                    Ssim2::<cubecl::cpu::CpuRuntime>::new_with_memory_mode(
+                        client, width, height, mode,
+                    )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
