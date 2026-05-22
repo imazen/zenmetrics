@@ -253,23 +253,35 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     ))]
     let gpu_runtime_for_cache = cfg.gpu_runtime;
 
+    // SWEEP_CLEANUP_BETWEEN_SOURCES — opt-in cubecl pool flush hint.
+    // Default OFF because with PC>1 (multiple chunks sharing the
+    // global cubecl client) the cleanup_all flush of one chunk's
+    // sources races with another chunk's in-flight kernel calls.
+    // Observed failure mode on v26 24 GB smoke: thread 'DSD-0-0'
+    // panicked at cubecl-cuda/src/compute/stream.rs:101 with
+    // "Memory page 0 doesn't exist" once AIMD ramped PC past 1 +
+    // cleanup_all fired between sources. The chunk-cap respawn
+    // (MAX_CHUNKS_PER_PROCESS, default 20) resets the pool to zero
+    // every N chunks, which is safer than the in-process cleanup.
+    //
+    // Set SWEEP_CLEANUP_BETWEEN_SOURCES=1 only when running PC=1
+    // (e.g. single-instance smokes that need to bound pool footprint
+    // on 12 GB cards without respawning).
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    let cleanup_between_sources = std::env::var("SWEEP_CLEANUP_BETWEEN_SOURCES")
+        .ok()
+        .as_deref()
+        .map(|s| matches!(s.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+
     for (src_idx, src_path) in cfg.sources.iter().enumerate() {
-        // Between source images, ask cubecl to release pool pages back
-        // to the driver. v26's corpus is heterogeneous (1024sq +
-        // wikimedia + gif at varying sizes), so each source-iteration
-        // boundary is a likely dim transition; without the cleanup hint,
-        // cubecl-cuda retains the prior source's persist planes and the
-        // pool footprint accumulates until OOM. The first iteration
-        // skips this — no prior allocations to release. cleanup_all
-        // also drops the cached Metric instances, which forces a fresh
-        // construction for this source's dims (the cache then refills
-        // and serves the rest of the source's cells).
-        //
-        // Trade-off: dropping the cache means one Metric::new per
-        // source instead of "rare on dim change". On homogeneous
-        // corpora that's a regression. The cubecl-cuda pool retention
-        // bug forces our hand here; reconsider once cubecl exposes a
-        // pool-size cap that does what we want.
         #[cfg(any(
             feature = "gpu-butteraugli",
             feature = "gpu-ssim2",
@@ -278,7 +290,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
             feature = "gpu-zensim",
             feature = "gpu-cvvdp"
         ))]
-        if src_idx > 0 {
+        if src_idx > 0 && cleanup_between_sources {
             let mut cache = MetricCache::lock_global(cfg.gpu_runtime);
             let _ = cache.cleanup_all();
         }
