@@ -65,6 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "wide_modulation" | "wide" => AcumenArch::WideModulation,
                     "aux_features" | "aux" => AcumenArch::AuxFeatures,
                     "mode_b" | "mode-b" | "modeb" => AcumenArch::ModeB,
+                    "mode_b_per_band" | "mode-b-per-band" | "perband" =>
+                        AcumenArch::ModeBPerBand,
                     _ => return Err(format!("unknown --acumen-arch: {v}").into()),
                 };
             }

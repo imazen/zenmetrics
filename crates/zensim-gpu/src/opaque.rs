@@ -130,6 +130,14 @@ pub enum AcumenArch {
     /// runs. The kernel itself is unmodified; the `compute_features`
     /// entry point sees pre-weighted RGB.
     ModeB,
+    /// Full per-band per-pixel Mode B. Computes 12 weight maps
+    /// (3 channels × 4 pyramid scales), each per-pixel from the
+    /// channel's CSF response at the pixel's local-adapted
+    /// luminance and the scale's spatial frequency ρ_s. Applies
+    /// element-wise to the pyramid's src/dst arrays via a small
+    /// multiply kernel BEFORE the existing fused features kernel
+    /// runs. This is the architecturally faithful castleCSF Mode B.
+    ModeBPerBand,
 }
 
 // Manual Debug impl because `Option<ViewingCondition>` doesn't
