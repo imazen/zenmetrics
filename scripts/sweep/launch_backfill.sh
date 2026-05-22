@@ -200,10 +200,10 @@ fi
 #   `cuda_max_good>=12.0` consistent with the actual driver ABI we
 #   require. Historical note: 525 was the CUDA 12.0 first-release floor.
 QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=555.0.0 num_gpus=1"
-# vast.ai's gpu_ram is per-GPU in MB; gpu_total_ram is in GB and is
-# the filter most launchers want for 24/48 GB cards.
+# vast.ai's gpu_total_ram filter accepts GB units (the JSON field is
+# MB but the query parser scales). gpu_total_ram>=24 = 24 GB.
 if [[ "${MIN_GPU_RAM_GB}" -gt 0 ]]; then
-    QUERY="${QUERY} gpu_total_ram>=$((MIN_GPU_RAM_GB * 1024))"
+    QUERY="${QUERY} gpu_total_ram>=${MIN_GPU_RAM_GB}"
 fi
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
