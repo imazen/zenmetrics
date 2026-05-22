@@ -234,11 +234,6 @@ pub struct Zensim<R: Runtime> {
     /// instead keep per-scale per-channel handles directly because the
     /// pad_total varies per scale.
     persist_planes_ref: Vec<[cubecl::server::Handle; 4]>,
-    /// Reserved for a future symmetric mask path that also runs the
-    /// blur over `|dst - mu2|`. CPU zensim uses the ref-side only, so
-    /// these are allocated but never written today.
-    #[allow(dead_code)]
-    persist_planes_dis: Vec<[cubecl::server::Handle; 4]>,
 
     /// Masked + IW per-(col, strip, ch) partials buffer. Length =
     /// Σ per-scale (pw × n_strips × 3 × 12). Empty handle on Basic.
@@ -335,12 +330,12 @@ impl<R: Runtime> Zensim<R> {
             ext_off += (pw as usize) * ns_ext * 3 * 12;
         }
 
-        // Budget check: 4 planes × 3 channels × 2 sides (ref + dis) ×
-        // padded_pixels × 4 bytes per scale.
+        // Budget check: 4 planes × 3 channels × padded_pixels × 4 bytes
+        // per scale (ref side only — see persist_planes_ref docstring).
         let needs_planes = regime.needs_extended_kernel();
         let extended_plane_bytes: usize = if needs_planes {
             plan.iter()
-                .map(|&(_, pw, ph)| (pw as usize) * (ph as usize) * 3 * 4 * 2 * 4)
+                .map(|&(_, pw, ph)| (pw as usize) * (ph as usize) * 3 * 4 * 4)
                 .sum()
         } else {
             0
@@ -369,12 +364,9 @@ impl<R: Runtime> Zensim<R> {
         // Extended regime allocations — only when needed. The persist
         // planes layout per scale is `[ch0 | ch1 | ch2]` flat, with
         // `pad_total` f32s per channel, one allocation per
-        // (scale, side, plane). The masked-IW kernel needs to read
-        // ref-side mu1/mu2/ssq/s12, so we currently only fill the
-        // ref-side planes (the dist-side is reserved for a future
-        // CPU-style symmetric path).
+        // (scale, plane). The masked-IW kernel reads ref-side
+        // mu1/mu2/ssq/s12; CPU zensim uses ref-side only.
         let mut persist_planes_ref: Vec<[cubecl::server::Handle; 4]> = Vec::new();
-        let mut persist_planes_dis: Vec<[cubecl::server::Handle; 4]> = Vec::new();
         let partials_ext_f64: cubecl::server::Handle;
         let finals_ext_f64: cubecl::server::Handle;
         if needs_planes {
@@ -389,7 +381,6 @@ impl<R: Runtime> Zensim<R> {
                     ]
                 };
                 persist_planes_ref.push(alloc_planes());
-                persist_planes_dis.push(alloc_planes());
             }
             partials_ext_f64 = alloc_empty_f64(&client, partials_ext_total);
             finals_ext_f64 = alloc_empty_f64(&client, scales.len() * 3 * 12);
@@ -423,7 +414,6 @@ impl<R: Runtime> Zensim<R> {
             has_cached_reference: false,
             regime,
             persist_planes_ref,
-            persist_planes_dis,
             partials_ext_f64,
             partials_ext_f64_len: partials_ext_total.max(1),
             finals_ext_f64,
