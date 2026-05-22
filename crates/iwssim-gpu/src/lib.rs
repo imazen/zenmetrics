@@ -58,7 +58,7 @@ pub mod pipeline;
 
 pub use memory_mode::{
     MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
-    vram_cap_bytes,
+    live_vram_probe_bytes, vram_cap_bytes,
 };
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.

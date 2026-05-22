@@ -1,0 +1,61 @@
+# iwssim-gpu cached-ref vs uncached strip bench metadata
+# Commit: TBD (filled at commit time — written from worktree HEAD prior to push)
+# Host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM, RTX 5070 (driver 596.21, CUDA 13.2)
+# Date: 2026-05-22
+# Backends: cubecl-cuda + cubecl-wgpu (WSL2 Vulkan)
+# Command (cuda):
+#   cargo run --release -p iwssim-gpu --example bench_cachedref_strip \
+#       --no-default-features --features cuda,cubecl-types,pixels
+# Command (wgpu):
+#   BENCH_DATE=2026-05-22-wgpu cargo run --release -p iwssim-gpu \
+#       --example bench_cachedref_strip \
+#       --no-default-features --features wgpu,cubecl-types,pixels
+#
+# Workload: RD-search-shaped. 1 reference + 16 distortions per row.
+#   - uncached_strip: 16 × compute_gray_stripped(ref, dist_i)
+#   - cached_ref_strip: 1 × set_reference_stripped(ref) + 16 ×
+#       compute_with_reference_stripped(dist_i)
+# Strip body 1024 matches production sweep config (zenmetrics
+# Dockerfile.sweep.v26 + onstart_v3.sh). Halo defaults to 256 → max
+# strip alloc = 1536 rows.
+#
+# Columns:
+#   backend:      "cuda" or "wgpu"
+#   w_h:          image dimensions "WxH"
+#   mp:           megapixels
+#   mode:         "uncached_strip" or "cached_ref_strip"
+#   strip_body:   strip body row count (kernel `h_body` arg)
+#   n_dist:       distortions per row
+#   total_ms:     wall-clock for the full (1 ref + N dist) workload
+#   per_dist_ms:  per-distortion wall-clock. For cached_ref this
+#                 excludes the one-time set_reference cost; for
+#                 uncached each call rebuilds the ref-side pyramid.
+#   score:        final IW-SSIM score of the last dist (sanity gate)
+#
+# Per-distortion speedup (cuda):
+#   2048×2048 (4 MP): 40.72 ms → 11.23 ms  (3.62×)
+#   4000×3000 (12 MP): 163.50 ms → 43.79 ms  (3.73×)
+# Per-distortion speedup (wgpu):
+#   2048×2048 (4 MP): 504.59 ms → 279.38 ms  (1.81×)
+#   4000×3000 (12 MP): 1315.76 ms → 748.42 ms  (1.76×)
+#
+# CUDA shows higher speedup because its per-launch overhead is much
+# lower (~50 µs vs wgpu's ~1-2 ms) — when the cached path eliminates
+# the ref-side pyramid build (NUM_SCALES × 4 kernel launches per
+# strip × n_strips), the absolute savings are similar across
+# backends but CUDA's total time is smaller, so the ratio is larger.
+#
+# Scores match across uncached/cached paths to f32 precision (the
+# cached path reorders identically per-strip — see
+# CACHED_VS_UNCACHED_REL in tests/cached_ref_strip.rs for the
+# tolerance band).
+#
+# Bug fixed in same commit (see jj describe at HEAD):
+#   set_reference_stripped did not reset `scales[s].lp_ref` between
+#   calls, so the second `set_reference_stripped` would panic if the
+#   prior call's last strip had a different `actual_strip_h` from
+#   the current call's first strip. The bench's warmup + measurement
+#   loops exercised this path at 12 MP (strip actual_h sequence:
+#   1280 / 1536 / 1208) — the second set_ref's first strip wanted
+#   1280×4000 bytes from a 1208×4000-sized lp_ref buffer.
+#   Regression test: cached_ref_strip_set_reference_twice_with_uneven_strips.

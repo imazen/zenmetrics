@@ -14,9 +14,74 @@ fn env_cap_bytes() -> Option<usize> {
         .and_then(|s| s.trim().parse::<usize>().ok())
 }
 
+/// Cache for the live nvidia-smi probe result. The query takes
+/// 50–200 ms per invocation; we read it at most once per process
+/// run so [`vram_cap_bytes`] stays sub-microsecond on the hot path.
+/// Wrapped in `OnceLock` so the cache is thread-safe and lock-free
+/// after first init.
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
+    std::sync::OnceLock::new();
+
+/// Probe live free-VRAM via `nvidia-smi --query-gpu=memory.free`.
+/// Returns `Some(bytes)` on success, `None` when `nvidia-smi` is
+/// unavailable or its output can't be parsed (e.g. AMD/Intel GPUs,
+/// CI runners without a CUDA driver, exotic distros).
+///
+/// The result is **cached process-wide** — subsequent calls return
+/// the same value without re-querying. This matches the intent: the
+/// cap is a budgeting hint, not a live tracker. If the GPU's free
+/// memory drops between calls (other processes allocating) the cap
+/// stays at the probed value; that's intentional, since refusing
+/// work mid-sweep would be worse than over-committing slightly.
+///
+/// Override via `ZENMETRICS_VRAM_CAP_BYTES` if the cached value
+/// becomes stale — env var always wins over the probe.
+pub fn live_vram_probe_bytes() -> Option<usize> {
+    *LIVE_PROBE_CACHE.get_or_init(query_nvidia_smi_memory_free)
+}
+
+/// Single-shot query of `nvidia-smi --query-gpu=memory.free`. Internal
+/// helper — callers should use [`live_vram_probe_bytes`] which caches
+/// the result. Mirrors `vastai-fleet::worker::adapt::nvidia_smi_total_memory_mb`
+/// but queries `memory.free` (what we actually want for capacity
+/// planning) rather than `memory.total`.
+fn query_nvidia_smi_memory_free() -> Option<usize> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=memory.free",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    let mb: u64 = s.lines().next()?.trim().parse().ok()?;
+    // Apply a safety factor: keep 10% headroom so a freshly-probed
+    // cap doesn't immediately put us at 99% occupancy. The IW-SSIM
+    // pipeline allocates a chunk of staging buffers on top of the
+    // estimated working set, and other live cubecl clients (other
+    // metrics, the runtime's own kernel cache) share the pool.
+    let bytes = (mb as usize).saturating_mul(1024 * 1024);
+    Some(bytes.saturating_sub(bytes / 10))
+}
+
+/// Cap policy: env var first (`ZENMETRICS_VRAM_CAP_BYTES`), then
+/// live `nvidia-smi` probe (cached process-wide, 10% safety factor),
+/// then the 8 GiB default for environments without an NVIDIA GPU
+/// (CI, AMD/Intel boxes, WGPU backend on macOS/etc.).
+///
+/// The probe is **best-effort** — when `nvidia-smi` is missing or
+/// fails (no CUDA driver, snap-docker, etc.) we fall through to the
+/// 8 GiB default and the existing strip/full resolver does the
+/// right thing. The probe is never a hard requirement.
 pub fn vram_cap_bytes() -> usize {
     if let Some(cap) = env_cap_bytes() {
         return cap;
+    }
+    if let Some(probed) = live_vram_probe_bytes() {
+        return probed;
     }
     8 * 1024 * 1024 * 1024
 }

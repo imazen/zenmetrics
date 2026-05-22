@@ -111,8 +111,60 @@ fn vram_cap_env_override() {
 }
 
 #[test]
-fn vram_cap_default_is_8gb() {
+fn vram_cap_no_env_returns_sensible_nonzero() {
+    // Without the env var, the cap is either the live nvidia-smi probe
+    // (when nvidia-smi is available) or the 8 GiB default fallback.
+    // Either way the value must be sensible (nonzero, ≤ 1 TiB).
     with_cap(None, || {
-        assert_eq!(memory_mode::vram_cap_bytes(), 8 * 1024 * 1024 * 1024);
+        let cap = memory_mode::vram_cap_bytes();
+        assert!(cap > 0, "cap must be > 0, got {cap}");
+        assert!(
+            cap <= 1024 * 1024 * 1024 * 1024,
+            "cap unreasonably large: {cap}"
+        );
     });
+}
+
+#[test]
+fn vram_cap_default_8gb_when_no_probe() {
+    // The 8 GiB default only kicks in when both (a) the env var is
+    // unset AND (b) the live probe fails. On a machine with
+    // nvidia-smi installed we get the probe instead. Both are valid
+    // contracts; the test verifies the FALLBACK is what we documented.
+    with_cap(None, || {
+        let cap = memory_mode::vram_cap_bytes();
+        let probe = memory_mode::live_vram_probe_bytes();
+        match probe {
+            None => assert_eq!(cap, 8 * 1024 * 1024 * 1024),
+            Some(p) => assert_eq!(cap, p),
+        }
+    });
+}
+
+#[test]
+fn vram_cap_env_override_wins_over_probe() {
+    // Even when the live probe is available, an explicit env var
+    // override MUST win — the probe is a fallback, not a forced cap.
+    with_cap(Some("17179869184"), || {
+        // 16 GiB — chosen distinct from both 8 GiB default and any
+        // realistic probed value.
+        assert_eq!(memory_mode::vram_cap_bytes(), 17_179_869_184);
+    });
+}
+
+#[test]
+fn live_probe_returns_sensible_value_when_available() {
+    // The probe is best-effort. On a box with nvidia-smi, it must
+    // return a sensible value. On a box without, it returns None.
+    // We just assert sanity, not the absolute number — the live
+    // value varies based on other processes.
+    let probe = memory_mode::live_vram_probe_bytes();
+    if let Some(bytes) = probe {
+        assert!(bytes > 0, "live probe returned zero bytes");
+        assert!(
+            bytes <= 1024 * 1024 * 1024 * 1024,
+            "live probe absurdly large: {bytes}"
+        );
+    }
+    // None is also valid (CI without GPU, AMD machine, etc.).
 }

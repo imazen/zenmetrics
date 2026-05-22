@@ -435,6 +435,37 @@ impl StripState {
     }
 }
 
+/// Per-strip cached reference state — used only when
+/// [`Iwssim::set_reference_stripped`] has populated it. See the
+/// `cached_strip_ref` field on [`Iwssim`] for the design rationale.
+///
+/// The cache holds **one independent device handle per (strip, scale)**
+/// for the ref-side Laplacian pyramid, plus the global eigendecomposed
+/// C_u_inv + lambda per scale. After this is populated,
+/// [`Iwssim::compute_with_reference_stripped`] only needs to: upload
+/// the dis-side strip, build the dis-side LP, and run pass-2
+/// (ssim_stats + iw_box3_parent + iw_infow + reductions) using the
+/// cached ref-side state. Pass 1 (cov accumulation) is fully elided.
+struct CachedStripRefState {
+    /// Per-strip per-scale LP-band handles for the cached reference.
+    /// `lp_ref[strip_idx][scale]` is independent device memory — each
+    /// strip's LP pyramid was built into its own handle during
+    /// `set_reference_stripped`, so they survive across compute calls.
+    lp_ref: Vec<Vec<cubecl::server::Handle>>,
+    /// Per-scale inverted C_u matrices (host f32, packed at the
+    /// matching `n_dim` for the scale: 10×10 for s ∈ 0..2,
+    /// 9×9 for s = 3). Uploaded once per `compute_with_reference_stripped`
+    /// to the `scales[s].cu_inv_dev` device buffer.
+    cu_inv_per_scale: Vec<Vec<f32>>,
+    /// Per-scale lambda eigenvalues (host f32, length `n_dim`).
+    lambda_per_scale: Vec<Vec<f32>>,
+    /// Strip layout snapshot at the time `set_reference_stripped` was
+    /// called. Subsequent `compute_with_reference_stripped` calls MUST
+    /// see the same strip count; we recompute strips each time from
+    /// the live `StripState` and validate it matches.
+    strip_count: usize,
+}
+
 /// Per-instance allocations + per-call orchestration. Construct once
 /// for a given `(width, height)`, reuse across many image pairs.
 pub struct Iwssim<R: Runtime> {
@@ -499,6 +530,20 @@ pub struct Iwssim<R: Runtime> {
     /// per-strip partial sums on the host. `None` for the historical
     /// whole-image path.
     strip: Option<StripState>,
+
+    /// Per-strip cached reference state. `Some(_)` after
+    /// [`Self::set_reference_stripped`] has populated the cache;
+    /// subsequent [`Self::compute_with_reference_stripped`] calls
+    /// reuse this state and skip the ref-side LP build + the entire
+    /// pass-1 cov accumulation.
+    ///
+    /// Whole-image cached-ref state lives in `scales[s].lp_ref`
+    /// directly (one LP pyramid per scale, no per-strip dimension);
+    /// strip mode needs ONE pyramid per strip per scale because the
+    /// strip walker mutates `scales[s].lp_ref` each iteration. The
+    /// cache holds independent device handles that survive across
+    /// strip iterations.
+    cached_strip_ref: Option<CachedStripRefState>,
 }
 
 /// Slot layout in the partials / sums buffer. Indices match the order
@@ -615,6 +660,7 @@ impl<R: Runtime> Iwssim<R> {
             cov_partials,
             has_cached_reference: false,
             strip: None,
+            cached_strip_ref: None,
         })
     }
 
@@ -782,6 +828,7 @@ impl<R: Runtime> Iwssim<R> {
                 halo,
                 strip_alloc_h,
             }),
+            cached_strip_ref: None,
         })
     }
 
@@ -790,13 +837,20 @@ impl<R: Runtime> Iwssim<R> {
         self.strip.is_some()
     }
 
-    // TODO: cached-reference strip path. Currently the strip path
-    // rebuilds the full LP pyramid for both ref and dis on every
-    // `compute_gray_stripped` call. For RD-search hot loops scoring
-    // the same reference against many distortions, a
-    // `set_reference_stripped` + `compute_dis_stripped` split would
-    // halve the per-call LP-build work. Out of scope for this pass;
-    // see `docs/STRIP_PROCESSING.md` § "Cached-reference path".
+    /// True if [`Self::set_reference_stripped`] has populated the
+    /// per-strip cached-reference state. Strip mode only; whole-image
+    /// callers should use [`Self::has_cached_reference`] instead.
+    pub fn has_cached_reference_stripped(&self) -> bool {
+        self.cached_strip_ref.is_some()
+    }
+
+    /// Drop any cached-reference strip state. Subsequent
+    /// [`Self::compute_with_reference_stripped`] calls will fail with
+    /// [`Error::NoCachedReference`] until a fresh
+    /// [`Self::set_reference_stripped`] is run.
+    pub fn clear_reference_stripped(&mut self) {
+        self.cached_strip_ref = None;
+    }
 
     /// Native `(width, height)` the caller supplied to `new` /
     /// `with_config`. Use this for input buffer length checks.
@@ -858,9 +912,11 @@ impl<R: Runtime> Iwssim<R> {
     }
     /// Drop any cached reference state. `compute_with_reference` will
     /// fail with `NoCachedReference` until a fresh `set_reference` is
-    /// run.
+    /// run. Also clears any cached strip-mode state (so re-uploading
+    /// a new reference is a single call regardless of mode).
     pub fn clear_reference(&mut self) {
         self.has_cached_reference = false;
+        self.cached_strip_ref = None;
     }
 
     /// Upload `ref_gray` and pre-compute the reference-side Laplacian
@@ -1453,6 +1509,564 @@ impl<R: Runtime> Iwssim<R> {
             score *= v.powf(b);
         }
         Ok(GpuIwssimResult { score, per_scale })
+    }
+
+    /// Upload `ref_gray` and pre-compute the per-strip reference-side
+    /// state (Laplacian pyramid + eigendecomposed C_u_inv + lambda per
+    /// scale) used by [`Self::compute_with_reference_stripped`]. Only
+    /// valid on instances constructed with [`Iwssim::new_strip`]; the
+    /// whole-image equivalent is [`Self::set_reference`].
+    ///
+    /// For RD-search workloads scoring one reference against many
+    /// distorted images, this elides:
+    ///   * the **ref-side LP pyramid build** per strip per
+    ///     `compute_with_reference_stripped` call, AND
+    ///   * the entire **pass-1 cov accumulation** (which depends only
+    ///     on the reference's LP at each scale).
+    ///
+    /// `compute_with_reference_stripped` then runs only pass-2 on each
+    /// strip: dis-side LP build, ssim_stats, iw_box3_parent, iw_infow,
+    /// reductions. Empirically the per-call cost is ~halved for the
+    /// 1-ref × N-dist hot loop — `benchmarks/iwssim_cachedref_strip_*.csv`.
+    ///
+    /// `ref_gray.len()` must equal `image_w × image_h` (native dims).
+    /// On error, the previous cached-strip state (if any) is preserved.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotStripMode`] when called on a whole-image instance
+    ///   (constructed via [`Iwssim::new`] / [`Iwssim::with_config`]).
+    /// - [`Error::DimensionMismatch`] when `ref_gray.len()` doesn't
+    ///   match the configured `image_w × image_h`.
+    pub fn set_reference_stripped(&mut self, ref_gray: &[f32]) -> Result<()> {
+        let strip_state = match self.strip {
+            Some(s) => s,
+            None => return Err(Error::NotStripMode),
+        };
+        let expected = (self.width * self.height) as usize;
+        if ref_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_gray.len(),
+            });
+        }
+
+        let image_w = self.width;
+        let strips = strip_state.strips();
+        let n_strips = strips.len();
+        let n_scales_iw = self.scales.len() - 1;
+
+        // Reset `scales[s].lp_ref` to a fresh full-strip allocation.
+        // A prior `compute_with_reference_stripped` call (line 1809 era)
+        // replaces `scales[s].lp_ref` with the cached handle for the
+        // last strip processed (which is sized to that strip's
+        // `actual_strip_h × image_w`, not the maximum `strip_alloc_h`).
+        // If we don't reset, the next `build_laplacian_pyramid` writes
+        // through `pointwise_sub_kernel(... lp_cur)` to a buffer that
+        // may be smaller than the current strip's `sc.h × sc.w`,
+        // producing a kernel out-of-bounds + a panic at the readback
+        // below where `bytes[..n*4]` overruns.
+        let max_strip_h = strip_state.h_body + 2 * strip_state.halo;
+        {
+            let mut h = max_strip_h;
+            let mut w = image_w;
+            for s in 0..self.scales.len() {
+                let n = (h as usize) * (w as usize);
+                self.scales[s].lp_ref = alloc(&self.client, n);
+                h = h.div_ceil(2);
+                w = w.div_ceil(2);
+            }
+        }
+
+        // Build per-strip per-scale lp_ref handles. Each strip's LP
+        // pyramid lives in INDEPENDENT device memory so subsequent
+        // strips don't trample it via `scales[s].lp_ref`. We allocate
+        // fresh handles per (strip, scale) here, build into them, and
+        // park them in `lp_ref_cache` for `compute_with_reference_stripped`
+        // to swap into `scales[s].lp_ref` per iteration.
+        //
+        // Capacity vs perf: at 1024² body=256 halo=256 (1536 max strip
+        // height, 4 strips), per-strip per-scale LP storage is
+        // strip_alloc_h × image_w × 4 B summed across the 5-level
+        // pyramid = ~14 MB per strip × 4 strips = ~56 MB. Trivial
+        // relative to the whole-image working set we're already paying
+        // for, and amortized across many `compute_with_reference_stripped`
+        // calls in the RD-search hot loop.
+        let mut lp_ref_cache: Vec<Vec<cubecl::server::Handle>> =
+            Vec::with_capacity(n_strips);
+
+        // Per-scale raw Σ Yᵀ Y accumulator and total iw row count.
+        // These follow `compute_gray_stripped`'s pass-1 logic exactly
+        // — we're just running it once with the ref input and caching
+        // the results.
+        let mut acc_cu = vec![vec![0.0_f64; 100]; n_scales_iw];
+        let mut total_nexp = vec![0_u64; n_scales_iw];
+        let mut n_dim_per_scale = vec![0_usize; n_scales_iw];
+        let mut has_parent_per_scale = vec![false; n_scales_iw];
+
+        for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            let actual_strip_h = up_hi - up_lo;
+            self.set_scale_dims_for_strip(actual_strip_h, image_w);
+
+            // Upload ref strip to scale-0 g_ref (only — we don't need
+            // dis here). Build ONLY the ref-side pyramid.
+            let row_stride = self.width as usize;
+            let ref_strip: &[f32] =
+                &ref_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
+            self.scales[0].g_ref =
+                self.client.create_from_slice(f32::as_bytes(ref_strip));
+            self.build_laplacian_pyramid(true);
+
+            // Snapshot each scale's lp_ref handle into the cache. The
+            // build wrote into `scales[s].lp_ref`; that handle clones
+            // cheaply (Arc-style refcount) and the underlying buffer
+            // lives as long as we hold a clone. The next strip's
+            // `build_laplacian_pyramid(true)` will REASSIGN
+            // `scales[s].lp_ref` to a different handle (because the
+            // top-scale path does `self.scales[top].lp_ref = sc.g_ref.clone()`
+            // which writes a new field value), so our cached handles
+            // are not overwritten.
+            //
+            // CAVEAT: at the top scale, `lp_ref` is just an alias of
+            // `g_ref` (no separate LP buffer at the residual). We need
+            // an independent copy so the next strip's g_ref write
+            // doesn't poison it. Read the top scale's bytes back and
+            // re-upload to a fresh handle — at the top scale the data
+            // is tiny (strip_alloc_h/16 × image_w/16 × 4 B ≈ tens of
+            // KB at 1024², ≪ 1 MB at 6000² × 1536).
+            //
+            // For scales s < top, `lp_ref` is a per-scale allocation
+            // distinct from `g_ref` (see `Scale::new`), so cloning the
+            // handle is sufficient — but the SHARED scale-buffer is
+            // also reused per strip. We must take an INDEPENDENT copy
+            // for every scale to survive across strips.
+            //
+            // Easiest correct approach: read each scale's lp_ref back
+            // to host and re-upload to a fresh device handle. At
+            // strip_alloc_h × image_w bytes worst-case (scale 0) this
+            // is a few MB per strip; the readback + reupload happens
+            // once per `set_reference_stripped` call, NOT per
+            // `compute_with_reference_stripped`, so it's amortized.
+            let mut strip_lp: Vec<cubecl::server::Handle> =
+                Vec::with_capacity(self.scales.len());
+            for s in 0..self.scales.len() {
+                let sc = &self.scales[s];
+                let n = (sc.h as usize) * (sc.w as usize);
+                let bytes = self
+                    .client
+                    .read_one(sc.lp_ref.clone())
+                    .expect("read lp_ref strip cache");
+                // `bytes.len()` is the underlying allocation size in
+                // bytes (cubecl's `read_one` returns the handle's full
+                // `size_in_used()`). The fresh-alloc reset above
+                // guarantees `bytes.len() >= max_strip_h × image_w × 4`
+                // at scale 0, so `bytes[..n*4]` is always in-range.
+                let active = &bytes[..n * 4];
+                strip_lp.push(self.client.create_from_slice(active));
+            }
+            lp_ref_cache.push(strip_lp);
+
+            // Pass-1 cov accumulation per scale (body iw range only).
+            let body_lp_top = (body_lo - up_lo) as i64;
+            let body_lp_bot = (body_hi - up_lo) as i64;
+            for s in 0..n_scales_iw {
+                let iw_h = self.scales[s].iw_h;
+                let (py_lo, py_hi) =
+                    body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
+                if py_hi <= py_lo {
+                    continue;
+                }
+                self.run_iw_box3_parent_ref_only(s);
+                self.run_iw_cov_accum_range(s, py_lo, py_hi);
+                let (cu_raw, n_dim, has_parent) = self.read_cu_raw(s);
+                n_dim_per_scale[s] = n_dim;
+                has_parent_per_scale[s] = has_parent;
+                let device_stride = if has_parent { 10 } else { 9 };
+                for i in 0..n_dim {
+                    for j in 0..n_dim {
+                        acc_cu[s][i * 10 + j] +=
+                            cu_raw[i * device_stride + j] as f64;
+                    }
+                }
+                let strip_nexp = (py_hi - py_lo) as u64
+                    * (self.scales[s].iw_w as u64);
+                total_nexp[s] += strip_nexp;
+            }
+        }
+
+        // Eigendecompose + cache per-scale C_u_inv + lambda on host.
+        // `compute_with_reference_stripped` uploads these once per
+        // call (NOT per strip — the global Cu is image-wide).
+        let mut cu_inv_per_scale: Vec<Vec<f32>> = Vec::with_capacity(n_scales_iw);
+        let mut lambda_per_scale: Vec<Vec<f32>> = Vec::with_capacity(n_scales_iw);
+        for s in 0..n_scales_iw {
+            if total_nexp[s] == 0 {
+                let n_dim = if s < self.scales.len() - 2 { 10 } else { 9 };
+                let mut cu_f64 = vec![0.0_f64; n_dim * n_dim];
+                for i in 0..n_dim {
+                    cu_f64[i * n_dim + i] = 1.0;
+                }
+                let eig_result = eig::decompose_and_invert(&cu_f64, n_dim);
+                cu_inv_per_scale.push(eig_result.c_u_inv[..n_dim * n_dim].to_vec());
+                lambda_per_scale.push(eig_result.lambda[..n_dim].to_vec());
+                continue;
+            }
+            let n_dim = n_dim_per_scale[s];
+            let nexp_f64 = total_nexp[s] as f64;
+            let mut cu_f64 = vec![0.0_f64; n_dim * n_dim];
+            for i in 0..n_dim {
+                for j in 0..n_dim {
+                    cu_f64[i * n_dim + j] = acc_cu[s][i * 10 + j] / nexp_f64;
+                }
+            }
+            let eig_result = eig::decompose_and_invert(&cu_f64, n_dim);
+            cu_inv_per_scale.push(eig_result.c_u_inv[..n_dim * n_dim].to_vec());
+            lambda_per_scale.push(eig_result.lambda[..n_dim].to_vec());
+        }
+
+        // Replace any previous cache atomically — only after every
+        // step above completed successfully, so a mid-call failure
+        // leaves the previous cache intact.
+        self.cached_strip_ref = Some(CachedStripRefState {
+            lp_ref: lp_ref_cache,
+            cu_inv_per_scale,
+            lambda_per_scale,
+            strip_count: n_strips,
+        });
+        Ok(())
+    }
+
+    /// Score one distortion against the per-strip cached reference.
+    /// Equivalent in result to
+    /// [`Self::compute_gray_stripped`]`(cached_ref, dis_gray)` but
+    /// skips the ref-side LP pyramid build and the pass-1 cov
+    /// accumulation per strip — both can be pre-computed once via
+    /// [`Self::set_reference_stripped`] and reused.
+    ///
+    /// `dis_gray.len()` must equal `image_w × image_h`. Returns
+    /// [`Error::NoCachedReference`] if `set_reference_stripped` hasn't
+    /// been called (or [`Self::clear_reference_stripped`] dropped the
+    /// cache), [`Error::NotStripMode`] on whole-image instances.
+    ///
+    /// # Reduction order
+    ///
+    /// Same reduction-order drift as
+    /// [`Self::compute_gray_stripped`] vs the whole-image path —
+    /// per-strip f32 sums reorder vs a single global pass. Bounded at
+    /// ~1e-5 rel. The cached-ref path adds no additional drift: it's
+    /// numerically identical to running `compute_gray_stripped` on
+    /// the same `(ref, dis)` pair.
+    pub fn compute_with_reference_stripped(
+        &mut self,
+        dis_gray: &[f32],
+    ) -> Result<GpuIwssimResult> {
+        let strip_state = match self.strip {
+            Some(s) => s,
+            None => return Err(Error::NotStripMode),
+        };
+        let cached = match self.cached_strip_ref.as_ref() {
+            Some(c) => c,
+            None => return Err(Error::NoCachedReference),
+        };
+        let expected = (self.width * self.height) as usize;
+        if dis_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_gray.len(),
+            });
+        }
+
+        let image_w = self.width;
+        let strips = strip_state.strips();
+        if strips.len() != cached.strip_count {
+            // Shouldn't happen — StripState is immutable post-
+            // construction — but guard anyway to keep `unwrap` indices
+            // safe.
+            return Err(Error::DimensionMismatch {
+                expected: cached.strip_count,
+                got: strips.len(),
+            });
+        }
+        let n_scales_iw = self.scales.len() - 1;
+
+        // Upload cached C_u_inv + lambda to each scale's device buffer
+        // once. This replaces the per-call eigendecomp + upload in the
+        // uncached strip path.
+        for s in 0..n_scales_iw {
+            self.scales[s].cu_inv_dev = self
+                .client
+                .create_from_slice(f32::as_bytes(&cached.cu_inv_per_scale[s]));
+            self.scales[s].lambda_dev = self
+                .client
+                .create_from_slice(f32::as_bytes(&cached.lambda_per_scale[s]));
+        }
+
+        let mut acc_csiw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_csl: f64 = 0.0;
+        let mut top_pool_count: u64 = 0;
+        let partials_len =
+            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+
+        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in
+            strips.iter().enumerate()
+        {
+            let actual_strip_h = up_hi - up_lo;
+            self.set_scale_dims_for_strip(actual_strip_h, image_w);
+
+            // Upload dis strip + build ONLY the dis-side LP pyramid.
+            let row_stride = self.width as usize;
+            let dis_strip: &[f32] = &dis_gray
+                [(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
+            self.scales[0].g_dis =
+                self.client.create_from_slice(f32::as_bytes(dis_strip));
+            self.build_laplacian_pyramid(false);
+
+            // Restore cached ref-side LP handles for this strip. After
+            // this loop iteration ends the handles stay where the
+            // cache put them — they aren't reassigned by the next
+            // strip's dis-side build (which only writes lp_dis / g_dis).
+            //
+            // NOTE: we hold cached.lp_ref through the iteration via the
+            // outer borrow; index into it without re-borrowing self.
+            for s in 0..self.scales.len() {
+                self.scales[s].lp_ref =
+                    self.cached_strip_ref.as_ref().unwrap().lp_ref[strip_idx][s].clone();
+            }
+
+            // Pass-2: ssim_stats + iw_box3_parent + iw_infow + reductions.
+            for s in 0..self.scales.len() {
+                self.run_ssim_stats(s);
+            }
+            for s in 0..n_scales_iw {
+                self.run_iw_box3_parent(s);
+                self.run_iw_infow(s);
+            }
+
+            let body_lp_top = (body_lo - up_lo) as i64;
+            let body_lp_bot = (body_hi - up_lo) as i64;
+            for s in 0..n_scales_iw {
+                let sc = &self.scales[s];
+                let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
+                let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
+                let (cs_y_start, cs_y_end) =
+                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                if cs_y_end <= cs_y_start {
+                    self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
+                    self.zero_partial_slot(SLOT_IW_BASE + s as u32);
+                    continue;
+                }
+                reduction::launch_weighted_sum::<R>(
+                    &self.client,
+                    sc.cs.clone(),
+                    cs_n,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_CSIW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+                reduction::launch_iw_sum::<R>(
+                    &self.client,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_IW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+            }
+            let top = self.scales.len() - 1;
+            let sc_top = &self.scales[top];
+            let cs_top_n = (sc_top.cs_h as usize) * (sc_top.cs_w as usize);
+            let (top_y_start, top_y_end) =
+                body_cs_range(body_lp_top, body_lp_bot, top, sc_top.cs_h);
+            if top_y_end > top_y_start {
+                reduction::launch_plain_sum::<R>(
+                    &self.client,
+                    sc_top.cs.clone(),
+                    cs_top_n,
+                    self.partials.clone(),
+                    partials_len,
+                    SLOT_CSL,
+                    sc_top.cs_w,
+                    top_y_start,
+                    top_y_end,
+                );
+                top_pool_count +=
+                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+            } else {
+                self.zero_partial_slot(SLOT_CSL);
+            }
+
+            reduction::launch_finalize::<R>(
+                &self.client,
+                self.partials.clone(),
+                partials_len,
+                self.sums.clone(),
+                NUM_SLOTS as usize,
+                NUM_SLOTS,
+            );
+
+            let bytes =
+                self.client.read_one(self.sums.clone()).expect("read sums");
+            let sums = f32::from_bytes(&bytes);
+            debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
+            for s in 0..n_scales_iw {
+                acc_csiw[s] += sums[(SLOT_CSIW_BASE + s as u32) as usize] as f64;
+                acc_iw[s] += sums[(SLOT_IW_BASE + s as u32) as usize] as f64;
+            }
+            acc_csl += sums[SLOT_CSL as usize] as f64;
+        }
+
+        let mut per_scale = [1.0_f64; NUM_SCALES];
+        for s in 0..n_scales_iw {
+            let num = acc_csiw[s];
+            let den = acc_iw[s];
+            per_scale[s] = if den == 0.0 || !den.is_finite() {
+                1.0
+            } else {
+                num / den
+            };
+        }
+        let top = self.scales.len() - 1;
+        per_scale[top] = if top_pool_count == 0 || !acc_csl.is_finite() {
+            1.0
+        } else {
+            acc_csl / (top_pool_count as f64)
+        };
+
+        let mut score = 1.0_f64;
+        for s in 0..self.scales.len() {
+            let b = filters::SCALE_WEIGHTS[s] as f64;
+            let v = per_scale[s].abs();
+            score *= v.powf(b);
+        }
+        Ok(GpuIwssimResult { score, per_scale })
+    }
+
+    /// RGB-u8 variant of [`Self::compute_gray_stripped`]. Both inputs
+    /// must be `image_w × image_h × 3` in packed RGB byte order
+    /// (native dims). The pipeline performs the BT.601 rgb→gray
+    /// conversion + half-up rounding on the **host** (matching the
+    /// on-device `rgb_u32_to_gray_kernel`), then routes through
+    /// [`Self::compute_gray_stripped`].
+    ///
+    /// Why host-side conversion: the strip walker uploads one strip's
+    /// f32 gray plane to scale-0 `g_ref`/`g_dis` per iteration; the
+    /// on-device packed-u32 → gray kernel expects a whole-image
+    /// staging buffer (`src_u32_a`/`src_u32_b`) sized for the strip
+    /// allocation, not per-strip uploads. Doing the conversion on the
+    /// host once for the full image gives a single tight inner loop;
+    /// strip-by-strip on-device conversion would require per-strip
+    /// packing + extra kernel launches that don't recover the upload
+    /// savings.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotStripMode`] on whole-image instances.
+    /// - [`Error::DimensionMismatch`] when either buffer's length
+    ///   doesn't match `image_w × image_h × 3`.
+    pub fn compute_rgb_stripped(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<GpuIwssimResult> {
+        if self.strip.is_none() {
+            return Err(Error::NotStripMode);
+        }
+        let expected = (self.width * self.height * 3) as usize;
+        if ref_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_rgb.len(),
+            });
+        }
+        if dis_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_rgb.len(),
+            });
+        }
+        let ref_gray = rgb_u8_to_gray_bt601(ref_rgb);
+        let dis_gray = rgb_u8_to_gray_bt601(dis_rgb);
+        self.compute_gray_stripped(&ref_gray, &dis_gray)
+    }
+
+    /// RGB-u8 variant of [`Self::set_reference_stripped`] — converts
+    /// the reference to grayscale via host-side BT.601 (matching the
+    /// on-device `rgb_u32_to_gray_kernel`) and delegates. Pairs with
+    /// [`Self::compute_rgb_with_reference_stripped`] for RD-search
+    /// workloads where the reference is held in sRGB form.
+    pub fn set_rgb_reference_stripped(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        if self.strip.is_none() {
+            return Err(Error::NotStripMode);
+        }
+        let expected = (self.width * self.height * 3) as usize;
+        if ref_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_rgb.len(),
+            });
+        }
+        let ref_gray = rgb_u8_to_gray_bt601(ref_rgb);
+        self.set_reference_stripped(&ref_gray)
+    }
+
+    /// RGB-u8 variant of [`Self::compute_with_reference_stripped`].
+    pub fn compute_rgb_with_reference_stripped(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<GpuIwssimResult> {
+        if self.strip.is_none() {
+            return Err(Error::NotStripMode);
+        }
+        let expected = (self.width * self.height * 3) as usize;
+        if dis_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_rgb.len(),
+            });
+        }
+        let dis_gray = rgb_u8_to_gray_bt601(dis_rgb);
+        self.compute_with_reference_stripped(&dis_gray)
+    }
+
+    /// `run_iw_box3_parent` variant that only needs `lp_ref` —
+    /// matches the existing helper exactly today (it already only
+    /// reads `lp_ref` / `lp_dis` indirectly via `box3_gv_kernel` and
+    /// the parent_band gather, but **the box3 kernel reads BOTH
+    /// `lp_ref` AND `lp_dis`** to compute the joint 3×3 box stats).
+    /// For the cached-ref-strip pass-1 path where we only care about
+    /// the cov accumulator (which itself only reads `lp_ref` and
+    /// `parent_band`), the box3 stage is unnecessary. We still run it
+    /// — but with a benign `lp_dis` source — because the cov kernels
+    /// don't read `g_buf` / `vv_buf` (those feed `infow`, which we
+    /// don't run in pass-1). This means in pass-1 of
+    /// `set_reference_stripped`, `box3_gv_kernel` reads `lp_dis` (a
+    /// zero-or-stale buffer from `Scale::new`'s alloc) — harmless
+    /// because its outputs are discarded.
+    ///
+    /// In other words: this helper is a thin wrapper that **could**
+    /// skip the box3 launch entirely for pass-1, but doesn't, because
+    /// the box3 launch is cheap (≤ 1% of strip cost) and skipping
+    /// would require splitting the box3+parent gather, which is more
+    /// trouble than the saving.
+    fn run_iw_box3_parent_ref_only(&mut self, s: usize) {
+        self.run_iw_box3_parent(s);
     }
 
     /// Upload one strip's slice of the input gray buffers into

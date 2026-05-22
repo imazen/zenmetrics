@@ -1,0 +1,9 @@
+backend,w_h,mp,mode,strip_body,n_dist,total_ms,per_dist_ms,score
+cuda,2048x2048,4.19,uncached_strip,body=1024,16,651.462,40.716,0.027512
+cuda,2048x2048,4.19,cached_ref_strip,body=1024,16,208.388,11.235,0.027512
+cuda,4000x3000,12.00,uncached_strip,body=1024,16,2616.039,163.502,0.029270
+cuda,4000x3000,12.00,cached_ref_strip,body=1024,16,799.860,43.792,0.029270
+wgpu,2048x2048,4.19,uncached_strip,body=1024,16,8073.381,504.586,0.027513
+wgpu,2048x2048,4.19,cached_ref_strip,body=1024,16,4641.212,279.381,0.027513
+wgpu,4000x3000,12.00,uncached_strip,body=1024,16,21052.098,1315.756,0.029270
+wgpu,4000x3000,12.00,cached_ref_strip,body=1024,16,12401.039,748.417,0.029270
