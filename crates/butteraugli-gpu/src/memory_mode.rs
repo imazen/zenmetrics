@@ -93,12 +93,28 @@ pub fn resolve_auto(
 ) -> crate::Result<ResolvedMode> {
     let full_bytes = estimate_gpu_memory_bytes(width, height);
 
-    // Try strip first — even if Full fits, butter is strip-preferred.
-    if let Some(h_body) = auto_size_strip_body(width, height, cap) {
-        return Ok(ResolvedMode::Strip { h_body });
+    // Strip is only worthwhile when image_h is large enough that the
+    // strip working set (body + 2 × halo) is meaningfully smaller than
+    // the whole image. At image_h ≤ MIN_STRIP_BODY + 2 × HALO_ROWS the
+    // single-strip case fully covers the image with the halo "spilling"
+    // past the edges via reflection — strip allocates AT LEAST as much
+    // as Full, the dispatch path degenerates, and small-image edge
+    // cases (sub-128 px thumbnails, opaque-shim tests) hit awkward
+    // dimension-check paths in the walker. Fall through to Full there.
+    let min_strip_image_h = MIN_STRIP_BODY + 2 * crate::strip::HALO_ROWS;
+    if height > min_strip_image_h {
+        // Try strip first — even if Full fits, butter is strip-preferred.
+        if let Some(h_body) = auto_size_strip_body(width, height, cap) {
+            return Ok(ResolvedMode::Strip { h_body });
+        }
     }
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);
+    }
+    // Last-ditch strip attempt for big images that don't fit Full —
+    // even at suboptimal small h_body, strip beats OOM.
+    if let Some(h_body) = auto_size_strip_body(width, height, cap) {
+        return Ok(ResolvedMode::Strip { h_body });
     }
     Err(crate::Error::TooBigForFull {
         needed: full_bytes,
