@@ -50,6 +50,13 @@ MAX_DPH="${MAX_DPH:-0.30}"
 MIN_CORES="${MIN_CORES:-8}"
 MIN_RAM_GB="${MIN_RAM_GB:-8}"
 MIN_DISK_GB="${MIN_DISK_GB:-20}"
+# Minimum total GPU RAM (GB) per box. Default 0 = no filter. Set to
+# 24 for v26+ sweeps to avoid the cubecl-cuda pool retention bug
+# observed on 12 GB cards (RTX 3060/3080). Sweep workers running
+# 372-feature zensim + 5 GPU metrics consistently brick those
+# cards mid-run; 24 GB+ cards (A5000/3090/4090/A6000) have enough
+# headroom that the bounded chunk cap suffices.
+MIN_GPU_RAM_GB="${MIN_GPU_RAM_GB:-0}"
 PARALLEL="${PARALLEL:-0}"
 GPU_RUNTIME="${GPU_RUNTIME:-auto}"
 GHCR_USER="${GHCR_USER:-lilithriver}"
@@ -76,6 +83,7 @@ while [[ $# -gt 0 ]]; do
         --min-cores) MIN_CORES="$2"; shift 2;;
         --min-ram) MIN_RAM_GB="$2"; shift 2;;
         --min-disk) MIN_DISK_GB="$2"; shift 2;;
+        --min-gpu-ram) MIN_GPU_RAM_GB="$2"; shift 2;;
         --parallel) PARALLEL="$2"; shift 2;;
         --gpu-runtime) GPU_RUNTIME="$2"; shift 2;;
         --ghcr-user) GHCR_USER="$2"; shift 2;;
@@ -117,6 +125,7 @@ echo "  N_BOXES:           $N_BOXES"
 echo "  MAX_DPH:           $MAX_DPH"
 echo "  MIN_CORES:         $MIN_CORES"
 echo "  MIN_RAM_GB:        $MIN_RAM_GB"
+echo "  MIN_GPU_RAM_GB:    $MIN_GPU_RAM_GB"
 echo "  MIN_DISK_GB:       $MIN_DISK_GB"
 echo "  PARALLEL/box:      $PARALLEL"
 echo "  GPU_RUNTIME:       $GPU_RUNTIME"
@@ -191,6 +200,11 @@ fi
 #   `cuda_max_good>=12.0` consistent with the actual driver ABI we
 #   require. Historical note: 525 was the CUDA 12.0 first-release floor.
 QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} cuda_max_good>=12.0 driver_version>=555.0.0 num_gpus=1"
+# vast.ai's gpu_ram is per-GPU in MB; gpu_total_ram is in GB and is
+# the filter most launchers want for 24/48 GB cards.
+if [[ "${MIN_GPU_RAM_GB}" -gt 0 ]]; then
+    QUERY="${QUERY} gpu_total_ram>=$((MIN_GPU_RAM_GB * 1024))"
+fi
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "

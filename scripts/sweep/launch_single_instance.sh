@@ -140,7 +140,7 @@ fi
 #   If a NEW dlsym panic surfaces on a driver in this band, narrow the
 #   floor further (driver_version>=570 is the next stable cut) rather
 #   than re-imposing the upper ceiling.
-QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1000)) cuda_max_good>=12.0 driver_version>=555.0.0 dlperf>=12 num_gpus=1"
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=${MIN_GPU_RAM_MB} cuda_max_good>=12.0 driver_version>=555.0.0 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \
