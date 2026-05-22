@@ -157,6 +157,15 @@ trait ZensimInner: Send {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<Vec<f64>>;
+    /// Set + upload + pre-build the reference's XYB pyramid.
+    /// Subsequent [`Self::compute_with_reference_vec`] calls skip the
+    /// ref upload + ref-pyramid construction entirely. Critical for
+    /// sweep workloads with ~80 distortions per reference.
+    fn set_reference(&mut self, ref_rgb: &[u8]) -> Result<()>;
+    /// Compute features against the cached reference. Returns
+    /// [`crate::Error::NoCachedReference`] if [`Self::set_reference`]
+    /// was never called.
+    fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
 }
 
@@ -179,6 +188,14 @@ where
         dis_rgb: &[u8],
     ) -> Result<Vec<f64>> {
         Zensim::compute_features_vec(self, ref_rgb, dis_rgb)
+    }
+
+    fn set_reference(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        Zensim::set_reference(self, ref_rgb)
+    }
+
+    fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
+        Zensim::compute_with_reference_vec(self, dis_rgb)
     }
 
     fn dims(&self) -> (u32, u32) {
@@ -338,6 +355,43 @@ impl ZensimOpaque {
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_features_vec(&ref_buf, &dis_buf)
+    }
+
+    /// Upload + pyramid-build the reference image ONCE, then call
+    /// [`Self::compute_with_reference_srgb_u8`] for each distortion.
+    /// Critical for sweep workloads: a single reference with N
+    /// distortions saves N-1 ref uploads (~1 MB each at 1 MP) and
+    /// N-1 ref-pyramid kernel launches.
+    pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        self.inner.set_reference(ref_rgb)
+    }
+
+    /// Compute features against the cached reference. Returns
+    /// `Vec<f64>` of length `params.regime.total_features()` (228 /
+    /// 300 / 372). Returns [`crate::Error::NoCachedReference`] if
+    /// [`Self::set_reference_srgb_u8`] was never called.
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
+        self.inner.compute_with_reference_vec(dis_rgb)
+    }
+
+    /// Set + upload + pre-build the reference's XYB pyramid from
+    /// [`PixelSlice`] input. Companion to
+    /// [`Self::compute_with_reference_pixels`].
+    #[cfg(feature = "pixels")]
+    pub fn set_reference_pixels(&mut self, r: PixelSlice<'_>) -> Result<()> {
+        let (w, h) = self.inner.dims();
+        let ref_buf = to_srgb_rgb8(&r, w, h)?;
+        self.inner.set_reference(&ref_buf)
+    }
+
+    /// Compute features against the cached reference from a
+    /// [`PixelSlice`] distortion. See
+    /// [`Self::compute_with_reference_srgb_u8`] for semantics.
+    #[cfg(feature = "pixels")]
+    pub fn compute_with_reference_pixels(&mut self, d: PixelSlice<'_>) -> Result<Vec<f64>> {
+        let (w, h) = self.inner.dims();
+        let dis_buf = to_srgb_rgb8(&d, w, h)?;
+        self.inner.compute_with_reference_vec(&dis_buf)
     }
 
     /// Compute the uniform [`Score`] from packed sRGB. Returns

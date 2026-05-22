@@ -39,6 +39,7 @@ bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+zenbench = { version = "0.1.8", features = ["criterion-compat"] }
 
 [[example]]
 name = "bench"
@@ -66,4 +67,17 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "opaque"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque_regime"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "opaque_cached_ref"
+required-features = ["cubecl-types"]
+
+[[bench]]
+name = "cached_ref"
+harness = false
 required-features = ["cubecl-types"]

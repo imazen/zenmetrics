@@ -17,6 +17,39 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zensim-gpu — cached-reference + regime-aware opaque API — 2026-05-22
+
+Plumbs the typed pipeline's `set_reference` / `compute_with_reference_vec`
+cached path through the `ZensimOpaque` shim. Critical for sweep workloads
+with many distortions per reference: a single `set_reference_srgb_u8` +
+N×`compute_with_reference_srgb_u8` skips N-1 ref uploads and N-1 ref-pyramid
+kernel launches.
+
+- `ZensimOpaque::set_reference_srgb_u8(ref)` — upload + build the ref's
+  XYB pyramid once.
+- `ZensimOpaque::compute_with_reference_srgb_u8(dist) -> Vec<f64>` —
+  regime-aware feature vector (228/300/372) against the cached ref;
+  returns `Error::NoCachedReference` if `set_reference_srgb_u8` was
+  never called.
+- `ZensimOpaque::set_reference_pixels(r)` / `compute_with_reference_pixels(d)`
+  — same flow from `PixelSlice` inputs (handles stride conversion).
+
+Bench at 1024² × 10 distortions per reference (RTX 5070): cached path
+saves ~38% on CUDA (55.23 → 34.08 ms) and ~40% on wgpu (3.61 → 2.15 s
+on WSL2 Vulkan). See `benchmarks/zensim_cached_ref_2026-05-22.csv`.
+
+12 new tests (`tests/opaque_regime.rs` + `tests/opaque_cached_ref.rs`):
+6 regime-routing tests (Basic→228, Extended→300, WithIw→372, defaults,
+fixed-array truncation contract, Extended slot-0..228 == Basic) and 6
+cached-ref tests (pair-mode parity, multi-dist parity, NoCachedReference
+error path, dim-mismatch rejection, regime respected on cached path,
+re-set-reference overwrites). Total zensim-gpu test count: 28 → 40 per
+backend (cuda / wgpu). All passing.
+
+Ported from the abandoned `feat/acumen-gpu` branch. The `ViewingCondition`
+re-export proposed in that branch is omitted — the upstream `zensim`
+version we depend on has no `hdr_pu` module to re-export from.
+
 ### iwssim-gpu — strip-processing path for `Iwssim::new_strip` + `compute_gray_stripped` — 2026-05-22
 
 Adds a memory-bounded strip-processing path to `iwssim-gpu` so production

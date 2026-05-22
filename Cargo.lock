@@ -6423,6 +6423,7 @@ dependencies = [
  "bytemuck",
  "cubecl",
  "image",
+ "zenbench",
  "zenmetrics-corpus",
  "zenpixels",
  "zenpixels-convert",

@@ -1,0 +1,31 @@
+# zensim-gpu cached-ref vs. pair-mode bench metadata
+# Commit: TBD (filled at commit time)
+# Host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM, RTX 5070 (driver 596.21, CUDA 13.2)
+# Date: 2026-05-22
+# Backends: cubecl-wgpu (WSL2 Vulkan) and cubecl-cuda
+# Command: cargo bench --no-default-features \
+#            --features "cubecl-types,<wgpu|cuda>,pixels,fast-reduction" \
+#            -p zensim-gpu --bench cached_ref
+#
+# Columns:
+#   mode: "pair_mode" (compute_features_vec_srgb_u8) or "cached_ref"
+#         (set_reference_srgb_u8 + compute_with_reference_srgb_u8 × N)
+#   backend: cuda / wgpu
+#   w / h: image dimensions
+#   n_dist: number of distortions per reference (sweep-style workload)
+#   mean_ms: mean wall-clock for N_DIST distortions (one set_reference
+#            + N_DIST scores for cached, N_DIST × (set+score) for pair)
+#   mad_ms: median absolute deviation
+#   ci95_lo / ci95_hi: 95% confidence interval (zenbench reports only
+#                     when CV is high enough to warrant it; blank where
+#                     zenbench didn't print it)
+#   cv_pct: coefficient of variation across iters (zenbench summary)
+#
+# Headline: cached path saves ~40% wall-clock on a 10-distortions-per-ref
+# sweep workload at 1024² on both wgpu and CUDA. Matches the prediction
+# of "skip N-1 ref uploads + N-1 ref-pyramid kernel launches".
+#
+# Reproduce on a clean GPU:
+#   cargo bench --no-default-features \
+#     --features "cubecl-types,cuda,pixels,fast-reduction" \
+#     -p zensim-gpu --bench cached_ref

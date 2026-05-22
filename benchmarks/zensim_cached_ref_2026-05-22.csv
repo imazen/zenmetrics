@@ -1,0 +1,5 @@
+mode,backend,w,h,n_dist,mean_ms,mad_ms,ci95_lo_ms,ci95_hi_ms,cv_pct
+pair_mode,wgpu,1024,1024,10,3610,1450,2980,4260,31
+cached_ref,wgpu,1024,1024,10,2150,160,,,
+pair_mode,cuda,1024,1024,10,55.23,4.6,43.5,75.2,55
+cached_ref,cuda,1024,1024,10,34.08,2.1,,,
