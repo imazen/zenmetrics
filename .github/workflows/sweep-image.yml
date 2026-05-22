@@ -60,7 +60,7 @@ jobs:
       # sibling worktrees. Clone them at pinned commits so the cargo
       # build inside CI resolves the same versions a local build does.
       # The pins live in zenmetrics/CLAUDE.md + the [patch] block.
-      - name: Clone sibling repos (zenjpeg + zenanalyze + zensim--principled-activity + jxl-encoder)
+      - name: Clone sibling repos (zenjpeg + zenpng + zenwebp + zenavif--main + zenjxl--main + zenanalyze + zensim--principled-activity + jxl-encoder)
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
@@ -73,6 +73,16 @@ jobs:
           # jxl-encoder — direct path dep from zen-metrics-cli (Cargo.toml:176)
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 42833a05ac58fd1b3ce6ff27095bc2160378c72d
+          # Codec siblings — workspace [patch.crates-io] entries point at
+          # these worktree directories. Clone tip-of-master; pin if CI
+          # bisection ever turns up a regression.
+          git clone --quiet https://github.com/imazen/zenpng.git     ../zenpng
+          git clone --quiet https://github.com/imazen/zenwebp.git    ../zenwebp
+          # zenavif `main` branch is checked out in a worktree dir named
+          # `zenavif--main` locally; CI just needs a regular clone at
+          # that name. Same story for zenjxl.
+          git clone --quiet https://github.com/imazen/zenavif.git    ../zenavif--main
+          git clone --quiet https://github.com/imazen/zenjxl.git     ../zenjxl--main
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
