@@ -102,7 +102,7 @@ fn bench_whole(w: u32, h: u32, n_warmup: usize, n_measure: usize) -> Row {
     for _ in 0..n_warmup {
         let _ = s.compute(&ref_srgb, &dis_srgb).unwrap();
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
 
     let mut min_s = f64::INFINITY;
     let mut last_score = 0.0_f64;
@@ -110,7 +110,7 @@ fn bench_whole(w: u32, h: u32, n_warmup: usize, n_measure: usize) -> Row {
     for _ in 0..n_measure {
         let t_iter = Instant::now();
         last_score = s.compute(&ref_srgb, &dis_srgb).unwrap().score;
-        client.sync();
+        cubecl::future::block_on(client.sync()).expect("client.sync");
         let dt_iter = t_iter.elapsed().as_secs_f64();
         if dt_iter < min_s {
             min_s = dt_iter;
@@ -141,7 +141,7 @@ fn bench_strip(w: u32, h: u32, h_body: u32, n_warmup: usize, n_measure: usize) -
     for _ in 0..n_warmup {
         let _ = s.compute_stripped(&ref_srgb, &dis_srgb).unwrap();
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
 
     let mut min_s = f64::INFINITY;
     let mut last_score = 0.0_f64;
@@ -149,7 +149,7 @@ fn bench_strip(w: u32, h: u32, h_body: u32, n_warmup: usize, n_measure: usize) -
     for _ in 0..n_measure {
         let t_iter = Instant::now();
         last_score = s.compute_stripped(&ref_srgb, &dis_srgb).unwrap().score;
-        client.sync();
+        cubecl::future::block_on(client.sync()).expect("client.sync");
         let dt_iter = t_iter.elapsed().as_secs_f64();
         if dt_iter < min_s {
             min_s = dt_iter;

@@ -35,12 +35,12 @@ fn main() {
     }
 
     // Total wall.
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
     let t = Instant::now();
     for _ in 0..16 {
         let _ = iw.compute_gray(&ref_gray, &dis_gray).unwrap();
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
     println!(
         "total mean over 16 iters @ {w}x{h}: {:.3} ms/pair",
         t.elapsed().as_secs_f64() / 16.0 * 1e3

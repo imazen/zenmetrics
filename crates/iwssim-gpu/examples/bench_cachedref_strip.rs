@@ -77,7 +77,7 @@ fn bench_cached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -> 
             let _ = iw.compute_with_reference_stripped(d).unwrap();
         }
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
 
     let mut last_score = 0.0_f64;
     let t = Instant::now();
@@ -86,7 +86,7 @@ fn bench_cached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -> 
     for d in &dists {
         last_score = iw.compute_with_reference_stripped(d).unwrap().score;
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
     let per_dist_ms = t_dist.elapsed().as_secs_f64() / n_dist as f64 * 1e3;
     let total_ms = t.elapsed().as_secs_f64() * 1e3;
 
@@ -114,14 +114,14 @@ fn bench_uncached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -
             let _ = iw.compute_gray_stripped(&ref_gray, d).unwrap();
         }
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
 
     let mut last_score = 0.0_f64;
     let t = Instant::now();
     for d in &dists {
         last_score = iw.compute_gray_stripped(&ref_gray, d).unwrap().score;
     }
-    client.sync();
+    cubecl::future::block_on(client.sync()).expect("client.sync");
     let total_ms = t.elapsed().as_secs_f64() * 1e3;
     let per_dist_ms = total_ms / n_dist as f64;
 

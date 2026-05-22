@@ -50,7 +50,7 @@ fn main() {
             for _ in 0..3 {
                 let _ = iw.compute_gray(&ref_g, &dis_g).unwrap();
             }
-            client.sync();
+            cubecl::future::block_on(client.sync()).expect("client.sync");
             println!("done whole {w}x{h}");
         }
         "strip" => {
@@ -58,7 +58,7 @@ fn main() {
             for _ in 0..3 {
                 let _ = iw.compute_gray_stripped(&ref_g, &dis_g).unwrap();
             }
-            client.sync();
+            cubecl::future::block_on(client.sync()).expect("client.sync");
             println!("done strip body=1024 {w}x{h}");
         }
         _ => {

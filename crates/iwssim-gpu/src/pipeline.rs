@@ -1223,7 +1223,7 @@ impl<R: Runtime> Iwssim<R> {
         self.scales[0].g_ref = h_ref;
         self.scales[0].g_dis = h_dis;
         if profile {
-            self.client.sync();
+            cubecl::future::block_on(self.client.sync()).expect("client.sync");
             eprintln!(
                 "    stage 'upload': {:.3} ms",
                 t.elapsed().as_secs_f64() * 1e3
@@ -2191,7 +2191,7 @@ impl<R: Runtime> Iwssim<R> {
         self.build_laplacian_pyramid(true);
         self.build_laplacian_pyramid(false);
         if profile {
-            self.client.sync();
+            cubecl::future::block_on(self.client.sync()).expect("client.sync");
             eprintln!(
                 "    stage 'lp_pyramid': {:.3} ms",
                 t0.elapsed().as_secs_f64() * 1e3
@@ -2222,7 +2222,7 @@ impl<R: Runtime> Iwssim<R> {
             self.run_ssim_stats(s);
         }
         if profile {
-            self.client.sync();
+            cubecl::future::block_on(self.client.sync()).expect("client.sync");
             eprintln!(
                 "    stage 'ssim_stats': {:.3} ms",
                 t.elapsed().as_secs_f64() * 1e3
@@ -2238,7 +2238,7 @@ impl<R: Runtime> Iwssim<R> {
             }
         }
         if profile {
-            self.client.sync();
+            cubecl::future::block_on(self.client.sync()).expect("client.sync");
             eprintln!(
                 "    stage 'iw_scales': {:.3} ms",
                 t.elapsed().as_secs_f64() * 1e3
@@ -2327,7 +2327,7 @@ impl<R: Runtime> Iwssim<R> {
             NUM_SLOTS,
         );
         if profile {
-            self.client.sync();
+            cubecl::future::block_on(self.client.sync()).expect("client.sync");
             eprintln!(
                 "    stage 'reductions': {:.3} ms",
                 t.elapsed().as_secs_f64() * 1e3
