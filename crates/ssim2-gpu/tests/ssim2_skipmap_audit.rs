@@ -93,22 +93,37 @@ fn modes_agree_on_jpeg_corpus() {
 
         // Lossless skips only zero-weight cells, so the *algebraic* answer
         // is identical to Full (each skipped cell contributes 0 * v = 0
-        // to the weighted sum). In practice, GPU float-atomic-add
-        // reductions are NOT order-stable across calls — different
-        // launch ordering of atomic ops on the same backend produces
-        // sub-ulp drift in the accumulator. Across a 10x repeat on CUDA,
-        // the observed |Δ| ranged 0.83e-6 .. 1.47e-5 at q=5 on the JPEG
-        // corpus (atomic-reduce reordering, NOT a real mode-switch bug).
-        // Gate relaxed from 1e-6 → 5e-5 to absorb that noise floor; 5e-5
-        // is still well under any mode-switch miscoding signal (scores
-        // are in the 0..100 band, and a real bug from wrong cells
-        // contributing would land in the 1e-2+ range). See the
-        // `lossless_identical_pair_is_bit_exact` test below for the
-        // synthetic identical-pair check that *is* bit-exact.
-        // See: 2026-05-22 ssim2 flakes-warnings sweep.
+        // to the weighted sum). Whether the GPU's empirical result is
+        // bit-identical depends on the reduction path:
+        //
+        // - With `fast-reduction` (default): the per-plane reduction uses
+        //   `Atomic<f32>::fetch_add`, whose commit order across cubes
+        //   varies across launches. Lossless skips some atomic adds
+        //   entirely (zero-weight cells short-circuit), so the surviving
+        //   add order is a different permutation than Full's — sub-ulp
+        //   reorder drift on accumulators in the 0..100 band. Observed
+        //   max |Δ| at q=5 on the JPEG corpus = 1.03e-5; the gate at
+        //   5e-5 sits ~5× above the worst observed value and 4 orders of
+        //   magnitude below any real miscoding signal (~1e-2+).
+        // - Without `fast-reduction` (portable path): per-thread partials
+        //   are written to a scratch buffer and the finalize kernel sums
+        //   them in a deterministic `k = 0 .. n_threads` order. Lossless
+        //   writes zeros where Full writes the real values, so the
+        //   finalize sees the same algebraic input order with some terms
+        //   replaced by their algebraic identity (0). The result is
+        //   measured |Δ| = 0.000e0 across q ∈ {5, 20, 45, 70, 90} — gate
+        //   at 1e-6 to catch any drift the determinism analysis missed.
+        //
+        // See `lossless_identical_pair_is_bit_exact` below for the
+        // synthetic identical-pair check (independent of fast-reduction).
+        // See: 2026-05-22 ssim2 flakes-warnings sweep + tighten-tolerances.
+        #[cfg(feature = "fast-reduction")]
+        let lossless_tol = 5e-5;
+        #[cfg(not(feature = "fast-reduction"))]
+        let lossless_tol = 1e-6;
         assert!(
-            dl < 5e-5,
-            "Lossless not within atomic-reorder noise floor of Full at q={q}: full={full:.10}, lossless={lossless:.10}, Δ={dl:.3e}"
+            dl < lossless_tol,
+            "Lossless not within reduction noise floor of Full at q={q}: full={full:.10}, lossless={lossless:.10}, Δ={dl:.3e}, tol={lossless_tol:.0e}"
         );
         // Fast / Faster bounded by `5e-4` relative.
         assert!(

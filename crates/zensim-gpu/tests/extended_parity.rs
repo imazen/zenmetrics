@@ -178,8 +178,8 @@ fn extended_identical_zeros() {
     assert!(cpu.len() >= TOTAL_FEATURES_EXTENDED);
 
     // Identical inputs → expect all values near zero. The HF terms can
-    // pick up sub-ULP noise from the f32 σ² division; allow 5e-2
-    // absolute on all 300 slots.
+    // pick up sub-ULP noise from the f32 σ² division. Tightened
+    // 2026-05-22 from 5e-2 → 2e-3 (measured max 6.8e-4 → 3× margin).
     let mut max_abs = 0.0_f64;
     for i in 0..TOTAL_FEATURES_EXTENDED {
         let a = (gpu[i] - cpu[i]).abs();
@@ -188,7 +188,7 @@ fn extended_identical_zeros() {
         }
     }
     eprintln!("ext identical: max |gpu - cpu| = {max_abs:.4e}");
-    assert!(max_abs < 5e-2, "ext identical max diff {max_abs}");
+    assert!(max_abs < 2e-3, "ext identical max diff {max_abs}");
 }
 
 /// Per-feature parity on a noisy gradient at 64×64. All 300 slots must
@@ -216,41 +216,52 @@ fn extended_noisy_gradient_64() {
     assert!(cpu.len() >= TOTAL_FEATURES_EXTENDED);
 
     let mut failed = Vec::new();
+    let mut max_abs_basic = 0.0_f64;
+    let mut max_abs_peak = 0.0_f64;
+    let mut max_abs_l8 = 0.0_f64;
+    let mut max_abs_masked = 0.0_f64;
     for i in 0..TOTAL_FEATURES_EXTENDED {
         let (s, c, kind, off) = decode_extended_idx(i);
         let cv = cpu[i];
         let gv = gpu[i];
         let abs = (cv - gv).abs();
         let rel = abs / cv.abs().max(1e-6);
-        // Budget by slot kind:
-        //   basic mean / L4 / L2 / mse / HF — 2e-3 rel
-        //   max-pooled (kind 1, off 0..3) — 3e-2 rel (1 outlier flips max)
-        //   L8 pool (kind 1, off 3..6) — 5e-3 rel
-        //   masked block (kind 2) — 5e-3 rel (principled per-channel
-        //     H-blur activity, see masked_iw_strip kernel docstring)
+        // Budget by slot kind. Tightened 2026-05-22 to reflect actual
+        // measured drift on this fixture (see drift summary printed
+        // below). Bands set to (measured_max × ~2–3) for headroom.
         //
         // ## Principled per-channel H-blur activity (2026-05-17)
         //
         // CPU now computes activity as `box_blur(|src - H_blur(src)|)`
         // per channel at all strip rows (inner + overlap). GPU mirrors
-        // this exactly — no cross-channel cascade, no carry plane. All
-        // masked slots match CPU within 5e-3 rel at every fixture size.
+        // this exactly — no cross-channel cascade, no carry plane.
         let (abs_budget, rel_budget) = match (kind, off, s, c) {
-            // peak / max-pooled
-            (1, 0, _, _) | (1, 1, _, _) | (1, 2, _, _) => (5e-3, 3e-2),
-            (1, _, _, _) => (3e-3, 5e-3),
+            // peak / max-pooled (kind 1, off 0..3)
+            (1, 0, _, _) | (1, 1, _, _) | (1, 2, _, _) => (2e-3, 3e-2),
+            // L8 pool (kind 1, off 3..6)
+            (1, _, _, _) => (1e-3, 5e-3),
             // masked block — principled per-channel H-blur
-            (2, _, _, _) => (5e-3, 5e-3),
-            _ => (2e-3, 2e-3),
+            (2, _, _, _) => (2e-3, 5e-3),
+            // basic (kind 0)
+            _ => (1e-3, 2e-3),
         };
         // skip clamped-to-zero slots
         if cv.abs() < 1e-6 && gv.abs() < abs_budget {
             continue;
         }
+        match (kind, off) {
+            (1, 0) | (1, 1) | (1, 2) => max_abs_peak = max_abs_peak.max(abs),
+            (1, _) => max_abs_l8 = max_abs_l8.max(abs),
+            (2, _) => max_abs_masked = max_abs_masked.max(abs),
+            _ => max_abs_basic = max_abs_basic.max(abs),
+        }
         if abs > abs_budget && rel > rel_budget {
             failed.push((i, kind, off, cv, gv, abs, rel));
         }
     }
+    eprintln!(
+        "extended_parity drift summary:\n  basic : max_abs={max_abs_basic:.3e}\n  peak  : max_abs={max_abs_peak:.3e}\n  l8    : max_abs={max_abs_l8:.3e}\n  masked: max_abs={max_abs_masked:.3e}"
+    );
     if !failed.is_empty() {
         for &(idx, k, o, cv, gv, abs, rel) in failed.iter().take(20) {
             eprintln!(
@@ -379,8 +390,11 @@ fn with_iw_structural_noisy() {
         }
     }
     eprintln!("with_iw[0..300] vs extended max |diff| = {max_300:.4e}");
+    // Tightened 2026-05-22: WithIw runs the same kernels as Extended
+    // and the measured drift is 0.0 (bit-identical across launches).
+    // Gate at 1e-9 to catch any future divergence.
     assert!(
-        max_300 < 5e-3,
+        max_300 < 1e-9,
         "WithIw[0..300] diverged from Extended (max diff {max_300})"
     );
 
@@ -438,8 +452,9 @@ fn with_iw_identical_zeros() {
         }
     }
     eprintln!("with_iw identical: max |val| = {max_abs:.4e}");
-    // Same budget as Extended identical: 5e-2 absolute.
-    assert!(max_abs < 5e-2, "with_iw identical max abs {max_abs}");
+    // Tightened to match Extended identical: 2e-3 absolute
+    // (measured 6.8e-4 → 3× margin).
+    assert!(max_abs < 2e-3, "with_iw identical max abs {max_abs}");
 }
 
 /// Basic regime still emits the canonical 228-vector with bit-for-bit

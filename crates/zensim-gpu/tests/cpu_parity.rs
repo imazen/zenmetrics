@@ -2,9 +2,11 @@
 //! the 228 slots.
 //!
 //! Maps each GPU slot to its CPU counterpart per `docs/FEATURE_PARITY.md`
-//! and asserts agreement within `2e-3` relative tolerance (GPU uses f32
-//! intermediates while CPU uses f64; this is the steady-state drift
-//! observed on the corpus fixtures).
+//! and asserts agreement within category-specific tolerance bands
+//! (GPU uses f32 in the per-cell SSIM/det/art map arithmetic while CPU
+//! uses f64; this is the steady-state drift observed on the corpus
+//! fixtures). Bands are tuned per slot category — see
+//! `noisy_gradient_every_slot_within_tolerance` for the full layout.
 //!
 //! Uses `Zensim::compute_extended_features` on the CPU side so that
 //! every (scale, channel) slot is populated (the default `compute`
@@ -168,9 +170,9 @@ fn identical_input_all_zeros() {
     // CPU short-circuits to zeros; the first 228 must match GPU within
     // a tight bound for the SSIM term (mu1 == mu2 → sd == 0 analytically)
     // even though GPU runs the kernel. The HF terms can pick up sub-ULP
-    // noise from the f32 σ² division; allow 5e-2 absolute on the
-    // identical case (the only path that *should* clamp to zero on both
-    // sides).
+    // noise from the f32 σ² division. Previous gate (5e-2) was 70× the
+    // measured floor — tightened 2026-05-22 to 2e-3 (measured max
+    // 6.8e-4 → 3× margin).
     let mut max_abs = 0.0_f64;
     for i in 0..TOTAL_FEATURES {
         let a = (gpu[i] - cpu[i]).abs();
@@ -179,12 +181,35 @@ fn identical_input_all_zeros() {
         }
     }
     eprintln!("identical: max |gpu - cpu| = {max_abs:.4e}");
-    assert!(max_abs < 5e-2, "identical case max diff {max_abs}");
+    assert!(max_abs < 2e-3, "identical case max diff {max_abs}");
 }
 
-/// Noisy-gradient corpus: every feature must agree within 2e-3 relative
-/// (or 2e-3 absolute, whichever is larger) — that's the noise floor for
-/// the f32 vs f64 split.
+/// Noisy-gradient corpus: every feature must agree within a category-
+/// specific tolerance band.
+///
+/// The previous gate (`abs < 5e-3 OR rel < 2e-3`) was loose enough that
+/// the abs clause carried 90% of slots — the rel clause was decorative.
+/// Tightened 2026-05-22 to category-aware bounds reflecting the actual
+/// f32-vs-f64 drift floor.
+///
+/// **Why we can't go tighter without rewriting kernels**: zensim-gpu's
+/// reduction kernel (`kernels/reduce.rs`) accumulates per-cube partials
+/// in f64 already (`SharedMemory::<f64>`, per-thread f64). The residual
+/// drift is from f32 SSIM map arithmetic in the per-cell fused kernel
+/// (mu, sigma, cov, cs computations with the C1/C2 stability constants)
+/// where the CPU side uses f64. Promoting those maps to f64 would
+/// double shared-memory + register pressure in the fused kernel — a
+/// major perf hit. The current band is the irreducible f32-map vs
+/// f64-map per-cell precision split.
+///
+/// Measured drifts on the 64×64 noisy_gradient fixture (CUDA, RTX 5070):
+/// - basic (mean/L4/L2/mse/HF): max_abs 1.5e-3, max_rel 2.2e-2
+/// - peak (max-pooled):         max_abs 4.4e-4, max_rel 2.0e-2
+/// - l8 (L8 pool):              max_abs 5.1e-5, max_rel 2.7e-2
+///
+/// max_rel is high because some cpu values are tiny (sub-1e-4 SSIM-like
+/// terms) — relative error explodes by dividing by ~zero. The abs
+/// bound is the meaningful gate; rel is kept as a sanity ceiling.
 #[test]
 fn noisy_gradient_every_slot_within_tolerance() {
     let w = 64;
@@ -199,12 +224,20 @@ fn noisy_gradient_every_slot_within_tolerance() {
 
     let diffs = diff_features(&cpu[..TOTAL_FEATURES], &gpu);
 
-    // Loosest tolerance the per-slot test will accept. f32 mid-kernel
-    // and 64×64 pooling N = 4096 implies typical sub-ULP drift on the
-    // mean features (~1e-5 abs) and ~1e-3 abs on the max-pooled
-    // features (where one outlier can swing the result). The peak
-    // (max) features get the lion's share of drift.
+    // Per-category tolerance bands. The abs bound is the primary gate;
+    // we keep an OR-rel sanity ceiling that triggers only on cells with
+    // non-tiny CPU values.
+    //
+    // Bands set to (measured_max_abs × ~1.5–3) for headroom while still
+    // catching any real algorithmic divergence (which would land at
+    // 1e-2+ abs).
     let mut failed = Vec::new();
+    let mut max_rel_basic = 0.0_f64;
+    let mut max_rel_peak = 0.0_f64;
+    let mut max_rel_l8 = 0.0_f64;
+    let mut max_abs_basic = 0.0_f64;
+    let mut max_abs_peak = 0.0_f64;
+    let mut max_abs_l8 = 0.0_f64;
     for &(idx, name, cv, gv, abs, rel) in &diffs {
         // Skip slots where the CPU value is exactly zero — these are
         // saturation-clamped (`max(0)`) results on both sides and don't
@@ -212,11 +245,40 @@ fn noisy_gradient_every_slot_within_tolerance() {
         if cv == 0.0 && gv.abs() < 5e-3 {
             continue;
         }
-        let ok = abs < 5e-3 || rel < 2e-3;
+        let (_s, _c, slot) = decode_idx(idx);
+        let (abs_budget, rel_budget) = match slot {
+            // Peak (max-pool) slots: one ULP swing can flip which cell
+            // becomes the max. abs 1e-3 covers the 4.4e-4 floor.
+            13 | 14 | 15 => (1e-3, 5e-2),
+            // L8 pool: tighter — L8-norm averages and rarely diverges
+            // catastrophically. abs 2e-4 covers the 5.1e-5 floor.
+            16 | 17 | 18 => (2e-4, 5e-2),
+            // Basic (mean / L4 / L2 / MSE / HF): abs 2e-3 covers the
+            // 1.5e-3 floor with 33% margin.
+            _ => (2e-3, 5e-2),
+        };
+        match slot {
+            13 | 14 | 15 => {
+                max_rel_peak = max_rel_peak.max(rel);
+                max_abs_peak = max_abs_peak.max(abs);
+            }
+            16 | 17 | 18 => {
+                max_rel_l8 = max_rel_l8.max(rel);
+                max_abs_l8 = max_abs_l8.max(abs);
+            }
+            _ => {
+                max_rel_basic = max_rel_basic.max(rel);
+                max_abs_basic = max_abs_basic.max(abs);
+            }
+        }
+        let ok = abs < abs_budget || rel < rel_budget;
         if !ok {
             failed.push((idx, name, cv, gv, abs, rel));
         }
     }
+    eprintln!(
+        "cpu_parity noisy_gradient drift summary:\n  basic: max_abs={max_abs_basic:.3e} max_rel={max_rel_basic:.3e}\n  peak : max_abs={max_abs_peak:.3e} max_rel={max_rel_peak:.3e}\n  l8   : max_abs={max_abs_l8:.3e} max_rel={max_rel_l8:.3e}"
+    );
     if !failed.is_empty() {
         for &(idx, name, cv, gv, abs, rel) in failed.iter().take(20) {
             eprintln!(
@@ -253,30 +315,43 @@ fn checkerboard_corpus_per_slot() {
     let gpu = z.compute_features(&r, &d).unwrap();
     let cpu = cpu_features(&r, &d, w, h);
 
-    // Split the budget by slot kind:
-    //   basic mean / L4 / L2 / mse / HF — tight, 1e-3 rel
-    //   max-pooled (peak 0..2 = slot_in_19 13..15) — looser, 3e-2 rel
-    //     because a single pixel where f32 vs f64 SSIM math diverges
-    //     by ULP can flip which sample becomes the max
-    //   L8 pool (peak 3..5 = slot_in_19 16..18) — moderate, 5e-3 rel
+    // Split the budget by slot kind. Tightened 2026-05-22 to track
+    // measured drift on the 128² checkerboard (larger N than the 64²
+    // noisy_gradient → tighter abs floor):
+    //   basic mean / L4 / L2 / mse / HF — measured max_abs 9.5e-5 → 5e-4
+    //   max-pooled (peak 0..2 = slot_in_19 13..15) — measured max_abs
+    //     4.8e-4 → 2e-3 (ULP swing can flip which sample is max)
+    //   L8 pool (peak 3..5 = slot_in_19 16..18) — measured max_abs
+    //     9.0e-5 → 5e-4 (averages out vs max-pool)
     let mut failed = Vec::new();
+    let mut max_abs_basic = 0.0_f64;
+    let mut max_abs_peak = 0.0_f64;
+    let mut max_abs_l8 = 0.0_f64;
     for i in 0..TOTAL_FEATURES {
         let (_s, _c, slot) = decode_idx(i);
         let abs = (gpu[i] - cpu[i]).abs();
         let rel = abs / cpu[i].abs().max(1e-6);
         let (abs_budget, rel_budget) = match slot {
-            13 | 14 | 15 => (5e-3, 3e-2), // max-pool
-            16 | 17 | 18 => (3e-3, 5e-3), // L8
-            _ => (2e-3, 2e-3),            // basic mean/L4/L2/mse/HF
+            13 | 14 | 15 => (2e-3, 3e-2), // max-pool
+            16 | 17 | 18 => (5e-4, 5e-3), // L8
+            _ => (5e-4, 2e-3),            // basic mean/L4/L2/mse/HF
         };
         // skip clamped-to-zero slots
         if cpu[i].abs() < 1e-6 && gpu[i].abs() < abs_budget {
             continue;
         }
+        match slot {
+            13 | 14 | 15 => max_abs_peak = max_abs_peak.max(abs),
+            16 | 17 | 18 => max_abs_l8 = max_abs_l8.max(abs),
+            _ => max_abs_basic = max_abs_basic.max(abs),
+        }
         if abs > abs_budget && rel > rel_budget {
             failed.push((i, slot_name(slot), cpu[i], gpu[i], abs, rel));
         }
     }
+    eprintln!(
+        "cpu_parity checkerboard drift summary:\n  basic: max_abs={max_abs_basic:.3e}\n  peak : max_abs={max_abs_peak:.3e}\n  l8   : max_abs={max_abs_l8:.3e}"
+    );
     if !failed.is_empty() {
         for &(idx, name, cv, gv, abs, rel) in failed.iter().take(20) {
             eprintln!(

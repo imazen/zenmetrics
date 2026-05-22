@@ -115,8 +115,11 @@ fn black_vs_white_is_significant() {
         "gpu produced ~0 on a pair the CPU rates at {cpu}"
     );
     let rel = (gpu - cpu).abs() / cpu;
+    // Tightened 2026-05-22 from 5% to 1% (measured ~0% — bit-identical
+    // on the saturated black/white pair; 1% catches any real divergence
+    // signal).
     assert!(
-        rel < 0.05,
+        rel < 0.01,
         "gpu = {gpu:.6} differs from cpu = {cpu:.6} by {:.2} %",
         rel * 100.0
     );
@@ -137,8 +140,12 @@ fn small_distortion_is_close() {
     } else {
         (gpu - cpu).abs()
     };
+    // Tightened 2026-05-22 from 10% to 1% (measured ~0.1% on the
+    // noisy-gradient fixture). The original 10% was a vast over-budget
+    // — DSSIM is well-conditioned and f32 GPU vs f64 CPU drift is sub-%
+    // on natural-content fixtures.
     assert!(
-        rel < 0.1,
+        rel < 0.01,
         "gpu = {gpu:.6} differs from cpu = {cpu:.6} by {:.2} %",
         rel * 100.0
     );
@@ -238,8 +245,13 @@ fn jpeg_corpus_q70_q90() {
             "{q}: cpu = {cpu:.6}, gpu = {gpu:.6}, rel = {:.3} %",
             rel * 100.0
         );
+        // Tightened 2026-05-22 from 5% to 1.5% (measured 0.668% at q90
+        // — driven by the small absolute magnitude after the JPEG q90
+        // distortion, where rel is sensitive to ULP-level differences
+        // in CPU vs GPU summation order. 1.5% holds across q70/q90 and
+        // captures any algorithmic divergence).
         assert!(
-            rel < 0.05,
+            rel < 0.015,
             "{q}: gpu = {gpu:.6} differs from cpu = {cpu:.6} by {:.2} %",
             rel * 100.0
         );

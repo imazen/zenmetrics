@@ -666,15 +666,27 @@ pub fn cov_accum_with_parent_kernel(
 /// `CubeDim::new_1d(1)` (one thread per cube — minimal but matches the
 /// shape of reduction.rs's `finalize_kernel`; could parallelize per-cube
 /// later if profiling shows it matters).
+///
+/// Accumulates in **f64** (the `partials` buffer is `f32` but each
+/// addend is widened to f64 before the running sum). Per-cell error of
+/// the prior f32 finalizer was bounded by √N · ε_f32 ≈ √16384 · 6e-8 ≈
+/// 7.7e-6 (relative to the cell magnitude), which propagated through
+/// the per-strip f64 host accumulator, eigendecomp, and Π|wmcs|^β to
+/// ~2-3e-4 final JOD drift in multi-strip parity tests. Promoting the
+/// cross-thread sum to f64 reduces the per-cell floor to ~ε_f64 ≈
+/// 1e-15 and lets the multi-strip parity gate tighten to the 1e-5 band
+/// (driven by the f32 per-thread accumulator, which still sums a small
+/// number of products per thread). Per-cell f64 cells cost 800 bytes
+/// per scale (5×800 = 4 KB total) — negligible.
 #[cube(launch_unchecked)]
-pub fn cov_finalize_kernel(partials: &Array<f32>, cu: &mut Array<f32>, n_threads: u32) {
+pub fn cov_finalize_kernel(partials: &Array<f32>, cu: &mut Array<f64>, n_threads: u32) {
     let cell = CUBE_POS_X;
     let n_t = n_threads as usize;
     let base = (cell as usize) * n_t;
-    let mut s = 0.0_f32;
+    let mut s = 0.0_f64;
     let mut k: u32 = 0;
     while k < n_threads {
-        s += partials[base + (k as usize)];
+        s += partials[base + (k as usize)] as f64;
         k += 1;
     }
     cu[cell as usize] = s;

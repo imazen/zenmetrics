@@ -50,12 +50,14 @@ fn opaque_srgb_u8_matches_typed() {
         .expect("opaque compute_srgb_u8");
 
     let rel = (opaque_score.value - typed_score.score).abs() / typed_score.score.abs().max(1e-12);
-    // IW-SSIM's GPU reduction has slightly higher run-to-run variance
-    // than the other crates (per-scale floor/clamp + log domain). 5e-5
-    // covers both calls on the same instance and opaque-vs-typed across
-    // separate clients without false positives.
+    eprintln!("opaque_srgb_u8_matches_typed: opaque={} typed={} rel={:.3e}",
+        opaque_score.value, typed_score.score, rel);
+    // Post-2026-05-22 cov_finalize f64 promotion: opaque vs typed measured
+    // bit-identical (rel=0.0) on CUDA. The 1e-7 gate leaves ~1 ULP@1.0
+    // headroom for wgpu / cubecl-cpu where the reduction order may
+    // differ but the math is the same.
     assert!(
-        rel < 5e-5,
+        rel < 1e-7,
         "opaque {} vs typed {} differ by rel {}",
         opaque_score.value,
         typed_score.score,
@@ -106,12 +108,15 @@ fn opaque_pixels_handles_stride() {
         .expect("padded compute_pixels");
 
     let rel = (tight_score.value - padded_score.value).abs() / tight_score.value.abs().max(1e-12);
-    // IW-SSIM's GPU reduction has slightly higher run-to-run variance
-    // than the other crates (per-scale floor/clamp + log domain). 5e-5
-    // covers both calls on the same instance and opaque-vs-typed across
-    // separate clients without false positives.
+    eprintln!("opaque_pixels_stride: tight={} padded={} rel={:.3e}",
+        tight_score.value, padded_score.value, rel);
+    // Two calls on the same instance with the same content (tight vs
+    // strided buffer that the PixelSlice reads with a per-row gather
+    // into the same internal tight buffer) should produce bit-
+    // identical scores. Post-2026-05-22 cov_finalize f64 promotion:
+    // 1e-7 gate (was 5e-5 in the pre-f64 era).
     assert!(
-        rel < 5e-5,
+        rel < 1e-7,
         "strided {} vs tight {} differ by rel {}",
         padded_score.value,
         tight_score.value,

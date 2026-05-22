@@ -8,14 +8,21 @@
 //! ## Tolerance band
 //!
 //! Single-strip degenerate runs (image fits in one body) match the
-//! whole-image score to ~1e-5 rel — no reduction reorder. Multi-strip
-//! runs reorder f32 adds across strips; the drift was measured at
-//! 5e-4 rel for 1024² with body=256 on CUDA / 2.7e-4 on WGPU. This
-//! is the f32 precision floor on the cov_accum's Σ over ~1M products
-//! (√N · ε ≈ 1.2e-4 per cell, amplified by eigendecomp + Π|wmcs|^β to
-//! ~2-3e-4 final). The 5e-4 tolerance is comfortably below the
-//! parity-lock test's 5e-3 tolerance against the Python reference, so
-//! the strip-path drift is invisible at the metric's known accuracy.
+//! whole-image score to ~0 rel — no reduction reorder, no per-thread
+//! accumulation rounding difference. (`measure_drifts` reported 0.000e0
+//! for the 256² body=256 case post-f64-cov-finalize.)
+//!
+//! Multi-strip runs reorder f32 adds across strips; the dominant drift
+//! source used to be `cov_finalize_kernel`'s f32 cross-thread sum over
+//! 16384 partials per cell (√N · ε_f32 ≈ 7.7e-6 per cell relative,
+//! propagated through eigendecomp + Π|wmcs|^β to ~2-3e-4 final score).
+//! After the 2026-05-22 tighten-tolerances pass promoted that sum to
+//! f64 (the per-thread accumulator stays f32 — small-N register
+//! arithmetic), the per-cell floor is now bounded by the f32
+//! per-thread accumulator (small N, error ~ε_f32 directly). Measured
+//! max rel drift across this test grid (CUDA): 3.6e-6 at 1024² body=512.
+//! The 1e-5 tolerance leaves ~3× margin while still catching any real
+//! mode-switch / orchestration bug — those would land at 1e-3+.
 //!
 //! Tests are gated on `cubecl-types` + at least one runtime feature.
 
@@ -30,16 +37,17 @@ type BackendT = cubecl::cuda::CudaRuntime;
 type BackendT = cubecl::wgpu::WgpuRuntime;
 
 /// Strip-vs-whole multi-strip tolerance. See module docs.
-const STRIP_VS_WHOLE_REL: f64 = 5e-4;
-/// Single-strip degenerate (no reduction reorder) tolerance.
-const STRIP_SINGLE_REL: f64 = 1e-4;
-/// Cross-tile-size tolerance: both strip configurations reorder f32
-/// adds vs the whole-image path, so their mutual drift is bounded
-/// by the sum of two independent drifts — up to ~2×STRIP_VS_WHOLE_REL.
-/// Empirically the body=256 vs body=512 comparison at 1024² lands at
-/// ~5.8e-4 rel on CUDA. Bound at 1.5e-3 with margin — still ~3.3×
-/// inside the parity-lock 5e-3 tolerance vs the Python reference.
-const STRIP_VS_STRIP_REL: f64 = 1.5e-3;
+/// Post-f64-cov-finalize: max measured rel drift = 3.6e-6 across the
+/// test grid. Set to 1e-5 with ~3× margin.
+const STRIP_VS_WHOLE_REL: f64 = 1e-5;
+/// Single-strip degenerate (no reduction reorder, identical algorithm
+/// trip) tolerance. Post-f64-cov-finalize: measured 0.0 — gate at 1e-7
+/// to keep some headroom against future micro-noise.
+const STRIP_SINGLE_REL: f64 = 1e-7;
+/// Cross-tile-size tolerance: both strip configurations reorder vs
+/// the whole-image path, so their mutual drift can be up to
+/// ~2 × STRIP_VS_WHOLE_REL. Bound at 5e-5 with margin.
+const STRIP_VS_STRIP_REL: f64 = 5e-5;
 
 /// Generate a deterministic grayscale-in-the-f32-0..255-range image.
 /// Mixes a low-frequency gradient with a high-frequency texture so

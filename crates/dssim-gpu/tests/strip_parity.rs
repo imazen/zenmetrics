@@ -359,8 +359,11 @@ fn cross_strip_size_parity() {
     let sb = b.compute(&r, &dist).unwrap().score;
     let rel = (sa - sb).abs() / sa.max(1e-6);
     eprintln!("strip h_body=128 vs 256: a={sa:.8}, b={sb:.8}, rel={:.4} %", rel * 100.0);
+    // Tightened 2026-05-22 from 1e-3 to 1e-4 (measured 9e-6 on this
+    // fixture; 1e-4 leaves 10× margin while still catching real
+    // strip-orchestration bugs).
     assert!(
-        rel < 1e-3,
+        rel < 1e-4,
         "cross-strip drift {rel:.6} rel exceeds tolerance"
     );
 }
@@ -374,7 +377,9 @@ fn strip_identical_is_zero() {
     let mut d = Dssim::<Backend>::new_strip(make_client!(), w, h, 128).unwrap();
     let s = d.compute(&img, &img).unwrap().score;
     eprintln!("strip identical: dssim = {s:.8}");
-    assert!(s < 1e-3, "expected ~0, got {s}");
+    // Tightened 2026-05-22 from 1e-3 to 1e-7 (measured 0.0 — bit-exact
+    // for identical input). 1e-7 leaves headroom for future micro-noise.
+    assert!(s < 1e-7, "expected ~0, got {s}");
 }
 
 /// `dimensions()` returns image dims (not strip-buffer dims) for

@@ -305,13 +305,20 @@ struct Scale {
     parent_band: cubecl::server::Handle,
     iw: cubecl::server::Handle,
 
-    // C_u accumulator (always 10*10 = 100 f32 — wastes 19 entries when
+    // C_u accumulator (always 10*10 = 100 **f64** — wastes 19 entries when
     // N=9 but cheap and avoids two-variant allocation). Receives the
     // 100-cell output of `cov_finalize_kernel`; was previously written
     // by atomic-add inside the cov_accum kernels. The atomic version
     // panicked silently on `cubecl-cpu` (no `atomic<f32>` lowering in
     // the MLIR backend) and produced score=0; the partials + finalize
     // path works on every backend.
+    //
+    // Promoted to f64 in tighten-tolerances pass 2026-05-22: the
+    // finalize kernel sums 16384 f32 partials per cell, and the f32
+    // round-off floor √N · ε ≈ 7.7e-6 per cell propagated to a 2-3e-4
+    // drift in the multi-strip parity gate. f64 accumulation in
+    // finalize drops that to ~1e-15 per cell; cells stay f64 through
+    // host readback for the cleanest precision path.
     cu: cubecl::server::Handle,
     cu_inv_dev: cubecl::server::Handle,
     lambda_dev: cubecl::server::Handle,
@@ -319,6 +326,12 @@ struct Scale {
 
 fn alloc<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
     client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]))
+}
+
+/// f64-typed allocator for buffers that need higher precision than
+/// f32 (e.g., the cov_finalize accumulator). Byte-length is `n * 8`.
+fn alloc_f64<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
+    client.create_from_slice(f64::as_bytes(&vec![0.0_f64; n]))
 }
 
 impl Scale {
@@ -359,7 +372,7 @@ impl Scale {
             vv_buf: alloc(client, n_lp),
             parent_band: alloc(client, n_lp),
             iw: alloc(client, n_iw),
-            cu: alloc(client, 100),
+            cu: alloc_f64(client, 100),
             cu_inv_dev: alloc(client, 100),
             lambda_dev: alloc(client, 10),
         }
@@ -1323,11 +1336,11 @@ impl<R: Runtime> Iwssim<R> {
                 let device_stride = if has_parent { 10 } else { 9 };
                 // Accumulate raw Σ Yᵀ Y (NOT yet divided by nexp).
                 // device buffer is 10×10; we read the top-left
-                // n_dim × n_dim block.
+                // n_dim × n_dim block. cu_raw is already f64 (the
+                // cov_finalize kernel sums in f64).
                 for i in 0..n_dim {
                     for j in 0..n_dim {
-                        acc_cu[s][i * 10 + j] +=
-                            cu_raw[i * device_stride + j] as f64;
+                        acc_cu[s][i * 10 + j] += cu_raw[i * device_stride + j];
                     }
                 }
                 let strip_nexp = (py_hi - py_lo) as u64
@@ -1682,10 +1695,10 @@ impl<R: Runtime> Iwssim<R> {
                 n_dim_per_scale[s] = n_dim;
                 has_parent_per_scale[s] = has_parent;
                 let device_stride = if has_parent { 10 } else { 9 };
+                // cu_raw is f64 (cov_finalize accumulates in f64).
                 for i in 0..n_dim {
                     for j in 0..n_dim {
-                        acc_cu[s][i * 10 + j] +=
-                            cu_raw[i * device_stride + j] as f64;
+                        acc_cu[s][i * 10 + j] += cu_raw[i * device_stride + j];
                     }
                 }
                 let strip_nexp = (py_hi - py_lo) as u64
@@ -2856,17 +2869,18 @@ impl<R: Runtime> Iwssim<R> {
     }
 
     /// Read the raw Σ Yᵀ Y matrix back to host (no division). Returns
-    /// the raw cells, `n_dim`, and `has_parent`. Callers divide and
+    /// the raw cells (f64 — the cov_finalize kernel accumulates in
+    /// f64), `n_dim`, and `has_parent`. Callers divide and
     /// (optionally) accumulate across strips before eigendecomp.
-    fn read_cu_raw(&self, s: usize) -> (Vec<f32>, usize, bool) {
+    fn read_cu_raw(&self, s: usize) -> (Vec<f64>, usize, bool) {
         let has_parent = s < self.scales.len() - 2;
         let n_dim = if has_parent { 10 } else { 9 };
         let cu_bytes = self
             .client
             .read_one(self.scales[s].cu.clone())
             .expect("read C_u");
-        let cu_f32 = f32::from_bytes(&cu_bytes).to_vec();
-        (cu_f32, n_dim, has_parent)
+        let cu_f64 = f64::from_bytes(&cu_bytes).to_vec();
+        (cu_f64, n_dim, has_parent)
     }
 
     /// Eigendecompose, invert, and upload C_u_inv + lambdas to the
@@ -2942,13 +2956,13 @@ impl<R: Runtime> Iwssim<R> {
 /// f64 matrix in row-major order. Handles the 10×10 vs 9×9 device
 /// layout split (the device buffer is always allocated 10×10; for
 /// `n_dim == 9` we read only the top-left 9×9 block).
-fn scale_cu(cu_raw: &[f32], n_dim: usize, has_parent: bool, nexp: f64) -> Vec<f64> {
+fn scale_cu(cu_raw: &[f64], n_dim: usize, has_parent: bool, nexp: f64) -> Vec<f64> {
     let device_stride = if has_parent { 10 } else { 9 };
     let mut out = vec![0.0_f64; n_dim * n_dim];
     for i in 0..n_dim {
         for j in 0..n_dim {
             let src_idx = i * device_stride + j;
-            out[i * n_dim + j] = (cu_raw[src_idx] as f64) / nexp;
+            out[i * n_dim + j] = cu_raw[src_idx] / nexp;
         }
     }
     out
