@@ -28,9 +28,16 @@ pub const NUM_BLOCKS: u32 = 16;
 pub const THREADS_PER_REDUCTION: u32 = NUM_BLOCKS * BLOCK_SIZE;
 
 /// Grid-strided sum of `cs[py, px] * iw[py + b1, px + b1]` for
-/// `py ∈ [0, nblv − 2·b1)`, `px ∈ [0, nblh − 2·b1)`. cs is laid out at
-/// the cropped shape `(nblv − 2·b1, nblh − 2·b1)`; iw at the full
-/// `(nblv, nblh)`. Output goes to `partials[base + tid]`.
+/// `py ∈ [cs_y_start, cs_y_end)`, `px ∈ [0, cs_w)`. cs is laid out at
+/// the cropped shape `(cs_h, cs_w)`; iw at the full `(iw_h, iw_w)`.
+/// Output goes to `partials[base + tid]`.
+///
+/// `cs_y_start` / `cs_y_end` restrict the pooling to a row range of
+/// the cs buffer — used by strip processing so per-strip pools only
+/// include the strip's body rows (halo rows are computed but not
+/// summed). For the whole-image path the caller passes
+/// `cs_y_start = 0`, `cs_y_end = cs_h`, recovering the original
+/// full-buffer reduction.
 #[cube(launch_unchecked)]
 pub fn weighted_sum_kernel(
     cs: &Array<f32>,
@@ -42,8 +49,11 @@ pub fn weighted_sum_kernel(
     iw_w: u32,
     bound1: u32,
     partials_base: u32,
+    cs_y_start: u32,
+    cs_y_end: u32,
 ) {
     let _ = iw_h;
+    let _ = cs_h;
     let tid = ABSOLUTE_POS;
     // Manual CUBE_COUNT aggregation (= X*Y*Z). The aggregated CUBE_COUNT
     // builtin is unimplemented on `cubecl-cpu` (silently panics inside the
@@ -52,17 +62,21 @@ pub fn weighted_sum_kernel(
     // compute the full product for correctness in case a future change
     // makes a launch 2D/3D.
     let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
-    let n = (cs_h * cs_w) as usize;
     let cs_w_us = cs_w as usize;
     let iw_w_us = iw_w as usize;
     let b1 = bound1 as usize;
+    let y_start = cs_y_start as usize;
+    let y_end = cs_y_end as usize;
+    let rows = y_end - y_start;
+    let n = rows * cs_w_us;
 
     let mut s = 0.0_f32;
     let mut i = tid;
     while i < n {
-        let py = i / cs_w_us;
-        let px = i - py * cs_w_us;
-        let cs_v = cs[i];
+        let local_py = i / cs_w_us;
+        let px = i - local_py * cs_w_us;
+        let py = local_py + y_start;
+        let cs_v = cs[py * cs_w_us + px];
         let iw_v = iw[(py + b1) * iw_w_us + (px + b1)];
         s += cs_v * iw_v;
         i += stride;
@@ -70,8 +84,9 @@ pub fn weighted_sum_kernel(
     partials[(partials_base as usize) + tid] = s;
 }
 
-/// Grid-strided sum of `iw[py + b1, px + b1]` over the cropped range
-/// `(nblv − 2·b1, nblh − 2·b1) = (cs_h, cs_w)`.
+/// Grid-strided sum of `iw[py + b1, px + b1]` over a row range
+/// `[cs_y_start, cs_y_end)` of the cropped iw extent. Same row-range
+/// semantics as [`weighted_sum_kernel`].
 #[cube(launch_unchecked)]
 pub fn iw_sum_kernel(
     iw: &Array<f32>,
@@ -82,20 +97,27 @@ pub fn iw_sum_kernel(
     iw_w: u32,
     bound1: u32,
     partials_base: u32,
+    cs_y_start: u32,
+    cs_y_end: u32,
 ) {
     let _ = iw_h;
+    let _ = cs_h;
     let tid = ABSOLUTE_POS;
     let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
-    let n = (cs_h * cs_w) as usize;
     let cs_w_us = cs_w as usize;
     let iw_w_us = iw_w as usize;
     let b1 = bound1 as usize;
+    let y_start = cs_y_start as usize;
+    let y_end = cs_y_end as usize;
+    let rows = y_end - y_start;
+    let n = rows * cs_w_us;
 
     let mut s = 0.0_f32;
     let mut i = tid;
     while i < n {
-        let py = i / cs_w_us;
-        let px = i - py * cs_w_us;
+        let local_py = i / cs_w_us;
+        let px = i - local_py * cs_w_us;
+        let py = local_py + y_start;
         let iw_v = iw[(py + b1) * iw_w_us + (px + b1)];
         s += iw_v;
         i += stride;
@@ -103,18 +125,39 @@ pub fn iw_sum_kernel(
     partials[(partials_base as usize) + tid] = s;
 }
 
-/// Grid-strided sum of `src[i]` over `n` elements — used for the top
-/// scale's `Σ(cs · l)` (cs · l is a separate kernel output) and as the
-/// generic single-buffer fold.
+/// Grid-strided sum of `src[i]` over a row-range slice. `src` is laid
+/// out at `(src_h, src_w)` row-major; the reduction sums
+/// `src[y, x]` for `y ∈ [y_start, y_end)`, `x ∈ [0, src_w)`. Used for
+/// the top scale's `Σ(cs · l)` (cs · l is a separate kernel output)
+/// and as the generic single-buffer fold.
+///
+/// For the whole-image path, pass `y_start = 0` and `y_end = src_h`
+/// to recover a sum over the full buffer. Strip processing passes
+/// the strip's body range (in the top scale's coordinate system) so
+/// only body rows are pooled.
 #[cube(launch_unchecked)]
-pub fn plain_sum_kernel(src: &Array<f32>, partials: &mut Array<f32>, partials_base: u32) {
+pub fn plain_sum_kernel(
+    src: &Array<f32>,
+    partials: &mut Array<f32>,
+    partials_base: u32,
+    src_w: u32,
+    y_start: u32,
+    y_end: u32,
+) {
     let tid = ABSOLUTE_POS;
     let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
-    let n = src.len();
+    let w_us = src_w as usize;
+    let y_lo = y_start as usize;
+    let y_hi = y_end as usize;
+    let rows = y_hi - y_lo;
+    let n = rows * w_us;
     let mut s = 0.0_f32;
     let mut i = tid;
     while i < n {
-        s += src[i];
+        let local_py = i / w_us;
+        let px = i - local_py * w_us;
+        let py = local_py + y_lo;
+        s += src[py * w_us + px];
         i += stride;
     }
     partials[(partials_base as usize) + tid] = s;
@@ -136,6 +179,12 @@ pub fn finalize_kernel(partials: &Array<f32>, dst: &mut Array<f32>) {
 }
 
 /// Convenience: launch a `Σ(cs · iw)` reduction into the given slot.
+///
+/// `cs_y_start` / `cs_y_end` restrict the sum to a row range of the
+/// cs buffer. For whole-image reduction pass `(0, cs_h)`; for strip
+/// reduction pass the body row range (in cs coordinates) so halo
+/// rows on either side are skipped.
+#[allow(clippy::too_many_arguments)]
 pub fn launch_weighted_sum<R: Runtime>(
     client: &ComputeClient<R>,
     cs: cubecl::server::Handle,
@@ -150,6 +199,8 @@ pub fn launch_weighted_sum<R: Runtime>(
     iw_w: u32,
     bound1: u32,
     slot: u32,
+    cs_y_start: u32,
+    cs_y_end: u32,
 ) {
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
@@ -168,10 +219,13 @@ pub fn launch_weighted_sum<R: Runtime>(
             iw_w,
             bound1,
             partials_base,
+            cs_y_start,
+            cs_y_end,
         );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn launch_iw_sum<R: Runtime>(
     client: &ComputeClient<R>,
     iw: cubecl::server::Handle,
@@ -184,6 +238,8 @@ pub fn launch_iw_sum<R: Runtime>(
     iw_w: u32,
     bound1: u32,
     slot: u32,
+    cs_y_start: u32,
+    cs_y_end: u32,
 ) {
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
@@ -201,10 +257,13 @@ pub fn launch_iw_sum<R: Runtime>(
             iw_w,
             bound1,
             partials_base,
+            cs_y_start,
+            cs_y_end,
         );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn launch_plain_sum<R: Runtime>(
     client: &ComputeClient<R>,
     src: cubecl::server::Handle,
@@ -212,6 +271,9 @@ pub fn launch_plain_sum<R: Runtime>(
     partials: cubecl::server::Handle,
     partials_len: usize,
     slot: u32,
+    src_w: u32,
+    y_start: u32,
+    y_end: u32,
 ) {
     let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
     let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
@@ -224,6 +286,9 @@ pub fn launch_plain_sum<R: Runtime>(
             ArrayArg::from_raw_parts(src, src_len),
             ArrayArg::from_raw_parts(partials, partials_len),
             partials_base,
+            src_w,
+            y_start,
+            y_end,
         );
     }
 }

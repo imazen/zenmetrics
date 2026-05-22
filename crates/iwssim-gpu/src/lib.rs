@@ -198,6 +198,20 @@ pub enum Error {
     /// Image too small for a 5-level pyramid + 11×11 valid blur. The
     /// paper's `iwssim.m` requires `min(W,H) >= 11 * 2^(Nsc-1) = 176`.
     InvalidImageSize,
+    /// `set_reference` / `compute_with_reference` was called on an
+    /// instance constructed via [`Iwssim::new_strip`]. The cached-
+    /// reference fast path is only implemented for the whole-image
+    /// pipeline; the strip path rebuilds the LP pyramid for both ref
+    /// and dis on every `compute_gray_stripped` call. See
+    /// `crates/iwssim-gpu/docs/STRIP_PROCESSING.md` § "Cached-reference
+    /// path" for the design rationale and the open follow-up work.
+    CachedRefNotSupportedInStripMode,
+    /// `compute_gray_stripped` was called on an instance constructed
+    /// via the whole-image [`Iwssim::new`] / [`Iwssim::with_config`]
+    /// constructors. Use [`Iwssim::compute_gray`] for whole-image
+    /// scoring, or construct the pipeline via [`Iwssim::new_strip`]
+    /// for the strip-processing path.
+    NotStripMode,
 }
 
 impl std::fmt::Display for Error {
@@ -212,6 +226,15 @@ impl std::fmt::Display for Error {
             Error::InvalidImageSize => write!(
                 f,
                 "image too small for 5-level IW-SSIM (min(W,H) must be ≥ 176)"
+            ),
+            Error::CachedRefNotSupportedInStripMode => write!(
+                f,
+                "cached-reference path is not implemented for strip mode; \
+                 use compute_gray_stripped(ref, dis) instead"
+            ),
+            Error::NotStripMode => write!(
+                f,
+                "compute_gray_stripped requires an instance built via Iwssim::new_strip"
             ),
         }
     }

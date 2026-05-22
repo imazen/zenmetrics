@@ -22,6 +22,10 @@
 
 use cubecl::prelude::*;
 
+/// `py_start` / `py_end` define an inclusive / exclusive iw row range
+/// to sum over. Whole-image: `(0, h − 2)`. Strip mode passes the
+/// strip's body iw row range so per-strip cov contributions don't
+/// overlap across strips.
 #[cube(launch_unchecked)]
 pub fn cov_accum_no_parent_kernel(
     lp: &Array<f32>,
@@ -29,12 +33,17 @@ pub fn cov_accum_no_parent_kernel(
     h: u32,
     w: u32,
     n_threads: u32,
+    py_start: u32,
+    py_end: u32,
 ) {
     let tid = ABSOLUTE_POS;
     let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
-    let nblv = h - 2;
+    let _ = h;
     let nblh = w - 2;
-    let nexp = (nblv * nblh) as usize;
+    let py_lo = py_start as usize;
+    let py_hi = py_end as usize;
+    let rows = py_hi - py_lo;
+    let nexp = rows * (nblh as usize);
     let w_us = w as usize;
     let n_threads_us = n_threads as usize;
 
@@ -122,9 +131,9 @@ pub fn cov_accum_no_parent_kernel(
 
     let mut p = tid;
     while p < nexp {
-        let py = (p as u32) / nblh;
-        let px = (p as u32) - py * nblh;
-        let py_us = py as usize;
+        let local_py = (p as u32) / nblh;
+        let px = (p as u32) - local_py * nblh;
+        let py_us = (local_py as usize) + py_lo;
         let px_us = px as usize;
         let v0 = lp[(py_us + 2) * w_us + (px_us + 2)];
         let v1 = lp[(py_us + 2) * w_us + (px_us + 1)];
@@ -305,6 +314,8 @@ pub fn cov_accum_no_parent_kernel(
     partials[80 * n_threads_us + tid] = a88;
 }
 
+/// `py_start` / `py_end` define an inclusive / exclusive iw row range
+/// to sum over. Same semantics as [`cov_accum_no_parent_kernel`].
 #[cube(launch_unchecked)]
 pub fn cov_accum_with_parent_kernel(
     lp: &Array<f32>,
@@ -313,12 +324,17 @@ pub fn cov_accum_with_parent_kernel(
     h: u32,
     w: u32,
     n_threads: u32,
+    py_start: u32,
+    py_end: u32,
 ) {
     let tid = ABSOLUTE_POS;
     let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
-    let nblv = h - 2;
+    let _ = h;
     let nblh = w - 2;
-    let nexp = (nblv * nblh) as usize;
+    let py_lo = py_start as usize;
+    let py_hi = py_end as usize;
+    let rows = py_hi - py_lo;
+    let nexp = rows * (nblh as usize);
     let w_us = w as usize;
     let n_threads_us = n_threads as usize;
 
@@ -425,9 +441,9 @@ pub fn cov_accum_with_parent_kernel(
 
     let mut p = tid;
     while p < nexp {
-        let py = (p as u32) / nblh;
-        let px = (p as u32) - py * nblh;
-        let py_us = py as usize;
+        let local_py = (p as u32) / nblh;
+        let px = (p as u32) - local_py * nblh;
+        let py_us = (local_py as usize) + py_lo;
         let px_us = px as usize;
         let v0 = lp[(py_us + 2) * w_us + (px_us + 2)];
         let v1 = lp[(py_us + 2) * w_us + (px_us + 1)];

@@ -1,0 +1,48 @@
+# iwssim-gpu strip-vs-whole bench metadata
+# Commit: TBD (filled at commit time)
+# Host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM, RTX (driver 596.21, CUDA 13.2)
+# Date: 2026-05-22
+# Backend: cubecl-cuda
+# Iters: 3 warmup, 8 measured per row
+# Command: cargo run --release --example bench_strip_vs_whole \
+#          -p iwssim-gpu --features cubecl-types,cuda
+#
+# Columns:
+#   w_h: image dimensions
+#   mp: megapixels
+#   mode: "whole" (Iwssim::new) or "strip(body=B,alloc=A)" (Iwssim::new_strip)
+#   mean_ms: mean wall-clock time per pair across 8 measured iters
+#   min_ms: min wall-clock time per pair across 8 measured iters
+#   score: IW-SSIM score (kept beside timing so perf regressions
+#          that also affect correctness are immediately visible)
+#   working_set_mb: per-pipeline GPU working set in megabytes,
+#                   computed as the geometric sum across 5 pyramid
+#                   levels with 19 f32 planes per scale
+#
+# Notes:
+# - The 24 MP whole-image row is marked SKIP_OOM. The whole-image
+#   constructor would allocate ~2.43 GB of scale planes; on a 12 GB
+#   consumer GPU with other metrics live this trips OOM. The strip
+#   path with body=1024 brings the working set down to ~933 MB and
+#   completes the run. This is the production motivation.
+# - Strip mode is slower per pair (2.2-3x at 4-12 MP) because every
+#   strip rebuilds the LP pyramid for both ref and dis (a cached-ref
+#   strip path is not implemented in this pass; see
+#   crates/iwssim-gpu/src/lib.rs::Error::CachedRefNotSupportedInStripMode).
+#   The OOM-avoidance and 1.75x host-RSS savings justify the perf
+#   cost on production sweep workers.
+# - 24 MP strip uses 4 body strips × (LP build + box3 + cov + reduce)
+#   × 2 passes (Pass 1 = global C_u, Pass 2 = scoring) = 16 fairly
+#   large GPU dispatches per pair.
+#
+# Heaptrack peaks (host-side RSS, 12 MP):
+#   whole: peak heap 1.71G / peak RSS 1.93G / total runtime 3.89s
+#   strip: peak heap 975M  / peak RSS 1.20G / total runtime 2.30s
+#   -> strip reduces host peak heap 1.76x, peak RSS 1.61x at 12 MP
+#
+# GPU memory tally (working_set_mb from strip_memory_tally example):
+#   size       MP    whole     strip(body=1024)  ratio
+#   1024x1024  1.05   114.9 MB        172.2 MB   0.67x  (strip overhead at 1MP)
+#   2048x2048  4.19   458.6 MB        344.0 MB   1.33x
+#   4000x3000  12.0  1311.2 MB        671.5 MB   1.95x
+#   6000x4000  24.0  2622.0 MB       1007.1 MB   2.60x  (production target)

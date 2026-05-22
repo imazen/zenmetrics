@@ -212,6 +212,55 @@ const BLK_HALF: u32 = 1;
 /// Cropped offset applied to `iw_j` before pooling against `cs_j`.
 const BOUND1: u32 = BOUND - BLK_HALF; // = 4
 
+/// Compute the cs-row range that owns "body" pixels at scale `s` for
+/// one strip. `body_lp_top` / `body_lp_bot` are body row bounds at
+/// scale 0 in strip-local coordinates. `cs_h_s` is the scale-s cs
+/// buffer height (= `strip_h_s − 10`). Returned range is clamped to
+/// `[0, cs_h_s]`; an empty range (start ≥ end) means the strip's
+/// body doesn't pool any cs rows at this scale.
+///
+/// Row mapping at scale `s`:
+///   LP row `y_s = y_0 / 2^s`        (integer division)
+///   cs row = LP row − 5             (11×11 valid blur, 5-row crop)
+fn body_cs_range(
+    body_lp_top: i64,
+    body_lp_bot: i64,
+    scale: usize,
+    cs_h_s: u32,
+) -> (u32, u32) {
+    let denom: i64 = 1 << (scale as u32);
+    // Use round-half-up division: body_top contributes from the first
+    // LP row that exceeds the body's start, body_bot from the last
+    // LP row strictly within the body. Mismatch by ±1 here is
+    // tolerable — the body row count at scale s drifts by < 1 row
+    // out of (h_body / 2^s), well within strip-overlap tolerances.
+    // Use floor for both ends; that's exact when body_lp_top is a
+    // multiple of 2^s (guaranteed in interior strips by construction).
+    let lp_top_s: i64 = body_lp_top.div_euclid(denom);
+    let lp_bot_s: i64 = body_lp_bot.div_euclid(denom);
+    let cs_top: i64 = (lp_top_s - 5).max(0).min(cs_h_s as i64);
+    let cs_bot: i64 = (lp_bot_s - 5).max(0).min(cs_h_s as i64);
+    (cs_top as u32, cs_bot as u32)
+}
+
+/// iw-row variant of [`body_cs_range`]. iw at scale `s` has shape
+/// `(h_s − 2, w_s − 2)`; cov_accum / iw_sum read iw rows starting
+/// at LP row 1 (box3 crops 1 row from each side). So iw row
+/// `y_iw = y_LP − 1`.
+fn body_iw_range(
+    body_lp_top: i64,
+    body_lp_bot: i64,
+    scale: usize,
+    iw_h_s: u32,
+) -> (u32, u32) {
+    let denom: i64 = 1 << (scale as u32);
+    let lp_top_s: i64 = body_lp_top.div_euclid(denom);
+    let lp_bot_s: i64 = body_lp_bot.div_euclid(denom);
+    let iw_top: i64 = (lp_top_s - 1).max(0).min(iw_h_s as i64);
+    let iw_bot: i64 = (lp_bot_s - 1).max(0).min(iw_h_s as i64);
+    (iw_top as u32, iw_bot as u32)
+}
+
 /// Per-scale device buffer set.
 struct Scale {
     /// LP shape.
@@ -331,6 +380,61 @@ const COV_N_THREADS: u32 = COV_CUBE_COUNT * COV_CUBE_DIM;
 /// for the max).
 const COV_MAX_CELLS: u32 = 100;
 
+/// Default scale-0 halo (rows) per side for strip processing.
+///
+/// Picked to comfortably cover the 5-level pipeline's worst-case
+/// cumulative reach (~180 rows, see `docs/STRIP_PROCESSING.md`). The
+/// halo MUST be a multiple of `2^(NUM_SCALES − 1) = 16` so it shrinks
+/// to an integer count at every pyramid level — 256 satisfies that
+/// and matches the design-doc default.
+pub const STRIP_DEFAULT_HALO: u32 = 256;
+
+/// Default body rows per strip at scale 0. Combined with the default
+/// halo this gives a maximum strip height of 1536 — the sweet spot
+/// per `docs/STRIP_PROCESSING.md` (50% halo overhead, ~460 MB working
+/// set on a 24 MP image).
+pub const STRIP_DEFAULT_BODY: u32 = 1024;
+
+/// Strip-mode state. Present when the pipeline was constructed via
+/// [`Iwssim::new_strip`].
+#[derive(Debug, Clone, Copy)]
+struct StripState {
+    /// Full source image height (rows).
+    image_h: u32,
+    /// Per-strip body rows at scale 0 (the contribution each strip
+    /// owns to the final per-scale reductions).
+    h_body: u32,
+    /// Halo rows per side at scale 0 (image rows pulled in past the
+    /// body region for stencil reach + cross-scale dependency).
+    halo: u32,
+    /// Maximum strip height at scale 0 = `h_body + 2 * halo`. Used
+    /// as the allocation height of every per-scale buffer.
+    /// Cached for debug / introspection; the strip loop derives the
+    /// per-strip actual_h from the upload range.
+    #[allow(dead_code)]
+    strip_alloc_h: u32,
+}
+
+impl StripState {
+    /// Yield `(body_start, body_end, upload_start, upload_end)` for
+    /// each strip, all in scale-0 image rows. `upload_*` are clamped
+    /// to `[0, image_h]`. The strip's actual GPU height is
+    /// `upload_end − upload_start` (may be < `strip_alloc_h` for
+    /// boundary strips).
+    fn strips(&self) -> Vec<(u32, u32, u32, u32)> {
+        let mut out = Vec::new();
+        let mut body_start = 0u32;
+        while body_start < self.image_h {
+            let body_end = (body_start + self.h_body).min(self.image_h);
+            let upload_start = body_start.saturating_sub(self.halo);
+            let upload_end = (body_end + self.halo).min(self.image_h);
+            out.push((body_start, body_end, upload_start, upload_end));
+            body_start = body_end;
+        }
+        out
+    }
+}
+
 /// Per-instance allocations + per-call orchestration. Construct once
 /// for a given `(width, height)`, reuse across many image pairs.
 pub struct Iwssim<R: Runtime> {
@@ -388,6 +492,13 @@ pub struct Iwssim<R: Runtime> {
     /// and flips this flag. Subsequent `compute_with_reference` calls
     /// skip the ref-side LP pyramid build.
     has_cached_reference: bool,
+
+    /// Strip-mode state. `Some(_)` when the pipeline was built via
+    /// [`Iwssim::new_strip`] — `compute_gray_stripped` walks the
+    /// strip layout, runs the existing per-strip pipeline, and folds
+    /// per-strip partial sums on the host. `None` for the historical
+    /// whole-image path.
+    strip: Option<StripState>,
 }
 
 /// Slot layout in the partials / sums buffer. Indices match the order
@@ -503,8 +614,144 @@ impl<R: Runtime> Iwssim<R> {
             sums,
             cov_partials,
             has_cached_reference: false,
+            strip: None,
         })
     }
+
+    /// Construct a strip-processing pipeline for an `image_w × image_h`
+    /// image, with each strip carrying `h_body` body rows + the default
+    /// halo per side ([`STRIP_DEFAULT_HALO`]). Per-scale GPU buffers
+    /// are sized for a single strip of `h_body + 2 * halo` rows, not
+    /// the full image — peak working set drops from `O(image_h)` to
+    /// `O(strip_alloc_h)`. See `docs/STRIP_PROCESSING.md` for the
+    /// memory analysis.
+    ///
+    /// Use `image_w` and `image_h` from the input you intend to score;
+    /// `h_body` defaults to [`STRIP_DEFAULT_BODY`] (1024 rows). The
+    /// `compute_gray_stripped` entry point loops over strips, runs
+    /// the existing whole-image pipeline on each strip (so existing
+    /// kernels are reused unchanged), and accumulates per-strip
+    /// partial sums on the host. The final score is the IW-SSIM of
+    /// the full image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidImageSize`] if either image axis is
+    /// below [`MIN_NATIVE_DIM`], or if `h_body` is too small (must be
+    /// at least 16 rows for the scale-4 strip to fit the 11×11 valid
+    /// blur), or if the resulting strip allocation height is below
+    /// [`MIN_NATIVE_DIM`]. Reflects the historical contract: strip
+    /// mode is only well-defined on stock-size inputs; the small-image
+    /// adaptive path stays whole-image.
+    ///
+    /// **Backwards-compatible:** [`Iwssim::new`] / [`Iwssim::with_config`]
+    /// continue to allocate a whole-image pipeline.
+    pub fn new_strip(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+    ) -> Result<Self> {
+        Self::new_strip_with_halo(client, image_w, image_h, h_body, STRIP_DEFAULT_HALO)
+    }
+
+    /// Like [`Iwssim::new_strip`] but lets the caller pick the halo
+    /// rows per side. Use this when the default halo is too generous
+    /// (e.g. small but still ≥ 176 px tall images where 256-row halo
+    /// would force the entire image into a single strip). Halo MUST
+    /// be a non-zero multiple of 16 (`2^(NUM_SCALES − 1)`) — see
+    /// `docs/STRIP_PROCESSING.md`.
+    pub fn new_strip_with_halo(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+        halo: u32,
+    ) -> Result<Self> {
+        if image_w < MIN_NATIVE_DIM || image_h < MIN_NATIVE_DIM {
+            return Err(Error::InvalidImageSize);
+        }
+        // Halo must respect the pyramid downsampling factor so it
+        // shrinks to an integer row count at every scale.
+        let pyr_factor: u32 = 1 << (NUM_SCALES - 1); // 16
+        if halo == 0 || halo % pyr_factor != 0 {
+            return Err(Error::InvalidImageSize);
+        }
+        if h_body == 0 || h_body % pyr_factor != 0 {
+            return Err(Error::InvalidImageSize);
+        }
+        let strip_alloc_h = h_body + 2 * halo;
+        // The allocation strip must satisfy the same 5-level pyramid
+        // floor as a whole image. A 176-row floor at scale 0 leaves
+        // 11 rows at scale 4 — exactly the 11×11 valid-blur radius.
+        if strip_alloc_h < MIN_NATIVE_DIM {
+            return Err(Error::InvalidImageSize);
+        }
+        // Allocate per-scale buffers sized for the MAX strip
+        // (h_body + 2 halo). Boundary strips with fewer rows pass a
+        // smaller actual_h into the kernels — buffers have extra
+        // capacity at the tail.
+        let mut dims = Vec::with_capacity(NUM_SCALES);
+        let mut h = strip_alloc_h;
+        let mut w = image_w;
+        for _ in 0..NUM_SCALES {
+            dims.push((h, w));
+            h = h.div_ceil(2);
+            w = w.div_ceil(2);
+        }
+        let scales: Vec<Scale> = dims
+            .iter()
+            .map(|&(h, w)| Scale::new(&client, h, w))
+            .collect();
+        let n_pixels_alloc = (strip_alloc_h * image_w) as usize;
+        let src_u32_a =
+            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
+        let src_u32_b =
+            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
+
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
+        let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; NUM_SLOTS as usize]));
+
+        let cov_partials_len = (COV_MAX_CELLS * COV_N_THREADS) as usize;
+        let cov_partials =
+            client.create_from_slice(f32::as_bytes(&vec![0.0_f32; cov_partials_len]));
+
+        Ok(Self {
+            client,
+            width: image_w,
+            height: image_h,
+            pad_width: image_w,
+            pad_height: image_h,
+            strategy: IwssimStrategy::Reject,
+            src_u32_a,
+            src_u32_b,
+            scales,
+            partials,
+            sums,
+            cov_partials,
+            has_cached_reference: false,
+            strip: Some(StripState {
+                image_h,
+                h_body,
+                halo,
+                strip_alloc_h,
+            }),
+        })
+    }
+
+    /// True if this pipeline was constructed via [`Iwssim::new_strip`].
+    pub fn is_strip_mode(&self) -> bool {
+        self.strip.is_some()
+    }
+
+    // TODO: cached-reference strip path. Currently the strip path
+    // rebuilds the full LP pyramid for both ref and dis on every
+    // `compute_gray_stripped` call. For RD-search hot loops scoring
+    // the same reference against many distortions, a
+    // `set_reference_stripped` + `compute_dis_stripped` split would
+    // halve the per-call LP-build work. Out of scope for this pass;
+    // see `docs/STRIP_PROCESSING.md` § "Cached-reference path".
 
     /// Native `(width, height)` the caller supplied to `new` /
     /// `with_config`. Use this for input buffer length checks.
@@ -584,6 +831,9 @@ impl<R: Runtime> Iwssim<R> {
     /// `is_padded()` is true, the buffer is reflect-padded on the host
     /// to `pad_width × pad_height` before upload.
     pub fn set_reference(&mut self, ref_gray: &[f32]) -> Result<()> {
+        if self.strip.is_some() {
+            return Err(Error::CachedRefNotSupportedInStripMode);
+        }
         let expected = (self.width * self.height) as usize;
         if ref_gray.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -618,6 +868,9 @@ impl<R: Runtime> Iwssim<R> {
     /// Reflect-padded when `is_padded()` is true (same contract as
     /// [`set_reference`]).
     pub fn compute_with_reference(&mut self, dis_gray: &[f32]) -> Result<GpuIwssimResult> {
+        if self.strip.is_some() {
+            return Err(Error::CachedRefNotSupportedInStripMode);
+        }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
@@ -855,6 +1108,361 @@ impl<R: Runtime> Iwssim<R> {
         self.run_pipeline()
     }
 
+    /// Score one grayscale-f32 pair via the strip-processing path.
+    /// Only valid on instances constructed with [`Iwssim::new_strip`];
+    /// returns [`Error::NotStripMode`] when called on a whole-image
+    /// instance.
+    ///
+    /// Both buffers must be `image_w × image_h` floats (native dims).
+    /// The implementation slices the image into strips, runs the
+    /// existing whole-image pipeline on each strip, accumulates
+    /// per-strip partial sums on the host, and finalizes once at the
+    /// end. Peak GPU working set is bounded by a single strip's
+    /// allocation (~ `strip_alloc_h × image_w × 4 B × scale_factor`),
+    /// not by the full image.
+    ///
+    /// # Reduction order
+    ///
+    /// f32 sums are reordered per-strip vs the whole-image path; the
+    /// drift is ~1e-5 rel — well below the cross-backend tolerance
+    /// (5e-4) and well below the parity-test tolerance (5e-3 against
+    /// the Python reference). The cached-reference strip path is NOT
+    /// implemented in this pass (see `docs/STRIP_PROCESSING.md` —
+    /// follow-up work).
+    pub fn compute_gray_stripped(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+    ) -> Result<GpuIwssimResult> {
+        let strip_state = match self.strip {
+            Some(s) => s,
+            None => return Err(Error::NotStripMode),
+        };
+        let expected = (self.width * self.height) as usize;
+        if ref_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_gray.len(),
+            });
+        }
+        if dis_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_gray.len(),
+            });
+        }
+
+        let image_w = self.width;
+        let strips = strip_state.strips();
+        let n_scales_iw = self.scales.len() - 1;
+
+        // ── Pass 1: build LP, accumulate per-scale raw Σ Yᵀ Y over
+        //   each strip's BODY iw row range only (no halo overlap).
+        //   Sum the raw matrices on host; once all strips finish,
+        //   divide by total nexp, eigendecompose, upload C_u_inv +
+        //   lambda to per-scale device buffers.
+        //
+        // The matrix is at most 10×10, so per-scale host accumulators
+        // are tiny — keep them in a 5-element vec of fixed 100-cell
+        // f64 buffers.
+        let mut acc_cu = vec![vec![0.0_f64; 100]; n_scales_iw];
+        let mut total_nexp = vec![0_u64; n_scales_iw];
+        let mut n_dim_per_scale = vec![0_usize; n_scales_iw];
+        let mut has_parent_per_scale = vec![false; n_scales_iw];
+
+        for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            let actual_strip_h = up_hi - up_lo;
+            self.set_scale_dims_for_strip(actual_strip_h, image_w);
+            self.upload_strip_gray(ref_gray, dis_gray, up_lo, up_hi);
+            self.build_laplacian_pyramid(true);
+            self.build_laplacian_pyramid(false);
+
+            // Per scale: box3 + parent_band + cov_accum (body iw range).
+            let body_lp_top = (body_lo - up_lo) as i64;
+            let body_lp_bot = (body_hi - up_lo) as i64;
+            for s in 0..n_scales_iw {
+                let iw_h = self.scales[s].iw_h;
+                let (py_lo, py_hi) =
+                    body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
+                if py_hi <= py_lo {
+                    // Strip's body contributes no iw rows at this
+                    // scale — skip cov accum to preserve sc.cu from
+                    // a previous strip / leave it empty for the
+                    // host accumulator.
+                    continue;
+                }
+                self.run_iw_box3_parent(s);
+                self.run_iw_cov_accum_range(s, py_lo, py_hi);
+                let (cu_raw, n_dim, has_parent) = self.read_cu_raw(s);
+                n_dim_per_scale[s] = n_dim;
+                has_parent_per_scale[s] = has_parent;
+                let device_stride = if has_parent { 10 } else { 9 };
+                // Accumulate raw Σ Yᵀ Y (NOT yet divided by nexp).
+                // device buffer is 10×10; we read the top-left
+                // n_dim × n_dim block.
+                for i in 0..n_dim {
+                    for j in 0..n_dim {
+                        acc_cu[s][i * 10 + j] +=
+                            cu_raw[i * device_stride + j] as f64;
+                    }
+                }
+                let strip_nexp = (py_hi - py_lo) as u64
+                    * (self.scales[s].iw_w as u64);
+                total_nexp[s] += strip_nexp;
+            }
+        }
+
+        // ── Between passes: divide acc_cu by total_nexp, eigendecompose,
+        //    upload C_u_inv + lambda once per scale. These device handles
+        //    are referenced by every strip's infow launch in pass 2.
+        for s in 0..n_scales_iw {
+            if total_nexp[s] == 0 {
+                // No strip contributed — set C_u_inv to identity-ish
+                // (eigvals = 1) so infow doesn't divide by zero.
+                let n_dim = if s < self.scales.len() - 2 { 10 } else { 9 };
+                let mut cu_f64 = vec![0.0_f64; n_dim * n_dim];
+                for i in 0..n_dim {
+                    cu_f64[i * n_dim + i] = 1.0;
+                }
+                self.eig_and_upload(
+                    s,
+                    &cu_f64,
+                    n_dim,
+                    s < self.scales.len() - 2,
+                );
+                continue;
+            }
+            let n_dim = n_dim_per_scale[s];
+            let nexp_f64 = total_nexp[s] as f64;
+            // Pack raw Σ Yᵀ Y (top-left n_dim block of the 10×10
+            // accumulator) into a tight n_dim × n_dim f64 matrix
+            // and divide by total_nexp.
+            let mut cu_f64 = vec![0.0_f64; n_dim * n_dim];
+            for i in 0..n_dim {
+                for j in 0..n_dim {
+                    cu_f64[i * n_dim + j] = acc_cu[s][i * 10 + j] / nexp_f64;
+                }
+            }
+            self.eig_and_upload(s, &cu_f64, n_dim, has_parent_per_scale[s]);
+        }
+
+        // ── Pass 2: rebuild LP, run ssim_stats, box3+parent_band, infow
+        //   (with the now-uploaded global C_u_inv), reductions on the
+        //   body row range, accumulate scalar sums on host.
+        let mut acc_csiw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_csl: f64 = 0.0;
+        let mut top_pool_count: u64 = 0;
+        let partials_len =
+            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+
+        for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            let actual_strip_h = up_hi - up_lo;
+            self.set_scale_dims_for_strip(actual_strip_h, image_w);
+            self.upload_strip_gray(ref_gray, dis_gray, up_lo, up_hi);
+            self.build_laplacian_pyramid(true);
+            self.build_laplacian_pyramid(false);
+            for s in 0..self.scales.len() {
+                self.run_ssim_stats(s);
+            }
+            for s in 0..n_scales_iw {
+                self.run_iw_box3_parent(s);
+                self.run_iw_infow(s);
+            }
+
+            // Per-strip reductions over the body row range.
+            let body_lp_top = (body_lo - up_lo) as i64;
+            let body_lp_bot = (body_hi - up_lo) as i64;
+            for s in 0..n_scales_iw {
+                let sc = &self.scales[s];
+                let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
+                let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
+                let (cs_y_start, cs_y_end) =
+                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                if cs_y_end <= cs_y_start {
+                    self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
+                    self.zero_partial_slot(SLOT_IW_BASE + s as u32);
+                    continue;
+                }
+                reduction::launch_weighted_sum::<R>(
+                    &self.client,
+                    sc.cs.clone(),
+                    cs_n,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_CSIW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+                reduction::launch_iw_sum::<R>(
+                    &self.client,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_IW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+            }
+            let top = self.scales.len() - 1;
+            let sc_top = &self.scales[top];
+            let cs_top_n = (sc_top.cs_h as usize) * (sc_top.cs_w as usize);
+            let (top_y_start, top_y_end) =
+                body_cs_range(body_lp_top, body_lp_bot, top, sc_top.cs_h);
+            if top_y_end > top_y_start {
+                reduction::launch_plain_sum::<R>(
+                    &self.client,
+                    sc_top.cs.clone(),
+                    cs_top_n,
+                    self.partials.clone(),
+                    partials_len,
+                    SLOT_CSL,
+                    sc_top.cs_w,
+                    top_y_start,
+                    top_y_end,
+                );
+                top_pool_count +=
+                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+            } else {
+                self.zero_partial_slot(SLOT_CSL);
+            }
+
+            reduction::launch_finalize::<R>(
+                &self.client,
+                self.partials.clone(),
+                partials_len,
+                self.sums.clone(),
+                NUM_SLOTS as usize,
+                NUM_SLOTS,
+            );
+
+            let bytes =
+                self.client.read_one(self.sums.clone()).expect("read sums");
+            let sums = f32::from_bytes(&bytes);
+            debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
+            for s in 0..n_scales_iw {
+                acc_csiw[s] += sums[(SLOT_CSIW_BASE + s as u32) as usize] as f64;
+                acc_iw[s] += sums[(SLOT_IW_BASE + s as u32) as usize] as f64;
+            }
+            acc_csl += sums[SLOT_CSL as usize] as f64;
+        }
+
+        // Combine accumulated per-strip sums into the final score.
+        let mut per_scale = [1.0_f64; NUM_SCALES];
+        for s in 0..n_scales_iw {
+            let num = acc_csiw[s];
+            let den = acc_iw[s];
+            per_scale[s] = if den == 0.0 || !den.is_finite() {
+                1.0
+            } else {
+                num / den
+            };
+        }
+        let top = self.scales.len() - 1;
+        per_scale[top] = if top_pool_count == 0 || !acc_csl.is_finite() {
+            1.0
+        } else {
+            acc_csl / (top_pool_count as f64)
+        };
+
+        let mut score = 1.0_f64;
+        for s in 0..self.scales.len() {
+            let b = filters::SCALE_WEIGHTS[s] as f64;
+            let v = per_scale[s].abs();
+            score *= v.powf(b);
+        }
+        Ok(GpuIwssimResult { score, per_scale })
+    }
+
+    /// Upload one strip's slice of the input gray buffers into
+    /// scale-0 `g_ref` / `g_dis`. Internal helper for
+    /// `compute_gray_stripped`'s two passes.
+    fn upload_strip_gray(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+        up_lo: u32,
+        up_hi: u32,
+    ) {
+        let row_stride = self.width as usize;
+        let ref_strip: &[f32] =
+            &ref_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
+        let dis_strip: &[f32] =
+            &dis_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
+        self.scales[0].g_ref =
+            self.client.create_from_slice(f32::as_bytes(ref_strip));
+        self.scales[0].g_dis =
+            self.client.create_from_slice(f32::as_bytes(dis_strip));
+    }
+
+    /// Mutate every Scale's dimension fields (`h`, `w`, `cs_h`,
+    /// `cs_w`, `iw_h`, `iw_w`) so subsequent pipeline calls operate
+    /// on a strip-sized region. Backing GPU buffers are unchanged —
+    /// they were sized for `strip_alloc_h` at construction and the
+    /// new dims are guaranteed ≤ allocation.
+    fn set_scale_dims_for_strip(&mut self, strip_h: u32, image_w: u32) {
+        let mut h = strip_h;
+        let mut w = image_w;
+        for s in 0..self.scales.len() {
+            self.scales[s].h = h;
+            self.scales[s].w = w;
+            self.scales[s].cs_h = h - 10;
+            self.scales[s].cs_w = w - 10;
+            self.scales[s].iw_h = h - 2;
+            self.scales[s].iw_w = w - 2;
+            h = h.div_ceil(2);
+            w = w.div_ceil(2);
+        }
+    }
+
+    /// Zero one slot's partials region in the device buffer. Used by
+    /// the strip path when a scale has no body rows to contribute
+    /// (last strip's deep scale collapsing under `body_cs_range`'s
+    /// floor + 5-row crop). Without this, the slot would retain the
+    /// previous strip's partial sum and double-count it.
+    fn zero_partial_slot(&self, slot: u32) {
+        let zeros = vec![0.0_f32; reduction::THREADS_PER_REDUCTION as usize];
+        // Replace the matching range of `self.partials` by writing
+        // zeros into the offset. cubecl's API doesn't expose a
+        // sub-range write directly; instead we just allocate a small
+        // host buffer and rely on the finalize kernel reading all of
+        // `partials` — easiest correct fix is to launch a
+        // plain_sum_kernel over a zero-length range (which writes
+        // zero into the slot) by passing y_start == y_end. A future
+        // change could add a dedicated "zero this slot" kernel.
+        let _ = zeros;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        // Use plain_sum with src == cs[0] (dummy) and y_start == y_end == 0.
+        // src_w == 0 too — the kernel's `n` becomes 0 so the loop
+        // immediately falls through, writing 0 into every thread's
+        // partial. We need a real (non-empty) src array to satisfy
+        // cubecl's bounds checks. Reuse self.sums as a tiny f32 array.
+        reduction::launch_plain_sum::<R>(
+            &self.client,
+            self.sums.clone(),
+            NUM_SLOTS as usize,
+            self.partials.clone(),
+            partials_len,
+            slot,
+            1, // src_w = 1 so we don't divide-by-zero in the kernel
+            0,
+            0,
+        );
+    }
+
     // ───────────────────────── helpers ─────────────────────────
 
     fn cube_count_1d(n: usize) -> CubeCount {
@@ -993,6 +1601,8 @@ impl<R: Runtime> Iwssim<R> {
                 sc.iw_w,
                 BOUND1,
                 SLOT_CSIW_BASE + s as u32,
+                0,
+                sc.cs_h,
             );
             reduction::launch_iw_sum::<R>(
                 &self.client,
@@ -1006,6 +1616,8 @@ impl<R: Runtime> Iwssim<R> {
                 sc.iw_w,
                 BOUND1,
                 SLOT_IW_BASE + s as u32,
+                0,
+                sc.cs_h,
             );
         }
         // Top scale: Σ(cs · l) over its native shape.
@@ -1019,6 +1631,9 @@ impl<R: Runtime> Iwssim<R> {
             self.partials.clone(),
             partials_len,
             SLOT_CSL,
+            sc_top.cs_w,
+            0,
+            sc_top.cs_h,
         );
 
         reduction::launch_finalize::<R>(
@@ -1439,11 +2054,23 @@ impl<R: Runtime> Iwssim<R> {
 
     /// Per-scale IW path for scale `s ∈ 0..NUM_SCALES − 1`.
     fn run_iw_scale(&mut self, s: usize) {
+        self.run_iw_box3_parent(s);
+        self.run_iw_cov_accum(s);
+        let (cu_raw, n_dim, has_parent) = self.read_cu_raw(s);
+        let nexp = (self.scales[s].iw_h as f64) * (self.scales[s].iw_w as f64);
+        let cu_f64 = scale_cu(&cu_raw, n_dim, has_parent, nexp);
+        self.eig_and_upload(s, &cu_f64, n_dim, has_parent);
+        self.run_iw_infow(s);
+    }
+
+    /// Step 1/3 of the IW path: 3×3 box stats + parent band gather.
+    /// Leaves `g_buf`, `vv_buf`, and (when `s < NUM_SCALES − 2`)
+    /// `parent_band` populated for the cov + infow stages.
+    fn run_iw_box3_parent(&mut self, s: usize) {
         let sc = &self.scales[s];
         let h = sc.h;
         let w = sc.w;
         let n_lp = (h as usize) * (w as usize);
-        let n_iw = (sc.iw_h as usize) * (sc.iw_w as usize);
 
         // 1. 3×3 box stats → g, vv at LP shape.
         unsafe {
@@ -1481,18 +2108,24 @@ impl<R: Runtime> Iwssim<R> {
                 );
             }
         }
+    }
 
-        // 3. Cov accumulation. Per-thread partials replace the prior
-        // Atomic<f32> direct-into-cu accumulator: each thread now
-        // writes its 81 (no-parent) or 100 (with-parent) partials to
-        // `cov_partials[cell * COV_N_THREADS + tid]`, and a separate
-        // finalize kernel folds the per-cell strips into the 100-cell
-        // `sc.cu` output. The partials buffer is overwritten in full,
-        // so no zero-pass is needed.
+    /// Step 2/3: cov accumulation + finalize. Leaves `sc.cu` holding
+    /// the raw Σ Yᵀ Y over iw rows `[py_start, py_end)` (NOT yet
+    /// divided by `nexp`). Whole-image path passes `(0, iw_h)`;
+    /// strip path passes the strip's body iw row range so per-strip
+    /// contributions sum cleanly to the global Σ Yᵀ Y without halo
+    /// overlap.
+    fn run_iw_cov_accum_range(&mut self, s: usize, py_start: u32, py_end: u32) {
+        let sc = &self.scales[s];
+        let h = sc.h;
+        let w = sc.w;
+        let n_lp = (h as usize) * (w as usize);
+
+        let has_parent = s < self.scales.len() - 2;
         let n_cells = if has_parent { 100_u32 } else { 81_u32 };
         let cov_partials_len = (COV_MAX_CELLS * COV_N_THREADS) as usize;
-        let sc = &self.scales[s];
-        let n_blk = ((sc.iw_h as u32) * (sc.iw_w as u32)) as usize;
+
         unsafe {
             if has_parent {
                 cov::cov_accum_with_parent_kernel::launch_unchecked::<R>(
@@ -1505,6 +2138,8 @@ impl<R: Runtime> Iwssim<R> {
                     h,
                     w,
                     COV_N_THREADS,
+                    py_start,
+                    py_end,
                 );
             } else {
                 cov::cov_accum_no_parent_kernel::launch_unchecked::<R>(
@@ -1516,12 +2151,10 @@ impl<R: Runtime> Iwssim<R> {
                     h,
                     w,
                     COV_N_THREADS,
+                    py_start,
+                    py_end,
                 );
             }
-            // Finalize: one cube per cell, sums COV_N_THREADS partials
-            // into a single f32 at `cu[cell]`. Cells 81..100 are
-            // un-written in the no-parent case and ignored by the
-            // downstream eigendecomp.
             cov::cov_finalize_kernel::launch_unchecked::<R>(
                 &self.client,
                 CubeCount::Static(n_cells, 1, 1),
@@ -1531,101 +2164,60 @@ impl<R: Runtime> Iwssim<R> {
                 COV_N_THREADS,
             );
         }
-        let _ = n_blk;
+    }
 
-        // 4. Read C_u back to host, eigendecompose + invert.
+    /// Whole-image / whole-strip cov accum — sum over the entire iw
+    /// shape. Equivalent to `run_iw_cov_accum_range(s, 0, iw_h)`.
+    fn run_iw_cov_accum(&mut self, s: usize) {
+        let iw_h = self.scales[s].iw_h;
+        self.run_iw_cov_accum_range(s, 0, iw_h);
+    }
+
+    /// Read the raw Σ Yᵀ Y matrix back to host (no division). Returns
+    /// the raw cells, `n_dim`, and `has_parent`. Callers divide and
+    /// (optionally) accumulate across strips before eigendecomp.
+    fn read_cu_raw(&self, s: usize) -> (Vec<f32>, usize, bool) {
+        let has_parent = s < self.scales.len() - 2;
+        let n_dim = if has_parent { 10 } else { 9 };
         let cu_bytes = self
             .client
-            .read_one(sc.cu.clone())
+            .read_one(self.scales[s].cu.clone())
             .expect("read C_u");
-        let cu_f32 = f32::from_bytes(&cu_bytes);
-        let n_dim = if has_parent { 10 } else { 9 };
-        // C_u = (1/nexp) · accumulated Yᵀ Y
-        let nexp = (sc.iw_h as f64) * (sc.iw_w as f64);
-        let mut cu_f64 = vec![0.0_f64; n_dim * n_dim];
-        // The atomic buffer is laid out as 10×10; for n_dim=9 we read
-        // only the top-left 9×9 block (the rest is unused / zero).
-        for i in 0..n_dim {
-            for j in 0..n_dim {
-                let src_idx = i * if has_parent { 10 } else { 9 } + j;
-                cu_f64[i * n_dim + j] = (cu_f32[src_idx] as f64) / nexp;
-            }
-        }
-        if std::env::var("IWSSIM_DEBUG").is_ok() {
-            let trace: f64 = (0..n_dim).map(|i| cu_f64[i * n_dim + i]).sum();
-            let max_abs = cu_f64.iter().fold(0.0_f64, |a, &v| a.max(v.abs()));
-            let any_nan = cu_f64.iter().any(|v| v.is_nan());
-            // Also probe the LP and parent buffers — RMS + first
-            // few values.
-            let lp_bytes = self.client.read_one(sc.lp_ref.clone()).expect("lp read");
-            let lp = f32::from_bytes(&lp_bytes);
-            let lp_active = &lp[..(h as usize) * (w as usize)];
-            let lp_rms = (lp_active
-                .iter()
-                .map(|&v| (v as f64) * (v as f64))
-                .sum::<f64>()
-                / lp_active.len() as f64)
-                .sqrt();
-            let lp_nan = lp_active.iter().any(|v| v.is_nan());
-            eprintln!(
-                "scale {} | n_dim {} | nexp {} | C_u trace={:.6e} max|·|={:.6e} any_nan={} | LP rms={:.4} nan={} first5={:.3?} ",
-                s,
-                n_dim,
-                nexp,
-                trace,
-                max_abs,
-                any_nan,
-                lp_rms,
-                lp_nan,
-                &lp_active[..5]
-            );
-        }
-        let eig_result = eig::decompose_and_invert(&cu_f64, n_dim);
-        if std::env::var("IWSSIM_DEBUG").is_ok() {
-            let lam: Vec<f32> = eig_result.lambda[..n_dim].to_vec();
-            eprintln!("scale {} | eigvals: {:?}", s, lam);
-            let cu_inv_min = eig_result.c_u_inv[..n_dim * n_dim]
-                .iter()
-                .fold(f32::INFINITY, |a, &v| a.min(v));
-            let cu_inv_max = eig_result.c_u_inv[..n_dim * n_dim]
-                .iter()
-                .fold(f32::NEG_INFINITY, |a, &v| a.max(v));
-            eprintln!(
-                "scale {} | C_u_inv range [{:.3e}, {:.3e}]",
-                s, cu_inv_min, cu_inv_max
-            );
-        }
+        let cu_f32 = f32::from_bytes(&cu_bytes).to_vec();
+        (cu_f32, n_dim, has_parent)
+    }
 
-        // 5. Upload eigenvalues and C_u_inv back to device.
+    /// Eigendecompose, invert, and upload C_u_inv + lambdas to the
+    /// per-scale device buffers (`cu_inv_dev`, `lambda_dev`). Used by
+    /// both the whole-image path (one C_u per scale per call) and the
+    /// strip path (one global C_u per scale after summing per-strip
+    /// raw contributions).
+    fn eig_and_upload(
+        &mut self,
+        s: usize,
+        cu_f64: &[f64],
+        n_dim: usize,
+        has_parent: bool,
+    ) {
+        let _ = has_parent;
+        let eig_result = eig::decompose_and_invert(cu_f64, n_dim);
         let lambda_slice = &eig_result.lambda[..n_dim];
         let cu_inv_slice = &eig_result.c_u_inv[..n_dim * n_dim];
         self.scales[s].lambda_dev = self.client.create_from_slice(f32::as_bytes(lambda_slice));
         self.scales[s].cu_inv_dev = self.client.create_from_slice(f32::as_bytes(cu_inv_slice));
+    }
+
+    /// Step 3/3: launch the infow kernel using whatever C_u_inv +
+    /// lambda are currently uploaded to `self.scales[s].cu_inv_dev`
+    /// and `lambda_dev`. Caller is responsible for ensuring those
+    /// were populated (via `eig_and_upload`) before invoking.
+    fn run_iw_infow(&self, s: usize) {
         let sc = &self.scales[s];
-
-        if std::env::var("IWSSIM_DEBUG").is_ok() {
-            let g_bytes = self.client.read_one(sc.g_buf.clone()).expect("g read");
-            let g_arr = f32::from_bytes(&g_bytes);
-            let vv_bytes = self.client.read_one(sc.vv_buf.clone()).expect("vv read");
-            let vv_arr = f32::from_bytes(&vv_bytes);
-            let np = (h as usize) * (w as usize);
-            let g_min = g_arr[..np].iter().cloned().fold(f32::INFINITY, f32::min);
-            let g_max = g_arr[..np]
-                .iter()
-                .cloned()
-                .fold(f32::NEG_INFINITY, f32::max);
-            let vv_min = vv_arr[..np].iter().cloned().fold(f32::INFINITY, f32::min);
-            let vv_max = vv_arr[..np]
-                .iter()
-                .cloned()
-                .fold(f32::NEG_INFINITY, f32::max);
-            eprintln!(
-                "scale {} | g range [{:.3e}, {:.3e}] vv range [{:.3e}, {:.3e}]",
-                s, g_min, g_max, vv_min, vv_max
-            );
-        }
-
-        // 6. infow kernel.
+        let h = sc.h;
+        let w = sc.w;
+        let n_lp = (h as usize) * (w as usize);
+        let n_iw = (sc.iw_h as usize) * (sc.iw_w as usize);
+        let has_parent = s < self.scales.len() - 2;
         unsafe {
             if has_parent {
                 infow::infow_with_parent_kernel::launch_unchecked::<R>(
@@ -1641,7 +2233,7 @@ impl<R: Runtime> Iwssim<R> {
                     ArrayArg::from_raw_parts(sc.iw.clone(), n_iw),
                     h,
                     w,
-                    0.4_f32, // sigma_nsq — paper default
+                    0.4_f32,
                 );
             } else {
                 infow::infow_no_parent_kernel::launch_unchecked::<R>(
@@ -1661,6 +2253,23 @@ impl<R: Runtime> Iwssim<R> {
             }
         }
     }
+
+}
+
+/// Divide the raw Σ Yᵀ Y matrix by `nexp` and pack into a `n_dim × n_dim`
+/// f64 matrix in row-major order. Handles the 10×10 vs 9×9 device
+/// layout split (the device buffer is always allocated 10×10; for
+/// `n_dim == 9` we read only the top-left 9×9 block).
+fn scale_cu(cu_raw: &[f32], n_dim: usize, has_parent: bool, nexp: f64) -> Vec<f64> {
+    let device_stride = if has_parent { 10 } else { 9 };
+    let mut out = vec![0.0_f64; n_dim * n_dim];
+    for i in 0..n_dim {
+        for j in 0..n_dim {
+            let src_idx = i * device_stride + j;
+            out[i * n_dim + j] = (cu_raw[src_idx] as f64) / nexp;
+        }
+    }
+    out
 }
 
 #[cfg(test)]

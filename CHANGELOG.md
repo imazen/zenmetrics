@@ -17,6 +17,67 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### iwssim-gpu — strip-processing path for `Iwssim::new_strip` + `compute_gray_stripped` — 2026-05-22
+
+Adds a memory-bounded strip-processing path to `iwssim-gpu` so production
+sweep workers can run IW-SSIM at 24 MP without OOMing. The whole-image
+constructor (`Iwssim::new`) pre-allocates ~2.43 GB of GPU working planes
+at 24 MP (6000×4000 × 19 planes × 5 scales × 4 bytes); strip mode bounds
+the working set to a single strip's allocation.
+
+- `Iwssim::new_strip(client, image_w, image_h, h_body)` — allocate the
+  pipeline for `h_body + 2 * STRIP_DEFAULT_HALO` rows per strip.
+- `Iwssim::new_strip_with_halo(...)` — custom halo for smaller images.
+- `Iwssim::compute_gray_stripped(ref, dis)` — two-pass driver. Pass 1
+  builds LPs and accumulates per-strip Σ YᵀY into a host-side per-scale
+  C_u matrix (then eigendecomposes ONCE globally); Pass 2 rebuilds LPs
+  and scores with the global C_u uploaded. Two passes are needed
+  because the C_u matrix is image-global per scale.
+- `Error::CachedRefNotSupportedInStripMode` / `Error::NotStripMode` —
+  typed error variants for "wrong mode" calls; previously
+  `set_reference` on a strip-mode instance would silently produce
+  wrong scores by uploading the full image into a strip-sized plane.
+- Per-kernel body-range params (`py_start/py_end` on `cov_accum`,
+  `cs_y_start/cs_y_end` on `weighted_sum`/`iw_sum`/`plain_sum`) so
+  reductions exclude halo rows.
+
+Memory tally at 1/4/12/24 MP (per-pipeline GPU working set, strip
+body=1024 vs whole-image): 1MP 115→172 MB (strip overhead at 1MP since
+the strip alloc is bigger than the image), 4MP 459→344 MB (1.33×),
+12MP 1311→671 MB (1.95×), 24MP 2622→1007 MB (2.60×) — matches the
+design budget in `crates/iwssim-gpu/docs/STRIP_PROCESSING.md`.
+
+Heaptrack peaks at 12MP (host RSS): whole 1.93 GB / strip 1.20 GB
+(1.61× reduction).
+
+Wall time on RTX 5070 (CUDA, 8 iters, min): 1MP whole 5.6 / strip 9.0 ms,
+4MP whole 14.9 / strip 34.3 ms, 12MP whole 86.2 / strip 106.5 ms,
+24MP whole SKIP_OOM / strip 498.1 ms. Strip is slower per pair because
+every strip rebuilds the LP pyramid for both ref and dis; the
+OOM-avoidance and 1.61-2.6× memory reduction justify the cost on
+production workers. The cached-reference strip path is deferred
+follow-up work (see `Error::CachedRefNotSupportedInStripMode`).
+
+f32 precision: strip-vs-whole rel drift is ~5e-4 at 1024² multi-strip
+(the cov_accum's Σ over ~1M products + eigendecomp + Π|wmcs|^β
+amplification puts this just at the f32 floor). The parity-lock test
+against the Python reference runs at 5e-3 tolerance — strip drift
+sits comfortably inside that band.
+
+Tests: 20 strip-parity tests covering single-strip degenerate (256²),
+multi-strip whole-vs-strip at 512² / 768² / 1024² / 1024×768 / body=512,
+uneven last strip (640² / 896² with body=256), cross-tile-size parity
+(body=256 vs body=512 at 1024² within 1.5e-3 rel), self-identity
+(equal ref/dis → 1.0), constructor validation, and dedicated negative
+tests for the new typed errors on every wrong-mode call shape. All
+20 pass on CUDA + WGPU.
+
+New bench example: `bench_strip_vs_whole` (`benchmarks/iwssim_strip_vs_whole_2026-05-22.csv`).
+New memory-tally example: `strip_memory_tally`. New heaptrack driver:
+`heaptrack_strip_12mp`.
+
+Design doc: `crates/iwssim-gpu/docs/STRIP_PROCESSING.md`.
+
 ### dssim-gpu — strip processing + compute_post_srgb dual-pyramid fix — 2026-05-22
 
 - `Dssim::new_strip(client, image_w, image_h, h_body)` constructor +
