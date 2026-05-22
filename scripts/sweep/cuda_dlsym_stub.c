@@ -127,7 +127,24 @@ void *dlsym(void *handle, const char *symbol) {
         return (void *)cu_coredump_callback_noop;
     }
 
-    /* Path 4: non-cu symbols genuinely missing — return NULL (real
-     * dlsym semantics) so glibc / other libs see the failure. */
+    /* Path 3b: nvrtc* fallback. Same panic pattern, different prefix.
+     * cudarc 0.19.4 also dlsyms nvrtc symbols (NVRTC JIT compiler);
+     * nvrtcGetTileIR is one example — added in nvrtc 12.5, missing
+     * on older 12.x runtimes. 2026-05-21 smoke on v26 hit this
+     * panic against a driver-570.195 vast.ai box where the bundled
+     * libnvrtc.so.12 still lacked the symbol. cuda-nvrtc-12-6 has
+     * it, but vast.ai's nvidia-container-toolkit can mount the host
+     * libnvrtc which may be older. Stubbing to a no-op is safe
+     * because cubecl-cuda only calls nvrtc* via the documented
+     * nvrtcCompileProgram path; the new TileIR / SASS feature flags
+     * are never invoked here. */
+    if (strncmp(symbol, "nvrtc", 5) == 0 &&
+        symbol[5] >= 'A' && symbol[5] <= 'Z') {
+        return (void *)cu_coredump_callback_noop;
+    }
+
+    /* Path 4: non-cu, non-nvrtc symbols genuinely missing — return
+     * NULL (real dlsym semantics) so glibc / other libs see the
+     * failure. */
     return NULL;
 }
