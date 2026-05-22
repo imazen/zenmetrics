@@ -112,6 +112,10 @@ required-features = ["cubecl-types"]
 name = "bench_strip_vs_whole_cuda"
 required-features = ["cubecl-types", "cuda"]
 
+[[example]]
+name = "w44_recon_a7_timing"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "reduction_parity"
 required-features = ["cubecl-types"]
