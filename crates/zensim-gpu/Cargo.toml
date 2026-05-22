@@ -11,7 +11,7 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels", "acumen"]
+default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
 cuda = ["cubecl/cuda"]
 wgpu = ["cubecl/wgpu"]
 hip  = ["cubecl/hip"]
@@ -27,14 +27,6 @@ cubecl-types = []
 # for the per-feature scalar fold; the f64 sum precision is preserved
 # by host-side promotion on read-back.
 fast-reduction = []
-# castleCSF acumen Mode A / Mode B / Mode B-per-band support.
-# Pulls in zensim's `acumen` feature for the LUT loader. Without
-# this feature the AcumenArch enum still exists (as `non_exhaustive`)
-# but all variants except `HfPost` panic if selected at runtime,
-# and ZensimParams::with_acumen_mode_a / with_acumen_arch produce
-# no-ops. ~132 KB castleCSF LUT + ~600 lines of host-side
-# preprocessing land only with this feature on.
-acumen = ["zensim/acumen"]
 
 [dependencies]
 cubecl = { workspace = true }

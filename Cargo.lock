@@ -6453,6 +6453,7 @@ dependencies = [
  "cubecl",
  "image",
  "parquet",
+ "rayon",
  "zenmetrics-corpus",
  "zenpixels",
  "zenpixels-convert",

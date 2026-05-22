@@ -220,41 +220,6 @@ pub struct Zensim<R: Runtime> {
 
     has_cached_reference: bool,
 
-    /// Cached acumen Mode A weights: `[channel][scale] -> f32 castleCSF
-    /// sensitivity`. Computed inside [`Zensim::set_reference`] when
-    /// the caller-supplied viewing condition is set via
-    /// [`Zensim::set_acumen_viewing`]. Phase 4 multiplies the HF band-
-    /// energy features (basic slots 10–12) by the matching scalar
-    /// when this field is `Some`. `None` => bit-stable V_22 path.
-    acumen_band_weights: Option<[[f32; SCALES]; 3]>,
-
-    /// Sticky viewing condition for [`Self::acumen_band_weights`]. When
-    /// `Some`, the next [`Self::set_reference`] call computes new
-    /// per-image weights using this viewing.
-    acumen_viewing: Option<zensim::acumen::viewing::ViewingCondition>,
-
-    /// Acumen application strategy — see [`crate::AcumenArch`].
-    /// Default `HfPost` matches the original Mode A wiring.
-    acumen_arch: crate::opaque::AcumenArch,
-
-    /// Loaded once per process for acumen Mode A lookups. `None` until
-    /// the first time the caller enables Mode A via
-    /// [`Zensim::set_acumen_viewing`].
-    acumen_lut_bytes: &'static [u8],
-
-    /// For `AcumenArch::ModeBPerBand`: 12 cached per-pixel weight
-    /// maps (3 channels × `SCALES` scales), each a GPU buffer of
-    /// `padded_w[s] * h[s]` f32 weights. Computed in `set_reference`
-    /// from the reference image's local-adapted luminance; reused
-    /// across all distortion-pair calls until the next
-    /// `set_reference`. `None` when arch != ModeBPerBand or no
-    /// reference has been set yet.
-    ///
-    /// Layout: `acumen_per_pixel_weights[ch][scale]`. The `ch=0`
-    /// (achromatic), `ch=1` (RG), `ch=2` (YV) ordering matches
-    /// `acumen_band_weights`.
-    acumen_per_pixel_weights: Option<[[cubecl::server::Handle; SCALES]; 3]>,
-
     // ───────── Extended / WithIw regime support ─────────
     regime: ZensimFeatureRegime,
     /// Per-scale per-channel mu1/mu2/ssq/s12 persist planes — laid out
@@ -456,11 +421,6 @@ impl<R: Runtime> Zensim<R> {
             finals_f64,
             finals_max,
             has_cached_reference: false,
-            acumen_band_weights: None,
-            acumen_viewing: None,
-            acumen_arch: crate::opaque::AcumenArch::default(),
-            acumen_lut_bytes: include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut"),
-            acumen_per_pixel_weights: None,
             regime,
             persist_planes_ref,
             persist_planes_dis,
@@ -554,121 +514,13 @@ impl<R: Runtime> Zensim<R> {
     }
 
     /// Cache the reference pyramid; subsequent
-    /// [`Zensim::compute_with_reference`] calls reuse it. When an
-    /// acumen viewing condition has been configured via
-    /// [`Self::set_acumen_viewing`], this call also recomputes the
-    /// per-image castleCSF band weights from the reference's mean
-    /// luminance.
+    /// [`Zensim::compute_with_reference`] calls reuse it.
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_dims(ref_srgb)?;
-        // Recompute acumen band weights from the reference image if
-        // mode A is enabled. Cheap (a single mean-luma pass + 12 LUT
-        // lookups, ~µs at 1080p).
-        if let Some(viewing) = self.acumen_viewing {
-            self.acumen_band_weights =
-                Some(Self::compute_acumen_weights(self.acumen_lut_bytes, viewing, ref_srgb));
-        }
-        // ModeBPerBand: compute per-pixel weight maps for the
-        // reference's adapted luminance, upload to GPU. Cached
-        // across all subsequent (ref, dist) calls for this ref.
-        if let Some(viewing) = self.acumen_viewing {
-            if matches!(self.acumen_arch, crate::opaque::AcumenArch::ModeBPerBand) {
-                self.acumen_per_pixel_weights =
-                    Some(self.compute_per_pixel_weight_maps(viewing, ref_srgb));
-            } else {
-                self.acumen_per_pixel_weights = None;
-            }
-        } else {
-            self.acumen_per_pixel_weights = None;
-        }
         self.upload_u8(true, ref_srgb);
         self.run_xyb_pyramid(true);
-        // Apply per-pixel weights to the cached reference pyramid.
-        // One-shot for the reference — distortion gets weighted
-        // per-call in compute_with_reference_vec.
-        if matches!(self.acumen_arch, crate::opaque::AcumenArch::ModeBPerBand)
-            && self.acumen_per_pixel_weights.is_some()
-        {
-            self.launch_apply_acumen_weights(true);
-        }
         self.has_cached_reference = true;
         Ok(())
-    }
-
-    /// Configure acumen application strategy. See
-    /// [`crate::AcumenArch`] for variants. Default `HfPost` matches
-    /// the original Mode A wiring (scale slots 10/11/12).
-    pub fn set_acumen_arch(&mut self, arch: crate::opaque::AcumenArch) {
-        self.acumen_arch = arch;
-    }
-
-    /// Flattened cached per-(channel, scale) castleCSF weights, in
-    /// `[channel * SCALES + scale]` order. Returns `None` when
-    /// acumen is disabled or no reference has been set.
-    pub fn acumen_band_weights_flat(&self) -> Option<[f32; 12]> {
-        let w = self.acumen_band_weights.as_ref()?;
-        let mut out = [0.0_f32; 12];
-        for ch in 0..3 {
-            for s in 0..SCALES {
-                out[ch * SCALES + s] = w[ch][s];
-            }
-        }
-        Some(out)
-    }
-
-    /// Configure acumen Mode A: subsequent [`Self::set_reference`]
-    /// calls will compute per-image castleCSF weights at this viewing
-    /// condition and Phase 4 will apply them to the HF band-energy
-    /// features. Pass `None` to disable and return to the legacy
-    /// V_22-shipped path.
-    pub fn set_acumen_viewing(
-        &mut self,
-        viewing: Option<zensim::acumen::viewing::ViewingCondition>,
-    ) {
-        self.acumen_viewing = viewing;
-        if viewing.is_none() {
-            self.acumen_band_weights = None;
-        } else {
-            // If a reference is already cached, recompute weights now
-            // so the next compute_with_reference call sees them.
-            self.acumen_band_weights = None;
-            // Caller is expected to re-call set_reference() after
-            // enabling acumen so we have ref bytes to compute mean L
-            // from. Document this in the rustdoc above.
-        }
-    }
-
-    /// Compute the per-(channel, scale) castleCSF weights for a given
-    /// reference image and viewing condition. Returns weights
-    /// normalised so the achromatic peak is 1.0 — keeps absolute
-    /// scale on the same order as the legacy `CSF_BAND_WEIGHTS`
-    /// prior so downstream MLPs trained with the legacy weights
-    /// don't see scale shock on the first eval pass.
-    ///
-    /// Layout: `[channel][scale]` where channel 0=A, 1=RG, 2=YV and
-    /// scale 0=finest (highest rho), N-1=coarsest (lowest rho).
-    fn compute_acumen_weights(
-        lut_bytes: &[u8],
-        viewing: zensim::acumen::viewing::ViewingCondition,
-        ref_srgb: &[u8],
-    ) -> [[f32; SCALES]; 3] {
-        let lut = zensim::acumen::castle_csf::CastleCsfLut::from_bytes(lut_bytes)
-            .expect("vendored castleCSF LUT must parse");
-        let mean_l = zensim::acumen::band_weights::image_mean_luminance_nits(
-            ref_srgb,
-            viewing.peak_luminance_nits,
-        );
-        let bw = zensim::acumen::band_weights::compute_csf_band_weights(&lut, viewing, mean_l)
-            .normalized_to_achromatic_peak();
-        // Project to [channel][scale] — N_BANDS matches SCALES per
-        // the band-rho convention. Both are 4 by design.
-        let mut out = [[0.0_f32; SCALES]; 3];
-        for ch in 0..3 {
-            for s in 0..SCALES {
-                out[ch][s] = bw.weights[ch][s];
-            }
-        }
-        out
     }
 
     pub fn clear_reference(&mut self) {
@@ -699,15 +551,6 @@ impl<R: Runtime> Zensim<R> {
         self.check_dims(dist_srgb)?;
         self.upload_u8(false, dist_srgb);
         self.run_xyb_pyramid(false);
-        // ModeBPerBand: apply the reference's adapted-L weight maps
-        // to the distortion pyramid too. CastleCSF Mode B uses the
-        // viewer's adaptation map for BOTH ref and dist (shared
-        // adaptation per scene); this matches the paper.
-        if matches!(self.acumen_arch, crate::opaque::AcumenArch::ModeBPerBand)
-            && self.acumen_per_pixel_weights.is_some()
-        {
-            self.launch_apply_acumen_weights(false);
-        }
 
         let n_scales = self.scales.len();
         let needs_ext = self.regime.needs_extended_kernel();
@@ -810,69 +653,14 @@ impl<R: Runtime> Zensim<R> {
                 out[bb + 7] = (sums[7] * inv_n).max(0.0).powf(0.25);
                 out[bb + 8] = (sums[8] * inv_n).max(0.0).sqrt();
                 out[bb + 9] = sums[9] * inv_n;
-                // Acumen Mode A application dispatched on
-                // `acumen_arch`. `HfPost` (default) multiplies only
-                // slots 10/11/12 (HF band-energy stats — the
-                // closest analog to CVVDP-features' band-ratios).
-                // `WideModulation` multiplies ALL 13 basic slots
-                // 0..12 by the same weight to test "wider
-                // application". `AuxFeatures` is a no-op here;
-                // the caller fetches the 12 weights via
-                // `Zensim::acumen_band_weights_flat()` and appends
-                // them as auxiliary feature columns. When acumen
-                // is disabled, the multiplier is 1.0 and the
-                // V_22-shipped path is bit-stable.
-                use crate::opaque::AcumenArch;
-                let acumen_w = self
-                    .acumen_band_weights
-                    .as_ref()
-                    .map(|w| w[ch][s] as f64)
-                    .unwrap_or(1.0);
-                match self.acumen_arch {
-                    AcumenArch::HfPost => {
-                        out[bb + 10] = hf_energy_loss * acumen_w;
-                        out[bb + 11] = hf_mag_loss * acumen_w;
-                        out[bb + 12] = hf_energy_gain * acumen_w;
-                    }
-                    AcumenArch::WideModulation => {
-                        for slot in 0..=12 {
-                            out[bb + slot] *= acumen_w;
-                        }
-                    }
-                    AcumenArch::AuxFeatures => {
-                        // Leave HF features unmodified — the caller
-                        // appends `acumen_band_weights_flat()` to
-                        // its training/inference vector. We still
-                        // store the raw `hf_*` values below; they
-                        // get written verbatim like in
-                        // the baseline (no-acumen) path.
-                        out[bb + 10] = hf_energy_loss;
-                        out[bb + 11] = hf_mag_loss;
-                        out[bb + 12] = hf_energy_gain;
-                    }
-                    AcumenArch::ModeB => {
-                        // Mode B applies CSF weighting OUTSIDE this
-                        // post-pool stage — the caller pre-multiplies
-                        // the input RGB by per-pixel achromatic CSF.
-                        // From Phase 4's perspective the features
-                        // come in already spatially-weighted; emit
-                        // the raw HF stats verbatim (no additional
-                        // post-multiply).
-                        out[bb + 10] = hf_energy_loss;
-                        out[bb + 11] = hf_mag_loss;
-                        out[bb + 12] = hf_energy_gain;
-                    }
-                    AcumenArch::ModeBPerBand => {
-                        // Per-band Mode B applied INSIDE the pyramid
-                        // via elementwise multiply kernel — by the
-                        // time Phase 4 runs, the band statistics
-                        // already encode per-pixel CSF weighting.
-                        // Emit raw verbatim.
-                        out[bb + 10] = hf_energy_loss;
-                        out[bb + 11] = hf_mag_loss;
-                        out[bb + 12] = hf_energy_gain;
-                    }
-                }
+                // HF band-energy slots (10/11/12). Emit raw —
+                // the abandoned acumen exploration used to multiply
+                // these by per-(scale, channel) castleCSF weights;
+                // that path is gone (NOT helpful at production scale,
+                // see `abandoned/feat-acumen-gpu`).
+                out[bb + 10] = hf_energy_loss;
+                out[bb + 11] = hf_mag_loss;
+                out[bb + 12] = hf_energy_gain;
 
                 // Peaks block.
                 let pb = basic_total
@@ -1039,134 +827,6 @@ impl<R: Runtime> Zensim<R> {
     /// One launch per scale (was 2 with the separate H-blur path).
     /// Eliminates the 12 H-blur scratch planes from DRAM — H-blur
     /// outputs live in shared memory across the V-blur slide.
-    /// Host-side: compute 12 per-pixel weight maps for the reference
-    /// image (3 channels × `SCALES` scales). Each map is a
-    /// `padded_w[s] * h[s]` f32 array uploaded to the GPU. Used by
-    /// `AcumenArch::ModeBPerBand` to apply per-band per-pixel CSF
-    /// weights inside the pyramid before the features kernel.
-    fn compute_per_pixel_weight_maps(
-        &self,
-        viewing: zensim::acumen::viewing::ViewingCondition,
-        ref_srgb: &[u8],
-    ) -> [[cubecl::server::Handle; SCALES]; 3] {
-        use zensim::acumen::castle_csf::{CastleCsfLut, Channel};
-        let lut = CastleCsfLut::from_bytes(self.acumen_lut_bytes)
-            .expect("vendored castleCSF LUT must parse");
-        let w = self.width as usize;
-        let h = self.height as usize;
-        let n = w * h;
-
-        // Step 1: per-pixel linear luminance from sRGB (BT.709 luma).
-        let mut lum = vec![0.0_f32; n];
-        for i in 0..n {
-            let r = srgb_u8_to_linear(ref_srgb[3 * i]);
-            let g = srgb_u8_to_linear(ref_srgb[3 * i + 1]);
-            let b = srgb_u8_to_linear(ref_srgb[3 * i + 2]);
-            lum[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        }
-
-        // Step 2: Gaussian-approx blur (sliding-window box blur, 3-pass).
-        // Sigma=8 px at full resolution ≈ 1° at ppd=56.
-        let blurred = box_blur_3pass(&lum, w, h, 8);
-
-        // Step 3: full-resolution L → photometric nits via
-        // viewing.adapted_luminance_nits.
-        let peak_nits = viewing.peak_luminance_nits;
-        let mut l_nits = vec![0.0_f32; n];
-        let mut mean_l_nits = 0.0_f64;
-        for i in 0..n {
-            let v = (blurred[i] * peak_nits).max(1e-3);
-            l_nits[i] = viewing.adapted_luminance_nits(v).max(1e-3);
-            mean_l_nits += l_nits[i] as f64;
-        }
-        mean_l_nits /= n as f64;
-
-        // Channel ordering: positive-XYB indices 0=A, 1=RG, 2=YV.
-        // Map to castleCSF channels.
-        let channels = [Channel::Achromatic, Channel::RedGreen, Channel::YellowViolet];
-
-        // Allocate result handles, [ch][scale].
-        let mut handles: [[Option<cubecl::server::Handle>; SCALES]; 3] = Default::default();
-
-        for s_idx in 0..SCALES {
-            let s = &self.scales[s_idx];
-            let sw = s.padded_w as usize;
-            let sh = s.h as usize;
-            // Downsample L map to scale resolution by power-of-2
-            // box-averaging. Scale 0 is full-res; scale 1 is /2; etc.
-            let factor = 1usize << s_idx;
-            let l_scaled = downsample_box(&l_nits, w, h, sw, sh, factor);
-
-            // Spatial frequency rho at this scale: each scale halves
-            // resolution → halves rho. Band 0 (finest) = ppd / 2,
-            // band 1 = ppd / 4, etc.
-            let rho = viewing.ppd / (2u32.pow(s_idx as u32 + 1) as f32);
-            let log_rho = rho.log10();
-            let log_mean_l = (mean_l_nits as f32).log10();
-
-            for ch_idx in 0..3 {
-                let ch = channels[ch_idx];
-                let csf_at_mean = lut.sensitivity(log_rho, log_mean_l, ch);
-                let mut weights = vec![0.0_f32; sw * sh];
-                for i in 0..(sw * sh) {
-                    let l_here = l_scaled[i].max(1e-3);
-                    let csf_here = lut.sensitivity(log_rho, l_here.log10(), ch);
-                    // Normalize to ~1.0 at image-mean L, clamp for
-                    // numerical safety.
-                    weights[i] = (csf_here / csf_at_mean).clamp(0.05, 8.0);
-                }
-                handles[ch_idx][s_idx] = Some(
-                    self.client.create_from_slice(f32::as_bytes(&weights)),
-                );
-            }
-        }
-
-        // Unwrap into the [[Handle; SCALES]; 3] return.
-        let mut out: [[std::mem::MaybeUninit<cubecl::server::Handle>; SCALES]; 3] = unsafe {
-            std::mem::MaybeUninit::uninit().assume_init()
-        };
-        for ch in 0..3 {
-            for s in 0..SCALES {
-                out[ch][s].write(handles[ch][s].take().unwrap());
-            }
-        }
-        unsafe { std::mem::transmute_copy(&out) }
-    }
-
-    /// Launch the elementwise weight-application kernel for each
-    /// (scale, channel) on either the reference (`is_a == true`)
-    /// or distortion (`is_a == false`) side of the cached pyramid.
-    fn launch_apply_acumen_weights(&self, is_a: bool) {
-        use cubecl::server::Handle;
-        let weights = self
-            .acumen_per_pixel_weights
-            .as_ref()
-            .expect("ModeBPerBand weight maps must be set first");
-        for s_idx in 0..self.scales.len() {
-            let s = &self.scales[s_idx];
-            let n_elements = (s.padded_w * s.h) as u32;
-            let cube_count = CubeCount::Static(n_elements.div_ceil(256), 1, 1);
-            let cube_dim = CubeDim::new_1d(256);
-            for ch in 0..3 {
-                let src_handle: Handle = if is_a {
-                    s.ref_xyb[ch].clone()
-                } else {
-                    s.dis_xyb[ch].clone()
-                };
-                unsafe {
-                    crate::kernels::acumen_weight::apply_weight_kernel::launch_unchecked::<R>(
-                        &self.client,
-                        cube_count.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(src_handle, n_elements as usize),
-                        ArrayArg::from_raw_parts(weights[ch][s_idx].clone(), n_elements as usize),
-                        n_elements,
-                    );
-                }
-            }
-        }
-    }
-
     fn launch_blur_and_features(&self, scale: usize) {
         // Keep in sync with `kernels::fused::TX`.
         const TX: u32 = 64;
@@ -1411,117 +1071,3 @@ impl<R: Runtime> Zensim<R> {
     }
 }
 
-// ============================================================================
-// ModeBPerBand host-side helpers — luminance, blur, downsample.
-// ============================================================================
-
-#[inline]
-fn srgb_u8_to_linear(v: u8) -> f32 {
-    let u = v as f32 / 255.0;
-    if u <= 0.040_45 {
-        u / 12.92
-    } else {
-        ((u + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-/// 3-pass sliding-window box blur (≈ Gaussian σ). Separable, O(W·H)
-/// per pass = O(6·W·H) total.
-fn box_blur_3pass(input: &[f32], w: usize, h: usize, sigma: usize) -> Vec<f32> {
-    let r = sigma;
-    let mut buf = input.to_vec();
-    let mut tmp = vec![0.0_f32; input.len()];
-    for _ in 0..3 {
-        box_blur_h(&buf, &mut tmp, w, h, r);
-        std::mem::swap(&mut buf, &mut tmp);
-        box_blur_v(&buf, &mut tmp, w, h, r);
-        std::mem::swap(&mut buf, &mut tmp);
-    }
-    buf
-}
-
-fn box_blur_h(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
-    for y in 0..h {
-        let row = y * w;
-        let mut sum: f32 = 0.0;
-        let init_hi = (r + 1).min(w);
-        for x in 0..init_hi {
-            sum += src[row + x];
-        }
-        let mut count = init_hi;
-        for x in 0..w {
-            dst[row + x] = sum / count as f32;
-            let add_x = x + r + 1;
-            if add_x < w {
-                sum += src[row + add_x];
-                count += 1;
-            }
-            if x >= r {
-                sum -= src[row + x - r];
-                count -= 1;
-            }
-        }
-    }
-}
-
-fn box_blur_v(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
-    for x in 0..w {
-        let mut sum: f32 = 0.0;
-        let init_hi = (r + 1).min(h);
-        for y in 0..init_hi {
-            sum += src[y * w + x];
-        }
-        let mut count = init_hi;
-        for y in 0..h {
-            dst[y * w + x] = sum / count as f32;
-            let add_y = y + r + 1;
-            if add_y < h {
-                sum += src[add_y * w + x];
-                count += 1;
-            }
-            if y >= r {
-                sum -= src[(y - r) * w + x];
-                count -= 1;
-            }
-        }
-    }
-}
-
-/// Power-of-2 box downsample a 2D map. `factor` = ratio between
-/// source and target. If the target dims are slightly larger than
-/// `(src_w / factor) × (src_h / factor)` (because the pyramid pads
-/// to align to SIMD width), the extra columns mirror the rightmost
-/// real column — matches the pyramid's edge handling.
-fn downsample_box(
-    src: &[f32],
-    src_w: usize,
-    src_h: usize,
-    dst_w: usize,
-    dst_h: usize,
-    factor: usize,
-) -> Vec<f32> {
-    let mut out = vec![0.0_f32; dst_w * dst_h];
-    let logical_dst_w = (src_w + factor - 1) / factor;
-    let logical_dst_h = (src_h + factor - 1) / factor;
-    for oy in 0..dst_h {
-        let oy_clamped = oy.min(logical_dst_h.saturating_sub(1));
-        let sy0 = oy_clamped * factor;
-        for ox in 0..dst_w {
-            let ox_clamped = ox.min(logical_dst_w.saturating_sub(1));
-            let sx0 = ox_clamped * factor;
-            // Average factor×factor block, mirror-clamp at edges.
-            let mut acc = 0.0_f32;
-            let mut n = 0u32;
-            for dy in 0..factor {
-                let yy = (sy0 + dy).min(src_h - 1);
-                for dx in 0..factor {
-                    let xx = (sx0 + dx).min(src_w - 1);
-                    acc += src[yy * src_w + xx];
-                    n += 1;
-                }
-            }
-            out[oy * dst_w + ox] = acc / n as f32;
-        }
-    }
-    out
-}

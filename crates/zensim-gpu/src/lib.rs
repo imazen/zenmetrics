@@ -77,15 +77,14 @@ pub mod weights;
 pub use weights::WEIGHTS_PREVIEW_V0_2;
 
 // Uniform opaque API (Phase 2). See `opaque.rs`.
-pub use opaque::{AcumenArch, Backend, Score, ZensimOpaque, ZensimParams};
+pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
 
-// Re-export the acumen ViewingCondition so `zen-metrics-cli` can
-// construct one without a direct `zensim` dep. Doc-hidden mirrors
-// the upstream's `#[doc(hidden)]` on the module. Only present when
-// the `acumen` feature is on; see `imazen/zensim#40`.
-#[cfg(feature = "acumen")]
+// Re-export the HDR/PU ViewingCondition from upstream zensim so
+// callers can construct one without a direct zensim dep.
+// `acumen` exploration was abandoned 2026-05-22 — only this lightweight
+// display-parameters struct survives. See abandoned/feat-acumen-gpu.
 #[doc(hidden)]
-pub use zensim::acumen::viewing::ViewingCondition;
+pub use zensim::hdr_pu::ViewingCondition;
 
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]

@@ -45,7 +45,7 @@ cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"
 butteraugli = { version = "0.9.2" }
 dssim-core = { version = "3.4", default-features = false }
 ssimulacra2 = { version = "0.5" }
-zensim = { path = "../zensim--acumen-foundation/zensim", features = ["acumen", "training"] }
+zensim = { path = "../zensim--acumen-foundation/zensim", features = ["training"] }
 
 # Common deps.
 bytemuck = "1"
@@ -100,7 +100,7 @@ codegen-units = 1
 # Equivalent git ref (use post-merge when the sibling worktree is gone,
 # AND after zensim's Cargo.toml has a git-ref zenpredict dep):
 #   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
-zensim = { path = "../zensim--acumen-foundation/zensim", features = ["acumen", "training"] }
+zensim = { path = "../zensim--acumen-foundation/zensim", features = ["training"] }
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no

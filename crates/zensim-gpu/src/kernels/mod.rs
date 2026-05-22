@@ -22,7 +22,6 @@
 //! kept in `f64` to match CPU precision; per-block atomics are avoided
 //! entirely by the per-column-partials layout.
 
-pub mod acumen_weight;
 pub mod color;
 pub mod downscale;
 pub mod fused;
