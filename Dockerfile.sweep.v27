@@ -1,0 +1,62 @@
+# Dockerfile.sweep.v27 — adds extract_acumen_features to the v26 image.
+#
+# v27 = v26 + the acumen-aware feature-extraction binary
+#       (`zensim-gpu/examples/extract_acumen_features` built --release).
+# Used for the production-recipe experiment (372-col features +
+# Mode B-lite preprocessing on safesyn 196k). The existing
+# zen-metrics + vastai-fleet binaries remain unchanged.
+#
+# Build:
+#   # 1. Build zen-metrics with CUDARC_CUDA_VERSION=12000 (as in v26).
+#   CUDARC_CUDA_VERSION=12000 cargo build --release -p zen-metrics-cli \
+#       --no-default-features \
+#       --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
+#   cp target/release/zen-metrics ./zen-metrics
+#
+#   # 2. Build vastai-fleet (same as v26).
+#   cargo build --release -p vastai-fleet --features inline-sweep
+#   cp target/release/vastai-fleet ./vastai-fleet
+#
+#   # 3. Build the acumen feature extractor.
+#   CUDARC_CUDA_VERSION=12000 cargo build --release \
+#       --example extract_acumen_features \
+#       -p zensim-gpu --features cuda
+#   cp target/release/examples/extract_acumen_features ./extract_acumen_features
+#
+#   # 4. Docker build.
+#   docker build -f Dockerfile.sweep.v27 \
+#       -t ghcr.io/imazen/zen-metrics-sweep:v27-acumen-$(git rev-parse --short HEAD) \
+#       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
+#       --build-arg VASTAI_FLEET_BINARY=./vastai-fleet \
+#       --build-arg EXTRACT_ACUMEN_BINARY=./extract_acumen_features \
+#       .
+
+# Start from v26 base — all the L1-L7 (OS + apt + CUDA + helpers
+# + cuda_dlsym_stub) layers come for free.
+FROM ghcr.io/imazen/zen-metrics-sweep:v26-acumen-9ab47d3 AS base
+
+# L12: extract_acumen_features binary. ~150 MB (similar to
+# zen-metrics — full release LTO build with CUDA features).
+ARG EXTRACT_ACUMEN_BINARY=./extract_acumen_features
+COPY --chmod=0755 ${EXTRACT_ACUMEN_BINARY} /usr/local/bin/extract_acumen_features
+
+# Sanity gate: binary launches + reports the right defaults +
+# is built with cudarc-12000.
+RUN /usr/local/bin/extract_acumen_features --pairs-tsv /nonexistent --out /tmp/x.parquet 2>&1 \
+        | grep -E "(NotFound|empty TSV)" \
+    && for sym in cuCtxGetDevice_v2 cuEventElapsedTime_v2 cuCoredumpDeregisterStartCallback cuCoredumpDeregisterCompleteCallback ; do \
+        if strings /usr/local/bin/extract_acumen_features 2>/dev/null | grep -q "^${sym}$"; then \
+            echo "v27: ${sym} still referenced -- rebuild with CUDARC_CUDA_VERSION=12000" >&2 ; \
+            exit 1 ; \
+        fi ; \
+    done \
+    && echo "v27 extract_acumen_features smoke + cudarc-bind check passed"
+
+# L13: the acumen feature-extract chunk worker + onstart.
+COPY --chmod=0755 scripts/sweep/extract_acumen_chunk_worker.sh /usr/local/bin/extract_acumen_chunk_worker.sh
+COPY --chmod=0755 scripts/sweep/onstart_extract_acumen.sh      /usr/local/bin/onstart_extract_acumen.sh
+
+LABEL imazen.zen-metrics-sweep.layer="v27 extract_acumen_features"
+LABEL imazen.zen-metrics-sweep.changelog="v27 adds extract_acumen_features binary + 372-feature Mode B-lite chunk worker"
+
+ENV SWEEP_IMAGE_VERSION=v27
