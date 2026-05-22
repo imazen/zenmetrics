@@ -41,6 +41,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut acumen_peak = 100.0_f32;
     let mut acumen_ambient = 5.0_f32;
     let mut acumen_arch = AcumenArch::HfPost;
+    // Mode B hyperparameters — defaults match the initial winning
+    // run. The CLI exposes them so hyperparameter sweeps don't
+    // require a rebuild.
+    let mut mode_b_blur_sigma: usize = 8;
+    let mut mode_b_band_idx: u32 = 2; // 0=finest, 3=coarsest. 2 = mid-band, near CSF peak.
+    let mut mode_b_clamp_lo: f32 = 0.1;
+    let mut mode_b_clamp_hi: f32 = 4.0;
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -61,6 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => return Err(format!("unknown --acumen-arch: {v}").into()),
                 };
             }
+            "--mode-b-blur-sigma" => mode_b_blur_sigma = args.next().unwrap().parse()?,
+            "--mode-b-band-idx" => mode_b_band_idx = args.next().unwrap().parse()?,
+            "--mode-b-clamp-lo" => mode_b_clamp_lo = args.next().unwrap().parse()?,
+            "--mode-b-clamp-hi" => mode_b_clamp_hi = args.next().unwrap().parse()?,
             _ => return Err(format!("unknown arg: {arg}").into()),
         }
     }
@@ -182,8 +193,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (r_used, d_used);
         if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
             let v = viewing.unwrap();
-            r_used = apply_mode_b_premultiply(&r, w_r, h_r, v)?;
-            d_used = apply_mode_b_premultiply(&d, w_r, h_r, v)?;
+            let cfg = ModeBConfig {
+                blur_sigma: mode_b_blur_sigma,
+                band_idx: mode_b_band_idx,
+                clamp_lo: mode_b_clamp_lo,
+                clamp_hi: mode_b_clamp_hi,
+            };
+            r_used = apply_mode_b_premultiply(&r, w_r, h_r, v, cfg)?;
+            d_used = apply_mode_b_premultiply(&d, w_r, h_r, v, cfg)?;
         } else {
             r_used = r.clone();
             d_used = d.clone();
@@ -271,11 +288,20 @@ fn decode_image(path: &Path) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::
 /// per-pixel inside the kernel). It tests whether spatial CSF
 /// adaptation carries signal at all; if yes, the full kernel-level
 /// per-band Mode B becomes worth the effort.
+#[derive(Clone, Copy)]
+struct ModeBConfig {
+    blur_sigma: usize,
+    band_idx: u32,
+    clamp_lo: f32,
+    clamp_hi: f32,
+}
+
 fn apply_mode_b_premultiply(
     rgb: &[u8],
     w: u32,
     h: u32,
     viewing: zensim_gpu::ViewingCondition,
+    cfg: ModeBConfig,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     use zensim::acumen::castle_csf::{CastleCsfLut, Channel};
     const LUT_BYTES: &[u8] = include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
@@ -294,16 +320,17 @@ fn apply_mode_b_premultiply(
     }
 
     // Step 2: Gaussian blur over luminance for local-adaptation.
-    // Radius 8 → adapts over ~1° at ppd=56. Box-blur 3-pass
-    // approximation; cheap, separable.
-    let blurred = box_blur_3pass(&lum, w as usize, h as usize, 8);
+    // Configurable sigma. Box-blur 3-pass approximation; cheap,
+    // separable.
+    let blurred = box_blur_3pass(&lum, w as usize, h as usize, cfg.blur_sigma);
 
     // Step 3 + 4: per-pixel CSF lookup + multiply.
-    // Use band 2 (rho = ppd/8) — the typical CSF peak band at
-    // photopic L. Normalize by the CSF at the IMAGE-MEAN L so the
-    // output is comparable in scale to the un-weighted path.
+    // Use the configured band (rho = ppd / 2^(band_idx + 1)). Default
+    // band_idx=2 is the typical CSF peak band at photopic L.
+    // Normalize by the CSF at the IMAGE-MEAN L so the output is
+    // comparable in scale to the un-weighted path.
     let peak_nits = viewing.peak_luminance_nits;
-    let rho = viewing.ppd / 8.0;
+    let rho = viewing.ppd / (2u32.pow(cfg.band_idx + 1) as f32);
     let log_rho = rho.log10();
     let mean_l_nits =
         (lum.iter().sum::<f32>() / n as f32) * peak_nits;
@@ -318,7 +345,7 @@ fn apply_mode_b_premultiply(
         // Normalized weight: 1.0 at image-mean L (matches Mode A
         // at this pixel), <1 in shadows where CSF rolls off, >1 in
         // mid-tones where CSF peaks.
-        let w_scalar = (csf_here / csf_at_mean).clamp(0.1, 4.0);
+        let w_scalar = (csf_here / csf_at_mean).clamp(cfg.clamp_lo, cfg.clamp_hi);
         for ch in 0..3 {
             let v = rgb[3 * i + ch] as f32 * w_scalar;
             out.push(v.clamp(0.0, 255.0) as u8);
@@ -333,41 +360,70 @@ fn srgb_u8_to_linear(v: u8) -> f32 {
     if u <= 0.040_45 { u / 12.92 } else { ((u + 0.055) / 1.055).powf(2.4) }
 }
 
-/// Approximate Gaussian blur via 3 passes of box blur of half-radius r/3.
-/// Separable, O(N) per pass.
+/// Approximate Gaussian blur via 3 passes of separable box blur,
+/// each with sliding-window accumulator → O(W·H) per pass.
+/// Total: 6 passes (3 H + 3 V), O(6·W·H) total work. Roughly 17×
+/// faster than the naive O(W·H·r) implementation it replaces.
 fn box_blur_3pass(input: &[f32], w: usize, h: usize, sigma: usize) -> Vec<f32> {
     let r = sigma; // approx σ
     let mut buf = input.to_vec();
     let mut tmp = vec![0.0_f32; input.len()];
     for _ in 0..3 {
-        // Horizontal
-        for y in 0..h {
-            let row = y * w;
-            for x in 0..w {
-                let lo = x.saturating_sub(r);
-                let hi = (x + r + 1).min(w);
-                let mut s = 0.0;
-                for xx in lo..hi {
-                    s += buf[row + xx];
-                }
-                tmp[row + x] = s / (hi - lo) as f32;
-            }
-        }
+        box_blur_h(&buf, &mut tmp, w, h, r);
         std::mem::swap(&mut buf, &mut tmp);
-        // Vertical
-        for y in 0..h {
-            let row = y * w;
-            for x in 0..w {
-                let lo = y.saturating_sub(r);
-                let hi = (y + r + 1).min(h);
-                let mut s = 0.0;
-                for yy in lo..hi {
-                    s += buf[yy * w + x];
-                }
-                tmp[row + x] = s / (hi - lo) as f32;
-            }
-        }
+        box_blur_v(&buf, &mut tmp, w, h, r);
         std::mem::swap(&mut buf, &mut tmp);
     }
     buf
+}
+
+#[inline]
+fn box_blur_h(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
+    for y in 0..h {
+        let row = y * w;
+        // Seed accumulator with the first window [0, r].
+        let mut sum: f32 = 0.0;
+        let init_hi = (r + 1).min(w);
+        for x in 0..init_hi {
+            sum += src[row + x];
+        }
+        let mut count = init_hi;
+        for x in 0..w {
+            dst[row + x] = sum / count as f32;
+            // Advance the window: drop x-r if it was in, add x+r+1 if available.
+            let add_x = x + r + 1;
+            if add_x < w {
+                sum += src[row + add_x];
+                count += 1;
+            }
+            if x >= r {
+                sum -= src[row + x - r];
+                count -= 1;
+            }
+        }
+    }
+}
+
+#[inline]
+fn box_blur_v(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
+    for x in 0..w {
+        let mut sum: f32 = 0.0;
+        let init_hi = (r + 1).min(h);
+        for y in 0..init_hi {
+            sum += src[y * w + x];
+        }
+        let mut count = init_hi;
+        for y in 0..h {
+            dst[y * w + x] = sum / count as f32;
+            let add_y = y + r + 1;
+            if add_y < h {
+                sum += src[add_y * w + x];
+                count += 1;
+            }
+            if y >= r {
+                sum -= src[(y - r) * w + x];
+                count -= 1;
+            }
+        }
+    }
 }
