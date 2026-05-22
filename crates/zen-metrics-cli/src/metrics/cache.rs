@@ -57,6 +57,15 @@ use std::collections::HashMap;
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
+use std::sync::{Mutex, OnceLock};
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
 use std::error::Error;
 
 #[cfg(any(
@@ -141,6 +150,16 @@ struct UmbrellaSlot {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
+static GLOBAL_CACHE: OnceLock<Mutex<MetricCache>> = OnceLock::new();
+
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
 impl MetricCache {
     pub(crate) fn new(gpu_runtime: GpuRuntime) -> Self {
         Self {
@@ -148,6 +167,51 @@ impl MetricCache {
             umbrella: HashMap::new(),
             #[cfg(feature = "gpu-butteraugli")]
             butter: None,
+        }
+    }
+
+    /// Process-static metric cache. Initializes on first call with
+    /// the supplied `gpu_runtime`; subsequent calls ignore the
+    /// argument (returns the existing global). The cache outlives
+    /// individual `run_sweep` calls so cached `Metric` instances are
+    /// reused across:
+    ///
+    /// - Groups within a chunk (per the original cubecl pool OOM
+    ///   diagnosis — repeated allocation of zensim WithIw persist
+    ///   planes saturates the pool faster than the driver can free
+    ///   them).
+    /// - Chunks within a worker process (`vastai-fleet worker`'s
+    ///   chunk loop calls `process_chunk_inline` per chunk; the
+    ///   global cache means cross-chunk dim transitions are the
+    ///   only allocation events).
+    ///
+    /// Safety: returns a `&'static Mutex<MetricCache>`; callers
+    /// should use [`lock_global`] which handles mutex poisoning
+    /// gracefully.
+    pub(crate) fn global(gpu_runtime: GpuRuntime) -> &'static Mutex<MetricCache> {
+        GLOBAL_CACHE.get_or_init(|| Mutex::new(MetricCache::new(gpu_runtime)))
+    }
+
+    /// Acquire the global cache, recovering from a poisoned lock.
+    ///
+    /// A panic inside a cell while holding the cache lock — e.g.
+    /// the cubecl-cuda OOM panic propagating up through
+    /// `compute_srgb_u8` — poisons the Mutex. Without recovery,
+    /// every subsequent cell on the same source image cascades
+    /// through the same poisoned-lock panic and the whole chunk is
+    /// lost. Recovery is sound because the cached `Metric` state
+    /// either survived the panic (no mutation in flight) or is
+    /// stale-but-safe (we rebuild on dim mismatch). Worst case the
+    /// recovered cache holds a Metric whose internal device state
+    /// is broken; the next compute call will fail loudly, which the
+    /// caller already handles as a metric failure.
+    pub(crate) fn lock_global(
+        gpu_runtime: GpuRuntime,
+    ) -> std::sync::MutexGuard<'static, MetricCache> {
+        let mtx = Self::global(gpu_runtime);
+        match mtx.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
         }
     }
 

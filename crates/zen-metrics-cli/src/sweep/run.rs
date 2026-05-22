@@ -222,21 +222,27 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     let feature_writer = Mutex::new(feature_writer_inner);
     let pairs_writer = Mutex::new(pairs_writer_inner);
 
-    // GPU metric instance cache. One `MetricCache` per `run_sweep`
-    // call, shared across rayon workers via a Mutex. Each rayon
-    // task encodes + decodes in parallel (CPU work, no lock needed),
-    // then takes the lock to score on cached GPU metric instances.
-    // The lock effectively serialises the GPU phase, which the cubecl
-    // driver does internally anyway — net effect is that the per-cell
-    // `Metric::new` storms are gone (one construction per (kind, dims)
-    // per sweep call instead of one per cell).
+    // GPU metric instance cache — **process-static**. The cache
+    // outlives individual `run_sweep` calls so cached `Metric`
+    // instances are reused across all calls (groups within a chunk,
+    // chunks within a worker process). This is the only point at
+    // which the cubecl-cuda persist-plane footprint stays bounded:
+    // a local cache per `run_sweep` would still drop 6 metrics ×
+    // ~200 MB / instance back to the pool between groups, and
+    // cubecl-cuda's pool does not promptly return those pages to
+    // the driver — after ~4 groups the 12 GB RTX 3060 OOMs on
+    // tiny (12 MB) follow-on allocations. The first refactor
+    // (commit 11d374dd) hoisted per-cell — necessary but not
+    // sufficient; this commit hoists per-process. See
+    // `metrics::cache::MetricCache::global` for the OnceLock
+    // construction.
     //
-    // Without the cache, repeated allocation of zensim WithIw persist
-    // planes (~200 MB / instance at 1080p), cvvdp's pre-compiled NVRTC
-    // pyramid buffers, and iwssim's wavelet workspace accumulate in
-    // cubecl-cuda's pool faster than dropped instances can be reclaimed,
-    // producing the v26 OOM on 12 GB cards after ~80 cell allocations.
-    // See `metrics::cache` module docs for details.
+    // The lock is taken only for GPU score calls; encode +
+    // decode-back run in parallel as before. Poisoned-lock
+    // recovery is in `MetricCache::lock_global` — a panic inside
+    // one cell (e.g. cubecl OOM bubbling up through the metric
+    // crate) used to cascade into every subsequent cell on the
+    // same source.
     #[cfg(any(
         feature = "gpu-butteraugli",
         feature = "gpu-ssim2",
@@ -245,7 +251,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
         feature = "gpu-zensim",
         feature = "gpu-cvvdp"
     ))]
-    let metric_cache = Mutex::new(MetricCache::new(cfg.gpu_runtime));
+    let gpu_runtime_for_cache = cfg.gpu_runtime;
 
     for src_path in &cfg.sources {
         // Decode the source once per image so we don't re-PNG-decode for
@@ -296,7 +302,7 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                         feature = "gpu-zensim",
                         feature = "gpu-cvvdp"
                     ))]
-                    &metric_cache,
+                    gpu_runtime_for_cache,
                 )
             }))
             .unwrap_or_else(|panic_payload| {
@@ -457,7 +463,7 @@ fn compute_cell(
         feature = "gpu-zensim",
         feature = "gpu-cvvdp"
     ))]
-    metric_cache: &Mutex<MetricCache>,
+    gpu_runtime_for_cache: GpuRuntime,
 ) -> CellOutcome {
     let knob_json = tuple.to_canonical_json();
     let mut row: Vec<String> = vec![
@@ -592,7 +598,7 @@ fn compute_cell(
                 // after ~80 cells. See `metrics::cache` module docs.
                 #[cfg(feature = "gpu-zensim")]
                 {
-                    let mut cache = metric_cache.lock().expect("metric_cache poisoned");
+                    let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
                     match cache.compute_zensim_features(
                         source,
                         &decoded,
@@ -623,7 +629,7 @@ fn compute_cell(
                     feature = "gpu-cvvdp"
                 ))]
                 {
-                    let mut cache = metric_cache.lock().expect("metric_cache poisoned");
+                    let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
                     cache.run_metric_cached(metric, source, &decoded)
                 }
                 #[cfg(not(any(
