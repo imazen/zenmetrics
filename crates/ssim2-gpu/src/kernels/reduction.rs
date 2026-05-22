@@ -73,6 +73,53 @@ mod fast {
         output_sums[off + 1].fetch_add(local_p4);
     }
 
+    /// Strip-aware variant of `fused_sum_p4_kernel`.
+    ///
+    /// `plane` is laid out as `width × plane_h` row-major (where
+    /// `width = plane.len() / plane_h` is the per-row stride). Only
+    /// elements whose column index `col = i % width` falls in
+    /// `[body_col_start, body_col_end)` are summed. Halo elements are
+    /// dropped from both Σ and Σ⁴.
+    ///
+    /// Used by the strip-processing path (`compute_stripped`). For
+    /// ssim2-gpu's transposed error-map orientation, the buffer's
+    /// "column" axis corresponds to the original frame's Y axis, so
+    /// the body-column range here is the body **row range** of the
+    /// untransposed strip — see `pipeline.rs::compute_stripped` for
+    /// the orientation mapping.
+    #[cube(launch_unchecked)]
+    fn fused_sum_p4_rows_kernel(
+        plane: &Array<f32>,
+        output_sums: &mut Array<Atomic<f32>>,
+        slot: u32,
+        width: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        let tid = ABSOLUTE_POS;
+        let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+        let n = plane.len();
+
+        let mut local_sum = 0.0_f32;
+        let mut local_p4 = 0.0_f32;
+
+        let mut i = tid;
+        while i < n {
+            let col = (i as u32) % width;
+            if col >= body_col_start && col < body_col_end {
+                let v = plane[i];
+                local_sum += v;
+                let v2 = v * v;
+                local_p4 += v2 * v2;
+            }
+            i += stride;
+        }
+
+        let off = (slot * 2) as usize;
+        output_sums[off].fetch_add(local_sum);
+        output_sums[off + 1].fetch_add(local_p4);
+    }
+
     #[cube(launch_unchecked)]
     fn fused_sum_p4_batched_kernel(
         plane: &Array<f32>,
@@ -121,6 +168,37 @@ mod fast {
                 ArrayArg::from_raw_parts(plane_handle, n_pixels),
                 ArrayArg::from_raw_parts(partials_handle, partials_len),
                 slot,
+            );
+        }
+    }
+
+    /// Strip-aware launcher — sums only elements whose column index
+    /// (in the `width`-strided plane) falls in
+    /// `[body_col_start, body_col_end)`.
+    pub fn launch_sum_p4_rows<R: Runtime>(
+        client: &ComputeClient<R>,
+        plane_handle: cubecl::server::Handle,
+        n_pixels: usize,
+        partials_handle: cubecl::server::Handle,
+        partials_len: usize,
+        slot: u32,
+        width: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
+        let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
+        unsafe {
+            fused_sum_p4_rows_kernel::launch_unchecked::<R>(
+                client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(plane_handle, n_pixels),
+                ArrayArg::from_raw_parts(partials_handle, partials_len),
+                slot,
+                width,
+                body_col_start,
+                body_col_end,
             );
         }
     }
@@ -248,6 +326,48 @@ mod portable {
         output[off + 1] = local_p4;
     }
 
+    /// Strip-aware portable variant. Writes per-thread partials,
+    /// then a separate finalize launch folds them.
+    ///
+    /// IMPORTANT: in the portable path, `launch_sum_p4_rows` must be
+    /// chained with a partials-zero-fill before the strip *and*
+    /// accumulated host-side across strips into the same slot. The
+    /// current implementation reuses the same partials slot — so the
+    /// driver runs the finalize once per strip into a host-side
+    /// accumulator. See `pipeline.rs::compute_stripped` for the
+    /// host-side accumulation loop.
+    #[cube(launch_unchecked)]
+    fn thread_sum_p4_rows_kernel(
+        plane: &Array<f32>,
+        output: &mut Array<f32>,
+        slot_offset: u32,
+        width: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        let tid = ABSOLUTE_POS;
+        let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+        let n = plane.len();
+
+        let mut local_sum = 0.0_f32;
+        let mut local_p4 = 0.0_f32;
+        let mut i = tid;
+        while i < n {
+            let col = (i as u32) % width;
+            if col >= body_col_start && col < body_col_end {
+                let v = plane[i];
+                local_sum += v;
+                let v2 = v * v;
+                local_p4 += v2 * v2;
+            }
+            i += stride;
+        }
+
+        let off = (slot_offset as usize) + tid * 2;
+        output[off] = local_sum;
+        output[off + 1] = local_p4;
+    }
+
     #[cube(launch_unchecked)]
     fn thread_sum_p4_batched_kernel(
         plane: &Array<f32>,
@@ -342,6 +462,36 @@ mod portable {
         }
     }
 
+    /// Strip-aware portable launcher — sums only body-column elements.
+    pub fn launch_sum_p4_rows<R: Runtime>(
+        client: &ComputeClient<R>,
+        plane_handle: cubecl::server::Handle,
+        n_pixels: usize,
+        partials_handle: cubecl::server::Handle,
+        partials_len: usize,
+        slot: u32,
+        width: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
+        let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
+        let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        unsafe {
+            thread_sum_p4_rows_kernel::launch_unchecked::<R>(
+                client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(plane_handle, n_pixels),
+                ArrayArg::from_raw_parts(partials_handle, partials_len),
+                slot_offset,
+                width,
+                body_col_start,
+                body_col_end,
+            );
+        }
+    }
+
     pub fn launch_sum_p4_batched<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
@@ -419,11 +569,15 @@ mod portable {
 }
 
 #[cfg(feature = "fast-reduction")]
-pub use fast::{launch_finalize, launch_finalize_batched, launch_sum_p4, launch_sum_p4_batched};
+pub use fast::{
+    launch_finalize, launch_finalize_batched, launch_sum_p4, launch_sum_p4_batched,
+    launch_sum_p4_rows,
+};
 
 #[cfg(not(feature = "fast-reduction"))]
 pub use portable::{
     launch_finalize, launch_finalize_batched, launch_sum_p4, launch_sum_p4_batched,
+    launch_sum_p4_rows,
 };
 
 // =====================================================================

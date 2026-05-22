@@ -33,6 +33,21 @@ use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
 #[cfg(feature = "fir")]
 use crate::Ssim2Blur;
 
+/// Strip-processing metadata. See `Ssim2::strip` for full docs.
+#[derive(Debug, Clone, Copy)]
+struct StripMeta {
+    /// Full-frame width and height the caller passes to `compute_stripped`.
+    image_w: u32,
+    image_h: u32,
+    /// Body rows per strip (excluding halo). Constructor clamps this
+    /// against `image_h` so tiny images degenerate to single-strip mode.
+    h_body: u32,
+    /// Halo rows per side at the finest scale. Always
+    /// [`crate::memory_mode::STRIP_HALO_ROWS`] currently; carried in
+    /// the struct so per-scale halos derive from it consistently.
+    halo: u32,
+}
+
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
 /// (one buffer per channel of a 3-channel image).
 struct Scale {
@@ -173,6 +188,21 @@ pub struct Ssim2<R: Runtime> {
 
     has_cached_reference: bool,
 
+    /// Strip-processing metadata. `None` for whole-image instances
+    /// (constructed via `new` / `new_with_memory_mode { Full | Auto→Full }`);
+    /// `Some` for strip-mode instances constructed via `new_strip`. When
+    /// `Some`, `compute_with_mode` is illegal (use `compute_stripped`);
+    /// when `None`, `compute_stripped` is illegal.
+    ///
+    /// Records `(image_w, image_h, h_body)` so the strip driver can:
+    /// - reject `(ref, dist)` whose dimensions don't match `image_w×image_h`,
+    /// - compute strip start/end + body row ranges per strip,
+    /// - and validate that `set_reference` isn't being misused.
+    ///
+    /// The `Scale` buffers' `width × height` reflect the **strip**
+    /// dimensions (image_w × (h_body + 2*halo)), not the full image.
+    strip: Option<StripMeta>,
+
     /// Selected blur kernel. Defaults to `Ssim2Blur::Iir` (the canonical
     /// libjxl recursive Gaussian — bit-identical to the pre-T_y.B
     /// behaviour). Set via `with_blur` / `set_blur`. The non-default
@@ -205,11 +235,13 @@ impl<R: Runtime> Ssim2<R> {
     /// assert_eq!(s.dimensions(), (1024, 768));
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
-    /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
-    /// ssim2-gpu has **no Strip implementation** yet — Strip and Tile
-    /// return [`crate::Error::ModeUnsupported`]. Auto can only
-    /// resolve to Full; oversized images surface
-    /// [`crate::Error::TooBigForFull`].
+    /// Unified [`MemoryMode`](crate::MemoryMode) constructor. Phase 2
+    /// (2026-05-22): `Strip` now ships — constructs via `new_strip`
+    /// with the requested body height (defaulting to
+    /// [`crate::memory_mode::STRIP_H_BODY_DEFAULT`]). `Tile` still
+    /// returns [`crate::Error::ModeUnsupported`]. Auto picks Full
+    /// when it fits the cap and Strip otherwise; if even Strip
+    /// exceeds the cap, surfaces [`crate::Error::TooBigForFull`].
     pub fn new_with_memory_mode(
         client: ComputeClient<R>,
         width: u32,
@@ -217,15 +249,23 @@ impl<R: Runtime> Ssim2<R> {
         mode: crate::MemoryMode,
     ) -> Result<Self> {
         use crate::MemoryMode;
-        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+        use crate::memory_mode::{
+            ResolvedMode, STRIP_H_BODY_DEFAULT, resolve_auto, vram_cap_bytes,
+        };
         match mode {
             MemoryMode::Full => Self::new(client, width, height),
-            MemoryMode::Strip { .. } => Err(crate::Error::ModeUnsupported("Strip")),
+            MemoryMode::Strip { h_body } => {
+                let h = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+                Self::new_strip(client, width, height, h)
+            }
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
                 match resolve_auto(width, height, cap)? {
                     ResolvedMode::Full => Self::new(client, width, height),
+                    ResolvedMode::Strip { h_body } => {
+                        Self::new_strip(client, width, height, h_body)
+                    }
                 }
             }
         }
@@ -276,13 +316,135 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            strip: None,
+            #[cfg(feature = "fir")]
+            blur: Ssim2Blur::default(),
+        })
+    }
+
+    /// Strip-processing constructor (Phase 2, 2026-05-22). Allocates
+    /// working-set buffers sized for one strip
+    /// (`image_w × (h_body + 2 × STRIP_HALO_ROWS)`) and configures
+    /// the instance so [`Self::compute_stripped`] can loop strips with
+    /// halo overlap, accumulating per-strip partial sums host-side.
+    ///
+    /// Memory cost is a function of `h_body`, not `image_h` — see
+    /// [`crate::memory_mode::estimate_strip_gpu_memory_bytes`] for the
+    /// per-strip estimator. The whole-image API (`compute` /
+    /// `compute_with_mode`) is unavailable on strip-mode instances and
+    /// will return [`Error::DimensionMismatch`] (the strip-sized scale-0
+    /// buffer can't hold a full-frame upload).
+    ///
+    /// `set_reference` is currently rejected on strip-mode instances
+    /// (`Error::CachedRefNotSupportedInStripMode`). For RD-search hot
+    /// loops use the whole-image path.
+    ///
+    /// ```no_run
+    /// use cubecl::Runtime;
+    /// use cubecl::wgpu::WgpuRuntime;
+    /// use ssim2_gpu::Ssim2;
+    ///
+    /// let client = WgpuRuntime::client(&Default::default());
+    /// let mut s = Ssim2::<WgpuRuntime>::new_strip(client, 6000, 4000, 1024)?;
+    /// let r = vec![0_u8; 6000 * 4000 * 3];
+    /// let d = vec![0_u8; 6000 * 4000 * 3];
+    /// let score = s.compute_stripped(&r, &d)?.score;
+    /// # let _ = score;
+    /// # Ok::<(), ssim2_gpu::Error>(())
+    /// ```
+    pub fn new_strip(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+    ) -> Result<Self> {
+        if image_w < 8 || image_h < 8 {
+            return Err(Error::InvalidImageSize);
+        }
+        if h_body == 0 {
+            return Err(Error::InvalidImageSize);
+        }
+        let halo = crate::memory_mode::STRIP_HALO_ROWS;
+        // Clamp h_body so a single-strip computation works on small
+        // images. If image_h ≤ h_body + 2*halo we just allocate enough
+        // for one whole-image-sized strip.
+        let h_body_eff = h_body.min(image_h);
+        // The strip-0 height — what the per-scale buffers must hold.
+        // Cap at image_h so we don't over-allocate when image_h is
+        // smaller than h_body + 2*halo.
+        let strip_h0 = h_body_eff
+            .saturating_add(2 * halo)
+            .min(image_h.saturating_add(2 * halo));
+        // For *truly* tiny images we want at least image_h rows; one
+        // strip suffices and halo regions are simply empty (the IIR
+        // zero-pad already handles this).
+        let alloc_h = strip_h0.max(image_h.min(strip_h0));
+        let n = (image_w as usize) * (alloc_h as usize);
+
+        // Pyramid dimensions: scale s has w = ceil(image_w / 2^s),
+        // h = ceil(alloc_h / 2^s). Stop early when below 8×8.
+        let mut dims = Vec::with_capacity(NUM_SCALES);
+        let mut w = image_w;
+        let mut h = alloc_h;
+        for _ in 0..NUM_SCALES {
+            if w < 8 || h < 8 {
+                break;
+            }
+            dims.push((w, h));
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+
+        let scales = dims
+            .iter()
+            .map(|&(w, h)| Scale::new(&client, w, h))
+            .collect::<Vec<_>>();
+
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+
+        let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
+        let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; SUMS_LEN]));
+
+        Ok(Self {
+            client,
+            width: image_w,
+            height: alloc_h,
+            n,
+            src_u8_a,
+            src_u8_b,
+            scales,
+            partials,
+            sums,
+            has_cached_reference: false,
+            strip: Some(StripMeta {
+                image_w,
+                image_h,
+                h_body: h_body_eff,
+                halo,
+            }),
             #[cfg(feature = "fir")]
             blur: Ssim2Blur::default(),
         })
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
+        // Strip-mode instances report the IMAGE dimensions (not the
+        // strip dimensions) so downstream callers see the size the
+        // caller passed to `new_strip` — matches the contract that
+        // dimensions() echoes the constructor's input.
+        if let Some(m) = self.strip {
+            return (m.image_w, m.image_h);
+        }
         (self.width, self.height)
+    }
+
+    /// True if this instance was constructed via [`Self::new_strip`].
+    /// Strip-mode and whole-image methods are mutually exclusive:
+    /// strip-mode rejects `compute` / `compute_with_mode` /
+    /// `set_reference`; whole-image rejects `compute_stripped`.
+    pub fn is_strip_mode(&self) -> bool {
+        self.strip.is_some()
     }
 
     /// Builder-style blur selector — **gated behind the `fir` Cargo
@@ -456,6 +618,11 @@ impl<R: Runtime> Ssim2<R> {
         ref_handle: &cubecl::server::Handle,
         dis_handle: &cubecl::server::Handle,
     ) -> Result<GpuSsim2Result> {
+        if self.strip.is_some() {
+            return Err(Error::ModeUnsupported(
+                "compute_handles is whole-image only; strip-mode instances must use compute_stripped",
+            ));
+        }
         // Same zero-fill discipline as `compute_with_mode`. See that
         // method's comment for rationale.
         reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
@@ -498,6 +665,12 @@ impl<R: Runtime> Ssim2<R> {
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
+        if self.strip.is_some() {
+            // Strip-mode instances allocate strip-sized scale-0 buffers
+            // (image_w × (h_body + 2*halo)); they can't hold a full-frame
+            // upload. Route the caller to compute_stripped instead.
+            return self.compute_stripped_with_mode(mode, ref_srgb, dist_srgb);
+        }
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
 
@@ -562,6 +735,9 @@ impl<R: Runtime> Ssim2<R> {
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        if self.strip.is_some() {
+            return Err(Error::CachedRefNotSupportedInStripMode);
+        }
         self.check_dims(ref_srgb)?;
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.build_linear_pyramid(true);
@@ -621,6 +797,9 @@ impl<R: Runtime> Ssim2<R> {
         mode: Ssim2Mode,
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
+        if self.strip.is_some() {
+            return Err(Error::CachedRefNotSupportedInStripMode);
+        }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
@@ -655,6 +834,330 @@ impl<R: Runtime> Ssim2<R> {
         Ok(GpuSsim2Result {
             score: self.read_and_aggregate(),
         })
+    }
+
+    // ───────────────────────── strip processing ─────────────────────────
+
+    /// Strip-processing driver. Public entry point for strip-mode
+    /// instances (`new_strip`). Slices the input into strips with halo
+    /// overlap, runs the pipeline per strip with the body row range
+    /// passed to the reduction kernel, and accumulates partial sums
+    /// host-side.
+    ///
+    /// Returns `Err(DimensionMismatch)` if either buffer's length doesn't
+    /// match `image_w × image_h × 3` (the dimensions passed to `new_strip`).
+    pub fn compute_stripped(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
+        self.compute_stripped_with_mode(Ssim2Mode::default(), ref_srgb, dist_srgb)
+    }
+
+    /// Mode-explicit strip driver — same skip-map semantics as
+    /// [`Self::compute_with_mode`] but operates per-strip.
+    pub fn compute_stripped_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
+        let meta = self
+            .strip
+            .ok_or(Error::ModeUnsupported("compute_stripped requires strip-mode instance"))?;
+        let expected = (meta.image_w as usize) * (meta.image_h as usize) * 3;
+        if ref_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_srgb.len(),
+            });
+        }
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+
+        // Plan strips. Strip i covers body rows
+        // `[i*h_body, min((i+1)*h_body, image_h))`. Around each body
+        // we attach halo rows clamped to [0, image_h). The strip
+        // buffer is image_w × strip_h0 (allocation size); for strips
+        // shorter than that, the trailing rows are zero-padded by the
+        // upload (left over from the previous strip — we zero-fill
+        // them explicitly via upload).
+        let h_body = meta.h_body;
+        let halo = meta.halo;
+        let image_h = meta.image_h;
+        let image_w = meta.image_w;
+        let strip_h0_alloc = self.scales[0].height; // = allocation height
+
+        // Accumulators for (Σ, Σ⁴) per slot, in f64 to absorb f32 noise
+        // across many strips.
+        let n_slots = NUM_SLOTS;
+        let mut acc_sum = vec![0.0_f64; n_slots];
+        let mut acc_p4 = vec![0.0_f64; n_slots];
+
+        let mut strip_idx = 0usize;
+        let mut body_start = 0u32;
+        while body_start < image_h {
+            let body_end = (body_start + h_body).min(image_h);
+            // Halo: extend halo rows above body_start and below body_end,
+            // clamped to image bounds.
+            let strip_top = body_start.saturating_sub(halo);
+            let strip_bot = (body_end + halo).min(image_h);
+            let strip_h_active = strip_bot - strip_top;
+            // Within the strip-local coord system, body rows are at
+            // [body_start - strip_top, body_end - strip_top).
+            let body_col_start = body_start - strip_top;
+            let body_col_end = body_end - strip_top;
+
+            // Upload this strip's slice of (ref, dist) into the
+            // pre-allocated strip buffers. We tightly pack into
+            // image_w × strip_h_active and zero-fill the remainder up
+            // to strip_h0_alloc (the trailing rows must be zero so they
+            // don't contaminate the IIR boundary on shorter strips).
+            self.upload_strip_slice(
+                true,
+                ref_srgb,
+                image_w,
+                image_h,
+                strip_top,
+                strip_h_active,
+                strip_h0_alloc,
+            );
+            self.upload_strip_slice(
+                false,
+                dist_srgb,
+                image_w,
+                image_h,
+                strip_top,
+                strip_h_active,
+                strip_h0_alloc,
+            );
+
+            // Run the per-strip pipeline. We re-zero the partials buffer
+            // each strip; per-strip results are then read back and
+            // accumulated host-side into `acc_sum` / `acc_p4`.
+            reduction::launch_zero_fill_f32(
+                &self.client,
+                self.partials.clone(),
+                PARTIALS_LEN,
+            );
+
+            // Build linear pyramid over the strip dimensions (which
+            // match the scale buffer dims).
+            let last_active = (0..self.scales.len())
+                .rev()
+                .find(|&s| !skip_scale(mode, s))
+                .unwrap_or(0);
+            self.build_linear_pyramid_until(true, last_active);
+            self.build_linear_pyramid_until(false, last_active);
+
+            // Process each scale with the body row range.
+            for s in 0..self.scales.len() {
+                if skip_scale(mode, s) {
+                    continue;
+                }
+                // Per-scale body column range (after transpose; see
+                // `kernels::reduction` docstring): start = body row start
+                // at scale 0, divided by 2^s. The downscale uses ceiling
+                // semantics, so we use the same ceiling for the strip
+                // endpoint. We use floor for the start so we don't drop
+                // any active body pixels.
+                let s_u = s as u32;
+                let scale_strip_h = self.scales[s].height; // transposed width
+                let scale_body_start = body_col_start >> s_u;
+                let scale_body_end = ((body_col_end + (1 << s_u) - 1) >> s_u).min(scale_strip_h);
+                self.process_scale_strip(s, mode, scale_strip_h, scale_body_start, scale_body_end);
+            }
+
+            // Stage-2 finalize → small sums buffer.
+            self.run_finalizer();
+            // Read sums back, accumulate.
+            let bytes = self
+                .client
+                .read_one(self.sums.clone())
+                .expect("read sums buffer (strip)");
+            let raw = f32::from_bytes(&bytes);
+            debug_assert_eq!(raw.len(), SUMS_LEN);
+            for slot in 0..n_slots {
+                acc_sum[slot] += raw[slot * 2] as f64;
+                acc_p4[slot] += raw[slot * 2 + 1] as f64;
+            }
+
+            strip_idx += 1;
+            body_start = body_end;
+        }
+        let _ = strip_idx;
+
+        // Final aggregation. Re-uses the same WEIGHT table /
+        // sigmoid as `read_and_aggregate` but driven from the
+        // host-side accumulators instead of the on-device sums buffer.
+        Ok(GpuSsim2Result {
+            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta),
+        })
+    }
+
+    /// Upload `image_w × strip_h_active` rows starting at row
+    /// `image_y_start` from `srgb` into the scale-0 ref or dist buffer.
+    /// Trailing rows up to `strip_h0_alloc` are zero-filled to keep
+    /// the IIR boundary clean.
+    fn upload_strip_slice(
+        &mut self,
+        is_a: bool,
+        srgb: &[u8],
+        image_w: u32,
+        _image_h: u32,
+        image_y_start: u32,
+        strip_h_active: u32,
+        strip_h0_alloc: u32,
+    ) {
+        let n_alloc = (image_w as usize) * (strip_h0_alloc as usize);
+        let pinned_len = n_alloc * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            let row_stride_bytes = (image_w as usize) * 4;
+            let src_row_stride = (image_w as usize) * 3;
+            // 1) Active rows: pack u8×3 → u32 (R | G<<8 | B<<16).
+            for sy in 0..strip_h_active as usize {
+                let image_y = (image_y_start as usize) + sy;
+                let src_row = &srgb[image_y * src_row_stride..(image_y + 1) * src_row_stride];
+                let dst_row =
+                    &mut dst[sy * row_stride_bytes..sy * row_stride_bytes + row_stride_bytes];
+                for (chunk_out, triple) in
+                    dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(3))
+                {
+                    chunk_out[0] = triple[0];
+                    chunk_out[1] = triple[1];
+                    chunk_out[2] = triple[2];
+                    chunk_out[3] = 0;
+                }
+            }
+            // 2) Trailing padding rows: zero.
+            let active_bytes = (strip_h_active as usize) * row_stride_bytes;
+            if active_bytes < pinned_len {
+                dst[active_bytes..].fill(0);
+            }
+        }
+        let handle = self.client.create(bytes);
+        if is_a {
+            self.src_u8_a = handle;
+        } else {
+            self.src_u8_b = handle;
+        }
+        self.srgb_to_linear_from_packed(is_a);
+    }
+
+    /// Per-scale processing for strip mode. Mirrors `process_scale`
+    /// but routes reductions through the row-range launcher with the
+    /// supplied body column range.
+    fn process_scale_strip(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        scale_strip_h: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        self.run_xyb_masked(scale, true, mode);
+        self.run_xyb_masked(scale, false, mode);
+        self.run_self_products_masked(scale, true, mode);
+        self.run_self_products_masked(scale, false, mode);
+        self.run_cross_product_masked(scale, mode);
+        self.run_blur_full_masked(scale, mode);
+        self.run_transpose_raw_xyb_pair_masked(scale, true, true, mode);
+        self.run_error_maps_masked(scale, mode);
+        self.run_reductions_strip_masked(scale, mode, scale_strip_h, body_col_start, body_col_end);
+    }
+
+    /// Strip-aware reduction launcher.
+    fn run_reductions_strip_masked(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        scale_strip_h: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+    ) {
+        let s = &self.scales[scale];
+        for ch in 0..3 {
+            let plane_handles = [&s.ssim[ch], &s.artifact[ch], &s.detail[ch]];
+            for map_type in 0..3 {
+                if skip_reduction(mode, scale, ch, map_type) {
+                    continue;
+                }
+                let slot = ((scale * 3 + ch) * 3 + map_type) as u32;
+                reduction::launch_sum_p4_rows::<R>(
+                    &self.client,
+                    plane_handles[map_type].clone(),
+                    s.n,
+                    self.partials.clone(),
+                    PARTIALS_LEN,
+                    slot,
+                    scale_strip_h,
+                    body_col_start,
+                    body_col_end,
+                );
+            }
+        }
+    }
+
+    /// Fold host-side accumulators through the SSIMULACRA2 weight table.
+    /// Same algebra as `read_and_aggregate` but with f64 accumulators
+    /// summed across strips and the n_pix divisor taken from `meta` (the
+    /// **full image** pixel count at each scale, not the per-strip
+    /// count — every strip's body sums add up to one whole-image sum).
+    fn aggregate_from_accumulators(
+        &self,
+        acc_sum: &[f64],
+        acc_p4: &[f64],
+        meta: StripMeta,
+    ) -> f64 {
+        let mut avg_ssim = vec![[0.0_f64; 6]; NUM_SCALES];
+        let mut avg_edgediff = vec![[0.0_f64; 12]; NUM_SCALES];
+
+        // Whole-image pixel count per scale (matches what `Ssim2::new`
+        // would compute for the same image_w / image_h).
+        let mut w = meta.image_w;
+        let mut h = meta.image_h;
+        let mut scale_npix = Vec::with_capacity(NUM_SCALES);
+        for _ in 0..NUM_SCALES {
+            if w < 8 || h < 8 {
+                break;
+            }
+            scale_npix.push((w as f64) * (h as f64));
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        // Match the per-scale loop in `read_and_aggregate`.
+        let n_scales = scale_npix.len();
+
+        for scale in 0..n_scales {
+            let n_pix = scale_npix[scale];
+            let one_per_pixels = 1.0 / n_pix;
+            for ch in 0..3 {
+                let s_slot = (scale * 3 + ch) * 3;
+                let a_slot = s_slot + 1;
+                let d_slot = s_slot + 2;
+
+                avg_ssim[scale][ch * 2] = one_per_pixels * acc_sum[s_slot];
+                avg_ssim[scale][ch * 2 + 1] = (one_per_pixels * acc_p4[s_slot]).sqrt().sqrt();
+
+                avg_edgediff[scale][ch * 4] = one_per_pixels * acc_sum[a_slot];
+                avg_edgediff[scale][ch * 4 + 1] =
+                    (one_per_pixels * acc_p4[a_slot]).sqrt().sqrt();
+                avg_edgediff[scale][ch * 4 + 2] = one_per_pixels * acc_sum[d_slot];
+                avg_edgediff[scale][ch * 4 + 3] =
+                    (one_per_pixels * acc_p4[d_slot]).sqrt().sqrt();
+            }
+        }
+        score_from_stats(&avg_ssim, &avg_edgediff, n_scales)
     }
 
     // ───────────────────────── helpers ─────────────────────────

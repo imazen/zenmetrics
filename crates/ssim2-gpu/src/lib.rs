@@ -104,8 +104,8 @@ pub mod pipeline_batch;
 pub mod skipmap;
 
 pub use memory_mode::{
-    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
-    vram_cap_bytes,
+    MemoryMode, ResolvedMode, STRIP_H_BODY_DEFAULT, STRIP_HALO_ROWS, estimate_gpu_memory_bytes,
+    estimate_strip_gpu_memory_bytes, vram_cap_bytes,
 };
 // Uniform opaque API (Phase 2). See `opaque.rs`.
 pub use opaque::{Backend, Score, Ssim2Opaque, Ssim2Params};
@@ -294,13 +294,22 @@ pub enum Error {
     /// `compute_batch` got more inputs than the instance's batch_size.
     InvalidBatchSize { got: usize, max: usize },
     /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
-    /// implemented yet (Strip and Tile in ssim2-gpu's current
-    /// revision — see `docs/STRIP_PROCESSING.md`).
+    /// implemented yet (`Tile` in ssim2-gpu's current revision; Strip
+    /// shipped 2026-05-22).
     ModeUnsupported(&'static str),
     /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
-    /// into the VRAM cap. ssim2-gpu has no Strip implementation, so
-    /// `needed` is the Full estimate.
+    /// into the VRAM cap with any supported mode. `needed` is the
+    /// Full estimate; Strip was tried at the default body height
+    /// and also exceeded the cap.
     TooBigForFull { needed: usize, cap: usize },
+    /// `set_reference` was called on a strip-mode instance. The
+    /// strip pipeline doesn't currently cache per-strip reference
+    /// state (would require persisting halo IIR state and the
+    /// per-strip ref_xyb_t / mu1_full / sigma11_full buffers — out
+    /// of scope for the first strip release). Fall back to the
+    /// whole-image path for RD-search if you need a cached reference,
+    /// or wait for the v2 strip-aware set_reference.
+    CachedRefNotSupportedInStripMode,
 }
 
 impl std::fmt::Display for Error {
@@ -324,7 +333,13 @@ impl std::fmt::Display for Error {
             Error::TooBigForFull { needed, cap } => write!(
                 f,
                 "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
-                 (ssim2-gpu has no Strip path yet — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
+                 (Strip mode tried at the default body height also exceeded the cap — \
+                 raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image / smaller h_body)"
+            ),
+            Error::CachedRefNotSupportedInStripMode => write!(
+                f,
+                "set_reference is not supported on strip-mode instances — \
+                 fall back to the whole-image path (Ssim2::new) for cached-reference RD-search"
             ),
         }
     }

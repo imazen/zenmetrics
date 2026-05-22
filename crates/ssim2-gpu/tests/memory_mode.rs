@@ -42,10 +42,34 @@ fn estimate_grows_with_pixels() {
 }
 
 #[test]
-fn strip_estimator_is_none() {
-    // ssim2 has no Strip implementation yet — the unified API
-    // requires the signature, but the function returns None.
-    assert!(estimate_strip_gpu_memory_bytes(1024, 64).is_none());
+fn strip_estimator_returns_some_phase2() {
+    // Phase 2 (2026-05-22): Strip is implemented. The estimator now
+    // reports per-strip working-set bytes for a (width, h_body) pair.
+    let bytes = estimate_strip_gpu_memory_bytes(1024, 64).expect("Some(bytes) after Phase 2");
+    // Strip working-set must scale with width × (h_body + 2*halo) × 57
+    // planes-per-scale across pyramid. At width=1024, h_body=64, halo=256,
+    // strip_h=576: scale 0 alone = 1024×576×57×4 ≈ 134 MB.
+    assert!(
+        bytes > 100 * 1024 * 1024 && bytes < 250 * 1024 * 1024,
+        "scale-0 + pyramid for w=1024 h_body=64 should be ~130–180 MB, got {bytes}"
+    );
+}
+
+#[test]
+fn strip_estimator_smaller_than_full() {
+    // The whole point of strip mode: per-strip memory is bounded by
+    // the strip dimensions, not the image dimensions. For a 24 MP
+    // image (6000×4000) at h_body=1024, the strip estimate should be
+    // substantially smaller than the Full estimate. Empirically the
+    // ratio is ~38% (2.85 GB strip vs 7.49 GB Full) — the savings
+    // come from the bounded strip height, not from skipping scales.
+    let full_24mp = estimate_gpu_memory_bytes(6000, 4000);
+    let strip_24mp =
+        estimate_strip_gpu_memory_bytes(6000, 1024).expect("Some(bytes) after Phase 2");
+    assert!(
+        strip_24mp * 2 < full_24mp,
+        "strip should be < 50% Full at 24 MP: strip={strip_24mp} full={full_24mp}"
+    );
 }
 
 #[test]
@@ -57,11 +81,26 @@ fn auto_picks_full_when_under_cap() {
 }
 
 #[test]
-fn auto_errors_when_strip_unsupported_and_too_big() {
-    // Tiny cap + no strip support → TooBigForFull.
+fn auto_errors_when_full_and_strip_both_too_big() {
+    // Tiny cap + neither Full nor default-Strip fit → TooBigForFull.
     with_cap(Some("1"), || {
         let r = memory_mode::resolve_auto(4096, 4096, memory_mode::vram_cap_bytes());
         assert!(matches!(r, Err(Error::TooBigForFull { .. })));
+    });
+}
+
+#[test]
+fn auto_picks_strip_when_full_exceeds_cap_but_strip_fits() {
+    // At 6000×4000 the Full estimate is ~7.49 GB; Strip at h_body=1024
+    // is ~2.85 GB. With a 4 GB cap, Auto should pick Strip.
+    with_cap(Some("4294967296"), || {
+        let r = memory_mode::resolve_auto(6000, 4000, memory_mode::vram_cap_bytes()).unwrap();
+        match r {
+            ResolvedMode::Strip { h_body } => {
+                assert!(h_body >= 512 && h_body <= 4000, "h_body = {h_body}");
+            }
+            ResolvedMode::Full => panic!("expected Strip resolution; got Full"),
+        }
     });
 }
 

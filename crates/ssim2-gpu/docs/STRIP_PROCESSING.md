@@ -17,7 +17,17 @@ Saving: 24 plane handles per scale, ~30% reduction in the variable-cost
 intermediates. Across 6 pyramid scales the working set drops from
 ~10.4 GB to ~7.3 GB at 24 MP.
 
-**Phase 2 (strip processing): NOT SHIPPED YET — design here.**
+**Phase 2 (strip processing): SHIPPED 2026-05-22.** `Ssim2::new_strip`
++ `Ssim2::compute_stripped` ship the per-strip allocation + driver
+described below. Measured at 24 MP (6000×4000) via
+`examples/bench_strip_vs_whole.rs`: working set 2.87 GB (strip,
+body=1024) vs 7.49 GB (whole) — a 62% reduction. Whole-image OOMs the
+default 8 GB cap at 24 MP; strip mode fits with ~5 GB headroom.
+
+Per-call wall time at 12 MP: 30.7 ms whole vs 52.1 ms strip (1.7×
+overhead). At 24 MP strip is ~100 ms (whole skip-OOM). The overhead is
+the per-strip halo recompute + extra reduction launches; it's the
+price for the memory bound.
 
 ## Why
 
@@ -77,8 +87,11 @@ Per-strip budget at 24 MP (image 6000×4000), with H_strip = body rows + halo:
 | 4000 (full) | n/a | 1 | n/a | 94 MB (no strips needed) |
 
 Sweet spot: **H_body = 1024**, **H_strip = 1536**. 24 MB per plane at
-scale 0 × 57 planes ≈ 1.4 GB working set per strip — fits comfortably on
-8 GB GPUs with multiple metrics live.
+scale 0 × 57 planes ≈ 1.4 GB working set at scale 0 alone. Across all
+6 pyramid scales the geometric series adds ~37% on top, giving ~2.87 GB
+total per strip on a 24 MP image — measured 2026-05-22 in
+`examples/bench_strip_vs_whole.rs`. Still fits comfortably on 8 GB
+GPUs with multiple metrics live (vs ~7.5 GB whole-image).
 
 Per-scale strip dimensions:
 - Scale 0: 6000 × 1536
@@ -211,3 +224,34 @@ zero-pad boundary means no state-save/restore complexity).
   processing for batch is a separate problem.
 - The strip-aware `set_reference` cache.
 - f16 / bf16 intermediates — orthogonal to strips.
+
+## Status: SHIPPED (2026-05-22)
+
+The Phase 2 work is now landed. Key components:
+
+- `Ssim2::new_strip(client, image_w, image_h, h_body)` constructor in
+  `src/pipeline.rs`. Allocates buffers sized for one strip
+  (`image_w × (h_body + 2 × STRIP_HALO_ROWS)`).
+- `Ssim2::compute_stripped` / `compute_stripped_with_mode` driver in
+  `src/pipeline.rs`. Loops over strips, runs the per-strip pipeline,
+  reads per-strip sums back, accumulates host-side in f64, folds
+  through the SSIMULACRA2 weight table.
+- Strip-aware reduction kernels in `src/kernels/reduction.rs`:
+  `launch_sum_p4_rows` filters by transposed-buffer column index
+  (= original frame y-axis) to drop halo rows from the sum.
+- `MemoryMode::Strip { h_body }` now routes to `new_strip` in
+  `new_with_memory_mode`. `MemoryMode::Auto` falls back to Strip when
+  the Full estimate exceeds the VRAM cap.
+- `Error::CachedRefNotSupportedInStripMode` returned when
+  `set_reference` is called on a strip-mode instance.
+- `tests/strip_parity.rs`: 27 tests on CUDA (24 on wgpu — 3 `4096²`
+  tests gated `cfg(feature = "cuda")` because wgpu's 65535
+  per-dimension dispatch limit is exceeded by the scale-0 kernel grid
+  at 4096² regardless of whole/strip mode; this is a pre-existing
+  wgpu backend limitation, not strip-specific). Covers parity vs
+  whole at 256² / 1024² / 2048² / 4096², cross-tile-size agreement,
+  uneven last strip, single-strip degenerate case, error paths,
+  KernelMode dispatch (Full / Lossless / Fast), identical-pair
+  sanity, IIR boundary in halo.
+- `examples/bench_strip_vs_whole.rs`: wall-time + working-set sweep
+  at 1 / 4 / 12 / 24 MP. Results land in `benchmarks/`.

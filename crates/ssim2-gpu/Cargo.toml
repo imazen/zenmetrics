@@ -113,6 +113,10 @@ required-features = ["cubecl-types"]
 name = "xyb_parity"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "bench_strip_vs_whole"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "blur_mode_api"
 required-features = ["cubecl-types"]
@@ -131,4 +135,12 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "opaque"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "strip_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "aliasing_invariants"
 required-features = ["cubecl-types"]

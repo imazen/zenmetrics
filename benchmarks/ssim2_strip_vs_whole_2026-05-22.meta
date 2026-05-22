@@ -1,0 +1,47 @@
+# ssim2_strip_vs_whole_2026-05-22.csv — metadata
+
+date: 2026-05-22
+repo: imazen/zenmetrics
+crate: ssim2-gpu
+git_commit: (current @ — see jj log)
+host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM
+gpu: NVIDIA driver 596.21, CUDA 13.2 (cubecl-cuda dynamic load)
+backend: CudaRuntime (CUDA)
+build: cargo build --release -p ssim2-gpu --example bench_strip_vs_whole \
+                  --no-default-features --features cubecl-types,cuda
+run:   ./target/release/examples/bench_strip_vs_whole
+
+note: bench_strip_vs_whole.rs runs sequentially per (size, mode) with
+      n_warmup=3, n_measure=8. Times reported in milliseconds via
+      `Instant::now()` bracketing `client.sync()` to force device-host
+      sync, eliminating async-submit timing artefacts.
+
+note: working_set_mb is a static-estimate function of (strip_alloc_h,
+      image_w) — NOT measured directly via nvidia-smi. The estimate
+      matches `memory_mode::estimate_strip_gpu_memory_bytes` /
+      `estimate_gpu_memory_bytes` modulo packing overhead. Use
+      `nvidia-smi --query-gpu=memory.used` mid-benchmark for a
+      runtime check.
+
+note: 24 MP whole-image is SKIP_OOM because the full ~7.5 GB
+      allocation exceeds the conservative 8 GB headroom budget when
+      ssim2 is the only metric live. The strip path completes at
+      24 MP because its working set is bounded by the strip
+      dimensions rather than the image dimensions.
+
+per-mp summary (strip path):
+  1.05 MP:  7.7 ms,  491 MB
+  4.19 MP: 19.8 ms,  981 MB
+ 12.00 MP: 52.1 ms, 1916 MB
+ 24.00 MP:100.9 ms, 2875 MB
+
+whole vs strip wall-time ratio:
+  1.05 MP: 1.1× (strip faster — fewer reductions to launch)
+  4.19 MP: 0.6× (strip slower — halo recompute overhead)
+ 12.00 MP: 0.6× (strip slower — same reason)
+ 24.00 MP: ∞   (whole skip-OOM)
+
+interpretation: strip mode trades wall time (~1.7× slower at 12 MP)
+for memory (~2.6× less working set at 12 MP, makes 24 MP possible at
+all). For sweep workers running multiple metrics concurrently this is
+the right trade — 24 MP becomes feasible on 8/12 GB consumer GPUs.
