@@ -202,6 +202,11 @@ ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
 # (the only way to keep concurrent cubecl allocations from saturating
 # the pool on 12 GB cards with v26's 372-feature WithIw regime).
 [[ -n "${JOBS:-}" ]]                 && ENV_STR+=" -e JOBS=${JOBS}"
+# Per-process chunk cap. Default 20 in the Rust worker; expose so
+# smokes can dial it down to force the respawn-loop test (e.g.
+# MAX_CHUNKS_PER_PROCESS=4 to see the respawn after 4 chunks).
+[[ -n "${MAX_CHUNKS_PER_PROCESS:-}" ]] && ENV_STR+=" -e MAX_CHUNKS_PER_PROCESS=${MAX_CHUNKS_PER_PROCESS}"
+[[ -n "${MAX_RESPAWNS:-}" ]]           && ENV_STR+=" -e MAX_RESPAWNS=${MAX_RESPAWNS}"
 # Pass the chunks URL through env. The unified Rust worker reads
 # CHUNKS_R2; the bash onstart workers ignored it and derived from
 # the SWEEP_RUN_ID. Forwarding here lets the smoke flow point at

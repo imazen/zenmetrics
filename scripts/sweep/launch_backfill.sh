@@ -308,6 +308,15 @@ for offer_id in $OFFER_IDS; do
         ENV_STR+=" -e ADAPT_INTERVAL_SEC=${ADAPT_INTERVAL_SEC}"
     [[ -n "${ZENSIM_FEATURES_REGIME:-}" ]] && \
         ENV_STR+=" -e ZENSIM_FEATURES_REGIME=${ZENSIM_FEATURES_REGIME}"
+    # Per-process chunk cap forwarded to the Rust worker. Default 20.
+    [[ -n "${MAX_CHUNKS_PER_PROCESS:-}" ]] && \
+        ENV_STR+=" -e MAX_CHUNKS_PER_PROCESS=${MAX_CHUNKS_PER_PROCESS}"
+    [[ -n "${MAX_RESPAWNS:-}" ]] && \
+        ENV_STR+=" -e MAX_RESPAWNS=${MAX_RESPAWNS}"
+    [[ -n "${METRICS:-}" ]] && \
+        ENV_STR+=" -e METRICS=${METRICS}"
+    [[ -n "${JOBS:-}" ]] && \
+        ENV_STR+=" -e JOBS=${JOBS}"
 
     LOGIN_STR="-u ${GHCR_USER} -p ${GHCR_TOKEN} ghcr.io"
 
