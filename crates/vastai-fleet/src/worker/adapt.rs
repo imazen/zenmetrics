@@ -38,10 +38,26 @@ use tokio::sync::Semaphore;
 use tokio::time;
 use tracing::{debug, info, warn};
 
-/// Initial PARALLEL_CHUNKS heuristic from host specs. Each
-/// concurrent chunk reserves ~4 CPU cores during encode and ~2 GB
-/// GPU VRAM during cubecl init.
+/// Initial PARALLEL_CHUNKS heuristic from host specs.
+///
+/// 2026-05-22 update: when `ZENSIM_FEATURES_REGIME` is set to a
+/// feature-extracting regime (`with-iw` / `withiw` / `iw` —
+/// 372 features), default PC=1. The WithIw regime's persist planes
+/// can require single allocations up to ~1.5 GB for an 8.7 MPixel
+/// source image, and cubecl-cuda's pool cannot satisfy 1.5 GB
+/// requests when N concurrent chunks have already reserved their
+/// own pool slots. Empirically (v26 smoke #1 on RTX 3090 24 GB),
+/// PC=4 with WithIw panicked every cell of every group at
+/// cubecl-cuda/src/compute/server.rs:124 with "can't allocate buffer
+/// of size: 1581133824".
+///
+/// For other regimes (Basic 228 / Extended 300) the planes are
+/// smaller (~200 MB at 1080p) and the legacy 2 GB-per-chunk
+/// budget heuristic still holds.
 pub fn auto_parallel_chunks() -> usize {
+    if regime_is_withiw() {
+        return 1;
+    }
     let cores = num_cpus();
     let gpu_mb = nvidia_smi_total_memory_mb().unwrap_or(4096);
     let pc_cpu = cores / 4;
@@ -54,9 +70,30 @@ pub fn auto_parallel_chunks() -> usize {
 /// the rayon thread pool inside zen-metrics oversubscribes the box
 /// (each `--jobs 0` sweep uses all cores; 5+ concurrent = 5×N
 /// rayon threads for N cores).
+///
+/// Same WithIw caveat as [`auto_parallel_chunks`]: when the feature
+/// regime requires large persist planes, the ceiling is also 1 so
+/// AIMD cannot ramp into the territory where the cubecl pool runs
+/// out of contiguous space.
 pub fn derive_pc_max() -> usize {
+    if regime_is_withiw() {
+        return 1;
+    }
     let cores = num_cpus();
     (cores / 2).clamp(1, 8)
+}
+
+/// Returns true when `ZENSIM_FEATURES_REGIME` selects the WithIw
+/// 372-feature regime (or its aliases). Matches the same parsing
+/// rules as [`crate::worker::inline::parse_regime_env_or_default`].
+fn regime_is_withiw() -> bool {
+    match std::env::var("ZENSIM_FEATURES_REGIME") {
+        Ok(s) => matches!(
+            s.trim().to_ascii_lowercase().as_str(),
+            "with-iw" | "with_iw" | "withiw" | "iw"
+        ),
+        Err(_) => false,
+    }
 }
 
 fn num_cpus() -> usize {
