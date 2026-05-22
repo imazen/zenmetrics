@@ -55,13 +55,27 @@
 //! clamping: a body row sees the same window in the strip plane as it
 //! would see in the whole-image plane.
 //!
+//! ## Multi-resolution strip walker
+//!
+//! [`run_strip_pipeline_multires`] handles the multires-strip case:
+//! it iterates the full-res strips just like the single-resolution
+//! walker, but each full-res strip pass also drives the half-res
+//! sibling. The half-res strip's body covers half-res image rows
+//! `[body_top_full / 2, body_end_full.div_ceil(2))` and its slab
+//! is built by 2× downsampling the full-res strip's linear-RGB
+//! planes — no separate half-res sRGB buffer is needed (and
+//! constructing one would defeat the strip memory savings).
+//!
+//! The constructor [`Butteraugli::new_multires_strip`] enforces an
+//! even `body_h`, which keeps every full-res strip's body_top even
+//! and lets the half-res strip mirror it exactly. For images whose
+//! `image_h` isn't a multiple of `body_h`, the last full-res strip
+//! has a smaller body whose half-res counterpart uses
+//! `body_end_full.div_ceil(2) - body_top_full/2` rows so the
+//! half-res image's last row is covered.
+//!
 //! ## What this MVP does NOT do
 //!
-//! - Multi-resolution sibling (`new_multires`): the half-res diffmap
-//!   supersample-add is not strip-stitched in this revision. Use
-//!   `new_strip` only for single-resolution comparisons. Adding
-//!   multi-res support requires either striping the half-res sibling
-//!   in tandem or running it whole-image (~1.2 GB at 24 MP).
 //! - `set_reference` + `compute_with_reference`: the cached-reference
 //!   fast path is not yet strip-aware. Each strip pass re-runs both
 //!   sides of the pipeline.
@@ -300,6 +314,179 @@ pub(crate) fn run_strip_pipeline<R: Runtime>(
             this_body_h,
         );
         combined.merge(&strip_partials);
+
+        body_top = body_end;
+    }
+
+    Ok(combined.finalize(n_pixels_image))
+}
+
+/// Drive the multires strip walker for `compute_strip` /
+/// `compute_strip_with_options` when the instance has a half-res
+/// sibling.
+///
+/// Iterates the full-res image in `body_h`-tall bands. For each strip:
+///
+/// 1. Upload `(ref, dist)` sRGB strip planes to the full-res
+///    instance.
+/// 2. Run the full-res strip pipeline up to and including the
+///    diffmap.
+/// 3. Downsample the full-res strip's linear-RGB slab into the
+///    half-res sibling's linear-RGB slab.
+/// 4. Run the half-res strip pipeline.
+/// 5. Supersample-add the half-res strip diffmap into the full-res
+///    strip diffmap.
+/// 6. Reduce the full-res strip's body rows into the running
+///    partials.
+///
+/// Halo alignment: the constructor guarantees `body_h_full` is even,
+/// so every full-res `body_top` is even and `halo_h_full` is the
+/// same `HALO_ROWS`. The half-res instance gets `body_h_full / 2`
+/// for its body and the same `HALO_ROWS` for its halo. Within a
+/// strip pass, the half-res strip slab's height is
+/// `halo_top_half + body_h_half + halo_bot_half` where each value
+/// is the floor / ceil of the corresponding full-res value as
+/// appropriate so the half-res strip covers the half-res rows
+/// `[body_top_full / 2, body_end_full.div_ceil(2))`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_strip_pipeline_multires<R: Runtime>(
+    state: &mut Butteraugli<R>,
+    ref_srgb: &[u8],
+    dist_srgb: &[u8],
+    image_w: u32,
+    image_h: u32,
+    body_h: u32,
+    halo_h: u32,
+    params: &ButteraugliParams,
+) -> Result<GpuButteraugliResult> {
+    crate::pipeline::validate_params(params)?;
+    let expected = (image_w as usize) * (image_h as usize) * 3;
+    if ref_srgb.len() != expected {
+        return Err(Error::DimensionMismatch {
+            expected,
+            got: ref_srgb.len(),
+        });
+    }
+    if dist_srgb.len() != expected {
+        return Err(Error::DimensionMismatch {
+            expected,
+            got: dist_srgb.len(),
+        });
+    }
+    // body_h MUST be even for the half-res alignment to be exact.
+    // The constructor enforces this; if a caller bypassed the
+    // constructor we want to fail loudly rather than silently
+    // mis-align.
+    debug_assert_eq!(body_h % 2, 0, "multires strip requires even body_h");
+    state.set_params(*params);
+    if let Some(half) = state.half_res_mut() {
+        half.set_params(*params);
+    }
+
+    let n_pixels_image = (image_w as usize) * (image_h as usize);
+    let mut combined = StripPartials::default();
+
+    let half_image_h = image_h.div_ceil(2);
+
+    let mut body_top: u32 = 0;
+    while body_top < image_h {
+        let body_end = (body_top + body_h).min(image_h);
+        let this_body_h = body_end - body_top;
+
+        // Full-res halo sizing — same edge-clamp rule as the single-
+        // res walker (see `run_strip_pipeline` for the derivation).
+        // body_top is guaranteed even by the constructor + the
+        // body_h-even invariant; halo_h (HALO_ROWS) is also even, so
+        // halo_top_full is min(body_top, HALO_ROWS) which is even iff
+        // body_top is. Since body_top is even and halo_h is even,
+        // halo_top_full is always even.
+        let halo_top = body_top.min(halo_h);
+        let halo_bot = (image_h - body_end).min(halo_h);
+        let strip_h_total = halo_top + this_body_h + halo_bot;
+
+        // Half-res strip rows: cover half-res image rows
+        // [body_top_half, body_end_half) where:
+        let body_top_half = body_top / 2;
+        let body_end_half = body_end.div_ceil(2).min(half_image_h);
+        let this_body_h_half = body_end_half - body_top_half;
+        // halo_top_full is even, so halo_top_half = halo_top_full / 2.
+        // halo_bot_half is the smaller of (HALO_ROWS, remaining
+        // half-res image rows below the body).
+        let halo_top_half = halo_top / 2;
+        let halo_bot_half = (half_image_h - body_end_half).min(halo_h);
+        let strip_h_total_half = halo_top_half + this_body_h_half + halo_bot_half;
+
+        // ── Full-res strip pass ──
+        state.upload_strip_srgb(
+            true,
+            ref_srgb,
+            image_w,
+            image_h,
+            body_top,
+            strip_h_total,
+            halo_top,
+        );
+        state.upload_strip_srgb(
+            false,
+            dist_srgb,
+            image_w,
+            image_h,
+            body_top,
+            strip_h_total,
+            halo_top,
+        );
+
+        // Run the full-res pipeline UP TO opsin: we want the linear-RGB
+        // planes populated so we can downsample them into the half-res
+        // sibling BEFORE opsin overwrites them. Since
+        // `apply_opsin` writes XYB back into `lin`, we must do the
+        // downsample first.
+        //
+        // The full-res pipeline-up-to-diffmap chain is the same as the
+        // single-resolution strip walker, so we can call
+        // `run_strip_pipeline_compute` AFTER downsampling. Order:
+        //   1. upload (already done above)
+        //   2. downsample linear-RGB into half-res slab
+        //   3. run full-res pipeline (apply_opsin, freq, mask, diff)
+        //   4. run half-res pipeline (apply_opsin, freq, mask, diff)
+        //   5. supersample-add half-res diffmap into full-res diffmap
+        //   6. reduce full-res body rows
+
+        // Step 2: downsample full-res lin → half-res lin (slab to
+        // slab). Temporarily clamp both heights so the downsample
+        // kernel covers the populated rows only.
+        let mut half = state
+            .take_half_res()
+            .expect("multires strip walker invoked without half_res sibling");
+        // Both still have their slab geometry as `height`. We pass
+        // explicit strip_h_total values to the helper, which clamps
+        // internally without needing to touch self.height. (The
+        // downsample kernel takes src/dst dims explicitly.)
+        state.downsample_full_strip_into_half(&half, strip_h_total, strip_h_total_half);
+
+        // Step 3 + 4: drive the full-res and half-res strip
+        // pipelines on the now-populated linear-RGB planes.
+        state.run_strip_pipeline_compute(strip_h_total);
+        half.run_strip_pipeline_compute_lin_only(strip_h_total_half);
+
+        // Step 5: supersample-add half → full.
+        state.add_supersampled_from_half_strip(&half, strip_h_total, strip_h_total_half);
+
+        // Step 6: reduce body rows of full-res strip diffmap.
+        let diffmap_handle = state.diffmap_buf_handle();
+        let strip_partials = reduce_strip_body::<R>(
+            state.client_ref(),
+            diffmap_handle,
+            image_w,
+            strip_h_total,
+            halo_top,
+            this_body_h,
+        );
+        combined.merge(&strip_partials);
+
+        // Restore half_res for the next iteration / for the caller's
+        // accessors.
+        state.restore_half_res(half);
 
         body_top = body_end;
     }

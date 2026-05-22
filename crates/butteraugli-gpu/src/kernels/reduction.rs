@@ -35,10 +35,14 @@ use cubecl::prelude::*;
 /// the existing `butteraugli-cuda` PTX path.
 const BLOCKS: u32 = 16;
 const THREADS: u32 = 256;
+/// Used only by the no-`fast-reduction` slow path's host-side allocator.
+#[cfg(not(feature = "fast-reduction"))]
 const THREADS_PER_REDUCTION: usize = (BLOCKS * THREADS) as usize;
 
 // Per-cube launch dim for the batched paths.
 const BATCHED_CUBES_PER_IMAGE: u32 = 8;
+/// Used only by the no-`fast-reduction` slow path's batched finalizer.
+#[cfg(not(feature = "fast-reduction"))]
 const BATCHED_THREADS_PER_REDUCTION: usize = (BATCHED_CUBES_PER_IMAGE * THREADS) as usize;
 
 // =====================================================================

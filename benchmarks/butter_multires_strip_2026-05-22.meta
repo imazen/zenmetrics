@@ -1,0 +1,21 @@
+benchmark: butter_multires_strip_2026-05-22.csv
+date: 2026-05-22
+host: lilith
+gpu: NVIDIA GeForce RTX 5070
+driver: 596.21
+cuda: 13.2
+master_tip: 220b6250fe5d70996abd62410e96461033e97946
+worktree_head: feat/butter-multires-strip (uncommitted at bench time)
+command: cargo run --release -p butteraugli-gpu --features cuda,cubecl-types --example bench_multires_strip_vs_whole_cuda
+backend: cubecl-cuda (CudaRuntime)
+body_h: 256
+halo_h: 40
+sizes: 4MP_2000x2000, 12MP_4000x3000, 24MP_6144x4096
+notes:
+  - 24 MP whole-image is skipped (exceeds 12 GB GPU memory budget).
+  - 4 MP strip is SLOWER than whole because per-strip kernel-launch
+    overhead exceeds the locality win at this size. This matches the
+    single-res strip behavior and is expected.
+  - 12 MP strip is 11.3× faster than whole — whole spills past L2.
+  - All numbers are zenbench medians over 4 rounds with one warmup
+    call before timed runs.

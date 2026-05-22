@@ -17,6 +17,57 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### butteraugli-gpu — multi-resolution strip walker + opaque-strip parity + dead-code cleanup — 2026-05-22
+
+Adds the constant-VRAM analog of the CPU reference's default
+multi-resolution path. `Butteraugli::new_multires_strip` walks the
+full-res image in `body_h`-tall strips, and each strip pass drives a
+synchronized half-res sibling whose body covers
+`[body_top_full / 2, body_end_full.div_ceil(2))`. The half-res image
+isn't decoded separately — its content comes from a 2× downsample of
+the full-res linear-RGB strip planes, so the constant-VRAM property of
+strip mode survives the multi-resolution upgrade.
+
+- `Butteraugli::new_multires_strip(client, w, h, body_h)` constructor;
+  enforces `body_h % 2 == 0` for half-res alignment.
+- `Butteraugli::new_multires_with_memory_mode(client, w, h, mode)`
+  routes `MemoryMode::Strip` to the new walker (was returning
+  `StripModeUnsupported("new_multires")`).
+- `strip::run_strip_pipeline_multires` orchestration:
+  upload → downsample linear-RGB into half-res slab → run full-res
+  pipeline → run half-res pipeline (lin-only entry, opsin already in
+  the downsampled slab) → supersample-add half-res diffmap → reduce
+  full-res body rows host-side.
+
+11 new multires-strip parity tests (`tests/multires_strip.rs`) and 10
+new opaque-shim strip routing tests (`tests/opaque_strip_parity.rs`),
+covering 256² → 4000×3000 with even/uneven body sizes, with and without
+`ButteraugliParams` overrides. All pass on cuda + wgpu within `1e-4`
+relative tolerance (matches the single-res `strip_parity` band).
+
+Bench (RTX 5070, body=256):
+
+| Size | Whole | Strip | Speedup | Whole alloc | Strip alloc |
+|---:|---:|---:|---:|---:|---:|
+| 4 MP | 76.8 ms | 143.8 ms | 0.53× | 954 MB | 160 MB |
+| 12 MP | 1736.6 ms | 153.6 ms | 11.31× | 2.79 GB | 320 MB |
+| 24 MP | OOM | 275.9 ms | — | 5.86 GB | 492 MB |
+
+At 4 MP the strip walker's per-strip kernel-launch overhead exceeds
+its locality win (same shape as the single-res bench). At 12 MP the
+whole-image multires path spills past L2 and strip is 11× faster. At
+24 MP the whole-image path doesn't fit in 12 GB consumer VRAM. See
+`benchmarks/butter_multires_strip_2026-05-22.csv`.
+
+Dead-code cleanup: removed 10 helper methods made redundant by the
+LUT-blur fast path and the fused `malta_triple` / `l2_asym_plus_l2` /
+`l2_diff_write_3ch` landings — `launch_opsin`, `blur_plane`,
+`blur_3ch_via`, `copy_plane`, `zero_plane`, `subtract_arrays`,
+`malta_hf`, `malta_lf`, `l2_diff`, `l2_diff_asym`. Gated two
+slow-path reduction constants behind `cfg(not(feature =
+"fast-reduction"))`. -273 LOC, 1 dead-code warning eliminated, no
+public API change.
+
 ### zensim-gpu — cached-reference + regime-aware opaque API — 2026-05-22
 
 Plumbs the typed pipeline's `set_reference` / `compute_with_reference_vec`

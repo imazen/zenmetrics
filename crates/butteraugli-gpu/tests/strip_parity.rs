@@ -335,17 +335,19 @@ fn compute_strip_on_whole_image_instance_returns_clear_error() {
 }
 
 #[test]
-fn strip_mode_is_documented_single_resolution_only() {
-    // No `new_strip_multires` constructor exists — strip mode is
-    // explicitly single-resolution per the MVP scope. This test
-    // documents that contract by checking that a strip instance
-    // reports no half-res sibling and that the constructor signature
-    // exposes only `(client, w, h, body_h)`.
+fn single_res_strip_constructor_has_no_half_res_sibling() {
+    // `new_strip` is the single-resolution strip constructor — it
+    // does NOT allocate a half-res sibling (the multires-strip path
+    // lives at `new_multires_strip`, covered by `multires_strip.rs`).
+    // This test pins that contract so a future refactor doesn't
+    // silently turn `new_strip` into a multires-strip allocator
+    // (which would double its memory footprint, breaking the strip
+    // memory savings).
     let client = BackendT::client(&Default::default());
     let strip = Butteraugli::<BackendT>::new_strip(client, 512, 512, 64);
     assert!(strip.is_strip_mode());
     assert!(
         strip.half_res().is_none(),
-        "strip mode must not allocate a half-res sibling"
+        "`new_strip` must not allocate a half-res sibling — use `new_multires_strip` for multires"
     );
 }

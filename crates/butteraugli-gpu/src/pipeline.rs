@@ -508,11 +508,13 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     /// Multi-resolution [`MemoryMode`](crate::MemoryMode) constructor.
-    /// Currently only `MemoryMode::Full` and `MemoryMode::Auto`
-    /// (which falls through to Full) are supported — the half-
-    /// resolution sibling does NOT have a strip walker yet. Strip
-    /// mode on multires returns
-    /// [`Error::StripModeUnsupported`](crate::Error::StripModeUnsupported).
+    /// `MemoryMode::Full` allocates whole-image planes for both the
+    /// full-res and half-res passes; `MemoryMode::Strip { h_body }`
+    /// allocates strip-sized planes for BOTH the full-res and half-res
+    /// passes (the strip-multires walker runs both in tandem with a
+    /// halved halo on the half-res side).
+    /// `MemoryMode::Auto` resolves to Strip when it fits the VRAM cap
+    /// (butter is strip-preferred), Full otherwise.
     pub fn new_multires_with_memory_mode(
         client: ComputeClient<R>,
         width: u32,
@@ -520,10 +522,26 @@ impl<R: Runtime> Butteraugli<R> {
         mode: crate::MemoryMode,
     ) -> crate::Result<Self> {
         use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
-            MemoryMode::Full | MemoryMode::Auto => Ok(Self::new_multires(client, width, height)),
-            MemoryMode::Strip { .. } => Err(crate::Error::StripModeUnsupported("new_multires")),
+            MemoryMode::Full => Ok(Self::new_multires(client, width, height)),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                });
+                Ok(Self::new_multires_strip(client, width, height, body))
+            }
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                match resolve_auto(width, height, cap)? {
+                    ResolvedMode::Full => Ok(Self::new_multires(client, width, height)),
+                    ResolvedMode::Strip { h_body } => {
+                        Ok(Self::new_multires_strip(client, width, height, h_body))
+                    }
+                }
+            }
         }
     }
 
@@ -541,6 +559,57 @@ impl<R: Runtime> Butteraugli<R> {
             let half_w = width.div_ceil(2);
             let half_h = height.div_ceil(2);
             full.half_res = Some(Box::new(Self::new(client, half_w, half_h)));
+        }
+        full
+    }
+
+    /// Construct a multi-resolution strip-mode `Butteraugli` instance.
+    /// Builds a strip-mode full-res instance via [`Self::new_strip`]
+    /// plus a strip-mode half-res sibling allocated at
+    /// `(image_w.div_ceil(2), image_h.div_ceil(2))` with body
+    /// `body_h.div_ceil(2)` and the same `HALO_ROWS` halo.
+    ///
+    /// The strip walker drives both instances in tandem: each full-res
+    /// strip's body has a matching half-res strip body produced by
+    /// 2× downsampling the full-res strip's linear-RGB slab. After the
+    /// half-res strip's diffmap is computed, it's supersample-added
+    /// into the full-res strip's diffmap BEFORE the body-band
+    /// reduction.
+    ///
+    /// **Constraints**:
+    /// - `body_h` is internally rounded DOWN to the nearest even value
+    ///   so the half-res body alignment is exact. The minimum body_h
+    ///   after rounding is 2 (caller passing `body_h = 1` will see a
+    ///   panic from the inner `new_strip` call). Pass even values to
+    ///   avoid surprise.
+    /// - For very small images (`w < 16` or `h < 16`) the half-res
+    ///   sibling is skipped — same threshold as [`Self::new_multires`]
+    ///   — and the constructor degenerates to a single-resolution
+    ///   strip instance.
+    pub fn new_multires_strip(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        body_h: u32,
+    ) -> Self {
+        const MIN_SIZE_FOR_SUBSAMPLE: u32 = 16;
+        // Round body_h DOWN to even so half-res body alignment is
+        // exact. body_h_full = 2k → body_h_half = k; every body_top
+        // is a multiple of 2k, also even.
+        let body_h_even = (body_h / 2).max(1) * 2;
+        let body_h_full = body_h_even.min(image_h);
+        let mut full = Self::new_strip(client.clone(), image_w, image_h, body_h_full);
+        if image_w >= MIN_SIZE_FOR_SUBSAMPLE && image_h >= MIN_SIZE_FOR_SUBSAMPLE {
+            let half_w = image_w.div_ceil(2);
+            let half_h = image_h.div_ceil(2);
+            // Half-res body is body_h_full / 2 — exact because
+            // body_h_full is even. The half-res HALO is still
+            // HALO_ROWS (the LF/HF/UHF blurs operate in pixel-space
+            // and have the same radii on the half-res image).
+            let body_h_half = (body_h_full / 2).max(1);
+            full.half_res = Some(Box::new(Self::new_strip(
+                client, half_w, half_h, body_h_half,
+            )));
         }
         full
     }
@@ -579,16 +648,29 @@ impl<R: Runtime> Butteraugli<R> {
                 "compute_strip-on-whole-image-instance (use Butteraugli::new_strip)",
             ));
         }
-        crate::strip::run_strip_pipeline(
-            self,
-            ref_srgb,
-            dist_srgb,
-            self.width,
-            self.image_h,
-            self.body_h,
-            self.halo_h,
-            params,
-        )
+        if self.half_res.is_some() {
+            crate::strip::run_strip_pipeline_multires(
+                self,
+                ref_srgb,
+                dist_srgb,
+                self.width,
+                self.image_h,
+                self.body_h,
+                self.halo_h,
+                params,
+            )
+        } else {
+            crate::strip::run_strip_pipeline(
+                self,
+                ref_srgb,
+                dist_srgb,
+                self.width,
+                self.image_h,
+                self.body_h,
+                self.halo_h,
+                params,
+            )
+        }
     }
 
     /// True if this instance was constructed via
@@ -1084,6 +1166,12 @@ impl<R: Runtime> Butteraugli<R> {
     /// value for the duration of the pipeline so kernels launched with
     /// `cube_count_1d / 2d` cover the strip but not the unused
     /// trailing rows of the slab.
+    ///
+    /// This method does NOT recurse into `self.half_res` — the
+    /// multires-strip walker drives the full-res and half-res
+    /// instances side-by-side instead (see
+    /// [`crate::strip::run_strip_pipeline_multires`]). For a
+    /// single-resolution strip instance, `self.half_res` is `None`.
     pub(crate) fn run_strip_pipeline_compute(&mut self, strip_h_total: u32) {
         let saved_height = self.height;
         let saved_n = self.n;
@@ -1095,9 +1183,6 @@ impl<R: Runtime> Butteraugli<R> {
         self.height = strip_h_total;
         self.n = (self.width as usize) * (strip_h_total as usize);
 
-        // Skip half_res / cached-reference branches: strip mode is
-        // single-resolution-only in this MVP.
-        debug_assert!(self.half_res.is_none(), "strip mode is single-res only");
         self.apply_opsin(true);
         self.apply_opsin(false);
         self.separate_frequencies(true);
@@ -1111,6 +1196,147 @@ impl<R: Runtime> Butteraugli<R> {
 
         self.height = saved_height;
         self.n = saved_n;
+    }
+
+    /// Strip-multires helper: downsample the full-res strip's
+    /// `lin_a` / `lin_b` planes into the half-res sibling's `lin_a`
+    /// / `lin_b` planes. Operates slab-to-slab — both instances must
+    /// have their `height` clamped to their respective strip-totals
+    /// before this call so that the fused 3-channel downsample kernel
+    /// covers exactly the populated rows.
+    ///
+    /// `full_strip_h_total` and `half_strip_h_total` are the populated
+    /// strip slab heights (full = 2 × half + parity overhang at the
+    /// bottom edge). The constructor guarantees these line up.
+    pub(crate) fn downsample_full_strip_into_half(
+        &self,
+        half: &Butteraugli<R>,
+        full_strip_h_total: u32,
+        half_strip_h_total: u32,
+    ) {
+        // Reuse the existing `downsample_2x_3ch_kernel` — it operates
+        // on plain planar buffers; the caller swears the half-res slab
+        // is half the size of the full-res slab to within rounding.
+        let half_n = (half.width as usize) * (half_strip_h_total as usize);
+        const TPB: u32 = 256;
+        let cubes = (half_n as u32).div_ceil(TPB);
+        let block = CubeDim::new_1d(TPB);
+        let full_n = (self.width as usize) * (full_strip_h_total as usize);
+        for &is_a in &[true, false] {
+            let (full_lin, half_lin) = if is_a {
+                (&self.lin_a, &half.lin_a)
+            } else {
+                (&self.lin_b, &half.lin_b)
+            };
+            // CubeCount/Dim aren't Copy — recreate per launch.
+            let dim = CubeCount::Static(cubes, 1, 1);
+            unsafe {
+                downscale::downsample_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    dim,
+                    block,
+                    ArrayArg::from_raw_parts(full_lin[0].clone(), full_n),
+                    ArrayArg::from_raw_parts(full_lin[1].clone(), full_n),
+                    ArrayArg::from_raw_parts(full_lin[2].clone(), full_n),
+                    ArrayArg::from_raw_parts(half_lin[0].clone(), half_n),
+                    ArrayArg::from_raw_parts(half_lin[1].clone(), half_n),
+                    ArrayArg::from_raw_parts(half_lin[2].clone(), half_n),
+                    self.width,
+                    full_strip_h_total,
+                    half.width,
+                    half_strip_h_total,
+                );
+            }
+        }
+    }
+
+    /// Strip-multires helper: supersample-add the half-res strip
+    /// diffmap into the full-res strip diffmap. The 2× upsample-add
+    /// kernel reads `src[y/2 * src_w + x/2]`, mapping each full-res
+    /// pixel (x, y) (slab coords) to a half-res pixel (x/2, y/2)
+    /// (slab coords). For the body rows of the strip to land on the
+    /// correct half-res rows, the constructor enforces `body_h_full
+    /// = 2 × body_h_half` and `halo_top_full = 2 × halo_top_half`;
+    /// the strip walker maintains this invariant per-strip.
+    ///
+    /// Both instances must have their slab-clamped `height` set
+    /// (full = `full_strip_h_total`, half = `half_strip_h_total`)
+    /// before this call.
+    pub(crate) fn add_supersampled_from_half_strip(
+        &self,
+        half: &Butteraugli<R>,
+        full_strip_h_total: u32,
+        half_strip_h_total: u32,
+    ) {
+        let full_n = (self.width as usize) * (full_strip_h_total as usize);
+        let half_n = (half.width as usize) * (half_strip_h_total as usize);
+        const TPB: u32 = 256;
+        let cubes = (full_n as u32).div_ceil(TPB);
+        let dim = CubeCount::Static(cubes, 1, 1);
+        let block = CubeDim::new_1d(TPB);
+        unsafe {
+            downscale::add_upsample_2x_kernel::launch_unchecked::<R>(
+                &self.client,
+                dim,
+                block,
+                ArrayArg::from_raw_parts(self.diffmap_buf.clone(), full_n),
+                ArrayArg::from_raw_parts(half.diffmap_buf.clone(), half_n),
+                self.width,
+                full_strip_h_total,
+                half.width,
+                0.5_f32,
+            );
+        }
+    }
+
+    /// Strip-multires helper: drive the same one-strip kernel chain
+    /// as [`Self::run_strip_pipeline_compute`] but skip the
+    /// sRGB→linear stage on the full-res side. The half-res
+    /// instance's `lin_a/b` are populated by an earlier
+    /// [`Self::downsample_full_strip_into_half`] from the full-res
+    /// strip's linear planes; we skip the sRGB upload + sRGB→linear
+    /// kernel on the half-res side because there's no half-res
+    /// sRGB buffer to read.
+    pub(crate) fn run_strip_pipeline_compute_lin_only(&mut self, strip_h_total: u32) {
+        let saved_height = self.height;
+        let saved_n = self.n;
+        self.height = strip_h_total;
+        self.n = (self.width as usize) * (strip_h_total as usize);
+
+        self.apply_opsin(true);
+        self.apply_opsin(false);
+        self.separate_frequencies(true);
+        self.separate_frequencies(false);
+        self.compute_psycho_diff();
+        self.compute_dc_diff();
+        self.compute_mask_pipeline_full();
+        unsafe {
+            self.launch_compute_diffmap();
+        }
+
+        self.height = saved_height;
+        self.n = saved_n;
+    }
+
+    /// Strip-multires helper: borrow the half-res sibling mutably so
+    /// the strip walker can clamp its height during a strip pass.
+    pub(crate) fn half_res_mut(&mut self) -> Option<&mut Box<Butteraugli<R>>> {
+        self.half_res.as_mut()
+    }
+
+    /// Strip-multires helper: take the half-res sibling out so the
+    /// strip walker can pass `&mut self` and `&mut half` to
+    /// kernel-launch helpers without splitting the borrow. The walker
+    /// MUST restore it via [`Self::restore_half_res`] before
+    /// returning.
+    pub(crate) fn take_half_res(&mut self) -> Option<Box<Butteraugli<R>>> {
+        self.half_res.take()
+    }
+
+    /// Strip-multires helper: put the half-res sibling back after a
+    /// [`Self::take_half_res`].
+    pub(crate) fn restore_half_res(&mut self, half: Box<Butteraugli<R>>) {
+        self.half_res = Some(half);
     }
 
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {
@@ -1255,55 +1481,6 @@ impl<R: Runtime> Butteraugli<R> {
         }
     }
 
-    unsafe fn launch_opsin(&self, is_a: bool) {
-        let (lin, bl) = if is_a {
-            (&self.lin_a, &self.blur_a)
-        } else {
-            (&self.lin_b, &self.blur_b)
-        };
-        unsafe {
-            colors::opsin_dynamics_planar_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(lin[0].clone(), self.n),
-                ArrayArg::from_raw_parts(lin[1].clone(), self.n),
-                ArrayArg::from_raw_parts(lin[2].clone(), self.n),
-                ArrayArg::from_raw_parts(bl[0].clone(), self.n),
-                ArrayArg::from_raw_parts(bl[1].clone(), self.n),
-                ArrayArg::from_raw_parts(bl[2].clone(), self.n),
-                self.params.intensity_target,
-            );
-        }
-    }
-
-    /// Helper: H+V Gaussian blur with given sigma. Two kernel launches.
-    /// `temp1` is reused as the H→V intermediate.
-    fn blur_plane(&self, src: &cubecl::server::Handle, dst: &cubecl::server::Handle, sigma: f32) {
-        unsafe {
-            blur::horizontal_blur_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), self.n),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                self.width,
-                self.height,
-                sigma,
-            );
-            blur::vertical_blur_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(self.temp1.clone(), self.n),
-                ArrayArg::from_raw_parts(dst.clone(), self.n),
-                self.width,
-                self.height,
-                sigma,
-            );
-        }
-    }
-
     /// H+V blur with a caller-supplied scratch (so we can blur into
     /// `temp1` without overwriting it mid-pass).
     ///
@@ -1368,140 +1545,6 @@ impl<R: Runtime> Butteraugli<R> {
                 self.width,
                 self.height,
                 sigma,
-            );
-        }
-    }
-
-    /// 3-channel fused variant of [`Self::blur_plane_via`]. Uses the
-    /// same scratch buffer pair (temp1/temp2 typed; here we need 3
-    /// distinct H→V scratches per channel — caller must supply).
-    /// Two launches total instead of six.
-    ///
-    /// LUT-based fast path: if `sigma` is one of [`BLUR_SIGMAS`], uses
-    /// the precomputed weight table; otherwise falls back to the
-    /// powf-per-tap path. The two paths produce bit-identical output
-    /// on every backend we test (CUDA, DX12, HIP, WGPU Vulkan).
-    #[allow(clippy::too_many_arguments)]
-    fn blur_3ch_via(
-        &self,
-        src_x: &cubecl::server::Handle,
-        src_y: &cubecl::server::Handle,
-        src_b: &cubecl::server::Handle,
-        dst_x: &cubecl::server::Handle,
-        dst_y: &cubecl::server::Handle,
-        dst_b: &cubecl::server::Handle,
-        scratch_x: &cubecl::server::Handle,
-        scratch_y: &cubecl::server::Handle,
-        scratch_b: &cubecl::server::Handle,
-        sigma: f32,
-    ) {
-        if let Some(kind) = blur_kind_for_sigma(sigma) {
-            let table = &self.blur_tables[kind as usize];
-            let table_len = self.blur_table_lens[kind as usize];
-            let radius = self.blur_radii[kind as usize];
-            unsafe {
-                blur_lut::horizontal_blur_3ch_lut_kernel::launch_unchecked::<R>(
-                    &self.client,
-                    self.cube_count_1d(),
-                    self.cube_dim_1d(),
-                    ArrayArg::from_raw_parts(src_x.clone(), self.n),
-                    ArrayArg::from_raw_parts(src_y.clone(), self.n),
-                    ArrayArg::from_raw_parts(src_b.clone(), self.n),
-                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
-                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
-                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
-                    ArrayArg::from_raw_parts(table.clone(), table_len),
-                    self.width,
-                    self.height,
-                    radius,
-                );
-                blur_lut::vertical_blur_3ch_lut_kernel::launch_unchecked::<R>(
-                    &self.client,
-                    self.cube_count_1d(),
-                    self.cube_dim_1d(),
-                    ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
-                    ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
-                    ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
-                    ArrayArg::from_raw_parts(dst_x.clone(), self.n),
-                    ArrayArg::from_raw_parts(dst_y.clone(), self.n),
-                    ArrayArg::from_raw_parts(dst_b.clone(), self.n),
-                    ArrayArg::from_raw_parts(table.clone(), table_len),
-                    self.width,
-                    self.height,
-                    radius,
-                );
-            }
-            return;
-        }
-        unsafe {
-            crate::kernels::blur_3ch::horizontal_blur_3ch_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src_x.clone(), self.n),
-                ArrayArg::from_raw_parts(src_y.clone(), self.n),
-                ArrayArg::from_raw_parts(src_b.clone(), self.n),
-                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
-                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
-                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
-                self.width,
-                self.height,
-                sigma,
-            );
-            crate::kernels::blur_3ch::vertical_blur_3ch_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(scratch_x.clone(), self.n),
-                ArrayArg::from_raw_parts(scratch_y.clone(), self.n),
-                ArrayArg::from_raw_parts(scratch_b.clone(), self.n),
-                ArrayArg::from_raw_parts(dst_x.clone(), self.n),
-                ArrayArg::from_raw_parts(dst_y.clone(), self.n),
-                ArrayArg::from_raw_parts(dst_b.clone(), self.n),
-                self.width,
-                self.height,
-                sigma,
-            );
-        }
-    }
-
-    fn copy_plane(&self, src: &cubecl::server::Handle, dst: &cubecl::server::Handle) {
-        unsafe {
-            frequency::copy_plane_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), self.n),
-                ArrayArg::from_raw_parts(dst.clone(), self.n),
-            );
-        }
-    }
-
-    fn zero_plane(&self, dst: &cubecl::server::Handle) {
-        unsafe {
-            frequency::zero_plane_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(dst.clone(), self.n),
-            );
-        }
-    }
-
-    fn subtract_arrays(
-        &self,
-        src1: &cubecl::server::Handle,
-        src2: &cubecl::server::Handle,
-        dst: &cubecl::server::Handle,
-    ) {
-        unsafe {
-            frequency::subtract_arrays_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(src1.clone(), self.n),
-                ArrayArg::from_raw_parts(src2.clone(), self.n),
-                ArrayArg::from_raw_parts(dst.clone(), self.n),
             );
         }
     }
@@ -1944,58 +1987,6 @@ impl<R: Runtime> Butteraugli<R> {
         }
     }
 
-    fn malta_hf(
-        &self,
-        a: &cubecl::server::Handle,
-        b: &cubecl::server::Handle,
-        acc: &cubecl::server::Handle,
-        norm2_0gt1: f32,
-        norm2_0lt1: f32,
-        norm1: f32,
-    ) {
-        unsafe {
-            malta::malta_diff_map_hf_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_2d(),
-                self.cube_dim_2d(),
-                ArrayArg::from_raw_parts(a.clone(), self.n),
-                ArrayArg::from_raw_parts(b.clone(), self.n),
-                ArrayArg::from_raw_parts(acc.clone(), self.n),
-                self.width,
-                self.height,
-                norm2_0gt1,
-                norm2_0lt1,
-                norm1,
-            );
-        }
-    }
-
-    fn malta_lf(
-        &self,
-        a: &cubecl::server::Handle,
-        b: &cubecl::server::Handle,
-        acc: &cubecl::server::Handle,
-        norm2_0gt1: f32,
-        norm2_0lt1: f32,
-        norm1: f32,
-    ) {
-        unsafe {
-            malta::malta_diff_map_lf_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_2d(),
-                self.cube_dim_2d(),
-                ArrayArg::from_raw_parts(a.clone(), self.n),
-                ArrayArg::from_raw_parts(b.clone(), self.n),
-                ArrayArg::from_raw_parts(acc.clone(), self.n),
-                self.width,
-                self.height,
-                norm2_0gt1,
-                norm2_0lt1,
-                norm1,
-            );
-        }
-    }
-
     /// T_x.K (2026-05-17): single-launch UHF (hf-pattern) + HF (lf-pattern)
     /// + MF (lf-pattern) per channel. Overwrites the accumulator.
     #[allow(clippy::too_many_arguments)]
@@ -2041,26 +2032,6 @@ impl<R: Runtime> Butteraugli<R> {
                 mf_norm2_0gt1,
                 mf_norm2_0lt1,
                 mf_norm1,
-            );
-        }
-    }
-
-    fn l2_diff(
-        &self,
-        a: &cubecl::server::Handle,
-        b: &cubecl::server::Handle,
-        acc: &cubecl::server::Handle,
-        weight: f32,
-    ) {
-        unsafe {
-            diffmap::l2_diff_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(a.clone(), self.n),
-                ArrayArg::from_raw_parts(b.clone(), self.n),
-                ArrayArg::from_raw_parts(acc.clone(), self.n),
-                weight,
             );
         }
     }
@@ -2111,28 +2082,6 @@ impl<R: Runtime> Butteraugli<R> {
                 ArrayArg::from_raw_parts(b.clone(), self.n),
                 ArrayArg::from_raw_parts(acc.clone(), self.n),
                 weight,
-            );
-        }
-    }
-
-    fn l2_diff_asym(
-        &self,
-        a: &cubecl::server::Handle,
-        b: &cubecl::server::Handle,
-        acc: &cubecl::server::Handle,
-        w_gt: f32,
-        w_lt: f32,
-    ) {
-        unsafe {
-            diffmap::l2_asym_diff_kernel::launch_unchecked::<R>(
-                &self.client,
-                self.cube_count_1d(),
-                self.cube_dim_1d(),
-                ArrayArg::from_raw_parts(a.clone(), self.n),
-                ArrayArg::from_raw_parts(b.clone(), self.n),
-                ArrayArg::from_raw_parts(acc.clone(), self.n),
-                w_gt,
-                w_lt,
             );
         }
     }
