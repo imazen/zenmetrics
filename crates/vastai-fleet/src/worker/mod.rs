@@ -160,6 +160,27 @@ pub struct WorkerArgs {
     #[arg(long, env = "ADAPT_INTERVAL_SEC", default_value_t = 60)]
     pub adapt_interval_sec: u64,
 
+    /// Per-process chunk cap. After dispatching this many chunks the
+    /// worker exits cleanly (code 0); the outer onstart loop is
+    /// expected to respawn it. 0 = no cap (process until chunks
+    /// exhausted). Default 20.
+    ///
+    /// Why: even with cubecl `memory_cleanup` between source images,
+    /// the cubecl-cuda pool footprint creeps up over long runs (NVRTC
+    /// PTX cache, fragmented allocations, retained planes from per-
+    /// metric features). A bounded process lifetime resets that
+    /// footprint to zero on respawn — much cheaper than fighting the
+    /// pool growth in-process. The atomic claim discipline (sidecar
+    /// existence + R2 claim file) ensures no chunk gets reprocessed
+    /// across respawns.
+    ///
+    /// Skipped chunks (sidecar present, peer holds, claim race lost)
+    /// DO count toward the cap — they each consumed a dispatch slot,
+    /// and capping by "real work done" would unbounded the process
+    /// lifetime when the corpus is sparse.
+    #[arg(long, env = "MAX_CHUNKS_PER_PROCESS", default_value_t = 20)]
+    pub max_chunks_per_process: usize,
+
     /// GPU util threshold for ramp-up. When the average GPU util
     /// over the last interval drops below this, the AIMD loop
     /// increments PC. Default 30%.
@@ -262,7 +283,29 @@ async fn run_worker_async(
     let mut shutdown = util::shutdown_signal();
     let mut chunk_iter = shuffled.into_iter();
 
+    let chunk_cap = args.max_chunks_per_process;
+    if chunk_cap > 0 {
+        info!(
+            chunk_cap,
+            "per-process chunk cap enabled; process will exit after \
+             dispatching N chunks so the outer onstart loop respawns \
+             and resets the cubecl pool footprint to zero"
+        );
+    }
+    let mut dispatched: usize = 0;
+    let mut cap_hit = false;
+
     'dispatch: loop {
+        if chunk_cap > 0 && dispatched >= chunk_cap {
+            info!(
+                chunk_cap,
+                dispatched,
+                "per-process chunk cap reached; stopping dispatch (outer \
+                 onstart loop will respawn worker with fresh cubecl pool)"
+            );
+            cap_hit = true;
+            break 'dispatch;
+        }
         tokio::select! {
             biased;
             _ = &mut shutdown => {
@@ -286,6 +329,7 @@ async fn run_worker_async(
                     }
                     drop(permit);
                 });
+                dispatched += 1;
             }
             else => break 'dispatch,
         }
@@ -296,7 +340,14 @@ async fn run_worker_async(
     if let Some(h) = adapt_handle {
         h.abort();
     }
-    info!("all chunks processed; worker exiting");
+    if cap_hit {
+        info!(
+            dispatched,
+            "chunk cap drained; worker exiting cleanly for respawn"
+        );
+    } else {
+        info!(dispatched, "all chunks processed; worker exiting");
+    }
     Ok(())
 }
 
@@ -357,6 +408,7 @@ fn hydrate_pid1_env() {
                 | "ADAPT_INTERVAL_SEC"
                 | "ZENSIM_FEATURES_REGIME"
                 | "JOBS"
+                | "MAX_CHUNKS_PER_PROCESS"
         ) && std::env::var_os(k).is_none()
         {
             // SAFETY: we're single-threaded at this point (called

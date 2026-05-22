@@ -389,11 +389,18 @@ fn parse_feature_regime_env_or_default() -> ZensimFeatureRegime {
 }
 
 /// Parse the METRICS env (comma-list) into the typed enum. The
-/// production omni default is the six GPU metrics; we keep that
-/// alignment so the Rust worker is a drop-in for the bash one.
+/// production omni default is the five GPU metrics that ship six
+/// score columns total (butteraugli emits both max and pnorm3).
+///
+/// iwssim-gpu is intentionally NOT in the default set: it has a
+/// 176-pixel minimum dimension which causes hard failures on every
+/// gif / small wikimedia image in the corpus AND its cubecl pool
+/// footprint contributes ~16% of pool pressure per cell. Operators
+/// who want iwssim coverage on a 24 GB+ box must pass METRICS
+/// explicitly including `iwssim-gpu`.
 fn parse_metrics_env_or_default() -> Vec<MetricKind> {
     let raw = std::env::var("METRICS").unwrap_or_else(|_| {
-        "zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu,iwssim-gpu".to_string()
+        "zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu".to_string()
     });
     let mut out = Vec::new();
     for name in raw.split(',') {

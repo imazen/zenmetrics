@@ -26,10 +26,20 @@
 #                        unset → auto-detect from host specs.
 #   METRICS              Optional. Comma-list of metric names.
 #                        Default: zensim-gpu,ssim2-gpu,butteraugli-gpu,
-#                                 cvvdp,dssim-gpu,iwssim-gpu.
+#                                 cvvdp,dssim-gpu. iwssim-gpu is
+#                                 OFF by default (176-px min fails on
+#                                 gif/wikimedia + ~16% pool pressure).
 #   SKIP_CLAIMS          Optional. Set to 1 for single-instance smoke.
 #   R2_*                 REQUIRED. R2_ACCOUNT_ID + access keys.
 #   ADAPT_INTERVAL_SEC   Optional. AIMD sample period; default 60.
+#   MAX_CHUNKS_PER_PROCESS Optional. After N chunks the worker exits 0
+#                        and the outer loop respawns it (fresh cubecl
+#                        pool). Default 20. Set 0 to disable.
+#   MAX_RESPAWNS         Optional. Hard ceiling on respawn loop
+#                        iterations. Default 200 (4000 chunks at the
+#                        default chunk cap of 20). Hit only if the
+#                        chunk corpus is huge AND each respawn lands
+#                        the cap.
 #
 # Launcher invocation expectations are unchanged — point any of the
 # existing launchers at this onstart instead of onstart_omni_backfill.sh.
@@ -72,9 +82,29 @@ echo "[onstart-unified] worker=${WORKER_ID:-$(hostname)} run=${SWEEP_RUN_ID} chu
 # default was info, so match.
 export RUST_LOG="${RUST_LOG:-info}"
 
-# Hand off to the Rust worker. exec replaces this bash shell so
-# the run_with_error_trap wrapper that called us still sees the
-# Rust worker's exit code directly.
-exec /usr/local/bin/vastai-fleet worker \
-    --run-id "${SWEEP_RUN_ID}" \
-    --chunks-r2 "${CHUNKS_R2}"
+# Respawn loop. The Rust worker has a per-process chunk cap
+# (MAX_CHUNKS_PER_PROCESS, default 20) that causes it to exit 0
+# after dispatching N chunks. This loop respawns it so the
+# cubecl-cuda pool footprint resets to zero. Non-zero exit
+# breaks the loop and falls through to the trap wrapper which
+# self-destroys the vast.ai instance (billing protection).
+#
+# MAX_RESPAWNS (default 200) bounds the loop so a runaway respawn
+# can't burn a box indefinitely. At 20 chunks/respawn that's 4000
+# chunks per box — well above any single-box realistic workload.
+MAX_RESPAWNS="${MAX_RESPAWNS:-200}"
+for ((i=1; i<=MAX_RESPAWNS; i++)); do
+    echo "[onstart-unified] worker process #${i} start" >&2
+    /usr/local/bin/vastai-fleet worker \
+        --run-id "${SWEEP_RUN_ID}" \
+        --chunks-r2 "${CHUNKS_R2}"
+    rc=$?
+    if (( rc != 0 )); then
+        echo "[onstart-unified] worker exited nonzero rc=${rc}; aborting respawn" >&2
+        exit "${rc}"
+    fi
+    echo "[onstart-unified] worker process #${i} exited cleanly (rc=0); respawning" >&2
+done
+
+echo "[onstart-unified] hit MAX_RESPAWNS=${MAX_RESPAWNS}; declaring success" >&2
+exit 0
