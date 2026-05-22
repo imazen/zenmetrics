@@ -142,7 +142,14 @@ fi
 #   than re-imposing the upper ceiling.
 # gpu_total_ram filter is in GB units. The MIN_GPU_RAM_MB env name is
 # kept for backcompat with older callers; we divide internally.
-QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1024)) cuda_max_good>=12.0 driver_version>=555.0.0 dlperf>=12 num_gpus=1"
+#
+# GPU_FRAC_MIN (default 1.0 = dedicated GPU) controls whether to allow
+# shared/partial GPUs. Set to e.g. 0.5 to allow half-share offers.
+# 2026-05-22: defaulted to 1.0 after discovery that cheap "24 GB"
+# offers were partial fractions (e.g. frac=0.2 = 4.8 GB usable),
+# causing OOMs on multi-MP source images in the v26 sweep corpus.
+GPU_FRAC_MIN="${GPU_FRAC_MIN:-1.0}"
+QUERY="rentable=true reliability>0.99 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORES} cpu_ram>=${MIN_RAM_GB} disk_space>${MIN_DISK_GB} gpu_total_ram>=$((MIN_GPU_RAM_MB / 1024)) gpu_frac>=${GPU_FRAC_MIN} cuda_max_good>=12.0 driver_version>=555.0.0 dlperf>=12 num_gpus=1"
 echo "[launch_single] querying offers"
 echo "  $QUERY"
 OFFER_ID=$(vastai search offers "$QUERY" --order 'dph_total' --raw \

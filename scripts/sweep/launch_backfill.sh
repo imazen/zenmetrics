@@ -205,6 +205,12 @@ QUERY="rentable=true reliability>0.95 dph_total<${MAX_DPH} cpu_cores>=${MIN_CORE
 if [[ "${MIN_GPU_RAM_GB}" -gt 0 ]]; then
     QUERY="${QUERY} gpu_total_ram>=${MIN_GPU_RAM_GB}"
 fi
+# GPU_FRAC_MIN (default 1.0 = dedicated GPU) — cheap "24 GB" offers
+# on vast.ai are typically partial fractions (e.g. frac=0.2 = 4.8 GB
+# usable). For sweeps with multi-MP source images, frac=1.0 is
+# required or per-cell OOMs are observed. 2026-05-22 finding.
+GPU_FRAC_MIN="${GPU_FRAC_MIN:-1.0}"
+QUERY="${QUERY} gpu_frac>=${GPU_FRAC_MIN}"
 echo "[launch_backfill] querying offers: $QUERY"
 OFFERS_JSON=$(vastai search offers "$QUERY" --order 'dph_total' --raw)
 OFFER_IDS=$(echo "$OFFERS_JSON" | python3 -c "
