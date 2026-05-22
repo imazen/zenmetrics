@@ -63,6 +63,30 @@ mod fast {
         output_sums[slot as usize].fetch_add(local_sum);
     }
 
+    /// Same as `fused_sum_kernel` but only sums plane indices in
+    /// `[start_idx, end_idx)`. Used by the strip path to skip halo
+    /// rows.
+    #[cube(launch_unchecked)]
+    fn fused_sum_range_kernel(
+        plane: &Array<f32>,
+        output_sums: &mut Array<Atomic<f32>>,
+        slot: u32,
+        start_idx: u32,
+        end_idx: u32,
+    ) {
+        let tid = ABSOLUTE_POS;
+        let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+        let n = end_idx - start_idx;
+
+        let mut local_sum = 0.0_f32;
+        let mut i = tid;
+        while i < (n as usize) {
+            local_sum += plane[(start_idx as usize) + i];
+            i += stride;
+        }
+        output_sums[slot as usize].fetch_add(local_sum);
+    }
+
     pub fn launch_sum<R: Runtime>(
         client: &ComputeClient<R>,
         plane_handle: cubecl::server::Handle,
@@ -81,6 +105,32 @@ mod fast {
                 ArrayArg::from_raw_parts(plane_handle, n_pixels),
                 ArrayArg::from_raw_parts(partials_handle, partials_len),
                 slot,
+            );
+        }
+    }
+
+    pub fn launch_sum_range<R: Runtime>(
+        client: &ComputeClient<R>,
+        plane_handle: cubecl::server::Handle,
+        n_pixels: usize,
+        partials_handle: cubecl::server::Handle,
+        partials_len: usize,
+        slot: u32,
+        start_idx: u32,
+        end_idx: u32,
+    ) {
+        let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
+        let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
+        unsafe {
+            fused_sum_range_kernel::launch_unchecked::<R>(
+                client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(plane_handle, n_pixels),
+                ArrayArg::from_raw_parts(partials_handle, partials_len),
+                slot,
+                start_idx,
+                end_idx,
             );
         }
     }
@@ -146,6 +196,34 @@ mod portable {
         output[(slot_offset as usize) + tid] = local_sum;
     }
 
+    /// Row-range variant — sums only `plane[start_idx..end_idx]`.
+    ///
+    /// Adds (does NOT overwrite) into `output[slot_offset + tid]`.
+    /// This makes the kernel safe to call multiple times against the
+    /// same slot to accumulate sums across multiple strips. Caller
+    /// must ensure the partials region is zeroed once before the
+    /// first call (e.g. by `zero_partials`).
+    #[cube(launch_unchecked)]
+    fn thread_sum_range_kernel(
+        plane: &Array<f32>,
+        output: &mut Array<f32>,
+        slot_offset: u32,
+        start_idx: u32,
+        end_idx: u32,
+    ) {
+        let tid = ABSOLUTE_POS;
+        let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+        let n = end_idx - start_idx;
+
+        let mut local_sum = 0.0_f32;
+        let mut i = tid;
+        while i < (n as usize) {
+            local_sum += plane[(start_idx as usize) + i];
+            i += stride;
+        }
+        output[(slot_offset as usize) + tid] = output[(slot_offset as usize) + tid] + local_sum;
+    }
+
     #[cube(launch_unchecked)]
     fn finalize_sum_kernel(partials: &Array<f32>, output: &mut Array<f32>) {
         let slot = CUBE_POS_X;
@@ -182,6 +260,33 @@ mod portable {
         }
     }
 
+    pub fn launch_sum_range<R: Runtime>(
+        client: &ComputeClient<R>,
+        plane_handle: cubecl::server::Handle,
+        n_pixels: usize,
+        partials_handle: cubecl::server::Handle,
+        partials_len: usize,
+        slot: u32,
+        start_idx: u32,
+        end_idx: u32,
+    ) {
+        let cube_count = CubeCount::Static(NUM_BLOCKS, 1, 1);
+        let cube_dim = CubeDim::new_1d(BLOCK_SIZE);
+        let slot_offset = slot * (PARTIALS_PER_REDUCTION as u32);
+        unsafe {
+            thread_sum_range_kernel::launch_unchecked::<R>(
+                client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(plane_handle, n_pixels),
+                ArrayArg::from_raw_parts(partials_handle, partials_len),
+                slot_offset,
+                start_idx,
+                end_idx,
+            );
+        }
+    }
+
     pub fn launch_finalize<R: Runtime>(
         client: &ComputeClient<R>,
         partials_handle: cubecl::server::Handle,
@@ -205,7 +310,7 @@ mod portable {
 }
 
 #[cfg(feature = "fast-reduction")]
-pub use fast::{launch_finalize, launch_sum};
+pub use fast::{launch_finalize, launch_sum, launch_sum_range};
 
 #[cfg(not(feature = "fast-reduction"))]
-pub use portable::{launch_finalize, launch_sum};
+pub use portable::{launch_finalize, launch_sum, launch_sum_range};

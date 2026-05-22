@@ -17,6 +17,34 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### dssim-gpu — strip processing + compute_post_srgb dual-pyramid fix — 2026-05-22
+
+- `Dssim::new_strip(client, image_w, image_h, h_body)` constructor +
+  `compute_stripped(ref, dis)` entry point. Allocates a per-strip
+  working set of `(h_body + 2 × halo) × image_w` and reuses it
+  across strips, instead of one full-image-sized pyramid.
+- `compute()` on a strip-mode instance auto-routes to
+  `compute_stripped()` for backwards compatibility.
+- Body-only pooling kernels added to `reduction.rs`:
+  `fused_sum_range_kernel`, `thread_sum_range_kernel`, and the
+  `launch_sum_range` dispatch helper.
+- Fixed pre-existing bug in `compute_post_srgb`: the distorted
+  pyramid was never built (only the reference pyramid was),
+  causing `compute()` to return garbage scores. One-line addition
+  of `build_linear_pyramid(false)` after the reference build. The
+  `identical_image_is_zero` parity test now passes correctly
+  (was returning ~0.902 on master).
+- Strip parity test count grew from 7 → 17 tests covering pair
+  path × cached-ref path × 3 image sizes (256/512/1024) × 2
+  `h_body` values, plus edge cases (non-divisible `image_h`,
+  single-strip, full-image-as-strip, halo-edge behavior).
+- `bench_strip_vs_whole_cuda.rs` example writes
+  `benchmarks/dssim_strip_vs_whole_<date>.csv` measuring whole vs
+  strip wall-clock at 1/4/12/24 MP.
+- GPU peak memory at 24 MP: whole=3.87 GB, strip(h_body=256)=
+  621 MB (6.38× reduction). Host RSS at 12 MP (heaptrack):
+  whole=2.30 GB, strip=608 MB (3.78× reduction).
+
 ### Changed — sweep image Dockerfile chain collapsed to single file `v26` — 2026-05-21
 
 Replaces the `v14 → v15 → v18 → v19 → v20 → v21 → v22 → v23 → v24 → v25`

@@ -106,6 +106,89 @@ impl Scale {
     }
 }
 
+/// Per-strip geometry, recomputed each iteration of the strip loop.
+/// All row coordinates are at scale 0.
+#[derive(Debug, Clone, Copy)]
+struct StripPlan {
+    /// First image row read into this strip (inclusive). Equals
+    /// `body_start - halo`, clamped to 0 at the top.
+    #[allow(dead_code)] // useful for debugging; logged via Debug
+    read_start_in_image: u32,
+    /// One past the last image row read into this strip. Equals
+    /// `body_end + halo`, clamped to image_h at the bottom.
+    #[allow(dead_code)]
+    read_end_in_image: u32,
+    /// Offset of the body region within the strip buffer (in scale-0
+    /// rows). 0 for the top strip, == halo for interior strips.
+    body_offset_in_strip_at_0: u32,
+    /// Height of the body region within the strip at scale 0. Equals
+    /// `h_body` for full strips; may be less for the bottom strip.
+    body_h_in_strip_at_0: u32,
+    /// Actual strip-buffer rows in use this iteration (may be less
+    /// than the allocated strip_h for top/bottom strips). Tail rows
+    /// beyond this are zeroed.
+    strip_h_actual: u32,
+}
+
+/// Compute the per-scale `[start_idx, end_idx)` element range that
+/// covers `plan`'s body rows at scale `s`, given the scale's buffer
+/// dimensions.
+///
+/// The pyramid uses `div_ceil(2)` per descent (with each axis clamped
+/// to ≥ 8). Body offset and body height at scale `s` are
+/// `body_offset_at_0.div_ceil(2^s)` and
+/// `body_h_at_0.div_ceil(2^s)`. We clamp the end against the scale's
+/// allocated `height` so the kernel never reads past the buffer.
+fn scale_row_range(
+    plan: &StripPlan,
+    scale: usize,
+    width_at_s: u32,
+    height_at_s: u32,
+) -> (u32, u32) {
+    let divisor = 1u32 << (scale as u32);
+    let body_offset_at_s = plan.body_offset_in_strip_at_0 / divisor;
+    let body_h_at_s = plan
+        .body_h_in_strip_at_0
+        .div_ceil(divisor)
+        .max(1);
+    let body_end_at_s = (body_offset_at_s + body_h_at_s).min(height_at_s);
+    let start_idx = body_offset_at_s * width_at_s;
+    let end_idx = body_end_at_s * width_at_s;
+    (start_idx, end_idx)
+}
+
+/// Strip-processing configuration. Present iff the `Dssim<R>` was
+/// constructed via [`Dssim::new_strip`]; absent in whole-image mode.
+///
+/// In strip mode the per-scale buffers are sized for one (body + halo)
+/// strip rather than the full image. `compute_stripped` walks the
+/// image as `n_strips` vertical strips, populating the scale-0 linear
+/// planes with the strip's rows (plus halo rows from neighboring
+/// strips) and accumulating per-scale `Σ ssim` / `Σ mad` over the
+/// body region only.
+#[derive(Debug, Clone)]
+struct StripConfig {
+    /// Full image width (kept on `Dssim::width` too — duplicated for
+    /// clarity at strip-driver call sites).
+    image_w: u32,
+    /// Full image height — the strip driver loops over this.
+    image_h: u32,
+    /// Number of body rows per strip at scale 0. Must be divisible by
+    /// `2^(NUM_SCALES - 1)` so the body region maps cleanly through
+    /// every pyramid level.
+    h_body: u32,
+    /// Halo rows above + below the body at scale 0. Sized to cover the
+    /// worst-case blur reach across all 5 scales.
+    halo: u32,
+    /// Strip total height = `h_body + 2 * halo`, clamped at the
+    /// top/bottom strips so we never index past the image boundary.
+    /// (The Scale buffers are allocated for the worst-case
+    /// `h_body + 2*halo`; smaller boundary strips just leave the
+    /// extra rows unused for that strip iteration.)
+    #[allow(dead_code)]
+    strip_h: u32,
+}
+
 /// Per-instance allocations + per-call orchestration of the DSSIM
 /// pipeline. Construct once for a given resolution; reuse across many
 /// image pairs of that resolution.
@@ -136,6 +219,17 @@ pub struct Dssim<R: Runtime> {
     sums: cubecl::server::Handle,
 
     has_cached_reference: bool,
+
+    /// `Some(_)` iff constructed via [`Dssim::new_strip`]. Drives the
+    /// strip-loop in [`Dssim::compute_stripped`] / friends.
+    strip_config: Option<StripConfig>,
+
+    /// Per-scale "actual data height" for the current strip
+    /// iteration. Empty outside strip mode; populated by
+    /// [`Dssim::set_strip_data_extents`] at the top of each strip
+    /// iteration to make blur / downscale kernels clamp at the
+    /// strip's data edge instead of the (larger) buffer edge.
+    strip_data_h: Vec<u32>,
 }
 
 const NUM_SLOTS: usize = NUM_SCALES * 2; // 10
@@ -193,16 +287,143 @@ impl<R: Runtime> Dssim<R> {
             partials,
             sums,
             has_cached_reference: false,
+            strip_config: None,
+            strip_data_h: Vec::new(),
+        })
+    }
+
+    /// Strip-processing constructor. Allocates working set for a
+    /// single `(h_body + 2 * halo) × image_w` strip rather than the
+    /// full image; reuses across strips for the same
+    /// `(image_w, image_h, h_body)` configuration.
+    ///
+    /// Halo size is fixed at 256 rows per side — enough to cover the
+    /// worst-case 4-pass 3×3 blur reach across all 5 pyramid scales,
+    /// plus the 2×2 box-downscale halo accumulated through each
+    /// pyramid descent (see `STRIP_PROCESSING.md` for the math).
+    ///
+    /// Constraints:
+    /// - `image_w` and `image_h` ≥ 8 (same as whole-image path).
+    /// - `h_body` must be a positive multiple of `2^(NUM_SCALES - 1)`
+    ///   so the body region maps cleanly through every pyramid level.
+    /// - If `h_body + 2 * halo >= image_h` the strip path degenerates
+    ///   to a single full-image strip (still works, but skip strips
+    ///   in that case — `new()` is cheaper).
+    pub fn new_strip(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+    ) -> Result<Self> {
+        if image_w < 8 || image_h < 8 {
+            return Err(Error::InvalidImageSize);
+        }
+        // Pyramid alignment: halve 4 times = factor 16.
+        const PYRAMID_ALIGN: u32 = 1 << (NUM_SCALES as u32 - 1);
+        if h_body == 0 || (h_body % PYRAMID_ALIGN) != 0 {
+            return Err(Error::InvalidImageSize);
+        }
+        const HALO: u32 = 256;
+        debug_assert_eq!(HALO % PYRAMID_ALIGN, 0);
+
+        let strip_h = (h_body + 2 * HALO).min(image_h);
+        // Reject configs where the strip would shrink below 8 at any
+        // scale (matches `Dssim::new`'s "image must be at least 8×8"
+        // contract applied to the strip buffers).
+        {
+            let mut h = strip_h;
+            for _ in 0..NUM_SCALES {
+                if h < 8 {
+                    return Err(Error::InvalidImageSize);
+                }
+                h = h.div_ceil(2);
+                if h < 8 {
+                    h = 8;
+                }
+            }
+        }
+        let n = (image_w as usize) * (strip_h as usize);
+
+        // Pyramid dims — width is image_w, height is strip_h.
+        let mut dims = Vec::with_capacity(NUM_SCALES);
+        let mut w = image_w;
+        let mut h = strip_h;
+        for _ in 0..NUM_SCALES {
+            dims.push((w, h));
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+            if w < 8 {
+                w = 8;
+            }
+            if h < 8 {
+                h = 8;
+            }
+        }
+
+        let scales = dims
+            .iter()
+            .map(|&(w, h)| Scale::new(&client, w, h))
+            .collect::<Vec<_>>();
+
+        // sRGB staging at strip-pixel count (n = image_w × strip_h).
+        let src_u8_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+        let src_u8_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n]));
+
+        let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; PARTIALS_LEN]));
+        let sums = client.create_from_slice(f32::as_bytes(&[0.0_f32; SUMS_LEN]));
+
+        Ok(Self {
+            client,
+            // `width` / `height` reflect the per-strip buffer size; the
+            // image-level dimensions live on `strip_config`.
+            width: image_w,
+            height: strip_h,
+            n,
+            src_u8_a,
+            src_u8_b,
+            scales,
+            partials,
+            sums,
+            has_cached_reference: false,
+            strip_config: Some(StripConfig {
+                image_w,
+                image_h,
+                h_body,
+                halo: HALO,
+                strip_h,
+            }),
+            strip_data_h: vec![0; NUM_SCALES],
         })
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
-        (self.width, self.height)
+        match &self.strip_config {
+            Some(cfg) => (cfg.image_w, cfg.image_h),
+            None => (self.width, self.height),
+        }
     }
 
     /// Number of active pyramid scales.
     pub fn n_scales(&self) -> usize {
         self.scales.len()
+    }
+
+    /// `true` iff this `Dssim` was constructed via [`Self::new_strip`]
+    /// and routes scoring through the strip-processing path.
+    pub fn is_strip_mode(&self) -> bool {
+        self.strip_config.is_some()
+    }
+
+    /// Effective height at scale `s` for kernel `width/height`
+    /// arguments — the buffer height (`scales[s].height`) for
+    /// whole-image mode, or the strip's actual data height at
+    /// scale `s` (≤ buffer height) for strip mode.
+    fn effective_h(&self, scale: usize) -> u32 {
+        if self.strip_config.is_some() && !self.strip_data_h.is_empty() {
+            self.strip_data_h[scale]
+        } else {
+            self.scales[scale].height
+        }
     }
 
     /// Pack the caller's `width × height × 3` sRGB-u8 bytes into a
@@ -266,6 +487,12 @@ impl<R: Runtime> Dssim<R> {
     /// Score one image pair, both sRGB packed RGB u8 of length
     /// `width × height × 3`.
     pub fn compute(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<GpuDssimResult> {
+        if self.strip_config.is_some() {
+            // Route image-sized buffers through the strip driver
+            // automatically so backwards-compatibility is preserved
+            // for callers that only know about `compute()`.
+            return self.compute_stripped(ref_srgb, dist_srgb);
+        }
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
 
@@ -283,6 +510,7 @@ impl<R: Runtime> Dssim<R> {
         // Build linear pyramid first (dssim-core downsamples in linear
         // RGB, NOT in Lab — Lab is per-scale).
         self.build_linear_pyramid(true);
+        self.build_linear_pyramid(false);
 
         self.zero_partials();
 
@@ -403,10 +631,345 @@ impl<R: Runtime> Dssim<R> {
         })
     }
 
+    // ───────────────────────── strip processing ─────────────────────────
+
+    /// Strip-mode pair scoring. Splits the image into vertical strips
+    /// of `h_body` body rows + `halo` rows above/below for stencil
+    /// reach, runs the full DSSIM pipeline per strip on strip-sized
+    /// working buffers, and accumulates body-row partial sums into
+    /// per-scale totals.
+    ///
+    /// Returns the same `GpuDssimResult` as [`Self::compute`] — strip
+    /// vs whole-image agrees within f32 reordering noise (typically
+    /// 1e-5 rel on accumulated sums).
+    ///
+    /// Returns `Err(NoCachedReference)` if called on an instance not
+    /// constructed via [`Self::new_strip`].
+    pub fn compute_stripped(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuDssimResult> {
+        if self.strip_config.is_none() {
+            // Borrow the same error variant — strip mode wasn't
+            // requested at construction time. (The
+            // `InvalidImageSize` variant would be wrong here; use
+            // `NoCachedReference` as the closest "wrong API path"
+            // signal — but better to introduce a dedicated variant
+            // later if this becomes user-facing.)
+            return Err(Error::NoCachedReference);
+        }
+        self.check_dims_image(ref_srgb)?;
+        self.check_dims_image(dist_srgb)?;
+
+        let cfg = self.strip_config.clone().unwrap();
+
+        // Pass 1: sum Σ ssim per scale across all strips.
+        self.zero_partials();
+        for strip in 0..self.n_strips() {
+            let plan = self.strip_plan(strip);
+            self.set_strip_data_extents(&plan);
+            self.upload_strip(true, ref_srgb, &plan);
+            self.upload_strip(false, dist_srgb, &plan);
+            self.run_strip_to_ssim_map();
+            self.sum_ssim_body(&plan);
+        }
+        self.run_finalize();
+        let pass1_sums = self.read_sums();
+
+        // Compute per-scale avg from full-image mean_ssim.
+        let mut avg_per_scale = [0.0_f32; NUM_SCALES];
+        for s in 0..self.scales.len() {
+            let n_pix = self.body_pixels_at_scale(s, &cfg) as f64;
+            let ssim_sum = pass1_sums[s * 2] as f64;
+            let mean_ssim = ssim_sum / n_pix;
+            let avg = mean_ssim.max(0.0).powf(0.5_f64.powi(s as i32));
+            avg_per_scale[s] = avg as f32;
+        }
+
+        // Pass 2: re-run pipeline per strip, but now also compute
+        // abs_diff_scalar against the per-scale avg and sum the mad
+        // map over body rows.
+        self.zero_partials();
+        for strip in 0..self.n_strips() {
+            let plan = self.strip_plan(strip);
+            self.set_strip_data_extents(&plan);
+            self.upload_strip(true, ref_srgb, &plan);
+            self.upload_strip(false, dist_srgb, &plan);
+            self.run_strip_to_ssim_map();
+            for s in 0..self.scales.len() {
+                self.run_abs_diff_only(s, avg_per_scale[s]);
+                self.sum_mad_body(s, &plan);
+            }
+        }
+        self.run_finalize();
+        let pass2_sums = self.read_sums();
+
+        // Final score.
+        let mut weighted = 0.0_f64;
+        let mut weight_sum = 0.0_f64;
+        for s in 0..self.scales.len() {
+            let n_pix = self.body_pixels_at_scale(s, &cfg) as f64;
+            let mad_sum = pass2_sums[s * 2 + 1] as f64;
+            let mad = mad_sum / n_pix;
+            let scale_score = 1.0 - mad;
+            weighted += scale_score * SCALE_WEIGHTS[s];
+            weight_sum += SCALE_WEIGHTS[s];
+        }
+        let ssim = weighted / weight_sum;
+        Ok(GpuDssimResult {
+            score: ssim_to_dssim(ssim),
+        })
+    }
+
+    fn n_strips(&self) -> u32 {
+        let cfg = self.strip_config.as_ref().expect("strip mode required");
+        cfg.image_h.div_ceil(cfg.h_body)
+    }
+
+    /// Populate `self.strip_data_h` with the actual data height per
+    /// scale for the strip described by `plan`. After this call,
+    /// `effective_h(s)` returns the strip's data height at scale `s`,
+    /// and subsequent kernel launches for this strip clamp at the
+    /// data edge (matching whole-image's boundary semantics).
+    fn set_strip_data_extents(&mut self, plan: &StripPlan) {
+        // Per-scale data height. At scale 0 it's `strip_h_actual`;
+        // at scale s it's `div_ceil(strip_h_at_(s-1), 2)`. Mirrors
+        // the pyramid build's div_ceil(2) pattern.
+        let mut h = plan.strip_h_actual;
+        for s in 0..NUM_SCALES {
+            self.strip_data_h[s] = h;
+            h = h.div_ceil(2);
+        }
+    }
+
+    /// Plan for one strip: row coordinates within the image, and the
+    /// in-strip body offset / body height at scale 0.
+    fn strip_plan(&self, strip_idx: u32) -> StripPlan {
+        let cfg = self.strip_config.as_ref().expect("strip mode required");
+        let body_start_in_image = strip_idx * cfg.h_body;
+        let body_end_in_image = (body_start_in_image + cfg.h_body).min(cfg.image_h);
+        let read_start_in_image = body_start_in_image.saturating_sub(cfg.halo);
+        let read_end_in_image = (body_end_in_image + cfg.halo).min(cfg.image_h);
+        let body_offset_in_strip = body_start_in_image - read_start_in_image;
+        let body_h_in_strip = body_end_in_image - body_start_in_image;
+        let strip_h_actual = read_end_in_image - read_start_in_image;
+        StripPlan {
+            read_start_in_image,
+            read_end_in_image,
+            body_offset_in_strip_at_0: body_offset_in_strip,
+            body_h_in_strip_at_0: body_h_in_strip,
+            strip_h_actual,
+        }
+    }
+
+    /// Number of body pixels summed across all strips at scale `s`.
+    /// Used to normalize the accumulated `Σ ssim` / `Σ mad` into a
+    /// mean.
+    ///
+    /// Subtlety: `image_h` may not be exactly divisible by
+    /// `2^(NUM_SCALES - 1)`. The pyramid uses `div_ceil(2)` per
+    /// descent and clamps each axis to ≥ 8; we mirror that here by
+    /// computing the per-scale total height as `div_ceil` of
+    /// `image_h` by `2^s` (and the per-scale width similarly).
+    /// Per-strip body heights at scale `s` are
+    /// `body_h_in_strip_at_0 / 2^s` for full strips, with the final
+    /// (partial) strip reduced proportionally.
+    fn body_pixels_at_scale(&self, scale: usize, cfg: &StripConfig) -> u64 {
+        // Width at scale s with clamp to 8.
+        let mut w = cfg.image_w;
+        for _ in 0..scale {
+            w = w.div_ceil(2);
+            if w < 8 {
+                w = 8;
+            }
+        }
+        // Sum body heights at scale s across all strips. Each strip's
+        // body at scale 0 is `h_body` rows (except possibly the last);
+        // at scale s that's `h_body / 2^s` (require divisibility,
+        // enforced in `new_strip`). The last strip's body may be
+        // shorter, mapped via div_ceil.
+        let divisor = 1u32 << (scale as u32);
+        let n_strips = self.n_strips();
+        let mut total_h: u64 = 0;
+        for k in 0..n_strips {
+            let body_start = k * cfg.h_body;
+            let body_end = (body_start + cfg.h_body).min(cfg.image_h);
+            let body_h_at_0 = body_end - body_start;
+            // Scale-s mapping: body at scale 0 starts at
+            // `body_start` and is `body_h_at_0` rows. The
+            // corresponding scale-s body row count is the number of
+            // scale-s rows whose "footprint" lies in the scale-0
+            // body. With div_ceil pyramid, this is `div_ceil(body_h,
+            // 2^s)` modulo clamp.
+            let body_h_at_s = body_h_at_0.div_ceil(divisor).max(1);
+            total_h += body_h_at_s as u64;
+        }
+        // Cap by the scale-s height (we never sum more rows than
+        // the scale-s plane actually has).
+        let mut h_scale = cfg.image_h;
+        for _ in 0..scale {
+            h_scale = h_scale.div_ceil(2);
+            if h_scale < 8 {
+                h_scale = 8;
+            }
+        }
+        total_h = total_h.min(h_scale as u64);
+        total_h * (w as u64)
+    }
+
+    /// Copy strip rows from `image_srgb` into the scale-0 staging
+    /// buffer and launch sRGB→linear conversion. Mirrors
+    /// `upload_and_srgb_to_linear` but for a strip slice.
+    ///
+    /// **Edge handling**: tail rows beyond the actual strip data
+    /// height are zero-filled. The per-strip kernel launches use the
+    /// actual data heights (per-scale) for `width`/`height` clamp
+    /// arguments so blurs and downscales clamp at the data edge, not
+    /// the buffer edge. This keeps boundary semantics identical to
+    /// the whole-image path: blur at the last data row reads
+    /// `[y - 1, y, y]` because `min(y + 1, data_h - 1) = y`.
+    fn upload_strip(&mut self, is_a: bool, image_srgb: &[u8], plan: &StripPlan) {
+        let cfg = self
+            .strip_config
+            .as_ref()
+            .expect("strip mode required")
+            .clone();
+        let row_bytes = (cfg.image_w as usize) * 3;
+        let strip_n = (cfg.image_w as usize) * (plan.strip_h_actual as usize);
+        let buffer_h = self.scales[0].height as usize;
+        let pinned_len = (cfg.image_w as usize) * buffer_h * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            // Zero-fill the buffer. Tail rows past strip_h_actual
+            // are never read in strip mode because per-scale kernel
+            // launches pass the actual data height as `height`.
+            for b in dst.iter_mut() {
+                *b = 0;
+            }
+            let src_start = (plan.read_start_in_image as usize) * row_bytes;
+            let src_slice = &image_srgb[src_start..src_start + strip_n * 3];
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(src_slice.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
+        }
+        let handle = self.client.create(bytes);
+        if is_a {
+            self.src_u8_a = handle;
+        } else {
+            self.src_u8_b = handle;
+        }
+        // sRGB→linear runs on the full buffer (n pixels); tail
+        // pixels with sRGB=0 just produce linear=0 in the tail.
+        self.srgb_to_linear_from_packed(is_a);
+    }
+
+    /// Per-strip pipeline up to and including the SSIM map for every
+    /// scale. Same shape as `compute_post_srgb`'s scale loop but
+    /// skips the final reduction (caller handles body-only summation
+    /// after this returns).
+    fn run_strip_to_ssim_map(&mut self) {
+        // Build linear pyramid + linear pyramid for dis.
+        self.build_linear_pyramid(true);
+        self.build_linear_pyramid(false);
+
+        for s in 0..self.scales.len() {
+            self.run_lab(s, true);
+            self.run_lab(s, false);
+            self.run_chroma_preblur(s, true);
+            self.run_chroma_preblur(s, false);
+            self.run_blur_stats(s, true);
+            self.run_blur_stats(s, false);
+            self.run_cross_blur(s);
+            self.run_ssim_map(s);
+        }
+    }
+
+    /// Sum the scale-s SSIM map's body rows into the per-scale
+    /// `ssim_sum` slot. The body row span at scale s is
+    /// `body_offset_in_strip_at_s × width_at_s` ..
+    /// `(body_offset + body_h) × width_at_s`.
+    fn sum_ssim_body(&self, plan: &StripPlan) {
+        for s in 0..self.scales.len() {
+            let scale = &self.scales[s];
+            let (start_idx, end_idx) =
+                scale_row_range(plan, s, scale.width, scale.height);
+            let slot = (s * 2) as u32; // ssim_sum slot
+            reduction::launch_sum_range::<R>(
+                &self.client,
+                scale.ssim_map.clone(),
+                scale.n,
+                self.partials.clone(),
+                PARTIALS_LEN,
+                slot,
+                start_idx,
+                end_idx,
+            );
+        }
+    }
+
+    /// Compute `|ssim - avg|` into `mad_map` for the given scale.
+    /// Separated from `run_abs_diff_and_sum` because in strip mode
+    /// we want to sum only body rows, not the whole strip.
+    fn run_abs_diff_only(&self, scale: usize, avg: f32) {
+        let s = &self.scales[scale];
+        unsafe {
+            ssim::abs_diff_scalar_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(s.n),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(s.ssim_map.clone(), s.n),
+                ArrayArg::from_raw_parts(s.mad_map.clone(), s.n),
+                avg,
+            );
+        }
+    }
+
+    fn sum_mad_body(&self, scale: usize, plan: &StripPlan) {
+        let s = &self.scales[scale];
+        let (start_idx, end_idx) =
+            scale_row_range(plan, scale, s.width, s.height);
+        let slot = (scale * 2 + 1) as u32; // mad_sum slot
+        reduction::launch_sum_range::<R>(
+            &self.client,
+            s.mad_map.clone(),
+            s.n,
+            self.partials.clone(),
+            PARTIALS_LEN,
+            slot,
+            start_idx,
+            end_idx,
+        );
+    }
+
     // ───────────────────────── helpers ─────────────────────────
 
     fn check_dims(&self, srgb: &[u8]) -> Result<()> {
         let expected = self.n * 3;
+        if srgb.len() != expected {
+            Err(Error::DimensionMismatch {
+                expected,
+                got: srgb.len(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Image-level dimension check for the strip path — `srgb` must
+    /// be `image_w × image_h × 3` bytes (not strip-sized).
+    fn check_dims_image(&self, srgb: &[u8]) -> Result<()> {
+        let cfg = self
+            .strip_config
+            .as_ref()
+            .expect("check_dims_image called outside strip mode");
+        let expected = (cfg.image_w as usize) * (cfg.image_h as usize) * 3;
         if srgb.len() != expected {
             Err(Error::DimensionMismatch {
                 expected,
@@ -511,8 +1074,14 @@ impl<R: Runtime> Dssim<R> {
 
     fn build_linear_pyramid(&self, is_a: bool) {
         for s in 1..self.scales.len() {
-            let (prev_w, prev_h) = (self.scales[s - 1].width, self.scales[s - 1].height);
-            let (curr_w, curr_h) = (self.scales[s].width, self.scales[s].height);
+            let prev_w = self.scales[s - 1].width;
+            let curr_w = self.scales[s].width;
+            // Effective heights: actual data heights in strip mode,
+            // buffer heights in whole-image mode. Downscale clamps at
+            // src_h - 1 so passing the data height keeps the
+            // boundary behaviour identical between modes.
+            let prev_h = self.effective_h(s - 1);
+            let curr_h = self.effective_h(s);
             let (prev_lin, curr_lin) = if is_a {
                 (&self.scales[s - 1].ref_lin, &self.scales[s].ref_lin)
             } else {
@@ -582,6 +1151,7 @@ impl<R: Runtime> Dssim<R> {
         scratch_b: &cubecl::server::Handle,
     ) {
         let s = &self.scales[scale];
+        let h = self.effective_h(scale);
         unsafe {
             // pass 1: src → scratch_a
             blur::blur_3x3_kernel::launch_unchecked::<R>(
@@ -591,7 +1161,7 @@ impl<R: Runtime> Dssim<R> {
                 ArrayArg::from_raw_parts(src.clone(), s.n),
                 ArrayArg::from_raw_parts(scratch_a.clone(), s.n),
                 s.width,
-                s.height,
+                h,
             );
             // pass 2: scratch_a → scratch_b
             blur::blur_3x3_kernel::launch_unchecked::<R>(
@@ -601,7 +1171,7 @@ impl<R: Runtime> Dssim<R> {
                 ArrayArg::from_raw_parts(scratch_a.clone(), s.n),
                 ArrayArg::from_raw_parts(scratch_b.clone(), s.n),
                 s.width,
-                s.height,
+                h,
             );
             // copy scratch_b → dst (allows dst == src). Use the
             // `blur_3x3` kernel here would corrupt the result; use a
@@ -622,6 +1192,7 @@ impl<R: Runtime> Dssim<R> {
     /// `ref_sq_blur` (or dis variants).
     fn run_blur_stats(&self, scale: usize, is_a: bool) {
         let s = &self.scales[scale];
+        let h = self.effective_h(scale);
         let (src_lab, mu_dst, sq_dst) = if is_a {
             (&s.ref_lab, &s.ref_mu, &s.ref_sq_blur)
         } else {
@@ -640,7 +1211,7 @@ impl<R: Runtime> Dssim<R> {
                     ArrayArg::from_raw_parts(src_lab[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.temp1.clone(), s.n),
                     s.width,
-                    s.height,
+                    h,
                 );
                 blur::blur_3x3_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -649,7 +1220,7 @@ impl<R: Runtime> Dssim<R> {
                     ArrayArg::from_raw_parts(s.temp1.clone(), s.n),
                     ArrayArg::from_raw_parts(sq_dst[ch].clone(), s.n),
                     s.width,
-                    s.height,
+                    h,
                 );
             }
         }
@@ -658,6 +1229,7 @@ impl<R: Runtime> Dssim<R> {
     /// `cross_blur[ch] = blur(blur_product(ref_lab[ch], dis_lab[ch]))`.
     fn run_cross_blur(&self, scale: usize) {
         let s = &self.scales[scale];
+        let h = self.effective_h(scale);
         for ch in 0..3 {
             unsafe {
                 blur::blur_product_kernel::launch_unchecked::<R>(
@@ -668,7 +1240,7 @@ impl<R: Runtime> Dssim<R> {
                     ArrayArg::from_raw_parts(s.dis_lab[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.temp1.clone(), s.n),
                     s.width,
-                    s.height,
+                    h,
                 );
                 blur::blur_3x3_kernel::launch_unchecked::<R>(
                     &self.client,
@@ -677,7 +1249,7 @@ impl<R: Runtime> Dssim<R> {
                     ArrayArg::from_raw_parts(s.temp1.clone(), s.n),
                     ArrayArg::from_raw_parts(s.cross_blur[ch].clone(), s.n),
                     s.width,
-                    s.height,
+                    h,
                 );
             }
         }

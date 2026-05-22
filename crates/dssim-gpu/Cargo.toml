@@ -73,10 +73,22 @@ required-features = ["cubecl-types"]
 name = "parity_corpus"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "bench_strip_vs_whole_cuda"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "heaptrack_strip_12mp"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "parity_lock"
 required-features = ["cubecl-types"]
 
 [[test]]
 name = "opaque"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "strip_parity"
 required-features = ["cubecl-types"]
