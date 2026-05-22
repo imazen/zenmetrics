@@ -17,6 +17,40 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Auto-fallback contract — `resolve_auto` cross-crate audit — 2026-05-22
+
+`MemoryMode::Auto`'s "2-pass fallback" semantic is now exercised by
+identical cross-crate contract tests so future regressions surface
+at `cargo test` rather than at production OOM.
+
+- **iwssim-gpu**: `resolve_auto` now uses the canonical
+  Full-fits-else-try-Strip shape with an explicit `MIN_NATIVE_DIM`
+  guard on the Strip branch (matches the floor enforced by
+  `Iwssim::new_strip_with_halo`). Behaviour preserved at large image
+  sizes; small-image overcap surfaces `TooBigForFull` honestly rather
+  than producing a Strip that the constructor would reject.
+- **ssim2-gpu**: `resolve_auto` now auto-sizes the strip body via a
+  new `auto_strip_body_for` helper instead of always using
+  `STRIP_H_BODY_DEFAULT`. When the default body doesn't fit the cap
+  but a smaller aligned body does, Auto now picks the smaller body
+  rather than surfacing `TooBigForFull`. `Ssim2::new_with_memory_mode`
+  also routes `MemoryMode::Strip { h_body: None }` through the
+  auto-sizer for the same coverage.
+- **butteraugli-gpu, dssim-gpu, cvvdp-gpu, zensim-gpu**: no source
+  changes — these crates' resolvers already match the canonical
+  contract. Tests added to pin behaviour.
+
+New tests (40 total, all host-side):
+
+- `crates/iwssim-gpu/tests/auto_fallback.rs` — 8 tests
+- `crates/butteraugli-gpu/tests/auto_fallback.rs` — 7 tests
+- `crates/dssim-gpu/tests/auto_fallback.rs` — 6 tests
+- `crates/ssim2-gpu/tests/auto_fallback.rs` — 7 tests
+- `crates/cvvdp-gpu/tests/auto_fallback.rs` — 6 tests (pins the
+  "no silent capped-Strip fallback" contract — capping changes JOD)
+- `crates/zensim-gpu/tests/auto_fallback.rs` — 6 tests (no-Strip
+  crate; pins that Auto only returns Full or TooBigForFull)
+
 ### cvvdp-gpu — capped-pyramid `MemoryMode::Strip { capped_levels: Some(k) }` + `predict_jod_still_3ch_capped` — 2026-05-22
 
 Adds an opt-in pyramid-depth cap for cvvdp-gpu that lets callers

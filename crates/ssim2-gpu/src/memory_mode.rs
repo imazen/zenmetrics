@@ -59,9 +59,16 @@ pub enum ResolvedMode {
 }
 
 /// Auto policy. Picks Full when it fits the cap; otherwise tries Strip
-/// with the default body height (1024 rows). If even Strip exceeds the
-/// cap, surfaces [`crate::Error::TooBigForFull`] with the Full estimate
-/// — Tile isn't implemented in ssim2-gpu so there's no smaller option.
+/// with an auto-sized body that fits the cap. If neither Full nor any
+/// strip body fits, surfaces [`crate::Error::TooBigForFull`] with the
+/// Full estimate — Tile isn't implemented in ssim2-gpu so there's no
+/// smaller option.
+///
+/// Auto-sizing the strip body (rather than using only the default
+/// [`STRIP_H_BODY_DEFAULT`]) matches the canonical shape from
+/// `butteraugli_gpu::memory_mode::resolve_auto`: when the default body
+/// doesn't fit, walk down to the largest aligned body that does. This
+/// is the 2-pass-fallback the unified MemoryMode API promises.
 pub fn resolve_auto(
     width: u32,
     height: u32,
@@ -71,20 +78,101 @@ pub fn resolve_auto(
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);
     }
-    // Try Strip with the default body height. If even that's too
-    // large, we can't auto-shrink further. (Halving body height once
-    // more drops working set ~2× at scale 0, but at < ~512 rows the
-    // scale-5 strip becomes too small for safe IIR boundary handling.)
-    let h_body = STRIP_H_BODY_DEFAULT.min(height.max(8));
-    if let Some(strip_bytes) = estimate_strip_gpu_memory_bytes(width, h_body) {
-        if strip_bytes <= cap {
-            return Ok(ResolvedMode::Strip { h_body });
-        }
+    if let Some(h_body) = auto_size_strip_body(width, height, cap) {
+        return Ok(ResolvedMode::Strip { h_body });
     }
     Err(crate::Error::TooBigForFull {
         needed: full_bytes,
         cap,
     })
+}
+
+/// Public auto-sizer for callers passing
+/// `MemoryMode::Strip { h_body: None }`. Returns a body height that
+/// fits the cap when possible; falls back to
+/// [`STRIP_H_BODY_DEFAULT`] (clamped to `height`) when the cap is too
+/// tight for the linearized estimate so the strip constructor itself
+/// has a chance to allocate.
+#[must_use]
+pub fn auto_strip_body_for(width: u32, height: u32, cap: usize) -> u32 {
+    auto_size_strip_body(width, height, cap).unwrap_or_else(|| {
+        STRIP_H_BODY_DEFAULT
+            .min(height.max(MIN_STRIP_BODY))
+            .max(MIN_STRIP_BODY)
+    })
+}
+
+/// Minimum body height. Smaller than the default but still safely
+/// above the per-scale 8-row floor enforced by
+/// [`crate::pipeline::Ssim2::new_strip`]. 64 rows mirrors the
+/// butteraugli/dssim convention and gives the IIR cascade enough
+/// rows to settle at every pyramid scale.
+const MIN_STRIP_BODY: u32 = 64;
+
+/// Pick the largest body that fits the cap, clamped to
+/// `[MIN_STRIP_BODY, height]`. Returns `None` if even
+/// `MIN_STRIP_BODY` exceeds the cap.
+fn auto_size_strip_body(width: u32, height: u32, cap: usize) -> Option<u32> {
+    if width < 8 {
+        return None;
+    }
+    // Halo-only baseline (body = 0 isn't valid per the estimator's own
+    // contract, but we treat its limit as "everything except the body
+    // rows"). Approximate by the smallest valid body — the result is
+    // a linear lower bound the search starts from.
+    let one_unit = estimate_strip_gpu_memory_bytes(width, MIN_STRIP_BODY)?;
+    if one_unit > cap {
+        return None;
+    }
+    // Try the default body first — most images fit there.
+    let h_default = STRIP_H_BODY_DEFAULT.min(height.max(MIN_STRIP_BODY));
+    if let Some(b) = estimate_strip_gpu_memory_bytes(width, h_default)
+        && b <= cap
+    {
+        return Some(h_default);
+    }
+    // Default doesn't fit — linear-extrapolate to the largest body
+    // that fits and clamp to the image height.
+    let two_unit = estimate_strip_gpu_memory_bytes(width, MIN_STRIP_BODY * 2)?;
+    let per_extra = two_unit.saturating_sub(one_unit);
+    if per_extra == 0 {
+        // Pathological: estimator didn't grow with body. Try a few
+        // discrete sizes in decreasing order.
+        for candidate in [
+            STRIP_H_BODY_DEFAULT / 2,
+            STRIP_H_BODY_DEFAULT / 4,
+            MIN_STRIP_BODY,
+        ] {
+            let h = candidate.min(height.max(MIN_STRIP_BODY));
+            if let Some(b) = estimate_strip_gpu_memory_bytes(width, h)
+                && b <= cap
+            {
+                return Some(h);
+            }
+        }
+        return None;
+    }
+    // one_unit covers MIN_STRIP_BODY rows; each additional MIN_STRIP_BODY
+    // rows costs `per_extra` bytes. Solve for the multiplier.
+    let headroom = cap - one_unit;
+    let extra_units = headroom / per_extra;
+    let body = MIN_STRIP_BODY.saturating_add((extra_units as u32).saturating_mul(MIN_STRIP_BODY));
+    let body = body.min(height.max(MIN_STRIP_BODY)).max(MIN_STRIP_BODY);
+    // Verify the result actually fits — the linearization is exact
+    // for this estimator but the saturating arithmetic above might
+    // have over-counted at extreme cap values. Walk back if needed.
+    if let Some(b) = estimate_strip_gpu_memory_bytes(width, body)
+        && b <= cap
+    {
+        return Some(body);
+    }
+    // Final fallback — try MIN_STRIP_BODY itself.
+    if let Some(b) = estimate_strip_gpu_memory_bytes(width, MIN_STRIP_BODY)
+        && b <= cap
+    {
+        return Some(MIN_STRIP_BODY);
+    }
+    None
 }
 
 /// Estimate the GPU working-set bytes

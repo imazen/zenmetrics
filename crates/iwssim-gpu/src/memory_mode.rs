@@ -103,6 +103,30 @@ pub enum ResolvedMode {
 const PYRAMID_ALIGN: u32 = 1 << (NUM_SCALES as u32 - 1); // 16
 const STRIP_DEFAULT_HALO: u32 = 256;
 
+/// Resolve [`MemoryMode::Auto`] for iwssim-gpu (Full-preferred).
+///
+/// Policy (matches the canonical shape from
+/// `butteraugli_gpu::memory_mode::resolve_auto` minus the
+/// strip-preferred first-pass):
+///
+/// 1. If Full fits the cap, pick Full. iwssim's strip walker is ~1.7×
+///    slower than whole-image (see `docs/STRIP_PROCESSING.md`), so we
+///    only fall back to Strip when Full is impossible.
+/// 2. Else if a pyramid-aligned strip body fits the cap **and** both
+///    axes are ≥ [`MIN_NATIVE_DIM`] (the floor enforced by
+///    [`crate::pipeline::Iwssim::new_strip_with_halo`]), pick Strip
+///    with the auto-sized body. This is the "2-pass iwssim fallback"
+///    that prevents TooBigForFull on large images.
+/// 3. Else return [`crate::Error::TooBigForFull`] with the Full
+///    estimate so callers can see the gap.
+///
+/// The MIN_NATIVE_DIM guard is **not** a relaxation of step 2 — strip
+/// genuinely cannot construct below that floor (`new_strip_with_halo`
+/// rejects with `InvalidImageSize`). For sub-MIN_NATIVE_DIM inputs the
+/// only memory-fitting paths are (a) explicit `MemoryMode::Full` with
+/// `IwssimConfig::allow_small`, or (b) raising the cap. Auto cannot
+/// pick either on the caller's behalf; surfacing TooBigForFull is the
+/// honest answer.
 pub fn resolve_auto(
     width: u32,
     height: u32,
@@ -112,16 +136,14 @@ pub fn resolve_auto(
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);
     }
-    if width < MIN_NATIVE_DIM || height < MIN_NATIVE_DIM {
-        // Small images don't have strip support — fall back to Full
-        // and let the caller surface the TooBigForFull.
-        return Err(crate::Error::TooBigForFull {
-            needed: full_bytes,
-            cap,
-        });
-    }
-    if let Some(h_body) = auto_size_strip_body(width, height, cap) {
-        return Ok(ResolvedMode::Strip { h_body });
+    // Full exceeds the cap — try Strip before giving up. This is the
+    // 2-pass-iwssim auto-fallback: `Iwssim::new_strip` works whenever
+    // both axes are ≥ MIN_NATIVE_DIM and an aligned body fits, and
+    // it's the only way to score images that don't fit Full.
+    if width >= MIN_NATIVE_DIM && height >= MIN_NATIVE_DIM {
+        if let Some(h_body) = auto_size_strip_body(width, height, cap) {
+            return Ok(ResolvedMode::Strip { h_body });
+        }
     }
     Err(crate::Error::TooBigForFull {
         needed: full_bytes,

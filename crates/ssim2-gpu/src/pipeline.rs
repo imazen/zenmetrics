@@ -249,13 +249,14 @@ impl<R: Runtime> Ssim2<R> {
         mode: crate::MemoryMode,
     ) -> Result<Self> {
         use crate::MemoryMode;
-        use crate::memory_mode::{
-            ResolvedMode, STRIP_H_BODY_DEFAULT, resolve_auto, vram_cap_bytes,
-        };
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
             MemoryMode::Full => Self::new(client, width, height),
             MemoryMode::Strip { h_body } => {
-                let h = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+                let h = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, cap)
+                });
                 Self::new_strip(client, width, height, h)
             }
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
