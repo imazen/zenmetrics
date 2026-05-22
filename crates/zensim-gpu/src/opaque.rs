@@ -240,6 +240,23 @@ trait ZensimInner: Send {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]>;
+    /// Regime-aware variant: returns a `Vec<f64>` of length
+    /// `regime.total_features()` (228 / 300 / 372). Lets callers
+    /// who configured `with_regime(WithIw)` see all 372 features
+    /// instead of being silently truncated to 228.
+    fn compute_features_vec_inner(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>>;
+    /// Set + upload + pre-build the reference's XYB pyramid.
+    /// Subsequent `compute_with_reference_vec_inner` calls skip the
+    /// ref upload + ref-pyramid construction entirely. Critical
+    /// optimization for sweep workloads with ~80 distortions per ref.
+    fn set_reference_inner(&mut self, ref_rgb: &[u8]) -> Result<()>;
+    /// Compute features against the cached reference. Must call
+    /// `set_reference_inner` first or get [`Error::NoCachedReference`].
+    fn compute_with_reference_vec_inner(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
     fn set_acumen_viewing(
         &mut self,
@@ -264,6 +281,22 @@ where
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]> {
         Zensim::compute_features(self, ref_rgb, dis_rgb)
+    }
+
+    fn compute_features_vec_inner(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>> {
+        Zensim::compute_features_vec(self, ref_rgb, dis_rgb)
+    }
+
+    fn set_reference_inner(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        Zensim::set_reference(self, ref_rgb)
+    }
+
+    fn compute_with_reference_vec_inner(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
+        Zensim::compute_with_reference_vec(self, dis_rgb)
     }
 
     fn dims(&self) -> (u32, u32) {
@@ -358,12 +391,42 @@ impl ZensimOpaque {
     }
 
     /// Compute the 228-feature vector for one pair from packed sRGB.
+    /// Truncates to 228 even when `params.regime` is Extended / WithIw;
+    /// use [`Self::compute_features_vec`] for the regime-aware variant.
     pub fn compute_features_srgb_u8(
         &mut self,
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]> {
         self.inner.compute_features(ref_rgb, dis_rgb)
+    }
+
+    /// Regime-aware feature vector: returns `Vec<f64>` of length
+    /// `params.regime.total_features()` (228 / 300 / 372). Use this
+    /// when `params.regime` is `Extended` or `WithIw`.
+    pub fn compute_features_vec(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<Vec<f64>> {
+        self.inner.compute_features_vec_inner(ref_rgb, dis_rgb)
+    }
+
+    /// Upload + pyramid-build the reference image ONCE, then call
+    /// [`Self::compute_with_reference_vec`] for each distortion.
+    /// Critical for sweep workloads: a single reference with N
+    /// distortions saves N-1 ref uploads (~1 MB each at 1 MP) and
+    /// N-1 ref-pyramid kernel launches.
+    pub fn set_reference(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        self.inner.set_reference_inner(ref_rgb)
+    }
+
+    /// Compute features against the cached reference. Returns
+    /// `Vec<f64>` of length `params.regime.total_features()`.
+    /// Returns [`Error::NoCachedReference`] if `set_reference` was
+    /// never called.
+    pub fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
+        self.inner.compute_with_reference_vec_inner(dis_rgb)
     }
 
     /// Compute the 228-feature vector from [`PixelSlice`] inputs.

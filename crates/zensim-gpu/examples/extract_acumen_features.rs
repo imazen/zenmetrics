@@ -229,16 +229,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             current_dims = Some((w_r, h_r));
         }
         let z = current_z.as_mut().unwrap();
+        // Detect ref change (compares path + dims).
+        let ref_changed = last_ref_path.as_ref() != Some(ref_path)
+            || last_ref_dims != Some((w_r, h_r));
+
         // Mode B: pre-multiply BOTH ref and dist by the REFERENCE's
-        // per-pixel achromatic CSF weight map (castleCSF Mode B uses
-        // shared adaptation per scene). Cache the ref's weight map
-        // across consecutive same-ref pairs (~80 distortions per ref
-        // on safesyn → 50% wall-time savings).
-        let (r_used, d_used);
+        // per-pixel achromatic CSF weight map. Cache the ref-side
+        // pre-multiplied bytes across same-ref pairs.
+        let d_used;
         if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
             let v = viewing.unwrap();
-            let ref_changed = last_ref_path.as_ref() != Some(ref_path)
-                || last_ref_dims != Some((w_r, h_r));
             if ref_changed {
                 let mut pre = zensim::acumen::mode_b::ModeBPreprocessor::new(
                     &lut, v, w_r, h_r, mode_b_cfg,
@@ -246,17 +246,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pre.set_reference(&r);
                 cached_ref_premul = Some(pre.apply_to_ref(&r));
                 mode_b_pre = Some(pre);
-                last_ref_path = Some(ref_path.clone());
-                last_ref_dims = Some((w_r, h_r));
             }
             let pre = mode_b_pre.as_ref().expect("preprocessor set above");
-            r_used = cached_ref_premul.as_ref().unwrap().clone();
             d_used = pre.apply_to_dist(&d);
         } else {
-            r_used = r.clone();
             d_used = d.clone();
         }
-        let feats = match z.compute_features_vec(&r_used, &d_used) {
+        // Set the GPU reference ONCE per ref change. Subsequent
+        // distortion pairs reuse the cached reference pyramid —
+        // saves N-1 ref uploads (1MB each) and N-1 ref-pyramid
+        // kernel launches for ~80 distortions per ref on safesyn.
+        if ref_changed {
+            let ref_for_gpu = if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
+                cached_ref_premul.as_ref().unwrap().clone()
+            } else {
+                r.clone()
+            };
+            if let Err(e) = z.set_reference(&ref_for_gpu) {
+                eprintln!("  set_reference failed [{}/{}]: {e:?}", idx + 1, pairs.len());
+                fail += 1;
+                continue;
+            }
+            last_ref_path = Some(ref_path.clone());
+            last_ref_dims = Some((w_r, h_r));
+        }
+        let feats = match z.compute_with_reference_vec(&d_used) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  compute_features failed [{}/{}]: {e:?}", idx + 1, pairs.len());

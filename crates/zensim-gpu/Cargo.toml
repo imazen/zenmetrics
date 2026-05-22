@@ -50,6 +50,7 @@ zensim = { workspace = true }
 [dev-dependencies]
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
+rayon = "1.10"
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 # Direct dep for extract_acumen_features example — uses
