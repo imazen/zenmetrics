@@ -26,7 +26,6 @@ fn make_image(w: usize, h: usize, seed: u32) -> Vec<u8> {
 }
 
 fn bench_size_phases(w: u32, h: u32) {
-    use cubecl::server::ComputeServer;
     let img_a = make_image(w as usize, h as usize, 42);
     let img_b = make_image(w as usize, h as usize, 137);
     let client = Backend::client(&Default::default());

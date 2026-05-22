@@ -169,9 +169,14 @@ fn v_blur_plane(src: &[f32], width: usize, height: usize, radius: usize, out: &m
 }
 
 // === SSIM math (single per-pixel, matches fused.rs / GPU kernel) ===
+// Currently unused — diagnostic uses summary metrics rather than per-pixel.
+// Kept around because the next b-channel divergence investigation will
+// likely want this verbatim.
 
+#[allow(dead_code)]
 const C2: f32 = 0.0009;
 
+#[allow(dead_code)]
 fn ssim_sd(mu1: f32, mu2: f32, ssq: f32, s12: f32) -> f32 {
     let mu_diff = mu1 - mu2;
     let num_m = mu_diff.mul_add(-mu_diff, 1.0);
@@ -285,6 +290,7 @@ impl ScaleBufs {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)] // some fields are dump-target context, set but not read
 struct ChannelDump {
     width: usize,
     strip_h: usize,

@@ -60,7 +60,6 @@ fn rgb_buf_to_imgvec(buf: &[u8], width: u32, height: u32) -> ImgVec<RGB8> {
 fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| {
         // Default to a workspace test image so CI can run this without args.
-        let manifest = env!("CARGO_MANIFEST_DIR");
         zenmetrics_corpus::source_png()
             .to_string_lossy()
             .to_string()

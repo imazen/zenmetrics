@@ -19,7 +19,6 @@ fn load_rgb8(path: &str) -> (Vec<u8>, u32, u32) {
 }
 
 fn main() {
-    let manifest = env!("CARGO_MANIFEST_DIR");
     let dir = zenmetrics_corpus::corpus_dir();
 
     let (src_bytes, w, h) = load_rgb8(dir.join("source.png").to_str().unwrap());

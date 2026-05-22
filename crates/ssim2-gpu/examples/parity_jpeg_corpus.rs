@@ -48,7 +48,6 @@ fn srgb_u8_to_xyb(bytes: &[u8], width: usize, height: usize) -> Xyb {
 }
 
 fn main() {
-    let manifest = env!("CARGO_MANIFEST_DIR");
     let dir = zenmetrics_corpus::corpus_dir();
 
     let (src_bytes, w, h) = load_rgb8(dir.join("source.png").to_str().unwrap());

@@ -40,7 +40,6 @@ fn median(xs: &mut [f64]) -> f64 {
 }
 
 fn run(qs_per_call: usize) {
-    let manifest = env!("CARGO_MANIFEST_DIR");
     let dir = zenmetrics_corpus::corpus_dir();
     let (src_bytes, w, h) = load_rgb8(dir.join("source.png").to_str().unwrap());
 

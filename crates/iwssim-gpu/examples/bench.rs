@@ -13,7 +13,6 @@ use std::time::Instant;
 
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
-use cubecl::prelude::*;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
 use iwssim_gpu::Iwssim;

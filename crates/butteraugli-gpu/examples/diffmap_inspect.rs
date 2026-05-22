@@ -67,7 +67,7 @@ fn main() {
     // Flat gray image with one perturbed pixel — easiest case to debug.
     // Diffmap should be the convolution kernel shape centered on the
     // perturbed pixel, modulated by the mask.
-    let mut ref_rgb = vec![128_u8; (width * height * 3) as usize];
+    let ref_rgb = vec![128_u8; (width * height * 3) as usize];
     let mut dist_rgb = ref_rgb.clone();
     let cx = (width / 2) as usize;
     let cy = (height / 2) as usize;
