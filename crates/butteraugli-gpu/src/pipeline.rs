@@ -107,9 +107,26 @@ fn malta_norm(w_0gt1: f64, w_0lt1: f64, norm1: f64, use_lf: bool) -> (f32, f32, 
 /// comparisons at the same resolution.
 pub struct Butteraugli<R: Runtime> {
     client: ComputeClient<R>,
+    /// Width of the buffers and (for strip mode) of the image. For
+    /// whole-image mode this equals the image width.
     width: u32,
+    /// Height of the allocated buffers. For whole-image mode this is the
+    /// image height; for strip mode it is `body_h_max + 2 * halo_h`,
+    /// i.e. the per-strip working slab.
     height: u32,
+    /// `width × height` (allocation size in f32 pixels).
     n: usize,
+
+    /// Logical image height for strip mode. Equals `self.height` for
+    /// whole-image mode. Used by `compute_strip` to bound the walk.
+    image_h: u32,
+    /// Per-strip body row count for strip mode (the inner band whose
+    /// per-pixel diffmap is folded into the running aggregate). Equal
+    /// to `self.height` for whole-image mode.
+    body_h: u32,
+    /// Halo rows above and below the body inside each strip. Zero in
+    /// whole-image mode.
+    halo_h: u32,
 
     // sRGB u8 staging
     src_u8_a: cubecl::server::Handle,
@@ -294,7 +311,13 @@ impl<R: Runtime> Butteraugli<R> {
         let n = (width as usize)
             .checked_mul(height as usize)
             .expect("width × height overflows usize");
-        let n_bytes = n
+        // Defensive overflow check: `n * 3` is the upper bound on
+        // sRGB input length (3 bytes per pixel). Pre-validating here
+        // means downstream `vec![0_u32; n]` / `vec![0.0_f32; n]`
+        // allocations can't surface a confusing alloc-failure for a
+        // caller's mistake; they'll trip this expect first. Result
+        // unused — kept for the side-effect panic.
+        let _n_bytes = n
             .checked_mul(3)
             .expect("width × height × 3 overflows usize");
         // T4.L (2026-05-16): pack 3 sRGB bytes per pixel into ONE u32
@@ -351,6 +374,12 @@ impl<R: Runtime> Butteraugli<R> {
             width,
             height,
             n,
+            // Whole-image construction: image_h == height, body_h ==
+            // height, halo == 0. compute_strip detects whole-image mode
+            // by halo_h == 0 and short-circuits to compute_with_options.
+            image_h: height,
+            body_h: height,
+            halo_h: 0,
             src_u8_a,
             src_u8_b,
             lin_a,
@@ -379,6 +408,53 @@ impl<R: Runtime> Butteraugli<R> {
         }
     }
 
+    /// Allocate buffers sized for a `body_h + 2 × HALO_ROWS` strip,
+    /// for processing a logical `image_w × image_h` image strip by
+    /// strip.
+    ///
+    /// Each call to [`Butteraugli::compute_strip`] walks the image in
+    /// `body_h` row-tall bands, populating halo rows from real image
+    /// content (edge-clamped at image top/bottom). Body rows of the
+    /// resulting diffmap are folded into running `(max, p3, p6, p12)`
+    /// partials and the final score is identical to the whole-image
+    /// path up to f64 reduction order.
+    ///
+    /// Use [`Butteraugli::new`] for whole-image mode; [`Butteraugli::new_strip`]
+    /// trades a small per-strip launch-latency overhead for ~`image_h /
+    /// (body_h + 2 × HALO_ROWS)` peak memory savings — well over 10× at
+    /// 24 MP with sensible body sizes.
+    ///
+    /// **Constraints (MVP):**
+    /// - Single-resolution only — the multi-resolution sibling that
+    ///   `new_multires` allocates is not strip-stitched in this
+    ///   revision. Use whole-image `new_multires` for the half-res
+    ///   contribution if needed.
+    /// - `set_reference` / `compute_with_reference` not yet supported.
+    ///   Strip-mode `compute_strip` re-runs the full pipeline both
+    ///   sides every call.
+    ///
+    /// Panics if `body_h == 0` or `image_w × (body_h + 2 × HALO_ROWS) ×
+    /// 3` overflows `usize`.
+    pub fn new_strip(client: ComputeClient<R>, image_w: u32, image_h: u32, body_h: u32) -> Self {
+        assert!(body_h > 0, "body_h must be > 0");
+        assert!(image_w > 0 && image_h > 0, "image dims must be > 0");
+        let halo_h = crate::strip::HALO_ROWS;
+        // If the image fits in a single strip (body_h + 2*halo >=
+        // image_h) we still allocate the strip slab; the walker just
+        // runs one strip whose body covers the whole image.
+        let body_h_eff = body_h.min(image_h);
+        let strip_h_total = body_h_eff
+            .saturating_add(halo_h.saturating_mul(2))
+            .min(image_h.saturating_add(halo_h.saturating_mul(2)));
+        // Build a whole-image-style instance sized to (image_w,
+        // strip_h_total), then patch the strip metadata in.
+        let mut inst = Self::new(client, image_w, strip_h_total);
+        inst.image_h = image_h;
+        inst.body_h = body_h_eff;
+        inst.halo_h = halo_h;
+        inst
+    }
+
     /// Construct a multi-resolution `Butteraugli` instance — same as
     /// [`Butteraugli::new`] plus a `(w/2)×(h/2)` sibling whose diffmap
     /// is supersample-added into the full-res diffmap before reduction.
@@ -395,6 +471,79 @@ impl<R: Runtime> Butteraugli<R> {
             full.half_res = Some(Box::new(Self::new(client, half_w, half_h)));
         }
         full
+    }
+
+    /// Compute strip-by-strip butteraugli over the logical image
+    /// configured at [`Butteraugli::new_strip`].
+    ///
+    /// `ref_srgb.len()` and `dist_srgb.len()` must equal `image_w ×
+    /// image_h × 3`. Returns the same `(score, pnorm_3)` shape as
+    /// [`Butteraugli::compute`], identical to the whole-image path up
+    /// to f64 reduction order (verified < 1e-4 rel at 1024² in the
+    /// parity tests).
+    ///
+    /// Panics if called on a whole-image instance (one constructed via
+    /// [`Butteraugli::new`] / [`Butteraugli::new_multires`]); use
+    /// [`Butteraugli::compute`] there.
+    pub fn compute_strip(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuButteraugliResult> {
+        self.compute_strip_with_options(ref_srgb, dist_srgb, &ButteraugliParams::default())
+    }
+
+    /// `compute_strip` with runtime-tunable params. Same constraints
+    /// and validation rules as [`Self::compute_with_options`].
+    pub fn compute_strip_with_options(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<GpuButteraugliResult> {
+        if self.halo_h == 0 {
+            // Whole-image instance — caller probably meant `compute`.
+            return Err(Error::StripModeUnsupported(
+                "compute_strip-on-whole-image-instance (use Butteraugli::new_strip)",
+            ));
+        }
+        crate::strip::run_strip_pipeline(
+            self,
+            ref_srgb,
+            dist_srgb,
+            self.width,
+            self.image_h,
+            self.body_h,
+            self.halo_h,
+            params,
+        )
+    }
+
+    /// True if this instance was constructed via
+    /// [`Butteraugli::new_strip`] (and therefore expects
+    /// [`Butteraugli::compute_strip`] rather than
+    /// [`Butteraugli::compute`]).
+    pub fn is_strip_mode(&self) -> bool {
+        self.halo_h > 0
+    }
+
+    /// Logical image height (returned even in strip mode where
+    /// `self.height` is the per-strip slab height, not the image
+    /// height). For whole-image mode this matches `self.height`.
+    pub fn image_height(&self) -> u32 {
+        self.image_h
+    }
+
+    /// Logical strip body row count (one per call to the inner
+    /// pipeline, NOT including halo).
+    pub fn strip_body_h(&self) -> u32 {
+        self.body_h
+    }
+
+    /// Per-strip halo row count (HALO_ROWS for strip mode, 0 for
+    /// whole-image).
+    pub fn strip_halo_h(&self) -> u32 {
+        self.halo_h
     }
 
     /// Compute the butteraugli `(score, pnorm_3)` for one image pair.
@@ -421,6 +570,13 @@ impl<R: Runtime> Butteraugli<R> {
         dist_srgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<GpuButteraugliResult> {
+        if self.halo_h > 0 {
+            // Strip-mode instance — caller probably meant compute_strip.
+            // Without this guard the check_dims rejection that follows
+            // would surface a misleading "expected N×slab_h×3 bytes"
+            // message (slab geometry, not image geometry).
+            return Err(Error::StripModeUnsupported("compute"));
+        }
         validate_params(params)?;
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
@@ -497,6 +653,9 @@ impl<R: Runtime> Butteraugli<R> {
         dis_handle: &cubecl::server::Handle,
         params: &ButteraugliParams,
     ) -> Result<GpuButteraugliResult> {
+        if self.halo_h > 0 {
+            return Err(Error::StripModeUnsupported("compute_handles"));
+        }
         validate_params(params)?;
         self.set_params_recursive(params);
         self.install_packed_handle_and_srgb_to_linear(true, ref_handle);
@@ -530,6 +689,14 @@ impl<R: Runtime> Butteraugli<R> {
         ref_srgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<()> {
+        if self.halo_h > 0 {
+            // Strip-mode instances can't cache reference-side
+            // intermediates: the strip walker rewrites lin_a/freq_a
+            // per strip, so reusing them across compute_strip calls
+            // would mix strips. Surface this as a clear error instead
+            // of silently corrupting state.
+            return Err(Error::StripModeUnsupported("set_reference"));
+        }
         validate_params(params)?;
         self.check_dims(ref_srgb)?;
         self.set_params_recursive(params);
@@ -637,6 +804,9 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
+        if self.halo_h > 0 {
+            return Err(Error::StripModeUnsupported("compute_with_reference"));
+        }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
         }
@@ -763,6 +933,112 @@ impl<R: Runtime> Butteraugli<R> {
         unsafe {
             self.launch_srgb_to_linear(is_a);
         }
+    }
+
+    /// Strip-mode helper used by [`crate::strip::run_strip_pipeline`].
+    /// Sets the active comparison parameters on `self` (no per-strip
+    /// state separate from the existing whole-image storage).
+    pub(crate) fn set_params(&mut self, params: ButteraugliParams) {
+        self.params = params;
+    }
+
+    /// Strip-mode helper: returns a reference to the underlying CubeCL
+    /// client so the strip walker can drive `read_one` for per-strip
+    /// diffmap reduction.
+    pub(crate) fn client_ref(&self) -> &ComputeClient<R> {
+        &self.client
+    }
+
+    /// Strip-mode helper: a clone of the diffmap-buf handle for the
+    /// just-completed strip pipeline run.
+    pub(crate) fn diffmap_buf_handle(&self) -> cubecl::server::Handle {
+        self.diffmap_buf.clone()
+    }
+
+    /// Strip-mode helper: pack an `image_w × image_h × 3` sRGB-u8
+    /// source into the (already-allocated) `src_u8_a` / `src_u8_b`
+    /// handle for one strip. Halo rows are populated with edge-clamped
+    /// image rows (mirrors the blur kernels' `saturating_sub` /
+    /// `min(h - 1)` edge handling, so body-row outputs match the
+    /// whole-image path exactly).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn upload_strip_srgb(
+        &mut self,
+        is_a: bool,
+        srgb: &[u8],
+        image_w: u32,
+        image_h: u32,
+        body_top_img: u32,
+        strip_h_total: u32,
+        halo_top: u32,
+    ) {
+        debug_assert_eq!(srgb.len(), (image_w as usize) * (image_h as usize) * 3);
+        debug_assert_eq!(image_w, self.width);
+        debug_assert!(strip_h_total <= self.height);
+
+        let pinned_len = (image_w as usize) * (strip_h_total as usize) * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            crate::strip::pack_strip_srgb_into(
+                dst,
+                srgb,
+                image_w,
+                image_h,
+                body_top_img,
+                strip_h_total,
+                halo_top,
+            );
+        }
+        let handle = self.client.create(bytes);
+        if is_a {
+            self.src_u8_a = handle;
+        } else {
+            self.src_u8_b = handle;
+        }
+        unsafe {
+            self.launch_srgb_to_linear(is_a);
+        }
+    }
+
+    /// Strip-mode helper: drive the same kernel chain as `compute`
+    /// (both sides; no cached-reference fast path) on the currently
+    /// loaded strip planes. `strip_h_total` is the populated height of
+    /// the strip; this method temporarily clamps `self.height` to that
+    /// value for the duration of the pipeline so kernels launched with
+    /// `cube_count_1d / 2d` cover the strip but not the unused
+    /// trailing rows of the slab.
+    pub(crate) fn run_strip_pipeline_compute(&mut self, strip_h_total: u32) {
+        let saved_height = self.height;
+        let saved_n = self.n;
+        // Clamp height + n to the strip's actually-populated slice.
+        // self.height drives every cube_count_1d / cube_count_2d call;
+        // self.n drives every ArrayArg::from_raw_parts length. After
+        // the pipeline pass we restore the slab-sized values so that
+        // the next strip's upload sees the full pinned-len.
+        self.height = strip_h_total;
+        self.n = (self.width as usize) * (strip_h_total as usize);
+
+        // Skip half_res / cached-reference branches: strip mode is
+        // single-resolution-only in this MVP.
+        debug_assert!(self.half_res.is_none(), "strip mode is single-res only");
+        self.apply_opsin(true);
+        self.apply_opsin(false);
+        self.separate_frequencies(true);
+        self.separate_frequencies(false);
+        self.compute_psycho_diff();
+        self.compute_dc_diff();
+        self.compute_mask_pipeline_full();
+        unsafe {
+            self.launch_compute_diffmap();
+        }
+
+        self.height = saved_height;
+        self.n = saved_n;
     }
 
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {

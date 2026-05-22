@@ -52,6 +52,7 @@ rgb = { workspace = true }
 image = { workspace = true, features = ["png", "jpeg"] }
 zenmetrics-corpus = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+zenbench = "0.1.8"
 
 # Examples and tests consuming the typed Butteraugli<R> require
 # the cubecl-types feature.
@@ -103,10 +104,22 @@ required-features = ["cubecl-types"]
 name = "reduction_parity"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "strip_parity_numbers"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "bench_strip_vs_whole_cuda"
+required-features = ["cubecl-types", "cuda"]
+
 [[test]]
 name = "reduction_parity"
 required-features = ["cubecl-types"]
 
 [[test]]
 name = "opaque"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "strip_parity"
 required-features = ["cubecl-types"]

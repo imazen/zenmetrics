@@ -45,6 +45,68 @@ Workspace conventions per the global rules:
   621 MB (6.38× reduction). Host RSS at 12 MP (heaptrack):
   whole=2.30 GB, strip=608 MB (3.78× reduction).
 
+### butteraugli-gpu — 2026-05-22 strip-mode pipeline (production-OOM fix)
+
+Adds the strip-walker orchestration for the butteraugli pipeline:
+`Butteraugli::new_strip(client, image_w, image_h, body_h)` allocates
+~38 planes at `width × (body_h + 2 × HALO_ROWS)` instead of the
+full `width × image_h`, then `compute_strip(ref, dis)` walks the
+image strip-by-strip while folding each body band into a running
+`(max, p3, p6, p12)` host-side aggregate. Result is bit-identical to
+the whole-image path up to f64 reduction order (parity tests assert
+`< 1e-4` relative error; measured `~1e-7` at 1024² across CUDA + WGPU).
+
+GPU peak allocation per `Butteraugli<R>` instance (analytical
+50-plane × 4-byte tally; matches actual GPU buffer pool usage):
+
+| size       | whole       | strip(body=256) | ratio |
+|------------|-------------|-----------------|-------|
+| 1MP 1024²  | 200 MB      | 66 MB           | 3.05× |
+| 4MP 2000²  | 763 MB      | 128 MB          | 5.95× |
+| 12MP 4000×3000 | 2.24 GB | 256 MB          | 8.93× |
+| 24MP 6144×4096 | 4.69 GB | 394 MB          | 12.19× |
+
+Strip vs whole throughput at 12 MP (zenbench paired-compare, median):
+`compute()` 106 ms vs `compute_strip()` 57 ms → 1.87× **faster** as
+a side benefit of better cache locality on the smaller working set.
+
+API surface additions:
+- `pub mod strip` (when `cubecl-types` enabled) — strip walker + edge-
+  mirror sRGB packer + per-strip host-side partials.
+- `pub struct Butteraugli::{new_strip, compute_strip,
+  compute_strip_with_options, is_strip_mode, image_height,
+  strip_body_h, strip_halo_h}`.
+- `pub enum Error::StripModeUnsupported(&'static str)` — surfaces
+  clear errors when whole-image-only APIs (`set_reference`, `compute`,
+  `compute_with_reference`, `compute_handles`) are called on a strip
+  instance, and vice versa (`compute_strip` on a whole-image
+  instance). Replaces the previous panicking `assert!`.
+
+MVP limits documented in module + test docs:
+- Single-resolution only — `new_multires` not strip-stitched.
+- `set_reference` / `compute_with_reference` not yet strip-aware.
+
+Test coverage: `tests/strip_parity.rs` grew from 6 to 19 tests (3
+image sizes × 2 body values pair-path matrix, uneven-last-strip,
+single-strip degenerate, body=image_h degenerate,
+options-pass-through, multires-on-whole-still-works, plus 4 clear-
+error assertions for the unsupported-API paths).
+
+Bench: `examples/bench_strip_vs_whole_cuda.rs` (zenbench paired-
+compare, writes `benchmarks/butter_strip_vs_whole_<date>.csv` +
+supports `--whole-only-12mp` / `--strip-only-12mp` for heaptrack).
+
+Heaptrack host RSS at 12 MP (single-shot bench, no heaptrack overhead
+factored in): whole=2.91 GB, strip=731 MB — 4.0× host RSS reduction
+(GPU-side reduction is larger; heaptrack measures host only).
+
+Files: `crates/butteraugli-gpu/src/strip.rs` (new),
+`crates/butteraugli-gpu/src/pipeline.rs` (`new_strip`,
+`compute_strip*`, strip-mode helpers + guards),
+`crates/butteraugli-gpu/src/lib.rs` (`pub mod strip`, new error),
+`crates/butteraugli-gpu/tests/strip_parity.rs` (new),
+`crates/butteraugli-gpu/examples/{strip_parity_numbers,bench_strip_vs_whole_cuda}.rs` (new).
+
 ### Changed — sweep image Dockerfile chain collapsed to single file `v26` — 2026-05-21
 
 Replaces the `v14 → v15 → v18 → v19 → v20 → v21 → v22 → v23 → v24 → v25`

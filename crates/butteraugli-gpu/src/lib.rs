@@ -31,6 +31,8 @@ pub mod kernels;
 pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
+#[cfg(feature = "cubecl-types")]
+pub mod strip;
 
 // Uniform opaque API (Phase 2 of API uniformity refactor). See
 // `opaque.rs` and the matching shim in `dssim-gpu`.
@@ -120,6 +122,12 @@ pub enum Error {
     NoCachedReference,
     /// `ButteraugliParams` had a non-finite or non-positive value.
     InvalidParams(&'static str),
+    /// A whole-image-only API (`set_reference`, `new_multires` sibling,
+    /// etc.) was called on a strip-mode instance constructed via
+    /// `new_strip`. Strip mode currently runs single-resolution
+    /// pair-only — re-allocate via `new` if you need the cached-
+    /// reference / multi-resolution paths.
+    StripModeUnsupported(&'static str),
 }
 
 impl std::fmt::Display for Error {
@@ -131,6 +139,11 @@ impl std::fmt::Display for Error {
             ),
             Error::NoCachedReference => write!(f, "no cached reference; call set_reference first"),
             Error::InvalidParams(msg) => write!(f, "invalid params: {msg}"),
+            Error::StripModeUnsupported(api) => write!(
+                f,
+                "strip-mode instance does not support `{api}` (single-resolution pair-only); \
+                use `Butteraugli::new` for whole-image / cached-reference / multi-resolution paths"
+            ),
         }
     }
 }
