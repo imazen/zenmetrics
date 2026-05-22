@@ -1,11 +1,27 @@
 //! Unified memory-mode API. See `butteraugli-gpu/src/memory_mode.rs`
 //! for shared design rationale.
 //!
-//! cvvdp-gpu is **architecturally blocked** at 24 MP square per
-//! `docs/STRIP_PROCESSING.md` — the spatial-frequency channel uses
-//! a full-image FFT-like decomposition that doesn't decompose into
-//! independently scorable strips. `MemoryMode::Strip` and `Tile`
-//! return [`crate::Error::ModeUnsupported`].
+//! cvvdp-gpu's strip-mode plan is documented in
+//! `docs/STRIP_PROCESSING.md`. Two paths are tracked there:
+//!
+//! 1. **Capped pyramid depth** — `MemoryMode::Strip { capped_levels:
+//!    Some(k) }`. Reduces the natural pyramid depth from the
+//!    `band_frequencies` cutoff (typically 9 at 4K-class viewing) to
+//!    `k`, shrinking the σ=3 PU-blur halo. Constructor delegates to
+//!    [`crate::Cvvdp::new_with_geometry_and_cap`]. Fidelity-vs-memory
+//!    tradeoff: changes JOD score outside the canonical ≤ 0.005 JOD
+//!    pycvvdp v0.5.4 parity gate for some fixtures at small caps.
+//!    Sweep data at `benchmarks/cvvdp_capped_levels_2026-05-22.csv`
+//!    shows `k = 8` keeps every measured fixture under the gate;
+//!    `k <= 7` fails on the 720×1280 offset fixture.
+//! 2. **Panorama strip** — tall/wide images via two-pass walker. Not
+//!    yet implemented; the panorama case currently falls through to
+//!    `Full` via `Auto` resolution. See `docs/STRIP_PROCESSING.md`.
+//!
+//! `MemoryMode::Tile` returns [`crate::Error::ModeUnsupported`].
+//! `MemoryMode::Auto` resolves to `Full` whenever Full fits the cap;
+//! it does NOT autoselect capped-Strip — capping changes the
+//! metric value, so the caller must opt in explicitly.
 //!
 //! This module wraps the pre-existing
 //! [`crate::pipeline::estimate_gpu_memory_bytes`] (which already
@@ -31,16 +47,39 @@ pub fn vram_cap_bytes() -> usize {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryMode {
     /// Pick Full or Strip automatically based on
-    /// [`vram_cap_bytes()`]. cvvdp-gpu always picks Full (no Strip
-    /// implementation).
+    /// [`vram_cap_bytes()`]. cvvdp-gpu always picks Full when it
+    /// fits the cap. **Does not** autoselect capped-Strip — capping
+    /// changes the JOD value (see `docs/STRIP_PROCESSING.md`), so
+    /// callers must opt in via `Strip { capped_levels: Some(_) }`
+    /// explicitly.
     Auto,
     /// Allocate the whole-image working set.
     Full,
-    /// Strip mode. **Unsupported in cvvdp-gpu** — the constructor
-    /// returns [`crate::Error::ModeUnsupported`].
+    /// Strip mode.
+    ///
+    /// **Single-pass strip (`h_body = Some(_)` or `None` and
+    /// `capped_levels = None`)**: currently returns
+    /// [`crate::Error::ModeUnsupported`] — see
+    /// `docs/STRIP_PROCESSING.md` for the planned panorama-strip
+    /// design.
+    ///
+    /// **Capped-depth Full (`capped_levels = Some(k)`)**: not a true
+    /// strip walker — instead, builds a Full pipeline with the
+    /// pyramid depth clamped to `k`. The σ=3 phase-uncertainty blur
+    /// halo at non-baseband bands shrinks proportionally to
+    /// `6 × 2^(k-2)` rows, making 24 MP square viable on smaller
+    /// VRAM budgets. **Capping changes the JOD value** — see
+    /// `docs/STRIP_PROCESSING.md` for the cap-vs-JOD-drift sweep
+    /// data and which caps fit the canonical ≤ 0.005 JOD pycvvdp
+    /// parity gate per fixture.
     Strip {
-        /// Optional body row count override.
+        /// Optional body row count override. **Ignored for now** —
+        /// the single-pass-strip path is not implemented yet.
         h_body: Option<u32>,
+        /// Optional pyramid-depth cap. `Some(k)` clamps the pyramid
+        /// to `min(k, natural_n_levels)` bands; `None` defers to the
+        /// natural depth from `band_frequencies`.
+        capped_levels: Option<u32>,
     },
     /// 2-D tile mode. **Unsupported** — reserved for a future
     /// implementation.

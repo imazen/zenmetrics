@@ -17,6 +17,56 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — capped-pyramid `MemoryMode::Strip { capped_levels: Some(k) }` + `predict_jod_still_3ch_capped` — 2026-05-22
+
+Adds an opt-in pyramid-depth cap for cvvdp-gpu that lets callers
+trade some JOD fidelity for a smaller σ=3 PU-blur halo, paving the
+way for a future strip walker. **Cap=8 ships as the deepest level
+that fits the canonical ≤ 0.005 JOD pycvvdp v0.5.4 manifest parity
+gate** across all measured fixtures (max drift 5.85e-4 JOD on the
+1280×720 offset fixture). Cap=7 fails on the 720×1280 fixture at
+1.17e-2 drift and does not ship.
+
+- `Cvvdp::new_with_geometry_and_cap(client, w, h, params, geom, capped_levels)`
+  — typed-API entry point; `capped_levels = None` matches
+  `new_with_geometry` byte-for-byte. `Some(0)` rejected.
+- `MemoryMode::Strip { h_body, capped_levels: Option<u32> }` — unified
+  variant; `Some(k)` routes to a Full pipeline with depth clamped to
+  `min(k, natural_n_levels)`. The `h_body` single-pass-strip path
+  remains unsupported (returns `Error::ModeUnsupported` when
+  `capped_levels = None`).
+- `host_scalar::predict_jod_still_3ch_capped(.., cap_levels: Option<usize>)`
+  — host-scalar variant for host-only callers. The existing
+  `predict_jod_still_3ch` now delegates with `cap_levels = None`,
+  bit-identical to the original.
+- `MemoryMode::Auto` does NOT auto-select capped depth — capping
+  changes the metric value, so callers must opt in explicitly.
+
+Memory in Full mode is unchanged (cap=8 vs cap=None saves only the
+smallest few coarse-band scratch slots, kilobytes). Perf neutral
+across 12 MP, 24 MP square, and 1024×8192 panorama (see
+`benchmarks/cvvdp_capped_perf_2026-05-22.csv`). Capped-levels
+fidelity sweep at `benchmarks/cvvdp_capped_levels_2026-05-22.csv`.
+Doc: `crates/cvvdp-gpu/docs/STRIP_PROCESSING.md`.
+
+Tests:
+
+- `tests/capped_levels_parity.rs` — 4 host-scalar gates: cap=None
+  matches uncapped, cap-above-natural clamps, cap=8 meets ≤ 0.005
+  on all natural-depth-9 fixtures, and a pinned cap=7 720×1280
+  failure.
+- `tests/capped_levels_gpu_parity.rs` — 3 GPU gates: 12 MP and
+  1024² cap=8 vs pycvvdp ≤ 0.005, cap=None matches uncapped at
+  1024². All pass on cubecl-cuda. wgpu's pre-existing 65535-
+  dispatch-grid limit (workgroup dim cap) still constrains 12 MP
+  on that backend; unchanged by this work.
+- `tests/memory_mode.rs` — `explicit_strip_with_cap_constructs` +
+  the existing strip/tile/auto resolver tests.
+
+73×91 odd-dim manifest parity holds at `|diff| = 0.0000 JOD` on
+CUDA backend (verified via `compute_dkl_jod_matches_pycvvdp_at_73x91_odd`
++ warm-ref companion).
+
 ### butteraugli-gpu — multi-resolution strip walker + opaque-strip parity + dead-code cleanup — 2026-05-22
 
 Adds the constant-VRAM analog of the CPU reference's default
@@ -67,7 +117,6 @@ LUT-blur fast path and the fused `malta_triple` / `l2_asym_plus_l2` /
 slow-path reduction constants behind `cfg(not(feature =
 "fast-reduction"))`. -273 LOC, 1 dead-code warning eliminated, no
 public API change.
-
 ### zensim-gpu — cached-reference + regime-aware opaque API — 2026-05-22
 
 Plumbs the typed pipeline's `set_reference` / `compute_with_reference_vec`

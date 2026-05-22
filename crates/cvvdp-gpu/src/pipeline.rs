@@ -760,10 +760,21 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
-    /// cvvdp-gpu has **no Strip implementation** — Strip and Tile
-    /// return [`crate::Error::ModeUnsupported`]. Auto resolves to
-    /// Full when it fits the cap, else
-    /// [`crate::Error::TooBigForFull`].
+    ///
+    /// - `Full` → standard full-image pipeline.
+    /// - `Strip { capped_levels: Some(k), .. }` → Full pipeline with
+    ///   pyramid depth clamped to `k`. **Changes JOD score** — see
+    ///   `docs/STRIP_PROCESSING.md`. The single-pass strip walker
+    ///   path (`h_body`) is not yet implemented; that field is
+    ///   currently ignored when `capped_levels` is set, and triggers
+    ///   `ModeUnsupported` when `capped_levels = None`.
+    /// - `Strip { capped_levels: None, .. }` →
+    ///   [`crate::Error::ModeUnsupported`].
+    /// - `Tile { .. }` → [`crate::Error::ModeUnsupported`].
+    /// - `Auto` → Full when it fits the cap, else
+    ///   [`crate::Error::TooBigForFull`]. Does NOT auto-select
+    ///   capped-Strip (capping changes the metric value — caller
+    ///   must opt in explicitly).
     pub fn new_with_memory_mode(
         client: ComputeClient<R>,
         width: u32,
@@ -775,7 +786,19 @@ impl<R: Runtime> Cvvdp<R> {
         use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
             MemoryMode::Full => Self::new(client, width, height, params),
-            MemoryMode::Strip { .. } => Err(crate::Error::ModeUnsupported("Strip")),
+            MemoryMode::Strip { capped_levels: Some(cap), .. } => {
+                Self::new_with_geometry_and_cap(
+                    client,
+                    width,
+                    height,
+                    params,
+                    crate::params::DisplayGeometry::STANDARD_4K,
+                    Some(cap),
+                )
+            }
+            MemoryMode::Strip { capped_levels: None, .. } => {
+                Err(crate::Error::ModeUnsupported("Strip"))
+            }
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
@@ -848,10 +871,39 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
+        Self::new_with_geometry_and_cap(client, width, height, params, geometry, None)
+    }
+
+    /// Capped-depth variant of [`Self::new_with_geometry`]. Pass
+    /// `Some(k)` to clamp the pyramid depth to `min(k,
+    /// natural_n_levels)`; pass `None` to behave identically to
+    /// `new_with_geometry`. See `docs/STRIP_PROCESSING.md` for the
+    /// fidelity-vs-memory tradeoff this opt-in implements.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new_with_geometry`], plus
+    /// [`Error::InvalidImageSize`] if `capped_levels = Some(0)`
+    /// (a zero-band pyramid is undefined).
+    pub fn new_with_geometry_and_cap(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+        capped_levels: Option<u32>,
+    ) -> Result<Self> {
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
         }
-        let n_levels = pyramid_levels(geometry.pixels_per_degree(), width, height);
+        if matches!(capped_levels, Some(0)) {
+            return Err(Error::InvalidImageSize);
+        }
+        let natural_n_levels = pyramid_levels(geometry.pixels_per_degree(), width, height);
+        let n_levels = match capped_levels {
+            Some(cap) => natural_n_levels.min(cap),
+            None => natural_n_levels,
+        };
 
         let n0 = (width as usize) * (height as usize);
         // Source-byte buffers are u32-slot arrays of length `n0 * 3`

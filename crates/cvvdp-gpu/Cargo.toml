@@ -57,6 +57,18 @@ name = "bench_warm_ref"
 required-features = ["cubecl-types"]
 
 [[example]]
+name = "capped_levels_sweep"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "cap_memory_estimate"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "cap_perf_compare"
+required-features = ["cubecl-types"]
+
+[[example]]
 name = "cvvdp_mem_table"
 required-features = ["cubecl-types"]
 
@@ -74,6 +86,14 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "band_weights_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "capped_levels_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "capped_levels_gpu_parity"
 required-features = ["cubecl-types"]
 
 [[test]]

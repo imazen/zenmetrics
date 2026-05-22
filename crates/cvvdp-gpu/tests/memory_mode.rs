@@ -65,8 +65,26 @@ fn auto_errors_when_strip_unsupported_and_too_big() {
 
 #[test]
 fn explicit_strip_constructs() {
-    let m = MemoryMode::Strip { h_body: Some(128) };
-    assert_eq!(m, MemoryMode::Strip { h_body: Some(128) });
+    let m = MemoryMode::Strip { h_body: Some(128), capped_levels: None };
+    assert_eq!(
+        m,
+        MemoryMode::Strip { h_body: Some(128), capped_levels: None }
+    );
+}
+
+#[test]
+fn explicit_strip_with_cap_constructs() {
+    // The capped-pyramid variant — `Strip { capped_levels: Some(k) }`
+    // is what unblocks 24 MP square via reduced σ=3 PU-blur halo (see
+    // `docs/STRIP_PROCESSING.md`).
+    let m = MemoryMode::Strip { h_body: None, capped_levels: Some(8) };
+    match m {
+        MemoryMode::Strip { capped_levels, h_body } => {
+            assert_eq!(capped_levels, Some(8));
+            assert_eq!(h_body, None);
+        }
+        _ => panic!("expected Strip"),
+    }
 }
 
 #[test]

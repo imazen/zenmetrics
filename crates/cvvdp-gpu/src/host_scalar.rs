@@ -85,6 +85,49 @@ pub fn predict_jod_still_3ch(
     display: DisplayModel,
     ppd: f32,
 ) -> f32 {
+    predict_jod_still_3ch_capped(ref_srgb, dist_srgb, width, height, display, ppd, None)
+}
+
+/// Variant of [`predict_jod_still_3ch`] that **truncates the pyramid**
+/// at `cap_levels` bands. When `cap_levels = Some(k)` with `k <
+/// natural_n_levels`, the coarsest `natural_n_levels - k` bands are
+/// dropped from the spatial pool. `cap_levels = None` (or `Some(k) >=
+/// natural_n_levels`) is identical to [`predict_jod_still_3ch`].
+///
+/// **This is a fidelity-vs-memory tradeoff.** Dropping coarse bands
+/// REDUCES the JOD penalty for low-frequency distortions (since those
+/// bands carry most of the low-freq signal). It also CHANGES the
+/// `(is_baseband = k == n_levels - 1)` selector: with a smaller cap,
+/// the band that becomes the "baseband" wasn't the natural baseband.
+/// We still apply the cvvdp baseband-bypass control flow (|T-R|·S, no
+/// masking, no CH_GAIN, rho clamped to `CSF_BASEBAND_RHO`) at whatever
+/// band ends up at index `cap - 1` — that's the closest analogue to
+/// "the coarsest available residual" but doesn't match what pycvvdp
+/// would compute if it ran the full pyramid.
+///
+/// Use [`crate::kernels::pyramid::band_frequencies`]`.len()` to query
+/// the natural depth before deciding on a cap.
+///
+/// # Parity-gate caveat
+///
+/// **Capping breaks pycvvdp v0.5.4 manifest parity** at the canonical
+/// 0.005 JOD tolerance for any cap below the natural depth — the
+/// metric value changes because the pool integrates over fewer bands.
+/// The capped variant is intended for memory-constrained 24 MP+ strip
+/// processing where the alternative is "no score at all," not as a
+/// drop-in for the strict parity tests. See
+/// `docs/STRIP_PROCESSING.md` for the measured cap-depth-vs-JOD drift
+/// curve and the gate it actually meets.
+#[must_use]
+pub fn predict_jod_still_3ch_capped(
+    ref_srgb: &[u8],
+    dist_srgb: &[u8],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    ppd: f32,
+    cap_levels: Option<usize>,
+) -> f32 {
     assert_eq!(ref_srgb.len(), width * height * 3);
     assert_eq!(dist_srgb.len(), width * height * 3);
 
@@ -127,7 +170,11 @@ pub fn predict_jod_still_3ch(
     // The auto-pick (n_levels=0 → ilog2(min(w,h))) only happens
     // to coincide with band_frequencies at 256×256; larger images
     // would over-build the pyramid and index past freqs.
-    let n_levels_query = band_frequencies(ppd, width, height).len();
+    let natural_n_levels = band_frequencies(ppd, width, height).len();
+    let n_levels_query = match cap_levels {
+        Some(cap) if cap >= 1 => cap.min(natural_n_levels),
+        _ => natural_n_levels,
+    };
     let ref_weber = [
         weber_contrast_pyr_dec_scalar(
             &ref_planes[0],
