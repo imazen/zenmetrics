@@ -354,6 +354,9 @@ fn hydrate_pid1_env() {
                 | "SKIP_CLAIMS"
                 | "CONTAINER_ID"
                 | "CONTAINER_API_KEY"
+                | "ADAPT_INTERVAL_SEC"
+                | "ZENSIM_FEATURES_REGIME"
+                | "JOBS"
         ) && std::env::var_os(k).is_none()
         {
             // SAFETY: we're single-threaded at this point (called

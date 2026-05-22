@@ -253,7 +253,35 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     ))]
     let gpu_runtime_for_cache = cfg.gpu_runtime;
 
-    for src_path in &cfg.sources {
+    for (src_idx, src_path) in cfg.sources.iter().enumerate() {
+        // Between source images, ask cubecl to release pool pages back
+        // to the driver. v26's corpus is heterogeneous (1024sq +
+        // wikimedia + gif at varying sizes), so each source-iteration
+        // boundary is a likely dim transition; without the cleanup hint,
+        // cubecl-cuda retains the prior source's persist planes and the
+        // pool footprint accumulates until OOM. The first iteration
+        // skips this — no prior allocations to release. cleanup_all
+        // also drops the cached Metric instances, which forces a fresh
+        // construction for this source's dims (the cache then refills
+        // and serves the rest of the source's cells).
+        //
+        // Trade-off: dropping the cache means one Metric::new per
+        // source instead of "rare on dim change". On homogeneous
+        // corpora that's a regression. The cubecl-cuda pool retention
+        // bug forces our hand here; reconsider once cubecl exposes a
+        // pool-size cap that does what we want.
+        #[cfg(any(
+            feature = "gpu-butteraugli",
+            feature = "gpu-ssim2",
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
+        ))]
+        if src_idx > 0 {
+            let mut cache = MetricCache::lock_global(cfg.gpu_runtime);
+            let _ = cache.cleanup_all();
+        }
         // Decode the source once per image so we don't re-PNG-decode for
         // every cell. The bytes are freed when we move to the next image
         // (drops at the end of this loop iteration). This is the entire

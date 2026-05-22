@@ -192,6 +192,40 @@ impl MetricCache {
         GLOBAL_CACHE.get_or_init(|| Mutex::new(MetricCache::new(gpu_runtime)))
     }
 
+    /// Drop all cached `Metric` instances + ask cubecl to release
+    /// memory back to the driver. Called between source images in
+    /// the sweep outer loop so the device's persist-plane footprint
+    /// doesn't accumulate across dim transitions when the corpus
+    /// has heterogeneous source sizes.
+    ///
+    /// cubecl's `memory_cleanup` is a "best-effort" hint to the
+    /// pool allocator — the docs say "not guaranteed any memory is
+    /// freed" — but in practice it does cause SlicedPages and
+    /// ExclusivePages to flush unused chunks back to the underlying
+    /// CUDA driver. Without this hint, pages stay in the pool
+    /// forever and pool footprint = sum of every dim we ever saw.
+    ///
+    /// Returns the number of slots evicted.
+    pub(crate) fn cleanup_all(&mut self) -> usize {
+        let n = self.umbrella.len();
+        self.umbrella.clear();
+        #[cfg(feature = "gpu-butteraugli")]
+        {
+            self.butter = None;
+        }
+        // Ask cubecl to release pages back to the driver. Only
+        // available when one of `gpu-cvvdp` / `gpu-butteraugli`
+        // pulls in the `cubecl` direct dependency (other GPU
+        // features route through `zenmetrics-api` and don't expose
+        // the runtime client). In production sweep builds the `gpu`
+        // bundle includes both, so this branch is taken.
+        #[cfg(any(feature = "gpu-cvvdp", feature = "gpu-butteraugli"))]
+        {
+            cubecl_runtime_memory_cleanup();
+        }
+        n
+    }
+
     /// Acquire the global cache, recovering from a poisoned lock.
     ///
     /// A panic inside a cell while holding the cache lock — e.g.
@@ -429,6 +463,13 @@ impl MetricCache {
             // peak GPU memory stays at one instance's worth rather
             // than two during the transition.
             self.umbrella.remove(&kind);
+            // Ask cubecl to release the freed pages back to the driver
+            // BEFORE the new allocation tries to reserve memory. Without
+            // this hint, cubecl-cuda's pool retains the dropped persist
+            // planes and the new allocation OOMs on a 12 GB card after
+            // a few dim transitions.
+            #[cfg(any(feature = "gpu-cvvdp", feature = "gpu-butteraugli"))]
+            cubecl_runtime_memory_cleanup();
             let (metric, backend) = construct_umbrella(
                 kind,
                 width,
@@ -555,6 +596,38 @@ fn build_params(
     }
     let _ = regime; // unused when zensim feature off
     resolve_default_params(kind)
+}
+
+/// Invoke `client.memory_cleanup()` on every enabled cubecl runtime.
+/// Best-effort: the cubecl docs say "not guaranteed any memory is
+/// freed". In practice on cubecl-cuda the call does flush unused
+/// SlicedPages/ExclusivePages back to the underlying CUDA driver,
+/// which is the only reason a 12 GB RTX 3060 can survive a v26
+/// chunk with heterogeneous source dims — without the hint, every
+/// dim transition adds to the pool footprint forever.
+#[cfg(any(feature = "gpu-cvvdp", feature = "gpu-butteraugli"))]
+fn cubecl_runtime_memory_cleanup() {
+    #[cfg(feature = "gpu-cuda")]
+    {
+        use cubecl::Runtime;
+        let client =
+            <cubecl::cuda::CudaRuntime as Runtime>::client(&Default::default());
+        client.memory_cleanup();
+    }
+    #[cfg(feature = "gpu-wgpu")]
+    {
+        use cubecl::Runtime;
+        let client =
+            <cubecl::wgpu::WgpuRuntime as Runtime>::client(&Default::default());
+        client.memory_cleanup();
+    }
+    #[cfg(feature = "gpu-hip")]
+    {
+        use cubecl::Runtime;
+        let client =
+            <cubecl::hip::HipRuntime as Runtime>::client(&Default::default());
+        client.memory_cleanup();
+    }
 }
 
 #[cfg(any(

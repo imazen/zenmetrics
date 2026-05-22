@@ -242,7 +242,7 @@ pub async fn process_chunk_inline(
                 .map(|_| sweeps.join(format!("g{gid_str}.features.parquet"))),
             feature_regime,
             encoded_out_dir: Some(encoded.clone()),
-            jobs: 0,
+            jobs: parse_jobs_env_or_default(),
         };
 
         let span_chunk_id = rec.chunk_id.clone();
@@ -349,6 +349,21 @@ pub async fn process_chunk_inline(
         let _ = tokio::fs::remove_dir_all(&scratch).await;
     }
     Ok(())
+}
+
+/// Parse the `JOBS` env var into a rayon worker count. `0` (default)
+/// = num_cpus auto-detect. Set `JOBS=1` to disable cell-level
+/// parallelism, which is the only way to keep concurrent cubecl
+/// allocations from saturating the pool on a memory-constrained card
+/// (12 GB RTX 3060 with v26's 372-feature regime needs JOBS=1 to fit).
+fn parse_jobs_env_or_default() -> usize {
+    match std::env::var("JOBS") {
+        Ok(s) => s.trim().parse::<usize>().unwrap_or_else(|_| {
+            warn!(value = %s, "JOBS env not parseable as usize; defaulting to 0 (auto)");
+            0
+        }),
+        Err(_) => 0,
+    }
 }
 
 /// Parse the `ZENSIM_FEATURES_REGIME` env var (`basic` / `extended` /
