@@ -319,6 +319,10 @@ for offer_id in $OFFER_IDS; do
         ENV_STR+=" -e MAX_CHUNKS_PER_PROCESS=${MAX_CHUNKS_PER_PROCESS}"
     [[ -n "${MAX_RESPAWNS:-}" ]] && \
         ENV_STR+=" -e MAX_RESPAWNS=${MAX_RESPAWNS}"
+    # SWEEP_CLEANUP_BETWEEN_SOURCES (commit a21204f) — opt-in cubecl
+    # pool flush. Safe only with PARALLEL_CHUNKS_MAX=1.
+    [[ -n "${SWEEP_CLEANUP_BETWEEN_SOURCES:-}" ]] && \
+        ENV_STR+=" -e SWEEP_CLEANUP_BETWEEN_SOURCES=${SWEEP_CLEANUP_BETWEEN_SOURCES}"
     [[ -n "${METRICS:-}" ]] && \
         ENV_STR+=" -e METRICS=${METRICS}"
     [[ -n "${JOBS:-}" ]] && \

@@ -214,6 +214,10 @@ ENV_STR+=" -e SCRIPTS_R2_PREFIX=${SCRIPTS_R2_PREFIX}"
 # MAX_CHUNKS_PER_PROCESS=4 to see the respawn after 4 chunks).
 [[ -n "${MAX_CHUNKS_PER_PROCESS:-}" ]] && ENV_STR+=" -e MAX_CHUNKS_PER_PROCESS=${MAX_CHUNKS_PER_PROCESS}"
 [[ -n "${MAX_RESPAWNS:-}" ]]           && ENV_STR+=" -e MAX_RESPAWNS=${MAX_RESPAWNS}"
+# SWEEP_CLEANUP_BETWEEN_SOURCES — opt-in cubecl pool flush hint per
+# commit a21204f. Safe ONLY with PARALLEL_CHUNKS_MAX=1 (the cleanup
+# races with concurrent chunks' in-flight kernels otherwise).
+[[ -n "${SWEEP_CLEANUP_BETWEEN_SOURCES:-}" ]] && ENV_STR+=" -e SWEEP_CLEANUP_BETWEEN_SOURCES=${SWEEP_CLEANUP_BETWEEN_SOURCES}"
 # Pass the chunks URL through env. The unified Rust worker reads
 # CHUNKS_R2; the bash onstart workers ignored it and derived from
 # the SWEEP_RUN_ID. Forwarding here lets the smoke flow point at
