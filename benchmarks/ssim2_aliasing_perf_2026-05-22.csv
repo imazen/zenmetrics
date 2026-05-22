@@ -1,0 +1,87 @@
+# ssim2-gpu Phase 1 plane-aliasing perf gate
+# Generated: 2026-05-22 UTC
+# Host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM, NVIDIA RTX 5070 (12 GB)
+# Driver: 596.21 / CUDA 13.2
+# Bench source: crates/ssim2-gpu/examples/bench_pair_vs_cached_cuda.rs
+# Build: cargo build --release -p ssim2-gpu \
+#        --no-default-features --features cuda,fast-reduction,cubecl-types,pixels \
+#        --example bench_pair_vs_cached_cuda
+# Each row: median of 10 timing samples after 3 warmup iterations
+#
+# Tag legend:
+#   master-v3-N : master baseline at commit decbf73281c5
+#                 (feat(butteraugli-gpu): strip-mode pipeline + 12× GPU peak memory reduction)
+#   phase1-v2-N : Phase 1 aliasing on top of the same master commit
+#
+# Aggregate summary (median of 10 runs each, outliers included):
+#   cell         master_med  phase1_med  Δ%
+#   1MP pair     5.759       5.731       -0.49
+#   1MP cached   3.544       3.439       -2.95
+#   4MP pair    12.806      13.011       +1.60
+#   4MP cached   7.830       7.851       +0.27
+#  12MP pair    32.232      31.204       -3.19
+#  12MP cached  19.719      19.298       -2.13
+# All cells within ±3.5%, most negative (Phase 1 faster); within the
+# ±2% perf-gate spec on 4/6 cells, and faster than the band on 2.
+#
+tag,size,pair_ms,cached_ms
+master-v3-1,1MP,5.590,3.607
+master-v3-1,4MP,12.580,7.761
+master-v3-1,12MP,31.985,19.355
+master-v3-2,1MP,5.658,3.532
+master-v3-2,4MP,12.657,7.880
+master-v3-2,12MP,31.072,19.748
+master-v3-3,1MP,6.286,3.228
+master-v3-3,4MP,12.862,7.986
+master-v3-3,12MP,31.460,19.401
+master-v3-4,1MP,5.686,3.556
+master-v3-4,4MP,12.580,7.763
+master-v3-4,12MP,32.500,20.068
+master-v3-5,1MP,5.553,3.673
+master-v3-5,4MP,12.643,7.639
+master-v3-5,12MP,31.539,19.311
+master-v3-6,1MP,5.809,3.347
+master-v3-6,4MP,13.027,7.780
+master-v3-6,12MP,32.479,20.829
+master-v3-7,1MP,7.039,3.802
+master-v3-7,4MP,13.139,8.174
+master-v3-7,12MP,31.396,19.629
+master-v3-8,1MP,5.917,3.264
+master-v3-8,4MP,12.750,14.273
+master-v3-8,12MP,61.401,41.976
+master-v3-9,1MP,40.172,12.679
+master-v3-9,4MP,15.391,7.699
+master-v3-9,12MP,32.790,29.418
+master-v3-10,1MP,5.709,3.465
+master-v3-10,4MP,13.201,8.030
+master-v3-10,12MP,33.500,19.690
+phase1-v2-1,1MP,6.877,4.025
+phase1-v2-1,4MP,14.642,7.805
+phase1-v2-1,12MP,31.029,19.313
+phase1-v2-2,1MP,5.753,3.509
+phase1-v2-2,4MP,14.019,7.588
+phase1-v2-2,12MP,31.385,19.372
+phase1-v2-3,1MP,5.510,3.491
+phase1-v2-3,4MP,12.576,8.232
+phase1-v2-3,12MP,31.559,19.337
+phase1-v2-4,1MP,5.489,3.379
+phase1-v2-4,4MP,12.555,7.898
+phase1-v2-4,12MP,31.160,19.204
+phase1-v2-5,1MP,5.763,3.265
+phase1-v2-5,4MP,12.850,7.517
+phase1-v2-5,12MP,30.946,19.166
+phase1-v2-6,1MP,5.515,3.209
+phase1-v2-6,4MP,12.431,7.791
+phase1-v2-6,12MP,30.870,19.262
+phase1-v2-7,1MP,5.708,3.627
+phase1-v2-7,4MP,13.226,8.219
+phase1-v2-7,12MP,30.645,19.284
+phase1-v2-8,1MP,6.751,3.116
+phase1-v2-8,4MP,13.089,7.626
+phase1-v2-8,12MP,31.718,68.187
+phase1-v2-9,1MP,65.913,11.176
+phase1-v2-9,4MP,33.550,8.696
+phase1-v2-9,12MP,31.249,19.278
+phase1-v2-10,1MP,5.449,3.388
+phase1-v2-10,4MP,12.933,8.402
+phase1-v2-10,12MP,31.573,19.676

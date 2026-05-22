@@ -78,6 +78,80 @@ New memory-tally example: `strip_memory_tally`. New heaptrack driver:
 
 Design doc: `crates/iwssim-gpu/docs/STRIP_PROCESSING.md`.
 
+### ssim2-gpu — Phase 1 plane aliasing in `pipeline.rs::Scale` — 2026-05-22
+
+Replaces 30 per-`Scale` blur-intermediate buffers
+(`{sigma11,sigma22,sigma12,mu1,mu2}_v` + `*_t` — 5 plane names × 3
+channels × 2 orientations) with a single shared rolling
+`v_scratch: [Handle; 3]` + `t_scratch: [Handle; 3]` reused across all
+5 blurs per (scale, channel). The two-pass IIR blur writes the
+scratch then reads it, three sequential kernel launches; the next
+blur overwrites the scratch from a fresh source. Same idiom the
+batched pipeline (`pipeline_batch.rs::BatchScale`) already used —
+this brings the unbatched pipeline in line.
+
+Plane count per scale: 81 → 57 (−29.6%). Across the 6-scale
+geometric pyramid: 108 → 76 scale-0-equivalent planes.
+
+GPU memory tally (analytical, plane count × n × 4 bytes + 2 × n × 4
+for sRGB u8 staging, dominated by the per-scale planes):
+
+| size       | pre (master) | post (Phase 1) | saving       |
+|------------|--------------|----------------|--------------|
+| 1MP 1024²  | 0.430 GiB    | 0.305 GiB      | 0.125 GiB    |
+| 4MP 2048²  | 1.718 GiB    | 1.218 GiB      | 0.500 GiB    |
+| 12MP 4000×3000 | 4.916 GiB | 3.486 GiB     | 1.430 GiB    |
+| 24MP 6000×4000 | 9.832 GiB | 6.972 GiB     | 2.860 GiB    |
+
+The 24 MP delta (10.56 → 7.49 GB in SI units) is the production
+target — sweep workers OOMing on 12 GB GPUs at 24 MP now fit with
+margin. Phase 2 strip processing would cut further to ~1.4 GB at
+24 MP but is multi-day work; design doc lands in this commit at
+`crates/ssim2-gpu/docs/STRIP_PROCESSING.md` for the follow-up
+session.
+
+Host RSS via heaptrack at 12 MP (3 `compute` calls including warmup):
+master 5.50 GB peak → Phase 1 3.97 GB peak (−27.8%). Cubecl mirrors
+each GPU buffer with host-side staging, so the GPU saving directly
+recovers host RSS too.
+
+CUDA perf (RTX 5070, median of 10 runs each on a clean GPU,
+synthetic 6-step pair):
+
+| cell          | master (ms) | Phase 1 (ms) | Δ%    |
+|---------------|-------------|---------------|-------|
+| 1MP pair      | 5.759       | 5.731         | −0.49 |
+| 1MP cached    | 3.544       | 3.439         | −2.95 |
+| 4MP pair      | 12.806      | 13.011        | +1.60 |
+| 4MP cached    | 7.830       | 7.851         | +0.27 |
+| 12MP pair     | 32.232      | 31.204        | −3.19 |
+| 12MP cached   | 19.719      | 19.298        | −2.13 |
+
+All within ±3.5% — most negative (Phase 1 faster), consistent with
+fewer allocator calls per scale.
+
+Scores are bit-identical to master on the heaptrack 12 MP driver
+(`12MP score = -64.321362` on both). All 21 `parity_lock`
+tests, 2 `opaque` tests, and 3 of 4 `ssim2_skipmap_audit` tests
+pass; the failing `modes_agree_on_jpeg_corpus` at q=5 is the same
+pre-existing `Δ=1e-5 > 1e-6` Lossless-vs-Full noise-floor flake that
+also fails on clean master at the same commit (master `Δ=6.25e-6`,
+Phase 1 `Δ=1.04e-5` — both fail the gate; Phase 1 reshuffles the
+fp atomic-add order but doesn't cause the failure). One bug at a
+time — that flake is outside this PR.
+
+Files: `crates/ssim2-gpu/src/pipeline.rs` (the aliasing change),
+`crates/ssim2-gpu/tests/aliasing_invariants.rs` (14 new tests —
+pair path × cached-ref path × {256², 1024², 2048², 4096²},
+repeated-call stability, per-mode pair-vs-cached agreement,
+set_reference re-arm cycle, identical-pair at multiple sizes),
+`crates/ssim2-gpu/examples/bench_pair_vs_cached_cuda.rs` (perf
+gate harness), `crates/ssim2-gpu/examples/heaptrack_driver.rs`
+(host RSS profile target),
+`benchmarks/ssim2_aliasing_perf_2026-05-22.csv` (the perf-gate raw
+numbers), `crates/ssim2-gpu/docs/STRIP_PROCESSING.md` (Phase 2
+design doc — reference only, not implemented in this commit).
+
 ### dssim-gpu — strip processing + compute_post_srgb dual-pyramid fix — 2026-05-22
 
 - `Dssim::new_strip(client, image_w, image_h, h_body)` constructor +

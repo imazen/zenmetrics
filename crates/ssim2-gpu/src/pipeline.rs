@@ -54,21 +54,27 @@ struct Scale {
     sigma22_in: [cubecl::server::Handle; 3], // dis·dis
     sigma12_in: [cubecl::server::Handle; 3], // ref·dis
 
-    /// First-pass (vertical-walk) blur outputs. Same orientation as input.
-    sigma11_v: [cubecl::server::Handle; 3],
-    sigma22_v: [cubecl::server::Handle; 3],
-    sigma12_v: [cubecl::server::Handle; 3],
-    mu1_v: [cubecl::server::Handle; 3],
-    mu2_v: [cubecl::server::Handle; 3],
-
-    /// Transposed first-pass outputs (`width` becomes height and vice
-    /// versa, stored as a `height × width` row-major buffer of size
-    /// `n` floats — same total length).
-    sigma11_t: [cubecl::server::Handle; 3],
-    sigma22_t: [cubecl::server::Handle; 3],
-    sigma12_t: [cubecl::server::Handle; 3],
-    mu1_t: [cubecl::server::Handle; 3],
-    mu2_t: [cubecl::server::Handle; 3],
+    /// Rolling scratch buffers for the two-pass blur, shared across all
+    /// 5 plane blurs (sigma11/22/12/mu1/mu2) within this scale.
+    ///
+    /// Phase 1 (2026-05-22) aliasing: previously this struct carried
+    /// 30 separate plane buffers — `{sigma11,sigma22,sigma12,mu1,mu2}_v`
+    /// and `{sigma11,sigma22,sigma12,mu1,mu2}_t` (5 plane names × 3
+    /// channels × 2 orientations). Each `*_v` was dead the moment its
+    /// `*_t` was written by the transpose; each `*_t` was dead the
+    /// moment its `*_full` was written by the second blur pass. With
+    /// in-order GPU launches the same `(v_scratch[ch], t_scratch[ch])`
+    /// pair safely cycles across all 5 blurs of one channel.
+    ///
+    /// The batched pipeline (`pipeline_batch.rs::BatchScale`) already
+    /// uses this idiom — see its `v_scratch`/`t_scratch` fields. This
+    /// change brings the unbatched pipeline in line.
+    ///
+    /// Net saving per scale: 30 → 6 plane handles for the blur
+    /// intermediates. At 24 MP that's ~570 MB of working set returned
+    /// to the runtime.
+    v_scratch: [cubecl::server::Handle; 3],
+    t_scratch: [cubecl::server::Handle; 3],
 
     /// Second-pass (vertical-walk on transposed) outputs. Orientation
     /// is "transposed" — for a `width × height` source these now live
@@ -115,16 +121,8 @@ impl Scale {
             sigma11_in: alloc_3(client, n),
             sigma22_in: alloc_3(client, n),
             sigma12_in: alloc_3(client, n),
-            sigma11_v: alloc_3(client, n),
-            sigma22_v: alloc_3(client, n),
-            sigma12_v: alloc_3(client, n),
-            mu1_v: alloc_3(client, n),
-            mu2_v: alloc_3(client, n),
-            sigma11_t: alloc_3(client, n),
-            sigma22_t: alloc_3(client, n),
-            sigma12_t: alloc_3(client, n),
-            mu1_t: alloc_3(client, n),
-            mu2_t: alloc_3(client, n),
+            v_scratch: alloc_3(client, n),
+            t_scratch: alloc_3(client, n),
             sigma11_full: alloc_3(client, n),
             sigma22_full: alloc_3(client, n),
             sigma12_full: alloc_3(client, n),
@@ -1057,8 +1055,8 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.sigma11_in[ch],
-                    &s.sigma11_v[ch],
-                    &s.sigma11_t[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.sigma11_full[ch],
                 );
                 self.blur_plane_two_pass(
@@ -1066,8 +1064,8 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.ref_xyb[ch],
-                    &s.mu1_v[ch],
-                    &s.mu1_t[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.mu1_full[ch],
                 );
             }
@@ -1078,8 +1076,8 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.sigma22_in[ch],
-                    &s.sigma22_v[ch],
-                    &s.sigma22_t[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.sigma22_full[ch],
                 );
                 self.blur_plane_two_pass(
@@ -1087,8 +1085,8 @@ impl<R: Runtime> Ssim2<R> {
                     h,
                     n,
                     &s.dis_xyb[ch],
-                    &s.mu2_v[ch],
-                    &s.mu2_t[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.mu2_full[ch],
                 );
             }
@@ -1215,30 +1213,32 @@ impl<R: Runtime> Ssim2<R> {
             if skip_error_map(mode, scale, ch) {
                 continue;
             }
-            // sigma11 = ref²
+            // sigma11 = ref². v_scratch/t_scratch are rolling scratch
+            // buffers reused across all 5 blurs in this scale × channel
+            // (see `Scale::v_scratch` doc for the aliasing argument).
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma11_in[ch], &s.sigma11_v[ch], &s.sigma11_t[ch], &s.sigma11_full[ch],
+                &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma11_full[ch],
             );
             // mu1 = blur(ref)
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.ref_xyb[ch], &s.mu1_v[ch], &s.mu1_t[ch], &s.mu1_full[ch],
+                &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu1_full[ch],
             );
             // sigma22 = dis²
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma22_in[ch], &s.sigma22_v[ch], &s.sigma22_t[ch], &s.sigma22_full[ch],
+                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma22_full[ch],
             );
             // mu2 = blur(dis)
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.dis_xyb[ch], &s.mu2_v[ch], &s.mu2_t[ch], &s.mu2_full[ch],
+                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu2_full[ch],
             );
             // sigma12 = ref·dis
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma12_in[ch], &s.sigma12_v[ch], &s.sigma12_t[ch], &s.sigma12_full[ch],
+                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma12_full[ch],
             );
         }
     }
@@ -1254,15 +1254,15 @@ impl<R: Runtime> Ssim2<R> {
             }
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma22_in[ch], &s.sigma22_v[ch], &s.sigma22_t[ch], &s.sigma22_full[ch],
+                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma22_full[ch],
             );
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.dis_xyb[ch], &s.mu2_v[ch], &s.mu2_t[ch], &s.mu2_full[ch],
+                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu2_full[ch],
             );
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma12_in[ch], &s.sigma12_v[ch], &s.sigma12_t[ch], &s.sigma12_full[ch],
+                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma12_full[ch],
             );
         }
     }
