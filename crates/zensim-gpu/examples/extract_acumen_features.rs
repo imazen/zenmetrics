@@ -168,6 +168,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut ok = 0usize;
     let mut fail = 0usize;
+    // Cache the Mode B preprocessor + last ref path so we reuse the
+    // ref-side weight map across distortion variants of the same
+    // reference. ~50% wall-time savings on safesyn (typically ~80
+    // distortions per ref).
+    let lut_bytes: &[u8] =
+        include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
+    let lut = zensim::acumen::castle_csf::CastleCsfLut::from_bytes(lut_bytes)
+        .map_err(|e| format!("LUT: {e:?}"))?;
+    let mode_b_cfg = zensim::acumen::mode_b::ModeBConfig {
+        blur_sigma: mode_b_blur_sigma,
+        band_idx: mode_b_band_idx,
+        clamp_lo: mode_b_clamp_lo,
+        clamp_hi: mode_b_clamp_hi,
+    };
+    let mut last_ref_path: Option<PathBuf> = None;
+    let mut last_ref_dims: Option<(u32, u32)> = None;
+    let mut mode_b_pre: Option<zensim::acumen::mode_b::ModeBPreprocessor> = None;
+    let mut cached_ref_premul: Option<Vec<u8>> = None;
+
     for (idx, (ref_path, dist_path)) in pairs.iter().enumerate() {
         let (r, w_r, h_r) = match decode_image(ref_path) {
             Ok(t) => t,
@@ -210,32 +229,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             current_dims = Some((w_r, h_r));
         }
         let z = current_z.as_mut().unwrap();
-        // Mode B: pre-multiply BOTH ref and dist by their respective
-        // per-pixel achromatic CSF weights. Each image gets its OWN
-        // adaptation map based on its own local luminance. Uses the
-        // canonical zensim::acumen::mode_b API so CPU and GPU share
-        // bit-exact preprocessing.
+        // Mode B: pre-multiply BOTH ref and dist by the REFERENCE's
+        // per-pixel achromatic CSF weight map (castleCSF Mode B uses
+        // shared adaptation per scene). Cache the ref's weight map
+        // across consecutive same-ref pairs (~80 distortions per ref
+        // on safesyn → 50% wall-time savings).
         let (r_used, d_used);
         if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
-            use zensim::acumen::castle_csf::CastleCsfLut;
-            use zensim::acumen::mode_b::{apply_mode_b_premultiply, ModeBConfig};
-            const LUT_BYTES: &[u8] =
-                include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
-            let lut = CastleCsfLut::from_bytes(LUT_BYTES).map_err(|e| format!("{e:?}"))?;
             let v = viewing.unwrap();
-            let cfg = ModeBConfig {
-                blur_sigma: mode_b_blur_sigma,
-                band_idx: mode_b_band_idx,
-                clamp_lo: mode_b_clamp_lo,
-                clamp_hi: mode_b_clamp_hi,
-            };
-            r_used = apply_mode_b_premultiply(&lut, v, &r, w_r, h_r, cfg);
-            d_used = apply_mode_b_premultiply(&lut, v, &d, w_r, h_r, cfg);
+            let ref_changed = last_ref_path.as_ref() != Some(ref_path)
+                || last_ref_dims != Some((w_r, h_r));
+            if ref_changed {
+                let mut pre = zensim::acumen::mode_b::ModeBPreprocessor::new(
+                    &lut, v, w_r, h_r, mode_b_cfg,
+                );
+                pre.set_reference(&r);
+                cached_ref_premul = Some(pre.apply_to_ref(&r));
+                mode_b_pre = Some(pre);
+                last_ref_path = Some(ref_path.clone());
+                last_ref_dims = Some((w_r, h_r));
+            }
+            let pre = mode_b_pre.as_ref().expect("preprocessor set above");
+            r_used = cached_ref_premul.as_ref().unwrap().clone();
+            d_used = pre.apply_to_dist(&d);
         } else {
             r_used = r.clone();
             d_used = d.clone();
         }
-        let feats = match z.compute_features_srgb_u8(&r_used, &d_used) {
+        let feats = match z.compute_features_vec(&r_used, &d_used) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  compute_features failed [{}/{}]: {e:?}", idx + 1, pairs.len());
