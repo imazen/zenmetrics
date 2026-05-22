@@ -45,7 +45,13 @@ pub fn weighted_sum_kernel(
 ) {
     let _ = iw_h;
     let tid = ABSOLUTE_POS;
-    let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+    // Manual CUBE_COUNT aggregation (= X*Y*Z). The aggregated CUBE_COUNT
+    // builtin is unimplemented on `cubecl-cpu` (silently panics inside the
+    // worker, kernel produces 0 — see `cov.rs` header). Cube launches in
+    // this file are all 1D in X, so the product is = CUBE_COUNT_X, but we
+    // compute the full product for correctness in case a future change
+    // makes a launch 2D/3D.
+    let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
     let n = (cs_h * cs_w) as usize;
     let cs_w_us = cs_w as usize;
     let iw_w_us = iw_w as usize;
@@ -79,7 +85,7 @@ pub fn iw_sum_kernel(
 ) {
     let _ = iw_h;
     let tid = ABSOLUTE_POS;
-    let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+    let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
     let n = (cs_h * cs_w) as usize;
     let cs_w_us = cs_w as usize;
     let iw_w_us = iw_w as usize;
@@ -103,7 +109,7 @@ pub fn iw_sum_kernel(
 #[cube(launch_unchecked)]
 pub fn plain_sum_kernel(src: &Array<f32>, partials: &mut Array<f32>, partials_base: u32) {
     let tid = ABSOLUTE_POS;
-    let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+    let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
     let n = src.len();
     let mut s = 0.0_f32;
     let mut i = tid;

@@ -31,7 +31,7 @@ use cubecl::prelude::*;
 use crate::eig;
 use crate::filters;
 use crate::kernels::{
-    box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine, util,
+    box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine,
 };
 use crate::{Error, GpuIwssimResult, IwssimConfig, IwssimStrategy, MIN_NATIVE_DIM, NUM_SCALES, Result};
 
@@ -256,9 +256,14 @@ struct Scale {
     parent_band: cubecl::server::Handle,
     iw: cubecl::server::Handle,
 
-    // C_u atomic accumulator (always 10*10 = 100 f32 — wastes 19
-    // entries when N=9 but cheap and avoids two-variant allocation).
-    cu_atomic: cubecl::server::Handle,
+    // C_u accumulator (always 10*10 = 100 f32 — wastes 19 entries when
+    // N=9 but cheap and avoids two-variant allocation). Receives the
+    // 100-cell output of `cov_finalize_kernel`; was previously written
+    // by atomic-add inside the cov_accum kernels. The atomic version
+    // panicked silently on `cubecl-cpu` (no `atomic<f32>` lowering in
+    // the MLIR backend) and produced score=0; the partials + finalize
+    // path works on every backend.
+    cu: cubecl::server::Handle,
     cu_inv_dev: cubecl::server::Handle,
     lambda_dev: cubecl::server::Handle,
 }
@@ -305,12 +310,26 @@ impl Scale {
             vv_buf: alloc(client, n_lp),
             parent_band: alloc(client, n_lp),
             iw: alloc(client, n_iw),
-            cu_atomic: alloc(client, 100),
+            cu: alloc(client, 100),
             cu_inv_dev: alloc(client, 100),
             lambda_dev: alloc(client, 10),
         }
     }
 }
+
+// Cube count / dim used by `cov_accum_*_kernel`. Total threads per
+// launch = COV_CUBE_COUNT * COV_CUBE_DIM. Kept in sync with the values
+// passed to `launch_unchecked` below — and used to size the cov
+// partials buffer (one f32 per (cell, thread)) plus to pass `n_threads`
+// into both the accumulator (which strides by it) and the finalizer
+// (which knows how many partials to fold per cell).
+const COV_CUBE_COUNT: u32 = 64;
+const COV_CUBE_DIM: u32 = 256;
+const COV_N_THREADS: u32 = COV_CUBE_COUNT * COV_CUBE_DIM;
+/// Maximum cells per cov matrix (10×10 with-parent; the no-parent
+/// kernel writes 81 cells, ignoring 19; the partials buffer is sized
+/// for the max).
+const COV_MAX_CELLS: u32 = 100;
 
 /// Per-instance allocations + per-call orchestration. Construct once
 /// for a given `(width, height)`, reuse across many image pairs.
@@ -355,6 +374,15 @@ pub struct Iwssim<R: Runtime> {
     /// the portable two-stage reduction pattern.
     partials: cubecl::server::Handle,
     sums: cubecl::server::Handle,
+
+    /// Per-thread cov accumulator partials. Layout
+    /// `[cell × COV_N_THREADS + tid]` — one f32 per (cell, thread).
+    /// Shared across scales (each scale's cov_accum + cov_finalize pair
+    /// completes before the next scale's pair starts). Replaces the
+    /// `Atomic<f32>` accumulator that the cov_accum kernels used to
+    /// write directly into `Scale::cu_atomic` — see Scale::cu docstring
+    /// for the rationale.
+    cov_partials: cubecl::server::Handle,
 
     /// `set_reference` populates `scales[s].lp_ref` for every scale
     /// and flips this flag. Subsequent `compute_with_reference` calls
@@ -452,6 +480,15 @@ impl<R: Runtime> Iwssim<R> {
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
         let sums = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; NUM_SLOTS as usize]));
 
+        // Cov partials: one f32 per (cell, thread). The accumulators
+        // overwrite (not accumulate-into), so this buffer never needs
+        // zeroing between calls — we still init zero-filled for
+        // determinism in case a future change re-introduces partial
+        // writes.
+        let cov_partials_len = (COV_MAX_CELLS * COV_N_THREADS) as usize;
+        let cov_partials =
+            client.create_from_slice(f32::as_bytes(&vec![0.0_f32; cov_partials_len]));
+
         Ok(Self {
             client,
             width,
@@ -464,6 +501,7 @@ impl<R: Runtime> Iwssim<R> {
             scales,
             partials,
             sums,
+            cov_partials,
             has_cached_reference: false,
         })
     }
@@ -1444,49 +1482,61 @@ impl<R: Runtime> Iwssim<R> {
             }
         }
 
-        // 3. Reset cu_atomic via a tiny zero kernel — cheaper than
-        // re-allocating the 100-float buffer via create_from_slice
-        // each call.
-        unsafe {
-            util::zero_kernel::launch_unchecked::<R>(
-                &self.client,
-                CubeCount::Static(1, 1, 1),
-                CubeDim::new_1d(128),
-                ArrayArg::from_raw_parts(sc.cu_atomic.clone(), 100),
-            );
-        }
-        let sc = &self.scales[s]; // re-borrow
+        // 3. Cov accumulation. Per-thread partials replace the prior
+        // Atomic<f32> direct-into-cu accumulator: each thread now
+        // writes its 81 (no-parent) or 100 (with-parent) partials to
+        // `cov_partials[cell * COV_N_THREADS + tid]`, and a separate
+        // finalize kernel folds the per-cell strips into the 100-cell
+        // `sc.cu` output. The partials buffer is overwritten in full,
+        // so no zero-pass is needed.
+        let n_cells = if has_parent { 100_u32 } else { 81_u32 };
+        let cov_partials_len = (COV_MAX_CELLS * COV_N_THREADS) as usize;
+        let sc = &self.scales[s];
         let n_blk = ((sc.iw_h as u32) * (sc.iw_w as u32)) as usize;
         unsafe {
             if has_parent {
                 cov::cov_accum_with_parent_kernel::launch_unchecked::<R>(
                     &self.client,
-                    CubeCount::Static(64, 1, 1),
-                    CubeDim::new_1d(256),
+                    CubeCount::Static(COV_CUBE_COUNT, 1, 1),
+                    CubeDim::new_1d(COV_CUBE_DIM),
                     ArrayArg::from_raw_parts(sc.lp_ref.clone(), n_lp),
                     ArrayArg::from_raw_parts(sc.parent_band.clone(), n_lp),
-                    ArrayArg::from_raw_parts(sc.cu_atomic.clone(), 100),
+                    ArrayArg::from_raw_parts(self.cov_partials.clone(), cov_partials_len),
                     h,
                     w,
+                    COV_N_THREADS,
                 );
             } else {
                 cov::cov_accum_no_parent_kernel::launch_unchecked::<R>(
                     &self.client,
-                    CubeCount::Static(64, 1, 1),
-                    CubeDim::new_1d(256),
+                    CubeCount::Static(COV_CUBE_COUNT, 1, 1),
+                    CubeDim::new_1d(COV_CUBE_DIM),
                     ArrayArg::from_raw_parts(sc.lp_ref.clone(), n_lp),
-                    ArrayArg::from_raw_parts(sc.cu_atomic.clone(), 100),
+                    ArrayArg::from_raw_parts(self.cov_partials.clone(), cov_partials_len),
                     h,
                     w,
+                    COV_N_THREADS,
                 );
             }
+            // Finalize: one cube per cell, sums COV_N_THREADS partials
+            // into a single f32 at `cu[cell]`. Cells 81..100 are
+            // un-written in the no-parent case and ignored by the
+            // downstream eigendecomp.
+            cov::cov_finalize_kernel::launch_unchecked::<R>(
+                &self.client,
+                CubeCount::Static(n_cells, 1, 1),
+                CubeDim::new_1d(1),
+                ArrayArg::from_raw_parts(self.cov_partials.clone(), cov_partials_len),
+                ArrayArg::from_raw_parts(sc.cu.clone(), 100),
+                COV_N_THREADS,
+            );
         }
         let _ = n_blk;
 
         // 4. Read C_u back to host, eigendecompose + invert.
         let cu_bytes = self
             .client
-            .read_one(sc.cu_atomic.clone())
+            .read_one(sc.cu.clone())
             .expect("read C_u");
         let cu_f32 = f32::from_bytes(&cu_bytes);
         let n_dim = if has_parent { 10 } else { 9 };

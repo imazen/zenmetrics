@@ -1,19 +1,42 @@
-//! Per-thread-accumulator cov_accum kernels (auto-generated body).
-//! Each thread maintains a 9x9 (or 10x10) local f32 register file,
-//! accumulates outer products over its grid-strided pixel range, and
-//! atomic-adds to global cu ONCE at the end — reducing global atomic
-//! traffic by factor of (nexp / total_threads), typically ~250x.
+//! Per-thread-accumulator cov_accum kernels — partials version.
+//!
+//! Each thread maintains a 9x9 (no-parent) or 10x10 (with-parent) local
+//! f32 register file, accumulates outer products over its grid-strided
+//! pixel range, and writes its 81 or 100 partials to a global
+//! `partials` array. The layout is transposed so that thread `tid` writes
+//! cell `i` to `partials[i * n_threads + tid]`, giving coalesced writes
+//! on GPU and contiguous per-cell strips for the finalize reducer.
+//!
+//! This replaces an earlier `Atomic<f32>::fetch_add` accumulator: the
+//! atomic kernel hit a hard wall on `cubecl-cpu` (no `atomic<f32>`
+//! lowering in the MLIR backend, fall-through panics silently, all
+//! cells stay at 0). Per-thread partials + a separate finalize kernel
+//! works on every backend.
+//!
+//! Layout:
+//! - `partials[i * n_threads + tid]`  — partial for cell `i` from thread `tid`
+//! - `n_threads = cube_count.x * cube_dim.x` for the cov launch
+//! - `i ∈ 0..81` for no-parent, `i ∈ 0..100` for with-parent
+//!
+//! Finalize via `cov_finalize_kernel` in this same module.
 
 use cubecl::prelude::*;
 
 #[cube(launch_unchecked)]
-pub fn cov_accum_no_parent_kernel(lp: &Array<f32>, cu: &mut Array<Atomic<f32>>, h: u32, w: u32) {
+pub fn cov_accum_no_parent_kernel(
+    lp: &Array<f32>,
+    partials: &mut Array<f32>,
+    h: u32,
+    w: u32,
+    n_threads: u32,
+) {
     let tid = ABSOLUTE_POS;
-    let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+    let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
     let nblv = h - 2;
     let nblh = w - 2;
     let nexp = (nblv * nblh) as usize;
     let w_us = w as usize;
+    let n_threads_us = n_threads as usize;
 
     let mut a00 = 0.0_f32;
     let mut a01 = 0.0_f32;
@@ -196,103 +219,108 @@ pub fn cov_accum_no_parent_kernel(lp: &Array<f32>, cu: &mut Array<Atomic<f32>>, 
         p += stride;
     }
 
-    cu[0].fetch_add(a00);
-    cu[1].fetch_add(a01);
-    cu[2].fetch_add(a02);
-    cu[3].fetch_add(a03);
-    cu[4].fetch_add(a04);
-    cu[5].fetch_add(a05);
-    cu[6].fetch_add(a06);
-    cu[7].fetch_add(a07);
-    cu[8].fetch_add(a08);
-    cu[9].fetch_add(a10);
-    cu[10].fetch_add(a11);
-    cu[11].fetch_add(a12);
-    cu[12].fetch_add(a13);
-    cu[13].fetch_add(a14);
-    cu[14].fetch_add(a15);
-    cu[15].fetch_add(a16);
-    cu[16].fetch_add(a17);
-    cu[17].fetch_add(a18);
-    cu[18].fetch_add(a20);
-    cu[19].fetch_add(a21);
-    cu[20].fetch_add(a22);
-    cu[21].fetch_add(a23);
-    cu[22].fetch_add(a24);
-    cu[23].fetch_add(a25);
-    cu[24].fetch_add(a26);
-    cu[25].fetch_add(a27);
-    cu[26].fetch_add(a28);
-    cu[27].fetch_add(a30);
-    cu[28].fetch_add(a31);
-    cu[29].fetch_add(a32);
-    cu[30].fetch_add(a33);
-    cu[31].fetch_add(a34);
-    cu[32].fetch_add(a35);
-    cu[33].fetch_add(a36);
-    cu[34].fetch_add(a37);
-    cu[35].fetch_add(a38);
-    cu[36].fetch_add(a40);
-    cu[37].fetch_add(a41);
-    cu[38].fetch_add(a42);
-    cu[39].fetch_add(a43);
-    cu[40].fetch_add(a44);
-    cu[41].fetch_add(a45);
-    cu[42].fetch_add(a46);
-    cu[43].fetch_add(a47);
-    cu[44].fetch_add(a48);
-    cu[45].fetch_add(a50);
-    cu[46].fetch_add(a51);
-    cu[47].fetch_add(a52);
-    cu[48].fetch_add(a53);
-    cu[49].fetch_add(a54);
-    cu[50].fetch_add(a55);
-    cu[51].fetch_add(a56);
-    cu[52].fetch_add(a57);
-    cu[53].fetch_add(a58);
-    cu[54].fetch_add(a60);
-    cu[55].fetch_add(a61);
-    cu[56].fetch_add(a62);
-    cu[57].fetch_add(a63);
-    cu[58].fetch_add(a64);
-    cu[59].fetch_add(a65);
-    cu[60].fetch_add(a66);
-    cu[61].fetch_add(a67);
-    cu[62].fetch_add(a68);
-    cu[63].fetch_add(a70);
-    cu[64].fetch_add(a71);
-    cu[65].fetch_add(a72);
-    cu[66].fetch_add(a73);
-    cu[67].fetch_add(a74);
-    cu[68].fetch_add(a75);
-    cu[69].fetch_add(a76);
-    cu[70].fetch_add(a77);
-    cu[71].fetch_add(a78);
-    cu[72].fetch_add(a80);
-    cu[73].fetch_add(a81);
-    cu[74].fetch_add(a82);
-    cu[75].fetch_add(a83);
-    cu[76].fetch_add(a84);
-    cu[77].fetch_add(a85);
-    cu[78].fetch_add(a86);
-    cu[79].fetch_add(a87);
-    cu[80].fetch_add(a88);
+    // Layout: partials[i * n_threads + tid] = a_i
+    // 81 cells (9×9), written contiguously per i to match
+    // cov_finalize_kernel's grid-strided reducer.
+    partials[0 * n_threads_us + tid] = a00;
+    partials[1 * n_threads_us + tid] = a01;
+    partials[2 * n_threads_us + tid] = a02;
+    partials[3 * n_threads_us + tid] = a03;
+    partials[4 * n_threads_us + tid] = a04;
+    partials[5 * n_threads_us + tid] = a05;
+    partials[6 * n_threads_us + tid] = a06;
+    partials[7 * n_threads_us + tid] = a07;
+    partials[8 * n_threads_us + tid] = a08;
+    partials[9 * n_threads_us + tid] = a10;
+    partials[10 * n_threads_us + tid] = a11;
+    partials[11 * n_threads_us + tid] = a12;
+    partials[12 * n_threads_us + tid] = a13;
+    partials[13 * n_threads_us + tid] = a14;
+    partials[14 * n_threads_us + tid] = a15;
+    partials[15 * n_threads_us + tid] = a16;
+    partials[16 * n_threads_us + tid] = a17;
+    partials[17 * n_threads_us + tid] = a18;
+    partials[18 * n_threads_us + tid] = a20;
+    partials[19 * n_threads_us + tid] = a21;
+    partials[20 * n_threads_us + tid] = a22;
+    partials[21 * n_threads_us + tid] = a23;
+    partials[22 * n_threads_us + tid] = a24;
+    partials[23 * n_threads_us + tid] = a25;
+    partials[24 * n_threads_us + tid] = a26;
+    partials[25 * n_threads_us + tid] = a27;
+    partials[26 * n_threads_us + tid] = a28;
+    partials[27 * n_threads_us + tid] = a30;
+    partials[28 * n_threads_us + tid] = a31;
+    partials[29 * n_threads_us + tid] = a32;
+    partials[30 * n_threads_us + tid] = a33;
+    partials[31 * n_threads_us + tid] = a34;
+    partials[32 * n_threads_us + tid] = a35;
+    partials[33 * n_threads_us + tid] = a36;
+    partials[34 * n_threads_us + tid] = a37;
+    partials[35 * n_threads_us + tid] = a38;
+    partials[36 * n_threads_us + tid] = a40;
+    partials[37 * n_threads_us + tid] = a41;
+    partials[38 * n_threads_us + tid] = a42;
+    partials[39 * n_threads_us + tid] = a43;
+    partials[40 * n_threads_us + tid] = a44;
+    partials[41 * n_threads_us + tid] = a45;
+    partials[42 * n_threads_us + tid] = a46;
+    partials[43 * n_threads_us + tid] = a47;
+    partials[44 * n_threads_us + tid] = a48;
+    partials[45 * n_threads_us + tid] = a50;
+    partials[46 * n_threads_us + tid] = a51;
+    partials[47 * n_threads_us + tid] = a52;
+    partials[48 * n_threads_us + tid] = a53;
+    partials[49 * n_threads_us + tid] = a54;
+    partials[50 * n_threads_us + tid] = a55;
+    partials[51 * n_threads_us + tid] = a56;
+    partials[52 * n_threads_us + tid] = a57;
+    partials[53 * n_threads_us + tid] = a58;
+    partials[54 * n_threads_us + tid] = a60;
+    partials[55 * n_threads_us + tid] = a61;
+    partials[56 * n_threads_us + tid] = a62;
+    partials[57 * n_threads_us + tid] = a63;
+    partials[58 * n_threads_us + tid] = a64;
+    partials[59 * n_threads_us + tid] = a65;
+    partials[60 * n_threads_us + tid] = a66;
+    partials[61 * n_threads_us + tid] = a67;
+    partials[62 * n_threads_us + tid] = a68;
+    partials[63 * n_threads_us + tid] = a70;
+    partials[64 * n_threads_us + tid] = a71;
+    partials[65 * n_threads_us + tid] = a72;
+    partials[66 * n_threads_us + tid] = a73;
+    partials[67 * n_threads_us + tid] = a74;
+    partials[68 * n_threads_us + tid] = a75;
+    partials[69 * n_threads_us + tid] = a76;
+    partials[70 * n_threads_us + tid] = a77;
+    partials[71 * n_threads_us + tid] = a78;
+    partials[72 * n_threads_us + tid] = a80;
+    partials[73 * n_threads_us + tid] = a81;
+    partials[74 * n_threads_us + tid] = a82;
+    partials[75 * n_threads_us + tid] = a83;
+    partials[76 * n_threads_us + tid] = a84;
+    partials[77 * n_threads_us + tid] = a85;
+    partials[78 * n_threads_us + tid] = a86;
+    partials[79 * n_threads_us + tid] = a87;
+    partials[80 * n_threads_us + tid] = a88;
 }
 
 #[cube(launch_unchecked)]
 pub fn cov_accum_with_parent_kernel(
     lp: &Array<f32>,
     parent: &Array<f32>,
-    cu: &mut Array<Atomic<f32>>,
+    partials: &mut Array<f32>,
     h: u32,
     w: u32,
+    n_threads: u32,
 ) {
     let tid = ABSOLUTE_POS;
-    let stride = CUBE_COUNT * (CUBE_DIM_X as usize);
+    let stride = ((CUBE_COUNT_X * CUBE_COUNT_Y * CUBE_COUNT_Z) as usize) * (CUBE_DIM_X as usize);
     let nblv = h - 2;
     let nblh = w - 2;
     let nexp = (nblv * nblh) as usize;
     let w_us = w as usize;
+    let n_threads_us = n_threads as usize;
 
     let mut a00 = 0.0_f32;
     let mut a01 = 0.0_f32;
@@ -514,104 +542,124 @@ pub fn cov_accum_with_parent_kernel(
         p += stride;
     }
 
-    cu[0].fetch_add(a00);
-    cu[1].fetch_add(a01);
-    cu[2].fetch_add(a02);
-    cu[3].fetch_add(a03);
-    cu[4].fetch_add(a04);
-    cu[5].fetch_add(a05);
-    cu[6].fetch_add(a06);
-    cu[7].fetch_add(a07);
-    cu[8].fetch_add(a08);
-    cu[9].fetch_add(a09);
-    cu[10].fetch_add(a10);
-    cu[11].fetch_add(a11);
-    cu[12].fetch_add(a12);
-    cu[13].fetch_add(a13);
-    cu[14].fetch_add(a14);
-    cu[15].fetch_add(a15);
-    cu[16].fetch_add(a16);
-    cu[17].fetch_add(a17);
-    cu[18].fetch_add(a18);
-    cu[19].fetch_add(a19);
-    cu[20].fetch_add(a20);
-    cu[21].fetch_add(a21);
-    cu[22].fetch_add(a22);
-    cu[23].fetch_add(a23);
-    cu[24].fetch_add(a24);
-    cu[25].fetch_add(a25);
-    cu[26].fetch_add(a26);
-    cu[27].fetch_add(a27);
-    cu[28].fetch_add(a28);
-    cu[29].fetch_add(a29);
-    cu[30].fetch_add(a30);
-    cu[31].fetch_add(a31);
-    cu[32].fetch_add(a32);
-    cu[33].fetch_add(a33);
-    cu[34].fetch_add(a34);
-    cu[35].fetch_add(a35);
-    cu[36].fetch_add(a36);
-    cu[37].fetch_add(a37);
-    cu[38].fetch_add(a38);
-    cu[39].fetch_add(a39);
-    cu[40].fetch_add(a40);
-    cu[41].fetch_add(a41);
-    cu[42].fetch_add(a42);
-    cu[43].fetch_add(a43);
-    cu[44].fetch_add(a44);
-    cu[45].fetch_add(a45);
-    cu[46].fetch_add(a46);
-    cu[47].fetch_add(a47);
-    cu[48].fetch_add(a48);
-    cu[49].fetch_add(a49);
-    cu[50].fetch_add(a50);
-    cu[51].fetch_add(a51);
-    cu[52].fetch_add(a52);
-    cu[53].fetch_add(a53);
-    cu[54].fetch_add(a54);
-    cu[55].fetch_add(a55);
-    cu[56].fetch_add(a56);
-    cu[57].fetch_add(a57);
-    cu[58].fetch_add(a58);
-    cu[59].fetch_add(a59);
-    cu[60].fetch_add(a60);
-    cu[61].fetch_add(a61);
-    cu[62].fetch_add(a62);
-    cu[63].fetch_add(a63);
-    cu[64].fetch_add(a64);
-    cu[65].fetch_add(a65);
-    cu[66].fetch_add(a66);
-    cu[67].fetch_add(a67);
-    cu[68].fetch_add(a68);
-    cu[69].fetch_add(a69);
-    cu[70].fetch_add(a70);
-    cu[71].fetch_add(a71);
-    cu[72].fetch_add(a72);
-    cu[73].fetch_add(a73);
-    cu[74].fetch_add(a74);
-    cu[75].fetch_add(a75);
-    cu[76].fetch_add(a76);
-    cu[77].fetch_add(a77);
-    cu[78].fetch_add(a78);
-    cu[79].fetch_add(a79);
-    cu[80].fetch_add(a80);
-    cu[81].fetch_add(a81);
-    cu[82].fetch_add(a82);
-    cu[83].fetch_add(a83);
-    cu[84].fetch_add(a84);
-    cu[85].fetch_add(a85);
-    cu[86].fetch_add(a86);
-    cu[87].fetch_add(a87);
-    cu[88].fetch_add(a88);
-    cu[89].fetch_add(a89);
-    cu[90].fetch_add(a90);
-    cu[91].fetch_add(a91);
-    cu[92].fetch_add(a92);
-    cu[93].fetch_add(a93);
-    cu[94].fetch_add(a94);
-    cu[95].fetch_add(a95);
-    cu[96].fetch_add(a96);
-    cu[97].fetch_add(a97);
-    cu[98].fetch_add(a98);
-    cu[99].fetch_add(a99);
+    // Layout: partials[i * n_threads + tid] = a_i. 100 cells (10×10).
+    partials[0 * n_threads_us + tid] = a00;
+    partials[1 * n_threads_us + tid] = a01;
+    partials[2 * n_threads_us + tid] = a02;
+    partials[3 * n_threads_us + tid] = a03;
+    partials[4 * n_threads_us + tid] = a04;
+    partials[5 * n_threads_us + tid] = a05;
+    partials[6 * n_threads_us + tid] = a06;
+    partials[7 * n_threads_us + tid] = a07;
+    partials[8 * n_threads_us + tid] = a08;
+    partials[9 * n_threads_us + tid] = a09;
+    partials[10 * n_threads_us + tid] = a10;
+    partials[11 * n_threads_us + tid] = a11;
+    partials[12 * n_threads_us + tid] = a12;
+    partials[13 * n_threads_us + tid] = a13;
+    partials[14 * n_threads_us + tid] = a14;
+    partials[15 * n_threads_us + tid] = a15;
+    partials[16 * n_threads_us + tid] = a16;
+    partials[17 * n_threads_us + tid] = a17;
+    partials[18 * n_threads_us + tid] = a18;
+    partials[19 * n_threads_us + tid] = a19;
+    partials[20 * n_threads_us + tid] = a20;
+    partials[21 * n_threads_us + tid] = a21;
+    partials[22 * n_threads_us + tid] = a22;
+    partials[23 * n_threads_us + tid] = a23;
+    partials[24 * n_threads_us + tid] = a24;
+    partials[25 * n_threads_us + tid] = a25;
+    partials[26 * n_threads_us + tid] = a26;
+    partials[27 * n_threads_us + tid] = a27;
+    partials[28 * n_threads_us + tid] = a28;
+    partials[29 * n_threads_us + tid] = a29;
+    partials[30 * n_threads_us + tid] = a30;
+    partials[31 * n_threads_us + tid] = a31;
+    partials[32 * n_threads_us + tid] = a32;
+    partials[33 * n_threads_us + tid] = a33;
+    partials[34 * n_threads_us + tid] = a34;
+    partials[35 * n_threads_us + tid] = a35;
+    partials[36 * n_threads_us + tid] = a36;
+    partials[37 * n_threads_us + tid] = a37;
+    partials[38 * n_threads_us + tid] = a38;
+    partials[39 * n_threads_us + tid] = a39;
+    partials[40 * n_threads_us + tid] = a40;
+    partials[41 * n_threads_us + tid] = a41;
+    partials[42 * n_threads_us + tid] = a42;
+    partials[43 * n_threads_us + tid] = a43;
+    partials[44 * n_threads_us + tid] = a44;
+    partials[45 * n_threads_us + tid] = a45;
+    partials[46 * n_threads_us + tid] = a46;
+    partials[47 * n_threads_us + tid] = a47;
+    partials[48 * n_threads_us + tid] = a48;
+    partials[49 * n_threads_us + tid] = a49;
+    partials[50 * n_threads_us + tid] = a50;
+    partials[51 * n_threads_us + tid] = a51;
+    partials[52 * n_threads_us + tid] = a52;
+    partials[53 * n_threads_us + tid] = a53;
+    partials[54 * n_threads_us + tid] = a54;
+    partials[55 * n_threads_us + tid] = a55;
+    partials[56 * n_threads_us + tid] = a56;
+    partials[57 * n_threads_us + tid] = a57;
+    partials[58 * n_threads_us + tid] = a58;
+    partials[59 * n_threads_us + tid] = a59;
+    partials[60 * n_threads_us + tid] = a60;
+    partials[61 * n_threads_us + tid] = a61;
+    partials[62 * n_threads_us + tid] = a62;
+    partials[63 * n_threads_us + tid] = a63;
+    partials[64 * n_threads_us + tid] = a64;
+    partials[65 * n_threads_us + tid] = a65;
+    partials[66 * n_threads_us + tid] = a66;
+    partials[67 * n_threads_us + tid] = a67;
+    partials[68 * n_threads_us + tid] = a68;
+    partials[69 * n_threads_us + tid] = a69;
+    partials[70 * n_threads_us + tid] = a70;
+    partials[71 * n_threads_us + tid] = a71;
+    partials[72 * n_threads_us + tid] = a72;
+    partials[73 * n_threads_us + tid] = a73;
+    partials[74 * n_threads_us + tid] = a74;
+    partials[75 * n_threads_us + tid] = a75;
+    partials[76 * n_threads_us + tid] = a76;
+    partials[77 * n_threads_us + tid] = a77;
+    partials[78 * n_threads_us + tid] = a78;
+    partials[79 * n_threads_us + tid] = a79;
+    partials[80 * n_threads_us + tid] = a80;
+    partials[81 * n_threads_us + tid] = a81;
+    partials[82 * n_threads_us + tid] = a82;
+    partials[83 * n_threads_us + tid] = a83;
+    partials[84 * n_threads_us + tid] = a84;
+    partials[85 * n_threads_us + tid] = a85;
+    partials[86 * n_threads_us + tid] = a86;
+    partials[87 * n_threads_us + tid] = a87;
+    partials[88 * n_threads_us + tid] = a88;
+    partials[89 * n_threads_us + tid] = a89;
+    partials[90 * n_threads_us + tid] = a90;
+    partials[91 * n_threads_us + tid] = a91;
+    partials[92 * n_threads_us + tid] = a92;
+    partials[93 * n_threads_us + tid] = a93;
+    partials[94 * n_threads_us + tid] = a94;
+    partials[95 * n_threads_us + tid] = a95;
+    partials[96 * n_threads_us + tid] = a96;
+    partials[97 * n_threads_us + tid] = a97;
+    partials[98 * n_threads_us + tid] = a98;
+    partials[99 * n_threads_us + tid] = a99;
+}
+
+/// Finalize: one cube per cell `i`, sum `partials[i * n_threads..(i+1) * n_threads]`
+/// into `cu[i]`. Launch with `CubeCount::Static(n_cells, 1, 1)` and
+/// `CubeDim::new_1d(1)` (one thread per cube — minimal but matches the
+/// shape of reduction.rs's `finalize_kernel`; could parallelize per-cube
+/// later if profiling shows it matters).
+#[cube(launch_unchecked)]
+pub fn cov_finalize_kernel(partials: &Array<f32>, cu: &mut Array<f32>, n_threads: u32) {
+    let cell = CUBE_POS_X;
+    let n_t = n_threads as usize;
+    let base = (cell as usize) * n_t;
+    let mut s = 0.0_f32;
+    let mut k: u32 = 0;
+    while k < n_threads {
+        s += partials[base + (k as usize)];
+        k += 1;
+    }
+    cu[cell as usize] = s;
 }

@@ -144,9 +144,15 @@ fn compute_on_identical_returns_1() {
         "identical pair must produce a finite score, got {}",
         score.value,
     );
+    // Tolerance 1e-7 ≈ one f32 ULP at 1.0. CUDA's atomic-stable reduce
+    // gets ≤1e-9 on this input, but wgpu's Vulkan compute pipeline
+    // shifts the cs/iw reduction sum by ~2.5e-8 vs CUDA after the
+    // per-thread-partials cov refactor — well under f32 epsilon, well
+    // above any tolerance that would still surface the original
+    // NaN-on-identical bug (which scored 0, not ~1).
     assert!(
-        (score.value - 1.0).abs() < 1e-9,
-        "identical pair must score 1.0 within 1e-9, got {}",
+        (score.value - 1.0).abs() < 1e-7,
+        "identical pair must score 1.0 within 1e-7, got {}",
         score.value,
     );
     assert_eq!(score.metric_name, "iwssim");
