@@ -50,10 +50,26 @@ use std::time::Instant;
 use rayon::prelude::*;
 
 use crate::decode::{Rgb8Image, decode_image_to_rgb8};
-use crate::metrics::{
-    GpuRuntime, MetricKind, ZensimFeatureRegime, run_metric, run_zensim_gpu_with_features,
-    run_zensim_with_features,
-};
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+use crate::metrics::cache::MetricCache;
+use crate::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime, run_zensim_with_features};
+// `run_metric` is the no-GPU-features fall-through AND the gpu-feature-off-
+// but-gpu-zensim-on branch inside `compute_cell`. The MetricCache also calls
+// it for CPU / disabled metrics. Mark unused to handle the all-GPU-on build
+// where the cache replaces every direct call site in this module.
+#[allow(unused_imports)]
+use crate::metrics::run_metric;
+// Re-exported for callers (lib consumers) — not directly called in this
+// file once the cache was introduced.
+#[allow(unused_imports)]
+use crate::metrics::run_zensim_gpu_with_features;
 use crate::sweep::encode::{CodecKind, encode};
 use crate::sweep::feature_writer::FeatureParquetWriter;
 use crate::sweep::grid::{KnobGrid, KnobTuple};
@@ -206,6 +222,31 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
     let feature_writer = Mutex::new(feature_writer_inner);
     let pairs_writer = Mutex::new(pairs_writer_inner);
 
+    // GPU metric instance cache. One `MetricCache` per `run_sweep`
+    // call, shared across rayon workers via a Mutex. Each rayon
+    // task encodes + decodes in parallel (CPU work, no lock needed),
+    // then takes the lock to score on cached GPU metric instances.
+    // The lock effectively serialises the GPU phase, which the cubecl
+    // driver does internally anyway — net effect is that the per-cell
+    // `Metric::new` storms are gone (one construction per (kind, dims)
+    // per sweep call instead of one per cell).
+    //
+    // Without the cache, repeated allocation of zensim WithIw persist
+    // planes (~200 MB / instance at 1080p), cvvdp's pre-compiled NVRTC
+    // pyramid buffers, and iwssim's wavelet workspace accumulate in
+    // cubecl-cuda's pool faster than dropped instances can be reclaimed,
+    // producing the v26 OOM on 12 GB cards after ~80 cell allocations.
+    // See `metrics::cache` module docs for details.
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    let metric_cache = Mutex::new(MetricCache::new(cfg.gpu_runtime));
+
     for src_path in &cfg.sources {
         // Decode the source once per image so we don't re-PNG-decode for
         // every cell. The bytes are freed when we move to the next image
@@ -247,6 +288,15 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                     tuple,
                     zensim_in_metrics,
                     zensim_gpu_in_metrics,
+                    #[cfg(any(
+                        feature = "gpu-butteraugli",
+                        feature = "gpu-ssim2",
+                        feature = "gpu-dssim",
+                        feature = "gpu-iwssim",
+                        feature = "gpu-zensim",
+                        feature = "gpu-cvvdp"
+                    ))]
+                    &metric_cache,
                 )
             }))
             .unwrap_or_else(|panic_payload| {
@@ -399,6 +449,15 @@ fn compute_cell(
     tuple: &KnobTuple,
     zensim_in_metrics: bool,
     zensim_gpu_in_metrics: bool,
+    #[cfg(any(
+        feature = "gpu-butteraugli",
+        feature = "gpu-ssim2",
+        feature = "gpu-dssim",
+        feature = "gpu-iwssim",
+        feature = "gpu-zensim",
+        feature = "gpu-cvvdp"
+    ))]
+    metric_cache: &Mutex<MetricCache>,
 ) -> CellOutcome {
     let knob_json = tuple.to_canonical_json();
     let mut row: Vec<String> = vec![
@@ -515,6 +574,8 @@ fn compute_cell(
     for &metric in &cfg.metrics {
         let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> =
             if metric == MetricKind::Zensim && want_features_cpu {
+                // CPU zensim — does not pressure the cubecl pool;
+                // keep the uncached per-call path.
                 match run_zensim_with_features(source, &decoded) {
                     Ok((score, features)) => {
                         zensim_features = Some((score as f32, features));
@@ -523,20 +584,59 @@ fn compute_cell(
                     Err(e) => Err(e),
                 }
             } else if metric == MetricKind::ZensimGpu && want_features_gpu {
-                match run_zensim_gpu_with_features(
-                    source,
-                    &decoded,
-                    cfg.gpu_runtime,
-                    cfg.feature_regime,
-                ) {
-                    Ok((score, features)) => {
-                        zensim_features = Some((score as f32, features));
-                        Ok(vec![("zensim_gpu", score)])
+                // GPU zensim with feature emit — go through the cache
+                // so the WithIw persist planes (~200 MB at 1080p) are
+                // allocated once per (dims, regime) instead of per
+                // cell. Without this, repeated cell-level construction
+                // saturates cubecl-cuda's pool on the 12 GB RTX 3060
+                // after ~80 cells. See `metrics::cache` module docs.
+                #[cfg(feature = "gpu-zensim")]
+                {
+                    let mut cache = metric_cache.lock().expect("metric_cache poisoned");
+                    match cache.compute_zensim_features(
+                        source,
+                        &decoded,
+                        cfg.feature_regime,
+                    ) {
+                        Ok((score, features)) => {
+                            zensim_features = Some((score as f32, features));
+                            Ok(vec![("zensim_gpu", score)])
+                        }
+                        Err(e) => Err(e),
                     }
-                    Err(e) => Err(e),
+                }
+                #[cfg(not(feature = "gpu-zensim"))]
+                {
+                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
                 }
             } else {
-                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+                // All other GPU metrics route through the cache; CPU
+                // metrics (and unknown / disabled GPU metrics) fall
+                // through to the uncached `run_metric` path inside
+                // `run_metric_cached`.
+                #[cfg(any(
+                    feature = "gpu-butteraugli",
+                    feature = "gpu-ssim2",
+                    feature = "gpu-dssim",
+                    feature = "gpu-iwssim",
+                    feature = "gpu-zensim",
+                    feature = "gpu-cvvdp"
+                ))]
+                {
+                    let mut cache = metric_cache.lock().expect("metric_cache poisoned");
+                    cache.run_metric_cached(metric, source, &decoded)
+                }
+                #[cfg(not(any(
+                    feature = "gpu-butteraugli",
+                    feature = "gpu-ssim2",
+                    feature = "gpu-dssim",
+                    feature = "gpu-iwssim",
+                    feature = "gpu-zensim",
+                    feature = "gpu-cvvdp"
+                )))]
+                {
+                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
+                }
             };
         match result {
             Ok(values) => {

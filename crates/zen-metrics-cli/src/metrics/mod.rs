@@ -50,6 +50,15 @@ mod zensim;
 
 #[cfg(feature = "gpu-butteraugli")]
 mod butter_pnorm3;
+#[cfg(any(
+    feature = "gpu-butteraugli",
+    feature = "gpu-ssim2",
+    feature = "gpu-dssim",
+    feature = "gpu-iwssim",
+    feature = "gpu-zensim",
+    feature = "gpu-cvvdp"
+))]
+pub(crate) mod cache;
 #[cfg(feature = "gpu-cvvdp")]
 pub mod cvvdp_gpu;
 
@@ -252,7 +261,7 @@ pub enum GpuRuntime {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
-fn auto_order() -> &'static [GpuRuntime] {
+pub(crate) fn auto_order() -> &'static [GpuRuntime] {
     &[
         GpuRuntime::Cuda,
         GpuRuntime::Wgpu,
@@ -289,7 +298,7 @@ pub(crate) fn runtime_label(rt: GpuRuntime) -> &'static str {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
-fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::Backend, String> {
+pub(crate) fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::Backend, String> {
     match rt {
         GpuRuntime::Auto => Err("Auto is expanded by the caller".to_string()),
         GpuRuntime::Cuda => Ok(zenmetrics_api::Backend::Cuda),
@@ -340,7 +349,7 @@ fn allow_small_images() -> bool {
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
-fn resolve_default_params(
+pub(crate) fn resolve_default_params(
     kind: zenmetrics_api::MetricKind,
 ) -> Result<zenmetrics_api::MetricParams, zenmetrics_api::Error> {
     #[cfg(feature = "gpu-iwssim")]
@@ -720,6 +729,8 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
 /// and returns the first that produces a finite score.
 #[cfg(feature = "sweep")]
 #[cfg(feature = "gpu-zensim")]
+#[allow(dead_code)] // superseded by `metrics::cache::MetricCache::compute_zensim_features`
+                    // for the sweep path; retained as a library entry point.
 pub fn run_zensim_gpu_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
