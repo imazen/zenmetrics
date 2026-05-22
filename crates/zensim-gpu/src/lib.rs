@@ -81,8 +81,9 @@ pub use opaque::{AcumenArch, Backend, Score, ZensimOpaque, ZensimParams};
 
 // Re-export the acumen ViewingCondition so `zen-metrics-cli` can
 // construct one without a direct `zensim` dep. Doc-hidden mirrors
-// the upstream's `#[doc(hidden)]` on the module. See
-// `imazen/zensim#40` for the Gate A surface.
+// the upstream's `#[doc(hidden)]` on the module. Only present when
+// the `acumen` feature is on; see `imazen/zensim#40`.
+#[cfg(feature = "acumen")]
 #[doc(hidden)]
 pub use zensim::acumen::viewing::ViewingCondition;
 

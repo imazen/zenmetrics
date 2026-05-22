@@ -95,6 +95,12 @@ pub struct ZensimParams {
     ///   then learns to use CSF weights as CONTEXT instead of as
     ///   a multiplicative modulation.
     pub acumen_arch: AcumenArch,
+
+    /// Feature regime to emit. Default `Basic` (228 features, the
+    /// V_22-shipped output shape). `Extended` adds 72 masked
+    /// features (300 total); `WithIw` adds 72 IW-pool features
+    /// on top (372 total, matches CPU `Zensim::compute_372col`).
+    pub regime: crate::ZensimFeatureRegime,
 }
 
 /// Acumen Mode A application strategy. See [`ZensimParams::acumen_arch`].
@@ -163,7 +169,16 @@ impl ZensimParams {
             weights: None,
             acumen_mode_a: None,
             acumen_arch: AcumenArch::default(),
+            regime: crate::ZensimFeatureRegime::Basic,
         }
+    }
+
+    /// Set the feature regime emitted. Default `Basic` (228 cols).
+    /// For production recipe parity with the CPU 372-col extractor,
+    /// pass [`crate::ZensimFeatureRegime::WithIw`].
+    pub fn with_regime(mut self, regime: crate::ZensimFeatureRegime) -> Self {
+        self.regime = regime;
+        self
     }
 
     /// Set the acumen application strategy. Only meaningful when
@@ -208,6 +223,7 @@ impl ZensimParams {
             weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
             acumen_mode_a: None,
             acumen_arch: AcumenArch::default(),
+            regime: crate::ZensimFeatureRegime::Basic,
         }
     }
 
@@ -286,24 +302,31 @@ impl ZensimOpaque {
         height: u32,
         params: ZensimParams,
     ) -> Result<Self> {
+        let regime = params.regime;
         let inner: Box<dyn ZensimInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::cuda::CudaRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::cuda::CudaRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::wgpu::WgpuRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::wgpu::WgpuRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new(client, width, height)?)
+                Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new_with_regime(
+                    client, width, height, regime,
+                )?)
             }
         };
         let mut shim = Self {

@@ -31,7 +31,7 @@ use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
-use zensim_gpu::{AcumenArch, Backend, TOTAL_FEATURES, ZensimOpaque, ZensimParams};
+use zensim_gpu::{AcumenArch, Backend, ZensimFeatureRegime, ZensimOpaque, ZensimParams};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pairs_tsv: Option<PathBuf> = None;
@@ -45,9 +45,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // run. The CLI exposes them so hyperparameter sweeps don't
     // require a rebuild.
     let mut mode_b_blur_sigma: usize = 8;
-    let mut mode_b_band_idx: u32 = 2; // 0=finest, 3=coarsest. 2 = mid-band, near CSF peak.
+    // Default band_idx=3 matches the sweep winner from 2026-05-21 — lower
+    // spatial frequencies give stronger Mode B signal. Original Path B
+    // run used band_idx=2 (0.7328 CID22); band_idx=3 lifts to 0.7543.
+    let mut mode_b_band_idx: u32 = 3;
     let mut mode_b_clamp_lo: f32 = 0.1;
     let mut mode_b_clamp_hi: f32 = 4.0;
+    // Feature regime: Basic (228), Extended (300), WithIw (372).
+    // Default = WithIw = production schema; pass --regime basic to
+    // reproduce pre-2026-05-22 228-col outputs.
+    let mut regime = ZensimFeatureRegime::WithIw;
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -74,6 +81,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--mode-b-band-idx" => mode_b_band_idx = args.next().unwrap().parse()?,
             "--mode-b-clamp-lo" => mode_b_clamp_lo = args.next().unwrap().parse()?,
             "--mode-b-clamp-hi" => mode_b_clamp_hi = args.next().unwrap().parse()?,
+            "--regime" => {
+                let v = args.next().unwrap();
+                regime = match v.as_str() {
+                    "basic" => ZensimFeatureRegime::Basic,
+                    "extended" | "ext" => ZensimFeatureRegime::Extended,
+                    "with_iw" | "with-iw" | "withiw" | "372" => ZensimFeatureRegime::WithIw,
+                    _ => return Err(format!("unknown --regime: {v}").into()),
+                };
+            }
             _ => return Err(format!("unknown arg: {arg}").into()),
         }
     }
@@ -125,7 +141,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         0
     };
-    let n_features_total = TOTAL_FEATURES + n_aux;
+    let base_features = regime.total_features();
+    let n_features_total = base_features + n_aux;
+    eprintln!(
+        "[extract_acumen_features] regime: {regime:?} → {base_features} features + {n_aux} aux"
+    );
     let mut fields = vec![Field::new("ref_basename", DataType::Utf8, false)];
     for i in 0..n_features_total {
         fields.push(Field::new(&format!("f{i}"), DataType::Float64, true));
@@ -180,7 +200,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if current_dims != Some((w_r, h_r)) {
             // Rebuild ZensimOpaque for new dimensions.
-            let mut params = ZensimParams::new().with_acumen_arch(acumen_arch);
+            let mut params = ZensimParams::new()
+                .with_acumen_arch(acumen_arch)
+                .with_regime(regime);
             if let Some(v) = viewing {
                 params = params.with_acumen_mode_a(v);
             }
@@ -190,10 +212,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let z = current_z.as_mut().unwrap();
         // Mode B: pre-multiply BOTH ref and dist by their respective
         // per-pixel achromatic CSF weights. Each image gets its OWN
-        // adaptation map based on its own local luminance — that's
-        // what Mode B per-pixel L_adapt means.
+        // adaptation map based on its own local luminance. Uses the
+        // canonical zensim::acumen::mode_b API so CPU and GPU share
+        // bit-exact preprocessing.
         let (r_used, d_used);
         if matches!(acumen_arch, AcumenArch::ModeB) && acumen_mode_a {
+            use zensim::acumen::castle_csf::CastleCsfLut;
+            use zensim::acumen::mode_b::{apply_mode_b_premultiply, ModeBConfig};
+            const LUT_BYTES: &[u8] =
+                include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
+            let lut = CastleCsfLut::from_bytes(LUT_BYTES).map_err(|e| format!("{e:?}"))?;
             let v = viewing.unwrap();
             let cfg = ModeBConfig {
                 blur_sigma: mode_b_blur_sigma,
@@ -201,8 +229,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 clamp_lo: mode_b_clamp_lo,
                 clamp_hi: mode_b_clamp_hi,
             };
-            r_used = apply_mode_b_premultiply(&r, w_r, h_r, v, cfg)?;
-            d_used = apply_mode_b_premultiply(&d, w_r, h_r, v, cfg)?;
+            r_used = apply_mode_b_premultiply(&lut, v, &r, w_r, h_r, cfg);
+            d_used = apply_mode_b_premultiply(&lut, v, &d, w_r, h_r, cfg);
         } else {
             r_used = r.clone();
             d_used = d.clone();
@@ -221,7 +249,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or("")
             .to_string();
         basenames.push(basename);
-        for i in 0..TOTAL_FEATURES {
+        for i in 0..base_features {
             feature_cols[i].push(Some(feats[i]));
         }
         // Aux columns: 12 castleCSF weights cached in ZensimOpaque
@@ -231,7 +259,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .acumen_band_weights_flat()
                 .ok_or("acumen-mode-a + AuxFeatures but weights unavailable")?;
             for i in 0..12 {
-                feature_cols[TOTAL_FEATURES + i].push(Some(weights[i] as f64));
+                feature_cols[base_features + i].push(Some(weights[i] as f64));
             }
         }
         ok += 1;
@@ -242,7 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("[extract_acumen_features] ok={ok} fail={fail} total={}", pairs.len());
 
     // Write parquet
-    let mut arrays: Vec<ArrayRef> = Vec::with_capacity(TOTAL_FEATURES + 1);
+    let mut arrays: Vec<ArrayRef> = Vec::with_capacity(n_features_total + 1);
     arrays.push(Arc::new(StringArray::from(basenames)));
     for col in feature_cols {
         arrays.push(Arc::new(Float64Array::from(col)));
@@ -274,158 +302,7 @@ fn decode_image(path: &Path) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::
     Ok((rgb.into_raw(), w, h))
 }
 
-/// Apply per-pixel achromatic castleCSF weighting to an RGB image.
-/// For each pixel:
-///   1. Compute linear luminance L(x,y) from sRGB-encoded RGB.
-///   2. Apply local Gaussian blur to L (radius ~8 pixels) to get
-///      the adapted luminance L_adapt(x,y).
-///   3. Look up castleCSF achromatic at L_adapt(x,y) at the average
-///      band rho (band 2 = ~7 cy/deg at ppd=56) — this is the band
-///      with peak CSF for typical viewing.
-///   4. Multiply pixel RGB by that scalar weight.
-///
-/// The output remains 8-bit RGB (clamped). The kernel sees a
-/// spatially-CSF-weighted image instead of the raw input. This is
-/// an approximation of true Mode B (which would weight per-band
-/// per-pixel inside the kernel). It tests whether spatial CSF
-/// adaptation carries signal at all; if yes, the full kernel-level
-/// per-band Mode B becomes worth the effort.
-#[derive(Clone, Copy)]
-struct ModeBConfig {
-    blur_sigma: usize,
-    band_idx: u32,
-    clamp_lo: f32,
-    clamp_hi: f32,
-}
-
-fn apply_mode_b_premultiply(
-    rgb: &[u8],
-    w: u32,
-    h: u32,
-    viewing: zensim_gpu::ViewingCondition,
-    cfg: ModeBConfig,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    use zensim::acumen::castle_csf::{CastleCsfLut, Channel};
-    const LUT_BYTES: &[u8] = include_bytes!("../data/castle_csf_v0_5_4_cvvdp.lut");
-    let lut = CastleCsfLut::from_bytes(LUT_BYTES).map_err(|e| format!("LUT: {e:?}"))?;
-
-    let n = (w as usize) * (h as usize);
-    assert_eq!(rgb.len(), n * 3);
-
-    // Step 1: per-pixel linear luminance.
-    let mut lum = vec![0.0_f32; n];
-    for i in 0..n {
-        let r = srgb_u8_to_linear(rgb[3 * i]);
-        let g = srgb_u8_to_linear(rgb[3 * i + 1]);
-        let b = srgb_u8_to_linear(rgb[3 * i + 2]);
-        lum[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    }
-
-    // Step 2: Gaussian blur over luminance for local-adaptation.
-    // Configurable sigma. Box-blur 3-pass approximation; cheap,
-    // separable.
-    let blurred = box_blur_3pass(&lum, w as usize, h as usize, cfg.blur_sigma);
-
-    // Step 3 + 4: per-pixel CSF lookup + multiply.
-    // Use the configured band (rho = ppd / 2^(band_idx + 1)). Default
-    // band_idx=2 is the typical CSF peak band at photopic L.
-    // Normalize by the CSF at the IMAGE-MEAN L so the output is
-    // comparable in scale to the un-weighted path.
-    let peak_nits = viewing.peak_luminance_nits;
-    let rho = viewing.ppd / (2u32.pow(cfg.band_idx + 1) as f32);
-    let log_rho = rho.log10();
-    let mean_l_nits =
-        (lum.iter().sum::<f32>() / n as f32) * peak_nits;
-    let norm_l = viewing.adapted_luminance_nits(mean_l_nits).max(1e-3);
-    let csf_at_mean = lut.sensitivity(log_rho, norm_l.log10(), Channel::Achromatic);
-
-    let mut out = Vec::with_capacity(n * 3);
-    for i in 0..n {
-        let l_nits = (blurred[i] * peak_nits).max(1e-3);
-        let l_adapt = viewing.adapted_luminance_nits(l_nits).max(1e-3);
-        let csf_here = lut.sensitivity(log_rho, l_adapt.log10(), Channel::Achromatic);
-        // Normalized weight: 1.0 at image-mean L (matches Mode A
-        // at this pixel), <1 in shadows where CSF rolls off, >1 in
-        // mid-tones where CSF peaks.
-        let w_scalar = (csf_here / csf_at_mean).clamp(cfg.clamp_lo, cfg.clamp_hi);
-        for ch in 0..3 {
-            let v = rgb[3 * i + ch] as f32 * w_scalar;
-            out.push(v.clamp(0.0, 255.0) as u8);
-        }
-    }
-
-    Ok(out)
-}
-
-fn srgb_u8_to_linear(v: u8) -> f32 {
-    let u = v as f32 / 255.0;
-    if u <= 0.040_45 { u / 12.92 } else { ((u + 0.055) / 1.055).powf(2.4) }
-}
-
-/// Approximate Gaussian blur via 3 passes of separable box blur,
-/// each with sliding-window accumulator → O(W·H) per pass.
-/// Total: 6 passes (3 H + 3 V), O(6·W·H) total work. Roughly 17×
-/// faster than the naive O(W·H·r) implementation it replaces.
-fn box_blur_3pass(input: &[f32], w: usize, h: usize, sigma: usize) -> Vec<f32> {
-    let r = sigma; // approx σ
-    let mut buf = input.to_vec();
-    let mut tmp = vec![0.0_f32; input.len()];
-    for _ in 0..3 {
-        box_blur_h(&buf, &mut tmp, w, h, r);
-        std::mem::swap(&mut buf, &mut tmp);
-        box_blur_v(&buf, &mut tmp, w, h, r);
-        std::mem::swap(&mut buf, &mut tmp);
-    }
-    buf
-}
-
-#[inline]
-fn box_blur_h(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
-    for y in 0..h {
-        let row = y * w;
-        // Seed accumulator with the first window [0, r].
-        let mut sum: f32 = 0.0;
-        let init_hi = (r + 1).min(w);
-        for x in 0..init_hi {
-            sum += src[row + x];
-        }
-        let mut count = init_hi;
-        for x in 0..w {
-            dst[row + x] = sum / count as f32;
-            // Advance the window: drop x-r if it was in, add x+r+1 if available.
-            let add_x = x + r + 1;
-            if add_x < w {
-                sum += src[row + add_x];
-                count += 1;
-            }
-            if x >= r {
-                sum -= src[row + x - r];
-                count -= 1;
-            }
-        }
-    }
-}
-
-#[inline]
-fn box_blur_v(src: &[f32], dst: &mut [f32], w: usize, h: usize, r: usize) {
-    for x in 0..w {
-        let mut sum: f32 = 0.0;
-        let init_hi = (r + 1).min(h);
-        for y in 0..init_hi {
-            sum += src[y * w + x];
-        }
-        let mut count = init_hi;
-        for y in 0..h {
-            dst[y * w + x] = sum / count as f32;
-            let add_y = y + r + 1;
-            if add_y < h {
-                sum += src[add_y * w + x];
-                count += 1;
-            }
-            if y >= r {
-                sum -= src[(y - r) * w + x];
-                count -= 1;
-            }
-        }
-    }
-}
+// NOTE: Mode B preprocessing lives in `zensim::acumen::mode_b`.
+// The example imports it inline via `use ... mode_b::{...}`. Keep
+// a single source of truth for the algorithm so CPU and GPU
+// pipelines stay bit-exact.
