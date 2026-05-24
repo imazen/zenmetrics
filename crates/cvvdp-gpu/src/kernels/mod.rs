@@ -46,6 +46,7 @@
 
 pub mod color;
 pub mod csf;
+pub mod diffmap;
 pub mod masking;
 pub mod pool;
 pub mod pyramid;

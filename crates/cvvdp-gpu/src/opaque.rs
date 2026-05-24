@@ -53,6 +53,42 @@ trait CvvdpInner: Send {
     ) -> Result<Score>;
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
+    fn compute_srgb_u8_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<Score>;
+    fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()>;
+    fn compute_with_warm_ref_srgb(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score>;
+    #[allow(clippy::too_many_arguments)]
+    fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score>;
+    fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()>;
+    fn compute_with_warm_ref_from_linear_planes(
+        &mut self,
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score>;
 }
 
 impl<R> CvvdpInner for Cvvdp<R>
@@ -91,6 +127,102 @@ where
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         Cvvdp::pack_srgb_into_packed_u32_handle(self, srgb)
     }
+
+    fn compute_srgb_u8_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<Score> {
+        let jod = Cvvdp::score_with_diffmap(self, ref_rgb, dis_rgb, diffmap_out)?;
+        Ok(Score {
+            value: f64::from(jod),
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        Cvvdp::warm_reference(self, ref_rgb)
+    }
+
+    fn compute_with_warm_ref_srgb(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        // For the sRGB-byte warm-ref scalar path the existing public
+        // method takes the construction-time PPD; we read it back via
+        // `Cvvdp::geometry_ppd_for_warm_ref` (a tiny accessor we add
+        // alongside the diffmap API so opaque doesn't reach into a
+        // private field). The diffmap variant wraps it internally.
+        let jod = match diffmap_out {
+            Some(out) => Cvvdp::score_with_warm_ref_diffmap(self, dis_rgb, out)?,
+            None => {
+                let ppd = Cvvdp::geometry_ppd_for_warm_ref(self);
+                Cvvdp::compute_dkl_jod_with_warm_ref(self, dis_rgb, ppd)?
+            }
+        };
+        Ok(Score {
+            value: f64::from(jod),
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        let jod = match diffmap_out {
+            Some(out) => Cvvdp::score_from_linear_planes_with_diffmap(
+                self, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, out,
+            )?,
+            None => {
+                Cvvdp::score_from_linear_planes(self, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)?
+            }
+        };
+        Ok(Score {
+            value: f64::from(jod),
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        Cvvdp::warm_reference_from_linear_planes(self, ref_r, ref_g, ref_b)
+    }
+
+    fn compute_with_warm_ref_from_linear_planes(
+        &mut self,
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        let jod = match diffmap_out {
+            Some(out) => Cvvdp::score_from_linear_planes_with_warm_ref_diffmap(
+                self, dis_r, dis_g, dis_b, out,
+            )?,
+            None => Cvvdp::score_from_linear_planes_with_warm_ref(self, dis_r, dis_g, dis_b)?,
+        };
+        Ok(Score {
+            value: f64::from(jod),
+            metric_name: "cvvdp",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
 }
 
 /// Opaque ColorVideoVDP scorer.
@@ -107,12 +239,7 @@ impl CvvdpOpaque {
     /// using the standard 4K viewing geometry (see
     /// `params::DisplayGeometry::STANDARD_4K`). Equivalent to
     /// `new_with_memory_mode(.., MemoryMode::Auto)`.
-    pub fn new(
-        backend: Backend,
-        width: u32,
-        height: u32,
-        params: CvvdpParams,
-    ) -> Result<Self> {
+    pub fn new(backend: Backend, width: u32, height: u32, params: CvvdpParams) -> Result<Self> {
         Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
     }
 
@@ -184,21 +311,13 @@ impl CvvdpOpaque {
     }
 
     /// Score one reference / distorted pair (packed sRGB RGB8).
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
     }
 
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let ref_buf = to_srgb_rgb8(&r, self.width, self.height)?;
         let dis_buf = to_srgb_rgb8(&d, self.width, self.height)?;
         self.inner.compute_srgb_u8(&ref_buf, &dis_buf)
@@ -220,11 +339,86 @@ impl CvvdpOpaque {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
+    }
+
+    /// Score one (reference, distorted) sRGB pair AND fill a per-pixel
+    /// diffmap. On return, `diffmap_out.len() == width * height` and
+    /// values are non-negative f32 row-major.
+    ///
+    /// See [`crate::kernels::diffmap`] module docs for the recipe.
+    pub fn compute_srgb_u8_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<Score> {
+        self.inner
+            .compute_srgb_u8_with_diffmap(ref_rgb, dis_rgb, diffmap_out)
+    }
+
+    /// Warm the REF side for repeated `compute_with_warm_ref_*` calls.
+    /// Subsequent scores against the cached REF skip the REF half of
+    /// the pipeline. See [`crate::pipeline::Cvvdp::warm_reference`].
+    pub fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        self.inner.warm_reference_srgb(ref_rgb)
+    }
+
+    /// Score a DIST candidate against the warm REF state. Pass
+    /// `Some(&mut Vec<f32>)` to also fill a per-pixel diffmap.
+    pub fn compute_with_warm_ref_srgb(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        self.inner.compute_with_warm_ref_srgb(dis_rgb, diffmap_out)
+    }
+
+    /// Score from three planar `W × H` linear-RGB f32 buffers (unit-
+    /// scaled sRGB linear-light). Skips the host-side sRGB pack +
+    /// LUT conversion. Pass `Some(&mut Vec<f32>)` to also fill a
+    /// per-pixel diffmap. Mirrors butteraugli-gpu's W44-PHASE3-B4
+    /// `compute_with_reference_from_linear_planes` pattern.
+    #[allow(clippy::too_many_arguments)] // 6 planar slices + diffmap option — natural shape for the linear-planes API.
+    pub fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        self.inner
+            .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, diffmap_out)
+    }
+
+    /// Warm the REF side from three planar linear-RGB f32 buffers.
+    /// See [`crate::pipeline::Cvvdp::warm_reference_from_linear_planes`].
+    pub fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        self.inner
+            .warm_reference_from_linear_planes(ref_r, ref_g, ref_b)
+    }
+
+    /// Score a DIST candidate (linear-RGB f32 planes) against the warm
+    /// REF state. Pass `Some(&mut Vec<f32>)` to also fill a per-pixel
+    /// diffmap.
+    pub fn compute_with_warm_ref_from_linear_planes(
+        &mut self,
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        self.inner
+            .compute_with_warm_ref_from_linear_planes(dis_r, dis_g, dis_b, diffmap_out)
     }
 }
 
@@ -254,7 +448,7 @@ fn convert_to_srgb_rgb8(
     s: &PixelSlice<'_>,
     target: zenpixels::PixelDescriptor,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
+    use zenpixels_convert::{convert_row, ConvertPlan};
     let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
     let w = s.width();
     let h = s.rows();

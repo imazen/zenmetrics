@@ -42,6 +42,86 @@ for AMD ROCm. On `cubecl::cpu::CpuRuntime` use
 `Cvvdp::compute_dkl_jod_host_pool` instead of `Cvvdp::score` — see
 the CPU backend section below.
 
+## Per-pixel diffmap
+
+`Cvvdp::score_with_diffmap` returns the same JOD scalar as
+`Cvvdp::score` AND fills a caller-owned `Vec<f32>` with a
+per-pixel error signal (row-major, `width * height` non-negative
+f32 values, large where the masked error is large in any DKL
+channel or pyramid band). The diffmap is the per-pixel input the
+jxl-encoder CVVDP-loop fork uses for its per-block 8×8 median + MAD
+heuristic. See `src/kernels/diffmap.rs` for the recipe and
+`docs/DIFFMAP_DIVERGENCES.md` for the relationship between the
+diffmap and the scalar JOD.
+
+```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
+use cvvdp_gpu::Cvvdp;
+use cvvdp_gpu::params::CvvdpParams;
+
+let client = CudaRuntime::client(&Default::default());
+let (w, h) = (256u32, 256u32);
+let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
+
+let ref_srgb = vec![128u8; (w * h * 3) as usize];
+let dis_srgb = vec![100u8; (w * h * 3) as usize];
+
+// Pre-allocate once; reuse across many score calls.
+let mut diffmap: Vec<f32> = Vec::with_capacity((w * h) as usize);
+let jod = cvvdp.score_with_diffmap(&ref_srgb, &dis_srgb, &mut diffmap)?;
+assert_eq!(diffmap.len(), (w * h) as usize);
+println!(
+    "JOD = {jod:.4}, peak pixel error = {:.4}",
+    diffmap.iter().cloned().fold(0.0_f32, f32::max)
+);
+# Ok::<(), cvvdp_gpu::Error>(())
+```
+
+The diffmap is also available from the warm-ref + linear-planes
+families (`score_with_warm_ref_diffmap`,
+`score_from_linear_planes_with_diffmap`,
+`score_from_linear_planes_with_warm_ref_diffmap`). Identical
+inputs (`ref ≡ dist`) produce an all-zero diffmap to 1e-7 absolute
+— the buttloop consumer relies on this invariant.
+
+## Linear-RGB planes entry points
+
+For callers that already have linear-light sRGB primaries in planar
+f32 (e.g. JPEG XL encoder buttloops),
+`Cvvdp::score_from_linear_planes` (and the warm-ref / diffmap
+variants) skips the host-side sRGB pack + sRGB→linear LUT lookup.
+Mirrors butteraugli-gpu's
+`compute_with_reference_from_linear_planes` (W44-PHASE3-B4 pattern):
+
+```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
+use cvvdp_gpu::Cvvdp;
+use cvvdp_gpu::params::CvvdpParams;
+
+let client = CudaRuntime::client(&Default::default());
+let (w, h) = (256u32, 256u32);
+let mut cvvdp = Cvvdp::<CudaRuntime>::new(client, w, h, CvvdpParams::PLACEHOLDER)?;
+
+let n_pix = (w * h) as usize;
+let ref_r = vec![0.5_f32; n_pix];
+let ref_g = vec![0.5_f32; n_pix];
+let ref_b = vec![0.5_f32; n_pix];
+let dis_r = vec![0.4_f32; n_pix];
+let dis_g = vec![0.5_f32; n_pix];
+let dis_b = vec![0.5_f32; n_pix];
+
+let jod = cvvdp.score_from_linear_planes(
+    &ref_r, &ref_g, &ref_b, &dis_r, &dis_g, &dis_b,
+)?;
+# Ok::<(), cvvdp_gpu::Error>(())
+```
+
+The display model (`y_peak`, `y_black`, `y_refl`) and DKL matrix
+still apply on GPU — the caller is responsible for the sRGB EOTF
+only.
+
 ## Cached-reference usage
 
 Two ways to amortise the reference-side cost across many distorted

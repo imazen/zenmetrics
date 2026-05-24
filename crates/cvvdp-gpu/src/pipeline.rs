@@ -86,27 +86,31 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
+use crate::kernels::color::{srgb_to_dkl_kernel, SRGB8_TO_LINEAR_LUT};
 use crate::kernels::csf::{
-    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights,
-    precompute_logs_row, precomputed_band_weights, weight_band_kernel,
+    csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights, precompute_logs_row,
+    precomputed_band_weights, weight_band_kernel, CsfChannel,
+};
+use crate::kernels::diffmap::{
+    diffmap_band_accumulate_kernel, diffmap_channel_pool_kernel, diffmap_zero_kernel,
+    linear_rgb_planes_to_dkl_kernel,
 };
 use crate::kernels::masking::{
-    CH_GAIN, MASK_C, PU_PADSIZE, diff_abs_3ch_kernel, min_abs_3ch_kernel,
-    mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel,
-    pu_blur_v_3ch_scaled_kernel,
+    diff_abs_3ch_kernel, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
+    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_v_3ch_scaled_kernel,
+    CH_GAIN, MASK_C, PU_PADSIZE,
 };
 use crate::kernels::pool::{
-    BETA_SPATIAL, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_finalize, POOL_LDS_BLOCK_DIM,
+    do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean, pool_band_3ch_kernel,
+    pool_band_3ch_lds_kernel, pool_band_finalize, BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W,
+    POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
-    DOWNSCALE_TILED_BLOCK_DIM,
-    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel,
+    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel, DOWNSCALE_TILED_BLOCK_DIM,
 };
 use crate::params::CvvdpParams;
-use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
+use crate::{Error, Result, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM};
 
 /// Return shape of [`Cvvdp::compute_dkl_weber_pyramid`].
 ///
@@ -196,6 +200,39 @@ struct WeberScratch {
     /// `fine` + `upscaled_c` directly.
     vscratch_c: [cubecl::server::Handle; N_CHANNELS],
     upscaled_c: [cubecl::server::Handle; N_CHANNELS],
+}
+
+/// GPU scratch for the per-pixel diffmap pipeline. Allocated lazily on
+/// the first `score_with_diffmap` / `score_from_linear_planes_with_diffmap`
+/// call — callers that never request a diffmap pay zero memory.
+///
+/// `acc[c]` are base-resolution `W × H` accumulator planes (one per
+/// DKL channel) that the per-band upsample step writes into;
+/// `out` is the per-pixel diffmap result the channel-pool step
+/// fills before host readback.
+///
+/// Memory cost: `4 * W * H * 4 bytes = 16 * W * H bytes`
+/// (~50 MB at 12 MP). Allocated once and reused across calls; the
+/// pool / channel-pool dispatch zeros + overwrites it per call.
+struct DiffmapScratch {
+    acc: [cubecl::server::Handle; N_CHANNELS],
+    out: cubecl::server::Handle,
+}
+
+/// Three planar f32 buffers (R, G, B) reused across
+/// `score_from_linear_planes*` calls to avoid per-iter
+/// `client.create_from_slice` allocations. Layout matches what
+/// `linear_rgb_planes_to_dkl_kernel` expects: tightly-packed
+/// row-major `W × H` linear-light unit-scaled sRGB primaries.
+///
+/// Allocated lazily on the first `from_linear_planes` call so
+/// callers that only use sRGB-byte inputs don't pay the 12 MB
+/// (per side) at 1 MP / 144 MB at 12 MP cost.
+struct LinearPlanesUpload {
+    /// `W × H` linear-RGB upload buffers. Reused across REF and DIST
+    /// dispatches — each call uploads fresh bytes before the kernel
+    /// launch, so a single triple is enough.
+    planes: [cubecl::server::Handle; N_CHANNELS],
 }
 
 fn build_weber_scratch<R: Runtime>(
@@ -454,6 +491,19 @@ pub struct Cvvdp<R: Runtime> {
     /// since those overwrite bands_ref and weber_scratch.log_l_bkg
     /// with the new REF's data.
     warm_ref_baseband_log_l_bkg: Option<f32>,
+
+    /// Diffmap pipeline scratch (3 base-res accumulator planes + 1
+    /// output plane). Lazy-allocated on the first
+    /// `score_with_diffmap` / `score_from_linear_planes_with_diffmap`
+    /// call; `None` until then. Callers that only request the JOD
+    /// scalar pay zero memory for diffmap support.
+    diffmap_scratch: Option<DiffmapScratch>,
+
+    /// Linear-RGB-planes upload scratch (3 planes × `W * H * 4 bytes`
+    /// each). Lazy-allocated on the first `from_linear_planes`-family
+    /// call; `None` until then. Skipped entirely on the sRGB-byte
+    /// upload path.
+    linear_planes_upload: Option<LinearPlanesUpload>,
 }
 
 fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
@@ -782,23 +832,25 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
+        use crate::memory_mode::{resolve_auto, vram_cap_bytes, ResolvedMode};
         use crate::MemoryMode;
-        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
             MemoryMode::Full => Self::new(client, width, height, params),
-            MemoryMode::Strip { capped_levels: Some(cap), .. } => {
-                Self::new_with_geometry_and_cap(
-                    client,
-                    width,
-                    height,
-                    params,
-                    crate::params::DisplayGeometry::STANDARD_4K,
-                    Some(cap),
-                )
-            }
-            MemoryMode::Strip { capped_levels: None, .. } => {
-                Err(crate::Error::ModeUnsupported("Strip"))
-            }
+            MemoryMode::Strip {
+                capped_levels: Some(cap),
+                ..
+            } => Self::new_with_geometry_and_cap(
+                client,
+                width,
+                height,
+                params,
+                crate::params::DisplayGeometry::STANDARD_4K,
+                Some(cap),
+            ),
+            MemoryMode::Strip {
+                capped_levels: None,
+                ..
+            } => Err(crate::Error::ModeUnsupported("Strip")),
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
@@ -813,6 +865,17 @@ impl<R: Runtime> Cvvdp<R> {
     /// to [`Self::new`] / [`Self::new_with_geometry`].
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    /// Internal accessor used by [`crate::opaque::CvvdpOpaque`] to
+    /// fetch the construction-time PPD without reaching into the
+    /// private `geometry` field. Same value returned by
+    /// `self.geometry.pixels_per_degree()`; provided as a stable
+    /// in-crate API surface so [`crate::opaque`] never imports
+    /// `crate::params::DisplayGeometry` paths.
+    #[doc(hidden)]
+    pub fn geometry_ppd_for_warm_ref(&self) -> f32 {
+        self.geometry.pixels_per_degree()
     }
 
     /// Allocate GPU buffers + record a custom viewing geometry. The
@@ -1025,6 +1088,8 @@ impl<R: Runtime> Cvvdp<R> {
             logs_row,
             cached: None,
             warm_ref_baseband_log_l_bkg: None,
+            diffmap_scratch: None,
+            linear_planes_upload: None,
         })
     }
 
@@ -1184,9 +1249,7 @@ impl<R: Runtime> Cvvdp<R> {
         // (`srgb_to_dkl_kernel`) sees the same `[u32]` packing.
         let pinned_len = n0 * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -1249,6 +1312,202 @@ impl<R: Runtime> Cvvdp<R> {
     fn _install_src_ref_and_dispatch_dkl(&mut self, handle: &cubecl::server::Handle) {
         self.src_ref = handle.clone();
         self._launch_srgb_to_dkl_from_src_ref();
+    }
+
+    /// Validate three planar `W × H` linear-RGB f32 buffers and return
+    /// the per-plane length. Used at the boundary of every
+    /// `from_linear_planes*` method to give the caller a precise
+    /// dimension-mismatch error if any plane is the wrong size.
+    fn _validate_linear_planes(&self, r: &[f32], g: &[f32], b: &[f32]) -> Result<usize> {
+        let expected = (self.width as usize) * (self.height as usize);
+        for (label, plane) in [("r", r), ("g", g), ("b", b)] {
+            if plane.len() != expected {
+                let _ = label; // surfaced via DimensionMismatch
+                return Err(Error::DimensionMismatch {
+                    expected,
+                    got: plane.len(),
+                });
+            }
+        }
+        Ok(expected)
+    }
+
+    /// Upload three planar `W × H` linear-RGB f32 buffers (unit-
+    /// scaled sRGB primaries) into the lazy `linear_planes_upload`
+    /// scratch and dispatch [`linear_rgb_planes_to_dkl_kernel`] into
+    /// `self.gauss_ref[0].planes[c]` — the same output slot
+    /// [`Self::_dispatch_dkl_planes_gpu`] writes to.
+    ///
+    /// Skips the sRGB→linear LUT lookup that the sRGB-byte path runs
+    /// in `srgb_to_dkl_kernel`. Callers using this path MUST pre-
+    /// linearise their RGB; the kernel reads each plane as
+    /// already-linear-light. The display-model step (`y_peak`,
+    /// `y_black`, `y_refl`) and the DKL matrix multiply still run on
+    /// GPU.
+    fn _dispatch_dkl_planes_gpu_from_linear_planes(
+        &mut self,
+        r: &[f32],
+        g: &[f32],
+        b: &[f32],
+    ) -> Result<()> {
+        let n0 = self._validate_linear_planes(r, g, b)?;
+        self._ensure_linear_planes_upload();
+
+        // Upload R/G/B into the scratch buffers via the cubecl-
+        // standard pinned-staging path. Reusing the existing handles
+        // means each iteration overwrites the buffer rather than
+        // allocating a fresh GPU buffer per call.
+        let upload = self.linear_planes_upload.as_ref().expect("ensured above");
+        let r_handle = upload.planes[0].clone();
+        let g_handle = upload.planes[1].clone();
+        let b_handle = upload.planes[2].clone();
+        // create_from_slice replaces the prior contents of the slot.
+        // (Same pattern as the sRGB path's `self.src_ref = self.client.create(bytes)`
+        // line — cubecl handles dedicate-by-replace correctly for
+        // long-lived slot bindings.)
+        let new_r = self.client.create_from_slice(f32::as_bytes(r));
+        let new_g = self.client.create_from_slice(f32::as_bytes(g));
+        let new_b = self.client.create_from_slice(f32::as_bytes(b));
+        // Update the scratch-slot bindings so subsequent calls see the
+        // last-installed buffer. We can't just `.clone()` because
+        // create_from_slice returns a brand-new handle.
+        if let Some(upload_mut) = self.linear_planes_upload.as_mut() {
+            upload_mut.planes[0] = new_r.clone();
+            upload_mut.planes[1] = new_g.clone();
+            upload_mut.planes[2] = new_b.clone();
+        }
+        let _ = (r_handle, g_handle, b_handle); // older handles drop here
+
+        let a_handle = self.gauss_ref[0].planes[0].clone();
+        let rg_handle = self.gauss_ref[0].planes[1].clone();
+        let vy_handle = self.gauss_ref[0].planes[2].clone();
+
+        let cube_dim = CubeDim::new_1d(64);
+        let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
+        let display = self.params.display;
+        unsafe {
+            linear_rgb_planes_to_dkl_kernel::launch::<R>(
+                &self.client,
+                cube_count,
+                cube_dim,
+                ArrayArg::from_raw_parts(new_r, n0),
+                ArrayArg::from_raw_parts(new_g, n0),
+                ArrayArg::from_raw_parts(new_b, n0),
+                ArrayArg::from_raw_parts(a_handle, n0),
+                ArrayArg::from_raw_parts(rg_handle, n0),
+                ArrayArg::from_raw_parts(vy_handle, n0),
+                self.width,
+                self.height,
+                display.y_peak,
+                display.y_black,
+                display.y_refl,
+            );
+        }
+        Ok(())
+    }
+
+    /// Gaussian-pyramid build starting from linear-RGB planar input
+    /// (instead of packed sRGB bytes). Mirrors
+    /// [`Self::_dispatch_gauss_pyramid_gpu`].
+    fn _dispatch_gauss_pyramid_gpu_from_linear_planes(
+        &mut self,
+        r: &[f32],
+        g: &[f32],
+        b: &[f32],
+    ) -> Result<()> {
+        self._dispatch_dkl_planes_gpu_from_linear_planes(r, g, b)?;
+        self._reduce_gauss_pyramid_from_level0();
+        Ok(())
+    }
+
+    /// Weber-pyramid build from linear-RGB planar input. Mirrors
+    /// [`Self::_dispatch_weber_pyramid_gpu`].
+    fn _dispatch_weber_pyramid_gpu_from_linear_planes(
+        &mut self,
+        r: &[f32],
+        g: &[f32],
+        b: &[f32],
+        log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
+    ) -> Result<f32> {
+        self._dispatch_gauss_pyramid_gpu_from_linear_planes(r, g, b)?;
+        self._finalize_weber_pyramid_after_gauss(log_l_bkg_dest, dest_is_dis)
+    }
+
+    /// REF weber pyramid only, from linear-RGB planar input. Mirrors
+    /// [`Self::_dispatch_ref_weber_pyramid_only`].
+    fn _dispatch_ref_weber_pyramid_only_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<f32> {
+        self.warm_ref_baseband_log_l_bkg = None;
+        let dests = std::mem::take(&mut self.log_l_bkg_ref_dests);
+        let result =
+            self._dispatch_weber_pyramid_gpu_from_linear_planes(ref_r, ref_g, ref_b, &dests, false);
+        self.log_l_bkg_ref_dests = dests;
+        result
+    }
+
+    /// DIST weber pyramid only, from linear-RGB planar input. Mirrors
+    /// [`Self::_dispatch_dist_weber_pyramid_only`].
+    fn _dispatch_dist_weber_pyramid_only_from_linear_planes(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<()> {
+        let dests = std::mem::take(&mut self.log_l_bkg_dis_dests);
+        let result = self
+            ._dispatch_weber_pyramid_gpu_from_linear_planes(dist_r, dist_g, dist_b, &dests, true);
+        self.log_l_bkg_dis_dests = dests;
+        result.map(|_| ())
+    }
+
+    /// Full D-bands dispatch from linear-RGB planar inputs. Mirrors
+    /// [`Self::_dispatch_d_bands_into_scratch`] but uses the planar
+    /// f32 entry points throughout.
+    fn _dispatch_d_bands_into_scratch_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<()> {
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+        let t_weber_ref = std::time::Instant::now();
+        let log_l_bkg_baseband =
+            self._dispatch_ref_weber_pyramid_only_from_linear_planes(ref_r, ref_g, ref_b)?;
+        if trace {
+            eprintln!("[trace] weber(ref):  {:?}", t_weber_ref.elapsed());
+        }
+        self._dispatch_d_bands_dist_and_band_loop_from_linear_planes(
+            dist_r,
+            dist_g,
+            dist_b,
+            log_l_bkg_baseband,
+        )
+    }
+
+    /// DIST weber + band loop, from linear-RGB planar input. Mirrors
+    /// [`Self::_dispatch_d_bands_dist_and_band_loop`].
+    fn _dispatch_d_bands_dist_and_band_loop_from_linear_planes(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        log_l_bkg_baseband: f32,
+    ) -> Result<()> {
+        let trace = std::env::var_os("CVVDP_TRACE").is_some();
+        let t_weber_dis = std::time::Instant::now();
+        self._dispatch_dist_weber_pyramid_only_from_linear_planes(dist_r, dist_g, dist_b)?;
+        if trace {
+            eprintln!("[trace] weber(dist): {:?}", t_weber_dis.elapsed());
+        }
+        self._run_d_bands_band_loop(log_l_bkg_baseband)
     }
 
     /// Run color stage + Gaussian-pyramid reduce loop. Returns the
@@ -1370,10 +1629,7 @@ impl<R: Runtime> Cvvdp<R> {
     /// Equivalent to [`Self::_dispatch_gauss_pyramid_gpu`] but starts
     /// from a caller-supplied packed-u32 device handle (one `u32`
     /// per pixel, `R | G<<8 | B<<16`, length `width × height`).
-    fn _dispatch_gauss_pyramid_gpu_from_handle(
-        &mut self,
-        packed_u32: &cubecl::server::Handle,
-    ) {
+    fn _dispatch_gauss_pyramid_gpu_from_handle(&mut self, packed_u32: &cubecl::server::Handle) {
         self._install_src_ref_and_dispatch_dkl(packed_u32);
         self._reduce_gauss_pyramid_from_level0();
     }
@@ -2993,10 +3249,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -3007,9 +3260,7 @@ impl<R: Runtime> Cvvdp<R> {
         let n0 = (self.width as usize) * (self.height as usize);
         let pinned_len = n0 * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -3488,8 +3739,7 @@ impl<R: Runtime> Cvvdp<R> {
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
             if n_px >= POOL_LDS_MIN_PIXELS {
-                let count =
-                    CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
+                let count = CubeCount::Static((n_px as u32).div_ceil(POOL_LDS_BLOCK_DIM), 1, 1);
                 unsafe {
                     pool_band_3ch_lds_kernel::launch::<R>(
                         &self.client,
@@ -3544,6 +3794,161 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+    }
+
+    /// Lazy-allocate the diffmap GPU scratch (one-time alloc, reused
+    /// across calls). See [`DiffmapScratch`] for the buffer layout +
+    /// memory cost.
+    fn _ensure_diffmap_scratch(&mut self) {
+        if self.diffmap_scratch.is_some() {
+            return;
+        }
+        let n0 = (self.width as usize) * (self.height as usize);
+        let acc = [
+            alloc_zeros_f32(&self.client, n0),
+            alloc_zeros_f32(&self.client, n0),
+            alloc_zeros_f32(&self.client, n0),
+        ];
+        let out = alloc_zeros_f32(&self.client, n0);
+        self.diffmap_scratch = Some(DiffmapScratch { acc, out });
+    }
+
+    /// Lazy-allocate the linear-RGB upload scratch (one-time alloc,
+    /// reused across calls). See [`LinearPlanesUpload`] for the
+    /// buffer layout + memory cost.
+    fn _ensure_linear_planes_upload(&mut self) {
+        if self.linear_planes_upload.is_some() {
+            return;
+        }
+        let n0 = (self.width as usize) * (self.height as usize);
+        let planes = [
+            alloc_zeros_f32(&self.client, n0),
+            alloc_zeros_f32(&self.client, n0),
+            alloc_zeros_f32(&self.client, n0),
+        ];
+        self.linear_planes_upload = Some(LinearPlanesUpload { planes });
+    }
+
+    /// Drop the per-band masked-difference planes (`d_scratch[k].d[c]`)
+    /// through the diffmap accumulator, then run the channel pool and
+    /// read back the W·H f32 plane into `diffmap_out`.
+    ///
+    /// Pre-condition: `d_scratch[k].d[c]` is GPU-resident for every
+    /// `(k, c)` (set up by `_dispatch_d_bands_into_scratch` /
+    /// `_dispatch_d_bands_dist_and_band_loop`).
+    ///
+    /// Post-condition: `diffmap_out` has length `width * height` and
+    /// contains the diffmap per the recipe in
+    /// [`crate::kernels::diffmap`]'s module docs.
+    ///
+    /// `diffmap_out`'s capacity is grown as needed; existing content
+    /// is overwritten via `clear` + extend so callers can reuse a
+    /// long-lived `Vec`.
+    fn _compute_diffmap_into(&mut self, diffmap_out: &mut Vec<f32>) -> Result<()> {
+        self._ensure_diffmap_scratch();
+        let n_levels = self.n_levels as usize;
+        let n0 = (self.width as usize) * (self.height as usize);
+
+        // Take ownership of the scratch handles briefly so we can pass
+        // them by Clone without conflicting with `&mut self`. The
+        // borrow on `diffmap_scratch` is dropped before the kernel
+        // launches (which take only `&self.client` immutably).
+        let scratch = self.diffmap_scratch.as_ref().expect("ensured above");
+        let acc_a = scratch.acc[0].clone();
+        let acc_rg = scratch.acc[1].clone();
+        let acc_vy = scratch.acc[2].clone();
+        let out = scratch.out.clone();
+
+        let cube_dim = CubeDim::new_1d(64);
+        let count_base = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
+
+        // Step 1: zero the 3 accumulator planes.
+        for handle in [acc_a.clone(), acc_rg.clone(), acc_vy.clone()] {
+            unsafe {
+                diffmap_zero_kernel::launch::<R>(
+                    &self.client,
+                    count_base.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(handle, n0),
+                    n0 as u32,
+                );
+            }
+        }
+
+        // Step 2: for each band, upsample D[k][c] to base res via
+        // bilinear sampling and add `per_sband_w * PER_CH_W` weighted
+        // sample into the matching accumulator plane.
+        let dst_w = self.width;
+        let dst_h = self.height;
+        for k in 0..n_levels {
+            let bw = self.gauss_ref[k].w;
+            let bh = self.gauss_ref[k].h;
+            let n_k = (bw as usize) * (bh as usize);
+            let is_baseband = k == n_levels - 1;
+            let w_a = PER_CH_W[0] * if is_baseband { BASEBAND_W[0] } else { 1.0 };
+            let w_rg = PER_CH_W[1] * if is_baseband { BASEBAND_W[1] } else { 1.0 };
+            let w_vy = PER_CH_W[2] * if is_baseband { BASEBAND_W[2] } else { 1.0 };
+            let d_a = self.d_scratch[k].d[0].clone();
+            let d_rg = self.d_scratch[k].d[1].clone();
+            let d_vy = self.d_scratch[k].d[2].clone();
+            unsafe {
+                diffmap_band_accumulate_kernel::launch::<R>(
+                    &self.client,
+                    count_base.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(d_a, n_k),
+                    ArrayArg::from_raw_parts(d_rg, n_k),
+                    ArrayArg::from_raw_parts(d_vy, n_k),
+                    ArrayArg::from_raw_parts(acc_a.clone(), n0),
+                    ArrayArg::from_raw_parts(acc_rg.clone(), n0),
+                    ArrayArg::from_raw_parts(acc_vy.clone(), n0),
+                    bw,
+                    bh,
+                    dst_w,
+                    dst_h,
+                    w_a,
+                    w_rg,
+                    w_vy,
+                );
+            }
+        }
+
+        // Step 3: per-pixel Minkowski-p pool across the 3 DKL channels.
+        unsafe {
+            diffmap_channel_pool_kernel::launch::<R>(
+                &self.client,
+                count_base.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(acc_a, n0),
+                ArrayArg::from_raw_parts(acc_rg, n0),
+                ArrayArg::from_raw_parts(acc_vy, n0),
+                ArrayArg::from_raw_parts(out.clone(), n0),
+                BETA_CH,
+                n0 as u32,
+            );
+        }
+
+        // Step 4: read back the per-pixel diffmap into the caller's Vec.
+        let bytes = self
+            .client
+            .read_one(out)
+            .map_err(|_| Error::InvalidImageSize)?;
+        let data: &[f32] = f32::from_bytes(&bytes);
+        debug_assert_eq!(data.len(), n0);
+        diffmap_out.clear();
+        diffmap_out.extend_from_slice(data);
+        Ok(())
+    }
+
+    /// Pool + finalize the JOD scalar AND fill the per-pixel diffmap
+    /// buffer. The scalar fold and the diffmap fold both consume the
+    /// per-band masked-difference planes resident in
+    /// `self.d_scratch[k].d[c]` — running both folds in one helper
+    /// avoids re-dispatching the upstream band loop.
+    fn _pool_and_finalize_jod_with_diffmap(&mut self, diffmap_out: &mut Vec<f32>) -> Result<f32> {
+        let jod = self._pool_and_finalize_jod()?;
+        self._compute_diffmap_into(diffmap_out)?;
+        Ok(jod)
     }
 
     /// Run color + Laplacian-pyramid + per-band CSF weighting.
@@ -3914,5 +4319,225 @@ impl<R: Runtime> Cvvdp<R> {
         let ppd = self.geometry.pixels_per_degree();
         let jod = self.compute_dkl_jod(&ref_srgb, distorted_srgb, ppd)?;
         Ok(f64::from(jod))
+    }
+
+    // ===================================================================
+    // Diffmap + linear-planes API (see kernels::diffmap module docs for
+    // the recipe contract; see docs/DIFFMAP_DIVERGENCES.md for the note
+    // on the relationship between the per-pixel diffmap and the scalar
+    // JOD).
+    // ===================================================================
+
+    /// One-shot score from sRGB-byte inputs that ALSO fills a
+    /// per-pixel diffmap.
+    ///
+    /// Same JOD scalar as [`Self::score`] (and same numerical
+    /// pipeline; the diffmap fold runs alongside the scalar fold,
+    /// it doesn't replace it). `diffmap_out` is overwritten via
+    /// `clear` + extend so callers can reuse a long-lived `Vec`.
+    /// On return, `diffmap_out.len() == width * height` and the
+    /// values are non-negative f32 row-major.
+    ///
+    /// Returns the JOD on cvvdp's 0–10 scale (10 = identical pair).
+    ///
+    /// See [`crate::kernels::diffmap`] module docs for the recipe
+    /// the diffmap follows, and `docs/DIFFMAP_DIVERGENCES.md` for
+    /// the note on its relationship to the scalar JOD.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if either input buffer's
+    ///   length doesn't match `width × height × 3`.
+    /// - [`Error::InvalidImageSize`] on GPU dispatch / readback
+    ///   failure anywhere in the pipeline.
+    pub fn score_with_diffmap(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if ref_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_srgb.len(),
+            });
+        }
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+        self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
+        self._pool_and_finalize_jod_with_diffmap(diffmap_out)
+    }
+
+    /// Warm-ref variant of [`Self::score_with_diffmap`]. Requires a
+    /// prior [`Self::warm_reference`] (or
+    /// [`Self::warm_reference_from_linear_planes`]) call; skips the
+    /// REF half of the pipeline per the same warm-state contract as
+    /// [`Self::compute_dkl_jod_with_warm_ref`].
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if `dist_srgb.len() != width × height × 3`.
+    /// - [`Error::NoWarmReference`] if no warm REF state is cached.
+    /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
+    pub fn score_with_warm_ref_diffmap(
+        &mut self,
+        dist_srgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
+        self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
+        self._pool_and_finalize_jod_with_diffmap(diffmap_out)
+    }
+
+    /// One-shot score from three planar `W × H` linear-RGB f32
+    /// buffers (one per primary, unit-scaled sRGB linear-light).
+    /// Skips the host-side sRGB-byte upload pack + sRGB→linear LUT
+    /// kernel — direct path from caller-owned linear-light buffers
+    /// to the DKL pipeline. Mirrors butteraugli-gpu's
+    /// `compute_with_reference_from_linear_planes`
+    /// (W44-PHASE3-B4 in the jxl-encoder repo).
+    ///
+    /// Display model (`y_peak`, `y_black`, `y_refl`) and the DKL
+    /// matrix still apply on GPU; the caller is responsible for
+    /// linearising sRGB only.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane length differs
+    ///   from `width × height`.
+    /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
+    pub fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        self._dispatch_d_bands_into_scratch_from_linear_planes(
+            ref_r, ref_g, ref_b, dist_r, dist_g, dist_b,
+        )?;
+        self._pool_and_finalize_jod()
+    }
+
+    /// As [`Self::score_from_linear_planes`], plus per-pixel diffmap.
+    #[allow(clippy::too_many_arguments)] // 6 planar f32 slices + W*H out — natural shape for "ref + dist" linear-RGB.
+    pub fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self._dispatch_d_bands_into_scratch_from_linear_planes(
+            ref_r, ref_g, ref_b, dist_r, dist_g, dist_b,
+        )?;
+        self._pool_and_finalize_jod_with_diffmap(diffmap_out)
+    }
+
+    /// Warm the REF side using three planar linear-RGB f32 buffers.
+    /// Mirrors [`Self::warm_reference`] but uses the
+    /// linear-planes upload path. Subsequent calls to
+    /// [`Self::score_from_linear_planes_with_warm_ref`] /
+    /// [`Self::score_from_linear_planes_with_warm_ref_diffmap`]
+    /// reuse the cached REF state.
+    ///
+    /// Warm-state invalidation rules are identical to
+    /// [`Self::warm_reference`] — any subsequent REF-dispatching
+    /// method overwrites `bands_ref`.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane length differs
+    ///   from `width × height`.
+    /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
+    pub fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        // _validate runs once host-side; the dispatch helper also
+        // validates but we surface the boundary error first per the
+        // same ordering as warm_reference / set_reference.
+        let _ = self._validate_linear_planes(ref_r, ref_g, ref_b)?;
+        let log_l_bkg_baseband =
+            self._dispatch_ref_weber_pyramid_only_from_linear_planes(ref_r, ref_g, ref_b)?;
+        self.warm_ref_baseband_log_l_bkg = Some(log_l_bkg_baseband);
+        Ok(())
+    }
+
+    /// Score a DIST candidate (planar linear-RGB f32) against the
+    /// warm-cached REF state. Returns the JOD scalar only.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane length differs
+    ///   from `width × height` (checked first, ahead of the warm
+    ///   state, per the tick-248 precedence audit).
+    /// - [`Error::NoWarmReference`] if the warm state is missing or
+    ///   was invalidated by an intervening REF dispatch.
+    /// - [`Error::InvalidImageSize`] on GPU dispatch failure.
+    pub fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        let _ = self._validate_linear_planes(dist_r, dist_g, dist_b)?;
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
+        self._dispatch_d_bands_dist_and_band_loop_from_linear_planes(
+            dist_r,
+            dist_g,
+            dist_b,
+            log_l_bkg_baseband,
+        )?;
+        self._pool_and_finalize_jod()
+    }
+
+    /// Score a DIST candidate (planar linear-RGB f32) against the
+    /// warm-cached REF state and fill a per-pixel diffmap.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::score_from_linear_planes_with_warm_ref`].
+    pub fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let _ = self._validate_linear_planes(dist_r, dist_g, dist_b)?;
+        let log_l_bkg_baseband = self
+            .warm_ref_baseband_log_l_bkg
+            .ok_or(Error::NoWarmReference)?;
+        self._dispatch_d_bands_dist_and_band_loop_from_linear_planes(
+            dist_r,
+            dist_g,
+            dist_b,
+            log_l_bkg_baseband,
+        )?;
+        self._pool_and_finalize_jod_with_diffmap(diffmap_out)
     }
 }

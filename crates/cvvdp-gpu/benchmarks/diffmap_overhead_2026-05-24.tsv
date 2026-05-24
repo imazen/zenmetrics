@@ -1,0 +1,9 @@
+# diffmap_overhead: backend = "cubecl_cuda::runtime::CudaRuntime"
+# iters per cell: 10
+# host: RTX 5070
+# parent commit: master (cc43d66b) + diffmap chunk on top
+# command: cargo run --release -p cvvdp-gpu --features cubecl-types --example diffmap_overhead -- --iters 10 --sizes 256,512,1024
+size	scoring_median_us	scoring_p95_us	diffmap_median_us	diffmap_p95_us	overhead_pct
+256	5359.78	5901.45	5869.54	6099.30	+9.51
+512	2943.83	3379.09	3877.35	4575.15	+31.71
+1024	4332.67	52546.12	5376.13	5502.86	+24.08
