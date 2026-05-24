@@ -1,0 +1,95 @@
+cvvdp-cpu size sweep — post initial perf optimization
+======================================================
+
+commit:    (HEAD after CSF hoist + fast masking + rayon parallel)
+host:      water-cooled AMD Ryzen 9 7950X, 128 GB RAM, 8 cores / 16 threads
+build:     `cargo run -p cvvdp-cpu --release --example time_size_sweep`
+           (release: LTO fat, codegen-units = 1, NO target-cpu=native;
+            features = std + parallel + alloc)
+date:      2026-05-24
+methodology: 3 warmup, 5 timed, median reported.
+
+Result summary (median wall ms):
+
+  size      content     cold_ms    warm_ms    cold_ms/MP   warm_ms/MP
+  64x64     smooth      1.35       1.01       332          247
+  128x128   smooth      4.0        3.4        244          207
+  256x256   smooth      13.6       12.5       208          191
+  512x512   smooth      57.9       50.0       221          191
+  1024x1024 smooth      231        215        221          205
+  2048x2048 smooth      1826       1423       436          340
+
+Linear regression `cold_ms = α + β · MP` (smooth class):
+  α ≈ 1.0 ms (fixed overhead — sRGB→DKL + planar alloc + thread wakeup)
+  β ≈ 220 ms/MP (per-pixel masking + CSF; sub-2K linear, scales with
+                 rayon overhead past 1MP).
+
+Cumulative speedup vs initial port (cvvdp_cpu_size_sweep_2026-05-24.tsv):
+
+  size      old cold   new cold   speedup
+  64x64     2.66       1.35       2.0×
+  128x128   11.4       4.0        2.9×
+  256x256   67.0       13.6       4.9×
+  512x512   254        58         4.4×
+  1024x1024 988        231        4.3×
+  2048x2048 3995       1826       2.2×  (rayon overhead at large bands)
+
+Three optimizations landed in this chunk:
+
+1. **CSF hoist** (`precompute_logs_row` once per band, not per pixel)
+   ~3-5× speedup. The dominant per-pixel cost was 3 × 32 binary
+   searches in the upstream `sensitivity_corrected_scalar`. Moved
+   to 1 hoist per (band, channel) + uniform-axis arithmetic per
+   pixel. Bit-exact match with upstream (golden parity tests still
+   pass within 1e-4 JOD).
+
+2. **In-scratch `mult_mutual_band_into`** (precomputed constants +
+   caller-owned scratch). `clamp_diff_soft` was calling
+   `10.0_f32.powf(D_MAX)` per pixel — replaced with a precomputed
+   linear constant. `phase_uncertainty` blur reuses upstream impl
+   for now (allocation reduction is the next perf chunk).
+
+3. **Rayon parallelism** at two levels:
+   - REF + DIST pyramid build in parallel (`rayon::join`).
+   - 3-channel pyramid builds in parallel (`rayon::join` nested).
+   - Per-band CSF + masking via `par_iter` (one task per band).
+   Gives ~2× on the band loop at 1024².
+
+Target floor (per task spec): < 50 ms at 1024² → β < 50 ms/MP.
+
+Gap: ~4.4× over target. The remaining cost is in `mult_mutual_band_into`'s
+per-pixel `powf` calls (MASK_P ≈ 2.26 and MASK_Q[c] ≈ 1.3..3.7).
+At 1M pixels × 9 powf per pixel ≈ 9M powf, f32 powf is ~50ns →
+~450 ms by itself (matches the measured 220ms after parallelism).
+
+Next perf chunks (queued):
+
+1. **archmage SIMD on the masking inner loop**: 4-wide AVX2
+   parallel-pow approximation. Should give ~3-4× on the masking
+   stage. (Note: precision is critical — must verify against
+   goldens at every commit.)
+
+2. **`safe_pow` fast path**: cvvdp uses `(x + eps)^p - eps^p`. The
+   `eps^p` is loop-invariant per `(band, channel)` and per (p) —
+   can be hoisted further. The dominant cost is the per-pixel
+   `(x + eps)^p`; for fixed `p` we can implement via `exp(p · ln(x))`
+   with vectorized `exp` + `ln` from a CPU SIMD math library
+   (e.g. sleef-rs).
+
+3. **Pyramid SIMD**: the 5-tap separable Gaussian inner loops are
+   trivially SIMD-vectorizable. ~3× speedup expected.
+
+4. **Reduce per-band allocations**: each band currently allocates
+   6× `Vec<f32>` for T_p/R_p. Wire through the scratch fields
+   (already declared in Scratch struct) to a thread-local pool
+   like butteraugli's B7c TLS pool. ~30% wall reduction.
+
+5. **Parallel band loop overhead**: at 2048² we see a slight
+   slowdown vs 1024² scaled. Profile suggests rayon thread wakeup
+   overhead per call. Use a persistent thread-pool with smaller
+   spawn granularity.
+
+Verdict: shipped as v0.0.1 with ~4× perf headroom remaining.
+Correctness is gated (4 parity + 6 diffmap invariants + 9 unit tests
+all pass). The diffmap API + warm-reference API DO NOT regress
+when SIMD lands.

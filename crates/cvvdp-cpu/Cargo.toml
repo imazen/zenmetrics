@@ -19,8 +19,8 @@ std = []
 # Allocator-only build. `alloc` is implied — kept as a feature to
 # make intent explicit. no_std + alloc is the minimum target.
 alloc = []
-# Rayon-backed per-band parallelism. Off by default in no_std builds.
-parallel = ["dep:rayon"]
+# Rayon-backed per-band parallelism. Implies std (rayon requires std).
+parallel = ["std", "dep:rayon"]
 # `zenpixels` integration smoke (scoring direct from `PixelLayout`).
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 
@@ -29,8 +29,8 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # directly so a future LUT bump only needs one update site.
 cvvdp-gpu = { workspace = true, default-features = false }
 rayon = { version = "1.10", optional = true }
-zenpixels = { version = "0.1", optional = true }
-zenpixels-convert = { version = "0.1", optional = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 # Corpus for parity tests (CID22 + screenshots).

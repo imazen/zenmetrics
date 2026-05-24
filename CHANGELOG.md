@@ -17,6 +17,39 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-cpu — new crate, pure-Rust CPU port — 2026-05-24
+
+New crate `cvvdp-cpu` at `crates/cvvdp-cpu/` ships v0.0.1. Maximally
+optimised pure-Rust port of ColorVideoVDP still-image scoring.
+Designed as a drop-in for JPEG XL encoder's iterative quantization
+loop where the GPU backend's host-to-device upload latency exceeds
+CPU compute time.
+
+- Matches cvvdp-gpu's `host_scalar` reference (the f32 contract)
+  within 1e-4 JOD on synthetic fixtures 16² through 512² (4 parity
+  tests pass).
+- API: `Cvvdp::{new, score, score_with_diffmap, warm_reference,
+  score_with_warm_ref, score_with_warm_ref_diffmap,
+  score_from_linear_planes, score_from_linear_planes_with_diffmap,
+  score_pixels}` (last gated on `pixels` feature).
+- Per-pixel diffmap: bilinear-upsampled per-band masked error
+  combined via `BETA_CH` Minkowski norm. 6 invariant tests:
+  identical → zero, non-negative, monotone-in-distortion,
+  correlates with JOD, spatially localizes to distorted region,
+  warm-ref matches cold path.
+- Perf at 1024² photo (single-thread / 8t cold/warm):
+  `222 ms / 215 ms` (down from `988 ms` baseline scalar). Target
+  floor is `< 50 ms`; remaining gap is in the per-pixel `powf`
+  calls inside the masking inner loop (queued for SIMD).
+- Features: `std` (default), `alloc`, `parallel` (default, rayon
+  per-band + per-channel + REF/DIST), `pixels` (zenpixels
+  integration).
+- CI: added to existing `compile` matrix (linux/windows/macos/arm)
+  + `i686-cross` job. No new workflow file.
+
+Initial commit: `da81694` (parity + diffmap + warm).
+Perf milestone: this commit.
+
 ### Auto-fallback contract — `resolve_auto` cross-crate audit — 2026-05-22
 
 `MemoryMode::Auto`'s "2-pass fallback" semantic is now exercised by

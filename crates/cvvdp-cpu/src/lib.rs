@@ -73,6 +73,7 @@ pub const N_CHANNELS: usize = 3;
 
 mod color;
 pub mod diffmap;
+mod masking;
 mod pipeline;
 mod pool;
 mod pyramid;
@@ -142,8 +143,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Owned per-channel sRGB-source-derived state used by warm-reference
 /// + diffmap output APIs.
 ///
-/// Public for callers that want to inspect the reference plane state
-/// (e.g. for off-line per-band probes).
+/// `w`, `h`, `planes`, and `display` are retained for future
+/// debug-inspection (`Cvvdp::warm_inspect`) — currently unused but
+/// pinned so the layout is stable.
+#[allow(dead_code)]
 pub(crate) struct ReferenceState {
     /// Image dimensions.
     pub w: usize,
@@ -154,6 +157,5 @@ pub(crate) struct ReferenceState {
     /// Per-channel weber pyramid bands.
     pub weber: [pyramid::WeberPyramid; 3],
     /// Pre-computed display-derived constants for re-entry.
-    #[allow(dead_code)]
     pub display: DisplayModel,
 }

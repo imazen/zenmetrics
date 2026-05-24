@@ -60,6 +60,11 @@ jobs:
           cargo build -p dssim-gpu       --no-default-features --features wgpu --release
           cargo build -p zensim-gpu      --no-default-features --features wgpu --release
           cargo build -p cvvdp-gpu       --no-default-features --features wgpu --release
+      - name: Build + test cvvdp-cpu (pure CPU, no GPU runtime required)
+        run: |
+          cargo build -p cvvdp-cpu --release
+          cargo build -p cvvdp-cpu --no-default-features --features "alloc parallel" --release
+          cargo test  -p cvvdp-cpu --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
         run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
 
@@ -100,6 +105,12 @@ jobs:
             -p cvvdp-gpu \
             -p zenmetrics-corpus \
             --no-default-features --features wgpu --release
+      - name: Cross-compile cvvdp-cpu (no GPU deps — pure CPU port)
+        run: |
+          cross build --target i686-unknown-linux-gnu \
+            -p cvvdp-cpu --release
+          cross test  --target i686-unknown-linux-gnu \
+            -p cvvdp-cpu --release
 
   # Runtime parity tests on macOS via Metal (the only CI-available GPU
   # runtime). Disable `fast-reduction` everywhere — Metal silently

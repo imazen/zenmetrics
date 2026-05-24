@@ -1,0 +1,64 @@
+cvvdp-cpu size sweep — initial port (no SIMD yet)
+==================================================
+
+commit:    da816947835c (initial port, scalar path)
+host:      water-cooled AMD Ryzen 9 7950X, 128 GB RAM
+build:     `cargo run -p cvvdp-cpu --release --example time_size_sweep`
+           (release profile = LTO fat, codegen-units = 1, no target-cpu=native)
+date:      2026-05-24
+methodology:
+  - 3 warmup calls per cell
+  - 5 timed calls, report median
+  - cold = Cvvdp::score (REF + DIST per call)
+  - warm = warm_reference once then score_with_warm_ref (REF
+    pyramid is cached; only DIST half of pipeline runs)
+
+Result summary:
+
+  size      content     cold_ms    warm_ms    ms_per_MP
+  64x64     smooth      2.66       2.46       ~620
+  128x128   smooth      11.4       14.1       ~696
+  256x256   smooth      67.0       62.5       ~1022
+  512x512   smooth      254        176        ~970
+  1024x1024 smooth      988        737        ~942
+  2048x2048 smooth      3995       2983       ~952
+
+Linear regression `cold_ms = α + β·MP`:
+  α ≈ 2-3 ms (per-call fixed overhead — sRGB→DKL color stage)
+  β ≈ 950-1000 ms/MP (per-pixel work; dominated by per-pixel CSF
+                       sensitivity lookup + per-band malloc).
+
+Target floor (per task spec): < 50 ms at 1024² → β < 50 ms/MP.
+
+Gap: ~19× over target. This is the SCALAR path — no SIMD, no per-band
+allocation reuse beyond the persistent scratch fields, no fast path
+for CSF (still calls `sensitivity_corrected_scalar` per pixel which
+does 32 binary-search interpolations).
+
+Next perf chunks (queued, NOT in this milestone):
+
+1. **CSF batch lookup**: pre-compute the 32-entry logs_row per band
+   (already in cvvdp-gpu host code as `precompute_logs_row`) and
+   use a direct uniform-axis interp at each pixel. Cuts the inner
+   loop from 3 × 32 binary searches to 3 × 2 indexed reads.
+
+2. **mult_mutual_band buffer recycling**: the upstream helper
+   allocates `m_mm_raw`, `m_mm`, `term`, `d` per call. The scratch
+   fields are already declared (Scratch::t_p_a etc.); wire them
+   through by reimplementing `mult_mutual_band` to take caller-
+   owned scratch.
+
+3. **archmage SIMD on the hot inner loops**: color, CSF apply,
+   masking inner pixel loop. Mirror butteraugli's pattern of
+   `#[arcane]` entry per band + `#[rite]` helpers.
+
+4. **rayon per-band parallelism**: the band loop is independent
+   across (band, channel) tuples. With 8 bands × 3 channels × 8
+   threads on a 7950X this should ~5-6× the per-band stage.
+
+5. **Pyramid build for both planes in parallel**: REF and DIST
+   weber pyramids are independent — `rayon::join`.
+
+Verdict: shipped as v0.0.1 with correctness gated; perf work is the
+next milestone. The diffmap API + warm-reference API + invariants
+do NOT regress when SIMD lands (parity tests gate every commit).

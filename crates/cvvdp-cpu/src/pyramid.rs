@@ -39,7 +39,12 @@ pub struct WeberPyramid {
 
 /// Scratch buffers used by reduce/expand passes. Owned by the
 /// `Cvvdp` scorer so they persist across calls (no realloc).
+///
+/// `expanded` and `gauss_tmp` are reserved for the next SIMD pass
+/// where we hoist the per-band expand output to the scratch slot
+/// instead of allocating per-call.
 #[derive(Default)]
+#[allow(dead_code)]
 pub(crate) struct PyramidScratch {
     pub vscratch: Vec<f32>,
     pub z_v: Vec<f32>,
