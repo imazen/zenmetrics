@@ -105,8 +105,14 @@ fn warm_ref_matches_cold_path() {
 
     let diff_a = (cold_a - warm_a).abs();
     let diff_b = (cold_b - warm_b).abs();
-    assert!(diff_a < 1e-5, "warm vs cold A: {warm_a} vs {cold_a} diff {diff_a}");
-    assert!(diff_b < 1e-5, "warm vs cold B: {warm_b} vs {cold_b} diff {diff_b}");
+    assert!(
+        diff_a < 1e-5,
+        "warm vs cold A: {warm_a} vs {cold_a} diff {diff_a}"
+    );
+    assert!(
+        diff_b < 1e-5,
+        "warm vs cold B: {warm_b} vs {cold_b} diff {diff_b}"
+    );
 }
 
 #[test]

@@ -150,17 +150,17 @@ fn main() -> std::io::Result<()> {
         .unwrap_or(std::path::Path::new("."));
     std::fs::create_dir_all(parent).ok();
     let mut out = File::create(&path)?;
-    writeln!(out, "size_w\tsize_h\tpixels\tcontent_class\tcold_ms\twarm_ms")?;
+    writeln!(
+        out,
+        "size_w\tsize_h\tpixels\tcontent_class\tcold_ms\twarm_ms"
+    )?;
     eprintln!("Writing TSV to {path}");
 
     for &(w, h) in SIZES {
         for class in CONTENT_CLASSES {
             let (cold, warm) = run_one(w, h, class);
             let pixels = (w as u64) * (h as u64);
-            writeln!(
-                out,
-                "{w}\t{h}\t{pixels}\t{class}\t{cold:.3}\t{warm:.3}"
-            )?;
+            writeln!(out, "{w}\t{h}\t{pixels}\t{class}\t{cold:.3}\t{warm:.3}")?;
             out.flush()?;
             eprintln!(
                 "  {w}x{h} {class}: cold={cold:.2}ms warm={warm:.2}ms ({:.2} MP)",

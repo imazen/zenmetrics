@@ -1351,6 +1351,7 @@ name = "cvvdp-cpu"
 version = "0.0.1"
 dependencies = [
  "cvvdp-gpu",
+ "image",
  "rayon",
  "zenmetrics-corpus",
  "zenpixels",

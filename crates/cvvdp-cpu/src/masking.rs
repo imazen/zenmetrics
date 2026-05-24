@@ -15,7 +15,7 @@
 use alloc::vec::Vec;
 
 use cvvdp_gpu::kernels::masking::{
-    gaussian_blur_sigma3, D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3,
+    D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3, gaussian_blur_sigma3,
 };
 
 const SAFE_EPS: f32 = 1e-5;
@@ -184,15 +184,8 @@ mod tests {
     #[test]
     fn matches_upstream_on_random() {
         // Sweep several sizes spanning the PU_PADSIZE branch boundary.
-        let cases: &[(usize, usize)] = &[
-            (4, 4),
-            (6, 6),
-            (7, 7),
-            (8, 8),
-            (12, 16),
-            (32, 32),
-            (64, 64),
-        ];
+        let cases: &[(usize, usize)] =
+            &[(4, 4), (6, 6), (7, 7), (8, 8), (12, 16), (32, 32), (64, 64)];
         for &(bw, bh) in cases {
             let n = bw * bh;
             let mut s = 0xabcdef01_u32;

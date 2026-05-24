@@ -34,6 +34,11 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![allow(clippy::needless_range_loop)]
+// CSF + masking constants imported from cvvdp v0.5.4 carry more digits
+// than f32 can represent verbatim (LLVM rounds at compile time, so the
+// values are mathematically identical to truncated forms). Allow the
+// literal forms so we don't drift from the upstream JSON.
+#![allow(clippy::excessive_precision)]
 
 extern crate alloc;
 
@@ -43,10 +48,8 @@ use alloc::vec::Vec;
 // callers can construct a CvvdpParams without an extra dependency
 // import. (The CPU port re-uses the same constants — there's exactly
 // one canonical set.)
-pub use cvvdp_gpu::params::{
-    CvvdpParams, DisplayGeometry, DisplayModel, PerfMode,
-};
 pub use cvvdp_gpu::PYCVVDP_REFERENCE_VERSION;
+pub use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel, PerfMode};
 
 /// Stable column-name identifier for sweep sidecars.
 ///

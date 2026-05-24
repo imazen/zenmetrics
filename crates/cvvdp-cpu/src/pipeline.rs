@@ -10,20 +10,20 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::color::{linear_planes_to_dkl_planar, srgb_to_dkl_planar};
-use crate::diffmap::{accumulate_band_diffmap, finalize_diffmap, DiffmapAccum};
-use crate::pool::{
-    do_pooling_and_jod_still_3ch, lp_norm_mean, BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL,
-    IMAGE_INT, PER_CH_W,
-};
-use crate::pyramid::{band_frequencies, weber_contrast_pyr, WeberPyramid};
-use crate::scratch::Scratch;
 use crate::ReferenceState;
+use crate::color::{linear_planes_to_dkl_planar, srgb_to_dkl_planar};
+use crate::diffmap::{DiffmapAccum, accumulate_band_diffmap, finalize_diffmap};
+use crate::pool::{
+    BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
+    do_pooling_and_jod_still_3ch, lp_norm_mean,
+};
+use crate::pyramid::{WeberPyramid, band_frequencies, weber_contrast_pyr};
+use crate::scratch::Scratch;
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
 use cvvdp_gpu::kernels::csf::{
-    precompute_logs_row, CsfChannel, CSF_BASEBAND_RHO, LOG_L_BKG_AXIS, N_L_BKG,
-    SENSITIVITY_CORRECTION_DB,
+    CSF_BASEBAND_RHO, CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, SENSITIVITY_CORRECTION_DB,
+    precompute_logs_row,
 };
 use cvvdp_gpu::kernels::masking::CH_GAIN;
 
@@ -51,10 +51,7 @@ const CSF_L_BKG_MAX_IDX: f32 = 30.999_999;
 /// reduces to 2 indexed reads + a linear combine + a single
 /// `f32::exp` per pixel per channel.
 #[inline]
-fn apply_csf_row_per_pixel(
-    log_l: f32,
-    logs_row: &[f32; N_L_BKG],
-) -> f32 {
+fn apply_csf_row_per_pixel(log_l: f32, logs_row: &[f32; N_L_BKG]) -> f32 {
     let off_raw = (log_l - CSF_L_BKG_AXIS_MIN) * CSF_L_BKG_INV_STEP;
     let off_lo = off_raw.clamp(0.0, CSF_L_BKG_MAX_IDX);
     let lo_idx_f = off_lo.floor();
@@ -190,9 +187,18 @@ impl Cvvdp {
         let mut ref_a = vec![0.0; w * h];
         let mut ref_rg = vec![0.0; w * h];
         let mut ref_vy = vec![0.0; w * h];
-        srgb_to_dkl_planar(ref_srgb, w, h, display, &mut ref_a, &mut ref_rg, &mut ref_vy);
+        srgb_to_dkl_planar(
+            ref_srgb,
+            w,
+            h,
+            display,
+            &mut ref_a,
+            &mut ref_rg,
+            &mut ref_vy,
+        );
         let n_levels = band_frequencies(self.ppd, w, h).len();
-        let [weber_a, weber_rg, weber_vy] = build_one_side(&ref_a, &ref_rg, &ref_vy, w, h, n_levels);
+        let [weber_a, weber_rg, weber_vy] =
+            build_one_side(&ref_a, &ref_rg, &ref_vy, w, h, n_levels);
         self.warm = Some(ReferenceState {
             w,
             h,
@@ -237,6 +243,7 @@ impl Cvvdp {
     /// One-shot score from linear-f32 RGB planes (display-relative
     /// `[0, 1]`). Bypasses the sRGB byte → linear LUT — useful for
     /// JPEG XL encoder paths that already hold linear-f32 planes.
+    #[allow(clippy::too_many_arguments)]
     pub fn score_from_linear_planes(
         &mut self,
         ref_r: &[f32],
@@ -288,6 +295,7 @@ impl Cvvdp {
 
     /// As `score_from_linear_planes` but also returns the per-pixel
     /// diffmap.
+    #[allow(clippy::too_many_arguments)]
     pub fn score_from_linear_planes_with_diffmap(
         &mut self,
         ref_r: &[f32],
@@ -445,6 +453,7 @@ impl Cvvdp {
 
     /// Sequential band loop. Used when `parallel` feature is off and
     /// as the inner-loop body for the parallel path.
+    #[cfg_attr(feature = "parallel", allow(dead_code))]
     fn fold_bands_sequential(
         &mut self,
         ref_weber: &[WeberPyramid; 3],
@@ -492,10 +501,8 @@ impl Cvvdp {
             debug_assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
 
             // Compute T_p + R_p per channel via the fast CSF path.
-            let mut t_p_per_ch: [Vec<f32>; 3] =
-                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-            let mut r_p_per_ch: [Vec<f32>; 3] =
-                [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            let mut t_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            let mut r_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
             let ref_a_band = &ref_weber[0].bands[k].data;
             let ref_rg_band = &ref_weber[1].bands[k].data;
             let ref_vy_band = &ref_weber[2].bands[k].data;
@@ -523,8 +530,7 @@ impl Cvvdp {
 
             // Baseband bypass vs full mult-mutual.
             let d_per_ch: [Vec<f32>; 3] = if is_baseband {
-                let mut out: [Vec<f32>; 3] =
-                    [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                let mut out: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
                 for i in 0..n_px {
                     let log_l = log_l_bkg_band[i];
                     let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
@@ -595,14 +601,7 @@ impl Cvvdp {
 
             // Accumulate diffmap.
             if let Some(acc) = accum.as_mut() {
-                accumulate_band_diffmap(
-                    acc,
-                    &d_per_ch,
-                    bw,
-                    bh,
-                    is_baseband,
-                    n_levels,
-                );
+                accumulate_band_diffmap(acc, &d_per_ch, bw, bh, is_baseband, n_levels);
             }
         }
 
@@ -628,7 +627,7 @@ impl Cvvdp {
         use rayon::prelude::*;
 
         let freqs = band_frequencies(self.ppd, w, h);
-        let ppd_freqs: Vec<f32> = freqs.iter().copied().collect();
+        let ppd_freqs: Vec<f32> = freqs.to_vec();
 
         // Each band's result: (q_per_ch, optional accumulated diffmap).
         let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = (0..n_levels)
@@ -827,7 +826,7 @@ fn convert_to_srgb_rgb8(
     s: &zenpixels::PixelSlice<'_>,
     target: zenpixels::PixelDescriptor,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{convert_row, ConvertPlan};
+    use zenpixels_convert::{ConvertPlan, convert_row};
     let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
     let w = s.width();
     let h = s.rows();
@@ -842,21 +841,24 @@ fn convert_to_srgb_rgb8(
     Ok(out)
 }
 
+/// 6-tuple of `&mut Vec<f32>` over the per-side DKL plane scratch
+/// slots in `Scratch` — returned by `scratch_dkl_planes` and only
+/// used at the entry point of each scoring path.
+type ScratchDklPlanesMut<'a> = (
+    &'a mut Vec<f32>,
+    &'a mut Vec<f32>,
+    &'a mut Vec<f32>,
+    &'a mut Vec<f32>,
+    &'a mut Vec<f32>,
+    &'a mut Vec<f32>,
+);
+
 /// Helper for `score()` to obtain the 6 plane scratches from
 /// `Scratch` as separate `&mut Vec<f32>`. Required because Rust's
 /// borrow checker rejects 6 simultaneous `&mut` of `self.scratch.*`
 /// directly through field projection on a single line in some
 /// configurations; this helper makes the split-borrow explicit.
-fn scratch_dkl_planes(
-    scratch: &mut Scratch,
-) -> (
-    &mut Vec<f32>,
-    &mut Vec<f32>,
-    &mut Vec<f32>,
-    &mut Vec<f32>,
-    &mut Vec<f32>,
-    &mut Vec<f32>,
-) {
+fn scratch_dkl_planes(scratch: &mut Scratch) -> ScratchDklPlanesMut<'_> {
     (
         &mut scratch.ref_a,
         &mut scratch.ref_rg,

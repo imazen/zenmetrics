@@ -19,7 +19,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-pub(crate) use cvvdp_gpu::kernels::pyramid::{band_frequencies, GAUSS5};
+pub(crate) use cvvdp_gpu::kernels::pyramid::{GAUSS5, band_frequencies};
 
 /// One Laplacian / Weber pyramid band.
 pub(crate) struct Band {

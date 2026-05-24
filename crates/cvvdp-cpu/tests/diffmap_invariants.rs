@@ -51,7 +51,10 @@ fn identical_inputs_yield_zero_diffmap() {
     assert!((jod - 10.0).abs() < 1e-3);
     assert_eq!(diff.len(), w * h);
     for &v in &diff {
-        assert_eq!(v, 0.0, "diffmap should be identically zero for identical inputs");
+        assert_eq!(
+            v, 0.0,
+            "diffmap should be identically zero for identical inputs"
+        );
     }
 }
 
@@ -124,8 +127,14 @@ fn diffmap_correlates_with_jod() {
         let mut diff = Vec::new();
         let jod = cv.score_with_diffmap(&r, &d, &mut diff).unwrap();
         let dsum: f64 = diff.iter().map(|v| *v as f64).sum();
-        assert!(jod <= last_jod + 1e-3, "JOD should decrease as distortion grows; was {last_jod} now {jod}");
-        assert!(dsum >= last_diff_sum - 1e-3, "diff sum should grow; was {last_diff_sum} now {dsum}");
+        assert!(
+            jod <= last_jod + 1e-3,
+            "JOD should decrease as distortion grows; was {last_jod} now {jod}"
+        );
+        assert!(
+            dsum >= last_diff_sum - 1e-3,
+            "diff sum should grow; was {last_diff_sum} now {dsum}"
+        );
         last_jod = jod;
         last_diff_sum = dsum;
     }
@@ -184,7 +193,9 @@ fn warm_ref_diffmap_matches_cold_path() {
     let mut cv_warm = Cvvdp::new(w as u32, h as u32, CvvdpParams::default()).unwrap();
     cv_warm.warm_reference(&r).unwrap();
     let mut dm_warm = Vec::new();
-    let jod_warm = cv_warm.score_with_warm_ref_diffmap(&d, &mut dm_warm).unwrap();
+    let jod_warm = cv_warm
+        .score_with_warm_ref_diffmap(&d, &mut dm_warm)
+        .unwrap();
     assert!((jod_cold - jod_warm).abs() < 1e-5);
     assert_eq!(dm_cold.len(), dm_warm.len());
     let mut max_diff = 0.0_f32;
@@ -194,5 +205,8 @@ fn warm_ref_diffmap_matches_cold_path() {
             max_diff = dd;
         }
     }
-    assert!(max_diff < 1e-5, "max diffmap drift between cold/warm: {max_diff}");
+    assert!(
+        max_diff < 1e-5,
+        "max diffmap drift between cold/warm: {max_diff}"
+    );
 }

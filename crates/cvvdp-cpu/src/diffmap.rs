@@ -112,8 +112,7 @@ fn upsample_add(
             let v01 = src[iy0 * bw + ix1];
             let v10 = src[iy1 * bw + ix0];
             let v11 = src[iy1 * bw + ix1];
-            let v =
-                v00 * (wx0 * wy0) + v01 * (wx1 * wy0) + v10 * (wx0 * wy1) + v11 * (wx1 * wy1);
+            let v = v00 * (wx0 * wy0) + v01 * (wx1 * wy0) + v10 * (wx0 * wy1) + v11 * (wx1 * wy1);
             dst[y * dw + x] += v * weight;
         }
     }

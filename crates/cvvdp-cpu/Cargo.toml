@@ -33,5 +33,7 @@ zenpixels = { version = "0.2.11", default-features = false, features = ["std"], 
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
-# Corpus for parity tests (CID22 + screenshots).
+# Corpus for parity tests (256² source + JPEG-q variants).
 zenmetrics-corpus = { workspace = true }
+# Used to decode the corpus PNG + JPEGs.
+image = { workspace = true, features = ["png", "jpeg"] }

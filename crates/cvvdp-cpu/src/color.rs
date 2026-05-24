@@ -58,6 +58,7 @@ pub(crate) fn srgb_to_dkl_planar(
 /// == width`, the plane is row-tight; the function handles both.
 ///
 /// Output planes are row-tight (`width × height`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn linear_planes_to_dkl_planar(
     r: &[f32],
     g: &[f32],

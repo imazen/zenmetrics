@@ -3,6 +3,6 @@
 //! `do_pooling_and_jod_still_3ch`.
 
 pub(crate) use cvvdp_gpu::kernels::pool::{
-    do_pooling_and_jod_still_3ch, lp_norm_mean, BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL,
-    IMAGE_INT, PER_CH_W,
+    BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
+    do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
