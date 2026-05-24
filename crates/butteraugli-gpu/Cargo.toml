@@ -123,3 +123,11 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "strip_parity"
 required-features = ["cubecl-types"]
+
+# W44-phase3-B4: parity test for the new set_reference_from_linear_planes
+# API. Requires `internals` to access the API + `cuda` to run the GPU
+# pipeline (the test asserts host-srgb→linear+upload matches the in-kernel
+# srgb→linear conversion on the legacy path).
+[[test]]
+name = "set_reference_from_linear_planes"
+required-features = ["cubecl-types", "internals", "cuda"]

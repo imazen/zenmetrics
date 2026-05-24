@@ -880,6 +880,94 @@ impl<R: Runtime> Butteraugli<R> {
         }
     }
 
+    /// Cache the reference image, taking the reference side as **3
+    /// already-uploaded planar f32 GPU handles** in linear-RGB space
+    /// (each `width × height` f32 values, in `[0, 1]` pre-opsin). Skips
+    /// the sRGB-bytes upload + sRGB→linear GPU conversion that
+    /// [`set_reference`] does internally.
+    ///
+    /// The provided handles' contents are **mutated in place** by the
+    /// opsin / frequency separation kernels (which overwrite the
+    /// `lin_a` planes per the existing pipeline). If the caller wants
+    /// to keep the original linear-RGB values intact, clone the handles
+    /// before calling — cubecl `Handle` is reference-counted so a clone
+    /// is cheap, but the underlying GPU buffer will then be allocated
+    /// separately by the next downstream consumer.
+    ///
+    /// **Use case**: encoder rate-distortion search where the encoder
+    /// already produces the source image as planar linear-RGB GPU
+    /// planes. Combined with
+    /// [`compute_with_reference_from_linear_planes`], the whole
+    /// reference + distorted pipeline can run without ever touching
+    /// sRGB-u8 — eliminates the host-side linear→sRGB pack
+    /// (~5-15 ms / iter at 1 MP with the LUT path; ~150-300 ms / iter
+    /// with the scalar `powf` path).
+    ///
+    /// Each caller-supplied plane MUST hold exactly `width × height`
+    /// f32 values in row-major order, contiguous, no padding. The
+    /// kernels assume a tight stride; pass tight planes only.
+    ///
+    /// Gated behind the `internals` cargo feature (mirrors
+    /// [`compute_with_reference_from_linear_planes`]). Not part of the
+    /// stable API; field layout / kernel order may shift with
+    /// internal pipeline refactors.
+    #[cfg(feature = "internals")]
+    pub fn set_reference_from_linear_planes(
+        &mut self,
+        ref_r: cubecl::server::Handle,
+        ref_g: cubecl::server::Handle,
+        ref_b: cubecl::server::Handle,
+    ) -> Result<()> {
+        self.set_reference_from_linear_planes_with_options(
+            ref_r,
+            ref_g,
+            ref_b,
+            &ButteraugliParams::default(),
+        )
+    }
+
+    /// Variant of [`set_reference_from_linear_planes`] that takes
+    /// explicit [`ButteraugliParams`]. All subsequent
+    /// `compute_with_reference*` calls reuse those params — call again
+    /// to change them.
+    #[cfg(feature = "internals")]
+    pub fn set_reference_from_linear_planes_with_options(
+        &mut self,
+        ref_r: cubecl::server::Handle,
+        ref_g: cubecl::server::Handle,
+        ref_b: cubecl::server::Handle,
+        params: &ButteraugliParams,
+    ) -> Result<()> {
+        validate_params(params)?;
+        self.set_params_recursive(params);
+        // Install caller-supplied linear-RGB plane handles into lin_a.
+        // The opsin / frequency / mask kernels will overwrite these
+        // in-place — see this struct's pipeline documentation for the
+        // chain. cubecl `Handle` is reference-counted so the swap is a
+        // pointer-level operation; the underlying GPU buffers are
+        // adopted by `self`.
+        self.lin_a[0] = ref_r;
+        self.lin_a[1] = ref_g;
+        self.lin_a[2] = ref_b;
+        // Downsample full-res linear into the half-res sibling BEFORE
+        // opsin overwrites lin_a in place. Mirrors run_pipeline_from_linear
+        // for the reference-only side.
+        if let Some(half) = self.half_res.as_deref() {
+            populate_half_res_linear(self, half, true);
+        }
+        self.apply_opsin(true);
+        self.separate_frequencies(true);
+        self.compute_mask_pipeline_reference_only();
+        self.has_cached_reference = true;
+        if let Some(half) = self.half_res.as_mut() {
+            half.apply_opsin(true);
+            half.separate_frequencies(true);
+            half.compute_mask_pipeline_reference_only();
+            half.has_cached_reference = true;
+        }
+        Ok(())
+    }
+
     /// Compute butteraugli against the cached reference (must follow a
     /// [`set_reference`] on this instance). Roughly halves per-call cost
     /// compared to [`compute`] when iterating many distorted images
