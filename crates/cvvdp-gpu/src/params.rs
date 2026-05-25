@@ -406,6 +406,261 @@ impl DisplayModel {
         k_refl: 0.005,
     };
 
+    /// `standard_hdr_pq` — 1500 cd/m² HDR PQ with BT.2020 primaries
+    /// at 10 lux ambient. Matches upstream `display_models.json`.
+    pub const STANDARD_HDR_PQ: Self = Self {
+        y_peak: 1500.0,
+        y_black: 0.001_5,
+        y_refl: 0.015_915_494,
+        eotf: Eotf::Pq,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 10.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_hdr_hlg` — 1500 cd/m² HDR HLG with BT.2020 primaries.
+    pub const STANDARD_HDR_HLG: Self = Self {
+        y_peak: 1500.0,
+        y_black: 0.001_5,
+        y_refl: 0.015_915_494,
+        eotf: Eotf::Hlg,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 10.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_hdr_linear` — 1500 cd/m² HDR linear with BT.709 primaries.
+    pub const STANDARD_HDR_LINEAR: Self = Self {
+        y_peak: 1500.0,
+        y_black: 0.001_5,
+        y_refl: 0.015_915_494,
+        eotf: Eotf::Linear,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 10.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_hdr_linear_dark` — 1500 cd/m² HDR linear, dark room
+    /// (0 lux ambient).
+    pub const STANDARD_HDR_LINEAR_DARK: Self = Self {
+        y_peak: 1500.0,
+        y_black: 0.001_5,
+        y_refl: 0.0,
+        eotf: Eotf::Linear,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 0.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_hdr_linear_zoom` — 10000 cd/m² zoomed-in HDR linear.
+    /// Y_peak per upstream JSON (10000, NOT 4000 as the comment claims).
+    pub const STANDARD_HDR_LINEAR_ZOOM: Self = Self {
+        y_peak: 10000.0,
+        y_black: 0.01,
+        y_refl: 0.015_915_494,
+        eotf: Eotf::Linear,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 10.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_fhd` — 200 cd/m² FHD with sRGB at office ambient.
+    pub const STANDARD_FHD: Self = Self {
+        y_peak: 200.0,
+        y_black: 0.2,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `standard_phone` — 500 cd/m² mobile phone display, 250 lux ambient.
+    /// `min_luminance = 0.05` → contrast = 10000.
+    pub const STANDARD_PHONE: Self = Self {
+        y_peak: 500.0,
+        y_black: 0.05,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `sdr_4k_30` — 100 cd/m² SDR 4K monitor, 250 lux ambient.
+    pub const SDR_4K_30: Self = Self {
+        y_peak: 100.0,
+        y_black: 0.1,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `sdr_fhd_24` — 100 cd/m² SDR FHD monitor, 250 lux ambient.
+    pub const SDR_FHD_24: Self = Self {
+        y_peak: 100.0,
+        y_black: 0.1,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `htc_vive_pro` — VR HMD at 133.3 cd/m², 0 lux ambient. Contrast
+    /// = 1333.3.
+    pub const HTC_VIVE_PRO: Self = Self {
+        y_peak: 133.3,
+        y_black: 0.1,
+        y_refl: 0.0,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 0.0,
+        k_refl: 0.005,
+    };
+
+    /// `iphone_12_pro` — 825 cd/m², min_luminance 0.0004 → contrast
+    /// = 2062500. 250 lux ambient.
+    pub const IPHONE_12_PRO: Self = Self {
+        y_peak: 825.0,
+        y_black: 0.000_4,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `iphone_14_pro` — 1025 cd/m², min_luminance 0.0004. 250 lux
+    /// ambient.
+    pub const IPHONE_14_PRO: Self = Self {
+        y_peak: 1025.0,
+        y_black: 0.000_4,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `iphone_14_pro_hdr` — 1590 cd/m² HDR HLG with BT.2020 primaries.
+    /// 10 lux ambient.
+    pub const IPHONE_14_PRO_HDR: Self = Self {
+        y_peak: 1590.0,
+        y_black: 0.000_4,
+        y_refl: 0.015_915_494,
+        eotf: Eotf::Hlg,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 10.0,
+        k_refl: 0.005,
+    };
+
+    /// `ipad_pro_12_9` — 600 cd/m², min_luminance 0.37 → contrast
+    /// ≈ 1621. 250 lux ambient.
+    pub const IPAD_PRO_12_9: Self = Self {
+        y_peak: 600.0,
+        y_black: 0.37,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `macbook_pro_16` — 500 cd/m², min_luminance 0.37 → contrast
+    /// ≈ 1351. 250 lux ambient.
+    pub const MACBOOK_PRO_16: Self = Self {
+        y_peak: 500.0,
+        y_black: 0.37,
+        y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
+    };
+
+    /// `lg_oled_2017_sdr` — 272 cd/m² OLED SDR. min_luminance 0.014.
+    /// 100 lux ambient.
+    pub const LG_OLED_2017_SDR: Self = Self {
+        y_peak: 272.0,
+        y_black: 0.014,
+        y_refl: 0.159_154_94,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 100.0,
+        k_refl: 0.005,
+    };
+
+    /// `lg_oled_2017_hdr` — 754 cd/m² OLED HDR (HLG-encoded). 100 lux
+    /// ambient.
+    pub const LG_OLED_2017_HDR: Self = Self {
+        y_peak: 754.0,
+        y_black: 0.038,
+        y_refl: 0.159_154_94,
+        eotf: Eotf::Hlg,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 100.0,
+        k_refl: 0.005,
+    };
+
+    /// `eizo_CG3146` — 300 cd/m², contrast 3000, 0 lux ambient.
+    pub const EIZO_CG3146: Self = Self {
+        y_peak: 300.0,
+        y_black: 0.1,
+        y_refl: 0.0,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 0.0,
+        k_refl: 0.005,
+    };
+
+    /// `65inch_hdr_pq_4knit` — 4000 cd/m² HDR PQ OLED, 5 lux ambient.
+    pub const HDR_PQ_4KNIT: Self = Self {
+        y_peak: 4000.0,
+        y_black: 0.004,
+        y_refl: 0.007_957_747,
+        eotf: Eotf::Pq,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 5.0,
+        k_refl: 0.005,
+    };
+
+    /// `65inch_hdr_pq_2Knit` — 2000 cd/m² HDR PQ OLED, 5 lux ambient.
+    pub const HDR_PQ_2KNIT: Self = Self {
+        y_peak: 2000.0,
+        y_black: 0.002,
+        y_refl: 0.007_957_747,
+        eotf: Eotf::Pq,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 5.0,
+        k_refl: 0.005,
+    };
+
+    /// `65inch_hdr_pq_1Knit` — 1000 cd/m² HDR PQ OLED, 5 lux ambient.
+    pub const HDR_PQ_1KNIT: Self = Self {
+        y_peak: 1000.0,
+        y_black: 0.001,
+        y_refl: 0.007_957_747,
+        eotf: Eotf::Pq,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 5.0,
+        k_refl: 0.005,
+    };
+
+    /// `lg_oled_2026_hdr_pq` — 3000 cd/m² HDR PQ OLED. min_luminance
+    /// 0.0005 → contrast 6e6. 5 lux ambient.
+    pub const LG_OLED_2026_HDR_PQ: Self = Self {
+        y_peak: 3000.0,
+        y_black: 0.000_5,
+        y_refl: 0.007_957_747,
+        eotf: Eotf::Pq,
+        primaries: Primaries::Bt2020,
+        e_ambient_lux: 5.0,
+        k_refl: 0.005,
+    };
+
     /// Derive `y_refl` from ambient illuminance and screen
     /// reflectivity per cvvdp's
     /// `vvdp_display_photo_eotf.get_black_level`:
@@ -547,6 +802,289 @@ impl DisplayGeometry {
         distance_m: 0.7472,
         diagonal_inches: 30.0,
     };
+
+    /// `standard_fhd` — 24-inch FHD monitor at 0.6 m, 200 cd/m².
+    /// Matches the `standard_fhd` entry in upstream `display_models.json`.
+    pub const STANDARD_FHD: Self = Self {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.6,
+        diagonal_inches: 24.0,
+    };
+
+    /// `sdr_4k_30` — 30-inch 4K SDR monitor at 0.6 m, 100 cd/m².
+    pub const SDR_4K_30: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 0.6,
+        diagonal_inches: 30.0,
+    };
+
+    /// `sdr_fhd_24` — 24-inch FHD SDR monitor at 0.6 m, 100 cd/m².
+    pub const SDR_FHD_24: Self = Self {
+        resolution_w: 1920,
+        resolution_h: 1080,
+        distance_m: 0.6,
+        diagonal_inches: 24.0,
+    };
+
+    /// `standard_phone` — 6-inch 2400×1080 phone at 0.4 m, 500 cd/m².
+    pub const STANDARD_PHONE: Self = Self {
+        resolution_w: 2400,
+        resolution_h: 1080,
+        distance_m: 0.4,
+        diagonal_inches: 6.0,
+    };
+
+    /// `iphone_12_pro` — 6.1" 2532×1170 at 20" viewing distance.
+    /// 20" = 0.508 m.
+    pub const IPHONE_12_PRO: Self = Self {
+        resolution_w: 2532,
+        resolution_h: 1170,
+        distance_m: 0.508,
+        diagonal_inches: 6.1,
+    };
+
+    /// `iphone_14_pro` — 6.1" 2532×1170 at 20" viewing distance.
+    pub const IPHONE_14_PRO: Self = Self {
+        resolution_w: 2532,
+        resolution_h: 1170,
+        distance_m: 0.508,
+        diagonal_inches: 6.1,
+    };
+
+    /// `iphone_14_pro_vert` — iPhone 14 Pro held vertically (W/H swapped).
+    pub const IPHONE_14_PRO_VERT: Self = Self {
+        resolution_w: 1170,
+        resolution_h: 2532,
+        distance_m: 0.508,
+        diagonal_inches: 6.1,
+    };
+
+    /// `ipad_pro_12_9` — 12.9" 2732×2048 at 20" viewing distance.
+    pub const IPAD_PRO_12_9: Self = Self {
+        resolution_w: 2732,
+        resolution_h: 2048,
+        distance_m: 0.508,
+        diagonal_inches: 12.9,
+    };
+
+    /// `macbook_pro_16` — 16" 3072×1920 at 25" viewing distance.
+    /// 25" = 0.635 m.
+    pub const MACBOOK_PRO_16: Self = Self {
+        resolution_w: 3072,
+        resolution_h: 1920,
+        distance_m: 0.635,
+        diagonal_inches: 16.0,
+    };
+
+    /// `lg_oled_2017` — 64.5" 3840×2160 at 101" viewing distance.
+    /// Shared geometry between SDR + HDR LG OLED 2017 presets.
+    /// 101" = 2.5654 m.
+    pub const LG_OLED_2017: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 2.5654,
+        diagonal_inches: 64.5,
+    };
+
+    /// `eizo_CG3146` — 31.063" 4096×2160 at 0.73406 m.
+    pub const EIZO_CG3146: Self = Self {
+        resolution_w: 4096,
+        resolution_h: 2160,
+        distance_m: 0.73406,
+        diagonal_inches: 31.063,
+    };
+
+    /// `65inch_hdr_pq_*` family geometry — 65" 3840×2160 at 1.98 m.
+    pub const PANEL_65IN_4K: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 1.98,
+        diagonal_inches: 65.0,
+    };
+
+    /// `lg_oled_2026_hdr_pq` — 64.9" 3840×2160 at 86.62" (2.2 m).
+    pub const LG_OLED_2026: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 2.2,
+        diagonal_inches: 64.9,
+    };
+
+    /// `standard_hdr_linear_zoom` — 4K at very close distance (0.25 m)
+    /// to spot super-resolution artifacts.
+    pub const HDR_LINEAR_ZOOM: Self = Self {
+        resolution_w: 3840,
+        resolution_h: 2160,
+        distance_m: 0.25,
+        diagonal_inches: 30.0,
+    };
+
+    /// `htc_vive_pro` / `standard_hmd` — VR HMD with 1440×1600 per eye,
+    /// 110° diagonal FOV at 3 m. Computed from upstream's `fov_diagonal`
+    /// path (display_model.py:474-485): an equivalent diagonal_inches
+    /// chosen so `pixels_per_degree()` returns the same value as the
+    /// FOV-based path would.
+    ///
+    /// Derivation (per upstream):
+    /// distance_px = sqrt(W² + H²) / (2 * tan(fov_diag/2))
+    ///             = sqrt(1440² + 1600²) / (2 * tan(55°))
+    ///             ≈ 753.16
+    /// height_deg  = degrees(atan(H/2 / distance_px)) * 2 ≈ 93.575°
+    /// height_m    = 2 * tan(height_deg/2) * 3 m ≈ 6.4115 m
+    /// width_m     = aspect * height_m ≈ 5.770 m
+    /// diag_m      = sqrt(width_m² + height_m²) ≈ 8.628 m
+    /// diag_inches = diag_m / 0.0254 ≈ 339.7 inches
+    ///
+    /// The resulting PPD ≈ 11.84 matches upstream's get_ppd() output.
+    pub const HTC_VIVE_PRO: Self = Self {
+        resolution_w: 1440,
+        resolution_h: 1600,
+        distance_m: 3.0,
+        diagonal_inches: 339.7,
+    };
+
+    /// Build a [`DisplayGeometry`] from physical fields. Identical to
+    /// struct-update syntax — provided for symmetry with the
+    /// `with_*` builder family.
+    #[must_use]
+    pub fn new(resolution_w: u32, resolution_h: u32, distance_m: f32, diagonal_inches: f32) -> Self {
+        Self {
+            resolution_w,
+            resolution_h,
+            distance_m,
+            diagonal_inches,
+        }
+    }
+
+    /// Build a [`DisplayGeometry`] from inch-denominated fields.
+    /// Mirrors upstream's `viewing_distance_inches` +
+    /// `diagonal_size_inches` JSON path. Inputs converted to metres
+    /// at `inches × 0.0254`.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvvdp_gpu::params::DisplayGeometry;
+    /// // iPhone 12 Pro: 20" viewing distance, 6.1" diagonal.
+    /// let g = DisplayGeometry::from_inches(2532, 1170, 20.0, 6.1);
+    /// assert_eq!(g.resolution_w, 2532);
+    /// assert!((g.distance_m - 0.508).abs() < 1e-4);
+    /// assert!((g.diagonal_inches - 6.1).abs() < 1e-6);
+    /// ```
+    #[must_use]
+    pub fn from_inches(
+        resolution_w: u32,
+        resolution_h: u32,
+        viewing_distance_inches: f32,
+        diagonal_inches: f32,
+    ) -> Self {
+        Self {
+            resolution_w,
+            resolution_h,
+            distance_m: viewing_distance_inches * 0.0254,
+            diagonal_inches,
+        }
+    }
+
+    /// Build a [`DisplayGeometry`] from a metre-denominated diagonal.
+    /// Mirrors upstream's `diagonal_size_meters` JSON path; inches
+    /// derived at `metres / 0.0254`.
+    #[must_use]
+    pub fn from_meters_diagonal(
+        resolution_w: u32,
+        resolution_h: u32,
+        distance_m: f32,
+        diagonal_meters: f32,
+    ) -> Self {
+        Self {
+            resolution_w,
+            resolution_h,
+            distance_m,
+            diagonal_inches: diagonal_meters / 0.0254,
+        }
+    }
+
+    /// Build a [`DisplayGeometry`] from a diagonal field-of-view
+    /// angle (in degrees). Mirrors upstream's `fov_diagonal` JSON
+    /// path used by VR headset presets (`htc_vive_pro`,
+    /// `standard_hmd`). Computes an equivalent `diagonal_inches` so
+    /// [`Self::pixels_per_degree`] returns the same PPD as upstream's
+    /// FOV-based getter.
+    ///
+    /// Derivation matches `display_model.py:474-485`:
+    /// 1. `distance_px = sqrt(W² + H²) / (2 · tan(fov_diag/2))`
+    /// 2. `height_deg = 2 · atan((H/2) / distance_px)`
+    /// 3. `height_m = 2 · tan(height_deg/2) · distance_m`
+    /// 4. `width_m = aspect · height_m`
+    /// 5. `diagonal_m = sqrt(width_m² + height_m²)`
+    ///
+    /// # Examples
+    /// ```
+    /// use cvvdp_gpu::params::DisplayGeometry;
+    /// let g = DisplayGeometry::from_fov_diagonal(1440, 1600, 3.0, 110.0);
+    /// // 110° FOV at 3 m on 1440×1600 → ~11.84 ppd, matches upstream
+    /// // get_ppd() to within 0.05.
+    /// let ppd = g.pixels_per_degree();
+    /// assert!((ppd - 11.84).abs() < 0.05, "got {ppd}");
+    /// ```
+    #[must_use]
+    pub fn from_fov_diagonal(
+        resolution_w: u32,
+        resolution_h: u32,
+        distance_m: f32,
+        fov_diagonal_deg: f32,
+    ) -> Self {
+        let w = resolution_w as f32;
+        let h = resolution_h as f32;
+        let half_fov_rad = (fov_diagonal_deg * 0.5_f32).to_radians();
+        let distance_px = (w * w + h * h).sqrt() / (2.0 * half_fov_rad.tan());
+        let height_deg = ((h * 0.5) / distance_px).atan().to_degrees() * 2.0;
+        let height_m = 2.0 * (height_deg * 0.5).to_radians().tan() * distance_m;
+        let aspect = w / h;
+        let width_m = aspect * height_m;
+        let diagonal_m = (width_m * width_m + height_m * height_m).sqrt();
+        Self {
+            resolution_w,
+            resolution_h,
+            distance_m,
+            diagonal_inches: diagonal_m / 0.0254,
+        }
+    }
+
+    /// Display width in metres (derived from `diagonal_inches` and
+    /// aspect ratio). Mirrors `display_size_m[0]` from upstream's
+    /// `vvdp_display_geometry`.
+    #[must_use]
+    pub fn display_width_m(&self) -> f32 {
+        let ar = self.resolution_w as f32 / self.resolution_h as f32;
+        let diagonal_mm = self.diagonal_inches * 25.4;
+        let height_mm = (diagonal_mm * diagonal_mm / (1.0 + ar * ar)).sqrt();
+        ar * height_mm / 1000.0
+    }
+
+    /// Display height in metres. Mirrors `display_size_m[1]`.
+    #[must_use]
+    pub fn display_height_m(&self) -> f32 {
+        let ar = self.resolution_w as f32 / self.resolution_h as f32;
+        let diagonal_mm = self.diagonal_inches * 25.4;
+        let height_mm = (diagonal_mm * diagonal_mm / (1.0 + ar * ar)).sqrt();
+        height_mm / 1000.0
+    }
+
+    /// Display width in visual degrees. Mirrors `display_size_deg[0]`.
+    #[must_use]
+    pub fn display_width_deg(&self) -> f32 {
+        let w_m = self.display_width_m();
+        2.0 * (w_m / (2.0 * self.distance_m)).atan().to_degrees()
+    }
+
+    /// Display height in visual degrees. Mirrors `display_size_deg[1]`.
+    #[must_use]
+    pub fn display_height_deg(&self) -> f32 {
+        let h_m = self.display_height_m();
+        2.0 * (h_m / (2.0 * self.distance_m)).atan().to_degrees()
+    }
 
     /// Pixels-per-degree at the display centre (eccentricity = 0).
     /// Matches cvvdp's `vvdp_display_geometry.get_ppd()` for the
