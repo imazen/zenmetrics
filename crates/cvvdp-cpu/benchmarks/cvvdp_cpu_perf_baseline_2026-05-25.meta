@@ -1,0 +1,236 @@
+cvvdp-cpu fresh perf baseline + flamegraph (2026-05-25)
+========================================================
+
+Purpose: confirm Agent A's 222 ms / 1024² number holds and surface
+the actual hot-loop distribution before the SIMD chain agent fires.
+
+commit:    cvvdp-cpu @ workspace master 2b44cb5c (cvvdp-gpu Eotf+
+           Primaries enums shipped post-cvvdp-cpu v0.0.1 release)
+host:      water-cooled AMD Ryzen 9 7950X, 128 GB RAM, 16 cores /
+           32 threads, Linux 6.6.114.1-microsoft-standard-WSL2
+build:     cargo build -p cvvdp-cpu --release --example time_size_sweep
+           (workspace [profile.release]: opt-level=3, lto=fat,
+            debug="full", split-debuginfo="packed", codegen-units default;
+            NO target-cpu=native; features = std + parallel + alloc)
+date:      2026-05-25
+methodology:
+  - 3-call warmup, 5 timed iters, median reported (per
+    `crates/cvvdp-cpu/examples/time_size_sweep.rs`).
+  - Synthetic deterministic gradient + perturbation (matches the
+    zensim bench harness — apples-to-apples on inputs).
+  - cold = full `score(ref, dist)`; warm = `score_with_warm_ref(dist)`
+    (reference Weber pyramid + DKL planes cached).
+  - The first re-run was contaminated by background load (load avg
+    52, zensim training, vast.ai, multiple Claude agents). After the
+    background load eased, a clean run matched Agent A's 222 ms.
+  - The numbers in `cvvdp_cpu_perf_baseline_2026-05-25.tsv` are the
+    CLEAN run (captured during `cargo flamegraph` execution at
+    01:47 UTC).
+
+Headline numbers (median wall ms, cold = full score):
+
+  size       cold_ms  warm_ms  ms/MP (cold)
+  64×64      1.32     1.01     323
+  128×128    3.41     2.87     208
+  256×256    12.40    10.80    189
+  512×512    46.10    41.78    176
+  1024×1024  222.29   199.35   212  <-- ANCHOR
+  2048×2048  928.72   797.85   222
+
+Per-size median in fresh run matches Agent A's 2026-05-24 numbers
+within ±1 ms at every size — no measurable drift. The 222 ms at
+1024² is the production floor.
+
+Linear regression `cold_ms = α + β · MP` (smooth, fit excluding
+the 2048² outlier):
+  α ≈ 0.9 ms   (sRGB→DKL alloc + rayon spawn, dominated by
+                fixed-overhead at 64²)
+  β ≈ 212 ms/MP   (per-pixel work — band loop + pyramid + masking;
+                   rayon mostly amortizes thread spawn past 256²)
+
+vs zensim target (zensim_perf_target_2026-05-25):
+  1024² ratio:  cvvdp-cpu 222 / zensim 14.66 = **15.1× slower**
+  ns/pixel:     cvvdp-cpu 212 / zensim 14.0  = **15.1× wider slope**
+
+This is the gap the SIMD chain agent must close.
+
+============================================================
+FLAMEGRAPH FINDINGS — what the 222 ms is actually spent on
+============================================================
+
+Profile capture:
+  cargo flamegraph -p cvvdp-cpu --example time_size_sweep --release \
+    -o crates/cvvdp-cpu/benchmarks/cvvdp_cpu_flamegraph_2026-05-25.svg
+
+  perf record default: 999 Hz, 5.09 GB raw `perf.data`, 83,073 samples
+  across the full 64-2048 sweep. 1024² + 2048² together account for
+  ~85% of wall time → the hot symbols below are dominated by those
+  two regimes.
+
+Top 10 hot symbols (self-time, no children, percent-limit 0.5):
+
+  Rank  Self %  Symbol                                                Notes
+  ----  ------  ----------------------------------------------------  -------------------------------
+   1    32.06%  cvvdp_gpu::kernels::masking::gaussian_blur_sigma3     13-tap separable Gaussian
+                                                                       called 3× per non-baseband band
+                                                                       per encode (phase uncertainty).
+                                                                       Scalar reflect-padded; the
+                                                                       BIGGEST single hotspot.
+   2    15.41%  cvvdp_cpu::pyramid::gausspyr_expand                   5-tap Gaussian upsample + 2×.
+                                                                       Called once per non-baseband
+                                                                       band per side per channel
+                                                                       (= 6 × 6 = 36 calls / encode).
+   3    10.63%  core::ops::function::impls::FnMut::call_mut (shim)    Rayon trampoline through join.
+                                                                       Pure rayon overhead — 10.6% is
+                                                                       a LOT of plumbing.
+   4     8.32%  cvvdp_cpu::pyramid::build_gauss_pyramid               Driver of gausspyr_reduce calls
+                                                                       (5-tap downsample).
+   5     7.27%  __powf_fma                                            libm powf — 9 per pixel in
+                                                                       mult_mutual_band_into.
+   6     5.16%  __log10f_finite@GLIBC_2.15                            Weber-contrast log10 of L_bkg
+                                                                       per pixel per band.
+   7     4.65%  __memset_avx512_unaligned_erms                        `Vec::resize(.., 0.0)` /
+                                                                       `vec![0.0; n_px]` per-band
+                                                                       scratch allocs.
+   8     2.99%  __logf_fma                                            log() called inside CSF apply
+                                                                       (per-pixel `log10` is `log /
+                                                                       LN10` on glibc).
+   9     2.56%  __expf_fma                                            CSF apply: `exp(log_s · ln10)`
+                                                                       per pixel.
+  10     2.52%  cvvdp_cpu::pyramid::weber_contrast_pyr                Driver — most cost in children.
+
+Sum of top 10: 91.57 %.
+
+============================================================
+KEY FINDINGS (revisions to Agent A's hypothesis)
+============================================================
+
+1. **The pyramid Gaussian blurs are the dominant cost, not the
+   masking powf.** Symbols 1+2+4 (pyramid+phase-uncertainty
+   Gaussian) sum to **55.79%** of wall. powf+log10f+logf+expf
+   together sum to **18.0%**.
+
+   Agent A's perf memo said: "the per-pixel `powf` calls inside
+   `mult_mutual_band_into` (9 pow per pixel × 1M pixel × ~50ns
+   = ~450ms baseline)". The 7.27% measured for `__powf_fma`
+   means powf is ~16ms out of 222ms — significant, but not the
+   primary lever. **The pyramid Gaussian SIMD chunk is bigger
+   than the masking-powf SIMD chunk.**
+
+2. **The phase-uncertainty blur (`gaussian_blur_sigma3`) is a
+   scalar 13-tap separable reflect-padded Gaussian living
+   inside cvvdp-gpu.** This means the SIMD chunk targeting it
+   has two implementation paths:
+     (a) port a SIMD `gaussian_blur_sigma3_simd` into cvvdp-cpu's
+         masking module and call it locally (preferred — avoids
+         cvvdp-gpu API change);
+     (b) push a SIMD variant upstream to cvvdp-gpu and re-export
+         (requires cross-crate change — parity agent's territory).
+
+3. **Rayon plumbing is at 10.6%.** That's the per-task trampoline
+   cost (FnMut::call_mut + bridge_producer_consumer + join). On a
+   7950X with 8 bands × per-band rayon::join overhead, ~22 ms of
+   wall time is spent in rayon coordination, not computation.
+   Smaller-spawn-granularity / fewer parallel tasks + larger
+   per-task work units would recover most of this.
+
+4. **Memory bandwidth (memset_avx512 + memmove_avx512) = 6.92%.**
+   Per-band `Vec::resize(n_px, 0.0)` for d_a/d_rg/d_vy/m_mm_*
+   /term_* (10× per-band Vecs) is the main contributor. A
+   TLS-pool or pre-sized cleared scratch would eliminate this
+   (mirrors butteraugli's B7c).
+
+5. **CSF per-pixel exp + log10 = 7.72% (#6 + #9).** The CSF apply
+   has `log10(L_bkg)` per pixel followed by `exp(log_s * LN_10)`
+   per pixel per channel. The log10 IS the Weber-contrast log
+   on L_bkg (one per pixel per band) and the exp is the CSF
+   sensitivity exponent. SIMD vexp/vlog approximations bring
+   both into the same SIMD pipeline as the rest of the band loop.
+
+6. **`floorf` at 0.36% (#16) is the CSF `apply_csf_row_per_pixel`
+   `lo_idx_f.floor()` call.** Worth knowing — would vectorize
+   for free with SIMD floor.
+
+============================================================
+WALL-TIME ATTRIBUTION (1024² estimate)
+============================================================
+
+At 222 ms / encode:
+
+  Pyramid Gaussian (reduce + expand + phase-uncertainty)  ≈ 124 ms
+  Per-pixel masking powf                                  ≈ 16 ms
+  Per-pixel CSF (log10 + exp)                             ≈ 17 ms
+  Per-band Vec::resize(0.0) memsets                       ≈ 10 ms
+  Rayon plumbing (parallel band + parallel side build)    ≈ 24 ms
+  Other (color conversion, sum/reduce, copies)            ≈ 31 ms
+                                                          ------
+  Total                                                  ≈ 222 ms
+
+Reachable wall at zensim parity (= 15 ms):
+  - SIMD pyramid Gaussian (reduce/expand/sigma3)    -55 ms est.
+  - SIMD masking with vectorized powf via vexp+vln  -12 ms est.
+  - SIMD CSF apply                                  -10 ms est.
+  - TLS scratch pool + pre-clear                     -8 ms est.
+  - Persistent rayon pool + smaller spawn unit       -18 ms est.
+  - Misc (sum/reduce, copies)                       -10 ms est.
+                                                    -------
+  Total recoverable:                               -113 ms est.
+
+  Best plausible post-SIMD wall:  ~109 ms (still 7.4× zensim).
+  Stretch (with more aggressive structural changes): ~50 ms (3.4×).
+  Aspiration (full strip-pipeline rewrite):           ~25 ms (1.7×).
+
+The 222→109 ms range is what SHOULD be achievable from the
+straightforward SIMD work outlined in the SIMD plan. The 109→50
+range requires structural changes (band fusion, contrast pyramid
+fused with CSF apply, etc.) — call it Phase 2.
+
+============================================================
+RECOMMENDED PERFORMANCE TARGET
+============================================================
+
+PHASE 1 target (this SIMD chain): **≤ 50 ms median at 1024² (8t)**.
+  - 4.4× speedup over current 222 ms.
+  - 3.4× zensim's 14.66 ms — acceptable headroom for cvvdp's
+    structural complexity (more bands, per-pixel transcendentals).
+  - Per-pixel slope target: ≤ 45 ms/MP.
+
+PHASE 2 stretch (out-of-scope for this scoping doc): ≤ 25 ms median
+at 1024² (1.7× zensim).
+
+Hard floor (must not regress): 222 ms.
+Parity gate: JOD scalar must stay within 1e-3 of pre-SIMD; the
+1e-4 golden tolerance pinned in `tests/parity_against_host_scalar`
+must hold or be widened explicitly (with user confirmation).
+
+============================================================
+REPRODUCING
+============================================================
+
+Fresh size sweep (no flamegraph):
+  cd ~/work/zen/zenmetrics
+  cargo build -p cvvdp-cpu --release --example time_size_sweep
+  ./target/release/examples/time_size_sweep \
+    --output crates/cvvdp-cpu/benchmarks/cvvdp_cpu_perf_baseline_<date>.tsv
+
+Flamegraph + perf.data:
+  cargo flamegraph -p cvvdp-cpu --example time_size_sweep --release \
+    -o crates/cvvdp-cpu/benchmarks/cvvdp_cpu_flamegraph_<date>.svg \
+    -- --output /tmp/sweep_<date>.tsv
+
+  (perf.data lands at workspace root; ~5 GB.
+   Discard after pulling the top-symbol report.)
+
+Top symbols report (after the above):
+  /home/lilith/bin/perf report --stdio -i perf.data --no-children \
+    --percent-limit 0.5
+
+NOTE: do not enable `-C target-cpu=native` (per CLAUDE.md
+"Performance Optimization" section). The encoder ships through
+runtime SIMD dispatch; `native` bakes ISAs that production users
+may not have.
+
+DO NOT cite "FMA precision" for any wall-time delta — the SIMD
+chain agent's wins should be reported as alloc/SIMD/scratch
+savings, never as FMA precision changes (per W44-66 user
+correction).

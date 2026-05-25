@@ -1,0 +1,100 @@
+zensim perf target — size sweep for cvvdp-cpu optimization target
+==================================================================
+
+Purpose: establish the per-pair scoring wall time we need cvvdp-cpu
+to match (or beat) so the user's "optimize cvvdp-cpu to the level of
+zensim" directive has a measured target instead of a hand-waved one.
+
+commit:    zensim main branch as of 2026-05-25
+host:      water-cooled AMD Ryzen 9 7950X, 128 GB RAM, 16 cores /
+           32 threads, Linux 6.6.114.1-microsoft-standard-WSL2
+build:     cargo build --release --example extended_iw_perf -p zensim-bench --features training
+           (LTO, codegen-units default, NO target-cpu=native;
+            features = training)
+date:      2026-05-25
+methodology:
+  - Synthetic deterministic gradient + perturbation (matches the
+    cvvdp-cpu time_size_sweep example so the comparison is apples-
+    to-apples on inputs).
+  - 1 warmup, 20 timed iters, min/median/mean reported.
+  - `compute_zensim_with_config` with `allow_multithreading = true`
+    (rayon, 32 threads default).
+  - Standard config (228 features, no IW, no extended) is the
+    canonical comparison baseline for the cvvdp-cpu target because
+    cvvdp-cpu computes a comparable scope of features (CSF + masking
+    per band, no IW, no masked-block).
+
+Headline numbers (standard config = 228 features, median wall ms):
+
+  size       median_ms   ns/pixel
+  64×64      1.54        376
+  128×128    2.60        159
+  256×256    4.40        67
+  512×512    7.20        27.5
+  1024×1024  14.66       14.0
+  2048×2048  57.28       13.7
+
+Linear regression `median_ms = α + β · MP` (standard, smooth fit):
+  α ≈ 1.0 ms  (fixed overhead — sRGB→XYB conversion, scratch alloc,
+               rayon spawn)
+  β ≈ 13.7 ms/MP  (per-pixel SIMD streaming kernels — mu/sigma
+                   blur, SSIM, edge, MSE accumulation)
+
+This means at 1024² (1.0 MP) zensim ≈ 14.7 ms is dominated by
+per-pixel work; at 64² (0.004 MP) the 1.0 ms intercept is 65% of
+wall (small-image scoring is overhead-bound).
+
+Why zensim is so fast:
+  - All per-pixel work is in archmage `#[arcane]` SIMD entry points
+    (4-wide v3 SSE/AVX, 8-wide v4 AVX2, NEON, WASM) — see
+    `~/work/zen/zensim/zensim/src/simd_ops.rs`.
+  - Hot path is streaming: src/dist images traverse the strip
+    pipeline ONCE per scale; mu/sigma_sq/sigma12 cached in scratch
+    buffers, fed into masked SSIM/edge/MSE kernels via SIMD.
+  - Zero per-pixel transcendentals (no per-pixel powf/exp/log).
+    `powf` only appears at aggregation steps (sum.powf(0.25), once
+    per channel per scale; 4 scales × 3 channels = 12 calls/encode).
+  - Fused 2-mask kernels collapse multiple weighted-pool passes
+    into single SIMD strip walks (the 2026-05-15 fused-kernel work).
+
+cvvdp-cpu current state (per Agent A's 2026-05-24 memo):
+  - 1024² median 222 ms — **15.1× slower than zensim's 14.7 ms**.
+  - Dominant cost: per-pixel `powf` (9 calls × ~1M pixels = ~9M
+    transcendental calls per band; 7 bands → 63M powf per encode).
+  - cvvdp-cpu's masking inner loop is scalar; pyramid is scalar;
+    rayon parallelism is at band granularity (8 bands → 8 tasks),
+    not at the SIMD-strip level zensim uses.
+
+PERFORMANCE TARGET FOR cvvdp-cpu (per "level of zensim" directive):
+
+  At 1024² (8t, standard config): ≤ 20 ms median (≤ 1.36× zensim)
+  Per-pixel slope:                  ≤ 18 ns/MP (≤ 1.3× zensim's β)
+  Stretch goal:                     match zensim at ≤ 15 ms / 14.0 ns
+
+  Hard floor (must not regress):   222 ms (the current value).
+
+The 1.3× headroom over zensim accounts for cvvdp's structural
+complexity:
+  - cvvdp has 8 pyramid bands vs zensim's 4 scales (~2× more band-
+    loop body cost).
+  - cvvdp's masking inner loop has 9 powf per pixel vs zensim's
+    zero (eliminating this entirely is achievable but not without
+    parity risk; SIMD-vectorized powf via vexp + vln gets us within
+    1.3-1.5× of zero-powf throughput).
+  - cvvdp's CSF apply per pixel is a 2-tap interp + 1 exp; zensim
+    has no equivalent per-pixel cost.
+
+Reproducing this measurement:
+  cd ~/work/zen/zensim
+  cargo build --release --example extended_iw_perf -p zensim-bench --features training
+  for SIZE in 64 128 256 512 1024 2048; do
+    ./target/release/examples/extended_iw_perf --size $SIZE --iters 20
+  done
+
+DO NOT cite "FMA precision" for any cvvdp-cpu byte/score drift
+caused by the SIMD chain (per W44-66 user correction). FMA changes
+score order-of-magnitude 1e-7; the precision floor at the JOD scalar
+level is ~1e-3.
+
+Output: this TSV + meta. Stored at
+crates/cvvdp-cpu/benchmarks/zensim_perf_target_2026-05-25.{tsv,meta}.
