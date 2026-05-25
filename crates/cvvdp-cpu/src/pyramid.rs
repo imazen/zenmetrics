@@ -16,7 +16,6 @@
 //!   `cvvdp_gpu::kernels::pyramid::band_frequencies` (avoiding a
 //!   redefinition).
 
-use alloc::vec;
 use alloc::vec::Vec;
 
 pub(crate) use cvvdp_gpu::kernels::pyramid::{GAUSS5, band_frequencies};
@@ -35,6 +34,18 @@ pub struct WeberPyramid {
     /// `log10(L_bkg)` per band (per-pixel for non-baseband,
     /// replicated scalar for baseband).
     pub(crate) log_l_bkg: Vec<Vec<f32>>,
+}
+
+impl WeberPyramid {
+    /// Create an empty WeberPyramid with reserved capacity hints. Used
+    /// by the Scratch struct to preallocate slots whose band buffers
+    /// can be reused across scoring calls.
+    pub(crate) fn empty() -> Self {
+        Self {
+            bands: Vec::new(),
+            log_l_bkg: Vec::new(),
+        }
+    }
 }
 
 /// Scratch buffers used by reduce/expand passes. Owned by the
@@ -224,42 +235,205 @@ pub(crate) fn gausspyr_expand(
     }
 }
 
-/// Build a single-channel Gaussian pyramid (`n_levels` bands).
-fn build_gauss_pyramid(
+/// Build a single-channel Gaussian pyramid (`n_levels` bands) into
+/// `out`. `out` is grown / shrunk to `n` bands; existing band Vec
+/// allocations are reused (clear + resize) when present, eliminating
+/// per-call heap churn.
+fn build_gauss_pyramid_into(
     src: &[f32],
     sw: usize,
     sh: usize,
     n: usize,
     scratch: &mut PyramidScratch,
-) -> Vec<Band> {
-    let mut p = Vec::with_capacity(n);
-    p.push(Band {
-        w: sw,
-        h: sh,
-        data: src.to_vec(),
-    });
+    out: &mut Vec<Band>,
+) {
+    // Grow to required band count, reusing existing Vec<f32> capacity.
+    while out.len() < n {
+        out.push(Band {
+            w: 0,
+            h: 0,
+            data: Vec::new(),
+        });
+    }
+    out.truncate(n);
+
+    // Band 0: copy src into out[0].data (reusing capacity).
+    out[0].w = sw;
+    out[0].h = sh;
+    out[0].data.clear();
+    out[0].data.extend_from_slice(src);
+
     let mut w = sw;
     let mut h = sh;
-    for _ in 1..n {
-        let mut next = Vec::new();
-        let prev = p.last().unwrap();
-        let (nw, nh) = gausspyr_reduce(&prev.data, w, h, scratch, &mut next);
-        p.push(Band {
-            w: nw,
-            h: nh,
-            data: next,
-        });
+    // Split the vec so we can borrow [k] and [k+1] separately.
+    for k in 0..n - 1 {
+        let (lhs, rhs) = out.split_at_mut(k + 1);
+        let prev = &lhs[k];
+        let next_band = &mut rhs[0];
+        let (nw, nh) = gausspyr_reduce(&prev.data, w, h, scratch, &mut next_band.data);
+        next_band.w = nw;
+        next_band.h = nh;
         w = nw;
         h = nh;
     }
-    p
+}
+
+/// Per-pyramid recycling cache: holds the two intermediate Gaussian
+/// pyramids (`gauss_img` + `gauss_l`) so successive calls reuse band
+/// Vec<f32> capacity. Owned by `Scratch`, one slot per channel
+/// pyramid (6 total: 3 REF + 3 DIST). All fields are `pub(crate)` so
+/// `Scratch::new` can construct empties.
+#[derive(Default)]
+pub(crate) struct WeberPyramidCache {
+    pub gauss_img: Vec<Band>,
+    pub gauss_l: Vec<Band>,
+    pub scratch: PyramidScratch,
 }
 
 /// Single-channel Weber-contrast pyramid (`weber_g1`).
 ///
+/// Writes the result into `out`, reusing existing band/log_l_bkg
+/// `Vec<f32>` capacity. `cache` holds two intermediate Gaussian
+/// pyramids whose buffers persist across calls.
+///
 /// `image_plane` is the channel under decomposition; `l_bkg_plane`
 /// is the achromatic plane used for the per-pixel L_bkg. For the
 /// achromatic channel itself they're the same buffer.
+pub(crate) fn weber_contrast_pyr_into(
+    image_plane: &[f32],
+    l_bkg_plane: &[f32],
+    sw: usize,
+    sh: usize,
+    n_levels: usize,
+    cache: &mut WeberPyramidCache,
+    out: &mut WeberPyramid,
+) {
+    let n = n_levels;
+    debug_assert!(n >= 1);
+
+    build_gauss_pyramid_into(
+        image_plane,
+        sw,
+        sh,
+        n,
+        &mut cache.scratch,
+        &mut cache.gauss_img,
+    );
+    build_gauss_pyramid_into(
+        l_bkg_plane,
+        sw,
+        sh,
+        n,
+        &mut cache.scratch,
+        &mut cache.gauss_l,
+    );
+
+    // Grow / shrink `out` to exactly `n` bands; reuse existing Vec<f32>.
+    while out.bands.len() < n {
+        out.bands.push(Band {
+            w: 0,
+            h: 0,
+            data: Vec::new(),
+        });
+        out.log_l_bkg.push(Vec::new());
+    }
+    out.bands.truncate(n);
+    out.log_l_bkg.truncate(n);
+
+    for k in 0..n {
+        let is_baseband = k == n - 1;
+        let fine = &cache.gauss_img[k];
+        let l_fine = &cache.gauss_l[k];
+        let n_px = fine.w * fine.h;
+
+        out.bands[k].w = fine.w;
+        out.bands[k].h = fine.h;
+        out.bands[k].data.clear();
+        out.bands[k].data.resize(n_px, 0.0);
+        out.log_l_bkg[k].clear();
+        out.log_l_bkg[k].resize(n_px, 0.0);
+
+        if is_baseband {
+            let sum: f32 = l_fine.data.iter().map(|v| v.max(0.01)).sum();
+            let l_bkg_mean = sum / l_fine.data.len() as f32;
+            let log_l = l_bkg_mean.log10();
+            let band_data = &mut out.bands[k].data;
+            for i in 0..n_px {
+                band_data[i] = fine.data[i] / l_bkg_mean;
+            }
+            let log_band = &mut out.log_l_bkg[k];
+            for v in log_band.iter_mut() {
+                *v = log_l;
+            }
+        } else {
+            // expanded_l + img_expanded into per-band scratch.
+            // Reuse `cache.scratch.expanded` for `expanded_l`, plus a
+            // local Vec for `img_expanded` (still better than the
+            // pre-fix path because gausspyr_expand uses cache.scratch
+            // internally for its own intermediates).
+            cache.scratch.expanded.clear();
+            // expanded_l is the L_bkg expansion; img_expanded is the
+            // image-channel expansion. We need both simultaneously,
+            // so we use `cache.scratch.expanded` for one and
+            // `cache.scratch.gauss_tmp` for the other.
+            let coarse_l = &cache.gauss_l[k + 1];
+            let img_coarse = &cache.gauss_img[k + 1];
+            // Pre-extract coarse data so we can borrow cache.scratch mutably below
+            // without aliasing.
+            let coarse_l_data: &[f32] = &coarse_l.data;
+            let coarse_l_w = coarse_l.w;
+            let coarse_l_h = coarse_l.h;
+            let img_coarse_data: &[f32] = &img_coarse.data;
+            let img_coarse_w = img_coarse.w;
+            let img_coarse_h = img_coarse.h;
+            // We can't simultaneously call gausspyr_expand with two
+            // different `dst` slots on the same `cache.scratch` —
+            // gausspyr_expand writes vscratch/z_v/z_h inside scratch.
+            // So we call sequentially and stash one result in
+            // `cache.scratch.expanded` and the other in
+            // `cache.scratch.gauss_tmp`.
+            // Trick: temporarily swap out the gauss_tmp + expanded.
+            let mut expanded_l = core::mem::take(&mut cache.scratch.expanded);
+            gausspyr_expand(
+                coarse_l_data,
+                coarse_l_w,
+                coarse_l_h,
+                fine.w,
+                fine.h,
+                &mut cache.scratch,
+                &mut expanded_l,
+            );
+            let mut img_expanded = core::mem::take(&mut cache.scratch.gauss_tmp);
+            gausspyr_expand(
+                img_coarse_data,
+                img_coarse_w,
+                img_coarse_h,
+                fine.w,
+                fine.h,
+                &mut cache.scratch,
+                &mut img_expanded,
+            );
+            let fine_data: &[f32] = &fine.data;
+            let band_data = &mut out.bands[k].data;
+            let log_band = &mut out.log_l_bkg[k];
+            for i in 0..n_px {
+                let l_bkg = expanded_l[i].max(0.01);
+                let layer = fine_data[i] - img_expanded[i];
+                let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
+                band_data[i] = c;
+                log_band[i] = l_bkg.log10();
+            }
+            // Return scratch.
+            cache.scratch.expanded = expanded_l;
+            cache.scratch.gauss_tmp = img_expanded;
+        }
+    }
+}
+
+/// Owning variant kept for tests that don't have a caller-supplied
+/// output buffer. Tests don't sit in the hot path so the allocation
+/// here is fine.
+#[cfg(test)]
 pub(crate) fn weber_contrast_pyr(
     image_plane: &[f32],
     l_bkg_plane: &[f32],
@@ -268,77 +442,23 @@ pub(crate) fn weber_contrast_pyr(
     n_levels: usize,
     scratch: &mut PyramidScratch,
 ) -> WeberPyramid {
-    let n = n_levels;
-    debug_assert!(n >= 1);
-
-    let gauss_img = build_gauss_pyramid(image_plane, sw, sh, n, scratch);
-    let gauss_l = build_gauss_pyramid(l_bkg_plane, sw, sh, n, scratch);
-
-    let mut bands: Vec<Band> = Vec::with_capacity(n);
-    let mut log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n);
-
-    for k in 0..n {
-        let is_baseband = k == n - 1;
-        let fine = &gauss_img[k];
-        let l_fine = &gauss_l[k];
-        let n_px = fine.w * fine.h;
-
-        if is_baseband {
-            let sum: f32 = l_fine.data.iter().map(|v| v.max(0.01)).sum();
-            let l_bkg_mean = sum / l_fine.data.len() as f32;
-            let log_l = l_bkg_mean.log10();
-            let mut contrast = vec![0.0_f32; n_px];
-            for i in 0..n_px {
-                contrast[i] = fine.data[i] / l_bkg_mean;
-            }
-            bands.push(Band {
-                w: fine.w,
-                h: fine.h,
-                data: contrast,
-            });
-            log_l_bkg.push(vec![log_l; n_px]);
-        } else {
-            let coarse_l = &gauss_l[k + 1];
-            let mut expanded_l = Vec::new();
-            gausspyr_expand(
-                &coarse_l.data,
-                coarse_l.w,
-                coarse_l.h,
-                fine.w,
-                fine.h,
-                scratch,
-                &mut expanded_l,
-            );
-            let img_coarse = &gauss_img[k + 1];
-            let mut img_expanded = Vec::new();
-            gausspyr_expand(
-                &img_coarse.data,
-                img_coarse.w,
-                img_coarse.h,
-                fine.w,
-                fine.h,
-                scratch,
-                &mut img_expanded,
-            );
-
-            let mut contrast = vec![0.0_f32; n_px];
-            let mut log_l = vec![0.0_f32; n_px];
-            for i in 0..n_px {
-                let l_bkg = expanded_l[i].max(0.01);
-                let layer = fine.data[i] - img_expanded[i];
-                let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
-                contrast[i] = c;
-                log_l[i] = l_bkg.log10();
-            }
-            bands.push(Band {
-                w: fine.w,
-                h: fine.h,
-                data: contrast,
-            });
-            log_l_bkg.push(log_l);
-        }
-    }
-    WeberPyramid { bands, log_l_bkg }
+    let mut cache = WeberPyramidCache {
+        gauss_img: Vec::new(),
+        gauss_l: Vec::new(),
+        scratch: core::mem::take(scratch),
+    };
+    let mut out = WeberPyramid::empty();
+    weber_contrast_pyr_into(
+        image_plane,
+        l_bkg_plane,
+        sw,
+        sh,
+        n_levels,
+        &mut cache,
+        &mut out,
+    );
+    *scratch = cache.scratch;
+    out
 }
 
 #[cfg(test)]

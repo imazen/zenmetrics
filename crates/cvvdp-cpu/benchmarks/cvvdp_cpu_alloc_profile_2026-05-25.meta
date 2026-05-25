@@ -1,0 +1,76 @@
+# cvvdp-cpu allocation profile (Chunk 4 baseline + post-recycle)
+
+## Provenance
+
+- Date: 2026-05-25
+- Host: 7950X, 128 GB RAM
+- Compiler: stable Rust
+- Build: `cargo build --release --example alloc_profile`
+- Methodology: `examples/alloc_profile.rs` uses a custom `GlobalAlloc`
+  wrapper that increments atomic counters in `alloc` / `dealloc`.
+  Each measurement: 2-call warmup, then snap counters before/after a
+  single `score` (cold path) and a single `score_with_warm_ref`
+  (warm path).
+
+## Files
+
+- `cvvdp_cpu_alloc_profile_baseline_2026-05-25.tsv` — pre-recycle
+  baseline against master commit `dd426497`.
+- `cvvdp_cpu_alloc_profile_recycle_2026-05-25.tsv` — post-recycle
+  on this branch.
+
+## TSV columns
+
+```
+size_w  size_h  pixels  path  allocs  frees  bytes
+```
+
+- `path ∈ {cold, warm}` — cold = `score()`; warm = `warm_reference()`
+  + `score_with_warm_ref()` (warm-ref already cached).
+- `allocs` / `frees` should always match (no leaks).
+- `bytes` is sum of `Layout::size()` across all alloc calls inside
+  the measurement window.
+
+## Headline results
+
+### Per-call malloc count
+
+| size  | path | baseline | recycle | reduction |
+|-------|------|----------|---------|-----------|
+| 256²  | cold |    472   |    46   |  -90.3%   |
+| 256²  | warm |    313   |    46   |  -85.3%   |
+| 512²  | cold |    529   |    52   |  -90.2%   |
+| 512²  | warm |    352   |    52   |  -85.2%   |
+|1024²  | cold |    535   |    58   |  -89.2%   |
+|1024²  | warm |    358   |    58   |  -83.8%   |
+
+### Per-call allocated bytes
+
+| size  | path | baseline   | recycle    | reduction |
+|-------|------|------------|------------|-----------|
+| 256²  | cold | 20,728,840 |  2,097,880 |  -89.9%   |
+| 256²  | warm | 14,034,664 |  2,097,880 |  -85.1%   |
+| 512²  | cold | 82,870,260 |  8,389,476 |  -89.9%   |
+| 512²  | warm | 56,115,492 |  8,389,476 |  -85.0%   |
+|1024²  | cold |331,405,380 | 33,555,300 |  -89.9%   |
+|1024²  | warm |224,422,836 | 33,555,300 |  -85.0%   |
+
+## What was eliminated
+
+The remaining ~58 allocs at 1024² are all single-call lifetimes
+(diffmap accumulator + the gaussian_blur_sigma3 internal allocs +
+small temporaries). The eliminated ~477 allocs were all multi-call
+lifetimes that had been freshly allocated and dropped per call:
+
+1. **WeberPyramid output bands** (6 channels × n_levels bands per
+   side = ~50 allocs / call at 1024² 8-level pyramid): now persisted
+   on `Scratch::weber_ref` / `Scratch::weber_dist`.
+2. **Per-channel pyramid intermediate Gaussian bands**
+   (6 × n_levels × 2 = ~100 per call): persisted in
+   `Scratch::weber_cache_*`'s `gauss_img` / `gauss_l` band Vecs.
+3. **Per-band closure scratch** in `fold_bands_parallel` (~17 per
+   band × n_levels): persisted in `Scratch::band_ws[k]` per band id.
+
+Cold == warm parity confirms that warm-reference's only previous
+"savings" came from skipping REF pyramid construction; now both paths
+share the same recycle layout.

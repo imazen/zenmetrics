@@ -17,8 +17,8 @@ use crate::pool::{
     BASEBAND_W, BETA_BAND, BETA_CH, BETA_SPATIAL, IMAGE_INT, PER_CH_W,
     do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
-use crate::pyramid::{WeberPyramid, band_frequencies, weber_contrast_pyr};
-use crate::scratch::Scratch;
+use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_contrast_pyr_into};
+use crate::scratch::{BandWorkspace, Scratch};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
 use cvvdp_gpu::kernels::csf::{
@@ -381,26 +381,36 @@ impl Cvvdp {
         let h = self.height;
         let n_levels = band_frequencies(self.ppd, w, h).len();
 
-        // The 6 weber pyramid builds are fully independent. Each owns
-        // its own PyramidScratch. With rayon, run them in parallel; on
-        // a 7950X with 8 channels of work that's ~5× wall-time
-        // reduction over sequential. Each side's PyramidScratch is
-        // allocated fresh inside the closure — we drop the persistent
-        // self.scratch.pyr slot for these (it's still used by
-        // warm_reference).
-        let (ref_weber, dist_weber) = build_both_sides(
-            &self.scratch.ref_a,
-            &self.scratch.ref_rg,
-            &self.scratch.ref_vy,
-            &self.scratch.dist_a,
-            &self.scratch.dist_rg,
-            &self.scratch.dist_vy,
-            w,
-            h,
-            n_levels,
-        );
+        // The 6 weber pyramid builds are fully independent. With rayon
+        // each runs in parallel. Each pyramid build writes into a
+        // persistent WeberPyramid slot owned by `self.scratch`, so the
+        // band Vec<f32> capacity is reused across calls — no fresh
+        // per-band allocation.
+        build_both_sides_into(&mut self.scratch, w, h, n_levels);
 
+        // Now consume the scratch slots immutably to fold bands. We
+        // temporarily move the WeberPyramids out so we can pass them
+        // by &[WeberPyramid; 3] reference while holding &mut self.
+        let ref_weber = core::mem::replace(
+            &mut self.scratch.weber_ref,
+            [
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+            ],
+        );
+        let dist_weber = core::mem::replace(
+            &mut self.scratch.weber_dist,
+            [
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+            ],
+        );
         let (jod, diffmap) = self.fold_bands(&ref_weber, &dist_weber, n_levels, w, h, want_diffmap);
+        // Stash back so the band buffer memory persists.
+        self.scratch.weber_ref = ref_weber;
+        self.scratch.weber_dist = dist_weber;
         Ok((jod, diffmap))
     }
 
@@ -410,21 +420,23 @@ impl Cvvdp {
         let w = self.width;
         let h = self.height;
         let n_levels = band_frequencies(self.ppd, w, h).len();
-        let dist_weber = build_one_side(
-            &self.scratch.dist_a,
-            &self.scratch.dist_rg,
-            &self.scratch.dist_vy,
-            w,
-            h,
-            n_levels,
-        );
+        build_one_side_dist_into(&mut self.scratch, w, h, n_levels);
 
         // Pull the warm reference out so we can call fold_bands with
         // a clean &mut self. Restored before returning so subsequent
         // score_with_warm_ref calls still find it cached.
         let warm = self.warm.take().expect("checked by caller");
+        let dist_weber = core::mem::replace(
+            &mut self.scratch.weber_dist,
+            [
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+            ],
+        );
         let (jod, diffmap) =
             self.fold_bands(&warm.weber, &dist_weber, n_levels, w, h, want_diffmap);
+        self.scratch.weber_dist = dist_weber;
         self.warm = Some(warm);
         Ok((jod, diffmap))
     }
@@ -452,7 +464,9 @@ impl Cvvdp {
     }
 
     /// Sequential band loop. Used when `parallel` feature is off and
-    /// as the inner-loop body for the parallel path.
+    /// as the inner-loop body for the parallel path. Reuses
+    /// `self.scratch.band_ws[0]` for all bands (sequential — no need
+    /// for per-band slots).
     #[cfg_attr(feature = "parallel", allow(dead_code))]
     fn fold_bands_sequential(
         &mut self,
@@ -473,6 +487,10 @@ impl Cvvdp {
             None
         };
 
+        // Reuse band_ws[0] as the single sequential scratch slot.
+        self.scratch.ensure_band_ws(1);
+        let ws = &mut self.scratch.band_ws[0];
+
         for k in 0..n_levels {
             let is_first = k == 0;
             let is_baseband = k == n_levels - 1;
@@ -489,20 +507,26 @@ impl Cvvdp {
             let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
             debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
-            // Hoist the rho-axis interp out of the per-pixel loop.
-            // `precompute_logs_row` returns a 32-entry row of
-            // `log10(S)` parameterized by `log_l_bkg`, one per
-            // channel.
             let logs_row_a = precompute_logs_row(rho, channels[0]);
             let logs_row_rg = precompute_logs_row(rho, channels[1]);
             let logs_row_vy = precompute_logs_row(rho, channels[2]);
-            // Sanity — pinned by N_L_BKG below.
             debug_assert_eq!(logs_row_a.len(), N_L_BKG);
             debug_assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
 
-            // Compute T_p + R_p per channel via the fast CSF path.
-            let mut t_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-            let mut r_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            // Compute T_p + R_p per channel into recycled workspace.
+            ws.t_p_a.clear();
+            ws.t_p_a.resize(n_px, 0.0);
+            ws.t_p_rg.clear();
+            ws.t_p_rg.resize(n_px, 0.0);
+            ws.t_p_vy.clear();
+            ws.t_p_vy.resize(n_px, 0.0);
+            ws.r_p_a.clear();
+            ws.r_p_a.resize(n_px, 0.0);
+            ws.r_p_rg.clear();
+            ws.r_p_rg.resize(n_px, 0.0);
+            ws.r_p_vy.clear();
+            ws.r_p_vy.resize(n_px, 0.0);
+
             let ref_a_band = &ref_weber[0].bands[k].data;
             let ref_rg_band = &ref_weber[1].bands[k].data;
             let ref_vy_band = &ref_weber[2].bands[k].data;
@@ -520,17 +544,21 @@ impl Cvvdp {
                 let bm_sa = band_mul * s_a;
                 let bm_srg = band_mul * s_rg;
                 let bm_svy = band_mul * s_vy;
-                t_p_per_ch[0][i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                t_p_per_ch[1][i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                t_p_per_ch[2][i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                r_p_per_ch[0][i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                r_p_per_ch[1][i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                r_p_per_ch[2][i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
+                ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
+                ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
+                ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
+                ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
+                ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
+                ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
             }
 
-            // Baseband bypass vs full mult-mutual.
-            let d_per_ch: [Vec<f32>; 3] = if is_baseband {
-                let mut out: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            if is_baseband {
+                ws.d_a.clear();
+                ws.d_a.resize(n_px, 0.0);
+                ws.d_rg.clear();
+                ws.d_rg.resize(n_px, 0.0);
+                ws.d_vy.clear();
+                ws.d_vy.resize(n_px, 0.0);
                 for i in 0..n_px {
                     let log_l = log_l_bkg_band[i];
                     let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
@@ -539,68 +567,62 @@ impl Cvvdp {
                     let diff_a = dis_a_band[i] - ref_a_band[i];
                     let diff_rg = dis_rg_band[i] - ref_rg_band[i];
                     let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                    out[0][i] = diff_a.abs() * s_a;
-                    out[1][i] = diff_rg.abs() * s_rg;
-                    out[2][i] = diff_vy.abs() * s_vy;
+                    ws.d_a[i] = diff_a.abs() * s_a;
+                    ws.d_rg[i] = diff_rg.abs() * s_rg;
+                    ws.d_vy[i] = diff_vy.abs() * s_vy;
                 }
-                out
             } else {
-                // Fast in-scratch masking. Borrow each scratch slot via
-                // a fresh tuple to avoid &mut self alias.
-                let s = &mut self.scratch;
-                let mut d_a = core::mem::take(&mut s.d_a);
-                let mut d_rg = core::mem::take(&mut s.d_rg);
-                let mut d_vy = core::mem::take(&mut s.d_vy);
-                let mut m_mm_a = core::mem::take(&mut s.m_mm_a);
-                let mut m_mm_rg = core::mem::take(&mut s.m_mm_rg);
-                let mut m_mm_vy = core::mem::take(&mut s.m_mm_vy);
-                let mut term_a = core::mem::take(&mut s.t_p_a);
-                let mut term_rg = core::mem::take(&mut s.t_p_rg);
-                let mut term_vy = core::mem::take(&mut s.t_p_vy);
-                let mut pu_scratch = core::mem::take(&mut s.pu_h);
+                // mult_mutual_band_into wants `&[Vec<f32>; 3]`. Move
+                // t_p / r_p slots out, call, move back.
+                let t_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.t_p_a),
+                    core::mem::take(&mut ws.t_p_rg),
+                    core::mem::take(&mut ws.t_p_vy),
+                ];
+                let r_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.r_p_a),
+                    core::mem::take(&mut ws.r_p_rg),
+                    core::mem::take(&mut ws.r_p_vy),
+                ];
                 mult_mutual_band_into(
-                    &t_p_per_ch,
-                    &r_p_per_ch,
+                    &t_p_taken,
+                    &r_p_taken,
                     bw,
                     bh,
-                    &mut d_a,
-                    &mut d_rg,
-                    &mut d_vy,
-                    &mut m_mm_a,
-                    &mut m_mm_rg,
-                    &mut m_mm_vy,
-                    &mut term_a,
-                    &mut term_rg,
-                    &mut term_vy,
-                    &mut pu_scratch,
+                    &mut ws.d_a,
+                    &mut ws.d_rg,
+                    &mut ws.d_vy,
+                    &mut ws.m_mm_a,
+                    &mut ws.m_mm_rg,
+                    &mut ws.m_mm_vy,
+                    &mut ws.term_a,
+                    &mut ws.term_rg,
+                    &mut ws.term_vy,
+                    &mut ws.pu_h,
                 );
-                let out = [d_a, d_rg, d_vy];
-                // Stash scratch back.
-                s.m_mm_a = m_mm_a;
-                s.m_mm_rg = m_mm_rg;
-                s.m_mm_vy = m_mm_vy;
-                s.t_p_a = term_a;
-                s.t_p_rg = term_rg;
-                s.t_p_vy = term_vy;
-                s.pu_h = pu_scratch;
-                // d_a/d_rg/d_vy live on as `out`; stash empty Vecs as
-                // placeholders so the field is always Vec (cleared on
-                // next call).
-                s.d_a = Vec::new();
-                s.d_rg = Vec::new();
-                s.d_vy = Vec::new();
-                out
+                let [t_a, t_rg, t_vy] = t_p_taken;
+                let [r_a, r_rg, r_vy] = r_p_taken;
+                ws.t_p_a = t_a;
+                ws.t_p_rg = t_rg;
+                ws.t_p_vy = t_vy;
+                ws.r_p_a = r_a;
+                ws.r_p_rg = r_rg;
+                ws.r_p_vy = r_vy;
             };
 
-            // Spatial pool per channel.
+            // Spatial pool per channel using the workspace d_*.
             let mut q_band = [0.0_f32; 3];
-            for c in 0..3 {
-                q_band[c] = lp_norm_mean(&d_per_ch[c], BETA_SPATIAL);
-            }
+            q_band[0] = lp_norm_mean(&ws.d_a, BETA_SPATIAL);
+            q_band[1] = lp_norm_mean(&ws.d_rg, BETA_SPATIAL);
+            q_band[2] = lp_norm_mean(&ws.d_vy, BETA_SPATIAL);
             q_per_ch.push(q_band);
 
-            // Accumulate diffmap.
+            // Accumulate diffmap. accumulate_band_diffmap takes
+            // `&[Vec<f32>; 3]`. Clone (sequential path is rare; this
+            // doesn't show in any benchmark since `parallel` is the
+            // default feature).
             if let Some(acc) = accum.as_mut() {
+                let d_per_ch: [Vec<f32>; 3] = [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
                 accumulate_band_diffmap(acc, &d_per_ch, bw, bh, is_baseband, n_levels);
             }
         }
@@ -611,9 +633,10 @@ impl Cvvdp {
     }
 
     /// Parallel band loop. Each band runs independently on a rayon
-    /// thread; results merge via reduce at the end. Diffmap path
-    /// allocates per-band accumulators since the bilinear upsample
-    /// already operates on its own band-sized buffer.
+    /// thread; results merge via reduce at the end. Each band gets
+    /// its own `BandWorkspace` slot from `self.scratch.band_ws`,
+    /// indexed by band id. The Vec<f32> capacities in each slot
+    /// persist across calls — no fresh per-band allocation.
     #[cfg(feature = "parallel")]
     fn fold_bands_parallel(
         &mut self,
@@ -629,10 +652,16 @@ impl Cvvdp {
         let freqs = band_frequencies(self.ppd, w, h);
         let ppd_freqs: Vec<f32> = freqs.to_vec();
 
+        // Grow the per-band workspace vec to at least n_levels and
+        // borrow it mutably so each band closure gets its own slot.
+        self.scratch.ensure_band_ws(n_levels);
+        let ws_slice: &mut [BandWorkspace] = &mut self.scratch.band_ws[..n_levels];
+
         // Each band's result: (q_per_ch, optional accumulated diffmap).
-        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = (0..n_levels)
-            .into_par_iter()
-            .map(|k| {
+        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = ws_slice
+            .par_iter_mut()
+            .enumerate()
+            .map(|(k, ws)| {
                 let is_first = k == 0;
                 let is_baseband = k == n_levels - 1;
                 let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
@@ -662,9 +691,14 @@ impl Cvvdp {
                 let ch_gain_rg = CH_GAIN[1];
                 let ch_gain_vy = CH_GAIN[2];
 
-                let d_per_ch: [Vec<f32>; 3] = if is_baseband {
-                    let mut out: [Vec<f32>; 3] =
-                        [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                if is_baseband {
+                    // Reuse d_a/d_rg/d_vy slots in the workspace.
+                    ws.d_a.clear();
+                    ws.d_a.resize(n_px, 0.0);
+                    ws.d_rg.clear();
+                    ws.d_rg.resize(n_px, 0.0);
+                    ws.d_vy.clear();
+                    ws.d_vy.resize(n_px, 0.0);
                     for i in 0..n_px {
                         let log_l = log_l_bkg_band[i];
                         let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
@@ -673,16 +707,24 @@ impl Cvvdp {
                         let diff_a = dis_a_band[i] - ref_a_band[i];
                         let diff_rg = dis_rg_band[i] - ref_rg_band[i];
                         let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                        out[0][i] = diff_a.abs() * s_a;
-                        out[1][i] = diff_rg.abs() * s_rg;
-                        out[2][i] = diff_vy.abs() * s_vy;
+                        ws.d_a[i] = diff_a.abs() * s_a;
+                        ws.d_rg[i] = diff_rg.abs() * s_rg;
+                        ws.d_vy[i] = diff_vy.abs() * s_vy;
                     }
-                    out
                 } else {
-                    let mut t_p: [Vec<f32>; 3] =
-                        [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
-                    let mut r_p: [Vec<f32>; 3] =
-                        [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+                    // Reuse t_p_*/r_p_* slots in the workspace.
+                    ws.t_p_a.clear();
+                    ws.t_p_a.resize(n_px, 0.0);
+                    ws.t_p_rg.clear();
+                    ws.t_p_rg.resize(n_px, 0.0);
+                    ws.t_p_vy.clear();
+                    ws.t_p_vy.resize(n_px, 0.0);
+                    ws.r_p_a.clear();
+                    ws.r_p_a.resize(n_px, 0.0);
+                    ws.r_p_rg.clear();
+                    ws.r_p_rg.resize(n_px, 0.0);
+                    ws.r_p_vy.clear();
+                    ws.r_p_vy.resize(n_px, 0.0);
                     for i in 0..n_px {
                         let log_l = log_l_bkg_band[i];
                         let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
@@ -691,50 +733,68 @@ impl Cvvdp {
                         let bm_sa = band_mul * s_a;
                         let bm_srg = band_mul * s_rg;
                         let bm_svy = band_mul * s_vy;
-                        t_p[0][i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                        t_p[1][i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                        t_p[2][i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                        r_p[0][i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                        r_p[1][i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                        r_p[2][i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
+                        ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
+                        ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
+                        ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
+                        ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
+                        ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
+                        ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
                     }
-                    // Per-thread scratch (no shared self.scratch).
-                    let mut d_a = Vec::new();
-                    let mut d_rg = Vec::new();
-                    let mut d_vy = Vec::new();
-                    let mut m_mm_a = Vec::new();
-                    let mut m_mm_rg = Vec::new();
-                    let mut m_mm_vy = Vec::new();
-                    let mut term_a = Vec::new();
-                    let mut term_rg = Vec::new();
-                    let mut term_vy = Vec::new();
-                    let mut pu_scratch = Vec::new();
+                    // `mult_mutual_band_into` requires `&[Vec<f32>; 3]`
+                    // for t_p and r_p. Move our workspace slots into
+                    // local arrays, call, then move them back.
+                    let t_p_taken: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.t_p_a),
+                        core::mem::take(&mut ws.t_p_rg),
+                        core::mem::take(&mut ws.t_p_vy),
+                    ];
+                    let r_p_taken: [Vec<f32>; 3] = [
+                        core::mem::take(&mut ws.r_p_a),
+                        core::mem::take(&mut ws.r_p_rg),
+                        core::mem::take(&mut ws.r_p_vy),
+                    ];
                     mult_mutual_band_into(
-                        &t_p,
-                        &r_p,
+                        &t_p_taken,
+                        &r_p_taken,
                         bw,
                         bh,
-                        &mut d_a,
-                        &mut d_rg,
-                        &mut d_vy,
-                        &mut m_mm_a,
-                        &mut m_mm_rg,
-                        &mut m_mm_vy,
-                        &mut term_a,
-                        &mut term_rg,
-                        &mut term_vy,
-                        &mut pu_scratch,
+                        &mut ws.d_a,
+                        &mut ws.d_rg,
+                        &mut ws.d_vy,
+                        &mut ws.m_mm_a,
+                        &mut ws.m_mm_rg,
+                        &mut ws.m_mm_vy,
+                        &mut ws.term_a,
+                        &mut ws.term_rg,
+                        &mut ws.term_vy,
+                        &mut ws.pu_h,
                     );
-                    [d_a, d_rg, d_vy]
-                };
+                    // Restore the t_p / r_p slots so next call reuses
+                    // the Vec capacity.
+                    let [t_a, t_rg, t_vy] = t_p_taken;
+                    let [r_a, r_rg, r_vy] = r_p_taken;
+                    ws.t_p_a = t_a;
+                    ws.t_p_rg = t_rg;
+                    ws.t_p_vy = t_vy;
+                    ws.r_p_a = r_a;
+                    ws.r_p_rg = r_rg;
+                    ws.r_p_vy = r_vy;
+                }
 
                 let mut q_band = [0.0_f32; 3];
-                for c in 0..3 {
-                    q_band[c] = lp_norm_mean(&d_per_ch[c], BETA_SPATIAL);
-                }
+                q_band[0] = lp_norm_mean(&ws.d_a, BETA_SPATIAL);
+                q_band[1] = lp_norm_mean(&ws.d_rg, BETA_SPATIAL);
+                q_band[2] = lp_norm_mean(&ws.d_vy, BETA_SPATIAL);
 
                 let band_accum = if want_diffmap {
                     let mut acc = DiffmapAccum::new(w, h);
+                    // accumulate_band_diffmap takes `&[Vec<f32>; 3]`.
+                    // Build a transient array view by cloning out the
+                    // d Vecs. We could avoid this by changing
+                    // accumulate_band_diffmap to take three &[f32]
+                    // refs, which is a follow-on chunk.
+                    let d_per_ch: [Vec<f32>; 3] =
+                        [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
                     accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
                     Some(acc)
                 } else {
@@ -879,9 +939,192 @@ const _: () = {
     let _ = BASEBAND_W;
 };
 
-/// Build the 3-channel weber pyramid for one side (REF or DIST) using
-/// rayon parallelism per channel when the `parallel` feature is on,
-/// falling back to sequential otherwise.
+/// Build the 3-channel weber pyramid for one side, writing into
+/// caller-supplied `out` slots + reusing caller-supplied `caches`.
+/// Used by the hot path (score_internal / score_internal_with_warm)
+/// so band Vec<f32> capacity persists across calls.
+#[allow(clippy::too_many_arguments)]
+fn build_one_side_recycle(
+    plane_a: &[f32],
+    plane_rg: &[f32],
+    plane_vy: &[f32],
+    w: usize,
+    h: usize,
+    n_levels: usize,
+    caches: &mut [WeberPyramidCache; 3],
+    out: &mut [WeberPyramid; 3],
+) {
+    #[cfg(feature = "parallel")]
+    {
+        // Split-borrow the 3 cache + 3 out slots.
+        let (ca0, ca_rest) = caches.split_at_mut(1);
+        let (ca1, ca2) = ca_rest.split_at_mut(1);
+        let (o0, o_rest) = out.split_at_mut(1);
+        let (o1, o2) = o_rest.split_at_mut(1);
+        rayon::join(
+            || {
+                weber_contrast_pyr_into(plane_a, plane_a, w, h, n_levels, &mut ca0[0], &mut o0[0]);
+            },
+            || {
+                rayon::join(
+                    || {
+                        weber_contrast_pyr_into(
+                            plane_rg,
+                            plane_a,
+                            w,
+                            h,
+                            n_levels,
+                            &mut ca1[0],
+                            &mut o1[0],
+                        );
+                    },
+                    || {
+                        weber_contrast_pyr_into(
+                            plane_vy,
+                            plane_a,
+                            w,
+                            h,
+                            n_levels,
+                            &mut ca2[0],
+                            &mut o2[0],
+                        );
+                    },
+                );
+            },
+        );
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        weber_contrast_pyr_into(
+            plane_a,
+            plane_a,
+            w,
+            h,
+            n_levels,
+            &mut caches[0],
+            &mut out[0],
+        );
+        weber_contrast_pyr_into(
+            plane_rg,
+            plane_a,
+            w,
+            h,
+            n_levels,
+            &mut caches[1],
+            &mut out[1],
+        );
+        weber_contrast_pyr_into(
+            plane_vy,
+            plane_a,
+            w,
+            h,
+            n_levels,
+            &mut caches[2],
+            &mut out[2],
+        );
+    }
+}
+
+/// Build REF + DIST weber pyramids into the persistent slots on
+/// `Scratch`. Slot Vec<f32> capacities persist across calls.
+fn build_both_sides_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: usize) {
+    // Need to split-borrow ref planes / dist planes (immutable) vs
+    // weber_ref / weber_dist / caches (mutable). All live on
+    // `scratch`, so do it by destructuring.
+    let Scratch {
+        dist_a,
+        dist_rg,
+        dist_vy,
+        ref_a,
+        ref_rg,
+        ref_vy,
+        weber_ref,
+        weber_dist,
+        weber_cache_ref,
+        weber_cache_dist,
+        ..
+    } = scratch;
+
+    #[cfg(feature = "parallel")]
+    {
+        rayon::join(
+            || {
+                build_one_side_recycle(
+                    ref_a,
+                    ref_rg,
+                    ref_vy,
+                    w,
+                    h,
+                    n_levels,
+                    weber_cache_ref,
+                    weber_ref,
+                );
+            },
+            || {
+                build_one_side_recycle(
+                    dist_a,
+                    dist_rg,
+                    dist_vy,
+                    w,
+                    h,
+                    n_levels,
+                    weber_cache_dist,
+                    weber_dist,
+                );
+            },
+        );
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        build_one_side_recycle(
+            ref_a,
+            ref_rg,
+            ref_vy,
+            w,
+            h,
+            n_levels,
+            weber_cache_ref,
+            weber_ref,
+        );
+        build_one_side_recycle(
+            dist_a,
+            dist_rg,
+            dist_vy,
+            w,
+            h,
+            n_levels,
+            weber_cache_dist,
+            weber_dist,
+        );
+    }
+}
+
+/// Same as `build_both_sides_into` but only the DIST side (used by
+/// `score_internal_with_warm`).
+fn build_one_side_dist_into(scratch: &mut Scratch, w: usize, h: usize, n_levels: usize) {
+    let Scratch {
+        dist_a,
+        dist_rg,
+        dist_vy,
+        weber_dist,
+        weber_cache_dist,
+        ..
+    } = scratch;
+    build_one_side_recycle(
+        dist_a,
+        dist_rg,
+        dist_vy,
+        w,
+        h,
+        n_levels,
+        weber_cache_dist,
+        weber_dist,
+    );
+}
+
+/// Owned-result variant used by `warm_reference` (called once per
+/// buttloop ref change, so allocation here is fine). Returns
+/// `[WeberPyramid; 3]`.
 fn build_one_side(
     plane_a: &[f32],
     plane_rg: &[f32],
@@ -890,75 +1133,25 @@ fn build_one_side(
     h: usize,
     n_levels: usize,
 ) -> [WeberPyramid; 3] {
-    #[cfg(feature = "parallel")]
-    {
-        // Each closure allocates its own PyramidScratch. The
-        // overhead of the 3 fresh scratch buffers is dwarfed by the
-        // 3× speedup over sequential.
-        let mut pyramids: [Option<WeberPyramid>; 3] = [None, None, None];
-        let (a, rg_vy) = rayon::join(
-            || {
-                let mut s = crate::pyramid::PyramidScratch::default();
-                weber_contrast_pyr(plane_a, plane_a, w, h, n_levels, &mut s)
-            },
-            || {
-                rayon::join(
-                    || {
-                        let mut s = crate::pyramid::PyramidScratch::default();
-                        weber_contrast_pyr(plane_rg, plane_a, w, h, n_levels, &mut s)
-                    },
-                    || {
-                        let mut s = crate::pyramid::PyramidScratch::default();
-                        weber_contrast_pyr(plane_vy, plane_a, w, h, n_levels, &mut s)
-                    },
-                )
-            },
-        );
-        pyramids[0] = Some(a);
-        pyramids[1] = Some(rg_vy.0);
-        pyramids[2] = Some(rg_vy.1);
-        [
-            pyramids[0].take().unwrap(),
-            pyramids[1].take().unwrap(),
-            pyramids[2].take().unwrap(),
-        ]
-    }
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut s = crate::pyramid::PyramidScratch::default();
-        let a = weber_contrast_pyr(plane_a, plane_a, w, h, n_levels, &mut s);
-        let rg = weber_contrast_pyr(plane_rg, plane_a, w, h, n_levels, &mut s);
-        let vy = weber_contrast_pyr(plane_vy, plane_a, w, h, n_levels, &mut s);
-        [a, rg, vy]
-    }
-}
-
-/// Build REF + DIST weber pyramids in parallel (or sequentially if
-/// `parallel` feature is off).
-#[allow(clippy::too_many_arguments)]
-fn build_both_sides(
-    ref_a: &[f32],
-    ref_rg: &[f32],
-    ref_vy: &[f32],
-    dist_a: &[f32],
-    dist_rg: &[f32],
-    dist_vy: &[f32],
-    w: usize,
-    h: usize,
-    n_levels: usize,
-) -> ([WeberPyramid; 3], [WeberPyramid; 3]) {
-    #[cfg(feature = "parallel")]
-    {
-        rayon::join(
-            || build_one_side(ref_a, ref_rg, ref_vy, w, h, n_levels),
-            || build_one_side(dist_a, dist_rg, dist_vy, w, h, n_levels),
-        )
-    }
-    #[cfg(not(feature = "parallel"))]
-    {
-        (
-            build_one_side(ref_a, ref_rg, ref_vy, w, h, n_levels),
-            build_one_side(dist_a, dist_rg, dist_vy, w, h, n_levels),
-        )
-    }
+    let mut caches = [
+        WeberPyramidCache::default(),
+        WeberPyramidCache::default(),
+        WeberPyramidCache::default(),
+    ];
+    let mut out = [
+        WeberPyramid::empty(),
+        WeberPyramid::empty(),
+        WeberPyramid::empty(),
+    ];
+    build_one_side_recycle(
+        plane_a,
+        plane_rg,
+        plane_vy,
+        w,
+        h,
+        n_levels,
+        &mut caches,
+        &mut out,
+    );
+    out
 }

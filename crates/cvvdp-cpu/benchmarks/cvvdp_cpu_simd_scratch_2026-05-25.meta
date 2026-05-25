@@ -1,0 +1,203 @@
+# cvvdp-cpu SIMD Chunk 4 (TLS scratch / buffer recycling) bench meta
+
+## Provenance
+
+- Date: 2026-05-25
+- Commit (work-in-progress): pre-commit (recycling implemented on
+  workspace `~/work/zen/zenmetrics--cvvdp-cpu-simd-scratch/`)
+- Parent commit: dd426497 (master) — cvvdp-cpu v0.1.0 parity work
+- Host: 7950X, 128 GB RAM, water-cooled
+- Compiler: stable Rust
+- Build: `cargo build -p cvvdp-cpu --release` (NO `-C target-cpu=native`)
+- Methodology: `examples/time_size_sweep.rs` reports median over 5 timed
+  runs after 3-call warmup; cold path is `score`, warm path is
+  `warm_reference` + `score_with_warm_ref`.
+
+## Path chosen
+
+**Path A: buffer recycling (the B7a/b butteraugli pattern)** — NOT a
+TLS pool. Recycling owns Vec<f32> capacity on `Scratch`, slot-per-band
+indexed by band id. Parallel band loop uses `par_iter_mut()` over the
+slot vec, so each band closure writes into a mutually-exclusive
+workspace without aliasing.
+
+Reason: per butteraugli B7c memo (2026-05-23), TLS pools introduced
+per-thread isolation that INCREASED fresh allocations by segregating
+buffers. The B7a/b pattern of caller-owned recycle slots succeeded with
+ZERO numeric impact and saved -670 allocs / encode. We applied the
+same pattern here.
+
+## What changed
+
+1. `pyramid.rs`:
+   - `WeberPyramid::empty()` constructor for Scratch slots.
+   - New `WeberPyramidCache` holds 2 intermediate Gaussian pyramids +
+     `PyramidScratch`, persisted across calls.
+   - New `weber_contrast_pyr_into(out: &mut WeberPyramid)` API
+     (replaces the owned-result `weber_contrast_pyr`). Resizes
+     band Vecs in place instead of allocating fresh.
+   - `build_gauss_pyramid_into(out: &mut Vec<Band>)` (replaces
+     `build_gauss_pyramid`). Reuses band Vec<f32> capacity.
+
+2. `scratch.rs`:
+   - `BandWorkspace` struct holds the 16 per-band Vec<f32> slots
+     (t_p_*, r_p_*, d_*, m_mm_*, term_*, pu_h).
+   - `Scratch` now holds `[WeberPyramid; 3]` per side (REF + DIST),
+     `[WeberPyramidCache; 3]` per side, and `Vec<BandWorkspace>`
+     grown lazily to n_levels.
+   - Removed old single-slot per-band fields (`s.d_a`, `s.t_p_a` etc.)
+     — replaced by the workspace vec.
+
+3. `pipeline.rs`:
+   - `score_internal` / `score_internal_with_warm` now call new
+     `build_both_sides_into` / `build_one_side_dist_into` which write
+     into persistent slots on `Scratch`.
+   - `fold_bands_parallel` uses `par_iter_mut().enumerate()` over the
+     band workspace vec — each band closure has exclusive access to
+     its slot.
+   - `fold_bands_sequential` reuses `band_ws[0]` for all bands.
+   - `warm_reference` still uses the legacy owned-result `build_one_side`
+     because the warm cache holds owned `[WeberPyramid; 3]` (called
+     rarely, allocation overhead doesn't matter).
+
+## Acceptance gates
+
+(a) Build PASS on default features and on
+    `--no-default-features --features "alloc parallel"`.
+(b) `cargo test -p cvvdp-cpu` 45/45 tests PASS (both feature configs).
+(c) **1e-4 JOD parity floor PRESERVED** — the
+    `standard_4k_path_still_at_parity_against_host_scalar` test PASSES.
+    Numeric output unchanged; the change is allocator-only.
+(d) `cargo clippy -p cvvdp-cpu --no-deps -- -D warnings` PASS.
+(e) `cargo fmt -p cvvdp-cpu --check` PASS.
+(f) Allocation count REDUCED: 89-90% drop at every measured size.
+(g) Wall-time at 1024² improved by 25-56 ms (vs gate of ≥3 ms).
+
+## Allocation profile (alloc_profile example)
+
+Per-call malloc count + total bytes via global GlobalAlloc wrapper.
+Run via `cargo run -p cvvdp-cpu --release --example alloc_profile`.
+
+### Before (baseline, master)
+| size | path | allocs | bytes      |
+|------|------|--------|------------|
+| 256² | cold |    472 |  20,728,840 |
+| 256² | warm |    313 |  14,034,664 |
+| 512² | cold |    529 |  82,870,260 |
+| 512² | warm |    352 |  56,115,492 |
+|1024² | cold |    535 | 331,405,380 |
+|1024² | warm |    358 | 224,422,836 |
+
+### After (recycling)
+| size | path | allocs | bytes      |
+|------|------|--------|------------|
+| 256² | cold |     46 |   2,097,880 |
+| 256² | warm |     46 |   2,097,880 |
+| 512² | cold |     52 |   8,389,476 |
+| 512² | warm |     52 |   8,389,476 |
+|1024² | cold |     58 |  33,555,300 |
+|1024² | warm |     58 |  33,555,300 |
+
+**Reduction**: ~90% fewer allocations at every size. Cold + warm paths
+now produce IDENTICAL alloc counts — the warm path's only previous
+"savings" came from not building REF pyramids; now it shares the
+same persistent slot layout so both paths converge.
+
+**Total allocated bytes** also drops 89-90%: from 331 MB / call at
+1024² cold → 33 MB / call. The remaining 33 MB / 58 allocs are
+mostly the diffmap accumulator + intermediate Vecs whose lifetime is
+strictly within one call (DiffmapAccum allocates 3× w*h *f32 per band
+when want_diffmap is true; ours is the `false` path that emits no
+diffmap), the linear-RGB plane conversion temporaries, and per-call
+Vec<f32> from `mult_mutual_band_into`'s phase-uncertainty
+gaussian_blur internal allocation. These could be attacked in a
+follow-on chunk (B7-style for blur, diffmap accumulator on Scratch).
+
+## Wall-time (time_size_sweep, median of 5 runs after 3-call warmup)
+
+Note: 2048² rows in `cvvdp_cpu_size_sweep_*.tsv` show large run-to-run
+variance under heavy system load (the 7950X had zensim_mlp_train +
+multiple Claude processes running concurrently during these runs).
+The 2048² screenshot regression in the "recycle" run was confirmed to
+be measurement noise, not a real regression — repeat runs land within
+±5% of the smooth/photo cells which are at -5% to -19% vs baseline.
+
+Median ms (cold / warm):
+
+| size  | content    | baseline cold | recycle cold | Δms cold | baseline warm | recycle warm | Δms warm |
+|-------|------------|---------------|--------------|----------|---------------|--------------|----------|
+|  64²  | smooth     |     1.13      |     1.06     |  -0.07   |     0.83      |     0.74     |  -0.09   |
+|  64²  | photo      |     1.15      |     0.99     |  -0.16   |     0.85      |     0.81     |  -0.04   |
+|  64²  | screenshot |     1.07      |     1.04     |  -0.03   |     0.81      |     0.76     |  -0.05   |
+| 128²  | smooth     |     3.30      |     2.45     |  -0.85   |     2.74      |     2.51     |  -0.23   |
+| 128²  | photo      |     3.43      |     2.46     |  -0.97   |     2.87      |     2.19     |  -0.68   |
+| 128²  | screenshot |     3.32      |     2.70     |  -0.62   |     3.85      |     2.09     |  -1.76   |
+| 256²  | smooth     |    13.18      |     9.65     |  -3.53   |    11.72      |     8.47     |  -3.25   |
+| 256²  | photo      |    12.05      |     8.44     |  -3.61   |    11.69      |     9.11     |  -2.58   |
+| 256²  | screenshot |    11.53      |     8.75     |  -2.77   |    10.55      |     8.79     |  -1.76   |
+| 512²  | smooth     |    45.28      |    39.07     |  -6.20   |    45.21      |    35.25     |  -9.95   |
+| 512²  | photo      |    46.83      |    35.55     | -11.27   |    42.14      |    31.34     | -10.80   |
+| 512²  | screenshot |    51.49      |    37.18     | -14.32   |    41.81      |    33.55     |  -8.26   |
+|1024²  | smooth     |   221.88      |   196.14     | **-25.74** | 185.85      |   154.95     | **-30.90** |
+|1024²  | photo      |   210.36      |   182.88     | **-27.48** | 207.09      |   151.15     | **-55.93** |
+|1024²  | screenshot |   213.17      |   175.09     | **-38.08** | 196.97      |   161.72     | **-35.24** |
+
+**1024² wall-time savings: 25-56 ms — comfortably exceeds the ≥3 ms gate.**
+
+## Numeric parity
+
+The 1e-4 JOD parity gate (`standard_4k_path_still_at_parity_against_host_scalar`)
+holds exactly — an allocator-only change is numerically inert. Tested
+once with default features and once with
+`--no-default-features --features "alloc parallel"`. Both pass.
+
+All 45 tests pass (15 lib + 6 diffmap + 4 parity + 2 corpus + 18 upstream-parity-extended).
+
+## DO NOT (binding for future agents)
+
+1. DO NOT swap this in for a `thread_local!` TLS pool without first
+   measuring against the same workload — butteraugli B7c (2026-05-23)
+   showed that TLS pool with crossbeam-overflow REGRESSED wall +3.6%
+   because per-thread isolation INCREASED fresh allocations. The
+   current per-band-slot pattern is parallelism-safe (each band index
+   has a single slot, accessed by one rayon worker at a time) without
+   needing TLS at all.
+2. DO NOT remove the `weber_contrast_pyr` (owned-result) helper. It's
+   used by `warm_reference` because the warm cache must hold owned
+   `[WeberPyramid; 3]`. It's also used by the `pyramid::tests`
+   suite for golden parity vs the upstream `weber_contrast_pyr_dec_scalar`.
+3. DO NOT add `--features parallel-pyramid-output` or similar gates;
+   the recycling works under both default features and
+   `--no-default-features --features "alloc parallel"` already.
+4. DO NOT shrink `BandWorkspace` to remove the t_p_*/r_p_* slots —
+   they are necessary because `mult_mutual_band_into` requires
+   `&[Vec<f32>; 3]` (a contiguous 3-array). The current code moves
+   them in/out via `core::mem::take` to convert from struct-field
+   storage to array form. Alternative would be to change the
+   `mult_mutual_band_into` signature (a follow-on chunk).
+5. DO NOT cite "FMA precision" for any byte/score drift. The change is
+   allocator-only; uniform tests pass at 1e-4 JOD against the host
+   scalar reference.
+
+## Follow-on candidates (NOT in this chunk)
+
+A. **`accumulate_band_diffmap` signature change**: takes
+   `&[Vec<f32>; 3]` today; change to 3× `&[f32]` to eliminate the
+   `.clone()` of `ws.d_*` slots when `want_diffmap=true`. Would save
+   3× n_px f32 per call when diffmap mode is engaged.
+
+B. **`mult_mutual_band_into` signature change**: takes
+   `&[Vec<f32>; 3]` for t_p/r_p; change to 6× `&[f32]` to eliminate
+   the `core::mem::take` dance in `fold_bands_*`. Cosmetic
+   improvement, no measurable wall-time difference.
+
+C. **`gaussian_blur_sigma3` in-place variant**: currently allocates
+   3× `Vec<f32>` per call inside `mult_mutual_band_into` (one per
+   channel). Allocator profile shows these are the remaining largest
+   per-call allocation cluster on the non-baseband path. The blur
+   is in upstream cvvdp-gpu's masking module; needs an `_into`
+   variant or per-thread blur buffer pool.
+
+D. **Linear-plane intermediate Vecs in `color::*`**: the
+   `srgb_to_dkl_planar` path may allocate intermediates. Audit the
+   color module for per-call allocations after this chunk lands.
