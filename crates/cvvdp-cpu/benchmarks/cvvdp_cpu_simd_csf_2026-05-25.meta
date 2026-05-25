@@ -1,0 +1,100 @@
+cvvdp-cpu SIMD CSF Chunk 5 — HONEST-STOP
+==========================================
+
+date:      2026-05-25
+host:      water-cooled AMD Ryzen 9 7950X (8C/16T), 128 GB RAM, Linux
+commit:    pre = Chunk 2 SIMD pyramid (master@origin `71bd498f`)
+           post_v1 = band-wide materialize CSF (zuqzlruz `23874d4e`)
+           post_v2 = tile-fused-256 CSF (this commit)
+binary:    cargo build -p cvvdp-cpu --release --example time_csf_paired_ab
+           features = std + parallel (default), NO target-cpu=native
+methodology:
+  - 5 ROUNDS of interleaved (pre, post) — 30 timed iterations per round
+    plus 3 warmups. Per-round we report best / median / mean / stddev.
+  - Aggregated via median-of-5 across rounds.
+
+## Result: BOTH designs REGRESS at 256-1024 squared
+
+Two approaches tested:
+
+### v1: band-wide materialize
+
+Pre-compute 3 per-channel sensitivity Vec<f32> buffers per band (each
+band_n_px elements), then read them in the t_p/r_p loop.
+
+| size      | pre_best | post_best | Dbest       | pre_med  | post_med | Dmed        |
+|-----------|----------|-----------|-------------|----------|----------|-------------|
+| 256x256   |     7.19 |      9.38 | +2.19 (+31%)  |     8.21 |    10.83 | +2.62 (+32%)|
+| 512x512   |    31.00 |     36.61 | +5.61 (+18%)  |    41.98 |    45.92 | +3.94 (+9%) |
+| 1024x1024 |   146.00 |    173.95 | +27.95 (+19%) |   173.84 |   217.81 | +43.98 (+25%)|
+| 2048x2048 |   626.65 |    714.54 | +87.89 (+14%) |   709.94 |   877.70 | +167.76(+24%)|
+
+### v2: tile-fused-256 (L1-resident stack tiles)
+
+256-element stack tiles: compute `log_s * LN_10` into stack, SIMD exp
+into sibling stack, copy to output Vec. Keeps working set at 2 KB.
+
+| size      | pre_best | post_best | Dbest       | pre_med  | post_med | Dmed        |
+|-----------|----------|-----------|-------------|----------|----------|-------------|
+| 256x256   |     6.85 |      7.71 | +0.86 (+13%)  |     7.51 |     8.92 | +1.41 (+19%)|
+| 512x512   |    28.68 |     33.03 | +4.35 (+15%)  |    31.46 |    35.54 | +4.08 (+13%)|
+| 1024x1024 |   150.52 |    159.35 | +8.83 (+6%)   |   160.33 |   175.13 | +14.80 (+9%)|
+| 2048x2048 |   599.24 |    660.13 | +60.89 (+10%) |   654.77 |   720.14 | +65.37 (+10%)|
+
+v2 is better than v1 but still regresses everywhere.
+
+## Root cause
+
+The original `apply_csf_row_per_pixel` is STREAM-FUSED by LLVM: the
+sensitivity value stays in an xmm register between the exp() call and
+the consumer `t_p[i] = dis * s * band_mul * ch_gain`. No intermediate
+buffer write/read. Any design that materializes `s[i]` into a Vec<f32>
+(even just for "compute once, read twice") incurs extra memory traffic
+that exceeds the SIMD exp saving.
+
+Per the Chunk 3 flamegraph, `f32::exp` is only ~2.6% of total wall.
+At 1024 squared baseline ~150 ms that's ~4 ms of exp time. Even
+replacing 100% of it with zero-cost SIMD would save at most 4 ms. The
+buffer materialization costs ~9-15 ms in extra memory traffic.
+
+The SIMD exp IS faster than scalar `f32::exp` (verified in
+single-thread isolation on 2048 squared: v1 gave -39% ST win there
+because the per-pixel work dominates at large sizes). But the CSF
+band loop is already memory-bound at 256-1024 squared; adding ANY
+buffer round-trip loses.
+
+## What would win
+
+A fully-fused SIMD band loop that processes all 3 channels + both
+sides in one pass with SIMD gather (`_mm256_i32gather_ps`) for the
+32-entry LUT bracket reads + SIMD exp + SIMD multiply for the
+t_p/r_p output. This avoids any materialization. archmage/magetypes
+does NOT expose gather intrinsics (too architecture-specific), so
+this would need a hand-written x86-only kernel — out of scope for
+this chunk.
+
+## Persistent rayon pool (Step 2)
+
+Skipped — rayon already provides a global persistent thread pool
+initialized on first `par_iter_mut` call. Wrapping it in a per-Cvvdp
+`ThreadPool::install(|| ...)` adds overhead for zero gain (same as
+butteraugli B7c TLS pool finding: the pool sync is NOT the bottleneck).
+
+## Disposition
+
+HONEST-STOP. ZERO production source change. `csf.rs` module added with
+`compute_sensitivities_into` + 3 unit tests retained as documentation
+(gated `#[allow(dead_code)]` on `mod csf` in lib.rs). pipeline.rs and
+scratch.rs restored to Chunk 2 baseline.
+
+1e-4 JOD parity gate PRESERVED (58/58 tests pass).
+
+## DO NOT
+
+1. DO NOT re-attempt band-wide sensitivity materialization at any tile
+   size <= 4096. Measurement is conclusive.
+2. DO NOT attempt persistent rayon pool wrapper. Rayon global pool IS
+   persistent.
+3. DO NOT cite "FMA precision" for the regression.
+4. DO remove the `csf.rs` module if it becomes confusing in future
+   refactors — it's documentation, not load-bearing.

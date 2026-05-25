@@ -48,17 +48,6 @@ pub(crate) struct BandWorkspace {
     pub term_rg: Vec<f32>,
     pub term_vy: Vec<f32>,
     pub pu_h: Vec<f32>,
-    // CSF sensitivities precomputed per band per channel (Chunk 5).
-    // Each holds `n_px` f32s = `exp((log_s_raw + correction) * LN_10)`.
-    // Filled by `csf::compute_sensitivities_into` once per band; read
-    // by the t_p/r_p/d loops below it.
-    pub s_a: Vec<f32>,
-    pub s_rg: Vec<f32>,
-    pub s_vy: Vec<f32>,
-    // Scratch buffer for the SIMD csf prologue. `csf::compute_sensitivities_into`
-    // writes `log_s_corr * LN_10` here before calling `vexp_into`.
-    // Reused across the 3 channels per band.
-    pub csf_tmp: Vec<f32>,
 }
 
 /// All scratch state owned by a `Cvvdp` instance.

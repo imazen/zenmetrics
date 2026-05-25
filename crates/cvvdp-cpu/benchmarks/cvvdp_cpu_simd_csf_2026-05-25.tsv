@@ -1,0 +1,9 @@
+design	size_w	size_h	pre_best_ms	post_best_ms	delta_best_ms	delta_best_pct	pre_median_ms	post_median_ms	delta_median_ms	delta_median_pct
+band-wide-materialize	256	256	7.19	9.38	2.19	30.5	8.21	10.83	2.62	31.9
+band-wide-materialize	512	512	31.00	36.61	5.61	18.1	41.98	45.92	3.94	9.4
+band-wide-materialize	1024	1024	146.00	173.95	27.95	19.1	173.84	217.81	43.98	25.3
+band-wide-materialize	2048	2048	626.65	714.54	87.89	14.0	709.94	877.70	167.76	23.6
+tile-fused-256	256	256	6.85	7.71	0.86	12.5	7.51	8.92	1.41	18.7
+tile-fused-256	512	512	28.68	33.03	4.35	15.2	31.46	35.54	4.08	13.0
+tile-fused-256	1024	1024	150.52	159.35	8.83	5.9	160.33	175.13	14.80	9.2
+tile-fused-256	2048	2048	599.24	660.13	60.89	10.2	654.77	720.14	65.37	10.0

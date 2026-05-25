@@ -21,15 +21,50 @@ use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_co
 use crate::scratch::{BandWorkspace, Scratch};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
-use cvvdp_gpu::kernels::csf::{CSF_BASEBAND_RHO, CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, precompute_logs_row};
+use cvvdp_gpu::kernels::csf::{
+    CSF_BASEBAND_RHO, CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, SENSITIVITY_CORRECTION_DB,
+    precompute_logs_row,
+};
 use cvvdp_gpu::kernels::masking::CH_GAIN;
 
-use crate::csf::compute_sensitivities_into;
 use crate::masking::mult_mutual_band_into;
 
-// Chunk 5: the per-pixel CSF apply was inlined here as
-// `apply_csf_row_per_pixel`. It's now `compute_sensitivities_into`
-// in `csf.rs` (SIMD-accelerated via `simd_math::vexp_into`).
+/// Sensitivity correction in log10 space, premultiplied so we can
+/// add to `log_s` before the `10^x` step (matches the GPU 3ch fused
+/// kernel's `log_correction` constant).
+const LOG_SENSITIVITY_CORRECTION: f32 = SENSITIVITY_CORRECTION_DB / 20.0;
+/// `1.0 / (LOG_L_BKG_AXIS[N-1] - LOG_L_BKG_AXIS[0]) * (N - 1)` = 31 /
+/// 6.30103 ≈ 4.919830570... The CSF L_bkg axis is uniform in log10
+/// space.
+const CSF_L_BKG_INV_STEP: f32 = 4.919_830_6;
+const CSF_L_BKG_AXIS_MIN: f32 = -2.301_03;
+const CSF_L_BKG_MAX_IDX: f32 = 30.999_999;
+
+/// Per-pixel CSF apply via a precomputed `logs_row[N_L_BKG]`.
+///
+/// Replicates `csf_apply_3ch_kernel`'s per-pixel arithmetic
+/// (uniform-axis bracket index from `(log_l - min) / step`, linear
+/// interp into the row, add the constant correction in log space,
+/// then `exp(log_s · ln 10)`). The rho-axis interp has already been
+/// folded into `logs_row` by `precompute_logs_row`, so the inner
+/// loop here has NO binary searches and the whole CSF evaluation
+/// reduces to 2 indexed reads + a linear combine + a single
+/// `f32::exp` per pixel per channel.
+#[inline]
+fn apply_csf_row_per_pixel(log_l: f32, logs_row: &[f32; N_L_BKG]) -> f32 {
+    let off_raw = (log_l - CSF_L_BKG_AXIS_MIN) * CSF_L_BKG_INV_STEP;
+    let off_lo = off_raw.clamp(0.0, CSF_L_BKG_MAX_IDX);
+    let lo_idx_f = off_lo.floor();
+    let frac = off_lo - lo_idx_f;
+    let lo_idx = lo_idx_f as usize;
+    let hi_idx = lo_idx + 1;
+    let lo = logs_row[lo_idx];
+    let hi = logs_row[hi_idx];
+    let log_s_raw = lo + frac * (hi - lo);
+    let log_s = log_s_raw + LOG_SENSITIVITY_CORRECTION;
+    // exp(log_s * ln 10) == 10^log_s
+    (log_s * core::f32::consts::LN_10).exp()
+}
 
 /// CPU scorer for cvvdp still-image JOD.
 ///
@@ -478,16 +513,6 @@ impl Cvvdp {
             debug_assert_eq!(logs_row_a.len(), N_L_BKG);
             debug_assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
 
-            // Chunk 5: precompute per-pixel sensitivities once per band
-            // per channel via SIMD exp. Each pixel's `s` is consumed
-            // TWICE per channel (for t_p[i] and r_p[i]) so the
-            // 1-write/2-read pattern beats the previous
-            // call-apply_csf-twice-per-pixel pattern even before
-            // counting the SIMD exp win.
-            compute_sensitivities_into(log_l_bkg_band, &logs_row_a, &mut ws.csf_tmp, &mut ws.s_a);
-            compute_sensitivities_into(log_l_bkg_band, &logs_row_rg, &mut ws.csf_tmp, &mut ws.s_rg);
-            compute_sensitivities_into(log_l_bkg_band, &logs_row_vy, &mut ws.csf_tmp, &mut ws.s_vy);
-
             // Compute T_p + R_p per channel into recycled workspace.
             ws.t_p_a.clear();
             ws.t_p_a.resize(n_px, 0.0);
@@ -512,9 +537,10 @@ impl Cvvdp {
             let ch_gain_rg = CH_GAIN[1];
             let ch_gain_vy = CH_GAIN[2];
             for i in 0..n_px {
-                let s_a = ws.s_a[i];
-                let s_rg = ws.s_rg[i];
-                let s_vy = ws.s_vy[i];
+                let log_l = log_l_bkg_band[i];
+                let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
                 let bm_sa = band_mul * s_a;
                 let bm_srg = band_mul * s_rg;
                 let bm_svy = band_mul * s_vy;
@@ -534,9 +560,10 @@ impl Cvvdp {
                 ws.d_vy.clear();
                 ws.d_vy.resize(n_px, 0.0);
                 for i in 0..n_px {
-                    let s_a = ws.s_a[i];
-                    let s_rg = ws.s_rg[i];
-                    let s_vy = ws.s_vy[i];
+                    let log_l = log_l_bkg_band[i];
+                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
                     let diff_a = dis_a_band[i] - ref_a_band[i];
                     let diff_rg = dis_rg_band[i] - ref_rg_band[i];
                     let diff_vy = dis_vy_band[i] - ref_vy_band[i];
@@ -664,29 +691,6 @@ impl Cvvdp {
                 let ch_gain_rg = CH_GAIN[1];
                 let ch_gain_vy = CH_GAIN[2];
 
-                // Chunk 5: precompute per-pixel sensitivities via SIMD
-                // exp into the band workspace. Each rayon worker has
-                // its own `ws` slot so the scratch is private — no
-                // contention.
-                compute_sensitivities_into(
-                    log_l_bkg_band,
-                    &logs_row_a,
-                    &mut ws.csf_tmp,
-                    &mut ws.s_a,
-                );
-                compute_sensitivities_into(
-                    log_l_bkg_band,
-                    &logs_row_rg,
-                    &mut ws.csf_tmp,
-                    &mut ws.s_rg,
-                );
-                compute_sensitivities_into(
-                    log_l_bkg_band,
-                    &logs_row_vy,
-                    &mut ws.csf_tmp,
-                    &mut ws.s_vy,
-                );
-
                 if is_baseband {
                     // Reuse d_a/d_rg/d_vy slots in the workspace.
                     ws.d_a.clear();
@@ -696,9 +700,10 @@ impl Cvvdp {
                     ws.d_vy.clear();
                     ws.d_vy.resize(n_px, 0.0);
                     for i in 0..n_px {
-                        let s_a = ws.s_a[i];
-                        let s_rg = ws.s_rg[i];
-                        let s_vy = ws.s_vy[i];
+                        let log_l = log_l_bkg_band[i];
+                        let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                        let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                        let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
                         let diff_a = dis_a_band[i] - ref_a_band[i];
                         let diff_rg = dis_rg_band[i] - ref_rg_band[i];
                         let diff_vy = dis_vy_band[i] - ref_vy_band[i];
@@ -721,9 +726,10 @@ impl Cvvdp {
                     ws.r_p_vy.clear();
                     ws.r_p_vy.resize(n_px, 0.0);
                     for i in 0..n_px {
-                        let s_a = ws.s_a[i];
-                        let s_rg = ws.s_rg[i];
-                        let s_vy = ws.s_vy[i];
+                        let log_l = log_l_bkg_band[i];
+                        let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                        let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                        let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
                         let bm_sa = band_mul * s_a;
                         let bm_srg = band_mul * s_rg;
                         let bm_svy = band_mul * s_vy;
