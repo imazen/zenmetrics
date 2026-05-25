@@ -1,0 +1,57 @@
+# cvvdp_iphone14_parity_gpu_2026-05-25.tsv
+
+Real-GPU companion to cvvdp_iphone14_parity_2026-05-25.tsv. Confirms
+that cubecl-cuda on this host (RTX 5070 / CUDA 13.2, native cargo run
+— no docker) produces the same parity numbers as the host_scalar path,
+within the 1e-4 / 5e-2 GPU↔scalar pin set by
+tests/color_kernel_display_dispatch.rs.
+
+Run via:
+    cargo run -p cvvdp-gpu --release \
+        --features cuda,cubecl-types --no-default-features \
+        --example parity_iphone_eval_gpu
+
+Source code: crates/cvvdp-gpu/examples/parity_iphone_eval_gpu.rs
+Eval bundle: /tmp/cvvdp-display-eval/ (13 pairs across photo / screen /
+lineart / gradient content classes, distortions = JPEG q8..q98, gauss
+blur sigma1..6, gauss noise s10..s25).
+
+Backend: cubecl-cuda 0.10 (Cvvdp::<CudaRuntime>::new_with_geometry +
+Cvvdp::score). Driver 596.21, CUDA 13.2.1 SDK at /usr/local/cuda.
+
+Reference: pycvvdp v0.5.4 — scores from
+/tmp/cvvdp-display-eval/results.tsv (columns jod_4k and jod_iphone).
+
+Displays:
+* standard_4k — DisplayModel::STANDARD_4K + DisplayGeometry::STANDARD_4K
+  (200 cd/m² sRGB at 4K, 75 ppd)
+* iphone_14_pro — DisplayModel::IPHONE_14_PRO +
+  DisplayGeometry::IPHONE_14_PRO
+
+Gate: mean abs_diff < 0.10 JOD, max abs_diff < 0.30 JOD.
+
+Result (GPU):
+* standard_4k:  n=13, mean=0.0370, median=0.0016, max=0.3906
+* iphone_14_pro: n=13, mean=0.0303, median=0.0011, max=0.3307
+
+vs host_scalar from cvvdp_iphone14_parity_2026-05-25.tsv:
+* standard_4k:  mean delta vs scalar = 0.0001
+* iphone_14_pro: mean delta vs scalar = 0.0001
+
+Both displays meet the mean gate. 12/13 pairs pass the max gate; the
+single outlier (photo_dark_noise_heavy — Gauss noise s25 on a dark
+photo reference) drifts ~0.33 / 0.39 JOD on BOTH displays. Same
+direction, same magnitude on host_scalar and GPU — confirms the drift
+is a metric-vs-pycvvdp content issue at the dark+noise extreme, not a
+display-dispatch defect and not a GPU-vs-scalar precision issue.
+
+Commits:
+* Wired by f8bf27298b04 (feat(cvvdp-gpu): GPU kernel-side EOTF +
+  primaries dispatch)
+* GPU reproducer added separately (see git log of
+  crates/cvvdp-gpu/examples/parity_iphone_eval_gpu.rs).
+
+Note: the local CLAUDE.md PINNED TASK section claimed WSL2 couldn't
+reach cubecl-cuda — that conflated snap-docker NVML failures with the
+native host's GPU access. Native cargo runs reach the GPU fine via
+cubecl-cuda's runtime dlopen of libcuda.so.1.

@@ -57,20 +57,25 @@ fast path hardcoded sRGB + BT.709 inside `srgb_to_dkl_kernel` /
   `y_peak` (HDR PQ at 3000 cd/m² gets 0.1 abs = 33 ppm relative);
   the chained `powf` in PQ / HLG accumulates ~3-4 ULPs of
   ordering noise across the f32 chain.
-- **HDR + iPhone parity vs pycvvdp v0.5.4** measured against the
-  13-pair `/tmp/cvvdp-display-eval/` bundle through host_scalar
-  (WSL2 host can't reach cubecl-cuda + cubecl-cpu hits the
-  `atomic<f32>` panic — see `zenmetrics/CLAUDE.md` PINNED TASK):
-  - `standard_4k`: n=13, mean abs_diff = 0.0369 JOD, median = 0.0016,
-    max = 0.3908 (single outlier on `photo_dark_noise_heavy`).
-  - `iphone_14_pro`: n=13, mean = 0.0302, median = 0.0011,
-    max = 0.3309 (same outlier).
+- **HDR + iPhone parity vs pycvvdp v0.5.4** measured on the real
+  GPU path (cubecl-cuda on RTX 5070 / CUDA 13.2, native build —
+  no docker) against the 13-pair `/tmp/cvvdp-display-eval/` bundle:
+  - `standard_4k`: n=13, mean abs_diff = 0.0370 JOD, median = 0.0016,
+    max = 0.3906 (single outlier on `photo_dark_noise_heavy`).
+  - `iphone_14_pro`: n=13, mean = 0.0303, median = 0.0011,
+    max = 0.3307 (same outlier).
   Both displays meet the mean<0.10 gate; the max outlier shows up
   on both displays at the same pair, indicating a content-specific
-  drift rather than a display-dispatch defect. Full breakdown at
+  drift rather than a display-dispatch defect. The GPU numbers are
+  within ~0.0002 JOD of the host_scalar path measured the same day,
+  matching the GPU↔scalar pin in
+  `tests/color_kernel_display_dispatch.rs`. Full breakdown at
   `benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv` + `.meta`.
-  Reproducer:
-  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval`.
+  Reproducers (both written for the same TSV layout):
+  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval_gpu --features cuda,cubecl-types --no-default-features`
+  (GPU, writes `parity_v2_gpu.tsv`) and
+  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval`
+  (host_scalar fallback for hosts without CUDA).
 
 Commit: `f8bf2729` (this work). Docs updated in
 `crates/cvvdp-gpu/docs/DISPLAY_SPECS.md` Scope matrix.

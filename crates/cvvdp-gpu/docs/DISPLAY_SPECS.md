@@ -138,8 +138,8 @@ variants of `params::Eotf`.
 Primaries coverage on GPU: Bt709 (default), Bt2020, DisplayP3, DciP3
 (currently aliased to DisplayP3 — see `Primaries` docs).
 
-Parity (host_scalar vs pycvvdp v0.5.4 — same numbers GPU produces at
-f32 precision per the tests above):
+Parity vs pycvvdp v0.5.4 — measured on the real GPU path
+(cubecl-cuda / RTX 5070 / CUDA 13.2, native build):
 
 * `standard_4k` over 13 mixed-content pairs: mean abs_diff = 0.037 JOD,
   median = 0.002 JOD, max = 0.391 JOD (single outlier on heavy noise).
@@ -149,13 +149,18 @@ f32 precision per the tests above):
 Both displays meet the mean<0.10 gate; the max outlier appears on both
 displays at the same pair (`photo_dark_noise_heavy`), indicating a
 content-specific divergence rather than a display-dispatch defect.
-Full breakdown:
-`benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv`.
+GPU and host_scalar numbers agree to ~0.0002 JOD, consistent with the
+GPU↔scalar pin in `tests/color_kernel_display_dispatch.rs`.
 
-Validated via `crates/cvvdp-gpu/examples/parity_iphone_eval.rs`. The
-GPU-vs-scalar agreement is separately pinned by
-`tests/color_kernel_display_dispatch.rs` (12 (EOTF × primaries × peak)
-combos including iPhone 14 Pro SDR + HDR).
+Full breakdown: `benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv`.
+
+Reproducers (both target the same TSV layout):
+* GPU:
+  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval_gpu --features cuda,cubecl-types --no-default-features`
+  (writes `/tmp/cvvdp-display-eval/parity_v2_gpu.tsv`)
+* Host scalar fallback (no CUDA required):
+  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval`
+  (writes `parity_v2_scalar.tsv`)
 
 ## Refreshing the vendored JSON
 
