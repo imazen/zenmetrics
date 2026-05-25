@@ -927,22 +927,23 @@ impl DisplayGeometry {
     /// chosen so `pixels_per_degree()` returns the same value as the
     /// FOV-based path would.
     ///
-    /// Derivation (per upstream):
+    /// Derivation (per upstream pycvvdp v0.5.4):
     /// distance_px = sqrt(W² + H²) / (2 * tan(fov_diag/2))
     ///             = sqrt(1440² + 1600²) / (2 * tan(55°))
-    ///             ≈ 753.16
-    /// height_deg  = degrees(atan(H/2 / distance_px)) * 2 ≈ 93.575°
-    /// height_m    = 2 * tan(height_deg/2) * 3 m ≈ 6.4115 m
-    /// width_m     = aspect * height_m ≈ 5.770 m
-    /// diag_m      = sqrt(width_m² + height_m²) ≈ 8.628 m
-    /// diag_inches = diag_m / 0.0254 ≈ 339.7 inches
+    ///             ≈ 753.626
+    /// height_deg  = degrees(atan(H/2 / distance_px)) * 2 ≈ 93.419°
+    /// height_m    = 2 * tan(height_deg/2) * 3 m ≈ 6.369 m
+    /// width_m     = aspect * height_m ≈ 5.732 m
+    /// diag_m      = sqrt(width_m² + height_m²) ≈ 8.570 m
+    /// diag_inches = diag_m / 0.0254 ≈ 337.4 inches
     ///
-    /// The resulting PPD ≈ 11.84 matches upstream's get_ppd() output.
+    /// The resulting PPD ≈ 13.153 matches upstream's get_ppd() output
+    /// (pinned by tests/upstream_parity_extended.rs).
     pub const HTC_VIVE_PRO: Self = Self {
         resolution_w: 1440,
         resolution_h: 1600,
         distance_m: 3.0,
-        diagonal_inches: 339.7,
+        diagonal_inches: 337.4,
     };
 
     /// Build a [`DisplayGeometry`] from physical fields. Identical to
@@ -1023,10 +1024,10 @@ impl DisplayGeometry {
     /// ```
     /// use cvvdp_gpu::params::DisplayGeometry;
     /// let g = DisplayGeometry::from_fov_diagonal(1440, 1600, 3.0, 110.0);
-    /// // 110° FOV at 3 m on 1440×1600 → ~11.84 ppd, matches upstream
-    /// // get_ppd() to within 0.05.
+    /// // 110° FOV at 3 m on 1440×1600 → ~13.15 ppd, matches upstream
+    /// // pycvvdp `vvdp_display_geometry.get_ppd()` to within 0.01.
     /// let ppd = g.pixels_per_degree();
-    /// assert!((ppd - 11.84).abs() < 0.05, "got {ppd}");
+    /// assert!((ppd - 13.153).abs() < 0.01, "got {ppd}");
     /// ```
     #[must_use]
     pub fn from_fov_diagonal(

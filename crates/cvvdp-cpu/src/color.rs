@@ -71,12 +71,8 @@ pub(crate) fn srgb_to_dkl_planar(
         // Dispatch path — honors arbitrary EOTF + primaries. HLG
         // needs per-RGB-triple OOTF, hence the per-pixel call.
         for i in 0..n {
-            let (a, rg, vy) = display_byte_to_dkl_scalar(
-                src[i * 3],
-                src[i * 3 + 1],
-                src[i * 3 + 2],
-                display,
-            );
+            let (a, rg, vy) =
+                display_byte_to_dkl_scalar(src[i * 3], src[i * 3 + 1], src[i * 3 + 2], display);
             out_a[i] = a;
             out_rg[i] = rg;
             out_vy[i] = vy;
@@ -300,7 +296,6 @@ mod tests {
             primaries: Primaries::Bt2020,
             e_ambient_lux: 10.0,
             k_refl: 0.005,
-
         };
         let w = 4;
         let h = 4;
@@ -317,7 +312,12 @@ mod tests {
         for i in 0..w * h {
             let (ea, erg, evy) =
                 display_byte_to_dkl_scalar(src[i * 3], src[i * 3 + 1], src[i * 3 + 2], display);
-            assert!((a[i] - ea).abs() < 1e-4, "A mismatch at i={i}: {} vs {}", a[i], ea);
+            assert!(
+                (a[i] - ea).abs() < 1e-4,
+                "A mismatch at i={i}: {} vs {}",
+                a[i],
+                ea
+            );
             assert!((rg[i] - erg).abs() < 1e-4, "RG mismatch at i={i}");
             assert!((vy[i] - evy).abs() < 1e-4, "VY mismatch at i={i}");
         }
@@ -337,7 +337,6 @@ mod tests {
             primaries: Primaries::Bt2020,
             e_ambient_lux: 10.0,
             k_refl: 0.005,
-
         };
         let w = 4;
         let h = 4;
@@ -374,7 +373,6 @@ mod tests {
             primaries: Primaries::Bt709,
             e_ambient_lux: 250.0,
             k_refl: 0.005,
-
         };
         let w = 4;
         let h = 4;
@@ -410,7 +408,6 @@ mod tests {
             primaries: Primaries::Bt2020,
             e_ambient_lux: 10.0,
             k_refl: 0.005,
-
         };
         let w = 4;
         let h = 4;
