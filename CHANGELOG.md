@@ -17,6 +17,32 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf narrative + HMD geometry + heatmap + params verification — 2026-05-25
+
+- **Performance numbers corrected**: lib.rs "How we compare" section
+  updated from stale tick-175 numbers (62 / 34 ns/px = 4.4× / 2.4×
+  slower) to current measurements (2.1 / 1.3 ns/px = **6.5× / 10.7×
+  faster** than pycvvdp v0.5.4 CUDA). Measured on RTX 5070 at 12 MP.
+  Reproducer: `cargo run --release --example time_12mp -p cvvdp-gpu
+  --features cuda,cubecl-types --no-default-features`. (`1280571a`)
+- **HMD geometry**: `DisplayGeometry::by_name()` now handles
+  `fov_diagonal` entries via `from_fov_diagonal()`. All 26 upstream
+  presets (including `standard_hmd` and `htc_vive_pro`) load both
+  model and geometry — previously the two HMD presets returned
+  `None` for geometry. (`1280571a`)
+- **Heatmap rendering**: new `heatmap` module with `HeatmapMode`
+  enum (`Threshold` / `SupraThreshold` / `Raw`) and
+  `render_heatmap()`. Ports upstream pycvvdp's
+  `visualize_diff_map.py` colormaps — threshold (5-color, 0–0.1 JOD),
+  supra-threshold (3-color, 0–0.3 JOD), raw (grayscale). Accepts
+  optional context image for luminance-modulated backdrop.
+  (`1280571a`)
+- **Params verification**: vendored `cvvdp_parameters.json` under
+  `data/` and added `tests/params_match_upstream_json.rs` asserting
+  all kernel consts (MASK_P/Q/C, D_MAX, BETA_*, JOD_A/EXP,
+  IMAGE_INT, BASEBAND_W) match the upstream JSON to 1e-5. Catches
+  calibration drift on upstream version bumps. (`1280571a`)
+
 ### cvvdp-cpu — SIMD 5-tap pyramid reduce/expand (Chunk 2 of SIMD plan) — 2026-05-25
 
 `src/simd_pyramid.rs` (new) ports the 5-tap separable Gaussian inner
