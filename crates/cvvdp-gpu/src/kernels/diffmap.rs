@@ -75,18 +75,20 @@ use cubecl::prelude::*;
 ///
 /// Inputs:
 /// - `lin_r`, `lin_g`, `lin_b` — three planar `W × H` linear-light
-///   sRGB f32 buffers in the unit `[0, 1]` range. Values outside
-///   `[0, 1]` are accepted (cvvdp's DKL is a linear transform; HDR
-///   highlights and below-black blacks pass through unmodified).
+///   f32 buffers in the unit `[0, 1]` range (or HDR cd/m²-scaled when
+///   paired with a Linear-EOTF display model). Values outside
+///   `[0, 1]` are accepted.
 ///
 /// Outputs:
 /// - `out_a`, `out_rg`, `out_vy` — `W × H` planar f32 in DKL
 ///   opponent space (cd/m²-scaled).
 ///
 /// Display constants (`y_peak`, `y_black`, `y_refl`) are pushed as
-/// runtime scalars; the DKL matrix is captured as kernel-local f32
-/// constants so LLVM folds the linear combination at codegen time
-/// (same bit-pinned values as `srgb_to_dkl_kernel`).
+/// runtime scalars. The DKL matrix is also pushed as 9 runtime
+/// scalars so a single kernel binary serves every
+/// [`crate::params::Primaries`] variant — LLVM still folds the
+/// linear combination at codegen time when the values are constant
+/// across the launch.
 #[cube(launch)]
 pub fn linear_rgb_planes_to_dkl_kernel(
     lin_r: &Array<f32>,
@@ -100,6 +102,15 @@ pub fn linear_rgb_planes_to_dkl_kernel(
     y_peak: f32,
     y_black: f32,
     y_refl: f32,
+    m00: f32,
+    m01: f32,
+    m02: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m20: f32,
+    m21: f32,
+    m22: f32,
 ) {
     let idx = ABSOLUTE_POS;
     let total = (width * height) as usize;
@@ -116,17 +127,6 @@ pub fn linear_rgb_planes_to_dkl_kernel(
     let lr = s * r + bias;
     let lg = s * g + bias;
     let lb = s * b + bias;
-
-    // Same row-bit-pinned f32 constants as srgb_to_dkl_kernel.
-    let m00 = f32::new(0.233_201_21);
-    let m01 = f32::new(0.728_830_8);
-    let m02 = f32::new(0.088_995_87);
-    let m10 = f32::new(0.127_620_77);
-    let m11 = f32::new(-0.087_068_09);
-    let m12 = f32::new(-0.036_777_39);
-    let m20 = f32::new(-0.214_822_5);
-    let m21 = f32::new(-0.626_253_7);
-    let m22 = f32::new(0.851_403_3);
 
     out_a[idx] = m00 * lr + m01 * lg + m02 * lb;
     out_rg[idx] = m10 * lr + m11 * lg + m12 * lb;

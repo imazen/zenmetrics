@@ -13,7 +13,9 @@
 
 use cubecl::Runtime;
 use cubecl::prelude::*;
-use cvvdp_gpu::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_byte_to_dkl_scalar, srgb_to_dkl_kernel};
+use cvvdp_gpu::kernels::color::{
+    SRGB8_TO_LINEAR_LUT, eotf_tag_and_gamma, srgb_byte_to_dkl_scalar, srgb_to_dkl_kernel,
+};
 use cvvdp_gpu::params::DisplayModel;
 
 #[path = "common/mod.rs"]
@@ -62,6 +64,10 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
     let cube_dim = CubeDim::new_1d(64);
     let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
 
+    let (eotf_tag, gamma_exp) = eotf_tag_and_gamma(display.eotf);
+    let hlg_gamma =
+        cvvdp_gpu::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
+    let m = display.primaries.linear_rgb_to_dkl();
     unsafe {
         srgb_to_dkl_kernel::launch::<Backend>(
             &client,
@@ -77,6 +83,18 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
             display.y_peak,
             display.y_black,
             display.y_refl,
+            eotf_tag,
+            gamma_exp,
+            hlg_gamma,
+            m[0][0],
+            m[0][1],
+            m[0][2],
+            m[1][0],
+            m[1][1],
+            m[1][2],
+            m[2][0],
+            m[2][1],
+            m[2][2],
         );
     }
 

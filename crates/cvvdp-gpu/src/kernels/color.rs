@@ -290,22 +290,257 @@ pub fn display_linear_rgb_to_dkl_scalar(
     (a, rg, vy)
 }
 
-/// sRGB packed-u8 → DKL planar f32.
+/// Runtime EOTF tag passed to GPU color kernels.
+///
+/// Mirrors [`crate::params::Eotf`] as a packed `u32` because cubecl's
+/// `#[cube]` macro can't yet specialize on bool/enum comptime generics
+/// (see `docs/CUBECL_GOTCHAS.md` §G1.7). The kernel branches on the
+/// tag value; identical to the host-side `Eotf::forward` dispatch.
+///
+/// Tag values:
+/// - `0` → [`Eotf::Srgb`] (default, sRGB EOTF via 256-entry LUT)
+/// - `1` → [`Eotf::Pq`] (SMPTE ST 2084, absolute cd/m²)
+/// - `2` → [`Eotf::Hlg`] (BT.2100 HLG, inverse-OETF + per-pixel OOTF)
+/// - `3` → [`Eotf::Linear`] (input already linear-light)
+/// - `4` → [`Eotf::Bt1886`] (BT.1886 display gamma 2.4 with lift)
+/// - `5` → [`Eotf::Gamma`] (generic power-law; gamma exponent passed
+///   as a separate runtime scalar `gamma_exp` because the variant
+///   payload is dynamic)
+///
+/// [`Eotf::Srgb`]: crate::params::Eotf::Srgb
+/// [`Eotf::Pq`]: crate::params::Eotf::Pq
+/// [`Eotf::Hlg`]: crate::params::Eotf::Hlg
+/// [`Eotf::Linear`]: crate::params::Eotf::Linear
+/// [`Eotf::Bt1886`]: crate::params::Eotf::Bt1886
+/// [`Eotf::Gamma`]: crate::params::Eotf::Gamma
+pub mod eotf_tag {
+    /// sRGB / BT.709 EOTF (default).
+    pub const SRGB: u32 = 0;
+    /// SMPTE ST 2084 PQ.
+    pub const PQ: u32 = 1;
+    /// BT.2100 Hybrid Log-Gamma.
+    pub const HLG: u32 = 2;
+    /// Linear-light input.
+    pub const LINEAR: u32 = 3;
+    /// BT.1886 display gamma 2.4 + black lift.
+    pub const BT1886: u32 = 4;
+    /// Generic power-law gamma (exponent passed as runtime scalar).
+    pub const GAMMA: u32 = 5;
+}
+
+/// Resolve a [`crate::params::Eotf`] into its `(tag, gamma_exp)` pair
+/// for passing to GPU color kernels. The `gamma_exp` payload is only
+/// meaningful when `tag == eotf_tag::GAMMA`; other variants ignore it
+/// (any sentinel value passes through the kernel branch).
+#[must_use]
+pub fn eotf_tag_and_gamma(eotf: crate::params::Eotf) -> (u32, f32) {
+    use crate::params::Eotf;
+    match eotf {
+        Eotf::Srgb => (eotf_tag::SRGB, 0.0),
+        Eotf::Pq => (eotf_tag::PQ, 0.0),
+        Eotf::Hlg => (eotf_tag::HLG, 0.0),
+        Eotf::Linear => (eotf_tag::LINEAR, 0.0),
+        Eotf::Bt1886 => (eotf_tag::BT1886, 0.0),
+        Eotf::Gamma(g) => (eotf_tag::GAMMA, g),
+    }
+}
+
+/// In-kernel EOTF apply. Branches on `eotf_tag` to mirror the host
+/// [`crate::params::Eotf::forward`] dispatch.
+///
+/// Input `v` is the byte / linear value in 0..1 normalized space (the
+/// caller divides bytes by 255). Linear EOTF accepts values >1
+/// (HDR linear-light cd/m² inputs); PQ accepts 0..1 PQ-encoded.
+///
+/// Output is the per-channel linear-cd/m² scene-light, BEFORE the
+/// HLG OOTF for HLG inputs (that step depends on the RGB triple's
+/// `Y_s` and is applied separately in the kernel body). For non-HLG
+/// EOTFs the output is already in cd/m² and ready for the DKL matmul.
+///
+/// `#[cube]` doesn't support early `return`, so the dispatch uses
+/// chained `if/else` expressions — semantically equivalent to a match
+/// on the tag.
+#[cube]
+fn apply_eotf_branch(
+    v: f32,
+    eotf_tag: u32,
+    gamma_exp: f32,
+    y_peak: f32,
+    y_black: f32,
+    y_refl: f32,
+) -> f32 {
+    let bias = y_black + y_refl;
+    let scale = y_peak - y_black;
+
+    let v_clamped = if v < f32::new(0.0) {
+        f32::new(0.0)
+    } else if v > f32::new(1.0) {
+        f32::new(1.0)
+    } else {
+        v
+    };
+
+    if eotf_tag == 1u32 {
+        // PQ (SMPTE ST 2084). Reference: pycvvdp `pq2lin`.
+        let l_max = f32::new(10000.0);
+        let m1 = f32::new(0.159_301_75);
+        let m2 = f32::new(78.843_75);
+        let c1 = f32::new(0.835_937_5);
+        let c2 = f32::new(18.851_562);
+        let c3 = f32::new(18.687_5);
+        // PQ accepts raw v (no 0..1 clamp; HDR PQ-encoded can exceed
+        // 1 in theory but realistic inputs are clamped upstream).
+        let im_t = f32::powf(v, f32::new(1.0) / m2);
+        let num_raw = im_t - c1;
+        let num = if num_raw < f32::new(0.0) {
+            f32::new(0.0)
+        } else {
+            num_raw
+        };
+        let den = c2 - c3 * im_t;
+        let lin = l_max * f32::powf(num / den, f32::new(1.0) / m1);
+        let floor_val = f32::new(0.005);
+        let clamped_lo = if lin < floor_val { floor_val } else { lin };
+        let clamped = if clamped_lo > y_peak { y_peak } else { clamped_lo };
+        clamped + bias
+    } else if eotf_tag == 2u32 {
+        // HLG inverse OETF. OOTF applied by caller (depends on Y_s).
+        let a = f32::new(0.178_832_77);
+        let b = f32::new(1.0) - f32::new(4.0) * a;
+        let c = f32::new(0.5) - a * f32::ln(f32::new(4.0) * a);
+        let lin = if v_clamped <= f32::new(0.5) {
+            (v_clamped * v_clamped) / f32::new(3.0)
+        } else {
+            (f32::exp((v_clamped - c) / a) + b) / f32::new(12.0)
+        };
+        scale * lin + bias
+    } else if eotf_tag == 3u32 {
+        // Linear-light input. Clip to [max(0.005, y_black), y_peak]
+        // then add y_refl (NOT bias — Linear's path doesn't re-add
+        // y_black, per pycvvdp's branch).
+        let floor_val = f32::new(0.005);
+        let floor_eff = if y_black > floor_val { y_black } else { floor_val };
+        let clamped_lo = if v < floor_eff { floor_eff } else { v };
+        let clamped = if clamped_lo > y_peak { y_peak } else { clamped_lo };
+        clamped + y_refl
+    } else if eotf_tag == 4u32 {
+        // BT.1886 — gamma 2.4 with black-level lift. L = a · (V + b)^γ.
+        let gamma = f32::new(2.4);
+        let inv_gamma = f32::new(1.0) / gamma;
+        let y_p_g = f32::powf(y_peak, inv_gamma);
+        let y_b_g = f32::powf(y_black, inv_gamma);
+        let lift_a = f32::powf(y_p_g - y_b_g, gamma);
+        let lift_b = y_b_g / (y_p_g - y_b_g);
+        let sum = v_clamped + lift_b;
+        let sum_pos = if sum < f32::new(0.0) {
+            f32::new(0.0)
+        } else {
+            sum
+        };
+        let l = lift_a * f32::powf(sum_pos, gamma);
+        l + y_refl
+    } else if eotf_tag == 5u32 {
+        // Generic power-law gamma (Adobe RGB 2.2, Apple RGB 1.8, …).
+        let lin = f32::powf(v_clamped, gamma_exp);
+        scale * lin + bias
+    } else {
+        // Default / fallback: sRGB closed-form. The caller takes the
+        // LUT path when it knows the EOTF is sRGB; this branch only
+        // fires if the linear-planes / non-byte entry routes a tag-0
+        // value through here.
+        let lin = if v_clamped > f32::new(0.040_45) {
+            f32::powf(
+                (v_clamped + f32::new(0.055)) / f32::new(1.055),
+                f32::new(2.4),
+            )
+        } else {
+            v_clamped / f32::new(12.92)
+        };
+        scale * lin + bias
+    }
+}
+
+/// HLG OOTF (system gamma applied to the linear-RGB triple per
+/// BT.2100). Computes Y_s from the inverse-OETF values, derives the
+/// per-pixel factor `Y_s^(γ-1)`, and re-scales each channel.
+///
+/// `gamma` is the precomputed HLG system gamma (host-side function
+/// `hlg_system_gamma(y_peak, e_ambient_lux)` — passed in as a
+/// runtime scalar since it doesn't vary per pixel).
+///
+/// Returns the OOTF-adjusted `(lr, lg, lb)` already in display-light
+/// cd/m² (the scale + bias step is folded in).
+#[cube]
+fn hlg_ootf(
+    lr_pre: f32,
+    lg_pre: f32,
+    lb_pre: f32,
+    y_peak: f32,
+    y_black: f32,
+    y_refl: f32,
+    gamma: f32,
+) -> (f32, f32, f32) {
+    let scale = y_peak - y_black;
+    let bias = y_black + y_refl;
+    // Strip the bias / scale applied by apply_eotf_branch so we get
+    // back to inverse_oetf(v) in 0..12.
+    let inv_r = if scale > f32::new(0.0) {
+        (lr_pre - bias) / scale
+    } else {
+        f32::new(0.0)
+    };
+    let inv_g = if scale > f32::new(0.0) {
+        (lg_pre - bias) / scale
+    } else {
+        f32::new(0.0)
+    };
+    let inv_b = if scale > f32::new(0.0) {
+        (lb_pre - bias) / scale
+    } else {
+        f32::new(0.0)
+    };
+    // BT.2100 luma coefficients (R, G, B) = (0.2627, 0.6780, 0.0593).
+    let y_s = f32::new(0.262_7) * inv_r + f32::new(0.678_0) * inv_g + f32::new(0.059_3) * inv_b;
+    let factor = if y_s > f32::new(0.0) {
+        f32::powf(y_s, gamma - f32::new(1.0))
+    } else {
+        f32::new(0.0)
+    };
+    let lr = scale * (inv_r * factor) + bias;
+    let lg = scale * (inv_g * factor) + bias;
+    let lb = scale * (inv_b * factor) + bias;
+    (lr, lg, lb)
+}
+
+/// 8-bit packed-RGB → DKL planar f32, with display dispatch on EOTF
+/// and primaries.
 ///
 /// Inputs:
-/// - `src` — `width × height × 3` packed sRGB bytes, with each byte
-///   widened to a `u32` slot. The host upload helper writes RGB triples
-///   in row-major order: `[r0, g0, b0, r1, g1, b1, …]`.
-/// - `lut` — uploaded [`SRGB8_TO_LINEAR_LUT`] (256 entries).
+/// - `src` — `width × height` packed sRGB bytes (R | G<<8 | B<<16).
+/// - `lut` — uploaded [`SRGB8_TO_LINEAR_LUT`] (256 entries). Read only
+///   on the sRGB fast path; ignored for non-sRGB EOTFs.
 ///
 /// Outputs:
 /// - `out_a`, `out_rg`, `out_vy` — `width × height` planar f32 in
 ///   DKLd65 opponent space (cd/m²-scaled).
 ///
-/// Display constants (`y_peak`, `y_black`, `y_refl`) are pushed as
-/// runtime scalars so per-display retunes don't need a recompile. The
-/// 3×3 RGB→DKL matrix is captured as kernel-local f32 constants so
-/// LLVM folds the linear combination at codegen time.
+/// Runtime dispatch:
+/// - `eotf_tag` — see [`eotf_tag`] constants. `0` = sRGB takes the
+///   fast LUT path; any other value runs the closed-form EOTF via
+///   [`apply_eotf_branch`].
+/// - `gamma_exp` — exponent for [`eotf_tag::GAMMA`]; ignored for
+///   other tags.
+/// - `m00..m22` — 9 runtime scalars carrying the per-primaries
+///   linear-RGB→DKL matrix ([`crate::params::Primaries::linear_rgb_to_dkl`]).
+///   Pushed as scalars (not constants) so a single kernel binary
+///   serves every primaries set; LLVM still folds the linear combo
+///   when the values are constant across the launch.
+/// - `hlg_gamma` — precomputed HLG system gamma. Only consumed when
+///   `eotf_tag == eotf_tag::HLG`.
+///
+/// The sRGB / BT.709 fast path matches the historical
+/// `srgb_to_dkl_kernel` output bit-for-bit (LUT + folded matrix
+/// constants come from the same vendored numbers).
 #[cube(launch)]
 pub fn srgb_to_dkl_kernel(
     src: &Array<u32>,
@@ -318,6 +553,18 @@ pub fn srgb_to_dkl_kernel(
     y_peak: f32,
     y_black: f32,
     y_refl: f32,
+    eotf_tag: u32,
+    gamma_exp: f32,
+    hlg_gamma: f32,
+    m00: f32,
+    m01: f32,
+    m02: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m20: f32,
+    m21: f32,
+    m22: f32,
 ) {
     let idx = ABSOLUTE_POS;
     let total = (width * height) as usize;
@@ -332,29 +579,46 @@ pub fn srgb_to_dkl_kernel(
     // alloc shrinks in proportion. 3 bit-shifts + 3 ANDs per pixel are
     // free relative to the upload time saved.
     let packed = src[idx];
-    let r = packed & 0xffu32;
-    let g = (packed >> 8u32) & 0xffu32;
-    let b = (packed >> 16u32) & 0xffu32;
+    let r_byte = packed & 0xffu32;
+    let g_byte = (packed >> 8u32) & 0xffu32;
+    let b_byte = (packed >> 16u32) & 0xffu32;
 
-    let lin_r = lut[r as usize];
-    let lin_g = lut[g as usize];
-    let lin_b = lut[b as usize];
-
+    // Per-channel EOTF: sRGB fast path (LUT + scale/bias) on tag=0,
+    // closed-form `apply_eotf_branch` on every other tag. Linear-light
+    // input is 0..1 byte/255 normalised before the branch (matches the
+    // host scalar's `display_byte_to_dkl_scalar` shape).
+    let inv_255 = f32::new(1.0) / f32::new(255.0);
     let s = y_peak - y_black;
     let bias = y_black + y_refl;
-    let lr = s * lin_r + bias;
-    let lg = s * lin_g + bias;
-    let lb = s * lin_b + bias;
+    let lr_pre = if eotf_tag == 0u32 {
+        let lin_r = lut[r_byte as usize];
+        s * lin_r + bias
+    } else {
+        let vr = (r_byte as f32) * inv_255;
+        apply_eotf_branch(vr, eotf_tag, gamma_exp, y_peak, y_black, y_refl)
+    };
+    let lg_pre = if eotf_tag == 0u32 {
+        let lin_g = lut[g_byte as usize];
+        s * lin_g + bias
+    } else {
+        let vg = (g_byte as f32) * inv_255;
+        apply_eotf_branch(vg, eotf_tag, gamma_exp, y_peak, y_black, y_refl)
+    };
+    let lb_pre = if eotf_tag == 0u32 {
+        let lin_b = lut[b_byte as usize];
+        s * lin_b + bias
+    } else {
+        let vb = (b_byte as f32) * inv_255;
+        apply_eotf_branch(vb, eotf_tag, gamma_exp, y_peak, y_black, y_refl)
+    };
 
-    let m00 = f32::new(0.233_201_21);
-    let m01 = f32::new(0.728_830_8);
-    let m02 = f32::new(0.088_995_87);
-    let m10 = f32::new(0.127_620_77);
-    let m11 = f32::new(-0.087_068_09);
-    let m12 = f32::new(-0.036_777_39);
-    let m20 = f32::new(-0.214_822_5);
-    let m21 = f32::new(-0.626_253_7);
-    let m22 = f32::new(0.851_403_3);
+    // HLG: per-pixel OOTF using the RGB triple's Y_s. Other EOTFs
+    // already produced final display-light cd/m².
+    let (lr, lg, lb) = if eotf_tag == 2u32 {
+        hlg_ootf(lr_pre, lg_pre, lb_pre, y_peak, y_black, y_refl, hlg_gamma)
+    } else {
+        (lr_pre, lg_pre, lb_pre)
+    };
 
     out_a[idx] = m00 * lr + m01 * lg + m02 * lb;
     out_rg[idx] = m10 * lr + m11 * lg + m12 * lb;

@@ -1285,6 +1285,11 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
 
         let display = self.params.display;
+        let (eotf_tag, gamma_exp) =
+            crate::kernels::color::eotf_tag_and_gamma(display.eotf);
+        let hlg_gamma =
+            crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
+        let m = display.primaries.linear_rgb_to_dkl();
         unsafe {
             srgb_to_dkl_kernel::launch::<R>(
                 &self.client,
@@ -1300,6 +1305,18 @@ impl<R: Runtime> Cvvdp<R> {
                 display.y_peak,
                 display.y_black,
                 display.y_refl,
+                eotf_tag,
+                gamma_exp,
+                hlg_gamma,
+                m[0][0],
+                m[0][1],
+                m[0][2],
+                m[1][0],
+                m[1][1],
+                m[1][2],
+                m[2][0],
+                m[2][1],
+                m[2][2],
             );
         }
     }
@@ -1385,6 +1402,7 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_dim = CubeDim::new_1d(64);
         let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
         let display = self.params.display;
+        let m = display.primaries.linear_rgb_to_dkl();
         unsafe {
             linear_rgb_planes_to_dkl_kernel::launch::<R>(
                 &self.client,
@@ -1401,6 +1419,15 @@ impl<R: Runtime> Cvvdp<R> {
                 display.y_peak,
                 display.y_black,
                 display.y_refl,
+                m[0][0],
+                m[0][1],
+                m[0][2],
+                m[1][0],
+                m[1][1],
+                m[1][2],
+                m[2][0],
+                m[2][1],
+                m[2][2],
             );
         }
         Ok(())

@@ -112,6 +112,10 @@ name = "color_kernel"
 required-features = ["cubecl-types"]
 
 [[test]]
+name = "color_kernel_display_dispatch"
+required-features = ["cubecl-types"]
+
+[[test]]
 name = "color_scalar"
 required-features = ["cubecl-types"]
 

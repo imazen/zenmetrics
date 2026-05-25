@@ -6328,7 +6328,7 @@ dependencies = [
 [[package]]
 name = "zenpredict"
 version = "0.2.1"
-source = "git+https://github.com/imazen/zenanalyze?rev=8025953e0b4119a0a3fb3e1d330d52138506f45c#8025953e0b4119a0a3fb3e1d330d52138506f45c"
+source = "git+https://github.com/imazen/zenanalyze?rev=9a9be8200f26f643b45338711426cacae820f3a1#9a9be8200f26f643b45338711426cacae820f3a1"
 dependencies = [
  "bytemuck",
  "libm",
