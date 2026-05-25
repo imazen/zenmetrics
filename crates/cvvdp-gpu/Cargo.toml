@@ -294,3 +294,7 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "opaque"
 required-features = ["cubecl-types"]
+
+[[test]]
+name = "eotf_primaries_invariants"
+required-features = ["cubecl-types"]
