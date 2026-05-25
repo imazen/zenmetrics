@@ -17,6 +17,68 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-cpu 0.1.0 — upstream-parity (EOTF + Primaries + named presets) — 2026-05-25
+
+Closes the cvvdp-cpu → gfxdisp/ColorVideoVDP parity gap on display
+modelling. The v0.0.1 path tracked cvvdp-gpu's `host_scalar` reference
+which itself hard-coded sRGB + BT.709; v0.1.0 wires the full
+`display.eotf` + `display.primaries` dispatch through the color stage
+and ships 23 named DisplayModel + 15 paired DisplayGeometry preset
+constants matching upstream `display_models.json`.
+
+- **Upstream parity audit shipped** (`414a16f`) — finding-only doc at
+  `crates/cvvdp-cpu/docs/UPSTREAM_PARITY_AUDIT.md` enumerating 26
+  display presets, EOTF / Primaries plumbing, CSF / masking / pooling
+  params with line refs on both sides.
+- **EOTF + Primaries dispatch in cvvdp-cpu::color** (`f0c0323`) —
+  `srgb_to_dkl_planar` and `linear_planes_to_dkl_planar` now honor
+  `display.eotf ∈ {Srgb, Pq, Hlg, Linear, Bt1886, Gamma(g)}` and
+  `display.primaries ∈ {Bt709, Bt2020, DisplayP3, DciP3}`. Fast path
+  `(Srgb, Bt709)` preserves v0.0.1 bit-identical numerics; any other
+  combination routes through `cvvdp_gpu::kernels::color::display_byte_to_dkl_scalar`.
+  Was a silent downcast before this commit.
+- **Named DisplayModel + DisplayGeometry presets** (`1a89804`) — 23
+  DisplayModel consts (STANDARD_HDR_PQ, STANDARD_HDR_HLG,
+  STANDARD_FHD, STANDARD_PHONE, SDR_4K_30, SDR_FHD_24, HTC_VIVE_PRO,
+  IPHONE_12_PRO, IPHONE_14_PRO, IPHONE_14_PRO_HDR, IPAD_PRO_12_9,
+  MACBOOK_PRO_16, LG_OLED_2017_SDR, LG_OLED_2017_HDR, EIZO_CG3146,
+  HDR_PQ_4KNIT, HDR_PQ_2KNIT, HDR_PQ_1KNIT, LG_OLED_2026_HDR_PQ,
+  plus 4 STANDARD_HDR_* linear variants). 15 DisplayGeometry consts.
+  4 geometry constructors: `new`, `from_inches`, `from_meters_diagonal`,
+  `from_fov_diagonal` (the last derives an equivalent
+  `diagonal_inches` from a VR-style FOV). 4 size getters:
+  `display_width_m / display_height_m / display_width_deg / display_height_deg`.
+- **Upstream parity tests** (`8cf4add`) — 18 new tests in
+  `tests/upstream_parity_extended.rs` covering geometry constructors,
+  every preset's fields, PPD round-trips against pycvvdp v0.5.4
+  reference Python calc (≤1e-4 rel err), EOTF round-trips (Pq, Hlg,
+  Linear, Gamma, Bt1886 — all yield JOD ≈ 10 on identical input),
+  Primaries round-trips (DisplayP3, DciP3), cross-primaries chroma
+  sensitivity, and a regression gate pinning STANDARD_4K against
+  `host_scalar::predict_jod_still_3ch` at 1e-4 JOD.
+- **Existing pycvvdp v0.5.4 parity preserved** — none of the chunks
+  widen the 1e-4 JOD tolerance the historical tests pinned. The
+  STANDARD_4K (sRGB + BT.709 + 200 cd/m² + 250 lux ambient) golden
+  is bit-identical to v0.0.1 numerics by routing through the fast
+  path that uses the same matrix `Primaries::Bt709.linear_rgb_to_dkl()`
+  returns.
+
+Bumped to v0.1.0 (minor — additive new features, no breaking
+changes to the v0.0.1 API surface). Workspace dep version pin
+bumped to match.
+
+Total tests: 45 (was 27 at end of v0.0.1 perf milestone). cargo
+clippy -p cvvdp-cpu --no-deps -- -D warnings clean. cargo fmt
+clean. cargo check --no-default-features --features alloc clean.
+
+Documentation: `crates/cvvdp-cpu/docs/UPSTREAM_PARITY_AUDIT.md`
+(per-row enumeration of parity status) +
+`crates/cvvdp-cpu/docs/UPSTREAM_DIVERGENCES.md` (RESOLVED + DIVERGES
+log for v0.1.0). Documented out-of-scope items (temporal channels,
+foveation, exposure, PU21 encoding, non-`weber_fixed_size` CSF LUTs,
+runtime parameter override, color spaces beyond BT.709/BT.2020/P3)
+with paths-to-close for each.
+
 ### cvvdp-cpu — new crate, pure-Rust CPU port — 2026-05-24
 
 New crate `cvvdp-cpu` at `crates/cvvdp-cpu/` ships v0.0.1. Maximally

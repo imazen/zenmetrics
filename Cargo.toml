@@ -31,7 +31,7 @@ rust-version = "1.93"
 [workspace.dependencies]
 # Workspace member crates (in-tree).
 butteraugli-gpu = { version = "0.0.1", path = "crates/butteraugli-gpu", default-features = false }
-cvvdp-cpu = { version = "0.0.1", path = "crates/cvvdp-cpu", default-features = false }
+cvvdp-cpu = { version = "0.1.0", path = "crates/cvvdp-cpu", default-features = false }
 cvvdp-gpu = { version = "0.0.1", path = "crates/cvvdp-gpu", default-features = false }
 dssim-gpu = { version = "0.0.1", path = "crates/dssim-gpu", default-features = false }
 iwssim-gpu = { version = "0.0.1", path = "crates/iwssim-gpu", default-features = false }
