@@ -17,6 +17,74 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — full display-spec parity (host-scalar) — 2026-05-25
+
+`DisplayModel` now carries first-class `eotf`, `primaries`,
+`e_ambient_lux`, and `k_refl` fields, plus the constructor
+`DisplayModel::new(y_peak, contrast, e_ambient_lux, k_refl, eotf,
+primaries)` matching upstream's `vvdp_display_photo_eotf.__init__`.
+`STANDARD_4K` stays a `pub const` and is bit-identical to the
+historical (3-field) shape — every existing parity test passes
+without modification.
+
+- EOTFs supported: `Srgb` (default), `Pq`, `Hlg`, `Linear`,
+  `Bt1886`, `Gamma(f32)`. Reference-value tests verify against
+  SMPTE ST 2084 (`PQ(0.5) ≈ 92.25 cd/m²`, `PQ(1.0) = 10000`),
+  BT.2100-1 Table 5 (`HLG(0.5) = 1/12`), and the IEC 61966-2-1
+  sRGB seam continuity at `V = 0.04045`. The `Eotf::forward`
+  dispatcher mirrors pycvvdp's `forward` branch-for-branch.
+- Primaries supported: `Bt709` (default), `Bt2020`, `DisplayP3`,
+  `DciP3` (today an alias for `DisplayP3` — no theatrical DCI
+  preset upstream). Per-primaries `LinRGB → DKL` matrices
+  pre-computed at f64 from upstream's
+  `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ RGB_to_XYZ` chain;
+  `Primaries::Bt709.linear_rgb_to_dkl()` is bit-identical to the
+  pinned `SRGB_LINEAR_TO_DKL` const.
+- 26 preset registry: `DisplayModel::by_name(name)` and
+  `DisplayGeometry::by_name(name)` load every preset from
+  pycvvdp's `display_models.json` (vendored under
+  `crates/cvvdp-gpu/data/`; MIT-licensed, license + attribution
+  preserved in `data/UPSTREAM_LICENSE_MIT.txt` + `data/THIRD_PARTY.md`).
+  EOTF + primaries derived from each preset's `colorspace` field
+  via the also-vendored `color_spaces.json`. Complements the
+  per-preset `pub const`s shipped in `cvvdp-cpu 0.1.0` by
+  exposing the same set through a string-keyed lookup that
+  matches pycvvdp's `vvdp_display_photometry.load(display_name)`
+  semantic.
+- New scalar entry points in `kernels::color`:
+  `display_byte_to_dkl_scalar(r, g, b, display)` and
+  `display_linear_rgb_to_dkl_scalar(r, g, b, display)` dispatch
+  on `display.eotf` and `display.primaries`. Bit-identical to
+  `srgb_byte_to_dkl_scalar` when given `STANDARD_4K`. HLG path
+  computes the per-pixel OOTF using BT.2100 luma coefficients
+  and the dynamic system gamma.
+- `host_scalar::predict_jod_still_3ch_capped` now calls
+  `display_byte_to_dkl_scalar`, so non-sRGB EOTF / non-BT.709
+  primaries score correctly through the host-scalar entry point.
+  All 20 `predict_jod_invariants` tests pass (pycvvdp goldens
+  at 128×128 / 720×1280 / 1024×1024 fixtures, ≤ 0.005 JOD).
+- 29 new tests cover: spec EOTF reference values, monotonicity,
+  seam continuity, per-primaries matrix divergence on saturated
+  colours, every-preset-loads, byte-path parity with
+  `srgb_byte_to_dkl_scalar` under `STANDARD_4K`, and the new
+  `DisplayModel::new` constructor matching `STANDARD_4K`
+  bit-for-bit. All in `tests/eotf_primaries_invariants.rs` (21)
+  + `src/presets.rs::tests` (8).
+- Scope: this release wires the display dispatch through the
+  host-scalar entry points. The GPU fast path (`Cvvdp::score`,
+  `compute_dkl_jod`, the kernel uploads) still reads
+  `y_peak`/`y_black`/`y_refl` and assumes sRGB+BT.709 — a
+  follow-up tick will route the kernels through the new fields.
+  Until then HDR / wide-gamut callers should convert to
+  linear-BT.709 host-side and use `score_from_linear_planes`.
+  Documented in `crates/cvvdp-gpu/docs/DISPLAY_SPECS.md` and in
+  the README "Display models" section.
+
+Commits: `2b44cb5` (params surface), `b73058e` (host-scalar
+dispatch), `156f92b` / `1ef5c6e` (preset registry + vendored
+JSON — rebased), `c5fb731` / `febd722` (21 reference-value
+invariant tests — rebased). Docs + CHANGELOG in this commit.
+
 ### cvvdp-cpu 0.1.0 — upstream-parity (EOTF + Primaries + named presets) — 2026-05-25
 
 Closes the cvvdp-cpu → gfxdisp/ColorVideoVDP parity gap on display

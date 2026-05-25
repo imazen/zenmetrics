@@ -122,6 +122,70 @@ The display model (`y_peak`, `y_black`, `y_refl`) and DKL matrix
 still apply on GPU — the caller is responsible for the sRGB EOTF
 only.
 
+## Display models
+
+`DisplayModel` carries the per-display photometric + colorimetric
+configuration that drives the EOTF, primaries, and ambient-reflection
+math:
+
+- `y_peak`, `y_black`, `y_refl` — historical fields; preserved for
+  back-compat with v1 callers and the canonical sRGB parity tests.
+- `eotf` — sRGB / PQ / HLG / Linear / BT.1886 / Gamma(g). Defaults
+  to `Eotf::Srgb`.
+- `primaries` — BT.709 / BT.2020 / Display P3 / DCI-P3. Defaults
+  to `Primaries::Bt709`.
+- `e_ambient_lux`, `k_refl` — ambient illuminance and screen
+  reflectivity; the host derives `y_refl = e_ambient_lux / π *
+  k_refl` per cvvdp's `vvdp_display_photo_eotf`.
+
+Construct from upstream-style parameters:
+
+```rust
+use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
+
+let standard_4k = DisplayModel::new(
+    200.0,                 // y_peak (cd/m²)
+    1000.0,                // contrast (y_black = y_peak / contrast)
+    250.0,                 // e_ambient_lux
+    0.005,                 // k_refl
+    Eotf::Srgb,
+    Primaries::Bt709,
+);
+assert_eq!(standard_4k.y_peak, DisplayModel::STANDARD_4K.y_peak);
+```
+
+Or load a named preset from the vendored `display_models.json`:
+
+```rust
+use cvvdp_gpu::params::{DisplayModel, DisplayGeometry, Eotf, Primaries};
+
+let hdr_pq = DisplayModel::by_name("standard_hdr_pq").unwrap();
+assert_eq!(hdr_pq.y_peak, 1500.0);
+assert_eq!(hdr_pq.eotf, Eotf::Pq);
+assert_eq!(hdr_pq.primaries, Primaries::Bt2020);
+
+let geo = DisplayGeometry::by_name("standard_4k").unwrap();
+assert_eq!(geo.resolution_w, 3840);
+```
+
+The registry mirrors every preset shipped in pycvvdp v0.5.4 main
+(`standard_4k`, `standard_hdr_pq`, `standard_hdr_hlg`,
+`standard_hdr_linear`, `standard_fhd`, `iphone_*`,
+`macbook_pro_16`, `lg_oled_*`, `65inch_hdr_pq_*`, …). See
+[`docs/DISPLAY_SPECS.md`](docs/DISPLAY_SPECS.md) for the full list
+and what each preset routes to.
+
+Note: as of this release the EOTF + primaries dispatch is wired
+through the host-scalar pipeline (`display_byte_to_dkl_scalar`,
+`display_linear_rgb_to_dkl_scalar` in `kernels::color`). The GPU
+fast path (`Cvvdp::score`, `compute_dkl_jod`, etc.) still assumes
+sRGB + BT.709 for the kernel uploads — it reads the
+`y_peak`/`y_black`/`y_refl` fields of the model and ignores
+`eotf`/`primaries`. To score HDR / wide-gamut inputs on the GPU
+path today, convert to linear-BT.709 on the host first and use
+the `score_from_linear_planes` entry point. Full GPU EOTF +
+primaries dispatch is queued for the next tick.
+
 ## Cached-reference usage
 
 Two ways to amortise the reference-side cost across many distorted

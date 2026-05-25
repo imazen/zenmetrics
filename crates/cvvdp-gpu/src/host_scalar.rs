@@ -6,7 +6,7 @@
 //! result is exercised by `tests/shadow_jod.rs` against the v1 R2
 //! manifest.
 
-use crate::kernels::color::srgb_byte_to_dkl_scalar;
+use crate::kernels::color::display_byte_to_dkl_scalar;
 use crate::kernels::csf::{CSF_BASEBAND_RHO, CsfChannel, sensitivity_corrected_scalar};
 use crate::kernels::masking::{CH_GAIN, mult_mutual_band};
 use crate::kernels::pool::{BETA_SPATIAL, do_pooling_and_jod_still_3ch, lp_norm_mean};
@@ -134,25 +134,27 @@ pub fn predict_jod_still_3ch_capped(
     let n = width * height;
     let mut ref_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     let mut dis_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    // Route through the display-aware scalar so non-sRGB EOTFs +
+    // non-BT.709 primaries land in the perceptual pool. For the
+    // STANDARD_4K default this is bit-identical to the historical
+    // srgb_byte_to_dkl_scalar path (pinned by
+    // display_byte_dkl_under_standard_4k_matches_srgb_path_bit_for_bit
+    // in tests/eotf_primaries_invariants.rs).
     for i in 0..n {
-        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+        let (a, rg, vy) = display_byte_to_dkl_scalar(
             ref_srgb[i * 3],
             ref_srgb[i * 3 + 1],
             ref_srgb[i * 3 + 2],
-            display.y_peak,
-            display.y_black,
-            display.y_refl,
+            display,
         );
         ref_planes[0][i] = a;
         ref_planes[1][i] = rg;
         ref_planes[2][i] = vy;
-        let (a, rg, vy) = srgb_byte_to_dkl_scalar(
+        let (a, rg, vy) = display_byte_to_dkl_scalar(
             dist_srgb[i * 3],
             dist_srgb[i * 3 + 1],
             dist_srgb[i * 3 + 2],
-            display.y_peak,
-            display.y_black,
-            display.y_refl,
+            display,
         );
         dis_planes[0][i] = a;
         dis_planes[1][i] = rg;
