@@ -23,6 +23,7 @@
 //! entirely by the per-column-partials layout.
 
 pub mod color;
+pub mod diffmap;
 pub mod downscale;
 pub mod fused;
 pub mod masked_iw;

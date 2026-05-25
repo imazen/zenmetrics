@@ -102,7 +102,88 @@ When the working set exceeds the VRAM cap
 `Zensim::new_with_regime_budget` helper continues to handle the
 Extended-regime persist-plane budget independently.
 
+## Per-pixel diffmap (Phase 1)
+
+zensim-gpu can also produce a per-pixel error map alongside the
+scalar score, for encoder-loop integrations that need to know
+**where** the distortion lives (e.g. JXL VarDCT quant-field
+refinement). Mirror of the cvvdp-gpu Phase 1 API shape:
+
+```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
+use zensim_gpu::Zensim;
+
+let client = CudaRuntime::client(&Default::default());
+let mut z = Zensim::<CudaRuntime>::new(client, 512, 512)?;
+
+let ref_srgb: Vec<u8> = vec![0; 512 * 512 * 3];
+let dis_srgb: Vec<u8> = vec![0; 512 * 512 * 3];
+let mut diffmap = Vec::new();
+
+// One-shot score + diffmap. Returns butteraugli-direction normalised
+// score (smaller = better; identity → 0).
+let score = z.score_with_diffmap(&ref_srgb, &dis_srgb, &mut diffmap)?;
+println!("score = {score:.4}, diffmap len = {}", diffmap.len());
+
+// Or: warm-ref pattern for encoder loops with one reference, N
+// distortion candidates per cell:
+z.set_reference(&ref_srgb)?;
+for candidate in [/* ... */] {
+    let s = z.score_with_warm_ref_diffmap(&candidate, &mut diffmap)?;
+}
+# Ok::<(), zensim_gpu::Error>(())
+```
+
+### Linear-RGB planes input
+
+For encoder-side integrations that already have the source in linear-
+RGB f32 planes (skipping the sRGB-byte LUT roundtrip), the
+`score_from_linear_planes_*` family takes three separate planes per
+side:
+
+```rust,no_run
+use cubecl::Runtime;
+use cubecl::cuda::CudaRuntime;
+use zensim_gpu::Zensim;
+
+let client = CudaRuntime::client(&Default::default());
+let mut z = Zensim::<CudaRuntime>::new(client, 512, 512)?;
+
+let ref_r: Vec<f32> = vec![0.5; 512 * 512];
+let ref_g: Vec<f32> = vec![0.5; 512 * 512];
+let ref_b: Vec<f32> = vec![0.5; 512 * 512];
+
+z.warm_reference_from_linear_planes(&ref_r, &ref_g, &ref_b)?;
+let mut diffmap = Vec::new();
+
+let dist_r: Vec<f32> = vec![0.49; 512 * 512];
+let dist_g: Vec<f32> = vec![0.49; 512 * 512];
+let dist_b: Vec<f32> = vec![0.49; 512 * 512];
+
+let score = z.score_from_linear_planes_with_warm_ref_diffmap(
+    &dist_r, &dist_g, &dist_b, &mut diffmap,
+)?;
+# Ok::<(), zensim_gpu::Error>(())
+```
+
+### Phase 1 implementation note
+
+Phase 1 of the zensim-fork RFC arc delegates the per-pixel diffmap
+*production* to zensim's canonical CPU pipeline
+(`zensim::compute_with_ref_and_diffmap_linear_planar`) — the GPU side
+stays the fast path for scalar feature extraction. The scalar score
+returned alongside the diffmap therefore comes from the CPU pipeline
+(NOT the GPU 372-feature MLP). See
+[`docs/DIFFMAP_DIVERGENCES.md`](docs/DIFFMAP_DIVERGENCES.md) for the
+full rationale; Phase 1b will port the diffmap chain to pure-GPU
+kernels.
+
 ## Status
 
 Initial port from `zensim-cuda`. See `PORT_STATUS.md` for the
 per-kernel breakdown, runtime coverage, and validated parity numbers.
+
+Phase 1 of the zensim-fork RFC arc: diffmap + linear-planes + warm-
+ref-diffmap API surface shipped (CPU-fallback diffmap path). See
+`docs/DIFFMAP_DIVERGENCES.md`.

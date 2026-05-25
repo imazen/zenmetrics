@@ -1,0 +1,91 @@
+# zensim-gpu Phase 1 diffmap per-pixel distribution capture
+
+**Date**: 2026-05-25
+**Crate**: zensim-gpu (Phase 1 zensim-fork)
+**Parent commit**: f9c567a2044372e2a5a657683bfec394fdf6a8c0
+**Branch state**: top of zenmetrics master + Phase 1 diffmap WIP
+
+## What this captures
+
+Per-pixel diffmap statistics (mean, p25, p50, p75, p95, max) across
+4 synthetic fixtures × 5 distortion-magnitude levels, sized 512×512.
+
+The fixtures are:
+- `gradient_a`: trichannel sRGB gradient (R: x-axis, G: y-axis, B: anti-diagonal).
+- `gradient_b`: same shape, different seed (B offset by 31).
+- `checker_16`: 16-pixel checkerboard (high-frequency edges).
+- `noise_lcg`: synthetic LCG noise (broadband).
+
+The distortions are uniform additive byte perturbations
+`delta ∈ {1, 4, 16, 32, 64}` (clamped to `[0, 255]`).
+
+## Output schema
+
+```
+fixture  delta  score  mean  p25  p50  p75  p95  max  n_pixels
+```
+
+- `score`: butteraugli-direction normalised score `(100 - zensim_score).clamp(0, 100)`.
+- `mean`/`p25`/.../`max`: per-pixel diffmap distribution statistics.
+- `n_pixels`: total = `512 * 512 = 262144`.
+
+## Purpose: input to Phase 4 calibration
+
+Per `RFC_PERCEPTUAL_METRIC_REQUIREMENTS.md` §3.2 + §4.2, the Phase 4
+zensim_targets calibration needs:
+
+1. **Per-distance target table** (`zensim_targets.rs`): the score
+   axis tells us what score zensim produces at each distortion level
+   — Phase 4 maps that to butteraugli-equivalent distances.
+2. **`ZENSIM_DIFFMAP_RENORM_SCALE`** (Phase 8c-style refit): the
+   mean/p95 axis tells us the diffmap magnitude. Phase 4's formula
+   is `scale = (target_z / target_b) * (mean_b / mean_z)`; this data
+   gives us `mean_z` and `p95_z` for several score targets.
+3. **`ZENSIM_BLOCK_CONSTANTS::k_tile_norm`** (Phase 8g-style refit):
+   the bad-rate distribution. Phase 4 will re-run this harness
+   with a 16-pixel block reducer applied to capture the tile-level
+   `tile_dist` distribution.
+
+## Cross-reference
+
+cvvdp-gpu's `JXL_PHASE8B_DIFFMAP_DUMP` data dump (jxl-encoder
+`vardct/perceptual_backend.rs:240-299`) captures the same shape
+during real encodes. The synthetic captures here are coarse seeds;
+real-encode capture during Phase 4 will refine the constants.
+
+## How to re-run
+
+```bash
+cd ~/work/zen/zenmetrics--zensim-diffmap
+cargo run --example diffmap_distribution \
+    --features cubecl-types --release \
+    > crates/zensim-gpu/benchmarks/zensim_diffmap_distribution_$(date +%Y-%m-%d).tsv
+```
+
+## What the data shows
+
+- At delta=1 (sub-perceptible noise), zensim's diffmap mean is
+  ~3-4e-5 across the gradient + noise fixtures, ~1.5e-5 on the
+  high-contrast checker. Max is ~1e-4 — well within the "identity →
+  ~0" practical tolerance.
+- At delta=4, mean climbs to ~2-3e-4 on gradients (proportional to
+  delta), ~1.5e-4 on noise. The noise fixture's score is
+  proportionally less affected because the perturbation gets
+  absorbed by the broadband signal (lower SROCC under additive
+  delta).
+- At delta=64, max saturates near ~0.38 on gradient fixtures and
+  the score caps at 100.0 (max divergence). This bounds the upper
+  envelope of `ZENSIM_DIFFMAP_RENORM_SCALE` derivation —
+  the renorm scale should land such that `mean × renorm ≈
+  butter_mean` at the same `score` band.
+
+## DO NOT
+
+- DO NOT use this synthetic data as a final-shipped calibration
+  source. Phase 4 must measure on the real CID22 / GB82-SC / W44
+  corpus (per RFC_ZENSIM_FORK_PLAN.md §6 Phase 4).
+- DO NOT cite "FMA precision" for fluctuations between fixtures
+  (per W44-66 user correction).
+- DO NOT extrapolate to larger sizes from these 512² numbers
+  without measuring — the multi-scale fusion is dimension-aware and
+  the noise floor at higher resolutions differs.

@@ -1,0 +1,9 @@
+size_w	size_h	fixture	score_only_median_ms	score_only_p95_ms	score_with_diffmap_median_ms	score_with_diffmap_p95_ms	overhead_pct
+256	256	gradient_identity	0.813	0.931	3.345	3.577	311.37
+256	256	gradient_perturbed	0.933	7.781	3.911	4.209	319.28
+512	512	gradient_identity	1.694	1.851	11.980	12.353	607.25
+512	512	gradient_perturbed	1.709	1.755	12.482	14.603	630.56
+1024	1024	gradient_identity	3.973	59.136	93.568	121.436	2255.13
+1024	1024	gradient_perturbed	7.739	9.628	85.566	103.783	1005.70
+2048	2048	gradient_identity	15.782	17.046	380.687	385.145	2312.20
+2048	2048	gradient_perturbed	16.880	26.714	356.907	458.563	2014.34

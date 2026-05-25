@@ -64,6 +64,14 @@ required-features = ["cubecl-types"]
 name = "zensim_bench_t4_warm"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "diffmap_overhead"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "diffmap_distribution"
+required-features = ["cubecl-types"]
+
 [[test]]
 name = "cpu_parity"
 required-features = ["cubecl-types"]
@@ -86,6 +94,10 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "score_v03_parity"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "diffmap_invariants"
 required-features = ["cubecl-types"]
 
 [[bench]]

@@ -96,7 +96,10 @@ fn gpu_v03_score_matches_cpu_within_001() {
         eprintln!("[skip] CID22 corpus at /mnt/v/dataset/cid22/CID22 not mounted");
         return;
     }
-    eprintln!("[parity] running {} (ref, dist) pairs from CID22", pairs.len());
+    eprintln!(
+        "[parity] running {} (ref, dist) pairs from CID22",
+        pairs.len()
+    );
 
     let profile = ZensimProfile::latest();
     eprintln!("[parity] profile: {}", profile);
@@ -173,7 +176,10 @@ fn gpu_v03_score_matches_cpu_within_001() {
             format!(
                 "{} {}",
                 codec,
-                dist_path.file_stem().and_then(|s| s.to_str()).unwrap_or("?")
+                dist_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("?")
             ),
             cpu_score,
             gpu_score,
@@ -183,9 +189,7 @@ fn gpu_v03_score_matches_cpu_within_001() {
 
     eprintln!("\n--- per-pair diff (cpu vs gpu) ---");
     for (tag, cpu, gpu, d) in &diffs {
-        eprintln!(
-            "  {tag:>40}  cpu={cpu:8.4}  gpu={gpu:8.4}  |Δ|={d:8.5}"
-        );
+        eprintln!("  {tag:>40}  cpu={cpu:8.4}  gpu={gpu:8.4}  |Δ|={d:8.5}");
     }
     diffs.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
     let n = diffs.len();
@@ -258,13 +262,9 @@ fn gpu_v03_uses_372_features() {
     let rgb = vec![128u8; (w * h * 3) as usize];
 
     let client = BackendT::client(&Default::default());
-    let mut typed = ZensimGpu::<BackendT>::new_with_regime(
-        client,
-        w,
-        h,
-        ZensimFeatureRegime::WithIw,
-    )
-    .expect("typed new_with_regime");
+    let mut typed =
+        ZensimGpu::<BackendT>::new_with_regime(client, w, h, ZensimFeatureRegime::WithIw)
+            .expect("typed new_with_regime");
     let features = typed
         .compute_features_vec(&rgb, &rgb)
         .expect("compute features");

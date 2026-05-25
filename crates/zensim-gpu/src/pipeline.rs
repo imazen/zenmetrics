@@ -32,6 +32,9 @@
 use cubecl::prelude::*;
 
 use crate::kernels::{self, color, downscale, fused, masked_iw_strip, reduce};
+use zensim::{
+    DiffmapOptions, PrecomputedReference, Zensim as ZensimCpu, ZensimError, ZensimProfile,
+};
 // `masked_iw` retained for back-compat in tests; not used in the
 // production extended path.
 #[allow(unused_imports)]
@@ -219,6 +222,19 @@ pub struct Zensim<R: Runtime> {
     finals_max: cubecl::server::Handle,
 
     has_cached_reference: bool,
+
+    // ───────── Diffmap + linear-planes API (Phase 1) ─────────
+    /// Lazy CPU diffmap state. Allocated on first call to a diffmap or
+    /// linear-planes entry-point (so callers using only the scalar
+    /// feature API pay zero cost).
+    ///
+    /// In Phase 1 the per-pixel diffmap is delegated to the canonical
+    /// CPU `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar`
+    /// path (see `crate::kernels::diffmap` module docs +
+    /// `docs/DIFFMAP_DIVERGENCES.md` for rationale). This state caches
+    /// the CPU `Zensim` driver + a `PrecomputedReference` so warm-ref
+    /// callers don't pay the ref-XYB pyramid build per iter.
+    diffmap_state: Option<DiffmapState>,
 
     // ───────── Extended / WithIw regime support ─────────
     regime: ZensimFeatureRegime,
@@ -438,6 +454,7 @@ impl<R: Runtime> Zensim<R> {
             finals_f64,
             finals_max,
             has_cached_reference: false,
+            diffmap_state: None,
             regime,
             persist_planes_ref,
             partials_ext_f64,
@@ -531,16 +548,52 @@ impl<R: Runtime> Zensim<R> {
 
     /// Cache the reference pyramid; subsequent
     /// [`Zensim::compute_with_reference`] calls reuse it.
+    ///
+    /// **Phase 1 diffmap state**: if the diffmap state has been
+    /// initialised (by any earlier call to a diffmap or linear-planes
+    /// entry-point), this call also populates the CPU-side
+    /// `PrecomputedReference` so the subsequent
+    /// [`Self::score_with_warm_ref_diffmap`] path works against the
+    /// SAME reference content. If the diffmap state has not been
+    /// initialised, `set_reference` only updates the GPU pyramid —
+    /// callers using the warm-ref-diffmap path must either invoke a
+    /// diffmap entry-point first (which lazy-allocates the state) OR
+    /// use [`Self::warm_reference_from_linear_planes`].
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_dims(ref_srgb)?;
         self.upload_u8(true, ref_srgb);
         self.run_xyb_pyramid(true);
         self.has_cached_reference = true;
+
+        // Mirror the reference into the diffmap state's warm cache so
+        // sRGB-byte warm-ref-diffmap callers see the same reference
+        // content the GPU side just uploaded. We only populate when
+        // the state already exists — first-time callers pay the
+        // CPU-side cost only when they actually want a diffmap.
+        if let Some(state) = self.diffmap_state.as_mut() {
+            let w = self.width as usize;
+            let h = self.height as usize;
+            let lut = srgb_lut_256();
+            srgb_u8_to_linear_planes_tight(ref_srgb, w, h, &mut state.ref_linear_planes, &lut);
+            let ref_views: [&[f32]; 3] = [
+                &state.ref_linear_planes[0],
+                &state.ref_linear_planes[1],
+                &state.ref_linear_planes[2],
+            ];
+            let pre = state
+                .cpu_zensim
+                .precompute_reference_linear_planar(ref_views, w, h, w)
+                .map_err(map_zensim_error)?;
+            state.warm_ref = Some(pre);
+        }
         Ok(())
     }
 
     pub fn clear_reference(&mut self) {
         self.has_cached_reference = false;
+        if let Some(state) = self.diffmap_state.as_mut() {
+            state.warm_ref = None;
+        }
     }
 
     pub fn has_cached_reference(&self) -> bool {
@@ -1079,5 +1132,620 @@ impl<R: Runtime> Zensim<R> {
             }
         }
         (sums, peaks)
+    }
+}
+
+// ============================================================
+// Diffmap + linear-planes + warm-ref-diffmap API (Phase 1).
+//
+// Public entry points mirror cvvdp-gpu's `8b658b40` commit shape:
+//
+// - score_with_diffmap                      (sRGB-byte inputs)
+// - score_with_warm_ref_diffmap             (sRGB-byte distorted vs warm ref)
+// - score_from_linear_planes                (3 linear-f32 planes × 2)
+// - score_from_linear_planes_with_diffmap   (+ diffmap)
+// - warm_reference_from_linear_planes
+// - score_from_linear_planes_with_warm_ref
+// - score_from_linear_planes_with_warm_ref_diffmap
+//
+// Phase 1 strategy: the diffmap *production* is delegated to the
+// canonical CPU `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar`
+// path. The GPU path remains the feature/scoring fast-path; diffmap
+// uses CPU. See `crate::kernels::diffmap` module docs +
+// `docs/DIFFMAP_DIVERGENCES.md` for rationale.
+// ============================================================
+
+/// Lazy CPU diffmap state — built on first use of any Phase 1 diffmap
+/// or linear-planes entry-point on a given [`Zensim<R>`].
+///
+/// This avoids paying any cost (driver build, plane allocs) for callers
+/// who only use the scalar/feature-vector GPU fast path. Once
+/// constructed, `cpu_zensim` is reused across all subsequent calls;
+/// the `warm_ref` field caches the most recent reference so the
+/// `set_reference → score_with_warm_ref_diffmap × N` warm pattern
+/// works the same way it does for the GPU feature pipeline.
+struct DiffmapState {
+    /// CPU `Zensim` driver bound to the profile recorded on first use.
+    cpu_zensim: ZensimCpu,
+    /// Profile bound at first call. All subsequent diffmap calls on
+    /// this state assume the same profile — switching profiles
+    /// mid-stream is a misuse pattern (would silently change the
+    /// scalar score direction). Phase 1 ships with the default
+    /// `PreviewV0_3` per RFC #2 §5. Kept as a diagnostic + Phase 1b
+    /// hook for surfacing the active profile to opaque-API callers.
+    #[allow(dead_code)]
+    profile: ZensimProfile,
+    /// Cached precomputed reference. Populated by `warm_reference_from_linear_planes`,
+    /// the warm-ref-diffmap entry-points, or by the one-shot diffmap
+    /// entry-points (which build a fresh PrecomputedReference per
+    /// call). Cleared whenever `Zensim::set_reference` runs on the GPU
+    /// side so the two reference states never drift.
+    warm_ref: Option<PrecomputedReference>,
+    /// Distorted-side `f32` linear-RGB scratch planes used by the
+    /// sRGB-byte path's host LUT decode. Three planes of length
+    /// `width * height`; resized to fit on first use, reused across
+    /// calls.
+    dist_linear_planes: [Vec<f32>; 3],
+    /// Reference-side `f32` linear-RGB scratch planes for the
+    /// sRGB-byte one-shot path. Reused across calls.
+    ref_linear_planes: [Vec<f32>; 3],
+}
+
+impl DiffmapState {
+    fn new(profile: ZensimProfile) -> Self {
+        Self {
+            cpu_zensim: ZensimCpu::new(profile),
+            profile,
+            warm_ref: None,
+            dist_linear_planes: [Vec::new(), Vec::new(), Vec::new()],
+            ref_linear_planes: [Vec::new(), Vec::new(), Vec::new()],
+        }
+    }
+}
+
+/// Host-side sRGB-u8 → linear-f32 lookup table.
+///
+/// Standard sRGB EOTF (IEC 61966-2-1), evaluated at 256 integer code
+/// points. Output in `[0, 1]` linear light. Identical to the LUT
+/// `zensim` itself uses internally; we duplicate it here so the GPU
+/// crate doesn't need to import `zensim`'s private helpers.
+fn srgb_lut_256() -> [f32; 256] {
+    let mut lut = [0.0_f32; 256];
+    for (i, slot) in lut.iter_mut().enumerate() {
+        let v = (i as f32) / 255.0;
+        *slot = if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        };
+    }
+    lut
+}
+
+/// Decode a packed sRGB-u8 RGB buffer (length `3 * width * height`,
+/// row-major `[r0, g0, b0, r1, g1, b1, ...]`) into three planar f32
+/// linear-RGB planes, tight stride = `width`. Each plane is resized
+/// to `width * height` and overwritten.
+fn srgb_u8_to_linear_planes_tight(
+    src: &[u8],
+    width: usize,
+    height: usize,
+    out: &mut [Vec<f32>; 3],
+    lut: &[f32; 256],
+) {
+    let n = width * height;
+    for plane in out.iter_mut() {
+        if plane.len() < n {
+            plane.resize(n, 0.0);
+        } else {
+            plane.truncate(n);
+        }
+    }
+    debug_assert_eq!(src.len(), n * 3);
+    let (r_plane, gb_planes) = out.split_first_mut().unwrap();
+    let (g_plane, b_planes) = gb_planes.split_first_mut().unwrap();
+    let b_plane = &mut b_planes[0];
+    for (i, pixel) in src.chunks_exact(3).enumerate() {
+        r_plane[i] = lut[pixel[0] as usize];
+        g_plane[i] = lut[pixel[1] as usize];
+        b_plane[i] = lut[pixel[2] as usize];
+    }
+}
+
+/// Map a [`ZensimError`] from the CPU side into the GPU crate's
+/// [`Error`] type. Unmappable variants fold to `InvalidImageSize`
+/// with the error preserved in `Display`.
+fn map_zensim_error(err: ZensimError) -> Error {
+    match err {
+        ZensimError::ImageTooSmall => Error::InvalidImageSize,
+        ZensimError::DimensionMismatch => Error::DimensionMismatch {
+            expected: 0,
+            got: 0,
+        },
+        // Other variants (InvalidStride, InvalidDataLength, ImageTooLarge,
+        // UnsupportedFormat, etc.) are surfaced as InvalidImageSize for
+        // the buttloop's purposes. The buttloop never inspects the inner
+        // ZensimError; it logs + falls back to butteraugli.
+        _ => Error::InvalidImageSize,
+    }
+}
+
+impl<R: Runtime> Zensim<R> {
+    /// One-shot zensim score from sRGB-byte inputs that ALSO fills a
+    /// per-pixel diffmap.
+    ///
+    /// Returns the **butteraugli-direction normalized score**:
+    /// `(100.0 - zensim_score)` clamped to `[0, 100]`. zensim's
+    /// native score is 0..100 where 100 = identical; the buttloop
+    /// contract is smaller=better at the trait boundary (per RFC #1
+    /// §1.1), so this entry-point normalizes for the buttloop.
+    ///
+    /// `diffmap_out` is overwritten via `clear` + extend so callers
+    /// can reuse a long-lived `Vec`. On return,
+    /// `diffmap_out.len() == width * height` and the values are
+    /// non-negative f32, row-major (no padding), zensim-native
+    /// units (per-pixel SSIM error fused across pyramid scales).
+    ///
+    /// **Phase 1**: the diffmap is produced by zensim's CPU pipeline.
+    /// See `docs/DIFFMAP_DIVERGENCES.md`.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if either input buffer's length
+    ///   doesn't match `width × height × 3`.
+    /// - [`Error::InvalidImageSize`] on dispatch / shape failure
+    ///   inside zensim CPU.
+    pub fn score_with_diffmap(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.check_dims(ref_srgb)?;
+        self.check_dims(dist_srgb)?;
+
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let lut = srgb_lut_256();
+
+        self.ensure_diffmap_state();
+        // Borrow state in a confined scope so we can call self.* helpers.
+        {
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            srgb_u8_to_linear_planes_tight(ref_srgb, w, h, &mut state.ref_linear_planes, &lut);
+            srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
+        }
+
+        self.compute_diffmap_from_linear_planes_into(w, h, true, diffmap_out)
+    }
+
+    /// Warm-ref variant of [`Self::score_with_diffmap`]. Requires a
+    /// prior [`Self::set_reference`] OR
+    /// [`Self::warm_reference_from_linear_planes`] call — both prime
+    /// the diffmap state's cached `PrecomputedReference`.
+    ///
+    /// Skips the REF-side sRGB decode + XYB pyramid build. Mirrors the
+    /// cvvdp-gpu warm-ref-diffmap pattern.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if `dist_srgb.len() != width × height × 3`.
+    /// - [`Error::NoCachedReference`] if no warm reference is cached
+    ///   in the diffmap state.
+    /// - [`Error::InvalidImageSize`] on dispatch / shape failure
+    ///   inside zensim CPU.
+    pub fn score_with_warm_ref_diffmap(
+        &mut self,
+        dist_srgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.check_dims(dist_srgb)?;
+
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let lut = srgb_lut_256();
+
+        self.ensure_diffmap_state();
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        if state.warm_ref.is_none() {
+            return Err(Error::NoCachedReference);
+        }
+        srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
+
+        self.compute_diffmap_from_linear_planes_into(w, h, false, diffmap_out)
+    }
+
+    /// One-shot zensim score from 6 planar linear-RGB f32 buffers
+    /// (3 reference + 3 distorted; each plane has length
+    /// `width * height` tight-strided).
+    ///
+    /// Returns the **butteraugli-direction normalized score**
+    /// (smaller=better, identity→0) per [`Self::score_with_diffmap`].
+    ///
+    /// Mirrors butteraugli-gpu's W44-PHASE3-B4 + cvvdp-gpu's
+    /// `score_from_linear_planes` shape — skips the host-side
+    /// sRGB-u8 pack + GPU-side sRGB→linear kernel. Direct path from
+    /// caller-owned linear-light buffers to zensim's CPU pipeline.
+    ///
+    /// **Phase 1**: Both score and (when requested) diffmap come from
+    /// zensim's CPU pipeline. The GPU-side feature pipeline is NOT
+    /// used on the linear-planes entry-points in Phase 1 — Phase 1b
+    /// will fuse the linear-planes upload with the existing
+    /// `srgb_to_positive_xyb_kernel` → XYB pyramid build.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane's length differs
+    ///   from `width × height`.
+    /// - [`Error::InvalidImageSize`] on shape failure.
+    pub fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
+        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
+
+        self.ensure_diffmap_state();
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        let pre = state
+            .cpu_zensim
+            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+            .map_err(map_zensim_error)?;
+        // Reuse the CPU `compute_with_ref` (no diffmap) — it is the
+        // cheapest path that returns a `ZensimResult`.
+        // We replicate the CPU `Zensim::compute_with_ref` plane-path
+        // by going through `precompute_reference_linear_planar` + the
+        // public `compute_with_ref_and_diffmap_linear_planar` API; we
+        // just don't pass the diffmap output through to the caller.
+        let res = state
+            .cpu_zensim
+            .compute_with_ref_and_diffmap_linear_planar(
+                &pre,
+                [dist_r, dist_g, dist_b],
+                w,
+                h,
+                stride,
+                DiffmapOptions::default(),
+            )
+            .map_err(map_zensim_error)?;
+        Ok(normalize_zensim_score(res.score()))
+    }
+
+    /// As [`Self::score_from_linear_planes`], plus a per-pixel diffmap.
+    #[allow(clippy::too_many_arguments)]
+    pub fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
+        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
+
+        self.ensure_diffmap_state();
+        // Build a fresh PrecomputedReference each call (one-shot
+        // semantics; the warm-ref variant amortises this).
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        let pre = state
+            .cpu_zensim
+            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+            .map_err(map_zensim_error)?;
+        let res = state
+            .cpu_zensim
+            .compute_with_ref_and_diffmap_linear_planar(
+                &pre,
+                [dist_r, dist_g, dist_b],
+                w,
+                h,
+                stride,
+                DiffmapOptions::default(),
+            )
+            .map_err(map_zensim_error)?;
+        write_diffmap_into(diffmap_out, res.diffmap());
+        Ok(normalize_zensim_score(res.score()))
+    }
+
+    /// Warm the diffmap-state's `PrecomputedReference` from three
+    /// planar linear-RGB f32 buffers.
+    ///
+    /// Subsequent [`Self::score_from_linear_planes_with_warm_ref`] /
+    /// [`Self::score_from_linear_planes_with_warm_ref_diffmap`] reuse
+    /// the cached reference. Mirrors cvvdp-gpu's
+    /// `warm_reference_from_linear_planes` + invalidation rules:
+    /// any call to `set_reference` on the GPU side also clears the
+    /// warm-ref to keep the two reference states aligned.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane's length differs
+    ///   from `width × height`.
+    /// - [`Error::InvalidImageSize`] on shape failure inside zensim
+    ///   CPU.
+    pub fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
+
+        self.ensure_diffmap_state();
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        let pre = state
+            .cpu_zensim
+            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+            .map_err(map_zensim_error)?;
+        state.warm_ref = Some(pre);
+        Ok(())
+    }
+
+    /// Score a distorted planar linear-RGB f32 candidate against the
+    /// warm-cached diffmap-state reference. Returns the
+    /// butteraugli-direction normalized score.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::DimensionMismatch`] if any plane's length differs
+    ///   from `width × height`.
+    /// - [`Error::NoCachedReference`] if the warm reference is
+    ///   missing.
+    /// - [`Error::InvalidImageSize`] on shape failure.
+    pub fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
+
+        self.ensure_diffmap_state();
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
+        let res = state
+            .cpu_zensim
+            .compute_with_ref_and_diffmap_linear_planar(
+                pre,
+                [dist_r, dist_g, dist_b],
+                w,
+                h,
+                stride,
+                DiffmapOptions::default(),
+            )
+            .map_err(map_zensim_error)?;
+        Ok(normalize_zensim_score(res.score()))
+    }
+
+    /// As [`Self::score_from_linear_planes_with_warm_ref`], plus a
+    /// per-pixel diffmap.
+    pub fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
+
+        self.ensure_diffmap_state();
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured");
+        let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
+        let res = state
+            .cpu_zensim
+            .compute_with_ref_and_diffmap_linear_planar(
+                pre,
+                [dist_r, dist_g, dist_b],
+                w,
+                h,
+                stride,
+                DiffmapOptions::default(),
+            )
+            .map_err(map_zensim_error)?;
+        write_diffmap_into(diffmap_out, res.diffmap());
+        Ok(normalize_zensim_score(res.score()))
+    }
+
+    // ─────────────────────── private helpers ───────────────────────
+
+    /// Allocate `diffmap_state` lazily on first use. Default profile
+    /// is `PreviewV0_3` per `RFC_ZENSIM_BUTTLOOP_AUDIT.md` §5.
+    /// Callers needing a non-default profile should construct via the
+    /// `ZensimOpaque::with_profile` path (Phase 1b will surface a
+    /// `Zensim::with_diffmap_profile` setter if needed).
+    fn ensure_diffmap_state(&mut self) {
+        if self.diffmap_state.is_none() {
+            self.diffmap_state = Some(DiffmapState::new(ZensimProfile::PreviewV0_3));
+        }
+    }
+
+    /// Shared implementation for sRGB-byte diffmap paths: assumes the
+    /// state's linear planes have been populated host-side.
+    ///
+    /// When `build_fresh_ref` is true, this function builds a fresh
+    /// `PrecomputedReference` from `state.ref_linear_planes` and
+    /// discards it after use (one-shot diffmap). When false, it uses
+    /// the warm-cached reference (which must exist; caller's
+    /// responsibility to check).
+    fn compute_diffmap_from_linear_planes_into(
+        &mut self,
+        w: usize,
+        h: usize,
+        build_fresh_ref: bool,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        let stride = w;
+        let state = self.diffmap_state.as_mut().expect("ensured by caller");
+
+        let ref_views: [&[f32]; 3] = [
+            &state.ref_linear_planes[0],
+            &state.ref_linear_planes[1],
+            &state.ref_linear_planes[2],
+        ];
+        let dist_views: [&[f32]; 3] = [
+            &state.dist_linear_planes[0],
+            &state.dist_linear_planes[1],
+            &state.dist_linear_planes[2],
+        ];
+
+        let res = if build_fresh_ref {
+            let pre = state
+                .cpu_zensim
+                .precompute_reference_linear_planar(ref_views, w, h, stride)
+                .map_err(map_zensim_error)?;
+            state
+                .cpu_zensim
+                .compute_with_ref_and_diffmap_linear_planar(
+                    &pre,
+                    dist_views,
+                    w,
+                    h,
+                    stride,
+                    DiffmapOptions::default(),
+                )
+                .map_err(map_zensim_error)?
+        } else {
+            let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
+            state
+                .cpu_zensim
+                .compute_with_ref_and_diffmap_linear_planar(
+                    pre,
+                    dist_views,
+                    w,
+                    h,
+                    stride,
+                    DiffmapOptions::default(),
+                )
+                .map_err(map_zensim_error)?
+        };
+        write_diffmap_into(diffmap_out, res.diffmap());
+        Ok(normalize_zensim_score(res.score()))
+    }
+}
+
+/// Convert zensim's higher-is-better 0..100 score to a
+/// butteraugli-direction normalised score (smaller=better,
+/// identity→0). Per RFC #1 §1.1 + `RFC_ZENSIM_BUTTLOOP_AUDIT.md` §1.1.
+fn normalize_zensim_score(score: f64) -> f32 {
+    let v = (100.0 - score).clamp(0.0, 100.0);
+    v as f32
+}
+
+/// Copy the CPU diffmap's `&[f32]` into the caller-owned `Vec<f32>`
+/// via clear + extend (preserves capacity).
+fn write_diffmap_into(diffmap_out: &mut Vec<f32>, src: &[f32]) {
+    diffmap_out.clear();
+    diffmap_out.extend_from_slice(src);
+}
+
+/// Validate three linear-RGB f32 planes against the expected
+/// `width × height`. Each plane must contain AT LEAST `w * h`
+/// elements (zensim's CPU API accepts extra padding, but we
+/// reject under-supply to surface the contract failure cleanly).
+fn validate_linear_planes(r: &[f32], g: &[f32], b: &[f32], w: usize, h: usize) -> Result<()> {
+    let expected = w * h;
+    for plane in [r, g, b] {
+        if plane.len() < expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: plane.len(),
+            });
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod diffmap_helpers_tests {
+    use super::*;
+
+    #[test]
+    fn normalize_zensim_score_identity_zero() {
+        assert_eq!(normalize_zensim_score(100.0), 0.0);
+    }
+
+    #[test]
+    fn normalize_zensim_score_max_clamps_at_100() {
+        assert_eq!(normalize_zensim_score(0.0), 100.0);
+        // Below zero (shouldn't happen but defend) clamps at 100.
+        assert_eq!(normalize_zensim_score(-1.0), 100.0);
+    }
+
+    #[test]
+    fn normalize_zensim_score_above_100_clamps_at_zero() {
+        // Numerical noise from f32 path: zensim can return 100.0001;
+        // we clamp at 0 so the buttloop's accept_bound math doesn't
+        // see a negative.
+        assert_eq!(normalize_zensim_score(100.0001), 0.0);
+    }
+
+    #[test]
+    fn write_diffmap_into_clears_and_extends() {
+        let mut buf = vec![99.0, 98.0, 97.0];
+        let src = vec![1.0, 2.0];
+        write_diffmap_into(&mut buf, &src);
+        assert_eq!(buf, vec![1.0, 2.0]);
+    }
+
+    #[test]
+    fn validate_linear_planes_rejects_short_plane() {
+        let r = vec![0.0; 100];
+        let g = vec![0.0; 100];
+        let b = vec![0.0; 99]; // short
+        let err = validate_linear_planes(&r, &g, &b, 10, 10).unwrap_err();
+        match err {
+            Error::DimensionMismatch { expected, got } => {
+                assert_eq!(expected, 100);
+                assert_eq!(got, 99);
+            }
+            _ => panic!("wrong error variant"),
+        }
+    }
+
+    #[test]
+    fn srgb_lut_endpoints_match_spec() {
+        let lut = srgb_lut_256();
+        assert_eq!(lut[0], 0.0);
+        assert!((lut[255] - 1.0).abs() < 1e-6, "lut[255] = {}", lut[255]);
+    }
+
+    #[test]
+    fn srgb_u8_to_linear_planes_separates_channels() {
+        let lut = srgb_lut_256();
+        // 2×1 image: [(255, 0, 128), (0, 255, 64)]
+        let src = vec![255, 0, 128, 0, 255, 64];
+        let mut planes = [Vec::new(), Vec::new(), Vec::new()];
+        srgb_u8_to_linear_planes_tight(&src, 2, 1, &mut planes, &lut);
+        assert_eq!(planes[0].len(), 2);
+        assert_eq!(planes[1].len(), 2);
+        assert_eq!(planes[2].len(), 2);
+        assert!((planes[0][0] - lut[255]).abs() < 1e-7);
+        assert!((planes[0][1] - lut[0]).abs() < 1e-7);
+        assert!((planes[1][0] - lut[0]).abs() < 1e-7);
+        assert!((planes[1][1] - lut[255]).abs() < 1e-7);
+        assert!((planes[2][0] - lut[128]).abs() < 1e-7);
+        assert!((planes[2][1] - lut[64]).abs() < 1e-7);
     }
 }

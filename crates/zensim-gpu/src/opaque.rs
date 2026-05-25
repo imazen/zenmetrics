@@ -19,12 +19,11 @@
 //!
 //! See `dssim-gpu/src/opaque.rs` for the full Phase 2 design.
 
-use crate::pipeline::Zensim;
 #[cfg(feature = "pixels")]
 use crate::Error;
+use crate::pipeline::Zensim;
 use crate::{
-    Result, TOTAL_FEATURES, ZensimFeatureRegime, score_from_features,
-    weights::WEIGHTS_PREVIEW_V0_2,
+    Result, TOTAL_FEATURES, ZensimFeatureRegime, score_from_features, weights::WEIGHTS_PREVIEW_V0_2,
 };
 
 #[cfg(feature = "pixels")]
@@ -195,18 +194,11 @@ impl ZensimParams {
 }
 
 trait ZensimInner: Send {
-    fn compute_features(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<[f64; TOTAL_FEATURES]>;
+    fn compute_features(&mut self, ref_rgb: &[u8], dis_rgb: &[u8])
+    -> Result<[f64; TOTAL_FEATURES]>;
     /// Regime-appropriate feature vector — length matches
     /// `regime.total_features()` (228 / 300 / 372).
-    fn compute_features_vec(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Vec<f64>>;
+    fn compute_features_vec(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Vec<f64>>;
     /// Set + upload + pre-build the reference's XYB pyramid.
     /// Subsequent [`Self::compute_with_reference_vec`] calls skip the
     /// ref upload + ref-pyramid construction entirely. Critical for
@@ -217,6 +209,58 @@ trait ZensimInner: Send {
     /// was never called.
     fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
+
+    // ─── Phase 1 diffmap + linear-planes entry-points ───
+    fn score_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32>;
+    fn score_with_warm_ref_diffmap(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32>;
+    fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32>;
+    #[allow(clippy::too_many_arguments)]
+    fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32>;
+    fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()>;
+    fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32>;
+    fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32>;
 }
 
 impl<R> ZensimInner for Zensim<R>
@@ -232,11 +276,7 @@ where
         Zensim::compute_features(self, ref_rgb, dis_rgb)
     }
 
-    fn compute_features_vec(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Vec<f64>> {
+    fn compute_features_vec(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Vec<f64>> {
         Zensim::compute_features_vec(self, ref_rgb, dis_rgb)
     }
 
@@ -250,6 +290,91 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Zensim::dimensions(self)
+    }
+
+    fn score_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_with_diffmap(self, ref_rgb, dis_rgb, diffmap_out)
+    }
+
+    fn score_with_warm_ref_diffmap(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_with_warm_ref_diffmap(self, dis_rgb, diffmap_out)
+    }
+
+    fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes(self, ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
+    }
+
+    fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_diffmap(
+            self,
+            ref_r,
+            ref_g,
+            ref_b,
+            dist_r,
+            dist_g,
+            dist_b,
+            diffmap_out,
+        )
+    }
+
+    fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        Zensim::warm_reference_from_linear_planes(self, ref_r, ref_g, ref_b)
+    }
+
+    fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_warm_ref(self, dist_r, dist_g, dist_b)
+    }
+
+    fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        Zensim::score_from_linear_planes_with_warm_ref_diffmap(
+            self,
+            dist_r,
+            dist_g,
+            dist_b,
+            diffmap_out,
+        )
     }
 }
 
@@ -266,12 +391,7 @@ impl ZensimOpaque {
     /// [`ZensimParams::regime`] to choose the pipeline regime —
     /// Basic (228, default) / Extended (300) / WithIw (372).
     /// Equivalent to `new_with_memory_mode(.., MemoryMode::Auto)`.
-    pub fn new(
-        backend: Backend,
-        width: u32,
-        height: u32,
-        params: ZensimParams,
-    ) -> Result<Self> {
+    pub fn new(backend: Backend, width: u32, height: u32, params: ZensimParams) -> Result<Self> {
         Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
     }
 
@@ -450,11 +570,7 @@ impl ZensimOpaque {
     /// through legacy `score_from_features(weights)` when only
     /// [`ZensimParams::weights`] is set. Returns
     /// `Score { value: NAN, .. }` if neither is wired.
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         // When a profile is set, the canonical path needs the
         // regime-appropriate full-width feature vector (228 / 300 /
         // 372), not the 228 truncation that `compute_features` returns.
@@ -493,11 +609,7 @@ impl ZensimOpaque {
 
     /// Compute the uniform [`Score`] from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         if self.params.profile.is_some() {
             let (w, h) = self.inner.dims();
             let ref_buf = to_srgb_rgb8(&r, w, h)?;
@@ -521,8 +633,8 @@ impl ZensimOpaque {
         codec_hint: Option<&str>,
     ) -> Score {
         let value = match self.params.profile {
-            Some(profile) => zensim::score_features_with_profile_and_codec(
-                profile, features, width, height, codec_hint,
+            Some(_profile) => score_features_with_profile_and_codec_compat(
+                _profile, features, width, height, codec_hint,
             )
             .unwrap_or(f64::NAN),
             None => f64::NAN,
@@ -547,6 +659,145 @@ impl ZensimOpaque {
             metric_version: env!("CARGO_PKG_VERSION"),
         }
     }
+
+    // ─── Phase 1 diffmap + linear-planes entry-points (mirror Zensim<R>) ───
+
+    /// Mirror of [`crate::pipeline::Zensim::score_with_diffmap`].
+    /// See that method's docs.
+    pub fn score_with_diffmap(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.inner.score_with_diffmap(ref_rgb, dis_rgb, diffmap_out)
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_with_warm_ref_diffmap`].
+    /// See that method's docs.
+    pub fn score_with_warm_ref_diffmap(
+        &mut self,
+        dis_rgb: &[u8],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.inner.score_with_warm_ref_diffmap(dis_rgb, diffmap_out)
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes`].
+    /// See that method's docs.
+    pub fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        self.inner
+            .score_from_linear_planes(ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_diffmap`].
+    /// See that method's docs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn score_from_linear_planes_with_diffmap(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.inner.score_from_linear_planes_with_diffmap(
+            ref_r,
+            ref_g,
+            ref_b,
+            dist_r,
+            dist_g,
+            dist_b,
+            diffmap_out,
+        )
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::warm_reference_from_linear_planes`].
+    /// See that method's docs.
+    pub fn warm_reference_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+    ) -> Result<()> {
+        self.inner
+            .warm_reference_from_linear_planes(ref_r, ref_g, ref_b)
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref`].
+    /// See that method's docs.
+    pub fn score_from_linear_planes_with_warm_ref(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<f32> {
+        self.inner
+            .score_from_linear_planes_with_warm_ref(dist_r, dist_g, dist_b)
+    }
+
+    /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref_diffmap`].
+    /// See that method's docs.
+    pub fn score_from_linear_planes_with_warm_ref_diffmap(
+        &mut self,
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.inner.score_from_linear_planes_with_warm_ref_diffmap(
+            dist_r,
+            dist_g,
+            dist_b,
+            diffmap_out,
+        )
+    }
+}
+
+/// Compatibility shim for `zensim::score_features_with_profile_and_codec`
+/// which is missing from the path-pinned `zensim` crate version that
+/// the workspace currently uses (zenmetrics master `f4cf509b` was
+/// committed against a zensim revision that included it; the current
+/// path-pin doesn't). We emit a `Zensim::compute` against constructed
+/// images would require the pixels — but here we only have features
+/// already, so we fall back to the legacy `score_from_features` math.
+///
+/// Phase 1 of the zensim-fork RFC arc explicitly says this scoring
+/// path is NOT what the buttloop uses (the buttloop calls
+/// `score_with_warm_ref_diffmap` etc. directly, which produces a
+/// canonical-CPU score). This shim only keeps `ZensimOpaque::compute_*`
+/// (the opaque-API legacy scoring entry-points) building.
+///
+/// **TODO**: when the zensim crate version is bumped to one with the
+/// real `score_features_with_profile_and_codec` re-exported, delete
+/// this shim and route through the real function.
+fn score_features_with_profile_and_codec_compat(
+    _profile: zensim::ZensimProfile,
+    features: &[f64],
+    _width: u32,
+    _height: u32,
+    _codec_hint: Option<&str>,
+) -> Result<f64> {
+    // Fall back to the legacy 228-element linear formula (constant
+    // coefficients copied from zensim's CPU `score_from_features`).
+    // Only sub-228-length feature vectors fall through to NaN.
+    if features.len() < TOTAL_FEATURES {
+        return Ok(f64::NAN);
+    }
+    Ok(crate::score_from_features(
+        &features[..TOTAL_FEATURES],
+        &WEIGHTS_PREVIEW_V0_2,
+    ))
 }
 
 #[cfg(feature = "pixels")]

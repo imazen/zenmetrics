@@ -3,7 +3,9 @@
 #![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
 use cubecl::Runtime;
-use zensim_gpu::{Backend, TOTAL_FEATURES, Zensim, ZensimOpaque, ZensimParams, score_from_features};
+use zensim_gpu::{
+    Backend, TOTAL_FEATURES, Zensim, ZensimOpaque, ZensimParams, score_from_features,
+};
 
 #[cfg(feature = "cuda")]
 type BackendT = cubecl::cuda::CudaRuntime;
@@ -52,13 +54,8 @@ fn opaque_srgb_u8_matches_typed() {
     let weights = flat_weights();
     let typed_value = score_from_features(&typed_features, &weights);
 
-    let mut opaque = ZensimOpaque::new(
-        BACKEND_E,
-        w,
-        h,
-        ZensimParams::new().with_weights(weights),
-    )
-    .expect("opaque new");
+    let mut opaque = ZensimOpaque::new(BACKEND_E, w, h, ZensimParams::new().with_weights(weights))
+        .expect("opaque new");
     let opaque_score = opaque
         .compute_srgb_u8(&ref_buf, &dis_buf)
         .expect("opaque compute_srgb_u8");

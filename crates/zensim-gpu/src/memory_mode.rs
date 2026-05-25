@@ -37,11 +37,7 @@ pub enum ResolvedMode {
 
 /// Auto policy: Strip unimplemented, so Auto resolves to Full when
 /// it fits and errors otherwise.
-pub fn resolve_auto(
-    width: u32,
-    height: u32,
-    cap: usize,
-) -> crate::Result<ResolvedMode> {
+pub fn resolve_auto(width: u32, height: u32, cap: usize) -> crate::Result<ResolvedMode> {
     let full_bytes = estimate_gpu_memory_bytes(width, height);
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);

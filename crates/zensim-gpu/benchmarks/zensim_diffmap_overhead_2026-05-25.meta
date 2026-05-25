@@ -1,0 +1,88 @@
+# zensim-gpu Phase 1 diffmap overhead bench
+
+**Date**: 2026-05-25
+**Crate**: zensim-gpu (Phase 1 zensim-fork)
+**Parent commit**: f9c567a2044372e2a5a657683bfec394fdf6a8c0
+**Branch state**: top of zenmetrics master + Phase 1 diffmap WIP
+
+## What this bench measures
+
+Paired wall-time of `Zensim<R>::compute_features_vec` (scalar GPU
+feature extraction, no diffmap) vs `Zensim<R>::score_with_diffmap`
+(Phase 1 CPU-fallback diffmap path) at 4 sizes × 2 fixtures.
+
+The overhead is the wall hit of:
+
+1. Host-side sRGB-u8 → linear-f32 LUT decode (3 × W·H f32 plane fills).
+2. zensim CPU `precompute_reference_linear_planar` (XYB pyramid build).
+3. zensim CPU `compute_with_ref_and_diffmap_linear_planar` (multi-scale
+   pyramid + per-pixel SSIM error + per-scale fusion → diffmap).
+4. `Vec<f32>::clear` + `extend_from_slice` of the W·H diffmap into the
+   caller's buffer.
+
+## Runtime
+
+- **Backend**: `CudaRuntime` (CUDA preferred per the cubecl backend
+  preference cascade in `examples/diffmap_overhead.rs`).
+- **Mode**: release.
+- **Iters**: 10 / 8 / 5 / 3 per size, with 2 warmup iters discarded.
+- **Reported**: median + p95 in milliseconds.
+
+## Output schema
+
+```
+size_w  size_h  fixture                score_only_median_ms  score_only_p95_ms  score_with_diffmap_median_ms  score_with_diffmap_p95_ms  overhead_pct
+```
+
+`overhead_pct` is `(score_with_diffmap_median - score_only_median) / score_only_median * 100`.
+
+## Observed wall-time (CPU-fallback diffmap, Phase 1)
+
+The overhead is **large** (3× to 23×): see TSV for exact numbers.
+This is expected for the Phase 1 CPU-fallback strategy — the diffmap
+production runs the full zensim CPU pipeline on the host while the
+GPU sits idle. Phase 1b (pure-GPU kernels) is the path to closing
+this gap.
+
+## Phase 1 ship decision
+
+The overhead is OK for the Phase 1 ship because:
+
+1. The opt-in / default-flip decision happens at Phase 4 (after the
+   buttloop-driven Pareto sweep). Wall is one of multiple ship gates.
+2. The buttloop calls the metric ~3-5× per encode at e≥8. Even at
+   1024² adding ~90 ms × 4 iters = ~360 ms per cell, that's still
+   sub-second on a typical encode wall.
+3. Phase 1b's pure-GPU port closes most of the gap; Phase 6's
+   Pareto-position sweep is the binding gate, not Phase 1's wall.
+
+## What Phase 1b should beat
+
+Per the cvvdp-gpu Phase 1 W44-PHASE3-B4 precedent:
+
+- The B4 (linear-planes upload skip) recovered 11-21% wall on
+  cvvdp-gpu at 1 MP. Same shape applies to zensim-gpu.
+- Direct port of the per-band SSIM error → bilinear-upsample →
+  blend chain onto CubeCL kernels should compress the diffmap
+  pipeline to roughly the score-only baseline wall (single-digit
+  ms at 256², 10-30 ms at 1024² on CUDA).
+
+## How to re-run
+
+```bash
+cd ~/work/zen/zenmetrics--zensim-diffmap
+cargo run --example diffmap_overhead \
+    --features cubecl-types --release \
+    > crates/zensim-gpu/benchmarks/zensim_diffmap_overhead_$(date +%Y-%m-%d).tsv
+```
+
+## DO NOT
+
+- DO NOT compare these numbers against cvvdp-gpu's diffmap_overhead
+  bench naively. cvvdp-gpu's Phase 1 already has pure-GPU kernels;
+  zensim-gpu's Phase 1 is CPU-fallback. The right comparison is
+  zensim-gpu Phase 1b vs cvvdp-gpu Phase 1 (after Phase 1b ships).
+- DO NOT cite "FMA precision" for any wall variance (per W44-66 user
+  correction).
+- DO NOT use this bench's wall numbers as a default-flip gate — that
+  decision lives at Phase 6 of the zensim fork plan.
