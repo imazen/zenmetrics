@@ -84,6 +84,9 @@ name = "manifest_parity_probe"
 required-features = ["cubecl-types"]
 
 [[example]]
+name = "parity_iphone_eval"
+
+[[example]]
 name = "time_12mp"
 required-features = ["cubecl-types"]
 

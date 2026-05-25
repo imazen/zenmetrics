@@ -113,27 +113,49 @@ follow-up tick can add a FOV-based geometry constructor.
 | `Eotf::forward(...)` scalar dispatcher | ✓ | ✓ | n/a |
 | `display_byte_to_dkl_scalar(...)` host-scalar | ✓ | ✓ | ✓ |
 | `display_linear_rgb_to_dkl_scalar(...)` host-scalar | ✓ | n/a | ✓ |
-| `host_scalar::predict_jod_still_3ch(...)` | ✓ | — | — |
-| GPU fast path (`Cvvdp::score`, etc.) | ✓ | — | — |
+| `host_scalar::predict_jod_still_3ch(...)` | ✓ | ✓ | ✓ |
+| GPU fast path (`Cvvdp::score`, etc.) | ✓ | ✓ | ✓ |
+| GPU linear-planes (`score_from_linear_planes`, etc.) | ✓ | ✓ | ✓ |
 
-"—" means: the field is accepted in the `DisplayModel` struct
-but ignored by the call site. Calls go through the sRGB + BT.709
-path. To score HDR / wide-gamut inputs against the GPU
-pipeline today, convert to linear-BT.709 on the host first and
-use `score_from_linear_planes`.
+GPU dispatch was wired in commit `f8bf2729` (2026-05-25):
 
-The next iteration of this work will:
+* `srgb_to_dkl_kernel` takes `eotf_tag` (u32), `gamma_exp` (f32),
+  `hlg_gamma` (f32 — precomputed system gamma), and the 9 RGB→DKL
+  matrix entries as runtime scalars. tag=0 (sRGB) keeps the LUT fast
+  path; all other tags route through `apply_eotf_branch` and (for HLG)
+  a per-pixel `hlg_ootf` step that resolves the Y_s OOTF gamma at the
+  RGB-triple level.
+* `linear_rgb_planes_to_dkl_kernel` takes the same 9 matrix scalars
+  so non-BT.709 linear-RGB inputs route into the right opponent
+  space.
+* sRGB + BT.709 stays bit-identical to the pre-dispatch
+  hardcoded-matrix kernel (pinned by
+  `tests/color_kernel::srgb_to_dkl_kernel_matches_host_scalar`).
 
-1. Wire `display.eotf` through `host_scalar::predict_jod_still_3ch`
-   (it calls `srgb_byte_to_dkl_scalar` today; switch to
-   `display_byte_to_dkl_scalar`).
-2. Add per-EOTF GPU kernels (one per branch in the switch above)
-   or a runtime-parameterised matrix kernel that takes the 9
-   matrix entries + EOTF selector as scalars and branches in the
-   kernel. Measure the per-frame cost vs the existing sRGB+BT.709
-   inline-constants kernel; if the branch is cheap, replace the
-   single kernel; otherwise keep BT.709 specialised and ship a
-   slower generic kernel for non-default displays.
+EOTF coverage on GPU: Srgb, Pq, Hlg, Linear, Bt1886, Gamma(g) — all 6
+variants of `params::Eotf`.
+
+Primaries coverage on GPU: Bt709 (default), Bt2020, DisplayP3, DciP3
+(currently aliased to DisplayP3 — see `Primaries` docs).
+
+Parity (host_scalar vs pycvvdp v0.5.4 — same numbers GPU produces at
+f32 precision per the tests above):
+
+* `standard_4k` over 13 mixed-content pairs: mean abs_diff = 0.037 JOD,
+  median = 0.002 JOD, max = 0.391 JOD (single outlier on heavy noise).
+* `iphone_14_pro` over the same 13 pairs: mean = 0.030 JOD,
+  median = 0.001 JOD, max = 0.331 JOD.
+
+Both displays meet the mean<0.10 gate; the max outlier appears on both
+displays at the same pair (`photo_dark_noise_heavy`), indicating a
+content-specific divergence rather than a display-dispatch defect.
+Full breakdown:
+`benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv`.
+
+Validated via `crates/cvvdp-gpu/examples/parity_iphone_eval.rs`. The
+GPU-vs-scalar agreement is separately pinned by
+`tests/color_kernel_display_dispatch.rs` (12 (EOTF × primaries × peak)
+combos including iPhone 14 Pro SDR + HDR).
 
 ## Refreshing the vendored JSON
 

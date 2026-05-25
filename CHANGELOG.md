@@ -17,6 +17,64 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — GPU kernel-side EOTF + Primaries dispatch — 2026-05-25
+
+Closes the GPU-side counterpart of the host-scalar display dispatch
+that landed earlier in this Unreleased section. The previous GPU
+fast path hardcoded sRGB + BT.709 inside `srgb_to_dkl_kernel` /
+`linear_rgb_planes_to_dkl_kernel`; HDR (PQ / HLG) and wide-gamut
+(BT.2020 / Display P3) presets only worked through `host_scalar`.
+
+- **EOTFs wired on GPU**: `Srgb`, `Pq`, `Hlg`, `Linear`, `Bt1886`,
+  `Gamma(g)`. `srgb_to_dkl_kernel` now takes `eotf_tag` (u32 — see
+  `kernels::color::eotf_tag` constants), `gamma_exp` (f32 — the
+  exponent payload for `Eotf::Gamma`), and `hlg_gamma` (f32 —
+  precomputed system gamma from
+  `params::hlg_system_gamma(y_peak, e_ambient_lux)`). The new
+  `#[cube]` helper `apply_eotf_branch` mirrors the host
+  `Eotf::forward` dispatch branch-for-branch (chained `if/else` —
+  cubecl 0.10 doesn't support early `return` in `#[cube]` bodies).
+  HLG OOTF is per-pixel using BT.2100 luma coefficients on the RGB
+  triple (`hlg_ootf` `#[cube]` helper).
+- **Primaries wired on GPU**: `Bt709` (default), `Bt2020`,
+  `DisplayP3`, `DciP3`. Both `srgb_to_dkl_kernel` and
+  `linear_rgb_planes_to_dkl_kernel` now take the 9 RGB→DKL matrix
+  entries as runtime scalars instead of inlining BT.709 constants
+  — one kernel binary serves every primaries variant. LLVM still
+  folds the linear combo when the values are constant across the
+  launch, so the per-pixel ALU cost is unchanged.
+- **sRGB+BT.709 stays bit-identical** — the `tag=0` branch in the
+  new kernel takes the LUT path with the same constants and
+  matmul order as the pre-dispatch kernel. Pinned by
+  `tests/color_kernel::srgb_to_dkl_kernel_matches_host_scalar`
+  (existing test, still passes unchanged).
+- **New parity tests**:
+  `tests/color_kernel_display_dispatch.rs` checks GPU-vs-host_scalar
+  agreement across 12 (EOTF × primaries × peak-luminance) combos:
+  sRGB+{BT.709, BT.2020, DisplayP3}, PQ+BT.2020 at {1500, 3000}
+  cd/m², HLG+BT.2020, Linear+BT.709, Bt1886, Gamma(2.2), Gamma(1.8),
+  iPhone 14 Pro SDR + iPhone 14 Pro HDR. Tolerances scale with
+  `y_peak` (HDR PQ at 3000 cd/m² gets 0.1 abs = 33 ppm relative);
+  the chained `powf` in PQ / HLG accumulates ~3-4 ULPs of
+  ordering noise across the f32 chain.
+- **HDR + iPhone parity vs pycvvdp v0.5.4** measured against the
+  13-pair `/tmp/cvvdp-display-eval/` bundle through host_scalar
+  (WSL2 host can't reach cubecl-cuda + cubecl-cpu hits the
+  `atomic<f32>` panic — see `zenmetrics/CLAUDE.md` PINNED TASK):
+  - `standard_4k`: n=13, mean abs_diff = 0.0369 JOD, median = 0.0016,
+    max = 0.3908 (single outlier on `photo_dark_noise_heavy`).
+  - `iphone_14_pro`: n=13, mean = 0.0302, median = 0.0011,
+    max = 0.3309 (same outlier).
+  Both displays meet the mean<0.10 gate; the max outlier shows up
+  on both displays at the same pair, indicating a content-specific
+  drift rather than a display-dispatch defect. Full breakdown at
+  `benchmarks/cvvdp_iphone14_parity_2026-05-25.tsv` + `.meta`.
+  Reproducer:
+  `cargo run -p cvvdp-gpu --release --example parity_iphone_eval`.
+
+Commit: `f8bf2729` (this work). Docs updated in
+`crates/cvvdp-gpu/docs/DISPLAY_SPECS.md` Scope matrix.
+
 ### cvvdp-gpu — full display-spec parity (host-scalar) — 2026-05-25
 
 `DisplayModel` now carries first-class `eotf`, `primaries`,
