@@ -43,6 +43,50 @@ Workspace conventions per the global rules:
   IMAGE_INT, BASEBAND_W) match the upstream JSON to 1e-5. Catches
   calibration drift on upstream version bumps. (`1280571a`)
 
+### cvvdp-cpu — SIMD 13-tap σ=3 Gaussian blur (Chunk 1 of SIMD plan) — 2026-05-26
+
+`src/simd_pyramid.rs` extended with the 13-tap σ=3 separable Gaussian
+blur (`gaussian_blur_sigma3_simd`) — replacement for the upstream
+`cvvdp_gpu::kernels::masking::gaussian_blur_sigma3` (which allocated
+its h-pass buffer internally). Same six-tier dispatch as Chunk 2's
+5-tap kernels: v4x AVX-512 16-wide, v4 AVX2 8-wide, v3 SSE4 4-wide,
+NEON, WASM SIMD128, scalar.
+
+Paired A/B against current master (`0fc2eb2b`, Chunks 2/3/4/5 +
+Chunk 4 buffer recycling already shipped), `RAYON_NUM_THREADS=8`, no
+`target-cpu=native`, 5 alternating rounds × 30 iters, full
+`Cvvdp::score` wall:
+
+| size      | BL med-o-med | PO med-o-med | Δmed%   | Δbest%  | speedup |
+|-----------|-------------:|-------------:|--------:|--------:|--------:|
+| 256×256   |     7.44 ms  |     4.24 ms  | -43.1 % | -43.1 % | 1.76 ×  |
+| 512×512   |    30.99 ms  |    17.57 ms  | -43.3 % | -45.0 % | 1.76 ×  |
+| 1024×1024 |   158.40 ms  |    82.88 ms  | -47.7 % | -48.6 % | 1.91 ×  |
+| 2048×2048 |   639.29 ms  |   360.38 ms  | -43.6 % | -44.2 % | 1.77 ×  |
+
+The win is two-fold: the upstream `gaussian_blur_sigma3` is pure
+scalar (LLVM does not vectorize the 13-tap dot because of the
+inner `reflect_idx_for_blur` branch) AND allocates 2× `w*h`
+`Vec<f32>` on every call (3 channels × non-baseband bands per
+encode). The SIMD entry vectorizes the boundary-clean interior
+(99 % of cells at 1024²) and threads caller-owned scratch, so both
+costs are removed at once. The 1024² wall dropped 158 → 83 ms.
+Reproducer: build `examples/time_masking_paired_ab` at master and
+at this commit; run each with `--iters 30` under
+`RAYON_NUM_THREADS=8`.
+
+- `masking::mult_mutual_band_into` Step 2 rewired to call the new
+  SIMD entry; uses `pu_scratch` as the h-pass scratch (shared across
+  the 3 channels) and `term_a/rg/vy` as blur output buffers (free
+  until Step 3). Master's Chunk 4 buffer recycling already owns the
+  per-band Scratch; this chunk swaps the per-band upstream blur (which
+  still allocated 2× `w*h` Vec<f32> per channel internally) for the
+  caller-scratch SIMD entry.
+- 5 new SIMD parity tests at 1e-5 abs (full-pipeline, h-only,
+  v-only, DC-preservation, scratch-reuse safety).
+- 1e-4 JOD parity floor PRESERVED
+  (`standard_4k_path_still_at_parity_against_host_scalar` green).
+
 ### cvvdp-cpu — SIMD 5-tap pyramid reduce/expand (Chunk 2 of SIMD plan) — 2026-05-25
 
 `src/simd_pyramid.rs` (new) ports the 5-tap separable Gaussian inner
@@ -107,13 +151,13 @@ for zero gain, per butteraugli B7c). CSF SIMD retained as
 `#[allow(dead_code)]` documentation. `f01c99d2` (attempt) + `03037b0e`
 (honest-stop revert). 1e-4 JOD parity preserved, 58/58 tests.
 
-<!-- NOTE: SIMD Chunk 1 (σ=3 13-tap blur, commit 1faa0c39) is committed
-     but NOT YET on master@origin — its agent was rate-limited during
-     final-push, and the commit conflicts with Chunk 5's masking.rs edits
-     on rebase (cross-agent file-scope overlap). Recoverable in the
-     zenmetrics--cvvdp-cpu-simd-sigma3 workspace; needs conflict
-     resolution + parity re-validation before push. Its CHANGELOG entry
-     travels with the commit. -->
+<!-- NOTE: SIMD Chunk 1 (σ=3 13-tap blur) was re-verified against
+     current master on 2026-05-26 and LANDED. The rebase conflict was
+     CHANGELOG-only (the masking.rs edit applied cleanly — master still
+     used the old allocating blur in that region). Re-benched vs master
+     (not the stale 71bd498f baseline): -43 to -49 % wall at 256²-2048²,
+     1e-4 JOD parity preserved. Entry above; bench
+     `benchmarks/cvvdp_cpu_simd_sigma3_2026-05-26.{tsv,meta}`. -->
 
 ### cvvdp-gpu — GPU kernel-side EOTF + Primaries dispatch — 2026-05-25
 

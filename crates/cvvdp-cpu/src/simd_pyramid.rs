@@ -31,7 +31,28 @@
 
 use alloc::vec::Vec;
 
+use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
 use cvvdp_gpu::kernels::pyramid::GAUSS5;
+
+/// Reflect `i` into `[0, n)` for the 13-tap PU blur. Matches
+/// torchvision's `F.pad(..., mode='reflect')` behaviour exactly —
+/// bit-equivalent to `cvvdp_gpu::kernels::masking::reflect_idx_for_blur`
+/// (private upstream, re-implemented locally for SIMD boundary use).
+#[inline]
+fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
+    let n_i = n as isize;
+    debug_assert!(n_i > 0);
+    let mut j = i;
+    while j < 0 || j >= n_i {
+        if j < 0 {
+            j = -j;
+        }
+        if j >= n_i {
+            j = 2 * n_i - 2 - j;
+        }
+    }
+    j as usize
+}
 
 // Two magetypes blocks: AVX-512 family uses 16-wide; everyone else
 // uses 8-wide (native on AVX2, polyfilled to 2× on NEON/wasm/scalar).
@@ -761,6 +782,471 @@ pub(crate) fn expand_horizontal_pass(
 }
 
 // ============================================================================
+// 13-tap σ=3 Gaussian blur (PU_BLUR_KERNEL_1D) — separable horizontal + vertical
+// ============================================================================
+//
+// Chunk 1 of the SIMD optimization plan. Targets the #1 hot kernel
+// `gaussian_blur_sigma3` from cvvdp-gpu's `kernels::masking` (32 %
+// self-time at 1024² per the 2026-05-25 flamegraph). Called 3× per
+// non-baseband band by `mult_mutual_band_into`.
+//
+// Per scalar reference (`cvvdp_gpu::kernels::masking::gaussian_blur_sigma3`):
+//   half = 6
+//   for y in 0..h:
+//     for x in 0..w:
+//       h_pass[y*w + x] = Σ_{t=0..13} k[t] · src[y*w + reflect(x + t - 6)]
+//   for y in 0..h:
+//     for x in 0..w:
+//       out[y*w + x] = Σ_{t=0..13} k[t] · h_pass[reflect(y + t - 6)*w + x]
+//
+// SIMD strategy:
+//   - Horizontal pass: interior columns (6..w-6) have NO boundary
+//     reflection — all 13 taps read from `src[y*w + (x-6..=x+6)]`.
+//     Vectorize across `x`: for SIMD width N, output cols
+//     [x_base..x_base+N] read 13 shifted N-wide loads (each starting
+//     at `x_base + t - 6` for t in 0..13). Boundary patches (first 6
+//     and last 6 cols) stay scalar.
+//   - Vertical pass: interior rows (6..h-6) similarly vectorize
+//     across `x` — each tap broadcast-multiplies the 13 source rows.
+//     Boundary patches (first 6 and last 6 rows) stay scalar.
+//
+// 5-vs-13 difference vs Chunk 2:
+//   - Same broadcast-tap pattern; just 13 taps instead of 5.
+//   - More cumulative arithmetic per output → more memory-bound at
+//     1024²+ (per Chunk 2 honest finding); HIGHER speedup at 256²-512²
+//     where the working set fits in L2.
+//   - We do NOT pre-allocate a scratch z-buffer (unlike the pyramid
+//     expand) — the kernel reads source/scratch directly.
+
+#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x16::splat(token, k[0]);
+    let k1 = f32x16::splat(token, k[1]);
+    let k2 = f32x16::splat(token, k[2]);
+    let k3 = f32x16::splat(token, k[3]);
+    let k4 = f32x16::splat(token, k[4]);
+    let k5 = f32x16::splat(token, k[5]);
+    let k6 = f32x16::splat(token, k[6]);
+    let k7 = f32x16::splat(token, k[7]);
+    let k8 = f32x16::splat(token, k[8]);
+    let k9 = f32x16::splat(token, k[9]);
+    let k10 = f32x16::splat(token, k[10]);
+    let k11 = f32x16::splat(token, k[11]);
+    let k12 = f32x16::splat(token, k[12]);
+
+    let lane = 16usize;
+    // SIMD interior: for each `x_base`, process N=lane output cols
+    // `[x_base, x_base+lane)`. The 13-tap window for output col
+    // `x_base+r` (r ∈ 0..lane) reads `src[row + (x_base+r) - 6 + t]`
+    // for `t in 0..13`. The last tap of the last lane reads at offset
+    // `x_base + lane - 1 + 6 = x_base + lane + 5`, which is part of a
+    // lane-wide load starting at `x_base + lane + 5 - (lane - 1)
+    //  = x_base + 6`. So we need:
+    //   - `x_base >= 6`                       (prefix tap in-bounds)
+    //   - `x_base + 6 + lane <= w`            (last tap load in-bounds)
+    // i.e. `x_base <= w - lane - 6`. Loop condition is
+    //   `x_base + lane + 6 <= w` ⇒ `x_base < w - lane - 5`.
+    let interior_lo = 6usize;
+    let interior_hi_excl = w.saturating_sub(lane + 5);
+
+    for y in 0..h {
+        let row_off = y * w;
+        // Scalar prefix: x in [0, 6).
+        for x in 0..interior_lo.min(w) {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                s += k[t] * src[row_off + sx];
+            }
+            dst[row_off + x] = s;
+        }
+        // SIMD interior: stride lane across `[interior_lo, interior_hi_excl)`.
+        let mut x_base = interior_lo;
+        while x_base < interior_hi_excl {
+            // Each tap reads N contiguous floats at row offset
+            // `row_off + (x_base - 6) + t`. The 13 windows overlap
+            // heavily — LLVM should keep the loads in L1.
+            let load = |off: usize| -> f32x16 {
+                let base = row_off + x_base - 6 + off;
+                let arr: [f32; 16] = src[base..base + 16].try_into().unwrap();
+                f32x16::from_array(token, arr)
+            };
+            let v0 = load(0);
+            let v1 = load(1);
+            let v2 = load(2);
+            let v3 = load(3);
+            let v4 = load(4);
+            let v5 = load(5);
+            let v6 = load(6);
+            let v7 = load(7);
+            let v8 = load(8);
+            let v9 = load(9);
+            let v10 = load(10);
+            let v11 = load(11);
+            let v12 = load(12);
+            let acc = v0 * k0
+                + v1 * k1
+                + v2 * k2
+                + v3 * k3
+                + v4 * k4
+                + v5 * k5
+                + v6 * k6
+                + v7 * k7
+                + v8 * k8
+                + v9 * k9
+                + v10 * k10
+                + v11 * k11
+                + v12 * k12;
+            let arr = acc.to_array();
+            dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
+            x_base += lane;
+        }
+        // Scalar middle (if interior_hi - x_base < 16) + suffix.
+        for x in x_base..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                s += k[t] * src[row_off + sx];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+}
+
+#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+fn pu_blur_h_inner(token: Token, src: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x8::splat(token, k[0]);
+    let k1 = f32x8::splat(token, k[1]);
+    let k2 = f32x8::splat(token, k[2]);
+    let k3 = f32x8::splat(token, k[3]);
+    let k4 = f32x8::splat(token, k[4]);
+    let k5 = f32x8::splat(token, k[5]);
+    let k6 = f32x8::splat(token, k[6]);
+    let k7 = f32x8::splat(token, k[7]);
+    let k8 = f32x8::splat(token, k[8]);
+    let k9 = f32x8::splat(token, k[9]);
+    let k10 = f32x8::splat(token, k[10]);
+    let k11 = f32x8::splat(token, k[11]);
+    let k12 = f32x8::splat(token, k[12]);
+
+    let lane = 8usize;
+    let interior_lo = 6usize;
+    // Loop while `x_base + lane <= w` AND
+    // `x_base + (lane - 1) + 6 < w` (last tap of last lane in-bounds),
+    // i.e. `x_base + lane + 5 <= w` ⇒ `x_base <= w - lane - 5`.
+    let interior_hi_excl = w.saturating_sub(lane + 5);
+
+    for y in 0..h {
+        let row_off = y * w;
+        for x in 0..interior_lo.min(w) {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                s += k[t] * src[row_off + sx];
+            }
+            dst[row_off + x] = s;
+        }
+        let mut x_base = interior_lo;
+        while x_base < interior_hi_excl {
+            let load = |off: usize| -> f32x8 {
+                let base = row_off + x_base - 6 + off;
+                let arr: [f32; 8] = src[base..base + 8].try_into().unwrap();
+                f32x8::from_array(token, arr)
+            };
+            let v0 = load(0);
+            let v1 = load(1);
+            let v2 = load(2);
+            let v3 = load(3);
+            let v4 = load(4);
+            let v5 = load(5);
+            let v6 = load(6);
+            let v7 = load(7);
+            let v8 = load(8);
+            let v9 = load(9);
+            let v10 = load(10);
+            let v11 = load(11);
+            let v12 = load(12);
+            let acc = v0 * k0
+                + v1 * k1
+                + v2 * k2
+                + v3 * k3
+                + v4 * k4
+                + v5 * k5
+                + v6 * k6
+                + v7 * k7
+                + v8 * k8
+                + v9 * k9
+                + v10 * k10
+                + v11 * k11
+                + v12 * k12;
+            let arr = acc.to_array();
+            dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
+            x_base += lane;
+        }
+        for x in x_base..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                s += k[t] * src[row_off + sx];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+}
+
+/// Horizontal pass of the σ=3 13-tap Gaussian blur. Writes the `w × h`
+/// scratch buffer with the per-row 13-tap convolution + reflect
+/// padding. Bit-equivalent to `gaussian_blur_sigma3`'s horizontal
+/// pass except for SIMD FMA-grouping in the interior (well below
+/// 1e-5 abs).
+pub(crate) fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &mut [f32]) {
+    debug_assert_eq!(src.len(), w * h);
+    debug_assert_eq!(h_pass.len(), w * h);
+    archmage::incant!(
+        pu_blur_h_inner(src, w, h, h_pass),
+        [v4x, v4, v3, neon, wasm128, scalar]
+    );
+}
+
+#[archmage::magetypes(define(f32x16), +v4, +v4x, -v3, -neon, -wasm128, -scalar)]
+fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x16::splat(token, k[0]);
+    let k1 = f32x16::splat(token, k[1]);
+    let k2 = f32x16::splat(token, k[2]);
+    let k3 = f32x16::splat(token, k[3]);
+    let k4 = f32x16::splat(token, k[4]);
+    let k5 = f32x16::splat(token, k[5]);
+    let k6 = f32x16::splat(token, k[6]);
+    let k7 = f32x16::splat(token, k[7]);
+    let k8 = f32x16::splat(token, k[8]);
+    let k9 = f32x16::splat(token, k[9]);
+    let k10 = f32x16::splat(token, k[10]);
+    let k11 = f32x16::splat(token, k[11]);
+    let k12 = f32x16::splat(token, k[12]);
+
+    let lane = 16usize;
+    let n_groups = w / lane;
+    let interior_lo = 6usize;
+    let interior_hi = h.saturating_sub(6); // y in [interior_lo, interior_hi) is SIMD interior
+
+    // Boundary rows: y in [0, 6) ∪ [h-6, h) — scalar.
+    for y in 0..interior_lo.min(h) {
+        let row_off = y * w;
+        for x in 0..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+
+    // Interior rows: SIMD across columns within each row.
+    for y in interior_lo..interior_hi {
+        let row_off = y * w;
+        // SIMD lane groups across w.
+        for cg in 0..n_groups {
+            let x_base = cg * lane;
+            // Each tap reads N contiguous floats at
+            // `(y - 6 + t) * w + x_base` (no reflection in interior).
+            let load = |t: usize| -> f32x16 {
+                let off = (y - 6 + t) * w + x_base;
+                let arr: [f32; 16] = h_pass[off..off + 16].try_into().unwrap();
+                f32x16::from_array(token, arr)
+            };
+            let v0 = load(0);
+            let v1 = load(1);
+            let v2 = load(2);
+            let v3 = load(3);
+            let v4 = load(4);
+            let v5 = load(5);
+            let v6 = load(6);
+            let v7 = load(7);
+            let v8 = load(8);
+            let v9 = load(9);
+            let v10 = load(10);
+            let v11 = load(11);
+            let v12 = load(12);
+            let acc = v0 * k0
+                + v1 * k1
+                + v2 * k2
+                + v3 * k3
+                + v4 * k4
+                + v5 * k5
+                + v6 * k6
+                + v7 * k7
+                + v8 * k8
+                + v9 * k9
+                + v10 * k10
+                + v11 * k11
+                + v12 * k12;
+            let arr = acc.to_array();
+            dst[row_off + x_base..row_off + x_base + 16].copy_from_slice(&arr);
+        }
+        // Scalar tail columns (< lane). No reflect needed (y is interior).
+        for x in n_groups * lane..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = y + t - 6; // safe: y >= 6
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+
+    // Boundary rows: y in [h-6, h) — scalar.
+    for y in interior_hi.max(interior_lo)..h {
+        let row_off = y * w;
+        for x in 0..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+}
+
+#[archmage::magetypes(define(f32x8), v3, neon, wasm128, scalar)]
+fn pu_blur_v_inner(token: Token, h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    let k = PU_BLUR_KERNEL_1D;
+    let k0 = f32x8::splat(token, k[0]);
+    let k1 = f32x8::splat(token, k[1]);
+    let k2 = f32x8::splat(token, k[2]);
+    let k3 = f32x8::splat(token, k[3]);
+    let k4 = f32x8::splat(token, k[4]);
+    let k5 = f32x8::splat(token, k[5]);
+    let k6 = f32x8::splat(token, k[6]);
+    let k7 = f32x8::splat(token, k[7]);
+    let k8 = f32x8::splat(token, k[8]);
+    let k9 = f32x8::splat(token, k[9]);
+    let k10 = f32x8::splat(token, k[10]);
+    let k11 = f32x8::splat(token, k[11]);
+    let k12 = f32x8::splat(token, k[12]);
+
+    let lane = 8usize;
+    let n_groups = w / lane;
+    let interior_lo = 6usize;
+    let interior_hi = h.saturating_sub(6);
+
+    for y in 0..interior_lo.min(h) {
+        let row_off = y * w;
+        for x in 0..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+
+    for y in interior_lo..interior_hi {
+        let row_off = y * w;
+        for cg in 0..n_groups {
+            let x_base = cg * lane;
+            let load = |t: usize| -> f32x8 {
+                let off = (y - 6 + t) * w + x_base;
+                let arr: [f32; 8] = h_pass[off..off + 8].try_into().unwrap();
+                f32x8::from_array(token, arr)
+            };
+            let v0 = load(0);
+            let v1 = load(1);
+            let v2 = load(2);
+            let v3 = load(3);
+            let v4 = load(4);
+            let v5 = load(5);
+            let v6 = load(6);
+            let v7 = load(7);
+            let v8 = load(8);
+            let v9 = load(9);
+            let v10 = load(10);
+            let v11 = load(11);
+            let v12 = load(12);
+            let acc = v0 * k0
+                + v1 * k1
+                + v2 * k2
+                + v3 * k3
+                + v4 * k4
+                + v5 * k5
+                + v6 * k6
+                + v7 * k7
+                + v8 * k8
+                + v9 * k9
+                + v10 * k10
+                + v11 * k11
+                + v12 * k12;
+            let arr = acc.to_array();
+            dst[row_off + x_base..row_off + x_base + 8].copy_from_slice(&arr);
+        }
+        for x in n_groups * lane..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = y + t - 6;
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+
+    for y in interior_hi.max(interior_lo)..h {
+        let row_off = y * w;
+        for x in 0..w {
+            let mut s = 0.0f32;
+            for t in 0..13 {
+                let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                s += k[t] * h_pass[sy * w + x];
+            }
+            dst[row_off + x] = s;
+        }
+    }
+}
+
+/// Vertical pass of the σ=3 13-tap Gaussian blur. Reads `h_pass`
+/// (output of `pu_blur_horizontal_pass`) and writes the final blur
+/// into `dst`.
+pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+    debug_assert_eq!(h_pass.len(), w * h);
+    debug_assert_eq!(dst.len(), w * h);
+    archmage::incant!(
+        pu_blur_v_inner(h_pass, w, h, dst),
+        [v4x, v4, v3, neon, wasm128, scalar]
+    );
+}
+
+/// Full σ=3 13-tap separable Gaussian blur with caller-owned scratch.
+///
+/// Replacement for `cvvdp_gpu::kernels::masking::gaussian_blur_sigma3`
+/// that avoids an internal allocation. `h_pass` is the horizontal-pass
+/// scratch (resized to `w*h` internally); `dst` receives the final
+/// blurred output. Same reflect-padding semantics as the upstream
+/// scalar reference; SIMD-vectorized interior with scalar boundary
+/// patches.
+///
+/// Caller invariants: `src.len() == w * h`, `w >= 1`, `h >= 1`.
+pub(crate) fn gaussian_blur_sigma3_simd(
+    src: &[f32],
+    w: usize,
+    h: usize,
+    h_pass: &mut Vec<f32>,
+    dst: &mut Vec<f32>,
+) {
+    debug_assert_eq!(src.len(), w * h);
+    let n = w * h;
+    h_pass.clear();
+    h_pass.resize(n, 0.0);
+    dst.clear();
+    dst.resize(n, 0.0);
+    pu_blur_horizontal_pass(src, w, h, h_pass.as_mut_slice());
+    pu_blur_vertical_pass(h_pass.as_slice(), w, h, dst.as_mut_slice());
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1024,6 +1510,161 @@ mod tests {
                     got[dy * sw + x]
                 );
             }
+        }
+    }
+
+    // ========================================================================
+    // 13-tap σ=3 Gaussian blur (Chunk 1) parity tests
+    // ========================================================================
+    //
+    // Compare against the scalar `gaussian_blur_sigma3` reference in
+    // cvvdp-gpu — bit-equivalent except for FMA-grouping in the SIMD
+    // interior (well below the 1e-5 abs tolerance).
+
+    #[test]
+    fn pu_blur_simd_matches_upstream_scalar() {
+        use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+        // Sizes spanning the no-blur PU_PADSIZE = 6 cutoff (caller guards
+        // against w ≤ 6 || h ≤ 6) AND a mix of SIMD-interior + tail
+        // cases: 16 == 8-lane × 2, 17 forces one scalar tail col, 32 ==
+        // 16-lane × 2 (v4x clean), etc.
+        let cases: &[(usize, usize)] = &[
+            (7, 7),
+            (8, 8),
+            (12, 12),
+            (16, 16),
+            (17, 19),
+            (24, 24),
+            (32, 32),
+            (33, 35),
+            (64, 64),
+            (100, 100),
+            (128, 128),
+            (256, 256),
+        ];
+        for &(w, h) in cases {
+            let src = rng_seq(0x12345678 ^ ((w as u32) << 16) ^ (h as u32), w * h);
+            let want = gaussian_blur_sigma3(&src, w, h);
+            let mut h_pass: Vec<f32> = Vec::new();
+            let mut got: Vec<f32> = Vec::new();
+            gaussian_blur_sigma3_simd(&src, w, h, &mut h_pass, &mut got);
+            for i in 0..want.len() {
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "case {w}x{h} idx {i}: want={}, got={} (delta={})",
+                    want[i],
+                    got[i],
+                    (want[i] - got[i]).abs()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_simd_dc_preservation() {
+        // Uniform input → uniform output (kernel sums to 1).
+        let cases: &[(usize, usize)] = &[(16, 16), (33, 33), (64, 100), (128, 128)];
+        for &(w, h) in cases {
+            let src = alloc::vec![3.5_f32; w * h];
+            let mut h_pass: Vec<f32> = Vec::new();
+            let mut got: Vec<f32> = Vec::new();
+            gaussian_blur_sigma3_simd(&src, w, h, &mut h_pass, &mut got);
+            for &v in got.iter() {
+                assert!(
+                    (v - 3.5).abs() < 1e-5,
+                    "DC not preserved at {w}x{h}: {v} vs 3.5"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_simd_horizontal_only_parity() {
+        use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+        // Validate the horizontal pass in isolation against a
+        // line-by-line scalar reference. Catches lane-boundary issues
+        // independently of the vertical pass.
+        let k = PU_BLUR_KERNEL_1D;
+        let cases: &[(usize, usize)] = &[(16, 4), (33, 4), (64, 4), (128, 4)];
+        for &(w, h) in cases {
+            let src = rng_seq(0xabad1dea ^ ((w as u32) << 16) ^ (h as u32), w * h);
+            let mut want = alloc::vec![0.0_f32; w * h];
+            for y in 0..h {
+                for x in 0..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sx = reflect_idx_for_blur(x as isize + t as isize - 6, w);
+                        s += k[t] * src[y * w + sx];
+                    }
+                    want[y * w + x] = s;
+                }
+            }
+            let mut got = alloc::vec![0.0_f32; w * h];
+            pu_blur_horizontal_pass(&src, w, h, &mut got);
+            for i in 0..want.len() {
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "h-pass {w}x{h} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_simd_vertical_only_parity() {
+        use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+        // Validate the vertical pass in isolation.
+        let k = PU_BLUR_KERNEL_1D;
+        let cases: &[(usize, usize)] = &[(16, 16), (33, 33), (64, 64), (128, 100)];
+        for &(w, h) in cases {
+            let scratch = rng_seq(0xbeefdead ^ ((w as u32) << 16) ^ (h as u32), w * h);
+            let mut want = alloc::vec![0.0_f32; w * h];
+            for y in 0..h {
+                for x in 0..w {
+                    let mut s = 0.0f32;
+                    for t in 0..13 {
+                        let sy = reflect_idx_for_blur(y as isize + t as isize - 6, h);
+                        s += k[t] * scratch[sy * w + x];
+                    }
+                    want[y * w + x] = s;
+                }
+            }
+            let mut got = alloc::vec![0.0_f32; w * h];
+            pu_blur_vertical_pass(&scratch, w, h, &mut got);
+            for i in 0..want.len() {
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "v-pass {w}x{h} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pu_blur_simd_reuses_scratch_safely() {
+        // Calling twice with the same scratch vec must produce
+        // identical output (no leftover state contamination).
+        use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+        let w = 64;
+        let h = 64;
+        let src1 = rng_seq(0xa1a1a1a1, w * h);
+        let src2 = rng_seq(0xb2b2b2b2, w * h);
+        let want2 = gaussian_blur_sigma3(&src2, w, h);
+        let mut h_pass: Vec<f32> = Vec::new();
+        let mut dst: Vec<f32> = Vec::new();
+        gaussian_blur_sigma3_simd(&src1, w, h, &mut h_pass, &mut dst);
+        gaussian_blur_sigma3_simd(&src2, w, h, &mut h_pass, &mut dst);
+        for i in 0..want2.len() {
+            assert!(
+                (want2[i] - dst[i]).abs() < 1e-5,
+                "reuse {i}: want={}, got={}",
+                want2[i],
+                dst[i]
+            );
         }
     }
 }

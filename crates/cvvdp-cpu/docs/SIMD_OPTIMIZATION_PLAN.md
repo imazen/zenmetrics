@@ -398,11 +398,40 @@ SIMD chain agent's scope**.
 
 | Chunk | Priority | Self % attacked | Expected ms saved | Actual ms saved | Risk | Dep |
 |-------|----------|----------------:|------------------:|----------------:|------|-----|
-| 1 — SIMD gaussian_blur_sigma3 | HIGHEST | 32.06% | 62-93 ms | _pending_ (parallel agent) | LOW | — |
+| 1 — SIMD gaussian_blur_sigma3 | HIGHEST | 32.06% | 62-93 ms | **~76 ms @ 1024² (-48.6 %)**; 256²/512² 1.76× — vs MASTER | LOW | — |
 | 2 — SIMD gausspyr reduce/expand | HIGH | 23.73% | 37-50 ms | **~0-5 ms** (see below) | LOW-MED | — |
 | 3 — SIMD safe_pow | MED | 10.26% | 7-10 ms | _pending_ | LOW | — |
 | 4 — TLS pool + pre-clear | MED | 4.65% + 10.63% | 5-8 ms | _pending_ | ZERO | — |
 | 5 — SIMD CSF + persistent rayon pool | LOW-MED | ~3.0% + 10.63% | 15-20 ms | _pending_ | LOW | Ch3 |
+
+**Chunk 1 actual result (LANDED 2026-05-26, re-verified vs current master):**
+The original agent benched against `71bd498f` (Chunk 2, before Chunk 4
+buffer recycling). The verdict pass re-benched against current master
+(`0fc2eb2b`, Chunks 2/3/4/5 + Chunk 4 Scratch already shipped) to confirm
+the win is not double-counting Chunk 4's allocation reduction. It is not —
+the win reproduces at ~2× on top of master. Paired A/B on
+`time_masking_paired_ab` (`RAYON_NUM_THREADS=8`, no native, 5 rounds ×
+30 iters, full `Cvvdp::score`):
+
+| size      | baseline (master) | post-SIMD | Δmed%    | Δbest%   | speedup |
+|-----------|------------------:|----------:|---------:|---------:|--------:|
+| 256×256   |  7.44 ms          |  4.24 ms  | -43.1 %  | -43.1 %  | 1.76 ×  |
+| 512×512   | 30.99 ms          | 17.57 ms  | -43.3 %  | -45.0 %  | 1.76 ×  |
+| 1024×1024 |158.40 ms          | 82.88 ms  | -47.7 %  | -48.6 %  | 1.91 ×  |
+| 2048×2048 |639.29 ms          |360.38 ms  | -43.6 %  | -44.2 %  | 1.77 ×  |
+
+The win is two-fold and stacks: (1) the upstream `gaussian_blur_sigma3` is
+pure scalar (the inner `reflect_idx_for_blur` branch blocks LLVM auto-
+vectorization), and (2) it allocates 2× `w*h` `Vec<f32>` on every call —
+costs Chunk 4's OUTER Scratch does not cover. The SIMD entry vectorizes
+the boundary-clean interior (99 % of cells @1024²) AND threads caller
+scratch, removing both at once. Chunk 2's "memory-bound at 1024²+"
+finding did NOT generalize: the 13-tap source loads overlap heavily (adj
+output cols share 12 of 13 inputs), keeping the working set L1d-resident
+(compute-bound). See `benchmarks/cvvdp_cpu_simd_sigma3_2026-05-26.meta`.
+
+1e-4 JOD parity floor preserved (`standard_4k_path_still_at_parity_against_host_scalar`
+green). 5 new SIMD parity tests at 1e-5 abs all pass.
 
 **Chunk 2 actual result (2026-05-25, commit shipped on master):**
 Wall delta at 1024² is ±5 % vs baseline (median post warm 196 ms vs

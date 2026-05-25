@@ -17,11 +17,10 @@
 
 use alloc::vec::Vec;
 
-use cvvdp_gpu::kernels::masking::{
-    D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3, gaussian_blur_sigma3,
-};
+use cvvdp_gpu::kernels::masking::{D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
 
 use crate::simd_math::safe_pow_with_offset_into;
+use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
 const SAFE_EPS: f32 = 1e-5;
 
@@ -93,21 +92,25 @@ pub(crate) fn mult_mutual_band_into(
     // Step 2: phase_uncertainty per channel.
     let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
     if bw > PU_PADSIZE && bh > PU_PADSIZE {
-        // Blur each channel then scale. We re-use `gaussian_blur_sigma3`'s
-        // upstream impl which allocates internally. (Optimizing the blur
-        // itself is the next perf chunk; for now we wrap.)
-        let blur_a = gaussian_blur_sigma3(m_mm_a, bw, bh);
-        let blur_rg = gaussian_blur_sigma3(m_mm_rg, bw, bh);
-        let blur_vy = gaussian_blur_sigma3(m_mm_vy, bw, bh);
+        // SIMD σ=3 13-tap separable Gaussian (Chunk 1 of the SIMD
+        // optimization plan, replacing the upstream
+        // `gaussian_blur_sigma3` which allocated its h-pass buffer
+        // internally). We thread `pu_scratch` as the h-pass scratch
+        // (shared across the 3 channels — resized to n inside the
+        // SIMD entry) and write blur output into the free `term_*`
+        // buffers, which aren't consumed until Step 3 below.
+        gaussian_blur_sigma3_simd(m_mm_a, bw, bh, pu_scratch, term_a);
         for i in 0..n {
-            m_mm_a[i] = blur_a[i] * mask_c_lin;
-            m_mm_rg[i] = blur_rg[i] * mask_c_lin;
-            m_mm_vy[i] = blur_vy[i] * mask_c_lin;
+            m_mm_a[i] = term_a[i] * mask_c_lin;
         }
-        // Drop the upstream-allocated blur buffers — we can wire them
-        // into `pu_scratch` in a future chunk via a custom in-place
-        // blur impl.
-        let _ = pu_scratch;
+        gaussian_blur_sigma3_simd(m_mm_rg, bw, bh, pu_scratch, term_rg);
+        for i in 0..n {
+            m_mm_rg[i] = term_rg[i] * mask_c_lin;
+        }
+        gaussian_blur_sigma3_simd(m_mm_vy, bw, bh, pu_scratch, term_vy);
+        for i in 0..n {
+            m_mm_vy[i] = term_vy[i] * mask_c_lin;
+        }
     } else {
         for i in 0..n {
             m_mm_a[i] *= mask_c_lin;

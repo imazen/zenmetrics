@@ -1,0 +1,123 @@
+cvvdp_cpu_simd_sigma3_2026-05-26 — VERDICT bench: paired A/B of the
+SIMD 13-tap σ=3 Gaussian blur (Chunk 1 of the SIMD optimization plan)
+re-measured AGAINST CURRENT MASTER, not the agent's original
+`71bd498f` baseline.
+
+================================================================
+Why this re-bench exists
+================================================================
+
+Chunk 1's original agent (commit `1faa0c39` / rebased `bb9c8991`) was
+rate-limited before pushing. Its bench (`*_2026-05-25.{tsv,meta}`)
+used `71bd498f` (Chunk 2, BEFORE Chunk 4 buffer recycling) as the
+baseline. The verdict pass re-benched against current master
+(`0fc2eb2b`, which already has Chunks 2/3/4/5 + the Chunk 4 buffer-
+recycling Scratch shipped) to confirm sigma3 adds value ON TOP of
+what is already on master — i.e. the win is not double-counting the
+allocation reduction Chunk 4 already delivered.
+
+It does. The win reproduces at ~2× on top of master.
+
+================================================================
+Configuration
+================================================================
+
+- Date:           2026-05-26
+- Host:           AMD Ryzen 9 7950X (16C/32T), water-cooled, WSL2
+- Toolchain:      stable rustc (workspace pin 1.93)
+- Profile:        release (LTO=fat, codegen-units=1)
+- Threads:        RAYON_NUM_THREADS=8
+- Compile flags:  NO `-C target-cpu=native` (runtime archmage dispatch)
+- Harness:        `examples/time_masking_paired_ab.rs`
+                  (full `Cvvdp::score` wall, 3 warmup + 30 timed iters)
+- Method:         two release binaries built at the same workspace:
+                  - baseline = `master` (`0fc2eb2b`); masking.rs Step 2
+                    still calls upstream allocating `gaussian_blur_sigma3`
+                  - post     = this commit (`bb9c8991`); Step 2 calls
+                    `gaussian_blur_sigma3_simd` with caller scratch
+                  5 alternating rounds (BL→PO→BL→PO…), per-cell
+                  median-of-medians + best-of-medians across rounds.
+
+================================================================
+Headline result (vs master)
+================================================================
+
+| size      | BL med-o-med | PO med-o-med | Δmed%   | BL best | PO best | Δbest%  | speedup |
+|-----------|-------------:|-------------:|--------:|--------:|--------:|--------:|--------:|
+| 256×256   |     7.44 ms  |     4.24 ms  | -43.1 % |  7.22   |  4.10   | -43.1 % |  1.76 × |
+| 512×512   |    30.99 ms  |    17.57 ms  | -43.3 % | 30.63   | 16.85   | -45.0 % |  1.76 × |
+| 1024×1024 |   158.40 ms  |    82.88 ms  | -47.7 % |154.69   | 79.45   | -48.6 % |  1.91 × |
+| 2048×2048 |   639.29 ms  |   360.38 ms  | -43.6 % |634.50   |354.36   | -44.2 % |  1.77 × |
+
+All four sizes clear the LAND gates by a wide margin
+(≥20 % @256² OR ≥10 % @512² OR ≥8 % @1024² — best-of-medians):
+256² -43 %, 512² -45 %, 1024² -49 %, 2048² -44 %.
+
+================================================================
+Why the win is so much bigger than "2× on a 32 %-of-wall kernel"
+================================================================
+
+The upstream `gaussian_blur_sigma3`
+(`cvvdp-gpu/src/kernels/masking.rs:300`) is:
+
+1. PURE SCALAR — triple-nested `for` loops; the inner 13-tap dot
+   contains a `reflect_idx_for_blur(...)` branch per tap, which
+   blocks LLVM auto-vectorization. So the baseline runs the whole
+   blur scalar.
+2. ALLOCATING — `let mut h_pass = vec![0.0; w*h]; … let mut out =
+   vec![0.0; w*h];` on EVERY call. Called 3× (channels) per
+   non-baseband band per encode. Chunk 4's outer `Scratch` recycling
+   does NOT cover these internal allocs because they live inside the
+   upstream cvvdp-gpu function, not in the cvvdp-cpu band loop.
+
+The SIMD entry removes BOTH at once: it vectorizes the boundary-clean
+interior (99 % of output cells at 1024²; 6-row/6-col reflect patches
+stay scalar) AND threads caller-owned `pu_scratch` + `term_*` buffers
+so zero allocation happens per band. That stacks two independent wins,
+which is why the pipeline delta (~-48 %) exceeds the naive
+"share-of-wall × SIMD ratio" estimate.
+
+This is NOT the memory-bound ceiling Chunk 2 hit. The 13-tap blur's
+adjacent output columns share 12 of 13 input columns, so the working
+set stays L1d-resident (compute-bound), unlike the decimating 5-tap
+pyramid reduce/expand (memory-bound). Chunk 2's honest finding was
+correct for the 5-tap kernel; it does not generalize to 13-tap.
+
+================================================================
+Parity
+================================================================
+
+- `standard_4k_path_still_at_parity_against_host_scalar` (1e-4 JOD
+  floor) PASSES — gate NOT widened.
+- 5 new SIMD parity tests assert 1e-5 abs vs the upstream scalar
+  blur (full-pipeline, h-only, v-only, DC-preservation, scratch
+  reuse). All green.
+- Full suite: 63 tests, 0 failures.
+
+================================================================
+Verdict: LAND
+================================================================
+
+Genuine compute + allocation win at all four sizes, parity held.
+Conflict on rebase was CHANGELOG-only (both sigma3 and master's
+backfill commit edited the [Unreleased] block); masking.rs Step 2
+applied cleanly because master still used the old allocating blur in
+that region. The masking.rs edit is the legitimate call-site rewiring
+(NOT accidental, NOT a different chunk) needed to exercise the new
+SIMD blur — without it, `gaussian_blur_sigma3_simd` is dead code.
+
+================================================================
+DO NOT (binding for future agents)
+================================================================
+
+1. DO NOT cite "FMA precision" for any JOD movement — the 1e-5 SIMD
+   parity floor sits below the 1e-4 JOD gate; parity tests assert it.
+2. DO NOT widen the 1e-4 JOD parity gate.
+3. DO NOT default-enable `avx512` — Chunk 3 simd_math lacks v4/v4x
+   variants and breaks that build (pre-existing, tracked separately).
+   AVX-512 hosts run the v4 (AVX2 8-wide) tier under default features,
+   which is what these numbers measure.
+4. DO NOT respawn Chunk 1 for more perf — the next lever is the
+   Phase-2 strip pipeline, not more aggressive SIMD here.
+5. DO NOT re-bench against `71bd498f` — that double-counts the
+   allocation story. Master is the honest baseline.
