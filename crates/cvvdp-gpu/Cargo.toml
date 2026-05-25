@@ -31,6 +31,9 @@ cubecl-types = []
 
 [dependencies]
 cubecl = { workspace = true }
+# JSON parsing for the vendored display_models.json / color_spaces.json
+# preset registry (src/presets.rs). Workspace serde_json is 1.x.
+serde_json = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 

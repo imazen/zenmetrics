@@ -182,6 +182,7 @@ pub mod memory_mode;
 pub mod opaque;
 pub mod params;
 pub mod pipeline;
+pub mod presets;
 
 // Unified MemoryMode surface — see `memory_mode.rs`.
 pub use memory_mode::{
