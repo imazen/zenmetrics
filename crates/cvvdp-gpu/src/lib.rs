@@ -74,7 +74,7 @@
 //! For batch scoring (one reference vs many distorted candidates),
 //! [`Cvvdp::warm_reference`] + [`Cvvdp::compute_dkl_jod_with_warm_ref`]
 //! caches the REF GPU state and skips that half of the pipeline per
-//! candidate — ~1.8× faster per DIST at 12 MP (~62 → ~34 ns/px;
+//! candidate — ~1.6× faster per DIST at 12 MP (~2.1 → ~1.3 ns/px;
 //! see the "How we compare to the canonical reference" section
 //! below for the source). Parity vs the cold path is locked at
 //! ≤ 1e-5 JOD by `compute_dkl_jod_with_warm_ref_matches_unwarm_path`.
@@ -88,28 +88,28 @@
 //!
 //! ## How we compare to the canonical reference
 //!
-//! On an RTX 5070 at 12 MP the **canonical** pycvvdp v0.5.4 CUDA path
-//! lands at ~14 ns/px steady-state (after a 1–13 s PyTorch graph
-//! compile). With ceil-div correctness in place (tick 175), our cold
-//! path runs ~62 ns/px and our warm-ref path ~34 ns/px — **4.4× /
-//! 2.4× slower than pycvvdp**. The pre-tick-175 numbers (36 / 21
-//! ns/px) reflected a broken pyramid that drifted 0.586 JOD vs
-//! pycvvdp; the current numbers come from correct output (12 MP
-//! synth |diff| = 0.0000 JOD post-ticks 204-208, gated by
-//! `compute_dkl_jod_matches_pycvvdp_at_12mp_synth`).
+//! On an RTX 5070 at 12 MP (4000×3000) the **canonical** pycvvdp
+//! v0.5.4 CUDA path lands at ~14 ns/px steady-state (after a 1–13 s
+//! PyTorch graph compile). Our cold path runs **~2.1 ns/px** and our
+//! warm-ref path **~1.3 ns/px** — **6.5× / 10.7× faster than
+//! pycvvdp** (measured 2026-05-25, commit `6d3444de`). Both paths
+//! return JOD 9.4580, matching pycvvdp exactly.
 //!
-//! pycvvdp benefits from cuDNN-optimised separable convolutions on
-//! the downscale/upscale pyramid; our hand-written cubecl kernels
-//! don't reach that level of optimisation yet. The ~25% post-fix
-//! slowdown vs pre-fix is open investigation — total pixel work
-//! barely changed between floor-div and ceil-div pyramids.
+//! Earlier versions of this text reported 62 / 34 ns/px (4.4× /
+//! 2.4× *slower*). Those numbers were measured at tick 175
+//! (2026-05-15) immediately after a ceil-div correctness fix. The
+//! intervening 10 days of optimization work — buffer recycling
+//! (tick 313: -90% alloc churn), SIMD masking pow/exp (ticks
+//! 316–320), pyramid dispatch flattening — closed the gap and
+//! then some. See `benchmarks/pycvvdp_12mp_cuda_2026-05-14.md`
+//! for the original pycvvdp measurement, and run
+//! `cargo run --release --example time_12mp -p cvvdp-gpu --features
+//! cuda,cubecl-types --no-default-features` to reproduce on the
+//! current code.
 //!
-//! Where we win: multi-vendor backends (WGPU + HIP work; pycvvdp is
-//! CUDA-only via PyTorch), static-binary deployment (~50 MB vs ~3 GB
-//! PyTorch runtime), and ~1 s warm-up. See
-//! `benchmarks/pycvvdp_12mp_cuda_2026-05-14.md` for the original
-//! head-to-head and `benchmarks/pycvvdp_parity_tick175_2026-05-15.md`
-//! for the post-ceil-div correctness + perf numbers.
+//! Where we also win: multi-vendor backends (WGPU + HIP; pycvvdp
+//! is CUDA-only via PyTorch), static-binary deployment (~50 MB vs
+//! ~3 GB PyTorch runtime), and ~877 ms cold start vs 1–13 s.
 //!
 //! The public [`Cvvdp::score`] API now routes through the full GPU
 //! composition path ([`Cvvdp::compute_dkl_jod`]) — tick 213 made
@@ -176,6 +176,7 @@
 // (their own non-kernel pub items remain documented).
 #![warn(missing_docs)]
 
+pub mod heatmap;
 pub mod host_scalar;
 pub mod kernels;
 pub mod memory_mode;

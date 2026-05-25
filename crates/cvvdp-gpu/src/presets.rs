@@ -18,12 +18,10 @@
 //! lookup `pycvvdp` performs in
 //! `vvdp_display_photometry.load(display_name, config_paths)`.
 //!
-//! Presets with a viewing-mode that's not yet ported to
-//! [`crate::params::DisplayGeometry`] (FOV-diagonal only, no
-//! `diagonal_size_inches` + `viewing_distance_meters` pair) are
-//! still loadable for their [`DisplayModel`] fields, but
-//! `geometry_by_name` returns `None` for them — see [`PRESETS`]
-//! for the full enumeration.
+//! All 26 upstream presets are loadable for both
+//! [`DisplayModel`] and [`DisplayGeometry`]. Presets that
+//! specify `fov_diagonal` instead of `diagonal_size_inches` are
+//! converted via [`DisplayGeometry::from_fov_diagonal`].
 //!
 //! # Examples
 //!
@@ -115,10 +113,10 @@ impl DisplayModel {
 
 impl DisplayGeometry {
     /// Load a named preset's display geometry from the vendored
-    /// upstream `display_models.json`. Returns `None` if the
-    /// preset doesn't exist OR doesn't expose
-    /// `diagonal_size_inches + viewing_distance_meters` (e.g.,
-    /// the FOV-only `standard_hmd` entry).
+    /// upstream `display_models.json`. Returns `None` only if the
+    /// preset name doesn't exist. Presets with `fov_diagonal`
+    /// (instead of `diagonal_size_inches`) are converted via
+    /// [`DisplayGeometry::from_fov_diagonal`].
     ///
     /// # Examples
     ///
@@ -129,9 +127,10 @@ impl DisplayGeometry {
     /// assert_eq!(g.resolution_w, 3840);
     /// assert_eq!(g.resolution_h, 2160);
     ///
-    /// // FOV-only presets return None for geometry today.
-    /// assert!(DisplayGeometry::by_name("standard_hmd").is_none());
-    /// // Unknown preset is also None.
+    /// // FOV-only presets (HMDs) also load via from_fov_diagonal.
+    /// let hmd = DisplayGeometry::by_name("standard_hmd").unwrap();
+    /// assert_eq!(hmd.resolution_w, 1440);
+    /// // Unknown preset is None.
     /// assert!(DisplayGeometry::by_name("nope").is_none());
     /// ```
     #[must_use]
@@ -223,11 +222,6 @@ fn parse_geometry(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Di
     let w = arr[0].as_u64()? as u32;
     let h = arr[1].as_u64()? as u32;
 
-    let diagonal_inches = obj
-        .get("diagonal_size_inches")
-        .and_then(serde_json::Value::as_f64)
-        .map(|v| v as f32)?;
-
     let distance_m = if let Some(m) = obj
         .get("viewing_distance_meters")
         .and_then(serde_json::Value::as_f64)
@@ -242,12 +236,29 @@ fn parse_geometry(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Di
         return None;
     };
 
-    Some(DisplayGeometry {
-        resolution_w: w,
-        resolution_h: h,
-        distance_m,
-        diagonal_inches,
-    })
+    if let Some(diag) = obj
+        .get("diagonal_size_inches")
+        .and_then(serde_json::Value::as_f64)
+    {
+        Some(DisplayGeometry {
+            resolution_w: w,
+            resolution_h: h,
+            distance_m,
+            diagonal_inches: diag as f32,
+        })
+    } else if let Some(fov_diag) = obj
+        .get("fov_diagonal")
+        .and_then(serde_json::Value::as_f64)
+    {
+        Some(DisplayGeometry::from_fov_diagonal(
+            w,
+            h,
+            distance_m,
+            fov_diag as f32,
+        ))
+    } else {
+        None
+    }
 }
 
 fn num_field(obj: &serde_json::Map<String, serde_json::Value>, key: &str) -> Result<f32, String> {
@@ -393,10 +404,14 @@ mod tests {
             "lg_oled_2026_hdr_pq",
         ] {
             let d = DisplayModel::by_name(name)
-                .unwrap_or_else(|| panic!("preset {name} should load"));
+                .unwrap_or_else(|| panic!("preset {name} model should load"));
             assert!(d.y_peak > 0.0, "{name} y_peak");
             assert!(d.y_black >= 0.0, "{name} y_black");
             assert!(d.k_refl > 0.0, "{name} k_refl");
+            let g = DisplayGeometry::by_name(name)
+                .unwrap_or_else(|| panic!("preset {name} geometry should load"));
+            assert!(g.resolution_w > 0, "{name} resolution_w");
+            assert!(g.pixels_per_degree() > 0.0, "{name} ppd");
         }
     }
 

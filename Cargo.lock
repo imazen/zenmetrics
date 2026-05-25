@@ -2600,7 +2600,7 @@ dependencies = [
  "rgb",
  "thiserror",
  "whereat",
- "zensim 0.2.7",
+ "zensim",
 ]
 
 [[package]]
@@ -6069,7 +6069,7 @@ dependencies = [
  "zenpixels",
  "zenpixels-convert",
  "zenpng",
- "zensim 0.3.0",
+ "zensim",
  "zenwebp",
 ]
 
@@ -6402,22 +6402,6 @@ dependencies = [
 
 [[package]]
 name = "zensim"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f46ead96f329b3f706ce66c8f36bf5b5bc1bb1fc5135c467079728379560b93c"
-dependencies = [
- "archmage",
- "bytemuck",
- "imgref",
- "linear-srgb",
- "magetypes",
- "rayon",
- "rgb",
- "thiserror",
-]
-
-[[package]]
-name = "zensim"
 version = "0.3.0"
 dependencies = [
  "archmage",
@@ -6442,7 +6426,7 @@ dependencies = [
  "zenmetrics-corpus",
  "zenpixels",
  "zenpixels-convert",
- "zensim 0.3.0",
+ "zensim",
 ]
 
 [[package]]
