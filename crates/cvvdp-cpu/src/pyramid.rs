@@ -65,7 +65,11 @@ pub(crate) struct PyramidScratch {
 }
 
 /// 2D separable 5-tap Gaussian + 2× decimation, ceil-halving.
-/// Bit-identical to `cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar`.
+/// Bit-identical to `cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar`
+/// for FMA-grouping-equivalent values, and within `< 1e-5 abs` for the
+/// SIMD inner-loop chunks (the 5-tap dot accumulator may schedule FMAs
+/// differently than the scalar `+` chain — the resulting numeric delta
+/// is far below the 1e-4 JOD parity floor).
 pub(crate) fn gausspyr_reduce(
     src: &[f32],
     sw: usize,
@@ -83,24 +87,19 @@ pub(crate) fn gausspyr_reduce(
     scratch.vscratch.clear();
     scratch.vscratch.resize(sw * dh, 0.0);
     let vscratch = &mut scratch.vscratch;
-    for dy in 0..dh {
-        let cy = 2 * dy as isize;
-        for x in 0..sw {
-            let read = |off: isize| -> f32 {
-                let r = cy + off;
-                if r < 0 || r >= sh as isize {
-                    0.0
-                } else {
-                    src[r as usize * sw + x]
-                }
-            };
-            vscratch[dy * sw + x] = k[0] * read(-2)
-                + k[1] * read(-1)
-                + k[2] * read(0)
-                + k[3] * read(1)
-                + k[4] * read(2);
-        }
-    }
+
+    // SIMD inner pass — covers all rows uniformly. Note: the SIMD pass
+    // overwrites every entry of `vscratch` so the zero-fill above is
+    // strictly redundant (kept for parity with the prior scalar code
+    // path and for easy debugging — `Vec::resize` on a warm Vec is
+    // ~~free since capacity matches; on cold first-call the alloc cost
+    // dominates the zero-fill cost regardless).
+    crate::simd_pyramid::reduce_vertical_pass(src, sw, sh, dh, vscratch);
+
+    // First-row patch: pycvvdp adds reflected-row contribution. Scalar
+    // because it's a one-row scan and preserves the historical FMA
+    // ordering (`+= a*k[1] + b*k[0]`) for bit-identical golden parity
+    // with the patches alone.
     if dh > 0 && sh >= 2 {
         for x in 0..sw {
             vscratch[x] += src[x] * k[1] + src[sw + x] * k[0];
@@ -120,25 +119,10 @@ pub(crate) fn gausspyr_reduce(
         }
     }
 
-    // Horizontal pass.
-    for dy in 0..dh {
-        for dx in 0..dw {
-            let cx = 2 * dx as isize;
-            let read = |off: isize| -> f32 {
-                let c = cx + off;
-                if c < 0 || c >= sw as isize {
-                    0.0
-                } else {
-                    vscratch[dy * sw + c as usize]
-                }
-            };
-            dst[dy * dw + dx] = k[0] * read(-2)
-                + k[1] * read(-1)
-                + k[2] * read(0)
-                + k[3] * read(1)
-                + k[4] * read(2);
-        }
-    }
+    // Horizontal pass — SIMD inner pass over rows, then scalar boundary
+    // patches replicating the upstream parity-on-rows bug.
+    crate::simd_pyramid::reduce_horizontal_pass(vscratch, sw, dw, dh, dst);
+
     if dw > 0 && sw >= 2 {
         for dy in 0..dh {
             dst[dy * dw] += vscratch[dy * sw] * k[1] + vscratch[dy * sw + 1] * k[0];
@@ -163,7 +147,10 @@ pub(crate) fn gausspyr_reduce(
 
 /// 2× upscale: zero-insert + 5-tap Gaussian (×4 reconstruction gain
 /// split 2× per separable pass). Bit-identical to
-/// `cvvdp_gpu::kernels::pyramid::gausspyr_expand_scalar`.
+/// `cvvdp_gpu::kernels::pyramid::gausspyr_expand_scalar` for
+/// FMA-grouping-equivalent values, and within `< 1e-5 abs` for the
+/// SIMD inner-loop chunks (see [`gausspyr_reduce`] for the FMA grouping
+/// note).
 pub(crate) fn gausspyr_expand(
     src: &[f32],
     sw: usize,
@@ -175,64 +162,25 @@ pub(crate) fn gausspyr_expand(
 ) {
     debug_assert!(out_w >= 2 * sw - 1 && out_w <= 2 * sw);
     debug_assert!(out_h >= 2 * sh - 1 && out_h <= 2 * sh);
-    let k = GAUSS5;
 
-    // Vertical pass.
+    // Vertical pass: SIMD inner sweep, builds per-column zero-inserted
+    // buffer in-flight (no separate `z_v` scratch from the caller).
     scratch.vscratch.clear();
     scratch.vscratch.resize(sw * out_h, 0.0);
-    let vscratch = &mut scratch.vscratch;
-    let z_len_v = out_h + 4;
-    scratch.z_v.clear();
-    scratch.z_v.resize(z_len_v, 0.0);
-    let z_v = &mut scratch.z_v;
-    let odd_h = out_h & 1;
-    let back_idx_v = out_h + 2 + odd_h;
-    for x in 0..sw {
-        for v in z_v.iter_mut() {
-            *v = 0.0;
-        }
-        z_v[0] = src[x];
-        for ky in 0..sh {
-            z_v[2 + 2 * ky] = src[ky * sw + x];
-        }
-        z_v[back_idx_v] = src[(sh - 1) * sw + x];
-        for y in 0..out_h {
-            let sum = k[0] * z_v[y]
-                + k[1] * z_v[y + 1]
-                + k[2] * z_v[y + 2]
-                + k[3] * z_v[y + 3]
-                + k[4] * z_v[y + 4];
-            vscratch[y * sw + x] = 2.0 * sum;
-        }
-    }
+    crate::simd_pyramid::expand_vertical_pass(src, sw, sh, out_h, &mut scratch.vscratch);
 
-    // Horizontal pass.
+    // Horizontal pass: SIMD inner sweep, re-uses caller's `z_h` scratch
+    // (resized inside).
     dst.clear();
     dst.resize(out_w * out_h, 0.0);
-    let z_len_h = out_w + 4;
-    scratch.z_h.clear();
-    scratch.z_h.resize(z_len_h, 0.0);
-    let z_h = &mut scratch.z_h;
-    let odd_w = out_w & 1;
-    let back_idx_h = out_w + 2 + odd_w;
-    for y in 0..out_h {
-        for v in z_h.iter_mut() {
-            *v = 0.0;
-        }
-        z_h[0] = vscratch[y * sw];
-        for kx in 0..sw {
-            z_h[2 + 2 * kx] = vscratch[y * sw + kx];
-        }
-        z_h[back_idx_h] = vscratch[y * sw + sw - 1];
-        for x in 0..out_w {
-            let sum = k[0] * z_h[x]
-                + k[1] * z_h[x + 1]
-                + k[2] * z_h[x + 2]
-                + k[3] * z_h[x + 3]
-                + k[4] * z_h[x + 4];
-            dst[y * out_w + x] = 2.0 * sum;
-        }
-    }
+    crate::simd_pyramid::expand_horizontal_pass(
+        &scratch.vscratch,
+        sw,
+        out_w,
+        out_h,
+        dst,
+        &mut scratch.z_h,
+    );
 }
 
 /// Build a single-channel Gaussian pyramid (`n_levels` bands) into
@@ -485,7 +433,17 @@ mod tests {
             gausspyr_reduce(&src, sw, sh, &mut scratch, &mut got);
             assert_eq!(want.len(), got.len(), "{sw}x{sh}");
             for i in 0..want.len() {
-                assert!((want[i] - got[i]).abs() < 1e-6, "case {sw}x{sh} idx {i}");
+                // 1e-5 tolerance (was 1e-6) per SIMD plan Chunk 2 — the
+                // SIMD inner sweep accumulates the 5-tap dot product in
+                // a different order than the scalar `+` chain, producing
+                // ULP-scale FMA-grouping deltas. Still ~3 orders below
+                // the 1e-3 JOD tolerance / 1e-4 golden tolerance.
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "case {sw}x{sh} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
             }
         }
     }
@@ -513,7 +471,14 @@ mod tests {
             gausspyr_expand(&src, sw, sh, ow, oh, &mut scratch, &mut got);
             assert_eq!(want.len(), got.len());
             for i in 0..want.len() {
-                assert!((want[i] - got[i]).abs() < 1e-6);
+                // 1e-5 tolerance (was 1e-6) per SIMD plan Chunk 2 — see
+                // `reduce_matches_upstream_scalar` for FMA grouping note.
+                assert!(
+                    (want[i] - got[i]).abs() < 1e-5,
+                    "case {sw}x{sh}/{ow}x{oh} idx {i}: want={}, got={}",
+                    want[i],
+                    got[i]
+                );
             }
         }
     }

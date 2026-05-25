@@ -18,6 +18,17 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512")
 
 [features]
 default = ["std", "parallel"]
+# Pull AVX-512 SIMD tier into the archmage `incant!` dispatch path
+# used by the pyramid 5-tap kernels. OPT-IN: enabling this forces every
+# archmage-routed incant! site in cvvdp-cpu to provide v4 / v4x tier
+# variants (currently only `simd_pyramid` does — `simd_math`'s
+# `safe_pow_with_offset_into` / `vexp_into` / `vlog_into` / `vpow_into`
+# routes its own incant! with the default tier set, which does NOT
+# include v4 / v4x). Until those gain v4 variants, default-off avoids a
+# build failure. Without this flag, AVX-512 CPUs run the 8-wide AVX2
+# (`v4` polyfill) tier — still faster than scalar, just not the 16-wide
+# `v4x` win.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
 # Use the standard library — most users want this. With `std` disabled
 # the crate falls back to `core + alloc` only, which is what no_std
 # wasm32 targets need.
@@ -34,16 +45,17 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Shared CSF + DKL + masking constants come from cvvdp-gpu — we depend
 # directly so a future LUT bump only needs one update site.
 cvvdp-gpu = { workspace = true, default-features = false }
+# Safe SIMD dispatch via capability tokens. Used by:
+#  - the pyramid 5-tap Gaussian SIMD port (Chunk 2 of the SIMD plan,
+#    `simd_pyramid.rs`),
+#  - vectorized transcendentals `vexp` / `vlog` / `vpow` via
+#    `simd_math.rs` (`pow_midp_unchecked` ≈ 128 ULP / 1e-5 rel-err)
+#    used by the masking `safe_pow` calls.
+archmage = { workspace = true }
+magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-# archmage / magetypes provide token-gated SIMD with vectorized
-# transcendentals (`pow_midp_unchecked` ≈ 128 ULP / 1e-5 rel-err).
-# Used to vectorize the per-pixel `safe_pow` calls in `masking.rs`;
-# `simd_math.rs` exposes `vexp` / `vlog` / `vpow` helpers that the
-# next perf chunk (CSF SIMD) can reuse on its own hot path.
-archmage = { version = "0.9.23", default-features = false, features = ["macros"] }
-magetypes = { version = "0.9.23", default-features = false }
 
 [dev-dependencies]
 # Corpus for parity tests (256² source + JPEG-q variants).

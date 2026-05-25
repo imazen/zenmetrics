@@ -82,6 +82,7 @@ mod pool;
 mod pyramid;
 mod scratch;
 mod simd_math;
+mod simd_pyramid;
 
 pub use pipeline::Cvvdp;
 

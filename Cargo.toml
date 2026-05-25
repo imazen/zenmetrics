@@ -50,6 +50,8 @@ ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
 # Common deps.
+archmage = { version = "0.9.23", features = ["macros", "avx512"] }
+magetypes = { version = "0.9.23", features = ["avx512"] }
 bytemuck = "1"
 clap = { version = "4", default-features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
 csv = "1"

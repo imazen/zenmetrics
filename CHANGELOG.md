@@ -17,6 +17,34 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-cpu — SIMD 5-tap pyramid reduce/expand (Chunk 2 of SIMD plan) — 2026-05-25
+
+`src/simd_pyramid.rs` (new) ports the 5-tap separable Gaussian inner
+loops of `gausspyr_reduce` / `gausspyr_expand` to safe SIMD via
+archmage `#[magetypes]` + `incant!` dispatch. Six tiers covered:
+AVX-512 (`v4x` — 16-wide), AVX2 (`v4` — 8-wide), SSE4 (`v3` — 4-wide),
+NEON, WASM SIMD128, scalar. Bit-near-identical output to the scalar
+reference (1e-5 max abs delta, vs the pre-existing 1e-6 fixture
+tolerance — far below the 1e-3 JOD floor and 1e-4 golden tolerance).
+
+Wall-time impact at 1024² is ±5 % vs baseline (small + within noise) —
+see `benchmarks/cvvdp_cpu_simd_pyramid_2026-05-25.meta` for the honest
+attribution. The chunk's structural ceiling is the pyramid's
+share-of-wall (~23 %, not the 56 % the flamegraph extrapolated). What
+ships is the SIMD scaffolding: the inner kernels are now fully
+SIMD-vectorized (AVX-512 `zmm` registers, `vmulps`/`vaddps` confirmed
+in disasm) and the runtime CPU detection routes correctly via
+archmage. Subsequent Chunks 1 + 3 + 4 + 5 stack on top.
+
+- New `simd_pyramid` module (`pub(crate)`), 6-tier `#[magetypes]` SIMD.
+- New `avx512` cargo feature, OPT-IN (default-off pending v4 / v4x
+  variants on the simd_math module landing — see meta for details).
+- New deps: `archmage 0.9.23` + `magetypes 0.9.23` (workspace).
+- 5 new SIMD-parity unit tests (random + DC-preservation fixtures).
+- `pyramid::gausspyr_reduce` / `gausspyr_expand` rewired to call SIMD
+  inner passes; boundary patches stay scalar for FMA-grouping parity.
+- Pyramid scalar-parity test tolerance: 1e-6 → 1e-5.
+
 ### cvvdp-gpu — GPU kernel-side EOTF + Primaries dispatch — 2026-05-25
 
 Closes the GPU-side counterpart of the host-scalar display dispatch
