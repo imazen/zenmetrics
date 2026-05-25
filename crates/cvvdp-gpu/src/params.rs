@@ -16,15 +16,313 @@
 //! All fields are stored as f32 — cvvdp's published parameters are
 //! single-precision; matching the Python reference's `.float()` calls.
 
-/// Display model: how sRGB bytes are mapped to physical luminance
-/// (cd/m²) before perceptual processing.
+/// Electro-optical transfer function — how display-encoded pixel
+/// values map to relative-linear or absolute luminance before the
+/// peak/black/ambient scaling step.
 ///
-/// Matches cvvdp's `vvdp_display_photo_eotf.forward` for the sRGB EOTF
-/// branch:
+/// Mirrors the EOTF branches in pycvvdp's
+/// `vvdp_display_photo_eotf.forward`:
+///
+/// - [`Eotf::Srgb`] — the historical default and the one every v1
+///   parity golden was captured against. Inputs in 0..1 normalized;
+///   output normalized in 0..1 (multiplied by `y_peak - y_black`
+///   downstream).
+/// - [`Eotf::Pq`] — SMPTE ST 2084 PQ. Absolute: `pq2lin(V)` returns
+///   cd/m² directly; the display scaling step does not multiply by
+///   `(y_peak - y_black)`. Output is clipped to `[0.005, y_peak]`
+///   then offset by `y_black + y_refl`. Used for `BT.2020-PQ`
+///   presets (`standard_hdr_pq`, the 65" HDR OLED variants).
+/// - [`Eotf::Hlg`] — Rec. BT.2100 Hybrid Log-Gamma. Inverse OETF
+///   then the system OOTF (gamma = 1.2 boosted slightly for displays
+///   above 1000 cd/m²). Normalized in 0..1, scaled by
+///   `(y_peak - y_black)` downstream.
+/// - [`Eotf::Linear`] — input is already linear-light. Clipped to
+///   `[max(0.005, y_black), y_peak]` then offset by `y_refl`. Used
+///   for `BT.709-linear` and `luminance` color spaces.
+/// - [`Eotf::Bt1886`] — Rec. BT.1886 display gamma (fixed 2.4 with
+///   black-level lift). Not directly used by any upstream preset
+///   today (those use numeric `gamma` like `"2.2"` or `"1.8"`) but
+///   wired in for completeness; calling code that needs an arbitrary
+///   power-law gamma should reach for [`Eotf::Gamma`] instead.
+/// - [`Eotf::Gamma`] — generic power-law gamma. Used for upstream
+///   color spaces whose EOTF field is a numeric string ("1.8" for
+///   Apple RGB, "2.2" for Adobe RGB / NTSC / Wide Gamut RGB, etc.).
+///
+/// All variants produce cd/m² output via [`Eotf::forward`]; that's
+/// the only entry point callers should use.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Eotf {
+    /// sRGB / BT.709 EOTF. Default — what every v1 parity golden
+    /// was captured against.
+    #[default]
+    Srgb,
+    /// SMPTE ST 2084 PQ (absolute, up to 10000 cd/m²).
+    Pq,
+    /// Rec. BT.2100 Hybrid Log-Gamma (relative + system OOTF).
+    Hlg,
+    /// Linear-light (input already in 0..1 normalized, or already
+    /// in cd/m² for HDR linear sources — same code path either way
+    /// since the multiply-by-y_peak step is gated on the EOTF being
+    /// relative).
+    Linear,
+    /// Rec. BT.1886 display gamma 2.4 with black-level lift. The
+    /// reference EOTF for studio video grading; rarely used for
+    /// authored content because the lift term depends on the
+    /// display's `y_black`.
+    Bt1886,
+    /// Generic power-law gamma `L = (Y_peak - Y_black) * V^gamma +
+    /// Y_black + Y_refl`. Used for Adobe RGB (2.2), Apple RGB
+    /// (1.8), and the other numeric-gamma color spaces in
+    /// upstream's `color_spaces.json`. Inner f32 is the gamma
+    /// exponent; defaults to 2.2 when constructed via
+    /// [`Eotf::default_gamma`].
+    Gamma(f32),
+}
+
+impl Eotf {
+    /// Convenience: `Eotf::Gamma(2.2)`. Saves callers from writing
+    /// the literal in the common Adobe-RGB / Wide-Gamut case.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvvdp_gpu::params::Eotf;
+    /// assert!(matches!(Eotf::default_gamma(), Eotf::Gamma(g) if (g - 2.2).abs() < 1e-6));
+    /// ```
+    #[must_use]
+    pub const fn default_gamma() -> Self {
+        Self::Gamma(2.2)
+    }
+
+    /// Inverse-EOTF entry point: convert a single display-encoded
+    /// channel value `v` (0..1 normalized for relative EOTFs;
+    /// 0..1 PQ-encoded for [`Eotf::Pq`]; 0..1 or cd/m² for
+    /// [`Eotf::Linear`]) to absolute cd/m² emitted from the
+    /// display, including ambient reflection.
+    ///
+    /// Inputs:
+    /// - `v` — display-encoded value. Clamped to 0..1 for the
+    ///   relative EOTFs (sRGB / HLG / Gamma / Bt1886). Linear and
+    ///   PQ accept inputs as-is.
+    /// - `y_peak` — display peak luminance in cd/m².
+    /// - `y_black` — display black level in cd/m² (computed
+    ///   host-side as `y_peak / contrast`).
+    /// - `y_refl` — light reflected off the display in cd/m²
+    ///   (`E_ambient / π * k_refl`).
+    ///
+    /// Output: cd/m² emitted luminance.
+    ///
+    /// Mirrors pycvvdp v0.5.4's
+    /// `vvdp_display_photo_eotf.forward` for the corresponding
+    /// EOTF branch.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use cvvdp_gpu::params::Eotf;
+    ///
+    /// // sRGB at the white point: V=1 → y_peak + y_refl.
+    /// let l_white = Eotf::Srgb.forward(1.0, 200.0, 0.2, 0.4);
+    /// assert!((l_white - 200.4).abs() < 1e-3);
+    ///
+    /// // Linear EOTF: V already in cd/m². V=100 → 100 + y_refl,
+    /// // clipped to [max(0.005, y_black), y_peak].
+    /// let l_lin = Eotf::Linear.forward(100.0, 200.0, 0.2, 0.4);
+    /// assert!((l_lin - 100.4).abs() < 1e-3);
+    /// ```
+    #[must_use]
+    pub fn forward(self, v: f32, y_peak: f32, y_black: f32, y_refl: f32) -> f32 {
+        let bias = y_black + y_refl;
+        match self {
+            Self::Srgb => {
+                let v = v.clamp(0.0, 1.0);
+                let lin = srgb_eotf_scalar(v);
+                (y_peak - y_black) * lin + bias
+            }
+            Self::Pq => {
+                let lin = pq_eotf_scalar(v);
+                let clipped = lin.clamp(0.005, y_peak);
+                clipped + bias
+            }
+            Self::Hlg => {
+                // The OOTF (Y_s^(gamma-1)) needs the full RGB
+                // triple to compute Y_s. The single-channel
+                // forward applies inverse OETF only; the
+                // per-pixel OOTF is applied by the color stage
+                // because it depends on all three channels.
+                // Callers wanting the full HLG forward at a
+                // single channel get the relative-linear value
+                // before OOTF.
+                let v = v.clamp(0.0, 1.0);
+                let lin = hlg_inverse_oetf_scalar(v);
+                (y_peak - y_black) * lin + bias
+            }
+            Self::Linear => {
+                let floor = if y_black > 0.005 { y_black } else { 0.005 };
+                let clipped = v.clamp(floor, y_peak);
+                clipped + y_refl
+            }
+            Self::Bt1886 => {
+                // BT.1886: L = a * (max(V + b, 0))^gamma with
+                // gamma = 2.4 and a/b chosen so L(0) = y_black,
+                // L(1) = y_peak. Simplifies to the lifted
+                // power-law form below. We then add y_refl per
+                // the cvvdp ambient convention (BT.1886 itself
+                // doesn't model ambient).
+                let gamma = 2.4_f32;
+                let v = v.clamp(0.0, 1.0);
+                let lift_a = (y_peak.powf(1.0 / gamma) - y_black.powf(1.0 / gamma)).powf(gamma);
+                let lift_b = y_black.powf(1.0 / gamma) / (y_peak.powf(1.0 / gamma) - y_black.powf(1.0 / gamma));
+                let l = lift_a * (v + lift_b).max(0.0).powf(gamma);
+                l + y_refl
+            }
+            Self::Gamma(g) => {
+                let v = v.clamp(0.0, 1.0);
+                (y_peak - y_black) * v.powf(g) + bias
+            }
+        }
+    }
+}
+
+/// Scalar sRGB EOTF (display-encoded 0..1 → relative-linear 0..1).
+/// Pulled out so unit tests can compare the LUT against the formula.
+#[must_use]
+#[inline]
+pub fn srgb_eotf_scalar(v: f32) -> f32 {
+    if v > 0.040_45 {
+        ((v + 0.055) / 1.055).powf(2.4)
+    } else {
+        v / 12.92
+    }
+}
+
+/// Scalar SMPTE ST 2084 PQ EOTF (PQ-encoded 0..1 → cd/m² in
+/// `[0, 10000]`). Reference: pycvvdp `pq2lin`.
+#[must_use]
+#[inline]
+pub fn pq_eotf_scalar(v: f32) -> f32 {
+    const L_MAX: f32 = 10000.0;
+    const N: f32 = 0.159_301_75; // m1
+    const M: f32 = 78.843_75; // m2
+    const C1: f32 = 0.835_937_5;
+    const C2: f32 = 18.851_562;
+    const C3: f32 = 18.687_5;
+
+    let im_t = v.powf(1.0 / M);
+    let num = (im_t - C1).max(0.0);
+    let den = C2 - C3 * im_t;
+    L_MAX * (num / den).powf(1.0 / N)
+}
+
+/// Scalar HLG inverse-OETF (display-encoded 0..1 → scene-relative
+/// linear in 0..12). Per-channel; the OOTF (system gamma) is a
+/// per-pixel multiplier applied by the color stage because it
+/// depends on the RGB triple's luminance.
+///
+/// Reference: pycvvdp `hlg2lin`; BT.2100-1 Table 5.
+#[must_use]
+#[inline]
+pub fn hlg_inverse_oetf_scalar(v: f32) -> f32 {
+    const A: f32 = 0.178_832_77;
+    const B: f32 = 1.0 - 4.0 * A;
+    let c = 0.5 - A * (4.0 * A).ln();
+    if v <= 0.5 {
+        (v * v) / 3.0
+    } else {
+        (((v - c) / A).exp() + B) / 12.0
+    }
+}
+
+/// HLG system gamma per BT.2100-1 / BBC WHP369. For a 1000 cd/m²
+/// peak the gamma is 1.2; brighter peaks add a luminance term and
+/// an ambient-light correction. Mirrors pycvvdp's `forward`
+/// branch for `EOTF=='HLG'`.
+#[must_use]
+#[inline]
+pub fn hlg_system_gamma(y_peak: f32, e_ambient_lux: f32) -> f32 {
+    if y_peak <= 1000.0 {
+        1.2
+    } else {
+        // The "log10(e_ambient / 5)" correction is undefined at
+        // E=0; pycvvdp guards by branching only when peak > 1000,
+        // implicitly assuming a non-zero ambient when an HDR peak
+        // is set. Match its arithmetic.
+        let amb = if e_ambient_lux > 0.0 { e_ambient_lux } else { 5.0 };
+        1.2 + 0.42 * (y_peak / 1000.0).log10() - 0.076_23 * (amb / 5.0).log10()
+    }
+}
+
+/// RGB color primaries (chromaticities of the R/G/B emitters and
+/// white point) for the input pixel-encoding color space.
+///
+/// Each variant determines the per-stage RGB→XYZ matrix that gets
+/// chained into the combined RGB→DKL transform. Selecting the wrong
+/// primaries shifts every chroma decision the metric makes; e.g. a
+/// saturated BT.2020 red interpreted as BT.709 ends up with a much
+/// larger achromatic component (because BT.2020's red lobe is more
+/// spectrally pure).
+///
+/// Matches the `RGB2X/Y/Z` rows in upstream's `color_spaces.json`.
+/// Variants below cover every primaries set that any preset in
+/// `display_models.json` references. Bt709 is the default — it's
+/// what sRGB / BT.709 / BT.709-linear all use, plus every preset
+/// that omits the `colorspace` field.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Primaries {
+    /// BT.709 / sRGB primaries with a D65 white point. Default —
+    /// every SDR preset and every v1 R2 golden uses this.
+    #[default]
+    Bt709,
+    /// BT.2020 primaries (wide-gamut UHDTV) with a D65 white
+    /// point. Used by every `BT.2020-*` color space:
+    /// `BT.2020-PQ`, `BT.2020-HLG`, `BT.2020-linear`.
+    Bt2020,
+    /// Display P3 primaries (Apple's wide-gamut consumer space)
+    /// with a D65 white point. Sometimes labelled "P3-D65" to
+    /// distinguish from theatrical DCI-P3.
+    DisplayP3,
+    /// DCI-P3 primaries with a D65 white point. Currently an
+    /// alias for [`Primaries::DisplayP3`] — upstream doesn't ship
+    /// a theatrical (DCI white, 48 nit) preset either. Kept as a
+    /// separate variant for callers that prefer the DCI label.
+    DciP3,
+}
+
+impl Primaries {
+    /// 3×3 row-major matrix mapping linear RGB in these primaries
+    /// to DKLd65 opponent space, computed as
+    /// `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ RGB_to_XYZ` at f64
+    /// precision then truncated to f32. The BT.709 row is
+    /// bit-identical to the existing [`SRGB_LINEAR_TO_DKL`]
+    /// constant.
+    #[must_use]
+    pub const fn linear_rgb_to_dkl(self) -> [[f32; 3]; 3] {
+        match self {
+            Self::Bt709 => SRGB_LINEAR_TO_DKL,
+            Self::Bt2020 => BT2020_LINEAR_TO_DKL,
+            // DCI-P3 and DisplayP3 share primaries here — see the
+            // variant docs for why theatrical DCI-P3 (DCI white)
+            // isn't a separate matrix yet.
+            Self::DisplayP3 | Self::DciP3 => DISPLAY_P3_LINEAR_TO_DKL,
+        }
+    }
+}
+
+/// Display model: how display-encoded pixels are mapped to physical
+/// luminance (cd/m²) before perceptual processing.
+///
+/// Matches cvvdp's `vvdp_display_photo_eotf.forward` for the
+/// configured EOTF branch:
 ///
 /// ```text
-/// L_rgb = (y_peak - y_black) * srgb2lin(byte / 255) + y_black + y_refl
+/// L_rgb = EOTF(byte / 255, y_peak, y_black, y_refl)  // sRGB / Gamma / HLG / BT.1886
+///       = pq2lin(V).clamp(0.005, y_peak) + y_black + y_refl  // PQ
+///       = V.clamp(max(0.005, y_black), y_peak) + y_refl       // Linear
 /// ```
+///
+/// The historical 3-field shape (`y_peak`, `y_black`, `y_refl`) is
+/// preserved — every v1 caller continues to compile and produce
+/// bit-identical scores. Added fields default to the sRGB /
+/// BT.709 / 250 lux ambient configuration of [`Self::STANDARD_4K`].
 ///
 /// # Examples
 ///
@@ -38,7 +336,7 @@
 /// assert_eq!(d.y_black, 0.2);  // 0.2 cd/m² black level (contrast 1000)
 ///
 /// // Construct a custom display (e.g. HDR400-ish) by aggregate-
-/// // updating from STANDARD_4K:
+/// // updating from STANDARD_4K — added fields inherit:
 /// let hdr400 = DisplayModel { y_peak: 400.0, ..d };
 /// assert!(hdr400.y_peak > d.y_peak);
 /// ```
@@ -49,32 +347,140 @@ pub struct DisplayModel {
     /// Black level in cd/m² (`y_peak / contrast`).
     pub y_black: f32,
     /// Light reflected from the screen, precomputed host-side from
-    /// `E_ambient / π * k_refl`.
+    /// `E_ambient / π * k_refl`. Kept as a public field for
+    /// back-compat with v1 callers that wrote the precomputed value
+    /// directly — host code may also derive it via
+    /// [`Self::compute_y_refl`] from the new `e_ambient_lux` and
+    /// `k_refl` fields.
     pub y_refl: f32,
+    /// Display EOTF — how display-encoded pixels are linearised.
+    /// Defaults to [`Eotf::Srgb`] for back-compat with v1 callers.
+    pub eotf: Eotf,
+    /// RGB primaries / chromaticities of the input pixel-encoding
+    /// space. Defaults to [`Primaries::Bt709`].
+    pub primaries: Primaries,
+    /// Ambient illuminance in lux at the display surface. Used
+    /// host-side together with [`Self::k_refl`] to derive
+    /// [`Self::y_refl`] via [`Self::compute_y_refl`].
+    /// 250 lux matches cvvdp's `standard_4k`. Stored alongside
+    /// the precomputed `y_refl` for inspection / round-tripping;
+    /// the GPU kernels only consume `y_refl`.
+    pub e_ambient_lux: f32,
+    /// Display reflectivity coefficient (fraction of incident
+    /// illuminance reflected back to the viewer). Default 0.005
+    /// matches cvvdp's `vvdp_display_photo_eotf`. Stored for
+    /// inspection / round-tripping.
+    pub k_refl: f32,
 }
 
 impl DisplayModel {
     /// cvvdp's `standard_4k` defaults — peak 200 cd/m², contrast 1000,
-    /// 250 lux ambient, k_refl 0.005, sRGB EOTF. The v1 R2 goldens
-    /// were captured under this display.
+    /// 250 lux ambient, k_refl 0.005, sRGB EOTF, BT.709 primaries.
+    /// The v1 R2 goldens were captured under this display, so every
+    /// existing parity test pins these three values bit-exactly.
     ///
     /// # Examples
     ///
     /// ```
-    /// use cvvdp_gpu::params::DisplayModel;
+    /// use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
     /// // Pinned by tests/display_geometry.rs::display_model_standard_4k_matches_pycvvdp_v0_5_4
-    /// // — all three fields bit-pinned via `.to_bits()`.
+    /// // — y_peak, y_black, y_refl bit-pinned via `.to_bits()`.
     /// let s = DisplayModel::STANDARD_4K;
     /// assert_eq!(s.y_peak, 200.0);
     /// assert_eq!(s.y_black, 0.2);
     /// // y_refl is precomputed host-side from 250 lux × 0.005 / π.
     /// assert!((s.y_refl - 0.397_887_36).abs() < 1e-6);
+    /// // EOTF / primaries are sRGB / BT.709 by default.
+    /// assert_eq!(s.eotf, Eotf::Srgb);
+    /// assert_eq!(s.primaries, Primaries::Bt709);
+    /// assert_eq!(s.e_ambient_lux, 250.0);
+    /// assert!((s.k_refl - 0.005).abs() < 1e-6);
     /// ```
     pub const STANDARD_4K: Self = Self {
         y_peak: 200.0,
         y_black: 0.2,
         y_refl: 0.397_887_36,
+        eotf: Eotf::Srgb,
+        primaries: Primaries::Bt709,
+        e_ambient_lux: 250.0,
+        k_refl: 0.005,
     };
+
+    /// Derive `y_refl` from ambient illuminance and screen
+    /// reflectivity per cvvdp's
+    /// `vvdp_display_photo_eotf.get_black_level`:
+    /// `y_refl = E_ambient / pi * k_refl`.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvvdp_gpu::params::DisplayModel;
+    /// // 250 lux × 0.005 / π = 0.397_887_36 (matches STANDARD_4K).
+    /// let r = DisplayModel::compute_y_refl(250.0, 0.005);
+    /// assert!((r - DisplayModel::STANDARD_4K.y_refl).abs() < 1e-6);
+    /// ```
+    #[must_use]
+    pub fn compute_y_refl(e_ambient_lux: f32, k_refl: f32) -> f32 {
+        e_ambient_lux / std::f32::consts::PI * k_refl
+    }
+
+    /// Constructor matching upstream's
+    /// `vvdp_display_photo_eotf.__init__(Y_peak, contrast, EOTF,
+    /// E_ambient, k_refl, ...)`. Derives `y_black` and `y_refl`
+    /// host-side per cvvdp's `get_black_level`.
+    ///
+    /// Inputs:
+    /// - `y_peak` — peak luminance in cd/m².
+    /// - `contrast` — display contrast ratio; `y_black = y_peak /
+    ///   contrast`. Use the on-paper number (1000 for office LCD,
+    ///   1e6 for an OLED HDR panel).
+    /// - `e_ambient_lux` — ambient illuminance at the screen, lux.
+    /// - `k_refl` — screen reflectivity. Default in cvvdp is
+    ///   0.005; pass that when the preset doesn't override.
+    /// - `eotf` — display EOTF.
+    /// - `primaries` — RGB primaries / chromaticities.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
+    /// let d = DisplayModel::new(
+    ///     200.0, 1000.0, 250.0, 0.005,
+    ///     Eotf::Srgb, Primaries::Bt709,
+    /// );
+    /// // Matches STANDARD_4K bit-for-bit.
+    /// assert_eq!(d.y_peak, DisplayModel::STANDARD_4K.y_peak);
+    /// assert_eq!(d.y_black, DisplayModel::STANDARD_4K.y_black);
+    /// assert!((d.y_refl - DisplayModel::STANDARD_4K.y_refl).abs() < 1e-6);
+    /// ```
+    #[must_use]
+    pub fn new(
+        y_peak: f32,
+        contrast: f32,
+        e_ambient_lux: f32,
+        k_refl: f32,
+        eotf: Eotf,
+        primaries: Primaries,
+    ) -> Self {
+        let y_black = y_peak / contrast;
+        let y_refl = Self::compute_y_refl(e_ambient_lux, k_refl);
+        Self {
+            y_peak,
+            y_black,
+            y_refl,
+            eotf,
+            primaries,
+            e_ambient_lux,
+            k_refl,
+        }
+    }
+}
+
+impl Default for DisplayModel {
+    /// `STANDARD_4K` — every v1 caller pinned this implicitly via
+    /// `CvvdpParams::PLACEHOLDER.display`, so the new explicit
+    /// `Default` impl matches.
+    fn default() -> Self {
+        Self::STANDARD_4K
+    }
 }
 
 /// Display geometry — resolution + viewing distance + physical size.
@@ -201,6 +607,49 @@ pub const SRGB_LINEAR_TO_DKL: [[f32; 3]; 3] = [
     [0.233_201_21, 0.728_830_8, 0.088_995_87],
     [0.127_620_77, -0.087_068_09, -0.036_777_39],
     [-0.214_822_5, -0.626_253_7, 0.851_403_3],
+];
+
+/// Combined `BT.2020 linear-RGB → DKLd65` matrix (row-major),
+/// computed at f64 precision from upstream's per-stage matrices:
+/// `LMS2006_to_DKLd65 @ XYZ_to_LMS2006 @ BT2020_RGB2XYZ`, with the
+/// BT.2020 primaries from `color_spaces.json`. Used for every
+/// `BT.2020-PQ`, `BT.2020-HLG`, and `BT.2020-linear` preset.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::params::BT2020_LINEAR_TO_DKL as M;
+/// // A row sum positive (achromatic gain on equal-energy white).
+/// let a_sum = M[0][0] + M[0][1] + M[0][2];
+/// assert!(a_sum > 0.5 && a_sum < 2.0, "A row sum {a_sum}");
+/// // Distinguishably different from the BT.709 matrix on at
+/// // least one chroma row entry (BT.2020 red lobe is more
+/// // saturated).
+/// use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as S;
+/// assert!((M[1][0] - S[1][0]).abs() > 0.05);
+/// ```
+pub const BT2020_LINEAR_TO_DKL: [[f32; 3]; 3] = [
+    [0.294_774_83, 0.679_742_5, 0.076_514_23],
+    [0.223_412_68, -0.169_937_05, -0.049_714_08],
+    [-0.294_110_88, -0.668_908_85, 0.973_610_63],
+];
+
+/// Combined `Display P3 (D65) linear-RGB → DKLd65` matrix
+/// (row-major). Mirrors upstream's `Display P3 Apple` color space
+/// (`color_spaces.json`). Also returned for [`Primaries::DciP3`]
+/// today — see that variant for why.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::params::DISPLAY_P3_LINEAR_TO_DKL as M;
+/// let a_sum = M[0][0] + M[0][1] + M[0][2];
+/// assert!(a_sum > 0.5 && a_sum < 2.0);
+/// ```
+pub const DISPLAY_P3_LINEAR_TO_DKL: [[f32; 3]; 3] = [
+    [0.253_237_6, 0.700_016_25, 0.097_775_31],
+    [0.160_692_72, -0.116_510_76, -0.040_388_58],
+    [-0.253_514_47, -0.671_234_8, 0.935_045_8],
 ];
 
 /// castleCSF achromatic + chrom params. Scaffolding for a planned
