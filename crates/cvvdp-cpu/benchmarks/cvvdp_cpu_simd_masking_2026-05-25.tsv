@@ -1,0 +1,5 @@
+size_w	size_h	pixels	pre_best_ms_median	pre_med_ms_median	pre_mean_ms_median	pre_stddev_ms_max	post_best_ms_median	post_med_ms_median	post_mean_ms_median	post_stddev_ms_max	delta_best_ms	delta_med_ms	delta_pct_best	delta_pct_med
+256	256	65536	10.187	10.877	10.931	0.818	10.096	10.593	10.878	1.867	-0.091	-0.284	-0.893	-2.611
+512	512	262144	44.013	46.242	46.980	4.827	41.893	44.975	47.009	7.703	-2.120	-1.267	-4.817	-2.740
+1024	1024	1048576	201.700	215.400	220.749	24.072	192.778	210.961	213.109	23.325	-8.922	-4.439	-4.423	-2.061
+2048	2048	4194304	870.691	929.715	937.482	233.106	832.777	902.681	927.584	90.117	-37.914	-27.034	-4.354	-2.908

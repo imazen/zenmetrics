@@ -9,14 +9,19 @@
 //!   `Scratch` struct — no per-band allocation of intermediate
 //!   `Vec<f32>` buffers.
 //! - Emits `d_a / d_rg / d_vy` into caller-owned `&mut Vec<f32>`.
-//! - The `safe_pow` calls remain (correctness-critical) but the
-//!   sentinel `eps^p` is precomputed.
+//! - The per-pixel `safe_pow` calls are vectorized via
+//!   [`crate::simd_math::safe_pow_with_offset_into`] (archmage SIMD).
+//!   Inputs are pre-offset by `SAFE_EPS > 0` so the unchecked
+//!   `pow_midp_unchecked` path is sound. The loop-invariant
+//!   `SAFE_EPS.powf(*)` constants are still hoisted once per band.
 
 use alloc::vec::Vec;
 
 use cvvdp_gpu::kernels::masking::{
     D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3, gaussian_blur_sigma3,
 };
+
+use crate::simd_math::safe_pow_with_offset_into;
 
 const SAFE_EPS: f32 = 1e-5;
 
@@ -111,23 +116,42 @@ pub(crate) fn mult_mutual_band_into(
         }
     }
 
-    // Step 3: term[ch] = safe_pow(|M_mm[ch]|, q[ch]).
+    // Step 3: term[ch] = safe_pow(|M_mm[ch]|, q[ch])
+    //                 = (|M_mm[ch]| + SAFE_EPS)^q[ch] - SAFE_EPS^q[ch].
+    //
+    // After Step 2 the m_mm_* buffers hold `min(|T|, |R|) * mask_c_lin`,
+    // which is non-negative — no per-element `abs()` needed. We feed the
+    // slices straight into the SIMD pow kernel (one chunked
+    // pow_midp_unchecked per channel), which is the bulk of the per-pixel
+    // wall time for this stage.
     let q_a = MASK_Q[0];
     let q_rg = MASK_Q[1];
     let q_vy = MASK_Q[2];
     let eps_qa = SAFE_EPS.powf(q_a);
     let eps_qrg = SAFE_EPS.powf(q_rg);
     let eps_qvy = SAFE_EPS.powf(q_vy);
-    for i in 0..n {
-        let va = m_mm_a[i].abs();
-        let vrg = m_mm_rg[i].abs();
-        let vvy = m_mm_vy[i].abs();
-        term_a[i] = (va + SAFE_EPS).powf(q_a) - eps_qa;
-        term_rg[i] = (vrg + SAFE_EPS).powf(q_rg) - eps_qrg;
-        term_vy[i] = (vvy + SAFE_EPS).powf(q_vy) - eps_qvy;
-    }
+    safe_pow_with_offset_into(m_mm_a, term_a.as_mut_slice(), SAFE_EPS, q_a, eps_qa);
+    safe_pow_with_offset_into(m_mm_rg, term_rg.as_mut_slice(), SAFE_EPS, q_rg, eps_qrg);
+    safe_pow_with_offset_into(m_mm_vy, term_vy.as_mut_slice(), SAFE_EPS, q_vy, eps_qvy);
 
     // Step 4: cross-channel pool + masked diff.
+    //
+    // The per-pixel work splits into:
+    //   (a) diff[c]   = |T[c] - R[c]|                     (3 reads + abs + sub)
+    //   (b) pow[c]    = (diff[c] + eps)^p - eps^p          (the hot transcendental)
+    //   (c) m[c]      = Σ_in XCM[in][c] * term[in]        (3×3 fused-multiply-add)
+    //   (d) du[c]     = pow[c] / (1.0 + m[c])
+    //   (e) d[c]      = D_MAX_LIN * du[c] / (D_MAX_LIN + du[c])
+    //
+    // We split this into THREE passes so the heaviest stage (b) can run
+    // through the vectorized `safe_pow_with_offset_into`:
+    //   pass 1 (scalar, LLVM auto-vectorizes): write |T-R| into the now-free
+    //          m_mm_* buffers — these were last touched in Step 3 as the pow
+    //          input, are free as scratch from here on.
+    //   pass 2 (archmage SIMD): pow into d_* (we don't need d_* until
+    //          pass 3 anyway, and it's already the right size).
+    //   pass 3 (scalar): the cheap per-pixel pool + clamp; reads pow from
+    //          d_* and overwrites d_* with the final diff value.
     let xcm00 = XCM_3X3[0][0];
     let xcm10 = XCM_3X3[1][0];
     let xcm20 = XCM_3X3[2][0];
@@ -148,22 +172,31 @@ pub(crate) fn mult_mutual_band_into(
     let rrg = &r_p_per_ch[1];
     let rvy = &r_p_per_ch[2];
 
+    // Pass 1: diff[c] = |T[c] - R[c]| → m_mm_* (free scratch).
+    for i in 0..n {
+        m_mm_a[i] = (ta[i] - ra[i]).abs();
+        m_mm_rg[i] = (trg[i] - rrg[i]).abs();
+        m_mm_vy[i] = (tvy[i] - rvy[i]).abs();
+    }
+
+    // Pass 2: pow[c] = (diff[c] + eps)^p - eps^p → d_* (vectorized).
+    safe_pow_with_offset_into(m_mm_a, d_a.as_mut_slice(), SAFE_EPS, p, eps_p);
+    safe_pow_with_offset_into(m_mm_rg, d_rg.as_mut_slice(), SAFE_EPS, p, eps_p);
+    safe_pow_with_offset_into(m_mm_vy, d_vy.as_mut_slice(), SAFE_EPS, p, eps_p);
+
+    // Pass 3: cross-channel pool + soft clamp, scalar (auto-vectorizes —
+    // no transcendentals left).
     for i in 0..n {
         let t0 = term_a[i];
         let t1 = term_rg[i];
         let t2 = term_vy[i];
-        // M[c] = sum_in XCM[in][c] * term[in]
         let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
         let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
         let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
 
-        let diff0 = (ta[i] - ra[i]).abs();
-        let diff1 = (trg[i] - rrg[i]).abs();
-        let diff2 = (tvy[i] - rvy[i]).abs();
-
-        let pow0 = (diff0 + SAFE_EPS).powf(p) - eps_p;
-        let pow1 = (diff1 + SAFE_EPS).powf(p) - eps_p;
-        let pow2 = (diff2 + SAFE_EPS).powf(p) - eps_p;
+        let pow0 = d_a[i];
+        let pow1 = d_rg[i];
+        let pow2 = d_vy[i];
 
         let du0 = pow0 / (1.0 + m0);
         let du1 = pow1 / (1.0 + m1);

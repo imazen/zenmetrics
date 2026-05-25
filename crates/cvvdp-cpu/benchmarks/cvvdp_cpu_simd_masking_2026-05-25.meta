@@ -1,0 +1,96 @@
+cvvdp-cpu SIMD masking chunk — paired interleaved A/B
+=====================================================
+
+date:      2026-05-25
+host:      water-cooled AMD Ryzen 9 7950X (8C/16T), 128 GB RAM, Linux
+commit:    pre = `feat(cvvdp-cpu): vectorized pow/exp/log via archmage + magetypes`
+                 (simd_math module added, masking.rs UNCHANGED)
+           post = pre + `perf(cvvdp-cpu): rewire masking.rs Step 3 + Step 4 powfs
+                          through simd_math`
+binary:    cargo build -p cvvdp-cpu --release --example time_masking_paired_ab
+           features = std + parallel (default), NO target-cpu=native
+methodology:
+  - 5 ROUNDS of interleaved (pre, post) — 30 timed iterations per round
+    plus 3 warmups. Per-round we report best / median / mean / stddev
+    of the 30 wall samples.
+  - This TSV's pre_* / post_* columns are the MEDIAN-of-5-ROUND-MEDIANS
+    (a robust statistic against the high cross-round noise we observe
+    on this machine under typical desktop load: stddev ranges 0.4-7.7ms
+    at 512², 6-24ms at 1024², 35-233ms at 2048²).
+  - The `_stddev_ms_max` columns report the WORST per-round stddev
+    across the 5 rounds (so the variance ceiling is visible).
+  - `delta_*` columns are `post - pre` (negative = improvement).
+
+Per-cell results (median-of-5):
+
+| size      | pre_best | post_best | Δbest      | pre_med  | post_med | Δmed       |
+|-----------|---------:|----------:|-----------:|---------:|---------:|-----------:|
+| 256x256   |   10.19  |   10.10   | -0.09 (-0.9%) |   10.88  |   10.59  | -0.28 (-2.6%) |
+| 512x512   |   44.01  |   41.89   | -2.12 (-4.8%) |   46.24  |   44.98  | -1.27 (-2.7%) |
+| 1024x1024 |  201.70  |  192.78   | -8.92 (-4.4%) |  215.40  |  210.96  | -4.44 (-2.1%) |
+| 2048x2048 |  870.69  |  832.78   | -37.91 (-4.4%) |  929.72  |  902.68  | -27.03 (-2.9%) |
+
+Reading: the SIMD masking chunk recovers ~4.4 % of wall on cold and
+~2.1-2.9 % on median across the four sweep sizes. The improvement
+GROWS with image area in absolute ms (-0.09 → -37.9 ms across 64x →
+2048x), which is the right shape for a per-pixel SIMD lever — the
+fixed pipeline overhead doesn't shift, only the per-pixel work does.
+
+Acceptance gate (from W44-SIMD-Chunk-3 brief): wall-time at 1024²
+improved by ≥ 4 ms — **MET** (best-of-medians delivers -8.92 ms;
+plan estimate was -7 to -10 ms).
+
+Parity gates:
+  - `cargo test -p cvvdp-cpu --release`: 50 / 50 PASS (45 baseline +
+    5 new in `simd_math::tests`).
+  - `tests::standard_4k_path_still_at_parity_against_host_scalar`:
+    PASS (within 1e-4 JOD).
+  - `tests::matches_upstream_on_random` (mult_mutual_band ports
+    bit-by-bit through the SIMD path now): PASS at 1e-3 relative
+    on every 4x4..64x64 cell.
+
+What changed (vs the previous size-sweep numbers in
+benchmarks/cvvdp_cpu_size_sweep_post_perf_2026-05-24.{tsv,meta}):
+
+  - `crates/cvvdp-cpu/src/simd_math.rs` (NEW): vectorized
+    safe_pow_with_offset_into / vexp_into / vlog_into / vpow_into
+    helpers backed by magetypes' pow_midp_unchecked
+    (`exp2_midp_unchecked(p * log2_midp_unchecked(x))`,
+    ~128 ULP / 1e-5 relative error).
+  - `crates/cvvdp-cpu/src/masking.rs`: `mult_mutual_band_into`
+    Step 3 + Step 4 powfs rewired through the SIMD entry points.
+    Step 4 split into 3 short passes so the cheap cross-channel
+    pool + soft-clamp stays scalar (LLVM auto-vectorizes that
+    section — no transcendentals left).
+  - `crates/cvvdp-cpu/Cargo.toml`: archmage 0.9.23 + magetypes 0.9.23
+    added.
+
+Where the savings come from (per Agent A's flamegraph at
+`benchmarks/cvvdp_cpu_flamegraph_2026-05-25.svg`):
+  __powf_fma was 7.27% of wall self-time. At 1024² (222 ms baseline)
+  that's ~16 ms. We recovered ~9 ms (~56 % of the powf budget) via
+  the SIMD chunk. The remaining ~7 ms lives in the precomputed
+  `SAFE_EPS.powf(*)` constants (loop-invariant per band, ~21 calls
+  per encode × ~5 powfs each at constant-folding time) and the
+  cvvdp-gpu-side `gaussian_blur_sigma3` (32% of wall, Chunk 1's
+  scope, not touched here).
+
+Reproduction:
+  ```bash
+  cd ~/work/zen/zenmetrics
+  cargo build -p cvvdp-cpu --release --example time_masking_paired_ab
+  # Build pre and post binaries separately, interleave 5 rounds.
+  # The aggregator at the top of this file is reproducible with the
+  # /tmp/ab_paired/{pre,post}_r{1..5}.tsv outputs of the bench binary.
+  ```
+
+Helpers exposed for Chunk 5 (CSF SIMD):
+  - `simd_math::vexp_into(xs, out)` — wraps `exp_midp_unchecked`.
+  - `simd_math::vlog_into(xs, out)` — wraps `ln_midp_unchecked`.
+  - `simd_math::vpow_into(xs, out, p)` — wraps `pow_midp_unchecked`.
+
+  These are crate-private; Chunk 5 (in `crates/cvvdp-cpu/src/csf.rs`,
+  which doesn't exist yet) can import them via `crate::simd_math::*`
+  the same way `masking.rs` does. The CSF stage's per-pixel
+  `exp(log_s · LN_10)` (2.56% of wall per flamegraph) is the next
+  hot site they target.
