@@ -75,6 +75,7 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_CPU_IMPL_TAG") {
 pub const N_CHANNELS: usize = 3;
 
 mod color;
+mod csf;
 pub mod diffmap;
 mod masking;
 mod pipeline;
