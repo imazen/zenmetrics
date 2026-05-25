@@ -92,6 +92,11 @@ pub const SRGB8_TO_LINEAR_LUT: [f32; 256] = [
 ///
 /// Returns `(dkl_a, dkl_rg, dkl_vy)` for one pixel.
 ///
+/// Hardcodes sRGB EOTF + BT.709 primaries — that's the v1 contract
+/// every parity golden was captured under. For a per-`DisplayModel`
+/// variant that dispatches on the model's `eotf` + `primaries`
+/// fields, see [`display_byte_to_dkl_scalar`].
+///
 /// # Examples
 ///
 /// ```
@@ -144,6 +149,144 @@ pub fn srgb_byte_to_dkl_scalar(
     let a = M[0][0] * lr + M[0][1] * lg + M[0][2] * lb;
     let rg = M[1][0] * lr + M[1][1] * lg + M[1][2] * lb;
     let vy = M[2][0] * lr + M[2][1] * lg + M[2][2] * lb;
+    (a, rg, vy)
+}
+
+/// Display-aware host-side scalar reference. Dispatches on the
+/// display's [`Eotf`] and [`Primaries`] to handle non-sRGB / non-
+/// BT.709 inputs.
+///
+/// For [`Eotf::Srgb`] + [`Primaries::Bt709`] the output is
+/// bit-identical to [`srgb_byte_to_dkl_scalar`] — the two paths
+/// share the same LUT, the same constants, and the same matrix
+/// row in the dispatch.
+///
+/// For non-sRGB EOTFs (PQ / HLG / Linear / Gamma / BT.1886) the
+/// 8-bit pixel encoding is interpreted as the corresponding
+/// 0..255 → 0..1 → EOTF chain. HLG additionally applies the
+/// per-pixel OOTF after inverse-OETF; the OOTF needs the RGB
+/// triple's `Y_s` so this is the natural API boundary for it.
+///
+/// Output: `(dkl_a, dkl_rg, dkl_vy)` in cd/m²-scaled DKL.
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::color::{display_byte_to_dkl_scalar, srgb_byte_to_dkl_scalar};
+/// use cvvdp_gpu::params::DisplayModel;
+///
+/// let d = DisplayModel::STANDARD_4K;
+/// // Under sRGB / BT.709 the two paths agree bit-for-bit.
+/// let (a1, rg1, vy1) = srgb_byte_to_dkl_scalar(200, 50, 100, d.y_peak, d.y_black, d.y_refl);
+/// let (a2, rg2, vy2) = display_byte_to_dkl_scalar(200, 50, 100, d);
+/// assert_eq!(a1.to_bits(), a2.to_bits());
+/// assert_eq!(rg1.to_bits(), rg2.to_bits());
+/// assert_eq!(vy1.to_bits(), vy2.to_bits());
+/// ```
+#[inline]
+#[must_use]
+pub fn display_byte_to_dkl_scalar(
+    r: u8,
+    g: u8,
+    b: u8,
+    display: crate::params::DisplayModel,
+) -> (f32, f32, f32) {
+    use crate::params::Eotf;
+
+    // sRGB stays bit-identical to srgb_byte_to_dkl_scalar by
+    // routing through the precomputed LUT. Other EOTFs normalise
+    // to 0..1 first and run their inverse-EOTF formula.
+    let (mut lr, mut lg, mut lb) = if matches!(display.eotf, Eotf::Srgb) {
+        let lin_r = SRGB8_TO_LINEAR_LUT[r as usize];
+        let lin_g = SRGB8_TO_LINEAR_LUT[g as usize];
+        let lin_b = SRGB8_TO_LINEAR_LUT[b as usize];
+        let s = display.y_peak - display.y_black;
+        let bias = display.y_black + display.y_refl;
+        (s * lin_r + bias, s * lin_g + bias, s * lin_b + bias)
+    } else {
+        let vr = (r as f32) * (1.0 / 255.0);
+        let vg = (g as f32) * (1.0 / 255.0);
+        let vb = (b as f32) * (1.0 / 255.0);
+        (
+            display.eotf.forward(vr, display.y_peak, display.y_black, display.y_refl),
+            display.eotf.forward(vg, display.y_peak, display.y_black, display.y_refl),
+            display.eotf.forward(vb, display.y_peak, display.y_black, display.y_refl),
+        )
+    };
+
+    // HLG OOTF (system gamma applied to the linear triple per
+    // BT.2100). Inverse OETF inside Eotf::forward gave us the
+    // scene-relative-linear values pre-scaling; we redo the
+    // scaling here after the OOTF so the math matches pycvvdp's
+    // forward(EOTF='HLG') branch. Other EOTFs are unaffected.
+    if matches!(display.eotf, Eotf::Hlg) {
+        // Strip the bias added by Eotf::forward so we get back to
+        // (y_peak - y_black) * inverse_oetf(v); divide by
+        // (y_peak - y_black) to recover inverse_oetf(v).
+        let s = display.y_peak - display.y_black;
+        let bias = display.y_black + display.y_refl;
+        let inv_r = if s > 0.0 { (lr - bias) / s } else { 0.0 };
+        let inv_g = if s > 0.0 { (lg - bias) / s } else { 0.0 };
+        let inv_b = if s > 0.0 { (lb - bias) / s } else { 0.0 };
+        // Compute Y_s using BT.2100 luma coefficients (R, G, B)
+        // = (0.2627, 0.6780, 0.0593). Same coefficients as the
+        // BT.2020 RGB2Y row in upstream's color_spaces.json.
+        let y_s = 0.262_7 * inv_r + 0.678_0 * inv_g + 0.059_3 * inv_b;
+        let gamma = crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
+        let factor = if y_s > 0.0 { y_s.powf(gamma - 1.0) } else { 0.0 };
+        lr = s * (inv_r * factor) + bias;
+        lg = s * (inv_g * factor) + bias;
+        lb = s * (inv_b * factor) + bias;
+    }
+
+    let m = display.primaries.linear_rgb_to_dkl();
+    let a = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+    let rg = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+    let vy = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
+    (a, rg, vy)
+}
+
+/// Display-aware host-side scalar reference for already-linear
+/// inputs (e.g., HDR EXR loaded as linear-light floats). Skips
+/// the EOTF entirely (the input is already in the post-EOTF
+/// linear-RGB space) and applies the per-primaries DKL matrix
+/// directly. The display's `y_peak`, `y_black`, `y_refl` are
+/// still applied as the "display scaling" step so the output
+/// matches a `[0..1] linear sRGB` input passed through
+/// [`Eotf::Linear`].
+///
+/// Use this for the linear-RGB-planes API entry points; the
+/// 8-bit display path goes through [`display_byte_to_dkl_scalar`].
+///
+/// # Examples
+///
+/// ```
+/// use cvvdp_gpu::kernels::color::display_linear_rgb_to_dkl_scalar;
+/// use cvvdp_gpu::params::DisplayModel;
+///
+/// let d = DisplayModel::STANDARD_4K;
+/// // (1.0, 1.0, 1.0) linear → maps to y_peak + y_refl approximately.
+/// let (a, _, _) = display_linear_rgb_to_dkl_scalar(1.0, 1.0, 1.0, d);
+/// assert!(a > 0.0);
+/// ```
+#[inline]
+#[must_use]
+pub fn display_linear_rgb_to_dkl_scalar(
+    r: f32,
+    g: f32,
+    b: f32,
+    display: crate::params::DisplayModel,
+) -> (f32, f32, f32) {
+    let s = display.y_peak - display.y_black;
+    let bias = display.y_black + display.y_refl;
+    let lr = s * r + bias;
+    let lg = s * g + bias;
+    let lb = s * b + bias;
+
+    let m = display.primaries.linear_rgb_to_dkl();
+    let a = m[0][0] * lr + m[0][1] * lg + m[0][2] * lb;
+    let rg = m[1][0] * lr + m[1][1] * lg + m[1][2] * lb;
+    let vy = m[2][0] * lr + m[2][1] * lg + m[2][2] * lb;
     (a, rg, vy)
 }
 
