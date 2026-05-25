@@ -30,6 +30,13 @@ fast-reduction = []
 
 [dependencies]
 cubecl = { workspace = true }
+# `zensim` is needed in non-dev so the opaque `ZensimOpaque::compute_*`
+# scoring path can call the canonical CPU `score_features_with_profile`
+# entry — that's how this crate produces bit-exact CPU-equivalent
+# scores on top of GPU-extracted features (per-sample-α head, tanh
+# output pin, PCHIP spline, per-codec affine — all live in the CPU
+# `zensim` crate's bake-eval path).
+zensim = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
@@ -75,6 +82,10 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "opaque_cached_ref"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "score_v03_parity"
 required-features = ["cubecl-types"]
 
 [[bench]]

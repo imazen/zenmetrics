@@ -63,22 +63,36 @@ pub struct Score {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ZensimParams {
-    /// Optional 228-element trained weights for converting the
-    /// feature vector into a scalar score. Pass
-    /// `zensim::profile::WEIGHTS_PREVIEW_V0_2` (or a similar profile
-    /// from the `zensim` crate) to land scores comparable to CPU
-    /// zensim's `PreviewV0_2` profile. `None` => uniform
-    /// `compute_*` methods return `Score { value: NaN, .. }`.
+    /// **Canonical scoring path** (v0.3+) — when `Some`, the opaque
+    /// `compute_*` entry points score by running GPU-extracted features
+    /// through CPU `zensim::score_features_with_profile(profile, ...)`,
+    /// which applies the profile's MLP bake forward pass, per-sample-α
+    /// or hybrid head, tanh output pin, PCHIP spline, per-codec affine,
+    /// and clamp / soft-clamp / extrapolate disposition. Output is
+    /// bit-exact equivalent to `zensim::Zensim::new(profile).compute(...)`
+    /// (up to GPU vs CPU f32-vs-f64 feature drift, ~1e-3 abs).
+    ///
+    /// Takes precedence over [`Self::weights`]. When both are `None`,
+    /// uniform `compute_*` methods return `Score { value: NaN, .. }`.
+    ///
+    /// Set via [`Self::with_profile`] (preferred) or
+    /// [`Self::default_weights`] (which sets the latest profile).
+    pub profile: Option<zensim::ZensimProfile>,
+    /// **Legacy linear-score path** — optional 228-element trained
+    /// weights for converting the feature vector into a scalar score.
+    /// Ignored when [`Self::profile`] is `Some`. Pass
+    /// `zensim_gpu::WEIGHTS_PREVIEW_V0_2` for parity with CPU zensim's
+    /// `PreviewV0_2` profile.
     ///
     /// Weights are 228 entries regardless of [`Self::regime`] — the
     /// scoring inner product runs over the basic block only.
     pub weights: Option<Box<[f64; TOTAL_FEATURES]>>,
     /// Feature regime: which slot map the underlying `Zensim` pipeline
-    /// computes. Default is [`ZensimFeatureRegime::Basic`] (228) for
-    /// backwards compatibility. Set to [`ZensimFeatureRegime::Extended`]
-    /// (300) or [`ZensimFeatureRegime::WithIw`] (372) to also fill the
-    /// masked / IW blocks — needed for picker training data and the
-    /// v26+ sweep schema.
+    /// computes. Default for [`Self::default_weights`] is
+    /// [`ZensimFeatureRegime::WithIw`] (372) because the shipping
+    /// `PreviewV0_3` profile (Tuner v11, 2026-05-24) is a 372-input
+    /// MLP. Set explicitly via [`Self::with_regime`] when the caller
+    /// needs a non-default regime (e.g. picker training data extraction).
     pub regime: ZensimFeatureRegime,
 }
 
@@ -89,50 +103,86 @@ impl Default for ZensimParams {
 }
 
 impl ZensimParams {
-    /// Default parameter bundle (no weights — uniform `compute_*`
-    /// methods return NaN, [`ZensimFeatureRegime::Basic`] regime).
-    /// Use [`Self::with_weights`] to wire a custom trained profile,
-    /// or [`Self::default_weights`] / [`Self::with_canonical_v0_2`]
-    /// to get the canonical `WEIGHTS_PREVIEW_V0_2` baked in.
+    /// Default parameter bundle (no weights, no profile — uniform
+    /// `compute_*` methods return NaN, [`ZensimFeatureRegime::Basic`]
+    /// regime). Use [`Self::with_profile`] for v0.3+ canonical scoring,
+    /// or [`Self::with_weights`] / [`Self::with_canonical_v0_2`] for
+    /// the legacy 228-linear path.
     pub fn new() -> Self {
         Self {
+            profile: None,
             weights: None,
             regime: ZensimFeatureRegime::Basic,
         }
     }
 
-    /// Bundle the canonical 228-element default weights
-    /// ([`crate::WEIGHTS_PREVIEW_V0_2`]) — same constants the CPU
-    /// `zensim` crate ships as the stable basic-regime default.
-    /// Returns finite scores from [`ZensimOpaque::compute_srgb_u8`]
-    /// / [`ZensimOpaque::compute_pixels`] without further wiring.
+    /// Bundle the **canonical default profile** — `zensim::ZensimProfile::latest()`
+    /// (currently `PreviewV0_3`, the Tuner v11 2026-05-24 ship). Routes
+    /// the opaque `compute_*` path through `zensim::score_features_with_profile`
+    /// so output is bit-exact equivalent to CPU
+    /// `zensim::Zensim::new(latest()).compute(...).score()` up to GPU
+    /// vs CPU feature drift.
+    ///
+    /// Sets regime to [`ZensimFeatureRegime::WithIw`] (372) because the
+    /// shipping bake is a 372-input MLP. Use [`Self::with_regime`] to
+    /// override (e.g. when the caller's bake only consumes the first
+    /// 228 / 300 slots).
     ///
     /// This is what the umbrella's `MetricParams::default_for(Zensim)`
     /// returns so the metric is usable out of the box.
     pub fn default_weights() -> Self {
-        Self::with_canonical_v0_2()
+        Self {
+            profile: Some(zensim::ZensimProfile::latest()),
+            weights: None,
+            regime: ZensimFeatureRegime::WithIw,
+        }
     }
 
-    /// Explicit version-tagged variant of [`Self::default_weights`] —
-    /// loads [`crate::WEIGHTS_PREVIEW_V0_2`]. Reach for this when the
-    /// version tag matters to the caller (e.g., audit logs, sweep
-    /// metadata).
+    /// Explicit version-tagged legacy variant — bundles
+    /// [`crate::WEIGHTS_PREVIEW_V0_2`] for the linear 228-feature
+    /// scoring path (no MLP). Useful for v0.2-compatible audit
+    /// pipelines that need to reproduce historical scores.
     pub fn with_canonical_v0_2() -> Self {
         Self {
+            profile: None,
             weights: Some(Box::new(WEIGHTS_PREVIEW_V0_2)),
             regime: ZensimFeatureRegime::Basic,
         }
     }
 
-    /// Attach a trained weight vector.
-    pub fn with_weights(mut self, weights: [f64; TOTAL_FEATURES]) -> Self {
-        self.weights = Some(Box::new(weights));
+    /// Bundle a specific [`zensim::ZensimProfile`] for canonical scoring.
+    /// Same path as [`Self::default_weights`] but lets the caller pin
+    /// to a non-latest profile (e.g. `PreviewV0_2` for audit, or a
+    /// frozen recovery-trail variant).
+    ///
+    /// Defaults regime to the profile's natural input width:
+    /// [`ZensimFeatureRegime::Basic`] (228) for V0_1 / V0_2;
+    /// [`ZensimFeatureRegime::WithIw`] (372) for every V0_3+ MLP
+    /// ship. Override via [`Self::with_regime`] if the bake only
+    /// consumes a prefix.
+    pub fn with_profile(mut self, profile: zensim::ZensimProfile) -> Self {
+        use zensim::ZensimProfile::*;
+        self.regime = match profile {
+            PreviewV0_1 | PreviewV0_2 => ZensimFeatureRegime::Basic,
+            _ => ZensimFeatureRegime::WithIw,
+        };
+        self.profile = Some(profile);
         self
     }
 
-    /// Set the feature regime: [`ZensimFeatureRegime::Basic`] (228, the
-    /// default), [`ZensimFeatureRegime::Extended`] (300, adds 72 masked
-    /// features), or [`ZensimFeatureRegime::WithIw`] (372, adds 72
+    /// Attach a legacy 228-element trained weight vector. Forces the
+    /// linear (non-MLP) scoring path even if [`Self::profile`] was
+    /// previously set — clears `profile` to make the precedence
+    /// explicit.
+    pub fn with_weights(mut self, weights: [f64; TOTAL_FEATURES]) -> Self {
+        self.weights = Some(Box::new(weights));
+        self.profile = None;
+        self
+    }
+
+    /// Set the feature regime: [`ZensimFeatureRegime::Basic`] (228),
+    /// [`ZensimFeatureRegime::Extended`] (300, adds 72 masked features),
+    /// or [`ZensimFeatureRegime::WithIw`] (372, adds 72
     /// information-weighted features on top of Extended).
     ///
     /// **Memory cost on Extended / WithIw**: ~600 MB at 12 MP for the
@@ -394,16 +444,51 @@ impl ZensimOpaque {
         self.inner.compute_with_reference_vec(&dis_buf)
     }
 
-    /// Compute the uniform [`Score`] from packed sRGB. Returns
-    /// `Score { value: NAN, .. }` if no weights are wired in
-    /// [`ZensimParams::weights`].
+    /// Compute the uniform [`Score`] from packed sRGB. Routes through
+    /// CPU `zensim::score_features_with_profile` when
+    /// [`ZensimParams::profile`] is set (v0.3+ canonical path), or
+    /// through legacy `score_from_features(weights)` when only
+    /// [`ZensimParams::weights`] is set. Returns
+    /// `Score { value: NAN, .. }` if neither is wired.
     pub fn compute_srgb_u8(
         &mut self,
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<Score> {
-        let features = self.inner.compute_features(ref_rgb, dis_rgb)?;
-        Ok(self.score_from(features))
+        // When a profile is set, the canonical path needs the
+        // regime-appropriate full-width feature vector (228 / 300 /
+        // 372), not the 228 truncation that `compute_features` returns.
+        // Otherwise the post-network forward pass would see the wrong
+        // input shape and `score_features_with_profile` would error.
+        if self.params.profile.is_some() {
+            let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
+            let (w, h) = self.inner.dims();
+            Ok(self.score_from_profile_vec(&features, w, h, None))
+        } else {
+            let features = self.inner.compute_features(ref_rgb, dis_rgb)?;
+            Ok(self.score_from_linear(features))
+        }
+    }
+
+    /// Same as [`Self::compute_srgb_u8`] but accepts an optional codec
+    /// hint that drives the per-codec post-spline affine calibration
+    /// (EXP-CROSS-CODEC-V11-E). Has no effect when the configured
+    /// profile's bake doesn't carry `zentrain.per_codec_calibration`
+    /// metadata. Ignored in the legacy `weights`-only path.
+    pub fn compute_srgb_u8_with_codec(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        codec_hint: Option<&str>,
+    ) -> Result<Score> {
+        if self.params.profile.is_some() {
+            let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
+            let (w, h) = self.inner.dims();
+            Ok(self.score_from_profile_vec(&features, w, h, codec_hint))
+        } else {
+            let features = self.inner.compute_features(ref_rgb, dis_rgb)?;
+            Ok(self.score_from_linear(features))
+        }
     }
 
     /// Compute the uniform [`Score`] from [`PixelSlice`] inputs.
@@ -413,11 +498,45 @@ impl ZensimOpaque {
         r: PixelSlice<'_>,
         d: PixelSlice<'_>,
     ) -> Result<Score> {
-        let features = self.compute_features_pixels(r, d)?;
-        Ok(self.score_from(features))
+        if self.params.profile.is_some() {
+            let (w, h) = self.inner.dims();
+            let ref_buf = to_srgb_rgb8(&r, w, h)?;
+            let dis_buf = to_srgb_rgb8(&d, w, h)?;
+            let features = self.inner.compute_features_vec(&ref_buf, &dis_buf)?;
+            Ok(self.score_from_profile_vec(&features, w, h, None))
+        } else {
+            let features = self.compute_features_pixels(r, d)?;
+            Ok(self.score_from_linear(features))
+        }
     }
 
-    fn score_from(&self, features: [f64; TOTAL_FEATURES]) -> Score {
+    /// Profile-aware scoring path — runs the GPU-extracted feature
+    /// vector through the CPU `zensim::score_features_with_profile`
+    /// dispatch (per-sample-α head, tanh-pin, PCHIP spline, etc.).
+    fn score_from_profile_vec(
+        &self,
+        features: &[f64],
+        width: u32,
+        height: u32,
+        codec_hint: Option<&str>,
+    ) -> Score {
+        let value = match self.params.profile {
+            Some(profile) => zensim::score_features_with_profile_and_codec(
+                profile, features, width, height, codec_hint,
+            )
+            .unwrap_or(f64::NAN),
+            None => f64::NAN,
+        };
+        Score {
+            value,
+            metric_name: "zensim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+
+    /// Legacy linear scoring path — `dot(features, weights)` +
+    /// `100 − A·d^B`. Only invoked when `params.profile` is `None`.
+    fn score_from_linear(&self, features: [f64; TOTAL_FEATURES]) -> Score {
         let value = match &self.params.weights {
             Some(w) => score_from_features(&features, w.as_ref()),
             None => f64::NAN,
