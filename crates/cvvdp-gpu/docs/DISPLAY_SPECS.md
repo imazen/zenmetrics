@@ -97,12 +97,10 @@ vendor pull.
 | `65inch_hdr_pq_1Knit` | 3840×2160 | 1.98 m | 1000 | PQ | BT.2020 | |
 | `lg_oled_2026_hdr_pq` | 3840×2160 | 86.62" | 3000 | PQ | BT.2020 | |
 
-That's 26 presets total. The two FOV-only entries (`standard_hmd`
-and `htc_vive_pro`) load via `DisplayModel::by_name` but return
-`None` from `DisplayGeometry::by_name` — they ship a
-`fov_diagonal` field rather than the `diagonal_size_inches +
-viewing_distance_meters` pair our `DisplayGeometry` expects. A
-follow-up tick can add a FOV-based geometry constructor.
+That's 26 presets total. All 26 load both `DisplayModel::by_name`
+and `DisplayGeometry::by_name`. The two FOV-only entries
+(`standard_hmd`, `htc_vive_pro`) are converted via
+`DisplayGeometry::from_fov_diagonal` (commit `1280571a`).
 
 ## Scope of this release
 
