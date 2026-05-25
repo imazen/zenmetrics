@@ -1350,8 +1350,10 @@ dependencies = [
 name = "cvvdp-cpu"
 version = "0.1.0"
 dependencies = [
+ "archmage",
  "cvvdp-gpu",
  "image",
+ "magetypes",
  "rayon",
  "zenmetrics-corpus",
  "zenpixels",
