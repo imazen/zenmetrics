@@ -1429,6 +1429,125 @@ pub fn upscale_h_kernel(src: &Array<f32>, dst: &mut Array<f32>, src_w: u32, dst_
         + (k4 * m4) * src[base + x4 as usize];
 }
 
+/// Strip-aware variant of [`upscale_h_kernel`]. The H-axis expand
+/// has no Y-direction state: each output row is computed
+/// independently from the same input row. The strip-aware signature
+/// adds `body_offset_y` and `logical_dst_h` purely for API
+/// uniformity with the V-axis strip kernel and to make a future
+/// strip-walker pipeline self-describing — the H kernel doesn't
+/// reflect against Y, so neither param affects the math.
+///
+/// Dispatch grid covers `src_w × in_h` output pixels just like the
+/// non-strip kernel; the H kernel's only Y dependency is the input
+/// row index `y = idx / dst_w`, which is identical between strip
+/// and full layouts because the V kernel already placed the
+/// strip's body rows contiguously at the top of `src`. The
+/// `logical_dst_h` and `body_offset_y` arguments document the
+/// strip the caller intends to fill but never enter the per-pixel
+/// math.
+#[cube(launch)]
+#[allow(clippy::useless_conversion)]
+pub fn upscale_h_strip_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    dst_w: u32,
+    in_h: u32,
+    _logical_dst_h: u32,
+    _body_offset_y: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (dst_w * in_h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let dw = dst_w as usize;
+    let sw = src_w as usize;
+    let y = idx / dw;
+    let x = idx - y * dw;
+
+    let k0 = f32::new(0.1);
+    let k1 = f32::new(0.5);
+    let k2 = f32::new(0.8);
+    let k3 = f32::new(0.5);
+    let k4 = f32::new(0.1);
+
+    let back_h = (dst_w as i32) + 2 + ((dst_w as i32) & 1);
+    let sw_i = src_w as i32;
+    let zx_base = x as i32;
+
+    let z0 = zx_base;
+    let z1 = zx_base + 1;
+    let z2 = zx_base + 2;
+    let z3 = zx_base + 3;
+    let z4 = zx_base + 4;
+
+    let v0 = z0 == 0 || z0 == back_h || (z0 >= 2 && (z0 & 1) == 0 && ((z0 - 2) >> 1) < sw_i);
+    let v1 = z1 == 0 || z1 == back_h || (z1 >= 2 && (z1 & 1) == 0 && ((z1 - 2) >> 1) < sw_i);
+    let v2 = z2 == 0 || z2 == back_h || (z2 >= 2 && (z2 & 1) == 0 && ((z2 - 2) >> 1) < sw_i);
+    let v3 = z3 == 0 || z3 == back_h || (z3 >= 2 && (z3 & 1) == 0 && ((z3 - 2) >> 1) < sw_i);
+    let v4 = z4 == 0 || z4 == back_h || (z4 >= 2 && (z4 & 1) == 0 && ((z4 - 2) >> 1) < sw_i);
+
+    let x0 = if z0 == 0 {
+        0u32.into()
+    } else if z0 == back_h {
+        src_w - 1
+    } else if z0 >= 2 && (z0 & 1) == 0 {
+        ((z0 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let x1 = if z1 == 0 {
+        0u32.into()
+    } else if z1 == back_h {
+        src_w - 1
+    } else if z1 >= 2 && (z1 & 1) == 0 {
+        ((z1 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let x2 = if z2 == 0 {
+        0u32.into()
+    } else if z2 == back_h {
+        src_w - 1
+    } else if z2 >= 2 && (z2 & 1) == 0 {
+        ((z2 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let x3 = if z3 == 0 {
+        0u32.into()
+    } else if z3 == back_h {
+        src_w - 1
+    } else if z3 >= 2 && (z3 & 1) == 0 {
+        ((z3 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let x4 = if z4 == 0 {
+        0u32.into()
+    } else if z4 == back_h {
+        src_w - 1
+    } else if z4 >= 2 && (z4 & 1) == 0 {
+        ((z4 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+
+    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
+    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
+    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
+    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
+    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+
+    let base = y * sw;
+    dst[idx] = (k0 * m0) * src[base + x0 as usize]
+        + (k1 * m1) * src[base + x1 as usize]
+        + (k2 * m2) * src[base + x2 as usize]
+        + (k3 * m3) * src[base + x3 as usize]
+        + (k4 * m4) * src[base + x4 as usize];
+}
+
 /// `band = fine - upscaled_coarse`.
 #[cube(launch)]
 pub fn subtract_kernel(
