@@ -17,7 +17,7 @@
 
 #![cfg(feature = "cuda")]
 
-use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
 
 const W: u32 = 256;
 const H: u32 = 256;
@@ -35,31 +35,55 @@ fn make_pair(seed_a: u64, seed_b: u64) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
+/// Memory mode for the cached-ref tests. Most metrics use Auto;
+/// butter is strip-preferred at 256×256 and strip-mode butter
+/// rejects `set_reference`, so the tests force Full mode there.
+fn cached_ref_memory_mode(kind: MetricKind) -> MemoryMode {
+    match kind {
+        MetricKind::Butter => MemoryMode::Full,
+        _ => MemoryMode::Auto,
+    }
+}
+
 /// Compare cached-ref vs one-shot for a single `(ref, dist)` pair.
 ///
 /// **Tolerance** (`tol`): pass `0.0` for metrics whose cached-ref vs
 /// one-shot kernel paths produce bit-identical output (zensim,
-/// iwssim — they share the same per-call reduction order). cvvdp's
-/// warm-ref path reuses live device buffers that the one-shot path
-/// re-allocates fresh; that touches `Atomic<f32>::fetch_add`
-/// reduction ordering and produces tiny (~1e-6 JOD) drift even on
+/// iwssim — they share the same per-call reduction order). cvvdp /
+/// butter / ssim2 / dssim use `Atomic<f32>::fetch_add` reductions
+/// whose scheduling can vary between the warm-ref-reuse and
+/// fresh-alloc paths; that produces small (~1e-6 to 1e-4) drift on
 /// a single pair. Bit-identical isn't a structural guarantee for
-/// cvvdp; tight numeric agreement is (well within pycvvdp's 5e-3
-/// JOD parity gate).
+/// those; tight numeric agreement is.
 fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
     let params = MetricParams::default_for(kind);
+    let mode = cached_ref_memory_mode(kind);
     let (r, d) = make_pair(7919, 2147483647);
 
     // One-shot.
-    let mut m_oneshot = Metric::new(kind, Backend::Cuda, W, H, params.clone())
-        .unwrap_or_else(|e| panic!("one-shot Metric::new({kind:?}) failed: {e}"));
+    let mut m_oneshot = Metric::new_with_memory_mode(
+        kind,
+        Backend::Cuda,
+        W,
+        H,
+        params.clone(),
+        mode,
+    )
+    .unwrap_or_else(|e| panic!("one-shot Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     let s_oneshot = m_oneshot
         .compute_srgb_u8(&r, &d)
         .unwrap_or_else(|e| panic!("compute_srgb_u8({kind:?}) failed: {e}"));
 
     // Cached-ref.
-    let mut m_cached = Metric::new(kind, Backend::Cuda, W, H, params)
-        .unwrap_or_else(|e| panic!("cached Metric::new({kind:?}) failed: {e}"));
+    let mut m_cached = Metric::new_with_memory_mode(
+        kind,
+        Backend::Cuda,
+        W,
+        H,
+        params,
+        mode,
+    )
+    .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     m_cached
         .set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("set_reference_srgb_u8({kind:?}) failed: {e}"));
@@ -108,6 +132,7 @@ fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
 /// a small absolute tolerance.
 fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
     let params = MetricParams::default_for(kind);
+    let mode = cached_ref_memory_mode(kind);
     let (r, _) = make_pair(7919, 2147483647);
 
     // Build N distortions deterministically.
@@ -119,8 +144,15 @@ fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
         .collect();
 
     // Cached-ref pass.
-    let mut m = Metric::new(kind, Backend::Cuda, W, H, params.clone())
-        .unwrap_or_else(|e| panic!("cached Metric::new({kind:?}) failed: {e}"));
+    let mut m = Metric::new_with_memory_mode(
+        kind,
+        Backend::Cuda,
+        W,
+        H,
+        params.clone(),
+        mode,
+    )
+    .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     m.set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("set_reference_srgb_u8({kind:?}) failed: {e}"));
     let cached_scores: Vec<f64> = dists
@@ -133,8 +165,15 @@ fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
         .collect();
 
     // One-shot pass for parity.
-    let mut m_os = Metric::new(kind, Backend::Cuda, W, H, params)
-        .unwrap_or_else(|e| panic!("oneshot Metric::new({kind:?}) failed: {e}"));
+    let mut m_os = Metric::new_with_memory_mode(
+        kind,
+        Backend::Cuda,
+        W,
+        H,
+        params,
+        mode,
+    )
+    .unwrap_or_else(|e| panic!("oneshot Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     let oneshot_scores: Vec<f64> = dists
         .iter()
         .map(|d| {
@@ -222,46 +261,92 @@ fn cached_ref_iwssim_has_cached_reference_roundtrip() {
     assert!(!m.has_cached_reference());
 }
 
-// Phase 2B sentinel: butter / ssim2 / dssim must surface a clear
-// "not yet wired" error from set_reference_srgb_u8 — NOT silently
-// fall through to one-shot. When Phase 2B lands these tests should
-// be updated to assert the success path.
+#[cfg(feature = "butter")]
+#[test]
+fn cached_ref_butter_matches_one_shot() {
+    // butter uses Atomic<f32>::fetch_add for the per-octave reduction;
+    // cached-ref vs one-shot may drift by ~1e-5 score units. Bit-
+    // identical isn't a structural guarantee; tight numeric agreement
+    // is well within butter's pycvvdp-equivalent parity gate.
+    assert_cached_ref_matches_one_shot(MetricKind::Butter, 1e-4);
+}
 
 #[cfg(feature = "butter")]
 #[test]
-fn cached_ref_butter_phase2b_pending() {
-    let params = MetricParams::default_for(MetricKind::Butter);
-    let mut m = Metric::new(MetricKind::Butter, Backend::Cuda, W, H, params).unwrap();
-    let (r, _) = make_pair(7919, 2147483647);
-    let err = m.set_reference_srgb_u8(&r).unwrap_err();
-    assert!(
-        format!("{err}").contains("Phase 2B"),
-        "expected 'Phase 2B' marker in butter cached-ref error, got: {err}"
-    );
+fn cached_ref_butter_n_distortions() {
+    assert_cached_ref_n_distortions(MetricKind::Butter, 3, 1e-4);
 }
 
 #[cfg(feature = "ssim2")]
 #[test]
-fn cached_ref_ssim2_phase2b_pending() {
-    let params = MetricParams::default_for(MetricKind::Ssim2);
-    let mut m = Metric::new(MetricKind::Ssim2, Backend::Cuda, W, H, params).unwrap();
-    let (r, _) = make_pair(7919, 2147483647);
-    let err = m.set_reference_srgb_u8(&r).unwrap_err();
-    assert!(
-        format!("{err}").contains("Phase 2B"),
-        "expected 'Phase 2B' marker in ssim2 cached-ref error, got: {err}"
-    );
+fn cached_ref_ssim2_matches_one_shot() {
+    // ssim2 reduction order varies (~5e-5 floor per task #52).
+    assert_cached_ref_matches_one_shot(MetricKind::Ssim2, 1e-3);
+}
+
+#[cfg(feature = "ssim2")]
+#[test]
+fn cached_ref_ssim2_n_distortions() {
+    assert_cached_ref_n_distortions(MetricKind::Ssim2, 3, 1e-3);
 }
 
 #[cfg(feature = "dssim")]
 #[test]
-fn cached_ref_dssim_phase2b_pending() {
+fn cached_ref_dssim_matches_one_shot() {
+    assert_cached_ref_matches_one_shot(MetricKind::Dssim, 1e-4);
+}
+
+#[cfg(feature = "dssim")]
+#[test]
+fn cached_ref_dssim_n_distortions() {
+    assert_cached_ref_n_distortions(MetricKind::Dssim, 3, 1e-4);
+}
+
+#[cfg(feature = "butter")]
+#[test]
+fn cached_ref_butter_has_cached_reference_roundtrip() {
+    let params = MetricParams::default_for(MetricKind::Butter);
+    // butter is strip-preferred at 256x256 and strip mode rejects
+    // set_reference — force Full mode for the cached-ref roundtrip.
+    let mut m = Metric::new_with_memory_mode(
+        MetricKind::Butter,
+        Backend::Cuda,
+        W,
+        H,
+        params,
+        MemoryMode::Full,
+    )
+    .unwrap();
+    assert!(!m.has_cached_reference());
+    let (r, _) = make_pair(7919, 2147483647);
+    m.set_reference_srgb_u8(&r).unwrap();
+    assert!(m.has_cached_reference());
+    m.clear_reference();
+    assert!(!m.has_cached_reference());
+}
+
+#[cfg(feature = "ssim2")]
+#[test]
+fn cached_ref_ssim2_has_cached_reference_roundtrip() {
+    let params = MetricParams::default_for(MetricKind::Ssim2);
+    let mut m = Metric::new(MetricKind::Ssim2, Backend::Cuda, W, H, params).unwrap();
+    assert!(!m.has_cached_reference());
+    let (r, _) = make_pair(7919, 2147483647);
+    m.set_reference_srgb_u8(&r).unwrap();
+    assert!(m.has_cached_reference());
+    m.clear_reference();
+    assert!(!m.has_cached_reference());
+}
+
+#[cfg(feature = "dssim")]
+#[test]
+fn cached_ref_dssim_has_cached_reference_roundtrip() {
     let params = MetricParams::default_for(MetricKind::Dssim);
     let mut m = Metric::new(MetricKind::Dssim, Backend::Cuda, W, H, params).unwrap();
+    assert!(!m.has_cached_reference());
     let (r, _) = make_pair(7919, 2147483647);
-    let err = m.set_reference_srgb_u8(&r).unwrap_err();
-    assert!(
-        format!("{err}").contains("Phase 2B"),
-        "expected 'Phase 2B' marker in dssim cached-ref error, got: {err}"
-    );
+    m.set_reference_srgb_u8(&r).unwrap();
+    assert!(m.has_cached_reference());
+    m.clear_reference();
+    assert!(!m.has_cached_reference());
 }

@@ -824,20 +824,26 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(_) => Err(Error::Metric {
-                kind: "butter",
-                message: "cached-ref not yet wired on butteraugli-gpu opaque (Phase 2B — task #45)".into(),
-            }),
+            Metric::Butter(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => Err(Error::Metric {
-                kind: "ssim2",
-                message: "cached-ref not yet wired on ssim2-gpu opaque (Phase 2B — task #46)".into(),
-            }),
+            Metric::Ssim2(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: e.to_string(),
+                }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => Err(Error::Metric {
-                kind: "dssim",
-                message: "cached-ref not yet wired on dssim-gpu opaque (Phase 2B)".into(),
-            }),
+            Metric::Dssim(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| Error::Metric {
+                    kind: "dssim",
+                    message: e.to_string(),
+                }),
         }
     }
 
@@ -848,7 +854,6 @@ impl Metric {
     /// # Errors
     ///
     /// - Per-crate `NoCachedReference` when no reference is cached.
-    /// - [`Error::Metric`] for butter / ssim2 / dssim (Phase 2B).
     pub fn compute_with_cached_reference_srgb_u8(
         &mut self,
         d: &[u8],
@@ -879,28 +884,35 @@ impl Metric {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "butter")]
-            Metric::Butter(_) => Err(Error::Metric {
-                kind: "butter",
-                message: "cached-ref not yet wired on butteraugli-gpu opaque (Phase 2B — task #45)".into(),
-            }),
+            Metric::Butter(m) => m
+                .compute_with_cached_reference_srgb_u8(d)
+                .map(convert_score_butter)
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => Err(Error::Metric {
-                kind: "ssim2",
-                message: "cached-ref not yet wired on ssim2-gpu opaque (Phase 2B — task #46)".into(),
-            }),
+            Metric::Ssim2(m) => m
+                .compute_with_cached_reference_srgb_u8(d)
+                .map(convert_score_ssim2)
+                .map_err(|e| Error::Metric {
+                    kind: "ssim2",
+                    message: e.to_string(),
+                }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => Err(Error::Metric {
-                kind: "dssim",
-                message: "cached-ref not yet wired on dssim-gpu opaque (Phase 2B)".into(),
-            }),
+            Metric::Dssim(m) => m
+                .compute_with_cached_reference_srgb_u8(d)
+                .map(convert_score_dssim)
+                .map_err(|e| Error::Metric {
+                    kind: "dssim",
+                    message: e.to_string(),
+                }),
         }
     }
 
-    /// Drop cached reference state. No-op for metrics whose
-    /// opaque shim doesn't expose `clear_reference` yet; iwssim
-    /// is the only Phase 2A metric with an explicit clear
-    /// accessor — cvvdp/zensim implicitly clear on the next
-    /// `set_reference_srgb_u8`.
+    /// Drop cached reference state. No-op for cvvdp/zensim whose
+    /// opaque shims don't expose an explicit clear accessor —
+    /// they implicitly overwrite on the next `set_reference_srgb_u8`.
     pub fn clear_reference(&mut self) {
         match self {
             // cvvdp's warm_reference_srgb overwrites prior state — no
@@ -908,44 +920,42 @@ impl Metric {
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(_) => {}
             // zensim has clear_reference on the typed pipeline but no
-            // opaque accessor yet. Phase 2A leaves it implicit; Phase
-            // 2B adds the accessor if any caller needs explicit clears.
+            // opaque accessor yet — Phase 2C can add it if needed.
             #[cfg(feature = "zensim")]
             Metric::Zensim(_) => {}
             #[cfg(feature = "iwssim")]
             Metric::Iwssim(m) => m.clear_reference(),
             #[cfg(feature = "butter")]
-            Metric::Butter(_) => {}
+            Metric::Butter(m) => m.clear_reference(),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => {}
+            Metric::Ssim2(m) => m.clear_reference(),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => {}
+            Metric::Dssim(m) => m.clear_reference(),
         }
     }
 
     /// Returns `true` if [`Self::set_reference_srgb_u8`] has been
     /// called and the cached reference state is still valid.
     ///
-    /// Today only iwssim tracks this state explicitly on the opaque
-    /// shim; cvvdp/zensim return `false` until they expose a `has_*`
-    /// accessor. The umbrella treats `false` conservatively: callers
-    /// that branch on this should also handle the
-    /// `NoCachedReference` error from
+    /// cvvdp/zensim return `false` until they expose a `has_*`
+    /// accessor (Phase 2C). The umbrella treats `false`
+    /// conservatively: callers that branch on this should also
+    /// handle the `NoCachedReference` error from
     /// [`Self::compute_with_cached_reference_srgb_u8`].
     pub fn has_cached_reference(&self) -> bool {
         match self {
             #[cfg(feature = "iwssim")]
             Metric::Iwssim(m) => m.has_cached_reference(),
+            #[cfg(feature = "butter")]
+            Metric::Butter(m) => m.has_cached_reference(),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(m) => m.has_cached_reference(),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(m) => m.has_cached_reference(),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(_) => false,
             #[cfg(feature = "zensim")]
             Metric::Zensim(_) => false,
-            #[cfg(feature = "butter")]
-            Metric::Butter(_) => false,
-            #[cfg(feature = "ssim2")]
-            Metric::Ssim2(_) => false,
-            #[cfg(feature = "dssim")]
-            Metric::Dssim(_) => false,
         }
     }
 }

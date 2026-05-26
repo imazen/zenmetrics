@@ -66,6 +66,25 @@ trait ButteraugliInner: Send {
     ) -> Result<Score>;
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
+    /// Cache the reference image's opsin pyramid + blur cascade.
+    /// Returns [`crate::Error::StripModeUnsupported`] when invoked
+    /// on a strip-mode instance (butter strip rejects set_reference
+    /// today — Phase 2C task #45 may add strip cached-ref).
+    fn set_reference_srgb_u8(
+        &mut self,
+        ref_rgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<()>;
+    /// Score one candidate against the cached reference.
+    fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<Score>;
+    /// Drop cached reference state.
+    fn clear_reference(&mut self);
+    /// Whether a reference has been cached.
+    fn has_cached_reference(&self) -> bool;
 }
 
 impl<R> ButteraugliInner for Butteraugli<R>
@@ -115,6 +134,35 @@ where
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         Butteraugli::pack_srgb_into_packed_u32_handle(self, srgb)
+    }
+
+    fn set_reference_srgb_u8(
+        &mut self,
+        ref_rgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<()> {
+        Butteraugli::set_reference_with_options(self, ref_rgb, params)
+    }
+
+    fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+        _params: &ButteraugliParams,
+    ) -> Result<Score> {
+        let r = Butteraugli::compute_with_reference(self, dis_rgb)?;
+        Ok(Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn clear_reference(&mut self) {
+        Butteraugli::clear_reference(self)
+    }
+
+    fn has_cached_reference(&self) -> bool {
+        Butteraugli::has_cached_reference(self)
     }
 }
 
@@ -284,6 +332,40 @@ impl ButteraugliOpaque {
         srgb: &[u8],
     ) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
+    }
+
+    /// Cache the reference image's opsin / blur / masking state on
+    /// device. Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
+    /// calls skip the ref-side pyramid build.
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::Error::StripModeUnsupported`] when invoked on a
+    ///   strip-mode instance (butter strip rejects set_reference
+    ///   today — task #45 / Phase 2C tracks adding strip cached-ref).
+    pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        self.inner.set_reference_srgb_u8(ref_rgb, &self.params)
+    }
+
+    /// Score a distorted candidate against the cached reference set
+    /// by [`Self::set_reference_srgb_u8`]. Returns
+    /// [`crate::Error::NoCachedReference`] if no reference is cached.
+    pub fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<Score> {
+        self.inner
+            .compute_with_cached_reference_srgb_u8(dis_rgb, &self.params)
+    }
+
+    /// Drop cached reference state.
+    pub fn clear_reference(&mut self) {
+        self.inner.clear_reference()
+    }
+
+    /// `true` if a reference has been cached.
+    pub fn has_cached_reference(&self) -> bool {
+        self.inner.has_cached_reference()
     }
 }
 
