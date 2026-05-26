@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 """Build per-codec training parquets via 3-way join of:
 
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │ DEPRECATED — use the Rust `zen-metrics assemble` subcommand instead.   │
+  │                                                                        │
+  │   cargo build --release -p zen-metrics-cli --features assemble         │
+  │   zen-metrics assemble --runs <run> --cache-dir <dir> --out-dir <dir>  │
+  │                                                                        │
+  │ The Rust port (crates/zen-metrics-cli/src/assemble/) reproduces this   │
+  │ exact 3-way join but with a TYPED full-key (`PairKey`) that makes the  │
+  │ 2026-05-25 parquet corruption (ssim2_gpu ref-misjoin + iwssim mock /   │
+  │ human-copy leak) structurally impossible — see                         │
+  │ zensim/benchmarks/DATA_INTEGRITY_root_cause_2026-05-25.md and the      │
+  │ four guards ported from zensim/scripts/canonical_corpus/join_safety.py.│
+  │ This Python script is kept only as a fallback / reference and uses     │
+  │ DuckDB's ref-only-collapsing merge that caused the original bug.       │
+  └──────────────────────────────────────────────────────────────────────┘
+
   1. omni/<chunk>.parquet        — per-cell metric scores + encode/decode stats
   2. zensim_features/<chunk>.parquet — per-cell 300-D zensim feature vector
   3. source_features/<chunk>.parquet — per-source 62+ zenanalyze features

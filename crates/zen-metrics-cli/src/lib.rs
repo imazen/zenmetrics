@@ -48,6 +48,11 @@
 pub mod metrics;
 pub mod output;
 
+/// Typed full-key corpus assembler — see the [`assemble`] module docs. Gated
+/// on the lean `assemble` feature (arrow/parquet only); `sweep` enables it too.
+#[cfg(feature = "assemble")]
+pub mod assemble;
+
 #[cfg(feature = "sweep")]
 pub mod sweep;
 

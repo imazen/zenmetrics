@@ -141,6 +141,25 @@ sweep = [
     "dep:parquet",
     "dep:arrow-array",
     "dep:arrow-schema",
+    # The corpus assembler shares the arrow/parquet stack, so `sweep`
+    # implies `assemble` for the common build. `assemble` can also be
+    # enabled on its own (without the codec-heavy sweep deps) for a lean
+    # CI job that only builds the join layer — see the `assemble` feature.
+    "assemble",
+]
+
+# `assemble` enables the `zen-metrics assemble` subcommand: the typed,
+# full-key corpus join that replaces the Python corpus-assembly builders
+# (`build_per_codec_training.py` + the canonical-corpus join layer) and
+# makes the 2026-05-25 parquet corruption structurally impossible. It needs
+# ONLY the arrow/parquet stack — no codecs, no GPU — so it is a separate,
+# light feature that does NOT pull in the codec/encoder deps the `sweep`
+# feature requires. This lets the assembler build + test in isolation even
+# when a sibling codec dep is temporarily broken.
+assemble = [
+    "dep:parquet",
+    "dep:arrow-array",
+    "dep:arrow-schema",
 ]
 
 [dependencies]

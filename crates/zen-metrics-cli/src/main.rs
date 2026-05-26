@@ -19,6 +19,8 @@
 //!
 //! See `--help` on any subcommand for full options.
 
+#[cfg(feature = "assemble")]
+mod assemble;
 mod compare;
 mod decode;
 mod metrics;
@@ -75,6 +77,15 @@ enum Command {
     /// `--features sweep`.
     #[cfg(feature = "sweep")]
     ScorePairs(ScorePairsArgs),
+    /// Assemble a training corpus by joining metric-score sidecars onto
+    /// feature tables with a TYPED full-key join that makes the 2026-05-25
+    /// parquet corruption (ref-only collapse + mock/human-copy leak)
+    /// structurally impossible. Replaces the Python corpus-assembly
+    /// builders (`build_per_codec_training.py` + the canonical-corpus
+    /// join layer). Available when built with `--features assemble`
+    /// (the lean arrow/parquet-only feature; `sweep` enables it too).
+    #[cfg(feature = "assemble")]
+    Assemble(crate::assemble::AssembleArgs),
     /// Print available metrics and which require a GPU.
     ListMetrics,
     /// Print supported input formats.
@@ -366,6 +377,14 @@ fn main() -> ExitCode {
             // chunk to a failure-log upload instead of treating the
             // sidecar as authoritative training data.
             Ok(ScorePairsOutcome::Bogus) => ExitCode::from(2),
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        #[cfg(feature = "assemble")]
+        Command::Assemble(args) => match crate::assemble::run_assemble(&args) {
+            Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
                 ExitCode::FAILURE

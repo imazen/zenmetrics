@@ -17,6 +17,41 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zen-metrics-cli — feat: `assemble` subcommand — typed full-key corpus join — 2026-05-26
+
+New `zen-metrics assemble` subcommand that replaces the Python
+corpus-assembly join layer (`scripts/sweep/build_per_codec_training.py`
+plus the `zensim/scripts/canonical_corpus` builders and the ~35 ad-hoc
+`pd.merge` scripts) with a TYPED full-key join that makes the 2026-05-25
+parquet corruption structurally impossible.
+
+- **`crates/zen-metrics-cli/src/assemble/`** — new module behind a lean
+  `assemble` cargo feature (arrow/parquet only; no codecs, no GPU; `sweep`
+  enables it too). Ports the four guarantees from
+  `zensim/scripts/canonical_corpus/join_safety.py`:
+  - `key::PairKey` — a four-field typed key (`image_path, codec, q,
+    knob_tuple_json`) with NO ref-only constructor, so the Mode-B ref-only
+    collapse is *unrepresentable at compile time* (not merely detected).
+  - `join::safe_join` — errors (never `.mean()`-averages) on duplicate
+    metric keys; errors if either side lacks a per-pair column.
+  - `join::attach_positional` — exact-length positional attach for the
+    ref-only KADID/TID path.
+  - `join::assert_no_leaked_columns` — rejects `*mock*` columns + raw-metric
+    columns bit-identical to `human_score` (Mode A); excludes `mix_*` and
+    accepts linear rescales (only bit-identity is the leak signature).
+  - `join::assert_not_constant_per_ref` — post-hoc ref-broadcast detector
+    with the mean-group-size > 1.5 false-positive gate.
+  - The per-codec build path runs both leak + ref-broadcast guards on every
+    output before writing.
+- **No new heavy deps** — reuses the crate's existing `arrow`/`parquet`
+  stack (the union-by-name dtype widening that DuckDB provided is
+  reimplemented in `table::Table::union_by_name`); R2 sidecar sync shells to
+  `s5cmd` synchronously, mirroring `build_per_codec_training.py`.
+- **`scripts/sweep/build_per_codec_training.py`** — marked DEPRECATED with a
+  pointer to the Rust subcommand; kept as a fallback/reference (not deleted).
+- Tests: `tests/assemble_join_safety.rs` (8 integration tests encoding the
+  six corruption-prevention cases) + submodule unit tests.
+
 ### cvvdp-gpu — feat: `CvvdpOpaque::new_with_geometry` opaque API for non-STANDARD_4K display configs — 2026-05-26
 
 - **`CvvdpOpaque::new_with_geometry(backend, w, h, params, geometry)`**
