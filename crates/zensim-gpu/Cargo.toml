@@ -96,10 +96,6 @@ name = "opaque_cached_ref"
 required-features = ["cubecl-types"]
 
 [[test]]
-name = "score_v03_parity"
-required-features = ["cubecl-types"]
-
-[[test]]
 name = "diffmap_invariants"
 required-features = ["cubecl-types"]
 

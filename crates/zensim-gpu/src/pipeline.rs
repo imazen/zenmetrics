@@ -288,7 +288,12 @@ impl<R: Runtime> Zensim<R> {
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
-                match resolve_auto(width, height, cap)? {
+                // This entry point defaults to Basic regime (see `new()`).
+                // Pass the regime explicitly so the cap check uses the
+                // right (BASE, BETA) — Extended / WithIw constructors
+                // route through `new_with_regime` which has its own
+                // separate budget knob (`new_with_regime_budget`).
+                match resolve_auto(width, height, ZensimFeatureRegime::Basic, cap)? {
                     ResolvedMode::Full => Self::new(client, width, height),
                 }
             }

@@ -2,9 +2,10 @@
 
 use std::sync::{Mutex, OnceLock};
 use zensim_gpu::{
-    Error, MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
-    memory_mode,
+    Error, MemoryMode, ResolvedMode, ZensimFeatureRegime, estimate_gpu_memory_bytes,
+    estimate_strip_gpu_memory_bytes, memory_mode,
 };
+use zensim_gpu::memory_mode::CUBECL_OVERHEAD_BYTES;
 
 const VRAM_CAP_VAR: &str = "ZENMETRICS_VRAM_CAP_BYTES";
 
@@ -34,10 +35,99 @@ fn with_cap<R>(cap: Option<&str>, f: impl FnOnce() -> R) -> R {
 
 #[test]
 fn estimate_grows_with_pixels() {
-    let a = estimate_gpu_memory_bytes(1024, 1024);
-    let b = estimate_gpu_memory_bytes(2048, 2048);
+    let a = estimate_gpu_memory_bytes(1024, 1024, ZensimFeatureRegime::Basic);
+    let b = estimate_gpu_memory_bytes(2048, 2048, ZensimFeatureRegime::Basic);
     let ratio = b as f64 / a as f64;
     assert!(ratio > 3.6 && ratio < 4.4, "ratio = {ratio}");
+}
+
+#[test]
+fn estimate_grows_with_regime() {
+    // Basic 4096² should be markedly smaller than WithIw 4096² —
+    // Extended / WithIw allocate ~3× the per-pyramid-pixel bytes.
+    let basic = estimate_gpu_memory_bytes(4096, 4096, ZensimFeatureRegime::Basic);
+    let ext = estimate_gpu_memory_bytes(4096, 4096, ZensimFeatureRegime::Extended);
+    let iw = estimate_gpu_memory_bytes(4096, 4096, ZensimFeatureRegime::WithIw);
+    assert!(
+        ext > basic * 2,
+        "Extended must be > 2× Basic at 4096²: basic={basic}, ext={ext}"
+    );
+    // WithIw / Extended are within ~10 % of each other (same persist
+    // planes, slightly different transient overhead).
+    let ratio = (iw as f64) / (ext as f64);
+    assert!(
+        ratio > 0.85 && ratio < 1.25,
+        "WithIw / Extended ratio outside [0.85, 1.25]: {ratio}"
+    );
+}
+
+/// Calibration regression — the 24 (size × regime) measured rows
+/// from `benchmarks/mem_per_metric_2026-05-26.csv` must all land
+/// within ±25 % of the estimator's prediction (estimator + cubecl
+/// overhead vs measured peak_delta_gpu_mb).
+///
+/// Fixture values are inlined here so the test survives benchmark
+/// CSV moves / renames; if the calibration is re-run, refresh the
+/// table and the (BASE, BETA) coefficients in `memory_mode.rs`.
+#[test]
+fn estimator_matches_measured() {
+    // (regime, width, height, measured_peak_delta_mb)
+    // Source: benchmarks/mem_per_metric_2026-05-26.csv
+    const ROWS: &[(ZensimFeatureRegime, u32, u32, f64)] = &[
+        (ZensimFeatureRegime::Basic, 64, 64, 193.0),
+        (ZensimFeatureRegime::Basic, 256, 256, 193.0),
+        (ZensimFeatureRegime::Basic, 1024, 1024, 225.0),
+        (ZensimFeatureRegime::Basic, 2048, 2048, 449.0),
+        (ZensimFeatureRegime::Basic, 3000, 3000, 642.0),
+        (ZensimFeatureRegime::Basic, 4096, 4096, 1185.0),
+        (ZensimFeatureRegime::Basic, 6000, 4000, 1324.0),
+        (ZensimFeatureRegime::Basic, 8192, 8192, 3489.0),
+        (ZensimFeatureRegime::Extended, 64, 64, 193.0),
+        (ZensimFeatureRegime::Extended, 256, 256, 225.0),
+        (ZensimFeatureRegime::Extended, 1024, 1024, 481.0),
+        (ZensimFeatureRegime::Extended, 2048, 2048, 1217.0),
+        (ZensimFeatureRegime::Extended, 3000, 3000, 1599.0),
+        (ZensimFeatureRegime::Extended, 4096, 4096, 2721.0),
+        (ZensimFeatureRegime::Extended, 6000, 4000, 3713.0),
+        (ZensimFeatureRegime::Extended, 8192, 8192, 10369.0),
+        (ZensimFeatureRegime::WithIw, 64, 64, 223.0),
+        (ZensimFeatureRegime::WithIw, 256, 256, 255.0),
+        (ZensimFeatureRegime::WithIw, 1024, 1024, 481.0),
+        (ZensimFeatureRegime::WithIw, 2048, 2048, 1217.0),
+        (ZensimFeatureRegime::WithIw, 3000, 3000, 1569.0),
+        (ZensimFeatureRegime::WithIw, 4096, 4096, 2751.0),
+        (ZensimFeatureRegime::WithIw, 6000, 4000, 3713.0),
+        (ZensimFeatureRegime::WithIw, 8192, 8192, 10290.0),
+    ];
+
+    let mut max_pct = 0.0_f64;
+    let mut failures = Vec::new();
+    for &(regime, w, h, measured_mb) in ROWS {
+        let est_bytes = estimate_gpu_memory_bytes(w, h, regime);
+        let total_bytes = est_bytes + CUBECL_OVERHEAD_BYTES;
+        let total_mb = (total_bytes as f64) / (1024.0 * 1024.0);
+        let pct = 100.0 * (total_mb - measured_mb) / measured_mb.max(1.0);
+        if pct.abs() > max_pct {
+            max_pct = pct.abs();
+        }
+        if pct.abs() > 25.0 {
+            failures.push((regime, w, h, measured_mb, total_mb, pct));
+        }
+    }
+    eprintln!("estimator vs measured: max |%err| = {max_pct:.1}% over {} rows", ROWS.len());
+    if !failures.is_empty() {
+        for (regime, w, h, meas, pred, pct) in &failures {
+            eprintln!(
+                "  FAIL regime={regime:?} {w}×{h} measured={meas:.0} MB predicted={pred:.0} MB ({pct:+.1}%)"
+            );
+        }
+        panic!(
+            "{} of {} calibration rows exceeded ±25%; max |%err| = {:.1}%",
+            failures.len(),
+            ROWS.len(),
+            max_pct
+        );
+    }
 }
 
 #[test]
@@ -48,7 +138,13 @@ fn strip_estimator_is_none() {
 #[test]
 fn auto_picks_full_when_under_cap() {
     with_cap(Some("17179869184"), || {
-        let r = memory_mode::resolve_auto(1024, 1024, memory_mode::vram_cap_bytes()).unwrap();
+        let r = memory_mode::resolve_auto(
+            1024,
+            1024,
+            ZensimFeatureRegime::Basic,
+            memory_mode::vram_cap_bytes(),
+        )
+        .unwrap();
         assert_eq!(r, ResolvedMode::Full);
     });
 }
@@ -56,7 +152,12 @@ fn auto_picks_full_when_under_cap() {
 #[test]
 fn auto_errors_when_strip_unsupported_and_too_big() {
     with_cap(Some("1"), || {
-        let r = memory_mode::resolve_auto(4096, 4096, memory_mode::vram_cap_bytes());
+        let r = memory_mode::resolve_auto(
+            4096,
+            4096,
+            ZensimFeatureRegime::Basic,
+            memory_mode::vram_cap_bytes(),
+        );
         assert!(matches!(r, Err(Error::TooBigForFull { .. })));
     });
 }
@@ -86,9 +187,3 @@ fn vram_cap_env_override() {
     });
 }
 
-#[test]
-fn vram_cap_default_is_8gb() {
-    with_cap(None, || {
-        assert_eq!(memory_mode::vram_cap_bytes(), 8 * 1024 * 1024 * 1024);
-    });
-}

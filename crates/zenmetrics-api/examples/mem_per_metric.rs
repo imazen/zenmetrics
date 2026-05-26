@@ -107,7 +107,7 @@ fn make_image(seed: u64, w: u32, h: u32) -> Vec<u8> {
     out
 }
 
-fn static_estimate_full_bytes(kind: MetricKind, w: u32, h: u32) -> usize {
+fn static_estimate_full_bytes(kind: MetricKind, w: u32, h: u32, _regime: &str) -> usize {
     use zenmetrics_api as api;
     match kind {
         #[cfg(feature = "butter")]
@@ -121,7 +121,15 @@ fn static_estimate_full_bytes(kind: MetricKind, w: u32, h: u32) -> usize {
         #[cfg(feature = "cvvdp")]
         MetricKind::Cvvdp => api::cvvdp::estimate_gpu_memory_bytes_usize(w, h),
         #[cfg(feature = "zensim")]
-        MetricKind::Zensim => api::zensim::estimate_gpu_memory_bytes(w, h),
+        MetricKind::Zensim => {
+            let r = match _regime {
+                "basic" => api::zensim::ZensimFeatureRegime::Basic,
+                "extended" => api::zensim::ZensimFeatureRegime::Extended,
+                "withiw" => api::zensim::ZensimFeatureRegime::WithIw,
+                _ => api::zensim::ZensimFeatureRegime::WithIw,
+            };
+            api::zensim::estimate_gpu_memory_bytes(w, h, r)
+        }
         #[allow(unreachable_patterns)]
         _ => 0,
     }
@@ -284,7 +292,7 @@ fn run_cell_subprocess(
     w: u32,
     h: u32,
 ) -> CellResult {
-    let estimated = static_estimate_full_bytes(kind, w, h);
+    let estimated = static_estimate_full_bytes(kind, w, h, regime);
     let estimated_mb = if estimated == usize::MAX {
         f64::NAN
     } else {

@@ -426,8 +426,16 @@ impl ZensimOpaque {
             crate::MemoryMode::Full => {} // pass through
             crate::MemoryMode::Auto => {
                 // Validate via resolve_auto so a too-tight cap surfaces
-                // TooBigForFull before regime allocation runs.
-                let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
+                // TooBigForFull before regime allocation runs. Pass the
+                // active regime so the estimator picks the right
+                // (base, beta) pair — Extended / WithIw allocate ~3×
+                // the per-pyramid-pixel bytes of Basic.
+                let _ = crate::memory_mode::resolve_auto(
+                    width,
+                    height,
+                    params.regime,
+                    cap,
+                )?;
             }
         }
         let regime = params.regime;
