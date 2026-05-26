@@ -2773,12 +2773,48 @@ impl<R: Runtime> Cvvdp<R> {
                 // Stage 2: per-channel separable upscale of coarse →
                 // upscaled_c body. Same shape as the A plane upscale
                 // but targeting the per-channel scratch buffers.
+                //
+                // Path A Phase 1b: when `upscaled_c_strip` is allocated
+                // (StripMode::Pair builds it), write to the
+                // per-strip-sized buffer directly with NO byte_off slice
+                // — the buffer is the strip (sized `fine_w *
+                // strip_h_at_k * 4`). Each strip's iteration
+                // overwrites the buffer; the subtract_weber kernel
+                // reads it back below (same iteration) so no
+                // cross-strip dependency exists. When Phase 1b is
+                // disabled (legacy / non-Mode-B), fall back to the
+                // sliced `upscaled_c` (full-image-sized) at
+                // `byte_off_fine`.
+                let use_phase1b_upsc = scratch.upscaled_c_strip.is_some();
                 for c in 0..N_CHANNELS {
                     let coarse = self.gauss_ref[k + 1].planes[c].clone();
                     let vscratch_c_strip =
                         scratch.vscratch_c[c].clone().offset_start(byte_off_v);
-                    let upscaled_c_strip =
-                        scratch.upscaled_c[c].clone().offset_start(byte_off_fine);
+                    let (upscaled_c_strip_h, upscaled_c_strip_n) = if let Some(strips) =
+                        scratch.upscaled_c_strip.as_ref()
+                    {
+                        // Phase 1b: per-strip buffer sized
+                        // `fine_w * strip_h_at_k`. The kernel writes
+                        // strip-local rows [0..body_h) of this buffer;
+                        // rows [body_h..strip_h_at_k) (if any, on the
+                        // last strip of an unaligned fine_h) keep
+                        // their prior contents but subtract_weber's
+                        // launch geometry (`count_fine_strip`) ensures
+                        // we only iterate `body_h` rows so stale
+                        // contents above body_h are never read.
+                        let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
+                        (strips[c].clone(), n_strip_buf)
+                    } else {
+                        // Legacy / Full path: slice the full-image
+                        // `upscaled_c` at the strip's byte offset so
+                        // the kernel writes to the body row block of
+                        // the full buffer (identical to pre-Phase-1b
+                        // behaviour).
+                        (
+                            scratch.upscaled_c[c].clone().offset_start(byte_off_fine),
+                            n_strip_fine,
+                        )
+                    };
                     unsafe {
                         upscale_v_strip_kernel::launch::<R>(
                             &self.client,
@@ -2798,7 +2834,7 @@ impl<R: Runtime> Cvvdp<R> {
                             count_fine_strip.clone(),
                             cube_dim,
                             ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
-                            ArrayArg::from_raw_parts(upscaled_c_strip, n_strip_fine),
+                            ArrayArg::from_raw_parts(upscaled_c_strip_h, upscaled_c_strip_n),
                             coarse_w,
                             fine_w,
                             body_h,
@@ -2811,41 +2847,123 @@ impl<R: Runtime> Cvvdp<R> {
                 }
 
                 // Stage 3: fused subtract + Weber-contrast + log_l_bkg.
-                // Reads from FULL fine/upsc/l_bkg buffers (the strip
-                // kernel uses absolute indexing); writes to body rows
-                // of the FULL bands + log_l_bkg buffers.
-                let fine_a = self.gauss_ref[k].planes[0].clone();
-                let fine_rg = self.gauss_ref[k].planes[1].clone();
-                let fine_vy = self.gauss_ref[k].planes[2].clone();
-                let upsc_a = scratch.upscaled_c[0].clone();
-                let upsc_rg = scratch.upscaled_c[1].clone();
-                let upsc_vy = scratch.upscaled_c[2].clone();
+                //
+                // Path A Phase 1b (when `upscaled_c_strip` is set):
+                //   - `upsc_*` reads from per-strip buffers
+                //     (`upscaled_c_strip[c]`); the buffer's row 0
+                //     corresponds to logical row `body_offset_y`.
+                //   - Every OTHER input/output buffer
+                //     (fine_*, l_bkg_fine, bands_*, log_l_bkg) is
+                //     full-image-sized; we slice each via
+                //     `offset_start(byte_off_fine)` so its row 0
+                //     ALSO corresponds to logical row body_offset_y.
+                //   - The kernel's `src_strip_offset = body_offset_y`
+                //     translates the logical body row
+                //     `body_offset_y + dy_local` to buffer-local
+                //     `dy_local`, which is the right index for every
+                //     buffer in this configuration.
+                //
+                // Legacy path (when `upscaled_c_strip` is None):
+                //   - Inputs and outputs are FULL-image buffers; the
+                //     kernel reads/writes at full-image-relative
+                //     `(body_offset_y + dy_local) * w + dx`. Pass
+                //     `src_strip_offset = 0`.
+                let fine_a_full = self.gauss_ref[k].planes[0].clone();
+                let fine_rg_full = self.gauss_ref[k].planes[1].clone();
+                let fine_vy_full = self.gauss_ref[k].planes[2].clone();
                 let l_bkg_fine_full = scratch.l_bkg_fine.clone();
                 let log_l_bkg_full = log_l_bkg_dest[k].clone();
-                let band_a = bands_dest[k].planes[0].clone();
-                let band_rg = bands_dest[k].planes[1].clone();
-                let band_vy = bands_dest[k].planes[2].clone();
+                let band_a_full = bands_dest[k].planes[0].clone();
+                let band_rg_full = bands_dest[k].planes[1].clone();
+                let band_vy_full = bands_dest[k].planes[2].clone();
+
+                let (
+                    fine_a_h,
+                    fine_rg_h,
+                    fine_vy_h,
+                    upsc_a_h,
+                    upsc_rg_h,
+                    upsc_vy_h,
+                    l_bkg_fine_h,
+                    band_a_h,
+                    band_rg_h,
+                    band_vy_h,
+                    log_l_bkg_h,
+                    src_strip_off,
+                    buf_n,
+                ) = if let Some(strips) = scratch.upscaled_c_strip.as_ref() {
+                    // Phase 1b: all buffers strip-local. Slice the
+                    // full-image fine/lbkg/bands/log_l_bkg handles at
+                    // `byte_off_fine`; upsc_* is the per-strip buffer
+                    // (no slice). The kernel's read/write index is
+                    // `dy_local * w + dx` for ALL of them. The bound
+                    // we pass to `ArrayArg::from_raw_parts` is
+                    // `n_strip_fine = body_h * fine_w`, the kernel's
+                    // exact iteration count — every buffer in this
+                    // configuration has at least that many remaining
+                    // elements from its row-0 origin:
+                    //   * upsc_* strip buf is `strip_h_at_k * fine_w
+                    //     >= body_h * fine_w`.
+                    //   * sliced full-image handles have remaining
+                    //     `(fine_h - body_offset_y) * fine_w >= body_h
+                    //     * fine_w`.
+                    (
+                        fine_a_full.offset_start(byte_off_fine),
+                        fine_rg_full.offset_start(byte_off_fine),
+                        fine_vy_full.offset_start(byte_off_fine),
+                        strips[0].clone(),
+                        strips[1].clone(),
+                        strips[2].clone(),
+                        l_bkg_fine_full.offset_start(byte_off_fine),
+                        band_a_full.offset_start(byte_off_fine),
+                        band_rg_full.offset_start(byte_off_fine),
+                        band_vy_full.offset_start(byte_off_fine),
+                        log_l_bkg_full.offset_start(byte_off_fine),
+                        body_offset_y,
+                        n_strip_fine,
+                    )
+                } else {
+                    // Legacy: all buffers FULL-image; the kernel uses
+                    // full-image-relative indexing.
+                    (
+                        fine_a_full,
+                        fine_rg_full,
+                        fine_vy_full,
+                        scratch.upscaled_c[0].clone(),
+                        scratch.upscaled_c[1].clone(),
+                        scratch.upscaled_c[2].clone(),
+                        l_bkg_fine_full,
+                        band_a_full,
+                        band_rg_full,
+                        band_vy_full,
+                        log_l_bkg_full,
+                        0,
+                        n_fine,
+                    )
+                };
+                let _ = use_phase1b_upsc;
+
                 unsafe {
                     subtract_weber_3ch_strip_kernel::launch::<R>(
                         &self.client,
                         count_fine_strip.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(fine_a, n_fine),
-                        ArrayArg::from_raw_parts(fine_rg, n_fine),
-                        ArrayArg::from_raw_parts(fine_vy, n_fine),
-                        ArrayArg::from_raw_parts(upsc_a, n_fine),
-                        ArrayArg::from_raw_parts(upsc_rg, n_fine),
-                        ArrayArg::from_raw_parts(upsc_vy, n_fine),
-                        ArrayArg::from_raw_parts(l_bkg_fine_full, n_fine),
-                        ArrayArg::from_raw_parts(band_a, n_fine),
-                        ArrayArg::from_raw_parts(band_rg, n_fine),
-                        ArrayArg::from_raw_parts(band_vy, n_fine),
-                        ArrayArg::from_raw_parts(log_l_bkg_full, n_fine),
+                        ArrayArg::from_raw_parts(fine_a_h, buf_n),
+                        ArrayArg::from_raw_parts(fine_rg_h, buf_n),
+                        ArrayArg::from_raw_parts(fine_vy_h, buf_n),
+                        ArrayArg::from_raw_parts(upsc_a_h, buf_n),
+                        ArrayArg::from_raw_parts(upsc_rg_h, buf_n),
+                        ArrayArg::from_raw_parts(upsc_vy_h, buf_n),
+                        ArrayArg::from_raw_parts(l_bkg_fine_h, buf_n),
+                        ArrayArg::from_raw_parts(band_a_h, buf_n),
+                        ArrayArg::from_raw_parts(band_rg_h, buf_n),
+                        ArrayArg::from_raw_parts(band_vy_h, buf_n),
+                        ArrayArg::from_raw_parts(log_l_bkg_h, buf_n),
                         fine_w,
                         body_h,
                         body_offset_y,
                         fine_h, // logical_h (carried for API symmetry; unused)
-                        0,      // src_strip_offset: all buffers FULL-image
+                        src_strip_off,
                     );
                 }
                 self.strip_dispatch_counter
