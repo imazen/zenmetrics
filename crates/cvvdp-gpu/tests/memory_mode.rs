@@ -59,17 +59,24 @@ fn auto_errors_when_too_big_for_full() {
 
 #[test]
 fn enum_variants_match_task79_contract() {
-    // Task #79 contract: cvvdp's MemoryMode enum is
-    // `{ Auto, Full, Strip { h_body }, CappedPyramid { levels } }`.
+    // Task #79 + Round 2 contract: cvvdp's MemoryMode enum is
+    // `{ Auto, Full, Strip { h_body }, StripPair { h_body },
+    // CappedPyramid { levels } }`.
     // The capped-pyramid Strip variant rolled back in task #77 was
     // re-introduced as the standalone `CappedPyramid` variant (Option
     // B safety net, 2026-05-26) — it is **JOD-shifting** and is never
     // picked by `Auto`. The mode-E `Strip` variant landed in task
     // #79 (ref-full + per-strip dist cached-ref, JOD-preserving).
+    // The mode-B `StripPair` variant landed in Round 2 (one-shot pair
+    // stripwise, no ref cache).
     let _auto = MemoryMode::Auto;
     let _full = MemoryMode::Full;
     let _strip = MemoryMode::Strip { h_body: None };
     let _strip_explicit = MemoryMode::Strip {
+        h_body: Some(memory_mode::STRIP_H_BODY_DEFAULT),
+    };
+    let _strip_pair = MemoryMode::StripPair { h_body: None };
+    let _strip_pair_explicit = MemoryMode::StripPair {
         h_body: Some(memory_mode::STRIP_H_BODY_DEFAULT),
     };
     let _capped = MemoryMode::CappedPyramid { levels: 5 };
@@ -80,8 +87,55 @@ fn enum_variants_match_task79_contract() {
         MemoryMode::Auto => 0u32,
         MemoryMode::Full => 1u32,
         MemoryMode::Strip { .. } => 2u32,
-        MemoryMode::CappedPyramid { .. } => 3u32,
+        MemoryMode::StripPair { .. } => 3u32,
+        MemoryMode::CappedPyramid { .. } => 4u32,
     };
+}
+
+#[test]
+fn strip_pair_estimator_aligned_validation() {
+    use cvvdp_gpu::memory_mode::estimate_gpu_memory_bytes_for_mode;
+    // Unaligned h_body yields usize::MAX (estimator-level "invalid").
+    let bad = estimate_gpu_memory_bytes_for_mode(
+        1024,
+        1024,
+        MemoryMode::StripPair { h_body: Some(100) },
+    );
+    assert_eq!(bad, usize::MAX);
+    // Aligned h_body yields a real estimate.
+    let ok = estimate_gpu_memory_bytes_for_mode(
+        1024,
+        1024,
+        MemoryMode::StripPair {
+            h_body: Some(memory_mode::STRIP_H_BODY_DEFAULT),
+        },
+    );
+    assert!(ok < usize::MAX);
+    assert!(ok > 0);
+}
+
+#[test]
+fn strip_pair_estimator_smaller_than_strip_mode() {
+    use cvvdp_gpu::memory_mode::estimate_gpu_memory_bytes_for_mode;
+    // Mode B (StripPair) does NOT allocate the dedicated
+    // `RefFullState`; Mode E (Strip) does. So at equal `h_body`,
+    // Mode B's conservative bound is strictly less than Mode E's.
+    let body = Some(memory_mode::STRIP_H_BODY_DEFAULT);
+    let pair = estimate_gpu_memory_bytes_for_mode(
+        2048,
+        2048,
+        MemoryMode::StripPair { h_body: body },
+    );
+    let cached_ref = estimate_gpu_memory_bytes_for_mode(
+        2048,
+        2048,
+        MemoryMode::Strip { h_body: body },
+    );
+    assert!(
+        pair < cached_ref,
+        "Mode B ({pair}) should be smaller than Mode E ({cached_ref}) — \
+         Mode B skips RefFullState",
+    );
 }
 
 #[test]
