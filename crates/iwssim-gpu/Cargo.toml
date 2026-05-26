@@ -64,6 +64,10 @@ name = "bench_cachedref_strip"
 required-features = ["cubecl-types"]
 
 [[example]]
+name = "native_rgb_perf_probe"
+required-features = ["cubecl-types"]
+
+[[example]]
 name = "strip_memory_tally"
 
 [[example]]
@@ -92,6 +96,10 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "rgb_strip"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "rgb_strip_native"
 required-features = ["cubecl-types"]
 
 [[test]]

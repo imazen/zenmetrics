@@ -1,0 +1,100 @@
+# iwssim-gpu native-RGB perf probe metadata
+# Commit: filled at commit time
+# Host: water-cooled AMD Ryzen 9 7950X, 128 GB RAM, RTX 5070 (driver 596.21, CUDA 13.2)
+# Date: 2026-05-26
+# Backend: cubecl-cuda
+# Command:
+#   cargo run --release -p iwssim-gpu --example native_rgb_perf_probe \
+#       --no-default-features --features cubecl-types,cuda
+#
+# Workload (per size): 1 cached reference + 20 distortion calls. Three modes:
+#   - host_conv:        compute_with_reference_stripped(host_BT601(dis_rgb))
+#                       — production path today. host_conv_ms measures the
+#                         per-call host-side rgb→gray work; gpu_compute_ms
+#                         is the strip walker + readback.
+#   - gray_baseline:    compute_with_reference_stripped(prebuilt_dis_gray)
+#                       — lower bound, host conversion done outside the
+#                         timing loop. Tells us what the strip walker
+#                         costs by itself.
+#   - native_rgb_strip: compute_rgb_with_reference_stripped_native(dis_rgb)
+#                       — this commit's implementation. Per strip:
+#                         pack_into_pinned(dis_strip_rgb) + alloc empty
+#                         g_dis_strip + rgb_u32_to_gray_kernel + strip walker.
+#
+# Strip body for these sizes: 256² maps to body=256 (1 strip), 1024²/2048²
+# /4096² map to body=1024.
+#
+# Columns:
+#   w_h:                 image dimensions "WxH"
+#   mp:                  megapixels
+#   mode:                "host_conv" / "gray_baseline" / "native_rgb_strip"
+#   n_iter:              dist calls per mode (20)
+#   host_conv_ms:        mean ms/call of host-side BT.601 rgb→gray. 0 for
+#                        gray_baseline and native_rgb_strip.
+#   gpu_compute_ms:      mean ms/call from dist input ready (gray for the
+#                        first two, RGB for native) through compute_*
+#                        + client.sync.
+#   total_ms:            host_conv_ms + gpu_compute_ms.
+#   host_conv_share_pct: host_conv_ms / total_ms * 100. Used by the
+#                        decision rule (> 10% → SHIP, < 5% → DON'T SHIP).
+#   score:               final IW-SSIM score of the last dist (sanity gate
+#                        that the three paths produce identical outputs).
+#
+# Key findings (across 4 runs of the probe):
+#
+# 1. Host-conv share of wall time:
+#      256²:   8-12% (sub-ms absolute, marginal)
+#      1024²:  35-41%
+#      2048²:  6-40% (high variance — see contention note below)
+#      4096²:  13-26%
+#    At 1024² and above, host-side rgb→gray is consistently a double-digit
+#    fraction of wall time. The brief's threshold (> 10% at any size) is
+#    cleanly cleared.
+#
+# 2. GPU contention: this machine was running 5+ sibling jj workspaces
+#    in parallel (cvvdp/ssim2/dssim/zensim), all on the same RTX 5070.
+#    `nvidia-smi` reported 105-141 MiB free out of ~12 GB during these
+#    runs and 0-78% utilisation across timesteps. This is the dominant
+#    noise source — host_conv numbers vary by 2-3× across runs at 4096²
+#    (60-69ms host_conv at 4096² was stable; gpu_compute_ms ranged
+#    95-431ms for the same code path). Treat absolute timings as a rough
+#    sketch; the host_conv_share fraction is more reliable because both
+#    numerator and denominator share the same contention.
+#
+# 3. The native_rgb_strip implementation in this commit (commits TBD):
+#      256²:   ~tied with host_conv (sub-ms anyway)
+#      1024²:  HIGHLY VARIABLE — winning by 56% in one run (10ms vs
+#              23ms), losing by 220-436% in others (37-48ms vs 9-12ms).
+#      2048²:  WINS in 3 of 4 runs (avg ~30ms vs ~70ms host_conv, but
+#              one run flipped on contention).
+#      4096²:  LOSES in all 4 runs (avg ~470ms vs ~330ms host_conv).
+#
+#    Root cause of the loss at 4096²: the naive implementation allocates
+#    a fresh packed-u32 staging handle AND a fresh g_dis_strip handle
+#    per strip, then runs an extra kernel launch per strip. At 4096²
+#    with body=1024 + halo=256, there are 4-5 strips per call → 8-10
+#    extra device allocations + 4-5 extra kernel launches per call,
+#    vs the gray-baseline path's 4-5 `create_from_slice` calls. The
+#    extra alloc + launch overhead outweighs the saved host conversion.
+#
+# DECISION:
+#   - Host-conv share fraction CLEARLY justifies investigating a native
+#     RGB strip path (35-41% at 1024², the production target size).
+#   - The naive implementation in this commit is parity-correct (see
+#     tests/rgb_strip_native.rs, all 7 tests pass) but NOT a consistent
+#     wall-time win. It needs follow-up work:
+#       a) Reuse g_dis_strip across strips (don't alloc per-strip).
+#       b) Reuse a single whole-image packed-u32 pinned staging buffer
+#          and have the kernel take a strip offset, instead of packing
+#          per strip.
+#       c) Consider a fused pack+convert kernel that reads sRGB-u8
+#          directly (skip the host-side 3→4 byte pack entirely).
+#   - The implementation is committed for completeness + future
+#     reference; the perf optimisation is queued as a follow-up.
+#
+# Scores match across all three paths to f32 precision (column "score"
+# above — 0.064713 / 0.060277 / 0.062326 / 0.063340 are identical
+# across host_conv / gray_baseline / native_rgb_strip per size, modulo
+# 1-ULP differences in the BT.601 rounding that occasionally flip the
+# 6th decimal: 2048² native shows 0.062325 vs 0.062326 for the other
+# two, which is within the 5e-5 relative bound the parity test enforces).

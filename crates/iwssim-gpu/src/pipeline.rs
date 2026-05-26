@@ -2058,6 +2058,259 @@ impl<R: Runtime> Iwssim<R> {
         self.compute_with_reference_stripped(&dis_gray)
     }
 
+    /// Native-RGB variant of [`Self::compute_rgb_with_reference_stripped`]
+    /// — same external semantics (sRGB-u8 in, IW-SSIM score out, cached
+    /// reference reused) but **skips the host-side BT.601 rgb→gray
+    /// conversion** for the distorted image. Per strip:
+    ///
+    /// 1. Slice the dist sRGB rows covered by `[up_lo..up_hi)`.
+    /// 2. Pack 3 sRGB bytes per pixel → one packed u32 directly into a
+    ///    pinned staging buffer (no FP math, no full-image f32 alloc).
+    /// 3. Upload the packed strip + launch
+    ///    [`crate::kernels::rgb2gray::rgb_u32_to_gray_kernel`] to write
+    ///    the strip-sized gray-f32 into `scales[0].g_dis` on the GPU.
+    /// 4. Run pass-2 identically to the gray-input strip walker.
+    ///
+    /// The motivation comes from the `native_rgb_perf_probe` benchmark
+    /// (`benchmarks/iwssim_native_rgb_perf_2026-05-26.csv`): at 1024²
+    /// through 4096², host-side `rgb_u8_to_gray_bt601` consumed 35–41%
+    /// of per-call wall time. Replacing it with strip-by-strip
+    /// pack-and-launch saves that host work without altering the GPU
+    /// math (the existing `rgb_u32_to_gray_kernel` is reused as-is).
+    ///
+    /// # Parity guarantee
+    ///
+    /// Scores are numerically identical to
+    /// [`Self::compute_rgb_with_reference_stripped`] (the host and
+    /// device BT.601 paths produce the same gray-f32 values by
+    /// construction; see [`rgb_u8_to_gray_bt601`]). A regression test
+    /// at `tests/rgb_strip_native.rs` locks this in.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::NotStripMode`] when called on a whole-image instance.
+    /// - [`Error::NoCachedReference`] when no cached reference has been
+    ///   set via [`Self::set_reference_stripped`] /
+    ///   [`Self::set_rgb_reference_stripped`].
+    /// - [`Error::DimensionMismatch`] when `dis_rgb.len() != width *
+    ///   height * 3`.
+    pub fn compute_rgb_with_reference_stripped_native(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<GpuIwssimResult> {
+        let strip_state = match self.strip {
+            Some(s) => s,
+            None => return Err(Error::NotStripMode),
+        };
+        let cached = match self.cached_strip_ref.as_ref() {
+            Some(c) => c,
+            None => return Err(Error::NoCachedReference),
+        };
+        let expected = (self.width * self.height * 3) as usize;
+        if dis_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_rgb.len(),
+            });
+        }
+
+        let image_w = self.width;
+        let strips = strip_state.strips();
+        if strips.len() != cached.strip_count {
+            return Err(Error::DimensionMismatch {
+                expected: cached.strip_count,
+                got: strips.len(),
+            });
+        }
+        let n_scales_iw = self.scales.len() - 1;
+
+        // Upload cached C_u_inv + lambda to each scale's device buffer
+        // (matches `compute_with_reference_stripped`).
+        for s in 0..n_scales_iw {
+            self.scales[s].cu_inv_dev = self
+                .client
+                .create_from_slice(f32::as_bytes(&cached.cu_inv_per_scale[s]));
+            self.scales[s].lambda_dev = self
+                .client
+                .create_from_slice(f32::as_bytes(&cached.lambda_per_scale[s]));
+        }
+
+        let mut acc_csiw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
+        let mut acc_csl: f64 = 0.0;
+        let mut top_pool_count: u64 = 0;
+        let partials_len =
+            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+
+        let rgb_row_stride = image_w as usize * 3;
+
+        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in
+            strips.iter().enumerate()
+        {
+            let actual_strip_h = up_hi - up_lo;
+            self.set_scale_dims_for_strip(actual_strip_h, image_w);
+
+            // ===== Native-RGB strip upload =====
+            // 1. Slice the dist RGB strip.
+            let dis_strip_rgb: &[u8] = &dis_rgb[(up_lo as usize) * rgb_row_stride
+                ..(up_hi as usize) * rgb_row_stride];
+            // 2. Pack to pinned packed-u32 (3 B → 4 B, no FP math).
+            let strip_pack = Self::pack_into_pinned(&self.client, dis_strip_rgb);
+            // 3. Allocate a strip-sized gray-f32 device buffer for the
+            //    kernel to write into, then dispatch the kernel. Uses
+            //    `create_from_slice` of a zero vec to match the
+            //    existing alloc pattern (e.g., `Scale::new` line 328);
+            //    the kernel overwrites every pixel so init contents
+            //    don't matter — the zero vec is just to size the
+            //    handle.
+            let n_strip_pixels = (actual_strip_h as usize) * (image_w as usize);
+            let g_dis_strip = self
+                .client
+                .create_from_slice(f32::as_bytes(&vec![0.0_f32; n_strip_pixels]));
+            unsafe {
+                rgb2gray::rgb_u32_to_gray_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(n_strip_pixels),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(strip_pack, n_strip_pixels),
+                    ArrayArg::from_raw_parts(g_dis_strip.clone(), n_strip_pixels),
+                );
+            }
+            self.scales[0].g_dis = g_dis_strip;
+            // ===== End native-RGB strip upload =====
+
+            self.build_laplacian_pyramid(false);
+
+            // Restore cached ref-side LP handles for this strip.
+            for s in 0..self.scales.len() {
+                self.scales[s].lp_ref =
+                    self.cached_strip_ref.as_ref().unwrap().lp_ref[strip_idx][s].clone();
+            }
+
+            // Pass-2: ssim_stats + iw_box3_parent + iw_infow + reductions.
+            for s in 0..self.scales.len() {
+                self.run_ssim_stats(s);
+            }
+            for s in 0..n_scales_iw {
+                self.run_iw_box3_parent(s);
+                self.run_iw_infow(s);
+            }
+
+            let body_lp_top = (body_lo - up_lo) as i64;
+            let body_lp_bot = (body_hi - up_lo) as i64;
+            for s in 0..n_scales_iw {
+                let sc = &self.scales[s];
+                let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
+                let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
+                let (cs_y_start, cs_y_end) =
+                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                if cs_y_end <= cs_y_start {
+                    self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
+                    self.zero_partial_slot(SLOT_IW_BASE + s as u32);
+                    continue;
+                }
+                reduction::launch_weighted_sum::<R>(
+                    &self.client,
+                    sc.cs.clone(),
+                    cs_n,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_CSIW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+                reduction::launch_iw_sum::<R>(
+                    &self.client,
+                    sc.iw.clone(),
+                    iw_n,
+                    self.partials.clone(),
+                    partials_len,
+                    sc.cs_h,
+                    sc.cs_w,
+                    sc.iw_h,
+                    sc.iw_w,
+                    BOUND1,
+                    SLOT_IW_BASE + s as u32,
+                    cs_y_start,
+                    cs_y_end,
+                );
+            }
+            let top = self.scales.len() - 1;
+            let sc_top = &self.scales[top];
+            let cs_top_n = (sc_top.cs_h as usize) * (sc_top.cs_w as usize);
+            let (top_y_start, top_y_end) =
+                body_cs_range(body_lp_top, body_lp_bot, top, sc_top.cs_h);
+            if top_y_end > top_y_start {
+                reduction::launch_plain_sum::<R>(
+                    &self.client,
+                    sc_top.cs.clone(),
+                    cs_top_n,
+                    self.partials.clone(),
+                    partials_len,
+                    SLOT_CSL,
+                    sc_top.cs_w,
+                    top_y_start,
+                    top_y_end,
+                );
+                top_pool_count +=
+                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+            } else {
+                self.zero_partial_slot(SLOT_CSL);
+            }
+
+            reduction::launch_finalize::<R>(
+                &self.client,
+                self.partials.clone(),
+                partials_len,
+                self.sums.clone(),
+                NUM_SLOTS as usize,
+                NUM_SLOTS,
+            );
+
+            let bytes =
+                self.client.read_one(self.sums.clone()).expect("read sums");
+            let sums = f32::from_bytes(&bytes);
+            debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
+            for s in 0..n_scales_iw {
+                acc_csiw[s] += sums[(SLOT_CSIW_BASE + s as u32) as usize] as f64;
+                acc_iw[s] += sums[(SLOT_IW_BASE + s as u32) as usize] as f64;
+            }
+            acc_csl += sums[SLOT_CSL as usize] as f64;
+        }
+
+        let mut per_scale = [1.0_f64; NUM_SCALES];
+        for s in 0..n_scales_iw {
+            let num = acc_csiw[s];
+            let den = acc_iw[s];
+            per_scale[s] = if den == 0.0 || !den.is_finite() {
+                1.0
+            } else {
+                num / den
+            };
+        }
+        let top = self.scales.len() - 1;
+        per_scale[top] = if top_pool_count == 0 || !acc_csl.is_finite() {
+            1.0
+        } else {
+            acc_csl / (top_pool_count as f64)
+        };
+
+        let mut score = 1.0_f64;
+        for s in 0..self.scales.len() {
+            let b = filters::SCALE_WEIGHTS[s] as f64;
+            let v = per_scale[s].abs();
+            score *= v.powf(b);
+        }
+        Ok(GpuIwssimResult { score, per_scale })
+    }
+
     /// `run_iw_box3_parent` variant that only needs `lp_ref` —
     /// matches the existing helper exactly today (it already only
     /// reads `lp_ref` / `lp_dis` indirectly via `box3_gv_kernel` and

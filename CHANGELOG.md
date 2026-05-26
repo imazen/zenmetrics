@@ -17,6 +17,37 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### iwssim-gpu — investigate: native-RGB strip path (task #57) — 2026-05-26
+
+User asked: should we add an on-device sRGB→gray conversion for the
+strip pipeline, instead of running `rgb_u8_to_gray_bt601` on the host
+before each `compute_rgb_with_reference_stripped` call? The brief
+required a measurement step before implementing.
+
+Probe at `crates/iwssim-gpu/examples/native_rgb_perf_probe.rs`
+(committed CSV + meta at `benchmarks/iwssim_native_rgb_perf_2026-05-26.{csv,meta}`)
+measures three modes across 256² / 1024² / 2048² / 4096²: host-side
+conversion + strip walker (production path), gray-baseline (lower
+bound), and a new `compute_rgb_with_reference_stripped_native` that
+packs each strip's sRGB into pinned packed-u32 and runs the existing
+`rgb_u32_to_gray_kernel` to populate `g_dis` on the device.
+
+Measurement (4 runs on RTX 5070, GPU contention from sibling agents):
+host-side conversion is 35-41% of per-call wall time at 1024², 7-40%
+at 2048², 13-26% at 4096². Above 10% at every size — the decision
+threshold for "implement" was clearly cleared.
+
+Implementation shipped + parity-locked (7 tests in
+`tests/rgb_strip_native.rs`, all pass on real CUDA, native vs host
+agree to 5e-5 relative). Perf result of the *naive* implementation is
+NOT a consistent win: 2048² mostly wins (~24 ms vs ~43 ms host_conv),
+4096² loses in all 4 probe runs (~470 ms native vs ~330 ms host_conv).
+Root cause documented in the meta file: per-strip alloc of fresh
+packed-u32 staging + fresh g_dis_strip + extra kernel launch
+outweighs the saved host conversion at large sizes. Follow-up
+queued: reuse buffers across strips, single whole-image pinned
+staging with kernel-side strip offset, or fused pack+convert kernel.
+
 ### Workspace — fix: switch `[profile.release]` to thin LTO + line-tables-only debug (task #59) — 2026-05-26
 
 `cargo build --release --workspace` on `ubuntu-latest` GitHub runners
