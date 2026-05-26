@@ -327,7 +327,8 @@ fn compare_372(
 
 // ───────────────────────── fixture sweep ─────────────────────────
 
-// Fixture sizes chosen to span:
+// Fixture sizes chosen to span the kernel-launch shape space:
+//
 //   - 64×64   — minimum where the 4-scale pyramid stays well above
 //               the 8×8 floor.
 //   - 192×192 — multi-strip on the CPU 32-row strip layout; each
@@ -336,11 +337,12 @@ fn compare_372(
 //               catches per-scale `div_ceil(2)` halving + edge
 //               handling.
 //
-// Larger / non-pow-2 sizes such as 257² would expose an
-// `attempt to subtract with overflow` panic at
-// `../zensim--principled-activity/zensim/src/blur.rs:217` (a CPU-side
-// box-blur boundary handling bug in the path-pinned crate). The
-// sizes above all stay inside the safe band.
+// Avoid sizes whose scale-3 (the smallest pyramid level) drops below
+// the CPU box-blur radius (r = 5) — e.g. an h = 7 input would have
+// scale-3 height ~ 0, but at h = 6 the AVX-512 vertical blur's
+// boundary handler underflows
+// (`2*(height-1) - add_raw` in `box_blur_v_copy_inner_v4x`). All the
+// sizes above stay safely above that band.
 const SIZES: &[(u32, u32)] = &[(64, 64), (192, 192), (320, 240)];
 
 #[derive(Debug, Clone, Copy)]

@@ -96,16 +96,16 @@ codegen-units = 1
 # re-collects with the post-W44 RD curves rather than reusing
 # the pre-W44 cached sidecars.
 [patch.crates-io]
-# Local worktree of feat/principled-activity (HEAD = e16d541a as of
-# 2026-05-17) to avoid needing a published zenpredict for the git-rev
-# patch to resolve. The sibling worktree is at
-# ../zensim--principled-activity which has the zenpredict path dep that
-# resolves locally.
+# Local sibling of the canonical zensim repo. The feat/principled-activity
+# branch landed on main weeks ago — the previous path-pin to
+# ../zensim--principled-activity was carrying a stale checkout that
+# would drift behind canonical on every push. Pointing at
+# ../zensim/zensim (canonical main) means a `jj git fetch` in the
+# zensim repo bubbles up to zenmetrics builds automatically.
 #
-# Equivalent git ref (use post-merge when the sibling worktree is gone,
-# AND after zensim's Cargo.toml has a git-ref zenpredict dep):
-#   { git = "https://github.com/imazen/zensim", rev = "e16d541ad752b59c758d5c0cd271eba71f931340" }
-zensim = { path = "../zensim--principled-activity/zensim" }
+# Equivalent git ref (use when the sibling checkout is gone):
+#   { git = "https://github.com/imazen/zensim", rev = "<commit>" }
+zensim = { path = "../zensim/zensim" }
 # 2026-05-19: switched codec deps from crates.io + git-rev to local
 # sibling worktrees so we always pick up in-flight improvements.
 # User confirmed: "jxl encoder local has been improved, verify no
