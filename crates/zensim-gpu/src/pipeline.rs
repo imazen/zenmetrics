@@ -923,6 +923,9 @@ impl<R: Runtime> Zensim<R> {
                 s.n_strips,
                 s.partials_f64_off as u32,
                 s.partials_max_off as u32,
+                // Full-image: every row contributes.
+                0u32,
+                s.h,
             );
         }
     }
@@ -970,6 +973,9 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_f64_off as u32,
                 s.partials_max_off as u32,
                 pad_total as u32,
+                // Full-image: every row contributes.
+                0u32,
+                s.h,
             );
         }
     }
@@ -1027,6 +1033,9 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_ext_off as u32,
                 do_ext,
                 do_iw,
+                // Full-image: every row contributes.
+                0u32,
+                s.h,
             );
         }
     }

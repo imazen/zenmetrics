@@ -125,6 +125,14 @@ pub fn masked_iw_strip_kernel(
     slot_off_ext_f64: u32,
     do_ext: u32, // 0 or 1
     do_iw: u32,  // 0 or 1
+    // Body-row range gate (relative to this kernel's buffer y-coord
+    // system, i.e. `[0, height)` where height = strip_alloc_h in
+    // strip mode or image_h in full mode). Halo rows still drive the
+    // strip-local mu1/activity computation; their per-pixel feature
+    // contributions are not accumulated. Full-image callers pass
+    // `(0, height)`.
+    y_body_start: u32,
+    y_body_end: u32,
 ) {
     let tx = UNIT_POS_X;
     let col_block = CUBE_POS_X;
@@ -292,8 +300,16 @@ pub fn masked_iw_strip_kernel(
         // planes (image-wide-correct values). Skip everything else for
         // overlap rows — they only matter as inputs to the activity
         // V-blur slide.
+        //
+        // Strip-mode walker: also gate on the body row range. The
+        // image-strip-level body row range is in the SAME coordinate
+        // system as the kernel's `height` axis (the strip allocation
+        // is `strip_alloc_h` rows; body is `[y_body_start, y_body_end)`
+        // within that).
         let is_inner_row = sy >= inner_off && sy < inner_off + inner_h;
-        if is_inner_row && in_bounds {
+        let gy_check = strip_top + sy;
+        let is_body_row = gy_check >= y_body_start && gy_check < y_body_end;
+        if is_inner_row && is_body_row && in_bounds {
             let gy = strip_top + sy;
             let off = (gy as usize) * w + (col as usize);
 

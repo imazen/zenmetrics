@@ -91,6 +91,7 @@ const C2: f32 = 0.0009;
 const INV_DIAM: f32 = 1.0 / 11.0;
 
 #[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
 pub fn fused_features_kernel(
     src_a: &Array<f32>,
     dst_a: &Array<f32>,
@@ -105,6 +106,14 @@ pub fn fused_features_kernel(
     n_strips: u32,
     slot_off_f64: u32,
     slot_off_max: u32,
+    // Body-row range gate. Full-image callers pass `(0, height)` —
+    // every row contributes. Strip-mode callers pass the body region
+    // for the current image strip; halo rows still participate in the
+    // V-blur sliding window (so mu1/mu2/etc. at body rows are
+    // image-correct) but their per-pixel feature contributions are
+    // NOT accumulated into `a0..a16` / `peak0..peak2`.
+    y_body_start: u32,
+    y_body_end: u32,
 ) {
     let tx = UNIT_POS_X;
     let col_block = CUBE_POS_X;
@@ -287,14 +296,6 @@ pub fn fused_features_kernel(
         let sd = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
-        a0 += sd as f64;
-        a1 += sd4 as f64;
-        a2 += sd2 as f64;
-        a14 += (sd4 * sd4) as f64;
-        if sd > peak0 {
-            peak0 = sd;
-        }
-
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
@@ -304,30 +305,46 @@ pub fn fused_features_kernel(
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        a3 += artifact as f64;
-        a4 += a4_v as f64;
-        a5 += a2_v as f64;
-        a6 += detail_lost as f64;
-        a7 += dl4 as f64;
-        a8 += dl2 as f64;
-        a15 += (a4_v * a4_v) as f64;
-        a16 += (dl4 * dl4) as f64;
-        if artifact > peak1 {
-            peak1 = artifact;
-        }
-        if detail_lost > peak2 {
-            peak2 = detail_lost;
-        }
-
         let vs = sv - mu1;
         let vd = dv - mu2;
-        a10 += (vs * vs) as f64;
-        a11 += (vd * vd) as f64;
-        a12 += diff1 as f64;
-        a13 += diff2 as f64;
-
         let pd = sv - dv;
-        a9 += (pd * pd) as f64;
+
+        // Gate per-pixel feature accumulation on the body-row range.
+        // Halo rows still drive the V-blur sliding sums (correctness of
+        // mu1/mu2/ssq/s12 at body rows); they just don't add to
+        // a0..a16 / peak0..peak2.
+        let is_body = y >= y_body_start && y < y_body_end;
+        if is_body {
+            a0 += sd as f64;
+            a1 += sd4 as f64;
+            a2 += sd2 as f64;
+            a14 += (sd4 * sd4) as f64;
+            if sd > peak0 {
+                peak0 = sd;
+            }
+
+            a3 += artifact as f64;
+            a4 += a4_v as f64;
+            a5 += a2_v as f64;
+            a6 += detail_lost as f64;
+            a7 += dl4 as f64;
+            a8 += dl2 as f64;
+            a15 += (a4_v * a4_v) as f64;
+            a16 += (dl4 * dl4) as f64;
+            if artifact > peak1 {
+                peak1 = artifact;
+            }
+            if detail_lost > peak2 {
+                peak2 = detail_lost;
+            }
+
+            a10 += (vs * vs) as f64;
+            a11 += (vd * vd) as f64;
+            a12 += diff1 as f64;
+            a13 += diff2 as f64;
+
+            a9 += (pd * pd) as f64;
+        }
 
         // Slide: subtract slot's old H-blur from sums, compute new
         // H-blur for row mirror(y + R + 1), add to sums, write to
@@ -482,6 +499,13 @@ pub fn fused_features_kernel_persist(
     slot_off_f64: u32,
     slot_off_max: u32,
     pad_total: u32,
+    // Body-row range gate (see `fused_features_kernel`'s docstring for
+    // semantics). Full-image callers pass `(0, height)`. Persist
+    // planes are written for EVERY row regardless — the masked-IW
+    // kernel needs them at body rows AND halo rows of an *adjacent*
+    // image strip's body, so we cannot gate persist writes here.
+    y_body_start: u32,
+    y_body_end: u32,
 ) {
     let tx = UNIT_POS_X;
     let col_block = CUBE_POS_X;
@@ -659,14 +683,6 @@ pub fn fused_features_kernel_persist(
         let sd = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
-        a0 += sd as f64;
-        a1 += sd4 as f64;
-        a2 += sd2 as f64;
-        a14 += (sd4 * sd4) as f64;
-        if sd > peak0 {
-            peak0 = sd;
-        }
-
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
@@ -676,30 +692,42 @@ pub fn fused_features_kernel_persist(
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        a3 += artifact as f64;
-        a4 += a4_v as f64;
-        a5 += a2_v as f64;
-        a6 += detail_lost as f64;
-        a7 += dl4 as f64;
-        a8 += dl2 as f64;
-        a15 += (a4_v * a4_v) as f64;
-        a16 += (dl4 * dl4) as f64;
-        if artifact > peak1 {
-            peak1 = artifact;
-        }
-        if detail_lost > peak2 {
-            peak2 = detail_lost;
-        }
-
         let vs = sv - mu1;
         let vd = dv - mu2;
-        a10 += (vs * vs) as f64;
-        a11 += (vd * vd) as f64;
-        a12 += diff1 as f64;
-        a13 += diff2 as f64;
-
         let pd = sv - dv;
-        a9 += (pd * pd) as f64;
+
+        let is_body = y >= y_body_start && y < y_body_end;
+        if is_body {
+            a0 += sd as f64;
+            a1 += sd4 as f64;
+            a2 += sd2 as f64;
+            a14 += (sd4 * sd4) as f64;
+            if sd > peak0 {
+                peak0 = sd;
+            }
+
+            a3 += artifact as f64;
+            a4 += a4_v as f64;
+            a5 += a2_v as f64;
+            a6 += detail_lost as f64;
+            a7 += dl4 as f64;
+            a8 += dl2 as f64;
+            a15 += (a4_v * a4_v) as f64;
+            a16 += (dl4 * dl4) as f64;
+            if artifact > peak1 {
+                peak1 = artifact;
+            }
+            if detail_lost > peak2 {
+                peak2 = detail_lost;
+            }
+
+            a10 += (vs * vs) as f64;
+            a11 += (vd * vd) as f64;
+            a12 += diff1 as f64;
+            a13 += diff2 as f64;
+
+            a9 += (pd * pd) as f64;
+        }
 
         // Slide
         let buf_idx = (slot * TX + tx) as usize;
