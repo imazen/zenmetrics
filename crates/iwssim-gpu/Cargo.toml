@@ -12,10 +12,15 @@ publish = false
 
 [features]
 default = ["cuda", "wgpu", "cpu", "pixels"]
-cuda = ["cubecl/cuda"]
-wgpu = ["cubecl/wgpu"]
-hip = ["cubecl/hip"]
-cpu = ["cubecl/cpu"]
+# Consistency with sibling metric crates: runtime features imply
+# `cubecl-types`. iwssim folds its typed surface into `pipeline.rs`
+# rather than a separate strip module, so cuda-only already
+# compiled — but uniformity matters for umbrella + downstream
+# consumers.
+cuda = ["cubecl/cuda", "cubecl-types"]
+wgpu = ["cubecl/wgpu", "cubecl-types"]
+hip = ["cubecl/hip", "cubecl-types"]
+cpu = ["cubecl/cpu", "cubecl-types"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Exposes the generic typed Iwssim<R>. Off by default.

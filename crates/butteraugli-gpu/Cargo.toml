@@ -12,10 +12,14 @@ publish = false
 
 [features]
 default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
-cuda = ["cubecl/cuda"]
-wgpu = ["cubecl/wgpu"]
-hip = ["cubecl/hip"]
-cpu = ["cubecl/cpu"]
+# Runtime features imply `cubecl-types` because `memory_mode.rs` and
+# `pipeline.rs` reference `crate::strip::*` unconditionally; without
+# this implication `cargo check -p butteraugli-gpu --features cuda`
+# fails with E0433 "cannot find `strip` in the crate root".
+cuda = ["cubecl/cuda", "cubecl-types"]
+wgpu = ["cubecl/wgpu", "cubecl-types"]
+hip = ["cubecl/hip", "cubecl-types"]
+cpu = ["cubecl/cpu", "cubecl-types"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Exposes the generic typed `Butteraugli<R: Runtime>` API publicly.

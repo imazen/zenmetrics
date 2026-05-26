@@ -15,10 +15,13 @@ publish = false
 
 [features]
 default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
-cuda = ["cubecl/cuda"]
-wgpu = ["cubecl/wgpu"]
-hip  = ["cubecl/hip"]
-cpu  = ["cubecl/cpu"]
+# Runtime features imply `cubecl-types` so doctests / examples that
+# import `Dssim<R>` directly (or `cubecl::wgpu::WgpuRuntime`) compile
+# when any backend feature is enabled.
+cuda = ["cubecl/cuda", "cubecl-types"]
+wgpu = ["cubecl/wgpu", "cubecl-types"]
+hip  = ["cubecl/hip",  "cubecl-types"]
+cpu  = ["cubecl/cpu",  "cubecl-types"]
 # Opaque-API zenpixels integration. Adds `compute_pixels(PixelSlice,
 # PixelSlice)` to `DssimOpaque`. On by default — the conversion path
 # is per-call (only allocates when format mismatches), the fast path

@@ -12,10 +12,13 @@ publish = false
 
 [features]
 default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
-cuda = ["cubecl/cuda"]
-wgpu = ["cubecl/wgpu"]
-hip  = ["cubecl/hip"]
-cpu  = ["cubecl/cpu"]
+# Runtime features imply `cubecl-types` so examples / tests that
+# import `Zensim<R>` directly compile when any backend feature is
+# enabled.
+cuda = ["cubecl/cuda", "cubecl-types"]
+wgpu = ["cubecl/wgpu", "cubecl-types"]
+hip  = ["cubecl/hip",  "cubecl-types"]
+cpu  = ["cubecl/cpu",  "cubecl-types"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Exposes the generic typed Zensim<R>. Off by default.
