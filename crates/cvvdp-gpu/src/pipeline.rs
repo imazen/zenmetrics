@@ -3935,6 +3935,19 @@ impl<R: Runtime> Cvvdp<R> {
         // per Cvvdp config, so compute once outside the band loop.
         let pu_scale = 10.0_f32.powf(MASK_C);
 
+        // Mode E (StripMode::CachedRef) reads REF-side band data + REF
+        // log_l_bkg straight from `RefFullState` — the dedicated buffer
+        // populated once by `warm_reference`. Modes Full and B both
+        // dispatch a fresh REF Weber pyramid per call into the shared
+        // `bands_ref` / `weber_scratch[k].log_l_bkg` scratch, so they
+        // read from there. The mode-dependent source resolution is
+        // hoisted out of the per-band hot loop into a const closure /
+        // bool so the band loop body stays uniform.
+        let mode_e = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::CachedRef, .. }),
+        );
+
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
             let is_baseband = k == n_levels - 1;
@@ -3946,11 +3959,17 @@ impl<R: Runtime> Cvvdp<R> {
             let t_band = std::time::Instant::now();
 
             // log_l_bkg source:
-            // - Non-baseband bands: read directly from the GPU-resident
-            //   `weber_scratch[k].log_l_bkg` handle (REF data, written
-            //   during the REF weber dispatch above). Tick 166 skips
-            //   the host roundtrip — was reading back ~64 MB at 12 MP
-            //   then re-uploading the same bytes per band.
+            // - Non-baseband bands:
+            //   * Modes Full and B: read directly from the GPU-resident
+            //     `weber_scratch[k].log_l_bkg` handle (REF data, written
+            //     during the REF weber dispatch above). Tick 166 skips
+            //     the host roundtrip — was reading back ~64 MB at 12 MP
+            //     then re-uploading the same bytes per band.
+            //   * Mode E: read from `ref_full_state.log_l_bkg[k]` — the
+            //     dedicated buffer populated by `warm_reference`. Avoids
+            //     the per-call copy from `RefFullState` back into
+            //     `weber_scratch` that the Phase 2 snapshot/restore
+            //     fallback used to do.
             // - Baseband: GPU fill the pre-allocated
             //   `self.baseband_log_l_bkg` buffer with the scalar
             //   `log_l_bkg_baseband`. Tick 168 replaces the per-JOD
@@ -3971,6 +3990,16 @@ impl<R: Runtime> Cvvdp<R> {
                     );
                 }
                 self.baseband_log_l_bkg.clone()
+            } else if mode_e {
+                // Mode E: read from RefFullState. Safe to unwrap — the
+                // outer dispatcher (`compute_dkl_jod_with_warm_ref` etc)
+                // surfaces `Error::NoWarmReference` when `ref_full_state`
+                // is None before reaching here.
+                self.ref_full_state
+                    .as_ref()
+                    .expect("Mode E: ref_full_state must be Some before band loop")
+                    .log_l_bkg[k]
+                    .clone()
             } else {
                 self.weber_scratch[k].log_l_bkg.clone()
             };
@@ -4013,18 +4042,42 @@ impl<R: Runtime> Cvvdp<R> {
             // Fused 6-channel CSF apply: one launch runs both sides
             // (REF + DIST) and shares the per-pixel LUT bracket math.
             // After tick 154's bands_ref/bands_dis split, both
-            // sides' weber data lives on GPU at band-loop time —
-            // REF in `self.bands_ref[k]`, DIST in `self.bands_dis[k]`.
+            // sides' weber data lives on GPU at band-loop time:
+            // - Modes Full and B: REF in `self.bands_ref[k]` (re-dispatched
+            //   per call by `_dispatch_ref_weber_pyramid_only`).
+            // - Mode E: REF in `self.ref_full_state.bands[k]` (snapshotted
+            //   once by `warm_reference`). The kernel reads the same
+            //   shape and stride, only the source handle differs.
+            // DIST in `self.bands_dis[k]` regardless.
             // No host upload needed.
+            let band_ref_a = if mode_e {
+                self.ref_full_state
+                    .as_ref()
+                    .expect("Mode E: ref_full_state must be Some")
+                    .bands[k][0]
+                    .clone()
+            } else {
+                self.bands_ref[k].planes[0].clone()
+            };
+            let band_ref_rg = if mode_e {
+                self.ref_full_state.as_ref().expect("checked above").bands[k][1].clone()
+            } else {
+                self.bands_ref[k].planes[1].clone()
+            };
+            let band_ref_vy = if mode_e {
+                self.ref_full_state.as_ref().expect("checked above").bands[k][2].clone()
+            } else {
+                self.bands_ref[k].planes[2].clone()
+            };
             {
                 unsafe {
                     csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
                         count.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[0].clone(), n_px),
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[1].clone(), n_px),
-                        ArrayArg::from_raw_parts(self.bands_ref[k].planes[2].clone(), n_px),
+                        ArrayArg::from_raw_parts(band_ref_a, n_px),
+                        ArrayArg::from_raw_parts(band_ref_rg, n_px),
+                        ArrayArg::from_raw_parts(band_ref_vy, n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[0].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[1].clone(), n_px),
                         ArrayArg::from_raw_parts(self.bands_dis[k].planes[2].clone(), n_px),
@@ -4091,22 +4144,27 @@ impl<R: Runtime> Cvvdp<R> {
                     scratch_d.d[2].clone(),
                 ];
                 let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
-                // Mode B: per-band per-strip dispatch of the masking
-                // chain (min_abs → pu_blur_h → pu_blur_v → mult_mutual).
-                // The V-blur is the only kernel with Y-axis dependency;
-                // we dispatch the whole chain over a halo-padded strip
-                // window so the per-strip V-blur reads correct rows of
-                // m_mid (populated by per-strip h-blur on the same
-                // window). mult_mutual processes ONLY body rows so the
-                // d band buffer stays valid. See
-                // _run_band_masking_strip_walker docstring for the
-                // halo-padded buffer convention.
-                let mode_b = matches!(
-                    self.strip_config,
-                    Some(StripConfig { mode: StripMode::Pair, .. }),
-                );
+                // Mode B (StripPair) and Mode E (CachedRef): per-band
+                // per-strip dispatch of the masking chain (min_abs →
+                // pu_blur_h → pu_blur_v → mult_mutual). The V-blur is
+                // the only kernel with Y-axis dependency; we dispatch
+                // the whole chain over a halo-padded strip window so
+                // the per-strip V-blur reads correct rows of m_mid
+                // (populated by per-strip h-blur on the same window).
+                // mult_mutual processes ONLY body rows so the d band
+                // buffer stays valid. See _run_band_masking_strip_walker
+                // docstring for the halo-padded buffer convention.
+                //
+                // Both Mode B and Mode E share this walker — the only
+                // per-mode difference is the REF source (Mode B writes
+                // bands_ref per call via the ref weber dispatch; Mode
+                // E reads from `RefFullState` populated once by
+                // `warm_reference`). That difference lives in
+                // `_band_loop_ref_handles` above; the masking chain
+                // consumes the same t_p_ref / t_p_dis handles regardless.
+                let any_strip_mode = self.strip_config.is_some();
                 unsafe {
-                    if use_blur && mode_b {
+                    if use_blur && any_strip_mode {
                         let m_raw_h: [cubecl::server::Handle; 3] = [
                             transient.m_raw[0].clone(),
                             transient.m_raw[1].clone(),
@@ -5206,84 +5264,21 @@ impl<R: Runtime> Cvvdp<R> {
         Ok(())
     }
 
-    /// Restore the dedicated [`RefFullState`] back into the shared
-    /// `bands_ref` / `weber_scratch[k].log_l_bkg` / `gauss_ref[last]`
-    /// scratch ahead of a strip-mode cached-ref dispatch. The shared
-    /// scratch is what every downstream kernel reads from, so this
-    /// "rebind" step is what makes the cached ref state survive
-    /// intervening one-shot scoring calls.
-    ///
-    /// Returns the cached baseband `log10(L_bkg)` scalar so the caller
-    /// can pass it into the band loop without re-deriving it.
-    fn _restore_ref_state_from_full(&mut self) -> Result<f32> {
-        let scalar = self
-            .ref_full_state
-            .as_ref()
-            .ok_or(Error::NoWarmReference)?
-            .baseband_log_l_bkg_scalar;
-        let n_levels = self.n_levels as usize;
-        let cube_dim = CubeDim::new_1d(64);
-        let mut w = self.width;
-        let mut h = self.height;
-        for k in 0..n_levels {
-            let n = (w as usize) * (h as usize);
-            let count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
-            // Borrow state through a fresh ref so we can also access
-            // self.bands_ref / weber_scratch (different fields, no
-            // borrow conflict).
-            let state = self.ref_full_state.as_ref().expect("checked above");
-            for c in 0..N_CHANNELS {
-                let src = state.bands[k][c].clone();
-                let dst = self.bands_ref[k].planes[c].clone();
-                unsafe {
-                    copy_f32_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(src, n),
-                        ArrayArg::from_raw_parts(dst, n),
-                        n as u32,
-                    );
-                }
-            }
-            if k < n_levels - 1 {
-                let src = state.log_l_bkg[k].clone();
-                let dst = self.weber_scratch[k].log_l_bkg.clone();
-                unsafe {
-                    copy_f32_kernel::launch::<R>(
-                        &self.client,
-                        count.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(src, n),
-                        ArrayArg::from_raw_parts(dst, n),
-                        n as u32,
-                    );
-                }
-            }
-            w = w.div_ceil(2);
-            h = h.div_ceil(2);
-        }
-        // Baseband gauss restore.
-        let last = n_levels - 1;
-        let bb_n = (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
-        let bb_count = CubeCount::Static((bb_n as u32).div_ceil(64), 1, 1);
-        let state = self.ref_full_state.as_ref().expect("checked above");
-        for c in 0..N_CHANNELS {
-            let src = state.baseband_gauss[c].clone();
-            let dst = self.gauss_ref[last].planes[c].clone();
-            unsafe {
-                copy_f32_kernel::launch::<R>(
-                    &self.client,
-                    bb_count.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(src, bb_n),
-                    ArrayArg::from_raw_parts(dst, bb_n),
-                    bb_n as u32,
-                );
-            }
-        }
-        Ok(scalar)
-    }
+    // Tick 263 (Mode E walker): `_restore_ref_state_from_full` was
+    // removed. The Phase 2 snapshot/restore loop copied REF state from
+    // `ref_full_state` back into the shared `bands_ref` /
+    // `weber_scratch.log_l_bkg` / `gauss_ref[last]` buffers ahead of
+    // every DIST dispatch — a per-call ~3× pyramid + 1× log_l_bkg
+    // pyramid copy (~144 MB at 12 MP).
+    //
+    // The Mode E walker now reads REF bands and non-baseband log_l_bkg
+    // straight from `ref_full_state` inside `_run_d_bands_band_loop`,
+    // and `_warm_ref_baseband_log_l_bkg_for_dispatch` returns the
+    // cached baseband scalar without touching the shared scratch.
+    // No restore is needed; the cached state survives intervening
+    // one-shot dispatches because it lives in dedicated buffers that
+    // are never written by REF weber dispatchers (only `warm_reference`
+    // touches them via `_snapshot_ref_state_to_full`).
 
     /// Score a DIST candidate against the GPU-warmed REF. Same JOD
     /// output as [`Cvvdp::compute_dkl_jod`] but skips the REF weber
@@ -5377,26 +5372,28 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
-        // Mode E (task #79): in strip mode, restore the cached ref
-        // state from the dedicated `ref_full_state` buffers ahead of
-        // the dist dispatch. The shared `bands_ref` /
-        // `weber_scratch.log_l_bkg` scratch may have been clobbered
-        // by an intervening one-shot call; the restore pre-populates
-        // them with the cached values. The strip-walker (Phase 3)
-        // will instead read directly from `ref_full_state` per strip
-        // — for Phase 2 the restore-then-run-Full-dispatch path keeps
-        // the JOD value bit-identical with Full-mode warm_reference.
+        // Mode E (task #79): in strip mode the cached REF state lives
+        // in the dedicated `ref_full_state` buffers populated by
+        // `warm_reference`. The walker reads REF bands and non-baseband
+        // log_l_bkg straight from `ref_full_state` inside
+        // `_run_d_bands_band_loop` and `_warm_ref_baseband_log_l_bkg_for_dispatch`
+        // returns the cached baseband scalar without copying anything
+        // back into the shared scratch. The Phase 2 snapshot/restore
+        // intermediate was removed in tick 263 — the walker shape now
+        // matches Mode B (strip-aware masking + strip-aware pool) with
+        // the only per-mode difference being the REF source.
         let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
-        // Mode E Phase 3: the per-band pool stage is the first
-        // strip-aware kernel — it partitions each band's pool work
-        // into row-strips and dispatches the offset kernel per slab.
-        // Atomic-adds across slabs are associative so JOD is
-        // bit-identical to Full mode (within the same per-call
-        // ordering noise band as Full's own repeated calls). The
-        // dist weber pyramid + CSF + masking chain still run
-        // full-image; their strip-aware port is the next Phase 3
-        // chunk after this lands.
+        // Mode B (StripPair) and Mode E (CachedRef) both route the
+        // per-band pool through the strip-aware walker that partitions
+        // each band's per-pixel pool into row-strips and dispatches
+        // `pool_band_3ch_offset_kernel` per slab. Atomic-adds across
+        // slabs are associative so JOD is bit-identical to Full mode
+        // (within the same per-call ordering noise band as Full's own
+        // repeated calls). The masking chain in Mode E now also runs
+        // through the strip-aware walker (`_run_band_masking_strip_walker`)
+        // — same dispatch shape as Mode B with the REF source pulled
+        // from `ref_full_state`.
         if self.strip_config.is_some() {
             self._pool_and_finalize_jod_strip()
         } else {
@@ -6254,20 +6251,28 @@ impl<R: Runtime> Cvvdp<R> {
     }
 
     /// Returns the baseband `log10(L_bkg)` scalar for the cached ref
-    /// state, restoring `ref_full_state` into the shared `bands_ref` /
-    /// `weber_scratch.log_l_bkg` / `gauss_ref[last]` scratch when in
-    /// strip mode. Shared helper across every warm-ref dispatcher
-    /// (sRGB-byte, linear-planes, diffmap variants).
+    /// state. Shared helper across every warm-ref dispatcher (sRGB-byte,
+    /// linear-planes, diffmap variants).
+    ///
+    /// Strip mode (Mode E) reads the cached scalar from
+    /// `ref_full_state.baseband_log_l_bkg_scalar` — the dedicated REF
+    /// state populated by `warm_reference`. The band loop (see
+    /// [`Self::_run_d_bands_band_loop`]) reads REF bands and
+    /// non-baseband `log_l_bkg` planes directly from
+    /// [`RefFullState`] too, so this scalar is the only ref-side
+    /// payload returned to the caller.
+    ///
+    /// Full mode reads from `warm_ref_baseband_log_l_bkg`.
     ///
     /// Returns [`Error::NoWarmReference`] if no warm REF state is
     /// cached (Full mode: `warm_ref_baseband_log_l_bkg` is `None`;
     /// strip mode: `ref_full_state` is `None`).
     fn _warm_ref_baseband_log_l_bkg_for_dispatch(&mut self) -> Result<f32> {
         if self.strip_config.is_some() {
-            if self.ref_full_state.is_none() {
-                return Err(Error::NoWarmReference);
-            }
-            self._restore_ref_state_from_full()
+            self.ref_full_state
+                .as_ref()
+                .map(|s| s.baseband_log_l_bkg_scalar)
+                .ok_or(Error::NoWarmReference)
         } else {
             self.warm_ref_baseband_log_l_bkg
                 .ok_or(Error::NoWarmReference)
