@@ -97,8 +97,9 @@ use crate::kernels::diffmap::{
 };
 use crate::kernels::masking::{
     diff_abs_3ch_kernel, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_v_3ch_scaled_kernel,
-    CH_GAIN, MASK_C, PU_PADSIZE,
+    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_h_3ch_strip_aware_kernel,
+    pu_blur_v_3ch_scaled_kernel, pu_blur_v_3ch_scaled_strip_aware_kernel, CH_GAIN, MASK_C,
+    PU_PADSIZE,
 };
 use crate::kernels::pool::{
     copy_f32_kernel, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
@@ -107,8 +108,9 @@ use crate::kernels::pool::{
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_strip_kernel,
-    downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel, upscale_h_kernel,
-    upscale_v_kernel, DOWNSCALE_TILED_BLOCK_DIM,
+    downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel,
+    subtract_weber_3ch_strip_kernel, upscale_h_kernel, upscale_h_strip_kernel, upscale_v_kernel,
+    upscale_v_strip_kernel, DOWNSCALE_TILED_BLOCK_DIM,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, Result, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM};
@@ -2499,6 +2501,211 @@ impl<R: Runtime> Cvvdp<R> {
         }
     }
 
+    /// Mode B per-level strip walker for the Weber-pyramid finalize
+    /// (non-baseband levels k = 0..n_levels-1). Mirrors
+    /// [`Self::_reduce_gauss_pyramid_strip_walker`]'s shape:
+    /// level-major iteration, per (strip, channel) dispatch.
+    ///
+    /// Each level k:
+    ///   1. Per strip, per channel: separable upscale of
+    ///      `gauss_ref[k+1]` (FULL coarse buffer) → vscratch (strip
+    ///      body of full vscratch buffer) → upscaled_c (strip body of
+    ///      full upscaled buffer). Uses `upscale_v_strip_kernel` +
+    ///      `upscale_h_strip_kernel`.
+    ///   2. Per strip: fused `subtract_weber_3ch_strip_kernel` reads
+    ///      from FULL fine/upsc/l_bkg buffers and writes to body rows
+    ///      of `bands_*[k]` + `log_l_bkg`. The strip-aware kernel
+    ///      uses absolute indexing `(body_offset_y + dy_local) * w +
+    ///      dx`; pre-allocated buffers are full-image-sized so the
+    ///      body rows land in the same place a Full-mode dispatch
+    ///      would have written.
+    ///
+    /// Strip body height halves per level. At deep levels the strip
+    /// count collapses to 1 (single dispatch covers all rows).
+    ///
+    /// Cross-strip data dependency: each strip's upscale reads
+    /// `gauss_ref[k+1]` rows in a small neighbourhood around
+    /// `body_offset_y / 2` (the upscale's reflection); those rows are
+    /// either in the FULL coarse buffer (cross-strip data inherited
+    /// from the gauss reduce) OR the body region of `vscratch` (for
+    /// the upscale_h reading upscale_v's strip output). The body
+    /// region is well-defined because v + h run in the same strip.
+    ///
+    /// The `strip_dispatch_counter` increments per (level, strip,
+    /// channel) dispatch + per (level, strip) subtract dispatch so a
+    /// test can observe the walker partitioned the work.
+    fn _finalize_weber_pyramid_strip_walker(
+        &self,
+        log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
+    ) {
+        let cube_dim = CubeDim::new_1d(64);
+        let n_levels = self.n_levels as usize;
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return,
+        };
+
+        for k in 0..n_levels.saturating_sub(1) {
+            let coarse_w = self.gauss_ref[k + 1].w;
+            let coarse_h = self.gauss_ref[k + 1].h;
+            let fine_w = self.gauss_ref[k].w;
+            let fine_h = self.gauss_ref[k].h;
+            let n_v = (coarse_w * fine_h) as usize;
+            let n_fine = (fine_w * fine_h) as usize;
+            let n_coarse = (coarse_w * coarse_h) as usize;
+
+            // Strip body height at this level: scale-0 body halved per
+            // level, clamped to 1. Matches gauss strip walker.
+            let strip_h_at_k = (h_body_at_0 >> k).max(1);
+            let n_strips = if fine_h <= strip_h_at_k {
+                1
+            } else {
+                fine_h.div_ceil(strip_h_at_k)
+            };
+
+            let scratch = &self.weber_scratch[k];
+            let bands_dest = if dest_is_dis {
+                &self.bands_dis
+            } else {
+                &self.bands_ref
+            };
+
+            for s in 0..n_strips {
+                let body_offset_y = s * strip_h_at_k;
+                let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
+                // Strip-shaped element counts at the fine and v-pass
+                // resolutions. The v-pass writes `coarse_w × body_h`
+                // rows; the h-pass and subtract write `fine_w ×
+                // body_h` rows. Offsets into the full vscratch and
+                // l_bkg_fine / upscaled / band buffers point at the
+                // body row block.
+                let n_strip_v = (coarse_w as usize) * (body_h as usize);
+                let n_strip_fine = (fine_w as usize) * (body_h as usize);
+                let count_v_strip = CubeCount::Static((n_strip_v as u32).div_ceil(64), 1, 1);
+                let count_fine_strip = CubeCount::Static((n_strip_fine as u32).div_ceil(64), 1, 1);
+                let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
+                let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
+
+                // Stage 1: separable upscale of coarse A → l_bkg_fine
+                // body. The A plane drives the per-pixel L_bkg used by
+                // every channel's Weber-contrast division below.
+                let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+                let vscratch_a_strip =
+                    scratch.vscratch_a.clone().offset_start(byte_off_v);
+                let l_bkg_fine_strip =
+                    scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+                unsafe {
+                    upscale_v_strip_kernel::launch::<R>(
+                        &self.client,
+                        count_v_strip.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
+                        coarse_w,
+                        coarse_h,        // logical_src_h
+                        fine_h,          // logical_dst_h
+                        body_offset_y,   // body_offset_y in dst rows
+                        body_h,          // body_h in dst rows
+                    );
+                    upscale_h_strip_kernel::launch::<R>(
+                        &self.client,
+                        count_fine_strip.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v),
+                        ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
+                        coarse_w,
+                        fine_w,
+                        body_h,          // in_h = strip body height
+                        fine_h,          // logical_dst_h (unused by H-pass)
+                        body_offset_y,   // body_offset_y (unused by H-pass)
+                    );
+                }
+                self.strip_dispatch_counter
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+                // Stage 2: per-channel separable upscale of coarse →
+                // upscaled_c body. Same shape as the A plane upscale
+                // but targeting the per-channel scratch buffers.
+                for c in 0..N_CHANNELS {
+                    let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                    let vscratch_c_strip =
+                        scratch.vscratch_c[c].clone().offset_start(byte_off_v);
+                    let upscaled_c_strip =
+                        scratch.upscaled_c[c].clone().offset_start(byte_off_fine);
+                    unsafe {
+                        upscale_v_strip_kernel::launch::<R>(
+                            &self.client,
+                            count_v_strip.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(coarse, n_coarse),
+                            ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v),
+                            coarse_w,
+                            coarse_h,
+                            fine_h,
+                            body_offset_y,
+                            body_h,
+                        );
+                        upscale_h_strip_kernel::launch::<R>(
+                            &self.client,
+                            count_fine_strip.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
+                            ArrayArg::from_raw_parts(upscaled_c_strip, n_strip_fine),
+                            coarse_w,
+                            fine_w,
+                            body_h,
+                            fine_h,
+                            body_offset_y,
+                        );
+                    }
+                    self.strip_dispatch_counter
+                        .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                }
+
+                // Stage 3: fused subtract + Weber-contrast + log_l_bkg.
+                // Reads from FULL fine/upsc/l_bkg buffers (the strip
+                // kernel uses absolute indexing); writes to body rows
+                // of the FULL bands + log_l_bkg buffers.
+                let fine_a = self.gauss_ref[k].planes[0].clone();
+                let fine_rg = self.gauss_ref[k].planes[1].clone();
+                let fine_vy = self.gauss_ref[k].planes[2].clone();
+                let upsc_a = scratch.upscaled_c[0].clone();
+                let upsc_rg = scratch.upscaled_c[1].clone();
+                let upsc_vy = scratch.upscaled_c[2].clone();
+                let l_bkg_fine_full = scratch.l_bkg_fine.clone();
+                let log_l_bkg_full = log_l_bkg_dest[k].clone();
+                let band_a = bands_dest[k].planes[0].clone();
+                let band_rg = bands_dest[k].planes[1].clone();
+                let band_vy = bands_dest[k].planes[2].clone();
+                unsafe {
+                    subtract_weber_3ch_strip_kernel::launch::<R>(
+                        &self.client,
+                        count_fine_strip.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(fine_a, n_fine),
+                        ArrayArg::from_raw_parts(fine_rg, n_fine),
+                        ArrayArg::from_raw_parts(fine_vy, n_fine),
+                        ArrayArg::from_raw_parts(upsc_a, n_fine),
+                        ArrayArg::from_raw_parts(upsc_rg, n_fine),
+                        ArrayArg::from_raw_parts(upsc_vy, n_fine),
+                        ArrayArg::from_raw_parts(l_bkg_fine_full, n_fine),
+                        ArrayArg::from_raw_parts(band_a, n_fine),
+                        ArrayArg::from_raw_parts(band_rg, n_fine),
+                        ArrayArg::from_raw_parts(band_vy, n_fine),
+                        ArrayArg::from_raw_parts(log_l_bkg_full, n_fine),
+                        fine_w,
+                        body_h,
+                        body_offset_y,
+                        fine_h, // logical_h (carried for API symmetry; unused)
+                    );
+                }
+                self.strip_dispatch_counter
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+
     /// Equivalent to [`Self::_dispatch_gauss_pyramid_gpu`] but starts
     /// from a caller-supplied packed-u32 device handle (one `u32`
     /// per pixel, `R | G<<8 | B<<16`, length `width × height`).
@@ -3368,56 +3575,44 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_dim = CubeDim::new_1d(64);
         let n_levels = self.n_levels as usize;
 
-        for k in 0..n_levels.saturating_sub(1) {
-            let coarse_w = self.gauss_ref[k + 1].w;
-            let coarse_h = self.gauss_ref[k + 1].h;
-            let fine_w = self.gauss_ref[k].w;
-            let fine_h = self.gauss_ref[k].h;
-            let n_v = (coarse_w * fine_h) as usize;
-            let n_fine = (fine_w * fine_h) as usize;
-            let n_coarse = (coarse_w * coarse_h) as usize;
+        // Mode B (StripPair): route per-level non-baseband finalize
+        // through the strip-aware walker. Mirrors
+        // `_reduce_gauss_pyramid_strip_walker`'s shape: level-major
+        // iteration, per (strip, channel) dispatch, reads from FULL
+        // coarse/fine buffers and writes to body-offset rows of the
+        // per-level scratch + bands buffers. Baseband (k = n_levels-1)
+        // is one global-mean reduction; handled below identically to
+        // the Full path because it needs all-pixels-of-A anyway.
+        let mode_b = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
+        if mode_b {
+            self._finalize_weber_pyramid_strip_walker(log_l_bkg_dest, dest_is_dis);
+        } else {
+            for k in 0..n_levels.saturating_sub(1) {
+                let coarse_w = self.gauss_ref[k + 1].w;
+                let coarse_h = self.gauss_ref[k + 1].h;
+                let fine_w = self.gauss_ref[k].w;
+                let fine_h = self.gauss_ref[k].h;
+                let n_v = (coarse_w * fine_h) as usize;
+                let n_fine = (fine_w * fine_h) as usize;
+                let n_coarse = (coarse_w * coarse_h) as usize;
 
-            let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
-            let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
+                let count_v = CubeCount::Static((n_v as u32).div_ceil(64), 1, 1);
+                let count_fine = CubeCount::Static((n_fine as u32).div_ceil(64), 1, 1);
 
-            let scratch = &self.weber_scratch[k];
-            let l_bkg_fine = scratch.l_bkg_fine.clone();
-            let vscratch_a = scratch.vscratch_a.clone();
-            let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
-            unsafe {
-                upscale_v_kernel::launch::<R>(
-                    &self.client,
-                    count_v.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(coarse_a, n_coarse),
-                    ArrayArg::from_raw_parts(vscratch_a.clone(), n_v),
-                    coarse_w,
-                    coarse_h,
-                    fine_h,
-                );
-                upscale_h_kernel::launch::<R>(
-                    &self.client,
-                    count_fine.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(vscratch_a, n_v),
-                    ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
-                    coarse_w,
-                    fine_w,
-                    fine_h,
-                );
-            }
-            let log_l_bkg = log_l_bkg_dest[k].clone();
-            for c in 0..N_CHANNELS {
-                let coarse = self.gauss_ref[k + 1].planes[c].clone();
-                let vscratch_c = scratch.vscratch_c[c].clone();
-                let upscaled_c = scratch.upscaled_c[c].clone();
+                let scratch = &self.weber_scratch[k];
+                let l_bkg_fine = scratch.l_bkg_fine.clone();
+                let vscratch_a = scratch.vscratch_a.clone();
+                let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
                 unsafe {
                     upscale_v_kernel::launch::<R>(
                         &self.client,
                         count_v.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(coarse, n_coarse),
-                        ArrayArg::from_raw_parts(vscratch_c.clone(), n_v),
+                        ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch_a.clone(), n_v),
                         coarse_w,
                         coarse_h,
                         fine_h,
@@ -3426,46 +3621,74 @@ impl<R: Runtime> Cvvdp<R> {
                         &self.client,
                         count_fine.clone(),
                         cube_dim,
-                        ArrayArg::from_raw_parts(vscratch_c, n_v),
-                        ArrayArg::from_raw_parts(upscaled_c, n_fine),
+                        ArrayArg::from_raw_parts(vscratch_a, n_v),
+                        ArrayArg::from_raw_parts(l_bkg_fine.clone(), n_fine),
                         coarse_w,
                         fine_w,
                         fine_h,
                     );
                 }
-            }
-            let fine_a = self.gauss_ref[k].planes[0].clone();
-            let fine_rg = self.gauss_ref[k].planes[1].clone();
-            let fine_vy = self.gauss_ref[k].planes[2].clone();
-            let upsc_a = scratch.upscaled_c[0].clone();
-            let upsc_rg = scratch.upscaled_c[1].clone();
-            let upsc_vy = scratch.upscaled_c[2].clone();
-            let bands_dest = if dest_is_dis {
-                &self.bands_dis
-            } else {
-                &self.bands_ref
-            };
-            let band_a = bands_dest[k].planes[0].clone();
-            let band_rg = bands_dest[k].planes[1].clone();
-            let band_vy = bands_dest[k].planes[2].clone();
-            unsafe {
-                subtract_weber_3ch_kernel::launch::<R>(
-                    &self.client,
-                    count_fine.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(fine_a, n_fine),
-                    ArrayArg::from_raw_parts(fine_rg, n_fine),
-                    ArrayArg::from_raw_parts(fine_vy, n_fine),
-                    ArrayArg::from_raw_parts(upsc_a, n_fine),
-                    ArrayArg::from_raw_parts(upsc_rg, n_fine),
-                    ArrayArg::from_raw_parts(upsc_vy, n_fine),
-                    ArrayArg::from_raw_parts(l_bkg_fine, n_fine),
-                    ArrayArg::from_raw_parts(band_a, n_fine),
-                    ArrayArg::from_raw_parts(band_rg, n_fine),
-                    ArrayArg::from_raw_parts(band_vy, n_fine),
-                    ArrayArg::from_raw_parts(log_l_bkg, n_fine),
-                    n_fine as u32,
-                );
+                let log_l_bkg = log_l_bkg_dest[k].clone();
+                for c in 0..N_CHANNELS {
+                    let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                    let vscratch_c = scratch.vscratch_c[c].clone();
+                    let upscaled_c = scratch.upscaled_c[c].clone();
+                    unsafe {
+                        upscale_v_kernel::launch::<R>(
+                            &self.client,
+                            count_v.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(coarse, n_coarse),
+                            ArrayArg::from_raw_parts(vscratch_c.clone(), n_v),
+                            coarse_w,
+                            coarse_h,
+                            fine_h,
+                        );
+                        upscale_h_kernel::launch::<R>(
+                            &self.client,
+                            count_fine.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(vscratch_c, n_v),
+                            ArrayArg::from_raw_parts(upscaled_c, n_fine),
+                            coarse_w,
+                            fine_w,
+                            fine_h,
+                        );
+                    }
+                }
+                let fine_a = self.gauss_ref[k].planes[0].clone();
+                let fine_rg = self.gauss_ref[k].planes[1].clone();
+                let fine_vy = self.gauss_ref[k].planes[2].clone();
+                let upsc_a = scratch.upscaled_c[0].clone();
+                let upsc_rg = scratch.upscaled_c[1].clone();
+                let upsc_vy = scratch.upscaled_c[2].clone();
+                let bands_dest = if dest_is_dis {
+                    &self.bands_dis
+                } else {
+                    &self.bands_ref
+                };
+                let band_a = bands_dest[k].planes[0].clone();
+                let band_rg = bands_dest[k].planes[1].clone();
+                let band_vy = bands_dest[k].planes[2].clone();
+                unsafe {
+                    subtract_weber_3ch_kernel::launch::<R>(
+                        &self.client,
+                        count_fine.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(fine_a, n_fine),
+                        ArrayArg::from_raw_parts(fine_rg, n_fine),
+                        ArrayArg::from_raw_parts(fine_vy, n_fine),
+                        ArrayArg::from_raw_parts(upsc_a, n_fine),
+                        ArrayArg::from_raw_parts(upsc_rg, n_fine),
+                        ArrayArg::from_raw_parts(upsc_vy, n_fine),
+                        ArrayArg::from_raw_parts(l_bkg_fine, n_fine),
+                        ArrayArg::from_raw_parts(band_a, n_fine),
+                        ArrayArg::from_raw_parts(band_rg, n_fine),
+                        ArrayArg::from_raw_parts(band_vy, n_fine),
+                        ArrayArg::from_raw_parts(log_l_bkg, n_fine),
+                        n_fine as u32,
+                    );
+                }
             }
         }
 
