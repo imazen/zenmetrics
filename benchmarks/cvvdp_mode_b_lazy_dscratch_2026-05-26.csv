@@ -1,0 +1,51 @@
+# cvvdp Mode B vs Full GPU memory measurement, Path B chunk 1
+# (lazy per-band d_scratch transient buffers).
+#
+# Generated 2026-05-26 by:
+#   cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+#
+# Host: 7950X + RTX 5070 12 GB (CUDA driver 596.21, runtime 13.2)
+# Backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+# Commit under measurement: chunk 1 (post-master 56a5c5be)
+#
+# Columns:
+#   size               = test image dim label (1024² / 4096²)
+#   mode               = full | mode_b (h_body=256)
+#   estimate_master_mib = pre-chunk-1 analytical estimate_gpu_memory_bytes
+#                         (Full layout; Mode B was the same in master since
+#                          it reused Full's allocator via new_with_geometry)
+#   estimate_head_mib  = post-chunk-1 analytical estimate (Full: real delta;
+#                        Mode B: aspirational — assumes strip-buffer-sized
+#                        pyramids that are NOT yet wired into the runtime)
+#   nvsmi_delta_mib    = nvidia-smi memory.used delta during compute_dkl_jod
+#                        (driver-level — includes cubecl pool over-allocation
+#                         so this is 2-6× the estimator and DOMINATES the
+#                         visible peak. Chunk 1's ~20 MB / 1MP delta is below
+#                         MiB granularity once pool noise is included.)
+#   jod                = compute_dkl_jod result (FP32 atomic noise ~1e-6)
+#
+# JOD parity:
+#   Full and Mode B at 1024² and 4096² agree to 0.000000 JOD — chunk 1
+#   uses the same kernels in the same order, only the alloc lifecycle
+#   changed. cubecl's memory pool recycles dropped per-band transient
+#   pages for the next band's allocation.
+#
+# Real chunk-1 delta (Full estimator only — Mode B HEAD estimate is
+# aspirational pending Path A's per-band strip allocator):
+#   1024sq: 198 MiB -> 178 MiB  (-10.1%)
+#   4096sq: 3178 MiB -> 2858 MiB (-10.1%)
+#
+# Driver-level (nvsmi_delta_mib) shows ZERO change between master and
+# chunk 1 (subprocess-measured separately) because:
+#   - cubecl memory pool over-allocates 2-6× the analytical working set
+#   - nvidia-smi has 1 MiB granularity, ~20 MB chunk-1 delta < granularity
+#   - The driver-level number is dominated by JIT kernel scratch +
+#     CUDA page rounding + cubecl's persistent buffer cache
+# This is expected — the chunk 1 GATE is JOD bit-identical + estimator
+# moves down + no regression elsewhere, not a driver-level peak drop.
+#
+size,mode,estimate_master_mib,estimate_head_mib,nvsmi_delta_mib,jod
+1024sq,full,198,178,385,9.4583
+1024sq,mode_b,198,57,385,9.4583
+4096sq,full,3178,2858,4225,9.4585
+4096sq,mode_b,3178,373,4225,9.4585

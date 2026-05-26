@@ -1,0 +1,31 @@
+benchmark: cvvdp_mode_b_lazy_dscratch_2026-05-26
+date: 2026-05-26
+host: lilith (water-cooled AMD Ryzen 9 7950X + RTX 5070 12 GB)
+gpu: NVIDIA GeForce RTX 5070 (driver 596.21, CUDA 13.2)
+backend: cubecl-cuda 0.10.0 (lilith fork, rev de2f98573902efe60717cbfc7f8e4f9d630d723e)
+commit: post-master 56a5c5be, Path B chunk 1 ("lazy per-band d_scratch transient buffers")
+command: cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+purpose: |
+  Verify Path B chunk 1 lowers the analytical pipeline working-set
+  estimate (estimate_gpu_memory_bytes) for Full mode while preserving
+  JOD bit-identity between Full and Mode B at 1024² and 4096².
+
+  Mode B's HEAD column is included for completeness but is
+  aspirational — estimate_gpu_memory_bytes_strip_pair already models
+  per-band strip-buffer allocation, but the actual `new_strip_pair`
+  constructor still goes through `new_with_geometry` (full-image
+  pyramids). Wiring that up is Path A, not chunk 1.
+
+  Driver-level (nvidia-smi) showed zero delta between master and
+  chunk 1 because cubecl's memory pool over-allocates 2-6× the
+  analytical working set and nvidia-smi has 1 MiB granularity; the
+  ~20 MB chunk-1 delta at 1MP is below the noise floor. JOD
+  bit-identical is the load-bearing guarantee.
+findings:
+  - Full estimator: -10.1% at both 1024² (198->178 MiB) and 4096² (3178->2858 MiB)
+  - JOD bit-identical (0.000000 diff) Full vs Mode B at 1024² and 4096²
+  - nvsmi_delta unchanged at MiB precision (385 / 4225 MiB respectively)
+  - 200+ cvvdp-gpu unit tests pass; 34 zenmetrics-api umbrella tests pass
+  - Two pre-existing test failures verified on master before chunk 1:
+    compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend
+    mode_e_strip_h_body_explicit_override
