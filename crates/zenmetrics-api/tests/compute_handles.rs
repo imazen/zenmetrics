@@ -72,8 +72,18 @@ fn upload_once_five_metrics() {
 
     for &kind in metrics {
         let params = MetricParams::default_for(kind);
-        let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
-            .unwrap_or_else(|e| panic!("Metric::new({kind:?}) failed: {e}"));
+        // butter at 256×256 with Auto picks Strip mode (butter is
+        // strip-preferred). Strip-mode butter rejects compute_handles
+        // — the single-resolution strip walker is pair-only. Force
+        // Full mode for butter here so the upload-once compute_handles
+        // path is reachable.
+        let mode = match kind {
+            #[cfg(feature = "butter")]
+            MetricKind::Butter => zenmetrics_api::MemoryMode::Full,
+            _ => zenmetrics_api::MemoryMode::Auto,
+        };
+        let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, params, mode)
+            .unwrap_or_else(|e| panic!("Metric::new_with_memory_mode({kind:?}) failed: {e}"));
 
         let s_handles = m
             .compute_handles(&pair)
@@ -90,14 +100,15 @@ fn upload_once_five_metrics() {
         // Bit-identical-or-close check vs. compute_srgb_u8 on the same
         // bytes. We build a fresh scorer for the byte path so neither
         // run's state can contaminate the other.
-        let mut m_bytes = Metric::new(
+        let mut m_bytes = Metric::new_with_memory_mode(
             kind,
             Backend::Cuda,
             W,
             H,
             MetricParams::default_for(kind),
+            mode,
         )
-        .unwrap_or_else(|e| panic!("Metric::new bytes-path({kind:?}) failed: {e}"));
+        .unwrap_or_else(|e| panic!("Metric::new_with_memory_mode bytes-path({kind:?}) failed: {e}"));
         let s_bytes = m_bytes
             .compute_srgb_u8(&r, &d)
             .unwrap_or_else(|e| panic!("compute_srgb_u8({kind:?}) failed: {e}"));
