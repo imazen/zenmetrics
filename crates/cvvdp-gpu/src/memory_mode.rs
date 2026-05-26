@@ -1,24 +1,38 @@
 //! Unified memory-mode API. See `butteraugli-gpu/src/memory_mode.rs`
 //! for shared design rationale.
 //!
-//! cvvdp-gpu supports only **Full** image processing. There is no
-//! partitioned working-set path — the 9-level Weber-contrast pyramid
-//! + σ=3 PU-blur halo accumulation makes a true walker a major
-//! redesign, and the capped-pyramid variant that previously lived
-//! here was rolled back (task #77) because **capping the pyramid
-//! depth changes the JOD value** — every k < 9 produces a different
-//! metric output. See `docs/STRIP_PROCESSING.md` for the full
-//! rationale.
+//! cvvdp-gpu supports two memory modes:
 //!
-//! `MemoryMode::Auto` resolves to `Full` whenever Full fits the cap;
-//! otherwise it surfaces [`crate::Error::TooBigForFull`] and lets the
-//! caller decide whether to pick a different metric or split the
-//! image at the application layer.
+//! - **Full** — whole-image working set on device. Bit-stable with
+//!   the host-scalar reference. Default; preferred when the image
+//!   fits the VRAM cap.
+//! - **Strip { h_body }** — **Mode E only** (ref-full + dist-strip
+//!   cached-ref). Task #79 reintroduces a Strip variant that is
+//!   **JOD-preserving**: the reference-side state stays at full
+//!   image resolution on device (so per-band masking has the
+//!   correct neighbour pixels at every level); the dist side walks
+//!   the image in vertical strips. Per-band atomic-pool sums are
+//!   associative across strips, so the final JOD equals Full-mode
+//!   JOD within the documented Atomic<f32> reduction-order noise
+//!   band.
 //!
-//! This module wraps the pre-existing
-//! [`crate::pipeline::estimate_gpu_memory_bytes`] (which already
-//! computes the working-set bytes) and exposes the unified
-//! [`MemoryMode`] enum.
+//! The earlier capped-pyramid Strip variant that lived here before
+//! task #77 was rolled back because **capping the pyramid depth
+//! changes the JOD value** at any k < 9. See `docs/STRIP_PROCESSING.md`
+//! for the full rationale on what was rolled back vs what mode E
+//! preserves.
+//!
+//! Strip mode is **only valid for the cached-ref code path**
+//! ([`crate::pipeline::Cvvdp::warm_reference`] +
+//! [`crate::pipeline::Cvvdp::compute_dkl_jod_with_warm_ref`] and the
+//! umbrella `MetricCache` surface). One-shot scoring
+//! ([`crate::pipeline::Cvvdp::score`]) is still Full-only because
+//! its memory profile is the dist working set that mode E aims to
+//! shrink anyway.
+//!
+//! `MemoryMode::Auto` picks Full when it fits the cap, else Strip
+//! with a crate-default `h_body`. Callers can override `h_body`
+//! explicitly via `MemoryMode::Strip { h_body: Some(N) }`.
 
 fn env_cap_bytes() -> Option<usize> {
     std::env::var("ZENMETRICS_VRAM_CAP_BYTES")
@@ -66,31 +80,68 @@ pub fn vram_cap_bytes() -> usize {
     8 * 1024 * 1024 * 1024
 }
 
+/// Crate-default Strip body height. Picked at the small side so the
+/// dist-side strip working set stays modest even on tiny VRAM caps.
+/// The Auto resolver can pick a larger value when the cap permits.
+///
+/// Must be a multiple of `2^(MAX_LEVELS - 1) = 256` so the per-level
+/// halving in the Weber pyramid doesn't drift through the strip
+/// boundary. 512 = 2 * 256 — small enough to fit in 1 GB at 12 MP
+/// (`512 × 4096 × 9 levels × N_CHANNELS × 4 bytes ≈ 224 MB` for the
+/// dist-pyramid working set, plus halo).
+pub const STRIP_H_BODY_DEFAULT: u32 = 512;
+
+/// Strip body height alignment factor. Multiples of `2^(MAX_LEVELS - 1)`
+/// — body and halo must both be divisible by this so the strip body
+/// region maps cleanly through every Weber pyramid level (ceil-div
+/// halving truncates exact body boundaries when they're not aligned).
+pub const STRIP_ALIGN: u32 = 1 << (crate::MAX_LEVELS as u32 - 1);
+
 /// How the GPU pipeline should partition its working set.
 ///
-/// cvvdp-gpu only supports whole-image processing — partitioned
-/// variants were removed in task #77 (the previous capped-pyramid
-/// implementation changed the JOD value at any k < 9, which is
-/// unacceptable for a metric crate).
+/// cvvdp-gpu supports two variants:
+///
+/// - [`Self::Full`] — whole-image working set. Default.
+/// - [`Self::Strip`] — Mode E (ref-full + dist-strip cached-ref).
+///   Only valid for the cached-ref code path
+///   ([`crate::pipeline::Cvvdp::warm_reference`] +
+///   [`crate::pipeline::Cvvdp::compute_dkl_jod_with_warm_ref`]).
+///
+/// See module-level docs for the JOD-preservation rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryMode {
-    /// Pick Full automatically based on [`vram_cap_bytes()`]. cvvdp-gpu
-    /// always picks Full when it fits; otherwise surfaces
-    /// [`crate::Error::TooBigForFull`].
+    /// Pick Full when it fits the cap, else Strip with a crate-
+    /// default `h_body`. See [`vram_cap_bytes()`] for the cap source.
     Auto,
     /// Allocate the whole-image working set.
     Full,
+    /// Mode E strip walker: full ref state on device + per-strip dist
+    /// working set. `h_body` is the dist-side strip body height in
+    /// rows. `None` lets the [`Self::Auto`] policy pick a default
+    /// (= [`STRIP_H_BODY_DEFAULT`]).
+    ///
+    /// `h_body` must be a positive multiple of [`STRIP_ALIGN`].
+    Strip {
+        /// Dist-side strip body height in rows. `None` → crate-default.
+        h_body: Option<u32>,
+    },
 }
 
-/// Outcome of resolving [`MemoryMode::Auto`]. cvvdp-gpu can only
-/// resolve to Full.
+/// Outcome of resolving [`MemoryMode::Auto`]. cvvdp-gpu can resolve
+/// to either Full or Strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedMode {
     /// Whole-image allocation.
     Full,
+    /// Mode E with the picked `h_body`.
+    Strip {
+        /// Resolved dist-side strip body height in rows.
+        h_body: u32,
+    },
 }
 
-/// Auto-resolve policy. See module-level docs.
+/// Auto-resolve policy: prefer Full when it fits the cap, else Strip
+/// with a crate-default `h_body`. See module-level docs.
 pub fn resolve_auto(
     width: u32,
     height: u32,
@@ -105,8 +156,19 @@ pub fn resolve_auto(
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);
     }
+    // Try Strip with the crate-default h_body. The strip-mode
+    // estimator returns the ref-full footprint + one-strip dist
+    // working set; if even that doesn't fit, surface TooBigForFull.
+    let strip_bytes =
+        crate::pipeline::estimate_gpu_memory_bytes_strip(width, height, STRIP_H_BODY_DEFAULT)
+            .unwrap_or(usize::MAX);
+    if strip_bytes <= cap {
+        return Ok(ResolvedMode::Strip {
+            h_body: STRIP_H_BODY_DEFAULT,
+        });
+    }
     Err(crate::Error::TooBigForFull {
-        needed: full_bytes,
+        needed: strip_bytes,
         cap,
     })
 }
@@ -121,4 +183,23 @@ pub fn resolve_auto(
 #[must_use]
 pub fn estimate_gpu_memory_bytes_usize(width: u32, height: u32) -> usize {
     crate::pipeline::estimate_gpu_memory_bytes(width, height).unwrap_or(usize::MAX)
+}
+
+/// Unified-API wrapper that selects between Full / Strip estimates
+/// based on the supplied [`MemoryMode`]. For [`MemoryMode::Auto`] this
+/// returns the Full estimate (mirroring the umbrella `Auto`-prefers-
+/// Full behavior at small sizes); the resolver consults
+/// [`resolve_auto`] for the actual pick.
+#[must_use]
+pub fn estimate_gpu_memory_bytes_for_mode(width: u32, height: u32, mode: MemoryMode) -> usize {
+    match mode {
+        MemoryMode::Full | MemoryMode::Auto => {
+            crate::pipeline::estimate_gpu_memory_bytes(width, height).unwrap_or(usize::MAX)
+        }
+        MemoryMode::Strip { h_body } => {
+            let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+            crate::pipeline::estimate_gpu_memory_bytes_strip(width, height, body)
+                .unwrap_or(usize::MAX)
+        }
+    }
 }

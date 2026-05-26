@@ -496,6 +496,21 @@ pub fn fill_f32_kernel(dest: &mut Array<f32>, value: f32, n: u32) {
     dest[idx] = value;
 }
 
+/// Copy `n` f32 slots from `src` to `dst`. Used by the strip-mode
+/// cached-ref path to populate the dedicated `RefFullState` buffers
+/// from the shared `bands_ref` / `weber_scratch.log_l_bkg` scratch
+/// after a `warm_reference` dispatch, and to restore them back into
+/// the shared scratch before a strip-mode dist scoring call. Both
+/// arrays must be at least `n` long; threads beyond `n` exit.
+#[cube(launch)]
+pub fn copy_f32_kernel(src: &Array<f32>, dst: &mut Array<f32>, n: u32) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    dst[idx] = src[idx];
+}
+
 /// Finish the host-side fold for the per-band atomic-pool
 /// kernels ([`pool_band_kernel()`] and the fused
 /// [`pool_band_3ch_kernel()`] used in production): given the

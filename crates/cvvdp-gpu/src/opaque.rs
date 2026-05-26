@@ -65,6 +65,8 @@ trait CvvdpInner: Send {
         dis_rgb: &[u8],
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score>;
+    fn has_warm_reference(&self) -> bool;
+    fn is_strip_mode(&self) -> bool;
     #[allow(clippy::too_many_arguments)]
     fn compute_from_linear_planes(
         &mut self,
@@ -144,6 +146,14 @@ where
 
     fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()> {
         Cvvdp::warm_reference(self, ref_rgb)
+    }
+
+    fn has_warm_reference(&self) -> bool {
+        Cvvdp::has_warm_reference(self)
+    }
+
+    fn is_strip_mode(&self) -> bool {
+        Cvvdp::is_strip_mode(self)
     }
 
     fn compute_with_warm_ref_srgb(
@@ -316,35 +326,70 @@ impl CvvdpOpaque {
         // the backend allocation runs.
         let cap = crate::memory_mode::vram_cap_bytes();
         match mode {
-            crate::MemoryMode::Full => {}
+            crate::MemoryMode::Full | crate::MemoryMode::Strip { .. } => {}
             crate::MemoryMode::Auto => {
                 let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
             }
         }
+        // Resolve Auto host-side so the backend dispatch picks the
+        // matching constructor. Strip and Full route to dedicated
+        // constructors; only Auto routes through `resolve_auto`.
+        let resolved_mode = match mode {
+            crate::MemoryMode::Full => crate::MemoryMode::Full,
+            crate::MemoryMode::Strip { h_body } => crate::MemoryMode::Strip { h_body },
+            crate::MemoryMode::Auto => {
+                match crate::memory_mode::resolve_auto(width, height, cap)? {
+                    crate::memory_mode::ResolvedMode::Full => crate::MemoryMode::Full,
+                    crate::memory_mode::ResolvedMode::Strip { h_body } => {
+                        crate::MemoryMode::Strip {
+                            h_body: Some(h_body),
+                        }
+                    }
+                }
+            }
+        };
         let inner: Box<dyn CvvdpInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::cuda::CudaRuntime>::new_with_geometry(
-                    client, width, height, params, geometry,
-                )?)
+                let inst = build_cvvdp_inner::<cubecl::cuda::CudaRuntime>(
+                    client,
+                    width,
+                    height,
+                    params,
+                    geometry,
+                    resolved_mode,
+                )?;
+                Box::new(inst)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::wgpu::WgpuRuntime>::new_with_geometry(
-                    client, width, height, params, geometry,
-                )?)
+                let inst = build_cvvdp_inner::<cubecl::wgpu::WgpuRuntime>(
+                    client,
+                    width,
+                    height,
+                    params,
+                    geometry,
+                    resolved_mode,
+                )?;
+                Box::new(inst)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::cpu::CpuRuntime>::new_with_geometry(
-                    client, width, height, params, geometry,
-                )?)
+                let inst = build_cvvdp_inner::<cubecl::cpu::CpuRuntime>(
+                    client,
+                    width,
+                    height,
+                    params,
+                    geometry,
+                    resolved_mode,
+                )?;
+                Box::new(inst)
             }
         };
         Ok(Self {
@@ -417,6 +462,24 @@ impl CvvdpOpaque {
     /// the pipeline. See [`crate::pipeline::Cvvdp::warm_reference`].
     pub fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()> {
         self.inner.warm_reference_srgb(ref_rgb)
+    }
+
+    /// `true` if a warm reference state is currently cached. In strip
+    /// mode (mode E) the cache survives intervening one-shot
+    /// dispatches; in Full mode it is invalidated by any REF-
+    /// dispatching method (see
+    /// [`crate::pipeline::Cvvdp::warm_reference`] for the
+    /// invalidation contract).
+    pub fn has_warm_reference(&self) -> bool {
+        self.inner.has_warm_reference()
+    }
+
+    /// `true` if this scorer was built with
+    /// [`crate::MemoryMode::Strip`] (mode E). See module-level
+    /// [`crate::memory_mode`] docs for the JOD-preservation
+    /// rationale.
+    pub fn is_strip_mode(&self) -> bool {
+        self.inner.is_strip_mode()
     }
 
     /// Score a DIST candidate against the warm REF state. Pass
@@ -495,6 +558,28 @@ pub(crate) fn to_srgb_rgb8(
         expected: (expected_w as usize) * (expected_h as usize) * 3,
         got: (s.width() as usize) * (s.rows() as usize) * 3,
     })
+}
+
+/// Build a typed [`Cvvdp<R>`] honoring the resolved memory mode. The
+/// opaque constructor calls this once per backend variant.
+fn build_cvvdp_inner<R: cubecl::Runtime>(
+    client: cubecl::prelude::ComputeClient<R>,
+    width: u32,
+    height: u32,
+    params: CvvdpParams,
+    geometry: crate::params::DisplayGeometry,
+    mode: crate::MemoryMode,
+) -> Result<Cvvdp<R>> {
+    use crate::memory_mode::STRIP_H_BODY_DEFAULT;
+    match mode {
+        crate::MemoryMode::Full | crate::MemoryMode::Auto => {
+            Cvvdp::<R>::new_with_geometry(client, width, height, params, geometry)
+        }
+        crate::MemoryMode::Strip { h_body } => {
+            let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+            Cvvdp::<R>::new_strip_with_geometry(client, width, height, body, params, geometry)
+        }
+    }
 }
 
 #[cfg(feature = "pixels")]

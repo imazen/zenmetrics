@@ -952,8 +952,14 @@ impl Metric {
             Metric::Ssim2(m) => m.has_cached_reference(),
             #[cfg(feature = "dssim")]
             Metric::Dssim(m) => m.has_cached_reference(),
+            // cvvdp gained `has_warm_reference` in task #79 (Mode E).
+            // The strip-mode cache survives intervening dispatches
+            // because it lives in dedicated buffers; the Full-mode
+            // cache invalidates per `Cvvdp::warm_reference`'s
+            // contract. Either way the accessor reflects the
+            // currently-cached state.
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(_) => false,
+            Metric::Cvvdp(m) => m.has_warm_reference(),
             #[cfg(feature = "zensim")]
             Metric::Zensim(_) => false,
         }

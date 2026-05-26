@@ -101,9 +101,9 @@ use crate::kernels::masking::{
     CH_GAIN, MASK_C, PU_PADSIZE,
 };
 use crate::kernels::pool::{
-    do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean, pool_band_3ch_kernel,
-    pool_band_3ch_lds_kernel, pool_band_finalize, BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W,
-    POOL_LDS_BLOCK_DIM,
+    copy_f32_kernel, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
+    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_finalize, BASEBAND_W, BETA_CH,
+    BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
@@ -328,6 +328,66 @@ fn build_d_bands_scratch<R: Runtime>(
     out
 }
 
+/// Dedicated ref-side full-image state populated by
+/// [`Cvvdp::set_reference_strip`] when running in [`MemoryMode::Strip`].
+/// The shared `bands_ref` / `weber_scratch[k].log_l_bkg` scratch lives
+/// in the `Cvvdp` struct and gets clobbered by one-shot dispatches; the
+/// strip-mode cached-ref path needs its own copy of the ref pyramid +
+/// log_l_bkg planes so per-strip dist scoring can read ref data
+/// without the every-call REF dispatch re-running.
+///
+/// Phase 2 (task #79) introduces this struct; Phase 3 will wire the
+/// per-strip dist walker that reads from these buffers via row-slab
+/// copies into the strip-sized working-set buffers.
+///
+/// Layout mirrors what [`Cvvdp::warm_reference`] writes into
+/// `self.bands_ref[k]` + `self.weber_scratch[k].log_l_bkg`:
+///
+/// - `bands[k][c]` — per-level Weber-contrast band, `w_k × h_k` f32
+///   plane, one per DKL channel.
+/// - `log_l_bkg[k]` — per-non-baseband-level `log10(L_bkg)`,
+///   `w_k × h_k` f32 plane (consumed by the per-band CSF apply).
+/// - `baseband_gauss[c]` — baseband gauss pyramid level (read by the
+///   band loop's baseband path when computing `inv_l_bkg_mean`). One
+///   per DKL channel.
+/// - `baseband_log_l_bkg_scalar` — host-side scalar mirroring the
+///   value [`Cvvdp::warm_reference`] caches in
+///   `warm_ref_baseband_log_l_bkg`.
+struct RefFullState {
+    /// Per-level Weber-contrast bands: `bands[k][c]` is one `w_k × h_k`
+    /// f32 plane per DKL channel.
+    bands: Vec<[cubecl::server::Handle; N_CHANNELS]>,
+    /// Per-non-baseband-level `log10(L_bkg)` plane. Indexed `0..n_levels - 1`.
+    log_l_bkg: Vec<cubecl::server::Handle>,
+    /// Per-DKL-channel baseband gauss level. Used by the band loop's
+    /// baseband path (the masking baseband bypass reads gauss[last]
+    /// directly via `baseband_divide_3ch_kernel`).
+    baseband_gauss: [cubecl::server::Handle; N_CHANNELS],
+    /// Host-side baseband `log10(L_bkg)` scalar, mirroring
+    /// `warm_ref_baseband_log_l_bkg` in Full mode.
+    baseband_log_l_bkg_scalar: f32,
+}
+
+/// Strip-processing configuration, present iff this [`Cvvdp<R>`] was
+/// constructed via [`Cvvdp::new_strip`] (or
+/// [`Cvvdp::new_with_memory_mode`] resolving to
+/// [`crate::ResolvedMode::Strip`]). Drives the strip-walker dispatch
+/// in [`Cvvdp::compute_dkl_jod_with_warm_ref`] when the strip cached-
+/// ref state is set.
+///
+/// Phase 1 (task #79) introduces the type with `h_body` storage. The
+/// strip walker dispatch lands in Phase 3 — until then,
+/// `compute_dkl_jod_with_warm_ref` surfaces a not-yet-implemented
+/// error when called in strip mode (the public API enforces "set
+/// reference, then call compute" so callers see the error before
+/// any dist work has been queued).
+#[derive(Debug, Clone, Copy)]
+struct StripConfig {
+    /// Dist-side strip body height in rows at scale 0.
+    #[allow(dead_code)] // consumed in Phase 3
+    h_body: u32,
+}
+
 /// Reference-side state kept across `score_with_reference` calls.
 ///
 /// Stashes the raw sRGB bytes; every `score_with_reference` call
@@ -504,6 +564,18 @@ pub struct Cvvdp<R: Runtime> {
     /// call; `None` until then. Skipped entirely on the sRGB-byte
     /// upload path.
     linear_planes_upload: Option<LinearPlanesUpload>,
+
+    /// Strip-mode configuration. `Some(_)` iff this `Cvvdp<R>` was
+    /// built via [`Cvvdp::new_strip`] / `new_with_memory_mode` resolving
+    /// to [`crate::ResolvedMode::Strip`]. Drives the cached-ref strip
+    /// walker dispatch (Phase 3+).
+    strip_config: Option<StripConfig>,
+
+    /// Dedicated full-image ref-side state for strip mode. Populated
+    /// by [`Cvvdp::set_reference_strip`] when in strip mode; `None`
+    /// before set_reference and in non-strip configurations. See
+    /// [`RefFullState`] for the layout.
+    ref_full_state: Option<RefFullState>,
 }
 
 fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
@@ -650,6 +722,73 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
             + weber_bytes
             + baseband_bytes,
     )
+}
+
+/// Strip-mode (Mode E) GPU-memory estimator. Returns the working-set
+/// bytes when the cvvdp pipeline is constructed via
+/// [`Cvvdp::new_strip`]:
+///
+/// - Full ref state on device (dedicated buffers, identical layout to
+///   [`Cvvdp::warm_reference`] but stored in a separate [`RefFullState`]
+///   so the shared `bands_ref` / `weber_scratch` scratch can house
+///   per-strip dist-side traffic without clobbering the ref).
+/// - Strip-sized dist working set: per-level pyramids sized for one
+///   `(h_body + 2 × halo)` strip rather than the full image.
+///
+/// Returns `None` if `(width, height)` is below the pyramid minimum or
+/// if `h_body` is zero / mis-aligned. Mirrors
+/// [`estimate_gpu_memory_bytes`]'s caveats (geometry-derived `n_levels`,
+/// transient overhead excluded).
+///
+/// This estimator is intentionally **conservative** in this initial
+/// landing (task #79 Phase 1): it bounds the strip footprint by the
+/// full-image footprint **plus** a small fixed delta for the dedicated
+/// ref cache. As the strip walker (Phase 3) shrinks the dist working
+/// set, this estimator will tighten. Today the value is suitable for
+/// "Strip is at most this much" decisions in `resolve_auto`, not for
+/// fine-grained capacity planning.
+#[must_use]
+pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> Option<usize> {
+    use crate::memory_mode::STRIP_ALIGN;
+    if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+        return None;
+    }
+    let full_bytes = estimate_gpu_memory_bytes(width, height)?;
+    let ppd = crate::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let n_levels = pyramid_levels(ppd, width, height) as usize;
+
+    // Dedicated ref-full state: 3 channels × sum-of-per-level pixels ×
+    // f32 for ref bands + 3 channels × full-image pixels × f32 for the
+    // baseband gauss (read by the band loop's baseband path) + per-
+    // non-baseband-level log_l_bkg (one fine-sized f32 plane per level).
+    let mut sum_level_pixels: usize = 0;
+    let mut log_l_bkg_pixels: usize = 0;
+    let mut w = width;
+    let mut h = height;
+    for k in 0..n_levels {
+        let n = (w as usize) * (h as usize);
+        sum_level_pixels += n;
+        if k < n_levels - 1 {
+            log_l_bkg_pixels += n;
+        }
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
+    }
+    let ref_full_bands_bytes = crate::N_CHANNELS * sum_level_pixels * 4;
+    let ref_full_log_l_bkg_bytes = log_l_bkg_pixels * 4;
+    let ref_full_baseband_gauss_bytes =
+        crate::N_CHANNELS * width.div_ceil(1 << (n_levels - 1)) as usize
+            * height.div_ceil(1 << (n_levels - 1)) as usize
+            * 4;
+    let ref_full_bytes =
+        ref_full_bands_bytes + ref_full_log_l_bkg_bytes + ref_full_baseband_gauss_bytes;
+
+    // h_body is currently unused by the (not-yet-implemented) strip
+    // dispatch — Phase 3 will replace this conservative bound with a
+    // strip-sized dist-working-set estimate.
+    let _ = h_body;
+
+    Some(full_bytes.saturating_add(ref_full_bytes))
 }
 
 /// Safety factor applied by [`recommend_parallel`] on top of the raw
@@ -811,13 +950,15 @@ impl<R: Runtime> Cvvdp<R> {
 
     /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
     ///
-    /// - `Full` → standard full-image pipeline.
-    /// - `Auto` → Full when it fits the cap, else
-    ///   [`crate::Error::TooBigForFull`].
+    /// - `Full` → standard full-image pipeline ([`Self::new`]).
+    /// - `Strip { h_body }` → Mode E pipeline ([`Self::new_strip`]).
+    ///   `h_body = None` resolves to
+    ///   [`crate::memory_mode::STRIP_H_BODY_DEFAULT`].
+    /// - `Auto` → Full when it fits the cap, else Strip with the
+    ///   default `h_body`.
     ///
-    /// cvvdp-gpu only supports whole-image processing. The Strip
-    /// (capped-pyramid) variant was rolled back in task #77 — see
-    /// `docs/STRIP_PROCESSING.md`.
+    /// See [`crate::memory_mode`] module docs for the mode-E
+    /// JOD-preservation rationale.
     pub fn new_with_memory_mode(
         client: ComputeClient<R>,
         width: u32,
@@ -825,14 +966,21 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
-        use crate::memory_mode::{resolve_auto, vram_cap_bytes, ResolvedMode};
+        use crate::memory_mode::{resolve_auto, vram_cap_bytes, ResolvedMode, STRIP_H_BODY_DEFAULT};
         use crate::MemoryMode;
         match mode {
             MemoryMode::Full => Self::new(client, width, height, params),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+                Self::new_strip(client, width, height, body, params)
+            }
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
                 match resolve_auto(width, height, cap)? {
                     ResolvedMode::Full => Self::new(client, width, height, params),
+                    ResolvedMode::Strip { h_body } => {
+                        Self::new_strip(client, width, height, h_body, params)
+                    }
                 }
             }
         }
@@ -1038,7 +1186,113 @@ impl<R: Runtime> Cvvdp<R> {
             warm_ref_baseband_log_l_bkg: None,
             diffmap_scratch: None,
             linear_planes_upload: None,
+            strip_config: None,
+            ref_full_state: None,
         })
+    }
+
+    /// Allocate GPU buffers for strip-mode (Mode E) processing.
+    ///
+    /// In strip mode:
+    /// - One-shot scoring ([`Self::score`]) still runs the standard
+    ///   full-image dispatch — same memory profile as
+    ///   [`Self::new`]. Strip mode does NOT change the one-shot path
+    ///   because that path's working set IS the dist working set
+    ///   that mode E aims to shrink (and we can't shrink it without
+    ///   the strip walker, which is meaningful only for cached-ref).
+    /// - Cached-ref scoring ([`Self::set_reference_strip`] +
+    ///   [`Self::compute_with_cached_reference_strip`]) lands the
+    ///   ref-side state into a dedicated [`RefFullState`]
+    ///   (full-image-sized, populated once), then walks the dist
+    ///   side in `(h_body + halo)` strips.
+    ///
+    /// **Phase 1 landing (task #79):** the constructor allocates the
+    /// strip config + dedicated ref-state storage. The strip-walker
+    /// dispatch itself (Phase 3) is not yet wired —
+    /// `compute_with_cached_reference_strip` surfaces a
+    /// [`Error::ModeUnsupported`] until Phase 3 lands. Callers can
+    /// detect this at construction time via [`Self::is_strip_mode`]
+    /// and fall back to Full mode at the application layer.
+    ///
+    /// `h_body` must be a positive multiple of
+    /// [`crate::memory_mode::STRIP_ALIGN`] (= 256). See
+    /// [`crate::memory_mode::STRIP_H_BODY_DEFAULT`] for the recommended
+    /// default.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidImageSize`] if either dimension is
+    /// smaller than [`crate::PYRAMID_MIN_DIM`] × 2, or
+    /// [`Error::ModeUnsupported`] if `h_body` is zero or not aligned.
+    pub fn new_strip(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        h_body: u32,
+        params: CvvdpParams,
+    ) -> Result<Self> {
+        Self::new_strip_with_geometry(
+            client,
+            width,
+            height,
+            h_body,
+            params,
+            crate::params::DisplayGeometry::STANDARD_4K,
+        )
+    }
+
+    /// Strip-mode constructor with a custom display geometry. See
+    /// [`Self::new_strip`] for the strip-mode semantics and
+    /// [`Self::new_with_geometry`] for the display-geometry semantics.
+    pub fn new_strip_with_geometry(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        h_body: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+    ) -> Result<Self> {
+        use crate::memory_mode::STRIP_ALIGN;
+        if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+            return Err(Error::ModeUnsupported("Strip { h_body=invalid }"));
+        }
+        let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
+        this.strip_config = Some(StripConfig { h_body });
+        Ok(this)
+    }
+
+    /// `true` if this scorer was built for strip-mode processing.
+    /// See [`Self::new_strip`].
+    pub fn is_strip_mode(&self) -> bool {
+        self.strip_config.is_some()
+    }
+
+    /// Strip-mode dist body height in rows, or `None` if not in strip
+    /// mode. Returns the value passed to [`Self::new_strip`] (or
+    /// resolved by [`Self::new_with_memory_mode`]).
+    pub fn strip_h_body(&self) -> Option<u32> {
+        self.strip_config.as_ref().map(|c| c.h_body)
+    }
+
+    /// `true` if a warm reference state is currently cached on device,
+    /// `false` if [`Self::warm_reference`] has not been called or the
+    /// warm state was invalidated by an intervening REF-dispatching
+    /// method (see [`Self::warm_reference`] for the invalidation
+    /// contract).
+    ///
+    /// In strip mode the warm state lives in the dedicated
+    /// [`RefFullState`] buffers — which survive intervening
+    /// dispatches because the shared scratch (which gets clobbered)
+    /// isn't where strip-mode's cached state lives. So strip-mode
+    /// `has_warm_reference()` stays `true` as long as
+    /// [`Self::warm_reference`] was called at least once on this
+    /// instance.
+    pub fn has_warm_reference(&self) -> bool {
+        if self.strip_config.is_some() {
+            self.ref_full_state.is_some()
+        } else {
+            self.warm_ref_baseband_log_l_bkg.is_some()
+        }
     }
 
     /// Pyramid level `k`'s spatial dimensions as `(bw, bh, n_px)`.
@@ -3449,9 +3703,10 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        // Mode E (task #79): in strip mode, restore ref state from
+        // `ref_full_state`. See compute_dkl_jod_with_warm_ref for the
+        // full rationale.
+        let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
         self._host_pool_and_finalize_jod()
     }
@@ -3569,7 +3824,216 @@ impl<R: Runtime> Cvvdp<R> {
         }
         let log_l_bkg_baseband = self._dispatch_ref_weber_pyramid_only(ref_srgb)?;
         self.warm_ref_baseband_log_l_bkg = Some(log_l_bkg_baseband);
+
+        // Mode E (task #79): when running in strip mode, snapshot the
+        // ref-side state from the shared `bands_ref` / `weber_scratch`
+        // scratch into the dedicated `ref_full_state` buffers so the
+        // cached state survives across any intervening one-shot
+        // dispatches (which clobber the shared scratch). Phase 3 will
+        // add a strip-walker dispatch that reads directly from
+        // `ref_full_state` per strip.
+        if self.strip_config.is_some() {
+            self._snapshot_ref_state_to_full(log_l_bkg_baseband)?;
+        }
         Ok(())
+    }
+
+    /// Allocate the dedicated [`RefFullState`] buffers if absent. Lazy
+    /// because Full-mode constructions don't need them and the
+    /// allocation cost is non-trivial at 4 MP+ (`~3 × N_CHANNELS × W ×
+    /// H × 4 bytes ≈ 144 MB` at 12 MP for the pyramid).
+    fn _ensure_ref_full_state(&mut self) {
+        if self.ref_full_state.is_some() {
+            return;
+        }
+        let n_levels = self.n_levels as usize;
+        let mut bands: Vec<[cubecl::server::Handle; N_CHANNELS]> = Vec::with_capacity(n_levels);
+        let mut log_l_bkg: Vec<cubecl::server::Handle> = Vec::with_capacity(n_levels - 1);
+        let mut w = self.width;
+        let mut h = self.height;
+        for k in 0..n_levels {
+            let n = (w as usize) * (h as usize);
+            bands.push([
+                alloc_zeros_f32(&self.client, n),
+                alloc_zeros_f32(&self.client, n),
+                alloc_zeros_f32(&self.client, n),
+            ]);
+            if k < n_levels - 1 {
+                log_l_bkg.push(alloc_zeros_f32(&self.client, n));
+            }
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        // Baseband gauss has its own slot: 3 channels × baseband size.
+        let last = n_levels - 1;
+        let bb_w = self.gauss_ref[last].w as usize;
+        let bb_h = self.gauss_ref[last].h as usize;
+        let bb_n = bb_w * bb_h;
+        let baseband_gauss = [
+            alloc_zeros_f32(&self.client, bb_n),
+            alloc_zeros_f32(&self.client, bb_n),
+            alloc_zeros_f32(&self.client, bb_n),
+        ];
+        self.ref_full_state = Some(RefFullState {
+            bands,
+            log_l_bkg,
+            baseband_gauss,
+            baseband_log_l_bkg_scalar: 0.0,
+        });
+    }
+
+    /// Snapshot the ref-side state from the shared scratch
+    /// (`bands_ref` + `weber_scratch[k].log_l_bkg` + baseband gauss in
+    /// `gauss_ref[last]`) into the dedicated [`RefFullState`] buffers.
+    /// Called at the end of [`Self::warm_reference`] when running in
+    /// strip mode.
+    ///
+    /// Uses a per-level [`copy_f32_kernel`] launch per channel per
+    /// data plane. Per-strip dist scoring later reads from these
+    /// dedicated buffers.
+    fn _snapshot_ref_state_to_full(&mut self, log_l_bkg_baseband: f32) -> Result<()> {
+        self._ensure_ref_full_state();
+        let n_levels = self.n_levels as usize;
+        let cube_dim = CubeDim::new_1d(64);
+        let mut w = self.width;
+        let mut h = self.height;
+        let state = self
+            .ref_full_state
+            .as_mut()
+            .expect("ensured above");
+        for k in 0..n_levels {
+            let n = (w as usize) * (h as usize);
+            let count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+            for c in 0..N_CHANNELS {
+                let src = self.bands_ref[k].planes[c].clone();
+                let dst = state.bands[k][c].clone();
+                unsafe {
+                    copy_f32_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(src, n),
+                        ArrayArg::from_raw_parts(dst, n),
+                        n as u32,
+                    );
+                }
+            }
+            if k < n_levels - 1 {
+                let src = self.weber_scratch[k].log_l_bkg.clone();
+                let dst = state.log_l_bkg[k].clone();
+                unsafe {
+                    copy_f32_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(src, n),
+                        ArrayArg::from_raw_parts(dst, n),
+                        n as u32,
+                    );
+                }
+            }
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        // Baseband gauss: 3 channels of gauss_ref[last].
+        let last = n_levels - 1;
+        let bb_n = (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
+        let bb_count = CubeCount::Static((bb_n as u32).div_ceil(64), 1, 1);
+        for c in 0..N_CHANNELS {
+            let src = self.gauss_ref[last].planes[c].clone();
+            let dst = state.baseband_gauss[c].clone();
+            unsafe {
+                copy_f32_kernel::launch::<R>(
+                    &self.client,
+                    bb_count.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(src, bb_n),
+                    ArrayArg::from_raw_parts(dst, bb_n),
+                    bb_n as u32,
+                );
+            }
+        }
+        state.baseband_log_l_bkg_scalar = log_l_bkg_baseband;
+        Ok(())
+    }
+
+    /// Restore the dedicated [`RefFullState`] back into the shared
+    /// `bands_ref` / `weber_scratch[k].log_l_bkg` / `gauss_ref[last]`
+    /// scratch ahead of a strip-mode cached-ref dispatch. The shared
+    /// scratch is what every downstream kernel reads from, so this
+    /// "rebind" step is what makes the cached ref state survive
+    /// intervening one-shot scoring calls.
+    ///
+    /// Returns the cached baseband `log10(L_bkg)` scalar so the caller
+    /// can pass it into the band loop without re-deriving it.
+    fn _restore_ref_state_from_full(&mut self) -> Result<f32> {
+        let scalar = self
+            .ref_full_state
+            .as_ref()
+            .ok_or(Error::NoWarmReference)?
+            .baseband_log_l_bkg_scalar;
+        let n_levels = self.n_levels as usize;
+        let cube_dim = CubeDim::new_1d(64);
+        let mut w = self.width;
+        let mut h = self.height;
+        for k in 0..n_levels {
+            let n = (w as usize) * (h as usize);
+            let count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+            // Borrow state through a fresh ref so we can also access
+            // self.bands_ref / weber_scratch (different fields, no
+            // borrow conflict).
+            let state = self.ref_full_state.as_ref().expect("checked above");
+            for c in 0..N_CHANNELS {
+                let src = state.bands[k][c].clone();
+                let dst = self.bands_ref[k].planes[c].clone();
+                unsafe {
+                    copy_f32_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(src, n),
+                        ArrayArg::from_raw_parts(dst, n),
+                        n as u32,
+                    );
+                }
+            }
+            if k < n_levels - 1 {
+                let src = state.log_l_bkg[k].clone();
+                let dst = self.weber_scratch[k].log_l_bkg.clone();
+                unsafe {
+                    copy_f32_kernel::launch::<R>(
+                        &self.client,
+                        count.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(src, n),
+                        ArrayArg::from_raw_parts(dst, n),
+                        n as u32,
+                    );
+                }
+            }
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        // Baseband gauss restore.
+        let last = n_levels - 1;
+        let bb_n = (self.gauss_ref[last].w as usize) * (self.gauss_ref[last].h as usize);
+        let bb_count = CubeCount::Static((bb_n as u32).div_ceil(64), 1, 1);
+        let state = self.ref_full_state.as_ref().expect("checked above");
+        for c in 0..N_CHANNELS {
+            let src = state.baseband_gauss[c].clone();
+            let dst = self.gauss_ref[last].planes[c].clone();
+            unsafe {
+                copy_f32_kernel::launch::<R>(
+                    &self.client,
+                    bb_count.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(src, bb_n),
+                    ArrayArg::from_raw_parts(dst, bb_n),
+                    bb_n as u32,
+                );
+            }
+        }
+        Ok(scalar)
     }
 
     /// Score a DIST candidate against the GPU-warmed REF. Same JOD
@@ -3664,9 +4128,16 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        // Mode E (task #79): in strip mode, restore the cached ref
+        // state from the dedicated `ref_full_state` buffers ahead of
+        // the dist dispatch. The shared `bands_ref` /
+        // `weber_scratch.log_l_bkg` scratch may have been clobbered
+        // by an intervening one-shot call; the restore pre-populates
+        // them with the cached values. The strip-walker (Phase 3)
+        // will instead read directly from `ref_full_state` per strip
+        // — for Phase 2 the restore-then-run-Full-dispatch path keeps
+        // the JOD value bit-identical with Full-mode warm_reference.
+        let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
         self._pool_and_finalize_jod()
     }
@@ -4371,11 +4842,30 @@ impl<R: Runtime> Cvvdp<R> {
                 got: dist_srgb.len(),
             });
         }
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
         self._pool_and_finalize_jod_with_diffmap(diffmap_out)
+    }
+
+    /// Returns the baseband `log10(L_bkg)` scalar for the cached ref
+    /// state, restoring `ref_full_state` into the shared `bands_ref` /
+    /// `weber_scratch.log_l_bkg` / `gauss_ref[last]` scratch when in
+    /// strip mode. Shared helper across every warm-ref dispatcher
+    /// (sRGB-byte, linear-planes, diffmap variants).
+    ///
+    /// Returns [`Error::NoWarmReference`] if no warm REF state is
+    /// cached (Full mode: `warm_ref_baseband_log_l_bkg` is `None`;
+    /// strip mode: `ref_full_state` is `None`).
+    fn _warm_ref_baseband_log_l_bkg_for_dispatch(&mut self) -> Result<f32> {
+        if self.strip_config.is_some() {
+            if self.ref_full_state.is_none() {
+                return Err(Error::NoWarmReference);
+            }
+            self._restore_ref_state_from_full()
+        } else {
+            self.warm_ref_baseband_log_l_bkg
+                .ok_or(Error::NoWarmReference)
+        }
     }
 
     /// One-shot score from three planar `W × H` linear-RGB f32
@@ -4457,6 +4947,12 @@ impl<R: Runtime> Cvvdp<R> {
         let log_l_bkg_baseband =
             self._dispatch_ref_weber_pyramid_only_from_linear_planes(ref_r, ref_g, ref_b)?;
         self.warm_ref_baseband_log_l_bkg = Some(log_l_bkg_baseband);
+
+        // Mode E (task #79): snapshot for the strip-mode cached-ref
+        // contract — see `warm_reference` for the rationale.
+        if self.strip_config.is_some() {
+            self._snapshot_ref_state_to_full(log_l_bkg_baseband)?;
+        }
         Ok(())
     }
 
@@ -4478,9 +4974,7 @@ impl<R: Runtime> Cvvdp<R> {
         dist_b: &[f32],
     ) -> Result<f32> {
         let _ = self._validate_linear_planes(dist_r, dist_g, dist_b)?;
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop_from_linear_planes(
             dist_r,
             dist_g,
@@ -4504,9 +4998,7 @@ impl<R: Runtime> Cvvdp<R> {
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
         let _ = self._validate_linear_planes(dist_r, dist_g, dist_b)?;
-        let log_l_bkg_baseband = self
-            .warm_ref_baseband_log_l_bkg
-            .ok_or(Error::NoWarmReference)?;
+        let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop_from_linear_planes(
             dist_r,
             dist_g,

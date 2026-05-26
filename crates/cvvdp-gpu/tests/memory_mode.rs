@@ -58,40 +58,65 @@ fn auto_errors_when_too_big_for_full() {
 }
 
 #[test]
-fn only_auto_and_full_variants_exist() {
-    // Task #77 rollback contract: cvvdp's MemoryMode enum is now
-    // `{ Auto, Full }`. Strip and Tile were removed because the
-    // capped-pyramid Strip variant changed the JOD value at any
-    // k < 9.
+fn enum_variants_match_task79_contract() {
+    // Task #79 contract: cvvdp's MemoryMode enum is
+    // `{ Auto, Full, Strip { h_body } }`. The capped-pyramid Strip
+    // variant rolled back in task #77 is gone; the mode-E Strip
+    // variant landed in task #79 (ref-full + per-strip dist
+    // cached-ref, JOD-preserving).
     let _auto = MemoryMode::Auto;
     let _full = MemoryMode::Full;
+    let _strip = MemoryMode::Strip { h_body: None };
+    let _strip_explicit = MemoryMode::Strip {
+        h_body: Some(memory_mode::STRIP_H_BODY_DEFAULT),
+    };
     // Exhaustive match — would fail to compile if a variant were
-    // re-introduced without updating this test.
+    // added without updating this test.
     let m = MemoryMode::Auto;
     let _ = match m {
         MemoryMode::Auto => 0u32,
         MemoryMode::Full => 1u32,
+        MemoryMode::Strip { .. } => 2u32,
     };
 }
 
 #[test]
-fn umbrella_strip_and_tile_map_to_cvvdp_auto() {
-    // The umbrella `MemoryMode::Strip { h_body }` and
-    // `MemoryMode::Tile { h, w }` map down to cvvdp's `Auto` via the
-    // From conversion in zenmetrics-api (cvvdp can no longer
-    // represent Strip/Tile). This test pins the direct cvvdp side of
-    // the contract: cvvdp_gpu::MemoryMode constructed via `Auto`
-    // resolves identically to what an umbrella::Strip/Tile request
-    // would route to.
+fn umbrella_strip_maps_to_cvvdp_strip() {
+    // Task #79: the umbrella `MemoryMode::Strip { h_body }` maps to
+    // cvvdp's own `Strip { h_body }` (no longer falls back to Auto
+    // since the JOD-preserving Mode E variant ships).
+    //
+    // Tile { h, w } still falls back to Auto — no tile-walker is
+    // implemented in any per-crate pipeline.
     //
     // The actual zenmetrics_api::MemoryMode → cvvdp_gpu::MemoryMode
     // From impl is covered by zenmetrics-api's own tests; here we
-    // pin that cvvdp's Auto path works end-to-end through
-    // new_with_memory_mode without surfacing ModeUnsupported.
+    // pin that cvvdp's Auto path resolves to Full at small sizes
+    // (the standard happy path).
     let cap = memory_mode::vram_cap_bytes();
-    // A modest size that fits any reasonable VRAM cap.
     let r = memory_mode::resolve_auto(256, 256, cap).expect("Auto should resolve");
     assert_eq!(r, ResolvedMode::Full);
+}
+
+#[test]
+fn strip_align_matches_max_levels() {
+    // STRIP_ALIGN must equal 2^(MAX_LEVELS - 1) so the per-level
+    // ceil-div halving in the Weber pyramid doesn't drift through
+    // the strip body boundary. MAX_LEVELS = 9 → STRIP_ALIGN = 256.
+    assert_eq!(
+        memory_mode::STRIP_ALIGN,
+        1 << (cvvdp_gpu::MAX_LEVELS as u32 - 1)
+    );
+    assert_eq!(memory_mode::STRIP_ALIGN, 256);
+}
+
+#[test]
+fn strip_h_body_default_is_aligned_and_positive() {
+    assert!(memory_mode::STRIP_H_BODY_DEFAULT > 0);
+    assert_eq!(
+        memory_mode::STRIP_H_BODY_DEFAULT % memory_mode::STRIP_ALIGN,
+        0
+    );
 }
 
 #[test]

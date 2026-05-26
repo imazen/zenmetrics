@@ -158,25 +158,29 @@ impl From<MemoryMode> for iwssim_gpu::MemoryMode {
     }
 }
 
-// cvvdp + zensim only support Full + Auto today; Strip/Tile fall back
-// to Auto so callers get the closest-meaning policy without an error
+// zensim still only supports Full + Auto today; Tile falls back to
+// Auto so callers get the closest-meaning policy without an error
 // at the umbrella boundary. Per-crate `new_with_memory_mode` already
 // surfaces a clear error if the resolved mode isn't supported.
+//
+// cvvdp-gpu gained Strip (Mode E) in task #79 — see
+// `cvvdp-gpu/src/memory_mode.rs` and `STRIP_PROCESSING.md`. The
+// strip-walker dispatch lands in phases; until Phase 3 ships,
+// strip-mode `compute_with_cached_reference_strip` returns
+// `ModeUnsupported` and callers should fall back to Full mode at
+// the application layer.
 
 #[cfg(feature = "cvvdp")]
 impl From<MemoryMode> for cvvdp_gpu::MemoryMode {
     fn from(m: MemoryMode) -> Self {
-        // cvvdp-gpu only supports { Auto, Full } as of task #77 — the
-        // capped-pyramid Strip variant was rolled back because it
-        // changed the JOD value at any k < 9. Both umbrella::Strip
-        // and umbrella::Tile map down to cvvdp's Auto: callers asking
-        // for a partitioned working set get the closest-meaning policy
-        // (Auto picks Full when it fits the cap, else surfaces
-        // TooBigForFull). See `cvvdp-gpu/docs/STRIP_PROCESSING.md`.
+        // Mode E (task #79) reintroduces Strip — JOD-preserving via a
+        // full ref state + per-strip dist walker. The previous
+        // capped-pyramid variant (task #77 rollback) was JOD-changing
+        // and is not what this enum maps to.
         match m {
             MemoryMode::Auto => cvvdp_gpu::MemoryMode::Auto,
             MemoryMode::Full => cvvdp_gpu::MemoryMode::Full,
-            MemoryMode::Strip { h_body: _ } => cvvdp_gpu::MemoryMode::Auto,
+            MemoryMode::Strip { h_body } => cvvdp_gpu::MemoryMode::Strip { h_body },
             MemoryMode::Tile { h: _, w: _ } => cvvdp_gpu::MemoryMode::Auto,
         }
     }
