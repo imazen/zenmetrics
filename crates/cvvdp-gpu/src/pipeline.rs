@@ -2551,7 +2551,12 @@ impl<R: Runtime> Cvvdp<R> {
             let coarse_h = self.gauss_ref[k + 1].h;
             let fine_w = self.gauss_ref[k].w;
             let fine_h = self.gauss_ref[k].h;
-            let n_v = (coarse_w * fine_h) as usize;
+            // `n_v` (coarse_w × fine_h) would be the FULL vscratch
+            // buffer's element count; the strip path computes
+            // `n_strip_v` per strip below from `coarse_w × body_h`.
+            // The full count isn't referenced here — it's kept as a
+            // doc breadcrumb to mirror the legacy weber finalize.
+            let _n_v_full = (coarse_w * fine_h) as usize;
             let n_fine = (fine_w * fine_h) as usize;
             let n_coarse = (coarse_w * coarse_h) as usize;
 
@@ -4005,8 +4010,51 @@ impl<R: Runtime> Cvvdp<R> {
                     scratch.d[2].clone(),
                 ];
                 let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
+                // Mode B: per-band per-strip dispatch of the masking
+                // chain (min_abs → pu_blur_h → pu_blur_v → mult_mutual).
+                // The V-blur is the only kernel with Y-axis dependency;
+                // we dispatch the whole chain over a halo-padded strip
+                // window so the per-strip V-blur reads correct rows of
+                // m_mid (populated by per-strip h-blur on the same
+                // window). mult_mutual processes ONLY body rows so the
+                // d band buffer stays valid. See
+                // _run_band_masking_strip_walker docstring for the
+                // halo-padded buffer convention.
+                let mode_b = matches!(
+                    self.strip_config,
+                    Some(StripConfig { mode: StripMode::Pair, .. }),
+                );
                 unsafe {
-                    if use_blur {
+                    if use_blur && mode_b {
+                        let m_raw_h: [cubecl::server::Handle; 3] = [
+                            scratch.m_raw[0].clone(),
+                            scratch.m_raw[1].clone(),
+                            scratch.m_raw[2].clone(),
+                        ];
+                        let m_mid_h: [cubecl::server::Handle; 3] = [
+                            scratch.m_mid[0].clone(),
+                            scratch.m_mid[1].clone(),
+                            scratch.m_mid[2].clone(),
+                        ];
+                        let m_blur_h: [cubecl::server::Handle; 3] = [
+                            scratch.m_blur[0].clone(),
+                            scratch.m_blur[1].clone(),
+                            scratch.m_blur[2].clone(),
+                        ];
+                        self._run_band_masking_strip_walker(
+                            k,
+                            bw,
+                            bh,
+                            n_px,
+                            pu_scale,
+                            &t_p_ref_h,
+                            &t_p_dis_h,
+                            &m_raw_h,
+                            &m_mid_h,
+                            &m_blur_h,
+                            &d_h,
+                        );
+                    } else if use_blur {
                         // min_abs → pu_blur_h → pu_blur_v → mult_mutual_3ch_with_blurred.
                         let m_raw_h: [cubecl::server::Handle; 3] = [
                             scratch.m_raw[0].clone(),
@@ -4125,6 +4173,247 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         Ok(())
+    }
+
+    /// Mode B per-strip masking dispatch within a single non-baseband
+    /// band (k = 0..n_levels-1). The full chain
+    /// `min_abs → pu_blur_h → pu_blur_v_scaled → mult_mutual` is
+    /// dispatched per strip over a halo-padded window of the band
+    /// buffers.
+    ///
+    /// # Halo-padded strip convention
+    ///
+    /// V-blur uses a 13-tap kernel (half = 6), so each strip needs
+    /// `HALO = 6` rows of context above and below its body rows.
+    /// For a body at `[body_offset_y, body_offset_y + body_h)`:
+    ///   `top_global = max(0, body_offset_y - HALO)`
+    ///   `bot_global = min(bh, body_offset_y + body_h + HALO)`
+    ///   `strip_window_h = bot_global - top_global`
+    ///
+    /// The first three chain stages (min_abs / pu_blur_h /
+    /// pu_blur_v_strip) dispatch over the WHOLE halo-padded window —
+    /// they all use offset handles starting at `top_global * bw * 4`.
+    /// V-blur's strip-aware kernel computes
+    /// `y_global = y_strip + body_off_kernel` and uses `body_off_kernel
+    /// = top_global` so reflections against `logical_h = bh` resolve
+    /// to absolute rows; `s[i] = reflect - top_global` then indexes
+    /// into the offset src buffer correctly because that buffer's
+    /// row 0 IS global row top_global.
+    ///
+    /// Halo rows of m_raw / m_mid / m_blur receive garbage values
+    /// (V-blur reflection-vs-buffer-edge math doesn't reach valid
+    /// data) but those rows are NOT read by anything downstream:
+    /// mult_mutual processes ONLY body rows (offset handles by
+    /// `body_offset_y * bw * 4`, n = body_h * bw), so the d band
+    /// buffer only ever sees correct values written to body rows.
+    ///
+    /// Sequential strip dispatch order is critical: GPU stream FIFO
+    /// guarantees strip k's chain completes before strip k+1's
+    /// starts, so strip overlap in m_raw / m_mid / m_blur is safe
+    /// (each strip's chain is self-contained in its window). d band
+    /// rows are partitioned non-overlappingly across strips by body
+    /// offsets so no cross-strip race exists.
+    ///
+    /// `strip_dispatch_counter` increments by 4 per strip (one per
+    /// kernel launch in the chain).
+    #[allow(clippy::too_many_arguments)]
+    fn _run_band_masking_strip_walker(
+        &self,
+        k: usize,
+        bw: usize,
+        bh: usize,
+        n_px: usize,
+        pu_scale: f32,
+        t_p_ref_h: &[cubecl::server::Handle; 3],
+        t_p_dis_h: &[cubecl::server::Handle; 3],
+        m_raw_h: &[cubecl::server::Handle; 3],
+        m_mid_h: &[cubecl::server::Handle; 3],
+        m_blur_h: &[cubecl::server::Handle; 3],
+        d_h: &[cubecl::server::Handle; 3],
+    ) {
+        // PU blur radius — `pu_blur_v_3ch_scaled_strip_aware_kernel`
+        // is a 13-tap (half = 6) kernel.
+        const HALO: usize = 6;
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body as usize,
+            None => return,
+        };
+
+        // Per-band strip body height: scale-0 body halved per level,
+        // clamped to 1. Matches the gauss + Weber strip walkers.
+        let strip_h_at_k = (h_body_at_0 >> k).max(1);
+        let n_strips = if bh <= strip_h_at_k {
+            1
+        } else {
+            bh.div_ceil(strip_h_at_k)
+        };
+
+        for s in 0..n_strips {
+            let body_offset_y = s * strip_h_at_k;
+            let body_h = (bh - body_offset_y).min(strip_h_at_k);
+
+            // Halo-padded window for the H/V blur chain.
+            let top_global = body_offset_y.saturating_sub(HALO);
+            let bot_global = (body_offset_y + body_h + HALO).min(bh);
+            let strip_window_h = bot_global - top_global;
+            let n_strip_window = bw * strip_window_h;
+            let byte_off_window: u64 = (top_global as u64) * (bw as u64) * 4;
+            let count_window =
+                CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+
+            // mult_mutual processes ONLY body rows (no halo).
+            let n_strip_body = bw * body_h;
+            let byte_off_body: u64 = (body_offset_y as u64) * (bw as u64) * 4;
+            let count_body =
+                CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
+
+            // Stage 1: min_abs over halo-padded window.
+            // Per-pixel, no reflection — offset handles + n = window size.
+            let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(byte_off_window);
+            let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(byte_off_window);
+            let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(byte_off_window);
+            let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(byte_off_window);
+            let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(byte_off_window);
+            let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(byte_off_window);
+            let m_raw_a_w = m_raw_h[0].clone().offset_start(byte_off_window);
+            let m_raw_rg_w = m_raw_h[1].clone().offset_start(byte_off_window);
+            let m_raw_vy_w = m_raw_h[2].clone().offset_start(byte_off_window);
+            unsafe {
+                min_abs_3ch_kernel::launch::<R>(
+                    &self.client,
+                    count_window.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(t_p_dis_a_w, n_strip_window),
+                    ArrayArg::from_raw_parts(t_p_dis_rg_w, n_strip_window),
+                    ArrayArg::from_raw_parts(t_p_dis_vy_w, n_strip_window),
+                    ArrayArg::from_raw_parts(t_p_ref_a_w, n_strip_window),
+                    ArrayArg::from_raw_parts(t_p_ref_rg_w, n_strip_window),
+                    ArrayArg::from_raw_parts(t_p_ref_vy_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
+                    n_strip_window as u32,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 2: pu_blur_h_3ch_strip_aware over halo-padded window.
+            // H-blur is X-only; body_offset_y / logical_h are passed
+            // for API uniformity but ignored by the kernel.
+            let m_mid_a_w = m_mid_h[0].clone().offset_start(byte_off_window);
+            let m_mid_rg_w = m_mid_h[1].clone().offset_start(byte_off_window);
+            let m_mid_vy_w = m_mid_h[2].clone().offset_start(byte_off_window);
+            unsafe {
+                pu_blur_h_3ch_strip_aware_kernel::launch::<R>(
+                    &self.client,
+                    count_window.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_mid_a_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_mid_rg_w.clone(), n_strip_window),
+                    ArrayArg::from_raw_parts(m_mid_vy_w.clone(), n_strip_window),
+                    bw as u32,
+                    strip_window_h as u32,
+                    top_global as u32, // body_offset_y (unused by H-pass)
+                    bh as u32,         // logical_h (unused by H-pass)
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 3: pu_blur_v_3ch_scaled_strip_aware over halo-padded
+            // window. The strip-aware V kernel resolves reflection
+            // against `logical_h = bh` and reads src via
+            // `s[i] = reflect(y_global, bh) - body_off_kernel`. We pass
+            // body_off_kernel = top_global so that:
+            //   - y_global = y_strip + top_global  (correct absolute
+            //     row of every dispatched output element)
+            //   - s[i] = reflect - top_global      (correct row index
+            //     into the offset src buffer whose row 0 is global
+            //     row top_global)
+            //
+            // Reflections from interior body rows stay within the
+            // strip window. Reflections from halo rows can resolve to
+            // src rows outside [0, strip_window_h) which underflow
+            // usize and write garbage; this is fine because:
+            //   - Halo rows of dst (m_blur) are never read downstream
+            //     — mult_mutual only reads body rows.
+            //   - Halo rows belong to neighbouring strips' bodies, and
+            //     each neighbouring strip recomputes its body
+            //     correctly on its own dispatch (sequential GPU stream
+            //     ordering preserves this).
+            let m_blur_a_w = m_blur_h[0].clone().offset_start(byte_off_window);
+            let m_blur_rg_w = m_blur_h[1].clone().offset_start(byte_off_window);
+            let m_blur_vy_w = m_blur_h[2].clone().offset_start(byte_off_window);
+            unsafe {
+                pu_blur_v_3ch_scaled_strip_aware_kernel::launch::<R>(
+                    &self.client,
+                    count_window.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(m_mid_a_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_mid_rg_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_mid_vy_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_blur_a_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_blur_rg_w, n_strip_window),
+                    ArrayArg::from_raw_parts(m_blur_vy_w, n_strip_window),
+                    pu_scale,
+                    bw as u32,
+                    strip_window_h as u32,
+                    top_global as u32,
+                    bh as u32,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 4: mult_mutual_3ch_with_blurred — process body
+            // rows only. Reads body rows of m_blur (correct from V-blur)
+            // + body rows of t_p/r_p (correct from CSF full-band
+            // dispatch) and writes body rows of d.
+            let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(byte_off_body);
+            let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(byte_off_body);
+            let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(byte_off_body);
+            let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(byte_off_body);
+            let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(byte_off_body);
+            let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(byte_off_body);
+            let m_blur_a_b = m_blur_h[0].clone().offset_start(byte_off_body);
+            let m_blur_rg_b = m_blur_h[1].clone().offset_start(byte_off_body);
+            let m_blur_vy_b = m_blur_h[2].clone().offset_start(byte_off_body);
+            let d_a_b = d_h[0].clone().offset_start(byte_off_body);
+            let d_rg_b = d_h[1].clone().offset_start(byte_off_body);
+            let d_vy_b = d_h[2].clone().offset_start(byte_off_body);
+            unsafe {
+                mult_mutual_3ch_with_blurred_kernel::launch::<R>(
+                    &self.client,
+                    count_body.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(t_p_dis_a_b, n_strip_body),
+                    ArrayArg::from_raw_parts(t_p_dis_rg_b, n_strip_body),
+                    ArrayArg::from_raw_parts(t_p_dis_vy_b, n_strip_body),
+                    ArrayArg::from_raw_parts(t_p_ref_a_b, n_strip_body),
+                    ArrayArg::from_raw_parts(t_p_ref_rg_b, n_strip_body),
+                    ArrayArg::from_raw_parts(t_p_ref_vy_b, n_strip_body),
+                    ArrayArg::from_raw_parts(m_blur_a_b, n_strip_body),
+                    ArrayArg::from_raw_parts(m_blur_rg_b, n_strip_body),
+                    ArrayArg::from_raw_parts(m_blur_vy_b, n_strip_body),
+                    ArrayArg::from_raw_parts(d_a_b, n_strip_body),
+                    ArrayArg::from_raw_parts(d_rg_b, n_strip_body),
+                    ArrayArg::from_raw_parts(d_vy_b, n_strip_body),
+                    n_strip_body as u32,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+        // Reference `n_px` to satisfy the helper's signature — the
+        // FULL-band element count is the caller's invariant, not
+        // something this walker uses directly. Same idea as the
+        // `_ = logical_h` annotations on the strip-aware kernels.
+        let _ = n_px;
     }
 
     /// Host-side readback wrapper around the GPU D-bands dispatch.
