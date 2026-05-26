@@ -31,7 +31,7 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{self, color, downscale, fused, masked_iw_strip, reduce};
+use crate::kernels::{self, blit, color, downscale, fused, masked_iw_strip, reduce};
 use zensim::{
     DiffmapOptions, PrecomputedReference, Zensim as ZensimCpu, ZensimError, ZensimProfile,
 };
@@ -232,6 +232,32 @@ impl StripState {
     }
 }
 
+/// Per-scale full-image cached reference XYB pyramid (Mode E
+/// refinement; task #75, 2026-05-26). Populated by [`Zensim::set_reference`]
+/// when in strip mode AND the device cache is enabled (default).
+///
+/// The strip walker installs a row-range slice from these full-image
+/// XYB planes into the strip-sized `Scale.ref_xyb` buffers via the
+/// `copy_rows_kernel` blit, skipping per-strip ref re-upload + ref
+/// xyb pyramid rebuild on every `compute_with_reference` call.
+///
+/// Memory cost: 3 channels × `Σ pyramid_pixels_at_full_h` × 4 bytes.
+/// For 4096² Basic that's ~130 MB on top of strip-mode's ~290 MB —
+/// still within typical VRAM caps. Callers who need to opt out (very
+/// tight VRAM, few dist iterations) can use
+/// [`Zensim::set_reference_host_cached_only`] instead.
+struct RefFullXybState {
+    /// Per-scale `(padded_w, full_h)` dims. `padded_w[s]` matches
+    /// `Scale::padded_w[s]` exactly; `full_h[s]` is the FULL image
+    /// height halved per scale (= what Full-mode would allocate).
+    dims: Vec<(u32, u32)>,
+    /// Per-scale 3-channel XYB planes, each of length
+    /// `padded_w[s] × full_h[s]`. Filled by running the standard
+    /// `srgb_to_positive_xyb_kernel` + `downscale_2x_3ch_kernel`
+    /// chain on full-image-sized scratch buffers.
+    xyb: Vec<[cubecl::server::Handle; 3]>,
+}
+
 /// Pyramid alignment factor: must divide `h_body` and `halo` cleanly so
 /// the strip's pyramid halves to integer row counts at every scale.
 /// `2^(SCALES - 1)` = 2^3 = 8 for zensim (4 scales).
@@ -267,16 +293,30 @@ pub struct Zensim<R: Runtime> {
     /// rather than the full image height.
     strip: Option<StripState>,
     /// Host-side cached reference sRGB bytes for strip mode. Filled
-    /// by `set_reference` in strip mode (where the full ref cannot be
-    /// staged on-device because every per-scale buffer is strip-sized).
-    /// Empty in Full mode.
+    /// by `set_reference` in strip mode whenever the device-cache
+    /// path is disabled. Empty when `ref_full_xyb` is `Some` (the
+    /// device cache supersedes the host cache).
     ///
-    /// **Phase 1 caching**: each `compute_with_reference_strip` call
-    /// uploads the ref strip from this Vec into `src_u8_a` and rebuilds
-    /// the ref-side XYB pyramid on every strip. Phase 4 will cache the
-    /// per-strip XYB pyramid + persist planes on the device to skip
-    /// the rebuild.
+    /// Kept as a fallback for callers that opt out of the device
+    /// cache via [`Zensim::set_reference_host_cached_only`]; the
+    /// strip walker uses host bytes when `ref_full_xyb` is `None`.
     cached_ref_strip_srgb: Vec<u8>,
+
+    /// Per-scale full-image ref XYB pyramid cached on device. Populated
+    /// by [`Zensim::set_reference`] in strip mode (task #75 mode-E
+    /// refinement); `None` in Full mode and on the host-cached-only
+    /// strip fallback.
+    ref_full_xyb: Option<RefFullXybState>,
+
+    /// sRGB-u8 staging buffer sized for the full image (image_w ×
+    /// image_h). Only allocated in strip mode when the device-cache
+    /// `set_reference` path is used; lives behind an `Option` to
+    /// avoid the alloc cost on Full mode + on strip mode callers
+    /// who never set a reference. Reused across set_reference calls.
+    src_u8_full: Option<cubecl::server::Handle>,
+    /// Persistent host pack scratch for `src_u8_full` (one u32 per
+    /// pixel). Empty Vec when the device cache isn't in use.
+    pack_scratch_full: Vec<u32>,
 
     /// Persistent host-side packing scratch (one u32 per pixel = R |
     /// G<<8 | B<<16). Reused across uploads to avoid the alloc + iter
@@ -665,6 +705,9 @@ impl<R: Runtime> Zensim<R> {
             pixels,
             strip,
             cached_ref_strip_srgb: Vec::new(),
+            ref_full_xyb: None,
+            src_u8_full: None,
+            pack_scratch_full: Vec::new(),
             pack_scratch: vec![0_u32; upload_pixels],
             src_u8_a,
             src_u8_b,
@@ -785,13 +828,17 @@ impl<R: Runtime> Zensim<R> {
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_dims(ref_srgb)?;
         if self.strip.is_some() {
-            // Strip mode: cache the full ref sRGB host-side; the strip
-            // walker re-uploads the appropriate ref strip per
-            // `compute_with_reference` call. Per-strip rebuild of the
-            // ref XYB pyramid is paid by every strip on every dist
-            // image until Phase 4 adds cached-ref strip mode.
+            // Strip mode: build the full-image ref XYB pyramid ONCE on
+            // device (task #75 mode-E refinement; 2026-05-26). Per-strip
+            // `compute_with_reference` then only copies the relevant
+            // row range from the cached planes into the strip's
+            // `Scale.ref_xyb`, skipping ref re-upload + ref XYB rebuild
+            // per strip.
+            //
+            // The host-side `cached_ref_strip_srgb` fallback is cleared
+            // here so the strip walker takes the device-cache code path.
             self.cached_ref_strip_srgb.clear();
-            self.cached_ref_strip_srgb.extend_from_slice(ref_srgb);
+            self.build_full_ref_xyb_pyramid(ref_srgb)?;
             self.has_cached_reference = true;
         } else {
             self.upload_u8(true, ref_srgb);
@@ -823,9 +870,64 @@ impl<R: Runtime> Zensim<R> {
 
     pub fn clear_reference(&mut self) {
         self.has_cached_reference = false;
+        self.cached_ref_strip_srgb.clear();
+        // Drop device-cached ref XYB planes — handles get refcount-
+        // decremented; cubecl's memory pool reclaims when the last
+        // handle goes away. The `src_u8_full` staging buffer stays
+        // allocated so the next set_reference call doesn't pay the
+        // alloc.
+        self.ref_full_xyb = None;
         if let Some(state) = self.diffmap_state.as_mut() {
             state.warm_ref = None;
         }
+    }
+
+    /// Opt out of the device-cached ref XYB pyramid added in task #75.
+    ///
+    /// In strip mode only, this caches the reference sRGB bytes
+    /// host-side instead of building the full-image XYB pyramid on
+    /// device. Each `compute_with_reference` then re-uploads the
+    /// appropriate ref strip + rebuilds the ref XYB pyramid per strip
+    /// — the pre-task-#75 behaviour.
+    ///
+    /// Use when VRAM pressure dominates and ref-side rebuild cost
+    /// across N dist iterations is acceptable. The default path
+    /// ([`Self::set_reference`]) is faster for warm-loop usage.
+    ///
+    /// In Full mode this is equivalent to [`Self::set_reference`]
+    /// (no host cache is used).
+    pub fn set_reference_host_cached_only(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        self.check_dims(ref_srgb)?;
+        if self.strip.is_some() {
+            // Drop any device cache from a prior call.
+            self.ref_full_xyb = None;
+            self.cached_ref_strip_srgb.clear();
+            self.cached_ref_strip_srgb.extend_from_slice(ref_srgb);
+            self.has_cached_reference = true;
+        } else {
+            self.upload_u8(true, ref_srgb);
+            self.run_xyb_pyramid(true);
+            self.has_cached_reference = true;
+        }
+
+        // Mirror to diffmap state (same as set_reference).
+        if let Some(state) = self.diffmap_state.as_mut() {
+            let w = self.width as usize;
+            let h = self.height as usize;
+            let lut = srgb_lut_256();
+            srgb_u8_to_linear_planes_tight(ref_srgb, w, h, &mut state.ref_linear_planes, &lut);
+            let ref_views: [&[f32]; 3] = [
+                &state.ref_linear_planes[0],
+                &state.ref_linear_planes[1],
+                &state.ref_linear_planes[2],
+            ];
+            let pre = state
+                .cpu_zensim
+                .precompute_reference_linear_planar(ref_views, w, h, w)
+                .map_err(map_zensim_error)?;
+            state.warm_ref = Some(pre);
+        }
+        Ok(())
     }
 
     pub fn has_cached_reference(&self) -> bool {
@@ -1162,13 +1264,21 @@ impl<R: Runtime> Zensim<R> {
         //    (boundary strips may be < strip_alloc_h).
         self.set_scale_h_for_strip(actual_strip_h);
 
-        // 2. Upload strip's reference rows (cached from set_reference)
-        //    and distorted rows for this strip.
-        self.upload_u8_strip(true, up_lo as usize, up_hi as usize, None);
+        // 2-3. Reference side: prefer the device-cached full-image
+        //    ref XYB pyramid (task #75; built by `set_reference`)
+        //    when available — slice rows into the strip's
+        //    `Scale.ref_xyb` and skip ref re-upload + ref XYB rebuild.
+        //    Fallback path (only used after `set_reference_host_cached_only`)
+        //    uploads the ref strip then runs the pyramid build.
+        if self.ref_full_xyb.is_some() {
+            self.install_ref_xyb_from_full_cache(up_lo);
+        } else {
+            self.upload_u8_strip(true, up_lo as usize, up_hi as usize, None);
+            self.run_xyb_pyramid(true);
+        }
+        // Distorted side always uploads + builds the strip's pyramid
+        // (no warm-cache equivalent — every dist call is unique).
         self.upload_u8_strip(false, up_lo as usize, up_hi as usize, Some(dist_srgb));
-
-        // 3. XYB pyramid for both sides on the strip-sized buffers.
-        self.run_xyb_pyramid(true);
         self.run_xyb_pyramid(false);
 
         // 4. Fused features (persist variant when masked/IW needed).
@@ -1226,6 +1336,239 @@ impl<R: Runtime> Zensim<R> {
             // count in sync with the actual strip height.
             s.n_strips_ext = kernels::masked_iw_strip::cpu_strip_count(h);
             h = h.div_ceil(2);
+        }
+    }
+
+    /// Build the full-image ref XYB pyramid on device (task #75
+    /// mode-E refinement). Allocates `src_u8_full` + the per-scale
+    /// XYB plane handles on first call; reuses across subsequent
+    /// `set_reference` invocations.
+    ///
+    /// Mirrors the existing `upload_u8 + run_xyb_pyramid(is_a=true)`
+    /// chain but operates on full-image-sized buffers rather than the
+    /// strip-sized `src_u8_a` + `Scale.ref_xyb`. The downscale is
+    /// bit-identical to what the strip walker would produce on a
+    /// pyramid-aligned strip (consecutive 2-row downscale; aligned
+    /// strip start preserves the row pairing). See `STRIP_PROCESSING.md`
+    /// "Cached reference (Mode E device cache)" for the parity proof.
+    fn build_full_ref_xyb_pyramid(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        // Per-scale `(padded_w, full_h)` plan — matches what Full mode
+        // would allocate for this (width, height) pair, NOT the strip
+        // allocation. simd_padded_width is monotone in width, so
+        // padded_w per scale matches `Scale.padded_w` exactly (the
+        // strip and full pipelines descend the pyramid the same way).
+        let mut plan_full: Vec<(u32, u32)> = Vec::with_capacity(SCALES);
+        let mut pw = simd_padded_width(self.width as usize) as u32;
+        let mut h_at_s = self.height;
+        for _ in 0..SCALES {
+            if pw < 8 || h_at_s < 8 {
+                break;
+            }
+            plan_full.push((pw, h_at_s));
+            pw /= 2;
+            h_at_s = h_at_s.div_ceil(2);
+        }
+
+        // Allocate per-scale XYB planes on first use (or after a
+        // resolution-changing reset — currently we never resize a
+        // Zensim, so this is a one-shot allocation). When already
+        // allocated and dims unchanged, reuse.
+        let needs_alloc = match self.ref_full_xyb.as_ref() {
+            Some(state) => state.dims != plan_full,
+            None => true,
+        };
+        if needs_alloc {
+            let xyb: Vec<[cubecl::server::Handle; 3]> = plan_full
+                .iter()
+                .map(|&(pw, h)| {
+                    let n = (pw as usize) * (h as usize);
+                    [
+                        alloc_empty_f32(&self.client, n),
+                        alloc_empty_f32(&self.client, n),
+                        alloc_empty_f32(&self.client, n),
+                    ]
+                })
+                .collect();
+            self.ref_full_xyb = Some(RefFullXybState {
+                dims: plan_full.clone(),
+                xyb,
+            });
+        }
+
+        // Allocate src_u8_full + pack_scratch_full on first use.
+        let full_pixels = (self.width as usize) * (self.height as usize);
+        if self.src_u8_full.is_none() {
+            self.src_u8_full = Some(self.client.empty(full_pixels * core::mem::size_of::<u32>()));
+        }
+        if self.pack_scratch_full.len() != full_pixels {
+            self.pack_scratch_full.resize(full_pixels, 0);
+        }
+
+        // Pack u8×3 → u32 into the persistent host scratch.
+        for (dst, chunk) in self
+            .pack_scratch_full
+            .iter_mut()
+            .zip(ref_srgb.chunks_exact(3))
+        {
+            *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
+        }
+        let bytes = u32::as_bytes(&self.pack_scratch_full);
+        // create_from_slice_pinned returns a new handle each call; we
+        // overwrite the cached handle so the prior allocation can be
+        // reclaimed.
+        self.src_u8_full = Some(self.client.create_from_slice_pinned(bytes));
+
+        // Run sRGB → positive XYB on full-image-sized buffers, then
+        // downscale through the pyramid. Mirrors the inner body of
+        // `run_xyb_pyramid` but uses `plan_full` dims + `ref_full_xyb`
+        // handles rather than `Scale.ref_xyb`.
+        self.run_ref_full_xyb_pyramid_kernels(&plan_full);
+        Ok(())
+    }
+
+    /// Kernel-launch body of [`Self::build_full_ref_xyb_pyramid`].
+    /// Split out so the parameter packing + handle allocation stay
+    /// close to the cache state, while the unsafe kernel launches
+    /// stay near the rest of the kernel-dispatch code.
+    fn run_ref_full_xyb_pyramid_kernels(&self, plan_full: &[(u32, u32)]) {
+        let absorbance_bias_neg = -color::cbrtf_fast_host(color::K_B0);
+        let ref_state = self
+            .ref_full_xyb
+            .as_ref()
+            .expect("ref_full_xyb allocated by caller");
+        let src = self
+            .src_u8_full
+            .as_ref()
+            .expect("src_u8_full allocated by caller");
+
+        // Scale 0: sRGB → positive XYB on the full image.
+        let (pw0, h0) = plan_full[0];
+        let n_padded0 = (pw0 as usize) * (h0 as usize);
+        let pixels0 = (self.width as usize) * (h0 as usize);
+        let mirror_arg = match self.scales[0].mirror_offsets.as_ref() {
+            Some(mo) => (mo.clone(), self.scales[0].pad_count as usize),
+            None => (self.srgb_lut.clone(), 1),
+        };
+        unsafe {
+            color::srgb_to_positive_xyb_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(n_padded0),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(src.clone(), pixels0),
+                ArrayArg::from_raw_parts(self.srgb_lut.clone(), 256),
+                ArrayArg::from_raw_parts(mirror_arg.0, mirror_arg.1),
+                ArrayArg::from_raw_parts(ref_state.xyb[0][0].clone(), n_padded0),
+                ArrayArg::from_raw_parts(ref_state.xyb[0][1].clone(), n_padded0),
+                ArrayArg::from_raw_parts(ref_state.xyb[0][2].clone(), n_padded0),
+                self.width,
+                h0,
+                pw0,
+                absorbance_bias_neg,
+            );
+        }
+
+        // Pyramid: 2× downscale per scale.
+        for s in 1..plan_full.len() {
+            let (prev_pw, prev_h) = plan_full[s - 1];
+            let (curr_pw, curr_h) = plan_full[s];
+            let prev_n = (prev_pw as usize) * (prev_h as usize);
+            let curr_n = (curr_pw as usize) * (curr_h as usize);
+            unsafe {
+                downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(curr_n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s - 1][0].clone(), prev_n),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s - 1][1].clone(), prev_n),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s - 1][2].clone(), prev_n),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s][0].clone(), curr_n),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s][1].clone(), curr_n),
+                    ArrayArg::from_raw_parts(ref_state.xyb[s][2].clone(), curr_n),
+                    prev_pw,
+                    prev_h,
+                    curr_pw,
+                    curr_h,
+                );
+            }
+        }
+    }
+
+    /// Copy the strip's row range from the cached full-image ref XYB
+    /// pyramid into the strip-sized `Scale.ref_xyb` buffers.
+    ///
+    /// `up_lo` is the strip's upload start in scale-0 image rows
+    /// (multiple of [`STRIP_ALIGN`]). At scale s, the source row
+    /// range is `[up_lo >> s, (up_lo >> s) + Scale.h)` — the
+    /// strip-buffer height at scale s equals `Scale.h` because
+    /// [`set_scale_h_for_strip`] was called immediately before this.
+    ///
+    /// Bit-exact parity vs the strip-walker's own pyramid build:
+    /// the 2× downscale operates on consecutive row pairs `(2r, 2r+1)`,
+    /// so when `up_lo` is a multiple of `2^(SCALES-1)`, scale-s row r
+    /// of the strip buffer equals scale-s row `((up_lo >> s) + r)` of
+    /// the full buffer.
+    fn install_ref_xyb_from_full_cache(&self, up_lo: u32) {
+        let ref_state = self
+            .ref_full_xyb
+            .as_ref()
+            .expect("install_ref_xyb_from_full_cache requires populated cache");
+        for s in 0..self.scales.len() {
+            let (full_pw, full_h) = ref_state.dims[s];
+            // Source row range at scale s.
+            let src_row_start = up_lo >> (s as u32);
+            // Active rows for this scale = strip's Scale.h (already
+            // set by set_scale_h_for_strip), clamped to the actual
+            // remaining rows in the full ref scale plane.
+            let scale = &self.scales[s];
+            let n_rows = scale.h.min(full_h.saturating_sub(src_row_start));
+            if n_rows == 0 {
+                continue;
+            }
+            let src_total_n = (full_pw as usize) * (full_h as usize);
+            let dst_total_n = scale.n_padded;
+            for ch in 0..3 {
+                self.launch_copy_rows(
+                    &ref_state.xyb[s][ch],
+                    &scale.ref_xyb[ch],
+                    full_pw,
+                    src_total_n,
+                    dst_total_n,
+                    n_rows,
+                    src_row_start,
+                );
+            }
+        }
+    }
+
+    /// Launch the row-range copy kernel — `dst[0..n_rows*width]` =
+    /// `src[src_row_start*width..(src_row_start+n_rows)*width]`.
+    /// Mirrors `dssim-gpu::pipeline::Dssim::launch_copy_rows`.
+    #[allow(clippy::too_many_arguments)]
+    fn launch_copy_rows(
+        &self,
+        src: &cubecl::server::Handle,
+        dst: &cubecl::server::Handle,
+        width: u32,
+        src_total_n: usize,
+        dst_total_n: usize,
+        n_rows: u32,
+        src_row_start: u32,
+    ) {
+        let total = (n_rows as usize) * (width as usize);
+        if total == 0 {
+            return;
+        }
+        unsafe {
+            blit::copy_rows_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(total),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(src.clone(), src_total_n),
+                ArrayArg::from_raw_parts(dst.clone(), dst_total_n),
+                width,
+                n_rows,
+                src_row_start,
+            );
         }
     }
 

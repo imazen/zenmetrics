@@ -22,6 +22,7 @@
 //! kept in `f64` to match CPU precision; per-block atomics are avoided
 //! entirely by the per-column-partials layout.
 
+pub mod blit;
 pub mod color;
 pub mod diffmap;
 pub mod downscale;
