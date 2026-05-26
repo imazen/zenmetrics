@@ -288,16 +288,34 @@ per-scale tolerance widening needed.
 
 ### IW block validation
 
-The published `zensim` crate pinned by zenmetrics
-(`rev e295d7fb4098`) predates the IW feature block, so direct CPU
-parity on slots 300..372 isn't testable here. The GPU IW kernel
-shares 90 %+ of its body with the masked kernel — only the weight
-formula differs (`1 + k·a` vs `1 / (1 + k·a)`). The test asserts:
+The path-pinned `zensim` crate
+(`../zensim--principled-activity/zensim`) exports the IW feature
+block via `ZensimResult::features()` whenever the active profile's
+`ProfileParams` carries `compute_iw_features: true`. The current
+`latest()` profile (`PreviewV0_3` aka `A`) does so, which means
+`ZensimCpu::new(latest()).compute_extended_features(...)` returns a
+372-feature `Vec<f64>` containing the IW block at slots 300..372 —
+**no `training` feature, no `compute_zensim_with_ref_and_config`
+plumbing required.**
 
-- WithIw[0..300] is bit-identical to a separate Extended run.
-- WithIw[300..372] is finite and mostly non-zero on noisy input.
-- WithIw of identical input is all zeros within ULP noise.
+Direct per-slot parity coverage in
+`tests/extended_parity.rs`:
 
-The implementation is correct by construction: if the masked block
-passes parity, the IW block uses the same kernel structure with a
-trivial weight-formula change.
+- `iw_slot_parity_noisy_gradient_64` — 64×64 gradient + noise,
+  asserts GPU vs CPU `5e-3 rel` per slot across the 72 IW features.
+- `iw_slot_parity_checkerboard_128` — 128×128 checkerboard + noise,
+  same `5e-3 rel` budget across multi-strip scales (scale 0 + 1).
+
+Structural coverage retained:
+
+- `with_iw_structural_noisy` — WithIw[0..300] is bit-identical to a
+  separate Extended run; WithIw[300..372] is finite, mostly non-zero
+  on noisy input, and within reasonable magnitude bounds.
+- `with_iw_identical_zeros` — WithIw of identical input is all zeros
+  within ULP noise.
+
+The implementation correctness now sits on three layers: (1) direct
+CPU per-slot parity at two fixture sizes, (2) the masked block's
+existing parity (the IW kernel shares 90 %+ of its body, with only
+the weight formula differing — `1 + k·a` vs `1 / (1 + k·a)`), and
+(3) structural finite-and-bounded checks.

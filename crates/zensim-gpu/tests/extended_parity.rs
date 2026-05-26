@@ -1,32 +1,22 @@
-//! Extended-regime per-feature parity test: zensim-gpu's
-//! `ZensimFeatureRegime::Extended` (300) vs zensim CPU's
-//! `compute_extended_features` (300), and `WithIw` (372) structural
-//! validation (the first 300 slots match Extended; the IW block is
-//! finite and non-trivially distributed on noisy input).
+//! Extended- + IW-regime per-feature parity tests against the
+//! path-pinned CPU `zensim`.
 //!
-//! ## Why not full CPU parity on the IW block?
+//! Coverage:
 //!
-//! The published zensim crate pinned by zenmetrics
-//! (`rev e295d7fb4098`) predates the IW feature block — it has no
-//! `compute_iw_features` config flag, no `FEATURES_PER_CHANNEL_IW`,
-//! and no public IW-pool API. Adding a full CPU IW reference inline
-//! would mean re-implementing the entire XYB pyramid + blur pipeline
-//! here, which would itself need testing.
+//! - `ZensimFeatureRegime::Extended` (300) vs CPU
+//!   `Zensim::compute_extended_features` (300) under the same
+//!   f32-vs-f64 budget as `cpu_parity.rs`.
+//! - `ZensimFeatureRegime::WithIw` (372): first 300 slots match
+//!   Extended (turning on IW doesn't disturb earlier work), IW
+//!   block (300..372) is bit-tested against CPU per slot.
 //!
-//! What we CAN guarantee from this file:
-//! - Extended block (300) is bit-tested against CPU at every slot
-//!   under the same f32-vs-f64 budget as `cpu_parity.rs`.
-//! - WithIw's first 300 slots are bit-identical to Extended (proves
-//!   that turning on the IW block doesn't disturb earlier work).
-//! - WithIw's IW block (300..372) is finite, mostly non-zero on
-//!   noisy fixtures, and in a reasonable magnitude range.
-//!
-//! The IW kernel shares 90 %+ of its body with the masked kernel —
-//! only the weight formula differs (`1 + k·a` vs `1 / (1 + k·a)`).
-//! If the masked block passes parity, the IW block is correct by
-//! construction. Bake-side production validation against the V_22-IW
-//! v2 PreviewV0_5 profile is the next defense layer; that lives in
-//! the bake-comparison sidecar pipeline, not this unit test.
+//! The CPU IW block is reached via the same
+//! `Zensim::compute_extended_features` entry: the `latest()` profile
+//! (`PreviewV0_3` / `A`) carries `compute_iw_features: true` in its
+//! `ProfileParams`, so `config_from_params` keeps the IW pass on and
+//! `combine_scores` Pass 4 appends the 72 IW slots to the returned
+//! feature vector. No `compute_zensim_with_ref_and_config`, no
+//! `training` feature flag needed.
 
 use cubecl::Runtime;
 use zensim::{RgbSlice, Zensim as ZensimCpu, ZensimProfile};
@@ -455,6 +445,199 @@ fn with_iw_identical_zeros() {
     // Tightened to match Extended identical: 2e-3 absolute
     // (measured 6.8e-4 → 3× margin).
     assert!(max_abs < 2e-3, "with_iw identical max abs {max_abs}");
+}
+
+/// Decode an IW-block flat index (relative to `TOTAL_FEATURES_EXTENDED`,
+/// i.e. `gpu[300 + iw_off]`) into (scale, channel, slot_offset). The IW
+/// block is 4 scales × 3 channels × 6 features = 72 slots, ordered as
+/// (scale-major, channel-medial, feature-minor):
+///   `iw[s][c][off]` = `iw_offset` 0..72 where
+///   `iw_offset = s * 18 + c * 6 + off`.
+fn decode_iw_idx(iw_off: usize) -> (usize, usize, usize) {
+    let s = iw_off / 18;
+    let rem = iw_off - s * 18;
+    let c = rem / 6;
+    let off = rem - c * 6;
+    (s, c, off)
+}
+
+fn iw_slot_label(off: usize) -> &'static str {
+    match off {
+        0 => "iw_ssim_mean",
+        1 => "iw_ssim_4th",
+        2 => "iw_ssim_2nd",
+        3 => "iw_art_4th",
+        4 => "iw_det_4th",
+        5 => "iw_mse",
+        _ => "?",
+    }
+}
+
+/// Per-slot IW parity on a 64×64 noisy gradient. Mirrors
+/// `extended_noisy_gradient_64`'s contract but for slots 300..372.
+///
+/// CPU path: `ZensimCpu::new(latest()).compute_extended_features(...)`.
+/// The `latest()` profile (`PreviewV0_3` aka `A`) carries
+/// `compute_iw_features: true` in its `ProfileParams`, so the CPU
+/// `config_from_params` keeps `compute_iw_features = true` and the
+/// resulting `ZensimResult.features()` already contains the IW block
+/// at offsets 300..372 (CPU `combine_scores` Pass 4). No separate
+/// `compute_zensim_with_ref_and_config` call needed — and no
+/// `training` feature gate either.
+#[test]
+fn iw_slot_parity_noisy_gradient_64() {
+    let w = 64;
+    let h = 64;
+    let r = gradient(w, h);
+    let d = add_noise(&r, 8);
+
+    let mut z = Zensim::<Backend>::new_with_regime(
+        make_client!(),
+        w as u32,
+        h as u32,
+        ZensimFeatureRegime::WithIw,
+    )
+    .unwrap();
+    let gpu = z.compute_features_vec(&r, &d).unwrap();
+    assert_eq!(gpu.len(), TOTAL_FEATURES_WITH_IW);
+
+    let cpu = cpu_extended_features(&r, &d, w, h);
+    assert_eq!(
+        cpu.len(),
+        TOTAL_FEATURES_WITH_IW,
+        "latest() CPU profile must emit 372 features (extended + IW)"
+    );
+
+    // Tolerance budget — mirror `extended_noisy_gradient_64`'s masked
+    // budget for symmetry. The IW kernel is the same as the masked
+    // kernel with `1 + k·a` vs `1 / (1 + k·a)`; mean/L4/L2/MSE pools
+    // behave identically. Use `5e-3 rel` consistently — the
+    // brief's spec.
+    const ABS_BUDGET: f64 = 2e-3;
+    const REL_BUDGET: f64 = 5e-3;
+
+    let mut failed = Vec::new();
+    let mut max_abs_iw = 0.0_f64;
+    let mut max_rel_iw = 0.0_f64;
+    for iw_off in 0..(TOTAL_FEATURES_WITH_IW - TOTAL_FEATURES_EXTENDED) {
+        let i = TOTAL_FEATURES_EXTENDED + iw_off;
+        let (s, c, off) = decode_iw_idx(iw_off);
+        let cv = cpu[i];
+        let gv = gpu[i];
+        let abs = (cv - gv).abs();
+        let rel = abs / cv.abs().max(1e-6);
+        // Skip clamped-to-zero slots.
+        if cv.abs() < 1e-6 && gv.abs() < ABS_BUDGET {
+            continue;
+        }
+        if abs > max_abs_iw {
+            max_abs_iw = abs;
+        }
+        if rel > max_rel_iw {
+            max_rel_iw = rel;
+        }
+        if abs > ABS_BUDGET && rel > REL_BUDGET {
+            failed.push((iw_off, s, c, off, cv, gv, abs, rel));
+        }
+    }
+    eprintln!(
+        "iw parity drift summary (64x64):\n  max_abs={max_abs_iw:.3e}\n  max_rel={max_rel_iw:.3e}"
+    );
+    if !failed.is_empty() {
+        for &(iw_off, s, c, off, cv, gv, abs, rel) in failed.iter().take(20) {
+            eprintln!(
+                "FAIL iw_off={iw_off:3} (s={s},c={c}) {:14}: cpu={cv:+.6e} \
+                 gpu={gv:+.6e} abs={abs:.3e} rel={rel:.3e}",
+                iw_slot_label(off)
+            );
+        }
+        eprintln!("({} failed in total)", failed.len());
+        panic!(
+            "IW per-feature parity failed on {} of 72 slots at 64x64",
+            failed.len()
+        );
+    }
+}
+
+/// Per-slot IW parity on a 128×128 checkerboard + noise — same budget
+/// as `extended_checkerboard_128` for the masked block.
+#[test]
+fn iw_slot_parity_checkerboard_128() {
+    let w = 128;
+    let h = 128;
+    let mut r = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        for x in 0..w {
+            let on = ((x / 8) + (y / 8)) % 2 == 0;
+            let v = if on { 220 } else { 64 };
+            r.push(v);
+            r.push(v);
+            r.push(v);
+        }
+    }
+    let d = add_noise(&r, 12);
+
+    let mut z = Zensim::<Backend>::new_with_regime(
+        make_client!(),
+        w as u32,
+        h as u32,
+        ZensimFeatureRegime::WithIw,
+    )
+    .unwrap();
+    let gpu = z.compute_features_vec(&r, &d).unwrap();
+    assert_eq!(gpu.len(), TOTAL_FEATURES_WITH_IW);
+
+    let cpu = cpu_extended_features(&r, &d, w, h);
+    assert_eq!(
+        cpu.len(),
+        TOTAL_FEATURES_WITH_IW,
+        "latest() CPU profile must emit 372 features (extended + IW)"
+    );
+
+    // Same `5e-3 rel` budget as `iw_slot_parity_noisy_gradient_64`.
+    const ABS_BUDGET: f64 = 5e-3;
+    const REL_BUDGET: f64 = 5e-3;
+
+    let mut failed = Vec::new();
+    let mut max_abs_iw = 0.0_f64;
+    let mut max_rel_iw = 0.0_f64;
+    for iw_off in 0..(TOTAL_FEATURES_WITH_IW - TOTAL_FEATURES_EXTENDED) {
+        let i = TOTAL_FEATURES_EXTENDED + iw_off;
+        let (s, c, off) = decode_iw_idx(iw_off);
+        let cv = cpu[i];
+        let gv = gpu[i];
+        let abs = (cv - gv).abs();
+        let rel = abs / cv.abs().max(1e-6);
+        if cv.abs() < 1e-6 && gv.abs() < ABS_BUDGET {
+            continue;
+        }
+        if abs > max_abs_iw {
+            max_abs_iw = abs;
+        }
+        if rel > max_rel_iw {
+            max_rel_iw = rel;
+        }
+        if abs > ABS_BUDGET && rel > REL_BUDGET {
+            failed.push((iw_off, s, c, off, cv, gv, abs, rel));
+        }
+    }
+    eprintln!(
+        "iw parity drift summary (128x128):\n  max_abs={max_abs_iw:.3e}\n  max_rel={max_rel_iw:.3e}"
+    );
+    if !failed.is_empty() {
+        for &(iw_off, s, c, off, cv, gv, abs, rel) in failed.iter().take(20) {
+            eprintln!(
+                "FAIL iw_off={iw_off:3} (s={s},c={c}) {:14}: cpu={cv:+.6e} \
+                 gpu={gv:+.6e} abs={abs:.3e} rel={rel:.3e}",
+                iw_slot_label(off)
+            );
+        }
+        eprintln!("({} failed in total)", failed.len());
+        panic!(
+            "IW per-feature parity failed on {} of 72 slots at 128x128",
+            failed.len()
+        );
+    }
 }
 
 /// Basic regime still emits the canonical 228-vector with bit-for-bit
