@@ -11,12 +11,17 @@
 //!   string a preset's `colorspace` field references
 //!   (`BT.2020-PQ`, `Display P3 Apple`, …).
 //!
-//! Both files are sourced verbatim from ColorVideoVDP's
-//! `pycvvdp/vvdp_data/` directory (commit fetched 2026-05-25,
-//! upstream is MIT-licensed; full license text vendored as
+//! `display_models.json` and `color_spaces.json` are sourced from
+//! ColorVideoVDP's `pycvvdp/vvdp_data/` directory (upstream is
+//! MIT-licensed; full license text vendored as
 //! `data/UPSTREAM_LICENSE_MIT.txt`). The registry mirrors the
 //! lookup `pycvvdp` performs in
 //! `vvdp_display_photometry.load(display_name, config_paths)`.
+//!
+//! Imazen-added presets that are NOT in upstream live in a separate
+//! `display_models_imazen.json` (every entry's `source` field is
+//! `"imazen"`) so the upstream mirror stays a faithful copy. Both
+//! files are merged into one registry by `by_name`.
 //!
 //! All 26 upstream presets are loadable for both
 //! [`DisplayModel`] and [`DisplayGeometry`]. Presets that
@@ -46,6 +51,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 const DISPLAY_MODELS_JSON: &str = include_str!("../data/display_models.json");
+const DISPLAY_MODELS_IMAZEN_JSON: &str = include_str!("../data/display_models_imazen.json");
 const COLOR_SPACES_JSON: &str = include_str!("../data/color_spaces.json");
 
 /// Sorted list of every preset name in the registry. Stable
@@ -169,6 +175,20 @@ fn load_registry() -> Registry {
             .unwrap_or_else(|err| panic!("preset {name:?} failed to load: {err}"));
         out.insert(name.clone(), preset);
     }
+
+    // Imazen-added presets (not from upstream ColorVideoVDP) live in a
+    // separate file so the upstream mirror stays a faithful copy.
+    let imazen: serde_json::Value = serde_json::from_str(DISPLAY_MODELS_IMAZEN_JSON)
+        .expect("vendored display_models_imazen.json must parse");
+    let imazen_obj = imazen
+        .as_object()
+        .expect("display_models_imazen.json root must be an object");
+    for (name, value) in imazen_obj {
+        let preset = parse_preset(name, value, &colors)
+            .unwrap_or_else(|err| panic!("imazen preset {name:?} failed to load: {err}"));
+        out.insert(name.clone(), preset);
+    }
+
     Registry { display: out }
 }
 
@@ -246,18 +266,12 @@ fn parse_geometry(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Di
             distance_m,
             diagonal_inches: diag as f32,
         })
-    } else if let Some(fov_diag) = obj
-        .get("fov_diagonal")
-        .and_then(serde_json::Value::as_f64)
-    {
-        Some(DisplayGeometry::from_fov_diagonal(
-            w,
-            h,
-            distance_m,
-            fov_diag as f32,
-        ))
     } else {
-        None
+        obj.get("fov_diagonal")
+            .and_then(serde_json::Value::as_f64)
+            .map(|fov_diag| {
+                DisplayGeometry::from_fov_diagonal(w, h, distance_m, fov_diag as f32)
+            })
     }
 }
 
@@ -432,5 +446,40 @@ mod tests {
         assert!(names.contains(&"standard_4k"));
         assert!(names.contains(&"standard_hdr_pq"));
         assert!(!names.is_empty());
+    }
+
+    #[test]
+    fn modern_oled_phone_indoor_models_auto_brightness_setpoint() {
+        let d = DisplayModel::by_name("modern_oled_phone_indoor")
+            .expect("imazen preset should load");
+        // SDR auto-brightness setpoint, not the panel HDR peak.
+        assert_eq!(d.y_peak, 400.0);
+        assert_eq!(d.eotf, Eotf::Srgb);
+        assert_eq!(d.primaries, Primaries::Bt709);
+        // OLED native black is sub-milli-nit, but ambient reflection
+        // (250 lux) dominates: y_refl ≈ 0.398 nit swamps it, so the
+        // effective black floor is reflection-bound near ~0.4 nit.
+        assert!(d.y_black < 0.001, "OLED native black");
+        assert!(d.y_refl > 0.39 && d.y_refl < 0.40, "250 lux reflection");
+        let g = DisplayGeometry::by_name("modern_oled_phone_indoor").unwrap();
+        // ~110 ppd at 0.35 m hand-held: ~1.5× a 75 ppd desktop. (Closer
+        // viewing means each pixel subtends a larger angle, so fewer
+        // pixels per degree than the iphone_14_pro preset's 160 ppd at
+        // its farther 0.508 m.)
+        let ppd = g.pixels_per_degree();
+        assert!(ppd > 100.0 && ppd < 120.0, "phone ppd was {ppd}");
+    }
+
+    #[test]
+    fn imazen_presets_are_tagged() {
+        let imazen: serde_json::Value =
+            serde_json::from_str(super::DISPLAY_MODELS_IMAZEN_JSON).unwrap();
+        for (name, v) in imazen.as_object().unwrap() {
+            assert_eq!(
+                v.get("source").and_then(|s| s.as_str()),
+                Some("imazen"),
+                "imazen preset {name} must declare source=imazen"
+            );
+        }
     }
 }

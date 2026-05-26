@@ -426,6 +426,9 @@ pub fn pool_band_3ch_lds_kernel(
     // `usize` type, sidestepping the `0usize` literal type mismatch
     // CubeCL surfaces in mixed-arm `if` expressions.
     let in_range = idx < n_usize;
+    // `idx - idx` is an intentional typed-zero (see comment above), not
+    // a mistake — clippy's eq_op can't see the CubeCL type constraint.
+    #[allow(clippy::eq_op)]
     let zero_idx = idx - idx;
     let safe_idx = if in_range { idx } else { zero_idx };
 

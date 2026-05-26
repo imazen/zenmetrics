@@ -63,14 +63,31 @@ test continues to pass without modification.
 ## Preset registry
 
 `DisplayModel::by_name(name)` and `DisplayGeometry::by_name(name)`
-load named displays from the vendored
-`data/display_models.json`. The list below is the full set
-shipped in upstream pycvvdp v0.5.4 main as of the 2026-05-25
-vendor pull.
+load named displays from two vendored files:
 
-| Preset | Resolution | Distance | Peak (cd/m²) | EOTF | Primaries | Notes |
+* `data/display_models.json` — the 22 presets from upstream
+  pycvvdp v0.5.4, plus 3 `65inch_hdr_pq_*` entries that match
+  upstream's `main` style but are not in the 0.5.4 release.
+* `data/display_models_imazen.json` — imazen-added reference
+  conditions not in upstream (every entry's `source` is
+  `"imazen"`).
+
+**Provenance matters for interpretation.** Only `eizo_CG3146` is a
+calibration-grounded display — it is the EIZO CG3146 that captured
+the XR-DAVID subjective dataset ColorVideoVDP v0.5.4 was fit on
+(arXiv 2401.11485). `standard_4k` is the documented metric default
+and cross-study comparability anchor. The remaining `standard_*`
+entries are canonical viewing conditions (`source: "none"`). Every
+device-named entry (`iphone_*`, `ipad_*`, `macbook_*`,
+`lg_oled_*`) is a manufacturer/review spec transcription with **no
+subjective data behind it** — useful as a prediction target, but
+carrying no research weight. The metric's calibration is
+display-agnostic: it takes photometry as input and predicts for
+whatever display you name.
+
+| Preset | Resolution | Distance | Peak (cd/m²) | EOTF | Primaries | Provenance |
 | --- | --- | --- | --- | --- | --- | --- |
-| `standard_4k` | 3840×2160 | 0.7472 m | 200 | sRGB | BT.709 | Default. v1 parity contract. |
+| `standard_4k` | 3840×2160 | 0.7472 m | 200 | sRGB | BT.709 | Default / comparability anchor |
 | `standard_hdr_pq` | 3840×2160 | 0.7472 m | 1500 | PQ | BT.2020 | |
 | `standard_hdr_hlg` | 3840×2160 | 0.7472 m | 1500 | HLG | BT.2020 | |
 | `standard_hdr_linear` | 3840×2160 | 0.7472 m | 1500 | Linear | BT.709 | |
@@ -91,16 +108,30 @@ vendor pull.
 | `macbook_pro_16` | 3072×1920 | 25" | 500 | sRGB | BT.709 | |
 | `lg_oled_2017_sdr` | 3840×2160 | 101" | 272 | sRGB | BT.709 | TV viewing distance |
 | `lg_oled_2017_hdr` | 3840×2160 | 101" | 754 | sRGB | BT.709 | upstream omits `colorspace` |
-| `eizo_CG3146` | 4096×2160 | 0.73406 m | 300 | sRGB | BT.709 | 0 lux (grading suite) |
-| `65inch_hdr_pq_4knit` | 3840×2160 | 1.98 m | 4000 | PQ | BT.2020 | |
-| `65inch_hdr_pq_2Knit` | 3840×2160 | 1.98 m | 2000 | PQ | BT.2020 | |
-| `65inch_hdr_pq_1Knit` | 3840×2160 | 1.98 m | 1000 | PQ | BT.2020 | |
-| `lg_oled_2026_hdr_pq` | 3840×2160 | 86.62" | 3000 | PQ | BT.2020 | |
+| `eizo_CG3146` | 4096×2160 | 0.73406 m | 300 | sRGB | BT.709 | **Calibration display (XR-DAVID)** |
+| `65inch_hdr_pq_4knit` | 3840×2160 | 1.98 m | 4000 | PQ | BT.2020 | upstream main, not 0.5.4 |
+| `65inch_hdr_pq_2Knit` | 3840×2160 | 1.98 m | 2000 | PQ | BT.2020 | upstream main, not 0.5.4 |
+| `65inch_hdr_pq_1Knit` | 3840×2160 | 1.98 m | 1000 | PQ | BT.2020 | upstream main, not 0.5.4 |
+| `lg_oled_2026_hdr_pq` | 3840×2160 | 86.62" | 3000 | PQ | BT.2020 | local addition (avforums review) |
+| `modern_oled_phone_indoor` | 2532×1170 | 0.35 m | 400 | sRGB | BT.709 | **imazen** — indoor SDR auto-brightness |
 
-That's 26 presets total. All 26 load both `DisplayModel::by_name`
-and `DisplayGeometry::by_name`. The two FOV-only entries
+That's 27 presets total (22 upstream 0.5.4 + 3 upstream-main +
+1 local + 1 imazen). All load both `DisplayModel::by_name` and
+`DisplayGeometry::by_name`. The two FOV-only entries
 (`standard_hmd`, `htc_vive_pro`) are converted via
 `DisplayGeometry::from_fov_diagonal` (commit `1280571a`).
+
+`modern_oled_phone_indoor` deserves a note: its `y_peak` of 400
+cd/m² is the **SDR auto-brightness setpoint** for indoor viewing,
+NOT the panel's HDR/sunlight peak (1000-2000 cd/m²). Modern phones
+dim SDR content indoors; the headline peak is reserved for HDR
+highlights and sunlight boost. The OLED's near-zero native black
+(0.0005 cd/m²) is washed out by 250 lux ambient reflection
+(`y_refl ≈ 0.398 cd/m²`), so effective contrast is ~1,000:1 — the
+OLED's deep-black advantage only appears in dark-room viewing,
+which this indoor preset doesn't model. Use `iphone_14_pro` /
+`iphone_14_pro_hdr` only when you genuinely mean the panel peak
+(sunlight/HDR), not indoor SDR.
 
 ## Scope of this release
 
