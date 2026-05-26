@@ -327,7 +327,46 @@ struct WeberScratch {
     /// dispatch paths keep using the full-image [`Self::upscaled_c`]
     /// without paying the Phase 1b allocation.
     upscaled_c_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
+    /// **Path A bands_dis per-strip scratch (Phase 1b prep, 2026-05-26).**
+    /// Sized identically to [`Self::upscaled_c_strip`]: per channel,
+    /// `fine_w × strip_h_at_k × f32` — one strip's worth. Allocated
+    /// only when the owning `Cvvdp` instance is in `StripMode::Pair`.
+    ///
+    /// **Reader/writer wiring status:** This buffer is currently a
+    /// Phase-1b-style additive allocation. The full-image
+    /// `Cvvdp::bands_dis[k].planes` are still allocated and still
+    /// the load-bearing destination for the DIST-side Weber strip
+    /// walker writes. The `bands_dis_strip` buffer is wired into the
+    /// DIST strip walker as a DUPLICATE write target (the kernel
+    /// writes the band-A/RG/VY result both to the full-image bands
+    /// destination AND to this strip-local buffer; the kernel does
+    /// not yet have a swap path, so the duplicate is implemented at
+    /// the dispatch level by issuing a second `subtract_weber` per
+    /// strip with a strip-local destination — see below). Net memory
+    /// is unchanged because the full-image `bands_dis` still holds
+    /// the load-bearing data the band loop's `csf_apply_6ch_kernel`
+    /// reads at full level dims.
+    ///
+    /// **Why ship Phase 1b without 1c?** The Phase-1c follow-up that
+    /// flips the consumer (`csf_apply_6ch_kernel`) from full-level
+    /// reads to per-strip reads is a band-loop restructure: csf must
+    /// be moved out of `_run_d_bands_band_loop` and into the DIST
+    /// Weber strip walker so each strip iteration writes
+    /// `bands_dis_strip` → reads `bands_dis_strip` → writes
+    /// `t_p_ref/t_p_dis` body — all in lock-step before the next
+    /// strip overwrites the buffer. That restructure also requires
+    /// allocating `DBandsTransient`-equivalent `t_p_*` storage at
+    /// the level (so masking can read it after Weber finishes the
+    /// level). That work is tracked separately; this Phase 1b
+    /// commit lands the per-strip allocation so the writer flow is
+    /// already strip-aware and the follow-up commit only has to
+    /// flip the reader.
+    ///
+    /// `None` outside `StripMode::Pair` so the Full and CachedRef
+    /// dispatch paths skip the allocation entirely.
+    bands_dis_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
 }
+
 
 /// GPU scratch for the per-pixel diffmap pipeline. Allocated lazily on
 /// the first `score_with_diffmap` / `score_from_linear_planes_with_diffmap`
@@ -407,6 +446,21 @@ fn build_weber_scratch<R: Runtime>(
             ]
         });
 
+        // Path A bands_dis_strip: same strip-buffer shape as
+        // upscaled_c_strip — fine_w × strip_h_at_k per channel.
+        // Allocated only in StripMode::Pair; the fused csf-in-walker
+        // path (`_finalize_dist_weber_and_csf_strip_walker`) reads
+        // it directly with strip-local indexing so we don't need
+        // halo padding here (csf is per-pixel — no neighborhood).
+        let bands_dis_strip = strip_h_at_k.map(|h_body| {
+            let n_strip = (fine_w as usize) * (h_body as usize);
+            [
+                alloc_zeros_f32(client, n_strip),
+                alloc_zeros_f32(client, n_strip),
+                alloc_zeros_f32(client, n_strip),
+            ]
+        });
+
         // Path A Phase 1c: skip the full-image `upscaled_c` allocation
         // when the strip variant is live. Mode B's Weber-finalize
         // walker writes to `upscaled_c_strip` exclusively (verified by
@@ -439,6 +493,7 @@ fn build_weber_scratch<R: Runtime>(
             ],
             upscaled_c,
             upscaled_c_strip,
+            bands_dis_strip,
         });
         fine_w = coarse_w;
         fine_h = coarse_h;
@@ -1749,7 +1804,53 @@ impl<R: Runtime> Cvvdp<R> {
 
         let gauss_ref = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
-        let bands_dis = build_pyramid(&client);
+
+        // Path A bands_dis shrink (2026-05-26): in StripMode::Pair,
+        // allocate non-baseband levels' planes as ZERO-SIZE handles.
+        // The actual DIST data flows through the per-strip
+        // `WeberScratch.bands_dis_strip` buffer + fused csf dispatch
+        // inside the Mode B band loop (Weber strip writes
+        // bands_dis_strip → csf strip reads bands_dis_strip → writes
+        // t_p_*; next strip overwrites bands_dis_strip — the buffer
+        // never holds more than one strip at a time, so the band
+        // loop can't read at full level dims and instead dispatches
+        // csf per-strip in lockstep with the Weber walker).
+        //
+        // The baseband level keeps a full-image allocation — the
+        // baseband-divide kernel writes the coarsest-level DIST data
+        // there (no strip walker at the baseband) and the band loop
+        // reads it at baseband resolution via the standard
+        // csf_apply_6ch path.
+        //
+        // Full / CachedRef modes use `build_pyramid` (every level
+        // full-image-sized).
+        let bands_dis: Vec<Level> = if strip_pair_h_body.is_some() {
+            let mut out = Vec::with_capacity(n_levels as usize);
+            let mut w = width;
+            let mut h = height;
+            for k in 0..n_levels as usize {
+                let is_baseband = k == n_levels as usize - 1;
+                let n_alloc = if is_baseband {
+                    (w as usize) * (h as usize)
+                } else {
+                    0
+                };
+                out.push(Level {
+                    w,
+                    h,
+                    planes: [
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                    ],
+                });
+                w = w.div_ceil(2);
+                h = h.div_ceil(2);
+            }
+            out
+        } else {
+            build_pyramid(&client)
+        };
         let d_scratch = build_d_bands_scratch(
             &client,
             n_levels as usize,
@@ -3828,12 +3929,35 @@ impl<R: Runtime> Cvvdp<R> {
         // per-level scratch + bands buffers. Baseband (k = n_levels-1)
         // is one global-mean reduction; handled below identically to
         // the Full path because it needs all-pixels-of-A anyway.
+        //
+        // **Path A bands_dis shrink (2026-05-26):** For the DIST side
+        // (`dest_is_dis = true`) in Mode B, the non-baseband Weber
+        // finalize is DEFERRED to the band loop
+        // (`_run_d_bands_band_loop`) where it runs in lock-step with
+        // csf strip dispatch (Weber strip writes
+        // `bands_dis_strip[k]` → csf strip reads it → writes
+        // `t_p_*[k]` body, all within one strip iteration). The
+        // full-image `bands_dis[k].planes` are zero-size in Mode B
+        // for non-baseband levels, so the strip walker's body-offset
+        // writes would crash. We still need the baseband path below
+        // because the baseband-divide kernel writes the full-size
+        // `bands_dis[last].planes` and the band loop reads them at
+        // baseband resolution.
+        //
+        // The REF side (`dest_is_dis = false`) keeps the standard
+        // strip walker call — bands_ref is allocated full-image and
+        // the band loop reads it at full level dims for the
+        // csf_apply_6ch reference inputs.
         let mode_b = matches!(
             self.strip_config,
             Some(StripConfig { mode: StripMode::Pair, .. }),
         );
-        if mode_b {
+        if mode_b && !dest_is_dis {
             self._finalize_weber_pyramid_strip_walker(log_l_bkg_dest, dest_is_dis);
+        } else if mode_b && dest_is_dis {
+            // DIST + Mode B: skip non-baseband finalize here. The
+            // band loop's per-strip Weber+csf fusion handles it.
+            // Baseband still runs below (same path as Full mode).
         } else {
             for k in 0..n_levels.saturating_sub(1) {
                 let coarse_w = self.gauss_ref[k + 1].w;
@@ -4153,6 +4277,20 @@ impl<R: Runtime> Cvvdp<R> {
             self.strip_config,
             Some(StripConfig { mode: StripMode::CachedRef, .. }),
         );
+        // **Path A bands_dis shrink (2026-05-26):** Mode B
+        // (StripPair) defers non-baseband DIST Weber finalize to this
+        // band loop where each level's iteration runs Weber strip +
+        // csf strip in lockstep over `bands_dis_strip` (one strip's
+        // worth of storage per level). The full-image
+        // `bands_dis[k].planes` are zero-size for non-baseband levels
+        // in Mode B (skipped at construction) — touching them would
+        // crash. The mode_b_pair flag below routes Mode B non-baseband
+        // through the fused walker; everything else (Full / CachedRef
+        // / baseband) goes through the standard csf_apply_6ch path.
+        let mode_b_pair = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
 
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
@@ -4275,7 +4413,33 @@ impl<R: Runtime> Cvvdp<R> {
             } else {
                 self.bands_ref[k].planes[2].clone()
             };
-            {
+            if mode_b_pair && !is_baseband {
+                // Path A bands_dis shrink: fused DIST Weber strip +
+                // csf strip dispatch over the per-level strip loop.
+                // Writes `t_p_ref[k]` and `t_p_dis[k]` body rows;
+                // the masking strip walker below reads those.
+                //
+                // Sources:
+                //   - bands_ref[k].planes[c] — full-image, sliced at
+                //     body offset for each strip s.
+                //   - bands_dis_strip[k] — strip-local buffer freshly
+                //     written by the Weber kernel ONE LINE earlier.
+                //   - log_l_bkg (REF's) — full-image, sliced at body
+                //     offset. (Note: `log_l_bkg_h` above resolves to
+                //     `weber_scratch[k].log_l_bkg` for Mode B; we
+                //     slice it per strip below.)
+                self._dispatch_dist_weber_csf_strip_walker_for_level(
+                    k,
+                    band_ref_a.clone(),
+                    band_ref_rg.clone(),
+                    band_ref_vy.clone(),
+                    log_l_bkg_h.clone(),
+                    &t_p_ref_h,
+                    &t_p_dis_h,
+                    [ch_gain_a, ch_gain_rg, ch_gain_vy],
+                    band_mul,
+                )?;
+            } else {
                 unsafe {
                     csf_apply_6ch_kernel::launch::<R>(
                         &self.client,
@@ -4589,6 +4753,301 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
+        Ok(())
+    }
+
+    /// **Path A bands_dis shrink — fused DIST Weber + csf strip
+    /// walker for a single non-baseband level in Mode B.** Replaces
+    /// the standard pre-band-loop DIST Weber finalize (which would
+    /// write to the now-zero-size `bands_dis[k].planes`) with a
+    /// per-strip pipeline that:
+    ///
+    /// 1. Runs the Weber strip kernels for level `k` (upscale +
+    ///    subtract+weber) writing one strip's worth of band data
+    ///    into the strip-local [`WeberScratch::bands_dis_strip`].
+    /// 2. Runs `csf_apply_6ch_kernel` over the same strip's body
+    ///    rows, reading `bands_dis_strip` (strip-local) + bands_ref
+    ///    (full, sliced at body offset) + log_l_bkg (full, sliced)
+    ///    and writing the per-strip body of the full-image
+    ///    `t_p_ref` / `t_p_dis` transients passed in.
+    ///
+    /// The two kernels must run in lockstep per strip — the next
+    /// strip's Weber dispatch overwrites `bands_dis_strip`, so csf
+    /// must consume it before the loop advances. The masking strip
+    /// walker dispatched after this function returns reads the
+    /// full-image `t_p_*` (now populated for all strips of level k)
+    /// and writes per-strip body rows of `d_scratch[k].d[c]`.
+    ///
+    /// `band_ref_a/rg/vy` are full-image handles for level k's REF
+    /// bands. `log_l_bkg_full` is the full-image log_l_bkg for the
+    /// REF side (cvvdp uses REF's log_l_bkg for both csf inputs).
+    /// `t_p_ref_h`, `t_p_dis_h` are full-image-sized per-channel
+    /// transient buffers — this walker writes strip body rows; the
+    /// masking walker reads them.
+    #[allow(clippy::too_many_arguments)]
+    fn _dispatch_dist_weber_csf_strip_walker_for_level(
+        &self,
+        k: usize,
+        band_ref_a: cubecl::server::Handle,
+        band_ref_rg: cubecl::server::Handle,
+        band_ref_vy: cubecl::server::Handle,
+        log_l_bkg_full: cubecl::server::Handle,
+        t_p_ref_h: &[cubecl::server::Handle; 3],
+        t_p_dis_h: &[cubecl::server::Handle; 3],
+        ch_gain: [f32; 3],
+        _band_mul: f32,
+    ) -> Result<()> {
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => {
+                // Caller (the band loop) only invokes this when Mode
+                // B is active; if strip_config is somehow None here
+                // the buffers we'd use are not allocated. Treat as
+                // hard invariant and bail.
+                return Err(Error::InvalidImageSize);
+            }
+        };
+
+        let coarse_w = self.gauss_ref[k + 1].w;
+        let coarse_h = self.gauss_ref[k + 1].h;
+        let fine_w = self.gauss_ref[k].w;
+        let fine_h = self.gauss_ref[k].h;
+        let n_fine = (fine_w * fine_h) as usize;
+        let n_coarse = (coarse_w * coarse_h) as usize;
+
+        let strip_h_at_k = (h_body_at_0 >> k).max(1);
+        let n_strips = if fine_h <= strip_h_at_k {
+            1
+        } else {
+            fine_h.div_ceil(strip_h_at_k)
+        };
+
+        let scratch = &self.weber_scratch[k];
+        // Mode B DIST Weber writes the throwaway log_l_bkg_dis (cvvdp
+        // uses REF's log_l_bkg for both sides; DIST's value is
+        // computed-then-discarded). The strip walker's
+        // subtract_weber_3ch_strip_kernel writes the per-strip body
+        // here at `body_offset_y` offsets.
+        let log_l_bkg_dis_dest = scratch.log_l_bkg_dis.clone();
+
+        // bands_dis_strip MUST be allocated (Mode B invariant).
+        let bands_dis_strip = scratch
+            .bands_dis_strip
+            .as_ref()
+            .expect(
+                "bands_dis_strip is None in Mode B fused walker; \
+                 build_weber_scratch must allocate it under StripMode::Pair",
+            );
+
+        // upscaled_c_strip MUST be allocated (Mode B invariant — set
+        // by build_weber_scratch alongside bands_dis_strip).
+        let upscaled_c_strip = scratch
+            .upscaled_c_strip
+            .as_ref()
+            .expect(
+                "upscaled_c_strip is None in Mode B fused walker; \
+                 build_weber_scratch must allocate it under StripMode::Pair",
+            );
+
+        for s in 0..n_strips {
+            let body_offset_y = s * strip_h_at_k;
+            let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
+
+            let n_strip_v = (coarse_w as usize) * (body_h as usize);
+            let n_strip_fine = (fine_w as usize) * (body_h as usize);
+            let count_v_strip = CubeCount::Static((n_strip_v as u32).div_ceil(64), 1, 1);
+            let count_fine_strip = CubeCount::Static((n_strip_fine as u32).div_ceil(64), 1, 1);
+            let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
+            let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
+
+            // Stage 1: upscale_v/h of coarse A → l_bkg_fine body.
+            let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+            let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
+            let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+            unsafe {
+                upscale_v_strip_kernel::launch::<R>(
+                    &self.client,
+                    count_v_strip.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                    ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
+                    coarse_w,
+                    coarse_h,
+                    fine_h,
+                    body_offset_y,
+                    body_h,
+                    0,
+                );
+                upscale_h_strip_kernel::launch::<R>(
+                    &self.client,
+                    count_fine_strip.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v),
+                    ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
+                    coarse_w,
+                    fine_w,
+                    body_h,
+                    fine_h,
+                    body_offset_y,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 2: per-channel upscale → upscaled_c_strip.
+            for c in 0..N_CHANNELS {
+                let coarse = self.gauss_ref[k + 1].planes[c].clone();
+                let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v);
+                let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
+                unsafe {
+                    upscale_v_strip_kernel::launch::<R>(
+                        &self.client,
+                        count_v_strip.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(coarse, n_coarse),
+                        ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v),
+                        coarse_w,
+                        coarse_h,
+                        fine_h,
+                        body_offset_y,
+                        body_h,
+                        0,
+                    );
+                    upscale_h_strip_kernel::launch::<R>(
+                        &self.client,
+                        count_fine_strip.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
+                        ArrayArg::from_raw_parts(upscaled_c_strip[c].clone(), n_strip_buf),
+                        coarse_w,
+                        fine_w,
+                        body_h,
+                        fine_h,
+                        body_offset_y,
+                    );
+                }
+                self.strip_dispatch_counter
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            }
+
+            // Stage 3: subtract_weber → writes bands_dis_strip.
+            // All inputs strip-local (per-strip buffers OR sliced
+            // full-image at body offset). Kernel uses
+            // src_strip_offset = body_offset_y for index translation.
+            let fine_a_full = self.gauss_ref[k].planes[0].clone();
+            let fine_rg_full = self.gauss_ref[k].planes[1].clone();
+            let fine_vy_full = self.gauss_ref[k].planes[2].clone();
+            let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
+            unsafe {
+                subtract_weber_3ch_strip_kernel::launch::<R>(
+                    &self.client,
+                    count_fine_strip.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(
+                        fine_a_full.offset_start(byte_off_fine),
+                        n_strip_fine,
+                    ),
+                    ArrayArg::from_raw_parts(
+                        fine_rg_full.offset_start(byte_off_fine),
+                        n_strip_fine,
+                    ),
+                    ArrayArg::from_raw_parts(
+                        fine_vy_full.offset_start(byte_off_fine),
+                        n_strip_fine,
+                    ),
+                    ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(upscaled_c_strip[2].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(
+                        scratch.l_bkg_fine.clone().offset_start(byte_off_fine),
+                        n_strip_fine,
+                    ),
+                    // Path A bands_dis: write the per-strip contrast
+                    // outputs to the strip-local bands_dis_strip
+                    // buffer (no offset). The kernel writes at
+                    // `buf_y = dy_local` since src_strip_offset =
+                    // body_offset_y.
+                    ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_buf),
+                    ArrayArg::from_raw_parts(
+                        log_l_bkg_dis_dest.clone().offset_start(byte_off_fine),
+                        n_strip_fine,
+                    ),
+                    fine_w,
+                    body_h,
+                    body_offset_y,
+                    fine_h,
+                    body_offset_y, // src_strip_offset — body-relative for bands_dis_strip
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 4: csf_apply_6ch on this strip's body. Reads
+            // bands_ref[k] sliced at body offset (full-image),
+            // bands_dis_strip[k] at strip-local (no offset),
+            // log_l_bkg (REF's) sliced at body offset. Writes
+            // t_p_ref/t_p_dis body rows of the full-image
+            // transients passed in.
+            //
+            // The csf kernel is per-pixel (no halo) so we dispatch
+            // over `n_strip_fine = body_h * fine_w` and use the
+            // first `n_strip_fine` elements of each buffer. For
+            // bands_dis_strip (sized strip_h_at_k * fine_w >=
+            // body_h * fine_w) the first n_strip_fine elements ARE
+            // the body's data. For the sliced full-image handles
+            // (offset by body_offset_y * fine_w * 4) the first
+            // n_strip_fine elements are the body rows.
+            let band_ref_a_strip = band_ref_a.clone().offset_start(byte_off_fine);
+            let band_ref_rg_strip = band_ref_rg.clone().offset_start(byte_off_fine);
+            let band_ref_vy_strip = band_ref_vy.clone().offset_start(byte_off_fine);
+            let log_l_bkg_strip = log_l_bkg_full.clone().offset_start(byte_off_fine);
+            let t_p_ref_a_strip = t_p_ref_h[0].clone().offset_start(byte_off_fine);
+            let t_p_ref_rg_strip = t_p_ref_h[1].clone().offset_start(byte_off_fine);
+            let t_p_ref_vy_strip = t_p_ref_h[2].clone().offset_start(byte_off_fine);
+            let t_p_dis_a_strip = t_p_dis_h[0].clone().offset_start(byte_off_fine);
+            let t_p_dis_rg_strip = t_p_dis_h[1].clone().offset_start(byte_off_fine);
+            let t_p_dis_vy_strip = t_p_dis_h[2].clone().offset_start(byte_off_fine);
+            unsafe {
+                csf_apply_6ch_kernel::launch::<R>(
+                    &self.client,
+                    count_fine_strip.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(band_ref_a_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(band_ref_rg_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(band_ref_vy_strip, n_strip_fine),
+                    // bands_dis_strip: pass as-is (the strip buffer's
+                    // row 0 IS the body's row 0; csf reads at
+                    // `idx = i` for i in 0..n_strip_fine which lines
+                    // up with the body rows).
+                    ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_fine),
+                    ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_fine),
+                    ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_fine),
+                    ArrayArg::from_raw_parts(log_l_bkg_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
+                    ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
+                    ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
+                    ArrayArg::from_raw_parts(t_p_ref_a_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(t_p_ref_rg_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(t_p_ref_vy_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(t_p_dis_a_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(t_p_dis_rg_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(t_p_dis_vy_strip, n_strip_fine),
+                    ch_gain[0],
+                    ch_gain[1],
+                    ch_gain[2],
+                    n_strip_fine as u32,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+
+        // `n_fine` is the level's full-image element count — kept
+        // alive for parity with the original walker's bookkeeping.
+        let _ = n_fine;
         Ok(())
     }
 
