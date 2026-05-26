@@ -1,0 +1,72 @@
+command:
+  cargo test -p cvvdp-gpu --features cuda --test memory_mode -- --nocapture
+  cargo test -p cvvdp-gpu --features cuda --test strip_mode_b_parity -- --nocapture
+  cargo test -p cvvdp-gpu --features cuda --test strip_mode_e_parity -- --nocapture
+git_commit: 8ac4597c (master after Round 2 Mode B API surface)
+host: water-cooled 7950X / RTX 5070 / WSL2 Ubuntu 24.04
+date: 2026-05-26
+notes:
+  Round 2 of task #79 status: API surface complete, walker memory
+  reduction NOT YET DELIVERED.
+
+  What shipped this round (commits c2cbcdfd, 8ac4597c):
+  - MemoryMode::StripPair { h_body } variant + new_strip_pair
+    constructor (Mode B API surface)
+  - is_strip_pair_mode() predicate, distinct from is_strip_mode()
+  - estimate_gpu_memory_bytes_strip_pair (conservative bound today)
+  - StripMode enum (CachedRef vs Pair) inside StripConfig
+  - 6 Mode B parity tests + estimator-bound tests
+  - All 11 Mode E parity tests still pass
+  - JOD output for new_strip_pair matches Full mode at 1e-4 abs
+
+  What did NOT ship this round:
+  - Per-strip dist buffer allocation (would shrink memory in Mode E)
+  - Strip walker for Mode B (currently routes through Full pipeline)
+  - Hybrid K_SPLIT dispatch (shallow=strip / deep=full)
+  - 4096² / 24 MP memory measurements
+
+  The `estimated_bytes` column above is the static estimator output
+  (estimate_gpu_memory_bytes_for_mode), not a real nvidia-smi delta.
+  The Strip row's delta over Full reflects the RefFullState the
+  Phase 2 work already allocated; the StripPair row equals Full
+  exactly because Mode B does NOT pay that delta.
+
+  Real memory reduction requires per-strip allocation of bands_dis +
+  d_scratch + weber_scratch (currently full-image-sized in strip
+  mode). That work needs:
+
+  1. Per-strip allocation paths in Cvvdp::new_with_geometry_inner
+     (gated on strip_config.is_some())
+  2. A strip walker that dispatches the existing strip-aware kernels
+     (downscale_strip, upscale_v_strip, upscale_h_strip,
+     subtract_weber_3ch_strip, pu_blur_h_3ch_strip,
+     pu_blur_v_3ch_scaled_strip, pool_band_3ch_offset) at proper
+     (body_offset_y, logical_h) per strip iteration
+  3. Strip-aware variants of the pointwise kernels (csf_apply_6ch,
+     mult_mutual_3ch_*, baseband_divide_3ch, srgb_to_dkl,
+     diff_abs_3ch, min_abs_3ch) — actually these are pointwise so
+     they don't need new kernels, just per-strip dispatch shape
+  4. Per-strip RefFullState row-slab copy (Mode E only)
+  5. Test infrastructure for nvidia-smi delta measurement
+     (cudaMemGetInfo round-trip before/after construction +
+     before/after first compute)
+
+  Estimated effort: 3-5 days of focused work given the 5400-line
+  pipeline.rs and the careful halo + reflection math at 9 levels.
+
+  The 6 strip-aware kernels from Round 1 (commits fe268e37, 91f47be8,
+  bd086088, 0157134f, f2ebe6ed, b6a402f2, 719a88fa) are bit-exact at
+  max_err = 0.0 vs their full-image siblings; they are the building
+  blocks the walker will dispatch.
+
+  Hybrid K_SPLIT rationale (from task brief): body_h / 2^K_SPLIT >=
+  12 (2x PU blur radius). For h_body=512, K_SPLIT=5 means levels
+  0-4 are strip-aware; levels 5-8 fall back to full-image (those
+  bands are tiny: at 4096² level 5 is ~128px, level 8 is ~16px —
+  memory cost negligible).
+
+  Pre-existing test failure (NOT from Round 2 work):
+    compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend
+  fails because cubecl-cpu's atomic<f32> short-circuits the pool
+  kernel; documented in CLAUDE.md PINNED TASK § Local docker smoke
+  2026-05-15 retry.

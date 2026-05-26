@@ -1,0 +1,10 @@
+width,height,mode,h_body,jod_value,estimated_bytes,notes
+64,64,Full,,9.59,3018944,baseline full-image
+64,64,Strip,512,9.59,3360832,Mode E: full + RefFullState delta
+64,64,StripPair,512,9.59,3018944,Mode B: equals full (no RefFullState)
+1024,1024,Full,,9.59,654176192,baseline full-image at 1MP
+1024,1024,Strip,512,9.59,762638272,Mode E adds RefFullState
+1024,1024,StripPair,512,9.59,654176192,Mode B matches Full
+2048,2048,Full,,,2589929920,4MP baseline (estimate)
+2048,2048,Strip,512,,3019714944,4MP Strip with RefFullState delta
+2048,2048,StripPair,512,,2589929920,4MP Mode B (no RefFullState)
