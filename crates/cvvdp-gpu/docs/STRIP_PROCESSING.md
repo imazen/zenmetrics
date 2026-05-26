@@ -429,3 +429,94 @@ actually fits a smaller VRAM cap.
 
 If even the Phase 2 estimate (Full + ref cache) exceeds the cap,
 `resolve_auto` still surfaces `Error::TooBigForFull { needed, cap }`.
+
+`Auto` does NOT pick `StripPair` (Mode B); that variant is opt-in
+only — callers explicitly choose between `Strip` (cached-ref for
+batch workloads) and `StripPair` (one-shot for CLI use). See the
+Mode B section below.
+
+## Mode B (Round 2): one-shot pair stripwise (StripPair)
+
+Mode B (`MemoryMode::StripPair { h_body }`) is the one-shot pair
+strip-walker variant: **both ref and dist** walk in strips together
+with no full-ref cache on device. Designed for CLI / one-shot
+scoring on large images where the user only needs a single JOD
+value and doesn't reuse the reference across many distorted
+candidates.
+
+### When to pick Mode B vs Mode E
+
+| | Mode E (`Strip`) | Mode B (`StripPair`) |
+|---|---|---|
+| Ref cache on device | Yes (RefFullState, full-image) | No |
+| Per-DIST work | Dist pyramid + masking only | Full ref+dist pyramid + masking |
+| Peak memory (target) | RefFullState + 1 strip dist | 2 strips (ref + dist) |
+| Best for | Batch workflows (sweep workers, many DISTs per REF) | One-shot scoring (CLI, single-pair) |
+| Construction | `Cvvdp::new_strip` or `MemoryMode::Strip` | `Cvvdp::new_strip_pair` or `MemoryMode::StripPair` |
+
+### Round 2 status (2026-05-26)
+
+What shipped in Round 2 (commits c2cbcdfd, 8ac4597c, 1aa46182):
+
+- **API surface**: `MemoryMode::StripPair { h_body }`,
+  `Cvvdp::new_strip_pair` / `new_strip_pair_with_geometry`,
+  `is_strip_pair_mode()` predicate, `estimate_gpu_memory_bytes_strip_pair`.
+- **Internal**: `StripMode` enum (`CachedRef` for Mode E, `Pair` for
+  Mode B) carried in `StripConfig`. The `new_with_memory_mode`
+  dispatcher routes `MemoryMode::StripPair` through the new
+  constructor.
+- **Estimator**: returns Full footprint (conservative bound — Mode
+  B does NOT pay the `RefFullState` delta that Mode E does, so this
+  estimate is strictly tighter than Mode E's at equal `h_body`).
+- **Tests**: 6 Mode B parity tests pinning the JOD contract; all
+  11 Mode E tests still pass.
+- **JOD invariant**: Mode B `score()` returns the same JOD as Full
+  at 64×64 within `1e-4 abs` (because today's walker routes through
+  the existing Full pipeline — see "what's NOT shipped" below).
+
+What did NOT ship in Round 2 (multi-day follow-on work):
+
+- **Per-strip dist+ref buffer allocation**. Currently
+  `new_strip_pair` allocates at full-image dimensions — same as
+  Full — so there is no memory reduction yet. The dist scratch
+  (`bands_dis`, `d_scratch`, `weber_scratch`) needs to be sized
+  for `(h_body + 2 × halo)` strips, not full-image.
+- **Strip walker** that dispatches the Round 1 strip-aware kernels
+  per strip iteration. Mode B's walker shape mirrors Mode E's
+  (`_dispatch_strip_body(...)`) but uploads fresh REF data per
+  strip instead of reading from RefFullState.
+- **Hybrid K_SPLIT dispatch** for the deep-band problem
+  (shallow=strip, deep=full-image). K_SPLIT=5 for `h_body=512`.
+- **4096² / 24 MP nvidia-smi delta measurements**.
+
+These items are gated on the same multi-day kernel + walker work
+documented in the Mode E Phase 3 design notes above. The Round 1
+strip-aware kernels (downscale, upscale_v, upscale_h,
+subtract_weber_3ch, pu_blur_h_3ch, pu_blur_v_3ch_scaled, pool) are
+the shared building blocks both Mode E and Mode B walkers will
+dispatch — Mode B reuses the entire Round 1 kernel surface.
+
+### Why Mode B sits next to Mode E
+
+The two walkers share most of the per-strip dispatch body. A
+future `_dispatch_strip_body(strip_idx, ...)` helper will be
+called by both Mode E (which sources REF from RefFullState row
+slabs) and Mode B (which uploads ref strip bytes per strip
+iteration alongside the dist strip bytes). The variants differ
+only in:
+
+- **Pre-strip setup**: Mode E restores REF state from
+  RefFullState into the strip-sized bands_ref scratch; Mode B
+  runs `srgb_to_dkl` + gauss pyramid + weber pyramid on the
+  ref-strip bytes.
+- **Construction**: Mode E allocates RefFullState (full-image
+  ref bands + log_l_bkg + baseband gauss); Mode B does not.
+- **Memory profile**: Mode B's per-strip working set is double
+  Mode E's (ref+dist both strip-sized), but Mode B saves the
+  RefFullState delta (~340 MB at 4096²).
+
+For images small enough to fit Full mode, both Mode E and Mode B
+add overhead (per-strip dispatch is slower than a single full-image
+dispatch on backends with high launch cost). For large images that
+don't fit Full, both variants restore feasibility — pick Mode E
+for batch, Mode B for one-shot.
