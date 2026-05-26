@@ -25,18 +25,53 @@ fn env_cap_bytes() -> Option<usize> {
         .and_then(|s| s.trim().parse::<usize>().ok())
 }
 
-/// Effective cap policy:
-/// 1. `ZENMETRICS_VRAM_CAP_BYTES` env var if set.
-/// 2. Else: 8 GB default (cubecl's free-VRAM query is not surfaced
-///    through a stable public API; we deliberately don't probe the
-///    runtime here to keep this fn pure and synchronous).
+/// Cache for the live nvidia-smi probe result. The query takes
+/// 50-200 ms per invocation; we cache process-wide so the hot path
+/// stays sub-microsecond after first init.
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
+    std::sync::OnceLock::new();
+
+/// Probe live free-VRAM via `nvidia-smi --query-gpu=memory.free`.
+/// Returns `Some(bytes)` on success, `None` when nvidia-smi is
+/// unavailable or its output can't be parsed (AMD/Intel GPUs, CI
+/// runners without a CUDA driver, exotic distros).
 ///
-/// Callers that already know their free-VRAM budget should set the
-/// env var (or use [`MemoryMode::Strip`] / [`MemoryMode::Full`]
-/// explicitly), rather than relying on the 8 GB default.
+/// Cached process-wide; subsequent calls return the same value
+/// without re-querying. Mirrors `iwssim_gpu::memory_mode::live_vram_probe_bytes`.
+pub fn live_vram_probe_bytes() -> Option<usize> {
+    *LIVE_PROBE_CACHE.get_or_init(query_nvidia_smi_memory_free)
+}
+
+fn query_nvidia_smi_memory_free() -> Option<usize> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=memory.free",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    let mb: u64 = s.lines().next()?.trim().parse().ok()?;
+    let bytes = (mb as usize).saturating_mul(1024 * 1024);
+    // 10% safety margin so a freshly-probed cap doesn't put us at
+    // 99% occupancy. Sibling cubecl clients (other metrics + the
+    // runtime's own kernel cache) share the pool.
+    Some(bytes.saturating_sub(bytes / 10))
+}
+
+/// Effective cap policy (task #51 — live VRAM probe across all 6 crates):
+/// 1. `ZENMETRICS_VRAM_CAP_BYTES` env var (always wins).
+/// 2. Live `nvidia-smi` probe (cached process-wide, 10% headroom).
+/// 3. 8 GB default for non-NVIDIA / CI / exotic environments.
 pub fn vram_cap_bytes() -> usize {
     if let Some(cap) = env_cap_bytes() {
         return cap;
+    }
+    if let Some(probed) = live_vram_probe_bytes() {
+        return probed;
     }
     8 * 1024 * 1024 * 1024
 }

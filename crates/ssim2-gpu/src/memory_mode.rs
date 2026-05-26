@@ -33,9 +33,42 @@ fn env_cap_bytes() -> Option<usize> {
         .and_then(|s| s.trim().parse::<usize>().ok())
 }
 
+/// Cache for the live nvidia-smi probe result. Process-wide so the
+/// hot path stays sub-microsecond after first init.
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
+    std::sync::OnceLock::new();
+
+/// Probe live free-VRAM via `nvidia-smi --query-gpu=memory.free`.
+/// Mirrors `iwssim_gpu::memory_mode::live_vram_probe_bytes`; see that
+/// for cache semantics + 10% headroom rationale.
+pub fn live_vram_probe_bytes() -> Option<usize> {
+    *LIVE_PROBE_CACHE.get_or_init(query_nvidia_smi_memory_free)
+}
+
+fn query_nvidia_smi_memory_free() -> Option<usize> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=memory.free",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    let mb: u64 = s.lines().next()?.trim().parse().ok()?;
+    let bytes = (mb as usize).saturating_mul(1024 * 1024);
+    Some(bytes.saturating_sub(bytes / 10))
+}
+
+/// Effective cap policy (task #51): env var → live nvidia-smi probe → 8 GB.
 pub fn vram_cap_bytes() -> usize {
     if let Some(cap) = env_cap_bytes() {
         return cap;
+    }
+    if let Some(probed) = live_vram_probe_bytes() {
+        return probed;
     }
     8 * 1024 * 1024 * 1024
 }
