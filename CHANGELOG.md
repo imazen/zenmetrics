@@ -17,6 +17,23 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — fix: CSF `log_rho` axis extrapolation at high PPD (conformance Finding A) — 2026-05-26
+
+- **`cvvdp_gpu::kernels::csf::interp1_rho_extrap`**: the inner CSF
+  `log_rho` axis interp now linearly EXTRAPOLATES above its 64 cy/deg
+  maximum (matching pycvvdp's `interp.get_interpolants_v1`), instead of
+  flat-clamping to the endpoint. The conformance matrix's
+  `iphone_14_pro` display (`pix_per_deg ≈ 159.6`, finest pyramid band
+  ≈ 80 cy/deg — the only conformance display past the axis) was
+  over-estimating achromatic CSF sensitivity by ~2× in the finest band,
+  landing both cvvdp-cpu AND cvvdp-gpu up to 0.028 JOD low vs pycvvdp on
+  JPEG content. Trigger was high spatial frequency, not high peak
+  luminance. Bit-identical for interior queries (no change to the other
+  8 displays / standard-4K 1e-4 parity). Conformance matrix: cpu
+  274→279/279, gpu 271→276/279. Covers BOTH impls because the GPU
+  uploads the host-computed `precompute_logs_row`. Closes
+  `UPSTREAM_DIVERGENCES.md` row 8. (this commit)
+
 ### cvvdp-cpu — brute-force SIMD-vs-scalar kernel equivalence harness — 2026-05-26
 
 - **`tests/simd_equivalence.rs`**: brute-force per-element comparison of

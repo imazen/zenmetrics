@@ -54,60 +54,24 @@ fn documented_divergences() -> BTreeMap<&'static str, &'static str> {
     // passes. Re-derive with `--nocapture` after any cvvdp-cpu/gpu
     // change; if a cell's delta drops below 1e-3, remove it here.
     //
-    // FINDING A — `iphone_14_pro` display (Y_peak = 1025 nit, the only
-    // sRGB conformance display with peak >= 1000 nit). cvvdp-cpu and
-    // cvvdp-gpu AGREE with each other to ~7e-5 JOD but BOTH land low
-    // vs pycvvdp by up to 0.028 JOD on mid-quality JPEG content. A
-    // shared (not GPU-specific) parity gap in the high-peak-luminance
-    // CSF/masking adaptation regime; magnitude shrinks toward
-    // near-lossless. Root cause + scope in docs/CVVDP_CONFORMANCE.md.
+    // FINDING A — RESOLVED 2026-05-26. The 10 `iphone_14_pro` JPEG
+    // cells previously listed here were root-caused to the CSF
+    // `log_rho` axis being flat-clamped (not extrapolated) above its
+    // 64 cy/deg maximum. `iphone_14_pro` (pix_per_deg ~= 159.6) is the
+    // only conformance display whose finest pyramid band exceeds that
+    // axis (rho ~= 80 cy/deg), so flat-clamping over-estimated CSF
+    // sensitivity by ~2x there. The trigger was high SPATIAL FREQUENCY
+    // (high PPD), not high peak luminance. Fixed in
+    // `cvvdp_gpu::kernels::csf::interp1_rho_extrap` (linear
+    // extrapolation above the axis, matching pycvvdp's
+    // `get_interpolants_v1`). All 10 cells now pass; see
+    // docs/CVVDP_CONFORMANCE.md Finding A (resolved).
     //
     // FINDING B — GPU-only marginal (<= 0.0014 JOD) on extreme
     // high-frequency / heavily-blurred content at the perceptibility
     // floor (JOD ~3.7-4.4). GPU float reduction-order vs CPU at the
     // deepest pyramid bands. cvvdp-cpu passes these cells.
     BTreeMap::from([
-        // Finding A
-        (
-            "synth_photo_256_jpeg60|iphone_14_pro|cpu",
-            "0.02439 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_photo_256_jpeg60|iphone_14_pro|gpu",
-            "0.02440 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q60|iphone_14_pro|cpu",
-            "0.02439 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q60|iphone_14_pro|gpu",
-            "0.02440 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q30|iphone_14_pro|cpu",
-            "0.01634 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q30|iphone_14_pro|gpu",
-            "0.01635 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q90|iphone_14_pro|cpu",
-            "0.00649 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "synth_jpeg_q90|iphone_14_pro|gpu",
-            "0.00649 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "large_1024_jpeg60|iphone_14_pro|cpu",
-            "0.02806 JOD; Finding A high-peak-luminance regime",
-        ),
-        (
-            "large_1024_jpeg60|iphone_14_pro|gpu",
-            "0.02813 JOD; Finding A high-peak-luminance regime",
-        ),
         // Finding B
         (
             "checkerboard_blur_r2|htc_vive_pro|gpu",

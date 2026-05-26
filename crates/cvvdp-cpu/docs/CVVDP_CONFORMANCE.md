@@ -126,28 +126,36 @@ some displays). The synth fixtures already pin tighter (`1e-4`–`5e-3`)
 elsewhere; the matrix's `1e-3` is the cross-display/cross-content
 gate.
 
-## Results (2026-05-26, pycvvdp v0.5.4, RTX 5070)
+## Results (2026-05-26, pycvvdp v0.5.4, RTX 5070; post-Finding-A fix)
 
-- **cpu within 1e-3: 274 / 279** (max `|delta_cpu|` = 0.028065)
-- **gpu within 1e-3: 271 / 279** (max `|delta_gpu|` = 0.028131)
-- **median `|delta_cpu|` = 2e-6, median `|delta_gpu|` = 6e-6** — the
-  vast majority of cells are at bit-parity with the reference.
-- **cpu/gpu agree to `max |jod_cpu − jod_gpu| = 1.2e-3`** — the two
-  impls track each other tightly.
+- **cpu within 1e-3: 279 / 279** (max `|delta_cpu|` = 0.000877)
+- **gpu within 1e-3: 276 / 279** (max `|delta_gpu|` = 0.001390)
+- **cpu/gpu agree tightly** — the two impls track each other across
+  every cell.
 
-Per-class pass rates:
+The Finding-A fix (CSF `log_rho` axis extrapolation; see below) closed
+all 10 `iphone_14_pro` JPEG cells. cpu went 274 → 279, gpu went
+271 → 276 (the 3 remaining gpu cells are Finding B, the GPU
+float-reduction-order floor — unaffected by the Finding-A fix).
+
+Per-class pass rates (post-fix):
 
 | Class | n | cpu pass | gpu pass | max Δcpu | max Δgpu |
 |---|---|---|---|---|---|
-| common_photo | 18 | 17/18 | 17/18 | 0.02439 | 0.02440 |
+| common_photo | 18 | 18/18 | 18/18 | 0.00002 | 0.00002 |
 | common_screenshot | 9 | 9/9 | 9/9 | 0.00001 | 0.00001 |
-| common_distortion | 72 | 69/72 | 68/72 | 0.02439 | 0.02440 |
-| niche_content | 99 | 98/99 | 96/99 | 0.02806 | 0.02813 |
+| common_distortion | 72 | 72/72 | 71/72 | 0.00088 | 0.00062 |
+| niche_content | 99 | 99/99 | 97/99 | 0.00088 | 0.00139 |
 | niche_distortion | 54 | 54/54 | 54/54 | 0.00046 | 0.00066 |
 | hdr | 27 | 27/27 | 27/27 | 0.00081 | 0.00076 |
 
 Every HDR (PQ/HLG/linear/BT.2020) and niche-distortion cell is within
-tolerance. All divergences are confined to two findings below.
+tolerance. The only remaining over-tolerance cells are the 3 Finding-B
+GPU floor cells below.
+
+(Pre-fix, the matrix recorded cpu 274/279, gpu 271/279 with
+`max |delta| = 0.028` driven entirely by the Finding-A iphone JPEG
+cells.)
 
 ## Divergences
 
@@ -156,55 +164,57 @@ the test's `documented_divergences()` allow-list (the explicit,
 reviewable alternative to widening the tolerance) and root-caused
 here. None is silently passed.
 
-### Finding A — `iphone_14_pro` high-peak-luminance regime (10 cells)
+### Finding A — RESOLVED: CSF `log_rho` axis extrapolation at high PPD (10 cells)
 
-**Symptom**: On the `iphone_14_pro` display (Y_peak = **1025 nit** —
-the only sRGB conformance display with peak ≥ 1000 nit), both
-cvvdp-cpu and cvvdp-gpu land **low** vs pycvvdp by up to **0.028 JOD**
-on JPEG-distorted content. The delta is largest at mid quality
-(q60/q30: 0.016–0.028) and shrinks toward near-lossless (q90: 0.006).
-The large 1024² JPEG cell is the worst (0.028).
+**Resolved 2026-05-26** in `cvvdp_gpu::kernels::csf::interp1_rho_extrap`.
 
-**Not a GPU issue**: cvvdp-cpu and cvvdp-gpu AGREE with each other to
-~7e-5 JOD on these cells — both diverge from pycvvdp by the same
-amount. This is a **shared algorithmic parity gap in the cvvdp model**
-(present identically on CPU and GPU), not a kernel/float-order
-artifact.
+**Symptom (pre-fix)**: On the `iphone_14_pro` display, both
+cvvdp-cpu and cvvdp-gpu landed **low** vs pycvvdp by up to **0.028 JOD**
+on JPEG-distorted content (q60/q30: 0.016–0.028, q90: 0.006; the large
+1024² JPEG cell was worst at 0.028). cvvdp-cpu and cvvdp-gpu AGREED with
+each other to ~7e-5 JOD, so it was a **shared model parity gap**, not a
+GPU/float-order artifact.
 
-**Ruled out** (verified, not assumed):
+**Root cause (PROVEN by per-band intermediate dumps)**: the trigger was
+**high spatial frequency, NOT high peak luminance**. The cvvdp CSF LUT
+`log_rho` axis tops out at **64 cy/deg** (log10 = 1.806). The finest
+Laplacian pyramid band has spatial frequency ≈ `pix_per_deg / 2`.
+`iphone_14_pro` has `pix_per_deg ≈ 159.6` (the highest of any
+conformance display), so its band-0 frequency ≈ **79.8 cy/deg** —
+**beyond the axis maximum**. Every other conformance display peaks at
+≤ 60.3 cy/deg (`standard_phone`, ppd 120.6), inside the axis. That is
+why `standard_phone` (500 nit) passed and the brighter-but-lower-PPD
+HDR displays (1500 nit, ppd 75.4) also passed: peak luminance was a
+coincidence of the iphone preset, not the cause.
 
-- *Display parameters* — our vendored `display_models.json`
-  `iphone_14_pro` entry is **byte-identical** to pycvvdp's upstream
-  entry. Derived `Y_peak=1025`, `Y_black=0.0004` (= 1025/2562500),
-  `Y_refl=0.39789` (= 250·0.005/π) all match pycvvdp's
-  `display_photometry` (`get_black_level() = (0.0004, 0.39789)`,
-  `contrast = 2562500`).
-- *EOTF* — our sRGB `forward()` at code 0.0/0.5/1.0 yields
-  0.398 / 219.8 / 1025.4 cd/m², matching pycvvdp's
-  `display_photometry.forward()` to display precision.
-- *CSF LUT luminance axis* — our `LOG_L_BKG_AXIS` spans 0.005 → 10000
-  cd/m² (log10 −2.301 → 4.0, 32 entries), **identical** to pycvvdp's
-  `csf_lut_weber_fixed_size.json` `L_bkg` axis. The iphone background
-  luminance (≤ ~1025) is well inside the axis, so this is not an
-  axis-clamp effect.
+Our `interp1_clamped` **flat-clamped** queries above the axis (held the
+64-cy/deg value), but pycvvdp's `interp.get_interpolants_v1`
+**linearly extrapolates** above the axis (clamps only the bottom). At
+the iphone band-0 frequency, pycvvdp's CSF keeps falling
+(rho=64→S_A≈1.86, rho=79.8→S_A≈0.94 uncorrected), while flat-clamp held
+S_A≈1.86 — a **~2× over-estimate of CSF sensitivity** in that band.
 
-**Root cause (localized)**: the divergence appears only when peak
-luminance pushes the per-pixel adaptation luminance into the
-high-photopic range (Y_peak ≥ 1000 nit on an sRGB display).
-`standard_phone` (Y_peak = 500, same E_ambient = 250 lux) passes every
-cell, so the trigger is peak luminance, not ambient. The gap tracks
-the correct direction (our JOD and pycvvdp's both rise vs `standard_4k`
-when moving to the brighter display) but undershoots — consistent with
-a small calibration-regime difference in the contrast-masking / CSF
-sensitivity interaction at high adaptation luminance, where the
-masking term is most active (hence the mid-quality peak and
-near-lossless shrink). The magnitude (≤ 0.028 JOD = 0.28% of full
-scale) is bounded and never inverts the quality ordering. Closing it
-fully requires a stage-by-stage re-derivation of the masking/CSF apply
-at L_adapt > ~500 cd/m² against pycvvdp's per-band tensors (a
-cvvdp-cpu/gpu source change — out of scope for the conformance harness,
-which tests the impls as black boxes). Filed as a finding for the
-cvvdp-cpu/gpu owners; see `UPSTREAM_DIVERGENCES.md`.
+Verified with `scripts/cvvdp_goldens/diagnose_hipeak.py` + a per-band
+dump of the CPU port on `synth_jpeg_q60 | iphone_14_pro`: pre-fix
+band-0 `Q_per_ch` (A/RG/VY) was `0.209 / 3.665 / 6.159` vs pycvvdp's
+`0.043 / 2.176 / 3.720`; bands 1–7 already matched to ~1e-4. Final JOD
+pre-fix 9.834731 vs pycvvdp 9.859124 (Δ 0.0244).
+
+**Fix**: `interp1_rho_extrap` matches `get_interpolants_v1` exactly —
+flat-clamp below the axis, **linear extrapolation above** (using the
+last interval's slope). It is bit-identical for interior queries (the
+only ones the other 8 displays produce), so **zero regression** on the
+248 non-iphone cells. Applied at both rho-axis interp sites
+(`sensitivity_scalar` + `precompute_logs_row` in
+`crates/cvvdp-gpu/src/kernels/csf.rs`); the GPU pipeline uploads the
+host-computed `precompute_logs_row` result, so the one fix covers both
+CPU and GPU (explaining why they diverged identically).
+
+**Post-fix**: all 10 iphone JPEG cells PASS. `synth_jpeg_q60`
+Δcpu 0.024393 → 0.000000; `large_1024_jpeg60` Δcpu 0.028065 → 0.000017,
+Δgpu 0.028131 → 0.000004. Standard-4K 1e-4 parity gate unchanged (its
+band-0 rho ≈ 37.7 cy/deg is well inside the axis → bit-identical to the
+old clamp).
 
 ### Finding B — GPU float reduction-order at the perceptibility floor (3 cells, GPU-only)
 

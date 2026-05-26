@@ -178,44 +178,70 @@ fn interp1_uniform(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     ys[imin] * (1.0 - ifrc) + ys[imax] * ifrc
 }
 
-/// 1-D linear interpolation via binary-search bracket lookup.
-/// Returns the y-value at `x`, clamping queries outside the
-/// axis range to the endpoint y-values.
+// NOTE: the former `interp1_clamped` (flat-clamp on both axis ends)
+// was the inner `log_rho` interp until the high-PPD conformance fix.
+// It over-estimated CSF sensitivity by ~2× for the finest pyramid
+// band on displays with `pix_per_deg > 128` (rho > 64 cy/deg, beyond
+// the LUT axis) because it held the endpoint value instead of
+// extrapolating. Replaced by `interp1_rho_extrap` below, which is
+// bit-identical for interior queries (the only ones the standard-4K
+// / phone-500 displays produce) and matches pycvvdp's
+// `get_interpolants_v1` extrapolation for super-axis queries.
+
+/// Returns the y-value at `x` on a monotonically-increasing `xs`
+/// axis, matching pycvvdp's `interp.get_interpolants_v1` +
+/// `interp1` for the `log_rho` axis EXACTLY:
 ///
-/// Works on any monotonically-increasing `xs`, uniformly-spaced
-/// or not. Slower than [`interp1_uniform`] but doesn't depend on
-/// the axis being grid-uniform at f32 precision. Used for the
-/// inner `log_rho` axis interp in `sensitivity_scalar` and
-/// `precompute_logs_row` — matching pycvvdp's choice of
-/// `torch.searchsorted` + linear interp for the rho axis (vs.
-/// `interp1q` for L_bkg). See [`interp1_uniform`] for the
-/// uniform-axis fast path used on the outer L_bkg interp.
-fn interp1_clamped(xs: &[f32], ys: &[f32], x: f32) -> f32 {
+/// - **Below** the axis (`x < xs[0]`): flat clamp to `ys[0]`.
+///   (`get_interpolants_v1` collapses `imin == imax == 0` then sets
+///   `ifrc = 0` for the bottom interval, and additionally zeroes any
+///   negative `ifrc` — so queries under the axis hold the first
+///   value.)
+/// - **Inside** the axis: linear interpolation (same as
+///   [`interp1_clamped`]).
+/// - **Above** the axis (`x > xs[N-1]`): LINEAR EXTRAPOLATION using
+///   the last interval's slope. `get_interpolants_v1` clamps the
+///   bucket index to `N-1` (so `imin = N-2`, `imax = N-1`) but does
+///   NOT clamp `ifrc` at the high end — only `ifrc < 0` is zeroed —
+///   so `ifrc = (x - xs[N-2]) / (xs[N-1] - xs[N-2]) > 1` and the
+///   result extrapolates past `ys[N-1]`.
+///
+/// This matters for high-PPD displays: the CSF `log_rho` axis tops
+/// out at 64 cy/deg (log10 = 1.806), but a display whose
+/// `pix_per_deg` exceeds ~128 (e.g. `iphone_14_pro`, ppd ≈ 159.6)
+/// produces a finest pyramid band at rho ≈ ppd/2 ≈ 80 cy/deg —
+/// beyond the axis. pycvvdp keeps the CSF falling off (extrapolates
+/// in log-S); flat-clamping (the old [`interp1_clamped`] behaviour
+/// at the high end) over-estimated sensitivity by ~2× in that band.
+/// See the high-peak-luminance conformance finding (resolved): the
+/// trigger is high spatial frequency, not high peak luminance.
+fn interp1_rho_extrap(xs: &[f32], ys: &[f32], x: f32) -> f32 {
     debug_assert_eq!(xs.len(), ys.len());
     let n = xs.len();
+    // Below the axis: flat clamp (pycvvdp zeroes negative ifrc).
     if x <= xs[0] {
         return ys[0];
     }
-    if x >= xs[n - 1] {
-        return ys[n - 1];
-    }
-    // Binary search for the bracket. `usize::midpoint` is the
-    // overflow-safe form — the `(lo + hi) / 2` shorthand would
-    // wrap on platforms where `lo + hi > usize::MAX`, which
-    // can't happen at our 32-entry LUT sizes but is the
-    // canonical idiom under MSRV 1.85+.
-    let mut lo = 0usize;
-    let mut hi = n - 1;
-    while hi - lo > 1 {
-        let mid = usize::midpoint(lo, hi);
-        if xs[mid] <= x {
-            lo = mid;
-        } else {
-            hi = mid;
+    // Inside or above: locate the bracket `[lo, lo+1]`. For queries
+    // above the axis, `lo = n - 2` (the last interval) and the
+    // linear blend below extrapolates because `t > 1`.
+    let lo = if x >= xs[n - 1] {
+        n - 2
+    } else {
+        let mut l = 0usize;
+        let mut h = n - 1;
+        while h - l > 1 {
+            let mid = usize::midpoint(l, h);
+            if xs[mid] <= x {
+                l = mid;
+            } else {
+                h = mid;
+            }
         }
-    }
-    let t = (x - xs[lo]) / (xs[hi] - xs[lo]);
-    ys[lo] + t * (ys[hi] - ys[lo])
+        l
+    };
+    let t = (x - xs[lo]) / (xs[lo + 1] - xs[lo]);
+    ys[lo] + t * (ys[lo + 1] - ys[lo])
 }
 
 fn channel_lut(cc: CsfChannel) -> &'static [f32; N_L_BKG * N_RHO] {
@@ -266,7 +292,7 @@ pub fn sensitivity_scalar(rho: f32, log_l_bkg: f32, cc: CsfChannel) -> f32 {
     let mut logs_row = [0.0_f32; N_L_BKG];
     for l_idx in 0..N_L_BKG {
         let row = &lut[l_idx * N_RHO..(l_idx + 1) * N_RHO];
-        logs_row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, row, log_rho_q);
+        logs_row[l_idx] = interp1_rho_extrap(&LOG_RHO_AXIS, row, log_rho_q);
     }
 
     // pycvvdp uses interp1q (uniform-axis rescale) for the L_bkg
@@ -344,7 +370,7 @@ pub fn precompute_logs_row(rho: f32, cc: CsfChannel) -> [f32; N_L_BKG] {
     let mut row = [0.0_f32; N_L_BKG];
     for l_idx in 0..N_L_BKG {
         let r = &lut[l_idx * N_RHO..(l_idx + 1) * N_RHO];
-        row[l_idx] = interp1_clamped(&LOG_RHO_AXIS, r, log_rho_q);
+        row[l_idx] = interp1_rho_extrap(&LOG_RHO_AXIS, r, log_rho_q);
     }
     row
 }
