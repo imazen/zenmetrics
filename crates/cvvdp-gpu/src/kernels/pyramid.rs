@@ -1968,6 +1968,109 @@ pub fn subtract_weber_3ch_kernel(
     log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
 }
 
+/// Strip-aware sibling of [`subtract_weber_3ch_kernel`] (Mode E
+/// Phase 3, task #79 follow-on). Same per-pixel math; processes
+/// only the **body rows** of an input strip buffer with halo,
+/// writing to the same-layout output buffers.
+///
+/// **Buffer convention.** All input AND output buffers share the
+/// same strip-buffer layout `(strip_h_buf × width)` — they include
+/// any halo rows the caller chose. The kernel iterates `body_h`
+/// rows starting at buffer-local row `body_offset_y`. Halo rows
+/// in the output buffers are left untouched (caller initialises
+/// them if it cares about their contents).
+///
+/// **Why no reflection.** The Weber-contrast subtract step is
+/// strictly per-pixel: `band = (fine − upsc) / max(lbkg, 0.01)`
+/// with clamps. No neighbouring-pixel access, so the kernel never
+/// needs to reflect against logical-image edges. `logical_h` is
+/// taken as a parameter purely for API symmetry with the other
+/// strip-aware pyramid kernels (and as a documentation contract
+/// for callers — the strip is a slice of a `logical_h`-row
+/// logical image). It is not used in the kernel math.
+///
+/// **Legacy equivalence.** Calling this with `body_offset_y = 0`
+/// and `body_h = strip_h_buf` (and `logical_h` arbitrary)
+/// produces output bit-identical to [`subtract_weber_3ch_kernel`]
+/// over the same buffers with `n = strip_h_buf × width`.
+#[cube(launch)]
+pub fn subtract_weber_3ch_strip_kernel(
+    fine_a: &Array<f32>,
+    fine_rg: &Array<f32>,
+    fine_vy: &Array<f32>,
+    upsc_a: &Array<f32>,
+    upsc_rg: &Array<f32>,
+    upsc_vy: &Array<f32>,
+    expanded_lbkg: &Array<f32>,
+    contrast_a: &mut Array<f32>,
+    contrast_rg: &mut Array<f32>,
+    contrast_vy: &mut Array<f32>,
+    log_l_bkg: &mut Array<f32>,
+    width: u32,
+    body_h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+) {
+    let tid = ABSOLUTE_POS;
+    let total = (width * body_h) as usize;
+    if tid >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let dy_local = tid / w;
+    let dx = tid - dy_local * w;
+    let buf_y = (body_offset_y as usize) + dy_local;
+    let idx = buf_y * w + dx;
+
+    let l_min = f32::new(0.01);
+    let l_max = f32::new(1000.0);
+    let l_min_neg = f32::new(-1000.0);
+
+    let raw_lbkg = expanded_lbkg[idx];
+    let l = if raw_lbkg < l_min { l_min } else { raw_lbkg };
+
+    let layer_a = fine_a[idx] - upsc_a[idx];
+    let c_a_raw = layer_a / l;
+    let c_a_hi = if c_a_raw > l_max { l_max } else { c_a_raw };
+    let c_a = if c_a_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_a_hi
+    };
+    contrast_a[idx] = c_a;
+
+    let layer_rg = fine_rg[idx] - upsc_rg[idx];
+    let c_rg_raw = layer_rg / l;
+    let c_rg_hi = if c_rg_raw > l_max { l_max } else { c_rg_raw };
+    let c_rg = if c_rg_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_rg_hi
+    };
+    contrast_rg[idx] = c_rg;
+
+    let layer_vy = fine_vy[idx] - upsc_vy[idx];
+    let c_vy_raw = layer_vy / l;
+    let c_vy_hi = if c_vy_raw > l_max { l_max } else { c_vy_raw };
+    let c_vy = if c_vy_hi < l_min_neg {
+        l_min_neg
+    } else {
+        c_vy_hi
+    };
+    contrast_vy[idx] = c_vy;
+
+    log_l_bkg[idx] = f32::ln(l) * f32::new(core::f32::consts::LOG10_E);
+
+    // `logical_h` is part of the strip-aware API contract for
+    // forward symmetry with the pyramid downscale/upscale kernels
+    // (which DO reflect against the logical image). The subtract
+    // is per-pixel and never needs it, but callers always pass it
+    // so this kernel can be swapped in without signature changes
+    // when a future variant adds reflection (e.g. for a halo-fill
+    // pass).
+    let _ = logical_h;
+}
+
 // Note (tick 159): I tried adding `upscale_v_3ch_kernel` and
 // `upscale_h_3ch_kernel` that read/write 3 channels per thread with
 // shared index/mask math. The intent was to halve the upscale
