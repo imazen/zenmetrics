@@ -17,6 +17,54 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — feat: re-introduce `MemoryMode::Strip { h_body }` (Mode E, task #79) — 2026-05-26
+
+Task #79 reintroduces a Strip variant for cvvdp that is
+**JOD-preserving**, unlike the rolled-back task #77 capped-pyramid
+variant. Mode E shrinks the *working set* without changing the
+algorithm: the reference-side state lives in dedicated full-image
+buffers (survives intervening one-shot `score()` calls); the dist
+side runs the standard pipeline against them. Per-band atomic-pool
+sums are associative across strips, so the final JOD equals
+Full-mode JOD within the documented Atomic<f32> reduction-order
+noise band (≤ 1e-4 abs JOD on CUDA).
+
+Phase 1+2 (commits 1c3445c3, 89b2a5f6) lands:
+
+- `MemoryMode::Strip { h_body: Option<u32> }` variant +
+  `ResolvedMode::Strip { h_body }`.
+- `STRIP_H_BODY_DEFAULT = 512`, `STRIP_ALIGN = 2^(MAX_LEVELS-1) = 256`.
+- `Cvvdp::new_strip` + `Cvvdp::new_strip_with_geometry`;
+  `new_with_memory_mode` dispatches Strip + Auto.
+- `RefFullState` struct (full-image per-level Weber bands +
+  per-non-baseband log_l_bkg + baseband gauss + baseband scalar).
+  Allocated lazily on first `warm_reference` in strip mode.
+- New `copy_f32_kernel` in `kernels::pool`.
+- `warm_reference` snapshots shared scratch into `ref_full_state`;
+  `compute_with_warm_ref` (+ host-pool / diffmap / linear-planes
+  siblings) restores it ahead of dist dispatch.
+- `Cvvdp::has_warm_reference()` + `is_strip_mode()` accessors;
+  `CvvdpOpaque` forwarders.
+- Umbrella `From<MemoryMode> for cvvdp_gpu::MemoryMode` maps
+  `Strip{h_body}` through (was falling back to Auto).
+- Umbrella `Metric::has_cached_reference()` consults cvvdp's
+  accessor (was hard-coded `false`).
+- `estimate_gpu_memory_bytes_strip(w, h, h_body)` (conservative
+  for Phase 2 — returns Full + ref-cache delta).
+- New `tests/strip_mode_e_parity.rs` (11 tests) + new
+  `cached_ref_cvvdp_strip_n_distortions` umbrella test pinning
+  the JOD-parity contract within 1e-4 abs JOD.
+- `docs/STRIP_PROCESSING.md` rewrite documenting JOD-preservation
+  invariant + Phase 1-5 status table + Phase 3 design notes.
+
+**Phase 3** (per-strip dist walker that shrinks the dist working
+set) is multi-day follow-on work and is **not** in this commit —
+`Auto` still picks Strip when Full overflows the cap, but Phase 2's
+strip mode has the same dist memory profile as Full plus a small
+ref-cache delta. The structural plumbing (`RefFullState`,
+snapshot/restore, `StripConfig` storage, `h_body` plumbing) is
+permanent and Phase 3 builds on top.
+
 ### cvvdp-gpu — refactor: roll back capped-pyramid Strip variant (task #77) — 2026-05-26
 
 cvvdp's `MemoryMode::Strip { h_body, capped_levels }` only ever
