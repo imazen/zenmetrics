@@ -3946,7 +3946,19 @@ impl<R: Runtime> Cvvdp<R> {
         // adds a per-band readback on top, paying ~432 MB of
         // GPU→host transfer at 12 MP — JOD skips that.
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
-        self._pool_and_finalize_jod()
+        // Mode B (StripPair) and Mode E (CachedRef via warm_ref) route
+        // the pool stage through the strip-aware walker that
+        // partitions each band's per-pixel pool into row-strips and
+        // dispatches `pool_band_3ch_offset_kernel` per slab. Atomic
+        // adds are associative across slabs, so JOD is bit-exact
+        // against `_pool_and_finalize_jod`. The strip dispatch
+        // counter increments by one per (level, strip) so tests can
+        // verify the walker actually partitioned.
+        if self.strip_config.is_some() {
+            self._pool_and_finalize_jod_strip()
+        } else {
+            self._pool_and_finalize_jod()
+        }
     }
 
     /// Pack the caller's `width × height × 3` sRGB-u8 bytes into a
@@ -5258,6 +5270,16 @@ impl<R: Runtime> Cvvdp<R> {
                 got: distorted_srgb.len(),
             });
         }
+        // Mode B (StripPair): currently routes through the Full
+        // pipeline for JOD parity. The per-strip walker that delivers
+        // memory reduction at runtime is the multi-day port documented
+        // in `docs/STRIP_PROCESSING.md` — the strip-aware kernels are
+        // already in place; wiring them through the walker is the
+        // remaining engineering. The estimator
+        // ([`estimate_gpu_memory_bytes_strip_pair`]) models the
+        // post-port memory profile (~32% of Full at 1024², ~12% at
+        // 4096²); the constructor today still allocates Full-mode
+        // buffers, so runtime savings are zero until Chunk 2 lands.
         let ppd = self.geometry.pixels_per_degree();
         let jod = self.compute_dkl_jod(reference_srgb, distorted_srgb, ppd)?;
         Ok(f64::from(jod))
