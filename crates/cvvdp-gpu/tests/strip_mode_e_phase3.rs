@@ -224,3 +224,72 @@ fn phase3_full_mode_counter_stays_zero() {
         .expect("full warm-ref jod");
     assert_eq!(full.strip_dispatch_counter(), 0);
 }
+
+/// Mode E walker JOD parity at 1024² with h_body=256.
+///
+/// Pins the contract for the Mode E walker drop-snapshot-restore
+/// landing: Mode E (CachedRef) reads REF bands and non-baseband
+/// log_l_bkg from `ref_full_state` directly, runs the strip-aware
+/// masking walker (same chain as Mode B) and the strip-aware pool
+/// walker, and produces a JOD within `PARITY_TOL_JOD` of Full mode.
+///
+/// Distinct from `phase3_pool_strip_matches_full_at_1024x1024`: that
+/// test runs at the canonical h_body=512 where only the L0 pool
+/// partitions into multiple strips; this one uses h_body=256 to
+/// exercise the strip masking walker on multiple bands (L0 alone:
+/// ceil(1024 / 256) = 4 strips, plus per-strip masking dispatch
+/// increments the counter by 4 per non-baseband band).
+///
+/// Gate: JOD diff < 1e-4 AND strip dispatch counter ≥ 4 (proves the
+/// walker actually partitioned, not bypassed).
+#[test]
+fn mode_e_walker_jod_matches_full_at_1024() {
+    let (r, d) = (
+        synth_pair_ref(1024, 1024),
+        apply_offset_dist(&synth_pair_ref(1024, 1024)),
+    );
+
+    let client_full = Backend::client(&Default::default());
+    let mut full = Cvvdp::<Backend>::new(client_full, 1024, 1024, CvvdpParams::PLACEHOLDER)
+        .expect("full new");
+    full.warm_reference(&r).expect("full warm");
+    let jod_full = full
+        .compute_dkl_jod_with_warm_ref(&d, ppd())
+        .expect("full warm-ref jod");
+
+    let client_strip = Backend::client(&Default::default());
+    let mut strip = Cvvdp::<Backend>::new_strip(
+        client_strip,
+        1024,
+        1024,
+        256,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("strip new");
+    strip.warm_reference(&r).expect("strip warm");
+    strip.reset_strip_dispatch_counter();
+    let jod_strip = strip
+        .compute_dkl_jod_with_warm_ref(&d, ppd())
+        .expect("strip warm-ref jod");
+    let n_dispatches = strip.strip_dispatch_counter();
+
+    let diff = (jod_full - jod_strip).abs();
+    eprintln!(
+        "Mode E walker 1024² (h_body=256): Full JOD={jod_full:.6}, \
+         Mode E JOD={jod_strip:.6}, |diff|={diff:.3e}, \
+         strip_dispatch_counter={n_dispatches}",
+    );
+
+    assert!(
+        diff < PARITY_TOL_JOD,
+        "Mode E walker JOD={jod_strip} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
+    );
+    // Walker partitioned proof: with h_body=256, L0 alone runs 4
+    // pool strips; deep bands fall to single-strip dispatch, and the
+    // masking walker adds 4 launches per (strip, non-baseband band).
+    // Lower bound of 4 captures the "walker actually ran" contract.
+    assert!(
+        n_dispatches >= 4,
+        "Mode E walker should dispatch >= 4 strip iterations at 1024² h_body=256; got {n_dispatches}",
+    );
+}
