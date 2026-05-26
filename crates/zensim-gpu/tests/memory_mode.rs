@@ -131,8 +131,14 @@ fn estimator_matches_measured() {
 }
 
 #[test]
-fn strip_estimator_is_none() {
-    assert!(estimate_strip_gpu_memory_bytes(1024, 64).is_none());
+fn strip_estimator_returns_value() {
+    // Strip mode landed 2026-05-26; estimator no longer returns None.
+    let v = estimate_strip_gpu_memory_bytes(1024, 64);
+    assert!(v.is_some());
+    // Per-pixel strip costs scale with body height.
+    let small = estimate_strip_gpu_memory_bytes(1024, 64).unwrap();
+    let large = estimate_strip_gpu_memory_bytes(1024, 1024).unwrap();
+    assert!(large > small);
 }
 
 #[test]
@@ -150,7 +156,9 @@ fn auto_picks_full_when_under_cap() {
 }
 
 #[test]
-fn auto_errors_when_strip_unsupported_and_too_big() {
+fn auto_errors_when_strip_cannot_fit() {
+    // 1-byte cap is below cubecl runtime overhead — neither Full nor
+    // Strip can fit, so resolve_auto returns TooBigForFull.
     with_cap(Some("1"), || {
         let r = memory_mode::resolve_auto(
             4096,
@@ -159,6 +167,31 @@ fn auto_errors_when_strip_unsupported_and_too_big() {
             memory_mode::vram_cap_bytes(),
         );
         assert!(matches!(r, Err(Error::TooBigForFull { .. })));
+    });
+}
+
+#[test]
+fn auto_falls_back_to_strip_when_full_exceeds_cap() {
+    // A cap that's enough for Strip but not Full. The Full estimate
+    // for 4096² Basic is ~1.4 GB (BASE 0 + BETA 41 × ~33 M pyramid
+    // pixels). A 600 MB cap (above strip working set + CUBECL_OVERHEAD)
+    // forces auto fallback to Strip.
+    with_cap(Some("629145600"), || {
+        let r = memory_mode::resolve_auto(
+            4096,
+            4096,
+            ZensimFeatureRegime::Basic,
+            memory_mode::vram_cap_bytes(),
+        );
+        match r {
+            Ok(ResolvedMode::Strip { h_body }) => {
+                assert!(
+                    h_body > 0 && h_body.is_multiple_of(zensim_gpu::pipeline::STRIP_ALIGN),
+                    "h_body must be a multiple of STRIP_ALIGN; got {h_body}"
+                );
+            }
+            other => panic!("expected Strip fallback, got {other:?}"),
+        }
     });
 }
 

@@ -293,58 +293,61 @@ pub fn fused_features_kernel(
         let inner_ds_inner = fma(-mu1, mu1, ssq);
         let denom_s = fma(-mu2, mu2, inner_ds_inner) + C2;
         let sd_raw = 1.0 - (num_m * num_s) / denom_s;
-        let sd = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        let sd0 = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        // Multiplicative body-row mask. Halo rows contribute 0 to
+        // every accumulator (and 0 can't change `max` peaks). Keeps
+        // the CFG of every per-pixel op identical to the pre-body
+        // kernel — preserves f32 rounding parity with the WithIw
+        // persist sibling kernel (cpu_gpu_feature_sweep gates this
+        // to < 1e-9 rel).
+        let is_body = y >= y_body_start && y < y_body_end;
+        let mask = if is_body { f32::new(1.0) } else { f32::new(0.0) };
+        let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
+        a0 += sd as f64;
+        a1 += sd4 as f64;
+        a2 += sd2 as f64;
+        a14 += (sd4 * sd4) as f64;
+        if sd > peak0 {
+            peak0 = sd;
+        }
+
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
-        let artifact = if ed > 0.0 { ed } else { f32::new(0.0) };
-        let detail_lost = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0) };
+        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact = artifact0 * mask;
+        let detail_lost = detail_lost0 * mask;
         let a2_v = artifact * artifact;
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        let vs = sv - mu1;
-        let vd = dv - mu2;
-        let pd = sv - dv;
-
-        // Gate per-pixel feature accumulation on the body-row range.
-        // Halo rows still drive the V-blur sliding sums (correctness of
-        // mu1/mu2/ssq/s12 at body rows); they just don't add to
-        // a0..a16 / peak0..peak2.
-        let is_body = y >= y_body_start && y < y_body_end;
-        if is_body {
-            a0 += sd as f64;
-            a1 += sd4 as f64;
-            a2 += sd2 as f64;
-            a14 += (sd4 * sd4) as f64;
-            if sd > peak0 {
-                peak0 = sd;
-            }
-
-            a3 += artifact as f64;
-            a4 += a4_v as f64;
-            a5 += a2_v as f64;
-            a6 += detail_lost as f64;
-            a7 += dl4 as f64;
-            a8 += dl2 as f64;
-            a15 += (a4_v * a4_v) as f64;
-            a16 += (dl4 * dl4) as f64;
-            if artifact > peak1 {
-                peak1 = artifact;
-            }
-            if detail_lost > peak2 {
-                peak2 = detail_lost;
-            }
-
-            a10 += (vs * vs) as f64;
-            a11 += (vd * vd) as f64;
-            a12 += diff1 as f64;
-            a13 += diff2 as f64;
-
-            a9 += (pd * pd) as f64;
+        a3 += artifact as f64;
+        a4 += a4_v as f64;
+        a5 += a2_v as f64;
+        a6 += detail_lost as f64;
+        a7 += dl4 as f64;
+        a8 += dl2 as f64;
+        a15 += (a4_v * a4_v) as f64;
+        a16 += (dl4 * dl4) as f64;
+        if artifact > peak1 {
+            peak1 = artifact;
         }
+        if detail_lost > peak2 {
+            peak2 = detail_lost;
+        }
+
+        let vs = (sv - mu1) * mask;
+        let vd = (dv - mu2) * mask;
+        a10 += (vs * vs) as f64;
+        a11 += (vd * vd) as f64;
+        a12 += (diff1 * mask) as f64;
+        a13 += (diff2 * mask) as f64;
+
+        let pd = (sv - dv) * mask;
+        a9 += (pd * pd) as f64;
 
         // Slide: subtract slot's old H-blur from sums, compute new
         // H-blur for row mirror(y + R + 1), add to sums, write to
@@ -680,54 +683,56 @@ pub fn fused_features_kernel_persist(
         let inner_ds_inner = fma(-mu1, mu1, ssq);
         let denom_s = fma(-mu2, mu2, inner_ds_inner) + C2;
         let sd_raw = 1.0 - (num_m * num_s) / denom_s;
-        let sd = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        let sd0 = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
+        // See `fused_features_kernel` for body-mask rationale.
+        let is_body = y >= y_body_start && y < y_body_end;
+        let mask = if is_body { f32::new(1.0) } else { f32::new(0.0) };
+        let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
+        a0 += sd as f64;
+        a1 += sd4 as f64;
+        a2 += sd2 as f64;
+        a14 += (sd4 * sd4) as f64;
+        if sd > peak0 {
+            peak0 = sd;
+        }
+
         let diff1 = f32::abs(sv - mu1);
         let diff2 = f32::abs(dv - mu2);
         let ed = (1.0 + diff2) / (1.0 + diff1) - 1.0;
-        let artifact = if ed > 0.0 { ed } else { f32::new(0.0) };
-        let detail_lost = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact0 = if ed > 0.0 { ed } else { f32::new(0.0) };
+        let detail_lost0 = if ed < 0.0 { -ed } else { f32::new(0.0) };
+        let artifact = artifact0 * mask;
+        let detail_lost = detail_lost0 * mask;
         let a2_v = artifact * artifact;
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        let vs = sv - mu1;
-        let vd = dv - mu2;
-        let pd = sv - dv;
-
-        let is_body = y >= y_body_start && y < y_body_end;
-        if is_body {
-            a0 += sd as f64;
-            a1 += sd4 as f64;
-            a2 += sd2 as f64;
-            a14 += (sd4 * sd4) as f64;
-            if sd > peak0 {
-                peak0 = sd;
-            }
-
-            a3 += artifact as f64;
-            a4 += a4_v as f64;
-            a5 += a2_v as f64;
-            a6 += detail_lost as f64;
-            a7 += dl4 as f64;
-            a8 += dl2 as f64;
-            a15 += (a4_v * a4_v) as f64;
-            a16 += (dl4 * dl4) as f64;
-            if artifact > peak1 {
-                peak1 = artifact;
-            }
-            if detail_lost > peak2 {
-                peak2 = detail_lost;
-            }
-
-            a10 += (vs * vs) as f64;
-            a11 += (vd * vd) as f64;
-            a12 += diff1 as f64;
-            a13 += diff2 as f64;
-
-            a9 += (pd * pd) as f64;
+        a3 += artifact as f64;
+        a4 += a4_v as f64;
+        a5 += a2_v as f64;
+        a6 += detail_lost as f64;
+        a7 += dl4 as f64;
+        a8 += dl2 as f64;
+        a15 += (a4_v * a4_v) as f64;
+        a16 += (dl4 * dl4) as f64;
+        if artifact > peak1 {
+            peak1 = artifact;
         }
+        if detail_lost > peak2 {
+            peak2 = detail_lost;
+        }
+
+        let vs = (sv - mu1) * mask;
+        let vd = (dv - mu2) * mask;
+        a10 += (vs * vs) as f64;
+        a11 += (vd * vd) as f64;
+        a12 += (diff1 * mask) as f64;
+        a13 += (diff2 * mask) as f64;
+
+        let pd = (sv - dv) * mask;
+        a9 += (pd * pd) as f64;
 
         // Slide
         let buf_idx = (slot * TX + tx) as usize;

@@ -1,11 +1,13 @@
 //! Unified memory-mode API. See `butteraugli-gpu/src/memory_mode.rs`
 //! for shared design rationale.
 //!
-//! zensim-gpu does **NOT** implement Strip processing — the
-//! 4-channel + 4-scale + Extended-regime allocator is contiguous and
-//! interlocked enough that strip processing would need a dedicated
-//! design pass. Until then `MemoryMode::Strip { .. }` returns
-//! [`crate::Error::ModeUnsupported`].
+//! zensim-gpu supports [`MemoryMode::Strip`] as of 2026-05-26: the
+//! strip walker re-uses the per-scale fused / persist / masked-IW
+//! kernels with strip-sized buffers, walks the image in
+//! `h_body + 2 × halo` strips, and accumulates per-feature raw sums
+//! on the host across strips (gated to body rows only via the
+//! `y_body_start / y_body_end` kernel parameters). See
+//! `docs/STRIP_PROCESSING.md` for the design + measured numbers.
 //!
 //! ## Regime-aware GPU memory estimator
 //!
@@ -77,6 +79,7 @@ pub enum MemoryMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedMode {
     Full,
+    Strip { h_body: u32 },
 }
 
 /// Fixed-per-process cubecl runtime pool init overhead measured on
@@ -98,8 +101,9 @@ pub enum ResolvedMode {
 /// at 64×64 (`peak_delta_gpu_mb = 193.0`).
 pub const CUBECL_OVERHEAD_BYTES: usize = 193 * 1024 * 1024;
 
-/// Auto policy: Strip unimplemented, so Auto resolves to Full when
-/// it fits and errors otherwise.
+/// Auto policy: prefer Full when it fits the cap, fall back to Strip
+/// otherwise. Mirrors the shape from
+/// `iwssim_gpu::memory_mode::resolve_auto`.
 ///
 /// The cap is interpreted as the *total* VRAM budget the caller has
 /// available; this routine reserves [`CUBECL_OVERHEAD_BYTES`] for the
@@ -116,10 +120,87 @@ pub fn resolve_auto(
     if needed_total <= cap {
         return Ok(ResolvedMode::Full);
     }
+    // Full exceeds the cap — try Strip before giving up. zensim-gpu's
+    // strip walker handles any image height ≥ STRIP_ALIGN, so as long
+    // as a strip-sized footprint fits we can score the image.
+    let cap_for_strip = cap.saturating_sub(CUBECL_OVERHEAD_BYTES);
+    if let Some(h_body) = auto_size_strip_body(width, height, regime, cap_for_strip) {
+        return Ok(ResolvedMode::Strip { h_body });
+    }
     Err(crate::Error::TooBigForFull {
         needed: needed_total,
         cap,
     })
+}
+
+/// Helper for callers needing the resolved h_body without going
+/// through [`resolve_auto`] — e.g. `Zensim::new_with_memory_mode`'s
+/// `MemoryMode::Strip { h_body: None }` path.
+#[must_use]
+pub fn auto_strip_body_for(
+    width: u32,
+    height: u32,
+    regime: ZensimFeatureRegime,
+    cap: usize,
+) -> u32 {
+    let cap_for_strip = cap.saturating_sub(CUBECL_OVERHEAD_BYTES);
+    auto_size_strip_body(width, height, regime, cap_for_strip)
+        .unwrap_or_else(|| {
+            let default = crate::pipeline::STRIP_DEFAULT_BODY;
+            round_align(height.min(default))
+        })
+        .max(crate::pipeline::STRIP_ALIGN)
+}
+
+/// Returns the largest `h_body` that fits the cap, or None if even
+/// the minimum body doesn't fit. Always a multiple of
+/// [`crate::pipeline::STRIP_ALIGN`].
+
+fn round_align(h: u32) -> u32 {
+    let align = crate::pipeline::STRIP_ALIGN;
+    h.div_ceil(align) * align
+}
+
+/// Pick the largest body height (multiple of [`crate::pipeline::STRIP_ALIGN`])
+/// such that the strip estimator fits the cap. Returns None when even
+/// a one-unit (`STRIP_ALIGN`-tall) body wouldn't fit.
+fn auto_size_strip_body(
+    width: u32,
+    height: u32,
+    regime: ZensimFeatureRegime,
+    cap: usize,
+) -> Option<u32> {
+    let align = crate::pipeline::STRIP_ALIGN;
+    let halo_bytes = estimate_strip_gpu_memory_bytes_for(width, 0, regime)?;
+    if halo_bytes >= cap {
+        return None;
+    }
+    let one_unit = estimate_strip_gpu_memory_bytes_for(width, align, regime)?;
+    let per_unit = one_unit.saturating_sub(halo_bytes);
+    if per_unit == 0 {
+        let fb = crate::pipeline::STRIP_DEFAULT_BODY.min(round_align(height));
+        return Some(fb.max(align));
+    }
+    let max_units = (cap - halo_bytes) / per_unit;
+    let raw = (max_units as u32) * align;
+    let body = raw.min(round_align(height));
+    if body < align {
+        return None;
+    }
+    Some(body)
+}
+
+/// Helper variant of [`estimate_strip_gpu_memory_bytes`] that takes
+/// the regime explicitly. Returns the strip working-set estimate
+/// (without [`CUBECL_OVERHEAD_BYTES`]).
+fn estimate_strip_gpu_memory_bytes_for(
+    width: u32,
+    h_body: u32,
+    regime: ZensimFeatureRegime,
+) -> Option<usize> {
+    let halo = crate::pipeline::STRIP_DEFAULT_HALO;
+    let strip_h = h_body.saturating_add(2 * halo);
+    Some(estimate_gpu_memory_bytes(width, strip_h, regime))
 }
 
 /// Sum of `w_s × h_s` across the 4 pyramid scales (s=0..3) using
@@ -205,9 +286,30 @@ pub fn estimate_gpu_memory_bytes(
     base_bytes.saturating_add(scale_bytes)
 }
 
-/// Strip-mode estimator. Always returns `None` because zensim-gpu
-/// has no Strip implementation.
+/// Strip-mode estimator. Returns the working-set bytes for one strip
+/// of `h_body + 2 × halo` rows at `width` pixels (default halo =
+/// [`crate::pipeline::STRIP_DEFAULT_HALO`] = 40). Uses the same
+/// per-pyramid-pixel coefficients as [`estimate_gpu_memory_bytes`]
+/// but evaluates the pyramid on the strip's allocation height instead
+/// of the full image height.
+///
+/// Does NOT include [`CUBECL_OVERHEAD_BYTES`] — callers that want
+/// total VRAM pressure should sum the two constants.
+///
+/// `regime` defaults to [`ZensimFeatureRegime::Basic`]. Use
+/// [`estimate_strip_gpu_memory_bytes_with_regime`] when the caller
+/// needs the Extended / WithIw budget.
 #[must_use]
-pub fn estimate_strip_gpu_memory_bytes(_width: u32, _h_body: u32) -> Option<usize> {
-    None
+pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize> {
+    estimate_strip_gpu_memory_bytes_with_regime(width, h_body, ZensimFeatureRegime::Basic)
+}
+
+/// Regime-aware strip estimator. See [`estimate_strip_gpu_memory_bytes`].
+#[must_use]
+pub fn estimate_strip_gpu_memory_bytes_with_regime(
+    width: u32,
+    h_body: u32,
+    regime: ZensimFeatureRegime,
+) -> Option<usize> {
+    estimate_strip_gpu_memory_bytes_for(width, h_body, regime)
 }

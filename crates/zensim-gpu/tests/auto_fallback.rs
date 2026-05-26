@@ -56,7 +56,8 @@ fn auto_picks_full_when_cap_generous() {
 
 #[test]
 fn auto_returns_too_big_when_full_exceeds_cap() {
-    // No strip path: when Full doesn't fit, Auto can only error.
+    // 1-byte cap is below cubecl runtime overhead — neither Full nor
+    // Strip can fit, so resolve_auto returns TooBigForFull.
     with_cap(Some("1"), || {
         let cap = memory_mode::vram_cap_bytes();
         let r = memory_mode::resolve_auto(4096, 4096, ZensimFeatureRegime::Basic, cap);
@@ -72,23 +73,33 @@ fn auto_returns_too_big_when_full_exceeds_cap() {
 
 #[test]
 fn auto_returns_too_big_at_explicit_tiny_cap() {
+    // With Strip mode landed (2026-05-26), `resolve_auto` falls back
+    // to Strip when Full doesn't fit — but a 1 MB cap is below even
+    // the cubecl runtime overhead, so neither Full nor Strip fits and
+    // we get `TooBigForFull` as the honest answer.
     with_cap(Some("1000000"), || {
         let cap = memory_mode::vram_cap_bytes();
         let r = memory_mode::resolve_auto(4096, 4096, ZensimFeatureRegime::Basic, cap);
         assert!(
             matches!(r, Err(Error::TooBigForFull { .. })),
-            "1 MB cap + 4096² must error (no Strip path), got {r:?}"
+            "1 MB cap + 4096² must error (cap is below runtime overhead), got {r:?}"
         );
     });
 }
 
 #[test]
-fn strip_estimator_is_none_by_design() {
-    // zensim deliberately has no per-strip estimator — the Extended-
-    // regime allocator interlocks per-scale persist planes with the
-    // working set, so a strip-mode design has to come first.
-    assert!(estimate_strip_gpu_memory_bytes(1024, 64).is_none());
-    assert!(estimate_strip_gpu_memory_bytes(8192, 256).is_none());
+fn strip_estimator_returns_some() {
+    // Strip mode landed 2026-05-26 — the estimator returns the
+    // working-set bytes for a one-strip allocation. See
+    // `memory_mode::estimate_strip_gpu_memory_bytes` for the formula.
+    let s = estimate_strip_gpu_memory_bytes(1024, 64);
+    assert!(s.is_some(), "strip estimator should now return Some");
+    let s2 = estimate_strip_gpu_memory_bytes(8192, 256);
+    assert!(s2.is_some());
+    // Strip with a larger body should require more memory.
+    let small = estimate_strip_gpu_memory_bytes(1024, 64).unwrap();
+    let large = estimate_strip_gpu_memory_bytes(1024, 1024).unwrap();
+    assert!(large > small, "larger h_body must require more memory");
 }
 
 #[test]

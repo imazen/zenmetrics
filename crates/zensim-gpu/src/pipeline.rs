@@ -186,6 +186,73 @@ impl Scale {
     }
 }
 
+/// Strip-mode state. Present when the pipeline was constructed via
+/// [`Zensim::new_strip`] / [`Zensim::new_strip_with_halo`].
+///
+/// `image_h` is the full image height the caller intends to score;
+/// per-scale buffers (in `Zensim::scales`) are sized for
+/// `strip_alloc_h = h_body + 2 × halo` instead of `image_h`, so peak
+/// working set drops from `O(image_h)` to `O(strip_alloc_h)`.
+#[derive(Debug, Clone, Copy)]
+struct StripState {
+    /// Full source image height (rows). Equal to `Zensim::height` in
+    /// strip mode — kept here for clarity at the strip-walker call
+    /// sites that need the image-level dimension distinct from the
+    /// per-scale strip allocation.
+    #[allow(dead_code)]
+    image_h: u32,
+    /// Body rows per strip at scale 0 (each strip's contribution to
+    /// the per-feature scalar sum). Multiple of [`STRIP_ALIGN`].
+    h_body: u32,
+    /// Halo rows per side at scale 0 (image rows pulled in past the
+    /// body region for V-blur reach + cross-scale halo). Multiple of
+    /// [`STRIP_ALIGN`].
+    halo: u32,
+    /// Maximum strip allocation height at scale 0 = `h_body + 2 × halo`.
+    /// All per-scale buffers are sized to `strip_alloc_h / 2^s`.
+    strip_alloc_h: u32,
+}
+
+impl StripState {
+    /// Yield `(body_start, body_end, upload_start, upload_end)` for
+    /// each strip, all in scale-0 image rows. `upload_*` is the actual
+    /// region uploaded to the GPU (body region expanded by halo on
+    /// each side, clamped to image bounds).
+    fn strips(&self) -> Vec<(u32, u32, u32, u32)> {
+        let mut out = Vec::new();
+        let mut body_start = 0u32;
+        while body_start < self.image_h {
+            let body_end = (body_start + self.h_body).min(self.image_h);
+            let upload_start = body_start.saturating_sub(self.halo);
+            let upload_end = (body_end + self.halo).min(self.image_h);
+            out.push((body_start, body_end, upload_start, upload_end));
+            body_start = body_end;
+        }
+        out
+    }
+}
+
+/// Pyramid alignment factor: must divide `h_body` and `halo` cleanly so
+/// the strip's pyramid halves to integer row counts at every scale.
+/// `2^(SCALES - 1)` = 2^3 = 8 for zensim (4 scales).
+pub const STRIP_ALIGN: u32 = 1u32 << (SCALES as u32 - 1);
+
+/// Default halo rows per side at scale 0 = 40 (multiple of [`STRIP_ALIGN`]).
+/// At the smallest scale (scale 3) this shrinks to `40 / 8 = 5` rows —
+/// just enough to cover the 11×11 valid-blur radius `R = 5`. Picking a
+/// smaller halo would mean the V-blur at body rows of the smallest
+/// scale would invoke the strip-local mirror (introducing artifacts
+/// vs the full-image path at strip boundaries). 40 is the minimum that
+/// reproduces full-image V-blur at every scale.
+pub const STRIP_DEFAULT_HALO: u32 = 40;
+
+/// Default body rows per strip at scale 0 = 256 (multiple of
+/// [`STRIP_ALIGN`]). Chosen as a balance between GPU occupancy
+/// (larger body = more parallelism per launch) and memory savings
+/// (smaller body = lower peak working set). Tunable via
+/// [`Zensim::new_strip_with_halo`].
+pub const STRIP_DEFAULT_BODY: u32 = 256;
+
 /// One per-resolution zensim pipeline. Allocate once with
 /// [`Zensim::new`] for a (width, height); reuse across many image pairs
 /// of that resolution.
@@ -194,6 +261,22 @@ pub struct Zensim<R: Runtime> {
     width: u32,
     height: u32,
     pixels: usize,
+
+    /// `Some(_)` when constructed via [`Zensim::new_strip`] — every
+    /// per-scale buffer in `scales` is sized for `strip_alloc_h`
+    /// rather than the full image height.
+    strip: Option<StripState>,
+    /// Host-side cached reference sRGB bytes for strip mode. Filled
+    /// by `set_reference` in strip mode (where the full ref cannot be
+    /// staged on-device because every per-scale buffer is strip-sized).
+    /// Empty in Full mode.
+    ///
+    /// **Phase 1 caching**: each `compute_with_reference_strip` call
+    /// uploads the ref strip from this Vec into `src_u8_a` and rebuilds
+    /// the ref-side XYB pyramid on every strip. Phase 4 will cache the
+    /// per-strip XYB pyramid + persist planes on the device to skip
+    /// the rebuild.
+    cached_ref_strip_srgb: Vec<u8>,
 
     /// Persistent host-side packing scratch (one u32 per pixel = R |
     /// G<<8 | B<<16). Reused across uploads to avoid the alloc + iter
@@ -270,10 +353,16 @@ impl<R: Runtime> Zensim<R> {
     }
 
     /// Unified [`MemoryMode`](crate::MemoryMode) constructor.
-    /// zensim-gpu has **no Strip implementation** — Strip and Tile
-    /// return [`crate::Error::ModeUnsupported`]. Auto resolves to
-    /// Full when it fits the cap, else
-    /// [`crate::Error::TooBigForFull`].
+    ///
+    /// - `Full` allocates the whole-image pipeline.
+    /// - `Strip { h_body }` allocates a strip-walker pipeline with
+    ///   `h_body` body rows per strip (defaults to
+    ///   [`STRIP_DEFAULT_BODY`] when `None`).
+    /// - `Tile { .. }` returns [`Error::ModeUnsupported`] (not
+    ///   implemented).
+    /// - `Auto` picks Full when it fits the VRAM cap, else falls back
+    ///   to Strip with an auto-sized body. Returns
+    ///   [`Error::TooBigForFull`] when neither fits.
     pub fn new_with_memory_mode(
         client: ComputeClient<R>,
         width: u32,
@@ -284,20 +373,108 @@ impl<R: Runtime> Zensim<R> {
         use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
         match mode {
             MemoryMode::Full => Self::new(client, width, height),
-            MemoryMode::Strip { .. } => Err(crate::Error::ModeUnsupported("Strip")),
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(
+                        width,
+                        height,
+                        ZensimFeatureRegime::Basic,
+                        cap,
+                    )
+                });
+                Self::new_strip(client, width, height, body)
+            }
             MemoryMode::Tile { .. } => Err(crate::Error::ModeUnsupported("Tile")),
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
                 // This entry point defaults to Basic regime (see `new()`).
-                // Pass the regime explicitly so the cap check uses the
-                // right (BASE, BETA) — Extended / WithIw constructors
-                // route through `new_with_regime` which has its own
-                // separate budget knob (`new_with_regime_budget`).
                 match resolve_auto(width, height, ZensimFeatureRegime::Basic, cap)? {
                     ResolvedMode::Full => Self::new(client, width, height),
+                    ResolvedMode::Strip { h_body } => {
+                        Self::new_strip(client, width, height, h_body)
+                    }
                 }
             }
         }
+    }
+
+    /// Construct a strip-mode pipeline for an `image_w × image_h`
+    /// image, with each strip carrying `h_body` body rows + the default
+    /// halo per side ([`STRIP_DEFAULT_HALO`]). Per-scale GPU buffers
+    /// are sized for a single strip of `h_body + 2 × halo` rows, not
+    /// the full image — peak working set drops from `O(image_h)` to
+    /// `O(strip_alloc_h)`.
+    ///
+    /// `h_body` and the halo MUST be multiples of [`STRIP_ALIGN`] (=8,
+    /// the pyramid alignment factor for 4 scales). [`STRIP_DEFAULT_BODY`]
+    /// (256) satisfies this.
+    ///
+    /// Default regime is [`ZensimFeatureRegime::Basic`]. Use
+    /// [`Self::new_strip_with_halo_and_regime`] for explicit regime
+    /// control.
+    pub fn new_strip(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+    ) -> Result<Self> {
+        Self::new_strip_with_halo_and_regime(
+            client,
+            image_w,
+            image_h,
+            h_body,
+            STRIP_DEFAULT_HALO,
+            ZensimFeatureRegime::Basic,
+        )
+    }
+
+    /// Strip-mode constructor with explicit halo and feature regime.
+    /// Both `h_body` and `halo` must be multiples of [`STRIP_ALIGN`]
+    /// (=8). `halo` must be ≥ 40 (= 5 × 8) so the smallest scale's
+    /// halo covers the 11×11 V-blur radius — smaller halos invoke the
+    /// strip-local mirror at body rows of scale 3 and produce wrong
+    /// V-blur outputs there.
+    pub fn new_strip_with_halo_and_regime(
+        client: ComputeClient<R>,
+        image_w: u32,
+        image_h: u32,
+        h_body: u32,
+        halo: u32,
+        regime: ZensimFeatureRegime,
+    ) -> Result<Self> {
+        if image_w < 8 || image_h < 8 {
+            return Err(Error::InvalidImageSize);
+        }
+        if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+            return Err(Error::InvalidImageSize);
+        }
+        if halo < STRIP_DEFAULT_HALO || !halo.is_multiple_of(STRIP_ALIGN) {
+            return Err(Error::InvalidImageSize);
+        }
+        let strip_alloc_h = h_body + 2 * halo;
+        if strip_alloc_h < 8 {
+            return Err(Error::InvalidImageSize);
+        }
+        let strip = StripState {
+            image_h,
+            h_body,
+            halo,
+            strip_alloc_h,
+        };
+        Self::new_with_regime_strip_budget(
+            client,
+            image_w,
+            image_h,
+            regime,
+            usize::MAX,
+            Some(strip),
+        )
+    }
+
+    /// True if this pipeline was constructed via [`Self::new_strip`].
+    pub fn is_strip_mode(&self) -> bool {
+        self.strip.is_some()
     }
 
     /// Construct with an explicit feature regime.
@@ -336,15 +513,46 @@ impl<R: Runtime> Zensim<R> {
         regime: ZensimFeatureRegime,
         max_extended_plane_bytes: usize,
     ) -> Result<Self> {
+        Self::new_with_regime_strip_budget(
+            client,
+            width,
+            height,
+            regime,
+            max_extended_plane_bytes,
+            None,
+        )
+    }
+
+    /// Like [`Self::new_with_regime_budget`] but accepts an optional
+    /// strip-mode descriptor. When `strip` is `Some`, per-scale buffers
+    /// are sized for `strip_alloc_h = h_body + 2 × halo` instead of the
+    /// full image height; the pipeline then uses strip-walker variants
+    /// of every `compute_*` entry point. Internal helper backing
+    /// [`Self::new_strip_with_halo_and_regime`] — public callers should
+    /// use the strip-specific constructors.
+    fn new_with_regime_strip_budget(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        regime: ZensimFeatureRegime,
+        max_extended_plane_bytes: usize,
+        strip: Option<StripState>,
+    ) -> Result<Self> {
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);
         }
         let pixels = (width as usize) * (height as usize);
 
+        // Per-scale allocation height = strip_alloc_h in strip mode,
+        // image height otherwise. The kernel's mirror semantics work
+        // on whatever buffer height we configure (mirror is *within*
+        // the buffer — strip mode supplies image-correct halo rows).
+        let effective_h = strip.map(|s| s.strip_alloc_h).unwrap_or(height);
+
         let mut scales = Vec::with_capacity(SCALES);
         let mut logical_w = width;
         let mut padded_w = simd_padded_width(width as usize) as u32;
-        let mut h = height;
+        let mut h = effective_h;
         let mut plan: Vec<(u32, u32, u32)> = Vec::with_capacity(SCALES);
         for _ in 0..SCALES {
             if logical_w < 8 || h < 8 {
@@ -394,8 +602,16 @@ impl<R: Runtime> Zensim<R> {
             });
         }
 
-        let src_u8_a = client.empty(pixels * core::mem::size_of::<u32>());
-        let src_u8_b = client.empty(pixels * core::mem::size_of::<u32>());
+        // src_u8 buffer size: in strip mode we only ever upload one strip
+        // at a time (strip_alloc_h rows × image width), so size for the
+        // strip rather than the full image.
+        let upload_pixels = if let Some(s) = strip {
+            (width as usize) * (s.strip_alloc_h as usize)
+        } else {
+            pixels
+        };
+        let src_u8_a = client.empty(upload_pixels * core::mem::size_of::<u32>());
+        let src_u8_b = client.empty(upload_pixels * core::mem::size_of::<u32>());
 
         let srgb_lut = client.create_from_slice(f32::as_bytes(
             &crate::kernels::color::SRGB8_TO_LINEARF32_LUT,
@@ -447,7 +663,9 @@ impl<R: Runtime> Zensim<R> {
             width,
             height,
             pixels,
-            pack_scratch: vec![0_u32; pixels],
+            strip,
+            cached_ref_strip_srgb: Vec::new(),
+            pack_scratch: vec![0_u32; upload_pixels],
             src_u8_a,
             src_u8_b,
             srgb_lut,
@@ -566,15 +784,24 @@ impl<R: Runtime> Zensim<R> {
     /// use [`Self::warm_reference_from_linear_planes`].
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_dims(ref_srgb)?;
-        self.upload_u8(true, ref_srgb);
-        self.run_xyb_pyramid(true);
-        self.has_cached_reference = true;
+        if self.strip.is_some() {
+            // Strip mode: cache the full ref sRGB host-side; the strip
+            // walker re-uploads the appropriate ref strip per
+            // `compute_with_reference` call. Per-strip rebuild of the
+            // ref XYB pyramid is paid by every strip on every dist
+            // image until Phase 4 adds cached-ref strip mode.
+            self.cached_ref_strip_srgb.clear();
+            self.cached_ref_strip_srgb.extend_from_slice(ref_srgb);
+            self.has_cached_reference = true;
+        } else {
+            self.upload_u8(true, ref_srgb);
+            self.run_xyb_pyramid(true);
+            self.has_cached_reference = true;
+        }
 
         // Mirror the reference into the diffmap state's warm cache so
         // sRGB-byte warm-ref-diffmap callers see the same reference
-        // content the GPU side just uploaded. We only populate when
-        // the state already exists — first-time callers pay the
-        // CPU-side cost only when they actually want a diffmap.
+        // content the GPU side just uploaded.
         if let Some(state) = self.diffmap_state.as_mut() {
             let w = self.width as usize;
             let h = self.height as usize;
@@ -623,6 +850,12 @@ impl<R: Runtime> Zensim<R> {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
+        // Strip mode runs a separate walker that loops over image
+        // strips; the full-image fast path stays inline so the warm
+        // hot loop pays no extra dispatch cost.
+        if self.strip.is_some() {
+            return self.compute_with_reference_vec_strip(dist_srgb);
+        }
         self.upload_u8(false, dist_srgb);
         self.run_xyb_pyramid(false);
 
@@ -682,6 +915,47 @@ impl<R: Runtime> Zensim<R> {
         };
 
         // Phase 4: host packs the regime-appropriate feature vector.
+        //
+        // Per-scale image height: in Full mode, `self.scales[s].h`. In
+        // strip mode (NOT this branch — strip walker dispatches earlier
+        // in this function), we'd use the **full image height** halved
+        // per scale.
+        let mut scale_image_h: [u32; SCALES] = [0; SCALES];
+        let mut hs = self.height;
+        for s in 0..n_scales {
+            scale_image_h[s] = hs;
+            hs = hs.div_ceil(2);
+        }
+
+        Ok(self.pack_feature_vector(
+            finals_f64,
+            finals_max,
+            finals_ext_f64,
+            &scale_image_h[..n_scales],
+        ))
+    }
+
+    /// Host-side packing of raw per-(scale, ch, slot) accumulators
+    /// into the regime-appropriate feature vector. Shared between Full
+    /// and Strip modes.
+    ///
+    /// `finals_f64.len() == n_scales × 3 × 17`,
+    /// `finals_max.len() == n_scales × 3 × 3`,
+    /// `finals_ext_f64.len() == n_scales × 3 × 12` (or empty on Basic).
+    ///
+    /// `scale_image_h[s]` is the image height at scale s — `self.height`
+    /// halved per scale; equal to `self.scales[s].h` in Full mode.
+    /// Strip mode passes the full-image scale heights (NOT the strip
+    /// allocation heights, which differ).
+    fn pack_feature_vector(
+        &self,
+        finals_f64: &[f64],
+        finals_max: &[f32],
+        finals_ext_f64: &[f64],
+        scale_image_h: &[u32],
+    ) -> Vec<f64> {
+        let needs_ext = self.regime.needs_extended_kernel();
+        let n_scales = self.scales.len();
         let total = self.regime.total_features();
         let mut out = vec![0.0_f64; total];
         let basic_total = n_scales * FEATURES_PER_CHANNEL_BASIC * 3;
@@ -699,7 +973,7 @@ impl<R: Runtime> Zensim<R> {
                 peaks.copy_from_slice(&finals_max[final_max_base..final_max_base + 3]);
 
                 let pad_w = self.scales[s].padded_w as usize;
-                let h_dim = self.scales[s].h as usize;
+                let h_dim = scale_image_h[s] as usize;
                 let inv_n = 1.0_f64 / (pad_w as f64 * h_dim as f64);
                 let var_src = sums[10] * inv_n;
                 let mad_src = sums[12] * inv_n;
@@ -749,10 +1023,6 @@ impl<R: Runtime> Zensim<R> {
                     ext_sums.copy_from_slice(&finals_ext_f64[ext_base..ext_base + 12]);
 
                     if self.regime.needs_masked() {
-                        // CPU layout: masked_ssim_mean / masked_ssim_4th /
-                        // masked_ssim_2nd / masked_art_4th /
-                        // masked_det_4th / masked_mse.
-                        // GPU slot map: [s0..s5] mirror this order.
                         let mb = masked_block_off
                             + s * 3 * FEATURES_PER_CHANNEL_MASKED
                             + ch * FEATURES_PER_CHANNEL_MASKED;
@@ -777,8 +1047,186 @@ impl<R: Runtime> Zensim<R> {
                 }
             }
         }
+        out
+    }
 
-        Ok(out)
+    /// Strip-mode entry point. Walks the image in strips, runs the
+    /// existing per-scale kernels on strip-sized buffers with body-row
+    /// gating, accumulates raw per-(scale, ch, slot) sums across strips
+    /// on the host, then packs the feature vector using the full image
+    /// height for the per-pixel normaliser.
+    fn compute_with_reference_vec_strip(&mut self, dist_srgb: &[u8]) -> Result<Vec<f64>> {
+        // Caller guarantees `self.strip.is_some()` and validated dims.
+        let strip_state = self.strip.expect("strip mode");
+        let n_scales = self.scales.len();
+        let needs_ext = self.regime.needs_extended_kernel();
+
+        // Host-side raw-sum accumulators per (scale, channel, slot).
+        // Mirror the device finals' layout so `pack_feature_vector`
+        // sees the same shape it does in Full mode.
+        let mut acc_f64 = vec![0.0_f64; n_scales * 3 * 17];
+        let mut acc_max = vec![f32::NEG_INFINITY; n_scales * 3 * 3];
+        let mut acc_ext_f64 = vec![0.0_f64; if needs_ext { n_scales * 3 * 12 } else { 0 }];
+
+        let strips = strip_state.strips();
+        for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
+            // Run one strip through the pipeline.
+            self.run_one_strip_ref(dist_srgb, body_lo, body_hi, up_lo, up_hi)?;
+
+            // Read back per-(scale, ch, slot) finals — already
+            // body-gated by the kernel.
+            let f64_bytes = self
+                .client
+                .read_one(self.finals_f64.clone())
+                .expect("read finals_f64");
+            let max_bytes = self
+                .client
+                .read_one(self.finals_max.clone())
+                .expect("read finals_max");
+            let finals_f64 = f64::from_bytes(&f64_bytes);
+            let finals_max = f32::from_bytes(&max_bytes);
+            for i in 0..acc_f64.len() {
+                acc_f64[i] += finals_f64[i];
+            }
+            for i in 0..acc_max.len() {
+                if finals_max[i] > acc_max[i] {
+                    acc_max[i] = finals_max[i];
+                }
+            }
+            if needs_ext {
+                let ext_bytes = self
+                    .client
+                    .read_one(self.finals_ext_f64.clone())
+                    .expect("read finals_ext_f64");
+                let finals_ext = f64::from_bytes(&ext_bytes);
+                for i in 0..acc_ext_f64.len() {
+                    acc_ext_f64[i] += finals_ext[i];
+                }
+            }
+        }
+
+        // Replace any never-touched peak slots (image too small for
+        // body to overlap any strip — should never happen in practice
+        // since at least one strip's body row range is non-empty) with
+        // 0.0 so the host pack doesn't see -inf.
+        for v in acc_max.iter_mut() {
+            if !v.is_finite() {
+                *v = 0.0;
+            }
+        }
+
+        // Build scale_image_h from FULL image height — body rows
+        // partition `[0, image_h)` perfectly, so per-scale body pixels
+        // = `pw × image_h_at_scale`. (Strip allocation height is
+        // irrelevant to the per-feature normaliser.)
+        let mut scale_image_h: [u32; SCALES] = [0; SCALES];
+        let mut hs = self.height;
+        for s in 0..n_scales {
+            scale_image_h[s] = hs;
+            hs = hs.div_ceil(2);
+        }
+        Ok(self.pack_feature_vector(
+            &acc_f64,
+            &acc_max,
+            &acc_ext_f64,
+            &scale_image_h[..n_scales],
+        ))
+    }
+
+    /// Run one strip end-to-end: upload, xyb pyramid, fused features,
+    /// (optional) masked-IW, reduction. Leaves the per-(scale, ch, slot)
+    /// finals in `self.finals_f64 / finals_max / finals_ext_f64` ready
+    /// for the caller to read back.
+    ///
+    /// `body_lo..body_hi` is the body row range in image coordinates
+    /// (the rows this strip "owns"); `up_lo..up_hi` is the actual
+    /// uploaded region (body + halo, clamped to image bounds). The
+    /// uploaded region maps onto the strip-sized device buffers at
+    /// rows `[0, up_hi - up_lo)`; the body row range in strip-local
+    /// coords is `[body_lo - up_lo, body_hi - up_lo)`.
+    fn run_one_strip_ref(
+        &mut self,
+        dist_srgb: &[u8],
+        body_lo: u32,
+        body_hi: u32,
+        up_lo: u32,
+        up_hi: u32,
+    ) -> Result<()> {
+        let needs_ext = self.regime.needs_extended_kernel();
+        let actual_strip_h = up_hi - up_lo;
+        // Body in strip-local coords (rows in `[0, actual_strip_h)`).
+        let body_local_lo = body_lo - up_lo;
+        let body_local_hi = body_hi - up_lo;
+
+        // 1. Update per-scale h_dim to reflect the actual strip height
+        //    (boundary strips may be < strip_alloc_h).
+        self.set_scale_h_for_strip(actual_strip_h);
+
+        // 2. Upload strip's reference rows (cached from set_reference)
+        //    and distorted rows for this strip.
+        self.upload_u8_strip(true, up_lo as usize, up_hi as usize, None);
+        self.upload_u8_strip(false, up_lo as usize, up_hi as usize, Some(dist_srgb));
+
+        // 3. XYB pyramid for both sides on the strip-sized buffers.
+        self.run_xyb_pyramid(true);
+        self.run_xyb_pyramid(false);
+
+        // 4. Fused features (persist variant when masked/IW needed).
+        //
+        // Map body rows from scale-0 strip-local to scale s. Both ends
+        // use `div_ceil` so consecutive strips' body ranges at scale s
+        // are contiguous (strip k's body_hi at scale s = strip k+1's
+        // body_lo at scale s). Using floor for body_hi would lose the
+        // last partial row at the bottom-boundary strip when image_h
+        // isn't aligned to 2^(SCALES - 1).
+        for s in 0..self.scales.len() {
+            let denom = 1u32 << s;
+            let body_s_lo = body_local_lo.div_ceil(denom);
+            let body_s_hi = body_local_hi.div_ceil(denom);
+            // Clamp to actual scale h so the kernel's body gate doesn't
+            // try to count rows past the strip buffer.
+            let scale_h = self.scales[s].h;
+            let body_s_hi_clamped = body_s_hi.min(scale_h);
+            if needs_ext {
+                self.launch_blur_and_features_persist_with_body(s, body_s_lo, body_s_hi_clamped);
+            } else {
+                self.launch_blur_and_features_with_body(s, body_s_lo, body_s_hi_clamped);
+            }
+        }
+
+        // 5. Masked + IW pooling.
+        if needs_ext {
+            for s in 0..self.scales.len() {
+                let denom = 1u32 << s;
+                let body_s_lo = body_local_lo.div_ceil(denom);
+                let body_s_hi = body_local_hi.div_ceil(denom);
+                let scale_h = self.scales[s].h;
+                let body_s_hi_clamped = body_s_hi.min(scale_h);
+                self.launch_masked_iw_with_body(s, body_s_lo, body_s_hi_clamped);
+            }
+        }
+
+        // 6. Reduction — partials → finals on device.
+        self.launch_reduction();
+        if needs_ext {
+            self.launch_reduction_ext();
+        }
+        Ok(())
+    }
+
+    /// Reset every `Scale.h` to `actual_strip_h / 2^s` for the current
+    /// strip. Buffers are sized for `strip_alloc_h / 2^s` so this only
+    /// changes the kernels' iteration bounds; boundary strips with
+    /// `actual_strip_h < strip_alloc_h` reuse the same allocations.
+    fn set_scale_h_for_strip(&mut self, actual_strip_h: u32) {
+        let mut h = actual_strip_h;
+        for s in self.scales.iter_mut() {
+            s.h = h;
+            // n_strips_ext recomputed to keep the CPU-shape strip
+            // count in sync with the actual strip height.
+            s.n_strips_ext = kernels::masked_iw_strip::cpu_strip_count(h);
+            h = h.div_ceil(2);
+        }
     }
 
     // ───────────────────────── helpers ─────────────────────────
@@ -824,43 +1272,90 @@ impl<R: Runtime> Zensim<R> {
         }
     }
 
+    /// Strip-mode upload helper: pack rows `[up_lo, up_hi)` of either
+    /// the cached ref bytes (when `is_a == true` and `dist_srgb` is
+    /// `None`) or the supplied dist bytes (when `is_a == false`) into
+    /// `pack_scratch`, then upload as packed u32 pixels.
+    ///
+    /// The src buffer (src_u8_a / src_u8_b) is sized for one strip's
+    /// allocation (`width * strip_alloc_h`). Boundary strips may have
+    /// `up_hi - up_lo < strip_alloc_h`; we pack only that many rows.
+    fn upload_u8_strip(
+        &mut self,
+        is_a: bool,
+        up_lo: usize,
+        up_hi: usize,
+        dist_srgb: Option<&[u8]>,
+    ) {
+        let src_bytes: &[u8] = if is_a {
+            &self.cached_ref_strip_srgb
+        } else {
+            dist_srgb.expect("dist_srgb required when is_a == false")
+        };
+        let row_bytes = (self.width as usize) * 3;
+        let strip_rows = up_hi - up_lo;
+        let strip_pixels = strip_rows * (self.width as usize);
+        let row_start = up_lo * row_bytes;
+        let row_end = up_hi * row_bytes;
+        let strip_slice = &src_bytes[row_start..row_end];
+        // Pack into the persistent pack_scratch (already sized to
+        // `width * strip_alloc_h` per `new_with_regime_strip_budget`).
+        for (dst, chunk) in self
+            .pack_scratch
+            .iter_mut()
+            .take(strip_pixels)
+            .zip(strip_slice.chunks_exact(3))
+        {
+            *dst = (chunk[0] as u32) | ((chunk[1] as u32) << 8) | ((chunk[2] as u32) << 16);
+        }
+        // Upload only the populated prefix to avoid pinning unused
+        // tail rows for boundary strips. cubecl::Handle returned by
+        // create_from_slice_pinned wraps the byte length internally.
+        let bytes = u32::as_bytes(&self.pack_scratch[..strip_pixels]);
+        if is_a {
+            self.src_u8_a = self.client.create_from_slice_pinned(bytes);
+        } else {
+            self.src_u8_b = self.client.create_from_slice_pinned(bytes);
+        }
+    }
+
     /// sRGB → positive XYB at scale 0, mirror-fill padding, then
     /// downscale through the pyramid. Operates on either the reference
     /// or distorted side based on `is_a`.
+    ///
+    /// In strip mode, `self.scales[*].h` reflects the current strip's
+    /// actual_strip_h (set via [`set_scale_h_for_strip`]); the kernel
+    /// processes `padded_w × h_strip` pixels.
     fn run_xyb_pyramid(&self, is_a: bool) {
         let s0 = &self.scales[0];
         let src = if is_a { &self.src_u8_a } else { &self.src_u8_b };
         let xyb = if is_a { &s0.ref_xyb } else { &s0.dis_xyb };
-        // sRGB → XYB at scale 0 (with integrated mirror-pad).
-        // `absorbance_bias_neg = -cbrtf_fast(K_B0)` is precomputed
-        // host-side using the same `cbrtf_fast` algorithm CPU zensim
-        // uses; the kernel takes it as a scalar so the bit-cast inside
-        // cbrtf_fast is never asked to operate on a literal.
         let absorbance_bias_neg = -color::cbrtf_fast_host(color::K_B0);
-        // The kernel always indexes `mirror_offsets` (so we always
-        // bind a non-empty handle); when `pad_count == 0` the kernel
-        // never reads it, so we can re-bind any small placeholder.
-        // We bind `srgb_lut` itself (always allocated, length 256
-        // u32-equivalent bytes) when no mirror is needed — its u32
-        // bit pattern doesn't matter because the index path is
-        // never taken.
         let mirror_arg = match s0.mirror_offsets.as_ref() {
             Some(mo) => (mo.clone(), s0.pad_count as usize),
             None => (self.srgb_lut.clone(), 1),
         };
+        // Pixel count for THIS pass — in strip mode the kernel only
+        // touches the first `s0.h` rows even though the buffer is sized
+        // for `strip_alloc_h`. The xyb buffer length passed to the
+        // kernel is still the full allocation so cubecl's bounds check
+        // doesn't reject the call.
+        let this_h = s0.h;
+        let this_pixels = (self.width as usize) * (this_h as usize);
+        let this_padded_pixels = (s0.padded_w as usize) * (this_h as usize);
         unsafe {
             color::srgb_to_positive_xyb_kernel::launch_unchecked::<R>(
                 &self.client,
-                Self::cube_count_1d(s0.n_padded),
+                Self::cube_count_1d(this_padded_pixels),
                 Self::cube_dim_1d(),
-                ArrayArg::from_raw_parts(src.clone(), self.pixels),
+                ArrayArg::from_raw_parts(src.clone(), this_pixels),
                 ArrayArg::from_raw_parts(self.srgb_lut.clone(), 256),
                 ArrayArg::from_raw_parts(mirror_arg.0, mirror_arg.1),
                 ArrayArg::from_raw_parts(xyb[0].clone(), s0.n_padded),
                 ArrayArg::from_raw_parts(xyb[1].clone(), s0.n_padded),
                 ArrayArg::from_raw_parts(xyb[2].clone(), s0.n_padded),
                 self.width,
-                self.height,
+                this_h,
                 s0.padded_w,
                 absorbance_bias_neg,
             );
@@ -871,10 +1366,14 @@ impl<R: Runtime> Zensim<R> {
             let curr = &self.scales[s];
             let prev_xyb = if is_a { &prev.ref_xyb } else { &prev.dis_xyb };
             let curr_xyb = if is_a { &curr.ref_xyb } else { &curr.dis_xyb };
+            // Cube count over the current scale's *active* pixels
+            // (`padded_w × h`); buffer size stays at `n_padded` for
+            // strip mode boundary strips where `h` is < strip_alloc_h.
+            let curr_active = (curr.padded_w as usize) * (curr.h as usize);
             unsafe {
                 downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
                     &self.client,
-                    Self::cube_count_1d(curr.n_padded),
+                    Self::cube_count_1d(curr_active),
                     Self::cube_dim_1d(),
                     ArrayArg::from_raw_parts(prev_xyb[0].clone(), prev.n_padded),
                     ArrayArg::from_raw_parts(prev_xyb[1].clone(), prev.n_padded),
@@ -897,6 +1396,23 @@ impl<R: Runtime> Zensim<R> {
     /// Eliminates the 12 H-blur scratch planes from DRAM — H-blur
     /// outputs live in shared memory across the V-blur slide.
     fn launch_blur_and_features(&self, scale: usize) {
+        let s = &self.scales[scale];
+        let h = s.h;
+        self.launch_blur_and_features_with_body(scale, 0, h);
+    }
+
+    /// Body-aware variant: only rows `[y_body_start, y_body_end)`
+    /// contribute to the per-(col, strip, ch) partials. Halo rows
+    /// drive the V-blur sliding window so per-pixel mu1/mu2/ssq/s12
+    /// at body rows are buffer-correct (which means
+    /// image-correct in strip mode when halo rows ship the image's
+    /// rows adjacent to the body region).
+    fn launch_blur_and_features_with_body(
+        &self,
+        scale: usize,
+        y_body_start: u32,
+        y_body_end: u32,
+    ) {
         // Keep in sync with `kernels::fused::TX`.
         const TX: u32 = 64;
         let s = &self.scales[scale];
@@ -923,9 +1439,8 @@ impl<R: Runtime> Zensim<R> {
                 s.n_strips,
                 s.partials_f64_off as u32,
                 s.partials_max_off as u32,
-                // Full-image: every row contributes.
-                0u32,
-                s.h,
+                y_body_start,
+                y_body_end,
             );
         }
     }
@@ -941,6 +1456,17 @@ impl<R: Runtime> Zensim<R> {
     /// (the masked-IW kernel needs them for `activity = blur(|src - mu1|)`
     /// which uses the REFERENCE side per CPU).
     fn launch_blur_and_features_persist(&self, scale: usize) {
+        let s = &self.scales[scale];
+        let h = s.h;
+        self.launch_blur_and_features_persist_with_body(scale, 0, h);
+    }
+
+    fn launch_blur_and_features_persist_with_body(
+        &self,
+        scale: usize,
+        y_body_start: u32,
+        y_body_end: u32,
+    ) {
         const TX: u32 = 64;
         let s = &self.scales[scale];
         let pad_total = s.n_padded;
@@ -973,9 +1499,8 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_f64_off as u32,
                 s.partials_max_off as u32,
                 pad_total as u32,
-                // Full-image: every row contributes.
-                0u32,
-                s.h,
+                y_body_start,
+                y_body_end,
             );
         }
     }
@@ -992,6 +1517,17 @@ impl<R: Runtime> Zensim<R> {
     /// cascade — see the kernel's docstring and zensim's
     /// `docs/PRINCIPLED_ACTIVITY.md`. No carryover plane needed.
     fn launch_masked_iw(&self, scale: usize) {
+        let s = &self.scales[scale];
+        let h = s.h;
+        self.launch_masked_iw_with_body(scale, 0, h);
+    }
+
+    fn launch_masked_iw_with_body(
+        &self,
+        scale: usize,
+        y_body_start: u32,
+        y_body_end: u32,
+    ) {
         const TX: u32 = 64;
 
         let s = &self.scales[scale];
@@ -1000,8 +1536,6 @@ impl<R: Runtime> Zensim<R> {
         let planes = &self.persist_planes_ref[scale];
 
         let cube_x = s.padded_w.div_ceil(TX).max(1);
-        // Grid Y dimension matches CPU's strip count (n_strips_ext),
-        // NOT the basic kernel's GPU-occupancy strip count.
         let cube_count = CubeCount::Static(cube_x, s.n_strips_ext, 3);
         let cube_dim = CubeDim::new_3d(TX, 1, 1);
         let do_ext = if self.regime.needs_masked() {
@@ -1033,9 +1567,8 @@ impl<R: Runtime> Zensim<R> {
                 s.partials_ext_off as u32,
                 do_ext,
                 do_iw,
-                // Full-image: every row contributes.
-                0u32,
-                s.h,
+                y_body_start,
+                y_body_end,
             );
         }
     }
