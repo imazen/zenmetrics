@@ -68,21 +68,29 @@
 //!   `l_bkg_fine`, `vscratch_a`, `log_l_bkg`, plus per-channel
 //!   `vscratch_c` / `upscaled_c` handles consumed by the fused
 //!   `subtract_weber_3ch_kernel`.
-//! - `d_scratch[k]` (per level, including baseband) — `t_p_ref`,
-//!   `t_p_dis`, masking-chain (`m_raw`, `m_mid`, `m_blur`), and
-//!   the final `d` output handles, all per-channel. Every level's
-//!   D plane lives in `d_scratch[k].d[c]` regardless of whether
-//!   the band ran through the masker (`mult_mutual_3ch_*`) or the
-//!   baseband bypass (`diff_abs_3ch`).
+//! - `d_scratch[k]` (per level, including baseband) — the final
+//!   `d` output handles, per-channel. Every level's D plane lives in
+//!   `d_scratch[k].d[c]` regardless of whether the band ran through
+//!   the masker (`mult_mutual_3ch_*`) or the baseband bypass
+//!   (`diff_abs_3ch`). The per-band transient intermediates
+//!   (`t_p_ref`, `t_p_dis`, `m_raw`, `m_mid`, `m_blur`) are
+//!   allocated lazily inside the band loop as a
+//!   [`DBandsTransient`] and dropped at the end of each band
+//!   iteration — only the current band's intermediates are GPU-
+//!   resident at any time, vs the previous all-levels-up-front
+//!   allocation (tick "Path B lazy-transient", 2026-05-26).
 //! - `logs_row[k][c]` — pre-uploaded 32-entry CSF sensitivity LUT
 //!   row per (level, channel); stable across calls since `rho_k`
 //!   is fixed for this Cvvdp.
 //!
 //! Total per-Cvvdp budget at 4000×3000 with 8 pyramid levels is
-//! ~700 MB of GPU memory (dominated by `d_scratch.t_p_*` and the
-//! masking-chain scratch buffers). All allocations happen once in
-//! `Cvvdp::new`; the hot path does only `create_from_slice` for
-//! input bytes and reads back small results.
+//! a few hundred MB of GPU memory. The `DBandsTransient`
+//! contribution is one band at a time (largest = base level) plus
+//! the persistent `d` output planes; the previous all-levels-up-
+//! front allocation of `t_p_*` + `m_*` was eliminated in the lazy-
+//! transient refactor. The remaining persistent allocations happen
+//! once in `Cvvdp::new`; the hot path does only `create_from_slice`
+//! for input bytes and reads back small results.
 
 use cubecl::prelude::*;
 
@@ -132,25 +140,86 @@ struct Level {
     planes: [cubecl::server::Handle; N_CHANNELS],
 }
 
-/// Per-level scratch buffers reused by `compute_dkl_d_bands` so the
-/// hot loop doesn't allocate per band. At 12 MP the function would
-/// otherwise allocate ~1.5 GB of transient GPU buffers per call (3
-/// channels × 2 sides × 6 buffer kinds × per-level size). Pre-
-/// allocating once on `Cvvdp::new` keeps the steady-state cost off
-/// the per-frame budget.
+/// Per-level persistent output buffer reused by
+/// `compute_dkl_d_bands`. Only the final `d` (masked-difference)
+/// planes need to survive past their band's masking dispatch — the
+/// pool / diffmap / `compute_dkl_d_bands` consumers all read
+/// `d_scratch[k].d[c]` after the band loop completes.
+///
+/// The per-band transient buffers (`t_p_ref`, `t_p_dis`, `m_raw`,
+/// `m_mid`, `m_blur`) used to live on this struct too — they were
+/// allocated for every level up front, peaking at 15/18 of the
+/// d_scratch volume even though only one band's worth was ever
+/// live at a time. The lazy-transient refactor moved them into
+/// [`DBandsTransient`], which is allocated inside the band loop
+/// and dropped at the end of each iteration.
 struct DBandsScratch {
+    /// Per-band masked-difference output (consumed by host
+    /// `lp_norm_mean` after read-back, or by the GPU pool /
+    /// diffmap dispatch). Stays GPU-resident for every level so
+    /// the post-band-loop pool stage can read all bands' D planes.
+    d: [cubecl::server::Handle; N_CHANNELS],
+}
+
+/// Per-band transient scratch for the CSF + masking chain, allocated
+/// lazily at the top of each band-loop iteration in
+/// [`Cvvdp::_run_d_bands_band_loop`] and dropped at the bottom.
+/// Holding only one band's worth of these buffers (vs the previous
+/// all-levels-up-front allocation) is the bulk of the Path-B memory
+/// reduction: at 12 MP these are ~120 MB per level × 8 levels (the
+/// finest band alone is ~60 MB), and dropping after the masking
+/// stage lets cubecl's memory pool recycle those pages for the next
+/// band's allocation.
+struct DBandsTransient {
     /// CSF-applied bands per channel for ref and dist sides.
     /// `compute_dkl_d_bands` runs `csf_apply_per_pixel_kernel` into
     /// these (one launch per side per channel).
     t_p_ref: [cubecl::server::Handle; N_CHANNELS],
     t_p_dis: [cubecl::server::Handle; N_CHANNELS],
-    /// Masking-chain scratch (non-baseband levels only).
+    /// Masking-chain scratch (non-baseband levels only). Allocated
+    /// unconditionally — baseband bypasses the masking kernels but
+    /// keeping the alloc unconditional keeps the band-loop control
+    /// flow uniform across levels. At the baseband size these are
+    /// tiny vs the finest band.
     m_raw: [cubecl::server::Handle; N_CHANNELS],
     m_mid: [cubecl::server::Handle; N_CHANNELS],
     m_blur: [cubecl::server::Handle; N_CHANNELS],
-    /// Per-band masked-difference output (consumed by host
-    /// `lp_norm_mean` after read-back).
-    d: [cubecl::server::Handle; N_CHANNELS],
+}
+
+impl DBandsTransient {
+    /// Allocate the per-band CSF + masking transients for a band of
+    /// `n` pixels. cubecl's memory pool will recycle pages on Drop,
+    /// so the per-iter alloc cost is the pool's bookkeeping, not a
+    /// full GPU buffer create.
+    fn new<R: Runtime>(client: &ComputeClient<R>, n: usize) -> Self {
+        Self {
+            t_p_ref: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            t_p_dis: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_raw: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_mid: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+            m_blur: [
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+                alloc_zeros_f32(client, n),
+            ],
+        }
+    }
 }
 
 fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
@@ -287,37 +356,17 @@ fn build_d_bands_scratch<R: Runtime>(
     width: u32,
     height: u32,
 ) -> Vec<DBandsScratch> {
+    // After the lazy-transient refactor, this only allocates the
+    // persistent `d` output planes per level. The 5 transient
+    // buffer kinds (`t_p_ref`, `t_p_dis`, `m_raw`, `m_mid`,
+    // `m_blur`) are now allocated inside the band loop via
+    // [`DBandsTransient::new`] and dropped at the end of each band.
     let mut out = Vec::with_capacity(n_levels);
     let mut w = width;
     let mut h = height;
     for _ in 0..n_levels {
         let n = (w as usize) * (h as usize);
         out.push(DBandsScratch {
-            t_p_ref: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
-            t_p_dis: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
-            m_raw: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
-            m_mid: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
-            m_blur: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
             d: [
                 alloc_zeros_f32(client, n),
                 alloc_zeros_f32(client, n),
@@ -741,9 +790,18 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
     // of per-level pixel counts × f32.
     let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
 
-    // d_scratch: 6 buffer types (t_p_ref, t_p_dis, m_raw, m_mid,
-    // m_blur, d) × 3 channels per level.
-    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+    // d_scratch: post-Path-B layout. The persistent allocation
+    // holds only the `d` output planes (1 buffer kind × 3 channels)
+    // for every level. The 5 transient buffer kinds (t_p_ref,
+    // t_p_dis, m_raw, m_mid, m_blur) are allocated inside the band
+    // loop one band at a time and dropped after that band's
+    // masking dispatch — so peak working set adds just one band's
+    // transient at the largest level (= base resolution n0). At
+    // 1MP with 8 levels this drops the d_scratch contribution by
+    // ~21% vs the prior all-bands-at-once layout.
+    let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
+    let d_scratch_transient_peak_bytes: usize = 5 * 3 * n0 * 4;
+    let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_scratch_transient_peak_bytes;
 
     // weber_scratch: only non-baseband levels (n_levels - 1).
     // Per level: 3 fine-sized planes (l_bkg_fine, log_l_bkg,
@@ -824,7 +882,11 @@ pub fn estimate_gpu_memory_bytes_capped(
     }
     let sum_level_pixels: usize = level_pixels.iter().sum();
     let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
-    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+    // Same lazy-transient accounting as estimate_gpu_memory_bytes.
+    let n0_capped = level_pixels.first().copied().unwrap_or(0);
+    let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
+    let d_scratch_transient_peak_bytes: usize = 5 * 3 * n0_capped * 4;
+    let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_scratch_transient_peak_bytes;
 
     let mut weber_bytes: usize = 0;
     let mut fw = width;
@@ -1010,8 +1072,22 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
 
     // gauss_ref + bands_ref + bands_dis: 3 pyramids × 3 channels each.
     let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
-    // d_scratch: 6 buffer kinds × 3 channels per level.
-    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+    // d_scratch (lazy-transient layout): persistent `d` only +
+    // peak transient = one band's worth (5 kinds × 3 channels at
+    // the largest band buffer size, which under the K_SPLIT
+    // walker is the strip-buffer-sized fine band).
+    let largest_level_pixels = {
+        // Compute the largest per-level buffer pixel count the way
+        // sum_level_pixels was computed above (strip-buf for k <
+        // k_split, full-image for k >= k_split). The fine band
+        // (k = 0) always dominates.
+        let halo0 = mode_b_halo_at_level(0, k_split as u32);
+        let strip_h0 = h_body.saturating_add(2 * halo0);
+        (width as usize) * (strip_h0 as usize)
+    };
+    let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
+    let d_scratch_transient_peak_bytes: usize = 5 * 3 * largest_level_pixels * 4;
+    let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_scratch_transient_peak_bytes;
 
     // weber_scratch: only non-baseband levels. Per level: 3 fine-sized
     // planes (l_bkg_fine, log_l_bkg, log_l_bkg_dis) + 3 upscaled_c +
@@ -3485,7 +3561,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///     or `bh ≤ PU_PADSIZE`).
     ///   - Baseband: `diff_abs_3ch_kernel` writes `|T_p_dis - T_p_ref|`
     ///     for all three channels in one launch (since tick 94 every
-    ///     level's D plane lives in the same `d_scratch.d[k][c]` slot).
+    ///     level's D plane lives in the same `d_scratch_d.d[k][c]` slot).
     ///
     /// No GPU→host readback inside this helper. Callers that want
     /// the host-side `Vec<[Vec<f32>; 3]>` snapshot use
@@ -3906,20 +3982,25 @@ impl<R: Runtime> Cvvdp<R> {
             }
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            // Reuse the pre-allocated per-level scratch (Cvvdp.d_scratch).
-            // T_p / m_* / d handles are kept resident so the masking kernels
-            // can consume them without a round-trip to host AND without
-            // per-band alloc_zeros_f32 churn (~1.5 GB worth at 12 MP).
-            let scratch = &self.d_scratch[k];
+            // Path-B lazy transient: allocate the per-band CSF +
+            // masking intermediates here (drops at end of iteration
+            // when `transient` goes out of scope, freeing the
+            // 15 GPU buffers back to cubecl's memory pool for the
+            // next band to reuse). `self.d_scratch[k].d[c]` is the
+            // only persistent allocation now — downstream pool /
+            // diffmap / `compute_dkl_d_bands` consumers read those
+            // after the band loop completes.
+            let transient = DBandsTransient::new(&self.client, n_px);
+            let scratch_d = &self.d_scratch[k];
             let t_p_ref_h: [cubecl::server::Handle; 3] = [
-                scratch.t_p_ref[0].clone(),
-                scratch.t_p_ref[1].clone(),
-                scratch.t_p_ref[2].clone(),
+                transient.t_p_ref[0].clone(),
+                transient.t_p_ref[1].clone(),
+                transient.t_p_ref[2].clone(),
             ];
             let t_p_dis_h: [cubecl::server::Handle; 3] = [
-                scratch.t_p_dis[0].clone(),
-                scratch.t_p_dis[1].clone(),
-                scratch.t_p_dis[2].clone(),
+                transient.t_p_dis[0].clone(),
+                transient.t_p_dis[1].clone(),
+                transient.t_p_dis[2].clone(),
             ];
 
             let t_csf = std::time::Instant::now();
@@ -3975,12 +4056,12 @@ impl<R: Runtime> Cvvdp<R> {
             if is_baseband {
                 // Baseband: cvvdp's `|T_p_dis - T_p_ref|` bypass. Tick
                 // 94 — GPU fused 3-channel diff into scratch.d so the
-                // baseband output lives in d_scratch.d[k][c] like every
+                // baseband output lives in d_scratch_d.d[k][c] like every
                 // other level (prep for GPU pool in tick 95).
                 let d_h: [cubecl::server::Handle; 3] = [
-                    scratch.d[0].clone(),
-                    scratch.d[1].clone(),
-                    scratch.d[2].clone(),
+                    scratch_d.d[0].clone(),
+                    scratch_d.d[1].clone(),
+                    scratch_d.d[2].clone(),
                 ];
                 unsafe {
                     diff_abs_3ch_kernel::launch::<R>(
@@ -4005,9 +4086,9 @@ impl<R: Runtime> Cvvdp<R> {
                 // come from the pre-allocated d_scratch[k] (no
                 // per-band alloc_zeros_f32 churn).
                 let d_h: [cubecl::server::Handle; 3] = [
-                    scratch.d[0].clone(),
-                    scratch.d[1].clone(),
-                    scratch.d[2].clone(),
+                    scratch_d.d[0].clone(),
+                    scratch_d.d[1].clone(),
+                    scratch_d.d[2].clone(),
                 ];
                 let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
                 // Mode B: per-band per-strip dispatch of the masking
@@ -4027,19 +4108,19 @@ impl<R: Runtime> Cvvdp<R> {
                 unsafe {
                     if use_blur && mode_b {
                         let m_raw_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_raw[0].clone(),
-                            scratch.m_raw[1].clone(),
-                            scratch.m_raw[2].clone(),
+                            transient.m_raw[0].clone(),
+                            transient.m_raw[1].clone(),
+                            transient.m_raw[2].clone(),
                         ];
                         let m_mid_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_mid[0].clone(),
-                            scratch.m_mid[1].clone(),
-                            scratch.m_mid[2].clone(),
+                            transient.m_mid[0].clone(),
+                            transient.m_mid[1].clone(),
+                            transient.m_mid[2].clone(),
                         ];
                         let m_blur_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_blur[0].clone(),
-                            scratch.m_blur[1].clone(),
-                            scratch.m_blur[2].clone(),
+                            transient.m_blur[0].clone(),
+                            transient.m_blur[1].clone(),
+                            transient.m_blur[2].clone(),
                         ];
                         self._run_band_masking_strip_walker(
                             k,
@@ -4057,9 +4138,9 @@ impl<R: Runtime> Cvvdp<R> {
                     } else if use_blur {
                         // min_abs → pu_blur_h → pu_blur_v → mult_mutual_3ch_with_blurred.
                         let m_raw_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_raw[0].clone(),
-                            scratch.m_raw[1].clone(),
-                            scratch.m_raw[2].clone(),
+                            transient.m_raw[0].clone(),
+                            transient.m_raw[1].clone(),
+                            transient.m_raw[2].clone(),
                         ];
                         min_abs_3ch_kernel::launch::<R>(
                             &self.client,
@@ -4082,14 +4163,14 @@ impl<R: Runtime> Cvvdp<R> {
                         // instead of 9 (3× pu_blur_h + 3× pu_blur_v +
                         // 3× weight_band).
                         let m_mid_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_mid[0].clone(),
-                            scratch.m_mid[1].clone(),
-                            scratch.m_mid[2].clone(),
+                            transient.m_mid[0].clone(),
+                            transient.m_mid[1].clone(),
+                            transient.m_mid[2].clone(),
                         ];
                         let m_blur_h: [cubecl::server::Handle; 3] = [
-                            scratch.m_blur[0].clone(),
-                            scratch.m_blur[1].clone(),
-                            scratch.m_blur[2].clone(),
+                            transient.m_blur[0].clone(),
+                            transient.m_blur[1].clone(),
+                            transient.m_blur[2].clone(),
                         ];
                         pu_blur_h_3ch_kernel::launch::<R>(
                             &self.client,
