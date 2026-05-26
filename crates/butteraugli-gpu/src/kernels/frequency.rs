@@ -272,6 +272,42 @@ pub fn copy_plane_kernel(src: &Array<f32>, dst: &mut Array<f32>) {
     dst[idx] = src[idx];
 }
 
+/// Copy a contiguous row-slab from a larger source plane into a strip-
+/// sized dst plane.
+///
+/// - `src` is laid out as `(src_h × width)` f32s, row-major, no padding.
+/// - `dst` is laid out as `(dst_h × width)` f32s, row-major, no padding.
+/// - `src_row_offset` is the source-plane row where the slab starts.
+///   Slab row `r` in `dst` is sourced from `src` row `src_row_offset + r`.
+///
+/// Used by butter Mode E (`set_reference` on a strip-mode instance):
+/// the reference-side intermediate planes (`lin_a`, `freq_a[*][*]`,
+/// `cached_blurred_a`, `mask`) are computed once at full image size and
+/// the strip walker then blits the matching slab of rows into the
+/// strip-mode dist-side planes per strip.
+#[cube(launch_unchecked)]
+pub fn copy_slab_from_full_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    width: u32,
+    src_row_offset: u32,
+    dst_h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let dst_len = (width as usize) * (dst_h as usize);
+    if idx >= dst_len {
+        terminate!();
+    }
+    let dst_row = (idx as u32) / width;
+    let col = (idx as u32) - dst_row * width;
+    if dst_row >= dst_h {
+        terminate!();
+    }
+    let src_row = src_row_offset + dst_row;
+    let src_idx = (src_row as usize) * (width as usize) + (col as usize);
+    dst[idx] = src[src_idx];
+}
+
 /// Broadcast a single `plane_stride`-sized source into `batch_size`
 /// contiguous slots of `dst`. Used to give the batched compute_diffmap
 /// kernel `batch_size` copies of the cached reference mask.

@@ -169,9 +169,24 @@ pub struct Butteraugli<R: Runtime> {
     /// is single-resolution only). Populated by [`Butteraugli::new_multires`].
     half_res: Option<Box<Butteraugli<R>>>,
 
+    /// Mode E (ref-full + dist-strip) helper. Allocated lazily on the
+    /// first [`set_reference`] call against a strip-mode instance —
+    /// holds whole-image reference-side intermediates (XYB lin_a,
+    /// freq_a[*][*], cached_blurred_a, mask) so each
+    /// `compute_with_reference` dist strip can blit those planes' row
+    /// slabs into the strip-mode planes instead of re-running the
+    /// ref-side pipeline per strip.
+    ///
+    /// `None` in whole-image mode and in strip-mode instances that
+    /// haven't had `set_reference` called yet.
+    ref_cache_full: Option<Box<Butteraugli<R>>>,
+
     /// Set by [`set_reference`]. While true, the reference-side
     /// intermediates (lin_a XYB, freq_a[*][*], cached_blurred_a, mask)
     /// are valid and `compute_with_reference` may skip recomputing them.
+    ///
+    /// In strip mode this flag means `ref_cache_full` is populated and
+    /// holds a valid whole-image reference cache.
     has_cached_reference: bool,
 
     /// Active comparison parameters. Overwritten by
@@ -397,6 +412,7 @@ impl<R: Runtime> Butteraugli<R> {
             temp1,
             temp2,
             half_res: None,
+            ref_cache_full: None,
             has_cached_reference: false,
             // T_x.O (2026-05-17): pack_scratch is gone — packing now
             // writes directly into the pinned staging buffer reserved
@@ -838,18 +854,31 @@ impl<R: Runtime> Butteraugli<R> {
     /// All subsequent [`compute_with_reference`] (or
     /// [`compute_with_reference_with_options`]) calls reuse those params
     /// — call again to change them.
+    ///
+    /// **Mode E (strip-mode instance, single-resolution only)**: lazily
+    /// allocates a whole-image sibling (`ref_cache_full`) and runs the
+    /// reference-side pipeline on it. Subsequent
+    /// [`compute_with_reference`] calls walk dist strips and blit
+    /// pre-computed ref-side row slabs from the full sibling into the
+    /// strip-mode planes — avoiding the ref-side opsin/freq/mask
+    /// recompute per strip. Returns
+    /// [`Error::StripModeUnsupported`] for the multires-strip case
+    /// (the half-res strip path doesn't have a Mode E port yet).
     pub fn set_reference_with_options(
         &mut self,
         ref_srgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<()> {
         if self.halo_h > 0 {
-            // Strip-mode instances can't cache reference-side
-            // intermediates: the strip walker rewrites lin_a/freq_a
-            // per strip, so reusing them across compute_strip calls
-            // would mix strips. Surface this as a clear error instead
-            // of silently corrupting state.
-            return Err(Error::StripModeUnsupported("set_reference"));
+            // Strip-mode instance → Mode E: allocate a whole-image
+            // sibling and cache the ref on it. The multires-strip case
+            // (strip-mode AND a half-res sibling) is not yet Mode-E-
+            // wired; surface the existing StripModeUnsupported error so
+            // callers fall back to one-shot compute_strip.
+            if self.half_res.is_some() {
+                return Err(Error::StripModeUnsupported("set_reference"));
+            }
+            return self.set_reference_strip_mode(ref_srgb, params);
         }
         validate_params(params)?;
         self.check_dims(ref_srgb)?;
@@ -871,12 +900,62 @@ impl<R: Runtime> Butteraugli<R> {
         Ok(())
     }
 
+    /// Mode E entry: cache reference state for a strip-mode instance.
+    /// Lazily allocates `self.ref_cache_full` (a whole-image
+    /// `Butteraugli<R>` sibling) and runs the standard ref-side
+    /// pipeline on it. The strip walker in
+    /// [`Self::compute_with_reference_strip_mode`] blits the cached
+    /// ref planes into the strip planes per strip.
+    fn set_reference_strip_mode(
+        &mut self,
+        ref_srgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<()> {
+        validate_params(params)?;
+        let expected = (self.width as usize) * (self.image_h as usize) * 3;
+        if ref_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_srgb.len(),
+            });
+        }
+        // Lazy-allocate the whole-image sibling. Buffers are
+        // (image_w × image_h × 50 planes × 4 B); for a 24 MP source
+        // that's ~5 GB. The caller chose strip mode specifically
+        // because the working set didn't fit Full, so callers running
+        // very large images plus cached-ref may want to use
+        // BothStripped instead (when available). For typical 1-8 MP
+        // sweep sizes the full ref cache fits within the VRAM cap by
+        // construction (cap > Full bytes only when Auto picked Full
+        // already; in strip-only-fits cases the umbrella's
+        // CachedRefStripPolicy will eventually steer to BothStripped).
+        if self.ref_cache_full.is_none() {
+            let helper = Self::new(self.client.clone(), self.width, self.image_h);
+            self.ref_cache_full = Some(Box::new(helper));
+        }
+        self.params = *params;
+        let cache = self
+            .ref_cache_full
+            .as_mut()
+            .expect("ref_cache_full just allocated");
+        cache.set_reference_with_options(ref_srgb, params)?;
+        self.has_cached_reference = true;
+        Ok(())
+    }
+
     /// Drop the cached reference state. The next call must be
     /// `set_reference`/`set_reference_with_options` again.
+    ///
+    /// Note: keeps `ref_cache_full` allocated so a subsequent
+    /// `set_reference` reuses the buffers. Drop the whole instance to
+    /// free the cache buffers.
     pub fn clear_reference(&mut self) {
         self.has_cached_reference = false;
         if let Some(half) = self.half_res.as_mut() {
             half.has_cached_reference = false;
+        }
+        if let Some(cache) = self.ref_cache_full.as_mut() {
+            cache.clear_reference();
         }
     }
 
@@ -1047,7 +1126,8 @@ impl<R: Runtime> Butteraugli<R> {
 
     fn compute_with_reference_inner(&mut self, dist_srgb: &[u8]) -> Result<GpuButteraugliResult> {
         if self.halo_h > 0 {
-            return Err(Error::StripModeUnsupported("compute_with_reference"));
+            // Mode E (strip-mode instance with cached ref).
+            return self.compute_with_reference_strip_mode(dist_srgb);
         }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
@@ -1061,6 +1141,36 @@ impl<R: Runtime> Butteraugli<R> {
             self.diffmap_buf.clone(),
             self.n,
         ))
+    }
+
+    /// Mode E strip walker: dist walks in strips, ref-side state is
+    /// blitted from the whole-image `ref_cache_full` sibling each
+    /// strip. Returns [`Error::NoCachedReference`] if `set_reference`
+    /// hasn't been called.
+    fn compute_with_reference_strip_mode(
+        &mut self,
+        dist_srgb: &[u8],
+    ) -> Result<GpuButteraugliResult> {
+        if !self.has_cached_reference || self.ref_cache_full.is_none() {
+            return Err(Error::NoCachedReference);
+        }
+        let expected = (self.width as usize) * (self.image_h as usize) * 3;
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+        let params = self.params;
+        crate::strip::run_strip_pipeline_cached_ref(
+            self,
+            dist_srgb,
+            self.width,
+            self.image_h,
+            self.body_h,
+            self.halo_h,
+            &params,
+        )
     }
 
     fn check_dims(&self, srgb: &[u8]) -> Result<()> {
@@ -1425,6 +1535,104 @@ impl<R: Runtime> Butteraugli<R> {
     /// [`Self::take_half_res`].
     pub(crate) fn restore_half_res(&mut self, half: Box<Butteraugli<R>>) {
         self.half_res = Some(half);
+    }
+
+    // ───────────── Mode E (cached-ref strip) helpers ─────────────
+
+    /// Mode E: take the full-image ref cache out so the strip walker
+    /// can borrow `self` mutably while reading from the cache. The
+    /// walker MUST restore it via [`Self::restore_ref_cache_full`].
+    pub(crate) fn take_ref_cache_full(&mut self) -> Option<Box<Butteraugli<R>>> {
+        self.ref_cache_full.take()
+    }
+
+    /// Mode E: restore the full-image ref cache after a
+    /// [`Self::take_ref_cache_full`].
+    pub(crate) fn restore_ref_cache_full(&mut self, cache: Box<Butteraugli<R>>) {
+        self.ref_cache_full = Some(cache);
+    }
+
+    /// Mode E: blit a row slab `[src_row_offset, src_row_offset +
+    /// strip_h_total)` from each of the cache's reference-side planes
+    /// (`lin_a`, `freq_a[*][*]`, `cached_blurred_a`, `mask`) into
+    /// `self`'s strip-mode planes. `self.height` is the strip-slab
+    /// height; the slab must be entirely inside the cache's image.
+    pub(crate) fn blit_ref_slab_from_cache(
+        &mut self,
+        cache: &Butteraugli<R>,
+        src_row_offset: u32,
+        strip_h_total: u32,
+    ) {
+        debug_assert_eq!(self.width, cache.width);
+        debug_assert!(strip_h_total <= self.height);
+        debug_assert!(src_row_offset + strip_h_total <= cache.height);
+        let dst_n = (self.width as usize) * (strip_h_total as usize);
+        let src_n = cache.n;
+        const TPB: u32 = 256;
+        let cubes = (dst_n as u32).div_ceil(TPB);
+        let block = CubeDim::new_1d(TPB);
+        // Slab-copy a single (src_plane → dst_plane) pair.
+        let blit_one = |src: &cubecl::server::Handle, dst: &cubecl::server::Handle| {
+            let dim = CubeCount::Static(cubes, 1, 1);
+            unsafe {
+                crate::kernels::frequency::copy_slab_from_full_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    dim,
+                    block,
+                    ArrayArg::from_raw_parts(src.clone(), src_n),
+                    ArrayArg::from_raw_parts(dst.clone(), dst_n),
+                    self.width,
+                    src_row_offset,
+                    strip_h_total,
+                );
+            }
+        };
+        // Reference XYB-opsin lin_a (3 planes).
+        for c in 0..3 {
+            blit_one(&cache.lin_a[c], &self.lin_a[c]);
+        }
+        // freq_a [UHF, HF, MF, LF] × [X, Y, B].
+        for f in 0..4 {
+            for c in 0..3 {
+                blit_one(&cache.freq_a[f][c], &self.freq_a[f][c]);
+            }
+        }
+        // Cached blurred (combine + diff_precompute → blur) of ref.
+        blit_one(&cache.cached_blurred_a, &self.cached_blurred_a);
+        // Reference mask (fuzzy-erosion output).
+        blit_one(&cache.mask, &self.mask);
+    }
+
+    /// Mode E strip walker helper: drive the same kernel chain as
+    /// [`Self::run_strip_pipeline_compute`] but skip the reference-
+    /// side opsin / freq-separation / mask-reference pipeline (those
+    /// planes are blitted in from the cache by
+    /// [`Self::blit_ref_slab_from_cache`]). Runs the distorted-side
+    /// pipeline + the diff/mask combine.
+    pub(crate) fn run_strip_pipeline_compute_dist_only(
+        &mut self,
+        strip_h_total: u32,
+    ) {
+        let saved_height = self.height;
+        let saved_n = self.n;
+        self.height = strip_h_total;
+        self.n = (self.width as usize) * (strip_h_total as usize);
+
+        // Reference side already populated via blit. Distorted side
+        // needs the full opsin/freq pipeline.
+        self.apply_opsin(false);
+        self.separate_frequencies(false);
+        self.compute_psycho_diff();
+        self.compute_dc_diff();
+        // Mask uses cached_blurred_a (already blitted from cache) and
+        // computes the distorted-side mask contribution.
+        self.compute_mask_pipeline_distorted_only();
+        unsafe {
+            self.launch_compute_diffmap();
+        }
+
+        self.height = saved_height;
+        self.n = saved_n;
     }
 
     fn populate_linear_from_srgb(&mut self, is_a: bool, srgb: &[u8]) {

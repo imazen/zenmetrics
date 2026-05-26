@@ -74,11 +74,23 @@
 //! `body_end_full.div_ceil(2) - body_top_full/2` rows so the
 //! half-res image's last row is covered.
 //!
+//! ## Mode E strip walker (cached ref + strip dist)
+//!
+//! [`run_strip_pipeline_cached_ref`] implements task #45 / issue #15
+//! "Mode E": the reference image is held whole-image in a sibling
+//! `Butteraugli<R>` cache (allocated lazily on the first
+//! `set_reference` call against a strip-mode instance), and each
+//! distorted strip's reference-side intermediates are blitted in
+//! per-strip via a row-offset slab-copy kernel. Skips the ref-side
+//! opsin → freq separation → mask-reference pipeline once per strip.
+//!
 //! ## What this MVP does NOT do
 //!
-//! - `set_reference` + `compute_with_reference`: the cached-reference
-//!   fast path is not yet strip-aware. Each strip pass re-runs both
-//!   sides of the pipeline.
+//! - Mode E multires-strip: the multires-strip path
+//!   ([`run_strip_pipeline_multires`]) does not yet wire through a
+//!   half-res cached-ref blit. `set_reference` on a multires-strip
+//!   instance returns `Error::StripModeUnsupported` so callers fall
+//!   back to one-shot `compute_strip`.
 
 use crate::pipeline::Butteraugli;
 use crate::{ButteraugliParams, Error, GpuButteraugliResult, Result};
@@ -491,5 +503,104 @@ pub(crate) fn run_strip_pipeline_multires<R: Runtime>(
         body_top = body_end;
     }
 
+    Ok(combined.finalize(n_pixels_image))
+}
+
+/// Mode E strip walker (task #45 / issue #15): walk the distorted
+/// image in strips and skip the reference-side recompute per strip
+/// by blitting reference planes from a whole-image
+/// `Butteraugli<R>::ref_cache_full` sibling.
+///
+/// The constructor invariant: `state` is a strip-mode instance
+/// (`halo_h > 0`) WITHOUT a half-res sibling. `state.ref_cache_full`
+/// MUST be `Some` and have `has_cached_reference == true` (the strip-
+/// mode `set_reference_with_options` populates this).
+///
+/// Per-strip pipeline:
+/// 1. Upload distorted sRGB strip to `state.src_u8_b` and run sRGB→linear.
+/// 2. Blit row slabs of reference planes (`lin_a`, `freq_a[*][*]`,
+///    `cached_blurred_a`, `mask`) from `ref_cache_full` into
+///    `state`'s strip planes.
+/// 3. Run the distorted-side pipeline + mask combine + diffmap +
+///    body-band reduction.
+///
+/// Identical body-row diffmap values to whole-image
+/// `compute_with_reference`, modulo the Atomic<f32>::fetch_add
+/// scheduling drift the cached-ref tests already tolerate.
+pub(crate) fn run_strip_pipeline_cached_ref<R: Runtime>(
+    state: &mut Butteraugli<R>,
+    dist_srgb: &[u8],
+    image_w: u32,
+    image_h: u32,
+    body_h: u32,
+    halo_h: u32,
+    params: &ButteraugliParams,
+) -> Result<GpuButteraugliResult> {
+    crate::pipeline::validate_params(params)?;
+    let expected = (image_w as usize) * (image_h as usize) * 3;
+    if dist_srgb.len() != expected {
+        return Err(Error::DimensionMismatch {
+            expected,
+            got: dist_srgb.len(),
+        });
+    }
+    state.set_params(*params);
+
+    // Borrow the ref cache out so we can pass &mut state and &cache
+    // into kernel-launch helpers without splitting the borrow.
+    let cache = state
+        .take_ref_cache_full()
+        .expect("compute_with_reference_strip_mode: ref_cache_full must be Some");
+
+    let n_pixels_image = (image_w as usize) * (image_h as usize);
+    let mut combined = StripPartials::default();
+
+    let mut body_top: u32 = 0;
+    while body_top < image_h {
+        let body_end = (body_top + body_h).min(image_h);
+        let this_body_h = body_end - body_top;
+
+        // Halo sizing (same edge-clamp rule as `run_strip_pipeline`).
+        let halo_top = body_top.min(halo_h);
+        let halo_bot = (image_h - body_end).min(halo_h);
+        let strip_h_total = halo_top + this_body_h + halo_bot;
+
+        // Source row in the FULL cache where the strip's slab starts.
+        let src_row_offset = body_top - halo_top;
+        debug_assert!(src_row_offset + strip_h_total <= image_h);
+
+        // 1) Dist sRGB upload + sRGB→linear for this strip.
+        state.upload_strip_srgb(
+            false,
+            dist_srgb,
+            image_w,
+            image_h,
+            body_top,
+            strip_h_total,
+            halo_top,
+        );
+
+        // 2) Blit ref-side intermediates from the full cache.
+        state.blit_ref_slab_from_cache(&cache, src_row_offset, strip_h_total);
+
+        // 3) Distorted-side compute + mask + diffmap.
+        state.run_strip_pipeline_compute_dist_only(strip_h_total);
+
+        // 4) Reduce body band into running partials.
+        let diffmap_handle = state.diffmap_buf_handle();
+        let strip_partials = reduce_strip_body::<R>(
+            state.client_ref(),
+            diffmap_handle,
+            image_w,
+            strip_h_total,
+            halo_top,
+            this_body_h,
+        );
+        combined.merge(&strip_partials);
+
+        body_top = body_end;
+    }
+
+    state.restore_ref_cache_full(cache);
     Ok(combined.finalize(n_pixels_image))
 }

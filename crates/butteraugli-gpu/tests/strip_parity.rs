@@ -219,19 +219,24 @@ fn strip_constructor_records_metadata() {
     assert!(h >= 128 + 2 * strip.strip_halo_h());
 }
 
-// ─── Cached-reference path NOT supported in strip mode ───
+// ─── Cached-reference path in strip mode (Mode E — task #45) ───
 
 #[test]
-fn strip_set_reference_returns_clear_error() {
+fn strip_set_reference_succeeds_mode_e() {
+    // Mode E (task #45 / issue #15): single-resolution strip-mode
+    // accepts set_reference by allocating a whole-image cache sibling.
+    // The strip walker blits ref-side planes per strip during the
+    // following compute_with_reference calls.
     let client = BackendT::client(&Default::default());
     let mut strip = Butteraugli::<BackendT>::new_strip(client, 512, 512, 64);
     let ref_buf = make_image(512, 512, 0);
-    match strip.set_reference(&ref_buf) {
-        Err(Error::StripModeUnsupported(api)) => {
-            assert_eq!(api, "set_reference");
-        }
-        other => panic!("expected StripModeUnsupported(set_reference), got {other:?}"),
-    }
+    strip
+        .set_reference(&ref_buf)
+        .expect("single-res strip mode set_reference (Mode E) must succeed");
+    assert!(
+        strip.has_cached_reference(),
+        "has_cached_reference must be true after set_reference"
+    );
 }
 
 #[test]
@@ -252,17 +257,59 @@ fn strip_compute_returns_clear_error() {
 }
 
 #[test]
-fn strip_compute_with_reference_returns_clear_error() {
+fn strip_compute_with_reference_without_set_reference_errors() {
+    // Mode E supports compute_with_reference in strip mode AFTER
+    // set_reference, but should still surface NoCachedReference
+    // when set_reference hasn't been called yet — same contract as
+    // whole-image mode.
     let client = BackendT::client(&Default::default());
     let mut strip = Butteraugli::<BackendT>::new_strip(client, 512, 512, 64);
     let dis_buf = make_image(512, 512, 7);
     match strip.compute_with_reference(&dis_buf) {
+        Err(Error::NoCachedReference) => {}
+        other => panic!("expected NoCachedReference, got {other:?}"),
+    }
+}
+
+#[test]
+fn strip_set_reference_then_compute_with_reference_mode_e() {
+    // Mode E end-to-end smoke: set_reference + compute_with_reference
+    // returns a finite score (parity to whole-image is exercised by
+    // the umbrella `cached_ref_butter_strip_n_distortions_1mp` test).
+    let client = BackendT::client(&Default::default());
+    let mut strip = Butteraugli::<BackendT>::new_strip(client, 512, 512, 64);
+    let ref_buf = make_image(512, 512, 0);
+    let dis_buf = make_image(512, 512, 7);
+    strip
+        .set_reference(&ref_buf)
+        .expect("strip set_reference (Mode E)");
+    let r = strip
+        .compute_with_reference(&dis_buf)
+        .expect("strip compute_with_reference (Mode E)");
+    assert!(r.score.is_finite(), "score must be finite, got {}", r.score);
+    assert!(r.pnorm_3.is_finite(), "pnorm_3 must be finite");
+    // After clear_reference, compute_with_reference should error again.
+    strip.clear_reference();
+    assert!(!strip.has_cached_reference());
+    match strip.compute_with_reference(&dis_buf) {
+        Err(Error::NoCachedReference) => {}
+        other => panic!("expected NoCachedReference after clear_reference, got {other:?}"),
+    }
+}
+
+#[test]
+fn multires_strip_set_reference_still_returns_clear_error() {
+    // Mode E ports the single-resolution strip case. The multires-
+    // strip path (new_multires_strip) still rejects set_reference;
+    // umbrella callers fall back to one-shot compute_strip.
+    let client = BackendT::client(&Default::default());
+    let mut strip = Butteraugli::<BackendT>::new_multires_strip(client, 512, 512, 64);
+    let ref_buf = make_image(512, 512, 0);
+    match strip.set_reference(&ref_buf) {
         Err(Error::StripModeUnsupported(api)) => {
-            assert_eq!(api, "compute_with_reference");
+            assert_eq!(api, "set_reference");
         }
-        other => panic!(
-            "expected StripModeUnsupported(compute_with_reference), got {other:?}"
-        ),
+        other => panic!("expected multires-strip StripModeUnsupported(set_reference), got {other:?}"),
     }
 }
 

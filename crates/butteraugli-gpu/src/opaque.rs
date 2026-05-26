@@ -67,9 +67,11 @@ trait ButteraugliInner: Send {
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
     /// Cache the reference image's opsin pyramid + blur cascade.
-    /// Returns [`crate::Error::StripModeUnsupported`] when invoked
-    /// on a strip-mode instance (butter strip rejects set_reference
-    /// today — Phase 2C task #45 may add strip cached-ref).
+    /// Strip-mode instances allocate a whole-image cache sibling on
+    /// first call (Mode E — task #45 / issue #15) and run the
+    /// reference-side pipeline on it. Returns
+    /// [`crate::Error::StripModeUnsupported`] only for the multires-
+    /// strip case, which doesn't have a Mode E port yet.
     fn set_reference_srgb_u8(
         &mut self,
         ref_rgb: &[u8],
@@ -338,11 +340,17 @@ impl ButteraugliOpaque {
     /// device. Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
     /// calls skip the ref-side pyramid build.
     ///
+    /// Strip-mode instances allocate a whole-image cache sibling on
+    /// first call (Mode E — task #45 / issue #15) and run the
+    /// reference-side pipeline on it; subsequent
+    /// `compute_with_cached_reference_srgb_u8` calls walk dist strips
+    /// while blitting cached ref planes per strip.
+    ///
     /// # Errors
     ///
     /// - [`crate::Error::StripModeUnsupported`] when invoked on a
-    ///   strip-mode instance (butter strip rejects set_reference
-    ///   today — task #45 / Phase 2C tracks adding strip cached-ref).
+    ///   multires-strip instance — the half-res strip cached-ref
+    ///   path is not yet implemented.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
         self.inner.set_reference_srgb_u8(ref_rgb, &self.params)
     }
