@@ -663,8 +663,13 @@ impl ZensimOpaque {
     }
 
     /// Profile-aware scoring path — runs the GPU-extracted feature
-    /// vector through the CPU `zensim::score_features_with_profile`
-    /// dispatch (per-sample-α head, tanh-pin, PCHIP spline, etc.).
+    /// vector through the CPU
+    /// [`zensim::score_features_with_profile_and_codec`] dispatch
+    /// (per-sample-α head, tanh-pin, PCHIP spline, per-codec affine).
+    ///
+    /// Returns `f64::NAN` when no profile is configured or when the
+    /// CPU scoring helper errors (e.g. the feature vector's shape
+    /// doesn't match the profile's expected input width).
     fn score_from_profile_vec(
         &self,
         features: &[f64],
@@ -673,8 +678,8 @@ impl ZensimOpaque {
         codec_hint: Option<&str>,
     ) -> Score {
         let value = match self.params.profile {
-            Some(_profile) => score_features_with_profile_and_codec_compat(
-                _profile, features, width, height, codec_hint,
+            Some(profile) => zensim::score_features_with_profile_and_codec(
+                profile, features, width, height, codec_hint,
             )
             .unwrap_or(f64::NAN),
             None => f64::NAN,
@@ -802,42 +807,6 @@ impl ZensimOpaque {
             diffmap_out,
         )
     }
-}
-
-/// Compatibility shim for `zensim::score_features_with_profile_and_codec`
-/// which is missing from the path-pinned `zensim` crate version that
-/// the workspace currently uses (zenmetrics master `f4cf509b` was
-/// committed against a zensim revision that included it; the current
-/// path-pin doesn't). We emit a `Zensim::compute` against constructed
-/// images would require the pixels — but here we only have features
-/// already, so we fall back to the legacy `score_from_features` math.
-///
-/// Phase 1 of the zensim-fork RFC arc explicitly says this scoring
-/// path is NOT what the buttloop uses (the buttloop calls
-/// `score_with_warm_ref_diffmap` etc. directly, which produces a
-/// canonical-CPU score). This shim only keeps `ZensimOpaque::compute_*`
-/// (the opaque-API legacy scoring entry-points) building.
-///
-/// **TODO**: when the zensim crate version is bumped to one with the
-/// real `score_features_with_profile_and_codec` re-exported, delete
-/// this shim and route through the real function.
-fn score_features_with_profile_and_codec_compat(
-    _profile: zensim::ZensimProfile,
-    features: &[f64],
-    _width: u32,
-    _height: u32,
-    _codec_hint: Option<&str>,
-) -> Result<f64> {
-    // Fall back to the legacy 228-element linear formula (constant
-    // coefficients copied from zensim's CPU `score_from_features`).
-    // Only sub-228-length feature vectors fall through to NaN.
-    if features.len() < TOTAL_FEATURES {
-        return Ok(f64::NAN);
-    }
-    Ok(crate::score_from_features(
-        &features[..TOTAL_FEATURES],
-        &WEIGHTS_PREVIEW_V0_2,
-    ))
 }
 
 #[cfg(feature = "pixels")]
