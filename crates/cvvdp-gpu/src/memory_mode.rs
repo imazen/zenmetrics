@@ -106,10 +106,16 @@ pub fn vram_cap_bytes() -> usize {
 /// dist-pyramid working set, plus halo).
 pub const STRIP_H_BODY_DEFAULT: u32 = 512;
 
-/// Strip body height alignment factor. Multiples of `2^(MAX_LEVELS - 1)`
-/// — body and halo must both be divisible by this so the strip body
-/// region maps cleanly through every Weber pyramid level (ceil-div
-/// halving truncates exact body boundaries when they're not aligned).
+/// Strip body height alignment factor (legacy). Multiples of
+/// `2^(MAX_LEVELS - 1)` would let `h_body` halve cleanly through
+/// every Weber pyramid level in the deepest possible image; in
+/// practice the strip walker only needs `h_body` to be a positive
+/// power of two (which is also the alignment the underlying
+/// kernels assume). The constructors validate `h_body` against the
+/// power-of-two rule directly (see
+/// [`crate::pipeline::Cvvdp::new_strip_pair`]); this constant is
+/// retained for the [`STRIP_H_BODY_DEFAULT`] derivation and for any
+/// downstream callers that want a safe-for-MAX_LEVELS alignment.
 pub const STRIP_ALIGN: u32 = 1 << (crate::MAX_LEVELS as u32 - 1);
 
 /// How the GPU pipeline should partition its working set.
@@ -137,7 +143,8 @@ pub enum MemoryMode {
     /// rows. `None` lets the [`Self::Auto`] policy pick a default
     /// (= [`STRIP_H_BODY_DEFAULT`]).
     ///
-    /// `h_body` must be a positive multiple of [`STRIP_ALIGN`].
+    /// `h_body` must be a positive power of two so the per-level
+    /// halving in the strip walker halves cleanly.
     Strip {
         /// Dist-side strip body height in rows. `None` → crate-default.
         h_body: Option<u32>,
@@ -147,7 +154,8 @@ pub enum MemoryMode {
     /// strip working set. Best for one-shot CLI callers; worse than
     /// `Strip` for batch workloads (REF pyramid recomputed per dist).
     ///
-    /// `h_body` must be a positive multiple of [`STRIP_ALIGN`].
+    /// `h_body` must be a positive power of two so the per-level
+    /// halving in the strip walker halves cleanly.
     StripPair {
         /// Strip body height in rows for both ref and dist. `None` →
         /// crate-default ([`STRIP_H_BODY_DEFAULT`]).

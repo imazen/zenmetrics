@@ -106,8 +106,9 @@ use crate::kernels::pool::{
     pool_band_finalize, BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
-    band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
-    subtract_weber_3ch_kernel, upscale_h_kernel, upscale_v_kernel, DOWNSCALE_TILED_BLOCK_DIM,
+    band_frequencies, baseband_divide_3ch_kernel, downscale_strip_kernel,
+    downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel, upscale_h_kernel,
+    upscale_v_kernel, DOWNSCALE_TILED_BLOCK_DIM,
 };
 use crate::params::CvvdpParams;
 use crate::{Error, Result, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM};
@@ -625,6 +626,26 @@ fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
     band_count.min(MAX_LEVELS as u32)
 }
 
+/// Validation predicate for the `h_body` strip-walker parameter.
+///
+/// Accepts any positive power of two. Powers of two halve cleanly
+/// through every Weber pyramid level (`h_body >> k` stays an
+/// integer ≥ 1 for `k < log2(h_body)`, with the `.max(1)` clamp in
+/// the pool/walker handling deeper levels), so this is exactly the
+/// alignment the strip walker actually needs. The legacy
+/// [`crate::memory_mode::STRIP_ALIGN`] constant (= 256) baked in a
+/// worst-case alignment for `MAX_LEVELS = 9` images; that's too
+/// strict for small inputs (e.g. 128² has only 6 levels, so
+/// `h_body = 32` aligns cleanly), and rejecting those left the
+/// Mode B walker un-testable at small sizes.
+///
+/// Rejects: zero, non-power-of-two values (e.g. 100, 200, 300).
+/// Accepts: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, …
+#[inline]
+fn is_valid_strip_h_body(h_body: u32) -> bool {
+    h_body > 0 && h_body.is_power_of_two()
+}
+
 /// Static-analysis predictor for the GPU memory `Cvvdp::new` will
 /// allocate for an image of `(width, height)` under the standard 4K
 /// viewing geometry. Sums every persistent buffer enumerated in
@@ -856,8 +877,7 @@ pub fn estimate_gpu_memory_bytes_capped(
 /// fine-grained capacity planning.
 #[must_use]
 pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> Option<usize> {
-    use crate::memory_mode::STRIP_ALIGN;
-    if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+    if !is_valid_strip_h_body(h_body) {
         return None;
     }
     let full_bytes = estimate_gpu_memory_bytes(width, height)?;
@@ -926,8 +946,7 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
     height: u32,
     h_body: u32,
 ) -> Option<usize> {
-    use crate::memory_mode::STRIP_ALIGN;
-    if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+    if !is_valid_strip_h_body(h_body) {
         return None;
     }
     if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
@@ -1600,8 +1619,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// detect this at construction time via [`Self::is_strip_mode`]
     /// and fall back to Full mode at the application layer.
     ///
-    /// `h_body` must be a positive multiple of
-    /// [`crate::memory_mode::STRIP_ALIGN`] (= 256). See
+    /// `h_body` must be a positive power of two so the per-level
+    /// halving in the strip walker halves cleanly. See
     /// [`crate::memory_mode::STRIP_H_BODY_DEFAULT`] for the recommended
     /// default.
     ///
@@ -1609,7 +1628,7 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// Returns [`Error::InvalidImageSize`] if either dimension is
     /// smaller than [`crate::PYRAMID_MIN_DIM`] × 2, or
-    /// [`Error::ModeUnsupported`] if `h_body` is zero or not aligned.
+    /// [`Error::ModeUnsupported`] if `h_body` is zero or not a power of two.
     pub fn new_strip(
         client: ComputeClient<R>,
         width: u32,
@@ -1638,8 +1657,7 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
-        use crate::memory_mode::STRIP_ALIGN;
-        if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+        if !is_valid_strip_h_body(h_body) {
             return Err(Error::ModeUnsupported("Strip { h_body=invalid }"));
         }
         let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
@@ -1660,8 +1678,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// images. For batch workloads with many DISTs per REF, prefer
     /// [`Self::new_strip`] (Mode E) so the REF pyramid is built once.
     ///
-    /// `h_body` must be a positive multiple of
-    /// [`crate::memory_mode::STRIP_ALIGN`] (= 256). Uses the standard
+    /// `h_body` must be a positive power of two so the per-level
+    /// halving in the strip walker halves cleanly. Uses the standard
     /// 4K viewing geometry; for a custom geometry use
     /// [`Self::new_strip_pair_with_geometry`].
     ///
@@ -1695,8 +1713,7 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
-        use crate::memory_mode::STRIP_ALIGN;
-        if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+        if !is_valid_strip_h_body(h_body) {
             return Err(Error::ModeUnsupported("StripPair { h_body=invalid }"));
         }
         let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
@@ -1960,49 +1977,95 @@ impl<R: Runtime> Cvvdp<R> {
     /// of [`Self::_dispatch_dkl_planes_gpu`] so [`Self::compute_handles`]
     /// (Phase 4 upload-once path) can reuse the dispatch step without
     /// re-uploading bytes.
+    ///
+    /// In Mode B (StripPair), the dispatch is **partitioned into
+    /// `ceil(height / h_body)` row strips** using `Handle::offset_start`
+    /// to slice both `src_ref` and the level-0 output planes per strip.
+    /// `srgb_to_dkl_kernel` is pointwise (`out[idx] = f(src[idx])`), so
+    /// dispatching it over disjoint row ranges produces bit-identical
+    /// output to a single full-image launch. The strip-walked dispatch
+    /// increments [`Self::strip_dispatch_counter`] by one per outer
+    /// strip iteration, proving the Mode B walker partitioned the work
+    /// rather than bypassing to Full. Cross-strip data dependencies in
+    /// the downstream Gauss / Weber / Masking stages are handled at
+    /// those stages' dispatchers — DKL itself has no cross-pixel
+    /// reads so per-strip dispatch is always safe.
     fn _launch_srgb_to_dkl_from_src_ref(&self) {
-        let n0 = (self.width as usize) * (self.height as usize);
-        let a_handle = self.gauss_ref[0].planes[0].clone();
-        let rg_handle = self.gauss_ref[0].planes[1].clone();
-        let vy_handle = self.gauss_ref[0].planes[2].clone();
-
-        let cube_dim = CubeDim::new_1d(64);
-        let cube_count = CubeCount::Static((n0 as u32).div_ceil(64), 1, 1);
-
         let display = self.params.display;
         let (eotf_tag, gamma_exp) =
             crate::kernels::color::eotf_tag_and_gamma(display.eotf);
         let hlg_gamma =
             crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
         let m = display.primaries.linear_rgb_to_dkl();
-        unsafe {
-            srgb_to_dkl_kernel::launch::<R>(
-                &self.client,
-                cube_count,
-                cube_dim,
-                ArrayArg::from_raw_parts(self.src_ref.clone(), n0),
-                ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
-                ArrayArg::from_raw_parts(a_handle, n0),
-                ArrayArg::from_raw_parts(rg_handle, n0),
-                ArrayArg::from_raw_parts(vy_handle, n0),
-                self.width,
-                self.height,
-                display.y_peak,
-                display.y_black,
-                display.y_refl,
-                eotf_tag,
-                gamma_exp,
-                hlg_gamma,
-                m[0][0],
-                m[0][1],
-                m[0][2],
-                m[1][0],
-                m[1][1],
-                m[1][2],
-                m[2][0],
-                m[2][1],
-                m[2][2],
-            );
+        let cube_dim = CubeDim::new_1d(64);
+
+        // Per-strip iteration: build (body_offset_y, body_h) slabs and
+        // dispatch the same pointwise kernel against handles sliced
+        // through `Handle::offset_start`. For Full mode the loop has
+        // a single iteration covering the whole image (body_offset_y=0,
+        // body_h=height).
+        let strip_h_body = match self.strip_config {
+            Some(StripConfig { mode: StripMode::Pair, h_body }) => h_body.min(self.height),
+            _ => self.height,
+        };
+        let n_strips = self.height.div_ceil(strip_h_body);
+        let w = self.width;
+
+        for s in 0..n_strips {
+            let body_offset_y = s * strip_h_body;
+            let body_h = (self.height - body_offset_y).min(strip_h_body);
+            let n_strip = (w as usize) * (body_h as usize);
+            let byte_off: u64 = u64::from(body_offset_y) * u64::from(w) * 4;
+            // For src_ref the packed-u32 layout is 4 bytes/pixel, same
+            // as the f32 output planes — both indexed by row × width.
+            let src_strip = self.src_ref.clone().offset_start(byte_off);
+            let a_strip = self.gauss_ref[0].planes[0].clone().offset_start(byte_off);
+            let rg_strip = self.gauss_ref[0].planes[1].clone().offset_start(byte_off);
+            let vy_strip = self.gauss_ref[0].planes[2].clone().offset_start(byte_off);
+
+            let cube_count = CubeCount::Static((n_strip as u32).div_ceil(64), 1, 1);
+            unsafe {
+                srgb_to_dkl_kernel::launch::<R>(
+                    &self.client,
+                    cube_count,
+                    cube_dim,
+                    ArrayArg::from_raw_parts(src_strip, n_strip),
+                    ArrayArg::from_raw_parts(self.srgb_lut.clone(), SRGB8_TO_LINEAR_LUT.len()),
+                    ArrayArg::from_raw_parts(a_strip, n_strip),
+                    ArrayArg::from_raw_parts(rg_strip, n_strip),
+                    ArrayArg::from_raw_parts(vy_strip, n_strip),
+                    w,
+                    body_h,
+                    display.y_peak,
+                    display.y_black,
+                    display.y_refl,
+                    eotf_tag,
+                    gamma_exp,
+                    hlg_gamma,
+                    m[0][0],
+                    m[0][1],
+                    m[0][2],
+                    m[1][0],
+                    m[1][1],
+                    m[1][2],
+                    m[2][0],
+                    m[2][1],
+                    m[2][2],
+                );
+            }
+
+            // Mode B: count this DKL strip dispatch toward the walker's
+            // iteration counter so the parity test can observe the
+            // strip-by-strip partitioning. Full mode never enters this
+            // branch (n_strips = 1 with strip_h_body = self.height,
+            // but strip_config is None so we still skip the increment).
+            if matches!(
+                self.strip_config,
+                Some(StripConfig { mode: StripMode::Pair, .. }),
+            ) {
+                self.strip_dispatch_counter
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            }
         }
     }
 
@@ -2299,11 +2362,48 @@ impl<R: Runtime> Cvvdp<R> {
     /// `compute_handles` path can populate level 0 from a caller-
     /// supplied packed-u32 handle and then run the same downscale
     /// chain bit-for-bit.
+    ///
+    /// Full / Mode E path: LDS-tiled `downscale_tiled_kernel`. T1.B
+    /// (2026-05-16) — 16×16 workgroup; 36×36 input tile in shared
+    /// memory; 25-tap stencil from LDS. Functionally equivalent to
+    /// the scalar `downscale_kernel`, including the tick-206
+    /// bug-compat delta.
+    ///
+    /// Mode B (StripPair) path: per-level strip walker over
+    /// `downscale_strip_kernel`. For each level `k = 1..n_levels`:
+    ///   1. Partition the level's `bh` rows into `ceil(bh / strip_h_at_k)`
+    ///      strips where `strip_h_at_k = max(h_body >> k, 1)`.
+    ///   2. Dispatch the strip-aware kernel once per (strip, channel),
+    ///      reading from the FULL level-`k-1` buffer (already fully
+    ///      populated by the prior level's strip walk) and writing
+    ///      strip-body rows of the level-`k` buffer via
+    ///      `Handle::offset_start`.
+    ///   3. Output is bit-identical to the tiled kernel: the strip
+    ///      kernel is the scalar reference path, and the tiled kernel
+    ///      is pinned bit-exact against it by
+    ///      `strip_kernel_parity_pyramid` tests.
+    ///
+    /// Cross-strip data dependency: each strip at level `k` reads
+    /// level `k-1` rows in a small neighbourhood around `2·body_offset_y_k`,
+    /// which were ALL written by level `k-1`'s strip walk before this
+    /// level started. Level-major iteration order keeps the walker
+    /// correct. The `strip_dispatch_counter` increments once per
+    /// (strip, channel) dispatch so a test can observe the walker
+    /// partitioned the work.
     fn _reduce_gauss_pyramid_from_level0(&self) {
-        // T1.B (2026-05-16): LDS-tiled downscale. 16×16 workgroup;
-        // 36×36 input tile in shared memory; 25-tap stencil from LDS.
-        // Functionally equivalent to the scalar `downscale_kernel`,
-        // including the tick-206 bug-compat delta.
+        let mode_b = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
+        if mode_b {
+            self._reduce_gauss_pyramid_strip_walker();
+        } else {
+            self._reduce_gauss_pyramid_tiled();
+        }
+    }
+
+    /// Tiled (LDS) downscale dispatch — the Full / Mode E path.
+    fn _reduce_gauss_pyramid_tiled(&self) {
         let cube_dim = CubeDim::new_2d(DOWNSCALE_TILED_BLOCK_DIM, DOWNSCALE_TILED_BLOCK_DIM);
         for k in 1..(self.n_levels as usize) {
             let prev_w = self.gauss_ref[k - 1].w;
@@ -2333,6 +2433,67 @@ impl<R: Runtime> Cvvdp<R> {
                         curr_w,
                         curr_h,
                     );
+                }
+            }
+        }
+    }
+
+    /// Per-level strip walker for Mode B. Uses `downscale_strip_kernel`
+    /// (scalar reference path) with full-image src and `body_offset_y`-
+    /// offset dst handles so each strip dispatch writes exactly its
+    /// body rows of the per-level output buffer.
+    fn _reduce_gauss_pyramid_strip_walker(&self) {
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return,
+        };
+
+        for k in 1..(self.n_levels as usize) {
+            let prev_w = self.gauss_ref[k - 1].w;
+            let prev_h = self.gauss_ref[k - 1].h;
+            let curr_w = self.gauss_ref[k].w;
+            let curr_h = self.gauss_ref[k].h;
+            let n_prev = (prev_w * prev_h) as usize;
+            // Strip body height at this level: scale-0 body halved per
+            // level, clamped to 1. At deep levels the strip count
+            // collapses to 1 (single dispatch covering all rows).
+            let strip_h_at_k = (h_body_at_0 >> k).max(1);
+            let n_strips = if curr_h <= strip_h_at_k {
+                1
+            } else {
+                curr_h.div_ceil(strip_h_at_k)
+            };
+
+            for s in 0..n_strips {
+                let body_offset_y = s * strip_h_at_k;
+                let body_h = (curr_h - body_offset_y).min(strip_h_at_k);
+                let n_strip = (curr_w as usize) * (body_h as usize);
+                let byte_off: u64 = u64::from(body_offset_y) * u64::from(curr_w) * 4;
+                let cube_count = CubeCount::Static((n_strip as u32).div_ceil(64), 1, 1);
+
+                for c in 0..N_CHANNELS {
+                    let src = self.gauss_ref[k - 1].planes[c].clone();
+                    let dst_strip = self.gauss_ref[k].planes[c].clone().offset_start(byte_off);
+                    unsafe {
+                        downscale_strip_kernel::launch::<R>(
+                            &self.client,
+                            cube_count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(src, n_prev),
+                            ArrayArg::from_raw_parts(dst_strip, n_strip),
+                            prev_w,
+                            prev_h,
+                            curr_w,
+                            body_h,
+                            body_offset_y,
+                            0,         // src_strip_offset: src is FULL prev-level buffer
+                            prev_h,    // logical_src_h
+                            curr_h,    // logical_dst_h
+                        );
+                    }
+                    self.strip_dispatch_counter
+                        .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
                 }
             }
         }
