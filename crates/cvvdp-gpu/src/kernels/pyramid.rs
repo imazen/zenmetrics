@@ -1208,6 +1208,124 @@ pub fn upscale_v_kernel(
         + (k4 * m4) * src[y4 as usize * sw + x];
 }
 
+/// Strip-aware variant of [`upscale_v_kernel`]. Computes the same
+/// vertical expand math but writes only the body slice
+/// `[body_offset_y, body_offset_y + body_h)` of the logical
+/// `src_w × logical_dst_h` output, into a strip buffer sized
+/// `src_w × body_h`. The strip height (`body_h`) is implicit in the
+/// dispatch grid: each thread covers one body output pixel
+/// (`total_threads = src_w * body_h`).
+///
+/// Edge reflection runs against `logical_src_h` (the full image's
+/// source height) and `logical_dst_h` (the full output height), so a
+/// strip that touches y=0 or y=logical_dst_h-1 still reflects the
+/// same way as the full-image kernel would.
+///
+/// Setting `body_offset_y = 0` and `logical_dst_h = body_h` reduces
+/// this kernel to [`upscale_v_kernel`] for the same input.
+#[cube(launch)]
+#[allow(clippy::useless_conversion)]
+pub fn upscale_v_strip_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+    body_offset_y: u32,
+    body_h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (src_w * body_h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let sw = src_w as usize;
+    let local_y = idx / sw;
+    let x = idx - local_y * sw;
+
+    let k0 = f32::new(0.1);
+    let k1 = f32::new(0.5);
+    let k2 = f32::new(0.8);
+    let k3 = f32::new(0.5);
+    let k4 = f32::new(0.1);
+
+    let back_v = (logical_dst_h as i32) + 2 + ((logical_dst_h as i32) & 1);
+    let sh_i = logical_src_h as i32;
+    // Map the strip-local output row back to the full-image
+    // destination row; this is what the original V-kernel called `y`.
+    let zy_base = (local_y as i32) + (body_offset_y as i32);
+
+    let z0 = zy_base;
+    let z1 = zy_base + 1;
+    let z2 = zy_base + 2;
+    let z3 = zy_base + 3;
+    let z4 = zy_base + 4;
+
+    let v0 = z0 == 0 || z0 == back_v || (z0 >= 2 && (z0 & 1) == 0 && ((z0 - 2) >> 1) < sh_i);
+    let v1 = z1 == 0 || z1 == back_v || (z1 >= 2 && (z1 & 1) == 0 && ((z1 - 2) >> 1) < sh_i);
+    let v2 = z2 == 0 || z2 == back_v || (z2 >= 2 && (z2 & 1) == 0 && ((z2 - 2) >> 1) < sh_i);
+    let v3 = z3 == 0 || z3 == back_v || (z3 >= 2 && (z3 & 1) == 0 && ((z3 - 2) >> 1) < sh_i);
+    let v4 = z4 == 0 || z4 == back_v || (z4 >= 2 && (z4 & 1) == 0 && ((z4 - 2) >> 1) < sh_i);
+
+    let y0 = if z0 == 0 {
+        0u32.into()
+    } else if z0 == back_v {
+        logical_src_h - 1
+    } else if z0 >= 2 && (z0 & 1) == 0 {
+        ((z0 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let y1 = if z1 == 0 {
+        0u32.into()
+    } else if z1 == back_v {
+        logical_src_h - 1
+    } else if z1 >= 2 && (z1 & 1) == 0 {
+        ((z1 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let y2 = if z2 == 0 {
+        0u32.into()
+    } else if z2 == back_v {
+        logical_src_h - 1
+    } else if z2 >= 2 && (z2 & 1) == 0 {
+        ((z2 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let y3 = if z3 == 0 {
+        0u32.into()
+    } else if z3 == back_v {
+        logical_src_h - 1
+    } else if z3 >= 2 && (z3 & 1) == 0 {
+        ((z3 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+    let y4 = if z4 == 0 {
+        0u32.into()
+    } else if z4 == back_v {
+        logical_src_h - 1
+    } else if z4 >= 2 && (z4 & 1) == 0 {
+        ((z4 - 2) >> 1) as u32
+    } else {
+        0u32.into()
+    };
+
+    let m0 = if v0 { f32::new(1.0) } else { f32::new(0.0) };
+    let m1 = if v1 { f32::new(1.0) } else { f32::new(0.0) };
+    let m2 = if v2 { f32::new(1.0) } else { f32::new(0.0) };
+    let m3 = if v3 { f32::new(1.0) } else { f32::new(0.0) };
+    let m4 = if v4 { f32::new(1.0) } else { f32::new(0.0) };
+
+    dst[idx] = (k0 * m0) * src[y0 as usize * sw + x]
+        + (k1 * m1) * src[y1 as usize * sw + x]
+        + (k2 * m2) * src[y2 as usize * sw + x]
+        + (k3 * m3) * src[y3 as usize * sw + x]
+        + (k4 * m4) * src[y4 as usize * sw + x];
+}
+
 /// Horizontal pass of the cvvdp expand. Consumes the vertical
 /// kernel's output (`src_w × in_h`) and produces the full
 /// `dst_w × in_h` result. The other ×2 of the ×4 reconstruction
