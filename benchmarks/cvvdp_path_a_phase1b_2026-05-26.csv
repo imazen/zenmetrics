@@ -1,0 +1,5 @@
+size,mode,estimate_master_mib,estimate_head_mib,nvsmi_delta_mib,jod
+1024sq,full,198,178,385,9.4583
+1024sq,mode_b,198,57,385,9.4583
+4096sq,full,3178,2858,4225,9.4585
+4096sq,mode_b,3178,373,4225,9.4585

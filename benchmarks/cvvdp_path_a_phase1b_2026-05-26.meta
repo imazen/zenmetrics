@@ -1,0 +1,73 @@
+# cvvdp Path A Phase 1b measurement (2026-05-26)
+#
+# Run command:
+#   cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+#
+# Git commit: c73cc47e4d8e (Path A Phase 1b wire — Weber strip walker reads per-strip upscaled_c_strip)
+# Branch: master (workspace zenmetrics--cvvdp-path-a-phase1b)
+# Hostname: water-cooled AMD Ryzen 9 7950X / RTX-class CUDA
+# Driver: nvidia-smi runtime 13.2
+# h_body = 256 (subprocess-per-cell — pool reset between Full and Mode B)
+#
+# Methodology: subprocess-per-measurement (parent process samples
+# nvidia-smi memory.used during compute_dkl_jod child run; child
+# exits releasing the cubecl pool to the driver).
+#
+# Columns:
+#   estimate_master_mib — pre-Path-B-chunk-1 analytical estimate (Full reference)
+#   estimate_head_mib   — post-Phase-1b analytical estimate
+#                          (estimate_gpu_memory_bytes for Full,
+#                           estimate_gpu_memory_bytes_strip_pair for Mode B)
+#   nvsmi_delta_mib     — nvidia-smi memory.used delta during child run
+#   jod                 — JOD score returned by compute_dkl_jod
+#
+# Key findings:
+#
+#   1. JOD BIT-IDENTICAL between Full and Mode B at both 1024² and
+#      4096² (|diff| = 0.000000). The Phase 1b kernel + dispatch
+#      changes leave the metric output exactly unchanged.
+#
+#   2. nvsmi_delta_mib unchanged at MiB precision — the analytical
+#      ~12 MiB savings (per-strip upscaled_c_strip at 1024²,
+#      h_body=256) is below cubecl pool over-allocation granularity.
+#      The task brief noted this would happen ("even 5-10 MiB delta
+#      is acceptable for Phase 1b — the goal is to land the
+#      architecture"). Driver-level measurability arrives once
+#      multiple Phase 1b-class buffers shrink in tandem (vscratch_c,
+#      bands_dis, etc.) and the pool ceiling drops below the next
+#      cubecl page-rounding boundary.
+#
+#   3. estimate_head_mib for Mode B shows 57 MiB at 1024² and 373 MiB
+#      at 4096², compared to the Full estimator's 178 / 2858 MiB.
+#      That number is the ASPIRATIONAL Phase-A target — the
+#      estimator already models per-strip allocation for ALL the
+#      strip-aware buffers (bands_ref, bands_dis, gauss_ref, the
+#      full weber_scratch); Phase 1b shrinks only upscaled_c. The
+#      gap between current driver nvsmi (385 MiB) and the
+#      aspirational estimate (57 MiB) is the remaining Path-A work
+#      tracked in subsequent phases.
+#
+# Analytical per-strip savings (h_body = 256, 1024² Mode B):
+#
+#   level | fine_w | strip_h_at_k | bytes saved (3 channels)
+#       0 |  1024  |     256      |     9 437 184 B
+#       1 |   512  |     128      |     2 359 296 B
+#       2 |   256  |      64      |       589 824 B
+#       3 |   128  |      32      |       147 456 B
+#       4 |    64  |      16      |        36 864 B
+#       5 |    32  |       8      |         9 216 B
+#       ---- total ----                  12 579 840 B = 11.999 MiB
+#
+# All Phase-1b gates pass:
+#   - cargo check -p cvvdp-gpu --features cuda: clean
+#   - strip_kernel_parity_pyramid (5/5 incl. new src_strip_offset test)
+#   - strip_mode_b_parity (6/6 incl. mode_b_score_matches_full_64x64)
+#   - mode_b_walker_parity (7/7 incl. mode_b_walker_jod_matches_full_at_1024_h_body_256)
+#   - memory_mode umbrella (13/13)
+#
+# Pre-existing master failures unrelated to Phase 1b (also fail on
+# the parent commit a17713248d1b before this work):
+#   - cpu_backend::compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend
+#     (cubecl-cpu atomic<f32> non-determinism; master varies 7.74-7.88 JOD).
+#   - strip_mode_e_parity::mode_e_strip_h_body_explicit_override
+#     (ModeUnsupported("Strip { h_body=invalid }") — unrelated mode).
