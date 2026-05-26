@@ -888,6 +888,189 @@ pub fn downscale_kernel(
     dst[idx] = total_v;
 }
 
+/// Strip-aware sibling of [`downscale_kernel`] (Mode E Phase 3,
+/// task #79 follow-on). Functionally equivalent to [`downscale_kernel`]
+/// on the BODY rows of a strip; reflects against the **logical**
+/// image dimensions (not the strip buffer dims) and applies the
+/// pycvvdp bug-compat parity delta using `logical_src_w % 2` /
+/// `logical_src_h % 2` so the JOD remains bit-exact against the
+/// full-image path.
+///
+/// **Buffer convention.** The destination strip buffer is sized
+/// exactly to the body region (no dst halo); buffer-local dst row
+/// 0 corresponds to logical dst row `body_offset_y`. The source
+/// strip buffer includes halo rows; buffer-local src row 0
+/// corresponds to logical src row `src_strip_offset`. Caller is
+/// responsible for populating the source strip so every logical
+/// row needed by reflection over `[2·body_offset_y − 2,
+/// 2·(body_offset_y + dst_h − 1) + 2]` is present.
+///
+/// **Reflection.** All reflection happens in logical-src
+/// coordinates against `logical_src_h`; the kernel then translates
+/// the post-reflect logical row to buffer-local by subtracting
+/// `src_strip_offset`. X-axis reflection is unchanged (strips
+/// partition only Y; `src_w` IS `logical_src_w`).
+///
+/// **Parity delta.** The tick-206 bug-compat delta at the right
+/// column uses `src_w % 2` (= logical_src_w % 2) and
+/// `logical_src_h % 2`. The legacy kernel's `sh` parameter refers
+/// to the buffer height, which on a strip is NOT the logical
+/// image height. Using the logical dim here keeps the delta
+/// firing identically to the full-image path — without this, an
+/// odd-height logical image striped into even-height buffers
+/// would silently drop the parity correction.
+///
+/// **Legacy equivalence.** Calling this with `body_offset_y = 0`,
+/// `src_strip_offset = 0`, `logical_src_h = src_h`, and
+/// `logical_dst_h = dst_h` produces output bit-identical to
+/// [`downscale_kernel`] on the same input.
+#[cube(launch)]
+pub fn downscale_strip_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    body_offset_y: u32,
+    src_strip_offset: u32,
+    logical_src_h: u32,
+    logical_dst_h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (dst_w * dst_h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let dw = dst_w as usize;
+    let dy_local = idx / dw;
+    let dx = idx - dy_local * dw;
+
+    // Logical dst row this thread emits — used to compute the
+    // logical src center row. The buffer-local dst row index
+    // `dy_local` writes to `dst[idx]` directly.
+    let dy_logical = (dy_local as u32) + body_offset_y;
+
+    let cy = 2 * (dy_logical as i32);
+    let cx = 2 * (dx as i32);
+    let sw = src_w as usize;
+    let sh_buf = src_h as usize;
+    let lsh_i = logical_src_h as i32;
+    let sw_i = src_w as i32;
+    let src_off = src_strip_offset as i32;
+
+    let k0 = f32::new(0.05);
+    let k1 = f32::new(0.25);
+    let k2 = f32::new(0.40);
+    let k3 = f32::new(0.25);
+    let k4 = f32::new(0.05);
+
+    // Reflect against LOGICAL src dims (not buffer). One fold is
+    // enough for kernel-radius-2 accesses: `cy-2 = -2 → 1`, and
+    // `cy+2 = lsh+1 → lsh-2`. Translate back to buffer-local by
+    // subtracting `src_strip_offset`.
+    let r0_l = if cy - 2 < 0 { -(cy - 2) - 1 } else { cy - 2 };
+    let r0 = (r0_l - src_off) as usize;
+    let r1_l = if cy - 1 < 0 { -(cy - 1) - 1 } else { cy - 1 };
+    let r1 = (r1_l - src_off) as usize;
+    let r2_l = cy;
+    let r2 = (r2_l - src_off) as usize;
+    let r3_l = if cy + 1 >= lsh_i {
+        2 * lsh_i - (cy + 1) - 1
+    } else {
+        cy + 1
+    };
+    let r3 = (r3_l - src_off) as usize;
+    let r4_l = if cy + 2 >= lsh_i {
+        2 * lsh_i - (cy + 2) - 1
+    } else {
+        cy + 2
+    };
+    let r4 = (r4_l - src_off) as usize;
+
+    // X-axis reflection is unchanged — strips partition only Y, so
+    // `src_w` equals `logical_src_w` and column indexing is direct.
+    let sx0_i = if cx - 2 < 0 { -(cx - 2) - 1 } else { cx - 2 };
+    let sx0 = sx0_i as usize;
+    let sx1_i = if cx - 1 < 0 { -(cx - 1) - 1 } else { cx - 1 };
+    let sx1 = sx1_i as usize;
+    let sx2 = cx as usize;
+    let sx3_i = if cx + 1 >= sw_i {
+        2 * sw_i - (cx + 1) - 1
+    } else {
+        cx + 1
+    };
+    let sx3 = sx3_i as usize;
+    let sx4_i = if cx + 2 >= sw_i {
+        2 * sw_i - (cx + 2) - 1
+    } else {
+        cx + 2
+    };
+    let sx4 = sx4_i as usize;
+
+    let col0 = k0 * src[r0 * sw + sx0]
+        + k1 * src[r1 * sw + sx0]
+        + k2 * src[r2 * sw + sx0]
+        + k3 * src[r3 * sw + sx0]
+        + k4 * src[r4 * sw + sx0];
+    let col1 = k0 * src[r0 * sw + sx1]
+        + k1 * src[r1 * sw + sx1]
+        + k2 * src[r2 * sw + sx1]
+        + k3 * src[r3 * sw + sx1]
+        + k4 * src[r4 * sw + sx1];
+    let col2 = k0 * src[r0 * sw + sx2]
+        + k1 * src[r1 * sw + sx2]
+        + k2 * src[r2 * sw + sx2]
+        + k3 * src[r3 * sw + sx2]
+        + k4 * src[r4 * sw + sx2];
+    let col3 = k0 * src[r0 * sw + sx3]
+        + k1 * src[r1 * sw + sx3]
+        + k2 * src[r2 * sw + sx3]
+        + k3 * src[r3 * sw + sx3]
+        + k4 * src[r4 * sw + sx3];
+    let col4 = k0 * src[r0 * sw + sx4]
+        + k1 * src[r1 * sw + sx4]
+        + k2 * src[r2 * sw + sx4]
+        + k3 * src[r3 * sw + sx4]
+        + k4 * src[r4 * sw + sx4];
+
+    let mut total_v = k0 * col0 + k1 * col1 + k2 * col2 + k3 * col3 + k4 * col4;
+
+    // Tick-206 bug-compat delta — uses LOGICAL dims. The legacy
+    // kernel reads `sh % 2`; on a strip with smaller buffer height
+    // that parity is wrong. `logical_src_h % 2` keeps the delta
+    // firing identically to the full-image path.
+    if dx == dw - 1 && sw >= 2 {
+        let vs_last = k0 * src[r0 * sw + sw - 1]
+            + k1 * src[r1 * sw + sw - 1]
+            + k2 * src[r2 * sw + sw - 1]
+            + k3 * src[r3 * sw + sw - 1]
+            + k4 * src[r4 * sw + sw - 1];
+        let vs_last2 = k0 * src[r0 * sw + sw - 2]
+            + k1 * src[r1 * sw + sw - 2]
+            + k2 * src[r2 * sw + sw - 2]
+            + k3 * src[r3 * sw + sw - 2]
+            + k4 * src[r4 * sw + sw - 2];
+
+        let sw_odd = sw % 2 == 1;
+        let lsh_odd = (logical_src_h as usize) % 2 == 1;
+        if sw_odd && !lsh_odd {
+            total_v += f32::new(-0.05) * vs_last2 + f32::new(-0.20) * vs_last;
+        } else if !sw_odd && lsh_odd {
+            total_v += f32::new(0.05) * vs_last2 + f32::new(0.20) * vs_last;
+        }
+    }
+
+    // Silence unused warnings — `sh_buf` and `logical_dst_h` are
+    // part of the strip-aware API contract for callers (and
+    // forward symmetry with future strip kernels that may need
+    // them) but the kernel body does not read them.
+    let _ = sh_buf;
+    let _ = logical_dst_h;
+
+    dst[idx] = total_v;
+}
+
 /// Workgroup size (output pixels per side) for the LDS-tiled downscale.
 pub const DOWNSCALE_TILED_BLOCK_DIM: u32 = 16;
 const DOWNSCALE_TILED_BLOCK_DIM_USIZE: usize = 16;
