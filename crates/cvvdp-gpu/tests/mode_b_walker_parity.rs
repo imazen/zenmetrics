@@ -177,3 +177,74 @@ fn mode_b_k_split_matches_design_table() {
     // h_body=128 gives K_SPLIT=4 (128>>4 = 8 < 12 threshold).
     assert_eq!(mode_b_k_split(128, 9), 4);
 }
+
+/// At 128×128 with h_body=32, the Mode B walker produces JOD within
+/// 1e-4 abs of Full mode AND the strip dispatch counter increments
+/// to ≥ 4 — proving the walker actually partitioned the work and
+/// did NOT bypass to the full-image one-shot dispatch.
+///
+/// This is the **tiny-end-to-end** test for Mode B: the smallest
+/// viable image size where the walker iterates at least 4 strips at
+/// L0 (`128 / 32 = 4`). Deeper levels (L1..L5) add more strip
+/// iterations on top, so the actual counter value lands well above 4.
+///
+/// The test combines BOTH gates of the Mode B walker contract:
+/// 1. `compute_dkl_jod(ref, dist)` bit-exact (within atomic pool
+///    ordering noise) against the Full-mode reference scorer.
+/// 2. Strip dispatch counter ≥ 4, distinguishing a real strip
+///    walker from a degenerate single-shot bypass.
+///
+/// Use deterministic noise inputs (the canonical
+/// `synth_pair_with_offset_dist`) so the JOD value is reproducible
+/// across runs and the parity gate stays meaningful.
+#[test]
+fn mode_b_walker_jod_matches_full_at_128() {
+    let client = Backend::client(&Default::default());
+    let mut full = Cvvdp::<Backend>::new(client.clone(), 128, 128, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new full");
+    let mut pair = Cvvdp::<Backend>::new_strip_pair(
+        client,
+        128,
+        128,
+        32,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("Cvvdp::new_strip_pair");
+
+    pair.reset_strip_dispatch_counter();
+    let (r, d) = synth_pair_with_offset_dist(128, 128);
+
+    // Use compute_dkl_jod directly (not score) so we test the JOD
+    // value the strip walker computes inside its dispatch chain,
+    // not the score()-wrapper indirection. Both gates apply to this
+    // path equally.
+    let ppd = cvvdp_gpu::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let jod_full = full
+        .compute_dkl_jod(&r, &d, ppd)
+        .expect("Full compute_dkl_jod");
+    let jod_pair = pair
+        .compute_dkl_jod(&r, &d, ppd)
+        .expect("Mode B compute_dkl_jod");
+    let diff = (jod_full - jod_pair).abs();
+    let n_dispatches = pair.strip_dispatch_counter();
+    eprintln!(
+        "128² (h_body=32): JOD Full={jod_full:.6}, Mode B={jod_pair:.6}, \
+         |diff|={diff:.3e}, strip_dispatch_counter={n_dispatches}",
+    );
+
+    // Gate 1: JOD parity within 1e-4 abs.
+    assert!(
+        diff < PARITY_TOL_JOD,
+        "Mode B JOD={jod_pair} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
+    );
+
+    // Gate 2: walker iterated ≥ 4 strips. At 128×128 with h_body=32,
+    // L0 alone produces 128/32 = 4 strips, and deeper levels add
+    // more iterations on top, so the counter lands well above 4.
+    // The lower bound = 4 captures the "walker partitioned vs.
+    // bypassed" contract.
+    assert!(
+        n_dispatches >= 4,
+        "Expected ≥ 4 strip dispatches (4 strips at L0); got {n_dispatches}",
+    );
+}
