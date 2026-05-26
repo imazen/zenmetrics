@@ -158,7 +158,33 @@ struct DBandsScratch {
     /// `lp_norm_mean` after read-back, or by the GPU pool /
     /// diffmap dispatch). Stays GPU-resident for every level so
     /// the post-band-loop pool stage can read all bands' D planes.
-    d: [cubecl::server::Handle; N_CHANNELS],
+    ///
+    /// **Path A Phase 1d (2026-05-26):** `None` for non-baseband
+    /// levels in `StripMode::Pair` (Mode B), where
+    /// [`Self::d_strip`] owns one strip's worth of d per
+    /// (level, strip) and the pool is dispatched **inline** by
+    /// [`Cvvdp::_run_band_masking_strip_walker`] before the next
+    /// strip overwrites the buffer. The baseband level still
+    /// allocates `d` in Mode B because the baseband bypasses the
+    /// strip walker (it uses the full-band `diff_abs_3ch_kernel`),
+    /// and at the deepest level the band is small enough that
+    /// per-strip shrinking has no value.
+    ///
+    /// Full and CachedRef modes (Mode E) keep `Some(...)` at every
+    /// level — Mode E's post-band-loop pool reads strip-by-strip
+    /// from the full `d` plane.
+    d: Option<[cubecl::server::Handle; N_CHANNELS]>,
+    /// Per-strip d buffer (Mode B only, non-baseband levels). Sized
+    /// `(bw_k × strip_h_at_k × f32)` per channel — `strip_h_at_k =
+    /// (h_body >> k).max(1)`. The masking strip walker writes one
+    /// strip's d into this buffer at offset 0, then immediately
+    /// dispatches the pool kernel to accumulate the strip's
+    /// contribution into `partials_h` before the next strip
+    /// overwrites this buffer.
+    ///
+    /// `None` outside `StripMode::Pair`, and `None` for the
+    /// baseband level even in Mode B (see [`Self::d`]).
+    d_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
 }
 
 /// Per-band transient scratch for the CSF + masking chain, allocated
@@ -429,27 +455,78 @@ fn build_d_bands_scratch<R: Runtime>(
     n_levels: usize,
     width: u32,
     height: u32,
+    strip_pair_h_body: Option<u32>,
 ) -> Vec<DBandsScratch> {
     // After the lazy-transient refactor, this only allocates the
     // persistent `d` output planes per level. The 5 transient
     // buffer kinds (`t_p_ref`, `t_p_dis`, `m_raw`, `m_mid`,
     // `m_blur`) are now allocated inside the band loop via
     // [`DBandsTransient::new`] and dropped at the end of each band.
+    //
+    // **Path A Phase 1d (2026-05-26):** under `StripMode::Pair`
+    // (Mode B) the non-baseband levels skip the full-image `d`
+    // allocation and instead allocate `d_strip` sized per-strip
+    // (`bw_k × strip_h_at_k`). The masking strip walker writes one
+    // strip's d into the strip buffer at offset 0 and dispatches the
+    // pool kernel inline before the next strip overwrites it. The
+    // baseband level retains full-image `d` because its diff_abs
+    // dispatch bypasses the strip walker (and the band is small).
     let mut out = Vec::with_capacity(n_levels);
     let mut w = width;
     let mut h = height;
-    for _ in 0..n_levels {
+    let mut strip_h_at_k = strip_pair_h_body;
+    for k in 0..n_levels {
         let n = (w as usize) * (h as usize);
-        out.push(DBandsScratch {
-            d: [
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-                alloc_zeros_f32(client, n),
-            ],
-        });
+        let is_baseband = k == n_levels - 1;
+        // The masking strip walker writes `bw × min(strip_h_at_k, bh)`
+        // pixels per dispatch when `use_blur` (large bands). For small
+        // bands (`bw ≤ PU_PADSIZE || bh ≤ PU_PADSIZE`) the band loop
+        // takes the no-blur path which writes `n_px = bw × bh` in a
+        // single dispatch — Mode B's strip buffer must cover that
+        // worst case at deep levels. Most savings come from shallow
+        // levels where `bw × strip_h_at_k ≪ n_px`.
+        let use_blur = w as usize > PU_PADSIZE && h as usize > PU_PADSIZE;
+        // Mode B non-baseband: per-strip d_strip, no full d.
+        // Mode B baseband: full d (small), no d_strip.
+        // Other modes: full d at every level, no d_strip.
+        let (d, d_strip) = match (strip_h_at_k, is_baseband) {
+            (Some(h_body), false) => {
+                let strip_h = (h_body as usize).min(h as usize);
+                let n_strip_buf = if use_blur {
+                    // Strip walker dispatches: each write is bw × body_h
+                    // where body_h ≤ strip_h_at_k. Cap at full band when
+                    // h_body would exceed the band height.
+                    (w as usize) * strip_h
+                } else {
+                    // No-blur fallback kernel writes the full band at
+                    // n_px. d_strip must cover that — at PU_PADSIZE-or-
+                    // smaller bands the savings are negligible anyway.
+                    n
+                };
+                let d_strip = [
+                    alloc_zeros_f32(client, n_strip_buf),
+                    alloc_zeros_f32(client, n_strip_buf),
+                    alloc_zeros_f32(client, n_strip_buf),
+                ];
+                (None, Some(d_strip))
+            }
+            _ => {
+                let d = [
+                    alloc_zeros_f32(client, n),
+                    alloc_zeros_f32(client, n),
+                    alloc_zeros_f32(client, n),
+                ];
+                (Some(d), None)
+            }
+        };
+        out.push(DBandsScratch { d, d_strip });
         // Ceil-div halving — see WeberScratch comment.
         w = w.div_ceil(2);
         h = h.div_ceil(2);
+        // Halve the strip body for the next (deeper) level. Clamp to
+        // 1 so deep levels still allocate a usable strip buffer (the
+        // walker's `strip_h_at_k` uses the same `.max(1)` clamp).
+        strip_h_at_k = strip_h_at_k.map(|hb| (hb >> 1).max(1));
     }
     out
 }
@@ -1673,7 +1750,13 @@ impl<R: Runtime> Cvvdp<R> {
         let gauss_ref = build_pyramid(&client);
         let bands_ref = build_pyramid(&client);
         let bands_dis = build_pyramid(&client);
-        let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
+        let d_scratch = build_d_bands_scratch(
+            &client,
+            n_levels as usize,
+            width,
+            height,
+            strip_pair_h_body,
+        );
         let weber_scratch =
             build_weber_scratch(&client, n_levels as usize, width, height, strip_pair_h_body);
 
@@ -4031,6 +4114,33 @@ impl<R: Runtime> Cvvdp<R> {
         // per Cvvdp config, so compute once outside the band loop.
         let pu_scale = 10.0_f32.powf(MASK_C);
 
+        // Path A Phase 1d (2026-05-26): in Mode B (StripMode::Pair),
+        // non-baseband bands dispatch the pool kernel inline (per
+        // strip in the strip walker, or once per band on the no-blur
+        // fallback). The atomic-adds accumulate into `partials_h`,
+        // which must be zero before any band writes. Zero it once
+        // here; the post-band-loop pool finalize then only needs to
+        // dispatch over the baseband (which still uses full `d`).
+        // Mode E and Mode Full continue to zero in
+        // `_pool_and_finalize_jod*` per their own dispatches.
+        let mode_b_outer = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
+        if mode_b_outer {
+            let n_partials = n_levels * N_CHANNELS;
+            unsafe {
+                fill_f32_kernel::launch::<R>(
+                    &self.client,
+                    CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                    0.0,
+                    n_partials as u32,
+                );
+            }
+        }
+
         // Mode E (StripMode::CachedRef) reads REF-side band data + REF
         // log_l_bkg straight from `RefFullState` — the dedicated buffer
         // populated once by `warm_reference`. Modes Full and B both
@@ -4202,15 +4312,31 @@ impl<R: Runtime> Cvvdp<R> {
             }
 
             let t_mask = std::time::Instant::now();
+            // Path A Phase 1d (2026-05-26): pick the d destination
+            // for this level. The baseband always uses `d` (full-band,
+            // small at deep levels). Non-baseband Mode B uses
+            // `d_strip` (per-strip-sized); other modes use the full
+            // `d` plane. Routing the handle selection through this
+            // closure keeps the rest of the band loop body uniform.
+            let mode_b = matches!(
+                self.strip_config,
+                Some(StripConfig { mode: StripMode::Pair, .. }),
+            );
             if is_baseband {
                 // Baseband: cvvdp's `|T_p_dis - T_p_ref|` bypass. Tick
                 // 94 — GPU fused 3-channel diff into scratch.d so the
                 // baseband output lives in d_scratch_d.d[k][c] like every
-                // other level (prep for GPU pool in tick 95).
+                // other level (prep for GPU pool in tick 95). Mode B
+                // keeps the full-image baseband alloc because the
+                // baseband band is small (~16×16 at 4K) and the diff_abs
+                // path bypasses the strip walker entirely.
+                let d_full = scratch_d.d.as_ref().expect(
+                    "DBandsScratch.d must be Some at baseband (allocated by build_d_bands_scratch)",
+                );
                 let d_h: [cubecl::server::Handle; 3] = [
-                    scratch_d.d[0].clone(),
-                    scratch_d.d[1].clone(),
-                    scratch_d.d[2].clone(),
+                    d_full[0].clone(),
+                    d_full[1].clone(),
+                    d_full[2].clone(),
                 ];
                 unsafe {
                     diff_abs_3ch_kernel::launch::<R>(
@@ -4234,11 +4360,24 @@ impl<R: Runtime> Cvvdp<R> {
                 // GPU masking. D output + masking-chain scratch all
                 // come from the pre-allocated d_scratch[k] (no
                 // per-band alloc_zeros_f32 churn).
-                let d_h: [cubecl::server::Handle; 3] = [
-                    scratch_d.d[0].clone(),
-                    scratch_d.d[1].clone(),
-                    scratch_d.d[2].clone(),
-                ];
+                //
+                // Mode B routes to `d_strip` (per-strip-sized; the
+                // strip walker writes one strip at a time at offset 0
+                // and dispatches the pool inline before the next
+                // strip overwrites it). Other modes use the full
+                // `d` plane (Mode E still strip-walks the pool
+                // post-band-loop over the full plane).
+                let d_h: [cubecl::server::Handle; 3] = if mode_b {
+                    let d_strip = scratch_d.d_strip.as_ref().expect(
+                        "DBandsScratch.d_strip must be Some at non-baseband levels in StripMode::Pair",
+                    );
+                    [d_strip[0].clone(), d_strip[1].clone(), d_strip[2].clone()]
+                } else {
+                    let d_full = scratch_d.d.as_ref().expect(
+                        "DBandsScratch.d must be Some at non-baseband levels outside StripMode::Pair",
+                    );
+                    [d_full[0].clone(), d_full[1].clone(), d_full[2].clone()]
+                };
                 let use_blur = bw > PU_PADSIZE && bh > PU_PADSIZE;
                 // Mode B (StripPair) and Mode E (CachedRef): per-band
                 // per-strip dispatch of the masking chain (min_abs →
@@ -4373,6 +4512,9 @@ impl<R: Runtime> Cvvdp<R> {
                         );
                     } else {
                         // Small band: inline no-blur masker (band ≤ PU_PADSIZE).
+                        // In Mode B `d_h` points at `d_strip` which is
+                        // allocated to hold `n_px` at this level (the
+                        // build_d_bands_scratch `use_blur=false` branch).
                         mult_mutual_3ch_no_blur_kernel::launch::<R>(
                             &self.client,
                             count.clone(),
@@ -4386,6 +4528,46 @@ impl<R: Runtime> Cvvdp<R> {
                             ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
                             ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
                             ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
+                            n_px as u32,
+                        );
+                    }
+                }
+                // Path A Phase 1d: Mode B's inline pool dispatch for
+                // the non-strip-walker masking paths (no_blur small
+                // bands; also the Full/CachedRef use_blur paths that
+                // don't fire in Mode B but defensive isolation keeps
+                // the conditional uniform). The strip walker already
+                // dispatches its own per-strip pool inside the loop;
+                // here we only need to cover the cases where the band
+                // was written as a single full-band dispatch.
+                //
+                // Mode B's only non-strip-walker path is the small-
+                // band no_blur branch (use_blur=false). In that case
+                // d_strip was sized at n_px so the kernel above wrote
+                // n_px elements; we now atomic-add the whole band's
+                // contribution into partials_h[k * 3 .. + 3].
+                if mode_b && !use_blur {
+                    let partial_idx_a = (k * N_CHANNELS) as u32;
+                    let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
+                    let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
+                    unsafe {
+                        pool_band_3ch_offset_kernel::launch::<R>(
+                            &self.client,
+                            count.clone(),
+                            cube_dim,
+                            ArrayArg::from_raw_parts(d_h[0].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[1].clone(), n_px),
+                            ArrayArg::from_raw_parts(d_h[2].clone(), n_px),
+                            ArrayArg::from_raw_parts(
+                                self.partials_h.clone(),
+                                (self.n_levels as usize) * N_CHANNELS,
+                            ),
+                            BETA_SPATIAL,
+                            partial_idx_a,
+                            partial_idx_rg,
+                            partial_idx_vy,
+                            0_u32,
+                            n_px as u32,
                             n_px as u32,
                         );
                     }
@@ -4609,6 +4791,20 @@ impl<R: Runtime> Cvvdp<R> {
             // rows only. Reads body rows of m_blur (correct from V-blur)
             // + body rows of t_p/r_p (correct from CSF full-band
             // dispatch) and writes body rows of d.
+            //
+            // Path A Phase 1d (2026-05-26): in Mode B the `d_h`
+            // buffer passed in is `d_strip` (per-strip-sized, allocated
+            // by build_d_bands_scratch for non-baseband levels). Each
+            // strip dispatch writes into position 0 of d_strip — the
+            // inline pool dispatch below then accumulates that strip's
+            // contribution into `partials_h` before the next strip
+            // iteration overwrites the buffer. Mode E keeps the full-
+            // image d plane and writes at `byte_off_body`.
+            let mode_b = matches!(
+                self.strip_config,
+                Some(StripConfig { mode: StripMode::Pair, .. }),
+            );
+            let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
             let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(byte_off_body);
             let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(byte_off_body);
             let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(byte_off_body);
@@ -4618,9 +4814,9 @@ impl<R: Runtime> Cvvdp<R> {
             let m_blur_a_b = m_blur_h[0].clone().offset_start(byte_off_body);
             let m_blur_rg_b = m_blur_h[1].clone().offset_start(byte_off_body);
             let m_blur_vy_b = m_blur_h[2].clone().offset_start(byte_off_body);
-            let d_a_b = d_h[0].clone().offset_start(byte_off_body);
-            let d_rg_b = d_h[1].clone().offset_start(byte_off_body);
-            let d_vy_b = d_h[2].clone().offset_start(byte_off_body);
+            let d_a_b = d_h[0].clone().offset_start(d_byte_off);
+            let d_rg_b = d_h[1].clone().offset_start(d_byte_off);
+            let d_vy_b = d_h[2].clone().offset_start(d_byte_off);
             unsafe {
                 mult_mutual_3ch_with_blurred_kernel::launch::<R>(
                     &self.client,
@@ -4635,14 +4831,56 @@ impl<R: Runtime> Cvvdp<R> {
                     ArrayArg::from_raw_parts(m_blur_a_b, n_strip_body),
                     ArrayArg::from_raw_parts(m_blur_rg_b, n_strip_body),
                     ArrayArg::from_raw_parts(m_blur_vy_b, n_strip_body),
-                    ArrayArg::from_raw_parts(d_a_b, n_strip_body),
-                    ArrayArg::from_raw_parts(d_rg_b, n_strip_body),
-                    ArrayArg::from_raw_parts(d_vy_b, n_strip_body),
+                    ArrayArg::from_raw_parts(d_a_b.clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(d_rg_b.clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(d_vy_b.clone(), n_strip_body),
                     n_strip_body as u32,
                 );
             }
             self.strip_dispatch_counter
                 .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+            // Stage 5 (Mode B only): inline pool dispatch over this
+            // strip's d (which lives in `d_strip` at offset 0). The
+            // pool kernel atomic-adds into `self.partials_h[k *
+            // N_CHANNELS + c]`; subsequent strips of this band (and
+            // every other band) accumulate into the same partials
+            // entries, so the final `partials_h` matches the
+            // post-band-loop pool result by atomic associativity.
+            //
+            // Mode E keeps the full-d post-band-loop pool path
+            // (`_pool_and_finalize_jod_strip`); only Mode B interleaves
+            // because only Mode B owns a per-strip-sized d_strip
+            // buffer that the next strip iteration is about to
+            // overwrite.
+            if mode_b {
+                let partial_idx_a = (k * N_CHANNELS) as u32;
+                let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
+                let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
+                unsafe {
+                    pool_band_3ch_offset_kernel::launch::<R>(
+                        &self.client,
+                        count_body.clone(),
+                        cube_dim,
+                        ArrayArg::from_raw_parts(d_h[0].clone(), n_strip_body),
+                        ArrayArg::from_raw_parts(d_h[1].clone(), n_strip_body),
+                        ArrayArg::from_raw_parts(d_h[2].clone(), n_strip_body),
+                        ArrayArg::from_raw_parts(
+                            self.partials_h.clone(),
+                            (self.n_levels as usize) * N_CHANNELS,
+                        ),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        0_u32,
+                        n_strip_body as u32,
+                        n_strip_body as u32,
+                    );
+                }
+                self.strip_dispatch_counter
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            }
         }
         // Reference `n_px` to satisfy the helper's signature — the
         // FULL-band element count is the caller's invariant, not
@@ -4709,6 +4947,19 @@ impl<R: Runtime> Cvvdp<R> {
         ppd: f32,
     ) -> Result<Vec<[Vec<f32>; 3]>> {
         self.debug_assert_ppd_matches_geometry(ppd);
+        // Path A Phase 1d (2026-05-26): Mode B's non-baseband d
+        // buffers are per-strip-sized and the strip walker
+        // overwrites them across strip iterations, so a single
+        // post-band-loop readback can't reconstruct the full-band
+        // planes. compute_dkl_d_bands is a parity/debug helper that
+        // production never calls; reject the mode loudly rather than
+        // returning truncated buffers.
+        if matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        ) {
+            return Err(Error::InvalidImageSize);
+        }
         self._dispatch_d_bands_into_scratch(ref_srgb, dist_srgb)?;
 
         let n_levels = self.n_levels as usize;
@@ -4720,10 +4971,13 @@ impl<R: Runtime> Cvvdp<R> {
             // f32::from_bytes(&bytes).to_vec()` on the next line.
             // Matches `compute_dkl_gauss_pyramid`'s readback shape.
             let mut planes: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+            let d_full = self.d_scratch[k].d.as_ref().expect(
+                "DBandsScratch.d must be Some in compute_dkl_d_bands (Mode B was rejected above)",
+            );
             for c in 0..N_CHANNELS {
                 let bytes = self
                     .client
-                    .read_one(self.d_scratch[k].d[c].clone())
+                    .read_one(d_full[c].clone())
                     .map_err(|_| Error::InvalidImageSize)?;
                 planes[c] = f32::from_bytes(&bytes).to_vec();
             }
@@ -5120,15 +5374,30 @@ impl<R: Runtime> Cvvdp<R> {
     /// — the dispatch path that landed the D bands differs, but
     /// the pool tail is identical.
     fn _host_pool_and_finalize_jod(&mut self) -> Result<f32> {
+        // Path A Phase 1d (2026-05-26): Mode B's d_strip planes are
+        // per-strip-sized and overwritten across strip iterations —
+        // a post-band-loop readback would only contain the LAST
+        // strip's data per band. Reject Mode B here too; production
+        // routes Mode B through `compute_dkl_jod` (GPU pool) which
+        // sums correctly via the inline pool.
+        if matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        ) {
+            return Err(Error::InvalidImageSize);
+        }
         let n_levels = self.n_levels as usize;
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
             let mut q = [0.0_f32; 3];
+            let d_full = self.d_scratch[k].d.as_ref().expect(
+                "DBandsScratch.d must be Some in _host_pool_and_finalize_jod (Mode B rejected above)",
+            );
             for c in 0..N_CHANNELS {
                 let bytes = self
                     .client
-                    .read_one(self.d_scratch[k].d[c].clone())
+                    .read_one(d_full[c].clone())
                     .map_err(|_| Error::InvalidImageSize)?;
                 let d_vec: &[f32] = f32::from_bytes(&bytes);
                 debug_assert_eq!(d_vec.len(), n_px);
@@ -5533,9 +5802,15 @@ impl<R: Runtime> Cvvdp<R> {
         let pool_atomic_cube_dim = CubeDim::new_1d(64);
         for k in 0..n_levels {
             let (_, _, n_px) = self.level_dims(k);
-            let d_a = self.d_scratch[k].d[0].clone();
-            let d_rg = self.d_scratch[k].d[1].clone();
-            let d_vy = self.d_scratch[k].d[2].clone();
+            // Full / CachedRef modes own a `Some(d)` at every level —
+            // this method is never called from Mode B's hot path
+            // (`compute_dkl_jod` routes Mode B to `_pool_and_finalize_jod_strip`).
+            let d_full = self.d_scratch[k].d.as_ref().expect(
+                "DBandsScratch.d must be Some in _pool_and_finalize_jod (Full / CachedRef)",
+            );
+            let d_a = d_full[0].clone();
+            let d_rg = d_full[1].clone();
+            let d_vy = d_full[2].clone();
             let partial_idx_a = (k * N_CHANNELS) as u32;
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
@@ -5631,27 +5906,36 @@ impl<R: Runtime> Cvvdp<R> {
         let n_partials = n_levels * N_CHANNELS;
         let cube_dim = CubeDim::new_1d(64);
 
-        // Zero partials_h — same shape as the Full pool dispatch.
-        unsafe {
-            fill_f32_kernel::launch::<R>(
-                &self.client,
-                CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
-                cube_dim,
-                ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
-                0.0,
-                n_partials as u32,
-            );
-        }
-
         // Strip body height at scale 0. Mode E's strip_config is
         // guaranteed Some(_) by the caller; the unwrap-equivalent is
         // safe but we defensively read via expect to surface a clear
         // message if a future caller forgets to gate.
-        let strip_h_body = self
+        let cfg = self
             .strip_config
             .as_ref()
-            .expect("_pool_and_finalize_jod_strip requires strip_config")
-            .h_body as usize;
+            .expect("_pool_and_finalize_jod_strip requires strip_config");
+        let strip_h_body = cfg.h_body as usize;
+        let mode_b = cfg.mode == StripMode::Pair;
+
+        // Mode E: zero partials_h here (the post-band-loop pool owns
+        // the accumulation).
+        // Mode B: partials_h was zeroed at the top of
+        // `_run_d_bands_band_loop` and the non-baseband pool was
+        // dispatched inline by the strip walker / no-blur fallback.
+        // Re-zeroing here would wipe the accumulated partials —
+        // skip the fill in Mode B.
+        if !mode_b {
+            unsafe {
+                fill_f32_kernel::launch::<R>(
+                    &self.client,
+                    CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                    0.0,
+                    n_partials as u32,
+                );
+            }
+        }
 
         let pool_atomic_cube_dim = CubeDim::new_1d(64);
 
@@ -5664,9 +5948,27 @@ impl<R: Runtime> Cvvdp<R> {
 
         for k in 0..n_levels {
             let (bw, bh, n_px) = self.level_dims(k);
-            let d_a = self.d_scratch[k].d[0].clone();
-            let d_rg = self.d_scratch[k].d[1].clone();
-            let d_vy = self.d_scratch[k].d[2].clone();
+            let is_baseband = k == n_levels - 1;
+
+            // Mode B's non-baseband bands were already pooled inline
+            // by the strip walker / no-blur fallback at band-loop
+            // time; skip them here. The baseband (always full `d`
+            // in Mode B too) still needs its pool dispatch.
+            if mode_b && !is_baseband {
+                continue;
+            }
+
+            // Both Mode B (baseband only at this point) and Mode E
+            // read from full `d` at this level. Mode B's d_strip is
+            // not addressable here — it was per-strip-sized and the
+            // strip walker already consumed it.
+            let d_full = self.d_scratch[k].d.as_ref().expect(
+                "DBandsScratch.d must be Some for any pool dispatch in _pool_and_finalize_jod_strip \
+                 (Mode B non-baseband levels are skipped via the inline pool above)",
+            );
+            let d_a = d_full[0].clone();
+            let d_rg = d_full[1].clone();
+            let d_vy = d_full[2].clone();
             let partial_idx_a = (k * N_CHANNELS) as u32;
             let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
             let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
@@ -5780,6 +6082,18 @@ impl<R: Runtime> Cvvdp<R> {
     /// is overwritten via `clear` + extend so callers can reuse a
     /// long-lived `Vec`.
     fn _compute_diffmap_into(&mut self, diffmap_out: &mut Vec<f32>) -> Result<()> {
+        // Path A Phase 1d (2026-05-26): Mode B's per-strip d buffers
+        // are overwritten across strip iterations — the diffmap
+        // accumulator needs the FULL d plane at every level. Reject
+        // Mode B here; production score_with_diffmap callers are
+        // expected to keep using Full / CachedRef modes (the diffmap
+        // path has never been wired through the strip walker).
+        if matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        ) {
+            return Err(Error::InvalidImageSize);
+        }
         self._ensure_diffmap_scratch();
         let n_levels = self.n_levels as usize;
         let n0 = (self.width as usize) * (self.height as usize);
@@ -5823,9 +6137,12 @@ impl<R: Runtime> Cvvdp<R> {
             let w_a = PER_CH_W[0] * if is_baseband { BASEBAND_W[0] } else { 1.0 };
             let w_rg = PER_CH_W[1] * if is_baseband { BASEBAND_W[1] } else { 1.0 };
             let w_vy = PER_CH_W[2] * if is_baseband { BASEBAND_W[2] } else { 1.0 };
-            let d_a = self.d_scratch[k].d[0].clone();
-            let d_rg = self.d_scratch[k].d[1].clone();
-            let d_vy = self.d_scratch[k].d[2].clone();
+            let d_full = self.d_scratch[k].d.as_ref().expect(
+                "DBandsScratch.d must be Some in _compute_diffmap_into (Mode B rejected above)",
+            );
+            let d_a = d_full[0].clone();
+            let d_rg = d_full[1].clone();
+            let d_vy = d_full[2].clone();
             unsafe {
                 diffmap_band_accumulate_kernel::launch::<R>(
                     &self.client,
