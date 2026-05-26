@@ -291,7 +291,28 @@ mod fast {
 
 // =====================================================================
 // Portable path — per-thread partials + on-device finalizer kernel.
-// Works on every cubecl backend regardless of float-atomic support.
+//
+// **Default since task #52 (2026-05-26).** Each grid-strided thread
+// writes its `(local_sum, local_p4)` partial to its own scratch slot
+// (indexed by `slot_offset + tid * 2`), then `finalize_sum_p4_kernel`
+// sums all 4096 partials in a fixed `k = 0..n_threads` order from
+// a single cube. f32 add isn't associative but the summation order
+// IS deterministic — so two runs of the same input produce
+// bit-identical scores, vs. the ~5e-5 reorder noise the
+// fast-reduction `Atomic<f32>::fetch_add` path leaks.
+//
+// This also INDIRECTLY restores Metal support: cubecl-wgpu's Metal
+// backend reports `Atomic<f32> = LoadStore|Add` as supported, but
+// the codegen silently no-ops `fetch_add` at execution time —
+// every reduction returned zero, every score collapsed to ~100.
+// The portable path uses plain stores, so it works on Metal as
+// well as any backend that supports plain f32 array writes.
+//
+// Trade-off: the partials buffer is `THREADS_PER_REDUCTION * 2` =
+// 8192 f32s per slot vs. 2 f32s per slot in fast mode (~4096×
+// memory amplification), and the single-cube finalize is sequential.
+// On CUDA this is measurably slower than the atomic-add path for
+// tiny images but disappears in the noise above 256×256.
 // =====================================================================
 
 #[cfg(not(feature = "fast-reduction"))]

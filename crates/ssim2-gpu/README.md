@@ -39,11 +39,15 @@ The `Ssim2Batch<R>` wrapper exposes the same API for batched scoring.
 ## Cargo features
 
 - `cuda` / `wgpu` / `hip` / `cpu` — runtime backends; pick whichever
-  your target platform supports. Default is `cuda + wgpu + cpu +
-  fast-reduction`.
-- `fast-reduction` — `Atomic<f32>::fetch_add` per-octave reduction.
-  See `Cargo.toml` for the per-backend correctness matrix
-  (disable on Metal).
+  your target platform supports. Default is `cuda + wgpu + cpu`.
+- `fast-reduction` — **opt-in** since 2026-05-26 (task #52).
+  Enables `Atomic<f32>::fetch_add` for the per-octave reduction.
+  ~2-3× faster on CUDA at small image sizes but the atomic-add
+  commit order varies across launches, so two runs of the same input
+  diverge by ~5e-5 in the final score. The default portable path is
+  bit-identical across runs and works on every cubecl backend
+  including Metal. See `Cargo.toml` for the per-backend correctness
+  matrix.
 - `fir` — **opt-in** separable FIR D=5 Gaussian blur path per Kanetaka
   et al. IWAIT 2026. Off by default. When enabled, exposes the
   `Ssim2Blur` enum, `with_blur` / `set_blur` / `blur()` accessors,

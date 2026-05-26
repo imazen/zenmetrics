@@ -11,7 +11,12 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
+# Defaults removed `fast-reduction` 2026-05-26 (task #52). The portable
+# per-thread-partials + finalize reduction is deterministic (bit-identical
+# across re-runs of the same input) and works on every cubecl backend
+# including Metal. Opt back into `fast-reduction` for the ~2-3× CUDA-only
+# speed boost at the cost of ~5e-5 reorder noise across re-runs.
+default = ["cuda", "wgpu", "cpu", "pixels"]
 # Runtime features imply `cubecl-types` so example / bench drivers
 # (e.g. `examples/bench_pair_vs_cached_cuda.rs`) that import `Ssim2<R>`
 # directly compile when any backend feature is enabled.
@@ -23,7 +28,8 @@ cpu = ["cubecl/cpu", "cubecl-types"]
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Exposes the generic typed Ssim2<R> / Ssim2Batch<R>. Off by default.
 cubecl-types = []
-# Use Atomic<f32>::fetch_add for the per-octave reduction. Verified
+# OFF by default since 2026-05-26 (task #52). Opt in to use
+# `Atomic<f32>::fetch_add` for the per-octave reduction. Verified
 # correct on:
 #   - CUDA   (NVIDIA, native runtime)
 #   - DX12   (Windows wgpu, real NVIDIA / AMD driver — including RTX 5070)
@@ -34,12 +40,16 @@ cubecl-types = []
 #            time — every reduction returns zero and every score
 #            collapses to ~100).
 #
-# Disable when targeting Metal:
-#   cargo build -p ssim2-gpu --no-default-features --features wgpu
+# Trade-off: ~2-3× faster on CUDA at small image sizes, but the atomic-add
+# commit order varies across launches — two runs of the same input
+# diverge by ~5e-5 in the final score (no-op in practice for picker /
+# training data, but breaks "million metrics" bit-reproducibility). The
+# portable per-thread-partials + finalize path (default since task #52)
+# is bit-identical across runs and works on every cubecl backend.
 #
-# The default feature set leaves it on — that's correct for CUDA,
-# Windows DX12, and HIP. Mac / Metal users (or anyone unsure of their
-# wgpu sub-backend's float-atomic support) should disable it.
+# Enable for CUDA-only deployments where the 2-3× reduction win matters
+# more than reproducibility:
+#   cargo build -p ssim2-gpu --features cuda,fast-reduction
 fast-reduction = []
 # Opt-in separable FIR D=5 Gaussian blur path
 # (Kanetaka et al. IWAIT 2026 Technique 1). OFF by default — the
@@ -146,4 +156,8 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "aliasing_invariants"
+required-features = ["cubecl-types"]
+
+[[test]]
+name = "reduction_determinism"
 required-features = ["cubecl-types"]

@@ -258,9 +258,15 @@ been deeply audited in the 2026-05-22 pass:
    non-deterministic floor of `Atomic<f32>::fetch_add` reordering
    on CUDA. Without fast-reduction (portable path) we measure 0.0
    exactly; the test now gates conditionally on the feature.
-   Eliminating the fast-reduction noise would require dropping the
-   feature entirely — a perf regression for users who don't run
-   the parity gate.
+   **Resolved by task #52 (2026-05-26):** `fast-reduction` removed
+   from default features. The default build now uses the
+   deterministic portable path. `fast-reduction` remains as an
+   opt-in feature for CUDA-only deployments that want the ~2-3×
+   reduction speed-up and accept the ~5e-5 reorder noise. The
+   `cargo test -p ssim2-gpu` default run now measures `|Δ| = 0`
+   across runs; see
+   `crates/ssim2-gpu/tests/reduction_determinism.rs` for the
+   10-run bit-identity gate that catches regressions.
 
 ## Verification commands
 
