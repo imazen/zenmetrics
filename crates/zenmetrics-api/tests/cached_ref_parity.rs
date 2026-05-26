@@ -35,14 +35,13 @@ fn make_pair(seed_a: u64, seed_b: u64) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
-/// Memory mode for the cached-ref tests. Most metrics use Auto;
-/// butter is strip-preferred at 256×256 and strip-mode butter
-/// rejects `set_reference`, so the tests force Full mode there.
-fn cached_ref_memory_mode(kind: MetricKind) -> MemoryMode {
-    match kind {
-        MetricKind::Butter => MemoryMode::Full,
-        _ => MemoryMode::Auto,
-    }
+/// Memory mode for the cached-ref tests. Auto is correct for every
+/// metric now that butter's strip-mode `set_reference` is Mode-E-
+/// supported (task #45 / issue #15) — both the strip walker and the
+/// whole-image walker produce the same body-row diffmaps so a single
+/// tolerance covers both code paths.
+fn cached_ref_memory_mode(_kind: MetricKind) -> MemoryMode {
+    MemoryMode::Auto
 }
 
 /// Compare cached-ref vs one-shot for a single `(ref, dist)` pair.
@@ -306,17 +305,11 @@ fn cached_ref_dssim_n_distortions() {
 #[test]
 fn cached_ref_butter_has_cached_reference_roundtrip() {
     let params = MetricParams::default_for(MetricKind::Butter);
-    // butter is strip-preferred at 256x256 and strip mode rejects
-    // set_reference — force Full mode for the cached-ref roundtrip.
-    let mut m = Metric::new_with_memory_mode(
-        MetricKind::Butter,
-        Backend::Cuda,
-        W,
-        H,
-        params,
-        MemoryMode::Full,
-    )
-    .unwrap();
+    // butter is strip-preferred at 256x256. With Mode E (task #45)
+    // the strip-mode instance accepts set_reference by allocating a
+    // whole-image cache sibling — the umbrella roundtrip works
+    // through both modes.
+    let mut m = Metric::new(MetricKind::Butter, Backend::Cuda, W, H, params).unwrap();
     assert!(!m.has_cached_reference());
     let (r, _) = make_pair(7919, 2147483647);
     m.set_reference_srgb_u8(&r).unwrap();
@@ -350,7 +343,6 @@ fn cached_ref_dssim_has_cached_reference_roundtrip() {
     m.clear_reference();
     assert!(!m.has_cached_reference());
 }
-
 /// Mode E parity test for task #73. Forces dssim into Strip mode at
 /// a size that would normally pick Full (4096×4096 fits in a 12 GB
 /// fleet box's VRAM, ~3 GB measured), then verifies the cached-ref
@@ -451,6 +443,99 @@ fn cached_ref_dssim_strip_n_distortions_24mp() {
         assert!(
             diff <= tol,
             "dssim strip-cached[{i}] = {s} vs full-cached {f} (diff {diff}) exceeds tolerance {tol}"
+        );
+    }
+}
+
+/// Mode E parity test: at a size where the umbrella's Auto policy
+/// resolves to Strip for butter, set_reference + N
+/// compute_with_cached_reference calls must agree with N one-shot
+/// compute_srgb_u8 calls under the same Atomic<f32>-tolerance band
+/// the in-mode butter tests use. This exercises the row-blit strip
+/// walker added in task #45 against multiple distortions.
+///
+/// Size: 1024×1024 — large enough that the strip walker engages
+/// at body < image_h (multiple strips per image) without bloating
+/// CI wall time.
+///
+/// Comparison: both sides use Auto-resolved Strip mode, so the
+/// baseline is single-resolution strip compute (NOT multires-Full
+/// which adds the half-res supersample contribution). The tight
+/// numeric agreement (~1e-4) shows the cached-ref strip walker
+/// produces the same body-row diffmaps as one-shot strip compute.
+#[cfg(feature = "butter")]
+#[test]
+fn cached_ref_butter_strip_n_distortions_1mp() {
+    const SW: u32 = 1024;
+    const SH: u32 = 1024;
+    let n = (SW as usize) * (SH as usize) * 3;
+    let mut r = vec![0u8; n];
+    for (i, b) in r.iter_mut().enumerate() {
+        *b = (((i as u64).wrapping_mul(7919)) & 0xFF) as u8;
+    }
+    let dists: Vec<Vec<u8>> = (0..3)
+        .map(|j| {
+            let seed = 2147483647u64.wrapping_mul((j + 1) as u64);
+            let mut d = vec![0u8; n];
+            for (i, b) in d.iter_mut().enumerate() {
+                *b = (((i as u64).wrapping_mul(seed)) & 0xFF) as u8;
+            }
+            d
+        })
+        .collect();
+
+    let params = MetricParams::default_for(MetricKind::Butter);
+
+    // Auto-resolved (likely Strip at 1MP — butter is strip-preferred).
+    let mut m = Metric::new_with_memory_mode(
+        MetricKind::Butter,
+        Backend::Cuda,
+        SW,
+        SH,
+        params.clone(),
+        MemoryMode::Auto,
+    )
+    .expect("butter Auto Metric::new");
+    m.set_reference_srgb_u8(&r)
+        .expect("butter set_reference at 1MP (Mode E)");
+    let cached: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m.compute_with_cached_reference_srgb_u8(d)
+                .expect("butter cached compute")
+                .value
+        })
+        .collect();
+
+    // Baseline: same Auto-resolved Strip mode, one-shot compute.
+    // Comparing strip-cached-ref vs strip-one-shot isolates the
+    // Mode E walker's correctness from any single-res/multires
+    // mode difference.
+    let mut m_os = Metric::new_with_memory_mode(
+        MetricKind::Butter,
+        Backend::Cuda,
+        SW,
+        SH,
+        params,
+        MemoryMode::Auto,
+    )
+    .expect("butter Auto Metric::new (one-shot)");
+    let oneshot: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m_os.compute_srgb_u8(&r, d)
+                .expect("butter strip one-shot compute")
+                .value
+        })
+        .collect();
+
+    for (i, (c, o)) in cached.iter().zip(oneshot.iter()).enumerate() {
+        let diff = (c - o).abs();
+        // Same tolerance band as the existing butter cached-ref
+        // tests at 256×256 (Atomic<f32> reduction-order drift).
+        assert!(
+            diff <= 1e-4,
+            "cached_scores[{i}] = {c} vs strip one-shot {o} (diff {diff})"
         );
     }
 }
