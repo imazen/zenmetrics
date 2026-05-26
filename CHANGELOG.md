@@ -17,6 +17,78 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zenmetrics-api / 6 metric crates — feat: umbrella cached-ref + MemoryMode unification (Phases 1, 2A, 2B, 2C + task #51) — 2026-05-26
+
+The cached-ref + strip-mode perf wins shipped per-crate over the
+preceding weeks but were unreachable from any sweep on master
+because the umbrella `Metric::compute_srgb_u8` is one-shot. This
+work plumbs the per-crate APIs through the umbrella and wires the
+sweep cache to use them transparently.
+
+- **`zenmetrics-api`** — `MemoryMode { Auto, Full, Strip, Tile }` +
+  `CachedRefStripPolicy { Auto, RefFull, BothStripped }` umbrella
+  enums with per-crate `From` conversions
+  (`crates/zenmetrics-api/src/memory_mode.rs`). New
+  `Metric::new_with_memory_mode(kind, backend, w, h, params, mode)`
+  constructor + four cached-ref methods on `Metric`:
+  `set_reference_srgb_u8`, `compute_with_cached_reference_srgb_u8`,
+  `clear_reference`, `has_cached_reference`. (`e0ae180`, `d4e1572`,
+  `d25124a`)
+- **`butter/ssim2/dssim-gpu`** — added cached-ref opaque
+  methods (`set_reference_srgb_u8`, `compute_with_cached_reference_srgb_u8`,
+  `clear_reference`, `has_cached_reference`) on `*Inner` traits +
+  `*Opaque` types. Each wraps the existing typed-pipeline
+  cached-ref. butter strip-mode rejects `set_reference` (single-
+  resolution pair-only); umbrella callers get
+  `Error::StripModeUnsupported` and fall back to one-shot. (`d25124a`)
+- **`iwssim-gpu`** — new opaque cached-ref methods that dispatch
+  `set_rgb_reference_stripped` / `compute_rgb_with_reference_stripped`
+  in Strip mode, else host-side sRGB→gray BT.601 +
+  `set_reference` / `compute_with_reference` in Full mode.
+  `rgb_u8_to_gray_bt601` made `pub(crate)`. (`d4e1572`)
+- **`zensim-gpu`** — new opaque
+  `compute_with_cached_reference_score_srgb_u8` wrapper that pairs
+  the existing `compute_with_reference_srgb_u8` Vec output with
+  the profile-mode `score_from_profile_vec` conversion to return a
+  uniform `Score`. (`d4e1572`)
+- **`zen-metrics-cli`** — `MetricCache::compute_umbrella` now keys
+  on the source `(pointer, len)` fingerprint. On a cache miss it
+  calls `set_reference_srgb_u8` then `compute_with_cached_reference_srgb_u8`;
+  on `Error::StripModeUnsupported` from set_reference it marks the
+  slot `set_reference_unsupported` and falls back to one-shot
+  `compute_srgb_u8` for the slot's lifetime. Sweep call sites in
+  `sweep/run.rs` don't change — the warm-ref optimization happens
+  transparently inside the cache. (`8449296`)
+- **Per-crate feature gating** — runtime features (`cuda`, `wgpu`,
+  `hip`, `cpu`) now imply `cubecl-types` across all 6 metric
+  crates. Fixes the lib-level `E0433 cannot find strip in the
+  crate root` error when building butteraugli-gpu with `--features
+  cuda` alone, and the test/example/doctest compile failures for
+  ssim2/dssim/zensim. (`e28ddd7`)
+- **Live VRAM probe across all 6 crates (task #51)** — replicated
+  iwssim-gpu's `live_vram_probe_bytes` (cached
+  `nvidia-smi --query-gpu=memory.free` with 10% headroom) into
+  butter/ssim2/dssim/cvvdp/zensim-gpu's `memory_mode.rs`.
+  `vram_cap_bytes()` now consults env → live probe → 8 GB default.
+  Per-crate code duplication preferred over a shared crate (per
+  the shared-traits planning verdict — `MemoryMode` enum divergences
+  in the per-crate variants make hoisting net-LOC-positive).
+  (`e6660cc`)
+- **`butteraugli-gpu`** — `dimensions()` returns the LOGICAL image
+  dims (`(width, image_h)`), not the strip-allocation dims
+  (`(width, height)` where height = `body_h_max + 2*halo_h`).
+  Fixes the umbrella `dispatch_butter` + `kind_roundtrip` tests.
+  (`3f9210b`)
+- **Tests** —
+  `crates/zenmetrics-api/tests/cached_ref_parity.rs` (16 tests):
+  single-pair + N-distortion cached-ref-vs-one-shot parity across
+  all 6 metrics + `has_cached_reference` roundtrips for the 4
+  metrics with explicit accessors. Bit-identical for zensim +
+  iwssim; ≤1e-4 JOD for cvvdp/butter/dssim (Atomic<f32>
+  reduction-order drift); ≤1e-3 for ssim2 (the 5e-5 atomic floor
+  per task #52). Full umbrella suite is 29/29 passing. (`d25124a`,
+  `7b78151`)
+
 ### cvvdp-gpu — fix: CSF `log_rho` axis extrapolation at high PPD (conformance Finding A) — 2026-05-26
 
 - **`cvvdp_gpu::kernels::csf::interp1_rho_extrap`**: the inner CSF
