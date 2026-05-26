@@ -244,9 +244,8 @@ impl CvvdpOpaque {
     }
 
     /// Construct an opaque cvvdp scorer with an explicit
-    /// [`MemoryMode`](crate::MemoryMode). cvvdp-gpu has no Strip
-    /// implementation — `MemoryMode::Strip` / `Tile` return
-    /// [`crate::Error::ModeUnsupported`].
+    /// [`MemoryMode`](crate::MemoryMode). cvvdp-gpu only supports
+    /// `Full` and `Auto` — see `docs/STRIP_PROCESSING.md`.
     ///
     /// Equivalent to
     /// `new_with_geometry_and_memory_mode(.., DisplayGeometry::STANDARD_4K, mode)`.
@@ -301,9 +300,10 @@ impl CvvdpOpaque {
     /// [`MemoryMode`](crate::MemoryMode) + geometry variant of
     /// [`Self::new_with_geometry`]. Mirrors
     /// [`Self::new_with_memory_mode`]'s memory-mode semantics
-    /// (`Strip` / `Tile` → [`crate::Error::ModeUnsupported`]) and
-    /// accepts a custom viewing [`DisplayGeometry`](crate::params::DisplayGeometry)
-    /// for the underlying [`Cvvdp::new_with_geometry`] dispatch.
+    /// (only `Full` and `Auto` are supported — see
+    /// `docs/STRIP_PROCESSING.md`) and accepts a custom viewing
+    /// [`DisplayGeometry`](crate::params::DisplayGeometry) for the
+    /// underlying [`Cvvdp::new_with_geometry`] dispatch.
     pub fn new_with_geometry_and_memory_mode(
         backend: Backend,
         width: u32,
@@ -312,14 +312,10 @@ impl CvvdpOpaque {
         geometry: crate::params::DisplayGeometry,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
-        // Resolve the mode host-side to surface ModeUnsupported /
-        // TooBigForFull before the backend allocation runs.
+        // Resolve the mode host-side to surface TooBigForFull before
+        // the backend allocation runs.
         let cap = crate::memory_mode::vram_cap_bytes();
         match mode {
-            crate::MemoryMode::Strip { .. } => {
-                return Err(crate::Error::ModeUnsupported("Strip"));
-            }
-            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
             crate::MemoryMode::Full => {}
             crate::MemoryMode::Auto => {
                 let _ = crate::memory_mode::resolve_auto(width, height, cap)?;

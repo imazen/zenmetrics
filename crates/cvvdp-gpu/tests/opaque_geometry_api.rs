@@ -184,40 +184,10 @@ fn opaque_new_with_geometry_and_memory_mode_modes() {
         .compute_srgb_u8(&ref_buf, &dis_buf)
         .expect("Auto+IPHONE compute_srgb_u8");
 
-    // Strip: ModeUnsupported (cvvdp-gpu has no Strip impl on the
-    // opaque API surface). The error must surface BEFORE backend
-    // allocation, matching `new_with_memory_mode`.
-    // (Use `match` rather than `expect_err` because `CvvdpOpaque`
-    // doesn't impl `Debug`.)
-    let strip_result = CvvdpOpaque::new_with_geometry_and_memory_mode(
-        BACKEND_E,
-        w,
-        h,
-        CvvdpParams::PLACEHOLDER,
-        DisplayGeometry::IPHONE_14_PRO,
-        cvvdp_gpu::MemoryMode::Strip {
-            h_body: None,
-            capped_levels: None,
-        },
-    );
-    match strip_result {
-        Err(cvvdp_gpu::Error::ModeUnsupported(_)) => {}
-        Err(other) => panic!("Strip: expected ModeUnsupported, got {other:?}"),
-        Ok(_) => panic!("Strip: expected ModeUnsupported, got Ok(_)"),
-    }
-
-    // Tile: ModeUnsupported (cvvdp-gpu has no Tile impl either).
-    let tile_result = CvvdpOpaque::new_with_geometry_and_memory_mode(
-        BACKEND_E,
-        w,
-        h,
-        CvvdpParams::PLACEHOLDER,
-        DisplayGeometry::IPHONE_14_PRO,
-        cvvdp_gpu::MemoryMode::Tile { w: 64, h: 64 },
-    );
-    match tile_result {
-        Err(cvvdp_gpu::Error::ModeUnsupported(_)) => {}
-        Err(other) => panic!("Tile: expected ModeUnsupported, got {other:?}"),
-        Ok(_) => panic!("Tile: expected ModeUnsupported, got Ok(_)"),
-    }
+    // Strip / Tile variants no longer exist on cvvdp_gpu::MemoryMode
+    // as of task #77 (capped-pyramid Strip changed the JOD value;
+    // see `docs/STRIP_PROCESSING.md`). Umbrella-level Strip/Tile
+    // requests are mapped down to cvvdp_gpu::MemoryMode::Auto by the
+    // zenmetrics-api `From` impl; the umbrella-level routing is
+    // covered by `zenmetrics-api` tests.
 }

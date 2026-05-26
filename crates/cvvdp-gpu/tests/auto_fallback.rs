@@ -1,18 +1,18 @@
 //! Auto-fallback contract tests for cvvdp-gpu.
 //!
-//! cvvdp-gpu does NOT auto-fall back to Strip: capping the pyramid
-//! depth changes the JOD value (see `docs/STRIP_PROCESSING.md` and
-//! `benchmarks/cvvdp_capped_levels_2026-05-22.csv`), so Auto cannot
-//! silently pick the capped path. Callers who want capped-Strip must
-//! opt in explicitly via `MemoryMode::Strip { capped_levels: Some(k) }`.
+//! cvvdp-gpu only supports Full + Auto as of task #77 — the
+//! capped-pyramid Strip variant was rolled back because it changed
+//! the JOD value at any k < 9 (see `docs/STRIP_PROCESSING.md`).
+//! Auto always resolves to Full when it fits the cap; otherwise it
+//! surfaces TooBigForFull so the caller can pick a different metric
+//! or split the image at the application layer.
 //!
 //! Pins:
 //! - Auto picks Full at generous cap.
-//! - Auto returns TooBigForFull when Full exceeds cap (no auto-cap).
-//! - `Strip { capped_levels: Some(_) }` constructs correctly (typed).
-//! - Strip estimator stays `None` (no per-strip estimate path).
+//! - Auto returns TooBigForFull when Full exceeds cap (no silent
+//!   metric-altering fallback).
 
-use cvvdp_gpu::{Error, MemoryMode, ResolvedMode, estimate_strip_gpu_memory_bytes, memory_mode};
+use cvvdp_gpu::{Error, ResolvedMode, memory_mode};
 use std::sync::{Mutex, OnceLock};
 
 const VRAM_CAP_VAR: &str = "ZENMETRICS_VRAM_CAP_BYTES";
@@ -51,12 +51,13 @@ fn auto_picks_full_when_cap_generous() {
 }
 
 #[test]
-fn auto_returns_too_big_no_silent_capped_fallback() {
-    // cvvdp deliberately does NOT auto-fall back to `Strip { capped_levels }`
-    // even though that path WOULD fit a tighter cap — capping changes
-    // the JOD value, so picking it silently would mislead callers.
-    // Tighter-cap scenarios surface TooBigForFull; callers can then
-    // opt in to capped-Strip explicitly.
+fn auto_returns_too_big_no_silent_fallback() {
+    // cvvdp deliberately surfaces TooBigForFull when Full exceeds
+    // the cap — there is no Strip / Tile path to fall back to.
+    // (Pre-task-#77, this test asserted the absence of capped-Strip
+    // auto-selection. The variant no longer exists, but the
+    // contract — Auto must not silently change the metric value —
+    // still holds, and is documented in `docs/STRIP_PROCESSING.md`.)
     with_cap(Some("1"), || {
         let cap = memory_mode::vram_cap_bytes();
         let r = memory_mode::resolve_auto(4096, 4096, cap);
@@ -65,54 +66,24 @@ fn auto_returns_too_big_no_silent_capped_fallback() {
                 assert!(needed > 0);
                 assert_eq!(c, 1);
             }
-            other => panic!("expected TooBigForFull (no auto-cap), got {other:?}"),
+            other => panic!("expected TooBigForFull (no fallback), got {other:?}"),
         }
     });
 }
 
 #[test]
-fn auto_returns_too_big_at_tight_cap_even_when_capped_strip_would_fit() {
-    // Cvvdp's capped-Strip variant *would* fit a 1 GB cap on most 4 MP
-    // images, but Auto must refuse to pick it. Pins the
-    // "no silent metric-altering fallback" contract.
+fn auto_returns_too_big_at_tight_cap() {
+    // Pins the "no silent metric-altering fallback" contract: tight
+    // caps surface TooBigForFull rather than picking a smaller-memory
+    // path that would change the JOD value.
     with_cap(Some("1000000"), || {
         let cap = memory_mode::vram_cap_bytes();
         let r = memory_mode::resolve_auto(4096, 4096, cap);
         assert!(
             matches!(r, Err(Error::TooBigForFull { .. })),
-            "Auto must NOT silently switch to capped-Strip, got {r:?}"
+            "Auto must surface TooBigForFull, got {r:?}"
         );
     });
-}
-
-#[test]
-fn explicit_strip_with_cap_is_addressable() {
-    // Confirms the capped variant is constructable via the typed enum
-    // path — callers can opt in to the depth-cap fallback explicitly.
-    let m = MemoryMode::Strip {
-        h_body: None,
-        capped_levels: Some(8),
-    };
-    match m {
-        MemoryMode::Strip {
-            h_body,
-            capped_levels,
-        } => {
-            assert_eq!(capped_levels, Some(8));
-            assert_eq!(h_body, None);
-        }
-        _ => panic!("expected Strip"),
-    }
-}
-
-#[test]
-fn strip_estimator_remains_none_per_design() {
-    // Per the design note in memory_mode.rs: cvvdp has no separate
-    // strip-mode estimator (the spatial-frequency decomposition is
-    // full-image by construction), so the strip estimator returns
-    // None and the resolver doesn't try to fall back.
-    assert!(estimate_strip_gpu_memory_bytes(1024, 64).is_none());
-    assert!(estimate_strip_gpu_memory_bytes(8192, 256).is_none());
 }
 
 #[test]

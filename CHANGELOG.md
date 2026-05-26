@@ -17,6 +17,43 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — refactor: roll back capped-pyramid Strip variant (task #77) — 2026-05-26
+
+cvvdp's `MemoryMode::Strip { h_body, capped_levels }` only ever
+implemented capped-pyramid scoring (a Full pipeline with the
+pyramid depth clamped to `k`), which **changes the JOD value at
+any k < 9** — different cap = different metric. There is no
+panorama use case in the production corpus to justify the redesign
+cost of a true strip walker, so the variant was removed entirely
+rather than left as an opt-in landmine that silently changes the
+metric output.
+
+Surface changes:
+
+- `cvvdp_gpu::MemoryMode` is now `{ Auto, Full }` (was
+  `{ Auto, Full, Strip{..}, Tile{..} }`).
+- `cvvdp_gpu::ResolvedMode` stays `{ Full }`.
+- `Cvvdp::new_with_geometry_and_cap` removed; use
+  `Cvvdp::new_with_geometry` (the cap parameter was the only
+  thing it added).
+- `estimate_strip_gpu_memory_bytes` removed (always returned
+  `None`); replaced lib-root re-export accordingly.
+- `Error::ModeUnsupported(&'static str)` variant kept for API
+  stability — never fires today since the umbrella `From` maps
+  `umbrella::Strip` / `umbrella::Tile` down to `cvvdp_gpu::Auto`.
+
+Downstream impact: `zenmetrics-api` `From<MemoryMode> for
+cvvdp_gpu::MemoryMode` now routes `umbrella::Strip` and
+`umbrella::Tile` both to `cvvdp_gpu::Auto` (closest-meaning
+policy). `publish = false` on cvvdp-gpu — no crates.io users to
+break.
+
+Methodology trace from the original capped-pyramid sweep moved to
+`crates/cvvdp-gpu/docs/archived/` so the cap-vs-JOD-drift sweep
+data and run log survive for future review.
+
+(commit TBD)
+
 ### iwssim-gpu — investigate: native-RGB strip path (task #57) — 2026-05-26
 
 User asked: should we add an on-device sRGB→gray conversion for the

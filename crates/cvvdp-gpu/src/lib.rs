@@ -187,8 +187,7 @@ pub mod presets;
 
 // Unified MemoryMode surface — see `memory_mode.rs`.
 pub use memory_mode::{
-    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, estimate_strip_gpu_memory_bytes,
-    vram_cap_bytes,
+    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, vram_cap_bytes,
 };
 
 // CvvdpParams stays unconditionally public — it's part of the opaque
@@ -408,8 +407,13 @@ pub enum Error {
     /// pipeline failed, retry or surface to user".
     InvalidImageSize,
     /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
-    /// implemented yet (Strip and Tile in cvvdp-gpu — architecturally
-    /// blocked at 24 MP square per `docs/STRIP_PROCESSING.md`).
+    /// implemented in cvvdp-gpu. Kept in the error enum for API
+    /// stability — the unified `MemoryMode` enum may in the future
+    /// gain variants this crate doesn't support, and the umbrella
+    /// `From` conversions map unsupported umbrella variants down to
+    /// `Auto` so this error never fires today. See
+    /// `docs/STRIP_PROCESSING.md` for why Strip/Tile were rolled
+    /// back (task #77 — capping pyramid depth changes JOD value).
     ModeUnsupported(&'static str),
     /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
     /// into the VRAM cap. cvvdp-gpu has no Strip implementation.
@@ -439,8 +443,8 @@ impl std::fmt::Display for Error {
             ),
             Error::ModeUnsupported(variant) => write!(
                 f,
-                "MemoryMode::{variant} is not yet implemented in cvvdp-gpu \
-                 (architecturally blocked at 24 MP square per STRIP_PROCESSING.md)"
+                "MemoryMode::{variant} is not supported in cvvdp-gpu \
+                 (see docs/STRIP_PROCESSING.md — only Full + Auto are supported)"
             ),
             Error::TooBigForFull { needed, cap } => write!(
                 f,

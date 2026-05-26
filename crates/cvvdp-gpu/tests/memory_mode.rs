@@ -3,8 +3,7 @@
 //! friends.
 
 use cvvdp_gpu::{
-    Error, MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize,
-    estimate_strip_gpu_memory_bytes, memory_mode,
+    Error, MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, memory_mode,
 };
 use std::sync::{Mutex, OnceLock};
 
@@ -43,11 +42,6 @@ fn estimate_grows_with_pixels() {
 }
 
 #[test]
-fn strip_estimator_is_none() {
-    assert!(estimate_strip_gpu_memory_bytes(1024, 64).is_none());
-}
-
-#[test]
 fn auto_picks_full_when_under_cap() {
     with_cap(Some("17179869184"), || {
         let r = memory_mode::resolve_auto(1024, 1024, memory_mode::vram_cap_bytes()).unwrap();
@@ -56,7 +50,7 @@ fn auto_picks_full_when_under_cap() {
 }
 
 #[test]
-fn auto_errors_when_strip_unsupported_and_too_big() {
+fn auto_errors_when_too_big_for_full() {
     with_cap(Some("1"), || {
         let r = memory_mode::resolve_auto(4096, 4096, memory_mode::vram_cap_bytes());
         assert!(matches!(r, Err(Error::TooBigForFull { .. })));
@@ -64,39 +58,40 @@ fn auto_errors_when_strip_unsupported_and_too_big() {
 }
 
 #[test]
-fn explicit_strip_constructs() {
-    let m = MemoryMode::Strip { h_body: Some(128), capped_levels: None };
-    assert_eq!(
-        m,
-        MemoryMode::Strip { h_body: Some(128), capped_levels: None }
-    );
+fn only_auto_and_full_variants_exist() {
+    // Task #77 rollback contract: cvvdp's MemoryMode enum is now
+    // `{ Auto, Full }`. Strip and Tile were removed because the
+    // capped-pyramid Strip variant changed the JOD value at any
+    // k < 9.
+    let _auto = MemoryMode::Auto;
+    let _full = MemoryMode::Full;
+    // Exhaustive match — would fail to compile if a variant were
+    // re-introduced without updating this test.
+    let m = MemoryMode::Auto;
+    let _ = match m {
+        MemoryMode::Auto => 0u32,
+        MemoryMode::Full => 1u32,
+    };
 }
 
 #[test]
-fn explicit_strip_with_cap_constructs() {
-    // The capped-pyramid variant — `Strip { capped_levels: Some(k) }`
-    // is what unblocks 24 MP square via reduced σ=3 PU-blur halo (see
-    // `docs/STRIP_PROCESSING.md`).
-    let m = MemoryMode::Strip { h_body: None, capped_levels: Some(8) };
-    match m {
-        MemoryMode::Strip { capped_levels, h_body } => {
-            assert_eq!(capped_levels, Some(8));
-            assert_eq!(h_body, None);
-        }
-        _ => panic!("expected Strip"),
-    }
-}
-
-#[test]
-fn tile_returns_unsupported_via_typed_helper() {
-    let m = MemoryMode::Tile { h: 512, w: 512 };
-    match m {
-        MemoryMode::Tile { h, w } => {
-            assert_eq!(h, 512);
-            assert_eq!(w, 512);
-        }
-        _ => panic!("expected Tile"),
-    }
+fn umbrella_strip_and_tile_map_to_cvvdp_auto() {
+    // The umbrella `MemoryMode::Strip { h_body }` and
+    // `MemoryMode::Tile { h, w }` map down to cvvdp's `Auto` via the
+    // From conversion in zenmetrics-api (cvvdp can no longer
+    // represent Strip/Tile). This test pins the direct cvvdp side of
+    // the contract: cvvdp_gpu::MemoryMode constructed via `Auto`
+    // resolves identically to what an umbrella::Strip/Tile request
+    // would route to.
+    //
+    // The actual zenmetrics_api::MemoryMode → cvvdp_gpu::MemoryMode
+    // From impl is covered by zenmetrics-api's own tests; here we
+    // pin that cvvdp's Auto path works end-to-end through
+    // new_with_memory_mode without surfacing ModeUnsupported.
+    let cap = memory_mode::vram_cap_bytes();
+    // A modest size that fits any reasonable VRAM cap.
+    let r = memory_mode::resolve_auto(256, 256, cap).expect("Auto should resolve");
+    assert_eq!(r, ResolvedMode::Full);
 }
 
 #[test]

@@ -6,10 +6,13 @@
 //! Each per-crate `MemoryMode` enum has the same *shape* (`Auto`,
 //! `Full`, `Strip { h_body }`, `Tile { h, w }`) but the per-crate
 //! `resolve_auto` policies, error-message advice strings, and a few
-//! variant fields (cvvdp adds `capped_levels` to its `Strip` variant)
-//! differ in meaningful ways. Hoisting the enum to a shared crate would
-//! either force every callsite through `From` conversions or force a
-//! single canonical shape that lies about cvvdp's capped-pyramid mode.
+//! variant fields differ in meaningful ways. cvvdp + zensim only
+//! expose `{ Auto, Full }` — they have no Strip / Tile path of their
+//! own (cvvdp's capped-pyramid Strip variant was rolled back in
+//! task #77 because it changed the JOD value). Hoisting the enum
+//! to a shared crate would either force every callsite through
+//! `From` conversions or force a single canonical shape that lies
+//! about per-crate capabilities.
 //!
 //! Instead the umbrella owns the *user-facing* policy enum and converts
 //! at the per-crate boundary inside [`crate::Metric::new_with_memory_mode`].
@@ -163,16 +166,17 @@ impl From<MemoryMode> for iwssim_gpu::MemoryMode {
 #[cfg(feature = "cvvdp")]
 impl From<MemoryMode> for cvvdp_gpu::MemoryMode {
     fn from(m: MemoryMode) -> Self {
+        // cvvdp-gpu only supports { Auto, Full } as of task #77 — the
+        // capped-pyramid Strip variant was rolled back because it
+        // changed the JOD value at any k < 9. Both umbrella::Strip
+        // and umbrella::Tile map down to cvvdp's Auto: callers asking
+        // for a partitioned working set get the closest-meaning policy
+        // (Auto picks Full when it fits the cap, else surfaces
+        // TooBigForFull). See `cvvdp-gpu/docs/STRIP_PROCESSING.md`.
         match m {
             MemoryMode::Auto => cvvdp_gpu::MemoryMode::Auto,
             MemoryMode::Full => cvvdp_gpu::MemoryMode::Full,
-            // cvvdp's Strip variant is `Strip { h_body, capped_levels }`;
-            // umbrella callers only pass `h_body` so capped_levels stays
-            // at its per-crate default.
-            MemoryMode::Strip { h_body } => cvvdp_gpu::MemoryMode::Strip {
-                h_body,
-                capped_levels: None,
-            },
+            MemoryMode::Strip { h_body: _ } => cvvdp_gpu::MemoryMode::Auto,
             MemoryMode::Tile { h: _, w: _ } => cvvdp_gpu::MemoryMode::Auto,
         }
     }
