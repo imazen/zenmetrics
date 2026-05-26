@@ -2201,7 +2201,14 @@ impl<R: Runtime> Butteraugli<R> {
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
-        (self.width, self.height)
+        // Return the LOGICAL image dimensions, not the allocation
+        // dimensions. In strip mode `self.height` is the per-strip
+        // working slab size (`body_h_max + 2 * halo_h`); `self.image_h`
+        // is the original image height the caller passed to `new` /
+        // `new_with_memory_mode`. dimensions() is the constructor-args
+        // accessor used by umbrella `Metric::dims()` and round-trip
+        // tests — those must see the LOGICAL dims regardless of mode.
+        (self.width, self.image_h)
     }
 
     /// Read the current diffmap back to host memory.
