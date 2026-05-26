@@ -131,6 +131,81 @@ fn mode_b_walker_jod_matches_full_at_1024() {
     );
 }
 
+/// Explicit-h_body alias of the 1024² parity test — pins the
+/// canonical (size, h_body) brief from the Mode B walker scope
+/// (1024² with h_body = 256) under the name pattern the brief
+/// requested. Equivalent to `mode_b_walker_jod_matches_full_at_1024`
+/// but kept distinct so the per-(size, h_body) parity contract is
+/// explicit in the test inventory.
+#[test]
+fn mode_b_walker_jod_matches_full_at_1024_h_body_256() {
+    let client = Backend::client(&Default::default());
+    let mut full =
+        Cvvdp::<Backend>::new(client.clone(), 1024, 1024, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new full");
+    let mut pair = Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new_strip_pair");
+
+    let (r, d) = synth_pair_with_offset_dist(1024, 1024);
+
+    let jod_full = full.score(&r, &d).expect("Full score");
+    let jod_pair = pair.score(&r, &d).expect("Mode B score");
+    let diff = (jod_full - jod_pair).abs();
+    eprintln!(
+        "1024² h_body=256 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",
+    );
+    assert!(
+        diff < PARITY_TOL_JOD as f64,
+        "Mode B JOD={jod_pair} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
+    );
+}
+
+/// 4096² walker parity at h_body=512. Stretch goal per the brief.
+///
+/// Memory profile: as of this landing the Cvvdp constructor still
+/// allocates Full-mode buffers for Mode B (the per-strip reshape is
+/// a separate landing). At 4096² that's ~4-5 GB per `Cvvdp` instance,
+/// so running TWO instances (Full + Mode B) in the same process
+/// approaches the upper end of a 12 GB GPU. The test is marked
+/// `#[ignore]` to keep the default `cargo test` run safe on the
+/// development workstation; remove the attribute (or run with
+/// `cargo test -- --ignored`) on a box with ≥ 16 GB free GPU memory
+/// to verify the stretch parity gate.
+///
+/// To run manually:
+/// ```sh
+/// cargo test -p cvvdp-gpu --features cuda --test mode_b_walker_parity \
+///     mode_b_walker_jod_matches_full_at_4096_h_body_512 -- --ignored
+/// ```
+///
+/// Tolerance is the same 1e-4 abs JOD band as the other parity
+/// tests; Atomic<f32> reduction-order noise is the only expected
+/// divergence and it stays well under that band.
+#[test]
+#[ignore = "Allocates two 4096² Cvvdp instances (~10 GB GPU); run with --ignored on a ≥ 16 GB GPU"]
+fn mode_b_walker_jod_matches_full_at_4096_h_body_512() {
+    let client = Backend::client(&Default::default());
+    let mut full =
+        Cvvdp::<Backend>::new(client.clone(), 4096, 4096, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new full");
+    let mut pair =
+        Cvvdp::<Backend>::new_strip_pair(client, 4096, 4096, 512, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new_strip_pair");
+
+    let (r, d) = synth_pair_with_offset_dist(4096, 4096);
+
+    let jod_full = full.score(&r, &d).expect("Full score");
+    let jod_pair = pair.score(&r, &d).expect("Mode B score");
+    let diff = (jod_full - jod_pair).abs();
+    eprintln!(
+        "4096² h_body=512 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",
+    );
+    assert!(
+        diff < PARITY_TOL_JOD as f64,
+        "Mode B JOD={jod_pair} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
+    );
+}
+
 /// At 1024² with h_body=256 the L0 pool dispatch partitions into
 /// `ceil(1024 / 256) = 4` strips; the strip dispatch counter
 /// increments by one per (level, strip), so after a single
