@@ -272,6 +272,23 @@ struct WeberScratch {
     /// `fine` + `upscaled_c` directly.
     vscratch_c: [cubecl::server::Handle; N_CHANNELS],
     upscaled_c: [cubecl::server::Handle; N_CHANNELS],
+    /// **Phase 1b per-strip upscaled scratch.** Allocated only when
+    /// the owning `Cvvdp` instance is in `StripMode::Pair`. Sized
+    /// `(fine_w × strip_h_at_k × f32)` per channel — `strip_h_at_k =
+    /// (h_body >> k).max(1)` — rather than the full-image
+    /// `(fine_w × fine_h × f32)` of [`Self::upscaled_c`]. The
+    /// Weber-finalize strip walker writes one strip's worth of
+    /// upscale output here, then the
+    /// `subtract_weber_3ch_strip_kernel` reads it with
+    /// `src_strip_offset = body_offset_y` (Phase 1b semantics) and
+    /// translates the read index to buffer-local. Every level allocates
+    /// its own pair of `[Handle; N_CHANNELS]`; entries past
+    /// `n_levels-1` are unused (the baseband level skips weber).
+    ///
+    /// `None` outside `StripMode::Pair` so the Full and CachedRef
+    /// dispatch paths keep using the full-image [`Self::upscaled_c`]
+    /// without paying the Phase 1b allocation.
+    upscaled_c_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
 }
 
 /// GPU scratch for the per-pixel diffmap pipeline. Allocated lazily on
@@ -312,10 +329,16 @@ fn build_weber_scratch<R: Runtime>(
     n_levels: usize,
     width: u32,
     height: u32,
+    strip_pair_h_body: Option<u32>,
 ) -> Vec<WeberScratch> {
     let mut out = Vec::with_capacity(n_levels.saturating_sub(1));
     let mut fine_w = width;
     let mut fine_h = height;
+    // Per-level strip body height for the Phase 1b upscaled_c_strip
+    // allocation. Halves each level, clamped to 1 — matches the
+    // walker's `strip_h_at_k` so the buffer is exactly the size the
+    // strip walker writes per dispatch.
+    let mut strip_h_at_k = strip_pair_h_body;
     // Only non-baseband levels need scratch (baseband bypasses the
     // expand/subtract/weber chain).
     for _ in 0..n_levels.saturating_sub(1) {
@@ -328,6 +351,24 @@ fn build_weber_scratch<R: Runtime>(
         let coarse_h = fine_h.div_ceil(2);
         let n_fine = (fine_w as usize) * (fine_h as usize);
         let n_v = (coarse_w as usize) * (fine_h as usize);
+
+        // Phase 1b: in StripMode::Pair allocate a per-strip-sized
+        // upscale destination (fine_w × strip_h_at_k pixels). The
+        // strip walker writes one strip's worth at a time and the
+        // subtract_weber_3ch_strip_kernel reads it back with
+        // `src_strip_offset = body_offset_y`. None outside
+        // StripMode::Pair so the Full / CachedRef paths skip the
+        // allocation entirely (they read from upscaled_c which IS
+        // full-image-sized).
+        let upscaled_c_strip = strip_h_at_k.map(|h_body| {
+            let n_strip = (fine_w as usize) * (h_body as usize);
+            [
+                alloc_zeros_f32(client, n_strip),
+                alloc_zeros_f32(client, n_strip),
+                alloc_zeros_f32(client, n_strip),
+            ]
+        });
+
         out.push(WeberScratch {
             l_bkg_fine: alloc_zeros_f32(client, n_fine),
             vscratch_a: alloc_zeros_f32(client, n_v),
@@ -343,9 +384,14 @@ fn build_weber_scratch<R: Runtime>(
                 alloc_zeros_f32(client, n_fine),
                 alloc_zeros_f32(client, n_fine),
             ],
+            upscaled_c_strip,
         });
         fine_w = coarse_w;
         fine_h = coarse_h;
+        // Halve the strip body for the next (deeper) level. Clamp to
+        // 1 so deep levels still allocate a usable strip buffer (the
+        // walker's `strip_h_at_k` uses the same `.max(1)` clamp).
+        strip_h_at_k = strip_h_at_k.map(|hb| (hb >> 1).max(1));
     }
     out
 }
@@ -1466,7 +1512,7 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
-        Self::new_with_geometry_inner(client, width, height, params, geometry, None)
+        Self::new_with_geometry_inner(client, width, height, params, geometry, None, None)
     }
 
     /// Capped-pyramid variant (Option B safety net). Constructs a
@@ -1521,7 +1567,7 @@ impl<R: Runtime> Cvvdp<R> {
         if levels == 0 {
             return Err(Error::ModeUnsupported("CappedPyramid { levels=0 }"));
         }
-        Self::new_with_geometry_inner(client, width, height, params, geometry, Some(levels))
+        Self::new_with_geometry_inner(client, width, height, params, geometry, Some(levels), None)
     }
 
     /// Inner constructor that backs both
@@ -1529,6 +1575,14 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Self::new_capped_pyramid_with_geometry`]. `cap_levels` clamps
     /// the pyramid depth from above; `None` selects the natural depth
     /// (the standard [`Self::new`] behaviour).
+    ///
+    /// `strip_pair_h_body` is `Some(h_body)` when the caller is
+    /// constructing for `StripMode::Pair` (Mode B). The Phase 1b
+    /// allocator uses this to size the per-strip
+    /// `weber_scratch[k].upscaled_c_strip` buffer; passing `None`
+    /// skips that allocation and the existing full-image
+    /// `upscaled_c` is used. The strip_config field itself is still
+    /// set by the calling `new_strip_pair_with_geometry`.
     fn new_with_geometry_inner(
         client: ComputeClient<R>,
         width: u32,
@@ -1536,6 +1590,7 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
         cap_levels: Option<u32>,
+        strip_pair_h_body: Option<u32>,
     ) -> Result<Self> {
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
@@ -1586,7 +1641,8 @@ impl<R: Runtime> Cvvdp<R> {
         let bands_ref = build_pyramid(&client);
         let bands_dis = build_pyramid(&client);
         let d_scratch = build_d_bands_scratch(&client, n_levels as usize, width, height);
-        let weber_scratch = build_weber_scratch(&client, n_levels as usize, width, height);
+        let weber_scratch =
+            build_weber_scratch(&client, n_levels as usize, width, height, strip_pair_h_body);
 
         // Baseband log_l_bkg buffer. Size matches `gauss_ref[last]`
         // which `build_pyramid` allocated with ceil-div halving
@@ -1794,7 +1850,15 @@ impl<R: Runtime> Cvvdp<R> {
         if !is_valid_strip_h_body(h_body) {
             return Err(Error::ModeUnsupported("StripPair { h_body=invalid }"));
         }
-        let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
+        // Route through `new_with_geometry_inner` with
+        // `strip_pair_h_body = Some(h_body)` so the Phase 1b allocator
+        // sizes `weber_scratch[k].upscaled_c_strip` per-strip rather
+        // than full-image. The `strip_config` field is still set
+        // post-construction below so existing call sites that check
+        // `strip_config` for Mode B dispatch behave identically.
+        let mut this = Self::new_with_geometry_inner(
+            client, width, height, params, geometry, None, Some(h_body),
+        )?;
         this.strip_config = Some(StripConfig {
             h_body,
             mode: StripMode::Pair,
