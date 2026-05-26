@@ -350,3 +350,107 @@ fn cached_ref_dssim_has_cached_reference_roundtrip() {
     m.clear_reference();
     assert!(!m.has_cached_reference());
 }
+
+/// Mode E parity test for task #73. Forces dssim into Strip mode at
+/// a size that would normally pick Full (4096×4096 fits in a 12 GB
+/// fleet box's VRAM, ~3 GB measured), then verifies the cached-ref
+/// strip path produces scores within 1e-4 of the Full-mode cached
+/// ref path across 3 distortions sharing a single reference.
+///
+/// 4096×4096 is the large-enough size where mode E starts to matter
+/// on small-VRAM tiers (24 MP+ images don't fit in Full at 4 GB,
+/// 12 GB tiers can fit Full at 16 MP but not 96 MP). The body
+/// auto-sizer picks h_body within the VRAM cap so the test runs on
+/// hosts with widely different memory caps.
+///
+/// Tolerance follows the other dssim cached-ref tests (1e-4) — same
+/// kernels, same data, but the per-strip path runs each scale's
+/// reduction across many strips whereas the Full path runs it once
+/// over the whole image. Atomic<f32> ordering between strips
+/// introduces small (~1e-6 to 1e-5) drift.
+#[cfg(feature = "dssim")]
+#[test]
+fn cached_ref_dssim_strip_n_distortions_24mp() {
+    use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams};
+
+    const WL: u32 = 4096;
+    const HL: u32 = 4096;
+
+    fn make_large_pair(seed_a: u64, seed_b: u64) -> (Vec<u8>, Vec<u8>) {
+        let n = (WL as usize) * (HL as usize) * 3;
+        let mut r = vec![0u8; n];
+        for (i, b) in r.iter_mut().enumerate() {
+            *b = (((i as u64).wrapping_mul(seed_a)) & 0xFF) as u8;
+        }
+        let mut d = vec![0u8; n];
+        for (i, b) in d.iter_mut().enumerate() {
+            *b = (((i as u64).wrapping_mul(seed_b)) & 0xFF) as u8;
+        }
+        (r, d)
+    }
+
+    let params = MetricParams::default_for(MetricKind::Dssim);
+    let n_dists = 3usize;
+    let (r, _) = make_large_pair(7919, 2147483647);
+    let dists: Vec<Vec<u8>> = (0..n_dists)
+        .map(|i| {
+            let (_, d) = make_large_pair(7919, 2147483647u64.wrapping_mul((i + 1) as u64));
+            d
+        })
+        .collect();
+
+    // Cached-ref in Strip mode (mode E).
+    let mut m_strip = Metric::new_with_memory_mode(
+        MetricKind::Dssim,
+        Backend::Cuda,
+        WL,
+        HL,
+        params.clone(),
+        MemoryMode::Strip { h_body: None },
+    )
+    .unwrap_or_else(|e| panic!("strip Metric::new_with_memory_mode failed: {e}"));
+    m_strip
+        .set_reference_srgb_u8(&r)
+        .unwrap_or_else(|e| panic!("strip set_reference_srgb_u8 failed: {e}"));
+    let strip_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m_strip
+                .compute_with_cached_reference_srgb_u8(d)
+                .unwrap_or_else(|e| panic!("strip compute failed: {e}"))
+                .value
+        })
+        .collect();
+
+    // Cached-ref in Full mode (parity target).
+    let mut m_full = Metric::new_with_memory_mode(
+        MetricKind::Dssim,
+        Backend::Cuda,
+        WL,
+        HL,
+        params,
+        MemoryMode::Full,
+    )
+    .unwrap_or_else(|e| panic!("full Metric::new_with_memory_mode failed: {e}"));
+    m_full
+        .set_reference_srgb_u8(&r)
+        .unwrap_or_else(|e| panic!("full set_reference_srgb_u8 failed: {e}"));
+    let full_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m_full
+                .compute_with_cached_reference_srgb_u8(d)
+                .unwrap_or_else(|e| panic!("full compute failed: {e}"))
+                .value
+        })
+        .collect();
+
+    let tol = 1e-4_f64;
+    for (i, (s, f)) in strip_scores.iter().zip(full_scores.iter()).enumerate() {
+        let diff = (s - f).abs();
+        assert!(
+            diff <= tol,
+            "dssim strip-cached[{i}] = {s} vs full-cached {f} (diff {diff}) exceeds tolerance {tol}"
+        );
+    }
+}
