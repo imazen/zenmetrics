@@ -691,6 +691,150 @@ pub fn pu_blur_v_3ch_scaled_kernel(
         * pu_scale;
 }
 
+/// Strip-aware sibling of [`pu_blur_v_3ch_scaled_kernel`] for Mode E
+/// Phase 3. Same separable σ=3 Gaussian blur with `* pu_scale` post-
+/// multiply, but reflects the Y-axis taps against the **logical**
+/// image height instead of the strip-buffer height, so a strip
+/// dispatch on a sub-band of the full image produces bit-exact body
+/// rows against a full-image dispatch.
+///
+/// Buffer model:
+/// - `src_*` and `dst_*` are **strip-buffer-sized** 3-channel f32
+///   planes of shape `w × h` (where `h` is the strip-buffer height,
+///   typically `body_h + halo_top + halo_bot`).
+/// - `body_offset_y` is the **global y of strip-buffer row 0**
+///   (i.e. the global y of the topmost halo row, NOT the body's
+///   first row). For full-image dispatch pass `body_offset_y = 0`.
+/// - `logical_h` is the height of the underlying logical image (the
+///   reflection target). For full-image dispatch pass
+///   `logical_h = h`.
+///
+/// Per output thread `idx` (1D flat index into the `w × h` strip
+/// buffer):
+/// ```text
+/// (x, y_strip) = (idx % w, idx / w)
+/// y_global     = y_strip + body_offset_y
+/// for tap t in 0..13:
+///     g_t      = y_global + (t - 6)           // global tap index
+///     ref_g_t  = reflect_pu_idx(g_t, logical_h) // reflect against logical edges
+///     local_t  = ref_g_t - body_offset_y       // strip-buffer row
+///     dst[idx] += k[t] * src[local_t * w + x]
+/// dst[idx] *= pu_scale
+/// ```
+///
+/// Correctness gate: `local_t` MUST lie in `[0, h)` for every tap
+/// the body rows touch. The caller (strip walker) is responsible
+/// for sizing halos so reflection lands inside the strip buffer.
+/// If `local_t` lands out of range, the read is OOB — this is a
+/// strip-coverage bug in the caller, not a kernel bug.
+///
+/// When called with `body_offset_y = 0, logical_h = h`, this is
+/// bit-exact identical to [`pu_blur_v_3ch_scaled_kernel`] (the
+/// reflect target collapses to the buffer height and the offset is
+/// a no-op).
+#[cube(launch)]
+pub fn pu_blur_v_3ch_scaled_strip_aware_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    pu_scale: f32,
+    w: u32,
+    h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y_strip = idx / wu;
+    let x = idx - y_strip * wu;
+
+    let logical_h_i = logical_h as i32;
+    let body_off_i = body_offset_y as i32;
+    let y_global_i = y_strip as i32 + body_off_i;
+    let half = 6_i32;
+
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    // Reflect each tap's global y against logical_h, then translate
+    // back to a strip-buffer row by subtracting body_offset_y.
+    // (reflect_pu_idx returns usize; cast to i32 for the subtract.)
+    let s0 = (reflect_pu_idx(y_global_i - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s1 = (reflect_pu_idx(y_global_i + 1 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s2 = (reflect_pu_idx(y_global_i + 2 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s3 = (reflect_pu_idx(y_global_i + 3 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s4 = (reflect_pu_idx(y_global_i + 4 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s5 = (reflect_pu_idx(y_global_i + 5 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s6 = (reflect_pu_idx(y_global_i + 6 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s7 = (reflect_pu_idx(y_global_i + 7 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s8 = (reflect_pu_idx(y_global_i + 8 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s9 = (reflect_pu_idx(y_global_i + 9 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s10 = (reflect_pu_idx(y_global_i + 10 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s11 = (reflect_pu_idx(y_global_i + 11 - half, logical_h_i) as i32 - body_off_i) as usize;
+    let s12 = (reflect_pu_idx(y_global_i + 12 - half, logical_h_i) as i32 - body_off_i) as usize;
+
+    dst_a[idx] = (k0 * src_a[s0 * wu + x]
+        + k1 * src_a[s1 * wu + x]
+        + k2 * src_a[s2 * wu + x]
+        + k3 * src_a[s3 * wu + x]
+        + k4 * src_a[s4 * wu + x]
+        + k5 * src_a[s5 * wu + x]
+        + k6 * src_a[s6 * wu + x]
+        + k7 * src_a[s7 * wu + x]
+        + k8 * src_a[s8 * wu + x]
+        + k9 * src_a[s9 * wu + x]
+        + k10 * src_a[s10 * wu + x]
+        + k11 * src_a[s11 * wu + x]
+        + k12 * src_a[s12 * wu + x])
+        * pu_scale;
+    dst_rg[idx] = (k0 * src_rg[s0 * wu + x]
+        + k1 * src_rg[s1 * wu + x]
+        + k2 * src_rg[s2 * wu + x]
+        + k3 * src_rg[s3 * wu + x]
+        + k4 * src_rg[s4 * wu + x]
+        + k5 * src_rg[s5 * wu + x]
+        + k6 * src_rg[s6 * wu + x]
+        + k7 * src_rg[s7 * wu + x]
+        + k8 * src_rg[s8 * wu + x]
+        + k9 * src_rg[s9 * wu + x]
+        + k10 * src_rg[s10 * wu + x]
+        + k11 * src_rg[s11 * wu + x]
+        + k12 * src_rg[s12 * wu + x])
+        * pu_scale;
+    dst_vy[idx] = (k0 * src_vy[s0 * wu + x]
+        + k1 * src_vy[s1 * wu + x]
+        + k2 * src_vy[s2 * wu + x]
+        + k3 * src_vy[s3 * wu + x]
+        + k4 * src_vy[s4 * wu + x]
+        + k5 * src_vy[s5 * wu + x]
+        + k6 * src_vy[s6 * wu + x]
+        + k7 * src_vy[s7 * wu + x]
+        + k8 * src_vy[s8 * wu + x]
+        + k9 * src_vy[s9 * wu + x]
+        + k10 * src_vy[s10 * wu + x]
+        + k11 * src_vy[s11 * wu + x]
+        + k12 * src_vy[s12 * wu + x])
+        * pu_scale;
+}
+
 /// Reflect index `i` into `[0, n)` for the PU blur. Matches
 /// torchvision's `F.pad(..., mode='reflect')` (no edge repeat).
 /// Inline-able from #[cube] bodies.
