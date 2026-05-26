@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/butteraugli-gpu",
+    "crates/cvvdp-conformance",
     "crates/cvvdp-cpu",
     "crates/cvvdp-gpu",
     "crates/dssim-gpu",

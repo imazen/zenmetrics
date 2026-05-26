@@ -1347,6 +1347,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cvvdp-conformance"
+version = "0.0.1"
+dependencies = [
+ "cubecl",
+ "cvvdp-cpu",
+ "cvvdp-gpu",
+ "image",
+ "serde_json",
+ "sha2",
+ "ureq",
+]
+
+[[package]]
 name = "cvvdp-cpu"
 version = "0.1.0"
 dependencies = [

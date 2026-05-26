@@ -35,6 +35,31 @@ Workspace conventions per the global rules:
   entry points for the external test crate. No logic change; no production
   path enables the feature. (`7beafa0`)
 
+### cvvdp-conformance — NEW crate: multi-impl conformance matrix vs pycvvdp v0.5.4 — 2026-05-26
+
+- **New dev-crate `cvvdp-conformance`** validating BOTH `cvvdp-cpu`
+  and `cvvdp-gpu` (as black boxes via public APIs) against the
+  canonical pycvvdp v0.5.4 reference across a **9 display × 31
+  situation = 279-cell** matrix. Replaces the thin single-image
+  `1e-4 JOD` gate that could mask per-display / per-content
+  divergences. Gated behind the `conformance-goldens` cargo feature
+  (mirrors cvvdp-gpu's `parity-goldens`) so offline `cargo test` stays
+  green; the matrix runs explicitly with a real GPU + R2 goldens.
+- **Result**: cpu 274/279, gpu 271/279 within 1e-3 JOD; median delta
+  ~2-6e-6 (bit-parity); cpu/gpu agree to ≤1.2e-3. Two documented
+  divergences surfaced (NOT silently passed): (A) shared cpu+gpu
+  parity gap ≤0.028 JOD on the `iphone_14_pro` Y_peak=1025 nit display
+  for JPEG content (high-peak-luminance CSF/masking regime — display
+  params/EOTF/CSF-axis all ruled out as identical to pycvvdp); (B) 3
+  GPU-only marginal cells ≤0.0014 JOD at the perceptibility floor on
+  extreme content (GPU float reduction-order). Both root-caused in
+  `crates/cvvdp-cpu/docs/CVVDP_CONFORMANCE.md` + `UPSTREAM_DIVERGENCES.md`.
+- **Goldens**: pycvvdp v0.5.4, 279 cells, R2
+  `s3://coefficient/cvvdp-goldens/conformance-v1/`
+  (sha256 `8f7d69dc…`). Reproducible via
+  `scripts/cvvdp_goldens/build_conformance_goldens.py`.
+- TSV: `benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv`.
+
 ### cvvdp-gpu — perf narrative + HMD geometry + heatmap + params verification — 2026-05-25
 
 - **Performance numbers corrected**: lib.rs "How we compare" section

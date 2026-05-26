@@ -1,0 +1,59 @@
+[package]
+name = "cvvdp-conformance"
+version = "0.0.1"
+description = "Conformance harness validating cvvdp-cpu + cvvdp-gpu against the pycvvdp v0.5.4 reference across a display × situation matrix"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+# By default the crate only builds the situation generator + matrix
+# definitions (pure CPU, no goldens, no GPU). `cargo test -p
+# cvvdp-conformance` then runs the offline self-tests (deterministic
+# situation hashes, matrix-cardinality pins) without touching the
+# network or a GPU.
+default = []
+# Enables the full conformance matrix test: fetches the pycvvdp
+# v0.5.4 goldens from R2 and scores BOTH cvvdp-cpu and cvvdp-gpu
+# against them, writing the result TSV. Mirrors cvvdp-gpu's
+# `parity-goldens` feature so offline `cargo test` stays green and
+# the matrix runs explicitly. NOT the silent-runtime-skip
+# anti-pattern: when this feature is off the matrix test isn't
+# compiled in at all.
+conformance-goldens = ["cuda", "dep:ureq", "dep:sha2"]
+# GPU backend selectors (forwarded to cvvdp-gpu). The conformance
+# matrix needs a real GPU runtime to exercise the cvvdp_gpu impl.
+cuda = ["cvvdp-gpu/cuda", "cvvdp-gpu/cubecl-types", "dep:cubecl"]
+wgpu = ["cvvdp-gpu/wgpu", "cvvdp-gpu/cubecl-types", "dep:cubecl"]
+
+[dependencies]
+cvvdp-cpu = { workspace = true }
+cvvdp-gpu = { workspace = true, default-features = false, features = ["pixels"] }
+serde_json = { workspace = true }
+image = { workspace = true, features = ["png", "jpeg"] }
+cubecl = { workspace = true, optional = true }
+# Only built when `conformance-goldens` is on. Cargo can't make
+# dev-deps optional, so the golden-fetch deps live here as opt-in
+# normal deps gated by the feature.
+ureq = { version = "3.3.0", optional = true }
+sha2 = { version = "0.10.9", optional = true }
+
+[dev-dependencies]
+sha2 = "0.10.9"
+
+[[bin]]
+name = "emit_situations"
+# Pure CPU — emits the situation corpus PNGs + manifest for the
+# pycvvdp golden builder. No GPU / goldens feature needed.
+
+# The full conformance matrix test only compiles when the
+# `conformance-goldens` feature is on (it needs a GPU runtime + the
+# R2 golden fetch). Off by default so `cargo test -p cvvdp-conformance`
+# stays offline + GPU-free (runs only the lib self-tests).
+[[test]]
+name = "conformance"
+required-features = ["conformance-goldens"]

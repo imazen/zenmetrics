@@ -148,6 +148,35 @@ appears.
 **Path to close**: vendor additional matrices via Python @ f64 then
 inline. Each new variant is ~10 LOC. Untracked.
 
+## 8. DIVERGES — High-peak-luminance (≥ 1000 nit) sRGB CSF/masking regime
+
+**Symptom**: On the `iphone_14_pro` display (Y_peak = 1025 nit — the
+only sRGB display with peak ≥ 1000 nit in the conformance matrix),
+both cvvdp-cpu AND cvvdp-gpu land low vs pycvvdp v0.5.4 by up to
+**0.028 JOD** on JPEG-distorted content. cpu and gpu AGREE with each
+other to ~7e-5 JOD, so this is a SHARED model parity gap, not a
+GPU/float-order artifact.
+
+**Ruled out** (verified against pycvvdp, see
+`CVVDP_CONFORMANCE.md` §Finding A): display parameters (our JSON entry
+is byte-identical to upstream; derived Y_black/Y_refl/contrast match),
+sRGB EOTF forward, and CSF LUT luminance-axis bounds (0.005–10000
+cd/m², identical to upstream).
+
+**Localized to**: the contrast-masking / CSF-sensitivity interaction
+at adaptation luminance > ~500 cd/m². `standard_phone` (Y_peak = 500,
+same E_ambient = 250 lux) passes every cell, so the trigger is peak
+luminance, not ambient. The gap tracks the correct direction
+(undershoots, never inverts ordering); magnitude is bounded at 0.28%
+of full scale and shrinks toward near-lossless.
+
+**Path to close**: stage-by-stage re-derivation of the masking/CSF
+apply at L_adapt > ~500 cd/m² against pycvvdp's per-band tensors
+(mirror the chroma-drift sentinel dumps in
+`scripts/cvvdp_goldens/dump_*_chroma.py`, but at high luminance). A
+cvvdp-cpu/gpu source change — tracked as a conformance finding, not
+yet scheduled.
+
 ---
 
 ## RESOLVED in v0.1.0
