@@ -135,7 +135,36 @@ fn vram_cap_env_override() {
 
 #[test]
 fn vram_cap_default_is_8gb() {
+    // Task #51 (commit e6660cc1) added a live nvidia-smi VRAM probe that
+    // takes precedence over the 8 GiB fallback when the env var is
+    // unset. The fallback only kicks in when the probe fails (no
+    // nvidia-smi, AMD/Intel GPU, CI runner, etc.). Both are valid
+    // contracts — the test verifies whichever applies on this host.
     with_cap(None, || {
-        assert_eq!(memory_mode::vram_cap_bytes(), 8 * 1024 * 1024 * 1024);
+        let cap = memory_mode::vram_cap_bytes();
+        let probe = memory_mode::live_vram_probe_bytes();
+        match probe {
+            None => assert_eq!(cap, 8 * 1024 * 1024 * 1024),
+            Some(p) => assert_eq!(cap, p, "must equal live probe when available"),
+        }
     });
+}
+
+#[test]
+fn vram_cap_env_override_wins_over_probe() {
+    with_cap(Some("17179869184"), || {
+        assert_eq!(memory_mode::vram_cap_bytes(), 17_179_869_184);
+    });
+}
+
+#[test]
+fn live_probe_returns_sensible_value_when_available() {
+    let probe = memory_mode::live_vram_probe_bytes();
+    if let Some(bytes) = probe {
+        assert!(bytes > 0, "live probe returned zero bytes");
+        assert!(
+            bytes <= 1024 * 1024 * 1024 * 1024,
+            "live probe absurdly large: {bytes}"
+        );
+    }
 }
