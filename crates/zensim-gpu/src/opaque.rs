@@ -405,9 +405,12 @@ impl ZensimOpaque {
     }
 
     /// Construct an opaque zensim instance with an explicit
-    /// [`MemoryMode`](crate::MemoryMode). zensim-gpu has no Strip
-    /// implementation — `MemoryMode::Strip` / `Tile` return
-    /// [`crate::Error::ModeUnsupported`].
+    /// [`MemoryMode`](crate::MemoryMode). All variants are supported as
+    /// of 2026-05-26:
+    /// - `Full` allocates the whole-image pipeline.
+    /// - `Strip { h_body }` allocates a strip-walker pipeline.
+    /// - `Tile` returns [`crate::Error::ModeUnsupported`] (not implemented).
+    /// - `Auto` falls back from Full → Strip when Full exceeds the VRAM cap.
     pub fn new_with_memory_mode(
         backend: Backend,
         width: u32,
@@ -415,54 +418,99 @@ impl ZensimOpaque {
         params: ZensimParams,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
-        // Route through the typed `new_with_memory_mode` to surface
-        // Mode errors before regime allocation.
-        let cap = crate::memory_mode::vram_cap_bytes();
-        match mode {
-            crate::MemoryMode::Strip { .. } => {
-                return Err(crate::Error::ModeUnsupported("Strip"));
-            }
-            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
-            crate::MemoryMode::Full => {} // pass through
-            crate::MemoryMode::Auto => {
-                // Validate via resolve_auto so a too-tight cap surfaces
-                // TooBigForFull before regime allocation runs. Pass the
-                // active regime so the estimator picks the right
-                // (base, beta) pair — Extended / WithIw allocate ~3×
-                // the per-pyramid-pixel bytes of Basic.
-                let _ = crate::memory_mode::resolve_auto(
-                    width,
-                    height,
-                    params.regime,
-                    cap,
-                )?;
-            }
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+
+        if matches!(mode, MemoryMode::Tile { .. }) {
+            return Err(crate::Error::ModeUnsupported("Tile"));
         }
         let regime = params.regime;
-        let inner: Box<dyn ZensimInner + Send> = match backend {
+        // Resolve Auto to a concrete (Full | Strip { h_body }) so the
+        // dispatch below is straightforward.
+        let resolved: ResolvedMode = match mode {
+            MemoryMode::Full => ResolvedMode::Full,
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, regime, cap)
+                });
+                ResolvedMode::Strip { h_body: body }
+            }
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                resolve_auto(width, height, regime, cap)?
+            }
+            MemoryMode::Tile { .. } => unreachable!("already returned above"),
+        };
+        let inner: Box<dyn ZensimInner + Send> = match (backend, resolved) {
             #[cfg(feature = "cuda")]
-            Backend::Cuda => {
+            (Backend::Cuda, ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
                 Box::new(Zensim::<cubecl::cuda::CudaRuntime>::new_with_regime(
                     client, width, height, regime,
                 )?)
             }
+            #[cfg(feature = "cuda")]
+            (Backend::Cuda, ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cuda::CudaRuntime::client(&Default::default());
+                Box::new(
+                    Zensim::<cubecl::cuda::CudaRuntime>::new_strip_with_halo_and_regime(
+                        client,
+                        width,
+                        height,
+                        h_body,
+                        crate::pipeline::STRIP_DEFAULT_HALO,
+                        regime,
+                    )?,
+                )
+            }
             #[cfg(feature = "wgpu")]
-            Backend::Wgpu => {
+            (Backend::Wgpu, ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
                 Box::new(Zensim::<cubecl::wgpu::WgpuRuntime>::new_with_regime(
                     client, width, height, regime,
                 )?)
             }
+            #[cfg(feature = "wgpu")]
+            (Backend::Wgpu, ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
+                Box::new(
+                    Zensim::<cubecl::wgpu::WgpuRuntime>::new_strip_with_halo_and_regime(
+                        client,
+                        width,
+                        height,
+                        h_body,
+                        crate::pipeline::STRIP_DEFAULT_HALO,
+                        regime,
+                    )?,
+                )
+            }
             #[cfg(feature = "cpu")]
-            Backend::Cpu => {
+            (Backend::Cpu, ResolvedMode::Full) => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
                 Box::new(Zensim::<cubecl::cpu::CpuRuntime>::new_with_regime(
                     client, width, height, regime,
                 )?)
+            }
+            #[cfg(feature = "cpu")]
+            (Backend::Cpu, ResolvedMode::Strip { h_body }) => {
+                use cubecl::Runtime;
+                let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+                Box::new(
+                    Zensim::<cubecl::cpu::CpuRuntime>::new_strip_with_halo_and_regime(
+                        client,
+                        width,
+                        height,
+                        h_body,
+                        crate::pipeline::STRIP_DEFAULT_HALO,
+                        regime,
+                    )?,
+                )
             }
         };
         Ok(Self {
