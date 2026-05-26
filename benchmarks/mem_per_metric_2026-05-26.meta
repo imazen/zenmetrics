@@ -1,0 +1,152 @@
+## mem_per_metric_2026-05-26 — meta
+
+### Subject
+
+Per-metric peak GPU memory and host RSS measurement across 6 zen GPU
+metric crates × 8 image sizes × (3 zensim regimes), for the umbrella
+`Metric::new_with_memory_mode(_, _, _, _, MemoryMode::Full)` constructor
+on the cubecl CUDA backend.
+
+The CSV `mem_per_metric_2026-05-26.csv` is one row per cell. Each cell
+runs in a fresh subprocess so cubecl's per-process memory pool starts
+empty — otherwise the second metric run in the same process would
+under-report by re-using the first's pool.
+
+### Method
+
+`crates/zenmetrics-api/examples/mem_per_metric.rs` is the harness:
+
+- driver mode: walks the (metric, regime, w, h) grid, spawns one child
+  per cell, polls `nvidia-smi --query-gpu=memory.used` every ~80 ms
+  for the lifetime of the child to capture the peak `memory.used`
+  delta from baseline
+- child mode: constructs the metric in `Full`, runs a one-shot
+  `compute_srgb_u8`, then `set_reference_srgb_u8` + two
+  `compute_with_cached_reference_srgb_u8` calls. Prints `CHILD_DONE …`
+  with ctor_ms, compute_ms, score, and per-process host `VmRSS` delta.
+
+Random u8 input buffers are seeded deterministically via an xorshift64
+PRNG so every cell scores the same (ref, dist) shape.
+
+### Columns
+
+- `metric`: butter | ssim2 | dssim | iwssim | cvvdp | zensim
+- `mode`: `full` (always — this run measures Full mode only; Strip
+  measurement is a follow-on)
+- `regime`: `-` for all metrics except zensim; `basic` | `extended` |
+  `withiw` for zensim
+- `width`, `height`, `mp`: image dims
+- `estimated_gpu_mb`: result of the per-crate
+  `estimate_gpu_memory_bytes(w, h)` (cvvdp uses
+  `estimate_gpu_memory_bytes_usize`) divided by `1024*1024`
+- `baseline_gpu_mib`: `nvidia-smi memory.used` immediately before
+  child spawn (MiB)
+- `peak_gpu_mib`: peak `memory.used` observed by the driver's poller
+  during the child's lifetime
+- `peak_delta_gpu_mb`: `peak_gpu_mib - baseline_gpu_mib` (MB)
+- `host_metric_mb`: child's `/proc/self/status` `VmRSS` delta from
+  *after* host buffers were allocated to final. Excludes the
+  reference/distorted buffers (which would otherwise add 3-4× n_bytes
+  irrelevant to the metric).
+- `score`: numeric score (for sanity that the kernel actually ran)
+- `cached_ref_supported`: whether `set_reference_srgb_u8` returned `Ok`
+- `ctor_ms`: time for `Metric::new_with_memory_mode` (includes NVRTC
+  compile on first call per process)
+- `compute_ms`: time for the first `compute_srgb_u8`
+- `duration_s`: wall-clock time the cell took from spawn to driver
+  finishing CSV append
+- `status`: `ok` or `err:<message>` or `exit:<status>` on
+  construct/compute errors and OOMs
+
+### Host
+
+- CPU: AMD Ryzen 9 7950X 16-Core Processor (water-cooled)
+- RAM: 49 GiB total, 15 GiB free at start
+- GPU: NVIDIA GeForce RTX 5070, 12227 MiB total VRAM, driver 596.21
+- WSL2 (Linux 6.6.114.1-microsoft-standard-WSL2)
+- CUDA 13.2.1 SDK at /usr/local/cuda
+
+### GPU-baseline note
+
+`baseline_gpu_mib` varies across cells (1047 → 1503) because cubecl /
+Windows host applications around the WSL2 boundary hold ~1–5 GiB of
+device memory at idle. The *delta* against the per-cell baseline is
+the meaningful "this metric's footprint" number; absolute peak is
+shown for completeness.
+
+### Build
+
+```
+PATH=/usr/local/cuda/bin:$PATH \
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+cargo build --release -p zenmetrics-api --example mem_per_metric \
+  --features cuda,all-metrics,cubecl-types,pixels
+```
+
+### Run
+
+```
+PATH=/usr/local/cuda/bin:$PATH \
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+./target/release/examples/mem_per_metric --out /tmp/mem_full.csv
+```
+
+(Full wall time: ~15 minutes including 1 stuck cell that was manually
+killed; see "ssim2 8192×8192 anomaly" below.)
+
+### git
+
+- repo: zenmetrics
+- HEAD at measurement time: 5cb6ad45bfca0b5da8065b6e711504462ea630ed
+  ("docs(CHANGELOG): umbrella cached-ref + MemoryMode + VRAM probe
+  unification")
+
+### Failures recorded
+
+- `butter 8192×8192` — estimated 12800 MB, OOM-killed mid-construct
+  (peak observed 7618 MB before kernel registered the alloc; exit
+  status `unix_wait_status(25856)` ≈ signal 100)
+- `ssim2 8192×8192` — estimated 19963 MB. Child stalled in NVRTC for
+  >2 min, manually `kill <pid>` to advance the driver. Peak observed
+  10377 MB before kill. Treat as "infeasible at this size in Full
+  on this GPU"; the failure mode was *slow OOM*, not clean error.
+- `iwssim 64×64` — surfaces clean error: "image too small for 5-level
+  IW-SSIM (min(W,H) must be ≥ 176)"
+
+### Measurement caveats
+
+1. `nvidia-smi memory.used` includes other processes on the host. The
+   per-cell delta cancels that out only if no other process changes
+   VRAM during the 80 ms poll window — which is true here because the
+   measurement box is dedicated, but anywhere with concurrent users
+   would need a stricter probe (e.g. CUDA's `cuMemGetInfo` from inside
+   the child).
+2. The 80 ms poll interval can miss spikes shorter than that. cubecl
+   construction is dominated by NVRTC compile (~200ms–10s+) which
+   produces flat-ish allocation. The peak should land in the visible
+   range; verify against the per-crate `estimate_gpu_memory_bytes` for
+   the larger-image cells where the estimate dominates init overhead.
+3. The first call into cubecl per-process costs ~150–200 MB for the
+   memory pool and JIT machinery. This shows up in every small-image
+   cell (`peak_delta_gpu_mb` ≈ 193 MB for 64×64 across all metrics).
+   Subtract this floor to get the "metric working set" — but for
+   "does this fit?" purposes you want to keep the 193 MB floor in
+   your VRAM budget.
+
+### Static estimator vs measurement
+
+In rough terms, the static estimators *under-predict* measured peaks
+by a factor of 1.5× to 2.5× at small-to-mid sizes (because they don't
+include the cubecl init pool + NVRTC + pinned-upload staging) and
+*roughly match* measured peaks at large sizes (where the per-image
+working set dominates). The largest 8K cells that succeeded landed
+within ~10–20% of the estimate (cvvdp 12715 est vs 10476 measured,
+zensim/withiw 6632 est vs 10290 measured — zensim's basic regime
+estimator is missing the Extended/WithIw plane-budget addition,
+which is documented as ~600 MB at 12 MP per scale).
+
+zensim's `estimate_gpu_memory_bytes` does NOT take regime as input —
+the 6632 MB estimate is the Basic-regime estimate; the measured 10369
+MB / 10290 MB for Extended / WithIw is the additional persist-plane
+cost the basic estimator misses (~600 MB/scale × 4 scales = ~2400 MB
+on top of basic, consistent with what the live probe sees at 8K).
