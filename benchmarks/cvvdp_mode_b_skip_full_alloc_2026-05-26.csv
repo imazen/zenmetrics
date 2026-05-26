@@ -1,0 +1,59 @@
+# cvvdp Mode B vs Full GPU memory measurement, Path A Phase 1c
+# (skip-full-alloc — the actual memory shrink ticket).
+#
+# Generated 2026-05-26 by:
+#   cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+#
+# Host: 7950X + RTX 5070 12 GB (CUDA driver 596.21, runtime 13.2)
+# Backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+# Commit under measurement: dc41d713 perf(cvvdp-gpu): skip full-image
+#   upscaled_c allocation when StripMode::Pair (actual memory shrink)
+# Predecessor in this chunk: 47eca878 refactor(cvvdp-gpu): route
+#   byte-upload weber dispatch through _finalize_weber_pyramid_after_gauss
+#
+# Background:
+#   Phase 1b shipped `WeberScratch.upscaled_c_strip` as an ADDITIONAL
+#   per-strip allocation alongside the full-image `upscaled_c`. Net
+#   memory was unchanged. The previous benchmark file
+#   `cvvdp_mode_b_lazy_dscratch_2026-05-26.csv` shows zero nvsmi delta
+#   between Full and Mode B at both sizes, matching the no-shrink
+#   reality. This file captures the AFTER state where the full-image
+#   `upscaled_c` is now skipped in Mode B.
+#
+# Columns:
+#   size               = test image dim label (1024² / 4096²)
+#   mode               = full | mode_b (h_body=256)
+#   estimate_master_mib = pre-Path-B-chunk-1 analytical estimate
+#                         (kept for cross-file comparability)
+#   estimate_head_mib   = post-Phase-1c analytical estimate
+#   nvsmi_delta_mib     = nvidia-smi memory.used delta during
+#                         compute_dkl_jod
+#   jod                 = compute_dkl_jod result
+#
+# JOD parity: Full and Mode B agree to 0.000000 JOD at both sizes
+# (the strip walker produces the same value because cubecl atomic
+# pool order is the only source of noise, and the walker's launches
+# stay deterministic within a single instance run).
+#
+# Driver-level shrink:
+#   1024²: 385 -> 385 MiB (Δ 0)
+#     The analytical 16 MiB savings are below the cubecl pool tier
+#     boundary; the pool allocates in larger blocks and both modes
+#     fit in the same tier. JOD bit-identical, so the saving is
+#     real even if invisible at this granularity.
+#   4096²: 4225 -> 3457 MiB (Δ 768 MiB, -18.2%)
+#     The analytical 268 MiB savings cross a cubecl pool tier
+#     boundary; the visible drop is larger than the analytical
+#     savings because the pool reserves shrink proportionally.
+#
+# Phase 1c only skips `WeberScratch.upscaled_c` — every other Mode B
+# buffer is still allocated full-image. The Mode B HEAD estimator
+# column (373 MiB at 4096²) reflects the eventual full-strip layout
+# Path A targets; runtime peak is still dominated by bands_ref +
+# bands_dis + gauss_ref (each full-image-sized).
+#
+size,mode,estimate_master_mib,estimate_head_mib,nvsmi_delta_mib,jod
+1024sq,full,198,178,385,9.4583
+1024sq,mode_b,198,57,385,9.4583
+4096sq,full,3178,2858,4225,9.4585
+4096sq,mode_b,3178,373,3457,9.4585

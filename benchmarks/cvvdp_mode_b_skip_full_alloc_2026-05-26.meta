@@ -1,0 +1,18 @@
+title: cvvdp Mode B vs Full GPU memory after Path A Phase 1c (skip-full-alloc)
+date: 2026-05-26
+host: 7950X + RTX 5070 12 GB (CUDA driver 596.21, runtime 13.2)
+backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+git_commits:
+  - 47eca878 refactor(cvvdp-gpu): route byte-upload weber dispatch through _finalize_weber_pyramid_after_gauss
+  - dc41d713 perf(cvvdp-gpu): skip full-image upscaled_c allocation when StripMode::Pair (actual memory shrink)
+command: cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+predecessor_file: cvvdp_mode_b_lazy_dscratch_2026-05-26.csv
+
+summary:
+  - JOD bit-identical between Full and Mode B at 1024² (9.4583) and 4096² (9.4585).
+  - 4096² Mode B nvidia-smi delta dropped 4225 MiB -> 3457 MiB (-768 MiB, -18.2%).
+  - 1024² Mode B nvidia-smi unchanged (385 MiB) — analytical 16 MiB
+    savings below cubecl pool tier granularity at this size.
+  - Analytical Mode B Path A estimator stays at 373 MiB / 57 MiB
+    (4096² / 1024²); runtime peak still dominated by bands_ref +
+    bands_dis + gauss_ref which Phase 1c does not touch.
