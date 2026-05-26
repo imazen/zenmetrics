@@ -17,6 +17,24 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-cpu — brute-force SIMD-vs-scalar kernel equivalence harness — 2026-05-26
+
+- **`tests/simd_equivalence.rs`**: brute-force per-element comparison of
+  every cvvdp-cpu SIMD kernel against its scalar reference across ≥1000
+  randomized inputs + adversarial edge cases per kernel, measuring the
+  ULP / relative-error envelope. Catches per-element divergences the
+  end-to-end 1e-4 JOD pool would mask. Gated behind a new `__simd_equiv_test`
+  cargo feature; OFF by default. Findings: sigma3 13-tap blur + pyramid
+  5-tap reduce are BIT-IDENTICAL to scalar (0 ULP); pyramid expand ≤2 ULP
+  (subnormal tail); vexp/vlog/vpow/safe_pow approximations measured at
+  14/3/40/92 max ULP — all inside magetypes' ~128 ULP / ~1e-5 rel budget,
+  committed as regression gates. Doc: `crates/cvvdp-cpu/docs/SIMD_EQUIVALENCE.md`.
+  (`7beafa0`)
+- **`lib.rs::__simd_equiv_test_api`** (feature-gated `#[doc(hidden)]`):
+  thin `pub fn` visibility shim re-exporting the `pub(crate)` SIMD kernel
+  entry points for the external test crate. No logic change; no production
+  path enables the feature. (`7beafa0`)
+
 ### cvvdp-gpu — perf narrative + HMD geometry + heatmap + params verification — 2026-05-25
 
 - **Performance numbers corrected**: lib.rs "How we compare" section
