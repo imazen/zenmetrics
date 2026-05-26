@@ -39,6 +39,21 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+# Cross-repo import of zensim's join_safety guards. See sibling
+# build_per_codec_training.py for the rationale and import pattern.
+_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensim/scripts/canonical_corpus")
+if str(_ZEN_CORPUS_JOIN_DIR) not in sys.path:
+    sys.path.insert(0, str(_ZEN_CORPUS_JOIN_DIR))
+try:
+    from join_safety import guard_metric_table  # noqa: E402
+except ImportError:
+    def guard_metric_table(label, table, *, source_key=None):  # type: ignore
+        print(
+            f"WARN: join_safety not on path ({_ZEN_CORPUS_JOIN_DIR} missing); "
+            f"skipping guard_metric_table({label!r})",
+            file=sys.stderr,
+        )
+
 R2_ENDPOINT = os.environ.get("R2_ENDPOINT") or (
     f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
     if "R2_ACCOUNT_ID" in os.environ
@@ -248,6 +263,12 @@ def main():
                    f"OR codec = 'v12_{codec}' OR codec = 'v13_{codec}' "
                    f"OR codec = 'v15rc_{codec}'")
         out_path = out_dir / f"{codec}_training.parquet"
+        # Pre-write Mode-A + Mode-B guards (see sibling script for rationale).
+        guard_metric_table(
+            f"build_per_codec_training_extended[{codec}]",
+            sub,
+            source_key="image_basename" if "image_basename" in sub.schema.names else None,
+        )
         pq.write_table(sub, out_path, compression="zstd", compression_level=3)
         print(f"  {codec}: {sub.num_rows} rows → {out_path} ({out_path.stat().st_size/1e6:.1f} MB)")
     print("\n✅ done")

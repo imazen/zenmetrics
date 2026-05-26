@@ -17,6 +17,23 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### scripts/sweep — Security: build_per_codec_training{,_extended} gain pre-write Mode-A + Mode-B guards (2026-05-26)
+
+`scripts/sweep/build_per_codec_training.py` +
+`scripts/sweep/build_per_codec_training_extended.py` now route their
+per-codec parquet output through
+`zensim::scripts::canonical_corpus::join_safety::guard_metric_table`
+before `pq.write_table(...)`. The guard catches the 2026-05-25 kadid/tid
+corruption recurrence shape (mock columns + bit-identical-to-human_score
+metric columns + any ssim2/cvvdp/butter/dssim column constant within
+every `image_basename` group). DuckDB joins themselves were already using
+the correct full per-pair key + explicit dedup; this commit closes the
+remaining post-join surface.
+
+Soft cross-repo import (try/except) so fleet workers without the zensim
+repo on disk still run, but log a stderr warning that the guard is
+skipped. See `zensim/benchmarks/joinsafety-migration-2026-05-26/MIGRATION_EVIDENCE.md`.
+
 ### ssim2-gpu — feat: cross-repo SSIM2 GPU parity test skeleton + doc (dedup Chunk H) — 2026-05-26
 
 Skeleton landing for the master dedup audit's Tier-0 #2 finding

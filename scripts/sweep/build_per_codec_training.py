@@ -52,6 +52,24 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+# Cross-repo import of zensim's join_safety. The DuckDB joins below use the
+# correct full per-pair key (image_path, codec, q, knob_tuple_json) — but
+# they still need a Mode-A leak guard + Mode-B constant-per-ref guard on
+# the final per-codec parquet so a future schema/source change can't silently
+# re-introduce the kadid/tid corruption shape.
+_ZEN_CORPUS_JOIN_DIR = Path("/home/lilith/work/zen/zensim/scripts/canonical_corpus")
+if str(_ZEN_CORPUS_JOIN_DIR) not in sys.path:
+    sys.path.insert(0, str(_ZEN_CORPUS_JOIN_DIR))
+try:
+    from join_safety import guard_metric_table  # noqa: E402
+except ImportError:
+    def guard_metric_table(label, table, *, source_key=None):  # type: ignore
+        print(
+            f"WARN: join_safety not on path ({_ZEN_CORPUS_JOIN_DIR} missing); "
+            f"skipping guard_metric_table({label!r})",
+            file=sys.stderr,
+        )
+
 R2_ENDPOINT = os.environ.get("R2_ENDPOINT") or (
     f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
     if "R2_ACCOUNT_ID" in os.environ
@@ -282,6 +300,18 @@ def main():
             continue
         sub = _ddb_table(f"SELECT * FROM joined WHERE codec = '{codec}'")
         out_path = out_dir / f"{codec}_training.parquet"
+        # Pre-write Mode-A + Mode-B guards. Raises on any mock column, any
+        # ssim2/cvvdp/butter/dssim column bit-identical to human_score, OR
+        # any of those metric columns constant within every image_basename
+        # group (the 2026-05-25 corruption signature). Source key is
+        # image_basename because that's the ref-only key the per-source
+        # join carries downstream; per-pair score columns SHOULD vary
+        # within each image_basename group across (codec, q, knob).
+        guard_metric_table(
+            f"build_per_codec_training[{codec}]",
+            sub,
+            source_key="image_basename" if "image_basename" in sub.schema.names else None,
+        )
         pq.write_table(sub, out_path, compression="zstd", compression_level=3)
         print(f"  {codec}: {sub.num_rows} rows → {out_path}  ({out_path.stat().st_size/1e6:.1f} MB)")
 
