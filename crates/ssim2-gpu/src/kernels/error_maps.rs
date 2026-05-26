@@ -93,6 +93,119 @@ pub fn error_maps_kernel(
     out_detail[idx] = dl;
 }
 
+/// Pointwise multiply with an offset into the `a` buffer:
+/// `out[i] = a[i + a_offset] * b[i]`.
+///
+/// Used by strip-mode mode E to compute `sigma12_strip = ref_xyb_full_slice
+/// · dis_xyb_strip` without materialising the slice in a separate
+/// buffer. `a` is the full-image pre-transpose ref-XYB plane (length
+/// `full_n`); `a_offset` is the starting flat index of the strip's
+/// body+halo in that plane (= `strip_top_at_scale * image_w_at_scale`).
+/// `b` and `out` are the strip-shaped dist and sigma12 planes.
+#[cube(launch_unchecked)]
+pub fn pointwise_mul_offset_kernel(
+    a: &Array<f32>,
+    b: &Array<f32>,
+    out: &mut Array<f32>,
+    a_offset: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    if idx >= out.len() {
+        terminate!();
+    }
+    let off = a_offset as usize;
+    out[idx] = a[off + idx] * b[idx];
+}
+
+/// Strip-mode error maps with cached **full-image** reference buffers.
+///
+/// Mode E from task #46 — "ref-full + dist-strip cached-ref". The
+/// reference-side state (`source` = raw transposed XYB, `mu1`,
+/// `sigma11`) lives in full-image-sized transposed buffers cached on
+/// device by an earlier `set_reference` call. The distorted side and
+/// the cross-terms (`distorted`, `mu2`, `sigma22`, `sigma12`) live in
+/// the strip-sized transposed buffers that the strip pipeline already
+/// allocates. The three error maps are written into strip-sized output
+/// buffers, ready for the existing strip-aware reduction launcher.
+///
+/// Buffer orientation: all inputs and outputs are in the SSIMULACRA2
+/// "transposed" orientation produced by `kernels::transpose` — `dst[r, c]`
+/// at flat index `r * inner_stride + c`, where the inner dimension is
+/// the **original frame's Y axis** and the outer dimension is the
+/// original frame's X axis (= the kernel-internal "width" / "outer
+/// stride" parameter). Strip buffers have `inner_stride = strip_h`;
+/// full buffers have `inner_stride = image_h` at the matching scale.
+///
+/// `inner_offset` is where the strip's first row lands in the full
+/// transposed buffer — i.e. the row offset within original-frame Y
+/// where the strip's body+halo starts. The kernel reads ref pixels at
+/// `outer * full_inner_stride + inner_offset + inner`.
+///
+/// Pointwise per strip pixel; processes `strip_n` = `strip_h × outer`
+/// pixels total.
+#[cube(launch_unchecked)]
+pub fn error_maps_strip_from_full_ref_kernel(
+    source_full: &Array<f32>,
+    distorted_strip: &Array<f32>,
+    mu1_full: &Array<f32>,
+    mu2_strip: &Array<f32>,
+    sigma11_full: &Array<f32>,
+    sigma22_strip: &Array<f32>,
+    sigma12_strip: &Array<f32>,
+    out_ssim: &mut Array<f32>,
+    out_artifact: &mut Array<f32>,
+    out_detail: &mut Array<f32>,
+    strip_inner_stride: u32,
+    full_inner_stride: u32,
+    inner_offset: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let n = out_ssim.len();
+    if idx >= n {
+        terminate!();
+    }
+    // Decompose strip-buffer flat idx → (outer, inner) in transposed
+    // orientation. Inner index = original frame Y within the strip;
+    // outer index = original frame X (column).
+    let strip_in = strip_inner_stride as usize;
+    let outer = idx / strip_in;
+    let inner = idx - outer * strip_in;
+    // Corresponding flat idx in the full ref buffers: same outer, but
+    // inner = inner_offset + inner-within-strip.
+    let full_in = full_inner_stride as usize;
+    let ref_idx = outer * full_in + (inner_offset as usize) + inner;
+
+    let m1 = mu1_full[ref_idx];
+    let m2 = mu2_strip[idx];
+    let s11 = sigma11_full[ref_idx];
+    let s22 = sigma22_strip[idx];
+    let s12 = sigma12_strip[idx];
+    let src = source_full[ref_idx];
+    let dis = distorted_strip[idx];
+
+    let mu11 = m1 * m1;
+    let mu22 = m2 * m2;
+    let mu12 = m1 * m2;
+    let mu_diff = m1 - m2;
+    let num_m = 1.0 - mu_diff * mu_diff;
+    let num_s = 2.0 * (s12 - mu12) + C2;
+    let denom_s = (s11 - mu11) + (s22 - mu22) + C2;
+    let mut d_ssim = 1.0 - (num_m * num_s) / denom_s;
+    if d_ssim < 0.0 {
+        d_ssim = 0.0;
+    }
+    out_ssim[idx] = d_ssim;
+
+    let denom = 1.0 / (1.0 + f32::abs(src - m1));
+    let numer = 1.0 + f32::abs(dis - m2);
+    let d1 = numer * denom - 1.0;
+
+    let art = if d1 > 0.0 { d1 } else { f32::new(0.0) };
+    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
+    out_artifact[idx] = art;
+    out_detail[idx] = dl;
+}
+
 /// Broadcast-batched error_maps for `Ssim2Batch`.
 ///
 /// Reference-side inputs (`source`, `mu1`, `sigma11`) are single

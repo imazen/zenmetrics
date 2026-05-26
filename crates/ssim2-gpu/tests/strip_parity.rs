@@ -194,15 +194,23 @@ fn strip_parity_single_strip_degenerate() {
 
 // ───────────────────────── error-path tests ─────────────────────────
 
+/// Strip-mode mode E (task #46, 2026-05-26): `set_reference` is now
+/// supported on strip-mode instances. It builds the full-image
+/// reference-side state on device; subsequent `compute_with_reference`
+/// walks the distorted side in strips.
 #[test]
-fn strip_rejects_set_reference() {
+fn strip_set_reference_succeeds_mode_e() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new_strip(client, 256, 256, 128).expect("new_strip");
     let r = vec![0u8; 256 * 256 * 3];
-    match s.set_reference(&r) {
-        Err(Error::CachedRefNotSupportedInStripMode) => {}
-        other => panic!("expected CachedRefNotSupportedInStripMode, got {other:?}"),
-    }
+    s.set_reference(&r).expect("strip-mode set_reference (mode E)");
+    assert!(s.has_cached_reference());
+    let d = vec![0u8; 256 * 256 * 3];
+    let _ = s
+        .compute_with_reference(&d)
+        .expect("strip-mode compute_with_reference (mode E)");
+    s.clear_reference();
+    assert!(!s.has_cached_reference());
 }
 
 #[test]

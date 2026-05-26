@@ -48,6 +48,53 @@ struct StripMeta {
     halo: u32,
 }
 
+/// Cached reference state for strip-mode mode E (task #46). Holds
+/// **full-image-sized** ref-side state per scale: the raw transposed
+/// XYB pyramid + the fully-blurred mu1 + the fully-blurred ref²
+/// (sigma11), all in transposed orientation (inner stride = full
+/// image height at the scale). When a strip-mode `Ssim2` has this
+/// populated, `compute_with_reference` walks the distorted side in
+/// strips and reads ref values out of these full buffers via the
+/// `error_maps_strip_from_full_ref` kernel.
+///
+/// Each scale's `(width, full_h, n)` reflects the full-image pyramid
+/// size at that scale — NOT the strip pyramid size.
+struct StripCachedRefScale {
+    /// Width in original-frame X at this pyramid scale.
+    width: u32,
+    /// Height in original-frame Y at this pyramid scale. The
+    /// transposed buffers' inner stride equals this.
+    full_h: u32,
+    /// `width × full_h` total floats per plane.
+    n: usize,
+    /// Raw **pre-transpose** reference XYB at this scale. Used by
+    /// strip-mode compute to build `sigma12_strip = ref · dis` via
+    /// the `pointwise_mul_offset` kernel, slicing this full plane
+    /// with the strip's flat-index offset.
+    ref_xyb_full: [cubecl::server::Handle; 3],
+    /// Raw transposed reference XYB (input to error_maps `source`).
+    ref_xyb_t_full: [cubecl::server::Handle; 3],
+    /// Fully-blurred reference XYB (input to error_maps `mu1`).
+    mu1_full_full: [cubecl::server::Handle; 3],
+    /// Fully-blurred reference² (input to error_maps `sigma11`).
+    sigma11_full_full: [cubecl::server::Handle; 3],
+}
+
+impl StripCachedRefScale {
+    fn new<R: Runtime>(client: &ComputeClient<R>, width: u32, full_h: u32) -> Self {
+        let n = (width as usize) * (full_h as usize);
+        Self {
+            width,
+            full_h,
+            n,
+            ref_xyb_full: alloc_3(client, n),
+            ref_xyb_t_full: alloc_3(client, n),
+            mu1_full_full: alloc_3(client, n),
+            sigma11_full_full: alloc_3(client, n),
+        }
+    }
+}
+
 /// Per-scale buffer set. Each plane is `width × height` f32, planar
 /// (one buffer per channel of a 3-channel image).
 struct Scale {
@@ -203,6 +250,16 @@ pub struct Ssim2<R: Runtime> {
     /// dimensions (image_w × (h_body + 2*halo)), not the full image.
     strip: Option<StripMeta>,
 
+    /// Strip-mode mode-E cached reference state — full-image-sized
+    /// ref-side buffers per pyramid scale. Populated by
+    /// [`Self::set_reference`] when invoked on a strip-mode instance;
+    /// consumed by [`Self::compute_with_reference`] which walks the
+    /// distorted side in strips and reads ref maps from the cached
+    /// full buffers via `error_maps_strip_from_full_ref`. Lazy-allocated
+    /// on the first `set_reference` call. `None` for whole-image
+    /// instances (those use the per-scale buffers directly).
+    strip_cached_ref: Option<Vec<StripCachedRefScale>>,
+
     /// Selected blur kernel. Defaults to `Ssim2Blur::Iir` (the canonical
     /// libjxl recursive Gaussian — bit-identical to the pre-T_y.B
     /// behaviour). Set via `with_blur` / `set_blur`. The non-default
@@ -318,6 +375,7 @@ impl<R: Runtime> Ssim2<R> {
             sums,
             has_cached_reference: false,
             strip: None,
+            strip_cached_ref: None,
             #[cfg(feature = "fir")]
             blur: Ssim2Blur::default(),
         })
@@ -336,9 +394,13 @@ impl<R: Runtime> Ssim2<R> {
     /// will return [`Error::DimensionMismatch`] (the strip-sized scale-0
     /// buffer can't hold a full-frame upload).
     ///
-    /// `set_reference` is currently rejected on strip-mode instances
-    /// (`Error::CachedRefNotSupportedInStripMode`). For RD-search hot
-    /// loops use the whole-image path.
+    /// Task #46 (2026-05-26): strip-mode `set_reference` is now
+    /// supported via mode E (ref full on device, dist walks in
+    /// strips). The reference-side state is built once at full image
+    /// resolution; subsequent `compute_with_reference` calls walk the
+    /// distorted side in strips and read ref values from the cached
+    /// full buffers. Memory cost adds ~3 × full-image plane size per
+    /// scale on top of the strip working set.
     ///
     /// ```no_run
     /// use cubecl::Runtime;
@@ -424,6 +486,7 @@ impl<R: Runtime> Ssim2<R> {
                 h_body: h_body_eff,
                 halo,
             }),
+            strip_cached_ref: None,
             #[cfg(feature = "fir")]
             blur: Ssim2Blur::default(),
         })
@@ -737,7 +800,7 @@ impl<R: Runtime> Ssim2<R> {
     /// ```
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         if self.strip.is_some() {
-            return Err(Error::CachedRefNotSupportedInStripMode);
+            return self.set_reference_strip_mode(ref_srgb);
         }
         self.check_dims(ref_srgb)?;
         self.upload_and_srgb_to_linear(true, ref_srgb);
@@ -755,9 +818,262 @@ impl<R: Runtime> Ssim2<R> {
         Ok(())
     }
 
+    /// Strip-mode mode-E set_reference (task #46). Builds the
+    /// **full-image** reference-side state (raw transposed XYB, blurred
+    /// mu1, blurred sigma11) per pyramid scale into the
+    /// `strip_cached_ref` slot, then subsequent
+    /// [`Self::compute_with_reference`] walks the distorted side in
+    /// strips and reads ref values from these full buffers.
+    ///
+    /// Uses temporary full-image-sized scratch buffers for the linear
+    /// pyramid + XYB + sigma11_in + the two-pass-blur scratch. The
+    /// scratch is dropped at the end of this call. Only the three
+    /// "final" ref maps per scale × channel persist in
+    /// `strip_cached_ref`.
+    fn set_reference_strip_mode(&mut self, ref_srgb: &[u8]) -> Result<()> {
+        let meta = self.strip.expect("strip mode required");
+        let expected = (meta.image_w as usize) * (meta.image_h as usize) * 3;
+        if ref_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_srgb.len(),
+            });
+        }
+
+        // Build per-scale full-image dimensions.
+        let mut dims = Vec::with_capacity(NUM_SCALES);
+        let mut w = meta.image_w;
+        let mut h = meta.image_h;
+        for _ in 0..NUM_SCALES {
+            if w < 8 || h < 8 {
+                break;
+            }
+            dims.push((w, h));
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+
+        // Lazily allocate the cached-ref store. The cache shape is
+        // fixed by the strip-mode instance's (image_w, image_h), so a
+        // single allocation is reused across `set_reference` calls.
+        if self
+            .strip_cached_ref
+            .as_ref()
+            .map(|v| v.len() != dims.len())
+            .unwrap_or(true)
+        {
+            let cache = dims
+                .iter()
+                .map(|&(w, h)| StripCachedRefScale::new(&self.client, w, h))
+                .collect::<Vec<_>>();
+            self.strip_cached_ref = Some(cache);
+        }
+
+        // Temporary full-image scratch per scale, just for the ref-side
+        // pipeline. Allocated on a per-scale basis so peak working-set
+        // is one scale's scratch at a time.
+        //
+        // Layout per scale: 3-channel ref_lin (input to this scale's
+        // XYB), 3-channel ref_xyb, 3-channel sigma11_in (ref²),
+        // 3-channel v_scratch, 3-channel t_scratch. Final 3-channel
+        // outputs (ref_xyb_t_full, mu1_full_full, sigma11_full_full)
+        // live in `strip_cached_ref`.
+        //
+        // To build the pyramid we keep ref_lin live across all scales
+        // — each scale's downscale reads from scale s-1 and writes
+        // into scale s. The other buffers (XYB, sigma11_in, scratch)
+        // can be dropped scale-by-scale, but the simplest path
+        // pre-allocates one full pyramid's worth of ref_lin and
+        // reuses per-scale temp buffers across calls.
+
+        // 1. Upload the reference + sRGB→linear at scale 0 into a
+        //    full-image-sized temp ref_lin buffer.
+        let n0 = (meta.image_w as usize) * (meta.image_h as usize);
+        let pinned_len = n0 * 4;
+        let mut staging = self.client.reserve_staging(&[pinned_len]);
+        let mut bytes = staging
+            .pop()
+            .expect("reserve_staging returned no buffers");
+        {
+            let dst: &mut [u8] = &mut bytes;
+            debug_assert_eq!(dst.len(), pinned_len);
+            for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(ref_srgb.chunks_exact(3)) {
+                chunk_out[0] = triple[0];
+                chunk_out[1] = triple[1];
+                chunk_out[2] = triple[2];
+                chunk_out[3] = 0;
+            }
+        }
+        let packed_handle = self.client.create(bytes);
+
+        // Build full ref_lin pyramid.
+        let mut full_ref_lin: Vec<[cubecl::server::Handle; 3]> = Vec::with_capacity(dims.len());
+        for &(w, h) in &dims {
+            let n = (w as usize) * (h as usize);
+            full_ref_lin.push(alloc_3(&self.client, n));
+        }
+        // sRGB→linear into scale 0.
+        unsafe {
+            srgb::srgb_u8_to_linear_planar_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(n0),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(packed_handle.clone(), n0),
+                ArrayArg::from_raw_parts(full_ref_lin[0][0].clone(), n0),
+                ArrayArg::from_raw_parts(full_ref_lin[0][1].clone(), n0),
+                ArrayArg::from_raw_parts(full_ref_lin[0][2].clone(), n0),
+            );
+        }
+        // Downscale chain.
+        for s in 1..dims.len() {
+            let (pw, ph) = dims[s - 1];
+            let (cw, ch_) = dims[s];
+            let n_prev = (pw as usize) * (ph as usize);
+            let n_curr = (cw as usize) * (ch_ as usize);
+            for chi in 0..3 {
+                unsafe {
+                    downscale::downscale_2x_plane_kernel::launch_unchecked::<R>(
+                        &self.client,
+                        Self::cube_count_1d(n_curr),
+                        Self::cube_dim_1d(),
+                        ArrayArg::from_raw_parts(full_ref_lin[s - 1][chi].clone(), n_prev),
+                        ArrayArg::from_raw_parts(full_ref_lin[s][chi].clone(), n_curr),
+                        pw,
+                        ph,
+                        cw,
+                        ch_,
+                    );
+                }
+            }
+        }
+
+        // Per-scale: XYB → sigma11_in (ref²) → blur(sigma11) + blur(ref_xyb)
+        // → transpose(ref_xyb). Write outputs into `strip_cached_ref`.
+        for s in 0..dims.len() {
+            let (w, h) = dims[s];
+            let n = (w as usize) * (h as usize);
+
+            // Allocate per-scale temp working buffers. sigma11_in and
+            // the two blur scratches are dropped at end of this scale;
+            // the XYB output we write directly into the cached
+            // `ref_xyb_full` slot.
+            let sigma11_in_temp = alloc_3(&self.client, n);
+            let v_scratch_temp = alloc_3(&self.client, n);
+            let t_scratch_temp = alloc_3(&self.client, n);
+
+            // linear → XYB (3-in, 3-out fused kernel). Output lands
+            // directly in the cached pre-transpose ref_xyb_full slot
+            // so the strip-mode compute can read it without a second
+            // copy. Borrow the cache via the `clone()`-into-handle
+            // idiom that the rest of the pipeline uses.
+            let cache_s_handles = {
+                let cache_s = &self.strip_cached_ref.as_ref().unwrap()[s];
+                debug_assert_eq!(cache_s.n, n);
+                (
+                    [
+                        cache_s.ref_xyb_full[0].clone(),
+                        cache_s.ref_xyb_full[1].clone(),
+                        cache_s.ref_xyb_full[2].clone(),
+                    ],
+                    [
+                        cache_s.ref_xyb_t_full[0].clone(),
+                        cache_s.ref_xyb_t_full[1].clone(),
+                        cache_s.ref_xyb_t_full[2].clone(),
+                    ],
+                    [
+                        cache_s.mu1_full_full[0].clone(),
+                        cache_s.mu1_full_full[1].clone(),
+                        cache_s.mu1_full_full[2].clone(),
+                    ],
+                    [
+                        cache_s.sigma11_full_full[0].clone(),
+                        cache_s.sigma11_full_full[1].clone(),
+                        cache_s.sigma11_full_full[2].clone(),
+                    ],
+                )
+            };
+            let (ref_xyb_full_h, ref_xyb_t_full_h, mu1_full_h, sigma11_full_h) = cache_s_handles;
+
+            unsafe {
+                xyb::linear_to_xyb_planar_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][0].clone(), n),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][1].clone(), n),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][2].clone(), n),
+                    ArrayArg::from_raw_parts(ref_xyb_full_h[0].clone(), n),
+                    ArrayArg::from_raw_parts(ref_xyb_full_h[1].clone(), n),
+                    ArrayArg::from_raw_parts(ref_xyb_full_h[2].clone(), n),
+                );
+            }
+
+            // sigma11_in = ref · ref (per channel).
+            for chi in 0..3 {
+                unsafe {
+                    pointwise_mul_kernel::launch_unchecked::<R>(
+                        &self.client,
+                        Self::cube_count_1d(n),
+                        Self::cube_dim_1d(),
+                        ArrayArg::from_raw_parts(ref_xyb_full_h[chi].clone(), n),
+                        ArrayArg::from_raw_parts(ref_xyb_full_h[chi].clone(), n),
+                        ArrayArg::from_raw_parts(sigma11_in_temp[chi].clone(), n),
+                    );
+                }
+            }
+
+            for chi in 0..3 {
+                // sigma11_full = blur(ref²)
+                self.blur_plane_two_pass(
+                    w,
+                    h,
+                    n,
+                    &sigma11_in_temp[chi],
+                    &v_scratch_temp[chi],
+                    &t_scratch_temp[chi],
+                    &sigma11_full_h[chi],
+                );
+                // mu1_full = blur(ref_xyb)
+                self.blur_plane_two_pass(
+                    w,
+                    h,
+                    n,
+                    &ref_xyb_full_h[chi],
+                    &v_scratch_temp[chi],
+                    &t_scratch_temp[chi],
+                    &mu1_full_h[chi],
+                );
+                // ref_xyb_t_full = transpose(ref_xyb)
+                unsafe {
+                    transpose::transpose_kernel::launch_unchecked::<R>(
+                        &self.client,
+                        Self::transpose_cube_count(w, h),
+                        Self::transpose_cube_dim(),
+                        ArrayArg::from_raw_parts(ref_xyb_full_h[chi].clone(), n),
+                        ArrayArg::from_raw_parts(ref_xyb_t_full_h[chi].clone(), n),
+                        w,
+                        h,
+                    );
+                }
+            }
+            // temp handles drop here at scope end — cubecl returns the
+            // memory to the runtime allocator. ref_lin we keep across
+            // all scales (the downscale chain reads from scale s-1
+            // when building scale s).
+        }
+
+        self.has_cached_reference = true;
+        Ok(())
+    }
+
     /// Drop any cached reference state.
     pub fn clear_reference(&mut self) {
         self.has_cached_reference = false;
+        // For strip mode, also release the cached ref buffers. For
+        // whole-image mode the per-scale buffers stay live (they're
+        // pre-allocated as part of the instance) and just the flag
+        // flips to false.
+        self.strip_cached_ref = None;
     }
 
     pub fn has_cached_reference(&self) -> bool {
@@ -799,7 +1115,7 @@ impl<R: Runtime> Ssim2<R> {
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
         if self.strip.is_some() {
-            return Err(Error::CachedRefNotSupportedInStripMode);
+            return self.compute_with_reference_strip_with_mode(mode, dist_srgb);
         }
         if !self.has_cached_reference {
             return Err(Error::NoCachedReference);
@@ -835,6 +1151,241 @@ impl<R: Runtime> Ssim2<R> {
         Ok(GpuSsim2Result {
             score: self.read_and_aggregate(),
         })
+    }
+
+    // ────────────────── strip processing (cached-ref mode E) ──────────────────
+
+    /// Strip-mode mode-E `compute_with_reference_with_mode` (task #46).
+    /// Walks the distorted side in strips; reads reference-side state
+    /// from the full-image `strip_cached_ref` buffers populated by
+    /// [`Self::set_reference_strip_mode`].
+    fn compute_with_reference_strip_with_mode(
+        &mut self,
+        mode: Ssim2Mode,
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
+        if !self.has_cached_reference || self.strip_cached_ref.is_none() {
+            return Err(Error::NoCachedReference);
+        }
+        let meta = self.strip.expect("strip-mode required");
+        let expected = (meta.image_w as usize) * (meta.image_h as usize) * 3;
+        if dist_srgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dist_srgb.len(),
+            });
+        }
+
+        let h_body = meta.h_body;
+        let halo = meta.halo;
+        let image_h = meta.image_h;
+        let image_w = meta.image_w;
+        let strip_h0_alloc = self.scales[0].height;
+
+        let n_slots = NUM_SLOTS;
+        let mut acc_sum = vec![0.0_f64; n_slots];
+        let mut acc_p4 = vec![0.0_f64; n_slots];
+
+        let mut body_start = 0u32;
+        while body_start < image_h {
+            let body_end = (body_start + h_body).min(image_h);
+            let strip_top = body_start.saturating_sub(halo);
+            let strip_bot = (body_end + halo).min(image_h);
+            let strip_h_active = strip_bot - strip_top;
+            let body_col_start = body_start - strip_top;
+            let body_col_end = body_end - strip_top;
+
+            // Upload only the distorted side. Reference is already
+            // resident in `strip_cached_ref` at full-image resolution.
+            self.upload_strip_slice(
+                false,
+                dist_srgb,
+                image_w,
+                image_h,
+                strip_top,
+                strip_h_active,
+                strip_h0_alloc,
+            );
+
+            reduction::launch_zero_fill_f32(
+                &self.client,
+                self.partials.clone(),
+                PARTIALS_LEN,
+            );
+
+            // Build dist-side linear pyramid only.
+            let last_active = (0..self.scales.len())
+                .rev()
+                .find(|&s| !skip_scale(mode, s))
+                .unwrap_or(0);
+            self.build_linear_pyramid_until(false, last_active);
+
+            for s in 0..self.scales.len() {
+                if skip_scale(mode, s) {
+                    continue;
+                }
+                let s_u = s as u32;
+                let scale_strip_h = self.scales[s].height;
+                let scale_body_start = body_col_start >> s_u;
+                let scale_body_end =
+                    ((body_col_end + (1 << s_u) - 1) >> s_u).min(scale_strip_h);
+                // The strip's top edge in full-image scale-s row coords.
+                // Scale-s row offset = floor(strip_top / 2^s) — same
+                // semantics as the scale-0 → scale-s downscale chain
+                // uses (which is div_ceil for height, but the body
+                // alignment uses floor on the top edge to keep the
+                // first body sample in scope).
+                let strip_top_at_s = strip_top >> s_u;
+                self.process_scale_strip_cached_ref(
+                    s,
+                    mode,
+                    scale_strip_h,
+                    scale_body_start,
+                    scale_body_end,
+                    strip_top_at_s,
+                );
+            }
+
+            self.run_finalizer();
+            let bytes = self
+                .client
+                .read_one(self.sums.clone())
+                .expect("read sums buffer (strip cached-ref)");
+            let raw = f32::from_bytes(&bytes);
+            debug_assert_eq!(raw.len(), SUMS_LEN);
+            for slot in 0..n_slots {
+                acc_sum[slot] += raw[slot * 2] as f64;
+                acc_p4[slot] += raw[slot * 2 + 1] as f64;
+            }
+            body_start = body_end;
+        }
+
+        Ok(GpuSsim2Result {
+            score: self.aggregate_from_accumulators(&acc_sum, &acc_p4, meta),
+        })
+    }
+
+    /// Per-scale strip processing for mode E. Builds dist-side state
+    /// only; uses cached full-image ref state for sigma12 (via the
+    /// offset-mul kernel) and error_maps (via the
+    /// `error_maps_strip_from_full_ref` kernel).
+    fn process_scale_strip_cached_ref(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        scale_strip_h: u32,
+        body_col_start: u32,
+        body_col_end: u32,
+        strip_top_at_s: u32,
+    ) {
+        // dist-side XYB
+        self.run_xyb_masked(scale, false, mode);
+        // sigma22 = dis · dis
+        self.run_self_products_masked(scale, false, mode);
+        // sigma12 = ref_full_slice · dis, where the ref slice is the
+        // strip's body+halo region of the cached full ref_xyb plane.
+        // Pre-transpose orientation: flat layout `image_h_s` rows of
+        // `image_w_s` cols, so the strip's slice starts at flat index
+        // `strip_top_at_s * image_w_s`.
+        self.run_cross_product_strip_cached_ref(scale, mode, strip_top_at_s);
+        // Blur dist-side planes: sigma22, mu2=dis, sigma12 — all
+        // produced in strip-shape transposed orientation.
+        self.run_blur_dis_only_masked(scale, mode);
+        // Transpose raw dist XYB (ref's transpose is already cached).
+        self.run_transpose_raw_xyb_pair_masked(scale, false, true, mode);
+        // Error maps: ref-side inputs from the cached full buffers,
+        // dist-side from the strip buffers. Output is strip-shape.
+        self.run_error_maps_strip_cached_ref(scale, mode, strip_top_at_s);
+        // Standard strip-mode reduction over output ssim/artifact/detail
+        // planes, filtered to body inner indices.
+        self.run_reductions_strip_masked(
+            scale,
+            mode,
+            scale_strip_h,
+            body_col_start,
+            body_col_end,
+        );
+    }
+
+    /// Strip-mode mode-E sigma12 cross-product: `sigma12_in_strip =
+    /// ref_xyb_full[offset..] · dis_xyb_strip`. The offset is the
+    /// pre-transpose flat index where the strip's first row lands in
+    /// the full ref plane.
+    fn run_cross_product_strip_cached_ref(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        strip_top_at_s: u32,
+    ) {
+        let s = &self.scales[scale];
+        let cache_s = &self
+            .strip_cached_ref
+            .as_ref()
+            .expect("strip_cached_ref populated")[scale];
+        // Offset in elements (flat-idx units) into the pre-transpose
+        // full ref buffer at this scale.
+        let a_offset = strip_top_at_s * cache_s.width;
+        for chi in 0..3 {
+            if skip_error_map(mode, scale, chi) {
+                continue;
+            }
+            unsafe {
+                crate::kernels::error_maps::pointwise_mul_offset_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(s.n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(cache_s.ref_xyb_full[chi].clone(), cache_s.n),
+                    ArrayArg::from_raw_parts(s.dis_xyb[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.sigma12_in[chi].clone(), s.n),
+                    a_offset,
+                );
+            }
+        }
+    }
+
+    /// Strip-mode mode-E error_maps: ref inputs from full buffers
+    /// (transposed orientation, inner stride = `full_h`); dist inputs
+    /// + outputs in strip-shape transposed (inner stride = `strip_h`).
+    /// `strip_top_at_s` is the row offset where the strip starts in
+    /// the full transposed buffer's inner-index axis.
+    fn run_error_maps_strip_cached_ref(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        strip_top_at_s: u32,
+    ) {
+        let s = &self.scales[scale];
+        let cache_s = &self
+            .strip_cached_ref
+            .as_ref()
+            .expect("strip_cached_ref populated")[scale];
+        let strip_inner_stride = s.height; // transposed strip inner dim
+        let full_inner_stride = cache_s.full_h;
+        for chi in 0..3 {
+            if skip_error_map(mode, scale, chi) {
+                continue;
+            }
+            unsafe {
+                crate::kernels::error_maps::error_maps_strip_from_full_ref_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(s.n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(cache_s.ref_xyb_t_full[chi].clone(), cache_s.n),
+                    ArrayArg::from_raw_parts(s.dis_xyb_t[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(cache_s.mu1_full_full[chi].clone(), cache_s.n),
+                    ArrayArg::from_raw_parts(s.mu2_full[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(cache_s.sigma11_full_full[chi].clone(), cache_s.n),
+                    ArrayArg::from_raw_parts(s.sigma22_full[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.sigma12_full[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.ssim[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.artifact[chi].clone(), s.n),
+                    ArrayArg::from_raw_parts(s.detail[chi].clone(), s.n),
+                    strip_inner_stride,
+                    full_inner_stride,
+                    strip_top_at_s,
+                );
+            }
+        }
     }
 
     // ───────────────────────── strip processing ─────────────────────────
