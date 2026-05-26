@@ -12,6 +12,7 @@ members = [
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zensim-gpu",
+    "crates/zenstats",
 ]
 # Excluded: burn-conv-spike is a standalone perf-spike crate that
 # pins cubecl 0.10.0 stable (cubek-convolution doesn't accept

@@ -6443,6 +6443,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenstats"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "zenwebp"
 version = "0.4.5"
 dependencies = [
