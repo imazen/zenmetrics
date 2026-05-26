@@ -38,6 +38,79 @@ use zenmetrics_api::cvvdp;
 use crate::decode::Rgb8Image;
 use crate::metrics::{GpuRuntime, auto_order, runtime_label};
 
+/// Display viewing conditions for a cvvdp scorer: photometry
+/// (`DisplayModel` — peak/black luminance, ambient reflection, EOTF)
+/// + geometry (`DisplayGeometry` — resolution / distance / diagonal,
+/// which derives pixels-per-degree).
+///
+/// Both halves matter and both must be set together: the photometry
+/// drives the sRGB→linear-cd/m² conversion in the color stage, and
+/// the geometry drives the CSF LUT that is pre-uploaded at
+/// `Cvvdp::new_with_geometry` time. Scoring the same pair under two
+/// different `DisplayTarget`s yields different JOD scores — that is
+/// the whole point of display-aware quality assessment (a phone at
+/// arm's length has higher PPD + higher peak luminance than a 4K
+/// desktop monitor, so artifacts are differently visible).
+///
+/// The default is `STANDARD_4K` (200 cd/m², 75.4 PPD), matching every
+/// historical CLI score and the v1 R2 parity goldens.
+#[derive(Debug, Clone, Copy)]
+pub struct DisplayTarget {
+    /// Photometric model — peak/black luminance, ambient, EOTF.
+    pub display: cvvdp::params::DisplayModel,
+    /// Viewing geometry — resolution + distance + diagonal → PPD.
+    pub geometry: cvvdp::params::DisplayGeometry,
+}
+
+impl Default for DisplayTarget {
+    fn default() -> Self {
+        Self {
+            display: cvvdp::params::DisplayModel::STANDARD_4K,
+            geometry: cvvdp::params::DisplayGeometry::STANDARD_4K,
+        }
+    }
+}
+
+impl DisplayTarget {
+    /// Resolve a `DisplayTarget` from a preset name (as found in the
+    /// vendored `display_models.json`, e.g. `"standard_4k"`,
+    /// `"iphone_14_pro"`, `"standard_phone"`). Both the photometry
+    /// and the geometry are loaded for the same name via
+    /// [`cvvdp::params::DisplayModel::by_name`] /
+    /// [`cvvdp::params::DisplayGeometry::by_name`].
+    ///
+    /// Returns `Err` listing the available preset names when `name`
+    /// is unknown, or when the named preset has photometry but no
+    /// geometry (FOV-only presets without resolution).
+    pub fn by_name(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let display = cvvdp::params::DisplayModel::by_name(name).ok_or_else(|| {
+            format!(
+                "unknown --display-model preset {name:?}; \
+                 see `display_models.json` for valid names \
+                 (e.g. standard_4k, iphone_14_pro, standard_phone)"
+            )
+        })?;
+        let geometry = cvvdp::params::DisplayGeometry::by_name(name).ok_or_else(|| {
+            format!(
+                "--display-model preset {name:?} has photometry but no \
+                 geometry (resolution); cvvdp scoring needs both"
+            )
+        })?;
+        Ok(Self { display, geometry })
+    }
+
+    /// The `CvvdpParams` for this target: `PLACEHOLDER` with the
+    /// photometric `display` field swapped in. The other scaffolding
+    /// sub-bundles are unused by the production kernels (see
+    /// `CvvdpParams::PLACEHOLDER` docs).
+    fn params(&self) -> cvvdp::CvvdpParams {
+        cvvdp::CvvdpParams {
+            display: self.display,
+            ..cvvdp::CvvdpParams::PLACEHOLDER
+        }
+    }
+}
+
 /// Batched cvvdp scorer that caches the `cvvdp::Cvvdp` instance
 /// by `(width, height)` across many score-pairs calls.
 ///
@@ -81,6 +154,7 @@ pub enum CvvdpBatchScorer {
 pub struct CvvdpBatchScorerState<R: Runtime> {
     client: cubecl::client::ComputeClient<R>,
     cached: Option<(u32, u32, cvvdp::Cvvdp<R>)>,
+    target: DisplayTarget,
 }
 
 /// CPU variant — routes through `compute_dkl_jod_host_pool` since
@@ -92,6 +166,7 @@ pub struct CvvdpBatchScorerState<R: Runtime> {
 pub struct CvvdpBatchScorerCpuState<R: Runtime> {
     client: cubecl::client::ComputeClient<R>,
     cached: Option<(u32, u32, cvvdp::Cvvdp<R>)>,
+    target: DisplayTarget,
 }
 
 impl CvvdpBatchScorer {
@@ -102,13 +177,26 @@ impl CvvdpBatchScorer {
     /// the scorer with an explicit fallback runtime — silent
     /// per-call fall-through is the bug the cache fixes.
     pub fn new(runtime: GpuRuntime) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_target(runtime, DisplayTarget::default())
+    }
+
+    /// Construct a scorer for the given runtime AND a specific
+    /// [`DisplayTarget`] (photometry + geometry). The target is baked
+    /// into every `Cvvdp` instance this scorer caches — both the
+    /// CSF-LUT PPD (from `target.geometry`) and the color-stage
+    /// photometry (from `target.display`). `new` is the back-compat
+    /// `STANDARD_4K` shorthand.
+    pub fn new_with_target(
+        runtime: GpuRuntime,
+        target: DisplayTarget,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let candidates: Vec<GpuRuntime> = match runtime {
             GpuRuntime::Auto => auto_order().to_vec(),
             other => vec![other],
         };
         let mut last_error: Option<String> = None;
         for rt in candidates {
-            match Self::try_new_with_runtime(rt) {
+            match Self::try_new_with_runtime(rt, target) {
                 Ok(s) => return Ok(s),
                 Err(e) => last_error = Some(format!("{}: {e}", runtime_label(rt))),
             }
@@ -120,12 +208,16 @@ impl CvvdpBatchScorer {
         .into())
     }
 
-    fn try_new_with_runtime(runtime: GpuRuntime) -> Result<Self, Box<dyn std::error::Error>> {
+    fn try_new_with_runtime(
+        runtime: GpuRuntime,
+        target: DisplayTarget,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         match runtime {
             #[cfg(feature = "gpu-cuda")]
             GpuRuntime::Cuda => Ok(Self::Cuda(CvvdpBatchScorerState {
                 client: <cubecl::cuda::CudaRuntime as Runtime>::client(&Default::default()),
                 cached: None,
+                target,
             })),
             #[cfg(not(feature = "gpu-cuda"))]
             GpuRuntime::Cuda => {
@@ -135,6 +227,7 @@ impl CvvdpBatchScorer {
             GpuRuntime::Wgpu => Ok(Self::Wgpu(CvvdpBatchScorerState {
                 client: <cubecl::wgpu::WgpuRuntime as Runtime>::client(&Default::default()),
                 cached: None,
+                target,
             })),
             #[cfg(not(feature = "gpu-wgpu"))]
             GpuRuntime::Wgpu => {
@@ -144,6 +237,7 @@ impl CvvdpBatchScorer {
             GpuRuntime::Hip => Ok(Self::Hip(CvvdpBatchScorerState {
                 client: <cubecl::hip::HipRuntime as Runtime>::client(&Default::default()),
                 cached: None,
+                target,
             })),
             #[cfg(not(feature = "gpu-hip"))]
             GpuRuntime::Hip => {
@@ -153,6 +247,7 @@ impl CvvdpBatchScorer {
             GpuRuntime::Cpu => Ok(Self::Cpu(CvvdpBatchScorerCpuState {
                 client: <cubecl::cpu::CpuRuntime as Runtime>::client(&Default::default()),
                 cached: None,
+                target,
             })),
             #[cfg(not(feature = "gpu-cpu"))]
             GpuRuntime::Cpu => {
@@ -223,13 +318,18 @@ fn score_pair_cached_gpu<R: Runtime>(
         // so peak GPU memory stays at one instance's worth rather
         // than two. `Cvvdp` releases all its buffers on drop.
         state.cached = None;
-        let c = cvvdp::Cvvdp::<R>::new(
+        // Bake BOTH the photometry (params.display) AND the geometry
+        // (PPD → CSF LUT) of the requested display target into this
+        // instance. STANDARD_4K is the default; iphone_14_pro etc.
+        // flow through `--display-model`.
+        let c = cvvdp::Cvvdp::<R>::new_with_geometry(
             state.client.clone(),
             w,
             h,
-            cvvdp::CvvdpParams::PLACEHOLDER,
+            state.target.params(),
+            state.target.geometry,
         )
-        .map_err(|e| format!("Cvvdp::new ({w}x{h}): {e}"))?;
+        .map_err(|e| format!("Cvvdp::new_with_geometry ({w}x{h}): {e}"))?;
         state.cached = Some((w, h, c));
     }
     let c = &mut state.cached.as_mut().expect("just populated").2;
@@ -262,17 +362,25 @@ fn score_pair_cached_cpu<R: Runtime>(
     let needs_rebuild = !matches!(state.cached, Some((cw, ch, _)) if cw == w && ch == h);
     if needs_rebuild {
         state.cached = None;
-        let c = cvvdp::Cvvdp::<R>::new(
+        // Bake the display target's photometry + geometry into the
+        // instance, mirroring the GPU path. The per-call `ppd` below
+        // must match the construction-time geometry (debug builds
+        // assert this in compute_dkl_*).
+        let c = cvvdp::Cvvdp::<R>::new_with_geometry(
             state.client.clone(),
             w,
             h,
-            cvvdp::CvvdpParams::PLACEHOLDER,
+            state.target.params(),
+            state.target.geometry,
         )
-        .map_err(|e| format!("Cvvdp::new (cpu host_pool, {w}x{h}): {e}"))?;
+        .map_err(|e| format!("Cvvdp::new_with_geometry (cpu host_pool, {w}x{h}): {e}"))?;
         state.cached = Some((w, h, c));
     }
     let c = &mut state.cached.as_mut().expect("just populated").2;
-    let ppd = cvvdp::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    // PPD derived from the SAME geometry the instance was built with —
+    // no longer hardcoded to STANDARD_4K (that bug pinned every CVVDP
+    // score to 4K viewing geometry regardless of --display-model).
+    let ppd = state.target.geometry.pixels_per_degree();
     let jod = c
         .compute_dkl_jod_host_pool(&reference.pixels, &distorted.pixels, ppd)
         .map_err(|e| format!("Cvvdp::compute_dkl_jod_host_pool: {e}"))?;

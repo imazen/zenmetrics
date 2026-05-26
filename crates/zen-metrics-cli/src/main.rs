@@ -115,6 +115,16 @@ struct BatchArgs {
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
+    /// Display-model preset name (cvvdp only) selecting the viewing
+    /// conditions — photometry (peak/black luminance, ambient) AND
+    /// geometry (resolution/distance → pixels-per-degree). Valid names
+    /// come from cvvdp's vendored `display_models.json`, e.g.
+    /// `standard_4k` (default), `iphone_14_pro`, `iphone_14_pro_hdr`,
+    /// `standard_phone`, `ipad_pro_12_9`, `macbook_pro_16`. Default
+    /// `standard_4k` reproduces every historical CVVDP score. Other
+    /// metrics ignore this flag.
+    #[arg(long)]
+    display_model: Option<String>,
     /// Number of CPU jobs (CPU metrics only). GPU metrics always serialize
     /// through one CubeCL stream.
     #[arg(long, default_value = "1")]
@@ -269,6 +279,11 @@ struct ScorePairsArgs {
     /// CubeCL runtime selection for GPU metrics.
     #[arg(long, value_enum, default_value = "auto")]
     gpu_runtime: GpuRuntime,
+    /// Display-model preset name (cvvdp only); see `batch --help`.
+    /// Selects viewing-condition photometry + geometry (PPD).
+    /// Default `standard_4k`. e.g. `iphone_14_pro`, `standard_phone`.
+    #[arg(long)]
+    display_model: Option<String>,
     /// Allow sub-176-pixel images for IW-SSIM via reflect-pad adaptive
     /// mode. Default `false` rejects small inputs (stock IW-SSIM
     /// requires `min(W, H) ≥ 176` per the 5-level pyramid + 11×11 valid
@@ -658,10 +673,20 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // path recreates it on every row → fleet OOMs at 100-pair chunks
     // even with PARALLEL=1 + 16 GB RAM. Use the batched scorer for cvvdp
     // so the instance survives across pairs of matching dims.
+    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::Cvvdp {
+        eprintln!(
+            "[score-pairs] warning: --display-model only affects cvvdp; ignored for {}",
+            args.metric.name()
+        );
+    }
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     if args.metric == crate::metrics::MetricKind::Cvvdp {
+        let target = match args.display_model.as_deref() {
+            Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
+            None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+        };
         cvvdp_scorer = Some(
-            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new(args.gpu_runtime)
+            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
         );
     }
@@ -881,6 +906,33 @@ fn cmd_batch(args: BatchArgs) -> Result<(), Box<dyn std::error::Error>> {
     // integration left for a follow-up because zen decoders and CPU metrics
     // mix Send + non-Send internals in ways that need per-metric review.
 
+    if args.display_model.is_some() && args.metric != crate::metrics::MetricKind::Cvvdp {
+        eprintln!(
+            "[batch] warning: --display-model only affects cvvdp; ignored for {}",
+            args.metric.name()
+        );
+    }
+
+    // cvvdp routes through the batched, display-aware scorer so that
+    // (a) the expensive `Cvvdp::new` instance survives across pairs of
+    // matching dims, and (b) the `--display-model` viewing conditions
+    // (photometry + geometry/PPD) actually flow into scoring. The
+    // generic `run_metric` umbrella path is fixed to STANDARD_4K and
+    // cannot honour --display-model, so it is bypassed for cvvdp.
+    #[cfg(feature = "gpu-cvvdp")]
+    let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
+    #[cfg(feature = "gpu-cvvdp")]
+    if args.metric == crate::metrics::MetricKind::Cvvdp {
+        let target = match args.display_model.as_deref() {
+            Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
+            None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+        };
+        cvvdp_scorer = Some(
+            crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
+                .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
+        );
+    }
+
     for record in rdr.records() {
         let record = record?;
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
@@ -899,10 +951,22 @@ fn cmd_batch(args: BatchArgs) -> Result<(), Box<dyn std::error::Error>> {
             )
             .into());
         }
-        let scores = run_metric(args.metric, &reference, &distorted, args.gpu_runtime)?;
         let mut row: Vec<String> = record.iter().map(String::from).collect();
-        for (_, value) in &scores {
-            row.push(format!("{value:.6}"));
+        #[cfg(feature = "gpu-cvvdp")]
+        let scored_via_cvvdp = if let Some(scorer) = cvvdp_scorer.as_mut() {
+            let jod = scorer.score(&reference, &distorted)?;
+            row.push(format!("{jod:.6}"));
+            true
+        } else {
+            false
+        };
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        let scored_via_cvvdp = false;
+        if !scored_via_cvvdp {
+            let scores = run_metric(args.metric, &reference, &distorted, args.gpu_runtime)?;
+            for (_, value) in &scores {
+                row.push(format!("{value:.6}"));
+            }
         }
         wtr.write_record(&row)?;
     }
