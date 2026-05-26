@@ -618,7 +618,19 @@ impl ZensimOpaque {
     /// through legacy `score_from_features(weights)` when only
     /// [`ZensimParams::weights`] is set. Returns
     /// `Score { value: NAN, .. }` if neither is wired.
+    ///
+    /// Byte-identity short-circuit: if `ref_rgb == dis_rgb`, returns
+    /// `Score { value: 100.0, .. }` without running the GPU kernel.
+    /// Mirrors the CPU canonical `Zensim::compute(...).score()`
+    /// behaviour — without this, the f32 GPU pipeline on byte-equal
+    /// inputs produces tiny non-zero residuals that the V0_3 MLP +
+    /// PCHIP spline (`extrapolate_score=true`) maps to arbitrary
+    /// values outside [0, 100], confusing callers that rely on
+    /// identity ⇒ ~100.
     pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
+        if let Some(score) = identity_short_circuit(ref_rgb, dis_rgb) {
+            return Ok(score);
+        }
         // When a profile is set, the canonical path needs the
         // regime-appropriate full-width feature vector (228 / 300 /
         // 372), not the 228 truncation that `compute_features` returns.
@@ -645,6 +657,9 @@ impl ZensimOpaque {
         dis_rgb: &[u8],
         codec_hint: Option<&str>,
     ) -> Result<Score> {
+        if let Some(score) = identity_short_circuit(ref_rgb, dis_rgb) {
+            return Ok(score);
+        }
         if self.params.profile.is_some() {
             let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
             let (w, h) = self.inner.dims();
@@ -656,15 +671,25 @@ impl ZensimOpaque {
     }
 
     /// Compute the uniform [`Score`] from [`PixelSlice`] inputs.
+    ///
+    /// Identical byte-identity short-circuit as
+    /// [`Self::compute_srgb_u8`]: when the converted-to-sRGB ref and
+    /// dist buffers match byte-for-byte, returns 100.0 without
+    /// running the GPU kernel.
     #[cfg(feature = "pixels")]
     pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
+        let (w, h) = self.inner.dims();
+        let ref_buf = to_srgb_rgb8(&r, w, h)?;
+        let dis_buf = to_srgb_rgb8(&d, w, h)?;
+        if let Some(score) = identity_short_circuit(&ref_buf, &dis_buf) {
+            return Ok(score);
+        }
         if self.params.profile.is_some() {
-            let (w, h) = self.inner.dims();
-            let ref_buf = to_srgb_rgb8(&r, w, h)?;
-            let dis_buf = to_srgb_rgb8(&d, w, h)?;
             let features = self.inner.compute_features_vec(&ref_buf, &dis_buf)?;
             Ok(self.score_from_profile_vec(&features, w, h, None))
         } else {
+            // Re-use the pixel-aware feature path that handles strided
+            // ref/dist explicitly so we don't double-convert here.
             let features = self.compute_features_pixels(r, d)?;
             Ok(self.score_from_linear(features))
         }
@@ -814,6 +839,33 @@ impl ZensimOpaque {
             dist_b,
             diffmap_out,
         )
+    }
+}
+
+/// Byte-identity short-circuit for the opaque `compute_*` paths.
+///
+/// When the reference and distorted buffers are byte-equal, every
+/// per-pixel SSIM / edge / IW term in the feature extractor collapses
+/// to 0 mathematically — but the f32 GPU pipeline picks up tiny ULP
+/// residuals at the coarse pyramid scales, and the V0_3 profile's
+/// PCHIP spline (with `extrapolate_score=true`) maps the resulting
+/// residual to arbitrary score-domain values outside [0, 100]. The
+/// CPU canonical `Zensim::compute(...).score()` path has this same
+/// short-circuit; mirroring it on the GPU side keeps the
+/// identity-input score predictable (100.0) for both paths.
+///
+/// Returns `None` when the inputs are not byte-equal — callers fall
+/// through to the normal scoring path. The `metric_name` /
+/// `metric_version` labels match the rest of the opaque API.
+fn identity_short_circuit(ref_rgb: &[u8], dis_rgb: &[u8]) -> Option<Score> {
+    if ref_rgb.len() == dis_rgb.len() && ref_rgb == dis_rgb {
+        Some(Score {
+            value: 100.0,
+            metric_name: "zensim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    } else {
+        None
     }
 }
 

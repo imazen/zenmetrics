@@ -45,10 +45,15 @@ fn score_identity(kind: MetricKind) -> zenmetrics_api::Score {
         .unwrap_or_else(|e| panic!("compute_srgb_u8 for {kind:?} failed: {e}"))
 }
 
-/// Build a clearly-distorted pair (low-frequency XOR sweep on top of
-/// the reference). Used by monotonicity sanity checks where the
+/// Build a moderately-distorted pair (uniform additive noise on top
+/// of the reference). Used by monotonicity sanity checks where the
 /// "perfect quality" sentinel of the metric extrapolates outside the
 /// nominal dial range (e.g. zensim's V0_3 PCHIP spline at identity).
+///
+/// Magnitude tuned (±12 per-channel jitter) so the resulting pair
+/// sits inside the V0_3 spline's training range (i.e. the score
+/// lands inside or near [0, 100] rather than extrapolating to
+/// nonsensical values).
 #[allow(dead_code)]
 fn distorted_inputs() -> (Vec<u8>, Vec<u8>) {
     let n = (W as usize) * (H as usize) * 3;
@@ -57,12 +62,17 @@ fn distorted_inputs() -> (Vec<u8>, Vec<u8>) {
         *b = ((i * 7919) & 0xFF) as u8;
     }
     let mut d = r.clone();
-    // Apply visible distortion: invert every 4th byte's MSB. Produces
-    // a clearly perceptible distortion regardless of metric.
+    // Apply moderate uniform noise (deterministic xorshift). Stays
+    // inside V0_3's training distribution so the score lands inside
+    // [0, 100] and the monotonicity check is well-defined.
+    let mut state: u32 = 0xCAFEBABE;
     for (i, b) in d.iter_mut().enumerate() {
-        if i % 4 == 0 {
-            *b ^= 0x80;
-        }
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        let noise = ((state & 0x1f) as i32) - 16; // ±16 jitter
+        let nv = (r[i] as i32 + noise).clamp(0, 255) as u8;
+        *b = nv;
     }
     (r, d)
 }
@@ -197,30 +207,19 @@ fn dispatch_iwssim() {
 fn dispatch_zensim() {
     // The umbrella's `MetricParams::default_for(Zensim)` carries the
     // canonical `ZensimProfile::PreviewV0_3` (alias `A`) profile and
-    // routes the score through `zensim::score_features_with_profile_and_codec`
-    // (post task #71 — see crates/zensim-gpu/src/opaque.rs::score_from_profile_vec).
+    // routes the score through
+    // `zensim::score_features_with_profile_and_codec` (post task #71
+    // — see crates/zensim-gpu/src/opaque.rs::score_from_profile_vec).
     //
-    // Identity inputs: zensim-gpu has no byte-identity short-circuit
-    // (unlike the CPU `Zensim::compute(...).score()` path), so the
-    // full f32 SSIM / blur / max-pool pipeline runs on byte-equal
-    // inputs and produces tiny (~1e-3) residual distance the MLP
-    // forward + PCHIP spline + per-codec affine then extrapolates.
-    // The PreviewV0_3 profile has `extrapolate_score=true`, so the
-    // identity score can land well outside [0, 100] — that's a
-    // characteristic of the spline's behaviour at the perfect-quality
-    // endpoint, not an algorithmic bug. The 372-feature parity tests
-    // (`crates/zensim-gpu/tests/extended_parity.rs` +
-    // `iw_slot_parity_*`) are the authoritative correctness signal
-    // for the metric; this umbrella dispatch test asserts only that:
-    //
-    //   1. The score is finite (no NaN/Inf — would indicate kernel
-    //      divergence or MLP bake corruption).
-    //   2. The `metric_name` label is `"zensim"` (wiring sanity).
-    //   3. The score is `<` the score of a clearly-distorted pair
-    //      (monotonicity sanity — same fixture pair as the cumulative
-    //      regression tests). On the canonical profile, "more
-    //      distortion → lower score" still holds even when both
-    //      endpoints are negative or above 100.
+    // Byte-identity contract: zensim-gpu's opaque
+    // `compute_srgb_u8` / `compute_pixels` paths short-circuit
+    // ref == dist to 100.0 (mirroring the CPU canonical
+    // `Zensim::compute(...).score()` behaviour). Without the
+    // short-circuit, the f32 SSIM/blur/max-pool pipeline picks up
+    // sub-ULP residuals on byte-equal inputs that the V0_3 PCHIP
+    // spline's `extrapolate_score=true` head maps to arbitrary
+    // out-of-dial values. See
+    // `crates/zensim-gpu/src/opaque.rs::identity_short_circuit`.
     let s_identity = score_identity(MetricKind::Zensim);
     assert_eq!(s_identity.metric_name, "zensim");
     assert!(
@@ -228,18 +227,27 @@ fn dispatch_zensim() {
         "zensim default-weights identity score must be finite, got {}",
         s_identity.value
     );
+    assert!(
+        (s_identity.value - 100.0).abs() < 1e-6,
+        "zensim identity must short-circuit to exactly 100.0, got {}",
+        s_identity.value
+    );
 
-    // Note: a monotonicity check (distorted < identity) is NOT
-    // included here. On the V0_3 profile with `extrapolate_score=true`
-    // both endpoints can extrapolate outside [0, 100] in directions
-    // the score-domain check would mis-trip — score-domain
-    // monotonicity is not a contract of the perceptual metric, nor
-    // of this umbrella test. The authoritative correctness signal is
-    // the per-feature parity coverage in
-    // `crates/zensim-gpu/tests/extended_parity.rs` (all 372 slots
-    // CPU↔GPU within `5e-3` rel) — that's what this umbrella's
-    // dispatch sanity test relies on for end-to-end correctness.
-    let _ = score_distorted; // keep the helper compiled for symmetry
+    // Monotonicity sanity: a clearly distorted pair must not exceed
+    // the identity score. Wins on the contract that 100.0 (perfect)
+    // is the upper bound of the dial when ref ⇒ dist is byte-equal.
+    let s_distorted = score_distorted(MetricKind::Zensim);
+    assert!(
+        s_distorted.value.is_finite(),
+        "zensim distorted score must be finite, got {}",
+        s_distorted.value
+    );
+    assert!(
+        s_distorted.value < s_identity.value,
+        "zensim score must drop under distortion: identity={}, distorted={}",
+        s_identity.value,
+        s_distorted.value
+    );
 }
 
 /// MetricKind roundtrip: constructed metric reports the same kind back.

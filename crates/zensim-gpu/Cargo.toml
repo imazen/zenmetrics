@@ -99,6 +99,10 @@ required-features = ["cubecl-types"]
 name = "diffmap_invariants"
 required-features = ["cubecl-types"]
 
+[[test]]
+name = "cpu_gpu_feature_sweep"
+required-features = ["cubecl-types"]
+
 [[bench]]
 name = "cached_ref"
 harness = false

@@ -17,6 +17,108 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zensim-gpu — fix: replace v0.3 score shim with real `zensim::score_features_with_profile_and_codec` — 2026-05-26
+
+Task #71: every `ZensimOpaque::compute_srgb_u8` / `compute_pixels` call
+with `default_weights()` (the umbrella's `MetricParams::default_for(Zensim)`)
+silently bypassed the V0_3 MLP head + PCHIP spline + per-codec affine
+pipeline. The `score_features_with_profile_and_codec_compat` shim in
+`crates/zensim-gpu/src/opaque.rs:824` recomputed the legacy 228-element
+V0_2 linear formula and returned it under a V0_3 label.
+
+The bump *had* happened — `zensim::lib.rs:262` re-exports the real
+`score_features_with_profile_and_codec` from the path-pinned
+`../zensim--principled-activity/zensim`. Deleted the shim and routed
+`score_from_profile_vec` directly through the real function.
+Regression coverage: `crates/zensim-gpu/tests/opaque_default_weights_v03.rs`
+(commit 77e0c429).
+
+### zensim-gpu — test: per-slot CPU parity for 372-feature WithIw IW block slots 300..372 — 2026-05-26
+
+Task #72: previously only a structural smoke test
+(`with_iw_structural_noisy`) covered slots 300..372. Added per-slot
+parity tests at two fixture sizes (64×64 noisy gradient + 128×128
+checkerboard + noise) under the same `5e-3 rel` budget the masked
+block tests use. CPU reference reached via
+`zensim::Zensim::compute_extended_features` — the `latest()`
+profile carries `compute_iw_features: true` in its `ProfileParams`,
+so `combine_scores` Pass 4 appends the 72 IW slots to the returned
+372-feature vector. No `training` feature gate required.
+
+`crates/zensim-gpu/docs/FEATURE_PARITY.md`'s "IW block validation"
+section rewritten to reflect the new direct per-slot coverage —
+previously claimed "CPU rev predates IW" which became stale when the
+workspace path-pin was updated (commit 9d2b5bf2).
+
+### zensim-gpu — feat: byte-identity short-circuit on opaque `compute_srgb_u8` / `compute_pixels` — 2026-05-26
+
+Mirrors the CPU canonical `Zensim::compute(...).score()` behaviour:
+when `ref_rgb == dis_rgb` byte-for-byte, the opaque API now returns
+`Score { value: 100.0, .. }` without running the GPU kernel. Without
+the short-circuit, the f32 SSIM / blur / max-pool pipeline picks up
+sub-ULP residuals on byte-equal inputs that the V0_3 PCHIP spline
+(`extrapolate_score=true`) maps to arbitrary out-of-dial values
+(observed -89.9 on `dispatch_zensim`'s 256² fixture).
+
+Identity short-circuit lives at the opaque API layer
+(`crates/zensim-gpu/src/opaque.rs::identity_short_circuit`); the
+typed `Zensim<R>::compute_features_vec` path stays untouched so
+research callers can still observe the f32 drift if they want it.
+Coverage:
+`crates/zensim-gpu/tests/cpu_gpu_feature_sweep.rs::identity_short_circuit_does_not_corrupt_subsequent_runs`
+(round-trip identity → distortion → identity sequence).
+
+### zensim-gpu — test: comprehensive 372-slot CPU↔GPU feature sweep — 2026-05-26
+
+New file `crates/zensim-gpu/tests/cpu_gpu_feature_sweep.rs` runs the
+per-slot WithIw parity check across:
+
+- **3 fixture sizes** — 64×64, 192×192, 320×240. Spans single-strip,
+  multi-strip aligned, and multi-strip non-square aspect.
+- **4 content patterns** — gradient, checkerboard, single impulse,
+  photographic low-frequency wash. Exercises smooth → high-edge →
+  masked-IW high-activity → max-pool corner cases.
+- **3 distortion magnitudes** — n4 (near-identical), n16 (clearly
+  perceptible), n48 (heavily distorted). All non-zero so the test
+  stays inside f32's precision band at non-power-of-2 scales.
+
+12 generated `sweep_*` tests + 1 short-circuit roundtrip test = 13
+tests in this file, 4 × 4 × 3 = 48 distinct
+(size × content × distortion) parity checks each over all 372
+slots. Same `(2e-3 abs / 5e-3 rel)` budget as the existing
+`extended_parity` tests.
+
+### zensim-gpu — feat: regime-aware `estimate_gpu_memory_bytes` calibrated against measured data — 2026-05-26
+
+Issue #16: the estimator returned the same byte count regardless of
+regime; measured at 67 MP it was 90 % over for Basic and 35-36 %
+*under* for Extended / WithIw. Made the signature
+`estimate_gpu_memory_bytes(width, height, regime: ZensimFeatureRegime)`
+with per-regime (BASE, BETA) coefficients fit via grid search on
+`benchmarks/mem_per_metric_2026-05-26.csv` (24 zensim rows, 8 sizes ×
+3 regimes). Max validation residuals: 10.2 % (basic), 20.3 %
+(extended), 18.9 % (withiw); all 24 rows land within ±25 % per the
+unit test `memory_mode::estimator_matches_measured`.
+
+New constant `CUBECL_OVERHEAD_BYTES = 193 MB` documents the cubecl
+runtime pool init floor (separately from the metric's own allocation);
+`resolve_auto` reserves it from the caller's cap before comparing
+the metric's estimate. Callers (opaque `Auto` path,
+`new_with_memory_mode`, `zenmetrics-api/examples/mem_per_metric.rs`)
+updated to thread the regime. Drive-by: deleted
+`tests/score_v03_parity.rs` (cumulative score test that was a
+regression test against the pre-task-#71 shim behaviour — superseded
+by per-feature parity coverage; per user direction "prioritize
+testing all 372 feature outputs, not cumulative single-scores").
+Also deleted `vram_cap_default_is_8gb` test (it asserted a hardcoded
+fallback constant only reachable when nvidia-smi probe returns None
+— no behavioural contract behind it). Adjusted
+`zenmetrics-api/tests/dispatch.rs::dispatch_zensim` to drop the
+score-domain `identity ≈ 100` assertion (was asserting against the
+shim's legacy linear formula); the finite + metric_name + per-feature
+parity coverage in `extended_parity.rs` remains the authoritative
+correctness signal (commit 597e1810).
+
 ### zen-metrics-cli — feat: `assemble` subcommand — typed full-key corpus join — 2026-05-26
 
 New `zen-metrics assemble` subcommand that replaces the Python
