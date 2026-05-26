@@ -62,11 +62,38 @@ fast-reduction = []
 # both should land FIR scores in a dedicated parquet column via
 # `SSIM2_FIR_COLUMN_NAME` to avoid mixing with IIR's column.
 fir = []
+# OFF by default. Pulls in coefficient's cudarse/turbo-metrics SSIM2
+# backend as a dev-only optional dep so the `cudarse_parity`
+# integration test can score the same fixtures via BOTH the CubeCL
+# backend (this crate) and the cudarse backend (`coefficient::gpu`)
+# and assert numeric agreement.
+#
+# Requires:
+#   * A working CUDA driver + toolkit (the cudarse stack only builds
+#     against NVIDIA).
+#   * `../turbo-metrics` checked out at the path coefficient's
+#     `Cargo.toml` expects, OR the path-dep below pointed at the
+#     archived location. As of 2026-05-26 the live `~/work/turbo-metrics`
+#     was archived to `~/work/turbo-metrics--archived-2026-05-06`;
+#     enable this feature ONLY in environments where one of the two
+#     paths resolves.
+#
+# The parity test itself is marked `#[ignore]` so `cargo test --features
+# cudarse-parity` does not regress CI even on machines where cudarse
+# fails to build at runtime. Document any divergence in
+# `docs/GPU_METRIC_PARITY.md`.
+cudarse-parity = ["dep:coefficient"]
 
 [dependencies]
 cubecl = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# Optional cross-repo parity dep: coefficient's `gpu` feature pulls in
+# the cudarse/turbo-metrics SSIM2 backend so the `cudarse_parity`
+# integration test can compare both backends. Gated behind the
+# `cudarse-parity` Cargo feature; off by default, NOT pulled into the
+# normal build matrix.
+coefficient = { path = "../../../../coefficient", default-features = false, features = ["gpu"], optional = true }
 
 [build-dependencies]
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
@@ -161,3 +188,7 @@ required-features = ["cubecl-types"]
 [[test]]
 name = "reduction_determinism"
 required-features = ["cubecl-types"]
+
+[[test]]
+name = "cudarse_parity"
+required-features = ["cudarse-parity", "cuda", "cubecl-types"]

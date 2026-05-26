@@ -17,6 +17,37 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### ssim2-gpu — feat: cross-repo SSIM2 GPU parity test skeleton + doc (dedup Chunk H) — 2026-05-26
+
+Skeleton landing for the master dedup audit's Tier-0 #2 finding
+("two GPU SSIM2 backends, no parity test"):
+
+- New `cudarse-parity` Cargo feature (OFF by default) that pulls in
+  `coefficient` as an optional dev-time dep so the parity test can
+  score the same fixtures via BOTH this crate's CubeCL backend AND
+  `coefficient::gpu::GpuMetrics` (cudarse / turbo-metrics).
+- New integration test
+  [`tests/cudarse_parity.rs`](crates/ssim2-gpu/tests/cudarse_parity.rs)
+  marked `#[ignore]` because coefficient's `gpu` feature
+  transitively requires the archived `~/work/turbo-metrics` tree
+  plus a CUDA-12-compatible toolkit (the dev-host CUDA 13.2 ptxas
+  rejects the archived kernels' `sm_70` target). 3 CID22 fixtures
+  at JPEG q90 / q50 / q20 cover the SSIM2 range where the two
+  backends are most likely to diverge. Initial tolerance
+  `0.5 SSIM2 points` (loose; tighten once measured agreement is
+  recorded).
+- New doc
+  [`docs/GPU_METRIC_PARITY.md`](docs/GPU_METRIC_PARITY.md) records
+  methodology, tolerance + rationale, run instructions, the three
+  blockers that prevent runtime on this dev host, and a
+  measured-agreement table to populate when the CUDA toolchain
+  unblock lands.
+
+Skeleton-only; no measured numbers yet. The audit's recommended
+next step ("parity test gate first; then pick one backend or a
+shared `zen-gpu-metrics`") remains queued behind the toolchain
+fix.
+
 ### cvvdp-gpu — feat: restore CappedPyramid + Phase 3 strip-aware pool walker (task #79) — 2026-05-26
 
 Two-part follow-on to the 2026-05-26 architectural deep-dive
