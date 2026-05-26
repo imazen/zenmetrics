@@ -40,6 +40,13 @@ alloc = []
 parallel = ["std", "dep:rayon"]
 # `zenpixels` integration smoke (scoring direct from `PixelLayout`).
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# TEST-ONLY: re-export the `pub(crate)` SIMD kernel entry points
+# (simd_pyramid + simd_math) through a `#[doc(hidden)]` module so the
+# brute-force SIMD-vs-scalar equivalence harness in
+# `tests/simd_equivalence.rs` can drive them directly. No production
+# code path enables this; it carries zero logic change and is hidden
+# from rustdoc. See `lib.rs::__simd_equiv_test_api`.
+__simd_equiv_test = []
 
 [dependencies]
 # Shared CSF + DKL + masking constants come from cvvdp-gpu — we depend

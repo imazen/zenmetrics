@@ -88,6 +88,134 @@ mod simd_pyramid;
 
 pub use pipeline::Cvvdp;
 
+/// TEST-ONLY re-exports of the `pub(crate)` SIMD kernel entry points.
+///
+/// Enabled only under the `__simd_equiv_test` cargo feature so the
+/// brute-force SIMD-vs-scalar equivalence harness in
+/// `tests/simd_equivalence.rs` (an external test crate) can drive the
+/// kernels directly while keeping them `pub(crate)` for the production
+/// API surface. `#[doc(hidden)]` keeps these out of rustdoc. This
+/// module carries NO logic — it is a thin visibility shim.
+#[cfg(feature = "__simd_equiv_test")]
+#[doc(hidden)]
+pub mod __simd_equiv_test_api {
+    use alloc::vec::Vec;
+
+    /// Kernel constants used by the scalar references in the harness.
+    pub use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+    pub use cvvdp_gpu::kernels::pyramid::GAUSS5;
+
+    // Thin `pub fn` wrappers around the `pub(crate)` kernel entry
+    // points. A `pub use` of a `pub(crate)` item is rejected by the
+    // compiler (E0364), so we forward through wrappers instead. Each
+    // body is a single delegating call — no logic change.
+
+    /// SIMD σ=3 13-tap separable Gaussian blur (interior SIMD + scalar
+    /// boundary patches). Mirrors `gaussian_blur_sigma3_simd`.
+    #[inline]
+    pub fn gaussian_blur_sigma3_simd(
+        src: &[f32],
+        w: usize,
+        h: usize,
+        h_pass: &mut Vec<f32>,
+        dst: &mut Vec<f32>,
+    ) {
+        crate::simd_pyramid::gaussian_blur_sigma3_simd(src, w, h, h_pass, dst);
+    }
+
+    /// Horizontal pass of the σ=3 13-tap blur in isolation.
+    #[inline]
+    pub fn pu_blur_horizontal_pass(src: &[f32], w: usize, h: usize, h_pass: &mut [f32]) {
+        crate::simd_pyramid::pu_blur_horizontal_pass(src, w, h, h_pass);
+    }
+
+    /// Vertical pass of the σ=3 13-tap blur in isolation.
+    #[inline]
+    pub fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mut [f32]) {
+        crate::simd_pyramid::pu_blur_vertical_pass(h_pass, w, h, dst);
+    }
+
+    /// Vertical pass of the pyramid 5-tap reduce.
+    #[inline]
+    pub fn reduce_vertical_pass(
+        src: &[f32],
+        sw: usize,
+        sh: usize,
+        dh: usize,
+        vscratch: &mut [f32],
+    ) {
+        crate::simd_pyramid::reduce_vertical_pass(src, sw, sh, dh, vscratch);
+    }
+
+    /// Horizontal pass of the pyramid 5-tap reduce.
+    #[inline]
+    pub fn reduce_horizontal_pass(
+        vscratch: &[f32],
+        sw: usize,
+        dw: usize,
+        dh: usize,
+        dst: &mut [f32],
+    ) {
+        crate::simd_pyramid::reduce_horizontal_pass(vscratch, sw, dw, dh, dst);
+    }
+
+    /// Vertical pass of the pyramid 5-tap expand (zero-insert).
+    #[inline]
+    pub fn expand_vertical_pass(
+        src: &[f32],
+        sw: usize,
+        sh: usize,
+        out_h: usize,
+        vscratch: &mut [f32],
+    ) {
+        crate::simd_pyramid::expand_vertical_pass(src, sw, sh, out_h, vscratch);
+    }
+
+    /// Horizontal pass of the pyramid 5-tap expand (zero-insert).
+    #[inline]
+    pub fn expand_horizontal_pass(
+        vscratch: &[f32],
+        sw: usize,
+        out_w: usize,
+        out_h: usize,
+        dst: &mut [f32],
+        z_h_scratch: &mut Vec<f32>,
+    ) {
+        crate::simd_pyramid::expand_horizontal_pass(vscratch, sw, out_w, out_h, dst, z_h_scratch);
+    }
+
+    /// `out[i] = (xs[i] + offset)^p - offset_pow_p` (magetypes
+    /// `pow_midp_unchecked` approximation).
+    #[inline]
+    pub fn safe_pow_with_offset_into(
+        xs: &[f32],
+        out: &mut [f32],
+        offset: f32,
+        p: f32,
+        offset_pow_p: f32,
+    ) {
+        crate::simd_math::safe_pow_with_offset_into(xs, out, offset, p, offset_pow_p);
+    }
+
+    /// `out[i] = exp(xs[i])` (magetypes `exp_midp_unchecked`).
+    #[inline]
+    pub fn vexp_into(xs: &[f32], out: &mut [f32]) {
+        crate::simd_math::vexp_into(xs, out);
+    }
+
+    /// `out[i] = ln(xs[i])` (magetypes `ln_midp_unchecked`, positive inputs).
+    #[inline]
+    pub fn vlog_into(xs: &[f32], out: &mut [f32]) {
+        crate::simd_math::vlog_into(xs, out);
+    }
+
+    /// `out[i] = xs[i]^p` (magetypes `pow_midp_unchecked`, positive inputs).
+    #[inline]
+    pub fn vpow_into(xs: &[f32], out: &mut [f32], p: f32) {
+        crate::simd_math::vpow_into(xs, out, p);
+    }
+}
+
 /// Failure modes for `Cvvdp::*`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
