@@ -1,0 +1,14 @@
+# zensim-gpu strip mode cached-ref: device-cache vs host-cache perf
+# Task #75 (mode E refinement). Measured 2026-05-26 on water-cooled
+# 7950X + RTX 5070, CUDA 13.2.1. Wall-clock host-side timing via
+# Instant::now (queue submission + readback included).
+#
+# 2 warmup iters discarded; rest reported per-iter then averaged.
+# Variance from background GPU contention on shared host — outliers
+# kept in raw data; mean computed over all timed iters.
+#
+# Schema: w,h,h_body,n_iter,mean_ms_host_cached,mean_ms_device_cached,speedup
+w,h,h_body,n_iter,mean_ms_host_cached,mean_ms_device_cached,speedup
+1024,1024,256,15,10.36,5.47,1.89
+2048,2048,256,10,24.38,16.78,1.45
+4096,4096,256,10,66.04,61.54,1.07

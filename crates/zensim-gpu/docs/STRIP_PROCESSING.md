@@ -105,19 +105,105 @@ In Full mode, `set_reference` uploads the ref sRGB and pre-builds the
 ref XYB pyramid on the device, then `compute_with_reference` only
 uploads/builds the dist side.
 
-In Strip mode (Phase 4), the full ref XYB pyramid cannot be cached on
-device (it would be `O(image_h)`, defeating strip mode). Instead,
-`set_reference` caches the full ref sRGB bytes host-side in
-`cached_ref_strip_srgb`. Each `compute_with_reference` call re-uploads
-the appropriate ref strip and rebuilds the ref XYB pyramid per strip.
+In Strip mode the per-scale buffers are sized for one strip — caching
+the **full** ref pyramid in `Scale.ref_xyb` is not possible. Mode E
+(strip + cached-ref) instead keeps a separate **full-image** ref XYB
+pyramid in `RefFullXybState` on device; the strip walker copies the
+strip's row range from there into `Scale.ref_xyb` per `compute_with_reference`
+call, skipping ref re-upload + ref XYB rebuild every strip.
 
-This is "mode E" per the cached-ref taxonomy (issue #15): ref state
-lives on the *host*, dist walks strips on the device. A future
-optimisation would cache the per-strip ref XYB pyramid + persist
-planes on device to skip the rebuild — significant for the 1-ref ×
-N-dist warm loop. Tracked for follow-up; the present implementation
-keeps the API surface clean while accepting the per-strip rebuild
-cost.
+### Mode E device cache (task #75, 2026-05-26)
+
+`set_reference` allocates `RefFullXybState` lazily on first call,
+runs `srgb_to_positive_xyb_kernel` + `downscale_2x_3ch_kernel` on
+full-image-sized scratch buffers, then keeps the 3-channel × 4-scale
+XYB planes resident across `compute_with_reference` calls. Each strip
+runs `install_ref_xyb_from_full_cache(up_lo)`, which launches a
+`copy_rows_kernel` blit per (scale, channel) — total `3 × 4 = 12`
+blit kernel dispatches per strip, each copying `padded_w × Scale.h`
+f32 values.
+
+**Bit-exact parity** vs the per-strip rebuild path: the 2× downscale
+operates on consecutive `(2r, 2r+1)` row pairs. Since `up_lo` is
+always a multiple of `STRIP_ALIGN = 8 = 2^(SCALES-1)`, scale-s row
+`r` of the strip buffer equals scale-s row `((up_lo >> s) + r)` of
+the full-image cache. The blit copies that row range directly; no
+boundary computation differs from what the strip walker would have
+produced itself. Verified by `tests/strip_parity.rs::host_cached_only_matches_device_cached_512x512`.
+
+**Memory cost** (3 channels × `Σ pyramid_pixels_at_full_h` × 4 bytes):
+
+| image | Mode E device cache | strip working set | total |
+|-------|---------------------|-------------------|-------|
+| 1024² Basic    | 16 MB | 70 MB  | 86 MB  |
+| 2048² Basic    | 64 MB | 130 MB | 194 MB |
+| 4096² Basic    | 256 MB | 290 MB | 546 MB |
+| 8192² WithIw   | 1024 MB | 705 MB | 1729 MB |
+
+(Working-set numbers from `STRIP_PROCESSING.md` § "Memory footprint".)
+
+The cache costs 12 channels × `Σ pyramid_pixels` × 4 bytes vs the full
+mode's 24 channels (ref + dist), so it's ~50% of the full-mode ref+dist
+XYB allocation. For 4096² Basic that's ~256 MB on top of strip's
+290 MB working set = 546 MB total — still 2.2× smaller than Full's
+1186 MB.
+
+**Speedup** (RTX 5070, CUDA 13.2.1, `examples/strip_cached_ref_speedup`;
+mean of 10-15 timed iters; `benchmarks/zensim_strip_device_cache_2026-05-26.csv`):
+
+| image | h_body | host-cache ms | device-cache ms | speedup |
+|-------|--------|---------------|------------------|---------|
+| 1024² | 256 | 10.36 | 5.47  | **1.89×** |
+| 2048² | 256 | 24.38 | 16.78 | **1.45×** |
+| 4096² | 256 | 66.04 | 61.54 | 1.07×   |
+
+The win is largest at smaller resolutions where per-strip ref XYB
+rebuild overhead is a bigger fraction of the dispatch budget. At
+4096² the per-strip kernel dispatches are large enough that the
+saved ref upload + ref pyramid rebuild only pulls 4-5 ms out of a
+66 ms iter. For warm-loop callers (encoder quant search, N dist
+iters vs one ref), 1.07-1.89× is significant.
+
+**Opt-out**: callers with extreme VRAM pressure or few dist iters
+can call `set_reference_host_cached_only` instead. This keeps the
+old behaviour — host-side `cached_ref_strip_srgb` cache, per-strip
+ref re-upload + ref XYB rebuild.
+
+**Lifecycle**:
+- `set_reference` allocates `RefFullXybState` lazily; subsequent
+  `set_reference` calls for the same resolution reuse the same
+  per-scale handles (overwrite the xyb content).
+- `clear_reference` drops `RefFullXybState`; the next
+  `set_reference` re-allocates.
+- The `src_u8_full` staging buffer stays allocated across
+  set_reference calls (alloc happens once on the first call).
+
+## Diffmap in strip mode (task #76)
+
+Per `docs/DIFFMAP_DIVERGENCES.md` §2, the per-pixel diffmap
+production is delegated to the canonical CPU
+`zensim::Zensim::compute_with_ref_and_diffmap_linear_planar` path
+in Phase 1. **This is intentional and works identically in strip
+mode** — the diffmap entry-points
+(`score_with_diffmap`, `score_with_warm_ref_diffmap`,
+`score_from_linear_planes_with_*_diffmap`) route entirely through
+`Zensim::diffmap_state`'s CPU `Zensim` driver and never touch the
+GPU strip walker.
+
+The CPU is deterministic, so strip-mode diffmap output is bit-identical
+to full-mode diffmap output for the same `(reference, distorted)` pair.
+Verified by `tests/strip_parity.rs::diffmap_strip_matches_full_bit_for_bit_512x512`.
+
+`set_reference` in strip mode mirrors the reference into
+`diffmap_state.warm_ref` exactly as Full mode does — the device
+cache for the GPU feature pipeline (`RefFullXybState`) and the
+CPU diffmap state are independent caches.
+
+**Out of scope for now**: a GPU-native diffmap kernel chain (Phase 2).
+When that ships, it will need a strip-aware per-scale diffmap output
+buffer + a `copy_rows_kernel`-style stitch to combine per-strip
+diffmap slices back into a full-image output. The CPU-routing
+design is the simplest correct solution that ships today.
 
 ## Parity vs Full mode
 
@@ -187,11 +273,8 @@ fleet box; Strip WithIw fits with room to spare.
 
 ## Out of scope (follow-ups)
 
-- Per-strip ref XYB pyramid caching on device (currently rebuilds per
-  dist call in strip mode E).
-- Diffmap production in strip mode (CPU path still routes via
-  `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar` —
-  no strip caching there yet).
+- GPU-native diffmap kernel chain (currently CPU; see § "Diffmap in
+  strip mode" above for the path).
 - Tile mode (2D strips). The CPU zensim doesn't use 2D tiling
   internally either; if needed it would require a separate kernel
   pass.

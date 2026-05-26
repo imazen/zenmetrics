@@ -282,6 +282,106 @@ fn extended_strip_matches_full_512x512() {
     assert_features_close(&feat_full, &feat_strip, "extended 512x512 h_body=128");
 }
 
+/// Task #76: diffmap output is identical between strip and full modes
+/// because the diffmap production routes through the CPU
+/// `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar` path
+/// (see `docs/DIFFMAP_DIVERGENCES.md`). Both modes mirror the same
+/// reference into `diffmap_state.warm_ref` from `set_reference`, then
+/// `score_with_warm_ref_diffmap` calls CPU regardless of GPU mode.
+/// This test pins that identity so future changes (e.g., a GPU-native
+/// diffmap kernel) don't silently break it.
+///
+/// Follows the documented usage contract: invoke a diffmap entry-point
+/// (here `score_with_diffmap` with a dummy distorted) once before
+/// `set_reference` so the lazy `diffmap_state` is allocated; then
+/// subsequent `set_reference` calls mirror the reference into
+/// `state.warm_ref`. This mirrors the production zensim-fork
+/// buttloop's startup sequence.
+#[test]
+fn diffmap_strip_matches_full_bit_for_bit_512x512() {
+    let client = make_client!();
+    let w = 512;
+    let h = 512;
+    let ref_img = gradient(w, h);
+    let dist_img = add_noise(&ref_img, 8);
+    let mut dummy_diff: Vec<f32> = Vec::new();
+
+    let mut full = Zensim::<Backend>::new(client.clone(), w as u32, h as u32).unwrap();
+    // Lazy-init diffmap state, then warm via set_reference.
+    full.score_with_diffmap(&ref_img, &ref_img, &mut dummy_diff)
+        .unwrap();
+    full.set_reference(&ref_img).unwrap();
+    let mut diff_full: Vec<f32> = Vec::new();
+    let score_full = full
+        .score_with_warm_ref_diffmap(&dist_img, &mut diff_full)
+        .unwrap();
+
+    let mut strip = Zensim::<Backend>::new_strip(client, w as u32, h as u32, 128).unwrap();
+    strip
+        .score_with_diffmap(&ref_img, &ref_img, &mut dummy_diff)
+        .unwrap();
+    strip.set_reference(&ref_img).unwrap();
+    let mut diff_strip: Vec<f32> = Vec::new();
+    let score_strip = strip
+        .score_with_warm_ref_diffmap(&dist_img, &mut diff_strip)
+        .unwrap();
+
+    assert_eq!(
+        diff_full.len(),
+        diff_strip.len(),
+        "diffmap length mismatch"
+    );
+    assert_eq!(
+        diff_full.len(),
+        w * h,
+        "diffmap should be width x height"
+    );
+    // CPU is deterministic; the diffmap should be bit-identical.
+    for (i, (&a, &b)) in diff_full.iter().zip(diff_strip.iter()).enumerate() {
+        assert_eq!(
+            a, b,
+            "diffmap[{i}] differs: full={a:?} strip={b:?}"
+        );
+    }
+    // Score is f32; deterministic CPU path → bit-identical.
+    assert_eq!(score_full, score_strip, "warm-ref score mismatch");
+}
+
+/// Task #75: opting out of the device-cached ref XYB pyramid (via
+/// `set_reference_host_cached_only`) must yield the SAME features
+/// as the device-cached path (within strip's normal f32 drift).
+/// Both compute over the same image and identical kernels — they
+/// just allocate the ref pyramid differently. Documents that the
+/// opt-out lever doesn't change scoring semantics.
+#[test]
+fn host_cached_only_matches_device_cached_512x512() {
+    let client = make_client!();
+    let w = 512;
+    let h = 512;
+    let ref_img = gradient(w, h);
+    let dist_img = add_noise(&ref_img, 8);
+
+    let mut strip_dev = Zensim::<Backend>::new_strip(client.clone(), w as u32, h as u32, 128).unwrap();
+    strip_dev.set_reference(&ref_img).unwrap();
+    let feat_dev = strip_dev.compute_with_reference_vec(&dist_img).unwrap();
+
+    let mut strip_host = Zensim::<Backend>::new_strip(client, w as u32, h as u32, 128).unwrap();
+    strip_host.set_reference_host_cached_only(&ref_img).unwrap();
+    let feat_host = strip_host.compute_with_reference_vec(&dist_img).unwrap();
+
+    // Device-cache + host-rebuild paths should agree within strip's
+    // own f32 reordering noise — the kernel chain is identical;
+    // only the source rows for the ref XYB pyramid differ in
+    // origin (full-image scratch vs strip-local scratch). The
+    // downscale is bit-exact on aligned strips so we expect tight
+    // agreement.
+    assert_features_close(
+        &feat_dev,
+        &feat_host,
+        "device-cached vs host-cached ref strip 512x512",
+    );
+}
+
 #[test]
 fn with_iw_strip_matches_full_512x512() {
     let client = make_client!();
