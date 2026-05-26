@@ -174,9 +174,16 @@ impl From<MemoryMode> for iwssim_gpu::MemoryMode {
 impl From<MemoryMode> for cvvdp_gpu::MemoryMode {
     fn from(m: MemoryMode) -> Self {
         // Mode E (task #79) reintroduces Strip — JOD-preserving via a
-        // full ref state + per-strip dist walker. The previous
-        // capped-pyramid variant (task #77 rollback) was JOD-changing
-        // and is not what this enum maps to.
+        // full ref state + per-strip dist walker.
+        //
+        // Note: `cvvdp_gpu::MemoryMode::CappedPyramid { levels }` is
+        // **cvvdp-specific** — it's a JOD-shifting Option B safety net
+        // and has no umbrella equivalent. Callers who need it must
+        // construct the typed `Cvvdp` directly with
+        // `Cvvdp::new_capped_pyramid` (or the opaque
+        // `CvvdpOpaque::new_with_memory_mode(CappedPyramid { .. })`).
+        // The umbrella's `MemoryMode` deliberately stays the
+        // metric-preserving subset.
         match m {
             MemoryMode::Auto => cvvdp_gpu::MemoryMode::Auto,
             MemoryMode::Full => cvvdp_gpu::MemoryMode::Full,

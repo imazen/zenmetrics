@@ -326,17 +326,24 @@ impl CvvdpOpaque {
         // the backend allocation runs.
         let cap = crate::memory_mode::vram_cap_bytes();
         match mode {
-            crate::MemoryMode::Full | crate::MemoryMode::Strip { .. } => {}
+            crate::MemoryMode::Full
+            | crate::MemoryMode::Strip { .. }
+            | crate::MemoryMode::CappedPyramid { .. } => {}
             crate::MemoryMode::Auto => {
                 let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
             }
         }
         // Resolve Auto host-side so the backend dispatch picks the
-        // matching constructor. Strip and Full route to dedicated
-        // constructors; only Auto routes through `resolve_auto`.
+        // matching constructor. Strip / Full / CappedPyramid route to
+        // dedicated constructors; only Auto routes through
+        // `resolve_auto` (which never picks CappedPyramid — that
+        // variant is opt-in).
         let resolved_mode = match mode {
             crate::MemoryMode::Full => crate::MemoryMode::Full,
             crate::MemoryMode::Strip { h_body } => crate::MemoryMode::Strip { h_body },
+            crate::MemoryMode::CappedPyramid { levels } => {
+                crate::MemoryMode::CappedPyramid { levels }
+            }
             crate::MemoryMode::Auto => {
                 match crate::memory_mode::resolve_auto(width, height, cap)? {
                     crate::memory_mode::ResolvedMode::Full => crate::MemoryMode::Full,
@@ -578,6 +585,11 @@ fn build_cvvdp_inner<R: cubecl::Runtime>(
         crate::MemoryMode::Strip { h_body } => {
             let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
             Cvvdp::<R>::new_strip_with_geometry(client, width, height, body, params, geometry)
+        }
+        crate::MemoryMode::CappedPyramid { levels } => {
+            Cvvdp::<R>::new_capped_pyramid_with_geometry(
+                client, width, height, params, geometry, levels,
+            )
         }
     }
 }

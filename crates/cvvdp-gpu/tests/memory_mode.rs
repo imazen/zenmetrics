@@ -60,16 +60,19 @@ fn auto_errors_when_too_big_for_full() {
 #[test]
 fn enum_variants_match_task79_contract() {
     // Task #79 contract: cvvdp's MemoryMode enum is
-    // `{ Auto, Full, Strip { h_body } }`. The capped-pyramid Strip
-    // variant rolled back in task #77 is gone; the mode-E Strip
-    // variant landed in task #79 (ref-full + per-strip dist
-    // cached-ref, JOD-preserving).
+    // `{ Auto, Full, Strip { h_body }, CappedPyramid { levels } }`.
+    // The capped-pyramid Strip variant rolled back in task #77 was
+    // re-introduced as the standalone `CappedPyramid` variant (Option
+    // B safety net, 2026-05-26) — it is **JOD-shifting** and is never
+    // picked by `Auto`. The mode-E `Strip` variant landed in task
+    // #79 (ref-full + per-strip dist cached-ref, JOD-preserving).
     let _auto = MemoryMode::Auto;
     let _full = MemoryMode::Full;
     let _strip = MemoryMode::Strip { h_body: None };
     let _strip_explicit = MemoryMode::Strip {
         h_body: Some(memory_mode::STRIP_H_BODY_DEFAULT),
     };
+    let _capped = MemoryMode::CappedPyramid { levels: 5 };
     // Exhaustive match — would fail to compile if a variant were
     // added without updating this test.
     let m = MemoryMode::Auto;
@@ -77,6 +80,7 @@ fn enum_variants_match_task79_contract() {
         MemoryMode::Auto => 0u32,
         MemoryMode::Full => 1u32,
         MemoryMode::Strip { .. } => 2u32,
+        MemoryMode::CappedPyramid { .. } => 3u32,
     };
 }
 

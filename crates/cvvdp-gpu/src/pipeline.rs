@@ -724,6 +724,81 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
     )
 }
 
+/// Capped-pyramid GPU-memory estimator. Returns the working-set bytes
+/// when the cvvdp pipeline is constructed via
+/// [`Cvvdp::new_capped_pyramid`] with the given `levels` cap. The
+/// caller-supplied `levels` is clamped against the natural pyramid
+/// depth for `(width, height)` under STANDARD_4K geometry; the
+/// returned bytes mirror exactly what [`estimate_gpu_memory_bytes`]
+/// would compute if it operated on the capped depth.
+///
+/// Returns `None` when `(width, height)` is below the pyramid minimum
+/// or `levels == 0`.
+///
+/// **Not JOD-bit-identical** to Full mode; the capped pyramid drops
+/// the deepest bands. See [`crate::MemoryMode::CappedPyramid`].
+#[must_use]
+pub fn estimate_gpu_memory_bytes_capped(
+    width: u32,
+    height: u32,
+    levels: u32,
+) -> Option<usize> {
+    if levels == 0 {
+        return None;
+    }
+    if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
+        return None;
+    }
+    let ppd = crate::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let natural = pyramid_levels(ppd, width, height) as usize;
+    let n_levels = natural.min(levels as usize).max(1);
+
+    let n0 = (width as usize) * (height as usize);
+    let src_bytes: usize = n0 * 3 * 4;
+    let srgb_lut_bytes: usize = 256 * 4;
+    let partials_bytes: usize = n_levels * crate::N_CHANNELS * 4;
+    let logs_row_bytes: usize = n_levels * crate::N_CHANNELS * crate::kernels::csf::N_L_BKG * 4;
+
+    let mut level_pixels: Vec<usize> = Vec::with_capacity(n_levels);
+    let mut w = width;
+    let mut h = height;
+    for _ in 0..n_levels {
+        level_pixels.push((w as usize) * (h as usize));
+        w = w.div_ceil(2);
+        h = h.div_ceil(2);
+    }
+    let sum_level_pixels: usize = level_pixels.iter().sum();
+    let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
+    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+
+    let mut weber_bytes: usize = 0;
+    let mut fw = width;
+    let mut fh = height;
+    for _ in 0..n_levels.saturating_sub(1) {
+        let n_fine = (fw as usize) * (fh as usize);
+        let cw = fw.div_ceil(2);
+        let n_v = (cw as usize) * (fh as usize);
+        let fine_planes = 6_usize;
+        let v_planes = 4_usize;
+        weber_bytes += (fine_planes * n_fine + v_planes * n_v) * 4;
+        fw = cw;
+        fh = fh.div_ceil(2);
+    }
+
+    let baseband_bytes: usize = level_pixels.last().copied().unwrap_or(0) * 4;
+
+    Some(
+        src_bytes
+            + srgb_lut_bytes
+            + partials_bytes
+            + logs_row_bytes
+            + pyramid_bytes
+            + d_scratch_bytes
+            + weber_bytes
+            + baseband_bytes,
+    )
+}
+
 /// Strip-mode (Mode E) GPU-memory estimator. Returns the working-set
 /// bytes when the cvvdp pipeline is constructed via
 /// [`Cvvdp::new_strip`]:
@@ -974,6 +1049,9 @@ impl<R: Runtime> Cvvdp<R> {
                 let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
                 Self::new_strip(client, width, height, body, params)
             }
+            MemoryMode::CappedPyramid { levels } => {
+                Self::new_capped_pyramid(client, width, height, params, levels)
+            }
             MemoryMode::Auto => {
                 let cap = vram_cap_bytes();
                 match resolve_auto(width, height, cap)? {
@@ -1059,10 +1137,85 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         geometry: crate::params::DisplayGeometry,
     ) -> Result<Self> {
+        Self::new_with_geometry_inner(client, width, height, params, geometry, None)
+    }
+
+    /// Capped-pyramid variant (Option B safety net). Constructs a
+    /// scorer whose pyramid depth is clamped to `levels` from above,
+    /// in addition to the natural per-image depth derived from the
+    /// viewing geometry. **NOT JOD-bit-identical** to [`Self::new`] —
+    /// see [`crate::MemoryMode::CappedPyramid`] for the metric-value
+    /// tradeoff. Uses the standard 4K viewing geometry; for a custom
+    /// geometry use [`Self::new_capped_pyramid_with_geometry`].
+    ///
+    /// `levels >= 1` required; values larger than the natural pyramid
+    /// depth are silently clamped (the natural depth is the upper
+    /// bound).
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::InvalidImageSize`] if either dimension is below the
+    ///   [`PYRAMID_MIN_DIM`] × 2 minimum.
+    /// - [`Error::ModeUnsupported`] if `levels == 0`.
+    pub fn new_capped_pyramid(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        levels: u32,
+    ) -> Result<Self> {
+        Self::new_capped_pyramid_with_geometry(
+            client,
+            width,
+            height,
+            params,
+            crate::params::DisplayGeometry::STANDARD_4K,
+            levels,
+        )
+    }
+
+    /// Capped-pyramid variant with custom display geometry. See
+    /// [`Self::new_capped_pyramid`] for the metric-value tradeoff and
+    /// [`Self::new_with_geometry`] for the display-geometry semantics.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new_capped_pyramid`].
+    pub fn new_capped_pyramid_with_geometry(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+        levels: u32,
+    ) -> Result<Self> {
+        if levels == 0 {
+            return Err(Error::ModeUnsupported("CappedPyramid { levels=0 }"));
+        }
+        Self::new_with_geometry_inner(client, width, height, params, geometry, Some(levels))
+    }
+
+    /// Inner constructor that backs both
+    /// [`Self::new_with_geometry`] and
+    /// [`Self::new_capped_pyramid_with_geometry`]. `cap_levels` clamps
+    /// the pyramid depth from above; `None` selects the natural depth
+    /// (the standard [`Self::new`] behaviour).
+    fn new_with_geometry_inner(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+        cap_levels: Option<u32>,
+    ) -> Result<Self> {
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
         }
-        let n_levels = pyramid_levels(geometry.pixels_per_degree(), width, height);
+        let natural_n_levels = pyramid_levels(geometry.pixels_per_degree(), width, height);
+        let n_levels = match cap_levels {
+            Some(c) => natural_n_levels.min(c).max(1),
+            None => natural_n_levels,
+        };
 
         let n0 = (width as usize) * (height as usize);
         // Source-byte buffers are u32-slot arrays of length `n0 * 3`

@@ -199,7 +199,10 @@ pub use opaque::{Backend, CvvdpOpaque, Score};
 
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]
-pub use pipeline::{Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, recommend_parallel};
+pub use pipeline::{
+    Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes,
+    estimate_gpu_memory_bytes_capped, recommend_parallel,
+};
 
 /// Number of color channels in DKL opponent space (achromatic +
 /// red-green + violet-yellow).

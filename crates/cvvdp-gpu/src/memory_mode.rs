@@ -1,7 +1,7 @@
 //! Unified memory-mode API. See `butteraugli-gpu/src/memory_mode.rs`
 //! for shared design rationale.
 //!
-//! cvvdp-gpu supports two memory modes:
+//! cvvdp-gpu supports three memory modes:
 //!
 //! - **Full** — whole-image working set on device. Bit-stable with
 //!   the host-scalar reference. Default; preferred when the image
@@ -15,6 +15,15 @@
 //!   associative across strips, so the final JOD equals Full-mode
 //!   JOD within the documented Atomic<f32> reduction-order noise
 //!   band.
+//! - **CappedPyramid { levels }** — Option B safety net. Reduces
+//!   the natural pyramid depth to `levels` so the deepest band's
+//!   σ=3 PU blur halo shrinks. Saves 30-50% peak working set vs
+//!   Full at large images but **is NOT JOD-bit-identical** to Full
+//!   (capping pyramid depth changes JOD at any level shorter than
+//!   the natural depth). Opt-in only — never picked by `Auto`. Use
+//!   when memory pressure forces a metric-value tradeoff (e.g.
+//!   cvvdp on 6 GB VRAM at >16 MP). Pre-rollback bench measured
+//!   ≤0.005 JOD parity gate at k=8.
 //!
 //! The earlier capped-pyramid Strip variant that lived here before
 //! task #77 was rolled back because **capping the pyramid depth
@@ -99,13 +108,15 @@ pub const STRIP_ALIGN: u32 = 1 << (crate::MAX_LEVELS as u32 - 1);
 
 /// How the GPU pipeline should partition its working set.
 ///
-/// cvvdp-gpu supports two variants:
+/// cvvdp-gpu supports three variants:
 ///
 /// - [`Self::Full`] — whole-image working set. Default.
 /// - [`Self::Strip`] — Mode E (ref-full + dist-strip cached-ref).
 ///   Only valid for the cached-ref code path
 ///   ([`crate::pipeline::Cvvdp::warm_reference`] +
 ///   [`crate::pipeline::Cvvdp::compute_dkl_jod_with_warm_ref`]).
+/// - [`Self::CappedPyramid`] — JOD-shifting capped-pyramid safety
+///   net. Opt-in only; not picked by [`Self::Auto`].
 ///
 /// See module-level docs for the JOD-preservation rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +135,22 @@ pub enum MemoryMode {
     Strip {
         /// Dist-side strip body height in rows. `None` → crate-default.
         h_body: Option<u32>,
+    },
+    /// JOD-shifting capped-pyramid mode (≤0.005 JOD parity gate at
+    /// k=8 per pre-rollback bench). Reduces natural pyramid depth to
+    /// `levels` to shrink σ=3 PU blur halo at deepest band. Saves
+    /// 30-50% peak working set vs Full at large images.
+    ///
+    /// **NOT JOD-bit-identical to Full** — opt-in only. [`Self::Auto`]
+    /// does not pick this variant. Use when memory pressure forces a
+    /// metric-value tradeoff (e.g. cvvdp on 6 GB VRAM at >16 MP).
+    ///
+    /// `levels` must be `>= 1` and is clamped from above by the
+    /// natural pyramid depth (`pipeline::pyramid_levels`) at
+    /// construction time.
+    CappedPyramid {
+        /// Maximum pyramid depth. Clamped by the natural depth.
+        levels: u32,
     },
 }
 
@@ -199,6 +226,10 @@ pub fn estimate_gpu_memory_bytes_for_mode(width: u32, height: u32, mode: MemoryM
         MemoryMode::Strip { h_body } => {
             let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
             crate::pipeline::estimate_gpu_memory_bytes_strip(width, height, body)
+                .unwrap_or(usize::MAX)
+        }
+        MemoryMode::CappedPyramid { levels } => {
+            crate::pipeline::estimate_gpu_memory_bytes_capped(width, height, levels)
                 .unwrap_or(usize::MAX)
         }
     }
