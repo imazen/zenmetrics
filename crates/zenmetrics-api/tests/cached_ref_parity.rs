@@ -223,6 +223,96 @@ fn cached_ref_cvvdp_n_distortions() {
     assert_cached_ref_n_distortions(MetricKind::Cvvdp, 3, 1e-4);
 }
 
+/// Mode E (task #79) umbrella-level strip-mode parity test for cvvdp.
+/// Phase 2 of mode E ships a JOD-preserving Strip variant where the
+/// cached-ref state lives in dedicated `RefFullState` buffers, then
+/// the dist dispatch restores them ahead of the existing Full-mode
+/// band loop. JOD output should match Full-mode cached-ref within
+/// the documented Atomic<f32> reduction-order band (1e-4 abs JOD).
+///
+/// Forces cvvdp into Strip mode via `MemoryMode::Strip { h_body: None }`
+/// (resolves to the crate-default `STRIP_H_BODY_DEFAULT = 512`).
+/// Confirms the umbrella's `has_cached_reference()` returns `true`
+/// post-set-reference in strip mode (task #79 acceptance gate #6).
+#[cfg(feature = "cvvdp")]
+#[test]
+fn cached_ref_cvvdp_strip_n_distortions() {
+    let params = MetricParams::default_for(MetricKind::Cvvdp);
+    let n_dists = 3usize;
+    let (r, _) = make_pair(7919, 2147483647);
+    let dists: Vec<Vec<u8>> = (0..n_dists)
+        .map(|i| {
+            let (_, d) = make_pair(7919, 2147483647u64.wrapping_mul((i + 1) as u64));
+            d
+        })
+        .collect();
+
+    let mut m_strip = Metric::new_with_memory_mode(
+        MetricKind::Cvvdp,
+        Backend::Cuda,
+        W,
+        H,
+        params.clone(),
+        MemoryMode::Strip { h_body: None },
+    )
+    .unwrap_or_else(|e| panic!("strip Metric::new_with_memory_mode failed: {e}"));
+
+    // Acceptance gate #6: has_cached_reference must return true after
+    // set_reference in strip mode (pre-task-#79 cvvdp hard-coded false).
+    assert!(!m_strip.has_cached_reference(), "fresh: should be false");
+    m_strip
+        .set_reference_srgb_u8(&r)
+        .unwrap_or_else(|e| panic!("strip set_reference_srgb_u8 failed: {e}"));
+    assert!(
+        m_strip.has_cached_reference(),
+        "cvvdp strip set_reference_srgb_u8 should flip has_cached_reference to true"
+    );
+
+    let strip_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m_strip
+                .compute_with_cached_reference_srgb_u8(d)
+                .unwrap_or_else(|e| panic!("strip compute failed: {e}"))
+                .value
+        })
+        .collect();
+
+    let mut m_full = Metric::new_with_memory_mode(
+        MetricKind::Cvvdp,
+        Backend::Cuda,
+        W,
+        H,
+        params,
+        MemoryMode::Full,
+    )
+    .unwrap_or_else(|e| panic!("full Metric::new_with_memory_mode failed: {e}"));
+    m_full
+        .set_reference_srgb_u8(&r)
+        .unwrap_or_else(|e| panic!("full set_reference_srgb_u8 failed: {e}"));
+    let full_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m_full
+                .compute_with_cached_reference_srgb_u8(d)
+                .unwrap_or_else(|e| panic!("full compute failed: {e}"))
+                .value
+        })
+        .collect();
+
+    for (i, (s, f)) in strip_scores.iter().zip(full_scores.iter()).enumerate() {
+        let d = (s - f).abs();
+        // 1e-4 JOD tolerance — matches the per-call Atomic<f32>
+        // reduction-order drift band documented elsewhere in this
+        // file. Tighter than that requires bit-stable atomic ordering
+        // which cvvdp doesn't guarantee.
+        assert!(
+            d < 1e-4,
+            "cvvdp Mode E strip score[{i}] {s:.6} diverged from Full {f:.6} by {d:.6}"
+        );
+    }
+}
+
 #[cfg(feature = "zensim")]
 #[test]
 fn cached_ref_zensim_matches_one_shot() {
