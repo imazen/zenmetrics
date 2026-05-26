@@ -2011,6 +2011,25 @@ pub fn subtract_weber_3ch_kernel(
 /// and `body_h = strip_h_buf` (and `logical_h` arbitrary)
 /// produces output bit-identical to [`subtract_weber_3ch_kernel`]
 /// over the same buffers with `n = strip_h_buf × width`.
+///
+/// **Source-strip semantics (Path-A Phase 1b).** `src_strip_offset`
+/// translates the logical buffer row `body_offset_y + dy_local` to a
+/// buffer-local row by subtracting `src_strip_offset`. This applies
+/// uniformly to BOTH input reads (`fine_*`, `upsc_*`,
+/// `expanded_lbkg`) AND output writes (`contrast_*`, `log_l_bkg`),
+/// so callers can pass strip-local sliced handles for any subset of
+/// the input/output buffers — the buffer's row 0 represents the
+/// logical row `src_strip_offset`. With `src_strip_offset = 0`
+/// (legacy / default), the buffer is interpreted as full-image and
+/// reads/writes happen at full-image-relative `(body_offset_y +
+/// dy_local) * w + dx`. Mirrors the
+/// [`upscale_v_strip_kernel`] `src_strip_offset` pattern.
+///
+/// **Per-buffer offset NOT supported.** All buffers share the same
+/// `src_strip_offset`. Callers mixing full-image inputs with
+/// strip-local inputs must pre-slice the full-image handles via
+/// `offset_start(src_strip_offset * width * 4)` so every buffer
+/// presents the same row-0 origin.
 #[cube(launch)]
 pub fn subtract_weber_3ch_strip_kernel(
     fine_a: &Array<f32>,
@@ -2028,6 +2047,7 @@ pub fn subtract_weber_3ch_strip_kernel(
     body_h: u32,
     body_offset_y: u32,
     logical_h: u32,
+    src_strip_offset: u32,
 ) {
     let tid = ABSOLUTE_POS;
     let total = (width * body_h) as usize;
@@ -2037,7 +2057,14 @@ pub fn subtract_weber_3ch_strip_kernel(
     let w = width as usize;
     let dy_local = tid / w;
     let dx = tid - dy_local * w;
-    let buf_y = (body_offset_y as usize) + dy_local;
+    // Translate the logical body row (`body_offset_y + dy_local`) to
+    // a buffer-local row by subtracting `src_strip_offset`. With
+    // `src_strip_offset = 0` this is a no-op and matches the legacy
+    // full-image-relative indexing. With `src_strip_offset =
+    // body_offset_y` (Phase 1b strip mode) the buffer-local row is
+    // `dy_local`, i.e. the buffer's row 0 corresponds to the start
+    // of the strip body.
+    let buf_y = (body_offset_y as usize) + dy_local - (src_strip_offset as usize);
     let idx = buf_y * w + dx;
 
     let l_min = f32::new(0.01);

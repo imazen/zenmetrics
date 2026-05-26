@@ -503,6 +503,7 @@ fn subtract_weber_strip_aware_matches_full_at_64x64() {
             body_h,
             body_offset_y,
             h, // logical_h
+            0, // src_strip_offset: buffers are FULL-image (legacy)
         );
     }
 
@@ -562,6 +563,195 @@ fn subtract_weber_strip_aware_matches_full_at_64x64() {
                 strip_ca[i], 0.0,
                 "halo bottom row {row} pixel {x} was written: got {} (expected 0)",
                 strip_ca[i]
+            );
+        }
+    }
+}
+
+/// Path-A Phase 1b: exercise the new `src_strip_offset` parameter on
+/// [`subtract_weber_3ch_strip_kernel`] by re-running the 32×32 subtract
+/// with STRIP-LOCAL input AND output buffers covering rows [8..24) of
+/// the full 32×32 logical image. Body covers rows [16..24) — those
+/// rows of the full reference must match strip rows [8..16) of the
+/// 16-row strip buffers exactly.
+///
+/// Conceptually, the strip buffer's row 0 corresponds to logical row
+/// 8 of the full image (`src_strip_offset = 8`); the kernel iterates
+/// body rows starting at logical row `body_offset_y = 16` (= strip
+/// row 8) for `body_h = 8` rows.
+#[test]
+fn subtract_weber_3ch_strip_with_src_offset_matches_full_at_32x32() {
+    let client = Backend::client(&Default::default());
+
+    let (w, h) = (32u32, 32u32);
+    let n = (w * h) as usize;
+    let w_us = w as usize;
+    let h_us = h as usize;
+
+    // Per-channel inputs that exercise the same clamps as the
+    // `_at_64x64` test.
+    let base = make_src(w_us, h_us);
+    let fine_a: Vec<f32> = base.iter().map(|v| v * 1.1).collect();
+    let fine_rg: Vec<f32> = base.iter().map(|v| v * -0.7 + 0.3).collect();
+    let fine_vy: Vec<f32> = base.iter().map(|v| v * 0.2 - 0.5).collect();
+    let upsc_a: Vec<f32> = base.iter().map(|v| v * 0.5).collect();
+    let upsc_rg: Vec<f32> = base.iter().map(|v| v * -0.4 + 0.1).collect();
+    let upsc_vy: Vec<f32> = base.iter().map(|v| v * 0.15 - 0.6).collect();
+    let lbkg: Vec<f32> = (0..n)
+        .map(|i| {
+            let v = (i as f32 * 0.013).sin() * 1.2 + 0.7;
+            if i % 17 == 0 {
+                0.0005_f32
+            } else {
+                v
+            }
+        })
+        .collect();
+
+    // Full reference (subtract_weber_3ch_kernel on FULL buffers).
+    let fine_a_h = client.create_from_slice(f32::as_bytes(&fine_a));
+    let fine_rg_h = client.create_from_slice(f32::as_bytes(&fine_rg));
+    let fine_vy_h = client.create_from_slice(f32::as_bytes(&fine_vy));
+    let upsc_a_h = client.create_from_slice(f32::as_bytes(&upsc_a));
+    let upsc_rg_h = client.create_from_slice(f32::as_bytes(&upsc_rg));
+    let upsc_vy_h = client.create_from_slice(f32::as_bytes(&upsc_vy));
+    let lbkg_h = client.create_from_slice(f32::as_bytes(&lbkg));
+    let full_c_a = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let full_c_rg = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let full_c_vy = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+    let full_log_l = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; n]));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let count_full = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
+    unsafe {
+        subtract_weber_3ch_kernel::launch::<Backend>(
+            &client,
+            count_full,
+            cube_dim,
+            ArrayArg::from_raw_parts(fine_a_h.clone(), n),
+            ArrayArg::from_raw_parts(fine_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(fine_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(upsc_a_h.clone(), n),
+            ArrayArg::from_raw_parts(upsc_rg_h.clone(), n),
+            ArrayArg::from_raw_parts(upsc_vy_h.clone(), n),
+            ArrayArg::from_raw_parts(lbkg_h.clone(), n),
+            ArrayArg::from_raw_parts(full_c_a.clone(), n),
+            ArrayArg::from_raw_parts(full_c_rg.clone(), n),
+            ArrayArg::from_raw_parts(full_c_vy.clone(), n),
+            ArrayArg::from_raw_parts(full_log_l.clone(), n),
+            n as u32,
+        );
+    }
+    let full_ca_b = client.read_one(full_c_a).expect("read full c_a");
+    let full_crg_b = client.read_one(full_c_rg).expect("read full c_rg");
+    let full_cvy_b = client.read_one(full_c_vy).expect("read full c_vy");
+    let full_log_b = client.read_one(full_log_l).expect("read full log");
+    let full_ca: &[f32] = f32::from_bytes(&full_ca_b);
+    let full_crg: &[f32] = f32::from_bytes(&full_crg_b);
+    let full_cvy: &[f32] = f32::from_bytes(&full_cvy_b);
+    let full_log: &[f32] = f32::from_bytes(&full_log_b);
+
+    // Build strip-local input buffers: rows [8..24) of each full
+    // input array.
+    let src_strip_offset = 8u32;
+    let strip_h = 16u32; // 16 rows: covers logical [8..24)
+    let strip_n = (w * strip_h) as usize;
+    let strip_start = (src_strip_offset as usize) * w_us;
+    let strip_end = strip_start + strip_n;
+    let strip_fine_a = fine_a[strip_start..strip_end].to_vec();
+    let strip_fine_rg = fine_rg[strip_start..strip_end].to_vec();
+    let strip_fine_vy = fine_vy[strip_start..strip_end].to_vec();
+    let strip_upsc_a = upsc_a[strip_start..strip_end].to_vec();
+    let strip_upsc_rg = upsc_rg[strip_start..strip_end].to_vec();
+    let strip_upsc_vy = upsc_vy[strip_start..strip_end].to_vec();
+    let strip_lbkg = lbkg[strip_start..strip_end].to_vec();
+
+    let s_fine_a_h = client.create_from_slice(f32::as_bytes(&strip_fine_a));
+    let s_fine_rg_h = client.create_from_slice(f32::as_bytes(&strip_fine_rg));
+    let s_fine_vy_h = client.create_from_slice(f32::as_bytes(&strip_fine_vy));
+    let s_upsc_a_h = client.create_from_slice(f32::as_bytes(&strip_upsc_a));
+    let s_upsc_rg_h = client.create_from_slice(f32::as_bytes(&strip_upsc_rg));
+    let s_upsc_vy_h = client.create_from_slice(f32::as_bytes(&strip_upsc_vy));
+    let s_lbkg_h = client.create_from_slice(f32::as_bytes(&strip_lbkg));
+    let s_c_a = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; strip_n]));
+    let s_c_rg = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; strip_n]));
+    let s_c_vy = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; strip_n]));
+    let s_log_l = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; strip_n]));
+
+    // Body region: logical rows [16..24). That's rows [8..16) of the
+    // strip-local buffer.
+    let body_offset_y = 16u32;
+    let body_h = 8u32;
+    let n_body = (w * body_h) as usize;
+    let count_strip = CubeCount::Static((n_body as u32).div_ceil(64), 1, 1);
+    unsafe {
+        subtract_weber_3ch_strip_kernel::launch::<Backend>(
+            &client,
+            count_strip,
+            cube_dim,
+            ArrayArg::from_raw_parts(s_fine_a_h, strip_n),
+            ArrayArg::from_raw_parts(s_fine_rg_h, strip_n),
+            ArrayArg::from_raw_parts(s_fine_vy_h, strip_n),
+            ArrayArg::from_raw_parts(s_upsc_a_h, strip_n),
+            ArrayArg::from_raw_parts(s_upsc_rg_h, strip_n),
+            ArrayArg::from_raw_parts(s_upsc_vy_h, strip_n),
+            ArrayArg::from_raw_parts(s_lbkg_h, strip_n),
+            ArrayArg::from_raw_parts(s_c_a.clone(), strip_n),
+            ArrayArg::from_raw_parts(s_c_rg.clone(), strip_n),
+            ArrayArg::from_raw_parts(s_c_vy.clone(), strip_n),
+            ArrayArg::from_raw_parts(s_log_l.clone(), strip_n),
+            w,
+            body_h,
+            body_offset_y,
+            h, // logical_h
+            src_strip_offset,
+        );
+    }
+    let s_ca_b = client.read_one(s_c_a).expect("read strip c_a");
+    let s_crg_b = client.read_one(s_c_rg).expect("read strip c_rg");
+    let s_cvy_b = client.read_one(s_c_vy).expect("read strip c_vy");
+    let s_log_b = client.read_one(s_log_l).expect("read strip log");
+    let s_ca: &[f32] = f32::from_bytes(&s_ca_b);
+    let s_crg: &[f32] = f32::from_bytes(&s_crg_b);
+    let s_cvy: &[f32] = f32::from_bytes(&s_cvy_b);
+    let s_log: &[f32] = f32::from_bytes(&s_log_b);
+
+    // Compare full rows [16..24) with strip rows [8..16).
+    let body_off_us = body_offset_y as usize;
+    let body_h_us = body_h as usize;
+    let src_off_us = src_strip_offset as usize;
+    let mut max_err = 0.0_f32;
+    for row in 0..body_h_us {
+        let full_row = body_off_us + row;
+        let strip_row = full_row - src_off_us;
+        let f_start = full_row * w_us;
+        let s_start = strip_row * w_us;
+        for x in 0..w_us {
+            let e_a = (full_ca[f_start + x] - s_ca[s_start + x]).abs();
+            let e_rg = (full_crg[f_start + x] - s_crg[s_start + x]).abs();
+            let e_vy = (full_cvy[f_start + x] - s_cvy[s_start + x]).abs();
+            let e_log = (full_log[f_start + x] - s_log[s_start + x]).abs();
+            for e in [e_a, e_rg, e_vy, e_log] {
+                if e > max_err {
+                    max_err = e;
+                }
+            }
+        }
+    }
+    assert!(
+        max_err <= PARITY_TOL,
+        "subtract_weber strip-with-src_offset parity vs full: max-abs error = {max_err} (> {PARITY_TOL})"
+    );
+
+    // Verify halo rows in the strip output (rows [0..8) of the
+    // strip buffer, i.e. logical [8..16)) are NOT touched.
+    for row in 0..(body_off_us - src_off_us) {
+        let row_start = row * w_us;
+        for x in 0..w_us {
+            assert_eq!(
+                s_ca[row_start + x],
+                0.0,
+                "strip-local halo top row {row} pixel {x} was written"
             );
         }
     }

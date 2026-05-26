@@ -2781,6 +2781,7 @@ impl<R: Runtime> Cvvdp<R> {
                         body_h,
                         body_offset_y,
                         fine_h, // logical_h (carried for API symmetry; unused)
+                        0,      // src_strip_offset: all buffers FULL-image
                     );
                 }
                 self.strip_dispatch_counter
