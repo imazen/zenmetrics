@@ -71,6 +71,50 @@ archmage. Subsequent Chunks 1 + 3 + 4 + 5 stack on top.
   inner passes; boundary patches stay scalar for FMA-grouping parity.
 - Pyramid scalar-parity test tolerance: 1e-6 → 1e-5.
 
+### cvvdp-cpu — SIMD Chunk 4: buffer recycling — 2026-05-25
+
+Per-call allocations cut ~90% via a persistent `Scratch` that owns the
+Weber pyramids + per-band workspaces (B7a/b buffer-recycling pattern, NOT
+TLS pool — the butteraugli B7c memo proved TLS regresses). Allocs
+535→58, mem 331MB→33MB per call at 1024². Wall: smooth -26/-31ms,
+photo -27/-56ms (-27%), screenshot -38/-35ms (cold/warm). 1e-4 JOD
+parity preserved; allocator-only change is numerically inert. 45/45
+tests pass. `93924e42`.
+
+### cvvdp-cpu — SIMD Chunk 3: vectorized pow/exp/log + masking rewire — 2026-05-25
+
+New `simd_math` module (`safe_pow_with_offset_into`, `vexp_into`,
+`vlog_into`, `vpow_into`) built on archmage + magetypes
+`pow_midp_unchecked` (≈128 ULP / 1e-5 rel; inputs pre-offset by
+`SAFE_EPS = 1e-5` so the unchecked positive-input path is sound). The
+existing magetypes transcendentals were used directly — no hand-rolled
+vpow. `masking.rs` powfs rewired through `simd_math`: -8.92ms at 1024²
+(best-of-medians), -37.91ms at 2048². 1e-4 JOD parity preserved. 50/50
+tests (45 + 5 accuracy). `da5ba743` (helpers) + `ea7945a3` (rewire).
+
+### cvvdp-cpu — SIMD Chunk 5: CSF apply — HONEST-STOP — 2026-05-25
+
+SIMD CSF apply attempted (`vexp_into` on the per-band sensitivity curve)
+but REGRESSES +6 to +31% wall at 256-1024². Root cause: LLVM already
+stream-fuses the scalar `apply_csf_row_per_pixel` (sensitivity stays in
+an xmm register between the `exp` call and the consumer multiply); any
+design that materializes `s[i]` into a buffer incurs round-trip traffic
+exceeding the SIMD-exp saving. The fully-fused SIMD band loop needs
+AVX2 `gather` for the 32-entry LUT bracket reads, which magetypes
+doesn't expose. Persistent rayon pool also skipped (rayon's global pool
+is already persistent; per-`Cvvdp` `ThreadPool::install` adds overhead
+for zero gain, per butteraugli B7c). CSF SIMD retained as
+`#[allow(dead_code)]` documentation. `f01c99d2` (attempt) + `03037b0e`
+(honest-stop revert). 1e-4 JOD parity preserved, 58/58 tests.
+
+<!-- NOTE: SIMD Chunk 1 (σ=3 13-tap blur, commit 1faa0c39) is committed
+     but NOT YET on master@origin — its agent was rate-limited during
+     final-push, and the commit conflicts with Chunk 5's masking.rs edits
+     on rebase (cross-agent file-scope overlap). Recoverable in the
+     zenmetrics--cvvdp-cpu-simd-sigma3 workspace; needs conflict
+     resolution + parity re-validation before push. Its CHANGELOG entry
+     travels with the commit. -->
+
 ### cvvdp-gpu — GPU kernel-side EOTF + Primaries dispatch — 2026-05-25
 
 Closes the GPU-side counterpart of the host-scalar display dispatch
