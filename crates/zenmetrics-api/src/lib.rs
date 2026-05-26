@@ -54,6 +54,7 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod memory_mode;
 mod metric;
 #[cfg(feature = "pixels")]
 mod pixels;
@@ -62,6 +63,7 @@ mod pixels;
 pub mod context;
 
 pub use error::Error;
+pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
 pub use metric::{Backend, Metric, MetricKind, MetricParams, Score};
 
 #[cfg(feature = "cubecl-types")]
