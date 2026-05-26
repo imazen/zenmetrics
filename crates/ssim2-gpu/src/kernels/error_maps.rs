@@ -93,15 +93,42 @@ pub fn error_maps_kernel(
     out_detail[idx] = dl;
 }
 
+/// Zero a tail range `[start_idx, n)` of a single plane. Used by
+/// strip-mode mode E to clear the "pad" rows of the distorted-side
+/// `dis_xyb` plane after XYB — pad rows in the linear-RGB pyramid are
+/// 0, but XYB(linear 0) = (0.42, 0.01, 0.55) (non-zero bias), so the
+/// pad region of `dis_xyb` would contaminate the subsequent blur at
+/// body-bottom rows if left uncleared. Whole-image computation never
+/// has these pad rows; clearing them here makes the strip's blur
+/// behave identically to the whole-image blur at the body-bottom
+/// boundary.
+#[cube(launch_unchecked)]
+pub fn zero_tail_kernel(plane: &mut Array<f32>, start_idx: u32) {
+    let idx = ABSOLUTE_POS;
+    let n = plane.len();
+    if idx >= n {
+        terminate!();
+    }
+    if idx >= start_idx as usize {
+        plane[idx] = 0.0;
+    }
+}
+
 /// Pointwise multiply with an offset into the `a` buffer:
-/// `out[i] = a[i + a_offset] * b[i]`.
+/// `out[i] = a[i + a_offset] * b[i]` for `i + a_offset < a.len()`,
+/// otherwise `out[i] = 0`.
 ///
 /// Used by strip-mode mode E to compute `sigma12_strip = ref_xyb_full_slice
 /// · dis_xyb_strip` without materialising the slice in a separate
 /// buffer. `a` is the full-image pre-transpose ref-XYB plane (length
 /// `full_n`); `a_offset` is the starting flat index of the strip's
 /// body+halo in that plane (= `strip_top_at_scale * image_w_at_scale`).
-/// `b` and `out` are the strip-shaped dist and sigma12 planes.
+/// `b` and `out` are the strip-shaped dist and sigma12 planes. The
+/// strip can be allocated taller than the slice of `a` it consumes
+/// (e.g. the bottom strip when image_h isn't a multiple of h_body, or
+/// any strip when h_body + 2*halo > image_h). For those trailing
+/// strip rows we zero the output so the downstream blur's IIR sees a
+/// well-defined boundary instead of reading past `a.len()`.
 #[cube(launch_unchecked)]
 pub fn pointwise_mul_offset_kernel(
     a: &Array<f32>,
@@ -114,10 +141,16 @@ pub fn pointwise_mul_offset_kernel(
         terminate!();
     }
     let off = a_offset as usize;
-    out[idx] = a[off + idx] * b[idx];
+    let a_idx = off + idx;
+    if a_idx >= a.len() {
+        out[idx] = 0.0;
+        terminate!();
+    }
+    out[idx] = a[a_idx] * b[idx];
 }
 
-/// Strip-mode error maps with cached **full-image** reference buffers.
+/// Strip-mode error maps with cached **full-image** reference buffers,
+/// with halo-region masking.
 ///
 /// Mode E from task #46 — "ref-full + dist-strip cached-ref". The
 /// reference-side state (`source` = raw transposed XYB, `mu1`,
@@ -170,10 +203,20 @@ pub fn error_maps_strip_from_full_ref_kernel(
     let strip_in = strip_inner_stride as usize;
     let outer = idx / strip_in;
     let inner = idx - outer * strip_in;
-    // Corresponding flat idx in the full ref buffers: same outer, but
-    // inner = inner_offset + inner-within-strip.
+    // Halo + padding rows of the strip don't have a corresponding
+    // position in the full ref buffer — those indices would point
+    // past the strip's row-range mapping into the full inner stride.
+    // The reductions skip them anyway (`body_col_start..body_col_end`
+    // gate); clamp the lookup to keep the kernel pointer-arithmetic
+    // valid + write a sentinel zero to the output.
     let full_in = full_inner_stride as usize;
-    let ref_idx = outer * full_in + (inner_offset as usize) + inner;
+    let inner_full = (inner_offset as usize) + inner;
+    let in_body = inner_full < full_in;
+    // Compute ref_idx unconditionally; clamp to a safe in-bounds value
+    // when out of body so the kernel never indexes past the cached
+    // full-image buffers.
+    let safe_full_idx = (full_in * outer) + inner_full;
+    let ref_idx = if in_body { safe_full_idx } else { 0usize.into() };
 
     let m1 = mu1_full[ref_idx];
     let m2 = mu2_strip[idx];
@@ -194,14 +237,19 @@ pub fn error_maps_strip_from_full_ref_kernel(
     if d_ssim < 0.0 {
         d_ssim = 0.0;
     }
+    if !in_body {
+        d_ssim = 0.0;
+    }
     out_ssim[idx] = d_ssim;
 
     let denom = 1.0 / (1.0 + f32::abs(src - m1));
     let numer = 1.0 + f32::abs(dis - m2);
     let d1 = numer * denom - 1.0;
 
-    let art = if d1 > 0.0 { d1 } else { f32::new(0.0) };
-    let dl = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
+    let art_raw = if d1 > 0.0 { d1 } else { f32::new(0.0) };
+    let dl_raw = if d1 < 0.0 { -d1 } else { f32::new(0.0) };
+    let art = if in_body { art_raw } else { f32::new(0.0) };
+    let dl = if in_body { dl_raw } else { f32::new(0.0) };
     out_artifact[idx] = art;
     out_detail[idx] = dl;
 }

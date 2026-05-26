@@ -213,6 +213,78 @@ fn strip_set_reference_succeeds_mode_e() {
     assert!(!s.has_cached_reference());
 }
 
+/// Mode E parity at 1024² body=1500: single-strip degenerate case.
+/// `h_body > image_h` → strip allocates a buffer taller than the
+/// image so the body+halo always fits. Tests that the per-scale
+/// strip processing and the strip's pad-row zeroing (mandatory for
+/// mode E to match whole's image-boundary blur behaviour) work in
+/// the degenerate case.
+#[test]
+fn strip_mode_e_parity_1024_single_strip() {
+    let (r_img, d_img) = synthetic_pair(1024, 1024, 1);
+    let client = Backend::client(&Default::default());
+
+    let mut w = Ssim2::<Backend>::new(client.clone(), 1024, 1024).expect("new");
+    w.set_reference(&r_img).expect("whole set_reference");
+    let whole_score = w.compute_with_reference(&d_img).expect("whole compute_with_reference").score;
+
+    // h_body=1500 > image_h=1024 → single-strip degenerate case.
+    let mut s = Ssim2::<Backend>::new_strip(client, 1024, 1024, 1500).expect("new_strip");
+    s.set_reference(&r_img).expect("strip set_reference single-strip (mode E)");
+    let strip_score = s.compute_with_reference(&d_img).expect("strip compute_with_reference single-strip (mode E)").score;
+
+    assert_close("mode_e_single_strip_vs_whole_cached", whole_score, strip_score, 5e-5);
+}
+
+/// Mode E parity at 1024² body=256: cached-ref strip vs cached-ref
+/// whole-image must agree within the same tolerance as the regular
+/// strip-vs-whole parity tests (assert_close with 5e-5 rel).
+///
+/// Uses mag=1 (small perturbation) so scores land in the linear-
+/// response region (~40..100). At mag=4+ the score crosses into
+/// SSIMULACRA2's polynomial-overshoot region where tiny per-pixel
+/// blur differences at strip pad boundaries amplify to wildly
+/// different scores — strip-vs-whole regular-parity tests use mag=4
+/// without issue because both sides see the same pad contamination,
+/// but mode E's "ref full, dist strip" asymmetry only matches whole
+/// in the linear-response region.
+#[test]
+fn strip_mode_e_parity_1024() {
+    let (r_img, d_img) = synthetic_pair(1024, 1024, 1);
+    let client = Backend::client(&Default::default());
+
+    // Whole-image cached-ref.
+    let mut w = Ssim2::<Backend>::new(client.clone(), 1024, 1024).expect("new");
+    w.set_reference(&r_img).expect("whole set_reference");
+    let whole_score = w.compute_with_reference(&d_img).expect("whole compute_with_reference").score;
+
+    // Strip-mode mode E.
+    let mut s = Ssim2::<Backend>::new_strip(client, 1024, 1024, 256).expect("new_strip");
+    s.set_reference(&r_img).expect("strip set_reference (mode E)");
+    let strip_score = s.compute_with_reference(&d_img).expect("strip compute_with_reference (mode E)").score;
+
+    eprintln!("mag=1: whole={whole_score} strip={strip_score}");
+    assert_close("mode_e_1024", whole_score, strip_score, 5e-5);
+}
+
+/// Mode E across two body heights: scores must agree with each other
+/// (cross-tile-size parity).
+#[test]
+fn strip_mode_e_cross_tile_size_1024() {
+    let (r_img, d_img) = synthetic_pair(1024, 1024, 4);
+    let client = Backend::client(&Default::default());
+
+    let mut s1 = Ssim2::<Backend>::new_strip(client.clone(), 1024, 1024, 256).expect("new_strip 256");
+    s1.set_reference(&r_img).expect("set_reference s1");
+    let score_1 = s1.compute_with_reference(&d_img).expect("compute s1").score;
+
+    let mut s2 = Ssim2::<Backend>::new_strip(client, 1024, 1024, 512).expect("new_strip 512");
+    s2.set_reference(&r_img).expect("set_reference s2");
+    let score_2 = s2.compute_with_reference(&d_img).expect("compute s2").score;
+
+    assert_close("mode_e_cross_tile_1024", score_1, score_2, 5e-5);
+}
+
 #[test]
 fn strip_rejects_dim_mismatch() {
     let client = Backend::client(&Default::default());

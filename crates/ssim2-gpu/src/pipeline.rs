@@ -589,6 +589,7 @@ impl<R: Runtime> Ssim2<R> {
         &self.client
     }
 
+
     /// Score one image pair, both sRGB packed RGB u8 of length
     /// `width × height × 3`.
     ///
@@ -1280,6 +1281,22 @@ impl<R: Runtime> Ssim2<R> {
     ) {
         // dist-side XYB
         self.run_xyb_masked(scale, false, mode);
+        // Zero the pad-row region of dis_xyb at this scale. Strip's
+        // upload zeros the linear-RGB pad rows, but XYB(linear 0) =
+        // (0.42, 0.01, 0.55) (non-zero bias), so without this clear
+        // the subsequent blur at body-bottom rows would see bias values
+        // at pad rows. Whole-image computation has no pad rows and the
+        // blur reads "out of bounds = 0" at image bottom — clearing
+        // the dis-side pad rows here makes the strip's body-bottom
+        // blur match the whole-image body-bottom blur.
+        //
+        // For non-bottom strips, the strip's body bottom is `halo`
+        // rows above any pad — the IIR's radius-4 reach can't see
+        // pad rows from the body, so this clear is a no-op in
+        // practice for those strips. For the bottom strip (where
+        // strip_h_active = image_h - strip_top), the pad region IS
+        // adjacent to body bottom and this clear is load-bearing.
+        self.zero_dis_pad_rows(scale, strip_top_at_s, mode);
         // sigma22 = dis · dis
         self.run_self_products_masked(scale, false, mode);
         // sigma12 = ref_full_slice · dis, where the ref slice is the
@@ -1305,6 +1322,47 @@ impl<R: Runtime> Ssim2<R> {
             body_col_start,
             body_col_end,
         );
+    }
+
+    /// Strip-mode mode-E: zero out the `dis_xyb` pad-row region for
+    /// this scale. Pad rows are strip-buffer rows beyond the actual
+    /// image data (`image_h_at_s - strip_top_at_s`). For the bottom
+    /// strip this is non-trivial since alloc extends past image_h;
+    /// for non-bottom strips the pad region is far from body and
+    /// clearing it is a no-op for the score.
+    fn zero_dis_pad_rows(&self, scale: usize, strip_top_at_s: u32, mode: Ssim2Mode) {
+        let s = &self.scales[scale];
+        let cache_s = &self
+            .strip_cached_ref
+            .as_ref()
+            .expect("strip_cached_ref populated")[scale];
+        // image_h_at_s = cache_s.full_h. Real-data rows in the strip
+        // at this scale = image_h_at_s - strip_top_at_s, clamped to
+        // strip's own height (a non-bottom strip's full strip range
+        // is entirely within image).
+        let image_h_at_s = cache_s.full_h;
+        let real_rows = image_h_at_s.saturating_sub(strip_top_at_s).min(s.height);
+        if real_rows >= s.height {
+            // No pad rows to clear.
+            return;
+        }
+        // Flat-index start of pad region in pre-transpose layout
+        // (strip is `s.height rows × s.width cols` row-major).
+        let start_idx = real_rows * s.width;
+        for chi in 0..3 {
+            if skip_error_map(mode, scale, chi) {
+                continue;
+            }
+            unsafe {
+                crate::kernels::error_maps::zero_tail_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(s.n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(s.dis_xyb[chi].clone(), s.n),
+                    start_idx,
+                );
+            }
+        }
     }
 
     /// Strip-mode mode-E sigma12 cross-product: `sigma12_in_strip =
