@@ -911,11 +911,15 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
 /// if `h_body` is zero / mis-aligned. Mirrors
 /// [`estimate_gpu_memory_bytes`]'s caveats.
 ///
-/// This estimator is intentionally **conservative** in this initial
-/// landing: it bounds the strip-pair footprint by the full-image
-/// footprint (without the RefFullState delta Mode E pays). As the
-/// strip walker shrinks the per-strip working set, this estimator will
-/// tighten.
+/// The estimate models the hybrid K_SPLIT walker
+/// ([`mode_b_k_split`]): bands shallower than K_SPLIT use strip-sized
+/// `(h_body + 2 × halo)` storage (halved per level), bands at K_SPLIT
+/// and deeper keep full-image storage (tiny at deep levels — level 8
+/// at 4096² is 16×16 = 256 f32 per channel). The dist-side scratch
+/// (`d_scratch.t_p_*`, `d_scratch.m_*`, etc.) follows the same
+/// per-level split. `gauss_ref` carries the ref-side state through the
+/// walker; sized identically to the dist side so the per-strip
+/// dispatch can run REF + DIST through the same buffer geometry.
 #[must_use]
 pub fn estimate_gpu_memory_bytes_strip_pair(
     width: u32,
@@ -926,11 +930,168 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
     if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
         return None;
     }
-    // Conservative: same as Full while the strip walker is still being
-    // wired. Mode B does NOT allocate RefFullState (Mode E's only
-    // delta vs Full), so its conservative bound equals Full exactly.
-    let _ = h_body;
-    estimate_gpu_memory_bytes(width, height)
+    if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
+        return None;
+    }
+    let ppd = crate::params::DisplayGeometry::STANDARD_4K.pixels_per_degree();
+    let n_levels = pyramid_levels(ppd, width, height) as usize;
+    let n0 = (width as usize) * (height as usize);
+
+    // Fixed-cost buffers (same in Full and Strip-Pair modes).
+    let src_bytes: usize = n0 * 3 * 4;
+    let srgb_lut_bytes: usize = 256 * 4;
+    let partials_bytes: usize = n_levels * crate::N_CHANNELS * 4;
+    let logs_row_bytes: usize = n_levels * crate::N_CHANNELS * crate::kernels::csf::N_L_BKG * 4;
+
+    // Per-level buffer pixel count. Shallow bands (k < K_SPLIT) use
+    // a strip-sized buffer of `(W>>k, body_h>>k + 2*halo>>k)`. Deep
+    // bands (k >= K_SPLIT) use full-image-sized `(W>>k, H>>k)` —
+    // small in absolute terms (level 8 at 4096² is 256 px).
+    let k_split = mode_b_k_split(h_body, n_levels as u32) as usize;
+    let mut sum_level_pixels: usize = 0;
+    let mut sum_level_pixels_v: usize = 0; // for vscratch (half-width fine_h)
+    let mut buf_w = width;
+    let mut buf_h = height; // updated each level
+    let mut buf_body = h_body;
+    for k in 0..n_levels {
+        // Level pixel count.
+        let n_lvl = if k < k_split {
+            // Strip buffer height = body_h + 2*halo at this level.
+            let halo = mode_b_halo_at_level(k as u32, k_split as u32);
+            let strip_h = buf_body.saturating_add(2 * halo);
+            (buf_w as usize) * (strip_h as usize)
+        } else {
+            // Full-image storage at this level.
+            (buf_w as usize) * (buf_h as usize)
+        };
+        sum_level_pixels += n_lvl;
+
+        // vscratch is coarse_w * fine_h — half-width of the level's
+        // output dimensions, used by upscale_v. Same shallow/deep split.
+        if k < n_levels.saturating_sub(1) {
+            let cw = buf_w.div_ceil(2);
+            let fine_h_eff = if k < k_split {
+                let halo = mode_b_halo_at_level(k as u32, k_split as u32);
+                buf_body.saturating_add(2 * halo)
+            } else {
+                buf_h
+            };
+            sum_level_pixels_v += (cw as usize) * (fine_h_eff as usize);
+        }
+
+        // Advance buffer dims for next level.
+        buf_w = buf_w.div_ceil(2);
+        buf_h = buf_h.div_ceil(2);
+        if buf_body > 1 {
+            buf_body = buf_body.div_ceil(2);
+        }
+    }
+
+    // gauss_ref + bands_ref + bands_dis: 3 pyramids × 3 channels each.
+    let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
+    // d_scratch: 6 buffer kinds × 3 channels per level.
+    let d_scratch_bytes: usize = 6 * 3 * sum_level_pixels * 4;
+
+    // weber_scratch: only non-baseband levels. Per level: 3 fine-sized
+    // planes (l_bkg_fine, log_l_bkg, log_l_bkg_dis) + 3 upscaled_c +
+    // 1 + 3 v-scratch (half-width).
+    // Approx: 6 fine + 4 vscratch.
+    let weber_fine: usize = 6 * sum_level_pixels.saturating_sub(
+        // Subtract the deepest level's contribution since weber_scratch
+        // doesn't carry the baseband.
+        {
+            let mut last_pixels = 0usize;
+            let mut bw = width;
+            let mut bh = height;
+            let mut bbod = h_body;
+            for k in 0..n_levels {
+                let n_lvl = if k < k_split {
+                    let halo = mode_b_halo_at_level(k as u32, k_split as u32);
+                    (bw as usize) * ((bbod.saturating_add(2 * halo)) as usize)
+                } else {
+                    (bw as usize) * (bh as usize)
+                };
+                if k == n_levels - 1 {
+                    last_pixels = n_lvl;
+                }
+                bw = bw.div_ceil(2);
+                bh = bh.div_ceil(2);
+                if bbod > 1 {
+                    bbod = bbod.div_ceil(2);
+                }
+            }
+            last_pixels
+        },
+    ) * 4;
+    let weber_vscratch: usize = 4 * sum_level_pixels_v * 4;
+    let weber_bytes: usize = weber_fine + weber_vscratch;
+
+    // Baseband log_l_bkg buffer: deep level (full-image pixels at deepest level).
+    let baseband_bytes: usize = {
+        let mut w = width;
+        let mut h = height;
+        for _ in 0..n_levels - 1 {
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        (w as usize) * (h as usize) * 4
+    };
+
+    Some(
+        src_bytes
+            + srgb_lut_bytes
+            + partials_bytes
+            + logs_row_bytes
+            + pyramid_bytes
+            + d_scratch_bytes
+            + weber_bytes
+            + baseband_bytes,
+    )
+}
+
+/// Pick the hybrid K_SPLIT for Mode B given `h_body` and the natural
+/// pyramid level count. Bands at level `k < K_SPLIT` are processed
+/// per-strip; bands at level `k >= K_SPLIT` are processed full-image.
+///
+/// The split is chosen so the strip body at the band's resolution
+/// (`h_body >> k`) is at least `MODE_B_DEEP_THRESHOLD` rows — beyond
+/// that the PU-blur halo (±6 rows at the band's resolution) approaches
+/// or exceeds the body, so striping yields no benefit. Returns the
+/// smaller of `n_levels` and the computed split.
+///
+/// For `h_body = 512` and 9 pyramid levels: K_SPLIT = 5 (bands 0-4
+/// strip-aware, bands 5-8 full-image). For smaller `h_body` the split
+/// shifts down accordingly.
+#[doc(hidden)]
+#[must_use]
+pub fn mode_b_k_split(h_body: u32, n_levels: u32) -> u32 {
+    const MODE_B_DEEP_THRESHOLD: u32 = 12;
+    let mut k_split = 0;
+    while k_split < n_levels && (h_body >> k_split) >= MODE_B_DEEP_THRESHOLD {
+        k_split += 1;
+    }
+    k_split.min(n_levels)
+}
+
+/// Per-level halo (in band-resolution rows) for the Mode B strip
+/// walker. The 13-tap PU blur kernel reads ±6 rows; the 5-tap
+/// pyramid downscale reads ±2 rows. We allocate `halo = 8` rows
+/// (PU blur ±6 + slack for downscale halo accumulation at this level).
+///
+/// The halo is constant per level — the strip-aware kernels handle
+/// reflection at the logical-image edges, so per-strip buffers don't
+/// need to grow with `k` once we're inside the hybrid shallow-band
+/// regime.
+#[doc(hidden)]
+#[must_use]
+pub fn mode_b_halo_at_level(k: u32, k_split: u32) -> u32 {
+    if k >= k_split {
+        0 // deep levels use full-image storage, no halo padding
+    } else {
+        // PU blur radius (6) + 2-tap downscale slack accumulated from
+        // adjacent shallow levels.
+        8
+    }
 }
 
 /// Safety factor applied by [`recommend_parallel`] on top of the raw
