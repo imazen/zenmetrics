@@ -373,6 +373,70 @@ pub fn pool_band_3ch_kernel(
     partials[partial_idx_vy as usize].fetch_add(c_vy);
 }
 
+/// Strip-aware sibling of [`pool_band_3ch_kernel`] (Phase 3, task #79).
+///
+/// Identical math but the per-thread pixel index is `start_offset +
+/// ABSOLUTE_POS`, so the kernel can be dispatched on a **slab** of a
+/// larger d-plane without producing a fresh sub-array. The host side
+/// dispatches it per strip:
+///
+/// ```text
+/// for strip in 0..n_strips {
+///     let start = strip * strip_n;
+///     let count = (band_n - start).min(strip_n);
+///     pool_band_3ch_offset_kernel::launch(.., start as u32, count as u32, band_n as u32);
+/// }
+/// ```
+///
+/// The atomic-add into `partials[partial_idx_*]` is associative, so
+/// the total written across strip dispatches equals the single full-
+/// band dispatch result to f32 rounding. This is the load-bearing
+/// invariant for the Mode E Phase 3 strip walker.
+///
+/// `band_total` is the underlying array's logical length; the kernel
+/// silently skips threads whose computed `start + tid` would exceed
+/// it (defensive against rounding in `n`).
+#[cube(launch)]
+pub fn pool_band_3ch_offset_kernel(
+    band_diff_a: &Array<f32>,
+    band_diff_rg: &Array<f32>,
+    band_diff_vy: &Array<f32>,
+    partials: &mut Array<Atomic<f32>>,
+    beta: f32,
+    partial_idx_a: u32,
+    partial_idx_rg: u32,
+    partial_idx_vy: u32,
+    start_offset: u32,
+    n: u32,
+    band_total: u32,
+) {
+    let tid = ABSOLUTE_POS;
+    if tid >= n as usize {
+        terminate!();
+    }
+    let idx = tid + start_offset as usize;
+    if idx >= band_total as usize {
+        terminate!();
+    }
+    let eps = f32::new(1e-5);
+    let eps_pow_beta = f32::powf(eps, beta);
+
+    let v_a = band_diff_a[idx];
+    let abs_a = if v_a < f32::new(0.0) { -v_a } else { v_a };
+    let c_a = f32::powf(abs_a + eps, beta) - eps_pow_beta;
+    partials[partial_idx_a as usize].fetch_add(c_a);
+
+    let v_rg = band_diff_rg[idx];
+    let abs_rg = if v_rg < f32::new(0.0) { -v_rg } else { v_rg };
+    let c_rg = f32::powf(abs_rg + eps, beta) - eps_pow_beta;
+    partials[partial_idx_rg as usize].fetch_add(c_rg);
+
+    let v_vy = band_diff_vy[idx];
+    let abs_vy = if v_vy < f32::new(0.0) { -v_vy } else { v_vy };
+    let c_vy = f32::powf(abs_vy + eps, beta) - eps_pow_beta;
+    partials[partial_idx_vy as usize].fetch_add(c_vy);
+}
+
 /// Workgroup size for the LDS-reduction pool kernel.
 pub const POOL_LDS_BLOCK_DIM: u32 = 256;
 const POOL_LDS_BLOCK_DIM_USIZE: usize = 256;

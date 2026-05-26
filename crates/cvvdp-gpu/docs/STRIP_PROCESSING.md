@@ -278,6 +278,91 @@ Phase 3 notes: cvvdp at > 16 MP on small-VRAM boxes falls back to
 foundation (RefFullState + snapshot/restore) is in place and ready
 to be the per-strip reader once the walker is built.
 
+### Phase 3 Approach B incremental landing (2026-05-26 follow-on)
+
+**Status: pool stage strip-aware. CSF + masking + dist weber pending.**
+
+The follow-on session shipped the first strip-aware kernel and
+walker:
+
+- New kernel `pool_band_3ch_offset_kernel` (in
+  `kernels/pool.rs`). Identical math to `pool_band_3ch_kernel` but
+  takes a `start_offset` so the host can dispatch on a row-slab of
+  a larger d-plane.
+- New host walker `_pool_and_finalize_jod_strip` (in
+  `pipeline.rs`). Partitions each band's per-pixel pool into row-
+  strips sized `strip_h_body >> k` and dispatches the offset kernel
+  per slab. Atomic-adds are associative across slabs, so JOD is
+  bit-exact against `_pool_and_finalize_jod` within the same
+  Atomic<f32> ordering noise band that Full produces on repeated
+  calls.
+- `compute_dkl_jod_with_warm_ref` and
+  `score_from_linear_planes_with_warm_ref` route through the strip
+  pool when in Mode E (`strip_config.is_some()`).
+- Test-only `Cvvdp::strip_dispatch_counter()` accessor exposed via
+  `#[doc(hidden)]`. Tests assert N >= 2 strip iterations at 1024²
+  with `h_body=512`, proving the walker actually partitions.
+- 5 new parity tests in `tests/strip_mode_e_phase3.rs`:
+  - `phase3_pool_strip_matches_full_at_64x64` (degenerate strip,
+    JOD bit-exact)
+  - `phase3_pool_strip_matches_full_at_1024x1024` (L0 partitions
+    into 2 strips, JOD bit-exact)
+  - `phase3_strip_walker_dispatches_n_strips_at_1024` (counter >= 2)
+  - `phase3_pool_strip_repeats_deterministically` (no walker-side
+    non-determinism)
+  - `phase3_full_mode_counter_stays_zero` (counter is gated on
+    strip mode, doesn't leak into Full callers)
+- 11 existing `strip_mode_e_parity.rs` tests still pass — the pool
+  walker is a drop-in for the existing dispatchers.
+
+**Memory impact**: zero so far. Only the pool stage iterates in
+strips; d_scratch, bands_ref, bands_dis, weber_scratch all remain
+full-image-sized. The pool stage is a tiny fraction of the working
+set. This landing proves the walker is correct end-to-end (atomic
+associativity + per-strip iteration + counter visibility); the
+memory wins are gated on the kernel-port work below.
+
+#### Next chunks (each ~1 day of focused kernel work + parity test)
+
+The chunks below port the rest of the cvvdp pipeline to strip-aware
+kernels. Each is small enough to land alone, ship a strip-aware
+parity test, and incrementally reduce the d_scratch /
+bands_dis / weber_scratch peak footprint:
+
+1. **Strip-aware pu_blur kernels** — add `(body_offset_y, logical_h)`
+   to `pu_blur_v_3ch_scaled_kernel` and `pu_blur_h_3ch_kernel`. The
+   horizontal kernel is trivial (no vertical halo); the vertical
+   needs the same reflection-at-logical-edge fix as the pyramid
+   downscale plan.
+2. **Strip-aware CSF apply** — `csf_apply_3ch_kernel` /
+   `csf_apply_6ch_kernel` are per-pixel; trivial offset
+   parameterisation.
+3. **Strip-aware masking chain** — `mult_mutual_3ch_*` /
+   `subtract_kernel` / etc. are per-pixel; trivial.
+4. **Per-strip d_scratch slab allocator** — sized
+   `(strip_h + 2 × halo_at_base) × width` per band, where
+   `halo_at_base = 6 × 2^min(k, K_HYBRID)` and K_HYBRID is the cut
+   level below which we still run full-image (see the deep-band
+   problem table). For `h_body = 512`, `K_HYBRID = 4` lets bands
+   0-3 run strip-aware and bands 4..n_levels run full-image.
+5. **Strip-aware downscale / upscale_v / upscale_h /
+   subtract_weber_3ch** — the four pyramid kernels. Each needs the
+   `(body_offset_y, logical_h)` reflection treatment. The downscale
+   kernel has the pycvvdp parity-bug compat delta at the right
+   column — keep using `logical_sw % 2` / `logical_sh % 2` for the
+   delta condition.
+6. **_dispatch_dist_weber_pyramid_only_strip** — walker that calls
+   the new kernels with per-strip slab views. The
+   `_run_d_bands_band_loop` already in Phase 3 is what consumes the
+   per-strip bands_dis; the loop body needs the same
+   `(body_offset, logical_h)` plumbing for the masking chain.
+
+When all six chunks ship, the per-strip d_scratch + bands_dis
+footprint shrinks to `n_strips × per_strip_pixels << full_pixels`,
+hitting the original `<= 70% of Full` Phase 3 target. The
+JOD-preservation contract stays tight (each chunk's parity test
+pins bit-exact match on full-image inputs vs strip-aware path).
+
 #### Specific implementation hints for the next agent
 
 If approach (A) (kernel modification) is chosen:

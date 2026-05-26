@@ -17,6 +17,57 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — feat: restore CappedPyramid + Phase 3 strip-aware pool walker (task #79) — 2026-05-26
+
+Two-part follow-on to the 2026-05-26 architectural deep-dive
+(`4f30487c`):
+
+**PART A — `MemoryMode::CappedPyramid { levels }` restoration**: 
+JOD-shifting Option B safety net re-introduced as a fourth variant
+on `cvvdp_gpu::MemoryMode`. Opt-in only (`Auto` never picks it). New
+constructors `Cvvdp::new_capped_pyramid{,_with_geometry}`, new
+estimator `pipeline::estimate_gpu_memory_bytes_capped`, and the
+unified `new_with_memory_mode` + `CvvdpOpaque` dispatch. 8 smoke
+tests in `tests/capped_pyramid_smoke.rs` covering construction,
+JOD-finite, estimator monotonicity, clamping behaviour, and error
+paths. Umbrella `zenmetrics_api::MemoryMode` does **not** gain
+CappedPyramid — the umbrella stays the metric-preserving subset;
+callers needing the safety net construct the typed Cvvdp /
+CvvdpOpaque directly.
+
+**PART B — Phase 3 strip-aware pool walker**: first strip-aware
+kernel in the cvvdp pipeline. New `pool_band_3ch_offset_kernel`
+(in `kernels/pool.rs`) takes a `start_offset` so the host can
+dispatch on a row-slab of a larger d-plane. New
+`_pool_and_finalize_jod_strip` walker partitions each band's
+per-pixel pool into row-strips sized `strip_h_body >> k` and
+dispatches the offset kernel per slab. Atomic-adds are associative
+across slabs so JOD is bit-exact against Full mode within the same
+per-call ordering noise band. `compute_dkl_jod_with_warm_ref` +
+`score_from_linear_planes_with_warm_ref` route through the strip
+pool when in Mode E. Test-only `strip_dispatch_counter()` accessor
+(via `#[doc(hidden)]`) tracks per-band strip iterations so the
+parity test can assert N >= 2 at 1024² with `h_body=512`.
+
+5 new parity tests in `tests/strip_mode_e_phase3.rs` (64², 1024²,
+counter, repeat-determinism, full-mode counter gating). All 11
+existing `strip_mode_e_parity.rs` tests still pass.
+
+**Memory impact**: zero so far — only the pool stage iterates in
+strips; d_scratch / bands_ref / bands_dis / weber_scratch all
+remain full-image-sized. The pool stage is a tiny fraction of the
+working set. This landing proves the walker is correct end-to-end
+(atomic associativity + per-strip iteration + counter visibility);
+the memory wins are gated on porting the CSF / masking chain /
+pyramid kernels to take `(body_offset_y, logical_h)` parameters so
+they reflect at logical-image edges rather than strip-buffer
+edges. See `docs/STRIP_PROCESSING.md` for the six-chunk roadmap.
+
+`benchmarks/cvvdp_mode_e_phase3_2026-05-26.csv` documents the
+JOD-parity-confirmed walker baseline and the memory-equivalence
+caveat (Full and Strip estimate-bytes match because d_scratch is
+still full-image).
+
 ### cvvdp-gpu — docs: Phase 3 architectural deep-dive — multi-day refactor confirmed (task #79) — 2026-05-26
 
 Investigation 2026-05-26 traced the cvvdp pipeline strip-blocking

@@ -102,8 +102,8 @@ use crate::kernels::masking::{
 };
 use crate::kernels::pool::{
     copy_f32_kernel, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_finalize, BASEBAND_W, BETA_CH,
-    BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM,
+    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_3ch_offset_kernel,
+    pool_band_finalize, BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM,
 };
 use crate::kernels::pyramid::{
     band_frequencies, baseband_divide_3ch_kernel, downscale_tiled_kernel, subtract_kernel,
@@ -576,6 +576,27 @@ pub struct Cvvdp<R: Runtime> {
     /// before set_reference and in non-strip configurations. See
     /// [`RefFullState`] for the layout.
     ref_full_state: Option<RefFullState>,
+
+    /// Cumulative count of strip iterations the Mode E pool walker
+    /// has dispatched since construction. Incremented by
+    /// `_pool_and_finalize_jod_strip` per outer strip-iteration in
+    /// the band loop. Visible via [`Self::strip_dispatch_counter`]
+    /// (hidden accessor) so the Phase 3 parity test can assert that
+    /// the walker actually partitioned (N >= 2 strips) at large
+    /// sizes, distinguishing a real strip dispatch from a single
+    /// full-image Full-mode fallback.
+    ///
+    /// Phase 3 (task #79): only the pool stage of the band loop is
+    /// strip-aware at this point. The dist weber pyramid + CSF +
+    /// masking still run full-image; the strip walker partitions the
+    /// per-band `d_scratch[k].d[c]` pixel range and dispatches the
+    /// `pool_band_3ch_offset_kernel` per slab. Atomic-add into
+    /// `partials_h` is associative across slabs, so the JOD scalar is
+    /// bit-exact against Full-mode `_pool_and_finalize_jod`. The
+    /// architectural foundation generalises to strip-aware CSF +
+    /// masking (when the kernels are ported to logical-image
+    /// reflection).
+    strip_dispatch_counter: core::sync::atomic::AtomicU32,
 }
 
 fn pyramid_levels(ppd: f32, width: u32, height: u32) -> u32 {
@@ -1341,6 +1362,7 @@ impl<R: Runtime> Cvvdp<R> {
             linear_planes_upload: None,
             strip_config: None,
             ref_full_state: None,
+            strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
         })
     }
 
@@ -1446,6 +1468,31 @@ impl<R: Runtime> Cvvdp<R> {
         } else {
             self.warm_ref_baseband_log_l_bkg.is_some()
         }
+    }
+
+    /// Test-only accessor for the Mode E Phase 3 strip-iteration
+    /// counter. Returns the cumulative number of pool-strip
+    /// dispatches `_pool_and_finalize_jod_strip` has launched since
+    /// this `Cvvdp` was constructed.
+    ///
+    /// Used by `tests/strip_mode_e_phase3.rs` to confirm the walker
+    /// actually partitioned at large sizes (N >= 2) rather than
+    /// dropping back to a single Full-mode dispatch. Not part of the
+    /// stable public API — exposed via `#[doc(hidden)]`.
+    #[doc(hidden)]
+    pub fn strip_dispatch_counter(&self) -> u32 {
+        self.strip_dispatch_counter
+            .load(core::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Test-only counter reset. Mirrors
+    /// [`Self::strip_dispatch_counter`]'s semantics; allows the
+    /// parity test to zero the counter between sub-tests without
+    /// reconstructing the scorer.
+    #[doc(hidden)]
+    pub fn reset_strip_dispatch_counter(&self) {
+        self.strip_dispatch_counter
+            .store(0, core::sync::atomic::Ordering::Relaxed);
     }
 
     /// Pyramid level `k`'s spatial dimensions as `(bw, bh, n_px)`.
@@ -4292,7 +4339,20 @@ impl<R: Runtime> Cvvdp<R> {
         // the JOD value bit-identical with Full-mode warm_reference.
         let log_l_bkg_baseband = self._warm_ref_baseband_log_l_bkg_for_dispatch()?;
         self._dispatch_d_bands_dist_and_band_loop(dist_srgb, log_l_bkg_baseband)?;
-        self._pool_and_finalize_jod()
+        // Mode E Phase 3: the per-band pool stage is the first
+        // strip-aware kernel — it partitions each band's pool work
+        // into row-strips and dispatches the offset kernel per slab.
+        // Atomic-adds across slabs are associative so JOD is
+        // bit-identical to Full mode (within the same per-call
+        // ordering noise band as Full's own repeated calls). The
+        // dist weber pyramid + CSF + masking chain still run
+        // full-image; their strip-aware port is the next Phase 3
+        // chunk after this lands.
+        if self.strip_config.is_some() {
+            self._pool_and_finalize_jod_strip()
+        } else {
+            self._pool_and_finalize_jod()
+        }
     }
 
     /// GPU pool + host fold for the per-band D planes resident in
@@ -4375,6 +4435,140 @@ impl<R: Runtime> Cvvdp<R> {
                 }
             }
         }
+
+        let bytes = self
+            .client
+            .read_one(self.partials_h.clone())
+            .map_err(|_| Error::InvalidImageSize)?;
+        let partials_data: &[f32] = f32::from_bytes(&bytes);
+
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
+        for k in 0..n_levels {
+            let (_, _, n_px_k) = self.level_dims(k);
+            let mut q = [0.0_f32; 3];
+            for c in 0..N_CHANNELS {
+                q[c] = pool_band_finalize(partials_data[k * N_CHANNELS + c], n_px_k, BETA_SPATIAL);
+            }
+            q_per_ch.push(q);
+        }
+
+        Ok(do_pooling_and_jod_still_3ch(&q_per_ch))
+    }
+
+    /// Mode E Phase 3 strip-aware variant of [`Self::_pool_and_finalize_jod`].
+    ///
+    /// Partitions each band's per-pixel pool into `n_strips` row-strips
+    /// and dispatches [`pool_band_3ch_offset_kernel`] per strip. The
+    /// atomic-add into `partials_h` is associative across strips, so
+    /// the final `partials_h[k * N_CHANNELS + c]` value equals the
+    /// single-shot pool dispatch result to f32 atomic-ordering noise
+    /// (which is the same drift band Full mode already produces
+    /// across repeated calls — see
+    /// `compute_dkl_jod_is_deterministic_across_repeated_calls` in
+    /// `tests/pipeline_score.rs`).
+    ///
+    /// Per-band strip count is computed from `strip_config.h_body` at
+    /// the band's resolution: a band of height `bh` is partitioned
+    /// into `ceil(bh / strip_body_h)` strips. Deep bands whose height
+    /// is shorter than the configured strip body fall through to a
+    /// single dispatch (effectively the same as the Full path) —
+    /// these bands carry negligible pool work so there's no value in
+    /// forcing multi-strip dispatch.
+    ///
+    /// Increments [`Self::strip_dispatch_counter`] by one per outer
+    /// strip-iteration (NOT per kernel launch; one strip iteration
+    /// dispatches the kernel once per `n_levels`). Test-only via
+    /// `#[doc(hidden)]` accessor.
+    ///
+    /// Caller contract: only invoke when `self.strip_config.is_some()`
+    /// (Mode E). Full-mode callers should keep using the canonical
+    /// [`Self::_pool_and_finalize_jod`] — single-dispatch is faster
+    /// when partitioning isn't needed.
+    fn _pool_and_finalize_jod_strip(&mut self) -> Result<f32> {
+        let n_levels = self.n_levels as usize;
+        let n_partials = n_levels * N_CHANNELS;
+        let cube_dim = CubeDim::new_1d(64);
+
+        // Zero partials_h — same shape as the Full pool dispatch.
+        unsafe {
+            fill_f32_kernel::launch::<R>(
+                &self.client,
+                CubeCount::Static((n_partials as u32).div_ceil(64), 1, 1),
+                cube_dim,
+                ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                0.0,
+                n_partials as u32,
+            );
+        }
+
+        // Strip body height at scale 0. Mode E's strip_config is
+        // guaranteed Some(_) by the caller; the unwrap-equivalent is
+        // safe but we defensively read via expect to surface a clear
+        // message if a future caller forgets to gate.
+        let strip_h_body = self
+            .strip_config
+            .as_ref()
+            .expect("_pool_and_finalize_jod_strip requires strip_config")
+            .h_body as usize;
+
+        let pool_atomic_cube_dim = CubeDim::new_1d(64);
+
+        // Track per-iteration strip count. We dispatch the offset
+        // kernel once per (level, strip); the outer loop iterates
+        // strips across levels so a single test can see N >= 2 strip
+        // iterations from a single warm-ref call when the image is
+        // tall enough.
+        let mut outer_strip_iters: u32 = 0;
+
+        for k in 0..n_levels {
+            let (bw, bh, n_px) = self.level_dims(k);
+            let d_a = self.d_scratch[k].d[0].clone();
+            let d_rg = self.d_scratch[k].d[1].clone();
+            let d_vy = self.d_scratch[k].d[2].clone();
+            let partial_idx_a = (k * N_CHANNELS) as u32;
+            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
+            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
+
+            // Per-band strip body height: scale 0 strip body halved
+            // to match the band's resolution. Bands whose body
+            // shrinks below 1 row clamp to bh (single-strip dispatch).
+            let strip_h_at_band = (strip_h_body >> k).max(1);
+            let n_strips_band = if bh <= strip_h_at_band {
+                1
+            } else {
+                bh.div_ceil(strip_h_at_band)
+            };
+
+            for s in 0..n_strips_band {
+                let row_start = s * strip_h_at_band;
+                let row_count = (bh - row_start).min(strip_h_at_band);
+                let start_offset = row_start * bw;
+                let slab_n = row_count * bw;
+                let count = CubeCount::Static((slab_n as u32).div_ceil(64), 1, 1);
+                unsafe {
+                    pool_band_3ch_offset_kernel::launch::<R>(
+                        &self.client,
+                        count,
+                        pool_atomic_cube_dim,
+                        ArrayArg::from_raw_parts(d_a.clone(), n_px),
+                        ArrayArg::from_raw_parts(d_rg.clone(), n_px),
+                        ArrayArg::from_raw_parts(d_vy.clone(), n_px),
+                        ArrayArg::from_raw_parts(self.partials_h.clone(), n_partials),
+                        BETA_SPATIAL,
+                        partial_idx_a,
+                        partial_idx_rg,
+                        partial_idx_vy,
+                        start_offset as u32,
+                        slab_n as u32,
+                        n_px as u32,
+                    );
+                }
+                outer_strip_iters += 1;
+            }
+        }
+
+        self.strip_dispatch_counter
+            .fetch_add(outer_strip_iters, core::sync::atomic::Ordering::Relaxed);
 
         let bytes = self
             .client
@@ -5134,7 +5328,13 @@ impl<R: Runtime> Cvvdp<R> {
             dist_b,
             log_l_bkg_baseband,
         )?;
-        self._pool_and_finalize_jod()
+        // Phase 3 strip-aware pool routes for Mode E. See
+        // `compute_dkl_jod_with_warm_ref` for the rationale.
+        if self.strip_config.is_some() {
+            self._pool_and_finalize_jod_strip()
+        } else {
+            self._pool_and_finalize_jod()
+        }
     }
 
     /// Score a DIST candidate (planar linear-RGB f32) against the

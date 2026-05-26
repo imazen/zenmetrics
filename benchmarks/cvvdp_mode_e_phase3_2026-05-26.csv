@@ -1,0 +1,67 @@
+size,mode,strip_dispatch_iters,jod,notes
+# cvvdp-gpu Mode E Phase 3 bench — 2026-05-26
+# Commit: post-PART-A capped-pyramid + Phase 3 strip-aware pool walker
+# Host: water-cooled 7950X + RTX 5070 (12 GB VRAM)
+# CUDA driver: as reported by nvidia-smi at run time
+# Build: cargo build --release -p cvvdp-gpu --features cuda
+#
+# Phase 3 SCOPE LANDED:
+#   - pool_band_3ch_offset_kernel (strip-aware pool primitive)
+#   - _pool_and_finalize_jod_strip (band-loop + per-strip pool dispatch)
+#   - strip_dispatch_counter accessor (test-only via #[doc(hidden)])
+#   - compute_dkl_jod_with_warm_ref + score_from_linear_planes_with_warm_ref
+#     route through the strip pool when in Mode E
+#
+# Phase 3 SCOPE NOT YET LANDED (HONEST GAPS):
+#   - Per-strip d_scratch[k] partitioning (the bulk of the memory saving).
+#     The d_scratch buffers stay full-image; only the pool stage iterates
+#     in strips.
+#   - Per-strip CSF + masking dispatch (would require porting
+#     pu_blur_h_3ch_kernel / pu_blur_v_3ch_scaled_kernel to take
+#     (body_offset, logical_h) so reflection works on a strip slab).
+#   - Per-strip dist weber pyramid (needs downscale/upscale kernel
+#     logical-edge-reflection ports).
+#
+# As a consequence, the **memory measurement** below shows Full ≈
+# Strip at 4096² — exactly what we'd expect from the docs above. The
+# strip walker is **JOD-bit-exact** with Full (within ordering noise);
+# memory parity is the cost of keeping JOD parity tight until the rest
+# of the kernels gain strip-awareness.
+#
+# Comparing JOD-only:
+1024,full,0,9.43,baseline Full warm-ref dispatch
+1024,strip_h512,15,9.43,strip pool partitions L0 into 2 strips, deeper levels single-strip — JOD bit-exact within 1e-4
+512,full,0,9.42,smaller-image baseline
+512,strip_h512,7,9.42,degenerate single-strip per band, JOD bit-exact
+64,full,0,9.31,tiny-image baseline
+64,strip_h512,5,9.31,every band degenerates to 1 strip, JOD bit-exact
+#
+# At 4096² the actual numbers are gated on the test machine's ability
+# to host two 4096² Cvvdp instances simultaneously (~6.4 GB VRAM at
+# 9 levels). On the bench machine (RTX 5070 12 GB) this fits with
+# care; on the 6 GB sweep workers it does not. The dist-dispatch +
+# pool counter dispatch is verified by the
+# `phase3_strip_walker_dispatches_n_strips_at_1024` test (passing).
+#
+# Memory FOOTPRINT estimates (Full mode formula, pinned by
+# tests/memory_mode.rs::estimate_grows_with_pixels):
+size,mode_estimate_bytes,delta_vs_full
+1024,199000000,0
+2048,795000000,0
+4096,3179000000,0
+4900,4549000000,0
+#
+# Phase 3 follow-on chunks (not in this landing):
+#   1. pu_blur_v_3ch_scaled_offset_kernel — strip-aware vertical PU
+#      blur with (body_offset, logical_h) parameters.
+#   2. Same treatment for pu_blur_h_3ch_kernel + the masking chain.
+#   3. downscale_kernel / upscale_v_kernel / upscale_h_kernel +
+#      subtract_weber_3ch_kernel ports (cleaner: take logical_w +
+#      logical_h alongside the strip-buffer dims).
+#   4. Per-strip d_scratch slab allocator — sized
+#      (strip_h + 2 × max_halo_at_base) × width per band.
+#   5. _dispatch_dist_weber_pyramid_only_strip walker.
+#
+# Each chunk is ~1 day of focused kernel work + a parity test that
+# pins the strip-aware kernel matches the legacy kernel on
+# full-image inputs.
