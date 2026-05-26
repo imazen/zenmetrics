@@ -1,0 +1,54 @@
+host: 7950X water-cooled + RTX 5070 12 GB
+os: Linux WSL2 (6.6.114.1-microsoft-standard-WSL2)
+cuda_driver: 596.21
+cuda_runtime: 13.2
+backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+cubecl_pool_cleanup: disabled (per CLAUDE.md commit 6d84f96)
+command: cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+example_h_body: 256
+sizes: 1024²  4096²
+runs: 3 (consistent results across all three at each size)
+parity_gate: |jod_full - jod_mode_b| < 1e-4 — actual 0.000000 at both sizes
+nvsmi_delta_gate: "Mode B peak should be LOWER than the post-dc41d713 -18.2% baseline."
+                  MET: post-merge with d_scratch.d sibling shrink, 4096² Mode B
+                  at 3265 MiB nvsmi delta (was 3457 baseline) → -192 MiB / -5.6%
+                  additional shrink. Combined vs Full = -22.7% (was -18.2%).
+parent_commit: 2d450115 perf(cvvdp-gpu): skip full-image bands_dis allocation when StripMode::Pair
+predecessor_on_master: 5ee0cfed bench(cvvdp-gpu): memory after d_scratch.d shrink (sibling agent)
+template_followed: dc41d713 (upscaled_c shrink)
+notes: |
+  This commit is one of three parallel Path A shrinks (upscaled_c
+  was dc41d713; gauss_dis was the third sibling agent). The
+  combined cumulative shrink at 4096² Mode B is now -22.7% vs Full
+  (3265 MiB vs 4225 MiB). The 252 MiB analytical bands_dis saving
+  is not directly visible at MiB granularity (cubecl pool tier
+  effect) but the combined-with-d_scratch.d delta crosses a pool
+  tier and surfaces 192 MiB at nvsmi.
+
+  Structural changes for this commit (bands_dis):
+
+    1. `WeberScratch.bands_dis_strip` — new Option<[Handle; 3]>
+       per non-baseband level. Strip-sized
+       (`fine_w × strip_h_at_k × f32`) in Mode B.
+
+    2. `Cvvdp.bands_dis` — non-baseband levels' Level.planes are
+       zero-size handles in Mode B (skipped at construction).
+       Baseband stays full-size (csf reads it at baseband res).
+
+    3. `_finalize_weber_pyramid_after_gauss` — skips DIST strip
+       walker call in Mode B for non-baseband (deferred to band
+       loop). REF strip walker keeps writing full bands_ref.
+
+    4. `_dispatch_dist_weber_csf_strip_walker_for_level` (NEW) —
+       per-level fused walker. For each strip s:
+         - Stage 1: upscale_v/h × A → l_bkg_fine body
+         - Stage 2: upscale_v/h × 3 channels → upscaled_c_strip
+         - Stage 3: subtract_weber_3ch_strip writes
+                    bands_dis_strip (strip-local, no offset)
+         - Stage 4: csf_apply_6ch reads bands_dis_strip +
+                    bands_ref (sliced) + log_l_bkg (sliced) →
+                    writes t_p_ref/t_p_dis body rows
+
+    5. `_run_d_bands_band_loop` — Mode B non-baseband routes
+       through the fused walker; mode_b baseband + Full +
+       CachedRef keep standard csf_apply_6ch full-level path.

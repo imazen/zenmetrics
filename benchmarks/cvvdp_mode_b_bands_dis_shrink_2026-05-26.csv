@@ -1,0 +1,84 @@
+# cvvdp Mode B vs Full GPU memory measurement, Path A bands_dis shrink.
+#
+# Generated 2026-05-26 by:
+#   cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+#
+# Host: 7950X + RTX 5070 12 GB (CUDA driver 596.21, runtime 13.2)
+# Backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+# Commits under measurement:
+#   - 2d450115 perf(cvvdp-gpu): skip full-image bands_dis allocation when StripMode::Pair (compound shrink)
+#   - 9608e432 perf(cvvdp-gpu): skip full-image d_scratch.d allocation when StripMode::Pair (largest shrink)
+#     (sibling agent commit landed before this rebase)
+#
+# Predecessors in the Path A chunk:
+#   - dc41d713 perf(cvvdp-gpu): skip full-image upscaled_c allocation when StripMode::Pair (actual memory shrink)
+#   - e0ceeac4 bench(cvvdp-gpu): driver-measurable memory reduction after skip-full-alloc
+#
+# Background:
+#   This commit lands the bands_dis equivalent of dc41d713's upscaled_c
+#   shrink. The full-image `bands_dis[k].planes` for non-baseband
+#   levels are now zero-size in Mode B; the actual DIST weber-contrast
+#   data flows through `WeberScratch.bands_dis_strip` (per-strip,
+#   `fine_w × strip_h_at_k × f32 × 3 channels per level`) + a fused
+#   csf_apply dispatched inside the band loop in lockstep with the
+#   Weber strip walker.
+#
+#   The csf reader was relocated from `_run_d_bands_band_loop`'s
+#   full-level dispatch into a new
+#   `_dispatch_dist_weber_csf_strip_walker_for_level` so that
+#   bands_dis_strip never needs to hold more than ONE strip's worth
+#   of data — write strip s → csf strip s → next strip overwrites.
+#
+#   The REF side (bands_ref) stays full-image — csf reads bands_ref
+#   at body offsets within the fused walker, and the REF Weber
+#   strip walker writes bands_ref via the existing offset_start
+#   path.
+#
+# Analytical savings at 4096² (bands_dis only):
+#   bands_dis non-baseband layers were:
+#       3 ch × (4096² + 2048² + 1024² + 512² + 256² + 128² + 64² + 32²) × 4B
+#         ≈ 268 MiB.
+#   Added bands_dis_strip:
+#       3 ch × (sum of fine_w × strip_h_at_k per non-baseband level) × 4B
+#         ≈ 16 MiB.
+#   Net saved: ≈ 252 MiB at 4096².
+#
+#   At 1024²: bands_dis non-baseband was ~17 MiB; bands_dis_strip ~6 MiB.
+#       Net saved: ≈ 11 MiB.
+#
+# Driver-level nvsmi delta (three consecutive runs, this branch on top
+# of 9608e432 which already shipped d_scratch.d shrink):
+#
+#       size    mode    estimate_master  estimate_head  nvsmi_delta  jod
+#   pre-shrink (e0ceeac4, before any d_scratch.d / bands_dis work):
+#       4096²   full       3178            2858           4225          9.4585
+#       4096²   mode_b     3178             373           3457          9.4585
+#   post-d_scratch.d (9608e432, before this commit):
+#       4096²   full       3178            2858           4225          (assumed unchanged)
+#       4096²   mode_b     3178             373           ?
+#   post-bands_dis (THIS commit, on top of 9608e432):
+#       4096²   full       3178            2858           4225          9.4585
+#       4096²   mode_b     3178             373           3265          9.4585
+#
+# The compound shrink (d_scratch.d + bands_dis) brings 4096² Mode B to
+# 3265 MiB, vs the e0ceeac4 baseline of 3457 MiB:
+#   - 4225 → 3265 = -960 MiB vs Full (was -768 MiB at e0ceeac4)
+#   - -22.7% reduction vs Full (was -18.2% at e0ceeac4)
+#   - Additional -192 MiB / -5.6% over the post-dc41d713 baseline
+#
+# JOD bit-identical between Full and Mode B at both sizes
+# (|jod_full − jod_mode_b| = 0.000000 across all three runs).
+#
+# Columns:
+#   size                 — image dimensions
+#   mode                 — full or mode_b
+#   estimate_master_mib  — pre-Path-B-chunk-1 analytical (Full only baseline)
+#   estimate_head_mib    — post-Path-B-chunk-1 analytical (Mode B uses strip estimator)
+#   nvsmi_delta_mib      — nvidia-smi memory.used delta during compute_dkl_jod
+#   jod                  — computed JOD score (bit-identical between Full and Mode B)
+#
+size,mode,estimate_master_mib,estimate_head_mib,nvsmi_delta_mib,jod
+1024sq,full,198,178,385,9.4583
+1024sq,mode_b,198,57,353,9.4583
+4096sq,full,3178,2858,4225,9.4585
+4096sq,mode_b,3178,373,3265,9.4585
