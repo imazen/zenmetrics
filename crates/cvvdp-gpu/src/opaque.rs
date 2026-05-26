@@ -328,6 +328,7 @@ impl CvvdpOpaque {
         match mode {
             crate::MemoryMode::Full
             | crate::MemoryMode::Strip { .. }
+            | crate::MemoryMode::StripPair { .. }
             | crate::MemoryMode::CappedPyramid { .. } => {}
             crate::MemoryMode::Auto => {
                 let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
@@ -341,6 +342,7 @@ impl CvvdpOpaque {
         let resolved_mode = match mode {
             crate::MemoryMode::Full => crate::MemoryMode::Full,
             crate::MemoryMode::Strip { h_body } => crate::MemoryMode::Strip { h_body },
+            crate::MemoryMode::StripPair { h_body } => crate::MemoryMode::StripPair { h_body },
             crate::MemoryMode::CappedPyramid { levels } => {
                 crate::MemoryMode::CappedPyramid { levels }
             }
@@ -585,6 +587,12 @@ fn build_cvvdp_inner<R: cubecl::Runtime>(
         crate::MemoryMode::Strip { h_body } => {
             let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
             Cvvdp::<R>::new_strip_with_geometry(client, width, height, body, params, geometry)
+        }
+        crate::MemoryMode::StripPair { h_body } => {
+            let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+            Cvvdp::<R>::new_strip_pair_with_geometry(
+                client, width, height, body, params, geometry,
+            )
         }
         crate::MemoryMode::CappedPyramid { levels } => {
             Cvvdp::<R>::new_capped_pyramid_with_geometry(

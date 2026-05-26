@@ -381,11 +381,22 @@ struct RefFullState {
 /// error when called in strip mode (the public API enforces "set
 /// reference, then call compute" so callers see the error before
 /// any dist work has been queued).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StripMode {
+    /// Mode E: ref-full cached on device, dist walks in strips.
+    /// Per-DIST cost: only dist pyramid + masking work.
+    CachedRef,
+    /// Mode B: both ref and dist walk in strips together, no ref cache.
+    /// Per-DIST cost: full ref+dist pipeline for every dist.
+    Pair,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct StripConfig {
     /// Dist-side strip body height in rows at scale 0.
-    #[allow(dead_code)] // consumed in Phase 3
     h_body: u32,
+    /// Walker variant — CachedRef (Mode E) or Pair (Mode B).
+    mode: StripMode,
 }
 
 /// Reference-side state kept across `score_with_reference` calls.
@@ -887,6 +898,41 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
     Some(full_bytes.saturating_add(ref_full_bytes))
 }
 
+/// Mode B (StripPair) GPU-memory estimator. Returns the working-set
+/// bytes when the cvvdp pipeline is constructed via
+/// [`Cvvdp::new_strip_pair`]:
+///
+/// - No full ref cache — only the strip-pair walker's per-strip
+///   working set is kept on device.
+/// - Strip-sized ref+dist working set: per-level pyramids sized for
+///   one `(h_body + 2 × halo)` strip rather than the full image.
+///
+/// Returns `None` if `(width, height)` is below the pyramid minimum or
+/// if `h_body` is zero / mis-aligned. Mirrors
+/// [`estimate_gpu_memory_bytes`]'s caveats.
+///
+/// This estimator is intentionally **conservative** in this initial
+/// landing: it bounds the strip-pair footprint by the full-image
+/// footprint (without the RefFullState delta Mode E pays). As the
+/// strip walker shrinks the per-strip working set, this estimator will
+/// tighten.
+#[must_use]
+pub fn estimate_gpu_memory_bytes_strip_pair(
+    width: u32,
+    height: u32,
+    h_body: u32,
+) -> Option<usize> {
+    use crate::memory_mode::STRIP_ALIGN;
+    if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+        return None;
+    }
+    // Conservative: same as Full while the strip walker is still being
+    // wired. Mode B does NOT allocate RefFullState (Mode E's only
+    // delta vs Full), so its conservative bound equals Full exactly.
+    let _ = h_body;
+    estimate_gpu_memory_bytes(width, height)
+}
+
 /// Safety factor applied by [`recommend_parallel`] on top of the raw
 /// [`estimate_gpu_memory_bytes`] prediction. Covers:
 ///
@@ -1069,6 +1115,10 @@ impl<R: Runtime> Cvvdp<R> {
             MemoryMode::Strip { h_body } => {
                 let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
                 Self::new_strip(client, width, height, body, params)
+            }
+            MemoryMode::StripPair { h_body } => {
+                let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+                Self::new_strip_pair(client, width, height, body, params)
             }
             MemoryMode::CappedPyramid { levels } => {
                 Self::new_capped_pyramid(client, width, height, params, levels)
@@ -1432,8 +1482,80 @@ impl<R: Runtime> Cvvdp<R> {
             return Err(Error::ModeUnsupported("Strip { h_body=invalid }"));
         }
         let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
-        this.strip_config = Some(StripConfig { h_body });
+        this.strip_config = Some(StripConfig {
+            h_body,
+            mode: StripMode::CachedRef,
+        });
         Ok(this)
+    }
+
+    /// Allocate GPU buffers for Mode B (StripPair) one-shot strip-pair
+    /// processing. Both ref and dist sides walk in strips together; no
+    /// full ref cache is kept on device.
+    ///
+    /// Use this when scoring one (ref, dist) pair at a time without a
+    /// batch workflow — peak memory ≈ 2× per-strip working set, which
+    /// is the right tradeoff for CLI / one-shot scoring on large
+    /// images. For batch workloads with many DISTs per REF, prefer
+    /// [`Self::new_strip`] (Mode E) so the REF pyramid is built once.
+    ///
+    /// `h_body` must be a positive multiple of
+    /// [`crate::memory_mode::STRIP_ALIGN`] (= 256). Uses the standard
+    /// 4K viewing geometry; for a custom geometry use
+    /// [`Self::new_strip_pair_with_geometry`].
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new_strip`].
+    pub fn new_strip_pair(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        h_body: u32,
+        params: CvvdpParams,
+    ) -> Result<Self> {
+        Self::new_strip_pair_with_geometry(
+            client,
+            width,
+            height,
+            h_body,
+            params,
+            crate::params::DisplayGeometry::STANDARD_4K,
+        )
+    }
+
+    /// Mode B (StripPair) constructor with a custom display geometry.
+    /// See [`Self::new_strip_pair`] for the strip-mode semantics.
+    pub fn new_strip_pair_with_geometry(
+        client: ComputeClient<R>,
+        width: u32,
+        height: u32,
+        h_body: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+    ) -> Result<Self> {
+        use crate::memory_mode::STRIP_ALIGN;
+        if h_body == 0 || !h_body.is_multiple_of(STRIP_ALIGN) {
+            return Err(Error::ModeUnsupported("StripPair { h_body=invalid }"));
+        }
+        let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
+        this.strip_config = Some(StripConfig {
+            h_body,
+            mode: StripMode::Pair,
+        });
+        Ok(this)
+    }
+
+    /// `true` if this scorer was built for Mode B (StripPair) one-shot
+    /// strip-pair processing. See [`Self::new_strip_pair`].
+    pub fn is_strip_pair_mode(&self) -> bool {
+        matches!(
+            self.strip_config,
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            })
+        )
     }
 
     /// `true` if this scorer was built for strip-mode processing.

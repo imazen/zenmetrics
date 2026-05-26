@@ -1,7 +1,7 @@
 //! Unified memory-mode API. See `butteraugli-gpu/src/memory_mode.rs`
 //! for shared design rationale.
 //!
-//! cvvdp-gpu supports three memory modes:
+//! cvvdp-gpu supports four memory modes:
 //!
 //! - **Full** — whole-image working set on device. Bit-stable with
 //!   the host-scalar reference. Default; preferred when the image
@@ -15,6 +15,12 @@
 //!   associative across strips, so the final JOD equals Full-mode
 //!   JOD within the documented Atomic<f32> reduction-order noise
 //!   band.
+//! - **StripPair { h_body }** — **Mode B** (one-shot pair stripwise).
+//!   Both ref AND dist sides walk through strips together, no ref
+//!   cache. Peak memory ≈ 2 × per-strip working set (REF gauss/weber
+//!   built fresh per strip alongside DIST). Better than Strip for
+//!   one-shot CLI callers (no cached-ref overhead) and worse for
+//!   batch workloads (REF pyramid recomputed every dist).
 //! - **CappedPyramid { levels }** — Option B safety net. Reduces
 //!   the natural pyramid depth to `levels` so the deepest band's
 //!   σ=3 PU blur halo shrinks. Saves 30-50% peak working set vs
@@ -136,6 +142,17 @@ pub enum MemoryMode {
         /// Dist-side strip body height in rows. `None` → crate-default.
         h_body: Option<u32>,
     },
+    /// Mode B one-shot pair strip walker: both ref and dist sides walk
+    /// in strips together (no full ref cache). Peak memory ≈ 2 × per-
+    /// strip working set. Best for one-shot CLI callers; worse than
+    /// `Strip` for batch workloads (REF pyramid recomputed per dist).
+    ///
+    /// `h_body` must be a positive multiple of [`STRIP_ALIGN`].
+    StripPair {
+        /// Strip body height in rows for both ref and dist. `None` →
+        /// crate-default ([`STRIP_H_BODY_DEFAULT`]).
+        h_body: Option<u32>,
+    },
     /// JOD-shifting capped-pyramid mode (≤0.005 JOD parity gate at
     /// k=8 per pre-rollback bench). Reduces natural pyramid depth to
     /// `levels` to shrink σ=3 PU blur halo at deepest band. Saves
@@ -226,6 +243,11 @@ pub fn estimate_gpu_memory_bytes_for_mode(width: u32, height: u32, mode: MemoryM
         MemoryMode::Strip { h_body } => {
             let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
             crate::pipeline::estimate_gpu_memory_bytes_strip(width, height, body)
+                .unwrap_or(usize::MAX)
+        }
+        MemoryMode::StripPair { h_body } => {
+            let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
+            crate::pipeline::estimate_gpu_memory_bytes_strip_pair(width, height, body)
                 .unwrap_or(usize::MAX)
         }
         MemoryMode::CappedPyramid { levels } => {
