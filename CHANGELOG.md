@@ -33,6 +33,18 @@ Workspace conventions per the global rules:
   274→279/279, gpu 271→276/279. Covers BOTH impls because the GPU
   uploads the host-computed `precompute_logs_row`. Closes
   `UPSTREAM_DIVERGENCES.md` row 8. (this commit)
+- **Offline regression tests** for the fix (`kernels::csf::tests`, run by
+  the default `cargo test -p cvvdp-gpu` — no GPU / no goldens fetch
+  needed): (1) the three-regime `interp1_rho_extrap` contract on a
+  synthetic axis (flat-clamp below, linear interp inside, linear
+  extrapolate above); (2) **interior bit-identity vs a flat-clamp
+  reference** across a 1000-point sweep + every interior knot — the
+  unit-level proof that the fix moved zero in-axis queries (the
+  "no regression on the 248 non-iphone cells" guarantee); (3) the
+  high-PPD guard at the iphone band-0 rho (≈79.8 cy/deg) on the real
+  `LOG_RHO_AXIS` + channel-A LUT, asserting the extrapolated
+  sensitivity falls strictly below the old clamp. Fails if anyone
+  reverts the rho axis to flat-clamp. (this commit)
 
 ### cvvdp-cpu — brute-force SIMD-vs-scalar kernel equivalence harness — 2026-05-26
 
