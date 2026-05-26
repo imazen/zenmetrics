@@ -17,6 +17,35 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — docs: Phase 3 architectural deep-dive — multi-day refactor confirmed (task #79) — 2026-05-26
+
+Investigation 2026-05-26 traced the cvvdp pipeline strip-blocking
+properties end-to-end against the Phase 1+2 foundation
+(`fb8e93d9`). `docs/STRIP_PROCESSING.md`'s "Phase 3 design notes"
+section rewritten with:
+
+- Measured memory breakdown by buffer at 1-24 MP (`d_scratch ~ 60%`,
+  pyramids `~ 30%`, weber `~ 9%` — all three must shrink to meet
+  the < 70% Full target).
+- Per-kernel reflection-boundary trace: every pyramid + PU blur
+  kernel reflects at array edges, needs `(body_offset, logical_h)`
+  to be strip-aware.
+- Deep-band problem table (at `STRIP_H_BODY_DEFAULT = 512`, levels
+  k >= 4 see PU blur halo comparable to or larger than strip body).
+- Three implementation approaches with cost estimates: (A) modify
+  ~7 kernels with body_offset param; (B) extend strip halo to fit
+  unmodified kernels; (C) hybrid shallow-strip + deep-full.
+- Concrete next-agent hints: downscale's pycvvdp bug-compat delta
+  uses LOGICAL parity not strip parity; dssim-gpu pattern as
+  template (constant HALO=256 works for 5 scales but doesn't scale
+  to cvvdp's 9 levels).
+
+Failure-mode clause invoked per CLAUDE.md task #79: foundation
+remains as the deliverable; deep architectural rework deferred.
+User-visible consequence unchanged from Phase 2: cvvdp at > 16 MP
+on small-VRAM boxes returns `Error::TooBigForFull` until walker
+lands. (commit ec901810)
+
 ### cvvdp-gpu — feat: re-introduce `MemoryMode::Strip { h_body }` (Mode E, task #79) — 2026-05-26
 
 Task #79 reintroduces a Strip variant for cvvdp that is

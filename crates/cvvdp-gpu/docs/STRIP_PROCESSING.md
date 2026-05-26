@@ -147,10 +147,36 @@ set — that's Phase 3 work. Today's Mode E delivers:
   permanent home for the ref-full data the strip walker will read
   from per strip.
 
-### Phase 3 design notes (for the next agent)
+### Phase 3 design notes — architectural deep-dive (2026-05-26)
 
-The cvvdp pipeline is structurally more complex than dssim or
-zensim's strip walkers:
+**Status: investigation complete, walker not shipped.** The
+2026-05-26 deep-dive confirmed the design notes' "multi-day work"
+estimate. Documented below are the load-bearing constraints found
+during that investigation so the next agent does not re-trace them.
+
+#### Where the memory actually lives
+
+Per `estimate_gpu_memory_bytes` measured 2026-05-26:
+
+| Size       | Estimate | Breakdown (approx)                                    |
+|------------|---------:|-------------------------------------------------------|
+| 1024×1024  | 199 MB   | `d_scratch ≈ 60%`, pyramids `30%`, weber `9%`         |
+| 2048×2048  | 795 MB   | same proportions                                      |
+| 4096×4096  | 3179 MB  | same proportions                                      |
+| 4900×4900  | 4549 MB  | same proportions                                      |
+
+The dominant buffer at every realistic image size is `d_scratch`
+(6 buffer types × 3 channels × **sum_level_pixels** × f32). At 4 MP
+that's ~480 MB. Pyramids (gauss_ref + bands_ref + bands_dis) come
+second at ~240 MB. Weber scratch is ~70 MB. To meet the task's
+"< 70% of Full" target at 4096² the strip walker has to shrink
+roughly all three to per-strip footprints — none of them alone
+gives enough headroom.
+
+#### Why a clean strip walker is multi-day
+
+The pipeline's strip-blocking properties are not symmetric across
+levels. Investigated 2026-05-26:
 
 1. **9 pyramid levels with per-level halo accumulation.** The dist
    Weber pyramid build at level k uses `gauss[k+1]` to subtract
@@ -161,35 +187,151 @@ zensim's strip walkers:
    masking chain runs `pu_blur_h_3ch_kernel` +
    `pu_blur_v_3ch_scaled_kernel` — a 13-tap separable Gaussian. The
    strip-side dist band needs `±6` rows halo *at that band's
-   resolution*.
+   resolution*, which is `±6 × 2^k` at base resolution.
 3. **Pyramid kernels are not strip-aware today.** `downscale_kernel`,
-   `upscale_v_kernel`, `upscale_h_kernel`, and
-   `subtract_weber_3ch_kernel` all take `(width, height)` parameters
-   and apply reflection boundary handling at the array edges. A strip
-   walker either (a) extends them to take a `body_offset` +
-   `body_height` parameter that selects which slab of an oversized
-   buffer is "the strip", or (b) reuses them on a strip-sized buffer
-   with explicit halo rows pre-populated from the prior/next strip.
+   `upscale_v_kernel`, `upscale_h_kernel`, `subtract_weber_3ch_kernel`,
+   and the masking PU blur kernels (`pu_blur_v_kernel`,
+   `pu_blur_v_3ch_scaled_kernel`) all take `(width, height)`
+   parameters and apply **reflection at the array edges**. The
+   reflection helpers (`reflect_pu_idx`, the inline `2*sh_i -
+   (cy + 2) - 1` lines in `downscale_kernel`) read the buffer's
+   declared height, not a logical image height.
+4. **`gauss_ref` is shared scratch between REF and DIST sides.**
+   The dist weber pyramid dispatch reuses `self.gauss_ref` to build
+   the dist gauss pyramid (clobbering it for that dispatch), then
+   immediately consumes it during the dist Weber subtract chain.
+   Mode E Phase 2 (`RefFullState`) restores ref bands before the
+   dist dispatch begins; the dist gauss build can run on a strip-
+   sized `gauss_ref` only if every other code path that reads from
+   `gauss_ref` (e.g. the baseband path consuming `gauss_ref[last]`
+   for `inv_l_bkg_mean`) is migrated to read from `ref_full_state`
+   exclusively. This cuts across the cached-ref API surface.
 
-**Path of least resistance**: option (b) — keep the kernels
-unchanged, allocate strip-sized dist buffers, and copy halo rows
-from adjacent strips before each Weber pyramid pass. This is what
-dssim-gpu does (see `dssim-gpu/src/pipeline.rs::compute_with_reference`
-and the `copy_rows_kernel` it uses). The complication for cvvdp is
-that the halo per level is **larger** than dssim's (`6 × 2^(k-2)` vs
-dssim's `2 × 2^k`), so the strip buffer must be sized for the
-worst-case halo at every level.
+#### The deep-band problem
 
-**Where the new code goes**: introduce a `_dispatch_dist_strip_band_loop`
-helper in `pipeline.rs` that mirrors the Full-mode
-`_dispatch_d_bands_dist_and_band_loop` but walks the dist side in
-strips, reading ref state directly from `ref_full_state`. The pool
-finalizer (`_pool_and_finalize_jod`) stays unchanged — atomic-pool
-sums accumulate across strip iterations the same way they accumulate
-across blocks in a single Full dispatch.
+At 4096² with the canonical `STRIP_H_BODY_DEFAULT = 512` rows:
 
-`tests/strip_mode_e_parity.rs` already pins the JOD value contract;
-Phase 3 must keep all 11 tests passing.
+| Level | Strip body height | PU blur halo (rows at that level) | Strip vs halo |
+|------:|-------------------:|-----------------------------------:|----|
+| 0     | 512  | ±6   | strip >> halo (OK) |
+| 1     | 256  | ±6   | strip >> halo (OK) |
+| 2     | 128  | ±6   | strip > halo (OK)  |
+| 3     | 64   | ±6   | strip > halo (OK)  |
+| 4     | 32   | ±6   | strip ≈ halo (marginal) |
+| 5     | 16   | ±6   | strip ≈ halo (broken) |
+| 6     | 8    | ±6   | strip < halo (broken) |
+| 7     | 4    | ±6   | strip < halo (broken) |
+| 8     | 2    | ±6   | strip << halo (broken) |
+
+At levels k ≥ 4 the PU blur halo is comparable to or larger than
+the strip body height at that level — the strip stops being a
+"strip" and effectively needs the whole band. **For deep bands the
+walker has to fall back to full-image processing**, which means
+a hybrid dispatch (shallow bands per-strip, deep bands full-image)
+with separate code paths for the two regimes.
+
+Deep bands are small in absolute terms (level 8 at 4096² is 16×16
+= 256 pixels — negligible memory). The full-image fallback there
+costs nothing structurally; it just adds dispatch complexity.
+
+#### Approach options (none ship in this push)
+
+(A) **Modify all pyramid + PU blur kernels** to take `body_offset` +
+   `body_height` parameters and reflect at logical image edges.
+   Touches `downscale_kernel`, `downscale_tiled_kernel`, three
+   upscale kernels, `subtract_weber_3ch_kernel`,
+   `baseband_divide_3ch_kernel`, both PU blur 1ch + 3ch variants.
+   Each kernel needs new parity tests pinning the strip-aware path
+   matches the legacy path on full-image inputs. Estimated 2-3 days
+   of careful kernel work + verification.
+
+(B) **Allocate strip buffers with enough halo that legacy kernels work.**
+   Per strip, the buffer is `(body_h + 2 × max_halo)` rows. Max halo
+   at level 0 is `6 × 2^4 = 96` rows at base (the level-4 PU blur
+   reflected back through pyramid scaling). Strip buffer = 512 + 192
+   = 704 rows ≈ 1.4× body. Allocator wise this means each strip's
+   dist buffers are 1.4× the body size; the savings vs Full come
+   from N_strips × body_pixels << Full_pixels only at large heights
+   (e.g. 4096 / 512 = 8 strips, total ≈ 1.4 × 4096 / 8 ≈ 0.7×
+   Full per-strip — modest). Estimated 1-2 days, less kernel
+   modification but more host-side state management.
+
+(C) **Hybrid: shallow bands per-strip via (A) or (B); deep bands
+   full-image.** The shallow bands consume most memory, the deep
+   ones are small. Splits at K_SPLIT where `body_h / 2^K_SPLIT >= 12`
+   (twice the PU blur radius). For body=512, K_SPLIT=5.
+   Most memory wins, most architecture cost. Estimated 3-4 days.
+
+#### Why I (the 2026-05-26 agent) did not ship Phase 3
+
+Failure-mode clause invoked: the structural complexity of the kernel
+boundary handling, combined with the deep-band problem requiring a
+hybrid dispatch, places this firmly in the "multi-day refactor"
+band the original notes warned about. Pushing a half-correct walker
+would either drift JOD outside the 1e-4 tolerance (forbidden by
+the JOD-preservation invariant) or pad strips so heavily the memory
+reduction disappears.
+
+The user-visible consequence remains as documented in the original
+Phase 3 notes: cvvdp at > 16 MP on small-VRAM boxes falls back to
+`Error::TooBigForFull` until the walker lands. The Phase 2
+foundation (RefFullState + snapshot/restore) is in place and ready
+to be the per-strip reader once the walker is built.
+
+#### Specific implementation hints for the next agent
+
+If approach (A) (kernel modification) is chosen:
+
+- The simplest signature change is to add `dst_offset_y` +
+  `logical_h` to each pyramid/PU kernel; the kernel computes
+  `global_y = dst_y + dst_offset_y` and reflects against
+  `logical_h` instead of `h`. The dispatched `n_px` stays the
+  strip-body count; the buffer height stays the strip-buffer
+  height.
+- Add a `tests/pyramid_kernel_strip_aware.rs` that constructs a
+  full-image kernel result, slices a strip out, and runs the
+  strip-aware kernel on a strip buffer asserting bit-exact match
+  at the body rows.
+- The downscale kernel has a pycvvdp bug-compat delta at the
+  right column (see `downscale_kernel` lines 851-886). That delta
+  uses `sw % 2`/`sh % 2` parity — both of which refer to the
+  LOGICAL image dims, not the strip dims. The strip-aware path
+  must pass `logical_sw` + `logical_sh` so the parity delta fires
+  identically. Easy to miss; pin in a strip-parity test.
+
+If approach (B) (halo extension) is chosen:
+
+- The dssim-gpu pattern (see `dssim-gpu/src/pipeline.rs` —
+  `compute_with_reference`'s strip walker) is the right template.
+  The difference is cvvdp's per-level halo is `6 × 2^k` not
+  `2 × 2^k` like dssim — so the per-strip buffer must size for
+  the **worst** halo (at level 0, since 2^k grows faster than
+  the strip body shrinks).
+- `copy_rows_kernel` analogue: cvvdp doesn't have one yet. Will
+  need a new kernel.
+
+#### What's wired and ready
+
+- `RefFullState` (ref bands, log_l_bkg, baseband gauss) at full
+  resolution: ready for per-strip slab reads.
+- `StripConfig { h_body }` known at construction time.
+- `_warm_ref_baseband_log_l_bkg_for_dispatch` is the integration
+  point — currently `restore_ref_state_from_full` runs a full
+  restore. Phase 3 replaces that with a per-strip slab restore
+  inside the strip walker.
+- `_run_d_bands_band_loop` is the per-band masking + pool dispatch.
+  Phase 3 strip walker calls this once per strip with strip-sized
+  inputs.
+- `_pool_and_finalize_jod` consumes `partials_h` which atomic-
+  accumulates across band+channel slots. **Atomic adds are
+  associative** — the same `partials_h` accumulates correctly
+  across both bands AND strips, so the pool finalizer needs zero
+  changes for Phase 3.
+
+`tests/strip_mode_e_parity.rs` pins the JOD value contract;
+Phase 3 must keep all 11 tests passing AND add a
+`strip_walker_dispatches_n_strips` test that asserts N > 1 strip
+iterations occur at sizes large enough to require partitioning.
 
 ## What `Auto` does today
 
