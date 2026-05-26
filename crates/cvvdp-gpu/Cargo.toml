@@ -93,6 +93,10 @@ name = "parity_iphone_eval_gpu"
 required-features = ["cuda", "cubecl-types"]
 
 [[example]]
+name = "score_two_displays"
+required-features = ["cuda", "cubecl-types"]
+
+[[example]]
 name = "time_12mp"
 required-features = ["cubecl-types"]
 

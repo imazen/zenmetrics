@@ -1,0 +1,54 @@
+# jxl_phone_vs_desktop_rd_2026-05-26.tsv
+
+Phase-1 probe: does targeting phone-perceived quality let JXL save
+bits vs desktop-perceived quality? Pipeline (no encoder modification):
+
+    cjxl-rs --effort 7 --distance D  ref.png -> out.jxl
+    zenjxl-decoder-cli              out.jxl -> out.png
+    cvvdp-gpu score_two_displays    (ref.png, out.png)
+        -> JOD under standard_4k AND modern_oled_phone_indoor
+
+Tools:
+- encoder: ~/work/zen/jxl-encoder/target/release/cjxl-rs (prebuilt 2026-05-24)
+- decoder: ~/work/zen/zenjxl-decoder/target/release/zenjxl-decoder-cli
+- scorer:  crates/cvvdp-gpu/examples/score_two_displays.rs (CUDA, RTX 5070)
+- harness: scripts/probes/phone_rd_probe.sh
+
+Corpus: 5 eval refs (1024x768) spanning content classes:
+  photo_general, photo_dark, lineart, photo_bright, screen_text
+Distances (weighted toward aggressive end): 0.7 1.0 1.5 2.0 3.0 4.5 6.0 8.0
+
+Displays:
+- standard_4k            = desktop reference (200 nit, 75 ppd)
+- modern_oled_phone_indoor = indoor SDR phone (400 nit auto-brightness
+  setpoint, ~1000:1 effective contrast after 250 lux ambient washout,
+  ~110 ppd at 0.35 m)
+
+KEY FINDINGS:
+- Phone is uniformly MORE forgiving (delta = jod_phone - jod_desktop
+  >= 0 on every cell). Mechanism: ~1.5x ppd pushes pixel-scale
+  compression artifacts up the cycles-per-degree axis past the CSF peak.
+- Exploitable gap is CONCENTRATED in photographic content at aggressive
+  compression: ~18-24% iso-quality byte savings on photo_general /
+  photo_dark at JOD targets 9.5-9.7 (bpp 0.15-0.7).
+- Non-photographic content (lineart, screen_text, photo_bright) shows
+  ~0 gap — those stay near JOD 10 on both displays; no differentiation.
+- photo_dark is FORGIVING here (+0.24 JOD at d8.0), NOT harsher. At the
+  400-nit indoor auto-brightness setpoint the OLED's deep-black
+  advantage is washed out by ambient, so the dark-sensitivity seen in
+  the earlier 1025-nit iphone_14_pro panel-peak eval does not appear.
+- At HIGH quality (bpp 1.5-2.7, distance <=1.5) deltas are tiny
+  (+0.004 to +0.025 JOD) — the saving only materializes at the
+  aggressive end (distance >=4, bpp <0.7).
+
+CAVEAT (critical): a phone-targeted encode looks WORSE on a desktop at
+75 ppd. The ~20% saving is only valid as a per-delivery-target encode
+(gated on knowing the client is a high-DPR phone). The gap is captured
+by the distance knob alone — it's a viewing-condition property, not a
+codec-decision property. Whether a phone-AWARE encoder (targeted
+high-freq relaxation via --epf / coarser high-band quant) can capture
+the same saving with LESS desktop penalty is Phase 2 (not yet run).
+
+NOTE: this is a directional PROBE on 5 images, NOT a calibration that
+ships constants. A real calibration would need the full size x quality
+x content coverage per the sweep-discipline rules.
