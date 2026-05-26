@@ -51,8 +51,18 @@ jobs:
         with:
           shared-key: zenmetrics-${{ matrix.os }}
       - name: Build workspace (wgpu + cpu, build-only)
+        # Disabled until 2026-05-26 because `[profile.release]` carried
+        # `lto = "fat"` + `debug = "full"` + `codegen-units = 1`, which
+        # OOM'd the 16 GB ubuntu-latest runner at the final LTO link.
+        # Workspace profile now uses thin LTO + line-tables-only debug
+        # + cu=16 (task #59) — peak LTO link RSS dropped ~74% per
+        # local measurement on the 7950X sandbox. If this step OOMs
+        # again, run `cargo build --release --workspace ...` locally
+        # with `/usr/bin/time -v` to capture peak RSS and check
+        # whether a new heavy member (cubecl backend? trie of generic
+        # GPU kernels?) regressed the link memory.
         run: cargo build --workspace --no-default-features --features cuda --release --all-targets
-        if: matrix.os == 'ubuntu-latest' && false
+        if: matrix.os == 'ubuntu-latest'
       - name: Build all -gpu crates (wgpu only)
         run: |
           cargo build -p butteraugli-gpu --no-default-features --features wgpu --release

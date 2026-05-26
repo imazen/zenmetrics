@@ -17,6 +17,44 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Workspace — fix: switch `[profile.release]` to thin LTO + line-tables-only debug (task #59) — 2026-05-26
+
+`cargo build --release --workspace` on `ubuntu-latest` GitHub runners
+(16 GB RAM) hit OOM at the final LTO link. The workspace build step
+in `.github/workflows/ci.yml:54` had been gated off with
+`if: matrix.os == 'ubuntu-latest' && false` since commit `4a729b65`
+on 2026-05-05 exactly because of this.
+
+Root cause: `[profile.release]` carried the triple `lto = "fat"` +
+`debug = "full"` + `codegen-units = 1`. Fat LTO loads every CGU of
+every workspace member into one LLVM context for the link; `debug =
+"full"` drags every DWARF DIE through that context; `codegen-units =
+1` forbids parallelising the per-CGU passes. The combination
+multiplied peak link RSS into the OOM range on small CI runners.
+
+Fix: `[profile.release]` now uses `lto = "thin"`, `debug =
+"line-tables-only"`, and `codegen-units = 16`. Thin LTO keeps the
+cross-CGU inlining / DCE / devirt wins; line-tables-only debug keeps
+backtrace line numbers for panics + `whereat` reports. Production
+release builds that genuinely want fat LTO opt in with the new
+`[profile.release-fat]` profile (`cargo build --profile release-fat`).
+`[profile.bench]` stays fat LTO since benchmarks measure single
+binaries on memory-rich hosts.
+
+Measured on the water-cooled 7950X / 50 GB sandbox (clean target/,
+10 of 12 workspace members — the two that depend on the path-pinned
+`jxl-encoder` are blocked on a separate compile error in
+`vardct/perceptual_backend.rs:637` that another agent is fixing):
+
+- fat LTO + debug=full + cu=1: rustc parent max RSS 3.63 GB, wall 63s
+- thin LTO + line-tables + cu=16: rustc parent max RSS 0.95 GB
+  (-74%), wall 53s
+
+CI `&& false` gate on `.github/workflows/ci.yml:54` removed so the
+workspace release build runs again on `ubuntu-latest`.
+
+(commit TBD)
+
 ### zensim-gpu — fix: replace v0.3 score shim with real `zensim::score_features_with_profile_and_codec` — 2026-05-26
 
 Task #71: every `ZensimOpaque::compute_srgb_u8` / `compute_pixels` call

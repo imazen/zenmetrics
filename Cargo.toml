@@ -64,12 +64,60 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
+# Release profile — thin LTO + 16 codegen-units + line-tables-only debug.
+#
+# Why not `lto = "fat"` here:
+#   - Fat LTO loads every CGU of every workspace member into a single
+#     LLVM context during the final crate's link. With this workspace
+#     (12 members, cubecl multi-backend, zenpixels, image codecs) plus
+#     `debug = "full"` + `codegen-units = 1`, peak RSS during the
+#     workspace-wide link routinely exceeded the 16 GB available on
+#     `ubuntu-latest` GitHub runners. The CI workspace build was
+#     gated off with `&& false` (ci.yml:55, since commit 4a729b65 on
+#     2026-05-05) for exactly this reason.
+#   - Thin LTO keeps ~85% of fat LTO's optimization wins (cross-CGU
+#     inlining, dead-code elimination, devirtualization) but does the
+#     work per-CGU rather than in one giant module, capping peak RSS.
+#   - `debug = "line-tables-only"` instead of `"full"` keeps backtrace
+#     line numbers (what `whereat` and panic reports need) without
+#     dragging every DWARF DIE through the LTO link — that's the
+#     other half of the OOM equation. Drop to `"none"` for even
+#     smaller link memory if backtraces aren't needed.
+#   - `codegen-units = 16` is the cargo default for release. With thin
+#     LTO it lets LLVM parallelise the per-CGU optimisation passes.
+#
+# Need maximum optimisation for a shipping binary? Use `--profile
+# release-fat` below. Benchmarks already opt into fat LTO via
+# `[profile.bench]`.
 [profile.release]
 opt-level = 3
-lto = "fat"
-debug = "full"
+lto = "thin"
+debug = "line-tables-only"
 split-debuginfo = "packed"
+codegen-units = 16
+
+# Fat-LTO release profile for production binaries on memory-rich
+# hosts (the 7950X workstation, vast.ai builders). Same shape as the
+# old `[profile.release]` minus `debug = "full"` (debug=full + fat LTO
+# was the OOM trigger; full debuginfo on a release artefact is rarely
+# what you actually want — split it out via `split-debuginfo` or use
+# `--profile release-debug` if you really need it).
+#
+# Usage:
+#   cargo build --profile release-fat -p zen-metrics-cli
+#   cargo build --profile release-fat --workspace
+[profile.release-fat]
+inherits = "release"
+lto = "fat"
 codegen-units = 1
+debug = "line-tables-only"
+
+# Full-debuginfo release profile for `perf record` / heaptrack /
+# callgrind sessions. Don't use this on CI runners — `debug = "full"`
+# is what made the workspace-wide release link OOM on ubuntu-latest.
+[profile.release-debug]
+inherits = "release"
+debug = "full"
 
 [profile.bench]
 opt-level = 3
