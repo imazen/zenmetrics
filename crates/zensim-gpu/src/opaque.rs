@@ -386,6 +386,15 @@ pub struct ZensimOpaque {
     backend: Backend,
 }
 
+// NOTE (geometry-API divergence vs cvvdp-gpu, 2026-05-26):
+// `ZensimOpaque` does NOT expose `new_with_geometry` / display-config
+// constructors because the underlying `zensim_gpu::Zensim::<R>` is a
+// feature-based metric (228 / 300 / 372-d vector) rather than a
+// display-aware one. There is no `DisplayGeometry` / PPD threading
+// through the zensim pipeline — feature extraction is purely
+// data-driven and the pyramid depth + filter weights don't depend on
+// viewing conditions. Callers wanting display-aware scoring should
+// use `cvvdp-gpu`'s `CvvdpOpaque::new_with_geometry` instead.
 impl ZensimOpaque {
     /// Construct an opaque zensim instance. Reads
     /// [`ZensimParams::regime`] to choose the pipeline regime —

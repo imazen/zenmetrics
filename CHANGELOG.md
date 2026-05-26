@@ -17,6 +17,40 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — feat: `CvvdpOpaque::new_with_geometry` opaque API for non-STANDARD_4K display configs — 2026-05-26
+
+- **`CvvdpOpaque::new_with_geometry(backend, w, h, params, geometry)`**
+  and **`CvvdpOpaque::new_with_geometry_and_memory_mode(.., geometry,
+  mode)`** — expose the geometry-aware constructor that
+  `Cvvdp::<R>::new_with_geometry` has carried since the host-scalar
+  display-spec parity work (2026-05-25 wave). Pre-2026-05-26
+  `CvvdpOpaque::new` / `new_with_memory_mode` permanently downcast
+  the construction-time PPD to `DisplayGeometry::STANDARD_4K`, so any
+  opaque-API caller that needed phone-class (≈340 PPD) / TV-class
+  (≈57 PPD) / HMD-class scoring had no path to thread the geometry
+  through. Closes the gap that jxl-encoder's `docs/RFC_DISPLAY_CONFIG_BACKFILL.md`
+  Phase 1 honest-finding cited.
+- **Refactor**: `new_with_memory_mode` now forwards to
+  `new_with_geometry_and_memory_mode(.., STANDARD_4K, mode)` so the
+  per-backend dispatch isn't duplicated. The two-line `new`
+  fallthrough is unchanged. Public API is purely additive — no
+  behavior change to existing call sites.
+- **Tests**: `crates/cvvdp-gpu/tests/opaque_geometry_api.rs` — 3
+  GPU-gated tests pinning (1) `new` ≡ `new_with_geometry(STANDARD_4K)`
+  byte-identity, (2) IPHONE_14_PRO vs PANEL_65IN_4K JOD must differ
+  (proves geometry is actually consumed), (3) Full / Auto succeed +
+  Strip / Tile surface `ModeUnsupported` on the new constructor.
+  (this commit)
+- **zensim-gpu divergence documented**: `ZensimOpaque` deliberately
+  does NOT receive a `new_with_geometry` companion API. The
+  underlying `zensim_gpu::Zensim::<R>` is a feature-based metric
+  (228 / 300 / 372-d vector) with no `DisplayGeometry` / PPD
+  threading — pyramid depth + filter weights are purely data-driven
+  and don't depend on viewing conditions. Comment block in
+  `crates/zensim-gpu/src/opaque.rs` directs callers wanting
+  display-aware scoring to `CvvdpOpaque::new_with_geometry`.
+  (this commit)
+
 ### zenmetrics-api / 6 metric crates — feat: umbrella cached-ref + MemoryMode unification (Phases 1, 2A, 2B, 2C + task #51) — 2026-05-26
 
 The cached-ref + strip-mode perf wins shipped per-crate over the

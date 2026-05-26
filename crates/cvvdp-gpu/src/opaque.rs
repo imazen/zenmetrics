@@ -247,11 +247,69 @@ impl CvvdpOpaque {
     /// [`MemoryMode`](crate::MemoryMode). cvvdp-gpu has no Strip
     /// implementation — `MemoryMode::Strip` / `Tile` return
     /// [`crate::Error::ModeUnsupported`].
+    ///
+    /// Equivalent to
+    /// `new_with_geometry_and_memory_mode(.., DisplayGeometry::STANDARD_4K, mode)`.
     pub fn new_with_memory_mode(
         backend: Backend,
         width: u32,
         height: u32,
         params: CvvdpParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self> {
+        Self::new_with_geometry_and_memory_mode(
+            backend,
+            width,
+            height,
+            params,
+            crate::params::DisplayGeometry::STANDARD_4K,
+            mode,
+        )
+    }
+
+    /// Construct an opaque cvvdp scorer with a non-default
+    /// [`DisplayGeometry`](crate::params::DisplayGeometry). Equivalent
+    /// to `new_with_geometry_and_memory_mode(.., geometry, MemoryMode::Auto)`.
+    ///
+    /// Use this constructor (instead of [`Self::new`]) when the
+    /// scoring context isn't STANDARD_4K — e.g. a phone-class viewing
+    /// geometry (≈340 PPD on iPhone 14 Pro at 0.30 m) or a TV-class
+    /// geometry (≈57 PPD on a 65″ panel at 3 m). PPD shifts the
+    /// spatial frequencies the castleCSF kernels are queried with,
+    /// which materially changes JOD scores — especially in the
+    /// finest pyramid bands.
+    ///
+    /// See [`crate::pipeline::Cvvdp::new_with_geometry`] for the
+    /// underlying typed API surface this forwards to.
+    pub fn new_with_geometry(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
+    ) -> Result<Self> {
+        Self::new_with_geometry_and_memory_mode(
+            backend,
+            width,
+            height,
+            params,
+            geometry,
+            crate::MemoryMode::Auto,
+        )
+    }
+
+    /// [`MemoryMode`](crate::MemoryMode) + geometry variant of
+    /// [`Self::new_with_geometry`]. Mirrors
+    /// [`Self::new_with_memory_mode`]'s memory-mode semantics
+    /// (`Strip` / `Tile` → [`crate::Error::ModeUnsupported`]) and
+    /// accepts a custom viewing [`DisplayGeometry`](crate::params::DisplayGeometry)
+    /// for the underlying [`Cvvdp::new_with_geometry`] dispatch.
+    pub fn new_with_geometry_and_memory_mode(
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        geometry: crate::params::DisplayGeometry,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
         // Resolve the mode host-side to surface ModeUnsupported /
@@ -272,24 +330,24 @@ impl CvvdpOpaque {
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::cuda::CudaRuntime>::new(
-                    client, width, height, params,
+                Box::new(Cvvdp::<cubecl::cuda::CudaRuntime>::new_with_geometry(
+                    client, width, height, params, geometry,
                 )?)
             }
             #[cfg(feature = "wgpu")]
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::wgpu::WgpuRuntime>::new(
-                    client, width, height, params,
+                Box::new(Cvvdp::<cubecl::wgpu::WgpuRuntime>::new_with_geometry(
+                    client, width, height, params, geometry,
                 )?)
             }
             #[cfg(feature = "cpu")]
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Cvvdp::<cubecl::cpu::CpuRuntime>::new(
-                    client, width, height, params,
+                Box::new(Cvvdp::<cubecl::cpu::CpuRuntime>::new_with_geometry(
+                    client, width, height, params, geometry,
                 )?)
             }
         };
