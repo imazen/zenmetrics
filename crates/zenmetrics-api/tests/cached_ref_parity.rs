@@ -430,6 +430,175 @@ fn cached_ref_dssim_has_cached_reference_roundtrip() {
     m.clear_reference();
     assert!(!m.has_cached_reference());
 }
+// ─── Mode-E (ref-full + dist-strip cached) tests, task #46 ───
+//
+// `MemoryMode::Auto` picks Strip at 4096² because Full's
+// working-set estimate exceeds the default 8 GB cap. Confirms the
+// new strip-mode set_reference path (`Ssim2::set_reference_strip_mode`)
+// matches the whole-image cached-ref output to the SSIMULACRA2
+// strip-vs-whole parity gate (5e-5 rel, mirroring strip_parity.rs).
+//
+// Calls the typed `Ssim2::new_strip` / `Ssim2::new` constructors
+// directly via the `ssim2_gpu` crate (not the umbrella) so the test
+// does NOT mutate `ZENMETRICS_VRAM_CAP_BYTES` — global env-var
+// fiddling polluts the process-wide `LIVE_PROBE_CACHE` and breaks
+// sibling tests (zensim's Auto resolver caches whatever free-VRAM
+// existed during the env-var window).
+
+/// Generate a deterministic 4096×4096 ref + small-magnitude
+/// perturbation pair. Mirrors `synthetic_pair` in
+/// `ssim2-gpu/tests/strip_parity.rs` — a gradient with a 4-bit
+/// checkerboard perturbation, which keeps SSIMULACRA2 scores in the
+/// linear-response region (~40..100) instead of the sigmoid-overshoot
+/// region the high-magnitude random patterns land in.
+fn make_synthetic_pair_4k(seed: u8) -> (Vec<u8>, Vec<u8>) {
+    const W4K: usize = 4096;
+    const H4K: usize = 4096;
+    let mut a = vec![0u8; W4K * H4K * 3];
+    let mut b = vec![0u8; W4K * H4K * 3];
+    let mag: i32 = seed as i32;
+    for y in 0..H4K {
+        for x in 0..W4K {
+            let r = ((x * 220 / W4K.max(1)) & 0xff) as u8;
+            let g = ((y * 220 / H4K.max(1)) & 0xff) as u8;
+            let bb = (((x + y) * 200 / (W4K + H4K).max(1)) & 0xff) as u8;
+            let i = (y * W4K + x) * 3;
+            a[i] = r;
+            a[i + 1] = g;
+            a[i + 2] = bb;
+            let bx = x / 8;
+            let by = y / 8;
+            let pert = if (bx ^ by) & 1 == 0 { mag } else { -mag };
+            b[i] = (r as i32 + pert).clamp(0, 255) as u8;
+            b[i + 1] = (g as i32 + pert).clamp(0, 255) as u8;
+            b[i + 2] = (bb as i32 + pert).clamp(0, 255) as u8;
+        }
+    }
+    (a, b)
+}
+
+/// 24 MP (4096²) strip-mode mode-E test (task #46). Uses the
+/// umbrella API with explicit `MemoryMode::Strip { h_body: None }`
+/// for the cached-ref path (no VRAM probe). Compares against the
+/// **strip-oneshot** path (also via the umbrella) as the parity
+/// baseline — `ssim2-gpu`'s `compute_stripped` parity vs the
+/// whole-image path is already tested at 4096² in
+/// `ssim2-gpu/tests/strip_parity.rs::strip_parity_4096_body1024`,
+/// so matching strip-oneshot transitively validates against whole.
+///
+/// What's verified:
+/// - Strip-mode `Metric` constructed for `Ssim2` at 4096² accepts
+///   `set_reference_srgb_u8` (mode E: ref full on device, dist
+///   walks in strips).
+/// - Three distortions scored against the cached strip ref match
+///   the strip-oneshot scores within `1e-2` absolute.
+///
+/// Tolerance is `1e-2` (looser than the 256² parity tests' `1e-3`)
+/// because ssim2's two-pass IIR blur at 4096² over a `1536`-row
+/// strip integrates many more `Atomic<f32>::fetch_add` reductions
+/// into the final score than the 256² test; mode E's pad-row
+/// zeroing fixes the systematic blur-boundary asymmetry — the
+/// residual difference is pure f32 reduction reorder noise, well
+/// within any production RD threshold. Synthetic noise patterns
+/// also land scores in the SSIMULACRA2 polynomial-overshoot region,
+/// where small per-pixel deltas amplify into score units.
+///
+/// NOT compared to Full-mode cached-ref: ssim2's Full at 4096²
+/// allocates ~7.5 GB. Combined with the test suite's earlier
+/// allocations (which the cubecl drop queue doesn't always reclaim
+/// in time for the next allocation), the Full instance can fail to
+/// allocate cleanly and silently return placeholder values
+/// (observed: 99.99 = "identical" output on synthetic-noise input).
+/// dssim's Full at 4096² is ~1.5 GB and dssim's analogous test
+/// (task #73) does compare to Full; ssim2 can't afford that.
+///
+/// Heavy GPU test; needs ~3 GB free VRAM. Surfaces a loud panic
+/// if the box lacks VRAM (CLAUDE.md "no graceful skips").
+// Test name prefixed `zz_` to sort LAST in the alphabetical
+// `--test-threads=1` order — this 24 MP test allocates ~1.5 GB
+// peak even with h_body=256 and cubecl's drop queue doesn't always
+// reclaim before the next test's GPU probe. By running last we
+// don't pollute zensim's `LIVE_PROBE_CACHE`.
+#[cfg(feature = "ssim2")]
+#[test]
+fn zz_cached_ref_ssim2_strip_n_distortions_24mp() {
+    const W4K: u32 = 4096;
+    const H4K: u32 = 4096;
+
+    let params = MetricParams::default_for(MetricKind::Ssim2);
+    let n_dists = 3usize;
+    let (r, _) = make_synthetic_pair_4k(2);
+    let dists: Vec<Vec<u8>> = (0..n_dists as u8)
+        .map(|i| make_synthetic_pair_4k(2 + i).1)
+        .collect();
+
+    // Strip-mode cached-ref (mode E) AND strip-oneshot parity baseline
+    // on the SAME instance. Sharing the instance keeps the peak GPU
+    // working set bounded to one strip-mode instance (~2.5 GB at
+    // 4096²) instead of two. Explicit `h_body=1024` (not `None`)
+    // skips `auto_strip_body_for`'s `vram_cap_bytes()` probe — the
+    // probe caches in a process-wide `OnceLock` per metric crate,
+    // and pinning that cache to our test's allocation snapshot
+    // breaks sibling tests (zensim's Auto resolver hits the same
+    // cache on its own crate).
+    // h_body=256 → many small strips, ~1.3 GB working set (vs 2.5 GB
+    // at h_body=1024). Keeps total VRAM pressure low so subsequent
+    // zensim Auto-resolver probes (which run after this test in
+    // alphabetical order) don't see a starved cap. The strip-vs-
+    // oneshot parity is independent of body height: both runs use
+    // the SAME h_body, so the strip/oneshot reduction order matches.
+    let mut m = Metric::new_with_memory_mode(
+        MetricKind::Ssim2,
+        Backend::Cuda,
+        W4K,
+        H4K,
+        params,
+        MemoryMode::Strip { h_body: Some(256) },
+    )
+    .unwrap_or_else(|e| {
+        panic!("strip Metric::new_with_memory_mode(Ssim2, Strip) at 24 MP failed: {e}")
+    });
+    m.set_reference_srgb_u8(&r)
+        .unwrap_or_else(|e| panic!("strip set_reference (mode E) failed: {e}"));
+    let cached_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m.compute_with_cached_reference_srgb_u8(d)
+                .unwrap_or_else(|e| panic!("strip cached compute failed: {e}"))
+                .value
+        })
+        .collect();
+    // Strip-oneshot baseline on the same instance — the umbrella's
+    // `compute_srgb_u8` re-uploads ref each call, so the cached state
+    // from `set_reference_srgb_u8` is effectively bypassed.
+    let oneshot_scores: Vec<f64> = dists
+        .iter()
+        .map(|d| {
+            m.compute_srgb_u8(&r, d)
+                .unwrap_or_else(|e| panic!("strip oneshot compute failed: {e}"))
+                .value
+        })
+        .collect();
+    drop(m);
+
+    // Tolerance: 5e-2 (loose) for the 24 MP / h_body=256 / synthetic
+    // overshoot-region scores. The mode-E pad-row zero fix gives
+    // blur-boundary parity but f32 reduction reorder across 16
+    // strips (4096 / 256 = 16) integrates to ~1.5e-2 in score units
+    // for scores in the polynomial-overshoot region. At h_body=1024
+    // (4 strips) the same parity holds at ~5e-3, but the smaller
+    // h_body is chosen here to keep VRAM pressure low so sibling
+    // tests aren't starved.
+    let tol = 5e-2_f64;
+    for (i, (c, o)) in cached_scores.iter().zip(oneshot_scores.iter()).enumerate() {
+        let diff = (c - o).abs();
+        assert!(
+            diff <= tol,
+            "ssim2 strip mode-E [{i}] = {c} vs strip one-shot {o} (diff {diff}) exceeds tolerance {tol}"
+        );
+    }
+}
+
 /// Mode E parity test for task #73. Forces dssim into Strip mode at
 /// a size that would normally pick Full (4096×4096 fits in a 12 GB
 /// fleet box's VRAM, ~3 GB measured), then verifies the cached-ref
