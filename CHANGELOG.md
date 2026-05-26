@@ -17,6 +17,22 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: Path A Phase 1 prep — `upscale_v_strip_kernel` gains `src_strip_offset` (2026-05-26)
+
+Adds `src_strip_offset: u32` parameter to `upscale_v_strip_kernel` so
+the kernel can read from a strip-local coarse source buffer (rather
+than the full-image gauss buffer it implicitly assumed). Mirrors the
+existing `downscale_strip_kernel::src_strip_offset` pattern. With
+`src_strip_offset = 0` behavior is bit-identical to the prior
+signature — JOD unchanged at 9.4583 on the 1024² mem_mode_b_vs_full
+example. New parity test `upscale_v_strip_with_src_offset_matches_full_interior_body`
+verifies the non-zero path at offset=8 on a 32×32→32×64 expand.
+
+This is the kernel-level unblock for full Phase 1 wiring (per-strip-
+sized `gauss_dis` allocation + outer-strip-inner-band dist dispatch).
+Driver memory unchanged at this commit — the kernel-prep alone does
+not allocate or route through a per-strip gauss buffer. Commit 98c057ef.
+
 ### scripts/sweep — Security: build_per_codec_training{,_extended} gain pre-write Mode-A + Mode-B guards (2026-05-26)
 
 `scripts/sweep/build_per_codec_training.py` +

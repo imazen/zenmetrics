@@ -2688,6 +2688,7 @@ impl<R: Runtime> Cvvdp<R> {
                         fine_h,          // logical_dst_h
                         body_offset_y,   // body_offset_y in dst rows
                         body_h,          // body_h in dst rows
+                        0,               // src_strip_offset: source is FULL coarse
                     );
                     upscale_h_strip_kernel::launch::<R>(
                         &self.client,
@@ -2726,6 +2727,7 @@ impl<R: Runtime> Cvvdp<R> {
                             fine_h,
                             body_offset_y,
                             body_h,
+                            0,               // src_strip_offset: source is FULL coarse
                         );
                         upscale_h_strip_kernel::launch::<R>(
                             &self.client,

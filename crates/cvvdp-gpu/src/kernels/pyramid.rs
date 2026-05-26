@@ -1404,8 +1404,19 @@ pub fn upscale_v_kernel(
 /// strip that touches y=0 or y=logical_dst_h-1 still reflects the
 /// same way as the full-image kernel would.
 ///
-/// Setting `body_offset_y = 0` and `logical_dst_h = body_h` reduces
-/// this kernel to [`upscale_v_kernel`] for the same input.
+/// Setting `body_offset_y = 0`, `src_strip_offset = 0`, and
+/// `logical_dst_h = body_h` reduces this kernel to
+/// [`upscale_v_kernel`] for the same input.
+///
+/// **Source-strip semantics (Path-A Phase 1).** `src_strip_offset`
+/// translates the post-reflect logical source row to a buffer-local
+/// source row, so callers can pass in a strip-local source buffer
+/// that holds rows `[src_strip_offset, src_strip_offset + src_buf_h)`
+/// of the full logical source. With `src_strip_offset = 0` the
+/// source buffer is interpreted as full-image (existing behavior).
+/// Mirrors the [`downscale_strip_kernel`] `src_strip_offset` pattern.
+/// Caller is responsible for populating the source strip so every
+/// logical row needed by reflection over the body rows is present.
 #[cube(launch)]
 #[allow(clippy::useless_conversion)]
 pub fn upscale_v_strip_kernel(
@@ -1416,6 +1427,7 @@ pub fn upscale_v_strip_kernel(
     logical_dst_h: u32,
     body_offset_y: u32,
     body_h: u32,
+    src_strip_offset: u32,
 ) {
     let idx = ABSOLUTE_POS;
     let total = (src_w * body_h) as usize;
@@ -1450,48 +1462,54 @@ pub fn upscale_v_strip_kernel(
     let v3 = z3 == 0 || z3 == back_v || (z3 >= 2 && (z3 & 1) == 0 && ((z3 - 2) >> 1) < sh_i);
     let v4 = z4 == 0 || z4 == back_v || (z4 >= 2 && (z4 & 1) == 0 && ((z4 - 2) >> 1) < sh_i);
 
+    // Reflection above maps logical-dst-row to logical-src-row via
+    // `((z - 2) >> 1)`. We then translate the logical source row to
+    // buffer-local by subtracting `src_strip_offset`. With
+    // `src_strip_offset = 0` (existing callers) the translation is a
+    // no-op and the buffer-local index equals the logical row.
+    let src_off = src_strip_offset;
     let y0 = if z0 == 0 {
         0u32.into()
     } else if z0 == back_v {
-        logical_src_h - 1
+        logical_src_h - 1 - src_off
     } else if z0 >= 2 && (z0 & 1) == 0 {
-        ((z0 - 2) >> 1) as u32
+        ((z0 - 2) >> 1) as u32 - src_off
     } else {
         0u32.into()
     };
     let y1 = if z1 == 0 {
         0u32.into()
     } else if z1 == back_v {
-        logical_src_h - 1
+        logical_src_h - 1 - src_off
     } else if z1 >= 2 && (z1 & 1) == 0 {
-        ((z1 - 2) >> 1) as u32
+        ((z1 - 2) >> 1) as u32 - src_off
     } else {
         0u32.into()
     };
     let y2 = if z2 == 0 {
         0u32.into()
     } else if z2 == back_v {
-        logical_src_h - 1
+        logical_src_h - 1 - src_off
     } else if z2 >= 2 && (z2 & 1) == 0 {
-        ((z2 - 2) >> 1) as u32
+        ((z2 - 2) >> 1) as u32 - src_off
     } else {
         0u32.into()
     };
     let y3 = if z3 == 0 {
         0u32.into()
     } else if z3 == back_v {
-        logical_src_h - 1
+        logical_src_h - 1 - src_off
     } else if z3 >= 2 && (z3 & 1) == 0 {
-        ((z3 - 2) >> 1) as u32
+        ((z3 - 2) >> 1) as u32 - src_off
     } else {
         0u32.into()
     };
     let y4 = if z4 == 0 {
         0u32.into()
     } else if z4 == back_v {
-        logical_src_h - 1
+        logical_src_h - 1 - src_off
     } else if z4 >= 2 && (z4 & 1) == 0 {
-        ((z4 - 2) >> 1) as u32
+        ((z4 - 2) >> 1) as u32 - src_off
     } else {
         0u32.into()
     };
