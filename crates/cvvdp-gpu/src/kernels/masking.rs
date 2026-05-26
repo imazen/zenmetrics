@@ -529,6 +529,127 @@ pub fn pu_blur_h_3ch_kernel(
         + k12 * src_vy[row_off + s12];
 }
 
+/// Strip-aware sibling of [`pu_blur_h_3ch_kernel`] for Mode E
+/// Phase 3 **API uniformity**.
+///
+/// The σ=3 Gaussian blur's horizontal pass only reflects along the
+/// X axis (`reflect_pu_idx(x_i + t - half, w_i)`) — it does no
+/// Y-axis arithmetic that depends on the logical image height. Strip
+/// processing slices Y, not X, so an H-blur dispatched on a strip
+/// buffer produces bit-exact body rows from a `w × h` view of the
+/// full plane without any reflection-target change.
+///
+/// `body_offset_y` and `logical_h` are accepted **for API
+/// uniformity** with [`pu_blur_v_3ch_scaled_strip_aware_kernel`] so
+/// the future strip walker can dispatch both kernels with the same
+/// call shape (and so callers don't have to maintain two different
+/// dispatch-arg helpers). They are **unused** in the kernel body —
+/// the existing `(w, h)` parameterisation already covers the strip
+/// buffer's footprint.
+///
+/// When called with any `body_offset_y, logical_h`, this is bit-
+/// exact identical to [`pu_blur_h_3ch_kernel`] (the extra params
+/// don't enter the per-pixel arithmetic).
+#[cube(launch)]
+pub fn pu_blur_h_3ch_strip_aware_kernel(
+    src_a: &Array<f32>,
+    src_rg: &Array<f32>,
+    src_vy: &Array<f32>,
+    dst_a: &mut Array<f32>,
+    dst_rg: &mut Array<f32>,
+    dst_vy: &mut Array<f32>,
+    w: u32,
+    h: u32,
+    body_offset_y: u32,
+    logical_h: u32,
+) {
+    // Body offset / logical height are deliberately unused — H-blur
+    // does not touch the Y axis. See doc comment above.
+    let _ = body_offset_y;
+    let _ = logical_h;
+
+    let idx = ABSOLUTE_POS;
+    let total = (w * h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let wu = w as usize;
+    let y = idx / wu;
+    let x = idx - y * wu;
+    let w_i = w as i32;
+    let x_i = x as i32;
+    let half = 6_i32;
+
+    let k0 = f32::new(1.854_402_2e-2);
+    let k1 = f32::new(3.416_694_2e-2);
+    let k2 = f32::new(5.633_176_4e-2);
+    let k3 = f32::new(8.310_854e-2);
+    let k4 = f32::new(1.097_193e-1);
+    let k5 = f32::new(1.296_180_3e-1);
+    let k6 = f32::new(1.370_228_2e-1);
+    let k7 = f32::new(1.296_180_3e-1);
+    let k8 = f32::new(1.097_193e-1);
+    let k9 = f32::new(8.310_854e-2);
+    let k10 = f32::new(5.633_176_4e-2);
+    let k11 = f32::new(3.416_694_2e-2);
+    let k12 = f32::new(1.854_402_2e-2);
+
+    let s0 = reflect_pu_idx(x_i - half, w_i);
+    let s1 = reflect_pu_idx(x_i + 1 - half, w_i);
+    let s2 = reflect_pu_idx(x_i + 2 - half, w_i);
+    let s3 = reflect_pu_idx(x_i + 3 - half, w_i);
+    let s4 = reflect_pu_idx(x_i + 4 - half, w_i);
+    let s5 = reflect_pu_idx(x_i + 5 - half, w_i);
+    let s6 = reflect_pu_idx(x_i + 6 - half, w_i);
+    let s7 = reflect_pu_idx(x_i + 7 - half, w_i);
+    let s8 = reflect_pu_idx(x_i + 8 - half, w_i);
+    let s9 = reflect_pu_idx(x_i + 9 - half, w_i);
+    let s10 = reflect_pu_idx(x_i + 10 - half, w_i);
+    let s11 = reflect_pu_idx(x_i + 11 - half, w_i);
+    let s12 = reflect_pu_idx(x_i + 12 - half, w_i);
+
+    let row_off = y * wu;
+    dst_a[idx] = k0 * src_a[row_off + s0]
+        + k1 * src_a[row_off + s1]
+        + k2 * src_a[row_off + s2]
+        + k3 * src_a[row_off + s3]
+        + k4 * src_a[row_off + s4]
+        + k5 * src_a[row_off + s5]
+        + k6 * src_a[row_off + s6]
+        + k7 * src_a[row_off + s7]
+        + k8 * src_a[row_off + s8]
+        + k9 * src_a[row_off + s9]
+        + k10 * src_a[row_off + s10]
+        + k11 * src_a[row_off + s11]
+        + k12 * src_a[row_off + s12];
+    dst_rg[idx] = k0 * src_rg[row_off + s0]
+        + k1 * src_rg[row_off + s1]
+        + k2 * src_rg[row_off + s2]
+        + k3 * src_rg[row_off + s3]
+        + k4 * src_rg[row_off + s4]
+        + k5 * src_rg[row_off + s5]
+        + k6 * src_rg[row_off + s6]
+        + k7 * src_rg[row_off + s7]
+        + k8 * src_rg[row_off + s8]
+        + k9 * src_rg[row_off + s9]
+        + k10 * src_rg[row_off + s10]
+        + k11 * src_rg[row_off + s11]
+        + k12 * src_rg[row_off + s12];
+    dst_vy[idx] = k0 * src_vy[row_off + s0]
+        + k1 * src_vy[row_off + s1]
+        + k2 * src_vy[row_off + s2]
+        + k3 * src_vy[row_off + s3]
+        + k4 * src_vy[row_off + s4]
+        + k5 * src_vy[row_off + s5]
+        + k6 * src_vy[row_off + s6]
+        + k7 * src_vy[row_off + s7]
+        + k8 * src_vy[row_off + s8]
+        + k9 * src_vy[row_off + s9]
+        + k10 * src_vy[row_off + s10]
+        + k11 * src_vy[row_off + s11]
+        + k12 * src_vy[row_off + s12];
+}
+
 /// Vertical pass of the σ=3 separable Gaussian blur.
 #[cube(launch)]
 pub fn pu_blur_v_kernel(src: &Array<f32>, dst: &mut Array<f32>, w: u32, h: u32) {
