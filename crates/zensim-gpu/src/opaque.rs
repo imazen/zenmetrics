@@ -544,6 +544,37 @@ impl ZensimOpaque {
         self.inner.compute_with_reference_vec(dis_rgb)
     }
 
+    /// Cached-reference variant of [`Self::compute_srgb_u8`] — returns
+    /// a uniform [`Score`] (with weights / profile already applied)
+    /// against the cached reference. Pre-requisite:
+    /// [`Self::set_reference_srgb_u8`] (or `set_reference_pixels`)
+    /// must have been called.
+    ///
+    /// Profile-mode only — when [`ZensimParams::profile`] is `None`
+    /// the legacy 228-feature linear-weights path is used, which
+    /// requires the fixed-shape `compute_features` (not the
+    /// variable-shape `compute_with_reference_vec`). Surfaces
+    /// [`crate::Error::NoCachedReference`] for legacy-weights callers
+    /// — those should use the one-shot [`Self::compute_srgb_u8`]
+    /// instead. The umbrella `zenmetrics-api` cached-ref API
+    /// dispatches through this method for the profile-mode default.
+    pub fn compute_with_cached_reference_score_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<Score> {
+        if self.params.profile.is_some() {
+            let features = self.inner.compute_with_reference_vec(dis_rgb)?;
+            let (w, h) = self.inner.dims();
+            Ok(self.score_from_profile_vec(&features, w, h, None))
+        } else {
+            // Legacy linear-weights cached-ref isn't wired today —
+            // compute_features (228-feat fixed struct) has no
+            // compute_with_reference twin. Surface a clear error
+            // rather than silently fall back to one-shot.
+            Err(crate::Error::NoCachedReference)
+        }
+    }
+
     /// Set + upload + pre-build the reference's XYB pyramid from
     /// [`PixelSlice`] input. Companion to
     /// [`Self::compute_with_reference_pixels`].

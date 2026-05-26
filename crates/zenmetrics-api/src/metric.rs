@@ -1,6 +1,7 @@
 //! `Metric` enum + per-metric variant dispatch.
 
 use crate::error::Error;
+use crate::memory_mode::MemoryMode;
 use crate::Result;
 
 #[cfg(feature = "pixels")]
@@ -316,6 +317,131 @@ impl Metric {
                 };
                 let b = zensim_backend(backend)?;
                 zensim_gpu::ZensimOpaque::new(b, width, height, p)
+                    .map(Metric::Zensim)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    })
+            }
+            #[allow(unreachable_patterns)]
+            other => Err(Error::MetricNotEnabled { kind: other.tag() }),
+        }
+    }
+
+    /// Construct a scorer with an explicit [`MemoryMode`] policy.
+    ///
+    /// Identical to [`Self::new`] but routes through each per-crate
+    /// `new_with_memory_mode` so callers can request Full / Strip /
+    /// Tile / Auto resolution at the umbrella API. [`MemoryMode::Auto`]
+    /// is the implicit default for [`Self::new`].
+    ///
+    /// Strip/Tile semantics are per-crate; see each metric crate's
+    /// `MemoryMode` docs for what `resolve_auto` picks. cvvdp + zensim
+    /// fall back to `Full` for `Strip`/`Tile` umbrella inputs at the
+    /// boundary `From` conversion — their per-crate constructors then
+    /// surface a clear `ModeUnsupported` if the resolved mode isn't
+    /// supported.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new`] plus per-crate
+    /// [`crate::Error::Metric`] when the requested mode isn't
+    /// supported for that metric (e.g. cvvdp/zensim with `Strip`).
+    ///
+    /// # Panics
+    ///
+    /// Same as [`Self::new`] — panics on `MetricParams` ↔ `kind`
+    /// mismatch.
+    #[allow(unused_variables)]
+    pub fn new_with_memory_mode(
+        kind: MetricKind,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: MetricParams,
+        mode: MemoryMode,
+    ) -> Result<Self> {
+        match kind {
+            #[cfg(feature = "cvvdp")]
+            MetricKind::Cvvdp => {
+                let p = match params {
+                    MetricParams::Cvvdp(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Cvvdp)"),
+                };
+                let b = cvvdp_backend(backend)?;
+                cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(b, width, height, p, mode.into())
+                    .map(Metric::Cvvdp)
+                    .map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: e.to_string(),
+                    })
+            }
+            #[cfg(feature = "butter")]
+            MetricKind::Butter => {
+                let p = match params {
+                    MetricParams::Butter(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Butter)"),
+                };
+                let b = butter_backend(backend)?;
+                butteraugli_gpu::ButteraugliOpaque::new_with_memory_mode(
+                    b, width, height, p, mode.into(),
+                )
+                .map(Metric::Butter)
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                })
+            }
+            #[cfg(feature = "ssim2")]
+            MetricKind::Ssim2 => {
+                let p = match params {
+                    MetricParams::Ssim2(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
+                };
+                let b = ssim2_backend(backend)?;
+                ssim2_gpu::Ssim2Opaque::new_with_memory_mode(b, width, height, p, mode.into())
+                    .map(Metric::Ssim2)
+                    .map_err(|e| Error::Metric {
+                        kind: "ssim2",
+                        message: e.to_string(),
+                    })
+            }
+            #[cfg(feature = "dssim")]
+            MetricKind::Dssim => {
+                let p = match params {
+                    MetricParams::Dssim(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Dssim)"),
+                };
+                let b = dssim_backend(backend)?;
+                dssim_gpu::DssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
+                    .map(Metric::Dssim)
+                    .map_err(|e| Error::Metric {
+                        kind: "dssim",
+                        message: e.to_string(),
+                    })
+            }
+            #[cfg(feature = "iwssim")]
+            MetricKind::Iwssim => {
+                let p = match params {
+                    MetricParams::Iwssim(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Iwssim)"),
+                };
+                let b = iwssim_backend(backend)?;
+                iwssim_gpu::IwssimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
+                    .map(Metric::Iwssim)
+                    .map_err(|e| Error::Metric {
+                        kind: "iwssim",
+                        message: e.to_string(),
+                    })
+            }
+            #[cfg(feature = "zensim")]
+            MetricKind::Zensim => {
+                let p = match params {
+                    MetricParams::Zensim(p) => p,
+                    _ => panic!("MetricParams variant mismatch (expected Zensim)"),
+                };
+                let b = zensim_backend(backend)?;
+                zensim_gpu::ZensimOpaque::new_with_memory_mode(b, width, height, p, mode.into())
                     .map(Metric::Zensim)
                     .map_err(|e| Error::Metric {
                         kind: "zensim",
@@ -644,6 +770,182 @@ impl Metric {
                     kind: "zensim",
                     message: e.to_string(),
                 }),
+        }
+    }
+
+    // -----------------------------------------------------------
+    // Cached-reference API (Phase 2A — cvvdp + zensim + iwssim).
+    //
+    // For RD-search workloads where the same reference is scored
+    // against many distortions, set_reference_srgb_u8 uploads the
+    // ref once and pre-computes ref-side state. Subsequent
+    // compute_with_cached_reference_srgb_u8 calls skip the
+    // ref-side pyramid build / blur cascade / IW weight maps.
+    //
+    // butter / ssim2 / dssim opaque shims don't yet expose the
+    // cached-ref methods — Phase 2B adds them (tasks #45/#46 and
+    // a sibling for dssim). Until then the umbrella returns
+    // [`Error::Metric`] with a "not yet wired" message for those
+    // three metrics, so callers can detect-and-fallback to
+    // `compute_srgb_u8` without changing call shape.
+    // -----------------------------------------------------------
+
+    /// Cache the reference image's metric-side state on device.
+    /// Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
+    /// calls skip the reference's per-call upload + ref-side
+    /// pre-processing.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::Metric`] when the underlying metric crate
+    ///   doesn't yet wire cached-ref (butter / ssim2 / dssim
+    ///   pending Phase 2B), or when the per-crate dispatch fails.
+    pub fn set_reference_srgb_u8(&mut self, r: &[u8]) -> Result<()> {
+        match self {
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(m) => m
+                .warm_reference_srgb(r)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "butter")]
+            Metric::Butter(_) => Err(Error::Metric {
+                kind: "butter",
+                message: "cached-ref not yet wired on butteraugli-gpu opaque (Phase 2B — task #45)".into(),
+            }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => Err(Error::Metric {
+                kind: "ssim2",
+                message: "cached-ref not yet wired on ssim2-gpu opaque (Phase 2B — task #46)".into(),
+            }),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => Err(Error::Metric {
+                kind: "dssim",
+                message: "cached-ref not yet wired on dssim-gpu opaque (Phase 2B)".into(),
+            }),
+        }
+    }
+
+    /// Score a distorted candidate against the cached reference.
+    /// Pre-requisite: [`Self::set_reference_srgb_u8`] must have
+    /// been called (or [`Self::has_cached_reference`] returns true).
+    ///
+    /// # Errors
+    ///
+    /// - Per-crate `NoCachedReference` when no reference is cached.
+    /// - [`Error::Metric`] for butter / ssim2 / dssim (Phase 2B).
+    pub fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        d: &[u8],
+    ) -> Result<Score> {
+        match self {
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(m) => m
+                .compute_with_warm_ref_srgb(d, None)
+                .map(convert_score)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => m
+                .compute_with_cached_reference_score_srgb_u8(d)
+                .map(convert_score_zensim)
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(m) => m
+                .compute_with_cached_reference_srgb_u8(d)
+                .map(convert_score_iwssim)
+                .map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "butter")]
+            Metric::Butter(_) => Err(Error::Metric {
+                kind: "butter",
+                message: "cached-ref not yet wired on butteraugli-gpu opaque (Phase 2B — task #45)".into(),
+            }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => Err(Error::Metric {
+                kind: "ssim2",
+                message: "cached-ref not yet wired on ssim2-gpu opaque (Phase 2B — task #46)".into(),
+            }),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => Err(Error::Metric {
+                kind: "dssim",
+                message: "cached-ref not yet wired on dssim-gpu opaque (Phase 2B)".into(),
+            }),
+        }
+    }
+
+    /// Drop cached reference state. No-op for metrics whose
+    /// opaque shim doesn't expose `clear_reference` yet; iwssim
+    /// is the only Phase 2A metric with an explicit clear
+    /// accessor — cvvdp/zensim implicitly clear on the next
+    /// `set_reference_srgb_u8`.
+    pub fn clear_reference(&mut self) {
+        match self {
+            // cvvdp's warm_reference_srgb overwrites prior state — no
+            // explicit clear API on opaque (see pipeline.rs:4234).
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(_) => {}
+            // zensim has clear_reference on the typed pipeline but no
+            // opaque accessor yet. Phase 2A leaves it implicit; Phase
+            // 2B adds the accessor if any caller needs explicit clears.
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(_) => {}
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(m) => m.clear_reference(),
+            #[cfg(feature = "butter")]
+            Metric::Butter(_) => {}
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => {}
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => {}
+        }
+    }
+
+    /// Returns `true` if [`Self::set_reference_srgb_u8`] has been
+    /// called and the cached reference state is still valid.
+    ///
+    /// Today only iwssim tracks this state explicitly on the opaque
+    /// shim; cvvdp/zensim return `false` until they expose a `has_*`
+    /// accessor. The umbrella treats `false` conservatively: callers
+    /// that branch on this should also handle the
+    /// `NoCachedReference` error from
+    /// [`Self::compute_with_cached_reference_srgb_u8`].
+    pub fn has_cached_reference(&self) -> bool {
+        match self {
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(m) => m.has_cached_reference(),
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(_) => false,
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(_) => false,
+            #[cfg(feature = "butter")]
+            Metric::Butter(_) => false,
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => false,
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => false,
         }
     }
 }

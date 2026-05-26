@@ -73,6 +73,18 @@ trait IwssimInner: Send {
     ) -> Result<Score>;
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
+    /// Cache the reference image (Phase 2A). Dispatches to the
+    /// stripped or whole-image typed pipeline based on strip mode.
+    fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
+    /// Score a candidate against the cached reference (Phase 2A).
+    fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<Score>;
+    /// Drop the cached reference state.
+    fn clear_reference(&mut self);
+    /// Whether a reference has been cached and is ready to score against.
+    fn has_cached_reference(&self) -> bool;
 }
 
 impl<R> IwssimInner for Iwssim<R>
@@ -110,6 +122,51 @@ where
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         Iwssim::pack_srgb_into_packed_u32_handle(self, srgb)
+    }
+
+    fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        if Iwssim::is_strip_mode(self) {
+            Iwssim::set_rgb_reference_stripped(self, ref_rgb)
+        } else {
+            // Full mode: convert sRGB-u8 → gray-f32 host-side (BT.601
+            // rounded, matches the on-device `rgb_u32_to_gray_kernel`
+            // used by the Strip-mode set_rgb_reference_stripped path).
+            let ref_gray = crate::pipeline::rgb_u8_to_gray_bt601(ref_rgb);
+            Iwssim::set_reference(self, &ref_gray)
+        }
+    }
+
+    fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<Score> {
+        let result = if Iwssim::is_strip_mode(self) {
+            Iwssim::compute_rgb_with_reference_stripped(self, dis_rgb)?
+        } else {
+            let dis_gray = crate::pipeline::rgb_u8_to_gray_bt601(dis_rgb);
+            Iwssim::compute_with_reference(self, &dis_gray)?
+        };
+        Ok(Score {
+            value: result.score,
+            metric_name: "iwssim",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        })
+    }
+
+    fn clear_reference(&mut self) {
+        if Iwssim::is_strip_mode(self) {
+            Iwssim::clear_reference_stripped(self);
+        } else {
+            Iwssim::clear_reference(self);
+        }
+    }
+
+    fn has_cached_reference(&self) -> bool {
+        if Iwssim::is_strip_mode(self) {
+            Iwssim::has_cached_reference_stripped(self)
+        } else {
+            Iwssim::has_cached_reference(self)
+        }
     }
 }
 
@@ -275,6 +332,47 @@ impl IwssimOpaque {
         dis_handle: &cubecl::server::Handle,
     ) -> Result<Score> {
         self.inner.compute_handles(ref_handle, dis_handle)
+    }
+
+    /// Cache the reference image's IW-SSIM state on device. Subsequent
+    /// [`Self::compute_with_cached_reference_srgb_u8`] calls skip the
+    /// ref-side pyramid build + per-scale C_u eigendecomposition.
+    ///
+    /// Dispatches to `set_rgb_reference_stripped` when constructed in
+    /// [`crate::MemoryMode::Strip`], else converts to gray host-side
+    /// (BT.601 rounded) and calls the whole-image `set_reference`.
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::Error::DimensionMismatch`] when
+    ///   `ref_rgb.len() != width * height * 3`.
+    pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        self.inner.set_reference_srgb_u8(ref_rgb)
+    }
+
+    /// Score a distorted candidate against the cached reference set by
+    /// [`Self::set_reference_srgb_u8`]. Returns
+    /// [`crate::Error::NoCachedReference`] if no reference has been
+    /// cached.
+    pub fn compute_with_cached_reference_srgb_u8(
+        &mut self,
+        dis_rgb: &[u8],
+    ) -> Result<Score> {
+        self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
+    }
+
+    /// Drop cached reference state. Subsequent
+    /// [`Self::compute_with_cached_reference_srgb_u8`] calls return
+    /// [`crate::Error::NoCachedReference`] until
+    /// [`Self::set_reference_srgb_u8`] is called again.
+    pub fn clear_reference(&mut self) {
+        self.inner.clear_reference()
+    }
+
+    /// `true` if a reference has been cached and
+    /// [`Self::compute_with_cached_reference_srgb_u8`] can be called.
+    pub fn has_cached_reference(&self) -> bool {
+        self.inner.has_cached_reference()
     }
 
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32

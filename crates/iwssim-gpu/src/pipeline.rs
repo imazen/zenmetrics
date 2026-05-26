@@ -2973,7 +2973,7 @@ fn scale_cu(cu_raw: &[f64], n_dim: usize, has_parent: bool, nexp: f64) -> Vec<f6
 /// strip-mode dispatch in [`Iwssim::compute_rgb`] when the instance
 /// was built via [`Iwssim::new_strip`] — the strip walker only takes
 /// f32 gray, so we convert on the host before handing off.
-fn rgb_u8_to_gray_bt601(rgb: &[u8]) -> Vec<f32> {
+pub(crate) fn rgb_u8_to_gray_bt601(rgb: &[u8]) -> Vec<f32> {
     let n = rgb.len() / 3;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
