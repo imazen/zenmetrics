@@ -3213,6 +3213,32 @@ impl<R: Runtime> Cvvdp<R> {
         // host readback (~190 MB at 12 MP) that we'd discard.
         self._dispatch_gauss_pyramid_gpu(srgb)?;
 
+        // Path A Phase 1c (skip-full-alloc): byte-upload path now
+        // defers to the unified `_finalize_weber_pyramid_after_gauss`
+        // helper. The handle-upload sibling
+        // (`_dispatch_weber_pyramid_gpu_from_handle`) already does
+        // this; the byte path previously inlined a duplicate Full-mode
+        // walker that ignored `strip_config`, so Mode B byte callers
+        // never hit the strip walker and `WeberScratch.upscaled_c_strip`
+        // was unused. Routing through the shared finalize lets the
+        // Mode B branch inside `_finalize_weber_pyramid_after_gauss`
+        // fire — and, in turn, lets us drop the now-unused full-image
+        // `upscaled_c` allocation in StripMode::Pair (see
+        // `build_weber_scratch`).
+        self._finalize_weber_pyramid_after_gauss(log_l_bkg_dest, dest_is_dis)
+    }
+
+    /// Pre-Phase-1c inline body of `_dispatch_weber_pyramid_gpu`.
+    /// Kept as `#[allow(dead_code)]` reference so future readers can
+    /// see what the old byte-upload duplicate looked like next to
+    /// `_finalize_weber_pyramid_after_gauss` without diving into git
+    /// history. The helper is unreachable; remove if it bitrots.
+    #[allow(dead_code, clippy::too_many_lines)]
+    fn _legacy_dispatch_weber_pyramid_gpu_inline(
+        &mut self,
+        log_l_bkg_dest: &[cubecl::server::Handle],
+        dest_is_dis: bool,
+    ) -> Result<f32> {
         let cube_dim = CubeDim::new_1d(64);
         let n_levels = self.n_levels as usize;
 
