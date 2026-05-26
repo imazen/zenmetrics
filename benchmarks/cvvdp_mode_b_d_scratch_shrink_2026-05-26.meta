@@ -1,0 +1,37 @@
+# Memory measurement metadata for cvvdp_mode_b_d_scratch_shrink_2026-05-26.csv
+#
+# Date     : 2026-05-26
+# Host     : Lilith's 7950X workstation (water-cooled)
+# GPU      : NVIDIA GeForce RTX 5070 12 GB
+# Driver   : 596.21 (Windows host, WSL2 forwarding)
+# CUDA     : 13.2 runtime / 13.2 SDK at /usr/local/cuda
+# Backend  : cubecl-cuda 0.10 (lilith fork rev de2f98573902efe60717cbfc7f8e4f9d630d723e)
+# Workspace: /home/lilith/work/zen/zenmetrics--cvvdp-shrink-dscratch/
+#
+# Commit under measurement:
+#   perf(cvvdp-gpu): skip full-image d_scratch.d allocation when StripMode::Pair (largest shrink)
+#
+# Predecessor chain (master ancestry at time of measurement):
+#   e0ceeac4 bench(cvvdp-gpu): driver-measurable memory reduction after skip-full-alloc
+#   dc41d713 perf(cvvdp-gpu): skip full-image upscaled_c allocation when StripMode::Pair (actual memory shrink)
+#   5407c9cc (the prior lazy d_scratch transient refactor)
+#
+# Measurement protocol (subprocess-per-cell, see
+# crates/cvvdp-gpu/examples/mem_mode_b_vs_full.rs):
+#
+#   1. Parent samples nvidia-smi memory.used baseline.
+#   2. Parent spawns child process that constructs Cvvdp, runs one
+#      compute_dkl_jod, signals READY <jod>, then sleeps 400ms.
+#   3. Parent samples nvidia-smi memory.used during the sleep window
+#      (driver state quiescent post-readback).
+#   4. nvsmi_delta = peak - baseline.
+#
+# The subprocess-per-cell approach defeats cubecl's intra-process
+# memory pool caching that would otherwise mask Mode B's freed
+# allocations as still-cached-in-pool. The pool's pages get reclaimed
+# by the OS on child exit, so the next child sees a clean baseline.
+#
+# Reproducibility: 4 consecutive runs at the same checkpoint produce
+# identical nvsmi_delta numbers (within 1-2 MiB transient noise on the
+# 1024² baseline-sample timing window). The 4096² numbers are stable
+# at 4225 / 3457 MiB across runs.

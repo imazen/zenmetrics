@@ -1,0 +1,89 @@
+# cvvdp Mode B vs Full GPU memory measurement, Path A Phase 1d
+# (skip-full-alloc on DBandsScratch.d for non-baseband levels).
+#
+# Generated 2026-05-26 by:
+#   cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+#
+# Host: 7950X + RTX 5070 12 GB (CUDA driver 596.21, runtime 13.2)
+# Backend: cubecl-cuda 0.10 (lilith fork commit de2f9857)
+# Commit under measurement: this commit (perf(cvvdp-gpu): skip full-image
+#   d_scratch.d allocation when StripMode::Pair (largest shrink))
+# Predecessor in this chunk:
+#   - dc41d713 perf(cvvdp-gpu): skip full-image upscaled_c allocation
+#     when StripMode::Pair (template — the upscaled_c shrink)
+#   - 5407c9cc lazy d_scratch transients (moved t_p_*/m_* into
+#     band-loop transient — left d persistent)
+#
+# Background:
+#   The persistent piece of DBandsScratch is `d: [Handle; 3]` per
+#   level. At 4096² with 9 levels this is 3 ch × sum_level_pixels × 4
+#   bytes ≈ 269 MiB analytical (pyramid-reduced, not 9 × 16M). In
+#   Mode B, the masking strip walker writes one strip's d into the
+#   buffer and is followed downstream by the per-strip pool walker
+#   that reads it — so non-baseband levels' d only needs to hold a
+#   single strip's worth of pixels if pool runs INLINE (before the
+#   next strip's masking dispatch overwrites the buffer).
+#
+# Path A Phase 1d makes that interleave land:
+#
+#   * DBandsScratch.d → Option<[Handle; 3]>;
+#     DBandsScratch.d_strip → Option<[Handle; 3]> (per-strip-sized
+#     bw_k × strip_h_at_k for use_blur=true levels, n_px for the
+#     small-band no_blur fallback). Mode B non-baseband levels carry
+#     d_strip=Some + d=None; baseband and other modes carry d=Some.
+#   * build_d_bands_scratch takes strip_pair_h_body (mirrors the
+#     build_weber_scratch pattern from dc41d713).
+#   * _run_band_masking_strip_walker writes d at offset 0 of
+#     d_strip in Mode B (vs byte_off_body in Mode E full-d) and
+#     dispatches pool_band_3ch_offset_kernel inline AFTER each
+#     strip's mult_mutual launch.
+#   * partials_h zero-fill hoisted to the top of
+#     _run_d_bands_band_loop in Mode B so atomic-adds accumulate
+#     across strips and bands; _pool_and_finalize_jod_strip skips
+#     the zero-fill in Mode B and only dispatches pool for the
+#     baseband (which still owns full d).
+#   * compute_dkl_d_bands, _host_pool_and_finalize_jod, and
+#     _compute_diffmap_into reject Mode B (they need full-band d
+#     post-band-loop; production score_with_diffmap stays on
+#     Full / CachedRef).
+#
+# Columns:
+#   size               = test image dim label (1024² / 4096²)
+#   mode               = full | mode_b (h_body=256)
+#   estimate_master_mib = pre-Path-B-chunk-1 analytical estimate
+#                         (kept for cross-file comparability)
+#   estimate_head_mib   = post-Phase-1d analytical estimate
+#   nvsmi_delta_mib     = nvidia-smi memory.used delta during
+#                         compute_dkl_jod
+#   jod                 = compute_dkl_jod result
+#
+# JOD parity: Full and Mode B agree to 0.000000 JOD at both sizes.
+# Bit-exact preservation of the post-mask atomic-add semantics —
+# inline pool is functionally identical to post-band-loop pool
+# because both atomic-add into partials_h with the same beta/idx
+# and the kernel itself is unchanged.
+#
+# Driver-level shrink (this commit alone):
+#   1024²: 385 -> 353 MiB (Δ 32 MiB, -8.3%)
+#     The d_scratch persistent analytical savings at 1024² are
+#     ~28 MiB (3 ch × ~2.3M pixels × 4 B). The d_scratch tier
+#     finally crosses a cubecl pool boundary at this size — the
+#     prior upscaled_c shrink left some slack that the d_scratch
+#     shrink now fills.
+#   4096²: 4225 -> 3457 MiB (no additional delta vs dc41d713's 3457)
+#     The d_scratch persistent analytical savings at 4096² are
+#     ~240 MiB. The cubecl pool tier crossed by dc41d713 absorbs
+#     this additional shrink (i.e., the freed 240 MiB fits inside
+#     the same pool reservation). Further visible reduction lands
+#     when the parallel bands_dis + gauss_dis shrinks reduce the
+#     dominant pyramid allocation.
+#
+# Cumulative vs Full mode at 4096²: 768 MiB (-18.2%) — same as
+# dc41d713. The Path A Phase 1 series compound when bands_dis +
+# gauss_dis shrinks land.
+#
+size,mode,estimate_master_mib,estimate_head_mib,nvsmi_delta_mib,jod
+1024sq,full,198,178,385,9.4583
+1024sq,mode_b,198,57,353,9.4583
+4096sq,full,3178,2858,4225,9.4585
+4096sq,mode_b,3178,373,3457,9.4585
