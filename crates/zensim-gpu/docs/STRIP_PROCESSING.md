@@ -164,15 +164,26 @@ pixel coefficients applied to the strip's allocation height):
 - Extended: `38 MB + 139 × pyramid_pixels` B
 - WithIw: `71 MB + 136 × pyramid_pixels` B
 
-At image_h = 8192 with h_body = 256, halo = 40, strip_alloc_h = 336.
-Pyramid pixels = `4 × (8192 × 336)` (sum across 4 scales with `div_ceil(2)`
-halving) ≈ 4.6 M pyramid pixels (vs ~33 M for full 8192² Basic).
+### Measured (nvidia-smi peak delta vs process start)
 
-- Basic strip ≈ 188 MB working set + 193 MB cubecl overhead = ~380 MB
-- WithIw strip ≈ 71 MB + 627 MB working set + 193 MB cubecl = ~890 MB
+Measured on RTX 5070 + CUDA 13.2.1 via
+`examples/strip_measure_actual.rs`. Values **include** the
+~193 MB cubecl runtime pool overhead. See
+`benchmarks/zensim_strip_vs_full_2026-05-26.csv`.
 
-vs Full 8192² WithIw measured at ~10.3 GB
-(`benchmarks/mem_per_metric_2026-05-26.csv`) — 11× reduction.
+| image | regime | Full MB | Strip MB | reduction |
+|-------|--------|---------|----------|-----------|
+| 4096² (16 MP) | Basic    | 1186 | 290 | 4.1× |
+| 4096² (16 MP) | Extended | 2722 | 482 | 5.6× |
+| 4096² (16 MP) | WithIw   | 2722 | 482 | 5.6× |
+| 8192² (67 MP) | Basic    | 3490 | 513 | 6.8× |
+| 8192² (67 MP) | WithIw   | 10205 | 705 | **14.5×** |
+
+The 8192² × WithIw case is the cardinal-direction fix for issue #16:
+Strip WithIw (705 MB) is now within 1.4× of Strip Basic (513 MB),
+mirroring the CPU zensim's structurally-flat memory cost across
+regimes. Full WithIw at 8192² needs 10.2 GB and won't fit on a 12 GB
+fleet box; Strip WithIw fits with room to spare.
 
 ## Out of scope (follow-ups)
 

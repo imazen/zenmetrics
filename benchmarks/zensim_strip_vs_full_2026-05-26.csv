@@ -1,0 +1,11 @@
+metric,mode,regime,width,height,peak_delta_mb,compute_ms
+zensim,full,Basic,4096,4096,1186,1040
+zensim,full,Extended,4096,4096,2722,944
+zensim,full,WithIw,4096,4096,2722,941
+zensim,strip,Basic,4096,4096,290,542
+zensim,strip,Extended,4096,4096,482,671
+zensim,strip,WithIw,4096,4096,482,698
+zensim,full,Basic,8192,8192,3490,1077
+zensim,full,WithIw,8192,8192,10205,1233
+zensim,strip,Basic,8192,8192,513,876
+zensim,strip,WithIw,8192,8192,705,991

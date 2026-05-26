@@ -1,0 +1,22 @@
+zensim_strip_vs_full_2026-05-26.csv
+====================================
+Measured by: crates/zensim-gpu/examples/strip_measure_actual.rs
+Date: 2026-05-26
+Host: water-cooled AMD Ryzen 9 7950X + RTX 5070, CUDA 13.2.1
+Workspace: zenmetrics--zensim-strip-port (master HEAD after Phase 5 commit)
+Command pattern:
+    cargo build --release -p zensim-gpu --example strip_measure_actual --features cuda
+    target/release/examples/strip_measure_actual <full|strip> <basic|ext|iw> <w> <h>
+
+`peak_delta_mb` = nvidia-smi `memory.used` after compute - baseline (process start).
+This INCLUDES cubecl runtime pool overhead (~193 MB).
+
+Key findings:
+- 4096² WithIw: Full 2722 MB → Strip 482 MB (5.6× reduction)
+- 8192² WithIw: Full 10205 MB → Strip 705 MB (14.5× reduction)
+- Strip WithIw at 8192² (705 MB) is ~1.4× of Strip Basic (513 MB)
+  — confirms the regime asymmetry from issue #16 is closed: WithIw
+  strip mode uses memory comparable to Basic strip mode, mirroring
+  CPU zensim's flat-across-regimes structural cost.
+
+Strip default h_body = 256, halo = 40.
