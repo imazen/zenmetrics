@@ -17,17 +17,25 @@ scales × 3 channels × 19 features).
 | Pipeline (`pipeline::Zensim`) | `zensim-cuda/src/lib.rs` | ~440 | ✅ wired | 4-scale pyramid with cached-reference state. SIMD padding matches `simd_padded_width` exactly so feature footprints stay aligned with CPU's `accum.n = padded_w × h`. |
 | `Zensim::set_reference` / `compute_with_reference` | same | (above) | ✅ implemented | Reference pyramid cached after `set_reference`; subsequent `compute_with_reference` reads it without re-running the ref-side sRGB→XYB / pad / downscale chain. Cached-vs-direct drift ≤ 1e-3 on the noisy-gradient lock test. |
 
-## Validated parity (RTX 5070, CUDA 13.2, host-side `zensim` v0.2.8)
+## Validated parity (RTX 5070, CUDA 13.2, host-side `zensim` path-pinned)
 
-Full test suite — **19 / 19 pass on CUDA** (verified 2026-05-20):
+Full test suite — **92 / 92 pass on CUDA** (verified 2026-05-26):
 
 | Test file | Tests | Coverage |
 |---|--:|---|
 | `tests/cpu_parity.rs` | 3 | Basic + peak 228-feat per-slot parity (identical / noisy-gradient 64² / checkerboard 128² multi-strip) |
-| `tests/extended_parity.rs` | 6 | Extended 300-feat (incl. masked block 228..300) + WithIw 372-feat structural |
+| `tests/extended_parity.rs` | 8 | Extended 300-feat (masked block 228..300) + WithIw 372-feat per-slot CPU parity on the IW block 300..372 (`iw_slot_parity_*` tests, task #72) |
+| `tests/cpu_gpu_feature_sweep.rs` | 13 | Comprehensive 372-slot CPU↔GPU sweep — 3 sizes × 4 content patterns × 3 distortion magnitudes (48 distinct fixtures) + identity short-circuit no-corruption regression |
 | `tests/parity_lock.rs` | 8 | Aggregate score: synthetic edges + cached-vs-direct + JPEG corpus q70/q90 |
 | `tests/weights_parity.rs` | 1 | Byte-for-byte CPU/GPU weights match `WEIGHTS_PREVIEW_V0_2` |
-| `tests/opaque.rs` | 1 | `Zensim::compute_features_srgb_u8` opaque-API path |
+| `tests/opaque.rs` | 2 | `Zensim::compute_features_srgb_u8` opaque-API path (incl. strided pixels) |
+| `tests/opaque_default_weights_v03.rs` | 2 | Post-task-#71 wiring: opaque path routes through `zensim::score_features_with_profile_and_codec`, NOT the deleted v0.2 linear shim |
+| `tests/opaque_cached_ref.rs` | 6 | Set-reference / compute-with-reference state machine |
+| `tests/opaque_regime.rs` | 6 | Regime selection: Basic / Extended / WithIw via `ZensimParams` |
+| `tests/diffmap_invariants.rs` | 10 | Phase 1 diffmap correctness (5 invariants × multiple paths) |
+| `tests/memory_mode.rs` | 9 | Regime-aware estimator (`estimator_matches_measured` asserts ±25 % on 24 measured rows) + `MemoryMode` API |
+| `tests/auto_fallback.rs` | 7 | Strip-unsupported + Auto cap fallback contract |
+| inline unit tests | 15 | Per-kernel sanity (`diffmap` module + ad-hoc) |
 
 `tests/parity_lock.rs` aggregate-score numbers (2026-05-20 re-run):
 
@@ -49,7 +57,8 @@ Full test suite — **19 / 19 pass on CUDA** (verified 2026-05-20):
 | 64² noisy gradient (300 slots) | within budget on every slot | basic 2e-3 rel · peak/max 3e-2 rel · L8 5e-3 rel · **masked 5e-3 rel** |
 | 128² checkerboard multi-strip (300 slots) | within budget on every slot | same as above |
 | 64² WithIw[0..300] vs Extended[0..300] | 0.0 (bit-identical) | 5e-3 abs |
-| 64² WithIw IW block (300..372) on noisy input | 72/72 non-zero, max \|val\| 0.236 | finite + magnitude < 1e3 |
+| 64² WithIw IW block (300..372) per-slot CPU parity (task #72) | within budget on every slot | 5e-3 rel (matches masked block) |
+| 128² WithIw IW block (300..372) per-slot CPU parity (task #72) | within budget on every slot | 5e-3 rel (matches masked block) |
 
 Synthetic edge cases (grayscale, polar opposite, low-magnitude X
 channels) sit comfortably under 1e-4 relative error. Real-image
