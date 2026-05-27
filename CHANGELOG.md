@@ -19,7 +19,7 @@ Workspace conventions per the global rules:
 
 ### zen-cloud-runpod — feat: RunPod Pods (pull) provider + `--backend runpod` (Phase F, 2026-05-27)
 
-(`__RUNPOD_COMMIT__`) New `zen-cloud-runpod` crate implementing the five
+(`82178f44`) New `zen-cloud-runpod` crate implementing the five
 `zen-cloud-core` traits for RunPod's **Pods (pull)** path (spec §1.10).
 RunPod pods are structurally identical to vast.ai — a rented GPU pod
 boots a generic container, credentials + sweep wiring arrive as pod env
