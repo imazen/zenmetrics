@@ -30,9 +30,11 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod bench;
 mod cpu;
 mod gpu;
 
+pub use bench::{synth_pair_offset_dist, BenchPlan, BenchReport};
 pub use cpu::detect_cpu;
 pub use gpu::detect_gpu;
 
@@ -116,20 +118,151 @@ pub struct CpuCapability {
     pub ram_mib: usize,
 }
 
-/// Per-metric profile placeholder. Phase 1 stores nothing here; Phase 2
-/// will fill in `ns_per_px_at` + `vram_mib_at` measured points.
+/// Backend variant the bench runner measured against. One row per
+/// backend in [`MetricProfile::ns_per_px_at`] / [`MetricProfile::vram_mib_at`].
+///
+/// `GpuStripPair` is cvvdp-only — it surfaces from
+/// [`zenmetrics_api::cvvdp::CvvdpOpaque::new_with_memory_mode`] with
+/// `cvvdp_gpu::MemoryMode::StripPair`. Other metrics omit that backend.
+///
+/// `Cpu` is reserved for Phase 6; Phase 2 leaves it `None` everywhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Backend {
+    /// `MemoryMode::Full` against the GPU's CUDA backend.
+    GpuFull,
+    /// `MemoryMode::Strip { h_body: None }` against the GPU's CUDA backend.
+    GpuStrip,
+    /// cvvdp-only: `cvvdp_gpu::MemoryMode::StripPair { h_body: 256 }`.
+    GpuStripPair,
+    /// Reference CPU backend (wired in Phase 6).
+    Cpu,
+}
+
+impl Backend {
+    /// Short stable tag, used in error messages and TOML keys.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Backend::GpuFull => "gpu_full",
+            Backend::GpuStrip => "gpu_strip",
+            Backend::GpuStripPair => "gpu_strip_pair",
+            Backend::Cpu => "cpu",
+        }
+    }
+}
+
+/// Wall-time p50 (steady-state) in nanoseconds per pixel, one entry per
+/// backend at a fixed image size. `None` means "backend not measured at
+/// this size" — either feature-gated out, surfaced an OOM, or skipped
+/// because a prior size already exhausted the budget.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct BackendBench {
+    /// Full-image working-set on GPU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_full: Option<f64>,
+    /// Strip-walker on GPU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_strip: Option<f64>,
+    /// cvvdp-only one-shot strip-pair walker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_strip_pair: Option<f64>,
+    /// CPU reference path (Phase 6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu: Option<f64>,
+}
+
+/// VRAM peak in MiB during steady-state compute, one entry per backend
+/// at a fixed image size. Same `None` semantics as [`BackendBench`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackendVram {
+    /// Full-image working-set on GPU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_full: Option<usize>,
+    /// Strip-walker on GPU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_strip: Option<usize>,
+    /// cvvdp-only one-shot strip-pair walker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_strip_pair: Option<usize>,
+    /// CPU resident-set MiB (Phase 6 — proxy for working-set).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu: Option<usize>,
+}
+
+impl BackendBench {
+    /// Set the entry for a given backend.
+    pub fn set(&mut self, backend: Backend, ns_per_px: f64) {
+        match backend {
+            Backend::GpuFull => self.gpu_full = Some(ns_per_px),
+            Backend::GpuStrip => self.gpu_strip = Some(ns_per_px),
+            Backend::GpuStripPair => self.gpu_strip_pair = Some(ns_per_px),
+            Backend::Cpu => self.cpu = Some(ns_per_px),
+        }
+    }
+
+    /// Read the entry for a given backend (returns `None` if not measured).
+    pub fn get(&self, backend: Backend) -> Option<f64> {
+        match backend {
+            Backend::GpuFull => self.gpu_full,
+            Backend::GpuStrip => self.gpu_strip,
+            Backend::GpuStripPair => self.gpu_strip_pair,
+            Backend::Cpu => self.cpu,
+        }
+    }
+}
+
+impl BackendVram {
+    /// Set the entry for a given backend.
+    pub fn set(&mut self, backend: Backend, mib: usize) {
+        match backend {
+            Backend::GpuFull => self.gpu_full = Some(mib),
+            Backend::GpuStrip => self.gpu_strip = Some(mib),
+            Backend::GpuStripPair => self.gpu_strip_pair = Some(mib),
+            Backend::Cpu => self.cpu = Some(mib),
+        }
+    }
+
+    /// Read the entry for a given backend (returns `None` if not measured).
+    pub fn get(&self, backend: Backend) -> Option<usize> {
+        match backend {
+            Backend::GpuFull => self.gpu_full,
+            Backend::GpuStrip => self.gpu_strip,
+            Backend::GpuStripPair => self.gpu_strip_pair,
+            Backend::Cpu => self.cpu,
+        }
+    }
+}
+
+/// Per-metric profile populated by [`Orchestrator::bench`] /
+/// [`Orchestrator::warm`]. Phase 1 left this empty; Phase 2 fills the
+/// `ns_per_px_at` + `vram_mib_at` measured points + the OOM-cell log.
+///
+/// Keys on the inner maps are `u64` "size pixels" (`width × height`),
+/// e.g. `1024 * 1024 = 1048576`. Phase 3's backend chooser interpolates
+/// between measured sizes.
+///
+/// TOML representation: the inner `BTreeMap<u64, _>` is serialised with
+/// stringified integer keys (TOML maps don't support integer keys
+/// directly). The orchestrator's TOML round-trip handles the conversion
+/// transparently via the `u64_keyed_map` serde helper.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct MetricProfile {
-    /// `width_px -> nanoseconds per pixel` (p50 of 5 timed calls).
-    #[serde(default)]
-    pub ns_per_px_at: BTreeMap<String, f64>,
-    /// `width_px -> VRAM peak in MiB`.
-    #[serde(default)]
-    pub vram_mib_at: BTreeMap<String, f64>,
-    /// Wall-clock timestamp of the last benchmark.
+    /// Wall-time p50 (steady-state, post-warmup) keyed by image size
+    /// (`width × height` in pixels).
+    #[serde(default, with = "u64_keyed_map_bench")]
+    pub ns_per_px_at: BTreeMap<u64, BackendBench>,
+    /// Peak VRAM during compute, keyed by same size.
+    #[serde(default, with = "u64_keyed_map_vram")]
+    pub vram_mib_at: BTreeMap<u64, BackendVram>,
+    /// Wall-clock timestamp of the last benchmark for this metric.
     #[serde(default, with = "systime_opt")]
     pub last_measured: Option<SystemTime>,
+    /// `(backend, size_pixels)` cells that surfaced OOM during the
+    /// bench. Phase 3's chooser treats these as a hard "do not retry"
+    /// list per the cached snapshot.
+    #[serde(default)]
+    pub cells_failed_oom: Vec<(Backend, u64)>,
 }
 
 /// The full persistent profile. Round-trips through TOML; the file
@@ -339,6 +472,123 @@ impl Orchestrator {
     /// for tests + the `print_capability` example.
     pub fn cache_path(&self) -> PathBuf {
         cache_file_path(&self.config.cache_dir, &self.capability.machine_hash)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bench runner — populates `capability.metrics`. Defined inline so the
+// Orchestrator impl block keeps all the public methods in one file.
+// ---------------------------------------------------------------------------
+
+impl Orchestrator {
+    /// Run the full quick-bench across every metric × backend × size
+    /// the build supports. Unconditional — overwrites any prior
+    /// measurements in `capability.metrics`, refreshes `last_validated`,
+    /// and re-saves the cache file.
+    ///
+    /// Total runtime budget: < 60s on an RTX 5070 / 7950X workstation
+    /// at the default sizes (1024², 2048², 4096²). Cells that exceed
+    /// 5s mark a "likely too large" warning + skip the remaining sizes
+    /// for that backend (see [`BenchPlan::soft_timeout_per_cell`]).
+    pub fn bench(&mut self) -> Result<()> {
+        self.bench_with_plan(BenchPlan::default())
+    }
+
+    /// Same as [`Self::bench`] but with an explicit [`BenchPlan`] (test
+    /// suites use this to override sizes / iterations / timeouts).
+    pub fn bench_with_plan(&mut self, plan: BenchPlan) -> Result<()> {
+        let report = bench::run(&plan);
+        self.capability.metrics = report.metrics;
+        self.capability.last_validated = SystemTime::now();
+        save_profile(&self.cache_path(), &self.capability)?;
+        Ok(())
+    }
+
+    /// Bench-on-demand: only run [`Self::bench`] if `capability.metrics`
+    /// is empty OR any metric profile's `last_measured` is older than
+    /// `self.config.cache_validity`. Cache-hit otherwise.
+    ///
+    /// Returns `true` if the bench actually ran, `false` on cache-hit.
+    pub fn warm(&mut self) -> Result<bool> {
+        let now = SystemTime::now();
+        let validity = self.config.cache_validity;
+        let needs_bench = self.capability.metrics.is_empty()
+            || self.capability.metrics.values().any(|m| match m.last_measured {
+                Some(t) => match now.duration_since(t) {
+                    Ok(elapsed) => elapsed > validity,
+                    Err(_) => true,
+                },
+                None => true,
+            });
+        if needs_bench {
+            self.bench()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// u64-keyed map serde helpers — TOML doesn't support non-string map keys
+// so we round-trip BTreeMap<u64, _> via stringified integer keys.
+// ---------------------------------------------------------------------------
+
+mod u64_keyed_map_bench {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::BackendBench;
+
+    pub fn serialize<S: Serializer>(
+        m: &BTreeMap<u64, BackendBench>,
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
+        let stringified: BTreeMap<String, &BackendBench> =
+            m.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        stringified.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<BTreeMap<u64, BackendBench>, D::Error> {
+        let stringified: BTreeMap<String, BackendBench> = BTreeMap::deserialize(d)?;
+        let mut out: BTreeMap<u64, BackendBench> = BTreeMap::new();
+        for (k, v) in stringified {
+            let parsed: u64 = k.parse().map_err(serde::de::Error::custom)?;
+            out.insert(parsed, v);
+        }
+        Ok(out)
+    }
+}
+
+mod u64_keyed_map_vram {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::BackendVram;
+
+    pub fn serialize<S: Serializer>(
+        m: &BTreeMap<u64, BackendVram>,
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
+        let stringified: BTreeMap<String, &BackendVram> =
+            m.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        stringified.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<BTreeMap<u64, BackendVram>, D::Error> {
+        let stringified: BTreeMap<String, BackendVram> = BTreeMap::deserialize(d)?;
+        let mut out: BTreeMap<u64, BackendVram> = BTreeMap::new();
+        for (k, v) in stringified {
+            let parsed: u64 = k.parse().map_err(serde::de::Error::custom)?;
+            out.insert(parsed, v);
+        }
+        Ok(out)
     }
 }
 

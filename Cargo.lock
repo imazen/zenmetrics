@@ -7004,6 +7004,7 @@ version = "0.1.0"
 name = "zenmetrics-orchestrator"
 version = "0.0.1"
 dependencies = [
+ "cvvdp-gpu",
  "dirs",
  "raw-cpuid",
  "serde",
@@ -7012,6 +7013,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+ "zenmetrics-api",
 ]
 
 [[package]]

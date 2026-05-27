@@ -16,11 +16,26 @@ publish = false
 # package, so the public-API shape here MUST stay non-breaking.
 
 [features]
+# Default: capability detection + cache only (the Phase 1 surface).
+# Phase 2's bench runner pulls in every metric crate via the
+# `zenmetrics-api` umbrella — opt in via the `bench` feature when you
+# actually want to populate the per-metric profile table.
 default = []
+
+# Phase 2 bench runner. Pulls in zenmetrics-api (umbrella) + cvvdp-gpu
+# (direct, for the StripPair backend that the umbrella doesn't surface).
+# Default ships the CUDA backend — Phase 6 will widen this to WGPU/HIP.
+bench = ["dep:zenmetrics-api", "dep:cvvdp-gpu"]
 
 [dependencies]
 thiserror = { workspace = true }
 serde = { workspace = true }
+
+# Phase 2 bench-runner deps. Only pulled when `bench` is enabled — this
+# keeps the Phase 1 surface (capability detection + TOML cache) free of
+# the cubecl + per-metric build graph.
+zenmetrics-api = { workspace = true, optional = true, default-features = false, features = ["all-metrics", "cuda"] }
+cvvdp-gpu = { workspace = true, optional = true, default-features = false, features = ["cuda"] }
 
 # Hashing the machine fingerprint. Workspace already pins sha2 0.10 via
 # transitive deps; we depend on it directly for `Sha256`.
