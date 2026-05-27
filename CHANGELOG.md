@@ -65,6 +65,31 @@ Workspace conventions per the global rules:
   orchestrator schedules in-process so the cumulative-pool numbers
   are more representative than subprocess-isolated audit values.
 
+- `zenmetrics-orchestrator` Phase 3 — pure backend chooser
+  (`Orchestrator::choose_backend(metric, w, h, vram_free_mib)`).
+  Predicts every candidate backend's `ns_per_px` + `vram_mib` via
+  log-pixel interpolation of the Phase 2 cache, rejects backends
+  outside the safety-margin VRAM budget or in `cells_failed_oom`,
+  and returns the fastest survivor + a diagnostic
+  `Vec<ConsideredCandidate>` so operators can audit "why did it
+  pick X?" with one call. Extrapolation above the measured size
+  range uses a configurable pessimism multiplier (default 1.20)
+  to avoid optimistic over-commits. `Backend::Cpu` is always
+  rejected as `CpuNotYetWired` until Phase 6. New public types:
+  `ChooserConfig` (safety margin / pessimism / tie-break order),
+  `BackendChoice`, `ConsideredCandidate`, `CandidateStatus`,
+  `RejectReason`, `ChooserError`, `TaskShape`. Convenience helper
+  `choose_backend_for_task(&TaskShape)` threads a live nvidia-smi
+  VRAM probe (via `cvvdp-gpu::memory_mode::live_vram_probe_bytes`)
+  through; falls back to `capability.gpu.total_vram_mib` on
+  CI/no-GPU hosts. `Orchestrator::from_capability(cfg, profile)`
+  new constructor for tests + fleet callers that bypass detection.
+  17 integration tests cover interpolation paths, OOM history
+  fallback, VRAM-constrained rejection, unknown-metric errors,
+  tie-break overrides, and a <100µs/call perf gate. The chooser
+  itself is feature-gated on `bench` because it references
+  `MetricKind` from `zenmetrics-api` (4228a168).
+
 - `zenmetrics-orchestrator::detect_wsl2_host_ram_mib_hint` — detects
   WSL2 via `/proc/version` and surfaces a hint so callers can
   interpret `ram_mib` correctly (WSL2 caps RAM at `.wslconfig:memory=`,
