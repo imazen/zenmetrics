@@ -6772,7 +6772,11 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
  "zen-cloud-core",
+ "zen-cloud-salad",
  "zen-cloud-vastai",
 ]
 

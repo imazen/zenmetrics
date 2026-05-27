@@ -69,6 +69,12 @@ mod source_features_only;
 
 #[cfg(feature = "inline-sweep")]
 pub use feature_backfill::backfill_features_for_chunk;
+// Re-exported so cloud-agnostic backends (e.g. `zen-cloud-salad`) can
+// reuse the SAME encode+score compute the vast.ai worker runs per chunk
+// — the spec's "the compute closure is backend-agnostic". Takes the raw
+// chunk line (the `Chunk.payload`), an R2 client, and the worker args.
+#[cfg(feature = "inline-sweep")]
+pub use inline::process_chunk_inline;
 #[cfg(feature = "source-features")]
 pub use source_features_only::backfill_source_features_for_chunk;
 pub mod r2;
