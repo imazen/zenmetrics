@@ -83,6 +83,18 @@ jobs:
           # that name. Same story for zenjxl.
           git clone --quiet https://github.com/imazen/zenavif.git    ../zenavif--main
           git clone --quiet https://github.com/imazen/zenjxl.git     ../zenjxl--main
+          # butteraugli: workspace [patch.crates-io] points at
+          # ../../butteraugli/butteraugli (the package dir inside
+          # butteraugli's own Cargo workspace). Clone the repo at
+          # ../../butteraugli so the inner package dir resolves.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          # zensim: the workspace's [patch.crates-io] points at
+          # ../zensim/zensim (the package dir inside zensim's repo).
+          # Clone at ../zensim so the inner package dir resolves.
+          # NOTE: this differs from the (no-longer-used) "principled-activity"
+          # branch clone above — the workspace patch was repointed to
+          # ../zensim/zensim some time ago.
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2

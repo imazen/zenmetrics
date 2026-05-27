@@ -72,6 +72,13 @@ jobs:
           git clone --quiet https://github.com/imazen/zenwebp.git    ../zenwebp
           git clone --quiet https://github.com/imazen/zenavif.git    ../zenavif--main
           git clone --quiet https://github.com/imazen/zenjxl.git     ../zenjxl--main
+          # butteraugli: workspace [patch.crates-io] points at
+          # ../../butteraugli/butteraugli; clone the repo at
+          # ../../butteraugli so the inner package dir resolves.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          # zensim: workspace patch points at ../zensim/zensim (the
+          # package dir inside zensim's repo). Clone at ../zensim.
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
