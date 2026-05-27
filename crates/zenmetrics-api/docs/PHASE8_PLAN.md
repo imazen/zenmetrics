@@ -20,13 +20,42 @@ that bypasses GPU detection. Assert end-to-end CPU scoring works
 without crashes when no GPU is present (and when libcuda dlopen
 fails at runtime — cubecl-cuda is lazy). 1-day task.
 
-### Phase 8c — rename `cvvdp-cpu` → `cvvdp`
+### Phase 8c — rename `cvvdp-cpu` → `cvvdp`  [LANDED — rename only]
 Move `crates/cvvdp-cpu` → `crates/cvvdp`. Update package name. Flip
 dep direction: `cvvdp-gpu` now `[dependencies] cvvdp = { path = "../cvvdp" }`
 to share the `Score` type + CPU fallback. Update all callers
 (workspace members, zenmetrics-orchestrator's `cpu-cvvdp` feature,
 tests). Extend to `iwssim` consistency check (no upstream iwssim
 crate exists, so iwssim-gpu stays singular — document). 1-day task.
+
+**Status (2026-05-27): rename landed; dep flip deferred.** The
+mechanical rename of `crates/cvvdp-cpu` → `crates/cvvdp` shipped,
+with the workspace member, package name, all callers
+(`zenmetrics-orchestrator` / `cvvdp-conformance` / docs / examples
+/ tests) updated. The `cpu-cvvdp` feature flag name is preserved
+(semantic — describes what it enables, not the dep crate name); the
+public column-name namespace `cvvdp_cpu_imazen_v*` and env override
+`CVVDP_CPU_IMPL_TAG` are also preserved so downstream sweeps keep
+aligning.
+
+The dep-direction flip (`cvvdp-gpu` depending on `cvvdp` rather than
+the inverse) is **deferred to Phase 8c.1** — the shared CSF / DKL /
+masking / params constants currently live in `cvvdp-gpu::kernels::*`
+and `cvvdp-gpu::params`, and extracting a shared base crate (or
+moving the constants into `cvvdp` for `cvvdp-gpu` to consume) is a
+non-trivial restructuring beyond the rename. The current direction
+(`cvvdp` depends on `cvvdp-gpu` for those constants) compiles
+cleanly and matches Phase 7.7.1 runtime behaviour, so the flip is
+not on the Phase 8 critical path.
+
+Phase 8c.1 (follow-up) — extract shared constants into `cvvdp`,
+make `cvvdp-gpu` depend on `cvvdp`, share `Score` / `Jod` / display
+geometry types. ~1-day task once scheduled.
+
+iwssim consistency: there is no upstream iwssim CPU crate to mirror,
+so iwssim-gpu stays singular; no rename required. The naming asymmetry
+(`cvvdp` for CPU base, `cvvdp-gpu` for GPU variant, vs `iwssim-gpu`
+with no CPU sibling) is intentional and documented here.
 
 ### Phase 8d — upstream pinned-upload PR to tracel-ai/cubecl
 Clean up the `feat/pinned-upload` patch from lilith/cubecl, file

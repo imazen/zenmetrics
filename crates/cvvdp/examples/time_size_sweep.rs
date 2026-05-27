@@ -1,10 +1,10 @@
-//! Size sweep — measures cvvdp-cpu wall time per call across image
+//! Size sweep — measures cvvdp wall time per call across image
 //! sizes + content classes, fits `α + β · pixels`, emits a TSV.
 //!
 //! Run with:
 //!
 //! ```bash
-//! cargo run -p cvvdp-cpu --release --example time_size_sweep -- --output bench.tsv
+//! cargo run -p cvvdp --release --example time_size_sweep -- --output bench.tsv
 //! ```
 //!
 //! Output columns: `size_w  size_h  pixels  content_class  cold_ms  warm_ms`.
@@ -18,7 +18,7 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 const SIZES: &[(u32, u32)] = &[
     (64, 64),

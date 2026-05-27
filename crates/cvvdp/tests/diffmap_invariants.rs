@@ -24,7 +24,7 @@
 //!    one half of the image, the diffmap concentrates in that half
 //!    (the other half stays at or near zero).
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 fn make_grid(w: usize, h: usize, seed: u32) -> Vec<u8> {
     let mut s = seed;

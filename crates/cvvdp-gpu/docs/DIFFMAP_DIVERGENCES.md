@@ -37,7 +37,7 @@ the β=4 channel sum (and breaks the β=2 spatial mean).
 ## What we implement instead
 
 The recipe both `cvvdp-gpu::kernels::diffmap` (this crate, GPU path)
-and `cvvdp-cpu::diffmap` (CPU port at master `da816947`) use:
+and `cvvdp::diffmap` (CPU port at master `da816947`) use:
 
 1. **Bilinear-upsample** each per-(band, channel) masked-difference
    plane `D[k][c]` to base resolution `W × H`. Convention: OpenCV
@@ -93,7 +93,7 @@ strict-invariant divergence.
 
 - `crates/cvvdp-gpu/src/kernels/diffmap.rs` module docstring — the
   recipe lives in the implementation comments too.
-- `crates/cvvdp-cpu/src/diffmap.rs` — the CPU port's matching
+- `crates/cvvdp/src/diffmap.rs` — the CPU port's matching
   implementation. The two impls share the recipe byte-for-byte.
 - `~/work/zen/jxl-encoder/docs/RFC_CVVDP_FORK.md` §3 — original
   RFC sketch of the contract.

@@ -235,7 +235,7 @@ const ALL_BACKENDS: [Backend; 4] = [
 fn supported_backends(metric: MetricKind) -> &'static [Backend] {
     match metric {
         // cvvdp uniquely supports StripPair via its single-pass
-        // one-shot pipeline. CPU reference: cvvdp-cpu (in-tree).
+        // one-shot pipeline. CPU reference: cvvdp (in-tree).
         MetricKind::Cvvdp => &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu],
         // zensim has a fused full-image kernel only. CPU reference: zensim.
         MetricKind::Zensim => &[Backend::GpuFull, Backend::Cpu],
@@ -663,7 +663,7 @@ fn evaluate_candidate(
         // failed.
         let ns = interpolate_ns_per_px(profile, backend, pixels, config.extrapolation_pessimism)
             .unwrap_or_else(|| {
-                // Heuristic fallback: 200 ns/px is roughly cvvdp-cpu
+                // Heuristic fallback: 200 ns/px is roughly cvvdp
                 // single-thread at 1024² on a 7950X. Conservative
                 // (some CPU metrics are faster, butteraugli is slower)
                 // but adequate as a last-resort ranking signal.

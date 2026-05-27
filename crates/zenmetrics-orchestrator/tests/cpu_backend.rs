@@ -14,7 +14,7 @@
 //! - `cpu_parity_against_gpu_cvvdp` — when `cpu-cvvdp` is on AND the
 //!   GPU CUDA backend is enabled, run a 256² pair through both and
 //!   assert |diff| < 0.1 JOD. Marked `#[ignore]` since it needs a
-//!   real CUDA device; the cvvdp-cpu crate's own parity tests cover
+//!   real CUDA device; the cvvdp crate's own parity tests cover
 //!   the tighter atomic-tolerance case.
 //! - `cached_ref_round_trip_cvvdp` — set_reference + 4 cached calls
 //!   yield the same scores as 4 one-shot calls.
@@ -461,7 +461,7 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
     }
 
     // Compare per-task. Both paths use the same CpuAdapter; with
-    // cvvdp-cpu's deterministic float pipeline the scores should be
+    // cvvdp's deterministic float pipeline the scores should be
     // identical up to floating point noise (cached-ref is the same
     // pipeline minus the reference-side recompute).
     for i in 0..4 {

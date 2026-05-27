@@ -1,11 +1,11 @@
-//! Allocation profiler for cvvdp-cpu using a counting global
+//! Allocation profiler for cvvdp using a counting global
 //! allocator wrapper. Counts (alloc, free) calls + total bytes for
 //! a single `Cvvdp::score` invocation and a single
 //! `score_with_warm_ref` invocation at each measurement size.
 //!
 //! Run:
 //! ```bash
-//! cargo run -p cvvdp-cpu --release --example alloc_profile -- --output benchmarks/cvvdp_cpu_alloc_profile.tsv
+//! cargo run -p cvvdp --release --example alloc_profile -- --output benchmarks/cvvdp_cpu_alloc_profile.tsv
 //! ```
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 static ALLOCS: AtomicU64 = AtomicU64::new(0);
 static FREES: AtomicU64 = AtomicU64::new(0);

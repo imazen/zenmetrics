@@ -1,7 +1,7 @@
 # SIMD-vs-Scalar Kernel Equivalence (brute-force harness)
 
-`crates/cvvdp-cpu/tests/simd_equivalence.rs` brute-force compares every
-cvvdp-cpu SIMD kernel against its scalar reference across thousands of
+`crates/cvvdp/tests/simd_equivalence.rs` brute-force compares every
+cvvdp SIMD kernel against its scalar reference across thousands of
 randomized inputs + adversarial edge cases, and measures the per-element
 ULP / relative-error envelope.
 
@@ -16,7 +16,7 @@ pool would hide still trips a test.
 **Run it:**
 
 ```bash
-cargo test -p cvvdp-cpu --features __simd_equiv_test --test simd_equivalence -- --nocapture
+cargo test -p cvvdp --features __simd_equiv_test --test simd_equivalence -- --nocapture
 ```
 
 The `__simd_equiv_test` cargo feature enables a `#[doc(hidden)]`

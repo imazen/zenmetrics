@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 const SIZES: &[(u32, u32)] = &[(256, 256), (512, 512), (1024, 1024), (2048, 2048)];
 

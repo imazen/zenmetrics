@@ -51,7 +51,7 @@ fn documented_divergences() -> BTreeMap<&'static str, &'static str> {
     // docs/CVVDP_CONFORMANCE.md §Divergences). Each value is the
     // measured |delta| + root cause. These are the harness DOING ITS
     // JOB — surfaced, reviewed, and rationalized findings, NOT silent
-    // passes. Re-derive with `--nocapture` after any cvvdp-cpu/gpu
+    // passes. Re-derive with `--nocapture` after any cvvdp/gpu
     // change; if a cell's delta drops below 1e-3, remove it here.
     //
     // FINDING A — RESOLVED 2026-05-26. The 10 `iphone_14_pro` JPEG
@@ -70,7 +70,7 @@ fn documented_divergences() -> BTreeMap<&'static str, &'static str> {
     // FINDING B — GPU-only marginal (<= 0.0014 JOD) on extreme
     // high-frequency / heavily-blurred content at the perceptibility
     // floor (JOD ~3.7-4.4). GPU float reduction-order vs CPU at the
-    // deepest pyramid bands. cvvdp-cpu passes these cells.
+    // deepest pyramid bands. cvvdp passes these cells.
     BTreeMap::from([
         // Finding B
         (
@@ -136,16 +136,16 @@ fn conformance_matrix() {
                 ..Default::default()
             };
 
-            // --- cvvdp-cpu (black box via public API) ---
-            let cpu_params = cvvdp_cpu::CvvdpParams {
+            // --- cvvdp (black box via public API) ---
+            let cpu_params = cvvdp::CvvdpParams {
                 display,
                 ..Default::default()
             };
-            let mut cpu = cvvdp_cpu::Cvvdp::with_geometry(s.width, s.height, cpu_params, geometry)
-                .unwrap_or_else(|e| panic!("cvvdp-cpu new {key}: {e:?}"));
+            let mut cpu = cvvdp::Cvvdp::with_geometry(s.width, s.height, cpu_params, geometry)
+                .unwrap_or_else(|e| panic!("cvvdp new {key}: {e:?}"));
             let jod_cpu = f64::from(
                 cpu.score(&s.reference, &s.distorted)
-                    .unwrap_or_else(|e| panic!("cvvdp-cpu score {key}: {e:?}")),
+                    .unwrap_or_else(|e| panic!("cvvdp score {key}: {e:?}")),
             );
 
             // --- cvvdp-gpu (black box via public API) ---

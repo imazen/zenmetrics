@@ -1,4 +1,4 @@
-//! cvvdp conformance harness — validates BOTH `cvvdp-cpu` and
+//! cvvdp conformance harness — validates BOTH `cvvdp` and
 //! `cvvdp-gpu` against the canonical pycvvdp v0.5.4 reference across a
 //! matrix of display models × content/distortion situations.
 //!
@@ -38,7 +38,7 @@ pub use situations::{Situation, SituationClass, all_situations};
 
 /// The pinned pycvvdp reference version this conformance matrix
 /// validates against. Sourced transitively from the cvvdp crates.
-pub const PYCVVDP_REFERENCE_VERSION: &str = cvvdp_cpu::PYCVVDP_REFERENCE_VERSION;
+pub const PYCVVDP_REFERENCE_VERSION: &str = cvvdp::PYCVVDP_REFERENCE_VERSION;
 
 /// Per-cell JOD-delta tolerance. A cell PASSES when
 /// `|jod_impl - jod_ref| <= TOLERANCE_JOD` for both impls. Matches
@@ -98,7 +98,7 @@ mod tests {
         assert_eq!(names.len(), n, "duplicate display name");
 
         // Every selected display MUST resolve in our by_name registry
-        // (so cvvdp-cpu/gpu can be configured identically to pycvvdp).
+        // (so cvvdp/gpu can be configured identically to pycvvdp).
         for d in conformance_displays() {
             assert!(
                 cvvdp_gpu::params::DisplayModel::by_name(d.upstream_name).is_some(),

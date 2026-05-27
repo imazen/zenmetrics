@@ -6,7 +6,7 @@
 
 #![cfg(feature = "pixels")]
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 fn make_bytes(w: usize, h: usize, seed: u32) -> Vec<u8> {

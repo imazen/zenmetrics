@@ -1,4 +1,4 @@
-//! Brute-force math-equivalence harness for cvvdp-cpu's SIMD kernels.
+//! Brute-force math-equivalence harness for cvvdp's SIMD kernels.
 //!
 //! Proves (blur kernels) or bounds (transcendental approximations) that
 //! each SIMD kernel matches its scalar reference across exhaustive +
@@ -7,7 +7,7 @@
 //! per-element kernel divergence the Minkowski pooling absorbs — this
 //! harness measures the per-element envelope directly.
 //!
-//! Kernels under test (all on cvvdp-cpu master):
+//! Kernels under test (all on cvvdp master):
 //!   1. sigma3 13-tap Gaussian blur (`gaussian_blur_sigma3_simd` /
 //!      `pu_blur_horizontal_pass` / `pu_blur_vertical_pass`)
 //!   2. pyramid 5-tap reduce/expand (`reduce_*_pass` / `expand_*_pass`)
@@ -27,10 +27,10 @@
 //!     so the divergence is purely the SIMD-lane approximation vs libm.
 //!
 //! Access: the `pub(crate)` kernel entry points are re-exported through
-//! `cvvdp_cpu::__simd_equiv_test_api` under the `__simd_equiv_test`
+//! `cvvdp::__simd_equiv_test_api` under the `__simd_equiv_test`
 //! cargo feature (a `#[doc(hidden)]` visibility shim, no logic change).
 //!
-//! Run: `cargo test -p cvvdp-cpu --features __simd_equiv_test --test
+//! Run: `cargo test -p cvvdp --features __simd_equiv_test --test
 //! simd_equivalence -- --nocapture` to see the printed envelopes.
 
 #![cfg(feature = "__simd_equiv_test")]
@@ -43,8 +43,8 @@
 // reason; mirror it in this test crate.
 #![allow(clippy::needless_range_loop)]
 
-use cvvdp_cpu::__simd_equiv_test_api as api;
-use cvvdp_cpu::__simd_equiv_test_api::{GAUSS5, PU_BLUR_KERNEL_1D};
+use cvvdp::__simd_equiv_test_api as api;
+use cvvdp::__simd_equiv_test_api::{GAUSS5, PU_BLUR_KERNEL_1D};
 
 // ===========================================================================
 // ULP + error metric machinery
@@ -274,7 +274,7 @@ fn gen_values(rng: &mut Rng, n: usize, dist: Dist) -> Vec<f32> {
 //
 // CRITICAL: the SIMD pyramid passes implement ONLY the bulk zero-pad
 // conv (reduce) / zero-insert conv (expand). They do NOT apply the
-// pycvvdp edge patches — those are applied by the cvvdp-cpu
+// pycvvdp edge patches — those are applied by the cvvdp
 // `pyramid.rs` wrapper AFTER the SIMD pass. So the per-pass scalar
 // reference here is the documented per-pass contract (re-ported from
 // the inline source comments + inline tests), NOT the full

@@ -269,7 +269,7 @@ const CPU_BENCH_SIZES: &[u32] = &[512, 1024];
 #[cfg(feature = "bench")]
 const CPU_BENCH_WARMUP: usize = 1;
 
-/// CPU bench timed iterations. At 1024² with cvvdp-cpu (~80 ms / call)
+/// CPU bench timed iterations. At 1024² with cvvdp (~80 ms / call)
 /// 2 iters costs ~160 ms; at 2048² it's ~700 ms — within budget.
 #[cfg(feature = "bench")]
 const CPU_BENCH_TIMED: usize = 2;

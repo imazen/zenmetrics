@@ -19,6 +19,24 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Phase 8c — `cvvdp-cpu` crate renamed to `cvvdp`.** Mechanical
+  rename matching the conventional Rust pattern of "main crate name =
+  canonical CPU implementation" (parallels `dssim-core` → CPU base,
+  `butteraugli` → CPU base, etc.). Workspace member moved
+  `crates/cvvdp-cpu` → `crates/cvvdp`; package name `cvvdp-cpu` →
+  `cvvdp`. All in-tree consumers updated (`zenmetrics-orchestrator`,
+  `cvvdp-conformance`, the `cvvdp-gpu` doc-comments cross-referencing
+  the CPU port). Not yet published to crates.io. The orchestrator's
+  `cpu-cvvdp` feature flag name is unchanged (semantic — describes
+  what it enables, not the dep crate name); the public stable column
+  name `cvvdp_cpu_imazen_v*` and the env override
+  `CVVDP_CPU_IMPL_TAG` are also unchanged so downstream sweeps /
+  parquet columns keep aligning. Dep-direction flip (cvvdp-gpu →
+  depends on cvvdp instead of the inverse) deferred to a follow-up
+  because the shared CSF / DKL / masking constants currently live in
+  `cvvdp-gpu` — extracting them into a shared base would expand scope
+  beyond a rename. Tracked in `crates/zenmetrics-api/docs/PHASE8_PLAN.md`.
+
 - **`zen-metrics-cli` Phase 7.7.1 — the orchestrator is now the default.**
   All scoring subcommands (`score` / `batch` / `compare` / `sweep`)
   route through `zenmetrics-orchestrator` by default. Opt OUT via

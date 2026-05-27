@@ -1,4 +1,4 @@
-//! Extended upstream-parity tests for cvvdp-cpu v0.1.0.
+//! Extended upstream-parity tests for cvvdp v0.1.0.
 //!
 //! Closes the chunk-2 audit (`docs/UPSTREAM_PARITY_AUDIT.md`) by pinning:
 //!
@@ -7,7 +7,7 @@
 //!   peak / black / refl, EOTF, primaries, ambient lux.
 //! - Each non-sRGB EOTF (`Pq`, `Hlg`, `Linear`, `Bt1886`, `Gamma`)
 //!   produces sane scoring (identical → JOD 10; non-identical →
-//!   JOD < 10) without panicking through the cvvdp-cpu pipeline.
+//!   JOD < 10) without panicking through the cvvdp pipeline.
 //! - Each non-BT.709 primaries variant (`Bt2020`, `DisplayP3`,
 //!   `DciP3`) scores correctly through the planar entry path.
 //! - PPD derivations match upstream's `display_model.py:get_ppd()`
@@ -16,7 +16,7 @@
 //! This file lives alongside `parity_against_host_scalar.rs` and does
 //! NOT widen the 1e-4 JOD tolerance the historical tests pinned.
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams, DisplayGeometry};
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
 
 /// PPD that upstream computes for a `(W, H, distance_m, diag_inches)`

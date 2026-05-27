@@ -1,11 +1,11 @@
-# cvvdp-cpu SIMD Optimization Plan
+# cvvdp SIMD Optimization Plan
 
 **Status**: SCOPING DOC for the SIMD chain agent. No source changes
 in this document — only measurements, hot-loop attribution, and a
 chunk-by-chunk implementation plan.
 
 **Created**: 2026-05-25
-**Author**: cvvdp-cpu-perf-scoping agent (sibling workspace)
+**Author**: cvvdp-perf-scoping agent (sibling workspace)
 **Anchored to**:
 - `benchmarks/zensim_perf_target_2026-05-25.{tsv,meta}` — the target
 - `benchmarks/cvvdp_cpu_perf_baseline_2026-05-25.{tsv,meta}` — the baseline
@@ -38,23 +38,23 @@ complexity:
 
 ## Hot-loop Attribution
 
-**Flamegraph capture**: `cargo flamegraph -p cvvdp-cpu --example
+**Flamegraph capture**: `cargo flamegraph -p cvvdp --example
 time_size_sweep --release` (full sweep, dominated by 1024² + 2048²
 samples). Output: `cvvdp_cpu_flamegraph_2026-05-25.svg`. Raw `perf
 report --no-children --percent-limit 0.5` snapshot:
 
 | Rank | Self % | Symbol | Origin |
 |------|-------:|--------|--------|
-| 1 | **32.06%** | `cvvdp_gpu::kernels::masking::gaussian_blur_sigma3` | cvvdp-gpu (called from cvvdp-cpu masking) |
-| 2 | **15.41%** | `cvvdp_cpu::pyramid::gausspyr_expand` | cvvdp-cpu pyramid |
+| 1 | **32.06%** | `cvvdp_gpu::kernels::masking::gaussian_blur_sigma3` | cvvdp-gpu (called from cvvdp masking) |
+| 2 | **15.41%** | `cvvdp::pyramid::gausspyr_expand` | cvvdp pyramid |
 | 3 | 10.63% | Rayon `FnMut::call_mut` shim | rayon trampoline overhead |
-| 4 | **8.32%** | `cvvdp_cpu::pyramid::build_gauss_pyramid` | drives `gausspyr_reduce` |
+| 4 | **8.32%** | `cvvdp::pyramid::build_gauss_pyramid` | drives `gausspyr_reduce` |
 | 5 | **7.27%** | `__powf_fma` | libm — 9 calls/px in `mult_mutual_band_into` |
 | 6 | 5.16% | `__log10f_finite` | Weber-contrast `log_l_bkg.log10()` + glibc log10 |
 | 7 | 4.65% | `__memset_avx512` | `Vec::resize(n_px, 0.0)` for scratch |
 | 8 | 2.99% | `__logf_fma` | inside glibc log10 + safe-pow ln path |
 | 9 | 2.56% | `__expf_fma` | CSF apply `exp(log_s · LN_10)` per pixel |
-| 10 | 2.52% | `cvvdp_cpu::pyramid::weber_contrast_pyr` | driver (children dominate) |
+| 10 | 2.52% | `cvvdp::pyramid::weber_contrast_pyr` | driver (children dominate) |
 
 Sum of top 10: **91.57 %**.
 
@@ -87,7 +87,7 @@ passes × 13 mul-adds = ~135 ms total per encode (matches the 32%
 × 222ms = 71 ms self + ~50 ms inclusive children).
 
 **Mechanism**:
-- Port a SIMD variant **into cvvdp-cpu's `masking.rs`** (so we
+- Port a SIMD variant **into cvvdp's `masking.rs`** (so we
   avoid touching cvvdp-gpu's API surface — the parity agent owns
   the cross-crate change if needed).
 - New helpers:
@@ -108,13 +108,13 @@ passes × 13 mul-adds = ~135 ms total per encode (matches the 32%
 - Horizontal pass: same pattern, transposed.
 
 **File scope**:
-- `crates/cvvdp-cpu/src/masking.rs` — replace `gaussian_blur_sigma3`
+- `crates/cvvdp/src/masking.rs` — replace `gaussian_blur_sigma3`
   call sites with `gaussian_blur_sigma3_simd`.
-- New file `crates/cvvdp-cpu/src/simd_blur.rs` (or fold into
+- New file `crates/cvvdp/src/simd_blur.rs` (or fold into
   `masking.rs`) for the SIMD entry points.
-- `crates/cvvdp-cpu/src/scratch.rs` — add `pu_blur_h: Vec<f32>` if
+- `crates/cvvdp/src/scratch.rs` — add `pu_blur_h: Vec<f32>` if
   not already there (mirrors `pu_h` slot).
-- `crates/cvvdp-cpu/Cargo.toml` — `archmage` already in workspace
+- `crates/cvvdp/Cargo.toml` — `archmage` already in workspace
   via cvvdp-gpu; verify zero extra deps needed.
 
 **Expected speedup**: 3-4× on the blur itself (zensim's archmage
@@ -167,10 +167,10 @@ non-baseband expands). Scalar implementation in `pyramid.rs:58-225`.
   output rows per input row plus boundary). Same SIMD shape.
 
 **File scope**:
-- `crates/cvvdp-cpu/src/pyramid.rs` — replace scalar inner loops
+- `crates/cvvdp/src/pyramid.rs` — replace scalar inner loops
   with archmage entry points; keep the reflect-padded boundary
   handling scalar.
-- Possibly factor into `crates/cvvdp-cpu/src/simd_pyramid.rs`.
+- Possibly factor into `crates/cvvdp/src/simd_pyramid.rs`.
 
 **Expected speedup**: 3-4× on the pyramid kernels (5-tap is simpler
 than the 13-tap; LLVM may even auto-vectorize the scalar after
@@ -224,9 +224,9 @@ approximations.
   pool.
 
 **File scope**:
-- `crates/cvvdp-cpu/src/masking.rs` — replace `(va + SAFE_EPS).powf(q_a)`
+- `crates/cvvdp/src/masking.rs` — replace `(va + SAFE_EPS).powf(q_a)`
   loops with SIMD entry calls.
-- Possibly factor into `crates/cvvdp-cpu/src/simd_pow.rs`.
+- Possibly factor into `crates/cvvdp/src/simd_pow.rs`.
 
 **Expected speedup**: 3-6× on the powf loops. Wall share 7.27% +
 the related `__logf_fma` (2.99%) which also covers safe-pow:
@@ -265,7 +265,7 @@ lives.
 - Mirror butteraugli's B7c pattern: `thread_local!` pool of
   `Vec<f32>` buffers keyed by size, with a `Mutex<Vec<Vec<f32>>>`
   overflow for stealing.
-- Module `crates/cvvdp-cpu/src/tls_pool.rs`:
+- Module `crates/cvvdp/src/tls_pool.rs`:
   ```rust
   pub struct BufferPool {
       tls: ThreadLocal<RefCell<Vec<Vec<f32>>>>,
@@ -284,12 +284,12 @@ lives.
   (per butteraugli B7c proportions).
 
 **File scope**:
-- `crates/cvvdp-cpu/src/tls_pool.rs` (new).
-- `crates/cvvdp-cpu/src/pipeline.rs::fold_bands_parallel` — use
+- `crates/cvvdp/src/tls_pool.rs` (new).
+- `crates/cvvdp/src/pipeline.rs::fold_bands_parallel` — use
   the pool.
-- `crates/cvvdp-cpu/src/pyramid.rs` — same for PyramidScratch
+- `crates/cvvdp/src/pyramid.rs` — same for PyramidScratch
   buffers.
-- `crates/cvvdp-cpu/Cargo.toml` — add `thread_local = "1.1"` to
+- `crates/cvvdp/Cargo.toml` — add `thread_local = "1.1"` to
   deps (verify nothing else in the workspace uses a different
   version; otherwise piggyback on butteraugli's existing dep
   via workspace).
@@ -317,7 +317,7 @@ overhead becomes the new top hit).
   pool pattern.
 - `~/work/zen/zenmetrics/memory/w44_phase3_b7c_tls_pool_2026-05-23.md`
   for the butteraugli B7c lessons (TLS pool was a +3.6% wall
-  REGRESSION at the butteraugli scale, but cvvdp-cpu has a
+  REGRESSION at the butteraugli scale, but cvvdp has a
   much larger allocation footprint per encode — re-validate
   with paired A/B during this chunk).
 
@@ -352,10 +352,10 @@ on the remaining hot loops + the 10.63% rayon plumbing overhead.
   wall).
 
 **File scope**:
-- `crates/cvvdp-cpu/src/pipeline.rs::apply_csf_row_per_pixel` →
+- `crates/cvvdp/src/pipeline.rs::apply_csf_row_per_pixel` →
   new SIMD entry; mark `#[inline(never)]` to keep the cold path
   measurable.
-- `crates/cvvdp-cpu/src/pipeline.rs::Cvvdp` — add
+- `crates/cvvdp/src/pipeline.rs::Cvvdp` — add
   `thread_pool: Option<Arc<rayon::ThreadPool>>` field; build once
   at `Cvvdp::new`, use throughout the band loop.
 
@@ -458,13 +458,13 @@ Combined recovery: ~126-181 ms (60-80% of current 222 ms).
 
 Every chunk MUST clear:
 
-- **Build**: `cargo build -p cvvdp-cpu --release` PASS on all
+- **Build**: `cargo build -p cvvdp --release` PASS on all
   feature combinations (default, no-default, no-default + alloc,
   no-default + alloc + parallel).
-- **Tests**: `cargo test -p cvvdp-cpu` PASS all 22 existing tests
+- **Tests**: `cargo test -p cvvdp` PASS all 22 existing tests
   + new SIMD parity tests. JOD tolerance held at 1e-4 unless
   user-approved widening to 1e-3.
-- **Lint**: `cargo clippy -p cvvdp-cpu --no-deps -- -D warnings`
+- **Lint**: `cargo clippy -p cvvdp --no-deps -- -D warnings`
   + `cargo fmt --check` PASS.
 - **Perf**: Paired A/B `cargo run --release --example
   time_size_sweep` showing ≥ 10% wall reduction at 1024² with
@@ -481,7 +481,7 @@ Every chunk MUST clear:
 - DO NOT use the `wide` crate (per CLAUDE.md). archmage `#[arcane]`
   + `#[rite]` + `#[magetypes]` is the canonical pattern.
 - DO NOT use `unsafe`. `#![forbid(unsafe_code)]` is set in
-  cvvdp-cpu's lib.rs; archmage provides safe SIMD via tokens.
+  cvvdp's lib.rs; archmage provides safe SIMD via tokens.
 - DO NOT widen the JOD tolerance above 1e-3 without explicit
   user confirmation.
 - DO NOT change the public API. Setters/getters stay stable;
@@ -513,10 +513,10 @@ Every chunk MUST clear:
 
 ## Bench harnesses to use
 
-- **Primary**: `crates/cvvdp-cpu/examples/time_size_sweep.rs`
+- **Primary**: `crates/cvvdp/examples/time_size_sweep.rs`
   (already exists). 5 cold + 5 warm iters per size × content class,
   median reported.
-- **Flamegraph**: `cargo flamegraph -p cvvdp-cpu --example
+- **Flamegraph**: `cargo flamegraph -p cvvdp --example
   time_size_sweep --release -o
   benchmarks/cvvdp_cpu_flamegraph_<date>.svg`.
 - **Paired A/B**: For each chunk, capture

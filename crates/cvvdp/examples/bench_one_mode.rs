@@ -10,7 +10,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 fn synth_pair(size: u32) -> (Vec<u8>, Vec<u8>) {
     let n = (size as usize) * (size as usize) * 3;
@@ -62,7 +62,7 @@ fn main() {
 
     let secs_json: Vec<String> = times.iter().map(|t| format!("{:.6}", t)).collect();
     println!(
-        "{{\"crate\":\"cvvdp-cpu\",\"size\":{},\"jod\":{:.6},\"per_iter_seconds\":[{}]}}",
+        "{{\"crate\":\"cvvdp\",\"size\":{},\"jod\":{:.6},\"per_iter_seconds\":[{}]}}",
         size,
         last_jod,
         secs_json.join(",")

@@ -17,7 +17,7 @@ build-time CPU fallback.
 | [`dssim-gpu`](crates/dssim-gpu/) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) v3.4 |
 | [`zensim-gpu`](crates/zensim-gpu/) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) v0.2.8 |
 | [`cvvdp-gpu`](crates/cvvdp-gpu/) | ColorVideoVDP (still-image, GPU) | JOD 0–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
-| [`cvvdp-cpu`](crates/cvvdp-cpu/) | ColorVideoVDP (still-image, CPU, JXL buttloop) | JOD 0–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
+| [`cvvdp`](crates/cvvdp/) | ColorVideoVDP (still-image, CPU, JXL buttloop) | JOD 0–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
 | [`zen-metrics-cli`](crates/zen-metrics-cli/) | CLI front-end | — | uses the five metrics above |
 | [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | shared test images | — | (test infra) |
 | [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) | Capability-aware scheduler + persistent benchmark cache + OOM fallback ladder | — | wraps the umbrella `zenmetrics-api` |

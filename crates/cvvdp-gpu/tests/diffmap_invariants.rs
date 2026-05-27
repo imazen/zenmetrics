@@ -2,7 +2,7 @@
 //!
 //! These tests pin the Phase 1 deliverable from the CVVDP-fork RFC
 //! (`~/work/zen/jxl-encoder/docs/RFC_CVVDP_FORK.md` §3) and the
-//! `cvvdp-cpu`-compat recipe shared with the CPU port at master
+//! `cvvdp`-compat recipe shared with the CPU port at master
 //! commit `da816947`.
 //!
 //! Invariants checked:
@@ -14,7 +14,7 @@
 //!    max(., 0) clamp can't produce negatives).
 //! 4. **GPU↔CPU parity**: the kernel + host scalar helpers in
 //!    `kernels::diffmap` produce values that match the
-//!    `cvvdp_cpu::diffmap` recipe per-pixel.
+//!    `cvvdp::diffmap` recipe per-pixel.
 //! 5. **JOD-diffmap correlation**: across synthetic fixtures of
 //!    increasing distortion, the lp_norm_mean of the diffmap (β = 2)
 //!    monotone with `(10 - JOD)`. This is the soft form of the
@@ -109,10 +109,10 @@ fn channel_pool_non_negative_for_any_input() {
 
 #[test]
 fn channel_pool_matches_cpu_recipe_pointwise() {
-    // The kernel docstring + the cvvdp-cpu `finalize_diffmap` recipe
+    // The kernel docstring + the cvvdp `finalize_diffmap` recipe
     // agree on the per-pixel pool. Verify by replaying the math
     // pointwise — this is the contract that allows the GPU diffmap
-    // and the cvvdp-cpu diffmap to interchange.
+    // and the cvvdp diffmap to interchange.
     let cases = [
         (1.0_f32, 1.0, 1.0),
         (-1.0, 2.0, -3.0),
@@ -126,14 +126,14 @@ fn channel_pool_matches_cpu_recipe_pointwise() {
     for &(a, rg, vy) in &cases {
         let beta = 4.0;
         let direct = channel_pool_scalar(a, rg, vy, beta);
-        // Mirror cvvdp_cpu::diffmap::finalize_diffmap exactly.
+        // Mirror cvvdp::diffmap::finalize_diffmap exactly.
         let a_pos = a.max(0.0);
         let rg_pos = rg.max(0.0);
         let vy_pos = vy.max(0.0);
         let cpu = (a_pos.powf(beta) + rg_pos.powf(beta) + vy_pos.powf(beta)).powf(1.0 / beta);
         assert!(
             (direct - cpu).abs() < 1e-6,
-            "channel_pool({a}, {rg}, {vy}, β={beta}) = {direct} vs cvvdp-cpu = {cpu}",
+            "channel_pool({a}, {rg}, {vy}, β={beta}) = {direct} vs cvvdp = {cpu}",
         );
     }
 }

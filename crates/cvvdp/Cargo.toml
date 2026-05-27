@@ -1,5 +1,5 @@
 [package]
-name = "cvvdp-cpu"
+name = "cvvdp"
 version = "0.1.0"
 description = "Maximally optimized pure-Rust CPU port of ColorVideoVDP (still-image), SIMD via archmage"
 license = "AGPL-3.0-or-later"
@@ -20,7 +20,7 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512")
 default = ["std", "parallel"]
 # Pull AVX-512 SIMD tier into the archmage `incant!` dispatch path
 # used by the pyramid 5-tap kernels. OPT-IN: enabling this forces every
-# archmage-routed incant! site in cvvdp-cpu to provide v4 / v4x tier
+# archmage-routed incant! site in cvvdp to provide v4 / v4x tier
 # variants (currently only `simd_pyramid` does — `simd_math`'s
 # `safe_pow_with_offset_into` / `vexp_into` / `vlog_into` / `vpow_into`
 # routes its own incant! with the default tier set, which does NOT

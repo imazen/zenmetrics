@@ -9,7 +9,7 @@ added, swapped, or marked unavailable.
 
 | MetricKind | CPU crate         | Feature flag    | Cached-ref API     | Notes |
 |------------|-------------------|-----------------|--------------------|-------|
-| Cvvdp      | `cvvdp-cpu` (in-tree) | `cpu-cvvdp` | yes (`warm_reference`) | Pure-Rust CPU port; matches pycvvdp v0.5.4 within ≤1e-3 JOD. |
+| Cvvdp      | `cvvdp` (in-tree) | `cpu-cvvdp` | yes (`warm_reference`) | Pure-Rust CPU port; matches pycvvdp v0.5.4 within ≤1e-3 JOD. |
 | Ssim2      | `ssimulacra2`     | `cpu-ssim2`     | no (recompute)     | Builds Xyb per-call; no warm-state API. |
 | Dssim      | `dssim-core`      | `cpu-dssim`     | yes (`DssimImage` cache) | Multi-scale LAB; reuses prepared image. |
 | Butter     | `butteraugli`     | `cpu-butter`    | no (recompute)     | `butteraugli()` is one-shot. |
@@ -72,7 +72,7 @@ through the cached path when both:
 
 Per-crate cached-ref behavior:
 
-- **cvvdp-cpu** (`supports_cached_ref = true`): true warm path —
+- **cvvdp** (`supports_cached_ref = true`): true warm path —
   `warm_reference` precomputes the reference's Weber pyramid + DKL
   planes; subsequent `score_with_warm_ref` calls skip ~50 % of the
   pipeline. Worth promoting whenever a reference is reused.
@@ -119,8 +119,8 @@ free system memory by the safety margin.
 
 - All CPU backends construct + compute successfully on a 256² synthetic
   pair: `tests/cpu_backend.rs::all_backends_construct_and_compute`.
-- cvvdp-cpu parity vs cvvdp-gpu: |diff| < 1e-3 JOD at 256² and 1024²
-  (covered in cvvdp-cpu's own parity tests, referenced here for the
+- cvvdp parity vs cvvdp-gpu: |diff| < 1e-3 JOD at 256² and 1024²
+  (covered in cvvdp's own parity tests, referenced here for the
   ladder).
 - OOM-forced fallback returns a CPU Score with `backend_used = Cpu`:
   `tests/cpu_backend.rs::oom_fallback_routes_to_cpu`.

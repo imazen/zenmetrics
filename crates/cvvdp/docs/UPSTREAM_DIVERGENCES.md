@@ -1,6 +1,6 @@
-# UPSTREAM_DIVERGENCES — cvvdp-cpu v0.1.0 vs gfxdisp/ColorVideoVDP
+# UPSTREAM_DIVERGENCES — cvvdp v0.1.0 vs gfxdisp/ColorVideoVDP
 
-Items where cvvdp-cpu v0.1.0 intentionally differs from
+Items where cvvdp v0.1.0 intentionally differs from
 [gfxdisp/ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP) main.
 Each row explains *what diverges*, *why*, and *the path to close it
 when / if needed*.
@@ -19,11 +19,11 @@ luminance channel (`Y_t`). Several parameters carry a 4th slot
 (`mask_q`, `xcm_weights`, `baseband_weight`, `BETA_TCH`) for this
 channel. The pooling stage adds a `beta_t` term across frames.
 
-**cvvdp-cpu**: 3 channels (A, RG, VY) only. The 4th slot in
+**cvvdp**: 3 channels (A, RG, VY) only. The 4th slot in
 `mask_q` / `xcm_weights` / `baseband_weight` is dropped. No
 temporal pooling.
 
-**Why**: cvvdp-cpu is targeted at the still-image / web-encoder /
+**Why**: cvvdp is targeted at the still-image / web-encoder /
 JPEG XL butteraugli-loop use-case. Temporal scoring requires a
 multi-frame buffer + the transient pyramid + `beta_t`. The cvvdp-gpu
 README explicitly scopes this crate as still-image-only.
@@ -39,7 +39,7 @@ add `beta_t` cross-frame pooling. Multi-week. Untracked.
 per-pixel-weights the metric by visual attention. Optional in the
 upstream Python API.
 
-**cvvdp-cpu**: not ported. The CSF is applied uniformly across the
+**cvvdp**: not ported. The CSF is applied uniformly across the
 image at the central PPD.
 
 **Why**: same reason as temporal channels — out-of-scope for the
@@ -59,7 +59,7 @@ post-EOTF before display scaling. Used to model under/over-exposed
 content. None of the 26 named display presets in
 `display_models.json` sets `exposure != 1`.
 
-**cvvdp-cpu**: `DisplayModel` has no `exposure` field. Effectively
+**cvvdp**: `DisplayModel` has no `exposure` field. Effectively
 `exposure = 1.0` everywhere.
 
 **Why**: zero of the canonical upstream presets exercise it; adding
@@ -82,7 +82,7 @@ table on `DisplayModel` (chunk 2's 23 presets) all use `exposure =
 `log`, `dkl_cone`, `none`. Selectable via the `csf` field in
 `cvvdp_parameters.json`.
 
-**cvvdp-cpu**: only `weber_fixed_size` is vendored (via cvvdp-gpu's
+**cvvdp**: only `weber_fixed_size` is vendored (via cvvdp-gpu's
 `kernels/csf_lut/v0_5_4.rs`).
 
 **Why**: `weber_fixed_size` is what pycvvdp v0.5.4 selects in its
@@ -98,7 +98,7 @@ increase (each LUT is ~6 KB). Untracked.
 **Upstream**: `cvvdp_parameters.json` is loaded at runtime; researchers
 can swap in a custom JSON for ablation.
 
-**cvvdp-cpu**: the v0.5.4 parameters are inlined as `const`s in
+**cvvdp**: the v0.5.4 parameters are inlined as `const`s in
 `cvvdp_gpu::kernels::pool::{BETA_SPATIAL, BETA_BAND, …}`,
 `cvvdp_gpu::kernels::masking::{MASK_P, MASK_Q, XCM_3X3, …}`. The
 `CvvdpParams::{csf, masking, pooling, jod}` sub-bundles are
@@ -119,11 +119,11 @@ Untracked.
 **Upstream**: ships PU21 / PU encoding (`pycvvdp/utils.py PU`) for
 side-by-side display-encoded-frame comparison.
 
-**cvvdp-cpu**: not ported. The `is_input_display_encoded` path that
+**cvvdp**: not ported. The `is_input_display_encoded` path that
 gates PU encode in upstream doesn't exist here.
 
 **Why**: PU21 is upstream's choice for the "display_encoded_*"
-target colorspaces in `source_2_target_colorspace`. cvvdp-cpu has
+target colorspaces in `source_2_target_colorspace`. cvvdp has
 exactly one target colorspace — DKLd65 — and routes through the
 `linear_2_target_colorspace` path. PU21 isn't reached.
 
@@ -136,7 +136,7 @@ the `PU` class. ~3-day port. Untracked.
 Adobe RGB, Apple RGB, Wide Gamut RGB, BT.601, P3D60 (theatrical),
 NTSC, etc.
 
-**cvvdp-cpu**: ships 3 (BT.709 / BT.2020 / DisplayP3 (= DciP3 alias)).
+**cvvdp**: ships 3 (BT.709 / BT.2020 / DisplayP3 (= DciP3 alias)).
 
 **Why**: the 3 shipped cover every upstream display preset. The
 others are reserved for future opt-in if a caller asks. Note
@@ -150,7 +150,7 @@ inline. Each new variant is ~10 LOC. Untracked.
 
 ## 8. RESOLVED (2026-05-26) — CSF `log_rho` axis flat-clamp at high PPD
 
-**Was**: On the `iphone_14_pro` display, both cvvdp-cpu AND cvvdp-gpu
+**Was**: On the `iphone_14_pro` display, both cvvdp AND cvvdp-gpu
 landed low vs pycvvdp v0.5.4 by up to **0.028 JOD** on JPEG-distorted
 content. cpu and gpu AGREED to ~7e-5 JOD — a SHARED model parity gap.
 

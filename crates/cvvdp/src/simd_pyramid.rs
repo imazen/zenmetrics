@@ -3,7 +3,7 @@
 //!
 //! Targets the inner column/row sweeps of [`gausspyr_reduce`] and
 //! [`gausspyr_expand`] (in [`super::pyramid`]) which together account
-//! for ~24 % of cvvdp-cpu wall time at 1024² (per the
+//! for ~24 % of cvvdp wall time at 1024² (per the
 //! `cvvdp_cpu_flamegraph_2026-05-25.svg` attribution).
 //!
 //! Approach: column-major SIMD over 8/16 contiguous f32 columns using

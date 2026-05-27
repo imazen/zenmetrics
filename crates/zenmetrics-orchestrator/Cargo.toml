@@ -60,7 +60,7 @@ cuda = ["bench"]
 # absent — no clean CPU reference exists upstream (see
 # `docs/CPU_BACKENDS.md`). Iwssim Cpu attempts surface
 # `CpuMetricUnavailable` and the OOM ladder advances.
-cpu-cvvdp = ["bench", "dep:cvvdp-cpu"]
+cpu-cvvdp = ["bench", "dep:cvvdp"]
 cpu-ssim2 = ["bench", "dep:ssimulacra2", "dep:imgref", "dep:rgb"]
 cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb"]
 cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb"]
@@ -98,7 +98,7 @@ rayon = { version = "1.12.0", optional = true }
 # only when its `cpu-<metric>` feature is on. Versions track the workspace
 # pins (which themselves match the dev-deps that the corresponding
 # `-gpu` crates already use for parity tests).
-cvvdp-cpu = { workspace = true, optional = true }
+cvvdp = { workspace = true, optional = true }
 ssimulacra2 = { workspace = true, optional = true }
 dssim-core = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }

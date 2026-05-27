@@ -9,7 +9,7 @@
 //! MAD heuristics. This module implements that signal.
 //!
 //! ## Recipe (binding for both the cvvdp-gpu extension and the
-//! cvvdp-cpu port; matches `docs/RFC_CVVDP_FORK.md` §3)
+//! cvvdp port; matches `docs/RFC_CVVDP_FORK.md` §3)
 //!
 //! 1. After masking we have per-pixel masked error `D[k][c][i]` for
 //!    each pyramid level `k`, DKL channel `c ∈ {A, RG, VY}`, and
@@ -263,10 +263,10 @@ pub fn diffmap_band_accumulate_kernel(
 ///             + max(acc_vy[i], 0)^β)^(1/β)
 /// ```
 ///
-/// This matches `cvvdp_cpu::diffmap::finalize_diffmap` byte-for-byte
+/// This matches `cvvdp::diffmap::finalize_diffmap` byte-for-byte
 /// at f32 precision so the CPU and GPU diffmap impls produce the
 /// same per-pixel values on identical inputs (verified by the
-/// `cvvdp_cpu::diffmap` recipe at master `da816947`).
+/// `cvvdp::diffmap` recipe at master `da816947`).
 ///
 /// **Why max(., 0) and not |.|**: the cvvdp masking stage produces
 /// `D_per_ch[c]` planes whose values are already non-negative
@@ -286,7 +286,7 @@ pub fn diffmap_band_accumulate_kernel(
 /// jxl-encoder buttloop's per-block 8×8 median + MAD reducer, which
 /// is non-differentiable anyway — the epsilon would only add a
 /// constant bias to every pixel without changing the relative
-/// shape. `cvvdp_cpu::diffmap::finalize_diffmap` skips the epsilon
+/// shape. `cvvdp::diffmap::finalize_diffmap` skips the epsilon
 /// for the same reason; the GPU kernel matches.
 ///
 /// `beta` is parametrised so callers can probe pool sensitivity
@@ -424,7 +424,7 @@ pub fn bilinear_sample_scalar(
 /// channels for one pixel. Returns the same value the GPU kernel
 /// would write to `out[idx]`.
 ///
-/// Matches `cvvdp_cpu::diffmap::finalize_diffmap`'s per-pixel
+/// Matches `cvvdp::diffmap::finalize_diffmap`'s per-pixel
 /// pool exactly: `max(., 0)` clamp per channel, plain `pow(p)` (no
 /// safe_pow epsilon), sum, `pow(1/p)`. See the kernel docstring
 /// for the rationale on the clamp + no-epsilon choices.
@@ -516,7 +516,7 @@ mod tests {
         // max(., 0) clamp: any negative channel contributes 0 to the
         // pool. This is asymmetric vs `lp_norm_sum` (which abs-pools
         // both signs), but it's the contract we share with
-        // `cvvdp_cpu::diffmap::finalize_diffmap`. The masking stage
+        // `cvvdp::diffmap::finalize_diffmap`. The masking stage
         // guarantees non-negative inputs in the analytical limit, so
         // this only masks f32 rounding noise.
         let beta = 4.0;
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn channel_pool_matches_cvvdp_cpu_recipe() {
-        // Mirror cvvdp_cpu::diffmap::finalize_diffmap exactly. Both
+        // Mirror cvvdp::diffmap::finalize_diffmap exactly. Both
         // GPU and CPU diffmap impls share the same recipe; the
         // per-pixel pool fold must produce identical values on
         // identical inputs (to f32 precision).
@@ -551,14 +551,14 @@ mod tests {
         for &(a, rg, vy) in &cases {
             let beta = 4.0;
             let direct = channel_pool_scalar(a, rg, vy, beta);
-            // Mirror cvvdp_cpu::diffmap::finalize_diffmap byte-for-byte.
+            // Mirror cvvdp::diffmap::finalize_diffmap byte-for-byte.
             let a_pos = a.max(0.0);
             let rg_pos = rg.max(0.0);
             let vy_pos = vy.max(0.0);
             let cpu = (a_pos.powf(beta) + rg_pos.powf(beta) + vy_pos.powf(beta)).powf(1.0 / beta);
             assert!(
                 (direct - cpu).abs() < 1e-6,
-                "channel_pool({a}, {rg}, {vy}) = {direct} vs cvvdp-cpu = {cpu}",
+                "channel_pool({a}, {rg}, {vy}) = {direct} vs cvvdp = {cpu}",
             );
         }
     }

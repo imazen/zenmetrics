@@ -6,7 +6,7 @@
 //! quantization loop needs a per-pixel "where is the error" map for
 //! the same reason butteraugli produces a diffmap — to decide which
 //! blocks to refine. This module defines the recipe used by both the
-//! cvvdp-cpu port AND the eventual cvvdp-gpu diffmap extension (so
+//! cvvdp port AND the eventual cvvdp-gpu diffmap extension (so
 //! the two impls stay byte-comparable at the per-pixel level).
 //!
 //! ## Recipe

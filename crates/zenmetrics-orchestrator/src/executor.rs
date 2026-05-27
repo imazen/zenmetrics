@@ -1185,7 +1185,7 @@ impl ExecMetric {
     /// promotes the dispatch.
     ///
     /// CPU adapters expose `supports_cached_ref` per-metric; the
-    /// caller delegates so a cvvdp-cpu fallback still benefits from
+    /// caller delegates so a cvvdp fallback still benefits from
     /// `warm_reference`, while ssim2 / butter / zensim CPU fall back
     /// to regular compute.
     pub(crate) fn supports_cached_ref(&self) -> bool {

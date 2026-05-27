@@ -878,7 +878,7 @@ mod tests {
         assert_eq!(extrap.to_bits(), manual.to_bits());
 
         // End-to-end via the public sensitivity API (the path
-        // cvvdp-cpu's pipeline drives through `precompute_logs_row`):
+        // cvvdp's pipeline drives through `precompute_logs_row`):
         // sensitivity at the above-axis band must be below the
         // (clamped) axis-top sensitivity, and finite/positive.
         let log_l = 2.0_f32; // photopic 100 cd/m²

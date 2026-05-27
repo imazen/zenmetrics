@@ -1,4 +1,4 @@
-# CVVDP Conformance Matrix — cvvdp-cpu + cvvdp-gpu vs pycvvdp v0.5.4
+# CVVDP Conformance Matrix — cvvdp + cvvdp-gpu vs pycvvdp v0.5.4
 
 The authoritative "are our cvvdp impls correct?" gate. Every
 `(impl × display_model × situation)` cell is scored against the
@@ -14,7 +14,7 @@ localized error without moving the final JOD. The conformance matrix
 exposes those errors by scoring across the full display × content ×
 distortion space.
 
-- **Harness**: `crates/cvvdp-conformance/` (depends on BOTH cvvdp-cpu
+- **Harness**: `crates/cvvdp-conformance/` (depends on BOTH cvvdp
   and cvvdp-gpu; tests them as black boxes via the public API).
 - **Result TSV**: `benchmarks/cvvdp_conformance_matrix_2026-05-26.tsv`.
 - **Goldens**: pycvvdp v0.5.4, R2
@@ -28,7 +28,7 @@ distortion space.
 | Impl | Source | Role |
 |---|---|---|
 | `pycvvdp_v054` | gfxdisp/ColorVideoVDP v0.5.4 (CUDA torch) | **REFERENCE** — ground-truth JOD |
-| `cvvdp_cpu` | `cvvdp_cpu::Cvvdp` (this workspace) | under test |
+| `cvvdp_cpu` | `cvvdp::Cvvdp` (this workspace) | under test |
 | `cvvdp_gpu` | `cvvdp_gpu::Cvvdp<CudaRuntime>` (this workspace) | under test |
 
 ### Display models (9 — acceptance gate requires ≥ 8)
@@ -169,9 +169,9 @@ here. None is silently passed.
 **Resolved 2026-05-26** in `cvvdp_gpu::kernels::csf::interp1_rho_extrap`.
 
 **Symptom (pre-fix)**: On the `iphone_14_pro` display, both
-cvvdp-cpu and cvvdp-gpu landed **low** vs pycvvdp by up to **0.028 JOD**
+cvvdp and cvvdp-gpu landed **low** vs pycvvdp by up to **0.028 JOD**
 on JPEG-distorted content (q60/q30: 0.016–0.028, q90: 0.006; the large
-1024² JPEG cell was worst at 0.028). cvvdp-cpu and cvvdp-gpu AGREED with
+1024² JPEG cell was worst at 0.028). cvvdp and cvvdp-gpu AGREED with
 each other to ~7e-5 JOD, so it was a **shared model parity gap**, not a
 GPU/float-order artifact.
 
@@ -222,7 +222,7 @@ old clamp).
 0.00139 JOD) on extreme high-frequency or heavily-blurred content
 (`checkerboard_blur_r2` on `htc_vive_pro` / `standard_fhd`,
 `synth_blur_r5` on `standard_hdr_hlg`) where the reference JOD is at
-the perceptibility floor (~3.7–4.4). cvvdp-cpu PASSES all three.
+the perceptibility floor (~3.7–4.4). cvvdp PASSES all three.
 
 **Root cause**: GPU float reduction order vs CPU in the deepest
 pyramid bands. On near-floor content the per-band energy is large and

@@ -1,6 +1,6 @@
 //! Vectorized transcendental helpers backed by archmage / magetypes.
 //!
-//! The cvvdp-cpu hot path spends ~7% of wall time inside `__powf_fma`
+//! The cvvdp hot path spends ~7% of wall time inside `__powf_fma`
 //! called from `masking.rs::mult_mutual_band_into` — 6 `powf` calls
 //! per pixel (3 `(x+eps)^q[ch] - eps^q[ch]` for the cross-channel
 //! masking term + 3 `(|T-R|+eps)^p - eps^p` for the masked diff).

@@ -287,7 +287,7 @@ downstream consumers don't pay for crates they don't use:
 
 | Feature flag | Pulls | Notes |
 | --- | --- | --- |
-| `cpu-cvvdp` | `cvvdp-cpu` | In-tree port; full cached-ref via `warm_reference`. |
+| `cpu-cvvdp` | `cvvdp` | In-tree port; full cached-ref via `warm_reference`. |
 | `cpu-ssim2` | `ssimulacra2` | Crates.io reference; cached-ref re-uses cached ref bytes (no separate warm-ref API upstream). |
 | `cpu-dssim` | `dssim-core` | True cached-ref via `DssimImage`. |
 | `cpu-butter` | `butteraugli` | Cached-ref recomputes from bytes (upstream has no separate warm path). |

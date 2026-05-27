@@ -1,4 +1,4 @@
-# cvvdp-cpu ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenmetrics/cvvdp-cpu.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/cvvdp-cpu?style=flat-square) ![lib.rs](https://img.shields.io/crates/v/cvvdp-cpu?style=flat-square&label=lib.rs&color=blue) ![docs.rs](https://img.shields.io/docsrs/cvvdp-cpu?style=flat-square) ![License](https://img.shields.io/crates/l/cvvdp-cpu?style=flat-square)
+# cvvdp ![CI](https://img.shields.io/github/actions/workflow/status/imazen/zenmetrics/cvvdp.yml?style=flat-square&label=CI) ![crates.io](https://img.shields.io/crates/v/cvvdp?style=flat-square) ![lib.rs](https://img.shields.io/crates/v/cvvdp?style=flat-square&label=lib.rs&color=blue) ![docs.rs](https://img.shields.io/docsrs/cvvdp?style=flat-square) ![License](https://img.shields.io/crates/l/cvvdp?style=flat-square)
 
 Pure-Rust CPU port of [ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP)
 (still-image scoring). Built on top of the canonical pycvvdp v0.5.4
@@ -13,7 +13,7 @@ v0.5.4 reference.
 ## What it does
 
 ```rust
-use cvvdp_cpu::{Cvvdp, CvvdpParams};
+use cvvdp::{Cvvdp, CvvdpParams};
 
 let (w, h) = (256, 256);
 let ref_srgb: Vec<u8> = vec![/* w*h*3 bytes */];
@@ -89,4 +89,4 @@ Dual-licensed under either:
 
 Pinned against [`pycvvdp v0.5.4`](https://github.com/gfxdisp/ColorVideoVDP/releases/tag/v0.5.4).
 The pinned reference version constant is re-exported as
-`cvvdp_cpu::PYCVVDP_REFERENCE_VERSION`.
+`cvvdp::PYCVVDP_REFERENCE_VERSION`.

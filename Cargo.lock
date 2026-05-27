@@ -1396,20 +1396,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cvvdp-conformance"
-version = "0.0.1"
-dependencies = [
- "cubecl",
- "cvvdp-cpu",
- "cvvdp-gpu",
- "image",
- "serde_json",
- "sha2",
- "ureq",
-]
-
-[[package]]
-name = "cvvdp-cpu"
+name = "cvvdp"
 version = "0.1.0"
 dependencies = [
  "archmage",
@@ -1420,6 +1407,19 @@ dependencies = [
  "zenmetrics-corpus",
  "zenpixels",
  "zenpixels-convert",
+]
+
+[[package]]
+name = "cvvdp-conformance"
+version = "0.0.1"
+dependencies = [
+ "cubecl",
+ "cvvdp",
+ "cvvdp-gpu",
+ "image",
+ "serde_json",
+ "sha2",
+ "ureq",
 ]
 
 [[package]]
@@ -6625,7 +6625,7 @@ name = "zenmetrics-orchestrator"
 version = "0.0.1"
 dependencies = [
  "butteraugli",
- "cvvdp-cpu",
+ "cvvdp",
  "cvvdp-gpu",
  "dirs",
  "dssim-core",

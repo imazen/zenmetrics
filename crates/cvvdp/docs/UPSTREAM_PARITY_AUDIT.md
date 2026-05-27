@@ -1,12 +1,12 @@
-# UPSTREAM_PARITY_AUDIT — cvvdp-cpu vs gfxdisp/ColorVideoVDP
+# UPSTREAM_PARITY_AUDIT — cvvdp vs gfxdisp/ColorVideoVDP
 
 **Snapshot date:** 2026-05-25
-**cvvdp-cpu HEAD:** v0.0.1 + this branch
+**cvvdp HEAD:** v0.0.1 + this branch
 **Upstream HEAD:** [gfxdisp/ColorVideoVDP](https://github.com/gfxdisp/ColorVideoVDP) `main` (clone at `/tmp/ColorVideoVDP`)
 **Reference parity:** pycvvdp v0.5.4 (gold-pinned via cvvdp-gpu shadow-JOD goldens). v0.5.4 stays the lock; v0.5.6 (the latest upstream JSON tag) bundles additional CSF parameters but produces a v0.5.4-compatible JOD scalar.
 
 This document is a **finding-only** audit. Each row pairs an upstream
-subsystem with the cvvdp-cpu / cvvdp-gpu line numbers that implement
+subsystem with the cvvdp / cvvdp-gpu line numbers that implement
 (or stub out) that subsystem, and labels the gap. The follow-up code
 chunks reference these rows by number.
 
@@ -16,9 +16,9 @@ Upstream class: `vvdp_display_geometry` in
 [`/tmp/ColorVideoVDP/pycvvdp/display_model.py:431-626`](file:///tmp/ColorVideoVDP/pycvvdp/display_model.py).
 Ours: `DisplayGeometry` in
 [`crates/cvvdp-gpu/src/params.rs:514-582`](../../cvvdp-gpu/src/params.rs#L514).
-cvvdp-cpu re-exports it via [`lib.rs:52`](../src/lib.rs#L52).
+cvvdp re-exports it via [`lib.rs:52`](../src/lib.rs#L52).
 
-| # | Field / path | Upstream | cvvdp-cpu (via cvvdp-gpu) | Status |
+| # | Field / path | Upstream | cvvdp (via cvvdp-gpu) | Status |
 |---|---|---|---|---|
 | G1 | `resolution` (W, H) | tuple in JSON, set at line 605-609 | `resolution_w`, `resolution_h: u32` | **PRESENT** |
 | G2 | `viewing_distance_meters` | line 617 | `distance_m: f32` | **PRESENT** |
@@ -42,7 +42,7 @@ Upstream class: `vvdp_display_photo_eotf` in
 Ours: `DisplayModel` + `Eotf` + `Primaries` in
 [`crates/cvvdp-gpu/src/params.rs:53-484`](../../cvvdp-gpu/src/params.rs#L53).
 
-| # | Field / path | Upstream | cvvdp-cpu (via cvvdp-gpu) | Status |
+| # | Field / path | Upstream | cvvdp (via cvvdp-gpu) | Status |
 |---|---|---|---|---|
 | D1 | `Y_peak` (cd/m²) | line 307 | `y_peak: f32` | **PRESENT** |
 | D2 | `contrast` (Y_peak / Y_black) | line 308 | derived from `y_peak / contrast` ctor | **PRESENT** |
@@ -57,7 +57,7 @@ Ours: `DisplayModel` + `Eotf` + `Primaries` in
 | D8a | **`Primaries` is actually USED in the planar conv** | applied via matrix mul | hardcoded `SRGB_LINEAR_TO_DKL` import in [`color.rs:11,46`](../src/color.rs#L46) | **GAP — CRITICAL (BT.2020-PQ silently uses BT.709 matrix)** |
 | D9 | `exposure` multiplier | line 312, 342-359 | **absent** | **GAP — minor** (only `iphone_14_pro_hdr_vert`-class HDR uses non-1.0 exposure in upstream; none in stock display_models.json. Reserved for future opt-in.) |
 | D10 | HLG OOTF gamma | line 351-355 + `hlg_system_gamma()` | `hlg_system_gamma()` at [`params.rs:241-252`](../../cvvdp-gpu/src/params.rs#L241) | **PRESENT (defined)** but not threaded through |
-| D11 | `is_input_display_encoded()` (gates PU-encode vs no-op) | line 315-317 | **absent** | GAP — minor (cvvdp-cpu doesn't ship PU21) |
+| D11 | `is_input_display_encoded()` (gates PU-encode vs no-op) | line 315-317 | **absent** | GAP — minor (cvvdp doesn't ship PU21) |
 
 ## 3. Display presets
 
@@ -95,7 +95,7 @@ Upstream JSON: `/tmp/ColorVideoVDP/pycvvdp/vvdp_data/display_models.json`
 | P26 | `lg_oled_2026_hdr_pq` | 3840×2160 | 2.2 m | 3000 | 6e6 | 5 | BT.2020-PQ | **GAP** |
 
 **Findings**: 25 / 26 named upstream presets are not callable via a
-single constant. The cvvdp-gpu / cvvdp-cpu API has every primitive
+single constant. The cvvdp-gpu / cvvdp API has every primitive
 field needed; what's missing is the named-preset surface AND the
 EOTF + Primaries plumbing through `color::srgb_to_dkl_planar`.
 
@@ -105,7 +105,7 @@ Upstream JSON: `cvvdp_parameters.json`. Ours: vendored LUT in
 [`crates/cvvdp-gpu/src/kernels/csf_lut/v0_5_4.rs`](../../cvvdp-gpu/src/kernels/csf_lut/v0_5_4.rs)
 + `CsfChannel` enum (per-channel `precompute_logs_row`).
 
-| # | Field | Upstream `cvvdp_parameters.json` | cvvdp-cpu | Status |
+| # | Field | Upstream `cvvdp_parameters.json` | cvvdp | Status |
 |---|---|---|---|---|
 | C1 | `csf` selector ("weber_fixed_size") | string field | hardcoded — only weber_fixed_size LUT vendored | **PRESENT (only weber_fixed_size)** |
 | C2 | `csf_sigma` | -1.5 | folded into vendored LUT | **PRESENT (baked)** |
@@ -121,7 +121,7 @@ Upstream JSON: `cvvdp_parameters.json`. Ours: vendored LUT in
 
 Upstream JSON section + paper §3.4. Ours: `cvvdp_gpu::kernels::masking`.
 
-| # | Field | Upstream JSON | cvvdp-cpu (via cvvdp-gpu) | Status |
+| # | Field | Upstream JSON | cvvdp (via cvvdp-gpu) | Status |
 |---|---|---|---|---|
 | M1 | `mask_p` | 2.264 | `MASK_P` const | **PRESENT** |
 | M2 | `mask_q` (per-channel) | `[1.30, 2.89, 3.68, 3.59]` (4 = A, RG, VY, Y_t) | `MASK_Q: [f32; 3]` (still-image: 3 channels) | **PRESENT** (4th drops temporal) |
@@ -139,7 +139,7 @@ Upstream JSON section + paper §3.4. Ours: `cvvdp_gpu::kernels::masking`.
 Upstream JSON: `beta`, `beta_t`, `beta_tch`, `beta_sch`, `image_int`,
 `baseband_weight`. Ours: `cvvdp_gpu::kernels::pool`.
 
-| # | Field | Upstream JSON | cvvdp-cpu | Status |
+| # | Field | Upstream JSON | cvvdp | Status |
 |---|---|---|---|---|
 | O1 | `beta` (spatial) | 2 | `BETA_SPATIAL` (= 2.0) | **PRESENT** |
 | O2 | `beta_t` (temporal) | 2 | n/a (still image) | **PRESENT-by-skip** |
@@ -153,7 +153,7 @@ Upstream JSON: `beta`, `beta_t`, `beta_tch`, `beta_sch`, `image_int`,
 
 Upstream JSON: `jod_a`, `jod_exp`. Ours: `cvvdp_gpu::kernels::pool::met2jod`.
 
-| # | Field | Upstream JSON | cvvdp-cpu | Status |
+| # | Field | Upstream JSON | cvvdp | Status |
 |---|---|---|---|---|
 | J1 | `jod_a` | 0.04396 | `JOD_A` const | **PRESENT** |
 | J2 | `jod_exp` | 0.9302 | `JOD_EXP` const | **PRESENT** |
@@ -174,10 +174,10 @@ Defined ✅ — but not threaded through `srgb_to_dkl_planar`. See D8a.
 
 Upstream: `pycvvdp/lpyr_dec.py` Gaussian-Laplacian pyramid +
 `band_frequencies` band-truncation rule.
-Ours: `crates/cvvdp-cpu/src/pyramid.rs` mirrors
+Ours: `crates/cvvdp/src/pyramid.rs` mirrors
 `cvvdp_gpu::kernels::pyramid::band_frequencies`.
 
-| # | Component | Upstream | cvvdp-cpu | Status |
+| # | Component | Upstream | cvvdp | Status |
 |---|---|---|---|---|
 | Y1 | Burt-Adelson 5-tap separable filter | `lpyr_dec.py` | `pyramid::PyramidScratch` + `weber_contrast_pyr` | **PRESENT** |
 | Y2 | Ceil-halving reduce | `lpyr_dec.py` | `reduce_to_quad_avg` | **PRESENT** |
@@ -188,15 +188,15 @@ Ours: `crates/cvvdp-cpu/src/pyramid.rs` mirrors
 ## 10. Diffmap
 
 Upstream: emit per-pixel D_px via `vdp_metric.compute_diff_map`. Ours:
-[`crates/cvvdp-cpu/src/diffmap.rs`](../src/diffmap.rs).
+[`crates/cvvdp/src/diffmap.rs`](../src/diffmap.rs).
 
-Diffmap is a cvvdp-cpu **extension** (upstream returns scalar JOD +
+Diffmap is a cvvdp **extension** (upstream returns scalar JOD +
 optional dump of per-channel maps; we emit a fully-pooled D_px so
 butteraugli-loop callers can iterate per-pixel). NOT a parity gap.
 
 ## 11. Multi-mode (PerfMode) + auto fallback
 
-cvvdp-cpu has `PerfMode::Strict` only. Upstream pycvvdp has no
+cvvdp has `PerfMode::Strict` only. Upstream pycvvdp has no
 "Fast" mode. Strict matches upstream. **Not a gap.**
 
 ## 12. Foveation / saliency
@@ -242,13 +242,13 @@ Ordered by impact-per-effort:
 5. **G11/G12 — Eccentricity / foveation.** Skipped (still-image,
    no foveation contract).
 
-## Diff against `cvvdp-cpu` v0.0.1 scope
+## Diff against `cvvdp` v0.0.1 scope
 
-cvvdp-cpu v0.0.1 explicitly tracked cvvdp-gpu's `host_scalar` —
+cvvdp v0.0.1 explicitly tracked cvvdp-gpu's `host_scalar` —
 NOT pycvvdp directly. host_scalar itself hardcodes sRGB+BT709. So
 v0.0.1 was "parity with the host_scalar reference, which itself
 diverges from upstream on EOTF/Primaries." The v0.1.0 work below
-closes the cvvdp-cpu → upstream gap. cvvdp-gpu will need a parallel
+closes the cvvdp → upstream gap. cvvdp-gpu will need a parallel
 chunk (Phase 1c) to honour EOTF/Primaries on the GPU path — flagged
 in the chunk plan.
 

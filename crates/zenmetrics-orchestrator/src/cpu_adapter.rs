@@ -9,7 +9,7 @@
 //!
 //! | Metric  | CPU reference crate     | Feature flag   |
 //! |---------|-------------------------|----------------|
-//! | Cvvdp   | `cvvdp-cpu` (in-tree)   | `cpu-cvvdp`    |
+//! | Cvvdp   | `cvvdp` (in-tree)       | `cpu-cvvdp`    |
 //! | Ssim2   | `ssimulacra2`           | `cpu-ssim2`    |
 //! | Dssim   | `dssim-core`            | `cpu-dssim`    |
 //! | Butter  | `butteraugli`           | `cpu-butter`   |
@@ -24,7 +24,7 @@
 //!
 //! Each CPU backend has a different relationship with reference reuse:
 //!
-//! - **cvvdp-cpu** has a true cached-reference path (`warm_reference` +
+//! - **cvvdp** has a true cached-reference path (`warm_reference` +
 //!   `score_with_warm_ref`). Skips ~50% of the pipeline.
 //! - **butteraugli** has no public cached-ref API today. The adapter
 //!   falls back to the regular `compute` on cached-ref calls — still
@@ -44,7 +44,7 @@
 //! CPU backends use RAM, not VRAM. Resident-set growth depends on
 //! image size:
 //!
-//! - cvvdp-cpu: ~5-7 bytes/pixel scratch (Weber pyramid + DKL planes
+//! - cvvdp: ~5-7 bytes/pixel scratch (Weber pyramid + DKL planes
 //!   + diffmap). 4096² = ~120 MiB.
 //! - butteraugli: ~30-40 bytes/pixel internal (XYB working set + blur
 //!   buffers). 4096² = ~600 MiB.
@@ -87,7 +87,7 @@ pub(crate) struct CpuAdapter {
 #[allow(clippy::large_enum_variant)]
 enum CpuAdapterState {
     #[cfg(feature = "cpu-cvvdp")]
-    Cvvdp(Box<cvvdp_cpu::Cvvdp>),
+    Cvvdp(Box<cvvdp::Cvvdp>),
     #[cfg(feature = "cpu-ssim2")]
     Ssim2(Ssim2State),
     #[cfg(feature = "cpu-dssim")]
@@ -449,7 +449,7 @@ fn make_score(name: &'static str, version: &'static str, value: f64) -> Score {
 }
 
 // ---------------------------------------------------------------------------
-// cvvdp-cpu wiring
+// cvvdp wiring
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "cpu-cvvdp")]
@@ -458,7 +458,7 @@ fn construct_cvvdp(
     height: u32,
     params: &MetricParams,
 ) -> Result<CpuAdapterState, CpuAdapterError> {
-    // cvvdp_cpu re-exports CvvdpParams from cvvdp-gpu, and the umbrella
+    // cvvdp re-exports CvvdpParams from cvvdp-gpu, and the umbrella
     // wraps the *same* struct in MetricParams::Cvvdp. So we can lift
     // the params without an extra translation table.
     let p = match params {
@@ -469,7 +469,7 @@ fn construct_cvvdp(
             )));
         }
     };
-    let c = cvvdp_cpu::Cvvdp::new(width, height, p)
+    let c = cvvdp::Cvvdp::new(width, height, p)
         .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
     Ok(CpuAdapterState::Cvvdp(Box::new(c)))
 }
@@ -486,7 +486,7 @@ fn construct_cvvdp(
 
 #[cfg(feature = "cpu-cvvdp")]
 fn compute_cvvdp(
-    c: &mut cvvdp_cpu::Cvvdp,
+    c: &mut cvvdp::Cvvdp,
     r: &[u8],
     d: &[u8],
 ) -> Result<Score, CpuAdapterError> {
@@ -498,7 +498,7 @@ fn compute_cvvdp(
 
 #[cfg(feature = "cpu-cvvdp")]
 fn cvvdp_cpu_version() -> &'static str {
-    // Crate's package version is the canonical identifier — cvvdp_cpu
+    // Crate's package version is the canonical identifier — cvvdp
     // re-uses cvvdp-gpu's PYCVVDP_REFERENCE_VERSION constant, but that's
     // the upstream pycvvdp version, not the adapter version. Keep them
     // distinct: this string identifies which Rust impl produced the score.

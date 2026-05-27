@@ -1,13 +1,13 @@
 //! Parity vs host_scalar on real corpus images.
 //!
 //! Loads the 256² PNG reference + 6 JPEG variants from
-//! `zenmetrics_corpus`, scores both with cvvdp-cpu and with
+//! `zenmetrics_corpus`, scores both with cvvdp and with
 //! cvvdp-gpu's host_scalar reference, and locks the JOD difference
 //! to ≤ 1e-4. This is the closest thing we have to a real-image
 //! goldens test that doesn't require fetching the pycvvdp R2
 //! manifest.
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams, DisplayGeometry};
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::DisplayModel;
 

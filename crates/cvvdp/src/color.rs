@@ -116,7 +116,7 @@ pub(crate) fn linear_planes_to_dkl_planar(
     // and the per-primaries DKL matrix — equivalent to the
     // [`Eotf::Linear`] branch of `display_byte_to_dkl_scalar`. Per
     // upstream `display_model.py:348-349` the `linear` EOTF clips to
-    // `[max(0.005, y_black), y_peak]` and then adds `y_refl`. The cvvdp-cpu
+    // `[max(0.005, y_black), y_peak]` and then adds `y_refl`. The cvvdp
     // historical contract is "input in display-relative [0, 1] OR in
     // cd/m² when EOTF=Linear" — we preserve both shapes by routing
     // through `display_linear_rgb_to_dkl_scalar`, which itself

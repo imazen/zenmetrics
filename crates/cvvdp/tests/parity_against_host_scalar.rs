@@ -1,4 +1,4 @@
-//! Parity test: cvvdp-cpu's `Cvvdp::score` must match cvvdp-gpu's
+//! Parity test: cvvdp's `Cvvdp::score` must match cvvdp-gpu's
 //! `host_scalar::predict_jod_still_3ch` within ≤ 1e-4 JOD on every
 //! synthetic fixture and corpus image. host_scalar IS the
 //! f32-precision contract; the GPU implementation is itself locked
@@ -8,7 +8,7 @@
 //! algorithm — investigate which stage drifted (color / pyramid /
 //! csf / masking / pool).
 
-use cvvdp_cpu::{Cvvdp, CvvdpParams, DisplayGeometry};
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
 use cvvdp_gpu::params::DisplayModel;
 

@@ -271,7 +271,7 @@ impl core::fmt::Display for Error {
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-/// `Result<T, cvvdp_cpu::Error>` — the crate's standard fallible
+/// `Result<T, cvvdp::Error>` — the crate's standard fallible
 /// return type.
 pub type Result<T> = core::result::Result<T, Error>;
 
