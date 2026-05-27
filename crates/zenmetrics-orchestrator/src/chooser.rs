@@ -133,6 +133,18 @@ pub enum RejectReason {
     /// Cache has no measurement for this backend at any size — e.g.
     /// Phase 2 OOMed at its smallest measured size.
     NoMeasuredData,
+    /// Phase 7.7.1: log-linear extrapolation produced a non-positive
+    /// `predicted_ns_per_px` for this backend at this size. Happens
+    /// when only 2 measured points exist for a monotonically
+    /// decreasing per-pixel cost (faster per-px at larger sizes) and
+    /// the requested size is far above the largest measured point —
+    /// the line goes below zero. A negative prediction would falsely
+    /// rank this backend as the fastest candidate; reject instead so
+    /// the chooser falls back to a backend with a real prediction.
+    /// Operators see this when their bench cache is sparse for a
+    /// given backend; re-running `bench` at the requested size cures
+    /// it.
+    NonPositivePrediction,
 }
 
 /// Final decision returned by [`Orchestrator::choose_backend`].
@@ -657,6 +669,22 @@ fn evaluate_candidate(
                 // but adequate as a last-resort ranking signal.
                 200.0
             });
+        // Phase 7.7.1: reject non-positive predictions. Log-linear
+        // extrapolation from 2 monotonically decreasing CPU points
+        // produces negative ns/px values at sizes well above the
+        // cached range; ranking by `min(ns_per_px)` then picks the
+        // negative value as "fastest," which is structurally wrong
+        // (negative time cannot be faster than positive time). The
+        // operator should re-bench at the requested size; until they
+        // do, reject this candidate so a GPU backend with a real
+        // measurement wins instead.
+        if ns <= 0.0 {
+            return CandidateStatus::Rejected {
+                reason: RejectReason::NonPositivePrediction,
+                predicted_ns_per_px: Some(ns),
+                predicted_vram_mib: Some(0),
+            };
+        }
         return CandidateStatus::Selected {
             ns_per_px: ns,
             vram_mib: 0,
@@ -673,6 +701,16 @@ fn evaluate_candidate(
                 };
             }
         };
+    // Phase 7.7.1: see same comment on the CPU branch above. Symmetric
+    // rejection here so a GPU backend with a runaway negative
+    // extrapolation can't out-rank a backend with a real measurement.
+    if ns <= 0.0 {
+        return CandidateStatus::Rejected {
+            reason: RejectReason::NonPositivePrediction,
+            predicted_ns_per_px: Some(ns),
+            predicted_vram_mib: None,
+        };
+    }
     let mib = match interpolate_vram_mib(profile, backend, pixels, config.extrapolation_pessimism) {
         Some(v) => v,
         None => {

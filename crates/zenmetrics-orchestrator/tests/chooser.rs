@@ -658,3 +658,88 @@ fn chooser_runs_in_under_100us() {
     );
     eprintln!("[perf] chooser: {per_call} ns/call ({iters} iters)");
 }
+
+/// Phase 7.7.1 regression: a backend whose 2-point log-linear
+/// extrapolation produces a NEGATIVE `predicted_ns_per_px` must be
+/// rejected with [`RejectReason::NonPositivePrediction`] rather than
+/// ranked as the fastest candidate (`min(ns_per_px)` would otherwise
+/// pick the negative value, which is structurally wrong — negative
+/// time cannot be faster than positive time).
+///
+/// Scenario captures the production ssim2 + zensim CPU-extrapolation
+/// failure observed during the Phase 7.7 parity sweep:
+/// - CPU bench cells at 262144 (1018.74 ns/px) and 1048576 (629.23 ns/px)
+/// - 16M-pixel target (4096²)
+/// - log-linear extrapolation: slope = (629.23 - 1018.74) / (log2(1M) - log2(256K))
+///   = -194.76 per doubling; at log2(16M)=24, v = 629.23 + (-194.76) * 4 = -149.8
+/// - * extrapolation_pessimism (1.20) = -179.76 ns/px
+/// Without this gate, ssim2's chooser would pick CPU (predicted -179.76
+/// "faster" than GpuStrip at 5 ns/px) and produce a divergent score
+/// vs the legacy GPU path.
+#[test]
+fn rejects_negative_extrapolated_cpu_prediction() {
+    let mut m = MetricProfile::default();
+    // GPU at 16M cell — real measurement, so the chooser has a non-OOM
+    // GPU candidate to fall back to once CPU is rejected.
+    m.ns_per_px_at.insert(
+        16_777_216,
+        bench_row(&[(Backend::GpuStrip, 5.0_f64)]),
+    );
+    m.vram_mib_at.insert(
+        16_777_216,
+        vram_row(&[(Backend::GpuStrip, 800)]),
+    );
+    // CPU at 256K + GPU at 1M co-cached (the cache stores per-size
+    // backends in one BackendBench entry per pixel-key, so we set the
+    // Cpu and GpuStrip values together for the size keys we want both
+    // to share).
+    m.ns_per_px_at.insert(
+        262_144,
+        bench_row(&[(Backend::Cpu, 1018.74_f64)]),
+    );
+    m.vram_mib_at.insert(
+        262_144,
+        vram_row(&[(Backend::Cpu, 0)]),
+    );
+    m.ns_per_px_at.insert(
+        1_048_576,
+        bench_row(&[(Backend::Cpu, 629.23_f64), (Backend::GpuStrip, 6.0_f64)]),
+    );
+    m.vram_mib_at.insert(
+        1_048_576,
+        vram_row(&[(Backend::Cpu, 0), (Backend::GpuStrip, 100)]),
+    );
+    m.last_measured = Some(SystemTime::now());
+
+    let orch = fake_orch_with_metrics(&[(MetricKind::Ssim2, m)]);
+    let choice = orch
+        .choose_backend(MetricKind::Ssim2, 4096, 4096, 12288)
+        .expect("choose_backend should succeed via GPU fallback");
+
+    // CPU must be rejected as NonPositivePrediction.
+    let cpu = find(&choice.considered, Backend::Cpu);
+    match cpu.status {
+        CandidateStatus::Rejected {
+            reason: RejectReason::NonPositivePrediction,
+            predicted_ns_per_px: Some(ns),
+            ..
+        } => {
+            assert!(
+                ns <= 0.0,
+                "expected non-positive ns, got {ns}",
+            );
+        }
+        ref s => panic!(
+            "expected CPU NonPositivePrediction rejection, got {s:?}",
+        ),
+    }
+
+    // The selected backend MUST be GpuStrip (the only positive-ns
+    // candidate at this size).
+    assert_eq!(
+        choice.backend,
+        Backend::GpuStrip,
+        "expected GpuStrip selection after CPU rejection, got {:?}",
+        choice.backend,
+    );
+}
