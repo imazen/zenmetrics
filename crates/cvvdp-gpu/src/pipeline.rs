@@ -2018,13 +2018,51 @@ impl<R: Runtime> Cvvdp<R> {
         let gauss_ref = build_pyramid(&client);
 
         // P2.3 gauss_alt (2026-05-27): in StripMode::Pair, allocate a
-        // second full-image gauss pyramid so REF gauss data can
-        // survive past DIST dispatch (see field docstring). Outside
-        // Mode B, `None` — the existing single `gauss_ref` suffices.
-        // P2.7 will strip-shape both gauss_ref and gauss_alt to free
-        // the additional storage.
-        let gauss_alt: Option<Vec<Level>> = if strip_pair_h_body.is_some() {
-            Some(build_pyramid(&client))
+        // second gauss pyramid so REF gauss data can survive past DIST
+        // dispatch (see field docstring). Outside Mode B, `None`.
+        //
+        // P2.7 partial (2026-05-27): only SHALLOW levels are
+        // full-image; deep levels are zero-size. The swap is shallow-
+        // only (see `_maybe_swap_gauss_alt_post_ref`), so deep
+        // gauss_alt is never read. This saves the deep-pyramid bytes
+        // from gauss_alt at construction. The shallow full-image
+        // allocation remains a temporary cost — a full P2.7 (strip-
+        // shape shallow gauss_alt + strip-shape gauss_ref + per-strip
+        // DIST gauss reduce) would retire it entirely, but that's a
+        // major restructure beyond P2.x's mechanical-shrink scope.
+        let gauss_alt: Option<Vec<Level>> = if let Some(h_body) = strip_pair_h_body {
+            let k_split = mode_b_k_split(h_body, n_levels) as usize;
+            let mut out = Vec::with_capacity(n_levels as usize);
+            let mut w = width;
+            let mut h = height;
+            for k in 0..n_levels as usize {
+                // The shallow REF strip helper for level k reads
+                // `gauss_alt[k+1]` (coarser source for the upscale).
+                // For the last shallow level `k = k_split - 1`, that's
+                // `gauss_alt[k_split]` — so gauss_alt needs full-image
+                // at level `k_split` too. Allocate full-image for
+                // `k <= k_split`; zero-size for `k > k_split` (those
+                // are unread post-shallow-swap because REF deep
+                // weber finalize completes before swap and DIST deep
+                // reads `gauss_ref` directly).
+                let n_alloc = if k <= k_split {
+                    (w as usize) * (h as usize)
+                } else {
+                    0
+                };
+                out.push(Level {
+                    w,
+                    h,
+                    planes: [
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                    ],
+                });
+                w = w.div_ceil(2);
+                h = h.div_ceil(2);
+            }
+            Some(out)
         } else {
             None
         };
@@ -3029,6 +3067,18 @@ impl<R: Runtime> Cvvdp<R> {
     ///
     /// The swap happens AFTER REF weber finalize (incl. baseband
     /// mean) so the finalize path can read `gauss_ref` as usual.
+    ///
+    /// **P2.7 partial (2026-05-27):** swap is now SHALLOW-ONLY
+    /// (`k < k_split`). Deep levels of `gauss_alt` are zero-size
+    /// (never read for REF — REF weber finalize writes deep bands_ref
+    /// from gauss_ref before this swap, then nothing reads REF deep
+    /// gauss until next call). After the per-level swap:
+    ///   - `gauss_alt[k]` shallow: holds REF gauss for shallow k.
+    ///   - `gauss_alt[k]` deep: zero-size (was already zero-size pre-swap).
+    ///   - `gauss_ref[k]` shallow: garbage (will be overwritten by DIST).
+    ///   - `gauss_ref[k]` deep: holds REF data — the DIST gauss reduce
+    ///     overwrites it (DIST baseband path reads gauss_ref[last]
+    ///     where last >= k_split, so DIST data is what's wanted there).
     fn _maybe_swap_gauss_alt_post_ref(&mut self) {
         let mode_b = matches!(
             self.strip_config,
@@ -3037,8 +3087,20 @@ impl<R: Runtime> Cvvdp<R> {
         if !mode_b {
             return;
         }
+        let h_body = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return,
+        };
+        let n_levels_u32 = self.n_levels;
+        let k_split = mode_b_k_split(h_body, n_levels_u32) as usize;
+        // Swap shallow levels + level k_split (the "coarse source" for
+        // the last shallow REF strip helper read). Levels > k_split
+        // stay unswapped because gauss_alt is zero-sized for them.
+        let swap_upto = (k_split + 1).min(self.n_levels as usize);
         if let Some(alt) = self.gauss_alt.as_mut() {
-            std::mem::swap(&mut self.gauss_ref, alt);
+            for k in 0..swap_upto {
+                std::mem::swap(&mut self.gauss_ref[k], &mut alt[k]);
+            }
         }
     }
 

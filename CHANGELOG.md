@@ -17,6 +17,39 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.7 partial — gauss_alt deep levels zero-sized + honest-stop on full shrink (2026-05-27)
+
+Zero-sizes `gauss_alt[k > k_split]` planes (deep levels). The shallow
+REF strip helper reads `gauss_alt[k+1]` at `k < k_split`, so
+`gauss_alt` levels `0..=k_split` stay full-image — the rest is unread
+post-swap and gets zero-size handles. `_maybe_swap_gauss_alt_post_ref`
+becomes a per-level shallow swap: levels `[0, k_split]` swap;
+levels `> k_split` stay unswapped (gauss_ref keeps REF data there
+until DIST gauss reduce overwrites it).
+
+**Memory delta (4096² h_body=256, k_split=6):** deep gauss_alt levels
+7-8 sum 64²+32²+16² × 3 ch × 4 = ~64 KiB. Negligible at 4096² but
+meaningful at smaller sizes / shallower k_split.
+
+**Honest-stop on full P2.7.** The brief targets `gauss_ref` strip-
+shaped for `k < k_split` (~680 MiB at 4096²). Achieving that needs
+strip-shape gauss_ref AND gauss_alt for shallow levels, which
+requires per-strip REF gauss reduce + per-strip DIST gauss reduce
+inside the band loop's strip-major outer (the existing
+`_reduce_gauss_pyramid_strip_walker` writes full-image strip-major
+gauss; making the OUTPUT buffer strip-shaped requires the gauss
+reduce caller chain to be strip-major-outer of LEVEL 0, populating
+levels 0..k_split per strip with halo-aware reads).
+
+That's a multi-commit restructure of the gauss reduce + color stage
++ DIST dispatch ordering, beyond the P2.x mechanical-shrink scope
+that landed P2.3-P2.6 cleanly. Documented for the next session in
+docs/STRIP_PROCESSING.md ("Phase 2 recipe" §11).
+
+**Cumulative shrink from P2.1c baseline (4096² Mode B):** 3457 →
+1502 MiB (-1955 MiB, -56.6%). JOD bit-identical at all tested
+sizes. Mode E + CappedPyramid + strip parity tests unchanged.
+
 ### cvvdp-gpu — perf: P2.5+P2.6 — weber_scratch strip-shaped + P2.5 noted (-271 MiB at 4096²) (2026-05-27)
 
 Shrinks `WeberScratch.{l_bkg_fine, vscratch_a, log_l_bkg,
