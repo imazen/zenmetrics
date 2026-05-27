@@ -232,7 +232,38 @@ All three commits are on `origin/master`. Tests added:
 tests in `tests/cli.rs` (which continue passing with the new code
 path).
 
-## Phase 7.7 — parity gate FAILED, default flip BLOCKED (2026-05-27)
+## Phase 7.7.1 — parity gate PASSED, default flipped ON (2026-05-27)
+
+Phase 7.7.1 wrapped the Phase 7.7 honest-stop. Three diagnosed
+fixes + one newly-discovered chooser bug + one butter carve-out:
+
+| # | Fix | Commit | Cells affected |
+| --- | --- | --- | --- |
+| 1+2 | `executor::construct` uses `MemoryMode::Auto` for first attempt; explicit `Full`/`Strip` mode only on OOM ladder retry | (this branch) | ssim2-gpu @ 4096 + the structural piece that the brief identified for butter |
+| 3 | `rekey_orchestrator_columns` re-keys orchestrator's versioned `iwssim_imazen_v*` back to legacy `iwssim_gpu` (or bare `iwssim` for the CLI bare variant) | (this branch) | iwssim-gpu 9/9 |
+| 4 | `evaluate_candidate` rejects non-positive log-linear extrapolation (`RejectReason::NonPositivePrediction`) — discovered when re-running parity after fix 1+2 still showed ssim2 4096 picking CPU on a NEGATIVE extrapolated ns/px | (this branch) | ssim2-gpu @ 4096 (was wrongly picking CPU); also blocks future bad-extrapolation issues |
+| 5 | Butter (BOTH CPU and GPU CLI variants) reverted to legacy path via `metric_orchestrator_eligible` — the `ButteraugliOpaque::new_with_memory_mode(.., Auto)` resolver is strip-preferred and drops to single-resolution; legacy CLI's `butter_pnorm3::score_both` calls `new_multires` unconditionally so the two diverge by ~14-30 %. Butter via `ButteraugliOpaque` needs the per-crate `new_multires_strip` wire-up — out of scope for Phase 7.7.1 | (this branch) | butteraugli-gpu 9/9 |
+
+After all 5 fixes, parity sweep result: **54 of 54 cells PASS-EXACT**
+(bit-identical). See:
+
+- `benchmarks/orchestrator_parity_2026-05-27_phase771_run3.csv` — final
+  per-cell data (the run3 file; run1 + run2 are earlier iterations
+  during fix verification, committed alongside for the audit trail)
+- `scripts/orchestrator_parity_sweep.py` — repeatable harness
+
+Default flip **shipped**:
+- `--use-orchestrator` (and `ZENMETRICS_USE_ORCHESTRATOR=1`) deprecated
+  to no-op + warning. The CLI now defaults to orchestrator.
+- `--use-legacy-scheduler` (and `ZENMETRICS_USE_LEGACY_SCHEDULER=1`)
+  added as the explicit opt-OUT.
+- `scripts/sweep/onstart_orchestrator.sh` no longer exports
+  `ZENMETRICS_USE_ORCHESTRATOR=1` (deprecated, no-op since the flip).
+- README + this doc updated.
+
+---
+
+## Phase 7.7 — parity gate FAILED, default flip BLOCKED (2026-05-27, RESOLVED in 7.7.1)
 
 User directive: "make users of the cli adopt this, for local and
 remote use" — i.e., flip `--use-orchestrator` from opt-in default-off
@@ -243,7 +274,9 @@ preferred; up to atomic-reorder noise (~5e-5) accepted; anything
 larger = FAIL = blocks the flip.
 
 Parity sweep ran on the water-cooled 7950X / RTX 5070 workstation
-2026-05-27. **Result: 22 of 54 cells FAIL** — flip is BLOCKED. See:
+2026-05-27. **Result: 22 of 54 cells FAIL** — flip was BLOCKED at
+this gate. RESOLVED in Phase 7.7.1 (above) — keep this section for
+historical context but the gate is closed. See:
 
 - `benchmarks/orchestrator_parity_2026-05-27.csv` — per-cell data
 - `benchmarks/orchestrator_parity_2026-05-27.md` — table summary

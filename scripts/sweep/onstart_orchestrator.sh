@@ -108,29 +108,35 @@ fi
 # forward the orchestrator flags through the env so the
 # zen-metrics-cli library calls inside zen-sweep-worker pick them up.
 log "configuring orchestrator env for downstream worker"
-export ZENMETRICS_USE_ORCHESTRATOR=1
+# Phase 7.7.1 (2026-05-27): the orchestrator is now the CLI default;
+# `ZENMETRICS_USE_ORCHESTRATOR=1` is no longer required (and is a
+# deprecated no-op the binary will warn about). Set
+# `ZENMETRICS_USE_LEGACY_SCHEDULER=1` to opt OUT — needed only when
+# this worker is intentionally exercising the legacy direct-dispatch
+# path for a parity comparison.
 export ZENMETRICS_BENCH_ON_START="${ZENMETRICS_BENCH_ON_START:-auto}"
 export ZENMETRICS_CPU_FEATURES="${ZENMETRICS_CPU_FEATURES:-all}"
-log "  ZENMETRICS_USE_ORCHESTRATOR=$ZENMETRICS_USE_ORCHESTRATOR"
 log "  ZENMETRICS_CACHE_DIR=$ZENMETRICS_CACHE_DIR"
 log "  ZENMETRICS_BENCH_ON_START=$ZENMETRICS_BENCH_ON_START"
 log "  ZENMETRICS_CPU_FEATURES=$ZENMETRICS_CPU_FEATURES"
+log "  orchestrator: default (set ZENMETRICS_USE_LEGACY_SCHEDULER=1 to opt out)"
 
-# Smoke: the binary recognises --use-orchestrator. If this fails the
-# image was built without the orchestrator feature — surface a clear
-# error before burning chunk time.
-if ! zen-metrics --help 2>&1 | grep -q -- '--use-orchestrator'; then
-    log "FATAL: zen-metrics binary does not expose --use-orchestrator"
+# Smoke: the binary recognises the orchestrator flag surface. We check
+# `--use-legacy-scheduler` (the new opt-OUT flag) so this works on
+# Phase 7.7.1+ binaries; older binaries that predate the flip still
+# expose `--use-orchestrator` and we accept either.
+if ! zen-metrics --help 2>&1 | grep -q -E -- '--use-(orchestrator|legacy-scheduler)'; then
+    log "FATAL: zen-metrics binary does not expose orchestrator flags"
     log "       (image was built without orchestrator feature; rebuild)"
     exit 98
 fi
 
 # Print the orchestrator's resolved capability profile so the worker
-# log captures which machine fingerprint scored this chunk. The
-# `--use-orchestrator` flag plus `score-pairs` with a tiny synthetic
-# input would also work, but a no-op list-metrics keeps the smoke fast.
+# log captures which machine fingerprint scored this chunk. A no-op
+# list-metrics call exercises the orchestrator's startup path
+# (capability detection + cache load) without burning chunk time.
 log "orchestrator preflight (list-metrics, capability cache will be written/loaded)"
-zen-metrics --use-orchestrator \
+zen-metrics \
     --orchestrator-cache "$ZENMETRICS_CACHE_DIR" \
     --bench-on-start "$ZENMETRICS_BENCH_ON_START" \
     --cpu-features "$ZENMETRICS_CPU_FEATURES" \
@@ -139,8 +145,8 @@ zen-metrics --use-orchestrator \
 }
 
 # Delegate to the existing unified-worker entrypoint. Its chunk-claim
-# loop calls `zen-metrics sweep` for every chunk; we've exported
-# ZENMETRICS_USE_ORCHESTRATOR=1 so each invocation routes through the
-# orchestrator path.
+# loop calls `zen-metrics sweep` for every chunk; with the Phase
+# 7.7.1 default flip, every invocation routes through the
+# orchestrator without needing an env-var opt-in.
 log "delegating to /usr/local/bin/onstart_unified.sh"
 exec /usr/local/bin/onstart_unified.sh "$@"

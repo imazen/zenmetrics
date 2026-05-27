@@ -909,8 +909,10 @@ fn use_orchestrator_score_identical_pngs() {
             "--use-orchestrator",
             "--orchestrator-cache",
             cache_dir.path().to_str().unwrap(),
+            // Phase 7.7.1: was `no` (would require pre-warmed cache);
+            // changed to `auto` so the test self-warms on first run.
             "--bench-on-start",
-            "no",
+            "auto",
             "score",
             "--metric",
             "zensim",
@@ -988,4 +990,139 @@ fn bench_on_start_flag_rejects_unknown_mode() {
     // Either rc=0 (orchestrator feature off, flag silently accepted)
     // or rc=1 (feature on, parser rejects the value). Both are valid
     // — test just exercises the path so no panic-on-parse.
+}
+
+// ===========================================================================
+// Phase 7.7.1 (2026-05-27): default-flip integration tests
+//
+// The CLI now defaults to the orchestrator path. `--use-orchestrator` is a
+// deprecated no-op that emits a warning; `--use-legacy-scheduler` is the
+// new opt-OUT flag.
+// ===========================================================================
+
+/// `zen-metrics --use-legacy-scheduler` should be accepted by clap regardless
+/// of the orchestrator feature flag, so users get a clean error rather than
+/// "unknown flag".
+#[test]
+fn use_legacy_scheduler_flag_parses_when_built_without_feature() {
+    let out = cli()
+        .args(["--use-legacy-scheduler", "list-metrics"])
+        .output()
+        .expect("run cli");
+    assert!(
+        out.status.success(),
+        "list-metrics with --use-legacy-scheduler failed: stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// `zen-metrics score …` (NO flag, default path) must succeed and route
+/// through the orchestrator when the orchestrator feature is built. The
+/// orchestrator emits a `[orchestrator] enabled` line to stderr.
+#[cfg(feature = "cpu-metrics")]
+#[test]
+fn default_score_routes_through_orchestrator() {
+    let dir = fixtures_dir();
+    let cache_dir = tempfile::tempdir().expect("tempdir");
+    let out = cli()
+        .args([
+            "--orchestrator-cache",
+            cache_dir.path().to_str().unwrap(),
+            "--bench-on-start",
+            "auto",
+            "score",
+            "--metric",
+            "zensim",
+            "--reference",
+            dir.join("ref_64.png").to_str().unwrap(),
+            "--distorted",
+            dir.join("dist_identical_64.png").to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "default score failed: stdout={stdout} stderr={stderr}",
+    );
+    // The orchestrator path emits `[orchestrator] enabled (…)` to
+    // stderr when the feature is built; legacy path does not. We
+    // only assert the marker when the feature is compiled in.
+    #[cfg(feature = "orchestrator")]
+    assert!(
+        stderr.contains("[orchestrator] enabled"),
+        "expected orchestrator-enabled stderr marker; got: {stderr}",
+    );
+}
+
+/// `zen-metrics --use-legacy-scheduler score …` must succeed and route
+/// through the legacy direct-dispatch path. The legacy path does NOT
+/// emit the `[orchestrator] enabled` stderr marker.
+#[cfg(feature = "cpu-metrics")]
+#[test]
+fn use_legacy_scheduler_score_skips_orchestrator() {
+    let dir = fixtures_dir();
+    let out = cli()
+        .args([
+            "--use-legacy-scheduler",
+            "score",
+            "--metric",
+            "zensim",
+            "--reference",
+            dir.join("ref_64.png").to_str().unwrap(),
+            "--distorted",
+            dir.join("dist_identical_64.png").to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "legacy-scheduler score failed: stdout={stdout} stderr={stderr}",
+    );
+    assert!(
+        !stderr.contains("[orchestrator] enabled"),
+        "legacy path should NOT emit orchestrator marker; got: {stderr}",
+    );
+}
+
+/// `zen-metrics --use-orchestrator …` is accepted (deprecated no-op
+/// since Phase 7.7.1) and emits a deprecation warning to stderr. The
+/// score itself goes through the orchestrator since that's the new
+/// default.
+#[cfg(feature = "cpu-metrics")]
+#[cfg(feature = "orchestrator")]
+#[test]
+fn use_orchestrator_emits_deprecation_warning() {
+    let dir = fixtures_dir();
+    let cache_dir = tempfile::tempdir().expect("tempdir");
+    let out = cli()
+        .args([
+            "--use-orchestrator",
+            "--orchestrator-cache",
+            cache_dir.path().to_str().unwrap(),
+            "--bench-on-start",
+            "auto",
+            "score",
+            "--metric",
+            "zensim",
+            "--reference",
+            dir.join("ref_64.png").to_str().unwrap(),
+            "--distorted",
+            dir.join("dist_identical_64.png").to_str().unwrap(),
+        ])
+        .output()
+        .expect("run cli");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success(),
+        "use-orchestrator score failed: stderr={stderr}",
+    );
+    assert!(
+        stderr.contains("--use-orchestrator")
+            && stderr.contains("deprecated"),
+        "expected deprecation warning mentioning --use-orchestrator; got: {stderr}",
+    );
 }

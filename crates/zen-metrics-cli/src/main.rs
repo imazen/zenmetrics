@@ -55,16 +55,34 @@ use crate::output::{OutputFormat, print_score};
 #[derive(Parser, Debug)]
 #[command(version, author = "Lilith River", about, long_about = None)]
 struct Cli {
-    /// Route scoring through the `zenmetrics-orchestrator` crate
-    /// instead of the legacy direct-dispatch handlers. The orchestrator
-    /// adds OOM-safe fallback (GPU full → strip → CPU), a persistent
-    /// machine-capability cache, and cached-reference auto-detect for
-    /// many-dist-one-ref workloads. Only meaningful when the binary
-    /// was built with `--features orchestrator,orchestrator-cuda`.
+    /// **DEPRECATED (Phase 7.7.1, 2026-05-27): the orchestrator is now
+    /// the default.** This flag is accepted for backwards compatibility
+    /// — passing it (or setting `ZENMETRICS_USE_ORCHESTRATOR=1`) is a
+    /// no-op and emits a deprecation warning on stderr. To opt OUT of
+    /// the orchestrator and route through the legacy direct-dispatch
+    /// handlers, use `--use-legacy-scheduler`.
     ///
-    /// May also be enabled by setting `ZENMETRICS_USE_ORCHESTRATOR=1`.
+    /// The orchestrator adds OOM-safe fallback (GPU full → strip →
+    /// CPU), a persistent machine-capability cache, and cached-reference
+    /// auto-detect for many-dist-one-ref workloads. Only meaningful
+    /// when the binary was built with
+    /// `--features orchestrator,orchestrator-cuda`.
     #[arg(long, global = true)]
     use_orchestrator: bool,
+
+    /// Route scoring through the legacy direct-dispatch handlers
+    /// instead of the `zenmetrics-orchestrator` crate. The legacy path
+    /// has no OOM fallback ladder, no persistent capability cache,
+    /// and no cached-reference auto-detect — it's the pre-Phase-7.7.1
+    /// default kept available for sweeps that need bit-identical
+    /// output with archived parquet sidecars, and for the butter
+    /// metric which still flows through legacy unconditionally
+    /// (orchestrator ineligibility documented in
+    /// `crate::orchestrator_runner::metric_orchestrator_eligible`).
+    ///
+    /// May also be enabled by setting `ZENMETRICS_USE_LEGACY_SCHEDULER=1`.
+    #[arg(long, global = true)]
+    use_legacy_scheduler: bool,
 
     /// Override the orchestrator's persistent capability cache
     /// location. Defaults to `$XDG_CACHE_HOME/zenmetrics/` or
@@ -367,10 +385,48 @@ struct ScorePairsArgs {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    // Top-level orchestrator opt-in: flag OR env var either is sufficient.
+    // Phase 7.7.1: the orchestrator is the default.
+    //
+    // Selection precedence (highest first):
+    //   1. `--use-legacy-scheduler` (CLI) or
+    //      `ZENMETRICS_USE_LEGACY_SCHEDULER=1` (env) → legacy path.
+    //   2. `--use-orchestrator` (CLI) or
+    //      `ZENMETRICS_USE_ORCHESTRATOR=1` (env) → deprecated alias
+    //      for the new default; emits a deprecation warning but is
+    //      accepted for backwards-compat with scripts / Docker images
+    //      built before the flip.
+    //   3. Default → orchestrator.
+    //
+    // The deprecation warning is conservative — only printed when the
+    // user EXPLICITLY set `--use-orchestrator` / the env var, not on
+    // every invocation. This keeps stdout / stderr clean for the
+    // default case.
     #[cfg(feature = "orchestrator")]
-    let use_orchestrator =
+    let use_legacy_scheduler =
+        cli.use_legacy_scheduler || orchestrator_glue::use_legacy_scheduler_from_env();
+    #[cfg(feature = "orchestrator")]
+    let explicit_orchestrator_opt_in =
         cli.use_orchestrator || orchestrator_glue::use_orchestrator_from_env();
+    #[cfg(feature = "orchestrator")]
+    let use_orchestrator = !use_legacy_scheduler;
+    #[cfg(feature = "orchestrator")]
+    {
+        if explicit_orchestrator_opt_in && !use_legacy_scheduler {
+            eprintln!(
+                "[zen-metrics] note: --use-orchestrator / ZENMETRICS_USE_ORCHESTRATOR is \
+                 deprecated since Phase 7.7.1 (2026-05-27) — the orchestrator is now the \
+                 default. Use --use-legacy-scheduler / ZENMETRICS_USE_LEGACY_SCHEDULER=1 \
+                 to opt OUT.",
+            );
+        }
+        if explicit_orchestrator_opt_in && use_legacy_scheduler {
+            eprintln!(
+                "[zen-metrics] warning: both --use-orchestrator and --use-legacy-scheduler \
+                 were passed; the legacy scheduler wins. The orchestrator opt-in flag is \
+                 deprecated and a no-op since Phase 7.7.1.",
+            );
+        }
+    }
     #[cfg(feature = "orchestrator")]
     let orchestrator_opts = match orchestrator_runner::bench_on_start_from_flag(
         Some(cli.bench_on_start.as_str()),
@@ -403,6 +459,7 @@ fn main() -> ExitCode {
     #[cfg(not(feature = "orchestrator"))]
     {
         let _ = cli.use_orchestrator;
+        let _ = cli.use_legacy_scheduler;
         let _ = &cli.orchestrator_cache;
         let _ = &cli.bench_on_start;
         let _ = &cli.cpu_features;

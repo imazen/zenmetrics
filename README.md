@@ -57,16 +57,34 @@ cached-ref semantics, CPU backend selection, capability cache lifecycle,
 and the full configuration surface. Migration code samples in
 [`crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md`](crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md).
 
-The `zen-metrics` CLI also exposes the orchestrator as an opt-in path:
-`zen-metrics --use-orchestrator score …` (or set
-`ZENMETRICS_USE_ORCHESTRATOR=1`) routes scoring through the
-orchestrator while preserving every existing flag and output format.
+The `zen-metrics` CLI routes scoring through the orchestrator by
+default (since Phase 7.7.1, 2026-05-27). The legacy direct-dispatch
+path remains available via `zen-metrics --use-legacy-scheduler …` (or
+`ZENMETRICS_USE_LEGACY_SCHEDULER=1`) — useful when an archived parquet
+sidecar needs bit-identical regeneration, or when comparing the two
+paths for parity. The orchestrator path itself was validated as
+bit-identical to legacy across all 54 cells (6 metrics × 3 sizes × 3
+qs) on RTX 5070 + 7950X — see
+[`benchmarks/orchestrator_parity_2026-05-27_phase771_run3.csv`](benchmarks/orchestrator_parity_2026-05-27_phase771_run3.csv)
+for the per-cell data. The `--use-orchestrator` flag and
+`ZENMETRICS_USE_ORCHESTRATOR` env var are accepted for
+backwards-compat with pre-Phase-7.7.1 scripts / Docker images but
+emit a deprecation warning.
+
 The new sweep image
 [`Dockerfile.sweep.v27`](Dockerfile.sweep.v27) bakes the orchestrator
 features in and ships
 [`scripts/sweep/onstart_orchestrator.sh`](scripts/sweep/onstart_orchestrator.sh)
 as an entrypoint that drives the per-cell scoring through the
 orchestrator's worker pool.
+
+One per-metric carve-out remains: butteraugli stays on the legacy
+direct-dispatch path because `ButteraugliOpaque::new_with_memory_mode`
+resolves Auto to strip-mode (butter is strip-preferred), which drops
+to single-resolution scoring and diverges from the legacy CLI's
+always-multires output by ~14-30 %. The orchestrator transparently
+falls back to legacy for butter; sweeps emit the same column shape
+in both paths.
 
 ## SRCC sanity table
 

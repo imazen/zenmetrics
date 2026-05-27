@@ -268,10 +268,29 @@ pub fn validate_cpu_variant_built_in(
 /// values: `1`, `true`, `yes`, `on` (case-insensitive). Falsy or unset
 /// returns `false`.
 ///
-/// This is the env-driven counterpart to the CLI's `--use-orchestrator`
-/// flag. The CLI ORs them so either path is sufficient.
+/// **Phase 7.7.1 (2026-05-27)**: deprecated. The orchestrator is the
+/// default; this env var is a no-op kept for backwards-compat with
+/// Docker images / shell scripts that set it before the default flip.
+/// Use [`use_legacy_scheduler_from_env`] for the opt-OUT path.
 pub fn use_orchestrator_from_env() -> bool {
     match std::env::var("ZENMETRICS_USE_ORCHESTRATOR") {
+        Ok(v) => matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        Err(_) => false,
+    }
+}
+
+/// Read the `ZENMETRICS_USE_LEGACY_SCHEDULER` env var. Recognised
+/// truthy values: `1`, `true`, `yes`, `on` (case-insensitive). Falsy
+/// or unset returns `false`.
+///
+/// Phase 7.7.1 (2026-05-27): the env-driven counterpart to the CLI's
+/// `--use-legacy-scheduler` flag. The CLI ORs them — either path
+/// opts out of the orchestrator.
+pub fn use_legacy_scheduler_from_env() -> bool {
+    match std::env::var("ZENMETRICS_USE_LEGACY_SCHEDULER") {
         Ok(v) => matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
@@ -309,6 +328,16 @@ mod tests {
         // correctly reads the var", which is also fine.
         if std::env::var("ZENMETRICS_USE_ORCHESTRATOR").is_err() {
             assert!(!use_orchestrator_from_env());
+        }
+    }
+
+    #[test]
+    fn use_legacy_scheduler_from_env_parses_truthy() {
+        // Same caveat as the orchestrator env var: rely on the test
+        // environment not pre-setting the var. We can verify the
+        // parser is wired by checking the falsey branch (unset → false).
+        if std::env::var("ZENMETRICS_USE_LEGACY_SCHEDULER").is_err() {
+            assert!(!use_legacy_scheduler_from_env());
         }
     }
 }

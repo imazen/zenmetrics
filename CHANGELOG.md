@@ -17,7 +17,61 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **`zen-metrics-cli` Phase 7.7.1 — the orchestrator is now the default.**
+  All scoring subcommands (`score` / `batch` / `compare` / `sweep`)
+  route through `zenmetrics-orchestrator` by default. Opt OUT via
+  `--use-legacy-scheduler` (or `ZENMETRICS_USE_LEGACY_SCHEDULER=1`)
+  to fall back to direct-dispatch handlers. `--use-orchestrator`
+  (and `ZENMETRICS_USE_ORCHESTRATOR=1`) deprecated to a no-op +
+  warning. Production sweeps gain OOM-safe fallback (Full → Strip →
+  CPU), persistent capability cache, and cached-reference
+  auto-detect for free. `scripts/sweep/onstart_orchestrator.sh`
+  drops the `ZENMETRICS_USE_ORCHESTRATOR=1` export — no longer
+  required. Parquet sidecar shape is bit-identical to the legacy
+  path on all metrics except butter (see below).
+
+  Butteraugli (BOTH CPU and GPU CLI variants) stays on the legacy
+  path until the per-crate `ButteraugliOpaque::new_with_memory_mode`
+  rewires its strip arm to `Butteraugli::new_multires_strip` (the
+  multi-resolution strip walker that exists in `pipeline.rs` but the
+  opaque doesn't yet expose). Without that wire-up, the
+  orchestrator's strip-preferred Auto resolver drops butter to
+  single-resolution and diverges from the legacy CLI's always-
+  multires `butter_pnorm3::score_both` path by ~14-30 %. The
+  orchestrator transparently falls back to the legacy code for
+  butter; sweep output shape is unchanged.
+
+  Refs `benchmarks/orchestrator_parity_2026-05-27_phase771_run3.csv`
+  (54 of 54 cells PASS-EXACT post-fix) and `INTEGRATION_NOTES.md`
+  Phase 7.7.1 section.
+
 ### Fixed
+
+- **`zenmetrics-orchestrator` Phase 7.7.1 — three structural bugs
+  cleared the parity gate so the CLI default could flip.** (1)
+  `executor::construct` was forcing `MemoryMode::Full` or
+  `MemoryMode::Strip { h_body: None }` based on which microbench
+  result happened to land first, baking a non-deterministic input
+  into ssim2 + butter scores at sizes where Auto would have picked
+  differently. Fixed by passing `MemoryMode::Auto` on the first
+  construct attempt so the per-crate resolver owns the policy;
+  explicit `Full` / `Strip` only on OOM-ladder retry (where the
+  chooser already excluded the bigger mode via `cells_failed_oom`).
+  (2) `evaluate_candidate` was selecting CPU candidates with NEGATIVE
+  `predicted_ns_per_px` — when log-linear extrapolation from 2
+  monotonically decreasing bench points overshoots zero at large
+  sizes (concrete: CPU ssim2 extrapolated to -179 ns/px at 16M
+  pixels), `min(ns_per_px)` then ranked the negative number as
+  fastest. Fixed by rejecting non-positive predictions via the new
+  `RejectReason::NonPositivePrediction`; the chooser falls back to a
+  backend with a real measurement. (3) `rekey_orchestrator_columns`
+  did not re-key the orchestrator's versioned `iwssim_imazen_v*`
+  column back to the legacy unversioned `iwssim_gpu` that production
+  parquet readers depend on; fixed by adding the rename rule.
+
+
 
 - `zen-cloud-vastai` sweep worker no longer silently falls back to the
   deprecated bash subprocess when the inline Rust pipeline fails. With
