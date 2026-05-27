@@ -40,8 +40,9 @@ The user instruction that locked this in (2026-05-26):
 ## Wall-time benchmark — required for any new shrink
 
 Every Phase 2 buffer-shrink commit MUST include a wall-time
-measurement showing Full performance is unchanged. Add a row per shrink
-to `benchmarks/cvvdp_mode_b_wallclock_<date>.csv` with columns:
+measurement comparing Full vs StripPair at production sizes. Add a row
+per shrink to `benchmarks/cvvdp_mode_b_wallclock_<date>.csv` with
+columns:
 
 | size | mode | h_body | wall_ms_p50 | wall_ms_p25 | wall_ms_p75 | nvidia_mb |
 |---|---|---|---|---|---|---|
@@ -57,11 +58,29 @@ harness extended with wall-time capture (`std::time::Instant` around
 `compute_dkl_jod_with_warm_ref` calls, n=20 runs per cell, report
 percentiles).
 
-**Regression gate:** Full's `wall_ms_p50` at any size must not
-increase by more than 1.5% from the pre-shrink baseline measured at
-parent commit. If a shrink commit pushes Full past that, the shrink
-goes behind a feature flag or the code path stays unmerged until the
-regression is understood.
+### Perf budget — Strip-vs-Full wall-time
+
+**StripPair may be up to 20% slower than Full at sizes where both
+modes fit.** This budget is the memory-savings-vs-perf tradeoff the
+user accepted (locked in 2026-05-26: "under 20pct regression is ok").
+
+- StripPair `wall_ms_p50 / Full wall_ms_p50 ≤ 1.20` at each size:
+  shrink lands.
+- Beyond 1.20 at a size where Full fits: still lands, but the Auto
+  resolver MUST prefer Full at that size (perf-aware selection per
+  the resolver rules below). The shrink commit must include the
+  resolver change in the same PR.
+- Beyond 1.20 at a size where Full does NOT fit: lands as-is. There's
+  no Full alternative; StripPair-slower-than-Full is still
+  StripPair-faster-than-OOM.
+
+**Full's own baseline must not regress more than 1.5%** from the
+parent commit. The 20% budget is for StripPair-vs-Full at the same
+commit, NOT for Full degrading over time. If a shrink commit pushes
+Full's `wall_ms_p50` past the 1.5% gate, the shrink goes behind a
+feature flag or the code path stays unmerged until the regression is
+understood — Full mode is the warm-path correctness baseline and must
+not silently slow down.
 
 ## Auto resolver — perf-aware, not just memory-aware
 
@@ -78,15 +97,27 @@ fit the cap and Strip DOES, pick Strip (existing behaviour). When BOTH
 fit, prefer Full (existing behaviour, which is also the fastest at
 sizes where Full fits since cache locality + zero halo overhead).
 
-**Do NOT change the resolver to prefer Strip when both fit** unless a
-benchmark establishes that Strip is meaningfully faster at that size.
-The current preference for Full is the conservative correct choice.
+**Smart selection (perf-aware) — landing rules**
 
-If a future Phase 2 shrink discovers Strip IS faster at some size
-range (e.g. cache effects at very large images), add a perf-aware
-branch using a static lookup table indexed by `(width, height)` from
-the committed wall-time benchmark. Never measure inside `new()` — the
-selection must be deterministic and zero-cost.
+When both Full and Strip fit the cap, the resolver consults a
+static lookup table seeded from the committed wall-time benchmark:
+
+- If `strip_p50 / full_p50 ≤ 1.20` at the resolved `(width, height)`
+  bucket: either choice is acceptable. Default to Full for warmpath
+  cache locality, but a caller asking for `MemoryMode::StripPair`
+  explicitly is honored as-is.
+- If `strip_p50 / full_p50 > 1.20` at that bucket: the Auto resolver
+  picks Full even though Strip also fits. The 20% budget is the line
+  past which "smart selection" kicks in to protect throughput.
+- If Full does NOT fit: pick Strip regardless of perf ratio. There's
+  no alternative.
+
+The lookup table lives in `pipeline::strip_perf_ratio_for_size` (to
+be added by Phase 2 alongside the wall-time benchmark commits). It's
+indexed by log2 width and log2 height bucket (8 = 256, 10 = 1024,
+12 = 4096), populated from the committed CSV, and queried by
+`resolve_auto`. Never measure perf inside `new()` — the selection
+must be deterministic and zero-cost.
 
 ## Mode-E vs Mode-B distinction
 
@@ -106,8 +137,10 @@ this fallback intact.
 1. `cargo test --release -p cvvdp-gpu --features cuda` — all tests pass.
 2. JOD parity test at 128² / 1024² / 4096² — `|diff| ≤ 1e-4` (target
    bit-identical `|diff| = 0.0`).
-3. Wall-time bench Full vs StripPair — Full unchanged within 1.5%,
-   StripPair documented (may be faster, slower, or equal).
+3. Wall-time bench Full vs StripPair — Full unchanged within 1.5%
+   from parent commit, StripPair within 20% of Full at sizes where
+   both fit (else update the perf-aware resolver lookup table in the
+   same commit).
 4. `nvidia-smi` delta — StripPair memory dropped by the predicted
    amount; Full memory unchanged.
 5. CappedPyramid still works (smoke test at 4096² with `levels=8`).
