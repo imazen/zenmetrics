@@ -211,6 +211,16 @@ name = "reorder"
 path = "tests/reorder.rs"
 required-features = ["cuda"]
 
+# Phase 8a graceful no-GPU fallback integration tests. Covers the
+# ZENMETRICS_FORCE_NO_GPU=1 env-var fixture, bench-plan gating, the
+# chooser's NoGpuPresent rejection, and the executor's libcuda-missing
+# downgrade path. Same sibling-workspace caveat — build from the
+# primary `zenmetrics/` checkout.
+[[test]]
+name = "no_gpu_fallback"
+path = "tests/no_gpu_fallback.rs"
+required-features = ["cuda"]
+
 # Phase 5 batch example. Drives `Orchestrator::run_all` against a real
 # CUDA device. Sibling-workspace caveat applies.
 [[example]]

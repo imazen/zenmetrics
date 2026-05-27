@@ -386,6 +386,8 @@ fn reject_reason_tag(r: RejectReason) -> &'static str {
         RejectReason::CpuNotYetWired => "CpuNotYetWired",
         RejectReason::CpuMetricUnavailable => "CpuMetricUnavailable",
         RejectReason::NoMeasuredData => "NoMeasuredData",
+        RejectReason::NonPositivePrediction => "NonPositivePrediction",
+        RejectReason::NoGpuPresent => "NoGpuPresent",
     }
 }
 
