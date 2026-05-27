@@ -784,3 +784,241 @@ walker-order changes to land together.
   treats `bands_dis_strip[k]` as body-only (no halo), and you
   want to invert the dispatch order, that buffer's shape is the
   first thing to change.
+
+## Phase 2 — investigation 2026-05-27 (PRE-IMPLEMENTATION ANALYSIS)
+
+> **Status: read-only analysis. No walker / kernel / buffer code
+> was touched in this push. This section is a refinement of the
+> Phase 2 recipe at lines 683-787 — written after a full read of
+> the existing strip walkers and the per-level kernel reflection
+> semantics. The analysis identifies three concerns the brief's
+> recipe under-specifies (halo back-projection, REF/DIST clobber
+> ordering, walker rewrites), decomposes the work into ten
+> commit-sized increments each gated by JOD parity, and recommends
+> a low-risk pre-work pass that the next session can ship without
+> taking on the full canary surgery.
+>
+> The numbers in §1 are first-pass calculations from the kernel
+> reflection semantics; the next session MUST verify them by
+> reading each `*_strip_kernel` / `*_strip_aware_kernel` against
+> the actual reflection bounds before sizing buffers off them.**
+
+### 1. Halo math is the first thing to nail down
+
+The Phase 1 recipe (line 695) cites
+`halo_at_level_0(k) = ±2^k · 2 + ±6 · 2^k = 8·2^k`
+as the back-projected halo at level 0 needed to provide an
+8-band-row halo at level k.
+
+The existing `mode_b_halo_at_level(k, k_split)` helper instead
+returns a **constant `8` band-resolution rows** for every shallow
+level. The two formulas describe different regimes:
+
+- **`8` band-resolution rows** is the right halo at a band's own
+  resolution. The downscale stencil reads ±2 of input per output
+  row; the PU-blur reads ±6 of input per output row. 8 rows at
+  band k's resolution gives both stencils valid context within
+  the strip's own buffer at level k.
+- **`8·2^k` level-0 rows** is the brief's back-projected halo —
+  the number of level-0 rows the strip must hold so the chain of
+  reduces produces 8 valid rows of halo at level k.
+
+For h_body=512, n_levels=9, K_SPLIT=6, the back-projection chain
+(each level k's strip storage needs both body+halo_k at its own
+resolution AND `2·(body_{k+1} + halo_{k+1}) + 2` rows at the next
+level for the reduce stencil; the max wins):
+
+- Level 5 (deepest shallow): body=16 + halo=8 = 24 rows.
+- Level 4: max(32+8, 2·24+2) = max(40, 50) = 50 rows.
+- Level 3: max(64+8, 2·50+2) = max(72, 102) = 102 rows.
+- Level 2: max(128+8, 2·102+2) = 206 rows.
+- Level 1: max(256+8, 2·206+2) = 414 rows.
+- Level 0: max(512+8, 2·414+2) = 830 rows.
+
+So the level-0 strip needs ~830 rows (not 528 as the helper
+currently models, and not 16384 as a full-image alloc costs at
+4096²). The level-0 buffer footprint is ~`830·W·4 = 13.6 MiB` per
+channel per buffer at 4096² instead of `4096·W·4 = 64 MiB` —
+substantial savings, but smaller than the helper's optimistic
+`528·W·4 = 8.6 MiB`.
+
+These numbers depend on the EXACT reflection / stencil semantics
+in `downscale_strip_kernel`, `upscale_v_strip_kernel`,
+`pu_blur_v_3ch_scaled_strip_aware_kernel`, etc. The next agent
+MUST verify by reading those kernels' bounds before settling on
+the back-projection formula.
+
+### 2. The current estimator (pipeline.rs:1213) is OPTIMISTIC
+
+`estimate_gpu_memory_bytes_strip_pair` uses
+`mode_b_halo_at_level(k) = 8` at every level. Under the
+back-projected halo (§1) the level-0 buffer grows by roughly
+`(830 / 528) ≈ 1.57×`. Across all shallow-level buffers the
+revised estimate sits between the existing optimistic `-88%`
+prediction and the full-image baseline — needs measurement.
+
+### 3. The REF/DIST gauss_ref clobber forces a per-strip reorganization
+
+Today's pipeline runs:
+
+```text
+_dispatch_ref_weber_pyramid_only(ref_srgb):
+  _dispatch_gauss_pyramid_gpu(ref_srgb)   // writes gauss_ref[0..n_levels]
+  _finalize_weber_pyramid_after_gauss()    // reads gauss_ref, writes bands_ref + log_l_bkg
+
+_dispatch_dist_weber_pyramid_only(dist_srgb):
+  _dispatch_gauss_pyramid_gpu(dist_srgb)  // CLOBBERS gauss_ref with DIST data
+  _finalize_weber_pyramid_after_gauss()    // reads gauss_ref (DIST), writes bands_dis_strip
+
+_run_d_bands_band_loop()                   // reads bands_ref + bands_dis_strip
+```
+
+The `gauss_ref` buffer is shared — REF then DIST. The recipe's
+strip-major outer dispatch implicitly requires (for k < K_SPLIT):
+
+1. Per strip s, build REF gauss for body+halo at level 0 → write
+   gauss_ref's strip rows.
+2. Per strip s, reduce REF gauss through all shallow levels.
+3. Per strip s, finalize REF weber for all shallow levels → writes
+   bands_ref strip rows + log_l_bkg strip rows.
+4. Per strip s, build DIST gauss (clobbers gauss_ref).
+5. Per strip s, reduce DIST gauss through all shallow levels.
+6. Per strip s, finalize DIST weber + csf + masking + pool for
+   all shallow levels.
+
+For steps 1-3 to coexist with later strips' steps 4-6 without
+clobbering REF data, **bands_ref needs to be allocated per-strip
+sized AND the REF state from prior strips must not be reused for
+the current strip's band loop**. The latter is satisfied because
+each strip's band loop only reads its own bands_ref rows; the
+former requires a per-strip bands_ref buffer.
+
+The alternative — keeping gauss_ref full-image but separate from
+gauss_dis — adds one full-image pyramid (3 channels × sum_level_pixels
+× 4 bytes ≈ 256 MiB at 4096²) and breaks the memory budget. The
+correct path is per-strip bands_ref, per-strip gauss_ref for shallow
+levels.
+
+### 4. The existing strip walker helpers are level-major-outer-only
+
+All four existing strip walker helpers
+(`_reduce_gauss_pyramid_strip_walker`,
+`_finalize_weber_pyramid_strip_walker`,
+`_dispatch_dist_weber_csf_strip_walker_for_level`,
+`_run_band_masking_strip_walker`) iterate strips internally with
+**level-major outer** semantics. They read full-image previous-level
+buffers via reflection-against-logical-image-bounds. Strip-major
+outer requires either:
+
+- New helpers that take a fixed strip index `s` and run all-shallow-
+  levels for that strip, OR
+- Refactoring the existing helpers to accept an `(s, k)` tuple and
+  iterating from the outer caller.
+
+### 5. Decomposed Phase 2 increment plan
+
+The brief's "canary + 7 shrinks" decomposition front-loads the
+buffer-shape change AND the dispatch-order change into the canary
+commit. The honest decomposition (each step is its own commit +
+JOD parity gate at 128² / 1024² / 4096²):
+
+**P2.0 — Verify the halo back-projection math.**
+- Read each strip-aware kernel's reflection bounds and write a
+  table mapping `(level k, kernel)` → halo. Settle on either the
+  simple `8·2^k` from the recipe or the iterative table from §1.
+- Document the result in this section before P2.1.
+- This is read-only; no code change.
+
+**P2.1 — Add strip-major outer dispatch with FULL-IMAGE buffers.**
+- New method invoked from `compute_dkl_jod` only for `StripMode::Pair`.
+- Iterates `s in 0..n_strips_at_level_0`.
+- Per strip: runs REF gauss + REF weber + DIST gauss + DIST weber
+  + band loop + pool for that strip's body+halo rows at each
+  shallow level.
+- BUFFERS REMAIN FULL-IMAGE. The strip writes its body+halo rows
+  into full-image buffers; overlap zones get overwritten by neighbour
+  strips (deterministic — kernel is pure).
+- Levels `k >= K_SPLIT` run via the existing level-major path AFTER
+  all strips complete the shallow-level work.
+- JOD parity gate: `|jod_strip_major - jod_level_major| ≤ 1e-4` at
+  128² / 1024² / 4096².
+- No memory change yet. This isolates the dispatch-order
+  correctness question from the buffer-shape question.
+
+**P2.2 through P2.8 — Shrink one buffer at a time.**
+- Each commit shrinks ONE buffer to body+halo-sized per the
+  verified back-projection table:
+  - P2.2 → `bands_dis_strip` (already body-sized; widen to
+    back-projected H_k)
+  - P2.3 → add `bands_ref_strip` per-strip-sized sibling
+  - P2.4 → `t_p_*` in `DBandsTransient`
+  - P2.5 → `m_raw / m_mid / m_blur` in `DBandsTransient`
+  - P2.6 → `log_l_bkg / log_l_bkg_dis / l_bkg_fine`
+  - P2.7 → `gauss_ref` for k<K_SPLIT
+  - P2.8 → `d_scratch[k]` non-`.d` fields
+- Each commit must hold the JOD parity gate AND maintain Full
+  mode unchanged (per MODE_SELECTION.md §"Wall-time benchmark"
+  and §"Auto resolver").
+
+**P2.9 — Wall-time bench + perf-aware resolver.**
+- Extend `examples/mem_mode_b_vs_full.rs` with wall-time capture
+  (n=20, p50/p25/p75 per cell).
+- Commit `benchmarks/cvvdp_mode_b_wallclock_2026-05-27.csv`.
+- Wire `pipeline::strip_perf_ratio_for_size` lookup table per
+  MODE_SELECTION.md §"Auto resolver".
+
+### 6. Why this agent honest-stopped before P2.1
+
+The recipe at lines 683-787 lays out the eleven steps that the
+canary commit must land *together* to avoid breaking JOD. The
+honest read of the current pipeline is:
+
+- The four existing strip walkers must each grow a strip-major-outer
+  twin OR be refactored to accept the outer `s` index. Either
+  shape is a substantial walker rewrite (~400 LOC each, across
+  four functions).
+- The CSF + masking pipeline must run per-strip with halo-aware
+  buffer reads that don't yet exist for `bands_ref` (only
+  `bands_dis_strip` has a per-strip variant today).
+- The REF/DIST gauss_ref clobber order requires the REF-side
+  walker (currently atomic) to be sliced per strip and interleaved
+  with the DIST side.
+- The halo back-projection table (§1) must be verified against
+  the actual kernels' reflection bounds before the buffer allocator
+  can be sized correctly.
+
+In one session this is too many uncertainties stacked together for
+a JOD-parity gate to land cleanly. The risk: ship a canary with
+subtle drift that's not caught until a downstream parity sweep
+runs on real corpora.
+
+The decomposition in §5 sequences the work so each commit's risk
+is bounded by one parity gate. P2.0 + P2.1 together should be one
+session's worth; the seven shrinks can then proceed at one or
+two per session.
+
+### 7. What's safe to do RIGHT NOW (low-risk pre-work)
+
+If a follow-up session has 1-2 hours and wants to make progress
+without taking on P2.1's full surgery:
+
+- **Verify the halo back-projection** by reading each
+  `downscale_strip_kernel` / `upscale_*_strip_kernel` /
+  `pu_blur_v_*_strip_aware_kernel` and documenting the actual
+  reflection-row range per call.
+- **Add `mode_b_strip_h_at_level(k, h_body, k_split)`** helper that
+  returns the back-projected level-k strip height (body + 2·halo),
+  alongside the existing `mode_b_halo_at_level` (which keeps the
+  band-resolution semantics it was originally meant to have).
+- **Add an estimator variant** `estimate_gpu_memory_bytes_strip_pair_back_projected`
+  that uses the new helper.
+- **Add a side-by-side delta print** in `mem_mode_b_vs_full` so
+  the optimistic vs realistic numbers ship together.
+- **Update tests** in `mode_b_walker_parity.rs` to expect the
+  realistic ratio (~`< 0.35` at 4096² rather than `< 0.25`) — this
+  may surface that the recipe's "-88%" target was based on the
+  optimistic model and needs to be revised to "-65 to -75%".
+
+That work is mechanical and JOD-neutral (it changes only memory
+prediction, not the runtime dispatch). It positions the next
+session to start P2.1 with a verified halo budget.
