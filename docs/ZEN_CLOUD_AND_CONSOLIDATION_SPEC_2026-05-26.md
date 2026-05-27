@@ -52,6 +52,8 @@ zen-cloud-core    (pure traits + types; NO gpu / cloud / parquet deps)
    ▼   provider impls (each its own crate, each implements the core traits):
 zen-cloud-vastai  · vast.ai API + /proc/1/environ + Cloudflare R2   (pull / BYO-queue)
 zen-cloud-salad   · SaladCloud API + IMDS + managed Job Queue + R2/S3 (push / managed-queue)
+zen-cloud-runpod  · RunPod API + Serverless-queue OR Pods + R2/S3   (push OR pull)
+zen-cloud-akash   · Akash SDL deploy + bid/lease + R2/S3             (pull / BYO-queue)
 zen-cloud-gcp     · GCP Batch + GCS                (from coefficient/gcp.rs)
 zen-cloud-do      · DigitalOcean + Spaces          (from coefficient/digitalocean.rs)
 zen-cloud-local   · localhost + filesystem + sqlite queue (dev / Tower NAS)
@@ -312,6 +314,65 @@ running vast.ai alternative (cheap commodity GPUs, same workload class).
 gcp/do are coefficient-legacy cleanup with no active demand. Salad is
 Phase C; gcp/do drop to Phase D.
 
+### 1.10 RunPod + Akash provider candidates (user request 2026-05-26)
+
+The user wants RunPod and Akash as further vast.ai/Salad alternatives.
+Both slot into the same `zen-cloud-*` provider pattern — **no
+architecture change**, just two more crates + launcher provisioning.
+They validate the trait layer a second and third time after Salad.
+
+**`zen-cloud-runpod` (Phase F — closest to Salad/vast, lowest effort).**
+RunPod offers two modes; the trait layer covers both:
+- **Serverless (push):** RunPod's queue invokes a handler per job. The
+  `JobQueue::next_chunk()` impl blocks on the handler invocation and
+  `ack_chunk()` returns the result — same shape as Salad's HTTP receiver.
+  Best fit for the sweep workload (autoscale-to-zero, pay-per-job).
+- **Pods (pull):** rent a persistent GPU pod; the worker claims chunks
+  from R2 exactly like vast.ai. Reuses `zen-cloud-vastai`'s claim logic
+  + `zen-cloud-s3` storage verbatim.
+- Launcher: RunPod has a **GraphQL API** (pod create/terminate, GPU type
+  selection, serverless endpoint deploy). Hand-roll `reqwest` + a GraphQL
+  query string (no official Rust SDK). Auth: API key header.
+- Storage: BYO R2/S3 (RunPod has network volumes but S3 is the portable
+  choice — reuse `zen-cloud-s3`).
+- Identity/creds: RunPod injects env vars into the container; no special
+  IMDS. `CredentialSource` reads env; `WorkerHost` reads
+  `RUNPOD_POD_ID` / `RUNPOD_*`.
+- Deploy image: same BAKE-EVERYTHING pattern; serverless mode needs a
+  RunPod handler shim (their python/go handler SDK) OR the worker speaks
+  their serverless HTTP contract directly — decide during Phase F by
+  reading the current RunPod serverless worker protocol.
+
+**`zen-cloud-akash` (Phase G — decentralized, most launcher-divergent).**
+Akash is a Cosmos-based decentralized compute marketplace. The **worker**
+side is identical to vast/runpod-pods (BYO S3 + R2-pull queue); the
+**launcher** is where Akash diverges hard:
+- Deploy via an **SDL manifest** (YAML describing the container, GPU
+  resources, pricing) → submit a deployment tx → providers **bid** →
+  accept a bid → **lease** → the workload runs. This is a multi-step
+  on-chain flow with a wallet + escrow (AKT tokens), not a single REST
+  call.
+- Launcher needs: Akash CLI (`provider-services` / `akash`) or the
+  Cosmos SDK gRPC, a funded wallet, bid evaluation, lease management.
+  This is genuinely more work than any other provider's launcher — keep
+  it LAST. The `zen-fleet-launch` Akash module wraps the CLI rather than
+  reimplementing the Cosmos tx flow in Rust (the CLI is the supported
+  path).
+- Worker: zero Akash-specific code — it's a generic S3+pull worker. So
+  `zen-cloud-akash` may be launcher-only (no worker crate), with the
+  deployed image being the same generic `zen-sweep-worker` the local /
+  vast pull-path uses.
+- Storage/identity: BYO R2/S3; env-var creds (Akash injects via the SDL
+  `env`). No IMDS.
+
+**Sequencing rationale:** RunPod (Phase F) is a near-clone of the
+Salad/vast effort — high value, low marginal cost, do it right after
+Salad ships. Akash (Phase G) has the same trivial worker but the most
+divergent launcher (on-chain bid/lease), so it lands last and wraps the
+Akash CLI rather than reimplementing the chain flow. Both depend only on
+the Phase A trait layer (done) + the shared `zen-cloud-s3` (done in
+Phase C) — neither needs Phase B/D/E.
+
 ---
 
 ## 2. Stats — finish migration, then publish `zenstats`
@@ -451,6 +512,8 @@ thin, frequently-touched index, not a deep doc.
 | `zen-cloud-vastai` | zenmetrics workspace | renamed from vastai-fleet |
 | `zen-cloud-salad` | zenmetrics workspace | SaladCloud (managed queue + IMDS), user-priority alt |
 | `zen-cloud-local` | zenmetrics workspace | dev/Tower backend |
+| `zen-cloud-runpod` | zenmetrics workspace | RunPod serverless-queue OR pods; user-requested alt |
+| `zen-cloud-akash` | zenmetrics workspace (launcher-only likely) | Akash SDL/bid/lease; worker is generic S3+pull |
 | `zen-cloud-gcp` / `-do` | zenmetrics workspace | from coefficient |
 | `zen-sweep-worker` | zenmetrics workspace | the deployed binary |
 | `zen-fleet-launch` | zenmetrics workspace | operator controller |
@@ -473,6 +536,8 @@ deps.
 | §1 Phase C — **SaladCloud** `zen-cloud-salad` | zenmetrics | after A (user priority) | queued |
 | §1 Phase D — gcp/do extract | zenmetrics + coefficient | after B | queued |
 | §1 Phase E — adopt + delete forks | all | after C/D | queued |
+| §1 Phase F — **RunPod** `zen-cloud-runpod` | zenmetrics | after A (user-requested alt) | queued |
+| §1 Phase G — **Akash** `zen-cloud-akash` | zenmetrics + launcher | after A (launcher-divergent, do last) | queued |
 | §2 stats finish + publish | zensim + coefficient | independent | queued |
 | §3 TOML-driven trainer | zensim | independent of cloud | queued |
 | §4 zenpicker-train | zenanalyze | needs §2 (zenstats) + §3 pattern | queued |
