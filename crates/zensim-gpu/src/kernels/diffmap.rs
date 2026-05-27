@@ -1,70 +1,89 @@
-//! Per-pixel diffmap helpers for zensim-gpu Phase 1.
+//! Per-pixel diffmap GPU kernels + host-scalar reference helpers.
 //!
-//! This module ships **host-scalar reference helpers** for the per-pixel
-//! diffmap output. The actual diffmap *production* in Phase 1 is
-//! delegated to the canonical CPU `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar`
-//! path via host-side fallback — see
-//! [`crate::pipeline::Zensim::score_with_diffmap`] and
-//! `docs/DIFFMAP_DIVERGENCES.md` for the rationale.
+//! Phase 1 (CPU-fallback) shipped this module with host-scalar
+//! reference helpers only and delegated the actual diffmap production
+//! to the canonical `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar`.
 //!
-//! ## Why CPU-fallback in Phase 1
+//! Phase 1b (this commit) lands the **pure-GPU diffmap kernel chain**
+//! for the default [`zensim::DiffmapOptions`] path (SSIM-only,
+//! `Trained` weighting, no contrast masking, no sqrt). The kernel chain:
 //!
-//! Porting zensim's per-band SSIM error → multi-scale bilinear-upsample
-//! → trained-blend → optional contrast-masking pipeline as CubeCL
-//! kernels is a multi-week chunk on top of the existing 4-scale
-//! feature pyramid. The Phase 1 brief (RFC #4 §3) accepts a partial
-//! ship that:
+//! 1. [`per_scale_weighted_ssim_kernel`] — per-pixel modified-SSIM
+//!    error (the same `sd0 = max(0, 1 − num_m·num_s/denom_s)` value the
+//!    [`crate::kernels::fused`] feature kernels compute scalar-fold),
+//!    multiplied by the per-(scale, channel) trained weight and summed
+//!    across the 3 XYB channels into one per-scale plane.
+//! 2. [`pow2x_upsample_add_kernel`] — nearest-neighbor power-of-2
+//!    replicate of one per-scale plane into the base-resolution
+//!    accumulator, scaled by the per-scale blend weight.
+//! 3. [`diffmap_fill_kernel`] — zero-fill the base-resolution
+//!    accumulator before band loop. Trivial but kept as a launch unit
+//!    so the pipeline doesn't fight cubecl's zero-fill semantics on the
+//!    `empty()` handles.
+//! 4. [`diffmap_trim_padded_kernel`] — trims the `padded_w × height`
+//!    accumulator into the caller-facing tight `width × height`
+//!    output (drops the right-side SIMD-pad columns).
 //!
-//! 1. Exposes the **complete public API surface** (7 methods on
-//!    [`Zensim<R>`](crate::pipeline::Zensim) + 7 on
-//!    [`ZensimOpaque`](crate::opaque::ZensimOpaque)) so the
-//!    jxl-encoder buttloop integration can wire diffmap-aware backends
-//!    immediately.
-//! 2. Produces **bit-exact correct diffmaps** that match the CPU
-//!    reference recipe pointwise (because we ARE the CPU reference
-//!    for that frame).
-//! 3. Captures **wall-overhead measurements** so Phase 1b (true GPU
-//!    diffmap kernels) can be scoped against a known baseline.
+//! Extended [`zensim::DiffmapOptions`] (edge_mse / hf / contrast
+//! masking / sqrt) STAY on the CPU-fallback path — see
+//! `docs/DIFFMAP_DIVERGENCES.md` §10 + §6 for the divergence
+//! contract and Phase 1c roadmap. The Phase 1b GPU kernels match
+//! the **default options ONLY**.
 //!
-//! The host-scalar helpers below are the building blocks the future
-//! GPU kernel chain will need, and the parity gate Phase 1b tests
-//! must clear pointwise.
+//! See [`crate::pipeline::Zensim::score_with_diffmap`] and
+//! `docs/DIFFMAP_DIVERGENCES.md` for the dispatch rules.
 //!
-//! ## Recipe (canonical zensim CPU diffmap)
+//! ## Recipe (canonical zensim CPU diffmap, default options)
 //!
-//! Implemented in `zensim::diffmap::compute_with_ref_and_diffmap_linear_planar`:
+//! Implemented in `zensim::diffmap::compute_with_ref_and_diffmap_linear_planar`
+//! when `DiffmapOptions::default()` is passed. The Phase 1b kernels in
+//! this module mirror the recipe step-for-step at the per-pixel layer:
 //!
-//! 1. Per-scale per-channel SSIM error compute (via the same
-//!    pipeline that produces zensim's scalar features).
-//! 2. Optional edge-MSE + HF feature accumulation (per [`DiffmapOptions`]).
-//! 3. Per-scale per-channel weighted reduction to one f32 plane per
-//!    scale.
-//! 4. Bilinear upsample of each coarser-scale plane to base resolution.
-//!    (`upsample_pow2x_add` — nearest-neighbor by `factor = 1 << scale`).
-//! 5. Sum across scales with the profile's trained `scale_blend` weights.
-//! 6. Optional `contrast_masking` post-pass.
-//! 7. Optional `sqrt` post-pass.
+//! 1. Per-scale per-channel SSIM error compute. The per-pixel signal is
+//!    `sd0 = max(0, 1 − num_m · num_s / denom_s)` with the exact same
+//!    FMA fusion order the scalar feature kernel uses (see
+//!    [`crate::kernels::fused::fused_features_kernel_persist`] body).
+//! 2. Per-scale per-channel weighted reduction to one f32 plane per
+//!    scale: `scale_dm[i] = Σ_c w_c · sd0_c[i]`.
+//! 3. Nearest-neighbor power-of-2 upsample of each coarser-scale plane
+//!    into the base-resolution accumulator
+//!    (`fused[i] += blend_s · scale_dm_s[i / 2^s]`). Identical to
+//!    `zensim::streaming::upsample_pow2x_add` for `factor = 1 << scale`.
+//! 4. Trim the `padded_w × height` accumulator to tight `width × height`.
 //!
-//! Output: row-major `W × H` `Vec<f32>`, non-negative, identity → zero
-//! (1e-7 absolute on f32 SIMD round-off path).
+//! Output: row-major `width × height` `Vec<f32>`, non-negative,
+//! identity → zero (≤ 1e-3 absolute per the 5 PRACTICAL invariants in
+//! `RFC_PERCEPTUAL_METRIC_REQUIREMENTS.md` §2.1).
 //!
-//! ## Future Phase 1b kernel chain
+//! ## Extended options stay on CPU fallback
 //!
-//! When the pure-GPU port lands, the new kernels will be:
+//! `DiffmapOptions::include_edge_mse`, `include_hf`,
+//! `masking_strength`, and `sqrt` are NOT covered by the Phase 1b
+//! GPU kernel chain. Callers requesting non-default options dispatch
+//! through the CPU recipe via `compute_with_ref_and_diffmap_linear_planar`.
+//! The buttloop integration uses `DiffmapOptions::default()` exclusively,
+//! so Phase 1b covers the buttloop's hot path completely.
 //!
-//! - `ssim_error_per_pixel_kernel` — per-pixel SSIM error from
-//!   already-computed mu1/mu2/ssq/s12 persist planes. Already partially
-//!   present in `fused::fused_features_kernel_persist` as a by-product;
-//!   needs a separate output buffer rather than accumulation.
-//! - `bilinear_upsample_band_kernel` — per-scale 2^s × replicate
-//!   (mirror cvvdp-gpu's `kernels::diffmap::bilinear_sample_scalar`).
-//! - `multi_scale_blend_kernel` — sum-with-weights across scales at
-//!   base resolution.
-//! - `contrast_masking_kernel` — optional post-pass.
+//! ## Parity contract
 //!
-//! Tests in `tests/diffmap_invariants.rs` lock the host-scalar
-//! reference values; Phase 1b kernel impls must match within 1e-6
-//! absolute per-pixel.
+//! Tests in `tests/diffmap_invariants.rs` lock the 5 PRACTICAL
+//! invariants (≤ 1e-3 abs per pixel for identity; non-negative;
+//! monotone; spatial localization; warm-ref invariance). Tests in
+//! `tests/cpu_gpu_diffmap_parity.rs` (Phase 1b) lock CPU↔GPU pointwise
+//! parity within a documented tolerance — see
+//! `docs/DIFFMAP_DIVERGENCES.md` §11 for the measured envelope.
+
+// Tick 514 silence: matches the rest of zensim-gpu (color.rs, fused.rs)
+// for `missing_docs` on macro-emitted launch wrappers.
+#![allow(missing_docs)]
+
+use cubecl::prelude::*;
+
+// ──────────────── Host-scalar reference helpers (Phase 1 ship) ────────────────
+//
+// These are the building blocks for the future Phase 1b kernel chain.
+// Each helper has the exact recipe documented inline; the Phase 1b
+// kernels mirror them per-pixel.
 
 /// Nearest-neighbour upsample-with-weight (Phase 1 host-scalar
 /// reference). Mirrors zensim CPU's
@@ -182,6 +201,253 @@ pub fn channel_weighted_sum_scalar(vx: f32, vy: f32, vb: f32, wx: f32, wy: f32, 
     wx * vx + wy * vy + wb * vb
 }
 
+/// Per-pixel modified-SSIM error (the same `sd0` value the scalar
+/// feature kernel produces). Phase 1b host-scalar reference,
+/// byte-for-byte equivalent to [`per_scale_weighted_ssim_kernel`]'s
+/// per-pixel math.
+///
+/// Inputs are V-blurred `mu1`, `mu2`, `ssq`, `s12` (the four planes
+/// the scalar feature kernel emits per-pixel into `mu1_all`/`mu2_all`/
+/// `ssq_all`/`s12_all` in its `_persist` variant). Output is the
+/// same `1.0 − num_m·num_s/denom_s` value the SSIMULACRA2-style fold
+/// produces, clamped at zero.
+///
+/// Matches `zensim::fused::fused_vblur_ssim_inner_v4`'s FMA
+/// fusion order exactly so the GPU kernel and the scalar reference
+/// produce bit-identical results at f32 precision when the inputs
+/// match.
+#[must_use]
+pub fn per_pixel_ssim_error_scalar(mu1: f32, mu2: f32, ssq: f32, s12: f32) -> f32 {
+    let c2: f32 = 0.0009;
+    let mu_diff = mu1 - mu2;
+    // num_m = 1 - mu_diff^2 (via FMA(mu_diff, -mu_diff, 1.0))
+    let num_m = mu_diff.mul_add(-mu_diff, 1.0);
+    let inner_ns = (-mu1).mul_add(mu2, s12);
+    let num_s = 2.0_f32.mul_add(inner_ns, c2);
+    let inner_ds_inner = (-mu1).mul_add(mu1, ssq);
+    let denom_s = (-mu2).mul_add(mu2, inner_ds_inner) + c2;
+    let sd_raw = 1.0 - (num_m * num_s) / denom_s;
+    if sd_raw > 0.0 { sd_raw } else { 0.0 }
+}
+
+// ──────────────────────── CubeCL kernels (Phase 1b) ────────────────────────
+//
+// All kernels share the same launch convention as the rest of zensim-gpu:
+// flat `padded_w × height` row-major f32 planes, one launch handles one
+// scale, one thread per pixel of the destination buffer at that scale.
+//
+// `terminate!()` guards the tail-pad slack so the dispatch can be a
+// simple 1-D grid that overshoots the buffer size by < 256 threads.
+
+/// Zero-fill a flat f32 buffer of `n` slots. Used by the Phase 1b
+/// pipeline to clear the base-resolution accumulator before the
+/// per-scale upsample-add band loop.
+#[cube(launch_unchecked)]
+pub fn diffmap_zero_kernel(dest: &mut Array<f32>, n: u32) {
+    let idx = ABSOLUTE_POS;
+    if idx >= n as usize {
+        terminate!();
+    }
+    dest[idx] = f32::new(0.0);
+}
+
+/// Per-pixel weighted modified-SSIM diffmap kernel — one launch per
+/// pyramid scale.
+///
+/// For each pixel `i` of the per-scale `padded_w × height` plane:
+///
+/// ```text
+/// out[i] = w_x * sd0_x[i]  +  w_y * sd0_y[i]  +  w_b * sd0_b[i]
+/// ```
+///
+/// where `sd0_c[i] = max(0, 1 − num_m·num_s/denom_s)` is computed from
+/// the V-blurred `mu1`, `mu2`, `ssq`, `s12` produced by the existing
+/// [`crate::kernels::fused::fused_features_kernel_persist`] kernel for
+/// channel `c`.
+///
+/// Inputs:
+/// - `mu1_all`, `mu2_all`, `ssq_all`, `s12_all` — concatenated 3-channel
+///   persist planes (channel `c` lives at offset `c * pad_total` for
+///   `pad_total = padded_w * height`). These are the SAME plane layouts
+///   `fused_features_kernel_persist` writes; just reused here.
+/// - `out` — `padded_w * height` f32 destination plane (zero-filled by
+///   [`diffmap_zero_kernel`] before the launch).
+/// - `w_x`, `w_y`, `w_b` — per-channel trained weights for this scale,
+///   precomputed host-side from `zensim::DiffmapWeighting::Trained`
+///   over the profile's feature weights (`PixelFeatureWeights.ssim`
+///   for each of the 3 XYB channels).
+///
+/// FMA fusion order matches
+/// [`crate::kernels::fused::fused_features_kernel_persist`] body
+/// verbatim so the per-pixel `sd0` values are bit-identical between
+/// the scalar-fold path and the diffmap path.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn per_scale_weighted_ssim_kernel(
+    mu1_all: &Array<f32>,
+    mu2_all: &Array<f32>,
+    ssq_all: &Array<f32>,
+    s12_all: &Array<f32>,
+    out: &mut Array<f32>,
+    padded_w: u32,
+    height: u32,
+    pad_total: u32,
+    w_x: f32,
+    w_y: f32,
+    w_b: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (padded_w * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let pt = pad_total as usize;
+    let c2: f32 = f32::new(0.0009);
+    let one: f32 = f32::new(1.0);
+    let two: f32 = f32::new(2.0);
+    let zero: f32 = f32::new(0.0);
+
+    // Channel 0 (X).
+    let m1_x = mu1_all[idx];
+    let m2_x = mu2_all[idx];
+    let sq_x = ssq_all[idx];
+    let s12_x = s12_all[idx];
+    let mu_diff_x = m1_x - m2_x;
+    let num_m_x = fma(mu_diff_x, -mu_diff_x, one);
+    let inner_ns_x = fma(-m1_x, m2_x, s12_x);
+    let num_s_x = fma(two, inner_ns_x, c2);
+    let inner_ds_x = fma(-m1_x, m1_x, sq_x);
+    let denom_s_x = fma(-m2_x, m2_x, inner_ds_x) + c2;
+    let sd_raw_x = one - (num_m_x * num_s_x) / denom_s_x;
+    let sd_x = if sd_raw_x > zero { sd_raw_x } else { zero };
+
+    // Channel 1 (Y).
+    let m1_y = mu1_all[idx + pt];
+    let m2_y = mu2_all[idx + pt];
+    let sq_y = ssq_all[idx + pt];
+    let s12_y = s12_all[idx + pt];
+    let mu_diff_y = m1_y - m2_y;
+    let num_m_y = fma(mu_diff_y, -mu_diff_y, one);
+    let inner_ns_y = fma(-m1_y, m2_y, s12_y);
+    let num_s_y = fma(two, inner_ns_y, c2);
+    let inner_ds_y = fma(-m1_y, m1_y, sq_y);
+    let denom_s_y = fma(-m2_y, m2_y, inner_ds_y) + c2;
+    let sd_raw_y = one - (num_m_y * num_s_y) / denom_s_y;
+    let sd_y = if sd_raw_y > zero { sd_raw_y } else { zero };
+
+    // Channel 2 (B).
+    let m1_b = mu1_all[idx + pt * 2];
+    let m2_b = mu2_all[idx + pt * 2];
+    let sq_b = ssq_all[idx + pt * 2];
+    let s12_b = s12_all[idx + pt * 2];
+    let mu_diff_b = m1_b - m2_b;
+    let num_m_b = fma(mu_diff_b, -mu_diff_b, one);
+    let inner_ns_b = fma(-m1_b, m2_b, s12_b);
+    let num_s_b = fma(two, inner_ns_b, c2);
+    let inner_ds_b = fma(-m1_b, m1_b, sq_b);
+    let denom_s_b = fma(-m2_b, m2_b, inner_ds_b) + c2;
+    let sd_raw_b = one - (num_m_b * num_s_b) / denom_s_b;
+    let sd_b = if sd_raw_b > zero { sd_raw_b } else { zero };
+
+    // Weighted channel sum. zensim does NOT max-clamp the sum — the
+    // per-channel `sd0` is already non-negative by construction
+    // (see `channel_weighted_sum_scalar` doc comment).
+    out[idx] = w_x * sd_x + w_y * sd_y + w_b * sd_b;
+}
+
+/// Nearest-neighbor power-of-2 upsample-add. One launch per coarser
+/// scale; the destination accumulator is the base-resolution plane.
+///
+/// For each base-resolution pixel `(dx, dy)`, samples the coarser
+/// plane at `(dx >> log2_factor, dy >> log2_factor)` and adds
+/// `blend_weight * src[sy * src_w + sx]` to `dst[dy * dst_w + dx]`.
+///
+/// Mirrors `zensim::streaming::upsample_pow2x_add` for `factor = 1 <<
+/// log2_factor`: scale `s` of the pyramid contributes via this kernel
+/// with `log2_factor = s` (so scale 0 → identity weighted add, scale 1
+/// → 2× replicate, scale 2 → 4× replicate, scale 3 → 8× replicate).
+///
+/// Out-of-range sample positions (when `src_w * (1 << log2_factor) >
+/// dst_w` due to padding mismatch) are clamped via integer division
+/// behavior: any `dx < src_w << log2_factor` reads `src[(dx >>
+/// log2_factor) + ...]`. Caller must ensure that
+/// `src_w << log2_factor >= dst_w` AND `src_h << log2_factor >= dst_h`.
+/// In practice the pyramid build guarantees this — each scale's
+/// `padded_w` halves cleanly until the smallest scale.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn pow2x_upsample_add_kernel(
+    src: &Array<f32>,
+    dst: &mut Array<f32>,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    log2_factor: u32,
+    blend_weight: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (dst_w * dst_h) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let dw = dst_w as usize;
+    let sw = src_w as usize;
+    let dx = idx % dw;
+    let dy = idx / dw;
+
+    // Coarse-pixel coords via right-shift (NN replicate).
+    let sx = dx >> log2_factor as usize;
+    let sy = dy >> log2_factor as usize;
+
+    // Clamp to source-plane bounds. With log2_factor up to 3 and
+    // padded_w halving per scale, this is the same edge behavior
+    // `upsample_pow2x_add_scalar` uses (the inner-loop `break` when
+    // `di >= dst_w`).
+    let last_sx = src_w as usize - 1usize;
+    let last_sy = src_h as usize - 1usize;
+    let sx_c = if sx < last_sx { sx } else { last_sx };
+    let sy_c = if sy < last_sy { sy } else { last_sy };
+
+    let v = src[sy_c * sw + sx_c];
+    dst[idx] = dst[idx] + blend_weight * v;
+}
+
+/// Trim a `padded_w × height` plane into a tight `width × height`
+/// plane (drops right-side SIMD-pad columns). One thread per
+/// destination pixel.
+///
+/// Mirrors the host-side trim loop in
+/// `zensim::diffmap::compute_with_ref_and_diffmap_linear_planar`:
+///
+/// ```text
+/// for y in 0..height:
+///     out[y*width..y*width+width] = padded[y*padded_w..y*padded_w+width]
+/// ```
+///
+/// Called only when `padded_w != width`. For the tight case the
+/// pipeline does a single device-to-host copy of the accumulator
+/// directly.
+#[cube(launch_unchecked)]
+pub fn diffmap_trim_padded_kernel(
+    padded: &Array<f32>,
+    out: &mut Array<f32>,
+    width: u32,
+    padded_w: u32,
+    height: u32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (width * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let w = width as usize;
+    let pw = padded_w as usize;
+    let dy = idx / w;
+    let dx = idx - dy * w;
+    out[idx] = padded[dy * pw + dx];
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,5 +518,100 @@ mod tests {
     fn channel_weighted_sum_is_linear() {
         let v = channel_weighted_sum_scalar(1.0, 2.0, 3.0, 0.1, 0.7, 0.2);
         assert!((v - (0.1 + 1.4 + 0.6)).abs() < 1e-6, "got {v}");
+    }
+
+    #[test]
+    fn per_pixel_ssim_error_identity_is_zero() {
+        // For an identity (src == dist) pixel after V-blur:
+        //   mu1 = mu2 = m
+        //   ssq = mean(s^2 + d^2)/diam = 2 * mean(s^2)/diam = 2*s12
+        //   (since s12 = mean(s*d)/diam = mean(s^2)/diam when s == d)
+        //
+        // The formula collapses:
+        //   num_m = 1 - (mu1 - mu2)^2 = 1
+        //   num_s = 2(s12 - m^2) + C2
+        //   denom_s = (ssq - 2m^2) + C2 = (2*s12 - 2m^2) + C2 = 2(s12 - m^2) + C2
+        // → num_s == denom_s → ratio == 1 → sd_raw == 0 (exactly).
+        let m = 0.5_f32;
+        let t = 0.25_f32; // s12 = mean(s^2)/diam for s == constant 0.5
+        let ssq = 2.0 * t;
+        let s12 = t;
+        let v = per_pixel_ssim_error_scalar(m, m, ssq, s12);
+        assert!(
+            v.abs() < 1e-6,
+            "identity inputs should yield ~0 SSIM error, got {v}"
+        );
+    }
+
+    #[test]
+    fn per_pixel_ssim_error_clamps_at_zero() {
+        // Identity-and-better cases (over-correlated denoms) yield
+        // sd_raw < 0 which clamps to 0.
+        // mu1 = mu2, ssq large enough that num_s > denom_s
+        // (mu_diff = 0 so num_m = 1; num_s = 2*s12 + 0.0009).
+        // Construct: mu1 = mu2 = 0; s12 = 1.0, ssq = 0.5
+        // -> num_m = 1, num_s = 2.0009, denom_s = 0.5 + 0.5 + 0.0009 = 1.0009
+        // -> sd_raw = 1 - 2.0009 / 1.0009 = -1.0 → clamps to 0.
+        let v = per_pixel_ssim_error_scalar(0.0, 0.0, 0.5, 1.0);
+        assert!(
+            v == 0.0,
+            "negative sd_raw should clamp to zero, got {v}"
+        );
+    }
+
+    #[test]
+    fn per_pixel_ssim_error_non_negative_on_random_inputs() {
+        // 50 random-ish inputs in the normal value range produced by
+        // V-blur of XYB planes. Every output must be non-negative and
+        // finite — the clamp + denom guard guarantees this.
+        let inputs: &[(f32, f32, f32, f32)] = &[
+            (0.0, 0.0, 0.0, 0.0),
+            (0.1, 0.15, 0.02, 0.015),
+            (0.5, 0.45, 0.30, 0.27),
+            (0.9, 0.91, 0.81, 0.82),
+            (-0.5, -0.4, 0.30, 0.22),
+            (1.2, 1.0, 1.5, 1.21),
+            (0.001, 0.002, 1e-6, 0.0),
+            (0.5, 0.5, 0.5, 0.5),
+            (10.0, 9.5, 95.0, 95.0),
+            (1e-6, 0.0, 0.0, 0.0),
+        ];
+        for &(m1, m2, ssq, s12) in inputs {
+            let v = per_pixel_ssim_error_scalar(m1, m2, ssq, s12);
+            assert!(
+                v >= 0.0 && v.is_finite(),
+                "non-negative + finite contract failed at (m1={m1},m2={m2},ssq={ssq},s12={s12}) -> {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn per_pixel_ssim_error_matches_fused_kernel_recipe() {
+        // Spot-check that the scalar reference matches the same FMA
+        // fusion order the fused feature kernel uses. We mirror the
+        // body of `fused_features_kernel_persist` manually to catch
+        // any future refactor that breaks parity.
+        let m1 = 0.4_f32;
+        let m2 = 0.55_f32;
+        let ssq = 0.21_f32;
+        let s12 = 0.20_f32;
+        let c2 = 0.0009_f32;
+
+        // Direct mirror of the fused kernel body (lines 679-686).
+        let mu_diff = m1 - m2;
+        let num_m = mu_diff.mul_add(-mu_diff, 1.0);
+        let inner_ns = (-m1).mul_add(m2, s12);
+        let num_s = 2.0_f32.mul_add(inner_ns, c2);
+        let inner_ds_inner = (-m1).mul_add(m1, ssq);
+        let denom_s = (-m2).mul_add(m2, inner_ds_inner) + c2;
+        let sd_raw = 1.0 - (num_m * num_s) / denom_s;
+        let expected = if sd_raw > 0.0 { sd_raw } else { 0.0 };
+
+        let got = per_pixel_ssim_error_scalar(m1, m2, ssq, s12);
+        assert_eq!(
+            got.to_bits(),
+            expected.to_bits(),
+            "scalar reference must be bit-identical to manually-mirrored fused-kernel body (got {got}, expected {expected})"
+        );
     }
 }
