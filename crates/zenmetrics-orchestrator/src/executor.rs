@@ -474,6 +474,36 @@ fn classify_call_err(msg: &str) -> CallErr {
     }
 }
 
+/// Phase 8a: detect runtime-libcuda-missing error patterns. cubecl-cuda
+/// lazily dlopens `libcuda.so.1` on the first kernel launch; if the
+/// library isn't on the system (CPU-only host with `--features cuda`
+/// build, snap-docker without nvidia-container-toolkit, etc.) the
+/// returned error contains tokens like `cuInit`,
+/// `CUDA_ERROR_NOT_INITIALIZED`, `libcuda.so`, or `DriverError`.
+///
+/// When the executor sees one of these patterns it marks the
+/// orchestrator's capability profile as `gpu.present = false` so all
+/// subsequent backend choices skip GPU candidates with
+/// [`RejectReason::NoGpuPresent`] instead of churning through the same
+/// dlopen failure. The downgrade is persisted to disk so a process
+/// crash mid-task doesn't lose the learning.
+pub(crate) fn is_no_cuda_driver(msg: &str) -> bool {
+    let lowered = msg.to_ascii_lowercase();
+    // Match the most informative tokens first. Each one is a clear
+    // signal that the runtime driver is missing, not that this
+    // particular kernel ran out of memory.
+    lowered.contains("libcuda.so")
+        || lowered.contains("cuinit")
+        || lowered.contains("cuda_error_not_initialized")
+        || lowered.contains("cuda_error_no_device")
+        || lowered.contains("cuda_error_operating_system")
+        || lowered.contains("error_library_not_found")
+        || lowered.contains("nvml")
+        // cubecl-cuda's top-level wrapper. Covers the cases where the
+        // inner cuInit error is wrapped: `DriverError(...)`.
+        || lowered.contains("drivererror")
+}
+
 /// Classify a constructor error (umbrella `Error`) into OOM vs other.
 /// The umbrella wraps the per-crate `TooBigForFull` as
 /// `Error::Metric { message: "...TooBigForFull..." }`, so this is a
@@ -837,6 +867,21 @@ impl Orchestrator {
                         Err(CallErr::Other(msg)) => {
                             attempts
                                 .push((backend, AttemptOutcome::OtherError(msg.clone())));
+                            // Phase 8a: a runtime cuInit / libcuda
+                            // failure can also surface here (e.g.,
+                            // construct succeeded by trapping a soft
+                            // error but the first kernel launch
+                            // explodes). Same treatment as the
+                            // construct-time path — downgrade + advance.
+                            if matches!(
+                                backend,
+                                Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair
+                            ) && is_no_cuda_driver(&msg)
+                            {
+                                drop(em);
+                                self.downgrade_to_no_gpu_and_persist();
+                                continue;
+                            }
                             // Non-OOM compute error → surface immediately.
                             return finalize_err(
                                 task_id,
@@ -854,6 +899,29 @@ impl Orchestrator {
                     continue;
                 }
                 ConstructOutcome::Other(msg) => {
+                    // Phase 8a: libcuda dlopen failure at runtime —
+                    // mark gpu.present = false in the capability cache
+                    // and persist so the next iteration's chooser
+                    // rejects every GPU backend with NoGpuPresent.
+                    // This handles the "build with --features cuda on
+                    // a host where libcuda.so.1 is missing" case where
+                    // detect_gpu() succeeded (nvidia-smi worked) but
+                    // the cubecl-cuda runtime can't actually launch a
+                    // kernel. Treat it as a recoverable per-task event
+                    // for THIS attempt — record and advance ladder.
+                    if matches!(
+                        backend,
+                        Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair
+                    ) && is_no_cuda_driver(&msg)
+                    {
+                        attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
+                        self.downgrade_to_no_gpu_and_persist();
+                        // Stay in the loop; the next iteration's
+                        // chooser sees gpu.present = false and picks
+                        // Cpu (or returns NoFeasibleBackend if no
+                        // CPU candidate is available).
+                        continue;
+                    }
                     // Phase 6 sentinel: CpuMetricUnavailable means the
                     // metric has no CPU reference (Iwssim). Advance the
                     // ladder so a different backend can be picked.
@@ -960,6 +1028,38 @@ impl Orchestrator {
     /// the `machine_hash` ↔ cache-file invariant.
     fn capability_mut(&mut self) -> &mut crate::CapabilityProfile {
         &mut self.capability
+    }
+
+    /// Phase 8a: mark the in-memory capability profile as no-GPU and
+    /// persist to disk. Called by [`Self::run_single`] when a GPU
+    /// backend attempt surfaced a libcuda-missing error
+    /// ([`is_no_cuda_driver`]). After this fires:
+    ///
+    /// 1. The chooser's `gpu.present == false` fast-path rejects every
+    ///    GPU backend with [`RejectReason::NoGpuPresent`].
+    /// 2. The OOM ladder continues with Cpu the only feasible
+    ///    candidate (assuming the metric has a CPU reference enabled).
+    /// 3. The downgrade survives a process crash — the next process
+    ///    sees `gpu.present == false` from the cache and skips
+    ///    nvidia-smi entirely.
+    ///
+    /// Note: we deliberately do NOT touch `gpu.model` /
+    /// `gpu.driver_version` so the `machine_hash` remains stable.
+    /// Only `present` and `total_vram_mib` flip; the hash key inputs
+    /// are unchanged. This keeps the cache filename stable across the
+    /// downgrade.
+    fn downgrade_to_no_gpu_and_persist(&mut self) {
+        let cap = self.capability_mut();
+        cap.gpu.present = false;
+        cap.gpu.total_vram_mib = 0;
+        let path = self.cache_path();
+        if let Err(e) = save_profile(&path, self.capability()) {
+            eprintln!(
+                "zenmetrics-orchestrator: failed to persist no-GPU downgrade at {}: {}",
+                path.display(),
+                e
+            );
+        }
     }
 }
 
