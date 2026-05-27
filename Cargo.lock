@@ -6897,12 +6897,14 @@ dependencies = [
  "cvvdp-gpu",
  "dirs",
  "raw-cpuid",
+ "rayon",
  "serde",
  "sha2",
  "sysinfo 0.38.4",
  "tempfile",
  "thiserror",
  "toml",
+ "xxhash-rust",
  "zenmetrics-api",
 ]
 
