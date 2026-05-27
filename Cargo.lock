@@ -6667,6 +6667,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-cloud-runpod"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zen-cloud-core",
+ "zen-cloud-s3",
+ "zen-cloud-vastai",
+]
+
+[[package]]
 name = "zen-cloud-s3"
 version = "0.0.1"
 dependencies = [
@@ -6763,6 +6778,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zen-cloud-core",
+ "zen-cloud-runpod",
  "zen-cloud-salad",
  "zen-cloud-vastai",
 ]

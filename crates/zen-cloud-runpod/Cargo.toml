@@ -1,0 +1,53 @@
+[package]
+name = "zen-cloud-runpod"
+description = "RunPod provider for the zen-cloud-core worker trait layer: a Pods (pull) JobQueue using the shared R2-ETag atomic chunk-claim (identical to vast.ai), the shared zen-cloud-s3 BlobStorage over a BYO R2/S3 bucket, RunPod container-env credentials + RUNPOD_POD_ID host introspection, and an optional R2 heartbeat. Plus a launcher module for pod provisioning over the RunPod v1 REST API. The thin RunPod glue around the same backend-agnostic compute closure vast.ai runs."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+keywords = ["runpod", "cloud", "worker", "job-queue", "gpu"]
+categories = ["concurrency", "api-bindings"]
+publish = false
+
+[lib]
+name = "zen_cloud_runpod"
+path = "src/lib.rs"
+
+[dependencies]
+# The cloud-agnostic trait layer this crate implements.
+zen-cloud-core = { workspace = true }
+# Reuse the shared S3-compatible BlobStorage — RunPod has no native
+# object store, so workers bring their own R2/S3 bucket (spec §1.9
+# item 4 / §1.10). Do NOT write a second S3 client.
+zen-cloud-s3 = { workspace = true }
+# RunPod pods are PULL (like vast.ai): the worker claims chunks from R2
+# via the atomic token-race. We reuse vast.ai's PROVEN claim algorithm
+# (`worker::claim::try_claim`) + R2 client (`worker::r2::R2Client`)
+# verbatim rather than copy-pasting a third claim impl. The `worker`
+# feature is GPU-free (no inline-sweep / source-features), so this pulls
+# only the claim + R2 plumbing, not the codec tree.
+zen-cloud-vastai = { workspace = true, default-features = false, features = ["worker"] }
+# anyhow for the launcher-side REST plumbing's error model (same as the
+# salad provider).
+anyhow = "1.0.102"
+# IMDS-free: RunPod injects identity + creds as plain container env vars,
+# so the worker side needs no HTTP. reqwest is for the launcher-side
+# pod-create / get / stop / delete REST calls only. rustls so the deploy
+# image needs no system OpenSSL; `json` for serde request/response bodies.
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+# The pull queue's blocking bridge drives the async R2 claim
+# (`try_claim`) + manifest fetch to completion on a disposable
+# current-thread runtime — the same sync↔async bridge the vast.ai + S3
+# backends use across the synchronous core trait surface (spec §1.5).
+tokio = { version = "1.52.3", default-features = false, features = ["rt"] }
+
+[dev-dependencies]
+# The off-node JobQueue roundtrip test builds an S3Client directly (no
+# network is dialed on the skip_claims path it drives).
+zen-cloud-s3 = { workspace = true }

@@ -61,10 +61,36 @@ _salad-backend = ["dep:zen-cloud-salad", "dep:tracing", "dep:tracing-subscriber"
 # of `zen-cloud-vastai/inline-sweep`).
 _salad-sweep = ["dep:tokio"]
 
+# The RunPod backend GLUE (spec §1.10, Phase F). RunPod Pods are PULL
+# (like vast.ai): the worker drains an R2 chunks.jsonl manifest with the
+# shared atomic claim. Pulls the runpod provider crate + vast.ai's
+# GPU-free `worker` feature for the shared `WorkerArgs` + R2 client. This
+# is the build the acceptance gate checks
+# (`cargo build -p zen-sweep-worker --features runpod`): it wires the
+# generic run_worker loop with the RunPod JobQueue / WorkerHost /
+# CredentialSource / BlobStorage / Heartbeat, GPU-free. The encode+score
+# compute itself lives behind `runpod-sweep` (it shares vast.ai's
+# inline-sweep tree, the production-image build).
+runpod = ["_runpod-backend", "_vastai-backend", "zen-cloud-vastai/worker"]
+# Full RunPod production build: runpod glue + the shared inline-sweep
+# encode+score compute (same GPU tree as `vastai`). What the RunPod
+# deploy image builds. Held separately from `runpod` so the glue +
+# dispatch typecheck on checkouts where the heavy GPU sibling deps don't
+# compile.
+runpod-sweep = ["runpod", "_runpod-sweep", "zen-cloud-vastai/inline-sweep", "zen-cloud-vastai/source-features"]
+# Internal marker: the RunPod backend code (dispatch arm) is compiled in.
+_runpod-backend = ["dep:zen-cloud-runpod", "dep:tracing", "dep:tracing-subscriber"]
+# Internal marker: the inline encode+score compute is available to the
+# runpod backend (cargo does not expose a dependency's feature as a cfg
+# in the dependent, so the runpod compute path gates on this local mirror
+# of `zen-cloud-vastai/inline-sweep`).
+_runpod-sweep = ["dep:tokio"]
+
 [dependencies]
 zen-cloud-core = { workspace = true }
 zen-cloud-vastai = { workspace = true, optional = true, default-features = false }
 zen-cloud-salad = { workspace = true, optional = true, default-features = false }
+zen-cloud-runpod = { workspace = true, optional = true, default-features = false }
 clap = { workspace = true, features = ["env"] }
 anyhow = "1.0.102"
 # Tracing init for the salad backend's run_worker loop logs (the

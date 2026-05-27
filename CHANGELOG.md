@@ -17,6 +17,33 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zen-cloud-runpod — feat: RunPod Pods (pull) provider + `--backend runpod` (Phase F, 2026-05-27)
+
+(`__RUNPOD_COMMIT__`) New `zen-cloud-runpod` crate implementing the five
+`zen-cloud-core` traits for RunPod's **Pods (pull)** path (spec §1.10).
+RunPod pods are structurally identical to vast.ai — a rented GPU pod
+boots a generic container, credentials + sweep wiring arrive as pod env
+vars, and the worker PULLs chunks from R2 with the shared atomic
+token-race claim. So the `JobQueue` (`RunpodChunkQueue`) reuses vast.ai's
+proven claim algorithm verbatim (`zen_cloud_vastai::worker::claim::try_claim`
++ `R2Client`) rather than copy-pasting a third claim impl; `BlobStorage`
+re-exports the shared `zen-cloud-s3` impl (no second S3 client);
+`CredentialSource`/`WorkerHost` read the plain pod env + `RUNPOD_POD_ID`
+(no IMDS, no pid-1 trick); `Heartbeat` defaults to a no-op (RunPod tracks
+pod liveness natively) with an `R2Heartbeat` for cross-fleet monitoring
+parity. The `launch` module hand-rolls the **current RunPod v1 REST API**
+(`https://rest.runpod.io/v1`, `Authorization: Bearer`, verified against
+the live OpenAPI 2026-05-27: `POST /pods`, `GET`/`DELETE /pods/{podId}`,
+`POST /pods/{podId}/stop`) — RunPod has migrated GraphQL→REST and REST is
+the go-forward path. Wires `--backend runpod` into `zen-sweep-worker`
+(cargo features `runpod` glue / `runpod-sweep` full, mirroring
+`salad`/`vastai`); the encode+score `compute` closure is the
+backend-agnostic vast.ai one. 26 tests (23 unit + 3 off-node JobQueue
+roundtrip via the real `skip_claims` path). Serverless (push) is a
+documented follow-on in `RUNPOD.md` (handler-shim design), not
+implemented. Real RunPod smoke run (rent a pod, run a chunk) is the
+operator's gate. `#![forbid(unsafe_code)]`.
+
 ### infra — feat: SaladCloud deploy image + CI publish to ghcr (2026-05-27)
 
 (`410cf6ae`) Adds `Dockerfile.sweep.salad.v1` (the SaladCloud sibling of the vast.ai
