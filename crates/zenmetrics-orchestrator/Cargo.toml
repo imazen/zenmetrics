@@ -27,6 +27,16 @@ default = []
 # Default ships the CUDA backend — Phase 6 will widen this to WGPU/HIP.
 bench = ["dep:zenmetrics-api", "dep:cvvdp-gpu"]
 
+# Phase 4 executor cuda backend. Pulled by `bench` transitively today
+# (the umbrella dep already enables `cuda` so the bench runner has a
+# CUDA backend to dispatch against). Kept as an explicit feature so
+# downstream callers can write `--features cuda` to convey intent and
+# so the executor module's `#[cfg(all(feature = "bench", feature =
+# "cuda"))]` gate stays meaningful. Implies `bench` because the
+# executor depends on the umbrella `MetricKind` / `MemoryMode` types
+# that the `bench` feature pulls in. Phase 5 adds `wgpu` / `hip`.
+cuda = ["bench"]
+
 [dependencies]
 thiserror = { workspace = true }
 serde = { workspace = true }

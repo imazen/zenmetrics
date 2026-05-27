@@ -34,6 +34,8 @@ mod bench;
 #[cfg(feature = "bench")]
 mod chooser;
 mod cpu;
+#[cfg(all(feature = "bench", feature = "cuda"))]
+mod executor;
 mod gpu;
 
 pub use bench::{locate_bench_worker, synth_pair_offset_dist, BenchPlan, BenchReport};
@@ -43,6 +45,10 @@ pub use chooser::{
     RejectReason, TaskShape,
 };
 pub use cpu::{detect_cpu, detect_wsl2_host_ram_mib_hint};
+#[cfg(all(feature = "bench", feature = "cuda"))]
+pub use executor::{
+    AttemptOutcome, OrchestratorError as ExecutorError, Task, TaskData, TaskResult,
+};
 pub use gpu::detect_gpu;
 
 /// Error type for orchestrator operations. Variants will be extended in
