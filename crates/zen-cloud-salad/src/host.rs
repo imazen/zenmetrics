@@ -51,6 +51,12 @@ impl CredentialSource for SaladEnvCredentials {
             "R2_ACCOUNT_ID",
             "R2_ACCESS_KEY_ID",
             "R2_SECRET_ACCESS_KEY",
+            // Session token for scoped/temporary R2 creds minted per-sweep
+            // by the launcher. REQUIRED by the S3 client alongside a
+            // temp key+secret (key+secret alone 403). The entrypoint
+            // writes it to ~/.aws/credentials as aws_session_token.
+            "AWS_SESSION_TOKEN",
+            "R2_SESSION_TOKEN",
             "R2_ENDPOINT",
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",

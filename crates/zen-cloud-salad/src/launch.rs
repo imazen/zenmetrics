@@ -33,6 +33,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use zen_cloud_core::{DEFAULT_TTL_SECONDS, Permission, ScopedR2Cred, mint_scoped_r2_cred};
 
 /// Public API base URL.
 pub const API_BASE: &str = "https://api.salad.com/api/public";
@@ -372,6 +373,186 @@ pub fn load_api_key() -> Result<String> {
     bail!("no API key in {}", path.display())
 }
 
+// ── Per-sweep scoped R2 credential minting + injection ──────────────────
+//
+// SaladCloud runs containers on hardware the operator does NOT own
+// (distributed consumer GPUs). Injecting the root R2 key into a remote
+// container exposes the whole R2 account to a hostile node operator who
+// can read the container env. Instead the launcher mints a credential
+// scoped to ONE bucket (object-read-write, short TTL) and injects the
+// minted key+secret+session-token. A compromised node's blast radius is
+// then limited to that one bucket. See
+// `~/work/claudehints/topics/r2-credentials.md` and the shared minter at
+// `zen_cloud_core::r2creds`.
+
+/// Where to read the parent (root) R2 keys + Cloudflare API token the
+/// launcher uses to mint scoped creds. These live on the operator box
+/// (mirroring `~/.config/cloudflare/r2-credentials`) and are NEVER
+/// injected into a worker — only the minted child cred is.
+#[derive(Debug, Clone)]
+pub struct R2ParentCreds {
+    /// Cloudflare REST API bearer token with R2 temp-cred-mint permission.
+    pub cf_api_token: String,
+    /// Cloudflare account id (the `{account_id}` in the API path).
+    pub account_id: String,
+    /// Root R2 **S3** access key id (the "parent" key for minting).
+    pub parent_access_key_id: String,
+    /// Root R2 S3 secret (the "parent" secret).
+    pub parent_secret_access_key: String,
+}
+
+impl R2ParentCreds {
+    /// Resolve the parent creds from the operator-box environment:
+    /// `CF_API_TOKEN` || `R2_API_TOKEN` for the bearer token, plus
+    /// `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`.
+    /// These mirror `~/.config/cloudflare/r2-credentials`. NEVER hardcode
+    /// secrets — this only reads them from the environment.
+    pub fn from_env() -> Result<Self> {
+        let cf_api_token = std::env::var("CF_API_TOKEN")
+            .or_else(|_| std::env::var("R2_API_TOKEN"))
+            .context("CF_API_TOKEN (or R2_API_TOKEN) not set — needed to mint scoped R2 creds")?;
+        let account_id = std::env::var("R2_ACCOUNT_ID").context("R2_ACCOUNT_ID not set")?;
+        let parent_access_key_id =
+            std::env::var("R2_ACCESS_KEY_ID").context("R2_ACCESS_KEY_ID not set")?;
+        let parent_secret_access_key =
+            std::env::var("R2_SECRET_ACCESS_KEY").context("R2_SECRET_ACCESS_KEY not set")?;
+        for (name, val) in [
+            ("CF_API_TOKEN/R2_API_TOKEN", &cf_api_token),
+            ("R2_ACCOUNT_ID", &account_id),
+            ("R2_ACCESS_KEY_ID", &parent_access_key_id),
+            ("R2_SECRET_ACCESS_KEY", &parent_secret_access_key),
+        ] {
+            if val.trim().is_empty() {
+                bail!("{name} is set but empty");
+            }
+        }
+        Ok(Self {
+            cf_api_token,
+            account_id,
+            parent_access_key_id,
+            parent_secret_access_key,
+        })
+    }
+}
+
+/// What to scope a per-sweep minted credential to. R2 temp creds are
+/// **single-bucket** — see the SALAD.md follow-on note about
+/// reads-from-A-writes-to-B sweeps.
+#[derive(Debug, Clone)]
+pub struct ScopedCredSpec {
+    /// The sweep's WORKING bucket (object-read-write).
+    pub bucket: String,
+    /// Optional tighter prefix scope (e.g. `["runs/<SWEEP_ID>/"]`). Empty
+    /// = the whole bucket.
+    pub prefixes: Vec<String>,
+    /// TTL in seconds. Defaults (via [`ScopedCredSpec::new`]) to 6h; the
+    /// minter clamps to Cloudflare's `[900, 604800]` range.
+    pub ttl_seconds: u64,
+    /// The permission to mint. Workers use [`Permission::ObjectReadWrite`].
+    pub permission: Permission,
+}
+
+impl ScopedCredSpec {
+    /// A spec for `bucket` with the 6h default TTL + object-read-write —
+    /// the right shape for a sweep worker.
+    pub fn new(bucket: impl Into<String>) -> Self {
+        Self {
+            bucket: bucket.into(),
+            prefixes: Vec::new(),
+            ttl_seconds: DEFAULT_TTL_SECONDS,
+            permission: Permission::ObjectReadWrite,
+        }
+    }
+
+    /// Tighten the scope to one or more key prefixes.
+    pub fn with_prefixes(mut self, prefixes: Vec<String>) -> Self {
+        self.prefixes = prefixes;
+        self
+    }
+
+    /// Override the TTL (clamped to `[900, 604800]` at mint time).
+    pub fn with_ttl_seconds(mut self, ttl: u64) -> Self {
+        self.ttl_seconds = ttl;
+        self
+    }
+}
+
+/// Inject a minted scoped R2 credential into a container-group env map.
+///
+/// Sets the three keys the worker + entrypoint consume:
+/// `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`.
+/// The session token is REQUIRED — a temp key+secret without it 403s
+/// (see `zen_cloud_core::r2creds` gotchas). The existing env-injection
+/// mechanism is unchanged; this just inserts these three entries.
+pub fn inject_r2_cred_into_env(env: &mut HashMap<String, String>, cred: &ScopedR2Cred) {
+    env.insert("R2_ACCESS_KEY_ID".into(), cred.access_key_id.clone());
+    env.insert(
+        "R2_SECRET_ACCESS_KEY".into(),
+        cred.secret_access_key.clone(),
+    );
+    env.insert("AWS_SESSION_TOKEN".into(), cred.session_token.clone());
+}
+
+impl SaladApi {
+    /// Mint a scoped, auto-expiring R2 credential for a sweep's working
+    /// bucket, using the operator-box parent keys.
+    ///
+    /// This is the provider-agnostic minter (`zen_cloud_core::r2creds`)
+    /// behind a Salad-launcher-shaped convenience: pass the parent creds
+    /// (typically [`R2ParentCreds::from_env`]) and a [`ScopedCredSpec`].
+    /// Inject the result with [`inject_r2_cred_into_env`] before
+    /// [`SaladApi::create_container_group`].
+    pub async fn mint_sweep_r2_cred(
+        &self,
+        parent: &R2ParentCreds,
+        spec: &ScopedCredSpec,
+    ) -> Result<ScopedR2Cred> {
+        mint_scoped_r2_cred(
+            &parent.cf_api_token,
+            &parent.account_id,
+            &parent.parent_access_key_id,
+            &parent.parent_secret_access_key,
+            &spec.bucket,
+            &spec.prefixes,
+            spec.permission,
+            spec.ttl_seconds,
+        )
+        .await
+        .with_context(|| format!("mint scoped R2 cred for bucket {:?}", spec.bucket))
+    }
+
+    /// Create a container group, OPTIONALLY minting + injecting a scoped
+    /// R2 credential first.
+    ///
+    /// When `cred` is `Some((parent, spec))`, mint a scoped cred for the
+    /// sweep's working bucket and inject `R2_ACCESS_KEY_ID` /
+    /// `R2_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` into the request's
+    /// container env (any pre-set values for those three keys are
+    /// overwritten by the minted cred). When `None`, the caller's env is
+    /// used verbatim — back-compat for callers that supply their own
+    /// (e.g. pre-set permanent-token) creds. Minting is NOT forced.
+    ///
+    /// Returns the created group plus the minted cred (if any) so the
+    /// caller can track `expires_at` for re-mint bookkeeping on long
+    /// sweeps.
+    pub async fn create_container_group_with_scoped_cred(
+        &self,
+        mut req: CreateContainerGroupRequest,
+        cred: Option<(&R2ParentCreds, &ScopedCredSpec)>,
+    ) -> Result<(ContainerGroup, Option<ScopedR2Cred>)> {
+        let minted = match cred {
+            Some((parent, spec)) => {
+                let c = self.mint_sweep_r2_cred(parent, spec).await?;
+                inject_r2_cred_into_env(&mut req.container.environment_variables, &c);
+                Some(c)
+            }
+            None => None,
+        };
+        let group = self.create_container_group(&req).await?;
+        Ok((group, minted))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,5 +627,86 @@ mod tests {
         let v = serde_json::to_value(&req).unwrap();
         assert_eq!(v["input"]["chunk_id"], "abc");
         assert!(v.get("metadata").is_none());
+    }
+
+    #[test]
+    fn scoped_cred_spec_defaults_to_6h_object_rw() {
+        let spec = ScopedCredSpec::new("zen-tuning-ephemeral");
+        assert_eq!(spec.bucket, "zen-tuning-ephemeral");
+        assert!(spec.prefixes.is_empty());
+        assert_eq!(spec.ttl_seconds, 21_600);
+        assert_eq!(spec.permission, Permission::ObjectReadWrite);
+
+        let tightened = ScopedCredSpec::new("b")
+            .with_prefixes(vec!["runs/s1/".into()])
+            .with_ttl_seconds(3600);
+        assert_eq!(tightened.prefixes, vec!["runs/s1/".to_string()]);
+        assert_eq!(tightened.ttl_seconds, 3600);
+    }
+
+    #[test]
+    fn inject_sets_the_three_required_env_keys() {
+        // Construct a ScopedR2Cred directly (no live Cloudflare call).
+        let cred = ScopedR2Cred {
+            access_key_id: "CHILD_AK".into(),
+            secret_access_key: "CHILD_SK".into(),
+            session_token: "SESSION_TOKEN".into(),
+            expires_at: Some(1_700_000_000),
+        };
+        let mut env = HashMap::new();
+        // Pre-existing root key must be overwritten by the scoped cred.
+        env.insert("R2_ACCESS_KEY_ID".into(), "ROOT_KEY".into());
+        env.insert("SWEEP_RUN_ID".into(), "sweep-1".into());
+
+        inject_r2_cred_into_env(&mut env, &cred);
+
+        assert_eq!(env["R2_ACCESS_KEY_ID"], "CHILD_AK");
+        assert_eq!(env["R2_SECRET_ACCESS_KEY"], "CHILD_SK");
+        // The session token MUST be present (key+secret alone would 403).
+        assert_eq!(env["AWS_SESSION_TOKEN"], "SESSION_TOKEN");
+        // Unrelated env entries are untouched.
+        assert_eq!(env["SWEEP_RUN_ID"], "sweep-1");
+    }
+
+    #[test]
+    fn injected_cred_serializes_into_container_group_env() {
+        let cred = ScopedR2Cred {
+            access_key_id: "AK".into(),
+            secret_access_key: "SK".into(),
+            session_token: "ST".into(),
+            expires_at: None,
+        };
+        let mut env = HashMap::new();
+        env.insert("SWEEP_RUN_ID".into(), "s2".into());
+        inject_r2_cred_into_env(&mut env, &cred);
+
+        let req = CreateContainerGroupRequest {
+            name: "zen-sweep".into(),
+            display_name: None,
+            container: ContainerConfig {
+                image: "ghcr.io/imazen/zen-sweep:latest".into(),
+                resources: ResourceRequirements {
+                    cpu: 4,
+                    memory: 8192,
+                    gpu_classes: vec!["gpu-1".into()],
+                },
+                command: None,
+                environment_variables: env,
+                registry_authentication: None,
+            },
+            replicas: 1,
+            restart_policy: "always".into(),
+            autostart_policy: true,
+            queue_connection: None,
+        };
+        let v = serde_json::to_value(&req).unwrap();
+        assert_eq!(
+            v["container"]["environment_variables"]["AWS_SESSION_TOKEN"],
+            "ST"
+        );
+        assert_eq!(
+            v["container"]["environment_variables"]["R2_ACCESS_KEY_ID"],
+            "AK"
+        );
     }
 }

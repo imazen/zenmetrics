@@ -194,6 +194,10 @@ fn temp_creds_url(base: &str, account_id: &str) -> String {
 ///
 /// `ttl_seconds` is clamped rather than rejected so callers can pass a
 /// generous default without a fallible pre-check.
+///
+/// The argument count mirrors the Cloudflare request fields exactly; a
+/// builder struct here would just shuffle the same fields one level up.
+#[allow(clippy::too_many_arguments)]
 pub async fn mint_scoped_r2_cred(
     cf_api_token: &str,
     account_id: &str,
@@ -318,7 +322,10 @@ mod tests {
             "admin-read-only"
         );
         // And the explicit accessor agrees.
-        assert_eq!(Permission::ObjectReadWrite.as_wire_str(), "object-read-write");
+        assert_eq!(
+            Permission::ObjectReadWrite.as_wire_str(),
+            "object-read-write"
+        );
     }
 
     #[test]
