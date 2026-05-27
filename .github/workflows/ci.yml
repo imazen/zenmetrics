@@ -52,6 +52,31 @@ jobs:
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 4ec04ca005caf0fe900fdbf7676894e3ae969442
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 742e8a73bd4a072703c5ff67e2a4991e5ef6e8a2
+          # butteraugli sits one directory up from the `zen/` tree
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). CI mirrors that by cloning to ../../butteraugli.
+          mkdir -p ../../butteraugli
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
+          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -111,6 +136,31 @@ jobs:
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 4ec04ca005caf0fe900fdbf7676894e3ae969442
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 742e8a73bd4a072703c5ff67e2a4991e5ef6e8a2
+          # butteraugli sits one directory up from the `zen/` tree
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). CI mirrors that by cloning to ../../butteraugli.
+          mkdir -p ../../butteraugli
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
+          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cross
         run: cargo install --locked cross
@@ -165,6 +215,31 @@ jobs:
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 4ec04ca005caf0fe900fdbf7676894e3ae969442
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 742e8a73bd4a072703c5ff67e2a4991e5ef6e8a2
+          # butteraugli sits one directory up from the `zen/` tree
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). CI mirrors that by cloning to ../../butteraugli.
+          mkdir -p ../../butteraugli
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
+          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -210,6 +285,31 @@ jobs:
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 4ec04ca005caf0fe900fdbf7676894e3ae969442
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 742e8a73bd4a072703c5ff67e2a4991e5ef6e8a2
+          # butteraugli sits one directory up from the `zen/` tree
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). CI mirrors that by cloning to ../../butteraugli.
+          mkdir -p ../../butteraugli
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
+          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -241,6 +341,31 @@ jobs:
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 4ec04ca005caf0fe900fdbf7676894e3ae969442
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 742e8a73bd4a072703c5ff67e2a4991e5ef6e8a2
+          # butteraugli sits one directory up from the `zen/` tree
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). CI mirrors that by cloning to ../../butteraugli.
+          mkdir -p ../../butteraugli
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
+          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
