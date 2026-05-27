@@ -49,6 +49,38 @@ the proven async path; all 25 unit + 7 CLI tests stay green.
   --backend vastai`; stale `vastai-fleet`/`crates/vastai-fleet` doc-path
   references across `zen-metrics-cli` + `iwssim-gpu` + scripts updated.
 
+### zen-cloud — SaladCloud provider + shared S3 helper, Phase C (2026-05-26)
+
+Adds SaladCloud as a vast.ai alternative (spec §1.9) and factors the R2
+client out of `zen-cloud-vastai` into a shared helper. vast.ai's 25 unit
++ 7 CLI tests stay green; the new crates add 3 + 22 tests.
+
+- New crate **`zen-cloud-s3`** (`3832ab33`): the shared
+  S3-compatible `BlobStorage` helper. The s5cmd-backed client
+  (`S3Client`, ex-`R2Client`) + the `BlobStorage` impl (`S3BlobStorage`,
+  ex-`R2BlobStorage`) relocate behaviour-identical out of
+  `zen-cloud-vastai`; the only change is a field-based constructor so any
+  provider can build one. `zen-cloud-vastai` now depends on it and
+  re-exports `R2Client` / `R2BlobStorage` under their historical names —
+  every internal call site + test compiles unchanged. R2 IS
+  S3-compatible, so one impl serves vast.ai + SaladCloud + DO + AWS.
+- New crate **`zen-cloud-salad`** (`2f2336e2`): the SaladCloud provider.
+  `JobQueue` is a local HTTP receiver fed by the baked-in
+  `salad-http-job-queue-worker` sidecar (the app side is HTTP, not gRPC —
+  the gRPC contract is internal to the sidecar; see `SALAD.md`);
+  `CredentialSource`/`WorkerHost` read the container-group env
+  (`SALAD_MACHINE_ID` / `SALAD_CONTAINER_GROUP_ID` + BYO R2/S3) + a
+  minimal IMDS client; `BlobStorage` reuses `zen-cloud-s3`; `Heartbeat`
+  is a log-only no-op. A `launch` module hand-rolls the public-API
+  provisioning (resolve GPU class, create queue, create container group
+  with `queue_connection`, push job chunks) with `reqwest` + `serde`.
+- **`zen-sweep-worker --backend salad`** (`ab9ada72`): the salad arm
+  drives the generic `run_worker` loop with the Salad traits + the SAME
+  inline encode+score compute vast.ai runs
+  (`process_chunk_inline`, now re-exported). Feature split: `salad` =
+  GPU-free glue (builds clean), `salad-sweep` = glue + the shared
+  inline-sweep compute tree (the deploy-image build).
+
 ### cvvdp-gpu — perf: Path A Phase 1 prep — `upscale_v_strip_kernel` gains `src_strip_offset` (2026-05-26)
 
 Adds `src_strip_offset: u32` parameter to `upscale_v_strip_kernel` so
