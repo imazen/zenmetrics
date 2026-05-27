@@ -237,6 +237,11 @@ struct WorkerTask {
     ref_hash: u64,
     /// True if the dispatcher promoted this task to cached-ref dispatch.
     use_cached_ref: bool,
+    /// Chooser's predicted VRAM consumption for the chosen backend at
+    /// this size, in MiB. Phase 7.6 Layer 4 — surfaces in the
+    /// swap-time log so operators can correlate the predicted
+    /// footprint with the worker's live free-VRAM reading.
+    predicted_vram_mib: usize,
 }
 
 /// What the worker should do with the reference image.
@@ -522,17 +527,34 @@ fn gpu_worker_main(
         let signature_changed = current_signature != Some(sig);
         if signature_changed {
             // Phase 7.6 Layer 4 — observable VRAM budget at swap time.
-            // Log when the swap is about to happen so operators can
-            // tune `vram_safety_floor_mib` from real workload patterns.
-            // This logs ALL signature-change swaps (not just budget
-            // violations); the WARN-level "vram budget gates instance
-            // swap" log fires only when a budget violation is detected.
+            // Log every signature-change swap with the chooser's
+            // prediction AND the live free-VRAM snapshot so operators
+            // can tune `vram_safety_floor_mib` and the chooser's
+            // safety_margin from real workload patterns. The check
+            // here is observational: the chooser already gated this
+            // task against `usable_vram = free * (1 - margin)` at
+            // submit time. A WARN-level log fires when the live
+            // free-VRAM at swap time has dropped below the
+            // chooser's predicted footprint (i.e. an external
+            // process consumed VRAM between chooser-decision and
+            // instance-construction).
             let free_mib = vram_snapshot.load(Ordering::Acquire);
-            log::debug!(
-                target: "zenmetrics_orchestrator::pool",
-                "warm-instance swap: metric={:?}, size={}x{}, backend={:?}, free_vram_mib={}",
-                task.metric, task.width, task.height, task.chosen_backend, free_mib,
-            );
+            let predicted_mib = task.predicted_vram_mib;
+            if free_mib < predicted_mib && free_mib != usize::MAX {
+                log::warn!(
+                    target: "zenmetrics_orchestrator::pool",
+                    "vram budget gates instance swap: metric={:?}, size={}x{}, backend={:?}, predict={} MiB, free={} MiB (live snapshot below chooser prediction — external VRAM pressure?)",
+                    task.metric, task.width, task.height, task.chosen_backend,
+                    predicted_mib, free_mib,
+                );
+            } else {
+                log::debug!(
+                    target: "zenmetrics_orchestrator::pool",
+                    "warm-instance swap: metric={:?}, size={}x{}, backend={:?}, predict={} MiB, free={} MiB",
+                    task.metric, task.width, task.height, task.chosen_backend,
+                    predicted_mib, free_mib,
+                );
+            }
             // Drop the old metric first to release device buffers.
             current_metric = None;
             cached_ref_hash = None;
@@ -551,8 +573,9 @@ fn gpu_worker_main(
                 ConstructOutcomePub::Oom => {
                     log::warn!(
                         target: "zenmetrics_orchestrator::pool",
-                        "vram budget gates instance swap: metric={:?}, size={}x{}, backend={:?}, free_vram_mib={}, outcome=OomAtConstruction",
-                        task.metric, task.width, task.height, task.chosen_backend, free_mib,
+                        "vram budget gates instance swap: metric={:?}, size={}x{}, backend={:?}, predict={} MiB, free={} MiB, outcome=OomAtConstruction",
+                        task.metric, task.width, task.height, task.chosen_backend,
+                        predicted_mib, free_mib,
                     );
                     let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtConstruction)];
                     let _ = result_tx.send(WorkerResult {
@@ -672,7 +695,10 @@ fn gpu_worker_main(
                         backend_used: Some(task.chosen_backend),
                         backends_attempted: attempts,
                         wall_us,
-                        vram_peak_mib: None,
+                        // Phase 7.6 Layer 4 — surface the chooser's
+                        // prediction so callers can audit per-task
+                        // VRAM consumption without their own probe.
+                        vram_peak_mib: Some(task.predicted_vram_mib),
                         output_columns,
                         metric_version,
                     },
@@ -694,7 +720,7 @@ fn gpu_worker_main(
                         backend_used: None,
                         backends_attempted: attempts,
                         wall_us,
-                        vram_peak_mib: None,
+                        vram_peak_mib: Some(task.predicted_vram_mib),
                         output_columns: ::std::collections::BTreeMap::new(),
                         metric_version: None,
                     },
@@ -710,7 +736,7 @@ fn gpu_worker_main(
                         backend_used: None,
                         backends_attempted: attempts,
                         wall_us,
-                        vram_peak_mib: None,
+                        vram_peak_mib: Some(task.predicted_vram_mib),
                         output_columns: ::std::collections::BTreeMap::new(),
                         metric_version: None,
                     },
@@ -1325,6 +1351,7 @@ impl Orchestrator {
             ref_hash,
             // Filled in at flush time via cached-ref observe.
             use_cached_ref: false,
+            predicted_vram_mib: choice.predicted_vram_mib,
         };
 
         // Enqueue into the streaming reorder window. The window is
