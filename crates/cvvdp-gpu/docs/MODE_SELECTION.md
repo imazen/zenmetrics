@@ -58,29 +58,47 @@ harness extended with wall-time capture (`std::time::Instant` around
 `compute_dkl_jod_with_warm_ref` calls, n=20 runs per cell, report
 percentiles).
 
-### Perf budget — Strip-vs-Full wall-time
+### Perf budget — feasibility trumps perf
 
-**StripPair may be up to 20% slower than Full at sizes where both
-modes fit.** This budget is the memory-savings-vs-perf tradeoff the
-user accepted (locked in 2026-05-26: "under 20pct regression is ok").
+User direction locked 2026-05-26:
 
-- StripPair `wall_ms_p50 / Full wall_ms_p50 ≤ 1.20` at each size:
-  shrink lands.
-- Beyond 1.20 at a size where Full fits: still lands, but the Auto
-  resolver MUST prefer Full at that size (perf-aware selection per
-  the resolver rules below). The shrink commit must include the
-  resolver change in the same PR.
-- Beyond 1.20 at a size where Full does NOT fit: lands as-is. There's
-  no Full alternative; StripPair-slower-than-Full is still
-  StripPair-faster-than-OOM.
+> "full can be 20pct slower and strip could be 3x slower to simply
+> not fail"
 
-**Full's own baseline must not regress more than 1.5%** from the
-parent commit. The 20% budget is for StripPair-vs-Full at the same
-commit, NOT for Full degrading over time. If a shrink commit pushes
-Full's `wall_ms_p50` past the 1.5% gate, the shrink goes behind a
-feature flag or the code path stays unmerged until the regression is
-understood — Full mode is the warm-path correctness baseline and must
-not silently slow down.
+The principle: memory-feasibility is the goal. Slow-but-running beats
+OOM. We have generous headroom on both modes.
+
+**StripPair vs Full wall-time at the same commit:**
+- `strip_p50 / full_p50 ≤ 3.0` at sizes where both fit — shrink
+  lands as-is.
+- Beyond 3x at a size where Full fits: still lands, but the perf-
+  aware Auto resolver MUST prefer Full at that size bucket. Same-
+  commit resolver lookup-table update required.
+- Beyond 3x at a size where Full does NOT fit: lands. There's no
+  alternative; 3x-slow-Strip is still infinitely-faster-than-OOM.
+
+**Full vs parent-commit Full wall-time:**
+- `full_p50_new / full_p50_parent ≤ 1.20` at each size — shrink
+  lands as-is.
+- Beyond 1.20: investigate first. The 20% headroom is for cases
+  where the dispatch-order change inherently costs Full a launch
+  or two; if you find an avoidable regression hiding inside that
+  budget (a bounds-check that LLVM can't optimize, a kernel-launch
+  refactor that affected the warm path), fix it. The budget is a
+  ceiling, not a target.
+- Beyond 20%: honest-stop. Document what regressed and why before
+  pushing.
+
+The earlier 1.5% / 20% thresholds were tightened-too-aggressive. The
+real tradeoffs:
+1. Memory savings are large (-88% estimator delta at 4096²) — worth
+   significant per-pixel overhead.
+2. Feasibility (running at all on a 6 GB card) is binary — a Strip
+   path that's 3x slower is infinitely better than a Full path that
+   OOMs.
+3. Full mode is the warm-path baseline but the dispatch-order
+   refactor will inherently affect launch count; 20% headroom buys
+   the structural changes Phase 2 needs without micro-optimizing.
 
 ## Auto resolver — perf-aware, not just memory-aware
 
@@ -102,15 +120,15 @@ sizes where Full fits since cache locality + zero halo overhead).
 When both Full and Strip fit the cap, the resolver consults a
 static lookup table seeded from the committed wall-time benchmark:
 
-- If `strip_p50 / full_p50 ≤ 1.20` at the resolved `(width, height)`
+- If `strip_p50 / full_p50 ≤ 3.0` at the resolved `(width, height)`
   bucket: either choice is acceptable. Default to Full for warmpath
   cache locality, but a caller asking for `MemoryMode::StripPair`
   explicitly is honored as-is.
-- If `strip_p50 / full_p50 > 1.20` at that bucket: the Auto resolver
-  picks Full even though Strip also fits. The 20% budget is the line
+- If `strip_p50 / full_p50 > 3.0` at that bucket: the Auto resolver
+  picks Full even though Strip also fits. The 3x budget is the line
   past which "smart selection" kicks in to protect throughput.
 - If Full does NOT fit: pick Strip regardless of perf ratio. There's
-  no alternative.
+  no alternative — 3x or 5x or 10x slower Strip still beats OOM.
 
 The lookup table lives in `pipeline::strip_perf_ratio_for_size` (to
 be added by Phase 2 alongside the wall-time benchmark commits). It's
@@ -137,10 +155,11 @@ this fallback intact.
 1. `cargo test --release -p cvvdp-gpu --features cuda` — all tests pass.
 2. JOD parity test at 128² / 1024² / 4096² — `|diff| ≤ 1e-4` (target
    bit-identical `|diff| = 0.0`).
-3. Wall-time bench Full vs StripPair — Full unchanged within 1.5%
-   from parent commit, StripPair within 20% of Full at sizes where
-   both fit (else update the perf-aware resolver lookup table in the
-   same commit).
+3. Wall-time bench Full vs StripPair — Full within 20% of parent
+   commit (investigate before pushing if regression > 5%, hard-stop
+   if > 20%); StripPair within 3x of Full at sizes where both fit
+   (else update the perf-aware resolver lookup table in the same
+   commit).
 4. `nvidia-smi` delta — StripPair memory dropped by the predicted
    amount; Full memory unchanged.
 5. CappedPyramid still works (smoke test at 4096² with `levels=8`).
