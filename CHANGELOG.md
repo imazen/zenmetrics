@@ -17,6 +17,16 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Fixed
+
+- Sweep worker + `zen-metrics-cli` could not read Snappy-compressed input
+  parquets — the `parquet` dep was built with only `["arrow", "zstd"]`, so
+  reading any parquet written with the default (Snappy) compression failed
+  with `Parquet error: Disabled feature at compile time: snap`. Added the
+  `snap` feature to all three `parquet` declarations. Caught on a Salad
+  smoke run via the new durable error sidecar — the failure was at the
+  input-parquet read, before any GPU work, not a node/CUDA issue.
+
 ### Added
 
 - `zen-cloud-vastai` worker — durable best-effort R2 error sidecar on

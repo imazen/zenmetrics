@@ -75,7 +75,12 @@ zen-metrics-cli = { path = "../zen-metrics-cli", optional = true, default-featur
 arrow = { version = "58", default-features = false, features = ["csv"], optional = true }
 arrow-schema = { version = "58", default-features = false, optional = true }
 arrow-array = { version = "58", default-features = false, optional = true }
-parquet = { version = "58", default-features = false, features = ["arrow", "zstd"], optional = true }
+# `snap` is required to READ Snappy-compressed input parquets — Snappy is
+# the parquet writer default, so a worker that can only read zstd silently
+# fails on any input written with default compression (caught on a Salad
+# smoke run: "Disabled feature at compile time: snap"). `zstd` is what the
+# fleet writes its own sidecars with.
+parquet = { version = "58", default-features = false, features = ["arrow", "zstd", "snap"], optional = true }
 # Image decoding for zenanalyze feature computation on sources.
 # Gated so only the source-features feature pulls it.
 image = { workspace = true, optional = true }
