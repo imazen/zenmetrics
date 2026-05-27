@@ -4156,22 +4156,30 @@ impl<R: Runtime> Cvvdp<R> {
             .collect();
         let log_l_bkg_baseband =
             self._dispatch_weber_pyramid_gpu(srgb, &ref_log_l_bkg_dests, false)?;
-        let mut log_l_bkg: Vec<Vec<f32>> = Vec::with_capacity(n_levels);
-        for k in 0..n_levels.saturating_sub(1) {
-            let (_, _, n_px_k) = self.level_dims(k);
-            let h = self.weber_scratch[k].log_l_bkg.clone();
-            let bytes = self
-                .client
-                .read_one(h)
-                .map_err(|_| Error::InvalidImageSize)?;
-            log_l_bkg.push(f32::from_bytes(&bytes).to_vec());
-            debug_assert_eq!(log_l_bkg[k].len(), n_px_k);
-        }
-        let (_, _, baseband_n) = self.level_dims(n_levels - 1);
-        log_l_bkg.push(vec![log_l_bkg_baseband; baseband_n]);
 
         let cube_dim = CubeDim::new_1d(64);
 
+        // Path B unfix (2026-05-27, follow-on): the per-band CSF
+        // launch reads `log_l_bkg` for the level directly from the
+        // already-on-GPU `self.weber_scratch[k].log_l_bkg`
+        // (non-baseband) or fills `self.baseband_log_l_bkg`
+        // in-place at the baseband (matching the hot-path
+        // `_run_d_bands_band_loop` convention). The prior code
+        // read each level's `log_l_bkg` back to host via
+        // `client.read_one(...)` then re-uploaded it via
+        // `client.create_from_slice(...)` per band — a per-band
+        // roundtrip whose only purpose was holding a host-side
+        // copy that the kernel did not consume.
+        //
+        // The per-band `alloc_zeros_f32` calls for `t_p_*_h` are
+        // also eliminated — we reuse the persistent
+        // `self.d_bands_transient.t_p_*` slots sized to base-level
+        // n0. The CSF kernel writes the band's `n_px` prefix; we
+        // read back that same prefix. Each band's CSF write
+        // completes before its own readback, and the next band's
+        // CSF will fully overwrite the prefix it cares about —
+        // same prefix-write/prefix-read pattern that Commit 1
+        // proved bit-identical.
         let mut t_p_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
         for k in 0..n_levels {
             let is_baseband = k == n_levels - 1;
@@ -4179,16 +4187,36 @@ impl<R: Runtime> Cvvdp<R> {
             // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
             let band_mul: f32 = if k == 0 || is_baseband { 1.0 } else { 2.0 };
             let (_, _, n_px) = self.level_dims(k);
-            debug_assert_eq!(log_l_bkg[k].len(), n_px);
-
-            let log_l_bkg_h = self.client.create_from_slice(f32::as_bytes(&log_l_bkg[k]));
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+
+            // GPU-resident log_l_bkg source. Non-baseband levels
+            // read from `weber_scratch[k].log_l_bkg` (just written
+            // by `_dispatch_weber_pyramid_gpu` above); the baseband
+            // gets a one-shot scalar fill into the pre-allocated
+            // `self.baseband_log_l_bkg` (same pattern as
+            // `_run_d_bands_band_loop`).
+            let log_l_bkg_h = if is_baseband {
+                let fill_count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
+                unsafe {
+                    fill_f32_kernel::launch::<R>(
+                        &self.client,
+                        fill_count,
+                        cube_dim,
+                        ArrayArg::from_raw_parts(self.baseband_log_l_bkg.clone(), n_px),
+                        log_l_bkg_baseband,
+                        n_px as u32,
+                    );
+                }
+                self.baseband_log_l_bkg.clone()
+            } else {
+                self.weber_scratch[k].log_l_bkg.clone()
+            };
 
             let [ch_gain_a, ch_gain_rg, ch_gain_vy] = ch_gain_for_band(is_baseband, band_mul);
 
-            let t_p_a_h = alloc_zeros_f32(&self.client, n_px);
-            let t_p_rg_h = alloc_zeros_f32(&self.client, n_px);
-            let t_p_vy_h = alloc_zeros_f32(&self.client, n_px);
+            let t_p_a_h = self.d_bands_transient.t_p_ref[0].clone();
+            let t_p_rg_h = self.d_bands_transient.t_p_ref[1].clone();
+            let t_p_vy_h = self.d_bands_transient.t_p_ref[2].clone();
 
             unsafe {
                 csf_apply_3ch_kernel::launch::<R>(
@@ -4218,7 +4246,12 @@ impl<R: Runtime> Cvvdp<R> {
                     .client
                     .read_one(h)
                     .map_err(|_| Error::InvalidImageSize)?;
-                planes[c] = f32::from_bytes(&bytes).to_vec();
+                // Take only this level's `n_px` prefix — the
+                // shared transient buffer is sized to base-level
+                // n0 and the kernel only wrote `n_px` elements at
+                // offset 0.
+                let full = f32::from_bytes(&bytes);
+                planes[c] = full[..n_px].to_vec();
             }
             t_p_bands.push(planes);
         }
