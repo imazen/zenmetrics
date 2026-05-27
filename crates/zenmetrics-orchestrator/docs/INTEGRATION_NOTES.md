@@ -232,6 +232,129 @@ All three commits are on `origin/master`. Tests added:
 tests in `tests/cli.rs` (which continue passing with the new code
 path).
 
+## Phase 7.7 — parity gate FAILED, default flip BLOCKED (2026-05-27)
+
+User directive: "make users of the cli adopt this, for local and
+remote use" — i.e., flip `--use-orchestrator` from opt-in default-off
+to default-on. The Phase 7.7 brief was clear: the flip is gated on a
+comprehensive parity sweep proving orchestrator == legacy across
+every metric / size / quality cell. Acceptable tolerance: bit-exact
+preferred; up to atomic-reorder noise (~5e-5) accepted; anything
+larger = FAIL = blocks the flip.
+
+Parity sweep ran on the water-cooled 7950X / RTX 5070 workstation
+2026-05-27. **Result: 22 of 54 cells FAIL** — flip is BLOCKED. See:
+
+- `benchmarks/orchestrator_parity_2026-05-27.csv` — per-cell data
+- `benchmarks/orchestrator_parity_2026-05-27.md` — table summary
+- `scripts/orchestrator_parity_sweep.py` — repro script
+
+### Failure breakdown
+
+| Metric | Cells PASS | Cells FAIL | Failure mode |
+| --- | --- | --- | --- |
+| cvvdp | 9/9 | 0 | clean (bit-exact at 256/1024, ~1e-4 atomic noise at 4096) |
+| dssim-gpu | 9/9 | 0 | bit-identical everywhere |
+| ssim2-gpu | 6/9 | 3 | **Memory-mode divergence at 4096** (same root cause as butter): at 16M px (4096²) the orchestrator's chooser picked `gpu_strip` because `gpu_full` benched OOM; orchestrator forces `MemoryMode::Strip`. Legacy `Metric::new()` uses `MemoryMode::Auto` which has ssim2's own resolver (different policy). Diffs 1.4e-3 to 9.6e-3 on the 0..100 scale. Bit-identical at 256 and 1024 where Full fits and both paths agree. |
+| butteraugli-gpu | 0/9 | 9 | **Memory-mode + bench-state divergence at ALL sizes**: legacy uses `Metric::new()` → `MemoryMode::Auto` → butter's strip-preferred resolver. Orchestrator uses `construct(...)` which translates `Backend::GpuFull`/`GpuStrip` to `MemoryMode::Full`/`MemoryMode::Strip { h_body: None }` based on which backend the chooser picked from the bench data. Verified: on a workstation with a stale `~/.cache/zenmetrics/` cache (bench showed gpu_full slightly faster), orch + no-bench produces 7.29 (matches legacy); on a fresh bench (gpu_strip slightly faster), orch + no-bench produces 6.29 — **a `~14%` swing depending on which microbench result happened to land first**. The legacy Auto path is bench-independent; the orchestrator's explicit Full/Strip selection makes butter scores depend on the (noisy) bench timing rather than on a deterministic policy. See `executor::construct` and `butteraugli-gpu/src/memory_mode.rs::resolve_auto`. |
+| iwssim-gpu | 0/9 | 9 | **Column name divergence**: legacy emits `iwssim_gpu` (hardcoded in `MetricKind::IwssimGpu.column_names()`); orchestrator emits `iwssim_imazen_v0_0_1` (versioned, from `executor::build_output_columns` + `IWSSIM_COLUMN_NAME`). Values are bit-identical; only the column key differs. `rekey_orchestrator_columns` doesn't have a rename rule for IwssimGpu, so the versioned key leaks through to JSON output. |
+| zensim-gpu | 8/9 | 1 | one cell at 4096 q=80 diverges 0.13 on 0..100 scale; rest pass within tolerance |
+
+### Why these are not "acceptable atomic noise"
+
+The brief allows ~5e-5 atomic-reorder noise. The observed failures
+are either:
+
+- **Structural memory-mode differences** (ssim2 at 4096): the
+  orchestrator's chooser correctly picked `gpu_strip` to avoid OOM,
+  but legacy's `Metric::new()` doesn't see the same constraint. This
+  produces valid-but-different scores. Not a bug per se; the
+  orchestrator's behaviour is arguably *better* (OOM-safe). But it
+  violates the bit-identical contract the brief requires.
+- **Real algorithmic divergence** (butter at all sizes): the
+  ~14-30% relative differences are far too large to attribute to
+  atomic reordering. Root cause not yet identified — needs
+  investigation into how `ExecMetric` constructs the butter scorer
+  vs `MetricCache`'s direct `ButteraugliOpaque::new`.
+- **Column name divergence** (iwssim): not a value difference, but
+  parquet sidecar shape changes break the "bit-identical sweep
+  output" contract.
+
+### Decisions blocked on this gate
+
+The Phase 7.7 deliverables that depended on a green parity gate
+are NOT shipped:
+
+- ~~flip `--use-orchestrator` default to on~~ — BLOCKED
+- ~~add `--use-legacy-scheduler` as the opt-out~~ — code drafted in
+  this branch but NOT committed; the flag isn't useful until the
+  default flips
+- ~~drop `ZENMETRICS_USE_ORCHESTRATOR=1` from onstart~~ — BLOCKED
+- ~~Dockerfile.sweep.v27 doc updates~~ — BLOCKED
+
+What DID ship from Phase 7.7:
+
+- `benchmarks/orchestrator_parity_2026-05-27.{csv,md}` —
+  comprehensive parity data baked into the repo. Future work can
+  resume from here without re-running the sweep.
+- `scripts/orchestrator_parity_sweep.py` — repeatable harness;
+  re-run any time the orchestrator or metric crates change to
+  re-verify parity.
+- This document section — surfaces the three blocking root causes
+  for the next contributor.
+
+### Path forward
+
+Each failure mode needs its own fix before the flip can land:
+
+1. **butter memory-mode + bench-state divergence (highest priority)**
+   — `executor::construct` maps `Backend::GpuFull` → `MemoryMode::Full`
+   and `Backend::GpuStrip` → `MemoryMode::Strip { h_body: None }`,
+   forcing the resolved memory mode based on which microbench was
+   faster. This contradicts the legacy CLI path which uses
+   `MemoryMode::Auto` (butter's strip-preferred deterministic policy).
+   The chooser then bakes a non-deterministic input (microbench
+   timing) into the metric's score.
+
+   Fix options:
+   - (a) Map `Backend::GpuFull` / `GpuStrip` → `MemoryMode::Auto` for
+     metrics where the score depends on the mode (butter, ssim2 at
+     large sizes). Then the chooser's role is purely speed-vs-OOM
+     ordering, and the per-crate `resolve_auto` is the authoritative
+     mode selector.
+   - (b) Pin every metric to a single mode (e.g. always Full unless
+     OOM forces fallback). Reproducibility wins; slight perf loss at
+     scale.
+   - (c) Document that orchestrator scores are bench-dependent and
+     widen the parity tolerance — likely unacceptable, since users
+     expect identical scores from "same image, same metric, same
+     binary".
+
+   Recommend option (a). The chooser still drives the OOM ladder
+   (Full → Strip → CPU); the per-metric Auto resolver decides which
+   mode to use within each rung.
+2. **iwssim column name (low effort)** — add a rename rule in
+   `rekey_orchestrator_columns` for `CliMetricKind::IwssimGpu`:
+   `("iwssim_imazen_v...", "iwssim_gpu")`. Or, harmonise the two
+   sides on a single column name (the versioned one is probably the
+   long-term right answer, but the existing parquet corpus uses
+   `iwssim_gpu` — pick whichever doesn't break the V_X store).
+3. **ssim2 memory-mode at 4096 (architectural)** — either:
+   - widen the parity tolerance for cells where the chooser switches
+     memory mode (document that the orchestrator's OOM-safe behaviour
+     is *better* but not bit-identical, and the sweep output shape
+     stays valid)
+   - force the orchestrator to use the same memory mode legacy would
+     have used (defeats the purpose of the chooser)
+   - require the user to acknowledge "OOM-safe sometimes diverges
+     from legacy at large sizes" as a known and accepted behaviour
+4. **zensim at 4096 q=80** — single-cell flake (0.13 diff over a
+   range that hits 50+); rerun with larger N to characterise.
+
+Until items 1+2 (at minimum) ship, the default cannot flip without
+violating either the brief's bit-identical contract or the brief's
+hard constraint that any FAIL blocks the flip.
+
 ## Pointers
 
 - Orchestrator design: `crates/zenmetrics-api/docs/ORCHESTRATOR_DESIGN.md`
@@ -241,3 +364,5 @@ path).
 - CLI integration code: `crates/zen-metrics-cli/src/orchestrator_glue.rs`
   + `crates/zen-metrics-cli/src/orchestrator_runner.rs`
 - Sweep image: `Dockerfile.sweep.v27` + `scripts/sweep/onstart_orchestrator.sh`
+- Parity sweep harness + data: `scripts/orchestrator_parity_sweep.py`,
+  `benchmarks/orchestrator_parity_2026-05-27.{csv,md}`

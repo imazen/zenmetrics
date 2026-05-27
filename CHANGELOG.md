@@ -53,6 +53,28 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zenmetrics-orchestrator` Phase 7.7 — **parity sweep harness +
+  honest-stop on default-flip**. User directive 2026-05-27: "make
+  users of the cli adopt this, for local and remote use" — i.e.,
+  flip `--use-orchestrator` from opt-in default-off to default-on.
+  Phase 7.7 brief gated the flip on a comprehensive parity sweep
+  proving orchestrator == legacy bit-identical (or within atomic
+  reorder noise) across all 6 metrics × 3 sizes × 3 qs = 54 cells.
+  **Result: 22 of 54 cells diverged — default flip BLOCKED**. The
+  divergences are not atomic-reorder noise; they're three distinct
+  structural issues now documented in `INTEGRATION_NOTES.md` Phase
+  7.7 section: (1) butter memory-mode-selection bench-state
+  dependency (`Backend::GpuFull`/`GpuStrip` → forced
+  `MemoryMode::Full`/`Strip`, contradicting the per-crate
+  strip-preferred Auto resolver; ~14% score swings depending on
+  whether the bench landed gpu_full or gpu_strip as faster), (2)
+  ssim2 same root cause at 4096 px when chooser picks Strip due to
+  bench-OOM at full, (3) iwssim column-name divergence (legacy
+  `iwssim_gpu` vs orchestrator `iwssim_imazen_v0_0_1`, values are
+  bit-identical). Path-forward documented per failure. Shipped:
+  `scripts/orchestrator_parity_sweep.py` (repeatable harness),
+  `benchmarks/orchestrator_parity_2026-05-27.{csv,md}` (data).
+
 - `zenmetrics-orchestrator` Phase 7.6 — **internal task reordering
   for warm-instance reuse + cached-ref hit rate**. User directive
   2026-05-27: "orchestrator should reorder tasks". Four layers
