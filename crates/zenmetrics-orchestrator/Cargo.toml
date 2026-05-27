@@ -221,6 +221,16 @@ name = "no_gpu_fallback"
 path = "tests/no_gpu_fallback.rs"
 required-features = ["cuda"]
 
+# Phase 9 GPU concurrency invariants — parity (N=1 vs N=4 bit-identical
+# scores) + throughput (N=4 >= 2.5x N=1 at 4096²) + adaptive lane count
+# introspection. Every test is `#[ignore]`d because they require real
+# CUDA + populated capability cache + (for the adaptive test) working
+# nvidia-smi. Sibling-workspace caveat applies.
+[[test]]
+name = "gpu_concurrency"
+path = "tests/gpu_concurrency.rs"
+required-features = ["cuda"]
+
 # Phase 5 batch example. Drives `Orchestrator::run_all` against a real
 # CUDA device. Sibling-workspace caveat applies.
 [[example]]
