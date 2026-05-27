@@ -517,17 +517,53 @@ fn classify_cvvdp_construct_err(e: zenmetrics_api::cvvdp::Error) -> ConstructOut
 // Construction for each backend
 // ---------------------------------------------------------------------------
 
+/// Phase 7.7.1: construct the metric for a given backend.
+///
+/// The `after_oom` parameter controls memory-mode selection for GPU
+/// backends:
+///
+/// - `after_oom == false` (first attempt for this task): pass
+///   [`MemoryMode::Auto`] to the per-crate constructor so the metric's
+///   own `resolve_auto` policy owns the choice. This is the legacy
+///   `MetricCache::new()` behaviour — butter's strip-preferred resolver,
+///   ssim2's full-by-default resolver, etc. Matching it is the whole
+///   reason Phase 7.7's parity sweep gates the orchestrator default.
+/// - `after_oom == true` (OOM ladder retry): force the explicit mode
+///   matching the chosen backend ([`Backend::GpuFull`] →
+///   [`MemoryMode::Full`], [`Backend::GpuStrip`] →
+///   [`MemoryMode::Strip { h_body: None }`]). This prevents the
+///   per-crate Auto from re-picking the mode that just OOM'd —
+///   `cells_failed_oom` is the chooser's signal, not the per-crate
+///   resolver's, so without forcing the mode we'd churn between Full
+///   and Strip on every ladder step.
+///
+/// `Backend::GpuStripPair` is cvvdp-only and always uses cvvdp's
+/// explicit `StripPair` mode (no Auto equivalent). `Backend::Cpu` is
+/// unaffected by `after_oom`.
 fn construct(
     kind: MetricKind,
     backend: Backend,
     width: u32,
     height: u32,
     params: Option<MetricParams>,
+    after_oom: bool,
 ) -> ConstructOutcome {
     match backend {
-        Backend::GpuFull => construct_via_umbrella(kind, width, height, params, MemoryMode::Full),
+        Backend::GpuFull => {
+            let mode = if after_oom {
+                MemoryMode::Full
+            } else {
+                MemoryMode::Auto
+            };
+            construct_via_umbrella(kind, width, height, params, mode)
+        }
         Backend::GpuStrip => {
-            construct_via_umbrella(kind, width, height, params, MemoryMode::Strip { h_body: None })
+            let mode = if after_oom {
+                MemoryMode::Strip { h_body: None }
+            } else {
+                MemoryMode::Auto
+            };
+            construct_via_umbrella(kind, width, height, params, mode)
         }
         Backend::GpuStripPair => {
             // StripPair is cvvdp-specific. Other metrics fall through to
@@ -732,6 +768,12 @@ impl Orchestrator {
         // future chooser change forgets to reject Cpu / a previously-
         // OOMed backend.
         let mut last_choice_vram_mib: Option<usize> = None;
+        // Phase 7.7.1: track whether a prior attempt OOM'd so the
+        // per-iteration `construct` knows whether to pass MemoryMode::Auto
+        // (first attempt, let per-crate own policy) or force the explicit
+        // mode matching the chosen backend (post-OOM, chooser already
+        // ruled out the bigger mode via cells_failed_oom).
+        let mut after_oom = false;
 
         for _iteration in 0..5 {
             // Re-ask the chooser each iteration — the previous attempt's
@@ -761,7 +803,7 @@ impl Orchestrator {
             last_choice_vram_mib = Some(choice.predicted_vram_mib);
 
             // Construct.
-            match construct(metric, backend, width, height, params.clone()) {
+            match construct(metric, backend, width, height, params.clone(), after_oom) {
                 ConstructOutcome::Ok(mut em) => {
                     // Try compute. Phase 7.5 routes through the extras
                     // path so butter's pnorm_3 column survives all the
@@ -789,6 +831,7 @@ impl Orchestrator {
                             // attempting the next backend.
                             drop(em);
                             self.record_oom_and_persist(metric, backend, pixels);
+                            after_oom = true;
                             continue;
                         }
                         Err(CallErr::Other(msg)) => {
@@ -807,6 +850,7 @@ impl Orchestrator {
                 ConstructOutcome::Oom => {
                     attempts.push((backend, AttemptOutcome::OomAtConstruction));
                     self.record_oom_and_persist(metric, backend, pixels);
+                    after_oom = true;
                     continue;
                 }
                 ConstructOutcome::Other(msg) => {
@@ -1197,6 +1241,14 @@ impl ExecMetric {
 /// `run_single` ladder; pool.rs uses this to route the per-task
 /// `(metric, backend, w, h, params)` tuple into the right per-crate
 /// constructor.
+///
+/// Phase 7.7.1: this entry is *always* a first-attempt construction
+/// from the pool's perspective — the pool maintains warm instances per
+/// `(metric, w, h, backend)` signature and does not yet have an
+/// in-place OOM-ladder reconstruction. So we pass `after_oom = false`
+/// to get the legacy-compatible `MemoryMode::Auto` path. Future work
+/// can plumb an explicit `after_oom` here when the pool gets its own
+/// ladder.
 pub(crate) fn construct_pub(
     kind: MetricKind,
     backend: Backend,
@@ -1204,7 +1256,7 @@ pub(crate) fn construct_pub(
     height: u32,
     params: Option<MetricParams>,
 ) -> ConstructOutcomePub {
-    match construct(kind, backend, width, height, params) {
+    match construct(kind, backend, width, height, params, false) {
         ConstructOutcome::Ok(em) => ConstructOutcomePub::Ok(em),
         ConstructOutcome::Oom => ConstructOutcomePub::Oom,
         ConstructOutcome::Other(msg) => ConstructOutcomePub::Other(msg),
