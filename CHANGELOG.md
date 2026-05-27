@@ -17,6 +17,48 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.3 — bands_ref strip-shaped + gauss_alt added (2026-05-27)
+
+Adds `WeberScratch.bands_ref_strip: Option<[Handle; 3]>` per shallow
+non-baseband level (`k < k_split`) — same `fine_w × R_k` shape as
+`bands_dis_strip`. The REF weber finalize for shallow levels is
+DEFERRED to the strip-major outer band loop (mirrors the existing
+DIST defer pattern):
+
+1. New helper `_dispatch_ref_weber_strip_s_for_level(s, k)` runs
+   stages 1-3 (upscale_v/h, per-channel upscale, fused
+   subtract+weber) on REF inputs → writes `bands_ref_strip` body+halo
+   + `log_l_bkg` (REF's per-pixel log₁₀(L_bkg)).
+2. `_run_d_bands_strip_major_shallow` calls REF strip helper THEN
+   DIST CSF strip helper per (s, k) in strict lockstep. CSF reads
+   `bands_ref_strip` (just written) + `bands_dis_strip` + `log_l_bkg`.
+3. `_dispatch_dist_weber_csf_strip_s_for_level` gains
+   `band_ref_strip_local: bool` parameter — when `true`, the
+   `band_ref_*` handles are strip-local (skip the byte-offset slice).
+
+REF gauss data persists through DIST gauss dispatch via a new
+`gauss_alt: Option<Vec<Level>>` full-image alt-buffer (allocated only
+in `StripMode::Pair`) and a `_maybe_swap_gauss_alt_post_ref()` swap
+after REF weber finalize. Post-swap, `gauss_alt` holds REF gauss data,
+`gauss_ref` is overwritten by DIST gauss. The REF strip helper reads
+from `gauss_alt`; DIST helpers read from `gauss_ref` as today.
+
+**Memory delta (4096² h_body=256):** `bands_ref` shallow non-baseband
+levels (~256 MiB) freed; `gauss_alt` full-image (~256 MiB) added.
+Net nvsmi delta ≈ 0 MiB for P2.3 alone (3457 → 3453 MiB ± noise).
+The estimator already counted bands_ref strip-shaped, so the
+analytical reduction landed pre-runtime; the deferred `gauss_alt`
+overhead will be reclaimed by P2.7's gauss strip-shaping.
+
+**JOD parity:** bit-identical (|diff|=0.0) at 128² / 1024² / 4096²
+(h_body 32, 256, 512). Wall-time 1024² Mode B 1.4s, 4096² Mode B
+4.45s (matches P2.1c baseline within noise).
+
+Foundation commit for the P2.x shrink chain — establishes the
+interleaved REF-then-DIST strip dispatch pattern and the
+gauss_alt-swap mechanism. P2.4-P2.6 + P2.8 ride this foundation;
+P2.7 retires `gauss_alt` by strip-shaping both gauss pyramids.
+
 ### cvvdp-gpu — perf: P2.1c — outer loop strip-major for k < k_split (2026-05-27)
 
 Inverts the outer dispatch loop in `_run_d_bands_band_loop` for

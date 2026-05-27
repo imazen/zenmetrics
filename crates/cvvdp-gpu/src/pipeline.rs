@@ -354,6 +354,31 @@ struct WeberScratch {
     /// `None` outside `StripMode::Pair` so the Full and CachedRef
     /// dispatch paths skip the allocation entirely.
     bands_dis_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
+    /// Per-strip bands_ref scratch (**P2.3, 2026-05-27**). Allocated only
+    /// when the owning `Cvvdp` instance is in `StripMode::Pair` AND this
+    /// level is shallow (`k < k_split`). Mirrors [`Self::bands_dis_strip`]
+    /// for the REF-side weber-pyramid output.
+    ///
+    /// **Sizing** (P2.3): per channel, `fine_w × R_k × f32` — identical
+    /// to [`Self::bands_dis_strip`]. Holds the body+halo window of
+    /// `bands_ref[k]` for one strip; subsequent strips overwrite it
+    /// before the next CSF dispatch reads it.
+    ///
+    /// **Reader/writer wiring (P2.3):** the per-strip REF helper
+    /// (analog to the per-strip DIST helper) writes this buffer in the
+    /// strip-major-outer band loop, and the per-strip CSF helper
+    /// reads it in the same `(s, k)` iteration before the next strip
+    /// overwrites it. The full-image `bands_ref[k].planes` are zero-
+    /// sized in Mode B for shallow non-baseband levels (skipped at
+    /// construction); deep levels (`k >= k_split`) and the baseband
+    /// keep their full-image allocation because the level-major-outer
+    /// dispatch path reads them.
+    ///
+    /// `None` outside `StripMode::Pair`, and `None` for deep
+    /// non-baseband levels even in Mode B (those keep the full-image
+    /// `bands_ref[k]` allocation; the strip-major outer only iterates
+    /// shallow levels).
+    bands_ref_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
 }
 
 
@@ -483,6 +508,27 @@ fn build_weber_scratch<R: Runtime>(
             ]
         });
 
+        // P2.3 bands_ref_strip (2026-05-27): allocate ONLY for shallow
+        // levels (k < k_split) where the strip-major-outer band loop
+        // reads bands_ref from the strip buffer. Deep levels keep
+        // bands_ref full-image (the level-major-outer dispatch path
+        // reads them at full level dims). Outside Mode B both fields
+        // stay `None`. Sizing matches `bands_dis_strip` exactly so the
+        // CSF helper can swap the read source without launch-geometry
+        // changes.
+        let bands_ref_strip = strip_h_at_k.and_then(|h_strip| {
+            if (k as u32) < k_split {
+                let n_strip = (fine_w as usize) * (h_strip as usize);
+                Some([
+                    alloc_zeros_f32(client, n_strip),
+                    alloc_zeros_f32(client, n_strip),
+                    alloc_zeros_f32(client, n_strip),
+                ])
+            } else {
+                None
+            }
+        });
+
         // Path A Phase 1c: skip the full-image `upscaled_c` allocation
         // when the strip variant is live. Mode B's Weber-finalize
         // walker writes to `upscaled_c_strip` exclusively (verified by
@@ -516,6 +562,7 @@ fn build_weber_scratch<R: Runtime>(
             upscaled_c,
             upscaled_c_strip,
             bands_dis_strip,
+            bands_ref_strip,
         });
         fine_w = coarse_w;
         fine_h = coarse_h;
@@ -775,7 +822,36 @@ pub struct Cvvdp<R: Runtime> {
     /// band loop's CSF reads here for REF inputs. Coarsest level
     /// shares storage with the coarsest gaussian for the Weber
     /// baseband path.
+    ///
+    /// **P2.3 (2026-05-27):** in `StripMode::Pair`, shallow non-
+    /// baseband levels (`k < k_split`) are allocated as zero-size
+    /// handles. The REF strip helper in `_run_d_bands_strip_major_shallow`
+    /// writes [`WeberScratch::bands_ref_strip`] per `(s, k)` instead,
+    /// in lockstep with the DIST CSF dispatch that reads it. Deep
+    /// non-baseband levels and the baseband keep full-image
+    /// allocations because the level-major dispatch path reads them
+    /// at full level dims.
     bands_ref: Vec<Level>,
+
+    /// Alternate full-image Gaussian-pyramid buffer (`StripMode::Pair`
+    /// only). `Some(...)` only in Mode B; `None` elsewhere.
+    ///
+    /// **P2.3 (2026-05-27):** the REF and DIST sides write into a
+    /// SHARED `gauss_ref` buffer (REF first, DIST clobbers). Mode B's
+    /// strip-major-outer band loop needs REF gauss data to persist
+    /// through DIST dispatch so the per-strip REF weber helper can
+    /// read it. We allocate this alt-buffer once at construction and
+    /// `mem::swap` `gauss_ref` ↔ `gauss_alt` after REF weber finalize:
+    /// post-swap `gauss_alt` holds REF gauss data, `gauss_ref` is the
+    /// (overwritten) prior REF buffer (garbage), and the next DIST
+    /// gauss dispatch writes to `gauss_ref` without disturbing REF
+    /// state in `gauss_alt`.
+    ///
+    /// **Memory cost (P2.3):** at 4096² adds ~268 MiB (one full-image
+    /// pyramid). Net P2.3 win: bands_ref shrink frees ~680 MiB,
+    /// minus this 268 MiB = ~412 MiB net reduction. P2.7 will strip-
+    /// shape both gauss_ref and gauss_alt to recover this overhead.
+    gauss_alt: Option<Vec<Level>>,
 
     /// Pyramid-band buffers for the DISTORTED side. Same shape as
     /// `bands_ref`; separate storage so both sides' weber-pyramid
@@ -1884,7 +1960,59 @@ impl<R: Runtime> Cvvdp<R> {
         };
 
         let gauss_ref = build_pyramid(&client);
-        let bands_ref = build_pyramid(&client);
+
+        // P2.3 gauss_alt (2026-05-27): in StripMode::Pair, allocate a
+        // second full-image gauss pyramid so REF gauss data can
+        // survive past DIST dispatch (see field docstring). Outside
+        // Mode B, `None` — the existing single `gauss_ref` suffices.
+        // P2.7 will strip-shape both gauss_ref and gauss_alt to free
+        // the additional storage.
+        let gauss_alt: Option<Vec<Level>> = if strip_pair_h_body.is_some() {
+            Some(build_pyramid(&client))
+        } else {
+            None
+        };
+
+        // P2.3 bands_ref shrink (2026-05-27): in StripMode::Pair,
+        // allocate non-baseband levels k<k_split as ZERO-SIZE handles
+        // (the strip-major outer in the band loop reads bands_ref
+        // from per-strip `weber_scratch[k].bands_ref_strip` instead).
+        // Deep levels (k >= k_split, non-baseband) and the baseband
+        // keep full-image allocations because the level-major dispatch
+        // path reads them at full level dims. Mirrors the bands_dis
+        // skip pattern (2026-05-26).
+        //
+        // Full / CachedRef modes use `build_pyramid` (every level
+        // full-image-sized).
+        let bands_ref: Vec<Level> = if let Some(h_body) = strip_pair_h_body {
+            let k_split = mode_b_k_split(h_body, n_levels);
+            let mut out = Vec::with_capacity(n_levels as usize);
+            let mut w = width;
+            let mut h = height;
+            for k in 0..n_levels as usize {
+                let is_baseband = k == n_levels as usize - 1;
+                let is_shallow = (k as u32) < k_split;
+                let n_alloc = if !is_baseband && is_shallow {
+                    0
+                } else {
+                    (w as usize) * (h as usize)
+                };
+                out.push(Level {
+                    w,
+                    h,
+                    planes: [
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                        alloc_zeros_f32(&client, n_alloc),
+                    ],
+                });
+                w = w.div_ceil(2);
+                h = h.div_ceil(2);
+            }
+            out
+        } else {
+            build_pyramid(&client)
+        };
 
         // Path A bands_dis shrink (2026-05-26): in StripMode::Pair,
         // allocate non-baseband levels' planes as ZERO-SIZE handles.
@@ -2009,6 +2137,7 @@ impl<R: Runtime> Cvvdp<R> {
             src_ref,
             srgb_lut,
             gauss_ref,
+            gauss_alt,
             bands_ref,
             bands_dis,
             d_scratch,
@@ -2662,6 +2791,7 @@ impl<R: Runtime> Cvvdp<R> {
         let result =
             self._dispatch_weber_pyramid_gpu_from_linear_planes(ref_r, ref_g, ref_b, &dests, false);
         self.log_l_bkg_ref_dests = dests;
+        self._maybe_swap_gauss_alt_post_ref();
         result
     }
 
@@ -2830,6 +2960,32 @@ impl<R: Runtime> Cvvdp<R> {
     /// correct. The `strip_dispatch_counter` increments once per
     /// (strip, channel) dispatch so a test can observe the walker
     /// partitioned the work.
+    /// **P2.3 (2026-05-27):** swap `gauss_ref` ↔ `gauss_alt` so REF
+    /// gauss data persists past a subsequent DIST gauss dispatch. No-op
+    /// outside `StripMode::Pair`. See [`Self::gauss_alt`] docstring for
+    /// the architecture rationale.
+    ///
+    /// After this swap:
+    ///   - `gauss_alt.as_ref().unwrap()` holds REF gauss data.
+    ///   - `gauss_ref` holds garbage (the prior call's leftover, or
+    ///     the zero-initialised buffer on first call). The next DIST
+    ///     gauss dispatch overwrites it before any read.
+    ///
+    /// The swap happens AFTER REF weber finalize (incl. baseband
+    /// mean) so the finalize path can read `gauss_ref` as usual.
+    fn _maybe_swap_gauss_alt_post_ref(&mut self) {
+        let mode_b = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
+        if !mode_b {
+            return;
+        }
+        if let Some(alt) = self.gauss_alt.as_mut() {
+            std::mem::swap(&mut self.gauss_ref, alt);
+        }
+    }
+
     fn _reduce_gauss_pyramid_from_level0(&self) {
         let mode_b = matches!(
             self.strip_config,
@@ -2983,8 +3139,31 @@ impl<R: Runtime> Cvvdp<R> {
             Some(StripConfig { h_body, .. }) => h_body,
             None => return,
         };
+        let n_levels_u32 = self.n_levels;
+        let k_split = mode_b_k_split(h_body_at_0, n_levels_u32) as usize;
 
         for k in 0..n_levels.saturating_sub(1) {
+            // P2.3 REF shrink (2026-05-27): for the REF side
+            // (`dest_is_dis = false`), defer shallow-level (k < k_split)
+            // writes to the band-loop's strip-major-outer dispatch.
+            // The full-image `bands_ref[k].planes` are zero-size for
+            // shallow levels under StripMode::Pair so writing here
+            // would crash; the per-strip REF helper invoked by
+            // `_run_d_bands_band_loop` writes
+            // `weber_scratch[k].bands_ref_strip` instead, in lockstep
+            // with the per-strip DIST CSF dispatch that consumes it.
+            // Deep levels (k >= k_split) keep full-image bands_ref and
+            // run through this strip walker as before.
+            //
+            // The DIST side keeps its existing behaviour (full-image
+            // bands_dis is zero-size only for non-baseband levels in
+            // Mode B; the DIST-side `_finalize_weber_pyramid_after_gauss`
+            // routes Mode B through a separate "defer entirely" branch
+            // upstream of this walker, so DIST never reaches this
+            // codepath for non-baseband levels in Mode B).
+            if !dest_is_dis && k < k_split {
+                continue;
+            }
             let coarse_w = self.gauss_ref[k + 1].w;
             let coarse_h = self.gauss_ref[k + 1].h;
             let fine_w = self.gauss_ref[k].w;
@@ -3944,6 +4123,7 @@ impl<R: Runtime> Cvvdp<R> {
         let dests = std::mem::take(&mut self.log_l_bkg_ref_dests);
         let result = self._dispatch_weber_pyramid_gpu(ref_srgb, &dests, false);
         self.log_l_bkg_ref_dests = dests;
+        self._maybe_swap_gauss_alt_post_ref();
         result
     }
 
@@ -4215,6 +4395,7 @@ impl<R: Runtime> Cvvdp<R> {
         let dests = std::mem::take(&mut self.log_l_bkg_ref_dests);
         let result = self._dispatch_weber_pyramid_gpu_from_handle(ref_handle, &dests, false);
         self.log_l_bkg_ref_dests = dests;
+        self._maybe_swap_gauss_alt_post_ref();
         result
     }
 
@@ -5011,10 +5192,21 @@ impl<R: Runtime> Cvvdp<R> {
             // include baseband).
             let band_mul: f32 = if k == 0 { 1.0 } else { 2.0 };
             let ch_gain = ch_gain_for_band(false, band_mul);
+            // P2.3 (2026-05-27): for shallow non-baseband levels in
+            // Mode B, bands_ref[k].planes is zero-size — the REF
+            // strip helper writes to `weber_scratch[k].bands_ref_strip`
+            // per (s, k). The CSF helper reads from these strip-local
+            // handles via `band_ref_strip_local: true`. Hold strip
+            // handles in `per_level_inputs` so they outlive the
+            // strip-major outer loop without per-iteration clones.
+            let bands_ref_strip = self.weber_scratch[k].bands_ref_strip.as_ref().expect(
+                "WeberScratch.bands_ref_strip must be Some at shallow non-baseband levels \
+                 (k < k_split) in StripMode::Pair — build_weber_scratch allocates them.",
+            );
             per_level_inputs.push(ShallowLevelInputs {
-                band_ref_a: self.bands_ref[k].planes[0].clone(),
-                band_ref_rg: self.bands_ref[k].planes[1].clone(),
-                band_ref_vy: self.bands_ref[k].planes[2].clone(),
+                band_ref_a: bands_ref_strip[0].clone(),
+                band_ref_rg: bands_ref_strip[1].clone(),
+                band_ref_vy: bands_ref_strip[2].clone(),
                 log_l_bkg: self.weber_scratch[k].log_l_bkg.clone(),
                 ch_gain,
                 bw,
@@ -5050,7 +5242,17 @@ impl<R: Runtime> Cvvdp<R> {
                     transients[k].t_p_dis[2].clone(),
                 ];
 
-                // Stage A: P2.1b body+halo CSF strip helper.
+                // Stage A0: P2.3 REF strip helper writes
+                // `bands_ref_strip[k]` body+halo from `gauss_alt`
+                // (REF gauss data preserved post-swap). Runs once per
+                // (s, k) strictly before the CSF helper that reads
+                // bands_ref_strip in lockstep. Mode B only — Mode E
+                // doesn't take this path.
+                self._dispatch_ref_weber_strip_s_for_level(s, k)?;
+
+                // Stage A: P2.1b body+halo CSF strip helper. P2.3:
+                // band_ref handles are strip-local (point at
+                // bands_ref_strip[c] populated by Stage A0).
                 self._dispatch_dist_weber_csf_strip_s_for_level(
                     s,
                     k,
@@ -5061,6 +5263,7 @@ impl<R: Runtime> Cvvdp<R> {
                     &t_p_ref_h,
                     &t_p_dis_h,
                     *ch_gain,
+                    true, // band_ref_strip_local (P2.3)
                 )?;
 
                 // Stage B: P2.1a masking strip helper. Reads body+halo
@@ -5230,6 +5433,7 @@ impl<R: Runtime> Cvvdp<R> {
                 t_p_ref_h,
                 t_p_dis_h,
                 ch_gain,
+                false, // band_ref_strip_local: legacy caller passes full-image handles
             )?;
         }
 
@@ -5327,6 +5531,13 @@ impl<R: Runtime> Cvvdp<R> {
         t_p_ref_h: &[cubecl::server::Handle; 3],
         t_p_dis_h: &[cubecl::server::Handle; 3],
         ch_gain: [f32; 3],
+        // P2.3 (2026-05-27): when `true`, the `band_ref_*` handles are
+        // strip-local with row 0 corresponding to global row
+        // `top_global` (matching the `bands_dis_strip` /
+        // `upscaled_c_strip` shape). When `false` (legacy), they are
+        // full-image handles that need slicing at
+        // `byte_off_fine_window` for the strip's body+halo window.
+        band_ref_strip_local: bool,
     ) -> Result<()> {
         let cube_dim = CubeDim::new_1d(64);
         let h_body_at_0 = match self.strip_config {
@@ -5553,9 +5764,20 @@ impl<R: Runtime> Cvvdp<R> {
         // byte_off_fine_window so row 0 corresponds to top_global.
         // bands_dis_strip / t_p_*_strip are strip-local; the t_p_*
         // writes hit the body+halo rows of the full-image transient.
-        let band_ref_a_strip = band_ref_a.clone().offset_start(byte_off_fine_window);
-        let band_ref_rg_strip = band_ref_rg.clone().offset_start(byte_off_fine_window);
-        let band_ref_vy_strip = band_ref_vy.clone().offset_start(byte_off_fine_window);
+        // P2.3 (2026-05-27): when band_ref handles are strip-local
+        // (row 0 = top_global), skip the slice. Strip-local handles
+        // come from `bands_ref_strip` at the caller (shallow Mode B);
+        // full-image handles come from `self.bands_ref[k].planes` and
+        // need slicing to position row 0 at top_global.
+        let (band_ref_a_strip, band_ref_rg_strip, band_ref_vy_strip) = if band_ref_strip_local {
+            (band_ref_a.clone(), band_ref_rg.clone(), band_ref_vy.clone())
+        } else {
+            (
+                band_ref_a.clone().offset_start(byte_off_fine_window),
+                band_ref_rg.clone().offset_start(byte_off_fine_window),
+                band_ref_vy.clone().offset_start(byte_off_fine_window),
+            )
+        };
         let log_l_bkg_strip = log_l_bkg_full.clone().offset_start(byte_off_fine_window);
         let t_p_ref_a_strip = t_p_ref_h[0].clone().offset_start(byte_off_fine_window);
         let t_p_ref_rg_strip = t_p_ref_h[1].clone().offset_start(byte_off_fine_window);
@@ -5594,6 +5816,244 @@ impl<R: Runtime> Cvvdp<R> {
             .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         let _ = strip_h_at_k; // P2.1b: width derived from R_k; legacy strip_h_at_k unused
 
+        Ok(())
+    }
+
+    /// **P2.3 (2026-05-27): per-strip REF weber finalize helper.**
+    ///
+    /// Mirrors stages 1-3 of [`Self::_dispatch_dist_weber_csf_strip_s_for_level`]
+    /// (which run the DIST side + CSF) but writes only REF outputs:
+    ///   - Stage 1: upscale_v/h of `gauss_alt[k+1] A` → `l_bkg_fine`
+    ///     body+halo. **gauss_alt** holds REF gauss data (preserved
+    ///     past the post-REF-weber swap; see
+    ///     [`Self::_maybe_swap_gauss_alt_post_ref`]).
+    ///   - Stage 2: per-channel separable upscale of
+    ///     `gauss_alt[k+1] c` → `upscaled_c_strip[c]` body+halo.
+    ///   - Stage 3: fused subtract+Weber → writes `bands_ref_strip[c]`
+    ///     body+halo + `weber_scratch[k].log_l_bkg` body+halo (the
+    ///     REF per-pixel log10(L_bkg) that the CSF stage 4 reads).
+    ///
+    /// The buffer layout is identical to the DIST helper: strip-local
+    /// `bands_ref_strip` + `upscaled_c_strip` (row 0 = top_global);
+    /// full-image-sliced `l_bkg_fine` + `log_l_bkg` (at
+    /// `byte_off_fine_window`).
+    ///
+    /// **Lockstep contract:** caller invokes this helper for `(s, k)`
+    /// immediately before [`Self::_dispatch_dist_weber_csf_strip_s_for_level`]
+    /// for the same `(s, k)`. The CSF helper reads `bands_ref_strip`
+    /// (just written by this helper) + `bands_dis_strip` (written by
+    /// the DIST helper's stage 3) + `log_l_bkg` body+halo (written by
+    /// this helper's stage 3). The next `s` overwrites
+    /// `bands_ref_strip` / `bands_dis_strip` / `upscaled_c_strip` —
+    /// strict lockstep is required.
+    ///
+    /// **gauss_alt dependency.** This helper hard-requires
+    /// `self.gauss_alt = Some(_)` (allocated only in `StripMode::Pair`)
+    /// AND that `_maybe_swap_gauss_alt_post_ref` has run after the
+    /// most-recent REF weber finalize so `gauss_alt` holds REF gauss
+    /// data. The `mode_b_pair` gate in `_run_d_bands_band_loop`
+    /// ensures both invariants.
+    ///
+    /// Increments `strip_dispatch_counter` by 1 (stage 1) + N_CHANNELS
+    /// (stage 2 per channel) + 1 (stage 3) = 5 per call.
+    fn _dispatch_ref_weber_strip_s_for_level(&self, s: u32, k: usize) -> Result<()> {
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return Err(Error::InvalidImageSize),
+        };
+
+        let coarse_w = self.gauss_ref[k + 1].w;
+        let coarse_h = self.gauss_ref[k + 1].h;
+        let fine_w = self.gauss_ref[k].w;
+        let fine_h = self.gauss_ref[k].h;
+        let n_coarse = (coarse_w * coarse_h) as usize;
+        let n_levels = self.n_levels;
+        let k_split = mode_b_k_split(h_body_at_0, n_levels);
+
+        let strip_h_at_k = (h_body_at_0 >> k).max(1);
+
+        let scratch = &self.weber_scratch[k];
+        // REF log_l_bkg destination — full-image, sliced. Mirrors the
+        // pre-P2.3 `_finalize_weber_pyramid_strip_walker` REF path.
+        let log_l_bkg_dest = scratch.log_l_bkg.clone();
+
+        let bands_ref_strip = scratch.bands_ref_strip.as_ref().expect(
+            "bands_ref_strip is None in Mode B per-strip REF helper; \
+             build_weber_scratch must allocate it for k < k_split under StripMode::Pair",
+        );
+        let upscaled_c_strip = scratch.upscaled_c_strip.as_ref().expect(
+            "upscaled_c_strip is None in Mode B per-strip REF helper; \
+             build_weber_scratch must allocate it under StripMode::Pair",
+        );
+
+        // gauss_alt holds REF gauss data after the post-REF-weber swap.
+        let gauss_alt = self.gauss_alt.as_ref().expect(
+            "gauss_alt is None in Mode B per-strip REF helper; \
+             new_with_geometry_inner must allocate it under StripMode::Pair",
+        );
+
+        let body_offset_y = s * strip_h_at_k;
+        let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
+
+        // P2.1b body+halo dispatch window — identical to DIST helper.
+        let halo_band = mode_b_halo_at_level(k as u32, k_split);
+        let top_global = body_offset_y.saturating_sub(halo_band);
+        let bot_global = (body_offset_y + body_h + halo_band).min(fine_h);
+        let strip_window_h = bot_global - top_global;
+        let r_k = {
+            let r_back = mode_b_strip_h_at_level(k as u32, h_body_at_0, k_split);
+            if r_back == 0 {
+                strip_h_at_k.min(fine_h)
+            } else {
+                r_back.min(fine_h)
+            }
+        };
+        let n_strip_buf = (fine_w as usize) * (r_k as usize);
+        debug_assert!(
+            strip_window_h <= r_k,
+            "strip_window_h={} exceeds R_k={} for (k={}, h_body={}, k_split={})",
+            strip_window_h,
+            r_k,
+            k,
+            h_body_at_0,
+            k_split,
+        );
+
+        let n_strip_v_window = (coarse_w as usize) * (strip_window_h as usize);
+        let n_strip_window = (fine_w as usize) * (strip_window_h as usize);
+        let count_v_window = CubeCount::Static((n_strip_v_window as u32).div_ceil(64), 1, 1);
+        let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+        let byte_off_v_window: u64 = u64::from(top_global) * u64::from(coarse_w) * 4;
+        let byte_off_fine_window: u64 = u64::from(top_global) * u64::from(fine_w) * 4;
+
+        // Stage 1: upscale_v/h of gauss_alt[k+1] A → l_bkg_fine body+halo.
+        // l_bkg_fine is full-image scratch shared with the DIST helper;
+        // each strip iteration overwrites it sequentially (REF then DIST).
+        let coarse_a = gauss_alt[k + 1].planes[0].clone();
+        let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v_window);
+        let l_bkg_fine_strip = scratch
+            .l_bkg_fine
+            .clone()
+            .offset_start(byte_off_fine_window);
+        unsafe {
+            upscale_v_strip_kernel::launch::<R>(
+                &self.client,
+                count_v_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v_window),
+                coarse_w,
+                coarse_h,
+                fine_h,
+                top_global,
+                strip_window_h,
+                0,
+            );
+            upscale_h_strip_kernel::launch::<R>(
+                &self.client,
+                count_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v_window),
+                ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_window),
+                coarse_w,
+                fine_w,
+                strip_window_h,
+                fine_h,
+                top_global,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 2: per-channel separable upscale → upscaled_c_strip
+        // body+halo (R_k rows). Strip-local; row 0 = top_global.
+        for c in 0..N_CHANNELS {
+            let coarse = gauss_alt[k + 1].planes[c].clone();
+            let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v_window);
+            unsafe {
+                upscale_v_strip_kernel::launch::<R>(
+                    &self.client,
+                    count_v_window.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(coarse, n_coarse),
+                    ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v_window),
+                    coarse_w,
+                    coarse_h,
+                    fine_h,
+                    top_global,
+                    strip_window_h,
+                    0,
+                );
+                upscale_h_strip_kernel::launch::<R>(
+                    &self.client,
+                    count_window.clone(),
+                    cube_dim,
+                    ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v_window),
+                    ArrayArg::from_raw_parts(upscaled_c_strip[c].clone(), n_strip_buf),
+                    coarse_w,
+                    fine_w,
+                    strip_window_h,
+                    fine_h,
+                    top_global,
+                );
+            }
+            self.strip_dispatch_counter
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
+
+        // Stage 3: subtract_weber → writes bands_ref_strip (strip-local)
+        // + log_l_bkg (full-image, sliced at byte_off_fine_window). The
+        // strip-aware kernel uses `src_strip_offset = top_global` so
+        // every buffer's row 0 corresponds to global row top_global —
+        // identical to the DIST helper's stage 3 layout.
+        let fine_a_full = gauss_alt[k].planes[0].clone();
+        let fine_rg_full = gauss_alt[k].planes[1].clone();
+        let fine_vy_full = gauss_alt[k].planes[2].clone();
+        unsafe {
+            subtract_weber_3ch_strip_kernel::launch::<R>(
+                &self.client,
+                count_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(
+                    fine_a_full.offset_start(byte_off_fine_window),
+                    n_strip_window,
+                ),
+                ArrayArg::from_raw_parts(
+                    fine_rg_full.offset_start(byte_off_fine_window),
+                    n_strip_window,
+                ),
+                ArrayArg::from_raw_parts(
+                    fine_vy_full.offset_start(byte_off_fine_window),
+                    n_strip_window,
+                ),
+                ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(upscaled_c_strip[2].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(
+                    scratch
+                        .l_bkg_fine
+                        .clone()
+                        .offset_start(byte_off_fine_window),
+                    n_strip_window,
+                ),
+                ArrayArg::from_raw_parts(bands_ref_strip[0].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(bands_ref_strip[1].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(bands_ref_strip[2].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(
+                    log_l_bkg_dest.offset_start(byte_off_fine_window),
+                    n_strip_window,
+                ),
+                fine_w,
+                strip_window_h,
+                top_global,
+                fine_h,
+                top_global, // src_strip_offset
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        let _ = strip_h_at_k;
         Ok(())
     }
 
