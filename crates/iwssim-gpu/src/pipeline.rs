@@ -467,11 +467,33 @@ struct CachedStripRefState {
     lp_ref: Vec<Vec<cubecl::server::Handle>>,
     /// Per-scale inverted C_u matrices (host f32, packed at the
     /// matching `n_dim` for the scale: 10×10 for s ∈ 0..2,
-    /// 9×9 for s = 3). Uploaded once per `compute_with_reference_stripped`
-    /// to the `scales[s].cu_inv_dev` device buffer.
+    /// 9×9 for s = 3). Kept on host for diagnostics / reuse in
+    /// `set_rgb_reference_stripped`'s pyramid rebuild path; the
+    /// per-call hot path uses `cu_inv_dev_per_scale` instead.
+    #[allow(dead_code)]
     cu_inv_per_scale: Vec<Vec<f32>>,
     /// Per-scale lambda eigenvalues (host f32, length `n_dim`).
+    #[allow(dead_code)]
     lambda_per_scale: Vec<Vec<f32>>,
+    /// **Per-scale device handles** holding `cu_inv_per_scale` and
+    /// `lambda_per_scale` already uploaded to GPU. Filled ONCE in
+    /// `set_reference_stripped` (mirroring the `lp_ref` cache pattern
+    /// for the ref-side LP pyramid). Subsequent
+    /// `compute_with_reference_stripped` /
+    /// `compute_rgb_with_reference_stripped_native` calls clone these
+    /// handles into the active `scales[s].cu_inv_dev` /
+    /// `scales[s].lambda_dev` slots instead of re-uploading the host
+    /// vectors per call.
+    ///
+    /// Eliminates `2 * n_scales_iw` HtoDs per cached-ref strip call
+    /// (typically 8 small HtoDs at 4 IW scales). The data is constant
+    /// across all dist-side calls for a given cached reference — it's
+    /// derived from the ref-side C_u accumulator alone — so it's the
+    /// same "static-given-reference" pattern that already applies to
+    /// the per-strip LP handle cache above.
+    cu_inv_dev_per_scale: Vec<cubecl::server::Handle>,
+    /// Companion to `cu_inv_dev_per_scale` — see that field's doc.
+    lambda_dev_per_scale: Vec<cubecl::server::Handle>,
     /// Strip layout snapshot at the time `set_reference_stripped` was
     /// called. Subsequent `compute_with_reference_stripped` calls MUST
     /// see the same strip count; we recompute strips each time from
@@ -1737,6 +1759,28 @@ impl<R: Runtime> Iwssim<R> {
             lambda_per_scale.push(eig_result.lambda[..n_dim].to_vec());
         }
 
+        // Upload the per-scale eig outputs to GPU ONCE here, holding
+        // the resulting handles in the cache. Each per-call
+        // `compute_with_reference_stripped` / `_rgb_*_native` then
+        // clones these handles into the active `scales[s].cu_inv_dev`
+        // / `scales[s].lambda_dev` slots — no per-call HtoD for these
+        // constants. Same "deterministic given the cached reference"
+        // pattern that `lp_ref_cache` above already uses.
+        let mut cu_inv_dev_per_scale: Vec<cubecl::server::Handle> =
+            Vec::with_capacity(n_scales_iw);
+        let mut lambda_dev_per_scale: Vec<cubecl::server::Handle> =
+            Vec::with_capacity(n_scales_iw);
+        for s in 0..n_scales_iw {
+            cu_inv_dev_per_scale.push(
+                self.client
+                    .create_from_slice(f32::as_bytes(&cu_inv_per_scale[s])),
+            );
+            lambda_dev_per_scale.push(
+                self.client
+                    .create_from_slice(f32::as_bytes(&lambda_per_scale[s])),
+            );
+        }
+
         // Replace any previous cache atomically — only after every
         // step above completed successfully, so a mid-call failure
         // leaves the previous cache intact.
@@ -1744,6 +1788,8 @@ impl<R: Runtime> Iwssim<R> {
             lp_ref: lp_ref_cache,
             cu_inv_per_scale,
             lambda_per_scale,
+            cu_inv_dev_per_scale,
+            lambda_dev_per_scale,
             strip_count: n_strips,
         });
         Ok(())
@@ -1802,16 +1848,18 @@ impl<R: Runtime> Iwssim<R> {
         }
         let n_scales_iw = self.scales.len() - 1;
 
-        // Upload cached C_u_inv + lambda to each scale's device buffer
-        // once. This replaces the per-call eigendecomp + upload in the
-        // uncached strip path.
+        // Bind cached C_u_inv + lambda device handles into each
+        // scale's active slot. These were uploaded ONCE by
+        // `set_reference_stripped`; cloning the handle is just an
+        // Arc-style refcount bump, no HtoD traffic. Replaces the
+        // per-call `create_from_slice(cached.cu_inv_per_scale[s])`
+        // pair that previously fired 2*n_scales_iw small HtoDs per
+        // call. Mirrors the cvvdp-gpu Option C constants lift
+        // (152a6924) and the lp_ref handle cache that already lives
+        // in this same struct.
         for s in 0..n_scales_iw {
-            self.scales[s].cu_inv_dev = self
-                .client
-                .create_from_slice(f32::as_bytes(&cached.cu_inv_per_scale[s]));
-            self.scales[s].lambda_dev = self
-                .client
-                .create_from_slice(f32::as_bytes(&cached.lambda_per_scale[s]));
+            self.scales[s].cu_inv_dev = cached.cu_inv_dev_per_scale[s].clone();
+            self.scales[s].lambda_dev = cached.lambda_dev_per_scale[s].clone();
         }
 
         let mut acc_csiw = [0.0_f64; NUM_SCALES - 1];
@@ -2124,15 +2172,13 @@ impl<R: Runtime> Iwssim<R> {
         }
         let n_scales_iw = self.scales.len() - 1;
 
-        // Upload cached C_u_inv + lambda to each scale's device buffer
-        // (matches `compute_with_reference_stripped`).
+        // Bind cached C_u_inv + lambda device handles into each
+        // scale's active slot — handle clones, no HtoD. Same fix as
+        // `compute_with_reference_stripped` above; see that site's
+        // comment for the rationale.
         for s in 0..n_scales_iw {
-            self.scales[s].cu_inv_dev = self
-                .client
-                .create_from_slice(f32::as_bytes(&cached.cu_inv_per_scale[s]));
-            self.scales[s].lambda_dev = self
-                .client
-                .create_from_slice(f32::as_bytes(&cached.lambda_per_scale[s]));
+            self.scales[s].cu_inv_dev = cached.cu_inv_dev_per_scale[s].clone();
+            self.scales[s].lambda_dev = cached.lambda_dev_per_scale[s].clone();
         }
 
         let mut acc_csiw = [0.0_f64; NUM_SCALES - 1];

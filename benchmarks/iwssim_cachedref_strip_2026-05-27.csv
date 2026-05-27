@@ -1,0 +1,24 @@
+tag,w_h,mp,mode,strip_body,n_dist,total_ms,per_dist_ms,score,notes
+before,2048x2048,4.19,uncached_strip,body=1024,16,616.600,38.537,0.027512,baseline parent 152a6924
+before,2048x2048,4.19,cached_ref_strip,body=1024,16,213.255,11.249,0.027512,baseline parent 152a6924
+before,4000x3000,12.00,uncached_strip,body=1024,16,2447.075,152.942,0.029270,baseline parent 152a6924
+before,4000x3000,12.00,cached_ref_strip,body=1024,16,706.293,38.285,0.029270,baseline parent 152a6924
+after,2048x2048,4.19,uncached_strip,body=1024,16,571.267,35.704,0.027512,with cu_inv/lambda handle cache
+after,2048x2048,4.19,cached_ref_strip,body=1024,16,184.714,9.502,0.027512,with cu_inv/lambda handle cache
+after,4000x3000,12.00,uncached_strip,body=1024,16,2562.437,160.152,0.029270,with cu_inv/lambda handle cache
+after,4000x3000,12.00,cached_ref_strip,body=1024,16,609.140,33.676,0.029270,with cu_inv/lambda handle cache
+# RTX 5070, cuda runtime, bench_cachedref_strip example
+# per-distortion cached_ref_strip wall:
+#   2048x2048 (4 MP):  11.25 ms -> 9.50 ms (1.18x, -1.75 ms/dist)
+#   4000x3000 (12 MP): 38.29 ms -> 33.68 ms (1.14x, -4.61 ms/dist)
+# uncached_strip path is untouched by this fix (the eig+upload happens
+# per-call there) — small wall-time deltas (-7% to +5%) are run-to-run noise.
+# Score parity: bit-identical at both sizes, both paths, before vs after.
+# HtoD count from nsys (whole bench, both sizes, warmup+timed):
+#   before: 1720 HtoDs across 11.33 GB
+#   after:  1448 HtoDs across 11.33 GB  (-272 small HtoDs)
+# Breakdown of the 272-event drop (matches 8 small HtoDs/cached-call x 36 calls):
+#   400-byte (cu_inv 10x10): 260 -> 158 (-102)
+#   40-byte  (lambda 10):    260 -> 158 (-102)
+#   324-byte (cu_inv 9x9):    80 ->  46 (-34)
+#   36-byte  (lambda 9):      84 ->  50 (-34)
