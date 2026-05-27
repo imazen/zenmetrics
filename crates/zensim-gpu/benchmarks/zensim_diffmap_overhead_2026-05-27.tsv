@@ -1,0 +1,9 @@
+size_w	size_h	fixture	score_only_ms	cpu_diffmap_ms	gpu_diffmap_ms	cpu_overhead_pct	gpu_overhead_pct
+256	256	gradient_identity	1.002	3.441	5.424	243.5	441.5
+256	256	gradient_perturbed	0.787	3.279	5.058	316.8	542.7
+512	512	gradient_identity	1.610	11.346	11.603	604.8	620.7
+512	512	gradient_perturbed	1.560	11.429	12.058	632.5	672.8
+1024	1024	gradient_identity	3.122	43.614	43.181	1296.8	1282.9
+1024	1024	gradient_perturbed	3.179	41.802	41.163	1214.8	1194.7
+2048	2048	gradient_identity	10.293	172.349	164.716	1574.5	1500.3
+2048	2048	gradient_perturbed	10.318	176.042	163.347	1606.1	1483.1

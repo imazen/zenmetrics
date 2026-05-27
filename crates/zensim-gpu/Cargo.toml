@@ -111,3 +111,7 @@ required-features = ["cubecl-types"]
 name = "cached_ref"
 harness = false
 required-features = ["cubecl-types"]
+
+[[example]]
+name = "diffmap_gpu_vs_cpu"
+required-features = ["cubecl-types"]

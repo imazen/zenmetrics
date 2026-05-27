@@ -1,0 +1,71 @@
+# zensim-gpu Phase 1b chunk 3 — diffmap wall bench (CPU-default vs GPU-opt-in)
+
+Date:        2026-05-27
+Host:        lilith RTX 5070 (CUDA), WSL2
+Backend:     cubecl_cuda::runtime::CudaRuntime
+Commit:      43c62064 (Phase 1b chunk 3 wired GPU diffmap, default-OFF)
+Build:       --release --no-default-features --features "cuda,fast-reduction"
+Reproduce:   cargo run -p zensim-gpu --release --no-default-features \
+               --features "cuda,fast-reduction" --example diffmap_gpu_vs_cpu \
+               > benchmarks/zensim_diffmap_overhead_2026-05-27.tsv
+
+## Columns
+
+- score_only_ms   — GPU scalar 372-feature extraction (the overhead-%
+                    denominator; this is the cheap GPU fast path).
+- cpu_diffmap_ms  — score_with_diffmap, CPU default (ZENSIM_GPU_DIFFMAP
+                    unset). Identical algorithm to Phase 1.
+- gpu_diffmap_ms  — score_with_diffmap, opt-in GPU kernel chain
+                    (ZENSIM_GPU_DIFFMAP=1). Score still CPU-sourced.
+- cpu_overhead_pct / gpu_overhead_pct — (path - score_only)/score_only.
+
+## Headline (1024², the Phase 1 target size)
+
+| path            | ms     | overhead vs scalar |
+|---              |---     |---                 |
+| score_only      |  3.18  | (baseline)         |
+| cpu_diffmap     | 41.80  | +1215%             |
+| gpu_diffmap     | 41.16  | +1195%             |
+
+## Honest-stop verdict — wall target ≤ +50% NOT MET
+
+The Phase 1 +1006% diffmap overhead is essentially UNCHANGED by the GPU
+diffmap kernels (1024²: +1215% CPU vs +1195% GPU — within noise). The
+GPU diffmap kernels themselves are cheap, but they CANNOT reduce the
+wall because the SCALAR SCORE must still come from the CPU canonical
+`compute_with_ref_and_diffmap_linear_planar` call, which re-runs the
+FULL CPU feature pipeline (~39 ms at 1024²). Running the GPU diffmap on
+top of the mandatory CPU score is the same wall (the CPU call
+dominates).
+
+Root cause of the score-path blocker (measured, NOT FMA precision):
+the GPU-feature → V0_3 MLP score path is catastrophically wrong on the
+pinned zensim 0.3.0. Measured on a real CID22 image (1418519.png,
+512²): CPU canonical V0_3 score = +85.33, GPU-feature → V0_3 MLP score
+= −77.13 — a 162-point divergence. The GPU WithIw features pass the
+per-feature `cpu_parity` tolerance bands, but the V0_3 MLP (372→128→128
+identity-passthrough) amplifies those small f32 drifts catastrophically.
+This is a pre-existing, documented issue (DIFFMAP_DIVERGENCES.md §9 +
+the Phase 1 memo §9) — the right fix is upgrading the pinned zensim
+crate so the GPU-feature score is trustworthy, OR a GPU-native
+MLP-equivalent scoring path. Both are OUT OF SCOPE for chunk 3 (zensim
+CPU is read-only; the MLP port is multi-week).
+
+## What chunk 3 DID deliver (correctness, not wall)
+
+- The GPU diffmap kernel chain is WIRED into all 4 diffmap-producing
+  methods behind ZENSIM_GPU_DIFFMAP=1.
+- It is VALIDATED bit-close to the CPU canonical: ≤ 2.08e-4 pointwise
+  over 5 fixtures × 4 distortions (tests/cpu_gpu_diffmap_parity.rs).
+- The 5 PRACTICAL invariants still pass (tests/diffmap_invariants.rs).
+- Default path is byte-identical to Phase 1 (zero regression).
+
+## Chunk N+1 (the wall fix)
+
+Fix the GPU-feature → V0_3 MLP score parity (upgrade pinned zensim OR
+add a GPU-native MLP-equivalent). Once the GPU score is trustworthy,
+drop the CPU canonical call entirely: the path becomes GPU features
+(~3 ms) + GPU diffmap kernels (cheap) + GPU/CPU MLP eval (µs), crushing
+the overhead from +1200% toward the ≤ +50% target. The GPU diffmap
+infrastructure shipped here is the validated foundation for that flip
+(just remove the CPU score call + flip the gate default-ON).
