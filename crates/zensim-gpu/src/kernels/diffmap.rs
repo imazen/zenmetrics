@@ -201,6 +201,107 @@ pub fn channel_weighted_sum_scalar(vx: f32, vy: f32, vb: f32, wx: f32, wy: f32, 
     wx * vx + wy * vy + wb * vb
 }
 
+/// Bit-faithful port of `zensim::diffmap::trained_multiscale_weights`
+/// specialised to default [`zensim::DiffmapOptions`] (SSIM-only, no
+/// edge_mse, no hf). Computes per-(scale, channel) `ssim_w` weights +
+/// per-scale blend weights from a profile's 228-entry trained weight
+/// table.
+///
+/// Returns `(per_scale_ssim_weights, scale_blend_weights)` where:
+/// - `per_scale_ssim_weights[s] = [w_x, w_y, w_b]` for scale `s`,
+///   already normalised to sum across (channels × features) = 1.0
+///   per scale (since edge_mse + hf are off, only the 3 ssim weights
+///   are non-zero).
+/// - `scale_blend_weights[s]` = fraction of total weight mass at
+///   scale `s`, summed to 1.0 across scales.
+///
+/// Layout assumption: `weights` is the canonical zensim weight table
+/// (`zensim::profile::WEIGHTS_PREVIEW_V0_2` or equivalent) of length
+/// `>= num_scales * FEATURES_PER_CHANNEL_BASIC * 3` = 156 for the
+/// default 4 scales × 3 channels × 13 features.
+///
+/// Used by Phase 1b's GPU diffmap pipeline to upload the per-(scale,
+/// channel) `w_x, w_y, w_b` scalars to
+/// [`per_scale_weighted_ssim_kernel`] and the per-scale blend to
+/// [`pow2x_upsample_add_kernel`].
+///
+/// **Parity contract**: byte-for-byte identical f64 arithmetic to
+/// the CPU reference (`zensim::diffmap::trained_multiscale_weights`
+/// with `include_edge_mse=false, include_hf=false`); cast to f32 only
+/// at the return boundary, which matches the CPU side's
+/// `PixelFeatureWeights` field types.
+#[must_use]
+pub fn trained_multiscale_ssim_weights_default(
+    weights: &[f64],
+    num_scales: usize,
+) -> (Vec<[f32; 3]>, Vec<f32>) {
+    // Mirrors `zensim::metric::FEATURES_PER_CHANNEL_BASIC` (= 13).
+    // Kept inline so this module doesn't transitively force the
+    // `training` feature flag on the zensim dependency for callers
+    // who don't need the public WEIGHTS table.
+    const FPC: usize = 13;
+    const FPS: usize = FPC * 3; // features per scale (basic only)
+
+    let mut per_scale: Vec<[f32; 3]> = Vec::with_capacity(num_scales);
+    let mut scale_totals: Vec<f64> = Vec::with_capacity(num_scales);
+
+    for s in 0..num_scales {
+        let scale_base = s * FPS;
+        let mut ssim_w = [0.0f64; 3];
+        let mut scale_total = 0.0f64;
+
+        for c in 0..3 {
+            let base = scale_base + c * FPC;
+            // First 3 features per channel are the 3 SSIM error norms
+            // (1-norm, 4-norm, 2-norm; same as CPU). edge_mse + hf
+            // are disabled for default options so we don't accumulate
+            // their per-channel sums.
+            if base + 2 < weights.len() {
+                ssim_w[c] = weights[base].abs()
+                    + weights[base + 1].abs()
+                    + weights[base + 2].abs();
+            }
+            // Sum ALL features at this scale (the blend weight uses
+            // the FULL weight mass, not just ssim, even when extended
+            // options are disabled — this is how CPU's
+            // `trained_multiscale_weights` computes `scale_totals`).
+            for f in 0..FPC {
+                if base + f < weights.len() {
+                    scale_total += weights[base + f].abs();
+                }
+            }
+        }
+
+        // Normalise per-channel weights: only ssim is non-zero so the
+        // feat_total reduces to the sum of the 3 ssim_w entries.
+        let feat_total: f64 = ssim_w.iter().sum();
+        let ch_weights = if feat_total > 0.0 {
+            [
+                (ssim_w[0] / feat_total) as f32,
+                (ssim_w[1] / feat_total) as f32,
+                (ssim_w[2] / feat_total) as f32,
+            ]
+        } else {
+            let eq = 1.0_f32 / 3.0_f32;
+            [eq, eq, eq]
+        };
+
+        per_scale.push(ch_weights);
+        scale_totals.push(scale_total);
+    }
+
+    // Normalise scale blend weights.
+    let total: f64 = scale_totals.iter().sum();
+    let blend: Vec<f32> = if total > 0.0 {
+        scale_totals.iter().map(|&s| (s / total) as f32).collect()
+    } else {
+        let w = 1.0_f32 / num_scales as f32;
+        vec![w; num_scales]
+    };
+
+    (per_scale, blend)
+}
+
 /// Per-pixel modified-SSIM error (the same `sd0` value the scalar
 /// feature kernel produces). Phase 1b host-scalar reference,
 /// byte-for-byte equivalent to [`per_scale_weighted_ssim_kernel`]'s
@@ -582,6 +683,54 @@ mod tests {
                 v >= 0.0 && v.is_finite(),
                 "non-negative + finite contract failed at (m1={m1},m2={m2},ssq={ssq},s12={s12}) -> {v}"
             );
+        }
+    }
+
+    #[test]
+    fn trained_weights_default_sum_per_scale_to_one() {
+        // Each per-scale [w_x, w_y, w_b] must sum to 1.0 (since we
+        // disabled edge_mse + hf, only ssim is active).
+        // Use the canonical zensim weights.
+        let weights = &zensim::profile::WEIGHTS_PREVIEW_V0_2;
+        let (per_scale, _blend) =
+            trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
+        assert_eq!(per_scale.len(), 4);
+        for (s, w) in per_scale.iter().enumerate() {
+            let sum = w[0] + w[1] + w[2];
+            assert!(
+                (sum - 1.0).abs() < 1e-5,
+                "scale {s} per-channel weights should sum to 1.0, got {sum}"
+            );
+        }
+    }
+
+    #[test]
+    fn trained_blend_weights_sum_to_one() {
+        let weights = &zensim::profile::WEIGHTS_PREVIEW_V0_2;
+        let (_per_scale, blend) =
+            trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
+        assert_eq!(blend.len(), 4);
+        let sum: f32 = blend.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "scale blend weights should sum to 1.0, got {sum}"
+        );
+    }
+
+    #[test]
+    fn trained_weights_default_empty_weights_returns_uniform() {
+        // Defensive: when feat_total is zero (degenerate empty weights),
+        // each channel weight collapses to 1/3 (matches CPU recipe).
+        let weights: [f64; 4] = [0.0; 4]; // too short, all-zero
+        let (per_scale, _blend) = trained_multiscale_ssim_weights_default(&weights, 4);
+        for w in per_scale.iter() {
+            // Each channel ~ 1/3
+            for c in 0..3 {
+                assert!(
+                    (w[c] - 1.0 / 3.0).abs() < 1e-5,
+                    "all-zero weights should yield uniform per-channel: got {w:?}"
+                );
+            }
         }
     }
 
