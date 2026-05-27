@@ -384,6 +384,7 @@ fn reject_reason_tag(r: RejectReason) -> &'static str {
         RejectReason::PredictedOomWithMargin => "PredictedOomWithMargin",
         RejectReason::KnownOomCell => "KnownOomCell",
         RejectReason::CpuNotYetWired => "CpuNotYetWired",
+        RejectReason::CpuMetricUnavailable => "CpuMetricUnavailable",
         RejectReason::NoMeasuredData => "NoMeasuredData",
     }
 }

@@ -35,10 +35,19 @@
 //! - No worker pool, no concurrency. [`crate::Orchestrator::run_single`]
 //!   blocks on the calling thread. Phase 5 layers a pool on top.
 //! - No cached-reference auto-detect. Phase 5.
-//! - No CPU backend execution. Phase 6 wires the per-crate CPU
-//!   references; until then every `Backend::Cpu` attempt returns
-//!   [`AttemptOutcome::OtherError`] with a `CpuNotYetWired` message and
-//!   the ladder advances.
+//!
+//! ## CPU backend wiring (Phase 6)
+//!
+//! As of Phase 6 the executor constructs a real
+//! [`crate::cpu_adapter::CpuAdapter`] when the ladder picks
+//! [`Backend::Cpu`] — the previous `CpuNotYetWired` shim was removed.
+//! Per-metric mapping + feature flags live in
+//! `crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md`. Metrics
+//! without a clean CPU reference (Iwssim) surface
+//! [`OrchestratorError::CpuMetricUnavailable`] and the ladder advances
+//! to the next candidate; the chooser already filters them out at
+//! decision time so this only fires when a synthetic test forces the
+//! Cpu branch.
 
 #![cfg(all(feature = "bench", feature = "cuda"))]
 
@@ -50,6 +59,7 @@ use zenmetrics_api::{
 };
 
 use crate::chooser::{BackendChoice, ChooserError, RejectReason};
+use crate::cpu_adapter::{CpuAdapter, CpuAdapterError};
 use crate::{save_profile, Backend, Orchestrator};
 
 // ---------------------------------------------------------------------------
@@ -196,7 +206,35 @@ pub enum OrchestratorError {
     /// wire any CPU executor. Always treated as a fallback-eligible
     /// failure (not a hard error) — the ladder advances to the next
     /// backend on this.
+    ///
+    /// **Phase 6**: this variant is no longer produced under normal
+    /// operation — CPU backends are wired. Kept for backwards
+    /// compatibility (Phase 5 callers that match on it still compile).
+    /// New Phase 6 errors use [`Self::CpuMetricUnavailable`] /
+    /// [`Self::CpuBackendUnavailable`].
     CpuNotYetWired,
+    /// The selected metric has no CPU reference implementation in this
+    /// release. Currently this means Iwssim (no clean upstream port);
+    /// see `docs/CPU_BACKENDS.md`. Recoverable — the ladder advances.
+    CpuMetricUnavailable {
+        /// The metric whose CPU adapter could not be constructed.
+        metric: MetricKind,
+    },
+    /// The build was compiled without the `cpu-<metric>` feature
+    /// needed for this metric's CPU reference. Distinct from
+    /// `CpuMetricUnavailable` (which is a permanent upstream gap) —
+    /// callers can rebuild with the missing feature. Recoverable.
+    CpuBackendUnavailable {
+        /// The metric whose CPU adapter feature is disabled.
+        metric: MetricKind,
+        /// Which feature flag would enable it.
+        required_feature: &'static str,
+    },
+    /// The CPU adapter constructed but the underlying CPU reference
+    /// crate failed at runtime (allocation, validation, internal
+    /// error). Non-recoverable: ladder advances but the next CPU
+    /// attempt at the same size will likely fail the same way.
+    CpuFailed(String),
 }
 
 impl std::fmt::Display for OrchestratorError {
@@ -215,6 +253,20 @@ impl std::fmt::Display for OrchestratorError {
             OrchestratorError::CpuNotYetWired => {
                 write!(f, "CPU backend selected but not yet wired (Phase 6)")
             }
+            OrchestratorError::CpuMetricUnavailable { metric } => write!(
+                f,
+                "metric '{}' has no CPU reference implementation",
+                metric.tag()
+            ),
+            OrchestratorError::CpuBackendUnavailable {
+                metric,
+                required_feature,
+            } => write!(
+                f,
+                "CPU backend for '{}' disabled (rebuild with --features {required_feature})",
+                metric.tag()
+            ),
+            OrchestratorError::CpuFailed(msg) => write!(f, "CPU backend failed: {msg}"),
         }
     }
 }
@@ -226,8 +278,9 @@ impl std::error::Error for OrchestratorError {}
 // ---------------------------------------------------------------------------
 
 /// Wrapper so the executor body doesn't care whether the configured
-/// backend goes through the umbrella `Metric` (Full / Strip) or the
-/// direct cvvdp `CvvdpOpaque` (StripPair).
+/// backend goes through the umbrella `Metric` (Full / Strip), the
+/// direct cvvdp `CvvdpOpaque` (StripPair), or the per-metric CPU
+/// reference (Phase 6).
 ///
 /// Mirrors the shape of `bench::BenchMetric` — both modules share the
 /// same per-backend construction matrix; the executor adds OOM-recovery
@@ -239,6 +292,12 @@ impl std::error::Error for OrchestratorError {}
 pub(crate) enum ExecMetric {
     Umbrella(Box<Metric>),
     CvvdpStripPair(Box<zenmetrics_api::cvvdp::CvvdpOpaque>),
+    /// Phase 6: CPU reference implementation. The inner [`CpuAdapter`]
+    /// dispatches to the right per-metric crate at runtime; backends
+    /// without a matching feature flag never reach this branch
+    /// (construction routes them straight to
+    /// [`ConstructOutcome::Other`] / `CpuBackendUnavailable`).
+    Cpu(Box<CpuAdapter>),
 }
 
 impl ExecMetric {
@@ -255,6 +314,17 @@ impl ExecMetric {
                 .compute_srgb_u8(r, d)
                 .map(convert_cvvdp_score)
                 .map_err(|e| classify_call_err(&e.to_string())),
+            ExecMetric::Cpu(adapter) => {
+                // CPU adapters never OOM in the GPU sense; an allocation
+                // failure inside ssimulacra2/etc surfaces as a panic
+                // (which we can't catch) or an Err here that we treat
+                // as a hard "Other" — the ladder ends. The chooser
+                // ensures CPU is the last attempt anyway.
+                match adapter.compute(r, d) {
+                    Ok(s) => Ok(s),
+                    Err(e) => Err(CallErr::Other(e.to_string())),
+                }
+            }
         }
     }
 }
@@ -368,7 +438,49 @@ fn construct(
             }
             construct_cvvdp_strip_pair(width, height, params)
         }
-        Backend::Cpu => ConstructOutcome::Other("CpuNotYetWired".to_string()),
+        Backend::Cpu => construct_cpu(kind, width, height, params),
+    }
+}
+
+/// Phase 6: build a CPU adapter for the requested metric. Routes the
+/// adapter's structured errors into the executor's ConstructOutcome
+/// shape so the ladder can advance / fail cleanly.
+fn construct_cpu(
+    kind: MetricKind,
+    width: u32,
+    height: u32,
+    params: Option<MetricParams>,
+) -> ConstructOutcome {
+    let params = match params {
+        Some(p) => p,
+        None => match MetricParams::try_default_for(kind) {
+            Ok(p) => p,
+            Err(e) => return ConstructOutcome::Other(e.to_string()),
+        },
+    };
+    match CpuAdapter::new(kind, width, height, &params) {
+        Ok(adapter) => ConstructOutcome::Ok(ExecMetric::Cpu(Box::new(adapter))),
+        Err(CpuAdapterError::FeatureNotEnabled(k)) => {
+            // Format a sentinel that the executor recognises so it can
+            // surface a structured `CpuBackendUnavailable` rather than a
+            // generic MetricApi.
+            ConstructOutcome::Other(format!(
+                "CpuBackendUnavailable:{}:cpu-{}",
+                k.tag(),
+                k.tag()
+            ))
+        }
+        Err(CpuAdapterError::Unavailable(k)) => {
+            ConstructOutcome::Other(format!("CpuMetricUnavailable:{}", k.tag()))
+        }
+        Err(CpuAdapterError::Failed(msg)) => {
+            ConstructOutcome::Other(format!("CpuFailed:{msg}"))
+        }
+        Err(CpuAdapterError::InvalidInputSize { expected, got }) => {
+            ConstructOutcome::Other(format!(
+                "CpuFailed:invalid input size (expected {expected}, got {got})"
+            ))
+        }
     }
 }
 
@@ -589,21 +701,48 @@ impl Orchestrator {
                     continue;
                 }
                 ConstructOutcome::Other(msg) => {
-                    // CpuNotYetWired is the recoverable "advance the
-                    // ladder" case. Anything else is a hard error.
-                    if msg == "CpuNotYetWired" {
+                    // Phase 6 sentinel: CpuMetricUnavailable means the
+                    // metric has no CPU reference (Iwssim). Advance the
+                    // ladder so a different backend can be picked.
+                    if let Some(_tag) = msg.strip_prefix("CpuMetricUnavailable:") {
                         attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
-                        // CPU isn't in cells_failed_oom — the chooser
-                        // already rejects Cpu via CpuNotYetWired. But if
-                        // we get here, something forced us to try Cpu
-                        // anyway (e.g. test scenario). Mark and continue;
-                        // the chooser will reject the same backend next
-                        // iteration so the loop exits via NoFeasibleBackend.
+                        // Mark the cell as failed so the chooser doesn't
+                        // pick this backend again at the same size.
                         self.record_oom_and_persist(metric, backend, pixels);
                         continue;
                     }
-                    attempts
-                        .push((backend, AttemptOutcome::OtherError(msg.clone())));
+                    // Phase 6 sentinel: CpuBackendUnavailable means the
+                    // build doesn't include the feature for this metric.
+                    // Same recovery as Unavailable — advance ladder.
+                    if msg.starts_with("CpuBackendUnavailable:") {
+                        attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
+                        self.record_oom_and_persist(metric, backend, pixels);
+                        continue;
+                    }
+                    // Phase 6 sentinel: CpuFailed is a real CPU runtime
+                    // error. Surface as MetricApi — the operator
+                    // probably needs to investigate.
+                    if let Some(real) = msg.strip_prefix("CpuFailed:") {
+                        attempts.push((
+                            backend,
+                            AttemptOutcome::OtherError(real.to_string()),
+                        ));
+                        return finalize_err(
+                            task_id,
+                            OrchestratorError::CpuFailed(real.to_string()),
+                            t_start,
+                            attempts,
+                        );
+                    }
+                    // Pre-Phase-6 legacy: CpuNotYetWired sentinel from
+                    // older build paths. Kept for completeness; modern
+                    // construct() never emits this. Same recovery.
+                    if msg == "CpuNotYetWired" {
+                        attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
+                        self.record_oom_and_persist(metric, backend, pixels);
+                        continue;
+                    }
+                    attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
                     return finalize_err(
                         task_id,
                         OrchestratorError::MetricApi(msg),
@@ -750,8 +889,17 @@ impl ExecMetric {
     /// metrics that DO expose cached-ref (cvvdp Full, butter, ssim2,
     /// dssim, iwssim, zensim) report true here so the worker pool
     /// promotes the dispatch.
+    ///
+    /// CPU adapters expose `supports_cached_ref` per-metric; the
+    /// caller delegates so a cvvdp-cpu fallback still benefits from
+    /// `warm_reference`, while ssim2 / butter / zensim CPU fall back
+    /// to regular compute.
     pub(crate) fn supports_cached_ref(&self) -> bool {
-        matches!(self, ExecMetric::Umbrella(_))
+        match self {
+            ExecMetric::Umbrella(_) => true,
+            ExecMetric::CvvdpStripPair(_) => false,
+            ExecMetric::Cpu(adapter) => adapter.supports_cached_ref(),
+        }
     }
 
     /// Install the reference state. Returns `Err(msg)` if the
@@ -765,6 +913,7 @@ impl ExecMetric {
             ExecMetric::CvvdpStripPair(_) => {
                 Err("cvvdp StripPair has no separate set_reference path".into())
             }
+            ExecMetric::Cpu(adapter) => adapter.set_reference(r).map_err(|e| e.to_string()),
         }
     }
 
@@ -787,6 +936,9 @@ impl ExecMetric {
             ExecMetric::CvvdpStripPair(_) => Err(CallErrPub::Other(
                 "cvvdp StripPair has no cached-reference path".into(),
             )),
+            ExecMetric::Cpu(adapter) => adapter
+                .compute_with_cached_reference(d)
+                .map_err(|e| CallErrPub::Other(e.to_string())),
         }
     }
 }

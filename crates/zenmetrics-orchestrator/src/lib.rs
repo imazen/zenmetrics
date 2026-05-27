@@ -34,6 +34,8 @@ mod bench;
 #[cfg(feature = "bench")]
 mod chooser;
 mod cpu;
+#[cfg(feature = "bench")]
+mod cpu_adapter;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 mod executor;
 mod gpu;

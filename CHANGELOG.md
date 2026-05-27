@@ -29,6 +29,61 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zenmetrics-orchestrator` Phase 6 — CPU backend wiring for the OOM
+  fallback ladder. Replaces the Phase 4-5 `CpuNotYetWired` short-circuit
+  with per-metric reference adapters: cvvdp-cpu (in-tree), ssimulacra2,
+  dssim-core, butteraugli, zensim. Each backend ships behind its own
+  `cpu-<metric>` feature flag; `cpu-all` is the convenience bundle for
+  production sweep workers. Defaults DO NOT include any CPU backend so
+  callers that only want capability detection pay no dep cost.
+
+  Iwssim has no clean upstream CPU reference and is honestly skipped —
+  the chooser surfaces `RejectReason::CpuMetricUnavailable` for Iwssim
+  Cpu candidates so the OOM ladder advances. See
+  `crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md` for the per-metric
+  mapping, cached-ref semantics, RAM characteristics, and the Iwssim
+  honest-stop rationale.
+
+  New crate module `cpu_adapter` exposes `CpuAdapter` (pub(crate))
+  with one arm per metric. Cached-ref dispatch is wired where the
+  upstream crate supports it (cvvdp-cpu `warm_reference`, dssim-core
+  `DssimImage` cache); ssim2 / butter / zensim cache bytes for API
+  shape and recompute on the cached-ref call. The pool's CpuWorker
+  now maintains a warm `CpuAdapter` per `(metric, w, h)` signature
+  (one per worker thread); the GPU worker's cached-ref auto-detect
+  pattern is mirrored, so production sweep workloads with many-dist-
+  one-ref see the same speedups.
+
+  Chooser updated: CPU is now a real candidate for every metric
+  except Iwssim. `vram_mib = 0` since CPU consumes RAM not VRAM;
+  ns/px from bench cache with a 200 ns/px heuristic fallback. The
+  chooser's `KnownOomCell` check applies to CPU too so a previous
+  CPU-side failure (e.g. allocation refusal) excludes the CPU
+  candidate at the same size.
+
+  Executor updated: `ExecMetric::Cpu(Box<CpuAdapter>)` variant added;
+  `construct` routes `Backend::Cpu` through `CpuAdapter::new` with
+  structured sentinels. New `OrchestratorError` variants:
+  `CpuMetricUnavailable`, `CpuBackendUnavailable`, `CpuFailed`.
+  `CpuNotYetWired` retained for backwards compatibility but no
+  longer produced.
+
+  Bench runner: per-metric × CPU-backend cells at 512² + 1024² (CPU
+  grid kept tight to stay within the < 60s warm() budget — 4096²
+  CPU butteraugli alone would burn the entire budget). `vram_mib`
+  is always 0 for CPU cells; future Phase 7 ResourceBudget work
+  will measure RAM during the bench instead.
+
+  New integration test file `tests/cpu_backend.rs` (10 tests):
+  per-CPU-backend construct+compute smoke, OOM-forced fallback to
+  Cpu, cached-ref round-trip parity, chooser picks Cpu when GPU
+  OOMs, Iwssim ladder-advance.
+
+  `RejectReason::CpuMetricUnavailable` added; `print_capability`
+  example prints both that and retained `CpuNotYetWired`;
+  `run_single` example reports `cpu_backends_enabled: [...]` so
+  operators can confirm the fallback ladder is armed.
+
 - `zenmetrics-orchestrator` Phase 5 — worker pool, streaming + batch
   APIs, cached-ref auto-detect, live VRAM watcher. New types:
   `TaskHandle`, `TaskRefHandle`, `PoolConfig`, `CachedRefStats`,

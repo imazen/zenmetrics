@@ -12,6 +12,16 @@
 //! Phase 4's executor will call this directly. Phase 3 ships the
 //! decision logic only — `Backend::Cpu` is always rejected as
 //! `CpuNotYetWired` until Phase 6 supplies a CPU runtime.
+//!
+//! ## Phase 6 update
+//!
+//! `Backend::Cpu` is no longer universally rejected. The chooser
+//! evaluates CPU as a real candidate when the metric has a CPU
+//! reference (every metric except Iwssim — see `docs/CPU_BACKENDS.md`).
+//! CPU candidates report `vram_mib = 0` since they consume RAM, not
+//! VRAM. Metrics without a CPU reference surface
+//! [`RejectReason::CpuMetricUnavailable`] so the operator can see the
+//! decision in `considered`.
 
 #![cfg(feature = "bench")]
 
@@ -112,7 +122,14 @@ pub enum RejectReason {
     /// nearest measured size — see the design doc.
     KnownOomCell,
     /// Phase 3 never selects [`Backend::Cpu`]; Phase 6 wires this.
+    ///
+    /// **Phase 6**: this variant is no longer produced by the chooser
+    /// — CPU is a real candidate. Kept in the enum for backwards
+    /// compatibility (Phase 5 callers that match on it still compile).
     CpuNotYetWired,
+    /// The selected metric has no CPU reference implementation in this
+    /// release (Iwssim). Phase 6.
+    CpuMetricUnavailable,
     /// Cache has no measurement for this backend at any size — e.g.
     /// Phase 2 OOMed at its smallest measured size.
     NoMeasuredData,
@@ -200,20 +217,40 @@ const ALL_BACKENDS: [Backend; 4] = [
 ];
 
 /// Which backends a given metric supports. Matches the
-/// `backends_for_kind` table in `bench.rs` plus `Cpu` (which Phase 6
-/// will wire — currently always rejected as `CpuNotYetWired`).
+/// `backends_for_kind` table in `bench.rs` plus `Cpu` (Phase 6 wires
+/// per-metric CPU references — Iwssim has no clean upstream port and
+/// is omitted; see `docs/CPU_BACKENDS.md`).
 fn supported_backends(metric: MetricKind) -> &'static [Backend] {
     match metric {
         // cvvdp uniquely supports StripPair via its single-pass
-        // one-shot pipeline. Cpu reserved for Phase 6.
+        // one-shot pipeline. CPU reference: cvvdp-cpu (in-tree).
         MetricKind::Cvvdp => &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu],
-        // zensim has a fused full-image kernel only.
+        // zensim has a fused full-image kernel only. CPU reference: zensim.
         MetricKind::Zensim => &[Backend::GpuFull, Backend::Cpu],
-        // The rest split between Full and Strip.
-        MetricKind::Butter
-        | MetricKind::Ssim2
-        | MetricKind::Dssim
-        | MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu],
+        // Butter / Ssim2 / Dssim each have a CPU reference crate.
+        MetricKind::Butter | MetricKind::Ssim2 | MetricKind::Dssim => {
+            &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
+        }
+        // Iwssim has no clean CPU port; GPU only.
+        MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip],
+    }
+}
+
+/// Whether the build was compiled with the `cpu-<metric>` feature
+/// required to actually run this metric on CPU. The chooser uses this
+/// to surface `CpuMetricUnavailable` for metrics whose CPU feature is
+/// disabled at compile time, rather than picking CPU and having the
+/// executor crash at construct time.
+///
+/// **Iwssim**: always returns `false` — no CPU reference exists.
+fn cpu_feature_enabled_for(metric: MetricKind) -> bool {
+    match metric {
+        MetricKind::Cvvdp => cfg!(feature = "cpu-cvvdp"),
+        MetricKind::Ssim2 => cfg!(feature = "cpu-ssim2"),
+        MetricKind::Dssim => cfg!(feature = "cpu-dssim"),
+        MetricKind::Butter => cfg!(feature = "cpu-butter"),
+        MetricKind::Zensim => cfg!(feature = "cpu-zensim"),
+        MetricKind::Iwssim => false,
     }
 }
 
@@ -468,11 +505,20 @@ impl Orchestrator {
             ((vram_free_mib as f64) * (1.0 - config.vram_safety_margin as f64)).floor() as usize;
 
         let supported = supported_backends(metric);
+        let cpu_feature_on = cpu_feature_enabled_for(metric);
         let mut considered: Vec<ConsideredCandidate> = Vec::with_capacity(ALL_BACKENDS.len());
 
         for &backend in &ALL_BACKENDS {
-            let status =
-                evaluate_candidate(profile, backend, pixels, supported, usable_vram_mib, config);
+            let status = evaluate_candidate(
+                profile,
+                metric,
+                backend,
+                pixels,
+                supported,
+                cpu_feature_on,
+                usable_vram_mib,
+                config,
+            );
             considered.push(ConsideredCandidate { backend, status });
         }
 
@@ -542,27 +588,78 @@ impl Orchestrator {
 /// fields where they're meaningful (e.g., a `PredictedOomWithMargin`
 /// rejection still carries the predicted ns/px so an operator can see
 /// "GpuFull would have been 2.7 ns/px but didn't fit").
+#[allow(clippy::too_many_arguments)]
 fn evaluate_candidate(
     profile: &MetricProfile,
+    metric: MetricKind,
     backend: Backend,
     pixels: u64,
     supported: &[Backend],
+    cpu_feature_on: bool,
     usable_vram_mib: usize,
     config: &ChooserConfig,
 ) -> CandidateStatus {
-    // Cpu is feature-gated out in Phase 3 regardless of metric support.
-    if backend == Backend::Cpu {
-        return CandidateStatus::Rejected {
-            reason: RejectReason::CpuNotYetWired,
-            predicted_ns_per_px: None,
-            predicted_vram_mib: None,
-        };
-    }
+    // Phase 6: CPU is a real candidate. Per-metric availability is
+    // resolved via `supported` (set by the per-metric matrix) and the
+    // build-time `cpu-<metric>` feature flag.
     if !supported.contains(&backend) {
+        // CPU specifically: when the metric supports CPU upstream but
+        // the build is missing the feature flag, surface
+        // `CpuMetricUnavailable` for operator clarity. Otherwise the
+        // generic "unsupported by metric" rejection.
+        if backend == Backend::Cpu {
+            return CandidateStatus::Rejected {
+                reason: RejectReason::CpuMetricUnavailable,
+                predicted_ns_per_px: None,
+                predicted_vram_mib: None,
+            };
+        }
         return CandidateStatus::Rejected {
             reason: RejectReason::UnsupportedByMetric,
             predicted_ns_per_px: None,
             predicted_vram_mib: None,
+        };
+    }
+    if backend == Backend::Cpu {
+        // The metric supports CPU upstream but the build may not
+        // include the `cpu-<metric>` feature. Reject early so the
+        // executor doesn't have to handle the construction failure.
+        let _ = metric;
+        if !cpu_feature_on {
+            return CandidateStatus::Rejected {
+                reason: RejectReason::CpuMetricUnavailable,
+                predicted_ns_per_px: None,
+                predicted_vram_mib: None,
+            };
+        }
+        // Test-mode override + production safety: even with the
+        // feature on, if a previous run learned that the CPU adapter
+        // at this size was bad (e.g. allocation failure surfaced as
+        // OOM), the OOM-cell log lets us skip it. Same rule as the
+        // GPU candidates so the OOM ladder works symmetrically.
+        if known_oom_cell(profile, backend, pixels) {
+            return CandidateStatus::Rejected {
+                reason: RejectReason::KnownOomCell,
+                predicted_ns_per_px: Some(0.0),
+                predicted_vram_mib: Some(0),
+            };
+        }
+        // CPU doesn't allocate VRAM; the per-cell `vram_mib` is always
+        // 0. ns/px comes from the bench cache (Phase 2 CPU cells); if
+        // the cache lacks CPU data, fall back to a conservative
+        // estimate so the OOM ladder can still route here when GPU has
+        // failed.
+        let ns = interpolate_ns_per_px(profile, backend, pixels, config.extrapolation_pessimism)
+            .unwrap_or_else(|| {
+                // Heuristic fallback: 200 ns/px is roughly cvvdp-cpu
+                // single-thread at 1024² on a 7950X. Conservative
+                // (some CPU metrics are faster, butteraugli is slower)
+                // but adequate as a last-resort ranking signal.
+                200.0
+            });
+        return CandidateStatus::Selected {
+            ns_per_px: ns,
+            vram_mib: 0,
         };
     }
     let ns =

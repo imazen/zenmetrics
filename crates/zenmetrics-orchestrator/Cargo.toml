@@ -20,6 +20,13 @@ publish = false
 # Phase 2's bench runner pulls in every metric crate via the
 # `zenmetrics-api` umbrella — opt in via the `bench` feature when you
 # actually want to populate the per-metric profile table.
+#
+# Phase 6 added per-metric CPU backends behind their own feature flags
+# so downstream callers can opt out of unused dependencies. The default
+# does NOT include CPU backends because callers who only want capability
+# detection shouldn't pay the dep cost. Production sweep workers that
+# want the OOM fallback ladder turn on `cpu-all` (or the individual
+# `cpu-*` features) explicitly.
 default = []
 
 # Phase 2 bench runner. Pulls in zenmetrics-api (umbrella) + cvvdp-gpu
@@ -38,6 +45,27 @@ bench = ["dep:zenmetrics-api", "dep:cvvdp-gpu", "dep:xxhash-rust", "dep:rayon"]
 # executor depends on the umbrella `MetricKind` / `MemoryMode` types
 # that the `bench` feature pulls in. Phase 5 adds `wgpu` / `hip`.
 cuda = ["bench"]
+
+# ---------------------------------------------------------------------
+# Phase 6 — CPU backend feature flags.
+#
+# Each `cpu-<metric>` feature wires the corresponding reference CPU
+# implementation into the orchestrator's OOM fallback ladder. They're
+# additive: turning on `cpu-cvvdp` doesn't require the others. All
+# imply `bench` because the CPU adapter shares the `MetricKind` enum
+# and the chooser/executor wiring that lives behind the bench feature.
+#
+# `cpu-all` is the convenience flag for production sweep workers that
+# want every supported CPU backend available. Iwssim is intentionally
+# absent — no clean CPU reference exists upstream (see
+# `docs/CPU_BACKENDS.md`). Iwssim Cpu attempts surface
+# `CpuMetricUnavailable` and the OOM ladder advances.
+cpu-cvvdp = ["bench", "dep:cvvdp-cpu"]
+cpu-ssim2 = ["bench", "dep:ssimulacra2", "dep:imgref", "dep:rgb"]
+cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb"]
+cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb"]
+cpu-zensim = ["bench", "dep:zensim"]
+cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim"]
 
 [dependencies]
 thiserror = { workspace = true }
@@ -59,6 +87,22 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3"], optional = true }
 # (Phase 6 will use this to actually run CPU references). Already in
 # the workspace lockfile.
 rayon = { version = "1.12.0", optional = true }
+
+# Phase 6: per-metric CPU reference crates. Each is optional and pulled
+# only when its `cpu-<metric>` feature is on. Versions track the workspace
+# pins (which themselves match the dev-deps that the corresponding
+# `-gpu` crates already use for parity tests).
+cvvdp-cpu = { workspace = true, optional = true }
+ssimulacra2 = { workspace = true, optional = true }
+dssim-core = { workspace = true, optional = true }
+butteraugli = { workspace = true, optional = true }
+zensim = { workspace = true, optional = true }
+
+# Shared support crates pulled in only when one of `cpu-ssim2`,
+# `cpu-dssim`, `cpu-butter` is on. `imgref` provides `ImgVec`/`ImgRef`
+# for dssim+butter; `rgb` provides `RGB<u8>` / `Rgb` color pixel types.
+imgref = { workspace = true, optional = true }
+rgb = { workspace = true, optional = true }
 
 # Hashing the machine fingerprint. Workspace already pins sha2 0.10 via
 # transitive deps; we depend on it directly for `Sha256`.
@@ -138,6 +182,16 @@ required-features = ["cuda"]
 [[test]]
 name = "cached_ref"
 path = "tests/cached_ref.rs"
+required-features = ["cuda"]
+
+# Phase 6 CPU backend integration tests. Each per-metric test is gated
+# on its `cpu-<metric>` feature; `cuda` is required for the executor
+# module gate. Same sibling-workspace caveat as the other Phase 4-5
+# tests — build from the primary `zenmetrics/` checkout to avoid the
+# butteraugli-gpu lockfile collision documented above.
+[[test]]
+name = "cpu_backend"
+path = "tests/cpu_backend.rs"
 required-features = ["cuda"]
 
 # Phase 5 batch example. Drives `Orchestrator::run_all` against a real

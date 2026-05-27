@@ -93,6 +93,11 @@ use crate::executor::{
 };
 use crate::{Backend, Orchestrator};
 
+// Bring the ExecMetric Cpu variant constructor into scope via cpu_adapter
+// only when needed (the Cpu worker uses it directly to manage warm state).
+#[allow(unused_imports)]
+use crate::cpu_adapter::CpuAdapter;
+
 // ---------------------------------------------------------------------------
 // Public handles
 // ---------------------------------------------------------------------------
@@ -653,30 +658,247 @@ fn gpu_worker_main(
 }
 
 // ---------------------------------------------------------------------------
-// CPU worker — Phase 6 wires the actual CPU references; Phase 5 returns
-// `CpuNotYetWired` so the streaming/batch API can already be exercised
-// by callers passing CPU-eligible tasks (even if every such task fails
-// today).
+// CPU worker — Phase 6.
+//
+// Each CPU worker thread owns one warm `ExecMetric::Cpu(CpuAdapter)`
+// matched against the current `(metric, w, h)` signature, mirroring the
+// signature-cache pattern in `gpu_worker_main`. Construction happens
+// lazily on the first task and on every signature change; intra-signature
+// runs reuse the adapter so set_reference / warm_reference work without
+// per-call allocation churn.
+//
+// Cached-ref dispatch follows the same logic as the GPU worker: when
+// the task's `use_cached_ref` is set AND the adapter reports
+// `supports_cached_ref`, install via `set_reference` once per
+// `(signature, ref_hash)` and dispatch through
+// `compute_with_cached_reference` for the rest. Adapters without a
+// true cached-ref path (ssim2 / butter / zensim) silently route through
+// the regular `compute` — the score is correct, just no speedup.
 // ---------------------------------------------------------------------------
 
 fn cpu_worker_main(
     rx: mpsc::Receiver<WorkerTask>,
     result_tx: mpsc::Sender<WorkerResult>,
 ) {
+    let mut current_signature: Option<MetricSignature> = None;
+    let mut current_metric: Option<ExecMetric> = None;
+    let mut cached_ref_hash: Option<u64> = None;
+
     while let Ok(task) = rx.recv() {
         let t_start = Instant::now();
-        let attempts = vec![(task.chosen_backend, AttemptOutcome::OtherError("CpuNotYetWired".into()))];
-        let _ = result_tx.send(WorkerResult {
-            handle_id: task.handle_id,
-            result: TaskResult {
-                task_id: task.task_id,
-                outcome: Err(OrchestratorError::CpuNotYetWired),
-                backend_used: None,
-                backends_attempted: attempts,
-                wall_us: t_start.elapsed().as_micros() as u64,
-                vram_peak_mib: None,
-            },
-        });
+        let handle_id = task.handle_id;
+        let task_id = task.task_id;
+
+        // -- Construct adapter if signature changed --------------------
+        let sig = MetricSignature {
+            metric: task.metric,
+            width: task.width,
+            height: task.height,
+            backend: task.chosen_backend,
+        };
+        let signature_changed = current_signature != Some(sig);
+        if signature_changed {
+            current_metric = None;
+            cached_ref_hash = None;
+            match construct_pub(
+                task.metric,
+                task.chosen_backend,
+                task.width,
+                task.height,
+                task.params.clone(),
+            ) {
+                ConstructOutcomePub::Ok(m) => {
+                    current_metric = Some(m);
+                    current_signature = Some(sig);
+                }
+                ConstructOutcomePub::Oom => {
+                    // OOM at CPU adapter construction means the
+                    // reference crate failed to allocate. Treat as
+                    // OomAtConstruction so the caller can see the
+                    // shape of the failure.
+                    let attempts =
+                        vec![(task.chosen_backend, AttemptOutcome::OomAtConstruction)];
+                    let _ = result_tx.send(WorkerResult {
+                        handle_id,
+                        result: TaskResult {
+                            task_id,
+                            outcome: Err(OrchestratorError::FullyExhausted {
+                                attempts: attempts.clone(),
+                            }),
+                            backend_used: None,
+                            backends_attempted: attempts,
+                            wall_us: t_start.elapsed().as_micros() as u64,
+                            vram_peak_mib: None,
+                        },
+                    });
+                    continue;
+                }
+                ConstructOutcomePub::Other(msg) => {
+                    // Phase 6 sentinels — recognise and translate into
+                    // the right structured error so callers can route
+                    // around (e.g. Iwssim ladder advance handled at
+                    // submit time, but a synthetic test that forces
+                    // Cpu still gets a clear result).
+                    let outcome_err = translate_cpu_sentinel(&msg, task.metric);
+                    let attempts =
+                        vec![(task.chosen_backend, AttemptOutcome::OtherError(msg))];
+                    let _ = result_tx.send(WorkerResult {
+                        handle_id,
+                        result: TaskResult {
+                            task_id,
+                            outcome: Err(outcome_err),
+                            backend_used: None,
+                            backends_attempted: attempts,
+                            wall_us: t_start.elapsed().as_micros() as u64,
+                            vram_peak_mib: None,
+                        },
+                    });
+                    continue;
+                }
+            }
+        }
+
+        let m = match current_metric.as_mut() {
+            Some(m) => m,
+            None => {
+                let attempts = vec![(
+                    task.chosen_backend,
+                    AttemptOutcome::OtherError("cpu worker lost adapter state".into()),
+                )];
+                let _ = result_tx.send(WorkerResult {
+                    handle_id,
+                    result: TaskResult {
+                        task_id,
+                        outcome: Err(OrchestratorError::MetricApi(
+                            "cpu worker lost adapter state".into(),
+                        )),
+                        backend_used: None,
+                        backends_attempted: attempts,
+                        wall_us: t_start.elapsed().as_micros() as u64,
+                        vram_peak_mib: None,
+                    },
+                });
+                continue;
+            }
+        };
+
+        // -- Materialise ref bytes ------------------------------------
+        let ref_bytes: &[u8] = match &task.ref_payload {
+            RefPayload::Bytes(b) => b.as_slice(),
+            RefPayload::PreUploaded(_, b) => b.as_slice(),
+        };
+
+        // -- Dispatch -------------------------------------------------
+        let compute_result = if task.use_cached_ref && m.supports_cached_ref() {
+            let need_install =
+                cached_ref_hash != Some(task.ref_hash) || signature_changed;
+            if need_install {
+                match m.set_reference(ref_bytes) {
+                    Ok(()) => cached_ref_hash = Some(task.ref_hash),
+                    Err(_) => cached_ref_hash = None,
+                }
+            }
+            if cached_ref_hash == Some(task.ref_hash) {
+                m.compute_with_cached_reference(&task.dist_bytes)
+            } else {
+                m.compute(ref_bytes, &task.dist_bytes)
+            }
+        } else {
+            cached_ref_hash = None;
+            m.compute(ref_bytes, &task.dist_bytes)
+        };
+
+        let wall_us = t_start.elapsed().as_micros() as u64;
+        match compute_result {
+            Ok(score) => {
+                let attempts = vec![(task.chosen_backend, AttemptOutcome::Success)];
+                let _ = result_tx.send(WorkerResult {
+                    handle_id,
+                    result: TaskResult {
+                        task_id,
+                        outcome: Ok(score),
+                        backend_used: Some(task.chosen_backend),
+                        backends_attempted: attempts,
+                        wall_us,
+                        vram_peak_mib: None,
+                    },
+                });
+            }
+            Err(CallErrPub::Oom) => {
+                // CPU OOM is exceptionally rare (CPU crates panic
+                // rather than returning) but we handle the shape.
+                current_metric = None;
+                current_signature = None;
+                cached_ref_hash = None;
+                let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtRuntime)];
+                let _ = result_tx.send(WorkerResult {
+                    handle_id,
+                    result: TaskResult {
+                        task_id,
+                        outcome: Err(OrchestratorError::FullyExhausted {
+                            attempts: attempts.clone(),
+                        }),
+                        backend_used: None,
+                        backends_attempted: attempts,
+                        wall_us,
+                        vram_peak_mib: None,
+                    },
+                });
+            }
+            Err(CallErrPub::Other(msg)) => {
+                let attempts = vec![(
+                    task.chosen_backend,
+                    AttemptOutcome::OtherError(msg.clone()),
+                )];
+                let _ = result_tx.send(WorkerResult {
+                    handle_id,
+                    result: TaskResult {
+                        task_id,
+                        outcome: Err(OrchestratorError::CpuFailed(msg)),
+                        backend_used: None,
+                        backends_attempted: attempts,
+                        wall_us,
+                        vram_peak_mib: None,
+                    },
+                });
+            }
+        }
+    }
+}
+
+/// Translate the executor's CPU-related sentinel strings into the
+/// matching [`OrchestratorError`] variant. Used by `cpu_worker_main`
+/// to surface structured errors to the caller without depending on
+/// the executor's private string parsing logic.
+fn translate_cpu_sentinel(msg: &str, metric: MetricKind) -> OrchestratorError {
+    if let Some(rest) = msg.strip_prefix("CpuMetricUnavailable:") {
+        let _ = rest;
+        OrchestratorError::CpuMetricUnavailable { metric }
+    } else if let Some(rest) = msg.strip_prefix("CpuBackendUnavailable:") {
+        // Format is `CpuBackendUnavailable:<tag>:cpu-<tag>`. Extract the
+        // feature name (last component); fall back to a generic label.
+        let feature = match rest.rsplit_once(':') {
+            Some((_, feat)) if !feat.is_empty() => feat,
+            _ => "cpu-<metric>",
+        };
+        // We can only carry a `&'static str` in the struct field; pin
+        // the feature name through a static table to satisfy that.
+        let required_feature = match feature {
+            "cpu-cvvdp" => "cpu-cvvdp",
+            "cpu-ssim2" => "cpu-ssim2",
+            "cpu-dssim" => "cpu-dssim",
+            "cpu-butter" => "cpu-butter",
+            "cpu-zensim" => "cpu-zensim",
+            _ => "cpu-all",
+        };
+        OrchestratorError::CpuBackendUnavailable {
+            metric,
+            required_feature,
+        }
+    } else if let Some(real) = msg.strip_prefix("CpuFailed:") {
+        OrchestratorError::CpuFailed(real.to_string())
+    } else {
+        OrchestratorError::MetricApi(msg.to_string())
     }
 }
 
@@ -972,7 +1194,15 @@ impl Orchestrator {
             }
             Backend::Cpu => {
                 if pool.cpu_txs.is_empty() {
-                    return Err(OrchestratorError::CpuNotYetWired);
+                    // No CPU workers spawned — surface a structured
+                    // error so callers can react. Modern config never
+                    // hits this (max_parallel_cpu has a floor of 1),
+                    // but it's possible to construct a pool with
+                    // `max_parallel_cpu = 0` for testing.
+                    return Err(OrchestratorError::CpuBackendUnavailable {
+                        metric,
+                        required_feature: "cpu-all",
+                    });
                 }
                 let idx = pool.cpu_next % pool.cpu_txs.len();
                 pool.cpu_next = pool.cpu_next.wrapping_add(1);

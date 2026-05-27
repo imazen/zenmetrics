@@ -203,21 +203,76 @@ const METRIC_KINDS: &[MetricKind] = &[
 ];
 
 /// Which backends a given metric supports in our Phase 2 bench grid.
+///
+/// **Phase 6 update**: the grid is now per-metric × {GPU backends} ∪
+/// {Cpu} when the corresponding `cpu-<metric>` feature is enabled. The
+/// CPU cell extends the warm() budget by ~30s total across all metrics
+/// (CPU references at 1024² + 2048² — 4096² is skipped to stay within
+/// the < 60s combined budget; the chooser interpolates the missing
+/// 4096² value from the 2048² point).
 #[cfg(feature = "bench")]
 fn backends_for_kind(kind: MetricKind) -> &'static [Backend] {
     match kind {
         // cvvdp Mode E (Strip) was rolled back upstream (changes JOD);
         // we measure Full + StripPair only.
-        MetricKind::Cvvdp => &[Backend::GpuFull, Backend::GpuStripPair],
+        MetricKind::Cvvdp => {
+            if cfg!(feature = "cpu-cvvdp") {
+                &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull, Backend::GpuStripPair]
+            }
+        }
         // zensim still only supports Full + Auto.
-        MetricKind::Zensim => &[Backend::GpuFull],
-        // Everything else exposes Full + Strip.
-        MetricKind::Butter
-        | MetricKind::Ssim2
-        | MetricKind::Dssim
-        | MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip],
+        MetricKind::Zensim => {
+            if cfg!(feature = "cpu-zensim") {
+                &[Backend::GpuFull, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull]
+            }
+        }
+        MetricKind::Butter => {
+            if cfg!(feature = "cpu-butter") {
+                &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull, Backend::GpuStrip]
+            }
+        }
+        MetricKind::Ssim2 => {
+            if cfg!(feature = "cpu-ssim2") {
+                &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull, Backend::GpuStrip]
+            }
+        }
+        MetricKind::Dssim => {
+            if cfg!(feature = "cpu-dssim") {
+                &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull, Backend::GpuStrip]
+            }
+        }
+        // Iwssim has no CPU reference upstream.
+        MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip],
     }
 }
+
+/// CPU-only bench sizes. Smaller than the GPU grid because a CPU 4096²
+/// run on butteraugli costs several seconds — the warm() budget is
+/// the dominant constraint. The chooser extrapolates from these two
+/// points; 4096² CPU is rare in production anyway (GPU is preferred).
+#[cfg(feature = "bench")]
+const CPU_BENCH_SIZES: &[u32] = &[512, 1024];
+
+/// CPU bench warmup iterations (CPU paths don't have the same PTX-
+/// compile-on-first-call jitter; one warmup is enough). Keeps the
+/// budget tight.
+#[cfg(feature = "bench")]
+const CPU_BENCH_WARMUP: usize = 1;
+
+/// CPU bench timed iterations. At 1024² with cvvdp-cpu (~80 ms / call)
+/// 2 iters costs ~160 ms; at 2048² it's ~700 ms — within budget.
+#[cfg(feature = "bench")]
+const CPU_BENCH_TIMED: usize = 2;
 
 // ---------------------------------------------------------------------------
 // `run` entry point — orchestrates the cell sweep.
@@ -260,7 +315,14 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
             // triggering page allocations that might trip into OOM
             // mid-bench. Important for in-process bench accuracy where
             // the pool is shared across metric instances.
-            let mut sizes_desc: Vec<u32> = plan.sizes.clone();
+            //
+            // Phase 6: CPU cells use a tighter grid (CPU_BENCH_SIZES)
+            // to keep the warm() budget under 60s. Per-metric override.
+            let mut sizes_desc: Vec<u32> = if backend == Backend::Cpu {
+                CPU_BENCH_SIZES.to_vec()
+            } else {
+                plan.sizes.clone()
+            };
             sizes_desc.sort();
             sizes_desc.reverse();
             // With descending iteration, a soft-timeout at the largest
@@ -457,6 +519,16 @@ fn measure_cell(
     let cell_start = Instant::now();
     let (r, d) = synth_pair_offset_dist(size, size);
 
+    // Phase 6: CPU paths don't touch the GPU, so the nvidia-smi sampler
+    // / VRAM bookkeeping is a no-op. We still spawn the sampler because
+    // its result is harmless (RAM growth isn't visible to nvidia-smi)
+    // but use a tighter warmup/timed budget per the CPU constants.
+    let (warmup_iters, timed_iters) = if backend == Backend::Cpu {
+        (CPU_BENCH_WARMUP, CPU_BENCH_TIMED)
+    } else {
+        (plan.warmup_iters, plan.timed_iters)
+    };
+
     // Pre-construction VRAM baseline. We measure the *delta* against
     // this baseline during the timed loop — that gives the marginal
     // VRAM cost of this cell, which is the meaningful number for
@@ -533,7 +605,7 @@ fn measure_cell(
     };
 
     // -------- Warmup --------
-    for _ in 0..plan.warmup_iters {
+    for _ in 0..warmup_iters {
         if let Err(_e) = metric.compute(&r, &d) {
             return finalize(CellOutcome::Oom, stop, sampler, peak_mib, baseline_mib);
         }
@@ -543,8 +615,8 @@ fn measure_cell(
     }
 
     // -------- Timed --------
-    let mut durations: Vec<Duration> = Vec::with_capacity(plan.timed_iters);
-    for _ in 0..plan.timed_iters {
+    let mut durations: Vec<Duration> = Vec::with_capacity(timed_iters);
+    for _ in 0..timed_iters {
         let t0 = Instant::now();
         match metric.compute(&r, &d) {
             Ok(()) => durations.push(t0.elapsed()),
@@ -625,10 +697,12 @@ enum CallErr {
 ///
 /// - umbrella `Metric` (covers GpuFull + GpuStrip across all kinds)
 /// - `cvvdp_gpu::CvvdpOpaque` (covers GpuStripPair specifically)
+/// - Phase 6: a CPU adapter for CPU cells.
 #[cfg(feature = "bench")]
 enum BenchMetric {
     Umbrella(Box<Metric>),
     CvvdpStripPair(Box<zenmetrics_api::cvvdp::CvvdpOpaque>),
+    Cpu(Box<crate::cpu_adapter::CpuAdapter>),
 }
 
 #[cfg(feature = "bench")]
@@ -643,6 +717,10 @@ impl BenchMetric {
                 .compute_srgb_u8(r, d)
                 .map(|_| ())
                 .map_err(|e| classify_call_err(&e.to_string())),
+            BenchMetric::Cpu(adapter) => adapter
+                .compute(r, d)
+                .map(|_| ())
+                .map_err(|e| CallErr::Other(e.to_string())),
         }
     }
 }
@@ -714,7 +792,32 @@ fn construct_metric(
             // one-shot stripwise walker).
             cvvdp_strip_pair(width, height)
         }
-        Backend::Cpu => ConstructOutcome::NoBackend,
+        Backend::Cpu => {
+            // Phase 6: CPU bench cell. Build the adapter via the same
+            // factory the executor uses so production cells = bench
+            // cells, byte-identical dispatch.
+            let params = match MetricParams::try_default_for(kind) {
+                Ok(p) => p,
+                Err(_) => return ConstructOutcome::NoMetric,
+            };
+            match crate::cpu_adapter::CpuAdapter::new(kind, width, height, &params) {
+                Ok(a) => ConstructOutcome::Ok(BenchMetric::Cpu(Box::new(a))),
+                Err(e) => {
+                    use crate::cpu_adapter::CpuAdapterError as E;
+                    match e {
+                        E::FeatureNotEnabled(_) | E::Unavailable(_) => {
+                            ConstructOutcome::NoBackend
+                        }
+                        E::Failed(msg) => ConstructOutcome::OtherErr(msg),
+                        E::InvalidInputSize { expected, got } => {
+                            ConstructOutcome::OtherErr(format!(
+                                "invalid input size (expected {expected}, got {got})"
+                            ))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

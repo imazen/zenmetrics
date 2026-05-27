@@ -59,16 +59,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
     let skip_warm = env::var("ZM_SKIP_WARM").as_deref() == Ok("1");
     let force_oom_full = env::var("ZM_FORCE_OOM_FULL").as_deref() == Ok("1");
+    // Phase 6: poison every GPU backend so the OOM ladder lands on CPU.
+    // Useful for the brief's acceptance gate
+    // ("ZM_FORCE_OOM_FULL=1 cvvdp@4096² → CPU fallback success").
+    // ZM_FORCE_OOM_FULL only poisons GpuFull (preserves GpuStripPair as
+    // a fallback for cvvdp). ZM_FORCE_OOM_ALL poisons everything GPU.
+    let force_oom_all = env::var("ZM_FORCE_OOM_ALL").as_deref() == Ok("1");
+
+    // Phase 6: report which CPU backends are baked in. The OOM
+    // fallback ladder lands here when every GPU candidate fails.
+    let cpu_backends_enabled: Vec<&'static str> = {
+        let mut v = Vec::new();
+        if cfg!(feature = "cpu-cvvdp") {
+            v.push("cvvdp");
+        }
+        if cfg!(feature = "cpu-ssim2") {
+            v.push("ssim2");
+        }
+        if cfg!(feature = "cpu-dssim") {
+            v.push("dssim");
+        }
+        if cfg!(feature = "cpu-butter") {
+            v.push("butter");
+        }
+        if cfg!(feature = "cpu-zensim") {
+            v.push("zensim");
+        }
+        v
+    };
 
     println!(
-        "zenmetrics-orchestrator Phase 4 — run_single example\n\
+        "zenmetrics-orchestrator Phase 4 (+ Phase 6 CPU adapters) — run_single example\n\
          size:   {size}×{size} ({} MP)\n\
          metric: {} ({})\n\
-         force-oom-full: {}\n",
+         force-oom-full: {}\n\
+         cpu_backends_enabled: {:?}\n",
         ((size as u64) * (size as u64)) as f64 / 1_000_000.0,
         metric.tag(),
         metric_str,
         force_oom_full,
+        cpu_backends_enabled,
     );
 
     // Build the orchestrator with the default capability cache dir
@@ -110,22 +140,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Optionally pre-poison the OOM log so the chooser falls back away
     // from GpuFull. Demonstrates the executor's recovery path without
     // needing a real VRAM-pressure scenario.
-    if force_oom_full {
+    if force_oom_full || force_oom_all {
         // Need to access mutable capability — go through a dance via
         // a new orchestrator constructed from the modified capability.
         let mut cap = orch.capability().clone();
         let entry = cap.metrics.entry(metric.tag().into()).or_default();
         let pixels = (size as u64) * (size as u64);
-        if !entry
-            .cells_failed_oom
-            .iter()
-            .any(|&(b, p)| b == Backend::GpuFull && p == pixels)
-        {
-            entry.cells_failed_oom.push((Backend::GpuFull, pixels));
-            println!(
-                "force-oom: injected (GpuFull, {pixels}) into cells_failed_oom for '{}'",
-                metric.tag(),
-            );
+        let backends_to_poison: &[Backend] = if force_oom_all {
+            // Force CPU fallback by poisoning every GPU candidate.
+            &[Backend::GpuFull, Backend::GpuStrip, Backend::GpuStripPair]
+        } else {
+            // Original ZM_FORCE_OOM_FULL behavior — poison only Full.
+            &[Backend::GpuFull]
+        };
+        for &backend in backends_to_poison {
+            if !entry
+                .cells_failed_oom
+                .iter()
+                .any(|&(b, p)| b == backend && p == pixels)
+            {
+                entry.cells_failed_oom.push((backend, pixels));
+                println!(
+                    "force-oom: injected ({}, {pixels}) into cells_failed_oom for '{}'",
+                    backend.tag(),
+                    metric.tag(),
+                );
+            }
         }
         // Persist + rebuild the orchestrator so the modified profile is
         // what `run_single` sees through `choose_backend_for_task`.

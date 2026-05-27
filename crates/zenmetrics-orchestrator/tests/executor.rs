@@ -247,10 +247,11 @@ fn fully_exhausted_when_no_backend_fits() {
     // bypass that by populating cells_failed_oom so the chooser rejects
     // everything as KnownOomCell.
     let mut profile = cvvdp_profile();
-    profile.cells_failed_oom.push((Backend::GpuFull, 1024 * 1024));
-    profile
-        .cells_failed_oom
-        .push((Backend::GpuStripPair, 1024 * 1024));
+    // Phase 6: poison Cpu too — with cpu-cvvdp on, Cpu is a real
+    // candidate that the chooser would otherwise pick.
+    for &b in &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu] {
+        profile.cells_failed_oom.push((b, 1024 * 1024));
+    }
     let (mut orch2, _td2) =
         fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
 
@@ -425,6 +426,10 @@ fn forced_low_vram_via_oom_log_fully_exhausts() {
     let mut profile = ssim2_profile();
     profile.cells_failed_oom.push((Backend::GpuFull, 1024 * 1024));
     profile.cells_failed_oom.push((Backend::GpuStrip, 1024 * 1024));
+    // Phase 6: poison Cpu too — with cpu-ssim2 on, the chooser would
+    // otherwise route to the CPU adapter, which then fails on the
+    // mismatched buffer size (64² bytes for a 1024² task).
+    profile.cells_failed_oom.push((Backend::Cpu, 1024 * 1024));
     let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Ssim2, profile)]);
 
     let (r, d) = synth_pair_64();

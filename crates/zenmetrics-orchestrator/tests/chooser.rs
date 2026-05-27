@@ -264,28 +264,41 @@ fn falls_back_to_strip_when_vram_constrained() {
 fn returns_no_feasible_when_nothing_fits() {
     // ssim2 at 4096² with vram_free=1 GB. Usable = 871 MiB.
     // GpuFull@4K = 6200 MiB (rejected). GpuStrip@4K = 2900 MiB (rejected).
-    // Cpu is CpuNotYetWired. → NoFeasibleBackend.
+    //
+    // Phase 6: when built WITHOUT cpu-ssim2, Cpu is rejected as
+    // CpuMetricUnavailable. Built with `cpu-ssim2`, Cpu is Selected
+    // (vram=0) and the call succeeds — so this test only asserts the
+    // no-feasible shape under the bench-only / cuda-only feature mix.
+    // With cpu-* features compiled in, the assertion below would
+    // wrongly fail; gate on `cfg(not(feature = "cpu-ssim2"))`.
     let orch = fake_orch_with_metrics(&[(MetricKind::Ssim2, ssim2_profile())]);
-    let err = orch
-        .choose_backend(MetricKind::Ssim2, 4096, 4096, 1024)
-        .expect_err("should be NoFeasibleBackend");
-    match err {
-        ChooserError::NoFeasibleBackend { considered } => {
-            // All four backends evaluated, none Selected.
-            assert_eq!(considered.len(), 4);
-            assert!(considered
-                .iter()
-                .all(|c| matches!(c.status, CandidateStatus::Rejected { .. })));
-            let cpu = find(&considered, Backend::Cpu);
-            assert!(matches!(
-                cpu.status,
-                CandidateStatus::Rejected {
-                    reason: RejectReason::CpuNotYetWired,
-                    ..
-                }
-            ));
+    let result = orch.choose_backend(MetricKind::Ssim2, 4096, 4096, 1024);
+
+    if cfg!(feature = "cpu-ssim2") {
+        // With CPU wired, Cpu is a feasible fallback (vram_mib=0).
+        // The choice MUST be Cpu since every GPU candidate is OOM.
+        let choice = result.expect("Cpu should be Selected when cpu-ssim2 is on");
+        assert_eq!(choice.backend, Backend::Cpu);
+        assert_eq!(choice.predicted_vram_mib, 0);
+    } else {
+        let err = result.expect_err("should be NoFeasibleBackend without cpu-ssim2");
+        match err {
+            ChooserError::NoFeasibleBackend { considered } => {
+                assert_eq!(considered.len(), 4);
+                assert!(considered
+                    .iter()
+                    .all(|c| matches!(c.status, CandidateStatus::Rejected { .. })));
+                let cpu = find(&considered, Backend::Cpu);
+                assert!(matches!(
+                    cpu.status,
+                    CandidateStatus::Rejected {
+                        reason: RejectReason::CpuMetricUnavailable,
+                        ..
+                    }
+                ));
+            }
+            other => panic!("expected NoFeasibleBackend, got {:?}", other),
         }
-        other => panic!("expected NoFeasibleBackend, got {:?}", other),
     }
 }
 
@@ -475,15 +488,26 @@ fn diagnostic_considered_list_populated() {
             ..
         }
     ));
-    // Cpu is CpuNotYetWired.
+    // Phase 6: Cpu candidate disposition depends on the cpu-cvvdp
+    // feature (this test uses MetricKind::Cvvdp). Without the feature
+    // Cpu is rejected as CpuMetricUnavailable; with it, Cpu is
+    // Selected (vram=0) and ranks against the GPU candidates.
     let cpu = find(&choice.considered, Backend::Cpu);
-    assert!(matches!(
-        cpu.status,
-        CandidateStatus::Rejected {
-            reason: RejectReason::CpuNotYetWired,
-            ..
-        }
-    ));
+    if cfg!(feature = "cpu-cvvdp") {
+        assert!(
+            matches!(cpu.status, CandidateStatus::Selected { .. }),
+            "expected Selected, got {:?}",
+            cpu.status
+        );
+    } else {
+        assert!(matches!(
+            cpu.status,
+            CandidateStatus::Rejected {
+                reason: RejectReason::CpuMetricUnavailable,
+                ..
+            }
+        ));
+    }
 }
 
 #[test]
@@ -548,7 +572,18 @@ fn no_measured_data_rejected_cleanly() {
     m.last_measured = Some(SystemTime::now());
     let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, m)]);
     // Should be no Selected backends → NoFeasibleBackend with all
-    // rejected as NoMeasuredData (or CpuNotYetWired for Cpu).
+    // rejected as NoMeasuredData (or CpuMetricUnavailable for Cpu
+    // when cpu-cvvdp is off). When cpu-cvvdp is on, Cpu is Selected
+    // via the conservative-fallback path (200 ns/px, vram=0) — the
+    // test is gated.
+    if cfg!(feature = "cpu-cvvdp") {
+        // Cpu becomes a feasible fallback even with empty vram_mib_at.
+        let choice = orch
+            .choose_backend(MetricKind::Cvvdp, 1024, 1024, 12288)
+            .expect("Cpu Selected when cpu-cvvdp is on");
+        assert_eq!(choice.backend, Backend::Cpu);
+        return;
+    }
     let err = orch
         .choose_backend(MetricKind::Cvvdp, 1024, 1024, 12288)
         .expect_err("no vram → no feasible");
