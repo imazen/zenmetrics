@@ -1,0 +1,218 @@
+name: Sweep image — Salad (Dockerfile.sweep.salad.v1)
+
+# Builds the SaladCloud deploy image on every push to master + every
+# zen-metrics-cli tag. Models the vast.ai sweep-image.yml two-job
+# pipeline (build the binaries in one job, COPY them into the image in
+# the second) but for the Salad backend:
+#
+#   - build-binary-salad: zen-metrics (same CUDARC_CUDA_VERSION=12000
+#     build as v26) + zen-sweep-worker built --features salad-sweep
+#     (NOT vastai).
+#   - build-image-salad: COPYs those binaries into
+#     Dockerfile.sweep.salad.v1, which also bakes the
+#     salad-http-job-queue-worker v0.7.0 sidecar, and pushes to
+#     ghcr.io/imazen/zen-metrics-sweep-salad.
+#
+# Tag scheme:
+#   ghcr.io/imazen/zen-metrics-sweep-salad:v1-<short-sha>   (every push)
+#   ghcr.io/imazen/zen-metrics-sweep-salad:v1               (latest master)
+#   ghcr.io/imazen/zen-metrics-sweep-salad:v1-<release-tag> (tagged releases)
+#
+# BAKE-EVERYTHING: the sidecar + binaries are baked at image-build time;
+# the Salad node boots straight into the job, never an installer.
+
+on:
+  push:
+    branches: [master, main]
+    tags:
+      - "zen-metrics-cli-v*"
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Dockerfile.sweep.salad.v1"
+      - "scripts/sweep/cuda_dlsym_stub.c"
+      - "scripts/sweep/entrypoint_salad.sh"
+      - ".github/workflows/sweep-image-salad.yml"
+  workflow_dispatch:
+    inputs:
+      force_rebuild_base:
+        description: "Rebuild the base layer (no cache hit even if Dockerfile base stage unchanged)"
+        type: boolean
+        default: false
+
+env:
+  IMAGE_NAME: ghcr.io/imazen/zen-metrics-sweep-salad
+  REGISTRY: ghcr.io
+
+jobs:
+  build-binary-salad:
+    name: Build zen-metrics + zen-sweep-worker (salad-sweep) binaries (Linux x86_64)
+    runs-on: ubuntu-latest
+    outputs:
+      sha-short: ${{ steps.meta.outputs.sha-short }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # zenmetrics workspace has [patch.crates-io] entries pointing at
+      # sibling worktrees. Clone them at the same pinned commits the
+      # vast.ai sweep-image.yml uses so the cargo build resolves the same
+      # versions a local build does.
+      - name: Clone sibling repos (zenjpeg + zenpng + zenwebp + zenavif--main + zenjxl--main + zenanalyze + zensim--principled-activity + jxl-encoder)
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git    ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
+          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git clone --quiet --branch feat/principled-activity \
+              https://github.com/imazen/zensim.git ../zensim--principled-activity
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 42833a05ac58fd1b3ce6ff27095bc2160378c72d
+          git clone --quiet https://github.com/imazen/zenpng.git     ../zenpng
+          git clone --quiet https://github.com/imazen/zenwebp.git    ../zenwebp
+          git clone --quiet https://github.com/imazen/zenavif.git    ../zenavif--main
+          git clone --quiet https://github.com/imazen/zenjxl.git     ../zenjxl--main
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Share the cache key with the vast.ai image job — the
+          # zen-metrics binary build is identical, so the cache hits.
+          shared-key: zen-metrics-sweep-image
+          workspaces: . -> target
+
+      # IDENTICAL to the vast.ai image's zen-metrics build (same CUDA
+      # binding pin). CUDARC_CUDA_VERSION=12000 keeps cudarc 0.19.4's
+      # eager loader off _v2 symbols missing on consumer-GPU driver pools.
+      - name: Build zen-metrics (release, sweep + GPU features, cudarc-12000-pinned)
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
+          CUDARC_CUDA_VERSION: "12000"
+        run: |
+          cargo build --release -p zen-metrics-cli \
+              --no-default-features \
+              --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
+          mkdir -p artifacts
+          cp target/release/zen-metrics artifacts/zen-metrics
+          chmod +x artifacts/zen-metrics
+          ./artifacts/zen-metrics --version
+          ./artifacts/zen-metrics list-metrics | grep -q iwssim
+          ./artifacts/zen-metrics list-metrics | grep -q cvvdp
+          ./artifacts/zen-metrics list-metrics | grep -q zensim
+          ./artifacts/zen-metrics score-pairs --help | grep -q allow-small-images
+          ./artifacts/zen-metrics sweep --help | grep -q zenjpeg
+
+      # The Salad-backend deployed worker: --features salad-sweep wires
+      # the Salad JobQueue/CredentialSource/WorkerHost/BlobStorage/
+      # Heartbeat glue + the shared inline encode+score compute (same GPU
+      # tree as vastai). `worker --backend salad` runs the HTTP-receiver
+      # loop the sidecar feeds.
+      - name: Build zen-sweep-worker (release, salad-sweep)
+        env:
+          CUDARC_CUDA_VERSION: "12000"
+        run: |
+          cargo build --release -p zen-sweep-worker --features salad-sweep
+          cp target/release/zen-sweep-worker artifacts/zen-sweep-worker
+          chmod +x artifacts/zen-sweep-worker
+          ./artifacts/zen-sweep-worker --version
+          ./artifacts/zen-sweep-worker --help | grep -q -- '--backend'
+          ./artifacts/zen-sweep-worker worker --backend salad --help | grep -q -- '--run-id'
+          ./artifacts/zen-sweep-worker worker --backend salad --help | grep -q -- '--chunks-r2'
+
+      - name: Extract short SHA
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha-short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binary artifacts for image job
+        uses: actions/upload-artifact@v4
+        with:
+          name: salad-sweep-binaries
+          path: |
+            artifacts/zen-metrics
+            artifacts/zen-sweep-worker
+          retention-days: 7
+
+  build-image-salad:
+    name: Build + push Salad sweep image
+    runs-on: ubuntu-latest
+    needs: build-binary-salad
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download salad sweep binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: salad-sweep-binaries
+          path: ./
+      - run: |
+          chmod +x ./zen-metrics ./zen-sweep-worker
+          ./zen-metrics --version
+          ./zen-sweep-worker --version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          SHA_SHORT="${{ needs.build-binary-salad.outputs.sha-short }}"
+          TAGS="${IMAGE_NAME}:v1-${SHA_SHORT}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              TAGS="${TAGS},${IMAGE_NAME}:v1"
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/zen-metrics-cli-v* ]]; then
+              VERSION="${GITHUB_REF#refs/tags/zen-metrics-cli-v}"
+              TAGS="${TAGS},${IMAGE_NAME}:v1-${VERSION}"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "Tags: $TAGS"
+
+      - name: Build + push Salad image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.sweep.salad.v1
+          build-args: |
+            ZEN_METRICS_BINARY=./zen-metrics
+            ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # Registry cache for the base layer (L1-L7) so we don't
+          # re-apt-install python+cuda+helpers or recompile
+          # cuda_dlsym_stub.so on every push — only when the base RUN
+          # steps change. The sidecar (L9b) is also cached unless its
+          # pinned version arg changes.
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v1
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-v1,mode=max
+          provenance: false
+
+      - name: Verify pushed image
+        run: |
+          docker pull ${IMAGE_NAME}:v1-${{ needs.build-binary-salad.outputs.sha-short }}
+          docker run --rm --entrypoint /usr/local/bin/zen-metrics \
+              ${IMAGE_NAME}:v1-${{ needs.build-binary-salad.outputs.sha-short }} \
+              --version
+          docker run --rm --entrypoint /usr/local/bin/zen-sweep-worker \
+              ${IMAGE_NAME}:v1-${{ needs.build-binary-salad.outputs.sha-short }} \
+              worker --backend salad --help | grep -q -- '--run-id'
+          # The sidecar is baked + executable. It auto-discovers the queue
+          # via IMDS at runtime, so off a Salad node it has no endpoint;
+          # we assert the binary is present + on PATH, not that it serves.
+          docker run --rm --entrypoint /bin/sh \
+              ${IMAGE_NAME}:v1-${{ needs.build-binary-salad.outputs.sha-short }} \
+              -c 'command -v salad-http-job-queue-worker'
+          echo "Salad image OK: ${IMAGE_NAME}:v1-${{ needs.build-binary-salad.outputs.sha-short }}"

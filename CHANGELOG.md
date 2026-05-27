@@ -17,6 +17,25 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### infra — feat: SaladCloud deploy image + CI publish to ghcr (2026-05-27)
+
+Adds `Dockerfile.sweep.salad.v1` (the SaladCloud sibling of the vast.ai
+`Dockerfile.sweep.v26`) + `scripts/sweep/entrypoint_salad.sh` + the
+`.github/workflows/sweep-image-salad.yml` publish pipeline. The image
+reuses v26's L1-L8 base (ubuntu → apt → pyarrow → CUDA 12-6 runtime+dev →
+s5cmd+jq → cuda_dlsym_stub → zen-metrics) verbatim, then bakes
+`zen-sweep-worker` built `--features salad-sweep` (L9) and the pinned
+`salad-http-job-queue-worker` v0.7.0 x86_64 Go sidecar (L9b). The
+entrypoint launches the sidecar + `zen-sweep-worker worker --backend
+salad` concurrently (upstream `with-shell-script` pattern): the sidecar
+forwards each queue job as `POST http://localhost:$SALAD_JOB_PORT<path>`
+to the worker's local HTTP receiver. BAKE-EVERYTHING honoured — sidecar +
+binaries baked at build time, entrypoint fail-loud-exits if any baked
+tool is missing, nothing apt/pip/curl-installed at boot. CI publishes
+`ghcr.io/imazen/zen-metrics-sweep-salad:v1` (+ `:v1-<sha>`) with a
+registry buildcache. Real 1-replica Salad smoke sweep (needs a Salad
+node + IMDS + BYO R2 creds) remains the operator's gate.
+
 ### cvvdp-gpu — perf: P2.7 partial — gauss_alt deep levels zero-sized + honest-stop on full shrink (2026-05-27)
 
 Zero-sizes `gauss_alt[k > k_split]` planes (deep levels). The shallow
