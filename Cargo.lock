@@ -6997,6 +6997,20 @@ name = "zenmetrics-corpus"
 version = "0.1.0"
 
 [[package]]
+name = "zenmetrics-orchestrator"
+version = "0.0.1"
+dependencies = [
+ "dirs",
+ "raw-cpuid",
+ "serde",
+ "sha2",
+ "sysinfo 0.38.4",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "zenpicker"
 version = "0.1.0"
 dependencies = [

@@ -17,6 +17,21 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- `zenmetrics-orchestrator` (new crate, Phase 1) — capability detection
+  (`nvidia-smi` GPU + `raw-cpuid` CPU + `sysinfo` RAM) and persistent
+  TOML cache at `~/.cache/zenmetrics/capability_<short_hash>.toml`.
+  Public surface: `Orchestrator`, `OrchestratorConfig`,
+  `CapabilityProfile`, `GpuCapability`, `CpuCapability`,
+  `MetricProfile` (Phase 2 placeholder), `OrchestratorError`,
+  `compute_machine_hash` + `cache_file_path` + `load_cached_profile` +
+  `save_profile` + `is_profile_stale` helpers, plus an example program
+  `print_capability`. Hash-based filename so multi-machine homedirs
+  don't collide. Stale-detection on time OR driver/model change.
+  No scheduling, no benchmark runner, no worker pool — those come
+  in later phases. See `crates/zenmetrics-api/docs/ORCHESTRATOR_DESIGN.md`.
+
 ### ssim2-gpu — refactor: orientation-aware error_maps + IIR untransposed building blocks — 2026-05-27
 
 Adds `Ssim2::blur_plane_two_pass_iir_untransposed` (uses the new

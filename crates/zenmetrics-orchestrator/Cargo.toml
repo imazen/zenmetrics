@@ -1,0 +1,48 @@
+[package]
+name = "zenmetrics-orchestrator"
+version = "0.0.1"
+description = "Capability-aware scheduler + persistent benchmark cache layered on zenmetrics-api (Phase 1: detection + cache only)"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# Phase 1 surface is intentionally tiny: capability detection + TOML
+# cache. Later phases (benchmark runner, scheduler, worker pool, OOM
+# recovery, CPU-backend wiring) extend this crate behind the same
+# package, so the public-API shape here MUST stay non-breaking.
+
+[features]
+default = []
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+# Hashing the machine fingerprint. Workspace already pins sha2 0.10 via
+# transitive deps; we depend on it directly for `Sha256`.
+sha2 = "0.10.9"
+
+# TOML serialization for the persistent capability profile. The newer
+# `toml = "1"` line is already in the workspace lockfile.
+toml = "1.1.2"
+
+# CPU fingerprint — brand string + SIMD feature bits via CPUID.
+raw-cpuid = "11.6.0"
+
+# System total RAM (sysinfo is already in the lockfile transitively;
+# we pin the version explicitly here so the public profile matches).
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
+
+# XDG cache dir resolution. `dirs = "6"` is already in the lockfile.
+dirs = "6.0.0"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "print_capability"
+path = "examples/print_capability.rs"
