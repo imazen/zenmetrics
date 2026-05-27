@@ -1,13 +1,14 @@
 # Cubecl fork strategy — `imazen/cubecl` maintenance plan
 
-**SUPERSEDED 2026-05-27.** The user directed a pivot mid-Phase-8e: instead
-of an org-transfer + git-fork dep + upstream-PR strategy, the actual
-plan is to publish renamed crates (`zenforks-cubecl-*`) to crates.io.
-The revised Phase 8e.1 lives in `PHASE8_PLAN.md`'s
-"Phase 8e — published `zenforks-cubecl-*` fork crates …" section; the
-strategy doc that captures the renamed-publish workflow will be
-`ZENFORKS_CUBECL_STRATEGY.md` (not yet written — execution still
-user-driven).
+**RESOLVED 2026-05-27 via Phase 8f.** The user directed a pivot mid-
+Phase-8e: instead of an org-transfer + git-fork dep + upstream-PR
+strategy, the actual plan is to publish renamed crates
+(`zenforks-cubecl-*`) to crates.io. Phase 8f executed this: 11 renamed
+crates ship at `zenforks-cubecl-*@0.10.x` on crates.io from
+[imazen/zenforks-cubecl](https://github.com/imazen/zenforks-cubecl).
+The active maintenance playbook is now
+[`ZENFORKS_CUBECL_STRATEGY.md`](ZENFORKS_CUBECL_STRATEGY.md) — read
+that for the current workflow.
 
 This document is retained as **internal methodology reference** — the
 branch structure, per-patch rebase notes, and CI matrix below all

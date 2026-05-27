@@ -17,6 +17,26 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **Phase 8f — switch from `lilith/cubecl` git-rev pins to
+  `zenforks-cubecl-*` crates.io publication.** The 11 patched-or-
+  transitive cubecl crates are now published to crates.io under the
+  `zenforks-cubecl-*` namespace from
+  [imazen/zenforks-cubecl](https://github.com/imazen/zenforks-cubecl).
+  The `[lib] name = "cubecl_*"` shim means workspace source code keeps
+  writing `use cubecl_runtime::*;` unchanged — only `Cargo.toml`'s
+  `[workspace.dependencies]` switches from `git = "lilith/cubecl"` to
+  `{ package = "zenforks-cubecl-*", version = "0.10.1" }`. Five
+  non-renamed leaf crates (`cubecl-common`, `cubecl-ir`,
+  `cubecl-macros`, `cubecl-macros-internal`, `cubecl-zspace`) continue
+  to come from upstream `tracel-ai/cubecl` at 0.10.0. zenforks-cubecl
+  0.10.0 ships vanilla rename + pinned-upload patch; 0.10.1 adds the
+  persistent PTX cache widening and the Metal `Atomic<f32>` capability
+  honesty fix. Full maintenance playbook in
+  `crates/zenmetrics-api/docs/ZENFORKS_CUBECL_STRATEGY.md`. Original
+  fork-strategy doc (`CUBECL_FORK_STRATEGY.md`) marked superseded.
+
 ### Added
 
 - **`zenmetrics-orchestrator` Phase 9.1 — N-lane GPU pool with
