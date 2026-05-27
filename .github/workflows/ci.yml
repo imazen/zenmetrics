@@ -46,6 +46,12 @@ jobs:
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -99,6 +105,12 @@ jobs:
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cross
         run: cargo install --locked cross
@@ -147,6 +159,12 @@ jobs:
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -186,6 +204,12 @@ jobs:
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -211,6 +235,12 @@ jobs:
           git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
           git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
