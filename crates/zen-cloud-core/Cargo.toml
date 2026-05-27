@@ -1,0 +1,21 @@
+[package]
+name = "zen-cloud-core"
+description = "Cloud-agnostic worker trait layer: JobQueue / BlobStorage / Heartbeat / CredentialSource / WorkerHost + a generic claim→fetch→compute→upload→beat job loop. Zero gpu / cloud-SDK / parquet deps."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "MIT OR Apache-2.0"
+keywords = ["cloud", "worker", "sweep", "job-queue", "blob-storage"]
+categories = ["concurrency", "filesystem"]
+publish = false
+
+[dependencies]
+# Pure trait + type layer. NO gpu, NO cloud-SDK, NO parquet. The only
+# dependency is a small error-derive helper so CloudError reads cleanly
+# across provider crates.
+thiserror = { workspace = true }
+
+[dev-dependencies]
