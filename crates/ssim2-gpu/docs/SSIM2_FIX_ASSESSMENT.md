@@ -167,3 +167,116 @@ cached-ref smoke, strip mode smoke).
 
 Estimated total scope: 1-1.5 days for a developer familiar with the
 zensim-gpu fused kernel pattern.
+
+## REVISION — 2026-05-27 (post first-attempt deep dive)
+
+After landing the easy-fix #2 (3-channel-fused downscale, commit
+3ac28448) the implementation team confirmed bit-identical output and
+the assessment's "easy fixes save launches but not memory" prediction.
+The hard fix turned out to be **harder than this assessment described**
+because of one missed factor:
+
+### ssim2 uses IIR, zensim uses FIR
+
+ssim2's blur kernel is a recursive Charalampidis IIR Gaussian
+(`crates/ssim2-gpu/src/kernels/blur.rs:124`) — a column-walker with
+6 floats of IIR state per column, walking each column top-to-bottom.
+zensim's fused kernel uses an **11-tap mirror-padded FIR** in shared
+memory (DIAM=11, `crates/zensim-gpu/src/kernels/fused.rs:230-238`).
+These two blurs are mathematically distinct — running the SSIMULACRA2
+math on FIR-blurred sigmas produces a **different score** than
+running it on IIR-blurred sigmas. SSIMULACRA2 spec mandates the IIR.
+
+So zensim's `fused_features_kernel` is NOT portable verbatim to
+ssim2-gpu. A direct port would break the CPU-parity guarantee
+(`parity_lock::parity_jpeg_corpus`).
+
+### Revised hard-fix design
+
+The architecture that **does** work for ssim2 (preserves IIR semantics):
+
+1. Eliminate the v-pass + transpose + v-pass shape by introducing an
+   **H-pass IIR kernel** (row-walking, one thread per row, 6 floats of
+   state per thread). The IIR is separable; v-pass + h-pass produces
+   the same result as v + transpose + v.
+2. Fuse the h-pass-second with the error_maps math. The fused kernel
+   reads 5 v-pass outputs (sigma11/22/12/ref/dis) in untransposed
+   orientation, walks horizontally with 30 floats of IIR state per
+   thread (5 planes × 6 state floats), at each emit step has the
+   fully-blurred sigmas/mus available + reads raw ref/dis untransposed,
+   computes ssim/art/det, accumulates per-thread (Σ, Σ⁴).
+3. Process channels SERIALLY to share the 5 v-pass buffers across
+   channels (-1.8 GB at 4096² scale 0). Per-thread state is 30 floats
+   = 120 bytes → 256-thread cube uses 30 KB shared memory, well within
+   per-SM limits.
+
+**Storage delta** per scale per channel after fusion:
+- Drops: `sigma11_full, sigma22_full, sigma12_full, mu1_full, mu2_full`
+  (5 planes), shared `t_scratch` slot, `ref_xyb_t`, `dis_xyb_t`,
+  `ssim, artifact, detail` (3 planes) = 11 planes dropped.
+- Adds: 5 v_buf planes shared across channels.
+- Net: -28 planes per scale (after × 3 channels and accounting for
+  shared) = **~1.8 GB at 4096² scale 0**.
+
+**Launch delta** per `compute_with_reference_with_mode`:
+- Drops: blur_pass second v-pass × 5 × 3 = 15; transpose × 5 × 3 = 15;
+  error_maps × 3; launch_sum_p4 × 9; = **42 launches per scale × 6
+  scales = 252 launches dropped per call**.
+- Adds: fused h-pass+features × 3 = 3 per scale × 6 = 18 launches.
+- Net: -234 launches per call. HtoD/iter: 52 → ~12.
+
+### Revised scope estimate
+
+This is genuinely the original assessment's "medium risk, ~1000 LOC"
+shape — just with a different kernel pattern than the zensim fused
+verbatim port. The new H-pass IIR kernel is ~120 LOC (mirror of the
+existing blur_pass_kernel with X/Y swapped); the fused h-pass+features
+is ~250 LOC (the new IIR-state ×5 walk + per-pixel features).
+
+**Decision after revision**: ship the easy fix (downscale; done).
+Document this assessment update. Pursue the H-pass IIR kernel + the
+fused h-pass+features as the architectural fix when the dedicated
+time budget is available — it's a larger change than the original
+"copy zensim verbatim" path implied. The user's "1-2 days estimate"
+in the original task brief was based on the zensim verbatim port; the
+revised estimate is 2-3 days because of the new IIR kernel + 5-plane
+fusion. The score-parity gate is more demanding: bit-identical IIR
+behavior must be preserved through the new kernel boundary.
+
+### Refined commit plan (REVISED)
+
+The original 4-commit plan above presumed a zensim-verbatim port.
+The revision splits the hard work into smaller chunks because the
+IIR-vs-FIR algorithmic difference forces us to write new kernels
+rather than port:
+
+1. **`perf(ssim2-gpu): port 3-channel-fused downscale`** — DONE
+   (commit `3ac28448`).
+2. **`perf(ssim2-gpu): H-pass IIR kernel (row-walking blur)`** —
+   ~120 LOC new kernel (mirror of `blur_pass_kernel` with X/Y axes
+   swapped). Eliminates the explicit-transpose step in the two-pass
+   blur. Same per-pixel output (separable IIR). Parity gate:
+   `v_pass + transpose + v_pass` ≡ `v_pass + h_pass`.
+3. **`perf(ssim2-gpu): use h_pass to drop the t_scratch family`** —
+   wire #2 into `blur_plane_two_pass_iir`; eliminate the transpose
+   launches AND the `t_scratch` buffer family (3 planes × 6 scales).
+4. **`perf(ssim2-gpu): fused h-pass+features kernel (per-channel)`** —
+   the big one. Reads 5 v-pass outputs (untransposed) per channel +
+   raw ref_xyb / dis_xyb (untransposed). Walks horizontally with
+   5×6=30 floats of IIR state per thread. Emits per-thread
+   (Σ_ssim, Σ_ssim⁴, Σ_art, Σ_art⁴, Σ_det, Σ_det⁴). Drops 5 `_full`
+   plane families + `ssim/artifact/detail` per channel.
+5. **`perf(ssim2-gpu): wire fused kernel through compute path`** —
+   replace the `run_blur_full_masked` + `run_error_maps_masked` +
+   `run_reductions_masked` triplet. Channels processed serially to
+   share the 5 v_bufs. Drop dead Scale fields.
+
+Each commit ships if its parity gate passes. If a commit's gate
+fails and parity can't be restored, honest-stop: document the
+failure mode here and leave the prior commit pushed.
+
+The 1-2 day estimate in the original task brief was based on the
+zensim-verbatim port. The revised work is closer to 2-3 days because
+of the new IIR-row-walker kernel; the dominant risk lives in commit
+#4 (the 5-plane fused kernel with 30-float IIR state). Commits #2
+and #3 are mechanical with low risk.
