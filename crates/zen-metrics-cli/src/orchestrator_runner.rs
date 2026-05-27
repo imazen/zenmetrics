@@ -51,10 +51,17 @@ use crate::orchestrator_glue::{
 /// Result of scoring one `(ref, dist, metric)` triple via the
 /// orchestrator. Mirrors the legacy `run_metric` shape (one row per
 /// emitted column) so output writers don't branch on the path.
+///
+/// **Phase 7.5 change**: `column` is now `String` (was `&'static str`)
+/// to accommodate cvvdp's versioned column name (computed at runtime
+/// from the `CVVDP_IMPL_TAG` build env var), and butter's two-column
+/// emit which produces one row per column.
 #[derive(Debug, Clone)]
 pub struct OrchestratorScoreRow {
-    /// Metric column name (e.g. `"ssim2_gpu"` or `"butteraugli_max"`).
-    pub column: &'static str,
+    /// Metric column name (e.g. `"ssim2_gpu"`, `"butteraugli_max_gpu"`,
+    /// `"butteraugli_pnorm3_gpu"`, or
+    /// `"cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>"`).
+    pub column: String,
     /// Score value.
     pub value: f64,
 }
@@ -62,10 +69,12 @@ pub struct OrchestratorScoreRow {
 /// Run one `(ref, dist, metric)` pair through the orchestrator.
 /// Returns the score columns the CLI's output writers expect.
 ///
-/// Phase 7 only supports single-column metrics through this path —
-/// butteraugli's two-column emit (`max` + `pnorm3`) still flows
-/// through the legacy direct-dispatch handler. The CLI router checks
-/// this constraint before electing the orchestrator path.
+/// **Phase 7.5**: multi-column metrics (butter GPU max + pnorm_3) are
+/// supported by reading from `TaskResult.output_columns`. The legacy
+/// hard-coded column-name mapping is now a fallback for the case
+/// where `output_columns` is empty (older orchestrator builds that
+/// predate Phase 7.5 — unlikely in practice since both ship from the
+/// same workspace, but kept for graceful degradation).
 #[cfg(feature = "orchestrator-cuda")]
 pub fn orchestrator_score_one(
     orch: &mut Orchestrator,
@@ -96,10 +105,27 @@ pub fn orchestrator_score_one(
     let result = orch.run_single(task);
 
     match result.outcome {
-        Ok(score) => Ok(vec![OrchestratorScoreRow {
-            column: cli_metric_to_column_name(cli_kind),
-            value: score.value,
-        }]),
+        Ok(score) => {
+            // Phase 7.5: consume output_columns when populated. Sorted
+            // by key (BTreeMap iteration order) for deterministic
+            // column order across runs.
+            let rows: Vec<OrchestratorScoreRow> = if result.output_columns.is_empty() {
+                vec![OrchestratorScoreRow {
+                    column: cli_metric_to_column_name(cli_kind).to_string(),
+                    value: score.value,
+                }]
+            } else {
+                result
+                    .output_columns
+                    .iter()
+                    .map(|(k, v)| OrchestratorScoreRow {
+                        column: k.clone(),
+                        value: *v,
+                    })
+                    .collect()
+            };
+            Ok(rows)
+        }
         Err(e) => Err(format!(
             "orchestrator: {e} (backends tried: {:?})",
             result.backends_attempted
@@ -148,14 +174,30 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
 }
 
 /// Decide whether a given CLI metric kind can flow through the
-/// orchestrator path. Butteraugli's two-column emit and CVVDP's
-/// versioned column logic need the legacy handler to preserve the
-/// historical output shape; everything else is fair game.
+/// orchestrator path.
+///
+/// **Phase 7.5 change**: butteraugli + cvvdp are now eligible.
+///
+/// - **Butteraugli**: the orchestrator's `TaskResult.output_columns`
+///   includes `butteraugli_pnorm3_gpu` alongside the max-norm column,
+///   so the two-column emit survives end-to-end. The columns are
+///   bit-identical to the legacy `MetricCache::compute_butter` path
+///   (same fused reduction kernel, same field names — see
+///   `executor::build_output_columns` and
+///   `butteraugli_gpu::opaque::compute_srgb_u8_with_pnorm3`).
+/// - **Cvvdp**: the orchestrator surfaces the versioned column tag
+///   from `Score::metric_version`, then
+///   `executor::build_output_columns` keys it into the parquet under
+///   `cvvdp_gpu::CVVDP_COLUMN_NAME` — same shape the legacy
+///   `CvvdpBatchScorer` emits.
+///
+/// **Phase 7.5 leaves `CliMetricKind::Butteraugli` (CPU)** still on
+/// the legacy path because the CPU butteraugli adapter doesn't expose
+/// `pnorm_3` today; routing it through the orchestrator would drop
+/// the second column silently. Future work: add `pnorm_3` to the
+/// `cpu-butter` adapter or document that CPU butter is single-column.
 pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
-    !matches!(
-        kind,
-        CliMetricKind::Butteraugli | CliMetricKind::ButteraugliGpu | CliMetricKind::Cvvdp
-    )
+    !matches!(kind, CliMetricKind::Butteraugli)
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the
@@ -297,7 +339,7 @@ pub fn bench_on_start_from_flag(flag: Option<&str>) -> Result<BenchOnStart, Stri
 
 /// Re-export the ApiMetricKind to make doctest examples in the
 /// migration guide compile without a transitive zenmetrics-api dep.
-pub use ApiMetricKind as MetricKind;
+pub use zenmetrics_api::MetricKind;
 
 #[cfg(test)]
 mod tests {
@@ -336,10 +378,13 @@ mod tests {
     }
 
     #[test]
-    fn metric_eligibility_keeps_butter_and_cvvdp_legacy() {
+    fn metric_eligibility_phase_7_5_admits_butter_gpu_and_cvvdp() {
+        // Phase 7.5: butter (GPU) + cvvdp now flow through the
+        // orchestrator. Only CPU butteraugli still uses the legacy
+        // path (the CPU adapter doesn't expose `pnorm_3`).
         assert!(!metric_orchestrator_eligible(CliMetricKind::Butteraugli));
-        assert!(!metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
-        assert!(!metric_orchestrator_eligible(CliMetricKind::Cvvdp));
+        assert!(metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
+        assert!(metric_orchestrator_eligible(CliMetricKind::Cvvdp));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2Gpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Dssim));

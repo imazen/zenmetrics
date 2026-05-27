@@ -1039,10 +1039,17 @@ fn cmd_score(
             &distorted,
         )?;
         // Re-emit as (name, value) tuples in the same shape as
-        // `run_metric` so `print_score` doesn't branch.
+        // `run_metric` so `print_score` doesn't branch. The
+        // orchestrator's column names come from runtime data (cvvdp's
+        // `CVVDP_IMPL_TAG` env var override, butter's two-column
+        // expansion), so we leak String -> &'static str via
+        // `String::leak`. The leaked memory is bounded by the metric
+        // count per invocation (single-digit) and the process exits
+        // shortly after — acceptable tradeoff for the type-shape
+        // match with the legacy path.
         let scores: Vec<(&'static str, f64)> = rows
             .into_iter()
-            .map(|r| (r.column, r.value))
+            .map(|r| (String::leak(r.column) as &'static str, r.value))
             .collect();
         print_score(args.output, args.metric, &scores);
         return Ok(());

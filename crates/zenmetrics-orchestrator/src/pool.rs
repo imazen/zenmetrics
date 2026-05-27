@@ -521,6 +521,8 @@ fn gpu_worker_main(
                             backends_attempted: attempts,
                             wall_us: t_start.elapsed().as_micros() as u64,
                             vram_peak_mib: None,
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
                         },
                     });
                     continue;
@@ -537,6 +539,8 @@ fn gpu_worker_main(
                             backends_attempted: attempts,
                             wall_us: t_start.elapsed().as_micros() as u64,
                             vram_peak_mib: None,
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
                         },
                     });
                     continue;
@@ -563,6 +567,8 @@ fn gpu_worker_main(
                         backends_attempted: attempts,
                         wall_us: t_start.elapsed().as_micros() as u64,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
                 continue;
@@ -576,7 +582,10 @@ fn gpu_worker_main(
         };
 
         // -- Dispatch --------------------------------------------------
-        let compute_result = if task.use_cached_ref && m.supports_cached_ref() {
+        let compute_result: Result<
+            (zenmetrics_api::Score, std::collections::BTreeMap<String, f64>),
+            CallErrPub,
+        > = if task.use_cached_ref && m.supports_cached_ref() {
             // If the worker's cached hash doesn't match the task's, install.
             let need_install = cached_ref_hash != Some(task.ref_hash) || signature_changed;
             if need_install {
@@ -593,20 +602,23 @@ fn gpu_worker_main(
                 }
             }
             if cached_ref_hash == Some(task.ref_hash) {
-                m.compute_with_cached_reference(&task.dist_bytes)
+                m.compute_with_cached_reference_with_extras(&task.dist_bytes)
             } else {
-                m.compute(ref_bytes, &task.dist_bytes)
+                m.compute_with_extras(ref_bytes, &task.dist_bytes)
             }
         } else {
             // Regular compute. Invalidate cached-ref state.
             cached_ref_hash = None;
-            m.compute(ref_bytes, &task.dist_bytes)
+            m.compute_with_extras(ref_bytes, &task.dist_bytes)
         };
 
         let wall_us = t_start.elapsed().as_micros() as u64;
         match compute_result {
-            Ok(score) => {
+            Ok((score, extras)) => {
                 let attempts = vec![(task.chosen_backend, AttemptOutcome::Success)];
+                let output_columns =
+                    crate::executor::build_output_columns(task.metric, &score, &extras);
+                let metric_version = Some(score.metric_version);
                 let _ = result_tx.send(WorkerResult {
                     handle_id,
                     result: TaskResult {
@@ -616,6 +628,8 @@ fn gpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns,
+                        metric_version,
                     },
                 });
             }
@@ -636,6 +650,8 @@ fn gpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
             }
@@ -650,6 +666,8 @@ fn gpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
             }
@@ -729,6 +747,8 @@ fn cpu_worker_main(
                             backends_attempted: attempts,
                             wall_us: t_start.elapsed().as_micros() as u64,
                             vram_peak_mib: None,
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
                         },
                     });
                     continue;
@@ -751,6 +771,8 @@ fn cpu_worker_main(
                             backends_attempted: attempts,
                             wall_us: t_start.elapsed().as_micros() as u64,
                             vram_peak_mib: None,
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
                         },
                     });
                     continue;
@@ -776,6 +798,8 @@ fn cpu_worker_main(
                         backends_attempted: attempts,
                         wall_us: t_start.elapsed().as_micros() as u64,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
                 continue;
@@ -789,7 +813,10 @@ fn cpu_worker_main(
         };
 
         // -- Dispatch -------------------------------------------------
-        let compute_result = if task.use_cached_ref && m.supports_cached_ref() {
+        let compute_result: Result<
+            (zenmetrics_api::Score, std::collections::BTreeMap<String, f64>),
+            CallErrPub,
+        > = if task.use_cached_ref && m.supports_cached_ref() {
             let need_install =
                 cached_ref_hash != Some(task.ref_hash) || signature_changed;
             if need_install {
@@ -799,19 +826,22 @@ fn cpu_worker_main(
                 }
             }
             if cached_ref_hash == Some(task.ref_hash) {
-                m.compute_with_cached_reference(&task.dist_bytes)
+                m.compute_with_cached_reference_with_extras(&task.dist_bytes)
             } else {
-                m.compute(ref_bytes, &task.dist_bytes)
+                m.compute_with_extras(ref_bytes, &task.dist_bytes)
             }
         } else {
             cached_ref_hash = None;
-            m.compute(ref_bytes, &task.dist_bytes)
+            m.compute_with_extras(ref_bytes, &task.dist_bytes)
         };
 
         let wall_us = t_start.elapsed().as_micros() as u64;
         match compute_result {
-            Ok(score) => {
+            Ok((score, extras)) => {
                 let attempts = vec![(task.chosen_backend, AttemptOutcome::Success)];
+                let output_columns =
+                    crate::executor::build_output_columns(task.metric, &score, &extras);
+                let metric_version = Some(score.metric_version);
                 let _ = result_tx.send(WorkerResult {
                     handle_id,
                     result: TaskResult {
@@ -821,6 +851,8 @@ fn cpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns,
+                        metric_version,
                     },
                 });
             }
@@ -842,6 +874,8 @@ fn cpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
             }
@@ -859,6 +893,8 @@ fn cpu_worker_main(
                         backends_attempted: attempts,
                         wall_us,
                         vram_peak_mib: None,
+                        output_columns: ::std::collections::BTreeMap::new(),
+                        metric_version: None,
                     },
                 });
             }
@@ -1372,6 +1408,8 @@ impl Orchestrator {
                         backends_attempted: Vec::new(),
                         wall_us: 0,
                         vram_peak_mib: None,
+                        output_columns: std::collections::BTreeMap::new(),
+                        metric_version: None,
                     });
                     total_submitted += 1;
                 }

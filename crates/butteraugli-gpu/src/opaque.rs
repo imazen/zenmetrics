@@ -56,6 +56,16 @@ trait ButteraugliInner: Send {
         dis_rgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<Score>;
+    /// Like `compute_srgb_u8` but also returns the libjxl 3-norm
+    /// aggregation (`pnorm_3`). Both numbers come from the same
+    /// fused reduction kernel — there's no extra GPU work; the opaque
+    /// path simply drops `pnorm_3` after the score is produced.
+    fn compute_srgb_u8_with_pnorm3(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<(Score, f64)>;
     fn dims(&self) -> (u32, u32);
     #[cfg(feature = "cubecl-types")]
     fn compute_handles(
@@ -112,6 +122,25 @@ where
             metric_name: "butter",
             metric_version: env!("CARGO_PKG_VERSION"),
         })
+    }
+
+    fn compute_srgb_u8_with_pnorm3(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        params: &ButteraugliParams,
+    ) -> Result<(Score, f64)> {
+        let r = if self.is_strip_mode() {
+            Butteraugli::compute_strip_with_options(self, ref_rgb, dis_rgb, params)?
+        } else {
+            Butteraugli::compute_with_options(self, ref_rgb, dis_rgb, params)?
+        };
+        let score = Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        };
+        Ok((score, r.pnorm_3 as f64))
     }
 
     fn dims(&self) -> (u32, u32) {
@@ -296,6 +325,22 @@ impl ButteraugliOpaque {
         dis_rgb: &[u8],
     ) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb, &self.params)
+    }
+
+    /// Score one sRGB RGB8 pair and also return the libjxl `pnorm_3`
+    /// aggregation. The CubeCL fused reduction kernel produces both
+    /// the max-norm `Score` and `pnorm_3` in one pass — this entry
+    /// point exposes both without re-running the kernel.
+    ///
+    /// Callers that already use [`Self::compute_srgb_u8`] keep working
+    /// unchanged; this is a strictly additive surface.
+    pub fn compute_srgb_u8_with_pnorm3(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<(Score, f64)> {
+        self.inner
+            .compute_srgb_u8_with_pnorm3(ref_rgb, dis_rgb, &self.params)
     }
 
     /// Score from [`PixelSlice`] inputs. See `dssim-gpu`'s

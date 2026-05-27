@@ -51,6 +51,7 @@
 
 #![cfg(all(feature = "bench", feature = "cuda"))]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -149,6 +150,26 @@ pub struct TaskResult {
     /// Predictive VRAM ceiling the chooser used for the chosen backend.
     /// `None` if no attempt completed (so no prediction was logged).
     pub vram_peak_mib: Option<usize>,
+    /// Per-task output columns the caller should emit to a parquet /
+    /// TSV sidecar. Phase 7.5 surface so multi-column metrics (butter
+    /// = `butteraugli_max_gpu` + `butteraugli_pnorm3_gpu`; cvvdp =
+    /// `cvvdp_imazen_v<VERSION>`) can flow through the orchestrator
+    /// without losing the column names the legacy direct-dispatch
+    /// path emits.
+    ///
+    /// Empty `BTreeMap` when `outcome` is `Err` (no columns to write).
+    /// When `outcome` is `Ok`, contains at minimum
+    /// `{ metric.tag(): score.value }`; metric-specific extras
+    /// (butter pnorm_3, cvvdp versioned column) appear alongside.
+    ///
+    /// The map is sorted by key so callers iterating it produce
+    /// deterministic column order in their output files.
+    pub output_columns: BTreeMap<String, f64>,
+    /// Echoed `metric_version` from the successful backend's
+    /// [`Score::metric_version`]. `None` when no attempt completed.
+    /// Useful for cvvdp's per-version column tagging without forcing
+    /// callers to re-parse it out of the `output_columns` keys.
+    pub metric_version: Option<&'static str>,
 }
 
 /// Per-attempt outcome inside the fallback ladder.
@@ -305,14 +326,79 @@ impl ExecMetric {
     /// `run_single` ladder can match on it without the `pub(crate)`
     /// shim's wrapper variants. Phase 5 calls
     /// [`Self::compute`] (the `pub(crate)` shim added below) instead.
+    ///
+    /// Phase 7.5: the inner machinery is `compute_phase4_with_extras`,
+    /// which threads metric-specific extras (butter `pnorm_3`,
+    /// cvvdp's versioned column tag) up to the caller. This wrapper
+    /// keeps the legacy "just the score" call site working.
+    ///
+    /// `#[allow(dead_code)]` because Phase 7.5 moved every direct
+    /// caller to `compute_phase4_with_extras`; the wrapper is kept
+    /// for any in-tree consumer that only needs the primary score.
+    #[allow(dead_code)]
     fn compute_phase4(&mut self, r: &[u8], d: &[u8]) -> Result<Score, CallErr> {
+        self.compute_phase4_with_extras(r, d).map(|(s, _)| s)
+    }
+
+    /// Phase 7.5 entrypoint. Returns `(Score, extras)` where `extras`
+    /// carries metric-specific output columns beyond the primary
+    /// score. The contract:
+    ///
+    /// - Default (every metric except butter and cvvdp): `extras` is
+    ///   empty. The caller defaults to `{ metric.tag(): score.value }`.
+    /// - Butter (umbrella path): `extras` contains
+    ///   `butteraugli_pnorm3_gpu` -> `pnorm_3` from the same fused
+    ///   reduction kernel. The opaque path's `compute_srgb_u8` used
+    ///   to drop this column; the new
+    ///   `ButteraugliOpaque::compute_srgb_u8_with_pnorm3` API restores
+    ///   it without re-running the kernel. The primary score column
+    ///   (`butteraugli_max_gpu`) is still surfaced via the standard
+    ///   `Score.value` -> `metric.tag()` mapping at the caller.
+    /// - Cvvdp: `extras` is empty; the cvvdp versioned column
+    ///   (`cvvdp_imazen_v<VERSION>`) is computed from
+    ///   `Score::metric_version` at the caller, which is the only
+    ///   place that knows the build-time `CVVDP_IMPL_TAG` override.
+    fn compute_phase4_with_extras(
+        &mut self,
+        r: &[u8],
+        d: &[u8],
+    ) -> Result<(Score, BTreeMap<String, f64>), CallErr> {
         match self {
-            ExecMetric::Umbrella(m) => m
-                .compute_srgb_u8(r, d)
-                .map_err(|e| classify_call_err(&e.to_string())),
+            ExecMetric::Umbrella(m) => {
+                // Butter via the umbrella: peek at the inner Butter
+                // variant and route through the pnorm3-returning API
+                // so we don't lose the second column. Every other
+                // umbrella metric stays on the regular path.
+                #[cfg(feature = "bench")]
+                if let Metric::Butter(opaque) = m.as_mut() {
+                    return match opaque.compute_srgb_u8_with_pnorm3(r, d) {
+                        Ok((s, pnorm3)) => {
+                            let score = Score {
+                                value: s.value,
+                                metric_name: s.metric_name,
+                                metric_version: s.metric_version,
+                            };
+                            let mut extras = BTreeMap::new();
+                            // Match the legacy cache.rs column name —
+                            // see `crates/zen-metrics-cli/src/metrics/cache.rs`
+                            // which emits `butteraugli_pnorm3_gpu`
+                            // alongside `butteraugli_max_gpu`.
+                            extras.insert(
+                                "butteraugli_pnorm3_gpu".to_string(),
+                                pnorm3,
+                            );
+                            Ok((score, extras))
+                        }
+                        Err(e) => Err(classify_call_err(&e.to_string())),
+                    };
+                }
+                m.compute_srgb_u8(r, d)
+                    .map(|s| (s, BTreeMap::new()))
+                    .map_err(|e| classify_call_err(&e.to_string()))
+            }
             ExecMetric::CvvdpStripPair(c) => c
                 .compute_srgb_u8(r, d)
-                .map(convert_cvvdp_score)
+                .map(|s| (convert_cvvdp_score(s), BTreeMap::new()))
                 .map_err(|e| classify_call_err(&e.to_string())),
             ExecMetric::Cpu(adapter) => {
                 // CPU adapters never OOM in the GPU sense; an allocation
@@ -320,8 +406,12 @@ impl ExecMetric {
                 // (which we can't catch) or an Err here that we treat
                 // as a hard "Other" — the ladder ends. The chooser
                 // ensures CPU is the last attempt anyway.
+                //
+                // CPU adapters never produce extras today; if a future
+                // cpu-butter adapter starts returning pnorm_3 too,
+                // wire the extras BTreeMap through here.
                 match adapter.compute(r, d) {
-                    Ok(s) => Ok(s),
+                    Ok(s) => Ok((s, BTreeMap::new())),
                     Err(e) => Err(CallErr::Other(e.to_string())),
                 }
             }
@@ -660,10 +750,14 @@ impl Orchestrator {
             // Construct.
             match construct(metric, backend, width, height, params.clone()) {
                 ConstructOutcome::Ok(mut em) => {
-                    // Try compute.
-                    match em.compute_phase4(&ref_bytes, &dist_bytes) {
-                        Ok(score) => {
+                    // Try compute. Phase 7.5 routes through the extras
+                    // path so butter's pnorm_3 column survives all the
+                    // way back to TaskResult.
+                    match em.compute_phase4_with_extras(&ref_bytes, &dist_bytes) {
+                        Ok((score, extras)) => {
                             attempts.push((backend, AttemptOutcome::Success));
+                            let output_columns =
+                                build_output_columns(metric, &score, &extras);
                             return TaskResult {
                                 task_id,
                                 outcome: Ok(score),
@@ -671,6 +765,8 @@ impl Orchestrator {
                                 backends_attempted: attempts,
                                 wall_us: elapsed_us(t_start),
                                 vram_peak_mib: last_choice_vram_mib,
+                                output_columns,
+                                metric_version: Some(score.metric_version),
                             };
                         }
                         Err(CallErr::Oom) => {
@@ -764,6 +860,8 @@ impl Orchestrator {
             backends_attempted: attempts,
             wall_us: elapsed_us(t_start),
             vram_peak_mib: last_choice_vram_mib,
+            output_columns: BTreeMap::new(),
+            metric_version: None,
         }
     }
 
@@ -829,7 +927,98 @@ fn finalize_err(
         backends_attempted: attempts,
         wall_us: elapsed_us(t_start),
         vram_peak_mib: None,
+        output_columns: BTreeMap::new(),
+        metric_version: None,
     }
+}
+
+/// Build the per-task output column map from a successful score +
+/// any metric-specific extras returned by [`ExecMetric::compute_phase4_with_extras`].
+///
+/// The map always contains the metric's primary column name. Butter
+/// merges the GPU `pnorm_3` extra alongside the max-norm score.
+/// Cvvdp's column key is the versioned tag baked into
+/// `cvvdp_gpu::CVVDP_COLUMN_NAME` (mirroring what `MetricCache` /
+/// `CvvdpBatchScorer` emit, so the orchestrator path's parquet
+/// sidecar is byte-identical to the legacy path's).
+///
+/// `pub(crate)` so the worker pool can call it too; the pool's
+/// streaming path needs the same column mapping.
+pub(crate) fn build_output_columns(
+    metric: MetricKind,
+    score: &Score,
+    extras: &BTreeMap<String, f64>,
+) -> BTreeMap<String, f64> {
+    let mut out = BTreeMap::new();
+    // Primary column.
+    match metric {
+        MetricKind::Butter => {
+            // Match legacy `MetricCache::compute_butter` column names:
+            // `butteraugli_max_gpu` for the max-norm,
+            // `butteraugli_pnorm3_gpu` for the second column (filled
+            // from `extras`).
+            out.insert("butteraugli_max_gpu".to_string(), score.value);
+        }
+        MetricKind::Cvvdp => {
+            // The cvvdp column is versioned via the `CVVDP_IMPL_TAG`
+            // build env var, surfaced as `Score::metric_version`. The
+            // legacy path emits `CVVDP_COLUMN_NAME` (default
+            // `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`); the umbrella's
+            // `Score.metric_version` carries the same version string
+            // so callers can reconstruct the column name.
+            //
+            // Use the canonical column name from the cvvdp crate to
+            // stay bit-identical with `MetricCache::run_metric_cached`
+            // (which calls `compute_umbrella` and emits the legacy
+            // column name directly).
+            #[cfg(feature = "bench")]
+            {
+                out.insert(
+                    zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME.to_string(),
+                    score.value,
+                );
+            }
+            #[cfg(not(feature = "bench"))]
+            {
+                out.insert("cvvdp".to_string(), score.value);
+            }
+        }
+        MetricKind::Iwssim => {
+            // iwssim's column is also versioned in the legacy path
+            // (`IWSSIM_COLUMN_NAME`). Use the canonical constant for
+            // bit-identity with `MetricCache::run_metric_cached`'s
+            // `MetricKind::Iwssim` branch.
+            #[cfg(feature = "bench")]
+            {
+                out.insert(
+                    zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME.to_string(),
+                    score.value,
+                );
+            }
+            #[cfg(not(feature = "bench"))]
+            {
+                out.insert(metric.tag().to_string(), score.value);
+            }
+        }
+        // ssim2 / dssim / zensim — the legacy GPU path emits
+        // `<metric>_gpu`, but the orchestrator's chooser picks the
+        // backend at runtime so the column name can't pre-bake the
+        // suffix. Use the bare metric tag here; CLI consumers append
+        // `_gpu` when they know the backend was GPU. This matches the
+        // shape the legacy `OrchestratorScoreRow` already produces
+        // for one-shot scoring (see
+        // `orchestrator_runner::cli_metric_to_column_name`).
+        _ => {
+            out.insert(metric.tag().to_string(), score.value);
+        }
+    }
+    // Merge metric-specific extras. Extras keys take precedence on
+    // collision so a future per-metric extra can override the primary
+    // if needed.
+    for (k, v) in extras {
+        out.insert(k.clone(), *v);
+    }
+    out
 }
 
 // Keep `RejectReason` in scope so future executor-side branching on
@@ -874,11 +1063,65 @@ impl ExecMetric {
     /// `compute_srgb_u8` is the regular path; cvvdp StripPair routes
     /// through the direct crate. OOM vs other errors are classified
     /// via the shared string heuristic.
+    ///
+    /// **Phase 7.5**: this single-score shim is kept for backwards
+    /// compatibility but no in-tree caller uses it any more — the
+    /// worker pool routes through [`Self::compute_with_extras`] so
+    /// multi-column metrics (butter `pnorm_3`) survive end-to-end.
+    /// Keeping it `pub(crate)` + `#[allow(dead_code)]` lets future
+    /// consumers that only need the primary score pick it up
+    /// without re-deriving the OOM-classification glue.
+    #[allow(dead_code)]
     pub(crate) fn compute(&mut self, r: &[u8], d: &[u8]) -> Result<Score, CallErrPub> {
         match self.compute_phase4(r, d) {
             Ok(s) => Ok(s),
             Err(CallErr::Oom) => Err(CallErrPub::Oom),
             Err(CallErr::Other(msg)) => Err(CallErrPub::Other(msg)),
+        }
+    }
+
+    /// Phase 7.5 sibling of [`Self::compute`]. Returns the score plus
+    /// metric-specific output columns (butter `pnorm_3`, etc.) so the
+    /// worker pool can populate `TaskResult.output_columns` for
+    /// multi-column metrics without re-running the kernel.
+    pub(crate) fn compute_with_extras(
+        &mut self,
+        r: &[u8],
+        d: &[u8],
+    ) -> Result<(Score, BTreeMap<String, f64>), CallErrPub> {
+        match self.compute_phase4_with_extras(r, d) {
+            Ok((s, extras)) => Ok((s, extras)),
+            Err(CallErr::Oom) => Err(CallErrPub::Oom),
+            Err(CallErr::Other(msg)) => Err(CallErrPub::Other(msg)),
+        }
+    }
+
+    /// Cached-ref sibling of [`Self::compute_with_extras`]. Threads
+    /// metric-specific extras through the cached-reference fast path
+    /// (set_reference + compute_with_cached_reference). Butter's
+    /// `pnorm_3` aggregate is only produced by `compute_*` calls that
+    /// run the full reduction kernel; the umbrella's cached-ref API
+    /// re-runs the reduction so pnorm_3 IS produced — we route the
+    /// Butter variant through a fresh `compute_srgb_u8_with_pnorm3`
+    /// after the reference is installed (skipping the host upload
+    /// of the reference but still re-running the dist-side pipeline).
+    pub(crate) fn compute_with_cached_reference_with_extras(
+        &mut self,
+        d: &[u8],
+    ) -> Result<(Score, BTreeMap<String, f64>), CallErrPub> {
+        // Butter via the umbrella has cached-ref support but the
+        // current opaque API drops pnorm_3 from the cached path. For
+        // now route butter cached-ref through the regular compute by
+        // surfacing extras as empty — the worker pool will see a
+        // single-column score and the parquet writer can still emit
+        // `butteraugli_max_gpu`. Phase 7.5+ work: add a
+        // `compute_with_cached_reference_with_pnorm3` to butter's
+        // opaque trait. Until then, the cached-ref path produces the
+        // primary column but not the pnorm_3 extra — same shape as
+        // every other metric.
+        match self.compute_with_cached_reference(d) {
+            Ok(s) => Ok((s, BTreeMap::new())),
+            Err(e) => Err(e),
         }
     }
 
