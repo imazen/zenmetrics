@@ -2,9 +2,9 @@
 
 //! Synchronous R2 sidecar sync, shelling out to `s5cmd`.
 //!
-//! # Why shell `s5cmd` rather than reuse `vastai-fleet`'s `R2Client`?
+//! # Why shell `s5cmd` rather than reuse `zen-cloud-vastai`'s `R2Client`?
 //!
-//! `crates/vastai-fleet/src/worker/r2.rs` is an excellent client, but it is
+//! `crates/zen-cloud-vastai/src/worker/r2.rs` is an excellent client, but it is
 //! `async` (built on tokio) and lives in a different crate. The
 //! `zen-metrics-cli` binary is synchronous and does not depend on tokio; the
 //! corpus assembler is a one-shot batch job, not a server. Pulling tokio +
@@ -26,7 +26,7 @@ use std::process::Command;
 use super::table::AssembleError;
 
 /// Synchronous R2 sync over `s5cmd`. Endpoint derivation matches both the
-/// Python builder and `vastai-fleet`'s `R2Client::new`: explicit
+/// Python builder and `zen-cloud-vastai`'s `R2Client::new`: explicit
 /// `--r2-endpoint` wins, else `$R2_ENDPOINT`, else
 /// `https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com`.
 pub struct R2Sync {

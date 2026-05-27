@@ -17,6 +17,38 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zen-cloud — cloud-agnostic worker carve, Phase A (no behaviour change) (2026-05-26)
+
+Carves the `vastai-fleet` crate into a cloud-agnostic trait layer + a
+vast.ai backend + a generic deployed-worker binary, per the zen-cloud
+spec §1.7 Phase A. No behaviour change — the production worker stays on
+the proven async path; all 25 unit + 7 CLI tests stay green.
+
+- New crate **`zen-cloud-core`** (`de66b1b0`): pure trait surface
+  (`JobQueue` / `BlobStorage` / `Heartbeat` / `CredentialSource` /
+  `WorkerHost`), value types (`Chunk` / `ChunkId` / `ChunkOutcome` /
+  `ArtifactKey` / `BlobMeta` / `WorkerId` / `WorkerStatus` /
+  `WorkerSummary` / `CloudError`), and a generic `run_worker` job loop.
+  Zero gpu / cloud-SDK / parquet deps.
+- **`vastai-fleet` crate renamed to `zen-cloud-vastai`** (`ccb4250f`),
+  now lib+bin: the proven worker/parse modules move unchanged; a new
+  `cloud` module implements the core traits for vast.ai (R2 storage via
+  the existing s5cmd client + `ls_keys`/`rm`, `/proc/1/environ`
+  credentials, nvidia-smi host, R2 heartbeat, R2-token-race chunk
+  queue). The operator CLI keeps the `vastai-fleet` binary name +
+  `self-destroy`/`status`/`destroy`/`watch`.
+- New binary **`zen-sweep-worker`** (`1d6eef0e`): the cloud-agnostic
+  deployed compute binary. `--backend vastai` (cargo-feature-gated)
+  dispatches `worker` to the same `cmd_worker` path as `vastai-fleet
+  worker` — byte-identical sweep output.
+- Workspace-wide rename fixups: `Dockerfile.sweep.v26` +
+  `.github/workflows/sweep-image.yml` build/copy/smoke both binaries
+  and run the deployed worker via `zen-sweep-worker`;
+  `onstart_unified.sh` / `onstart_feature_backfill.sh` /
+  `onstart_source_features.sh` invoke `zen-sweep-worker worker
+  --backend vastai`; stale `vastai-fleet`/`crates/vastai-fleet` doc-path
+  references across `zen-metrics-cli` + `iwssim-gpu` + scripts updated.
+
 ### cvvdp-gpu — perf: Path A Phase 1 prep — `upscale_v_strip_kernel` gains `src_strip_offset` (2026-05-26)
 
 Adds `src_strip_offset: u32` parameter to `upscale_v_strip_kernel` so

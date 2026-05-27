@@ -4,7 +4,7 @@
 //! vendored by the `sweep` feature (see `Cargo.toml`). No DuckDB.
 //!
 //! Read path mirrors the established `ParquetRecordBatchReaderBuilder` pattern
-//! used in `crates/vastai-fleet/src/worker/feature_backfill.rs`. We accept the
+//! used in `crates/zen-cloud-vastai/src/worker/feature_backfill.rs`. We accept the
 //! handful of arrow types that appear in the corpus parquets (Utf8 / Float64 /
 //! Float32 / Int64 / UInt32 / Null) and coerce each to one of the three
 //! logical [`Column`] variants. Anything else is an error rather than a silent

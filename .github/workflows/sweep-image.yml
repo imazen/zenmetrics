@@ -5,7 +5,7 @@ name: Sweep image (Dockerfile.sweep.v26)
 # chain: stable base (ubuntu + python-pyarrow + cuda-nvrtc + cuda-dev
 # headers + s5cmd + jq + cuda_dlsym_stub) is rebuilt only when those
 # RUN steps change; the per-push delta is the zen-metrics binary
-# (~280 MB) + vastai-fleet binary (~5 MB) + scripts (~50 KB).
+# (~280 MB) + zen-sweep-worker + vastai-fleet binaries (~10 MB) + scripts (~50 KB).
 #
 # Tag scheme:
 #   ghcr.io/imazen/zen-metrics-sweep:v26-<short-sha>      (every push)
@@ -49,7 +49,7 @@ env:
 
 jobs:
   build-binary:
-    name: Build zen-metrics + vastai-fleet binaries (Linux x86_64)
+    name: Build zen-metrics + zen-sweep-worker + vastai-fleet binaries (Linux x86_64)
     runs-on: ubuntu-latest
     outputs:
       sha-short: ${{ steps.meta.outputs.sha-short }}
@@ -114,18 +114,32 @@ jobs:
           ./artifacts/zen-metrics score-pairs --help | grep -q allow-small-images
           ./artifacts/zen-metrics sweep --help | grep -q zenjpeg
 
-      # vastai-fleet ships the unified Rust worker (`worker --mode
-      # {omni,feature-backfill,source-features}`) + self-destroy CLI.
-      # --features inline-sweep enables the in-process run_sweep path.
-      - name: Build vastai-fleet (release, inline-sweep)
+      # zen-sweep-worker is the cloud-agnostic DEPLOYED worker
+      # (`worker --backend vastai --mode {omni,feature-backfill,
+      # source-features}`). --features vastai pulls zen-cloud-vastai's
+      # inline-sweep + source-features in-process run_sweep tree.
+      - name: Build zen-sweep-worker (release, vastai)
         run: |
-          cargo build --release -p vastai-fleet --features inline-sweep
+          cargo build --release -p zen-sweep-worker --features vastai
+          cp target/release/zen-sweep-worker artifacts/zen-sweep-worker
+          chmod +x artifacts/zen-sweep-worker
+          ./artifacts/zen-sweep-worker --version
+          ./artifacts/zen-sweep-worker --help | grep -q -- '--backend'
+          ./artifacts/zen-sweep-worker worker --help | grep -q -- '--mode'
+          ./artifacts/zen-sweep-worker worker --help | grep -q -- '--run-id'
+
+      # vastai-fleet stays the operator + error-trap CLI (self-destroy /
+      # status / destroy / watch). Built from the renamed crate
+      # zen-cloud-vastai. --features inline-sweep keeps the worker
+      # subcommand available for ad-hoc operator use.
+      - name: Build vastai-fleet operator CLI (release, inline-sweep)
+        run: |
+          cargo build --release -p zen-cloud-vastai --features inline-sweep
           cp target/release/vastai-fleet artifacts/vastai-fleet
           chmod +x artifacts/vastai-fleet
           ./artifacts/vastai-fleet --version
           ./artifacts/vastai-fleet --help | grep -q self-destroy
-          ./artifacts/vastai-fleet worker --help | grep -q -- '--mode'
-          ./artifacts/vastai-fleet worker --help | grep -q -- '--run-id'
+          ./artifacts/vastai-fleet self-destroy --help | grep -q -- '--error-log'
 
       - name: Extract short SHA
         id: meta
@@ -139,6 +153,7 @@ jobs:
           name: sweep-binaries
           path: |
             artifacts/zen-metrics
+            artifacts/zen-sweep-worker
             artifacts/vastai-fleet
           retention-days: 7
 
@@ -158,8 +173,9 @@ jobs:
           name: sweep-binaries
           path: ./
       - run: |
-          chmod +x ./zen-metrics ./vastai-fleet
+          chmod +x ./zen-metrics ./zen-sweep-worker ./vastai-fleet
           ./zen-metrics --version
+          ./zen-sweep-worker --version
           ./vastai-fleet --version
 
       - name: Set up Docker Buildx
@@ -194,6 +210,7 @@ jobs:
           file: Dockerfile.sweep.v26
           build-args: |
             ZEN_METRICS_BINARY=./zen-metrics
+            ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker
             VASTAI_FLEET_BINARY=./vastai-fleet
           push: true
           tags: ${{ steps.tags.outputs.tags }}
@@ -217,7 +234,10 @@ jobs:
           docker run --rm --entrypoint /usr/local/bin/zen-metrics \
               ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
               score-pairs --help | grep -q allow-small-images
-          docker run --rm --entrypoint /usr/local/bin/vastai-fleet \
+          docker run --rm --entrypoint /usr/local/bin/zen-sweep-worker \
               ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
               worker --help | grep -q -- '--mode'
+          docker run --rm --entrypoint /usr/local/bin/vastai-fleet \
+              ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }} \
+              self-destroy --help | grep -q -- '--error-log'
           echo "Image OK: ${IMAGE_NAME}:v26-${{ needs.build-binary.outputs.sha-short }}"

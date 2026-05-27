@@ -57,7 +57,7 @@ use parquet::file::properties::WriterProperties;
 pub const NUM_FEATURES_DEFAULT: usize = 300;
 
 /// Legacy alias for [`NUM_FEATURES_DEFAULT`]. Kept so downstream
-/// references (`vastai-fleet::feature_backfill::NUM_FEATURES`) continue
+/// references (`zen_cloud_vastai::worker::feature_backfill::NUM_FEATURES`) continue
 /// to compile; new code should not depend on a single global feature
 /// count.
 #[allow(dead_code)]

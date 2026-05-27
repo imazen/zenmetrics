@@ -21,7 +21,7 @@
 #   │ L6: helpers (s5cmd 2.2.2 + jq 1.7.1)   ~18 MB   per quarter   │
 #   │ L7: cuda_dlsym_stub.so (compiled here) ~15 KB   rare          │
 #   │ L8: zen-metrics binary                 ~280 MB  per code push │
-#   │ L9: vastai-fleet binary                ~5 MB    per code push │
+#   │ L9: zen-sweep-worker + vastai-fleet     ~10 MB   per code push │
 #   │ L10: onstart + worker scripts          ~50 KB   per script    │
 #   │ L11: ENV + LABELs + ENTRYPOINT         0 B      ~never        │
 #   └──────────────────────────────────────────────────────────────┘
@@ -43,22 +43,33 @@
 #       --features 'sweep,png,gpu,gpu-cuda,gpu-cpu'
 #   cp target/release/zen-metrics ./zen-metrics
 #
-#   # 2. Build vastai-fleet with inline-sweep so `vastai-fleet worker
-#   #    --mode {omni,feature-backfill,source-features}` is wired up.
+#   # 2. Build the cloud-agnostic deployed worker zen-sweep-worker
+#   #    (`zen-sweep-worker worker --backend vastai --mode {omni,
+#   #    feature-backfill,source-features}`). The `vastai` feature pulls
+#   #    zen-cloud-vastai's inline-sweep + source-features tree.
 #
-#   cargo build --release -p vastai-fleet --features inline-sweep
+#   cargo build --release -p zen-sweep-worker --features vastai
+#   cp target/release/zen-sweep-worker ./zen-sweep-worker
+#
+#   # 2b. Build the vastai-fleet operator CLI (self-destroy is what the
+#   #     error trap invokes; status/destroy/watch are operator tools).
+#
+#   cargo build --release -p zen-cloud-vastai --features inline-sweep
 #   cp target/release/vastai-fleet ./vastai-fleet
 #
 #   # 3. Build the image (context: zenmetrics dir):
 #
 #   docker build -f Dockerfile.sweep.v26 \
 #       --build-arg ZEN_METRICS_BINARY=./zen-metrics \
+#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker \
 #       --build-arg VASTAI_FLEET_BINARY=./vastai-fleet \
 #       -t ghcr.io/imazen/zen-metrics-sweep:v26-$(git rev-parse --short HEAD) \
 #       -t ghcr.io/imazen/zen-metrics-sweep:v26 \
 #       .
 #
-# Run: ENTRYPOINT is `vastai-fleet worker` (the unified Rust worker).
+# Run: ENTRYPOINT runs `zen-sweep-worker worker --backend vastai` (the
+# cloud-agnostic deployed worker; same compute path as the legacy
+# `vastai-fleet worker`).
 # Callers override with `--entrypoint /usr/local/bin/onstart_iwssim.sh`
 # (legacy iwssim flow), `/usr/local/bin/onstart_cvvdp_imazen.sh`
 # (cvvdp backfill), or `/usr/local/bin/zen-metrics` (ad-hoc CLI).
@@ -66,7 +77,7 @@
 FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
-LABEL org.opencontainers.image.description="zen-metrics sweep worker (v26: collapsed single-file image replacing the v14→v25 chain; CUDA NVRTC + pyarrow + cuda_dlsym_stub + vastai-fleet unified worker)"
+LABEL org.opencontainers.image.description="zen-metrics sweep worker (v26: collapsed single-file image replacing the v14→v25 chain; CUDA NVRTC + pyarrow + cuda_dlsym_stub + zen-sweep-worker cloud-agnostic worker + vastai-fleet operator CLI)"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -234,32 +245,41 @@ RUN /usr/local/bin/zen-metrics --version \
     done \
     && echo "v26 zen-metrics smoke + cudarc-bind check passed"
 
-# ── L9: vastai-fleet binary (unified Rust worker + self-destroy CLI) ────
+# ── L9: deployed worker (zen-sweep-worker) + operator CLI (vastai-fleet) ─
 #
-# The production entrypoint. `vastai-fleet worker --mode {omni,
+# zen-sweep-worker is the cloud-agnostic DEPLOYED worker (spec §1.2).
+# `zen-sweep-worker worker --backend vastai --mode {omni,
 # feature-backfill,source-features}` runs the inline-sweep pipeline:
 # chunks.jsonl fetch, atomic claim, in-process run_sweep via
 # zen-metrics-cli lib, AIMD adaptive concurrency, arrow-rs parquet IO,
-# bounded async dispatch. Replaces the bash onstart + chunk_worker
-# chain. Must be built with `--features inline-sweep` so the `worker`
-# subcommand and `--mode` flag are present. `self-destroy` is what the
-# run_with_error_trap.sh wrapper calls on rc≠0 to free the vast.ai
-# instance immediately (avoids billing-while-broken).
+# bounded async dispatch — the SAME code path as the legacy
+# `vastai-fleet worker`. Built with `--features vastai` (which pulls
+# zen-cloud-vastai/inline-sweep + source-features).
+#
+# vastai-fleet stays as the operator + error-trap CLI: `self-destroy`
+# is what run_with_error_trap.sh calls on rc≠0 to free the vast.ai
+# instance immediately (avoids billing-while-broken); status / destroy
+# / watch are operator tools. Built with `-p zen-cloud-vastai
+# --features inline-sweep`.
+ARG ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker
 ARG VASTAI_FLEET_BINARY=./vastai-fleet
+COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zen-sweep-worker
 COPY --chmod=0755 ${VASTAI_FLEET_BINARY} /usr/local/bin/vastai-fleet
 
-# Sanity gate: vastai-fleet exposes the unified worker subcommand
-# + the self-destroy CLI. CI / image push fails loud if either
-# regressed.
-RUN /usr/local/bin/vastai-fleet --version \
+# Sanity gate: zen-sweep-worker exposes the worker subcommand + the
+# --backend selector; vastai-fleet still exposes the self-destroy CLI.
+# CI / image push fails loud if either regressed.
+RUN /usr/local/bin/zen-sweep-worker --version \
+    && /usr/local/bin/zen-sweep-worker --help 2>&1 | grep -q -- '--backend' \
+    && /usr/local/bin/zen-sweep-worker worker --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/zen-sweep-worker worker --help 2>&1 | grep -q -- '--chunks-r2' \
+    && /usr/local/bin/zen-sweep-worker worker --help 2>&1 | grep -q -- '--parallel-chunks' \
+    && /usr/local/bin/zen-sweep-worker worker --help 2>&1 | grep -q -- '--adapt-interval-sec' \
+    && /usr/local/bin/zen-sweep-worker worker --help 2>&1 | grep -q -- '--mode' \
+    && /usr/local/bin/vastai-fleet --version \
     && /usr/local/bin/vastai-fleet --help 2>&1 | grep -q self-destroy \
     && /usr/local/bin/vastai-fleet self-destroy --help 2>&1 | grep -q -- '--error-log' \
-    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--run-id' \
-    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--chunks-r2' \
-    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--parallel-chunks' \
-    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--adapt-interval-sec' \
-    && /usr/local/bin/vastai-fleet worker --help 2>&1 | grep -q -- '--mode' \
-    && echo "v26 vastai-fleet unified worker smoke passed"
+    && echo "v26 zen-sweep-worker + vastai-fleet smoke passed"
 
 # ── L10: onstart + worker scripts ───────────────────────────────────────
 #
@@ -288,9 +308,10 @@ COPY --chmod=0755 scripts/sweep/iwssim_backfill_chunk_worker.sh   /usr/local/bin
 
 # ── L11: ENTRYPOINT ─────────────────────────────────────────────────────
 #
-# Default = unified Rust worker (vastai-fleet worker --mode omni)
-# wrapped by the error trap so failures self-destroy the vast.ai
-# instance instead of billing-while-broken. Callers override:
+# Default = cloud-agnostic worker (zen-sweep-worker worker --backend
+# vastai --mode omni, driven via onstart_unified.sh) wrapped by the
+# error trap so failures self-destroy the vast.ai instance instead of
+# billing-while-broken. Callers override:
 #
 #   --entrypoint /usr/local/bin/onstart_iwssim.sh        (iwssim flow)
 #   --entrypoint /usr/local/bin/onstart_cvvdp_imazen.sh  (cvvdp backfill)

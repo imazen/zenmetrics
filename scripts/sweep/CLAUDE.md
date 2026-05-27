@@ -16,11 +16,11 @@ new sweep work happens in this repo.
 The **unified Rust worker** in `crates/vastai-fleet` is the
 production entrypoint. Sweep operations are:
 
-- `onstart_unified.sh` — execs `vastai-fleet worker --mode omni`
-  (the default mode). Replaces the bash `onstart_omni_backfill.sh`
-  chain. Used with `Dockerfile.sweep.v26`.
-- `onstart_feature_backfill.sh` — execs `vastai-fleet worker
-  --mode feature-backfill`. Reads existing omni sidecars + cached
+- `onstart_unified.sh` — execs `zen-sweep-worker worker --backend
+  vastai --mode omni` (the default mode). Replaces the bash
+  `onstart_omni_backfill.sh` chain. Used with `Dockerfile.sweep.v26`.
+- `onstart_feature_backfill.sh` — execs `zen-sweep-worker worker
+  --backend vastai --mode feature-backfill`. Reads existing omni sidecars + cached
   encoded variants from R2, writes zensim 300-feature parquets
   without re-encoding. Used with `Dockerfile.sweep.v26`.
 - `generate_cvvdp_backfill_chunks.py` — chunk generator (slices

@@ -203,7 +203,7 @@ impl MetricCache {
     ///   diagnosis — repeated allocation of zensim WithIw persist
     ///   planes saturates the pool faster than the driver can free
     ///   them).
-    /// - Chunks within a worker process (`vastai-fleet worker`'s
+    /// - Chunks within a worker process (`zen-sweep-worker worker`'s
     ///   chunk loop calls `process_chunk_inline` per chunk; the
     ///   global cache means cross-chunk dim transitions are the
     ///   only allocation events).

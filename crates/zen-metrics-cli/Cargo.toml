@@ -23,7 +23,7 @@ path = "src/main.rs"
 #   - The bash worker calls `zen-metrics sweep` ~30 times per chunk
 #     (one per knob_tuple). Each subprocess re-initialises cubecl
 #     (~3-5s). On a typical chunk that's 90-150s of pure overhead.
-#   - Linking the same code as a library into vastai-fleet's
+#   - Linking the same code as a library into zen-cloud-vastai's
 #     worker subcommand means one cubecl init *per worker process*
 #     (not per group, not per chunk). 30× fewer inits.
 [lib]

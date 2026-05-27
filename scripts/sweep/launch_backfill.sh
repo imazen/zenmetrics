@@ -14,8 +14,9 @@
 #   - s5cmd
 #   - gh (for ghcr.io token)
 #   - python3 (only for parsing `vastai create instance --raw` output)
-#   - vastai-fleet (built from crates/vastai-fleet — `cargo build
-#     --release -p vastai-fleet && cp target/release/vastai-fleet ~/.local/bin/`)
+#   - vastai-fleet (operator CLI built from crates/zen-cloud-vastai —
+#     `cargo build --release -p zen-cloud-vastai && cp
+#     target/release/vastai-fleet ~/.local/bin/`)
 #
 # Required env vars (sourced from ~/.config/cloudflare/r2-credentials):
 #   R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY

@@ -3,8 +3,8 @@
 #
 # The bash dispatcher chain (onstart_omni_backfill.sh +
 # omni_backfill_chunk_worker.sh) is replaced by a single
-# `vastai-fleet worker` invocation that does everything in one
-# process:
+# `zen-sweep-worker worker --backend vastai` invocation that does
+# everything in one process:
 #
 #   - Claim loop (token-race + sidecar idempotency + stale recovery)
 #   - Bounded adaptive concurrency (AIMD on nvidia-smi util)
@@ -95,7 +95,11 @@ export RUST_LOG="${RUST_LOG:-info}"
 MAX_RESPAWNS="${MAX_RESPAWNS:-200}"
 for ((i=1; i<=MAX_RESPAWNS; i++)); do
     echo "[onstart-unified] worker process #${i} start" >&2
-    /usr/local/bin/vastai-fleet worker \
+    # The cloud-agnostic deployed worker (zen-sweep-worker, --backend
+    # vastai). Same compute path as the legacy `vastai-fleet worker`;
+    # the operator self-destroy/status/destroy/watch CLI stays the
+    # `vastai-fleet` binary (see run_with_error_trap.sh).
+    /usr/local/bin/zen-sweep-worker worker --backend vastai \
         --run-id "${SWEEP_RUN_ID}" \
         --chunks-r2 "${CHUNKS_R2}"
     rc=$?

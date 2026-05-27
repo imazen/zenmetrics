@@ -4,7 +4,7 @@
 //!
 //! The vast majority of users want the CLI (`zen-metrics` binary). This
 //! library surface exists so the unified fleet worker
-//! (`crates/vastai-fleet`) can call the same code paths in-process and
+//! (`crates/zen-cloud-vastai`) can call the same code paths in-process and
 //! share one `cubecl` device across hundreds of metric evaluations
 //! within a worker's lifetime — eliminating the ~3-5 s cubecl init
 //! that costs ~30× per chunk when the dispatcher subprocess-spawns

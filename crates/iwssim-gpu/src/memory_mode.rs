@@ -42,7 +42,7 @@ pub fn live_vram_probe_bytes() -> Option<usize> {
 
 /// Single-shot query of `nvidia-smi --query-gpu=memory.free`. Internal
 /// helper — callers should use [`live_vram_probe_bytes`] which caches
-/// the result. Mirrors `vastai-fleet::worker::adapt::nvidia_smi_total_memory_mb`
+/// the result. Mirrors `zen_cloud_vastai::worker::adapt::nvidia_smi_total_memory_mb`
 /// but queries `memory.free` (what we actually want for capacity
 /// planning) rather than `memory.total`.
 fn query_nvidia_smi_memory_free() -> Option<usize> {

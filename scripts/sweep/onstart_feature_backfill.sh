@@ -41,7 +41,7 @@ export RUST_LOG="${RUST_LOG:-debug}"
 export RUST_BACKTRACE="${RUST_BACKTRACE:-full}"
 export WORKER_MODE=feature-backfill
 
-exec /usr/local/bin/vastai-fleet worker \
+exec /usr/local/bin/zen-sweep-worker worker --backend vastai \
     --run-id "${SWEEP_RUN_ID}" \
     --chunks-r2 "${CHUNKS_R2}" \
     --mode feature-backfill
