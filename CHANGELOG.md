@@ -17,6 +17,41 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.4 — DBandsTransient t_p_*/m_* strip-shaped (-1704 MiB at 4096²) (2026-05-27)
+
+Adds `DBandsTransient::new_strip(client, n_strip)` that allocates the
+five buffer kinds (`t_p_ref`, `t_p_dis`, `m_raw`, `m_mid`, `m_blur` —
+3 channels each = 15 buffers) at `bw × R_k` instead of full-band
+`bw × bh`. Used by `_run_d_bands_strip_major_shallow` for shallow
+non-baseband levels.
+
+`_run_band_masking_strip_s_for_level` gains `transients_strip_local:
+bool` parameter. When `true`:
+- Stage 1-3 (min_abs / blur_h / blur_v) byte offsets for t_p_* / m_*
+  go to 0 instead of `top_global * bw * 4` — buffer row 0 IS top_global
+  at this dispatch (the CSF helper just wrote it there).
+- Stage 4 (mult_mutual) body offsets become `(body_offset_y - top_global)
+  * bw * 4 = HALO * bw * 4` — body sits HALO=6 rows down within the
+  strip buffer.
+- Strip-aware kernels still receive `body_off_kernel = top_global`
+  unchanged — reflection math against `logical_h = bh` is identical
+  because the buffer-relative index `reflect - top_global` matches
+  both the full-image-sliced and strip-local layouts.
+
+`_dispatch_dist_weber_csf_strip_s_for_level` reuses the
+`band_ref_strip_local` flag to also skip the slice for its t_p_*
+writes when called from the strip-major outer.
+
+**Memory delta (4096² h_body=256):** nvsmi delta 3457 MiB → 1753 MiB
+(-1704 MiB, -49.3%). Wall-time 4.67s → 3.72s. JOD bit-identical at
+128², 1024² (|diff|=0). Mode E + CappedPyramid smoke unchanged.
+
+The biggest single-commit shrink — 15 strip-shaped buffers per shallow
+level × `(bh - R_k) / bh` ≈ 86% per-level savings (e.g. R_k=572 vs
+bh=4096 at level 0). The legacy level-major caller passes
+`transients_strip_local: false` and keeps its full-image transient
+behavior (Mode E + Full).
+
 ### cvvdp-gpu — perf: P2.3 — bands_ref strip-shaped + gauss_alt added (2026-05-27)
 
 Adds `WeberScratch.bands_ref_strip: Option<[Handle; 3]>` per shallow

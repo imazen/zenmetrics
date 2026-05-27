@@ -246,6 +246,24 @@ impl DBandsTransient {
             ],
         }
     }
+
+    /// **P2.4 (2026-05-27):** allocate strip-shaped t_p_* + m_*
+    /// transients sized at `n_strip = bw × R_k` per channel. Used by
+    /// the strip-major outer band loop for shallow non-baseband
+    /// levels (`k < k_split`) — each strip iteration overwrites the
+    /// buffer in place before the masking chain consumes it within
+    /// the SAME (s, k) iteration.
+    ///
+    /// Caller must pass `body_off_kernel = top_global` to the
+    /// strip-aware masking kernels AND skip the `offset_start`
+    /// byte slices (the buffer's row 0 IS the strip window's row 0
+    /// at dispatch time). See `_run_band_masking_strip_s_for_level`'s
+    /// `transients_strip_local: bool` parameter.
+    fn new_strip<R: Runtime>(client: &ComputeClient<R>, n_strip: usize) -> Self {
+        // Same shape as `new`, just sized at strip pixels instead of
+        // full-band pixels.
+        Self::new(client, n_strip)
+    }
 }
 
 fn alloc_zeros_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
@@ -5160,9 +5178,30 @@ impl<R: Runtime> Cvvdp<R> {
         // transient. After the phase, the transients drop (cubecl
         // pool recycles).
         let mut transients: Vec<DBandsTransient> = Vec::with_capacity(k_split_us);
+        // P2.4 (2026-05-27): allocate transients at strip size
+        // (`bw × R_k`) instead of full band (`bw × bh`). Each (s, k)
+        // iteration overwrites the buffer in place before the masking
+        // chain consumes it within the same iteration — no
+        // cross-strip data dependency on t_p_* / m_*. Saves ~`(bh -
+        // R_k) / bh` per level at shallow levels (e.g. at 4096²
+        // h_body=256 level 0: bh=4096, R_k=572 → ~86% per-level shrink
+        // of 5 buffer kinds × 3 channels = ~660 MiB total across
+        // shallow levels).
+        let n_levels_u32 = self.n_levels;
+        let k_split = mode_b_k_split(h_body_at_0, n_levels_u32);
         for k in 0..k_split_us {
-            let (_bw, _bh, n_px) = self.level_dims(k);
-            transients.push(DBandsTransient::new(&self.client, n_px));
+            let (bw, bh, _n_px) = self.level_dims(k);
+            // R_k strip height — matches build_weber_scratch sizing.
+            let r_k = {
+                let r_back = mode_b_strip_h_at_level(k as u32, h_body_at_0, k_split);
+                if r_back == 0 {
+                    ((h_body_at_0 as usize) >> k).max(1).min(bh)
+                } else {
+                    (r_back as usize).min(bh)
+                }
+            };
+            let n_strip = bw * r_k;
+            transients.push(DBandsTransient::new_strip(&self.client, n_strip));
         }
 
         // Resolve REF source per shallow level once (mode-dependent,
@@ -5317,6 +5356,7 @@ impl<R: Runtime> Cvvdp<R> {
                         &m_mid_h,
                         &m_blur_h,
                         &d_h,
+                        true, // P2.4: transients are strip-local
                     );
                 } else {
                     // Small shallow level (shouldn't happen at
@@ -5341,6 +5381,7 @@ impl<R: Runtime> Cvvdp<R> {
                             &m_mid_h,
                             &m_blur_h,
                             &d_h,
+                            true, // P2.4: transients are strip-local
                         );
                     }
                 }
@@ -5779,12 +5820,34 @@ impl<R: Runtime> Cvvdp<R> {
             )
         };
         let log_l_bkg_strip = log_l_bkg_full.clone().offset_start(byte_off_fine_window);
-        let t_p_ref_a_strip = t_p_ref_h[0].clone().offset_start(byte_off_fine_window);
-        let t_p_ref_rg_strip = t_p_ref_h[1].clone().offset_start(byte_off_fine_window);
-        let t_p_ref_vy_strip = t_p_ref_h[2].clone().offset_start(byte_off_fine_window);
-        let t_p_dis_a_strip = t_p_dis_h[0].clone().offset_start(byte_off_fine_window);
-        let t_p_dis_rg_strip = t_p_dis_h[1].clone().offset_start(byte_off_fine_window);
-        let t_p_dis_vy_strip = t_p_dis_h[2].clone().offset_start(byte_off_fine_window);
+        // P2.4 (2026-05-27): when `band_ref_strip_local`, the
+        // strip-major outer caller passes strip-local t_p_* as well
+        // (they're allocated together by `DBandsTransient::new_strip`).
+        // The csf_apply_6ch kernel is per-pixel (no row math), so
+        // skipping the slice merely changes which buffer rows the
+        // writes land in — strip-local row 0 = top_global maps the
+        // writes to the correct band+halo region of the strip buffer.
+        // The masking helper then reads from those same rows.
+        let (t_p_ref_a_strip, t_p_ref_rg_strip, t_p_ref_vy_strip,
+             t_p_dis_a_strip, t_p_dis_rg_strip, t_p_dis_vy_strip) = if band_ref_strip_local {
+            (
+                t_p_ref_h[0].clone(),
+                t_p_ref_h[1].clone(),
+                t_p_ref_h[2].clone(),
+                t_p_dis_h[0].clone(),
+                t_p_dis_h[1].clone(),
+                t_p_dis_h[2].clone(),
+            )
+        } else {
+            (
+                t_p_ref_h[0].clone().offset_start(byte_off_fine_window),
+                t_p_ref_h[1].clone().offset_start(byte_off_fine_window),
+                t_p_ref_h[2].clone().offset_start(byte_off_fine_window),
+                t_p_dis_h[0].clone().offset_start(byte_off_fine_window),
+                t_p_dis_h[1].clone().offset_start(byte_off_fine_window),
+                t_p_dis_h[2].clone().offset_start(byte_off_fine_window),
+            )
+        };
         unsafe {
             csf_apply_6ch_kernel::launch::<R>(
                 &self.client,
@@ -6146,6 +6209,7 @@ impl<R: Runtime> Cvvdp<R> {
                 m_mid_h,
                 m_blur_h,
                 d_h,
+                false, // legacy caller: full-image transients
             );
         }
 
@@ -6205,6 +6269,16 @@ impl<R: Runtime> Cvvdp<R> {
         m_mid_h: &[cubecl::server::Handle; 3],
         m_blur_h: &[cubecl::server::Handle; 3],
         d_h: &[cubecl::server::Handle; 3],
+        // P2.4 (2026-05-27): when `true`, the `t_p_*` and `m_*`
+        // handles are strip-local (size `bw × R_k`, row 0 = top_global).
+        // The body+halo offsets are 0 (no `offset_start` slice). The
+        // strip-aware kernels still receive `body_off_kernel =
+        // top_global` so y_global computation works correctly; the
+        // buffer-relative index `reflect - top_global` is the same
+        // whether the buffer is full-image-sliced or strip-local.
+        // When `false` (legacy), handles are full-image and are
+        // sliced at `top_global * bw * 4`.
+        transients_strip_local: bool,
     ) {
         // PU blur radius — `pu_blur_v_3ch_scaled_strip_aware_kernel`
         // is a 13-tap (half = 6) kernel.
@@ -6235,17 +6309,37 @@ impl<R: Runtime> Cvvdp<R> {
         let count_body =
             CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
 
+        // P2.4 (2026-05-27): when transients are strip-local
+        // (`bw × R_k`), the buffer's row 0 IS top_global at this
+        // dispatch. So:
+        //   - Window slices (Stage 1-3) use offset 0 instead of
+        //     top_global * bw * 4.
+        //   - Body slices (Stage 4) point at body's offset within the
+        //     strip buffer: `(body_offset_y - top_global) * bw * 4 =
+        //     HALO * bw * 4` for interior strips, or 0 for strip 0
+        //     where top_global == body_offset_y == 0.
+        // The strip-aware kernels still receive `body_off_kernel =
+        // top_global` so reflection math against `logical_h = bh` is
+        // unchanged — only the buffer-relative index translates.
+        let (tp_m_off_window, tp_m_off_body) = if transients_strip_local {
+            let body_off_in_strip: u64 =
+                (body_offset_y.saturating_sub(top_global) as u64) * (bw as u64) * 4;
+            (0_u64, body_off_in_strip)
+        } else {
+            (byte_off_window, byte_off_body)
+        };
+
         // Stage 1: min_abs over halo-padded window.
         // Per-pixel, no reflection — offset handles + n = window size.
-        let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(byte_off_window);
-        let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(byte_off_window);
-        let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(byte_off_window);
-        let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(byte_off_window);
-        let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(byte_off_window);
-        let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(byte_off_window);
-        let m_raw_a_w = m_raw_h[0].clone().offset_start(byte_off_window);
-        let m_raw_rg_w = m_raw_h[1].clone().offset_start(byte_off_window);
-        let m_raw_vy_w = m_raw_h[2].clone().offset_start(byte_off_window);
+        let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(tp_m_off_window);
+        let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(tp_m_off_window);
+        let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(tp_m_off_window);
+        let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(tp_m_off_window);
+        let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(tp_m_off_window);
+        let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(tp_m_off_window);
+        let m_raw_a_w = m_raw_h[0].clone().offset_start(tp_m_off_window);
+        let m_raw_rg_w = m_raw_h[1].clone().offset_start(tp_m_off_window);
+        let m_raw_vy_w = m_raw_h[2].clone().offset_start(tp_m_off_window);
         unsafe {
             min_abs_3ch_kernel::launch::<R>(
                 &self.client,
@@ -6269,9 +6363,9 @@ impl<R: Runtime> Cvvdp<R> {
         // Stage 2: pu_blur_h_3ch_strip_aware over halo-padded window.
         // H-blur is X-only; body_offset_y / logical_h are passed
         // for API uniformity but ignored by the kernel.
-        let m_mid_a_w = m_mid_h[0].clone().offset_start(byte_off_window);
-        let m_mid_rg_w = m_mid_h[1].clone().offset_start(byte_off_window);
-        let m_mid_vy_w = m_mid_h[2].clone().offset_start(byte_off_window);
+        let m_mid_a_w = m_mid_h[0].clone().offset_start(tp_m_off_window);
+        let m_mid_rg_w = m_mid_h[1].clone().offset_start(tp_m_off_window);
+        let m_mid_vy_w = m_mid_h[2].clone().offset_start(tp_m_off_window);
         unsafe {
             pu_blur_h_3ch_strip_aware_kernel::launch::<R>(
                 &self.client,
@@ -6313,9 +6407,9 @@ impl<R: Runtime> Cvvdp<R> {
         //     each neighbouring strip recomputes its body
         //     correctly on its own dispatch (sequential GPU stream
         //     ordering preserves this).
-        let m_blur_a_w = m_blur_h[0].clone().offset_start(byte_off_window);
-        let m_blur_rg_w = m_blur_h[1].clone().offset_start(byte_off_window);
-        let m_blur_vy_w = m_blur_h[2].clone().offset_start(byte_off_window);
+        let m_blur_a_w = m_blur_h[0].clone().offset_start(tp_m_off_window);
+        let m_blur_rg_w = m_blur_h[1].clone().offset_start(tp_m_off_window);
+        let m_blur_vy_w = m_blur_h[2].clone().offset_start(tp_m_off_window);
         unsafe {
             pu_blur_v_3ch_scaled_strip_aware_kernel::launch::<R>(
                 &self.client,
@@ -6355,15 +6449,15 @@ impl<R: Runtime> Cvvdp<R> {
             Some(StripConfig { mode: StripMode::Pair, .. }),
         );
         let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
-        let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(byte_off_body);
-        let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(byte_off_body);
-        let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(byte_off_body);
-        let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(byte_off_body);
-        let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(byte_off_body);
-        let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(byte_off_body);
-        let m_blur_a_b = m_blur_h[0].clone().offset_start(byte_off_body);
-        let m_blur_rg_b = m_blur_h[1].clone().offset_start(byte_off_body);
-        let m_blur_vy_b = m_blur_h[2].clone().offset_start(byte_off_body);
+        let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(tp_m_off_body);
+        let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(tp_m_off_body);
+        let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(tp_m_off_body);
+        let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(tp_m_off_body);
+        let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(tp_m_off_body);
+        let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(tp_m_off_body);
+        let m_blur_a_b = m_blur_h[0].clone().offset_start(tp_m_off_body);
+        let m_blur_rg_b = m_blur_h[1].clone().offset_start(tp_m_off_body);
+        let m_blur_vy_b = m_blur_h[2].clone().offset_start(tp_m_off_body);
         let d_a_b = d_h[0].clone().offset_start(d_byte_off);
         let d_rg_b = d_h[1].clone().offset_start(d_byte_off);
         let d_vy_b = d_h[2].clone().offset_start(d_byte_off);
