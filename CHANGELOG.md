@@ -19,6 +19,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zen-cloud-vastai` worker — durable best-effort R2 error sidecar on
+  chunk failure. When `process_chunk_inline` returns an error, the worker
+  uploads the full anyhow error chain + chunk_id, run_id, hostname, and
+  input/source URIs to `s3://<out-bucket>/<run_id>/errors/<chunk_id>.txt`
+  via its existing scoped R2 cred. The out-bucket is derived from the
+  chunk's `out_sidecar_omni`. Makes fleet failures (vast.ai / Salad /
+  RunPod — they all share this compute path) diagnosable without a
+  logging provider, since the container can die right after the failure.
+  Non-fatal: the original error is always returned regardless of upload
+  outcome.
+
 - `zenmetrics-orchestrator` (new crate, Phase 1) — capability detection
   (`nvidia-smi` GPU + `raw-cpuid` CPU + `sysinfo` RAM) and persistent
   TOML cache at `~/.cache/zenmetrics/capability_<short_hash>.toml`.

@@ -59,10 +59,112 @@ struct ChunkRecord {
 
 /// Top-level entry point. The caller (chunk.rs::process_chunk) has
 /// already won the claim race for this chunk.
+///
+/// On any failure, best-effort uploads the error string + context to a
+/// durable R2 sidecar at `s3://<out-bucket>/<run_id>/errors/<chunk_id>.txt`
+/// (see [`best_effort_error_sidecar`]) so fleet failures are diagnosable
+/// without a logging provider — the container can die immediately after
+/// this returns and the error survives in R2. The capture is non-fatal:
+/// the ORIGINAL error is always returned regardless of upload success.
 pub async fn process_chunk_inline(args: &WorkerArgs, r2: &R2Client, line: &str) -> Result<()> {
     let rec: ChunkRecord = serde_json::from_str(line).context("parse chunk JSON")?;
     let run_id = rec.run_id.clone().unwrap_or_else(|| args.run_id.clone());
 
+    match run_chunk_inline_impl(args, r2, &rec, &run_id).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // Durable, best-effort error capture. Never mask the real error.
+            best_effort_error_sidecar(args, r2, &rec, &run_id, &format!("{e:#}")).await;
+            Err(e)
+        }
+    }
+}
+
+/// Build the R2 URI for a chunk's durable error sidecar. Derives the
+/// output bucket from the chunk's `out_sidecar_omni` (an
+/// `s3://<bucket>/...` URI) so errors land in the SAME bucket the worker
+/// already has write access to via its scoped cred — falls back to the
+/// production `zentrain` bucket when the chunk record omits the sidecar.
+fn error_sidecar_uri(rec: &ChunkRecord, run_id: &str) -> String {
+    // `out_sidecar_omni` is like `s3://<bucket>/<prefix>/omni/<chunk>.parquet`.
+    // Extract `s3://<bucket>` and place errors under `<bucket>/<run>/errors/`.
+    let bucket = rec
+        .out_sidecar_omni
+        .as_deref()
+        .and_then(|uri| uri.strip_prefix("s3://"))
+        .and_then(|rest| rest.split('/').next())
+        .filter(|b| !b.is_empty())
+        .unwrap_or("zentrain");
+    format!("s3://{bucket}/{run_id}/errors/{}.txt", rec.chunk_id)
+}
+
+/// Best-effort durable error capture. Writes a small text file with the
+/// chunk_id, run_id, hostname, and the full anyhow error chain, then
+/// uploads it to R2 via the worker's existing client + scoped cred. All
+/// failures are swallowed (logged at `warn`) — this MUST NOT mask the
+/// original chunk error.
+async fn best_effort_error_sidecar(
+    args: &WorkerArgs,
+    r2: &R2Client,
+    rec: &ChunkRecord,
+    run_id: &str,
+    error: &str,
+) {
+    let uri = error_sidecar_uri(rec, run_id);
+    // Identify the node: HOSTNAME (Linux container default) → SALAD_MACHINE_ID
+    // → WORKER_ID → "unknown". Salad injects SALAD_MACHINE_ID / SALAD_CONTAINER_GROUP_ID.
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("SALAD_MACHINE_ID"))
+        .or_else(|_| std::env::var("WORKER_ID"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    let salad_machine = std::env::var("SALAD_MACHINE_ID").unwrap_or_default();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let body = format!(
+        "chunk_id: {}\nrun_id: {}\nhostname: {}\nsalad_machine_id: {}\nunix_ts: {}\n\
+         input_parquet_r2: {}\nsource_dir_r2: {}\n\nerror:\n{}\n",
+        rec.chunk_id,
+        run_id,
+        hostname,
+        salad_machine,
+        ts,
+        rec.input_parquet_r2,
+        rec.source_dir_r2,
+        error,
+    );
+    // Write to a temp file under the scratch workdir (already on a writable
+    // mount) then upload. If the scratch dir doesn't exist, fall back to the
+    // workdir root.
+    let scratch = args.workdir.join(&rec.chunk_id);
+    let local = if tokio::fs::metadata(&scratch).await.is_ok() {
+        scratch.join("_error.txt")
+    } else {
+        args.workdir.join(format!("{}._error.txt", rec.chunk_id))
+    };
+    if let Err(e) = tokio::fs::write(&local, body.as_bytes()).await {
+        warn!(chunk_id = %rec.chunk_id, error = %e, "error-sidecar local write failed (non-fatal)");
+        return;
+    }
+    match r2.upload(&local, &uri).await {
+        Ok(()) => info!(chunk_id = %rec.chunk_id, uri = %uri, "durable error sidecar uploaded"),
+        Err(e) => {
+            warn!(chunk_id = %rec.chunk_id, uri = %uri, error = %e, "error-sidecar R2 upload failed (non-fatal)")
+        }
+    }
+}
+
+/// The chunk pipeline body. Separated from [`process_chunk_inline`] so the
+/// latter can wrap it with durable error capture without threading the
+/// capture through every `?` early-return.
+async fn run_chunk_inline_impl(
+    args: &WorkerArgs,
+    r2: &R2Client,
+    rec: &ChunkRecord,
+    run_id: &str,
+) -> Result<()> {
+    let run_id = run_id.to_string();
     let scratch = args.workdir.join(&rec.chunk_id);
     let sources = scratch.join("sources");
     let sweeps = scratch.join("sweeps");
@@ -572,4 +674,42 @@ fn concat_feature_parquets(
     wtr.write(&merged).context("write feature batch")?;
     wtr.close().context("close feature writer")?;
     Ok(n_rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rec_with_sidecar(sidecar: Option<&str>) -> ChunkRecord {
+        let sidecar_json = match sidecar {
+            Some(s) => format!(r#","out_sidecar_omni":"{s}""#),
+            None => String::new(),
+        };
+        let line = format!(
+            r#"{{"chunk_id":"salad-smoke-001","input_parquet":"in.parquet",
+               "input_parquet_r2":"s3://b/in.parquet","row_range":[0,1],
+               "source_dir_r2":"s3://b/src","image_basenames":["a.png"]{sidecar_json}}}"#
+        );
+        serde_json::from_str(&line).expect("parse test chunk record")
+    }
+
+    #[test]
+    fn error_sidecar_uri_derives_bucket_from_out_sidecar() {
+        let rec = rec_with_sidecar(Some(
+            "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/omni/salad-smoke-001.parquet",
+        ));
+        assert_eq!(
+            error_sidecar_uri(&rec, "salad-smoke-2026-05-27"),
+            "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/errors/salad-smoke-001.txt"
+        );
+    }
+
+    #[test]
+    fn error_sidecar_uri_falls_back_to_zentrain_without_sidecar() {
+        let rec = rec_with_sidecar(None);
+        assert_eq!(
+            error_sidecar_uri(&rec, "run-x"),
+            "s3://zentrain/run-x/errors/salad-smoke-001.txt"
+        );
+    }
 }
