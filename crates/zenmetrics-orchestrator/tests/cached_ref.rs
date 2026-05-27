@@ -49,6 +49,7 @@ fn cached_ref_auto_detect_reuses_ref() {
             height: size,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         })
         .collect();
 
@@ -94,6 +95,7 @@ fn cached_ref_explicit_override_skips_hash() {
             height: size,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         })
         .collect();
 
@@ -152,6 +154,7 @@ fn cached_ref_different_dist_same_ref_all_pass() {
             height: size,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         })
         .collect();
 

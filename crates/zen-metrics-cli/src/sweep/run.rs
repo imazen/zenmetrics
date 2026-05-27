@@ -214,6 +214,7 @@ fn score_via_orchestrator(
         height: reference.height,
         metric: spec.kind,
         params: None,
+        ref_hash: 0,
     };
     let result = {
         let mut g = orch.lock().expect("orchestrator handle poisoned");

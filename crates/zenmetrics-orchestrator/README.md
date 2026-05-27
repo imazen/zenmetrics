@@ -47,6 +47,7 @@ let task = Task {
     height: 1024,
     metric: MetricKind::Ssim2,
     params: None,
+    ref_hash: 0,
 };
 let result = orch.run_single(task);
 
@@ -94,6 +95,7 @@ let tasks: Vec<Task> = (0..100)
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     })
     .collect();
 
@@ -223,6 +225,7 @@ let tasks: Vec<Task> = (0..100)
         height: 1024,
         metric: MetricKind::Ssim2,
         params: None,
+        ref_hash: 0,
     })
     .collect();
 
@@ -265,6 +268,7 @@ for (i, variant) in variants.iter().enumerate() {
         height: 4096,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     orch.submit(task)?;
 }

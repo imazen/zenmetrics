@@ -74,6 +74,12 @@ use crate::{save_profile, Backend, Orchestrator};
 /// can match up async-style batch responses against the original
 /// submissions in Phase 5. For [`Orchestrator::run_single`] it's just
 /// passed through.
+///
+/// `ref_hash` is the Phase 7.6 sort key for reorder batching. Callers
+/// can leave it at `0` (the default) — the orchestrator populates it
+/// from `ref_data` before sorting in [`Orchestrator::run_all`] /
+/// [`Orchestrator::submit`]. For `TaskData::PreUploaded`, the hash is
+/// the pre-upload's stable `ref_id` so identical handles cluster.
 #[derive(Debug, Clone)]
 pub struct Task {
     /// Caller-chosen correlation identifier. Echoed back unchanged.
@@ -91,6 +97,13 @@ pub struct Task {
     pub metric: MetricKind,
     /// Per-metric parameters. `None` → [`MetricParams::default_for(metric)`].
     pub params: Option<MetricParams>,
+    /// Phase 7.6 sort key. Set to `0` (the default) at construction; the
+    /// orchestrator populates this with `xxhash3_64(ref_bytes)` (or the
+    /// pre-upload's stable id) before reorder batching. Callers MAY set
+    /// it themselves to skip the auto-hash, but the orchestrator will
+    /// overwrite a zero value either way. See
+    /// `crates/zenmetrics-orchestrator/docs/REORDERING_DESIGN.md`.
+    pub ref_hash: u64,
 }
 
 /// Source for a single image buffer. The executor materializes this to

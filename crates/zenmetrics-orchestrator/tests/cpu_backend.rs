@@ -176,6 +176,7 @@ fn cvvdp_cpu_constructs_and_computes_256() {
         height: 256,
         metric: MetricKind::Cvvdp,
         params: Some(params),
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -210,6 +211,7 @@ fn ssim2_cpu_constructs_and_computes_256() {
         height: 256,
         metric: MetricKind::Ssim2,
         params: Some(params),
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -241,6 +243,7 @@ fn dssim_cpu_constructs_and_computes_256() {
         height: 256,
         metric: MetricKind::Dssim,
         params: Some(params),
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -270,6 +273,7 @@ fn butter_cpu_constructs_and_computes_256() {
         height: 256,
         metric: MetricKind::Butter,
         params: Some(params),
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -299,6 +303,7 @@ fn zensim_cpu_constructs_and_computes_256() {
         height: 256,
         metric: MetricKind::Zensim,
         params: Some(params),
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -334,6 +339,7 @@ fn iwssim_cpu_unavailable_advances_ladder() {
         height: 256,
         metric: MetricKind::Iwssim,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     assert!(result.outcome.is_err());
@@ -367,6 +373,7 @@ fn oom_fallback_routes_to_cpu_cvvdp_256() {
         height: 256,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     let score = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -410,6 +417,7 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
             height: 256,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         };
         let result = orch.run_single(task);
         let s = result.outcome.as_ref().unwrap_or_else(|e| {
@@ -433,6 +441,7 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
             height: 256,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         };
         let h = orch
             .submit(task)

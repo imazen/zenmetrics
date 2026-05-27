@@ -57,6 +57,7 @@ let task = Task {
     height: 1024,
     metric: MetricKind::Ssim2,
     params: None,
+    ref_hash: 0,
 };
 let result = orch.run_single(task);
 let score = result.outcome?;
@@ -134,6 +135,7 @@ let tasks: Vec<Task> = pairs
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     })
     .collect();
 
@@ -191,6 +193,7 @@ for (i, variant) in variants.iter().enumerate() {
         height: 4096,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     })?;
     outstanding += 1;
     // Drain non-blocking — keeps the queue from growing without bound.

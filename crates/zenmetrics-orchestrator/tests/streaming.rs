@@ -51,6 +51,7 @@ fn build_cvvdp_tasks(n: usize, size: u32) -> Vec<Task> {
             height: size,
             metric: MetricKind::Cvvdp,
             params: None,
+            ref_hash: 0,
         })
         .collect()
 }

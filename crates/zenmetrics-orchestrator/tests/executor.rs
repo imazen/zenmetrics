@@ -182,6 +182,7 @@ fn happy_path_gpu_full() {
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     assert_eq!(result.task_id, 1);
@@ -266,6 +267,7 @@ fn fully_exhausted_when_no_backend_fits() {
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     let result = orch2.run_single(task);
     assert_eq!(result.task_id, 42);
@@ -295,6 +297,7 @@ fn path_task_data_unsupported() {
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     match result.outcome.unwrap_err() {
@@ -373,6 +376,7 @@ fn non_oom_errors_dont_retry() {
         height: 1024,
         metric: MetricKind::Cvvdp,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     assert_eq!(result.task_id, 99);
@@ -441,6 +445,7 @@ fn forced_low_vram_via_oom_log_fully_exhausts() {
         height: 1024,
         metric: MetricKind::Ssim2,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     assert_eq!(result.task_id, 5);
@@ -466,6 +471,7 @@ fn unknown_metric_surfaces_chooser_error() {
         // UnknownMetric.
         metric: MetricKind::Ssim2,
         params: None,
+        ref_hash: 0,
     };
     let result = orch.run_single(task);
     match result.outcome.unwrap_err() {

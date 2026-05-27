@@ -97,6 +97,7 @@ pub fn orchestrator_score_one(
         height,
         metric: spec.kind,
         params: None,
+        ref_hash: 0,
     };
 
     // Single-task path: drive through `run_single` (synchronous,
