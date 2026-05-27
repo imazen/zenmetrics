@@ -238,7 +238,14 @@ struct WorkerTask {
 enum RefPayload {
     /// Raw bytes to upload (or skip re-upload via cached ref).
     Bytes(Vec<u8>),
-    /// Pre-uploaded — worker installs the cached state if not already current.
+    /// Pre-uploaded handle — the dispatcher already cloned the bytes
+    /// from the pool's table into the second field, so the worker
+    /// treats this identically to `Bytes` for the actual compute. The
+    /// distinction is preserved for future Phase 5+ optimisations
+    /// (e.g., a true GPU-resident pre-upload that skips the second
+    /// CPU-side clone). For now we only retain the handle marker for
+    /// debug introspection.
+    #[allow(dead_code)]
     PreUploaded(TaskRefHandle, Vec<u8>),
 }
 
@@ -366,6 +373,13 @@ impl Drop for VramWatcher {
 /// State for a pre-uploaded reference — the worker installs this via
 /// [`zenmetrics_api::Metric::set_reference_srgb_u8`] when first hit,
 /// then keeps reusing as long as the worker's current signature matches.
+///
+/// `metric` / `width` / `height` are stored for debug introspection
+/// and for a future Phase 5+ optimisation that validates the handle's
+/// shape at dispatch time without consulting the `TaskRefHandle`. The
+/// current dispatcher only reads `ref_bytes` + `ref_hash` because the
+/// `TaskRefHandle` already carries the shape.
+#[allow(dead_code)]
 struct PreUpload {
     metric: MetricKind,
     width: u32,
@@ -691,7 +705,10 @@ pub(crate) struct PoolState {
     cached_ref_cache: CachedRefCache,
     /// Live VRAM watcher.
     vram: VramWatcher,
-    /// Configuration snapshot.
+    /// Configuration snapshot. Stored for inspection / future
+    /// re-spawning logic; the active worker thread params are baked
+    /// in at spawn time.
+    #[allow(dead_code)]
     config: PoolConfig,
     /// Pre-upload table — guarded by Mutex so the pool's API methods can
     /// extend it without going through the worker.
