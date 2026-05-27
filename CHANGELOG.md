@@ -17,6 +17,20 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### ssim2-gpu — perf: port 3-channel-fused downscale kernel from zensim-gpu — 2026-05-27
+
+Adds `downscale_2x_3ch_kernel` (3-in, 3-out planar 2× downscale)
+mirrored verbatim from `zensim-gpu::kernels::downscale::downscale_2x_3ch_kernel`.
+Replaces the per-channel `downscale_2x_plane_kernel` triplet loop in
+`build_linear_pyramid_until` (and `set_reference_strip_mode`'s
+full-image ref pyramid) with one launch per scale transition.
+
+Output is bit-identical to the per-plane variant — same `min(src-1)`
+clamp math and same `* 0.25` box-average — verified by parity tests
+(21/21 `parity_lock.rs` tests pass; scores identical to pre-fix at
+1024², 2048², 4096²). Phase 0 / easy-fix from
+`docs/SSIM2_FIX_ASSESSMENT.md`.
+
 ### zen-cloud-runpod — feat: RunPod Pods (pull) provider + `--backend runpod` (Phase F, 2026-05-27)
 
 (`82178f44`) New `zen-cloud-runpod` crate implementing the five

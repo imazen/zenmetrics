@@ -925,26 +925,29 @@ impl<R: Runtime> Ssim2<R> {
                 ArrayArg::from_raw_parts(full_ref_lin[0][2].clone(), n0),
             );
         }
-        // Downscale chain.
+        // Downscale chain — one launch per scale transition via the
+        // 3-channel-fused kernel.
         for s in 1..dims.len() {
             let (pw, ph) = dims[s - 1];
             let (cw, ch_) = dims[s];
             let n_prev = (pw as usize) * (ph as usize);
             let n_curr = (cw as usize) * (ch_ as usize);
-            for chi in 0..3 {
-                unsafe {
-                    downscale::downscale_2x_plane_kernel::launch_unchecked::<R>(
-                        &self.client,
-                        Self::cube_count_1d(n_curr),
-                        Self::cube_dim_1d(),
-                        ArrayArg::from_raw_parts(full_ref_lin[s - 1][chi].clone(), n_prev),
-                        ArrayArg::from_raw_parts(full_ref_lin[s][chi].clone(), n_curr),
-                        pw,
-                        ph,
-                        cw,
-                        ch_,
-                    );
-                }
+            unsafe {
+                downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(n_curr),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(full_ref_lin[s - 1][0].clone(), n_prev),
+                    ArrayArg::from_raw_parts(full_ref_lin[s - 1][1].clone(), n_prev),
+                    ArrayArg::from_raw_parts(full_ref_lin[s - 1][2].clone(), n_prev),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][0].clone(), n_curr),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][1].clone(), n_curr),
+                    ArrayArg::from_raw_parts(full_ref_lin[s][2].clone(), n_curr),
+                    pw,
+                    ph,
+                    cw,
+                    ch_,
+                );
             }
         }
 
@@ -1900,6 +1903,12 @@ impl<R: Runtime> Ssim2<R> {
     /// downscale launches for scales beyond `last_scale` when the
     /// skip-map elides them. `last_scale` is inclusive — must be in
     /// `0..self.scales.len()`.
+    ///
+    /// Uses the 3-channel-fused [`downscale::downscale_2x_3ch_kernel`]:
+    /// one launch per scale transition (down from three pre-fix). Output
+    /// is bit-identical to the per-plane variant — same clamp math, same
+    /// `* 0.25` box-average. See `SSIM2_FIX_ASSESSMENT.md` for the
+    /// per-line audit of the kernel's portability.
     fn build_linear_pyramid_until(&self, is_a: bool, last_scale: usize) {
         let stop = last_scale.min(self.scales.len().saturating_sub(1));
         for s in 1..=stop {
@@ -1912,20 +1921,22 @@ impl<R: Runtime> Ssim2<R> {
             };
             let n_curr = self.scales[s].n;
             let n_prev = self.scales[s - 1].n;
-            for ch in 0..3 {
-                unsafe {
-                    downscale::downscale_2x_plane_kernel::launch_unchecked::<R>(
-                        &self.client,
-                        Self::cube_count_1d(n_curr),
-                        Self::cube_dim_1d(),
-                        ArrayArg::from_raw_parts(prev_lin[ch].clone(), n_prev),
-                        ArrayArg::from_raw_parts(curr_lin[ch].clone(), n_curr),
-                        prev_w,
-                        prev_h,
-                        curr_w,
-                        curr_h,
-                    );
-                }
+            unsafe {
+                downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(n_curr),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(prev_lin[0].clone(), n_prev),
+                    ArrayArg::from_raw_parts(prev_lin[1].clone(), n_prev),
+                    ArrayArg::from_raw_parts(prev_lin[2].clone(), n_prev),
+                    ArrayArg::from_raw_parts(curr_lin[0].clone(), n_curr),
+                    ArrayArg::from_raw_parts(curr_lin[1].clone(), n_curr),
+                    ArrayArg::from_raw_parts(curr_lin[2].clone(), n_curr),
+                    prev_w,
+                    prev_h,
+                    curr_w,
+                    curr_h,
+                );
             }
         }
     }
