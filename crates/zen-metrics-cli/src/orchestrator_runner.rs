@@ -188,33 +188,70 @@ pub fn rekey_orchestrator_columns(
     cli_kind: CliMetricKind,
     columns: &std::collections::BTreeMap<String, f64>,
 ) -> Vec<(String, f64)> {
+    // Phase 7.7.1: the orchestrator's `executor::build_output_columns`
+    // emits the *versioned* iwssim column name (e.g.
+    // `iwssim_imazen_v0_0_1` via `iwssim_gpu::IWSSIM_COLUMN_NAME`),
+    // matching the cvvdp pattern. The legacy
+    // `MetricCache::run_metric_cached` path historically emitted the
+    // unversioned `iwssim_gpu` column. The bit-identical parquet
+    // sidecar contract is what production tooling locked onto, so
+    // re-key the versioned name back to the legacy
+    // unversioned name for both `Iwssim` and `IwssimGpu` CLI variants.
+    //
+    // Discover the versioned key at compile-time when the `iwssim`
+    // feature lights up zenmetrics_api::iwssim; in builds where it
+    // doesn't (rare), the rename is a no-op since the orchestrator
+    // wouldn't have emitted that column either.
+    #[cfg(feature = "gpu-iwssim")]
+    let iwssim_versioned: &str = zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME;
+    #[cfg(not(feature = "gpu-iwssim"))]
+    let iwssim_versioned: &str = "iwssim_imazen_vX_X_X";
+
     // Renames applied per CLI variant. GPU variants need no renames
-    // (their column name matches what the orchestrator produces).
-    let rename: &[(&str, &str)] = match cli_kind {
-        CliMetricKind::Ssim2 => &[("ssim2_gpu", "ssim2")],
-        CliMetricKind::Dssim => &[("dssim_gpu", "dssim")],
-        CliMetricKind::Zensim => &[("zensim_gpu", "zensim")],
-        CliMetricKind::Butteraugli => {
-            &[
-                ("butteraugli_max_gpu", "butteraugli_max"),
-                ("butteraugli_pnorm3_gpu", "butteraugli_pnorm3"),
-            ]
+    // for ssim2/dssim/zensim/butteraugli (their column name matches
+    // what the orchestrator produces). Iwssim is the exception:
+    // even `IwssimGpu` strips the versioned suffix because the legacy
+    // CLI path uses `iwssim_gpu` and downstream parquet readers depend
+    // on that exact column name.
+    let renames: Vec<(String, String)> = match cli_kind {
+        CliMetricKind::Ssim2 => vec![("ssim2_gpu".to_string(), "ssim2".to_string())],
+        CliMetricKind::Dssim => vec![("dssim_gpu".to_string(), "dssim".to_string())],
+        CliMetricKind::Zensim => vec![("zensim_gpu".to_string(), "zensim".to_string())],
+        CliMetricKind::Butteraugli => vec![
+            ("butteraugli_max_gpu".to_string(), "butteraugli_max".to_string()),
+            ("butteraugli_pnorm3_gpu".to_string(), "butteraugli_pnorm3".to_string()),
+        ],
+        // Iwssim-GPU: the legacy CLI's `IwssimGpu` arm emits the
+        // unversioned `iwssim_gpu` column (see
+        // `crates/zen-metrics-cli/src/metrics/mod.rs` IwssimGpu match
+        // arm). The orchestrator's `executor::build_output_columns`
+        // routes through `IwssimOpaque::column_name()` which yields
+        // the *versioned* `iwssim_imazen_v<MAJOR>_<MINOR>_<PATCH>`
+        // name. Re-key it back to `iwssim_gpu` so the parquet sidecar
+        // shape is bit-identical to legacy.
+        CliMetricKind::IwssimGpu => {
+            vec![(iwssim_versioned.to_string(), "iwssim_gpu".to_string())]
         }
-        CliMetricKind::Iwssim
-        | CliMetricKind::IwssimGpu
-        | CliMetricKind::Cvvdp
+        // Iwssim (the bare CLI variant): the legacy CLI's `Iwssim`
+        // arm emits the *versioned* column name straight through
+        // (`IWSSIM_COLUMN_NAME`). The orchestrator already emits the
+        // versioned name — so this case is a no-op rename. We list
+        // it here explicitly (rather than falling into the empty arm
+        // below) so future readers see the contract.
+        CliMetricKind::Iwssim => Vec::new(),
+        CliMetricKind::Cvvdp
         | CliMetricKind::Ssim2Gpu
         | CliMetricKind::DssimGpu
         | CliMetricKind::ZensimGpu
-        | CliMetricKind::ButteraugliGpu => &[],
+        | CliMetricKind::ButteraugliGpu => Vec::new(),
     };
     columns
         .iter()
         .map(|(k, v)| {
-            let renamed = rename
+            let renamed = renames
                 .iter()
-                .find(|(orig, _)| *orig == k.as_str())
-                .map(|(_, new)| new.to_string())
+                .find(|(orig, _)| orig.as_str() == k.as_str())
+                .map(|(_, new)| new.clone())
                 .unwrap_or_else(|| k.clone());
             (renamed, *v)
         })
@@ -224,28 +261,37 @@ pub fn rekey_orchestrator_columns(
 /// Decide whether a given CLI metric kind can flow through the
 /// orchestrator path.
 ///
-/// **Phase 7.5 change**: butteraugli + cvvdp are now eligible.
+/// **Phase 7.7.1 change**: `ButteraugliGpu` is back on the legacy
+/// path until the per-crate multi-resolution Strip mode lands.
 ///
-/// - **Butteraugli**: the orchestrator's `TaskResult.output_columns`
-///   includes `butteraugli_pnorm3_gpu` alongside the max-norm column,
-///   so the two-column emit survives end-to-end. The columns are
-///   bit-identical to the legacy `MetricCache::compute_butter` path
-///   (same fused reduction kernel, same field names — see
-///   `executor::build_output_columns` and
-///   `butteraugli_gpu::opaque::compute_srgb_u8_with_pnorm3`).
-/// - **Cvvdp**: the orchestrator surfaces the versioned column tag
-///   from `Score::metric_version`, then
-///   `executor::build_output_columns` keys it into the parquet under
-///   `cvvdp_gpu::CVVDP_COLUMN_NAME` — same shape the legacy
-///   `CvvdpBatchScorer` emits.
-///
-/// **Phase 7.5 leaves `CliMetricKind::Butteraugli` (CPU)** still on
-/// the legacy path because the CPU butteraugli adapter doesn't expose
-/// `pnorm_3` today; routing it through the orchestrator would drop
-/// the second column silently. Future work: add `pnorm_3` to the
-/// `cpu-butter` adapter or document that CPU butter is single-column.
+/// - **Butteraugli (CPU + GPU)**: legacy on both. The legacy GPU
+///   path is `butter_pnorm3::score_both` which calls
+///   `Butteraugli::new_multires` directly and ALWAYS returns the
+///   multi-resolution score (full-res + half-res sibling supersampled
+///   into the diffmap — matches CPU butteraugli's default mode).
+///   The orchestrator path routes through `ButteraugliOpaque` whose
+///   `MemoryMode::Auto` resolver is *strip-preferred* — at any size
+///   where `Strip` fits the VRAM cap (i.e. most production sizes)
+///   it drops to single-resolution. Single-res scores diverge from
+///   multires scores by ~14–30 % depending on image / quality,
+///   far beyond any "atomic-reorder noise" parity tolerance. Until
+///   `ButteraugliOpaque::new_with_memory_mode`'s strip arms route
+///   through `Butteraugli::new_multires_strip` (the multi-resolution
+///   strip walker exists already but the opaque doesn't wire it up
+///   yet — a per-crate API change that needs its own review),
+///   butter sweeps must use the legacy CLI's typed
+///   `butter_pnorm3::score_both` path to stay bit-identical with
+///   production data. Tracked: see `INTEGRATION_NOTES.md` Phase
+///   7.7.1 path forward.
+/// - **Cvvdp**: orchestrator-eligible. The orchestrator surfaces the
+///   versioned column tag from `Score::metric_version`, then
+///   `executor::build_output_columns` keys it under
+///   `cvvdp_gpu::CVVDP_COLUMN_NAME`.
 pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
-    !matches!(kind, CliMetricKind::Butteraugli)
+    !matches!(
+        kind,
+        CliMetricKind::Butteraugli | CliMetricKind::ButteraugliGpu,
+    )
 }
 
 /// Build the orchestrator at the start of a CLI command. Wraps the
@@ -473,17 +519,72 @@ mod tests {
         assert_eq!(cvvdp, vec![("cvvdp_imazen_v0_0_1".to_string(), 9.2)]);
     }
 
+    /// Phase 7.7.1: iwssim's versioned column gets re-keyed back to the
+    /// legacy `iwssim_gpu` (GPU CLI variant) / `iwssim` (CPU CLI
+    /// variant). This is the parity fix — the orchestrator path emits
+    /// the versioned name that `zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME`
+    /// returns; the legacy `MetricCache` path emits the unversioned
+    /// `iwssim_gpu`. Production parquet readers depend on the legacy
+    /// column name, so the orchestrator path harmonises on it.
     #[test]
-    fn metric_eligibility_phase_7_5_admits_butter_gpu_and_cvvdp() {
-        // Phase 7.5: butter (GPU) + cvvdp now flow through the
-        // orchestrator. Only CPU butteraugli still uses the legacy
-        // path (the CPU adapter doesn't expose `pnorm_3`).
+    #[cfg(feature = "gpu-iwssim")]
+    fn rekey_orchestrator_columns_phase_7_7_1_renames_iwssim() {
+        use std::collections::BTreeMap;
+        // The exact versioned key depends on `IWSSIM_IMPL_TAG` /
+        // `CARGO_PKG_VERSION`. Build the key dynamically from the
+        // constant so this test tracks the source of truth.
+        let versioned = zenmetrics_api::iwssim::IWSSIM_COLUMN_NAME.to_string();
+        let mut cols = BTreeMap::new();
+        cols.insert(versioned.clone(), 0.952_f64);
+
+        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::IwssimGpu, &cols);
+        assert_eq!(
+            gpu_rekeyed,
+            vec![("iwssim_gpu".to_string(), 0.952)],
+            "iwssim-gpu should re-key versioned column to legacy iwssim_gpu"
+        );
+
+        // The bare `Iwssim` CLI variant is a passthrough — legacy
+        // CLI's matching arm ALSO emits the versioned name, so
+        // there's nothing to re-key. See the inline comment in
+        // `rekey_orchestrator_columns` for the source-of-truth path.
+        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Iwssim, &cols);
+        assert_eq!(
+            cpu_rekeyed,
+            vec![(versioned.clone(), 0.952)],
+            "iwssim (bare CLI variant) should pass versioned column through"
+        );
+    }
+
+    #[test]
+    fn metric_eligibility_phase_7_7_1_excludes_butter() {
+        // Phase 7.7.1: butter (BOTH CPU and GPU) reverts to the
+        // legacy path. The Phase 7.5 GPU-eligibility was premature
+        // — `ButteraugliOpaque::new_with_memory_mode` resolves Auto
+        // to strip-mode at most sizes (butter is strip-preferred),
+        // which drops to single-resolution. The legacy CLI's GPU
+        // butter helper (`butter_pnorm3::score_both`) calls
+        // `Butteraugli::new_multires` unconditionally — always
+        // multi-resolution. Routing GPU butter through the
+        // orchestrator's Auto path produced single-res scores
+        // diverging from multires by ~14-30 % (see
+        // `benchmarks/orchestrator_parity_2026-05-27_phase771_run2.csv`).
+        // Until the opaque API wires `new_multires_strip` (the
+        // multi-resolution strip walker that already exists in
+        // `butteraugli_gpu::pipeline.rs`), butter stays on the
+        // legacy code path so parquet sidecar shape stays
+        // bit-identical to production data.
         assert!(!metric_orchestrator_eligible(CliMetricKind::Butteraugli));
-        assert!(metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
+        assert!(!metric_orchestrator_eligible(CliMetricKind::ButteraugliGpu));
+        // Every other metric: orchestrator-eligible.
         assert!(metric_orchestrator_eligible(CliMetricKind::Cvvdp));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2));
         assert!(metric_orchestrator_eligible(CliMetricKind::Ssim2Gpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Dssim));
+        assert!(metric_orchestrator_eligible(CliMetricKind::DssimGpu));
         assert!(metric_orchestrator_eligible(CliMetricKind::Iwssim));
+        assert!(metric_orchestrator_eligible(CliMetricKind::IwssimGpu));
+        assert!(metric_orchestrator_eligible(CliMetricKind::Zensim));
+        assert!(metric_orchestrator_eligible(CliMetricKind::ZensimGpu));
     }
 }

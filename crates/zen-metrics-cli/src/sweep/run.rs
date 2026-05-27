@@ -769,11 +769,28 @@ fn compute_cell(
                 }
             } else if use_orch_for_cell
                 && !(metric == MetricKind::ZensimGpu && want_features_gpu)
+                && {
+                    #[cfg(feature = "orchestrator")]
+                    {
+                        crate::orchestrator_runner::metric_orchestrator_eligible(metric)
+                    }
+                    #[cfg(not(feature = "orchestrator"))]
+                    {
+                        false
+                    }
+                }
             {
                 // Phase 7.5: orchestrator-driven scoring. Skipped for
                 // ZensimGpu+want_features_gpu because the orchestrator
                 // doesn't yet expose feature emission; that branch
-                // still uses MetricCache below.
+                // still uses MetricCache below. Phase 7.7.1: also
+                // skipped for `Butteraugli` / `ButteraugliGpu`
+                // because the orchestrator's strip-preferred Auto
+                // resolver picks single-resolution scoring which
+                // diverges from the legacy CLI's
+                // `Butteraugli::new_multires`-always output by
+                // ~14-30 %. See
+                // `crate::orchestrator_runner::metric_orchestrator_eligible`.
                 #[cfg(feature = "orchestrator")]
                 {
                     score_via_orchestrator(
