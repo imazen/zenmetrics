@@ -1222,21 +1222,34 @@ mod tests {
     }
 
     #[test]
-    fn xxhash3_64_4mp_under_10ms() {
-        // 4096² × 3 = 48 MiB. Hash should complete well under 10 ms on
-        // any modern CPU.
+    fn xxhash3_64_4mp_under_10ms_release_only() {
+        // 4096² × 3 = 48 MiB. xxhash3_64 should hash this in <10 ms on
+        // any modern CPU when optimised. Debug builds run xxhash
+        // unoptimised (~300+ ms on 7950X), so this assertion only
+        // applies in release mode where the dispatcher actually runs.
+        if cfg!(debug_assertions) {
+            eprintln!("skipping xxhash 4MP timing test in debug build");
+            return;
+        }
         let buf = vec![42u8; 4096 * 4096 * 3];
         let t = std::time::Instant::now();
         let _ = hash_ref_bytes(&buf);
         let elapsed_ms = t.elapsed().as_millis();
-        // Use a wide bound (50 ms) so this test doesn't flake on
-        // contended CI machines; the 10 ms target is documented in
-        // the module docs.
+        // 50 ms flake bound; 10 ms target.
         assert!(
             elapsed_ms < 50,
             "xxhash3_64 4MP took {elapsed_ms} ms (target <10 ms; flake bound 50 ms)"
         );
-        eprintln!("xxhash3_64 4MP elapsed: {elapsed_ms} ms");
+        eprintln!("xxhash3_64 4MP elapsed: {elapsed_ms} ms (release build)");
+    }
+
+    #[test]
+    fn xxhash3_64_runs_at_4mp_regardless_of_build() {
+        // Cheap shape test that works in both debug and release: just
+        // confirm the hash function doesn't panic on a 4MP buffer.
+        let buf = vec![42u8; 4096 * 4096 * 3];
+        let h = hash_ref_bytes(&buf);
+        assert!(h != 0);
     }
 
     #[test]
