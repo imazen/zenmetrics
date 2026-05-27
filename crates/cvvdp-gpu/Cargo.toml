@@ -96,6 +96,10 @@ required-features = ["cubecl-types"]
 name = "time_size_sweep"
 required-features = ["cubecl-types"]
 
+[[example]]
+name = "bench_4096_one_mode"
+required-features = ["cuda"]
+
 [[test]]
 name = "band_weights_invariants"
 required-features = ["cubecl-types"]
