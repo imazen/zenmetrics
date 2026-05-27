@@ -1,0 +1,32 @@
+[package]
+name = "zen-cloud-local"
+description = "Local (no-cloud) provider for the zen-cloud-core worker trait layer: a plain-filesystem JobQueue (chunks.jsonl or a queue dir, claim-by-rename, done/failed sub-dirs), a filesystem BlobStorage mapping s3://bucket/key + file:// + plain-path keys to <base>/<bucket>/<key>, env/.env credentials, hostname/$WORKER_ID host with nvidia-smi gpu count, and a log-only heartbeat. Runs the full claim→fetch→compute→upload→ack loop on localhost with zero spend — the abstraction-validation + local-debug backend (spec §1.7 Phase B)."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+keywords = ["cloud", "worker", "job-queue", "filesystem", "local"]
+categories = ["concurrency", "filesystem"]
+publish = false
+
+[lib]
+name = "zen_cloud_local"
+path = "src/lib.rs"
+
+[dependencies]
+# The cloud-agnostic trait layer this crate implements.
+zen-cloud-core = { workspace = true }
+# Parse each chunk record (the same `chunks.jsonl` line shape the
+# vast.ai / runpod workers read) to extract the stable `chunk_id`.
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+# Log-only heartbeat + queue/storage trace breadcrumbs.
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+# The integration test runs the generic `run_worker` loop against the
+# local queue + filesystem storage with a trivial compute closure.
+tempfile = "3.27.0"

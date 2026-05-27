@@ -6671,6 +6671,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-cloud-local"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "zen-cloud-core",
+]
+
+[[package]]
 name = "zen-cloud-runpod"
 version = "0.0.1"
 dependencies = [
