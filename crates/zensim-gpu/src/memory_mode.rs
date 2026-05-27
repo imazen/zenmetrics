@@ -270,11 +270,7 @@ fn pyramid_pixels(width: u32, height: u32) -> usize {
 /// measurement. Adding an explicit floor inside the estimator would
 /// double-count the runtime overhead.
 #[must_use]
-pub fn estimate_gpu_memory_bytes(
-    width: u32,
-    height: u32,
-    regime: ZensimFeatureRegime,
-) -> usize {
+pub fn estimate_gpu_memory_bytes(width: u32, height: u32, regime: ZensimFeatureRegime) -> usize {
     let pyramid = pyramid_pixels(width, height);
     let (base_mb, beta_b_per_pyr) = match regime {
         ZensimFeatureRegime::Basic => (0_usize, 41_usize),

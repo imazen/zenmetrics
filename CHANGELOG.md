@@ -17,6 +17,30 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### zensim-gpu — perf: Phase 1b chunk 3 — GPU diffmap kernels WIRED + VALIDATED, default-OFF (2026-05-27)
+
+Wires the Phase 1b chunk-1/2 CubeCL diffmap kernels (`b50b8f57`,
+`f66930c7`) into the diffmap-producing methods behind an opt-in env
+gate `ZENSIM_GPU_DIFFMAP=1`. New `linear_to_positive_xyb_kernel`
+(linear-RGB sibling of the sRGB color kernel) feeds the GPU feature
+pipeline from the linear planes the diffmap API receives. New
+`GpuDiffmapScratch` (inner WithIw `Zensim<R>` + base accumulator +
+per-scale dm planes + cached trained weights) drives the
+`per_scale_weighted_ssim_kernel` → `pow2x_upsample_add_kernel` →
+`diffmap_trim_padded_kernel` chain. New `tests/cpu_gpu_diffmap_parity.rs`
+proves the GPU diffmap matches the CPU canonical
+`compute_with_ref_and_diffmap_linear_planar` **pointwise to ≤ 2.08e-4
+absolute** (5 fixtures × 4 distortions, CUDA RTX 5070; tolerance 1e-3).
+The gate is **default-OFF** (honest-stop on the wall axis): the scalar
+score must still come from the CPU canonical path because the
+GPU-feature → V0_3 MLP score is catastrophically wrong on the pinned
+zensim 0.3.0 (measured −77.13 vs CPU +85.33 on a real CID22 image —
+pre-existing WithIw-feature / V0_3-MLP-sensitivity bug, `docs/DIFFMAP_DIVERGENCES.md`
+§2b + §9), so GPU-diffmap + CPU-score is strictly slower than the
+CPU-only default. Production default is unchanged (zero regression);
+the validated GPU diffmap infrastructure unblocks the chunk-N+1
+score-path fix that flips the gate default-ON.
+
 ### zen-cloud — cloud-agnostic worker carve, Phase A (no behaviour change) (2026-05-26)
 
 Carves the `vastai-fleet` crate into a cloud-agnostic trait layer + a

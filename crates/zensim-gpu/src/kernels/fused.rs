@@ -301,7 +301,11 @@ pub fn fused_features_kernel(
         // persist sibling kernel (cpu_gpu_feature_sweep gates this
         // to < 1e-9 rel).
         let is_body = y >= y_body_start && y < y_body_end;
-        let mask = if is_body { f32::new(1.0) } else { f32::new(0.0) };
+        let mask = if is_body {
+            f32::new(1.0)
+        } else {
+            f32::new(0.0)
+        };
         let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
@@ -686,7 +690,11 @@ pub fn fused_features_kernel_persist(
         let sd0 = if sd_raw > 0.0 { sd_raw } else { f32::new(0.0) };
         // See `fused_features_kernel` for body-mask rationale.
         let is_body = y >= y_body_start && y < y_body_end;
-        let mask = if is_body { f32::new(1.0) } else { f32::new(0.0) };
+        let mask = if is_body {
+            f32::new(1.0)
+        } else {
+            f32::new(0.0)
+        };
         let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;

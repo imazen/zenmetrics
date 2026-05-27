@@ -8,11 +8,8 @@
 //!     cargo run --release -p zensim-gpu --example strip_memory_demo --features cuda
 
 use zensim_gpu::{
-    ZensimFeatureRegime,
-    estimate_gpu_memory_bytes,
-    memory_mode::{
-        CUBECL_OVERHEAD_BYTES, estimate_strip_gpu_memory_bytes_with_regime,
-    },
+    ZensimFeatureRegime, estimate_gpu_memory_bytes,
+    memory_mode::{CUBECL_OVERHEAD_BYTES, estimate_strip_gpu_memory_bytes_with_regime},
     pipeline::{STRIP_DEFAULT_BODY, STRIP_DEFAULT_HALO},
 };
 
@@ -41,11 +38,15 @@ fn main() {
     for &(w, h) in &sizes {
         for &(name, regime) in &regimes {
             let full_bytes = estimate_gpu_memory_bytes(w, h, regime);
-            let strip_bytes = estimate_strip_gpu_memory_bytes_with_regime(w, body, regime)
-                .unwrap_or(0);
+            let strip_bytes =
+                estimate_strip_gpu_memory_bytes_with_regime(w, body, regime).unwrap_or(0);
             let full_mb = (full_bytes as f64) / (1024.0 * 1024.0);
             let strip_mb = (strip_bytes as f64) / (1024.0 * 1024.0);
-            let ratio = if strip_mb > 0.0 { full_mb / strip_mb } else { 0.0 };
+            let ratio = if strip_mb > 0.0 {
+                full_mb / strip_mb
+            } else {
+                0.0
+            };
             eprintln!(
                 "{:>4}x{:<4} {:<8} {:>10.1} {:>10.1} {:>8.2}x",
                 w, h, name, full_mb, strip_mb, ratio

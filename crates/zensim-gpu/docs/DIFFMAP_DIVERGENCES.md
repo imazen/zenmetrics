@@ -88,6 +88,48 @@ need the 228 / 300 / 372 features pay zero CPU-side cost. The
 diffmap state is `Option<DiffmapState>` and lazy-allocated on first
 use of any Phase 1 diffmap or linear-planes entry-point.
 
+### §2b. Phase 1b chunk 3 — GPU diffmap kernels WIRED + VALIDATED, DEFAULT-OFF (2026-05-27)
+
+Phase 1b chunks 1+2 (commits `b50b8f57`, `f66930c7`) landed the CubeCL
+diffmap kernels (`per_scale_weighted_ssim_kernel` +
+`pow2x_upsample_add_kernel` + `diffmap_trim_padded_kernel` +
+`diffmap_zero_kernel`) and the default-options trained-weight port
+(`trained_multiscale_ssim_weights_default`). Chunk 3 (this commit)
+**wires them into the diffmap-producing methods** behind an opt-in env
+gate and **proves them pointwise-correct** against the CPU canonical:
+
+- New `linear_to_positive_xyb_kernel` (sibling of the sRGB color
+  kernel) lets the GPU feature pipeline ingest the linear-RGB planes
+  the diffmap API receives.
+- New `GpuDiffmapScratch` holds an inner WithIw-regime `Zensim<R>`
+  (which writes the per-scale mu1/mu2/ssq/s12 persist planes) + the
+  base accumulator + per-scale dm planes + cached trained weights.
+- `Zensim::gpu_diffmap_linear_into` orchestrates: build ref + dist XYB
+  pyramids on the inner pipeline → run the WithIw persist feature pass
+  (writes persist planes) → run the chunk-1/2 diffmap kernel chain →
+  trim → read back.
+- `tests/cpu_gpu_diffmap_parity.rs` validates the GPU diffmap matches
+  the CPU canonical `compute_with_ref_and_diffmap_linear_planar`
+  **pointwise to ≤ 2.08e-4 absolute** (5 fixtures × 4 distortions,
+  CUDA RTX 5070; tolerance pinned at 1e-3 with ~5× margin).
+
+**The GPU diffmap path is OPT-IN (`ZENSIM_GPU_DIFFMAP=1`), DEFAULT-OFF**
+— an honest-stop on the wall axis. Reason: the SCALAR SCORE must still
+come from the CPU canonical path, because the GPU-feature → V0_3 MLP
+score path is **catastrophically wrong** on the pinned zensim 0.3.0 (see
+§9; measured GPU V0_3 score `-77.13` vs CPU canonical `+85.33` on a
+real CID22 image — the WithIw GPU features pass the per-feature
+`cpu_parity` bands, but the V0_3 MLP amplifies those small f32 drifts
+into a 160-point score divergence). With the score forced onto the CPU
+canonical (which inherently re-runs the full feature pipeline), running
+the GPU diffmap **on top** is strictly slower than Phase 1's CPU-only
+path. The opt-in gate ships the validated GPU diffmap infrastructure so
+that the chunk N+1 score-path fix (upgrade the pinned zensim crate so
+the GPU-feature → V0_3 MLP score is trustworthy, OR add a GPU-native
+MLP-equivalent) flips the gate to default-ON and drops the CPU call —
+crushing the +1006% overhead. Until then the production default is
+unchanged (zero regression).
+
 ## §3. CPU vs GPU score divergence
 
 Because Phase 1's diffmap path returns the score produced by zensim's
