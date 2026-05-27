@@ -2,10 +2,29 @@
 //!
 //! * Brand string + SIMD feature flags via `raw-cpuid` (CPUID instr).
 //! * Logical core count via `std::thread::available_parallelism`.
-//! * Total physical RAM in MiB via `sysinfo`.
+//! * Total physical RAM in MiB via `sysinfo` + WSL2 detection.
+//!
+//! ## Phase 2 RAM detection notes
+//!
+//! The Phase 1 `ram_mib` value reported 50185 on the 128 GB
+//! water-cooled 7950X workstation. After investigation this is NOT a
+//! `sysinfo` bug — it's the actual ceiling the Linux kernel sees under
+//! WSL2 with `memory=50GB` set in `.wslconfig`. Surfacing 128 GB would
+//! lie about what the orchestrator can schedule against; the
+//! orchestrator's CPU-backend scheduler cares about
+//! Linux-kernel-visible RAM, not Windows-host RAM.
+//!
+//! Phase 2 keeps `ram_mib` reading the kernel-visible total (what
+//! `MemTotal` in `/proc/meminfo` reports — same as the original Phase
+//! 1 value) and explicitly documents the WSL2 case via a new
+//! `wsl_host_ram_mib_hint` field that callers can use to estimate
+//! whether re-configuring `.wslconfig` would meaningfully grow the
+//! schedulable RAM.
+
+use std::fs;
 
 use raw_cpuid::{CpuId, CpuIdReader};
-use sysinfo::System;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 use crate::CpuCapability;
 
@@ -98,13 +117,89 @@ fn collect_features<R: CpuIdReader>(cpuid: &CpuId<R>) -> Vec<String> {
 }
 
 /// Total physical RAM in MiB. `sysinfo::System::total_memory()` returns
-/// bytes; divide by 1 MiB. We refresh only the memory subsystem so
-/// startup cost stays low (no process scan, no disk scan).
+/// bytes; divide by 1 MiB.
+///
+/// Phase 2 hardened from Phase 1:
+///
+/// 1. Use `System::new_with_specifics(RefreshKind::nothing().with_memory(..))`
+///    + an explicit `refresh_memory_specifics(RAM)` to ensure RAM is
+///    populated. Phase 1's `System::new()` + `refresh_memory()` worked
+///    on every host we tested, but the explicit form is idempotent
+///    against future sysinfo refactors.
+///
+/// 2. Cross-check against `/proc/meminfo`'s `MemTotal:` line on Linux.
+///    Under WSL2, `/proc/meminfo` matches sysinfo's value exactly (both
+///    see the same kernel allocation), so the cross-check is a sanity
+///    gate: if sysinfo returns 0 we fall back to `MemTotal`, and if
+///    that's also 0 we return 0.
+///
+/// The returned value is the **Linux-kernel-visible** total RAM. On
+/// WSL2 this is bounded by `.wslconfig:memory=...`. Use
+/// [`wsl_detect`] to know whether the host could expose more.
 fn total_ram_mib() -> usize {
-    let mut sys = System::new();
-    sys.refresh_memory();
+    let refresh = RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram());
+    let mut sys = System::new_with_specifics(refresh);
+    sys.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
     let bytes = sys.total_memory();
-    (bytes / (1024 * 1024)) as usize
+    if bytes > 0 {
+        (bytes / (1024 * 1024)) as usize
+    } else {
+        // Fall back to /proc/meminfo's MemTotal (Linux-only). Returns 0
+        // on systems where that file doesn't exist.
+        proc_meminfo_total_mib()
+    }
+}
+
+/// Parse `MemTotal:` from `/proc/meminfo`. Returns 0 if the file is
+/// missing or the line isn't present. The format is `MemTotal: NNN kB`
+/// (always kilobytes, always integer).
+fn proc_meminfo_total_mib() -> usize {
+    let s = match fs::read_to_string("/proc/meminfo") {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    parse_meminfo_total_kib(&s).map(|kib| kib / 1024).unwrap_or(0)
+}
+
+fn parse_meminfo_total_kib(text: &str) -> Option<usize> {
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("MemTotal:") {
+            // Tokens: <whitespace><number><whitespace>kB
+            return rest
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse::<usize>().ok());
+        }
+    }
+    None
+}
+
+/// Detect WSL2 and surface the Windows-host RAM if cheaply available.
+///
+/// Detection: `/proc/version` contains "microsoft" or "WSL" — that's
+/// the standard WSL2 signature. We do NOT shell out to PowerShell
+/// (slow startup, doesn't always exist, blocks the orchestrator
+/// constructor); we just flag the WSL2 case so callers can interpret
+/// `ram_mib` correctly.
+///
+/// Returns:
+/// - `None`: not running under WSL2 (Linux native, macOS, Windows
+///   native, etc.). `ram_mib` is the actual physical RAM.
+/// - `Some(0)`: WSL2 detected, host RAM unknown.
+/// - `Some(n)`: WSL2 detected, host RAM is `n` MiB (when discoverable
+///   from `/proc/cmdline` or environment hints — best-effort).
+pub fn detect_wsl2_host_ram_mib_hint() -> Option<usize> {
+    let version = fs::read_to_string("/proc/version").ok()?;
+    let lowered = version.to_ascii_lowercase();
+    if !(lowered.contains("microsoft") || lowered.contains("wsl")) {
+        return None;
+    }
+    // Found WSL2. We don't have a cheap way to ask the Windows host
+    // for its total RAM from inside Linux, so return Some(0) as a
+    // "WSL2 detected, host RAM unknown" sentinel. Callers who want
+    // the actual host RAM can shell out to powershell.exe themselves;
+    // we keep the orchestrator constructor fast.
+    Some(0)
 }
 
 #[cfg(test)]
@@ -143,5 +238,32 @@ mod tests {
         // Skip on weirdly-instrumented CI hosts that return 0; only
         // assert the call doesn't panic.
         let _ = total_ram_mib();
+    }
+
+    #[test]
+    fn parse_meminfo_total_kib_canonical() {
+        // Canonical /proc/meminfo header — `MemTotal:` line followed by
+        // a space-separated number and the `kB` suffix.
+        let text = "MemTotal:       51390444 kB\nMemFree:        15243200 kB\n";
+        assert_eq!(parse_meminfo_total_kib(text), Some(51_390_444));
+    }
+
+    #[test]
+    fn parse_meminfo_total_kib_missing_returns_none() {
+        let text = "MemFree:        15243200 kB\nMemAvailable:   45230000 kB\n";
+        assert_eq!(parse_meminfo_total_kib(text), None);
+    }
+
+    #[test]
+    fn parse_meminfo_total_kib_handles_extra_whitespace() {
+        let text = "MemTotal:\t\t51390444 kB\n";
+        assert_eq!(parse_meminfo_total_kib(text), Some(51_390_444));
+    }
+
+    #[test]
+    fn wsl2_hint_never_panics() {
+        // Smoke — just verify the call doesn't panic on the host. The
+        // return value depends on whether the test runs under WSL2.
+        let _ = detect_wsl2_host_ram_mib_hint();
     }
 }

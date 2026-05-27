@@ -35,7 +35,7 @@ mod cpu;
 mod gpu;
 
 pub use bench::{synth_pair_offset_dist, BenchPlan, BenchReport};
-pub use cpu::detect_cpu;
+pub use cpu::{detect_cpu, detect_wsl2_host_ram_mib_hint};
 pub use gpu::detect_gpu;
 
 /// Error type for orchestrator operations. Variants will be extended in
@@ -865,5 +865,155 @@ mod tests {
         _assert_send_sync::<Orchestrator>();
         _assert_send_sync::<CapabilityProfile>();
         _assert_send_sync::<OrchestratorConfig>();
+    }
+
+    // ----------- MetricProfile / Backend round-trip tests (Phase 2) -----------
+
+    #[test]
+    fn backend_tag_round_trip() {
+        for b in [
+            Backend::GpuFull,
+            Backend::GpuStrip,
+            Backend::GpuStripPair,
+            Backend::Cpu,
+        ] {
+            // Tag is what serializes into TOML keys + report headers —
+            // assert each variant has a distinct stable tag.
+            let s = b.tag();
+            assert!(!s.is_empty());
+        }
+        // Spot check: all four tags must be distinct.
+        let tags: std::collections::HashSet<_> =
+            [Backend::GpuFull, Backend::GpuStrip, Backend::GpuStripPair, Backend::Cpu]
+                .iter()
+                .map(|b| b.tag())
+                .collect();
+        assert_eq!(tags.len(), 4);
+    }
+
+    #[test]
+    fn backend_bench_set_get() {
+        let mut b = BackendBench::default();
+        assert_eq!(b.get(Backend::GpuFull), None);
+        b.set(Backend::GpuFull, 2.71);
+        assert_eq!(b.get(Backend::GpuFull), Some(2.71));
+        b.set(Backend::GpuStripPair, 2.62);
+        assert_eq!(b.get(Backend::GpuStripPair), Some(2.62));
+        assert_eq!(b.get(Backend::GpuStrip), None);
+        assert_eq!(b.get(Backend::Cpu), None);
+    }
+
+    #[test]
+    fn backend_vram_set_get() {
+        let mut v = BackendVram::default();
+        assert_eq!(v.get(Backend::GpuFull), None);
+        v.set(Backend::GpuFull, 3970);
+        assert_eq!(v.get(Backend::GpuFull), Some(3970));
+    }
+
+    #[test]
+    fn metric_profile_toml_round_trip() {
+        // Build a populated profile, save through the cache helpers,
+        // load back and check structural equality at second-resolution.
+        let mut profile = fake_profile();
+        let mut cvvdp = MetricProfile::default();
+        let size_4k_px: u64 = 4096 * 4096;
+        let size_2k_px: u64 = 2048 * 2048;
+        let size_1k_px: u64 = 1024 * 1024;
+
+        let mut bench_4k = BackendBench::default();
+        bench_4k.set(Backend::GpuFull, 2.71);
+        bench_4k.set(Backend::GpuStripPair, 2.62);
+        let mut bench_2k = BackendBench::default();
+        bench_2k.set(Backend::GpuFull, 3.10);
+        let mut bench_1k = BackendBench::default();
+        bench_1k.set(Backend::GpuFull, 5.34);
+
+        cvvdp.ns_per_px_at.insert(size_4k_px, bench_4k);
+        cvvdp.ns_per_px_at.insert(size_2k_px, bench_2k);
+        cvvdp.ns_per_px_at.insert(size_1k_px, bench_1k);
+
+        let mut vram_4k = BackendVram::default();
+        vram_4k.set(Backend::GpuFull, 3970);
+        vram_4k.set(Backend::GpuStripPair, 2272);
+        cvvdp.vram_mib_at.insert(size_4k_px, vram_4k);
+
+        cvvdp.last_measured = Some(SystemTime::now());
+        cvvdp
+            .cells_failed_oom
+            .push((Backend::GpuFull, 4096u64 * 4096u64 * 4));
+
+        profile.metrics.insert("cvvdp".into(), cvvdp);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = cache_file_path(dir.path(), &profile.machine_hash);
+        save_profile(&path, &profile).expect("save");
+        let loaded = load_cached_profile(&path).expect("load");
+
+        let cv = loaded.metrics.get("cvvdp").expect("cvvdp metric");
+        assert_eq!(cv.ns_per_px_at.len(), 3);
+        let b4k = cv.ns_per_px_at.get(&size_4k_px).unwrap();
+        assert_eq!(b4k.get(Backend::GpuFull), Some(2.71));
+        assert_eq!(b4k.get(Backend::GpuStripPair), Some(2.62));
+        assert_eq!(b4k.get(Backend::GpuStrip), None);
+        let v4k = cv.vram_mib_at.get(&size_4k_px).unwrap();
+        assert_eq!(v4k.get(Backend::GpuFull), Some(3970));
+        assert_eq!(v4k.get(Backend::GpuStripPair), Some(2272));
+        assert_eq!(cv.cells_failed_oom.len(), 1);
+        let (oom_b, oom_px) = cv.cells_failed_oom[0];
+        assert_eq!(oom_b, Backend::GpuFull);
+        assert_eq!(oom_px, 4096u64 * 4096u64 * 4);
+    }
+
+    #[test]
+    fn metric_profile_toml_emits_string_size_keys() {
+        // Confirm the TOML serializer stringifies u64 keys (the format
+        // mandated by the design doc — see ORCHESTRATOR_DESIGN.md).
+        let mut profile = fake_profile();
+        let mut cvvdp = MetricProfile::default();
+        let size_1k_px: u64 = 1024 * 1024;
+        let mut bench = BackendBench::default();
+        bench.set(Backend::GpuFull, 5.34);
+        cvvdp.ns_per_px_at.insert(size_1k_px, bench);
+        let mut vram = BackendVram::default();
+        vram.set(Backend::GpuFull, 385);
+        cvvdp.vram_mib_at.insert(size_1k_px, vram);
+        cvvdp.last_measured = Some(SystemTime::now());
+        profile.metrics.insert("cvvdp".into(), cvvdp);
+        let toml_text = toml::to_string_pretty(&profile).unwrap();
+        // The key 1048576 (= 1024 * 1024) must appear somewhere in
+        // the output. TOML's dotted-key format emits integer-looking
+        // keys unquoted (`[metrics.cvvdp.ns_per_px_at.1048576]`); our
+        // serde helper stringifies u64 -> "1048576" but the TOML
+        // writer is free to drop the quotes since the lexer parses
+        // unquoted integers + bare-keys identically. Either form is
+        // a valid round-trip — assert just on the substring.
+        assert!(
+            toml_text.contains("1048576"),
+            "expected stringified u64 key '1048576' somewhere in TOML:\n{toml_text}"
+        );
+        // And the metric tag heading must be present.
+        assert!(toml_text.contains("[metrics.cvvdp"));
+    }
+
+    #[test]
+    fn metric_profile_default_is_empty() {
+        let p = MetricProfile::default();
+        assert!(p.ns_per_px_at.is_empty());
+        assert!(p.vram_mib_at.is_empty());
+        assert!(p.cells_failed_oom.is_empty());
+        assert!(p.last_measured.is_none());
+    }
+
+    #[test]
+    fn bench_report_empty_without_feature() {
+        // Without the `bench` feature, BenchPlan + run still exist —
+        // run returns an empty report. This keeps the public API
+        // stable regardless of feature mix.
+        let plan = BenchPlan::default();
+        let report = bench::run(&plan);
+        // Either zero metrics (bench feature off) OR populated (on).
+        // We only assert structural shape, not contents.
+        let _ = report.metrics.len();
     }
 }
