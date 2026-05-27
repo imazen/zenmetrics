@@ -10,6 +10,9 @@
 //! It has ZERO gpu / cloud-SDK / parquet dependencies, so any consumer
 //! (coefficient, jxl-encoder, zensim picker training) can depend on the
 //! abstraction without dragging GPU infrastructure (spec §1.6 dec. 5).
+//! (It does carry a thin `reqwest` HTTP dep for [`r2creds`] — the shared,
+//! provider-agnostic Cloudflare R2 scoped-credential minter every fleet
+//! launcher reuses — but no cloud SDK.)
 //!
 //! Provider crates implement the traits:
 //! - `zen-cloud-vastai` — vast.ai API + `/proc/1/environ` + Cloudflare R2
@@ -22,11 +25,16 @@
 #![forbid(unsafe_code)]
 
 mod error;
+pub mod r2creds;
 mod run;
 mod traits;
 mod types;
 
 pub use error::CloudError;
+pub use r2creds::{
+    DEFAULT_TTL_SECONDS, MAX_TTL_SECONDS, MIN_TTL_SECONDS, Permission, ScopedR2Cred,
+    mint_scoped_r2_cred, mint_scoped_r2_cred_with,
+};
 pub use run::run_worker;
 pub use traits::{BlobStorage, CredentialSource, Heartbeat, JobQueue, WorkerHost};
 pub use types::{
