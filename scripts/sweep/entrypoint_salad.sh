@@ -36,6 +36,11 @@
 #   R2_* / AWS_*    REQUIRED. BYO object-store credentials (R2_ACCOUNT_ID +
 #                   R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY). The worker's
 #                   SaladEnvCredentials reads the container-group env.
+#                   AWS_SESSION_TOKEN (or R2_SESSION_TOKEN) is REQUIRED when
+#                   the launcher injected a SCOPED/temporary R2 cred — it is
+#                   written to ~/.aws/credentials as aws_session_token (a
+#                   temp key+secret without it 403s). Absent for permanent /
+#                   root-key use (back-compatible).
 #   SALAD_LOG_LEVEL Optional. Sidecar log verbosity (debug/info/warn/error;
 #                   default error). RUST_LOG controls the worker.
 #
@@ -101,12 +106,22 @@ export RUST_LOG="${RUST_LOG:-info,zen_cloud_salad=info}"
 
 # s5cmd credentials file (the worker shells to s5cmd for R2 ops, matching
 # the vast.ai path).
+#
+# Scoped/temporary R2 creds (minted per-sweep by the launcher) carry a
+# session token that the S3 client MUST send — key+secret ALONE 403.
+# When AWS_SESSION_TOKEN (or R2_SESSION_TOKEN) is present, write
+# `aws_session_token` into the profile. When absent, behave exactly as
+# before (permanent-token / root-key use stays back-compatible).
+SESSION_TOKEN="${AWS_SESSION_TOKEN:-${R2_SESSION_TOKEN:-}}"
 mkdir -p ~/.aws
-cat > ~/.aws/credentials <<CREDS
-[r2]
-aws_access_key_id = ${R2_ACCESS_KEY_ID}
-aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}
-CREDS
+{
+    echo "[r2]"
+    echo "aws_access_key_id = ${R2_ACCESS_KEY_ID}"
+    echo "aws_secret_access_key = ${R2_SECRET_ACCESS_KEY}"
+    if [[ -n "${SESSION_TOKEN}" ]]; then
+        echo "aws_session_token = ${SESSION_TOKEN}"
+    fi
+} > ~/.aws/credentials
 
 JOB_PORT="${SALAD_JOB_PORT:-80}"
 log "worker=${WORKER_ID:-${SALAD_MACHINE_ID:-$(hostname)}} run=${SWEEP_RUN_ID} chunks=${CHUNKS_R2} job_port=${JOB_PORT}"
