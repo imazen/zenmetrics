@@ -37,6 +37,8 @@ mod cpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 mod executor;
 mod gpu;
+#[cfg(all(feature = "bench", feature = "cuda"))]
+mod pool;
 
 pub use bench::{locate_bench_worker, synth_pair_offset_dist, BenchPlan, BenchReport};
 #[cfg(feature = "bench")]
@@ -50,6 +52,8 @@ pub use executor::{
     AttemptOutcome, OrchestratorError as ExecutorError, Task, TaskData, TaskResult,
 };
 pub use gpu::detect_gpu;
+#[cfg(all(feature = "bench", feature = "cuda"))]
+pub use pool::{CachedRefStats, PoolConfig, RunAllIter, TaskHandle, TaskRefHandle};
 
 /// Error type for orchestrator operations. Variants will be extended in
 /// later phases (benchmark failures, scheduler errors, etc.) — callers
@@ -421,13 +425,46 @@ pub fn is_profile_stale(
     false
 }
 
-/// Top-level orchestrator. Phase 1 holds only configuration + the
-/// cached capability profile; later phases add a runtime state field
-/// (worker pool, in-flight tasks, learned perf numbers).
-#[derive(Debug, Clone)]
+/// Top-level orchestrator. Phase 1 held only configuration + the
+/// cached capability profile; Phase 5 adds the worker pool, pool
+/// configuration, and cached-ref auto-detect state.
+///
+/// The worker pool is lazily initialized on first `submit` /
+/// `run_all` / `upload_reference` — `Orchestrator::new` stays cheap
+/// (no thread spawn, no VRAM probe thread). Callers that just want
+/// to inspect the capability profile pay nothing for the pool.
+///
+/// **Not `Clone`** — the pool's `mpsc::Receiver` and `JoinHandle`s are
+/// single-owner. Multi-threaded callers wrap the orchestrator in
+/// `Arc<Mutex<Orchestrator>>` themselves.
+///
+/// **Not `Sync`** for the same reason. `Send` *is* implemented, so
+/// the orchestrator can move between threads as long as only one
+/// thread touches it at a time.
 pub struct Orchestrator {
     config: OrchestratorConfig,
     capability: CapabilityProfile,
+    /// Pool configuration. Set via [`Self::set_pool_config`] before
+    /// the first `submit`; frozen once workers spawn.
+    #[cfg(all(feature = "bench", feature = "cuda"))]
+    pool_config: crate::pool::PoolConfig,
+    /// Worker pool — lazily initialised on first `submit` / `run_all` /
+    /// `upload_reference`. `None` until then.
+    #[cfg(all(feature = "bench", feature = "cuda"))]
+    pool: Option<Box<crate::pool::PoolState>>,
+}
+
+impl std::fmt::Debug for Orchestrator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("Orchestrator");
+        s.field("config", &self.config)
+            .field("capability_machine_hash", &self.capability.machine_hash);
+        #[cfg(all(feature = "bench", feature = "cuda"))]
+        {
+            s.field("pool_initialised", &self.pool.is_some());
+        }
+        s.finish()
+    }
 }
 
 impl Orchestrator {
@@ -468,7 +505,14 @@ impl Orchestrator {
             }
         };
 
-        Ok(Self { config, capability })
+        Ok(Self {
+            config,
+            capability,
+            #[cfg(all(feature = "bench", feature = "cuda"))]
+            pool_config: crate::pool::PoolConfig::default(),
+            #[cfg(all(feature = "bench", feature = "cuda"))]
+            pool: None,
+        })
     }
 
     /// Borrow the active capability profile.
@@ -491,7 +535,14 @@ impl Orchestrator {
     /// test suite (`tests/chooser.rs`). Production code paths should
     /// still prefer [`Self::new`].
     pub fn from_capability(config: OrchestratorConfig, capability: CapabilityProfile) -> Self {
-        Self { config, capability }
+        Self {
+            config,
+            capability,
+            #[cfg(all(feature = "bench", feature = "cuda"))]
+            pool_config: crate::pool::PoolConfig::default(),
+            #[cfg(all(feature = "bench", feature = "cuda"))]
+            pool: None,
+        }
     }
 
     /// Borrow the active config.
@@ -893,7 +944,11 @@ mod tests {
     #[test]
     fn orchestrator_send_sync() {
         fn _assert_send_sync<T: Send + Sync>() {}
-        _assert_send_sync::<Orchestrator>();
+        // Phase 5: Orchestrator gained a worker pool whose mpsc::Receiver
+        // is !Sync, so the orchestrator dropped Sync. It remains Send
+        // (and the cap/config remain Send + Sync).
+        fn _assert_send<T: Send>() {}
+        _assert_send::<Orchestrator>();
         _assert_send_sync::<CapabilityProfile>();
         _assert_send_sync::<OrchestratorConfig>();
     }

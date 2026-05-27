@@ -29,6 +29,31 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zenmetrics-orchestrator` Phase 5 — worker pool, streaming + batch
+  APIs, cached-ref auto-detect, live VRAM watcher. New types:
+  `TaskHandle`, `TaskRefHandle`, `PoolConfig`, `CachedRefStats`,
+  `RunAllIter`. New `Orchestrator` methods: `submit` /
+  `poll` / `poll_any` / `poll_any_blocking` for the streaming API,
+  `run_all` for batch, `upload_reference` / `drop_reference` for
+  explicit pre-uploads that skip the auto-hash, `cached_ref_stats` for
+  test introspection, `vram_watcher_mib` for the live watcher snapshot,
+  `set_pool_config` for runtime tuning. `TaskData` gained
+  `PreUploaded(TaskRefHandle)` for the explicit-pre-upload path.
+  Single GPU worker keeps a warm `Metric` instance across consecutive
+  tasks of the same `(metric, w, h, backend)` signature; `num_cpus/2`
+  CPU workers (capped) currently surface `CpuNotYetWired` until Phase 6
+  wires the per-crate CPU references. xxhash3_64 ref-bytes hash on
+  every `submit` drives a sliding-window cache (32 entries) that
+  promotes consecutive same-ref tasks to `set_reference_srgb_u8` +
+  `compute_with_cached_reference_srgb_u8`. Live VRAM watcher samples
+  `cvvdp_gpu::memory_mode::live_vram_probe_bytes` every 250 ms; GPU
+  worker stalls briefly when free VRAM drops below
+  `vram_safety_floor_mib` (default 200). New examples `run_batch.rs`
+  + `run_stream.rs`; new integration tests `tests/streaming.rs` +
+  `tests/cached_ref.rs` (real-GPU, gated `#[ignore]`). `Orchestrator`
+  dropped `Clone` and `Sync` (still `Send`) because the pool owns
+  `mpsc::Receiver` + `JoinHandle`s.
+
 - `zen-cloud-vastai` worker — durable best-effort R2 error sidecar on
   chunk failure. When `process_chunk_inline` returns an error, the worker
   uploads the full anyhow error chain + chunk_id, run_id, hostname, and

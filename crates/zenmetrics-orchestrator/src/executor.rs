@@ -86,7 +86,12 @@ pub struct Task {
 /// a `Vec<u8>` once and reuses across every backend attempt for the same
 /// task — re-reading from disk on each fallback would be wasteful.
 ///
-/// `PreUploaded` is Phase 5 territory; intentionally absent here.
+/// `PreUploaded` is Phase 5: callers who want zero auto-hash overhead
+/// can pre-upload a reference via
+/// [`crate::Orchestrator::upload_reference`] and pass the resulting
+/// [`crate::TaskRefHandle`] as `TaskData::PreUploaded`. The handle is
+/// only valid as a *reference* — passing it as the distorted side
+/// returns an error at submit time.
 #[derive(Debug, Clone)]
 pub enum TaskData {
     /// Already-loaded packed sRGB `R,G,B,…` bytes (length `width * height * 3`).
@@ -96,6 +101,12 @@ pub enum TaskData {
     /// surfaces an `UnsupportedTaskData` error for `Path` because the
     /// loader integration isn't wired yet — pass `Srgb8` directly.
     Path(PathBuf),
+    /// Pre-uploaded reference handle. The worker pool skips the
+    /// xxhash3_64 ref-bytes hash entirely when the task arrives with
+    /// `PreUploaded` instead of `Srgb8`. The handle must match the
+    /// task's `(metric, width, height)` signature — submit returns
+    /// [`OrchestratorError::MetricApi`] otherwise.
+    PreUploaded(crate::pool::TaskRefHandle),
 }
 
 // ---------------------------------------------------------------------------
@@ -221,13 +232,21 @@ impl std::error::Error for OrchestratorError {}
 /// Mirrors the shape of `bench::BenchMetric` — both modules share the
 /// same per-backend construction matrix; the executor adds OOM-recovery
 /// state on top.
-enum ExecMetric {
+///
+/// `pub(crate)` so the Phase 5 worker pool (`pool.rs`) can hold a warm
+/// instance and dispatch through [`Self::compute`] /
+/// [`Self::set_reference`] / [`Self::compute_with_cached_reference`].
+pub(crate) enum ExecMetric {
     Umbrella(Box<Metric>),
     CvvdpStripPair(Box<zenmetrics_api::cvvdp::CvvdpOpaque>),
 }
 
 impl ExecMetric {
-    fn compute(&mut self, r: &[u8], d: &[u8]) -> Result<Score, CallErr> {
+    /// Phase 4 entrypoint. Returns the private `CallErr` so the
+    /// `run_single` ladder can match on it without the `pub(crate)`
+    /// shim's wrapper variants. Phase 5 calls
+    /// [`Self::compute`] (the `pub(crate)` shim added below) instead.
+    fn compute_phase4(&mut self, r: &[u8], d: &[u8]) -> Result<Score, CallErr> {
         match self {
             ExecMetric::Umbrella(m) => m
                 .compute_srgb_u8(r, d)
@@ -410,14 +429,21 @@ fn construct_cvvdp_strip_pair(
 // Materialize TaskData → bytes
 // ---------------------------------------------------------------------------
 
-/// Materialize `data` into a packed sRGB `Vec<u8>`. Phase 4 wires only
-/// `Srgb8`; `Path` surfaces a clear "Phase 5" error.
+/// Materialize `data` into a packed sRGB `Vec<u8>`. Phase 4's
+/// `run_single` wires only `Srgb8`; `Path` and `PreUploaded` surface
+/// a clear "Phase 5 — use submit/run_all" error. Phase 5's worker
+/// pool resolves `PreUploaded` against its own state table before
+/// dispatching the worker, so this fall-through is `run_single`-only.
 fn materialize(data: TaskData) -> Result<Vec<u8>, OrchestratorError> {
     match data {
         TaskData::Srgb8(b) => Ok(b),
         TaskData::Path(p) => Err(OrchestratorError::UnsupportedTaskData(format!(
             "TaskData::Path({}) not yet wired (Phase 5)",
             p.display()
+        ))),
+        TaskData::PreUploaded(h) => Err(OrchestratorError::UnsupportedTaskData(format!(
+            "TaskData::PreUploaded(id={}) is for submit/run_all only; run_single uses Srgb8",
+            h.inner_id
         ))),
     }
 }
@@ -523,7 +549,7 @@ impl Orchestrator {
             match construct(metric, backend, width, height, params.clone()) {
                 ConstructOutcome::Ok(mut em) => {
                     // Try compute.
-                    match em.compute(&ref_bytes, &dist_bytes) {
+                    match em.compute_phase4(&ref_bytes, &dist_bytes) {
                         Ok(score) => {
                             attempts.push((backend, AttemptOutcome::Success));
                             return TaskResult {
@@ -678,3 +704,139 @@ fn _force_use_reject_reason(_r: RejectReason) {}
 // chooser already re-exports it from the crate root.
 #[allow(dead_code)]
 fn _force_use_backend_choice(_c: BackendChoice) {}
+
+// ---------------------------------------------------------------------------
+// Phase 5: pub(crate) shims for pool.rs
+//
+// The pool's GPU worker reuses the same per-backend construction matrix
+// + the same OOM-classification heuristic as `run_single`. We expose
+// them as `pub(crate)` shims rather than making the internal types
+// `pub` directly — keeps the public API minimal.
+// ---------------------------------------------------------------------------
+
+/// Wrapper exposing [`ExecMetric`] outside this module for the worker
+/// pool. Mirrors the variants exactly; the worker doesn't care which
+/// underlying type it's calling, only that `compute` and the
+/// cached-ref variants work.
+pub(crate) enum ConstructOutcomePub {
+    Ok(ExecMetric),
+    Oom,
+    Other(String),
+}
+
+/// pool-facing classification for [`compute`] call errors.
+pub(crate) enum CallErrPub {
+    Oom,
+    Other(String),
+}
+
+impl ExecMetric {
+    /// Try to score `(ref_bytes, dist_bytes)`. The umbrella's
+    /// `compute_srgb_u8` is the regular path; cvvdp StripPair routes
+    /// through the direct crate. OOM vs other errors are classified
+    /// via the shared string heuristic.
+    pub(crate) fn compute(&mut self, r: &[u8], d: &[u8]) -> Result<Score, CallErrPub> {
+        match self.compute_phase4(r, d) {
+            Ok(s) => Ok(s),
+            Err(CallErr::Oom) => Err(CallErrPub::Oom),
+            Err(CallErr::Other(msg)) => Err(CallErrPub::Other(msg)),
+        }
+    }
+
+    /// True when this backend supports cached-ref dispatch. cvvdp
+    /// StripPair uses a one-shot strip walker that doesn't expose
+    /// a separate set_reference / compute_with_cached_reference pair —
+    /// the pool still calls regular `compute` for it. The umbrella
+    /// metrics that DO expose cached-ref (cvvdp Full, butter, ssim2,
+    /// dssim, iwssim, zensim) report true here so the worker pool
+    /// promotes the dispatch.
+    pub(crate) fn supports_cached_ref(&self) -> bool {
+        matches!(self, ExecMetric::Umbrella(_))
+    }
+
+    /// Install the reference state. Returns `Err(msg)` if the
+    /// underlying metric crate's cached-ref API isn't wired or
+    /// failed at dispatch.
+    pub(crate) fn set_reference(&mut self, r: &[u8]) -> Result<(), String> {
+        match self {
+            ExecMetric::Umbrella(m) => m
+                .set_reference_srgb_u8(r)
+                .map_err(|e| e.to_string()),
+            ExecMetric::CvvdpStripPair(_) => {
+                Err("cvvdp StripPair has no separate set_reference path".into())
+            }
+        }
+    }
+
+    /// Score a distorted candidate against the previously-cached
+    /// reference. Pre-requisite: [`Self::set_reference`] succeeded.
+    pub(crate) fn compute_with_cached_reference(
+        &mut self,
+        d: &[u8],
+    ) -> Result<Score, CallErrPub> {
+        match self {
+            ExecMetric::Umbrella(m) => m
+                .compute_with_cached_reference_srgb_u8(d)
+                .map_err(|e| {
+                    let msg = e.to_string();
+                    match classify_call_err(&msg) {
+                        CallErr::Oom => CallErrPub::Oom,
+                        CallErr::Other(s) => CallErrPub::Other(s),
+                    }
+                }),
+            ExecMetric::CvvdpStripPair(_) => Err(CallErrPub::Other(
+                "cvvdp StripPair has no cached-reference path".into(),
+            )),
+        }
+    }
+}
+
+/// pool-facing entry to `construct`. Same dispatch as the
+/// `run_single` ladder; pool.rs uses this to route the per-task
+/// `(metric, backend, w, h, params)` tuple into the right per-crate
+/// constructor.
+pub(crate) fn construct_pub(
+    kind: MetricKind,
+    backend: Backend,
+    width: u32,
+    height: u32,
+    params: Option<MetricParams>,
+) -> ConstructOutcomePub {
+    match construct(kind, backend, width, height, params) {
+        ConstructOutcome::Ok(em) => ConstructOutcomePub::Ok(em),
+        ConstructOutcome::Oom => ConstructOutcomePub::Oom,
+        ConstructOutcome::Other(msg) => ConstructOutcomePub::Other(msg),
+    }
+}
+
+/// Pool-facing OOM classifier (re-exported for symmetry with
+/// `construct_pub`). Currently the pool doesn't call this directly —
+/// it relies on `ExecMetric::compute` to surface the classification —
+/// but keeping it crate-visible matches the bench's symmetry.
+#[allow(dead_code)]
+pub(crate) fn classify_call_err_pub(msg: &str) -> CallErrPub {
+    match classify_call_err(msg) {
+        CallErr::Oom => CallErrPub::Oom,
+        CallErr::Other(s) => CallErrPub::Other(s),
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn classify_construct_err_pub(e: ApiError) -> ConstructOutcomePub {
+    match classify_construct_err(e) {
+        ConstructOutcome::Ok(m) => ConstructOutcomePub::Ok(m),
+        ConstructOutcome::Oom => ConstructOutcomePub::Oom,
+        ConstructOutcome::Other(s) => ConstructOutcomePub::Other(s),
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn classify_cvvdp_construct_err_pub(
+    e: zenmetrics_api::cvvdp::Error,
+) -> ConstructOutcomePub {
+    match classify_cvvdp_construct_err(e) {
+        ConstructOutcome::Ok(m) => ConstructOutcomePub::Ok(m),
+        ConstructOutcome::Oom => ConstructOutcomePub::Oom,
+        ConstructOutcome::Other(s) => ConstructOutcomePub::Other(s),
+    }
+}

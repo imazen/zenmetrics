@@ -25,7 +25,9 @@ default = []
 # Phase 2 bench runner. Pulls in zenmetrics-api (umbrella) + cvvdp-gpu
 # (direct, for the StripPair backend that the umbrella doesn't surface).
 # Default ships the CUDA backend — Phase 6 will widen this to WGPU/HIP.
-bench = ["dep:zenmetrics-api", "dep:cvvdp-gpu"]
+# Phase 5 layered the worker pool / streaming API on top — pulls xxhash
+# for cached-ref auto-detect and rayon for the CPU pool stub.
+bench = ["dep:zenmetrics-api", "dep:cvvdp-gpu", "dep:xxhash-rust", "dep:rayon"]
 
 # Phase 4 executor cuda backend. Pulled by `bench` transitively today
 # (the umbrella dep already enables `cuda` so the bench runner has a
@@ -46,6 +48,17 @@ serde = { workspace = true }
 # the cubecl + per-metric build graph.
 zenmetrics-api = { workspace = true, optional = true, default-features = false, features = ["all-metrics", "cuda"] }
 cvvdp-gpu = { workspace = true, optional = true, default-features = false, features = ["cuda"] }
+
+# Phase 5: cached-reference auto-detect hashes ref bytes via xxhash3
+# (fast enough for 4096² at <10ms). Already in the workspace lockfile
+# transitively, pinned here so the cached-ref code can't regress to
+# an older line.
+xxhash-rust = { version = "0.8.15", features = ["xxh3"], optional = true }
+
+# Phase 5: rayon-managed CPU pool. Only pulled when `bench` is on
+# (Phase 6 will use this to actually run CPU references). Already in
+# the workspace lockfile.
+rayon = { version = "1.12.0", optional = true }
 
 # Hashing the machine fingerprint. Workspace already pins sha2 0.10 via
 # transitive deps; we depend on it directly for `Sha256`.
@@ -112,4 +125,31 @@ required-features = ["cuda"]
 [[example]]
 name = "run_single"
 path = "examples/run_single.rs"
+required-features = ["cuda"]
+
+# Phase 5 streaming integration tests. Same sibling-workspace caveat —
+# build from the primary `zenmetrics/` checkout.
+[[test]]
+name = "streaming"
+path = "tests/streaming.rs"
+required-features = ["cuda"]
+
+# Phase 5 cached-ref auto-detect tests. Sibling-workspace caveat applies.
+[[test]]
+name = "cached_ref"
+path = "tests/cached_ref.rs"
+required-features = ["cuda"]
+
+# Phase 5 batch example. Drives `Orchestrator::run_all` against a real
+# CUDA device. Sibling-workspace caveat applies.
+[[example]]
+name = "run_batch"
+path = "examples/run_batch.rs"
+required-features = ["cuda"]
+
+# Phase 5 streaming example. Drives `Orchestrator::submit` + `poll`.
+# Sibling-workspace caveat applies.
+[[example]]
+name = "run_stream"
+path = "examples/run_stream.rs"
 required-features = ["cuda"]
