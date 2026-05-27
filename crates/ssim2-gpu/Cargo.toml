@@ -82,23 +82,27 @@ fir = []
 # cudarse-parity` does not regress CI even on machines where cudarse
 # fails to build at runtime. Document any divergence in
 # `docs/GPU_METRIC_PARITY.md`.
-cudarse-parity = ["dep:coefficient"]
+# cudarse-parity test machinery — coefficient is now a [dev-dependencies]
+# entry (see below). The feature is retained as a no-op flag so the
+# `[[test]] cudarse_parity` block can still gate on it for opt-in CI,
+# but it no longer pulls coefficient into the [dependencies] graph
+# (which created a coefficient ↔ ssim2-gpu cycle once coefficient
+# itself listed ssim2-gpu as an optional dep, 2026-05-26).
+cudarse-parity = []
 
 [dependencies]
 cubecl = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-# Optional cross-repo parity dep: coefficient's `gpu` feature pulls in
-# the cudarse/turbo-metrics SSIM2 backend so the `cudarse_parity`
-# integration test can compare both backends. Gated behind the
-# `cudarse-parity` Cargo feature; off by default, NOT pulled into the
-# normal build matrix.
-coefficient = { path = "../../../../coefficient", default-features = false, features = ["gpu"], optional = true }
 
 [build-dependencies]
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 [dev-dependencies]
+# Cross-repo parity dep — only used by tests/cudarse_parity.rs which is
+# `#[ignore]`d by default. Moved out of [dependencies] 2026-05-27 to
+# break the coefficient ↔ ssim2-gpu cargo cycle.
+coefficient = { path = "../../../../coefficient", default-features = false, features = ["gpu"] }
 ssimulacra2 = { workspace = true }
 yuvxyb = "0.5.0"
 bytemuck = { workspace = true }
