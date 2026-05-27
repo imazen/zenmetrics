@@ -58,25 +58,57 @@ so iwssim-gpu stays singular; no rename required. The naming asymmetry
 with no CPU sibling) is intentional and documented here.
 
 ### Phase 8d — upstream pinned-upload PR to tracel-ai/cubecl
-Clean up the `feat/pinned-upload` patch from lilith/cubecl, file
-upstream PR with bench numbers showing 4× HtoD speedup. Document
-the upstream PR URL in our README. Maintain our fork as a
-transitional shim until the patch lands upstream. Half-day task
-(mostly PR-writing + bench replication).
+**SCRAPPED 2026-05-27 per user directive "dont upstream coordinate,
+fork to new crate names - zenforks-cubecl-".** The PR draft work
+landed at commit 4355dce0 (`PINNED_UPLOAD_UPSTREAM_PR.md` + README
+fork-dep section) but the upstream submission path is abandoned.
+The pinned-upload patch (and any future patches) ship through our
+own published forks instead — see Phase 8e revised below.
 
-### Phase 8e — maintained cubecl forks + persistent cache + Metal
+The draft PR doc + bench numbers are retained as **internal
+methodology reference** — if a future maintainer wants to
+re-attempt upstreaming after we've validated patches in production,
+the diff + bench harness are ready.
 
-This is the umbrella for the user's items 2/5/6. Decomposed:
+### Phase 8e — published `zenforks-cubecl-*` fork crates + persistent cache + Metal
 
-#### 8e.1 — establish `imazen/cubecl` fork strategy
-- Move/mirror `lilith/cubecl` to `imazen/cubecl` (org-owned, surviving
-  the lilith→imazen transition)
-- Branch structure: `imazen-main` tracks upstream + our patches, with
-  feature branches per patch (`feat/pinned-upload`, `feat/persistent-cache`,
-  `feat/metal-atomic-fix`) for easy rebase + upstream PR submission
-- CI on the fork (GitHub Actions): build all backends including Metal
-- Versioning: tag releases as `vUPSTREAM+imazen.N` (e.g. `v0.10.0+imazen.1`)
-- Document maintenance protocol in `imazen/cubecl/MAINTAINERS.md`
+**REVISED 2026-05-27 per user directive "dont upstream coordinate,
+fork to new crate names - zenforks-cubecl-".** Instead of maintaining
+a git-fork dep on `lilith/cubecl` and chasing upstream PRs, we
+publish renamed forked crates to crates.io. Downstream library
+users get stable `Cargo.toml`-pinned deps without git-deps.
+
+#### 8e.1 — establish `zenforks-cubecl-*` publication strategy
+- Fork `lilith/cubecl` rev de2f9857 (or current pin) → rename ALL
+  crates under the `zenforks-cubecl-` prefix:
+  - `cubecl` → `zenforks-cubecl`
+  - `cubecl-runtime` → `zenforks-cubecl-runtime`
+  - `cubecl-core` → `zenforks-cubecl-core`
+  - `cubecl-common` → `zenforks-cubecl-common`
+  - `cubecl-ir` → `zenforks-cubecl-ir`
+  - `cubecl-cuda` → `zenforks-cubecl-cuda`
+  - `cubecl-cpu` → `zenforks-cubecl-cpu`
+  - `cubecl-wgpu` → `zenforks-cubecl-wgpu`
+  - `cubecl-hip` → `zenforks-cubecl-hip`
+  - `cubecl-cpp` → `zenforks-cubecl-cpp`
+  - (any others encountered during the rename)
+- Update all internal cross-crate refs (each `zenforks-cubecl-*`
+  crate references siblings by the renamed names)
+- Versioning: `0.10.X` series tracking upstream's `0.10.X` with our
+  patches baked in. Bump on cubecl upstream changes we cherry-pick
+  OR on our own patch additions.
+- Publish to crates.io as `zenforks-cubecl-*` (one publish per
+  crate, in dep-order)
+- Document the fork-rename strategy + upgrade workflow in
+  `crates/zenmetrics-api/docs/ZENFORKS_CUBECL_STRATEGY.md`
+- Workspace `Cargo.toml`: replace all `cubecl = { git = ... }` deps
+  with `zenforks-cubecl-* = "0.10.x"` from crates.io
+- All zenmetrics `-gpu` crates: rename `use cubecl::*` → `use
+  zenforks_cubecl::*` (mechanical refactor)
+
+This is substantially more work than the original "maintained git
+fork" plan but unblocks downstream library users completely. They
+can `cargo add zenforks-cubecl` without git deps.
 
 #### 8e.2 — persistent PTX cache in our cubecl fork
 - Hash kernel source + compile flags → cache key
