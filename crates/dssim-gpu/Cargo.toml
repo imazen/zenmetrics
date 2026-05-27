@@ -14,7 +14,16 @@ rust-version.workspace = true
 publish = false
 
 [features]
-default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
+# Defaults removed `fast-reduction` 2026-05-27 (Phase 8e.4 audit;
+# mirrors ssim2-gpu task #52). cubecl-wgpu's Metal backend silently
+# no-ops Atomic<f32>::fetch_add (every reduction returns zero, every
+# score collapses to the default value). The portable per-thread-
+# partials + finalize reduction is deterministic and works on every
+# cubecl backend including Metal. Opt back into `fast-reduction` via
+# explicit feature flag for CUDA-only deployments where the ~2-3×
+# reduction-step speedup matters more than reproducibility. Tracked
+# in `crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`.
+default = ["cuda", "wgpu", "cpu", "pixels"]
 # Runtime features imply `cubecl-types` so doctests / examples that
 # import `Dssim<R>` directly (or `cubecl::wgpu::WgpuRuntime`) compile
 # when any backend feature is enabled.
@@ -32,15 +41,20 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # users who want to construct against a specific cubecl runtime
 # (and pin to its version) can opt in.
 cubecl-types = []
-# Use Atomic<f32>::fetch_add for the per-scale (Σ ssim, Σ |ssim - avg|)
-# reduction. Verified working on:
+# OFF by default since 2026-05-27 (Phase 8e.4 audit). Opt in to use
+# `Atomic<f32>::fetch_add` for the per-scale (Σ ssim, Σ |ssim - avg|)
+# reduction. Verified correct on:
 #   - CUDA (NVIDIA, native runtime)
 #   - DX12 (Windows wgpu, real driver — NVIDIA / AMD)
 #   - HIP  (AMD ROCm) by analogy with the cubecl atomic intrinsics path
-# Verified BROKEN on Metal (cubecl-wgpu's Metal sub-backend reports
-# Atomic<f32> = LoadStore|Add as supported, but the codegen silently
-# no-ops). For Metal builds:
-#   cargo build -p dssim-gpu --no-default-features --features wgpu
+# Verified BROKEN on:
+#   - Metal  (cubecl-wgpu's Metal backend reports Atomic<f32> = LoadStore|Add
+#            as supported, but the codegen silently no-ops — every
+#            reduction returns zero. Root cause + upstream patch:
+#            `crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`).
+#
+# Enable for CUDA-only deployments:
+#   cargo build -p dssim-gpu --no-default-features --features cuda,fast-reduction
 fast-reduction = []
 
 [dependencies]

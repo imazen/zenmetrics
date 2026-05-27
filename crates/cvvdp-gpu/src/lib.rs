@@ -3,16 +3,32 @@
 //! `#[cube]` kernel source dispatches across:
 //!
 //! - **CUDA** (NVIDIA) via the cubecl CUDA runtime
-//! - **WGPU** (cross-platform) via Vulkan/Metal/DX12/WebGPU
+//! - **WGPU/Vulkan** (cross-platform) via the cubecl wgpu runtime
+//! - **WGPU/DX12** (Windows) via the cubecl wgpu runtime
+//! - **WGPU/Metal** — **NOT SUPPORTED on the production pool path**.
+//!   `pool_band_3ch_lds_kernel` (the workgroup-LDS pool used by
+//!   `compute_dkl_jod`) commits per-workgroup sums via
+//!   `Atomic<f32>::fetch_add`, which cubecl-wgpu's Metal backend
+//!   silently no-ops — every reduction returns zero and the JOD
+//!   score collapses to the default (10.0 for identical, ~10.0 for
+//!   different). Root cause + upstream patch:
+//!   [`crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`].
+//!   `compute_dkl_jod_host_pool` (the host-pool fallback used for
+//!   cubecl-cpu, see below) works on Metal because it reads D bands
+//!   back to host before pooling. Use that path for Metal
+//!   deployments until the upstream fix lands and the workspace
+//!   cubecl pin bumps to a fork rev with `feat/metal-atomic-fix`.
 //! - **HIP** (AMD ROCm) when the `hip` feature is enabled
 //! - **CPU** via the cubecl CPU runtime — supported through
 //!   [`Cvvdp::compute_dkl_jod_host_pool`] (tick 208), which reads
 //!   D bands back to host and pools with the host-scalar
 //!   `lp_norm_mean` instead of the GPU `pool_band_3ch_kernel`
 //!   (which uses `Atomic<f32>::fetch_add`, unsupported by
-//!   cubecl-cpu). For GPU runtimes prefer
+//!   cubecl-cpu). For CUDA / wgpu-Vulkan / wgpu-DX12 prefer
 //!   [`Cvvdp::compute_dkl_jod`] — it keeps the spatial reduction
-//!   on-device and skips the per-band readback.
+//!   on-device and skips the per-band readback. **Metal users
+//!   must use `compute_dkl_jod_host_pool` until the upstream fix
+//!   lands** — see the Metal note above.
 //!
 //! ## Scope: still images, JOD score
 //!

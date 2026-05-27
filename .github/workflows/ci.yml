@@ -195,14 +195,23 @@ jobs:
   # Runtime parity tests on macOS via Metal (the only CI-available GPU
   # runtime). Disable `fast-reduction` everywhere — Metal silently
   # no-ops Atomic<f32>::fetch_add (gotcha G3.x); the portable two-stage
-  # reduction is what actually works.
+  # reduction is what actually works. Root cause + fix tracked in
+  # `crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md` (Phase 8e.4).
+  #
+  # Matrix includes:
+  #   - macos-latest    — Apple Silicon (arm64)
+  #   - macos-26-intel  — Intel x86_64 (newer image)
+  #   - macos-15-intel  — Intel x86_64 (older image, per CLAUDE.md
+  #                       "Every crate MUST also test on a macOS Intel
+  #                       runner"); kept alongside macos-26-intel to
+  #                       cover both Intel image generations
   metal-tests:
     name: Metal tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-26-intel]
+        os: [macos-latest, macos-26-intel, macos-15-intel]
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
@@ -270,6 +279,20 @@ jobs:
       - name: zensim-gpu parity
         if: always()
         run: cargo test -p zensim-gpu --no-default-features --features wgpu --release
+      - name: iwssim-gpu parity
+        # iwssim-gpu has no Atomic<f32> use in its hot path (audited
+        # 2026-05-27 as part of Phase 8e.4 — see CUBECL_METAL_ATOMIC_FIX.md),
+        # so it's safe to add to the metal-tests matrix even pre-upstream-fix.
+        if: always()
+        run: cargo test -p iwssim-gpu --no-default-features --features wgpu --release
+      # cvvdp-gpu deliberately omitted from metal-tests until the upstream
+      # cubecl-wgpu CAS-loop lowering lands. Its production
+      # pool_band_3ch_lds_kernel uses Atomic<f32>::fetch_add (every band ×
+      # channel commit), so Metal scores collapse to the default JOD value.
+      # The lib.rs module-doc directs Metal users to compute_dkl_jod_host_pool
+      # which reads bands back to host before pooling. Re-enable here once
+      # the workspace cubecl pin bumps to a fork rev with
+      # feat/metal-atomic-fix.
 
   # Compile-only doctest pass — catches the doc examples in lib.rs that
   # reference `WgpuRuntime` etc. CUDA-only environments would skip these,

@@ -77,13 +77,28 @@ distortion. Mirrors the `f64` returned by `dssim_core::Dssim::compare`.
 | `wgpu` | yes | Compile the cubecl-wgpu backend. |
 | `cpu`  | yes | Compile the cubecl-cpu backend (build-only — see above). |
 | `hip`  | no  | Compile the cubecl-hip backend. |
-| `fast-reduction` | yes | Use `Atomic<f32>::fetch_add` for the per-scale Σ reduction. Works on CUDA / DX12 / HIP; silently no-ops on Metal — disable for Metal builds. |
+| `fast-reduction` | **no** (since 2026-05-27, Phase 8e.4) | Use `Atomic<f32>::fetch_add` for the per-scale Σ reduction. Verified correct on CUDA / Windows DX12 / HIP; **BROKEN on Metal** (cubecl-wgpu's Metal backend silently no-ops the atomic — every reduction returns zero, every score collapses to the default value). Off by default since 2026-05-27 so default builds work on Metal out of the box. Opt in for CUDA-only deployments where the ~2-3× reduction-step speedup matters more than reproducibility. Root cause + upstream patch in [`../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`](../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md). |
 
-For Metal targets:
+### Metal status
+
+dssim-gpu works correctly on Metal **out of the box** as of 2026-05-27.
+The default feature set drops `fast-reduction`, so the portable
+per-thread-partials + finalize reduction is what ships. Build:
 
 ```bash
-cargo build -p dssim-gpu --no-default-features --features wgpu
+# Default — works on Metal, CUDA, DX12, Vulkan, ROCm
+cargo build -p dssim-gpu
+
+# CUDA-only with the atomic-add fast path (~2-3× faster reduction step
+# but non-deterministic and broken on Metal)
+cargo build -p dssim-gpu --no-default-features --features cuda,fast-reduction
 ```
+
+When the upstream `feat/metal-atomic-fix` lands (CAS-loop lowering for
+WGSL `atomicAdd<f32>` on Metal — tracked in
+[`CUBECL_METAL_ATOMIC_FIX.md`](../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md)),
+`fast-reduction` will work correctly on Metal too; the default-off
+state stays as a determinism guard.
 
 ## Memory modes
 

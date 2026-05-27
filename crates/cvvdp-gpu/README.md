@@ -455,6 +455,26 @@ For Metal (Apple) or non-NVIDIA GPUs, build wgpu-only:
 cargo build -p cvvdp-gpu --no-default-features --features wgpu
 ```
 
+### Metal status (2026-05-27, Phase 8e.4)
+
+cvvdp-gpu's production `compute_dkl_jod` path uses
+`pool_band_3ch_lds_kernel` which commits per-workgroup pool sums via
+`Atomic<f32>::fetch_add`. cubecl-wgpu's Metal backend silently no-ops
+that atomic — every band reduction returns zero, the JOD score
+collapses to the identity-pair default (~10.0). **Metal users MUST
+use `compute_dkl_jod_host_pool`** until the upstream
+`feat/metal-atomic-fix` lands. The host-pool variant reads D bands
+back to host before pooling with the scalar `lp_norm_mean` and is
+unaffected by the atomic bug. It is the same path used for the
+cubecl-cpu backend (which has the same atomic-f32 unsupported
+limitation). Root cause + upstream patch in
+[`../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`](../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md).
+
+cvvdp-gpu is **deliberately excluded** from the metal-tests CI job
+(`.github/workflows/ci.yml`) until the upstream fix lands. Re-add
+once the workspace cubecl pin bumps to a fork rev with
+`feat/metal-atomic-fix`.
+
 ## Memory modes
 
 cvvdp-gpu exposes the workspace's unified `MemoryMode` enum but has

@@ -79,6 +79,33 @@ exceeds the 12 GB consumer VRAM budget; strip is the only viable mode.
 CSV: `benchmarks/butter_multires_strip_<date>.csv` (schema mirrors the
 single-res `butter_strip_vs_whole_<date>.csv` file).
 
+## Metal status
+
+butteraugli-gpu works correctly on Metal **out of the box** as of
+2026-05-27 (Phase 8e.4). The default feature set drops
+`fast-reduction`, so the portable per-thread-partials + finalize
+reduction is what ships. Without that flip, the per-octave reduction
+relied on `Atomic<f32>::fetch_add`, which cubecl-wgpu's Metal backend
+silently no-ops — every reduction returned zero and every score
+collapsed to the default. Root cause + upstream patch in
+[`../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md`](../zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md).
+
+Build configurations:
+
+```bash
+# Default — works on Metal, CUDA, DX12, Vulkan, ROCm
+cargo build -p butteraugli-gpu
+
+# CUDA-only with the atomic-add fast path (~2-3× faster reduction step
+# but non-deterministic and broken on Metal)
+cargo build -p butteraugli-gpu --no-default-features --features cuda,fast-reduction
+```
+
+When the upstream `feat/metal-atomic-fix` lands, `fast-reduction` will
+work correctly on Metal too; the default-off state stays as a
+determinism guard (atomic-add commit order is launch-dependent and
+breaks bit-reproducibility).
+
 ## See also
 
 - `bench_strip_vs_whole_cuda` — single-resolution strip vs whole bench.

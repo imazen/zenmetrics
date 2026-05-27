@@ -36,6 +36,69 @@ Workspace conventions per the global rules:
   single-worker behaviour (max_gpu_lanes=1, adaptive_gpu_lanes=false);
   existing tests pass unchanged. (23e26c9e)
 
+- **CI Phase 8e.5 — Metal CI matrix expanded + iwssim-gpu added to
+  per-metric parity step.** `.github/workflows/ci.yml` `metal-tests`
+  job matrix now includes `macos-15-intel` alongside `macos-latest`
+  (Apple Silicon) and `macos-26-intel`, satisfying CLAUDE.md's
+  "Every crate MUST also test on a macOS Intel runner" requirement
+  for both Intel image generations. `iwssim-gpu` added to the
+  per-metric test list (audit confirmed no `Atomic<f32>` use in its
+  hot path). `cvvdp-gpu` deliberately deferred from metal-tests
+  until the upstream cubecl-wgpu CAS-loop lowering lands — its
+  production pool path uses `Atomic<f32>::fetch_add` and would
+  always fail. Per-crate READMEs (`butteraugli-gpu`, `dssim-gpu`,
+  `cvvdp-gpu`) gain an explicit "Metal status" section so operators
+  see the current state without diving into Cargo.toml comments.
+
+- **`zenmetrics-api` Phase 8e.4 — Metal `Atomic<f32>` root-cause doc +
+  per-crate workaround audit + upstream patch draft.**
+  `crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md` identifies
+  the bug site (`cubecl-wgpu/src/backend/metal.rs:109-125` overstates
+  Metal's f32-atomic-add capability; the codegen emits WGSL
+  `atomicAdd<f32>` which naga's MSL backend drops because standard
+  WGSL doesn't define `atomicAdd` for floats), drafts the upstream
+  patch (capability honest + CAS-loop lowering with u32-bitcast over
+  `atomicCompareExchangeWeak`), and audits every `-gpu` crate for
+  `Atomic<f32>` use. Audit result: 3 default-broken on Metal pre-fix
+  (`butteraugli-gpu`, `dssim-gpu`, `cvvdp-gpu`); 3 clear (`ssim2-gpu`,
+  `zensim-gpu`, `iwssim-gpu`). Workaround commits in this Phase 8e
+  flip `fast-reduction` to default-off for butteraugli-gpu and
+  dssim-gpu and document cvvdp-gpu's Metal status at the module-doc
+  level (Metal users use `compute_dkl_jod_host_pool` until the
+  upstream fix lands).
+
+- **`zenmetrics-api` Phase 8e.2 + 8e.3 — persistent PTX cache patch + cache-key design.**
+  `crates/zenmetrics-api/docs/CUBECL_PERSISTENT_PTX_CACHE_PATCH.md`
+  captures the investigation finding (cubecl-cuda **already** has a
+  persistent PTX cache at `<root>/cuda/<ver>/ptx.json.log` via
+  `CompilationCache<StableHash, PtxCacheEntry>`; the "cold start"
+  symptom is the cache key being too narrow, not the cache being
+  absent) and stages a ready-to-apply patch against the
+  `lilith/cubecl` fork. The patch extends the cache file path to
+  `<root>/cuda/<ver>/<cubecl_sha>/<compute_cap>/<cuda_runtime>/ptx.json.log`,
+  picking up: cubecl fork HEAD SHA from a new `build.rs` (so codegen-
+  only fork-rev advances invalidate), `sm_<arch>` for multi-GPU
+  correctness (per-architecture PTX is mandatory; sharing across caps
+  is a correctness bug), and CUDA driver version. Includes the full
+  diff (~73 lines additive across `cubecl-cuda/build.rs` +
+  `cubecl-cuda/src/compute/context.rs`), the cache-key justification
+  table, migration notes, and a three-step verification methodology.
+  Patch is NOT applied to lilith/cubecl per CLAUDE.md — execution is
+  the `feat/persistent-cache` branch follow-on described in
+  `CUBECL_FORK_STRATEGY.md`.
+
+- **`zenmetrics-api` Phase 8e.1 — `imazen/cubecl` fork strategy doc.**
+  `crates/zenmetrics-api/docs/CUBECL_FORK_STRATEGY.md` captures the
+  maintained-fork plan: move `lilith/cubecl` → `imazen/cubecl` (org-
+  owned, surviving the lilith → imazen GitHub identity transition),
+  document `imazen-main` trunk + per-patch feature branches
+  (`feat/pinned-upload`, `feat/persistent-cache`,
+  `feat/metal-atomic-fix`), versioning scheme `vUPSTREAM+imazen.N`,
+  rebase + upstream-PR submission protocol, CI matrix on the fork
+  (CUDA / wgpu / cpu / hip), and a 6-step user-driven migration plan.
+  Execution is user-driven follow-on; this doc is the architectural
+  decision deliverable.
+
 - **`zenmetrics-orchestrator` Phase 8a — graceful CPU fallback when no
   GPU is present.** `detect_gpu()` honours
   `ZENMETRICS_FORCE_NO_GPU=1` to short-circuit the nvidia-smi path,
@@ -59,6 +122,29 @@ Workspace conventions per the global rules:
   Phase 8a section for the verified scenarios.
 
 ### Changed
+
+- **`butteraugli-gpu` + `dssim-gpu` Phase 8e.4 — `fast-reduction`
+  feature flipped to default-OFF.** Mirrors the ssim2-gpu task #52
+  fix (2026-05-26). Default consumers now use the portable per-
+  thread-partials + finalize reduction which is deterministic and
+  works on every cubecl backend including Metal. Opt back into
+  `fast-reduction` for CUDA-only deployments where the ~2-3×
+  reduction-step speedup matters more than reproducibility. Existing
+  parity-lock and auto_fallback tests cover the slow path; no test
+  changes needed.
+
+- **`cvvdp-gpu` Phase 8e.4 — Metal status documented at the lib.rs
+  module-doc level.** The production `compute_dkl_jod` pool path
+  (`pool_band_3ch_lds_kernel`) commits per-workgroup sums via
+  `Atomic<f32>::fetch_add`, which silently no-ops on Metal. Until
+  the upstream cubecl-wgpu CAS-loop lowering lands (tracked in
+  `CUBECL_METAL_ATOMIC_FIX.md`'s `feat/metal-atomic-fix` branch),
+  Metal users MUST use `compute_dkl_jod_host_pool` (the host-pool
+  fallback originally shipped for cubecl-cpu) which reads D bands
+  back to host before pooling and is unaffected by the atomic bug.
+  No API change; lib.rs module-doc updated with explicit Metal
+  guidance. cvvdp-gpu is NOT added to the metal-tests CI job until
+  the upstream fix lands.
 
 - **Phase 8c — `cvvdp-cpu` crate renamed to `cvvdp`.** Mechanical
   rename matching the conventional Rust pattern of "main crate name =
