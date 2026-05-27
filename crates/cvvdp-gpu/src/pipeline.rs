@@ -85,12 +85,15 @@
 //!
 //! Total per-Cvvdp budget at 4000×3000 with 8 pyramid levels is
 //! a few hundred MB of GPU memory. The `DBandsTransient`
-//! contribution is one band at a time (largest = base level) plus
-//! the persistent `d` output planes; the previous all-levels-up-
-//! front allocation of `t_p_*` + `m_*` was eliminated in the lazy-
-//! transient refactor. The remaining persistent allocations happen
-//! once in `Cvvdp::new`; the hot path does only `create_from_slice`
-//! for input bytes and reads back small results.
+//! contribution is one base-level-sized buffer set held
+//! persistently on the `Cvvdp` (was per-band in the 5407c9cc
+//! lazy-transient layout; reverted in the 2026-05-27 unfix because
+//! the per-band re-allocation cost 208 zero-upload HtoDs per
+//! `compute_dkl_jod` call at 4096² — see the
+//! `d_bands_transient` field doc). The persistent `d` output planes
+//! span every level. All persistent allocations happen once in
+//! `Cvvdp::new`; the hot path does only `create_from_slice` for
+//! input bytes and reads back small results.
 
 use cubecl::prelude::*;
 
@@ -920,6 +923,38 @@ pub struct Cvvdp<R: Runtime> {
     /// churn GPU allocations per band (~1.5 GB worth at 12 MP).
     d_scratch: Vec<DBandsScratch>,
 
+    /// **Path B unfix (2026-05-27):** persistent `DBandsTransient`
+    /// sized to the base-level (n0 = `width * height`), reused across
+    /// every band in the level-major-outer `_run_d_bands_band_loop`.
+    /// 5407c9cc moved the transient inside the band loop as
+    /// `DBandsTransient::new(client, n_px)` per band — that added 15
+    /// `alloc_zeros_f32` calls × n_bands per `compute_dkl_jod`, which
+    /// `nsys` traced as ~120 zero-upload HtoD per call (208 total at
+    /// 4096²). The shape of those bytes is deterministic (always
+    /// zero-initialized into a slice the kernels immediately
+    /// overwrite), so there is no semantic reason to re-zero them
+    /// per band — the kernels write the full `n_px` range they read.
+    ///
+    /// One persistent transient at n0 holds the worst-case (level 0)
+    /// requirement; smaller bands only touch the front portion of
+    /// each buffer. Per-band writes happen entirely before per-band
+    /// reads (CSF writes t_p_*, masking reads t_p_*), and bands don't
+    /// share state across iterations — the band-k+1 CSF launch
+    /// overwrites the t_p_* prefix before the band-k+1 masking reads
+    /// it, so the unread tail from band-k is irrelevant.
+    ///
+    /// The 10% memory win from 5407c9cc's "one band's transient" peak
+    /// is preserved: peak working set still holds exactly one
+    /// transient at a time (this one), sized at the same n0 the
+    /// per-band path's largest band would have hit.
+    ///
+    /// The strip-major-outer shallow phase
+    /// (`_run_d_bands_strip_major_shallow`) keeps its own per-level
+    /// strip-sized transients — those carry different sizing (R_k
+    /// strip rows, not full band) and live alongside this persistent
+    /// one without conflict.
+    d_bands_transient: DBandsTransient,
+
     /// Per-non-baseband-level scratch for `compute_dkl_weber_pyramid`'s
     /// expand/subtract/weber chain. Pre-allocated; reused per side
     /// per call. ~176 MB worth at 12 MP per call.
@@ -1151,15 +1186,16 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
     // of per-level pixel counts × f32.
     let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
 
-    // d_scratch: post-Path-B layout. The persistent allocation
-    // holds only the `d` output planes (1 buffer kind × 3 channels)
-    // for every level. The 5 transient buffer kinds (t_p_ref,
-    // t_p_dis, m_raw, m_mid, m_blur) are allocated inside the band
-    // loop one band at a time and dropped after that band's
-    // masking dispatch — so peak working set adds just one band's
-    // transient at the largest level (= base resolution n0). At
-    // 1MP with 8 levels this drops the d_scratch contribution by
-    // ~21% vs the prior all-bands-at-once layout.
+    // d_scratch: post-Path-B-unfix layout (2026-05-27). The
+    // persistent allocation holds the per-level `d` output planes
+    // (1 buffer kind × 3 channels × every level) PLUS one
+    // base-level-sized DBandsTransient (5 buffer kinds × 3 channels
+    // × n0) held in `Cvvdp::d_bands_transient`. The unfix preserves
+    // the peak working-set win of 5407c9cc's lazy-transient layout
+    // (still one band's worth of transient at any time, sized at
+    // the largest band) while eliminating the per-band
+    // alloc_zeros_f32 churn that 5407c9cc introduced (208
+    // zero-upload HtoDs per call at 4096²).
     let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
     let d_scratch_transient_peak_bytes: usize = 5 * 3 * n0 * 4;
     let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_scratch_transient_peak_bytes;
@@ -2161,6 +2197,12 @@ impl<R: Runtime> Cvvdp<R> {
             height,
             strip_pair_h_body,
         );
+        // Path B unfix (2026-05-27): one persistent DBandsTransient
+        // sized to base-level n0 (= width * height) replaces the
+        // per-band DBandsTransient::new() that 5407c9cc moved into
+        // the band loop. See d_bands_transient struct field doc.
+        let n0 = (width as usize) * (height as usize);
+        let d_bands_transient = DBandsTransient::new(&client, n0);
         let weber_scratch =
             build_weber_scratch(&client, n_levels as usize, width, height, strip_pair_h_body);
 
@@ -2235,6 +2277,7 @@ impl<R: Runtime> Cvvdp<R> {
             bands_ref,
             bands_dis,
             d_scratch,
+            d_bands_transient,
             weber_scratch,
             baseband_log_l_bkg,
             partials_h,
@@ -4789,15 +4832,25 @@ impl<R: Runtime> Cvvdp<R> {
             }
             let count = CubeCount::Static((n_px as u32).div_ceil(64), 1, 1);
 
-            // Path-B lazy transient: allocate the per-band CSF +
-            // masking intermediates here (drops at end of iteration
-            // when `transient` goes out of scope, freeing the
-            // 15 GPU buffers back to cubecl's memory pool for the
-            // next band to reuse). `self.d_scratch[k].d[c]` is the
-            // only persistent allocation now — downstream pool /
-            // diffmap / `compute_dkl_d_bands` consumers read those
-            // after the band loop completes.
-            let transient = DBandsTransient::new(&self.client, n_px);
+            // Path B unfix (2026-05-27): reuse the persistent
+            // `self.d_bands_transient` (sized to base-level n0) for
+            // every band's CSF + masking intermediates. The CSF
+            // kernel for band k writes `n_px` elements; the masking
+            // kernels read `n_px` elements — both indices are
+            // contiguous and start at 0, so smaller bands only touch
+            // the front portion of each buffer. The unread tail
+            // (from larger prior bands at deeper-then-shallower
+            // iteration orders is moot: this band's CSF launch fully
+            // overwrites the `n_px` prefix before this band's
+            // masking reads it, and the next band's CSF will again
+            // overwrite its own prefix before its masking reads.
+            //
+            // Replaces the per-band `DBandsTransient::new(client, n_px)`
+            // from 5407c9cc which fired 15 alloc_zeros_f32 calls per
+            // band — ~120 zero-upload HtoDs per `compute_dkl_jod`
+            // call (208 total at 4096² per nsys) for buffers the
+            // kernel was about to fully overwrite anyway.
+            let transient = &self.d_bands_transient;
             let scratch_d = &self.d_scratch[k];
             let t_p_ref_h: [cubecl::server::Handle; 3] = [
                 transient.t_p_ref[0].clone(),
