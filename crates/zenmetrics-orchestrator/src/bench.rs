@@ -63,8 +63,23 @@ pub struct BenchPlan {
     /// (larger) sizes for the same `(metric, backend)`. Default `5s`.
     pub soft_timeout_per_cell: Duration,
     /// `nvidia-smi` sample interval during the compute loop. Default
-    /// `25 ms`.
+    /// `10 ms`.
     pub vram_sample_interval: Duration,
+    /// Optional `bench_worker` example binary path. When set, the
+    /// bench runner spawns this binary as a subprocess per cell so
+    /// each cell sees a fresh cubecl pool — accurate VRAM at the
+    /// cost of ~700 ms CUDA-init per cell. When `None`, the bench
+    /// runs in-process (default). The orchestrator's actual
+    /// deployment schedules all metrics in one process, so the
+    /// in-process numbers are usually MORE representative; use
+    /// subprocess mode when audit-style isolated VRAM numbers are
+    /// required (Phase 3 chooser calibration, comparison vs the
+    /// `benchmarks/gpu_memory_audit_*.csv` reference table).
+    pub worker_binary: Option<std::path::PathBuf>,
+    /// Hold time the subprocess worker sleeps post-READY so the
+    /// parent can sample `nvidia-smi memory.used` during a quiescent
+    /// window. Default 400 ms — matches `audit_gpu_metrics.py`.
+    pub subprocess_hold: Duration,
 }
 
 impl Default for BenchPlan {
@@ -72,15 +87,56 @@ impl Default for BenchPlan {
         Self {
             sizes: vec![1024, 2048, 4096],
             warmup_iters: 2,
-            timed_iters: 5,
+            // 3 iters keeps p50 stable while staying inside the
+            // < 60 s total budget on subprocess mode. In-process mode
+            // is fast enough that 5 iters comfortably fit, but the
+            // shared default trades a small statistical loss for a
+            // big wall-time win.
+            timed_iters: 3,
             soft_timeout_per_cell: Duration::from_secs(5),
             // 10 ms — fast enough to catch the steady-state peak even
             // on small-image cells where total GPU time per call is
             // ~5 ms × 5 iters = 25 ms. 25 ms sampling missed most
             // small-cell peaks.
             vram_sample_interval: Duration::from_millis(10),
+            worker_binary: None,
+            // 250 ms — shorter than audit's 400 ms but the actual peak
+            // is visible within the first ~50 ms after the worker's
+            // READY line (CUDA driver decommits pool pages lazily on
+            // exit, not immediately on `drop`). Trim to fit budget.
+            subprocess_hold: Duration::from_millis(250),
         }
     }
+}
+
+/// Convenience: locate the `bench_worker` example binary that ships
+/// alongside the calling binary. Looks at `std::env::current_exe()`,
+/// resolves its parent directory, then searches for
+/// `examples/bench_worker` (or platform-equivalent). Returns `None` if
+/// no such binary is found — typical for tests or non-release builds.
+///
+/// Use this from the calling binary (e.g., the `print_capability`
+/// example) to plumb a [`BenchPlan::worker_binary`] without hard-
+/// coding paths.
+pub fn locate_bench_worker() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    // Cargo's `examples/` build path: `target/<profile>/examples/<name>`.
+    // If we're already in `target/<profile>/examples`, the worker is a
+    // sibling. If we're elsewhere (e.g. `cargo run -p` from a workspace
+    // root), search `target/release/examples` directly.
+    let candidates = [
+        dir.join("bench_worker"),
+        dir.join("bench_worker.exe"),
+        dir.join("examples/bench_worker"),
+        dir.join("../examples/bench_worker"),
+    ];
+    for c in &candidates {
+        if c.is_file() {
+            return Some(c.clone());
+        }
+    }
+    None
 }
 
 /// Output of [`run`] — what [`crate::Orchestrator::bench`] folds into
@@ -213,7 +269,11 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
             // small size aborting larger — would never apply since
             // we visit large first.)
             for &size in &sizes_desc {
-                let cell = measure_cell(kind, backend, size, plan);
+                let cell = if let Some(ref worker) = plan.worker_binary {
+                    measure_cell_subprocess(kind, backend, size, plan, worker)
+                } else {
+                    measure_cell(kind, backend, size, plan)
+                };
                 let size_px = (size as u64) * (size as u64);
                 match cell {
                     CellOutcome::Ok { ns_per_px, vram_mib } => {
@@ -261,6 +321,117 @@ enum CellOutcome {
     TimedOut,
     SkippedNoBackend,
     SkippedNoMetric,
+}
+
+/// Tag string for the worker `WORKER_METRIC` env var.
+#[cfg(feature = "bench")]
+fn metric_kind_tag(kind: MetricKind) -> &'static str {
+    match kind {
+        MetricKind::Cvvdp => "cvvdp",
+        MetricKind::Butter => "butter",
+        MetricKind::Ssim2 => "ssim2",
+        MetricKind::Dssim => "dssim",
+        MetricKind::Iwssim => "iwssim",
+        MetricKind::Zensim => "zensim",
+    }
+}
+
+/// Subprocess-per-cell variant of [`measure_cell`]. Spawns
+/// `plan.worker_binary` with the cell's params in env vars, samples
+/// `nvidia-smi memory.used` before launch + during the child's
+/// post-READY hold window, parses `READY ns_per_px=<n> warm_ms=<n>`
+/// from stdout.
+///
+/// Matches the proven pattern in
+/// `scripts/memory_audit/audit_gpu_metrics.py` so VRAM numbers land
+/// within ~10-15 % of the
+/// `benchmarks/gpu_memory_audit_2026-05-27.csv` reference table.
+#[cfg(feature = "bench")]
+fn measure_cell_subprocess(
+    kind: MetricKind,
+    backend: Backend,
+    size: u32,
+    plan: &BenchPlan,
+    worker: &std::path::Path,
+) -> CellOutcome {
+    // Pre-launch baseline. Wait briefly to let any prior cell's pool
+    // settle (mirrors audit_gpu_metrics.py).
+    std::thread::sleep(Duration::from_millis(300));
+    let baseline_mib = nvidia_smi_used_mib().unwrap_or(0);
+
+    let mut cmd = std::process::Command::new(worker);
+    cmd.env("WORKER_METRIC", metric_kind_tag(kind))
+        .env("WORKER_BACKEND", backend.tag())
+        .env("WORKER_W", size.to_string())
+        .env("WORKER_H", size.to_string())
+        .env("WORKER_WARMUP", plan.warmup_iters.to_string())
+        .env("WORKER_TIMED", plan.timed_iters.to_string())
+        .env("WORKER_HOLD_MS", plan.subprocess_hold.as_millis().to_string())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(_) => return CellOutcome::Oom,
+    };
+
+    let cell_start = Instant::now();
+
+    // Read READY line line-by-line. Time out if it never arrives.
+    let stdout = child.stdout.take().expect("piped stdout");
+    let reader = std::io::BufReader::new(stdout);
+    use std::io::BufRead;
+    let mut ready_line: Option<String> = None;
+    let timeout_deadline = cell_start
+        .checked_add(plan.soft_timeout_per_cell * 4)
+        .unwrap_or(Instant::now() + Duration::from_secs(20));
+    for line in reader.lines().map_while(Result::ok) {
+        if Instant::now() > timeout_deadline {
+            break;
+        }
+        if line.starts_with("READY ") {
+            ready_line = Some(line);
+            break;
+        }
+    }
+
+    let Some(ready) = ready_line else {
+        // Child failed or hung. Drain + reap.
+        let _ = child.kill();
+        let _ = child.wait();
+        return CellOutcome::Oom;
+    };
+
+    // Parse ns_per_px= value.
+    let ns_per_px = ready
+        .split_whitespace()
+        .find_map(|tok| tok.strip_prefix("ns_per_px="))
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(f64::NAN);
+
+    // Sample nvidia-smi during the hold window. Slightly less than
+    // subprocess_hold to leave headroom for the child's exit syscall.
+    let mut peak = baseline_mib;
+    let sample_until = Instant::now() + plan.subprocess_hold - Duration::from_millis(50);
+    while Instant::now() < sample_until {
+        if let Some(v) = nvidia_smi_used_mib() {
+            if v > peak {
+                peak = v;
+            }
+        }
+        std::thread::sleep(plan.vram_sample_interval);
+    }
+
+    let _ = child.wait();
+    let vram_delta_mib = peak.saturating_sub(baseline_mib);
+
+    if ns_per_px.is_nan() || ns_per_px <= 0.0 {
+        return CellOutcome::Oom;
+    }
+    CellOutcome::Ok {
+        ns_per_px,
+        vram_mib: vram_delta_mib,
+    }
 }
 
 /// Construct + warmup + time + drop one cell. Errors are translated

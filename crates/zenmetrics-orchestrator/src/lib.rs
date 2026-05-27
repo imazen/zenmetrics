@@ -34,7 +34,7 @@ mod bench;
 mod cpu;
 mod gpu;
 
-pub use bench::{synth_pair_offset_dist, BenchPlan, BenchReport};
+pub use bench::{locate_bench_worker, synth_pair_offset_dist, BenchPlan, BenchReport};
 pub use cpu::{detect_cpu, detect_wsl2_host_ram_mib_hint};
 pub use gpu::detect_gpu;
 

@@ -119,23 +119,17 @@ fn collect_features<R: CpuIdReader>(cpuid: &CpuId<R>) -> Vec<String> {
 /// Total physical RAM in MiB. `sysinfo::System::total_memory()` returns
 /// bytes; divide by 1 MiB.
 ///
-/// Phase 2 hardened from Phase 1:
-///
-/// 1. Use `System::new_with_specifics(RefreshKind::nothing().with_memory(..))`
-///    + an explicit `refresh_memory_specifics(RAM)` to ensure RAM is
-///    populated. Phase 1's `System::new()` + `refresh_memory()` worked
-///    on every host we tested, but the explicit form is idempotent
-///    against future sysinfo refactors.
-///
-/// 2. Cross-check against `/proc/meminfo`'s `MemTotal:` line on Linux.
-///    Under WSL2, `/proc/meminfo` matches sysinfo's value exactly (both
-///    see the same kernel allocation), so the cross-check is a sanity
-///    gate: if sysinfo returns 0 we fall back to `MemTotal`, and if
-///    that's also 0 we return 0.
+/// Phase 2 hardened from Phase 1 by calling
+/// `System::new_with_specifics(RefreshKind::nothing().with_memory(...))`
+/// then `refresh_memory_specifics(RAM)`; the explicit form is
+/// idempotent against future sysinfo refactors. The function also
+/// falls back to parsing `/proc/meminfo` `MemTotal:` on Linux when
+/// sysinfo returns 0 (rare but seen on cgroup-restricted hosts).
 ///
 /// The returned value is the **Linux-kernel-visible** total RAM. On
 /// WSL2 this is bounded by `.wslconfig:memory=...`. Use
-/// [`wsl_detect`] to know whether the host could expose more.
+/// [`detect_wsl2_host_ram_mib_hint`] to know whether the host could
+/// expose more.
 fn total_ram_mib() -> usize {
     let refresh = RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram());
     let mut sys = System::new_with_specifics(refresh);

@@ -61,3 +61,12 @@ tempfile = "3"
 [[example]]
 name = "print_capability"
 path = "examples/print_capability.rs"
+
+# Phase 2 single-cell bench worker. The orchestrator's bench runner
+# spawns this as a subprocess per cell when subprocess mode is enabled.
+# Only builds when the `bench` feature is on so default builds don't
+# pull in the full per-metric graph for the example.
+[[example]]
+name = "bench_worker"
+path = "examples/bench_worker.rs"
+required-features = ["bench"]

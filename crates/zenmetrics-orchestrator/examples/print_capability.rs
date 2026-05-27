@@ -17,7 +17,8 @@
 use std::time::{Duration, Instant};
 
 use zenmetrics_orchestrator::{
-    detect_wsl2_host_ram_mib_hint, Backend, Orchestrator, OrchestratorConfig,
+    detect_wsl2_host_ram_mib_hint, locate_bench_worker, Backend, BenchPlan, Orchestrator,
+    OrchestratorConfig,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -79,8 +80,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // -------- Phase 2 bench (only when the `bench` feature is on) --------
     let bench_t0 = Instant::now();
-    let ran = orch.warm()?;
+    // Bench mode:
+    //
+    // - Default (in-process, <60 s): the orchestrator schedules
+    //   metrics in one process at deployment, so the cumulative-pool
+    //   numbers in-process measurement produces ARE the orchestrator's
+    //   actual operating reality. VRAM under-counts vs the
+    //   subprocess-isolated audit by ~50-99 % on cells where the
+    //   cubecl pool already holds enough free pages.
+    //
+    // - Subprocess (~100 s on RTX 5070, opt-in via
+    //   ZENMETRICS_BENCH_SUBPROCESS=1): each cell runs in a fresh
+    //   process so cubecl's pool starts empty. Matches the audit
+    //   CSV within ~2-15 %. Use for Phase 3 chooser calibration or
+    //   when comparing against `benchmarks/gpu_memory_audit_*.csv`.
+    let want_subprocess = std::env::var_os("ZENMETRICS_BENCH_SUBPROCESS")
+        .map(|v| v != "0" && v != "")
+        .unwrap_or(false);
+    let worker = if want_subprocess { locate_bench_worker() } else { None };
+    let mut plan = BenchPlan::default();
+    plan.worker_binary = worker.clone();
+    let ran = if orch.capability().metrics.is_empty() {
+        orch.bench_with_plan(plan)?;
+        true
+    } else {
+        false
+    };
     let bench_wall = bench_t0.elapsed();
+    if let Some(ref w) = worker {
+        eprintln!("[bench] subprocess mode: worker = {}", w.display());
+    } else if want_subprocess {
+        eprintln!("[bench] subprocess requested but bench_worker not found; using in-process");
+    } else {
+        eprintln!("[bench] in-process mode (set ZENMETRICS_BENCH_SUBPROCESS=1 for subprocess)");
+    }
     println!();
     if ran {
         println!(
