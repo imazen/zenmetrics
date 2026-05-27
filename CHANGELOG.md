@@ -17,6 +17,44 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.5+P2.6 — weber_scratch strip-shaped + P2.5 noted (-271 MiB at 4096²) (2026-05-27)
+
+Shrinks `WeberScratch.{l_bkg_fine, vscratch_a, log_l_bkg,
+log_l_bkg_dis, vscratch_c}` from full-image to strip dims
+(`fine_w × R_k` for fine planes, `coarse_w × R_k` for v-scratch) at
+shallow non-baseband levels (`k < k_split`) in `StripMode::Pair`.
+Deep levels keep full-image sizing.
+
+Each (s, k) iteration overwrites these scratch buffers in place; no
+cross-strip data dependency since:
+- `l_bkg_fine` is read by `subtract_weber_3ch_strip_kernel` in the
+  same dispatch chain as it's written (Stage 1 → Stage 3).
+- `log_l_bkg` is written by REF strip helper Stage 3 and read by
+  CSF Stage 4 in the SAME (s, k) iteration.
+- `log_l_bkg_dis` is a throwaway DIST destination.
+- `vscratch_a` / `vscratch_c` are intermediate upscale scratch.
+
+The DIST CSF helper's `byte_off_*_window` (used for slicing weber
+scratch reads/writes) now switches between strip-local-offset-0 and
+full-image-top_global based on `band_ref_strip_local`. The REF
+strip helper uses offset 0 unconditionally for weber scratch (always
+strip-shaped at shallow Mode B). A separate `byte_off_*_full` carries
+the top_global slice for gauss_ref/gauss_alt reads (still full-image
+until P2.7).
+
+**P2.5 status:** the brief listed P2.5 as `m_raw/m_mid/m_blur` strip-
+shaping. That work landed implicitly in P2.4 (`DBandsTransient::new_strip`
+allocates ALL five buffer kinds at strip dims together — they're co-
+allocated in the same struct with no semantic split). No separate
+P2.5 commit; the P2.4 entry above documents the co-shrink.
+
+**Memory delta (4096² h_body=256):** nvsmi delta 1753 MiB → 1482 MiB
+(-271 MiB, -15.5%). Cumulative from P2.1c baseline: 3457 → 1482
+(-1975 MiB, -57.1%). Wall-time 3.72s → 2.91s.
+
+JOD bit-identical at 128² / 1024² (|diff|=0). Mode E + CappedPyramid
+smoke unchanged.
+
 ### cvvdp-gpu — perf: P2.4 — DBandsTransient t_p_*/m_* strip-shaped (-1704 MiB at 4096²) (2026-05-27)
 
 Adds `DBandsTransient::new_strip(client, n_strip)` that allocates the

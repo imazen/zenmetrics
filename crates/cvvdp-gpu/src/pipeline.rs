@@ -297,18 +297,38 @@ fn ch_gain_for_band(is_baseband: bool, band_mul: f32) -> [f32; N_CHANNELS] {
 /// else.
 struct WeberScratch {
     /// Expanded achromatic L_bkg, shared across channels (n_fine).
+    ///
+    /// **P2.6 (2026-05-27):** in `StripMode::Pair` for shallow levels
+    /// (`k < k_split`), this is allocated at `fine_w × R_k` instead of
+    /// `n_fine = fine_w × fine_h`. Each (s, k) iteration overwrites
+    /// l_bkg_fine in place (REF stage 1 then DIST stage 1); REF and
+    /// DIST stage 3 each read the value they just wrote. No
+    /// cross-strip data dependency. Deep levels keep `n_fine`.
     l_bkg_fine: cubecl::server::Handle,
     /// Vertical-pass scratch for achromatic L_bkg expand (n_v).
+    ///
+    /// **P2.6 (2026-05-27):** in `StripMode::Pair` for shallow levels,
+    /// allocated at `coarse_w × R_k` instead of `coarse_w × fine_h`.
+    /// Same strip-local overwrite-per-(s,k) pattern as `l_bkg_fine`.
     vscratch_a: cubecl::server::Handle,
-    /// Per-pixel log10(L_bkg) plane for the REF side (n_fine).
-    /// Persists through the band loop so the CSF kernel can read
-    /// it directly without a host roundtrip (tick 166).
+    /// Per-pixel log10(L_bkg) plane for the REF side.
+    ///
+    /// **P2.6 (2026-05-27):** in `StripMode::Pair` for shallow levels
+    /// (`k < k_split`), sized `fine_w × R_k`. The REF strip helper
+    /// writes it body+halo; the CSF helper reads it body+halo, both
+    /// within the same `(s, k)` iteration. The next strip overwrites
+    /// it. Deep levels (`k >= k_split`) keep `n_fine` because the
+    /// level-major dispatch path reads them at full level dims.
     log_l_bkg: cubecl::server::Handle,
     /// Throwaway destination for DIST's log_l_bkg write — same
     /// shape as `log_l_bkg`. cvvdp's weber_g1 rule uses REF's
     /// log_l_bkg for both sides, so DIST's value is computed but
     /// discarded; this lets the DIST dispatch write somewhere
     /// without clobbering REF.
+    ///
+    /// **P2.6 (2026-05-27):** same shallow/deep sizing rule as
+    /// `log_l_bkg`. The dispatch writes here but nothing downstream
+    /// reads it — keeping it strip-sized just saves wasted memory.
     log_l_bkg_dis: cubecl::server::Handle,
     /// Per-channel vertical/horizontal expand scratch (n_v, n_fine).
     /// The previous `layer_c` intermediate is gone — tick 91 fuses
@@ -567,15 +587,33 @@ fn build_weber_scratch<R: Runtime>(
             ])
         };
 
+        // P2.6 (2026-05-27): in StripMode::Pair for shallow levels
+        // (k < k_split), shrink l_bkg_fine / log_l_bkg / log_l_bkg_dis
+        // to `fine_w × R_k` instead of `n_fine`. Each (s, k) iteration
+        // overwrites them in place; no cross-strip read. Same shrink
+        // logic for vscratch_a / vscratch_c (`coarse_w × R_k`).
+        //
+        // Deep levels (k >= k_split) keep full-image sizing because
+        // the level-major dispatch path reads them at full dims.
+        let p26_shallow = strip_h_at_k.is_some() && (k as u32) < k_split;
+        let (n_fine_alloc, n_v_alloc) = if p26_shallow {
+            let h_strip = strip_h_at_k.unwrap() as usize;
+            (
+                (fine_w as usize) * h_strip,
+                (coarse_w as usize) * h_strip,
+            )
+        } else {
+            (n_fine, n_v)
+        };
         out.push(WeberScratch {
-            l_bkg_fine: alloc_zeros_f32(client, n_fine),
-            vscratch_a: alloc_zeros_f32(client, n_v),
-            log_l_bkg: alloc_zeros_f32(client, n_fine),
-            log_l_bkg_dis: alloc_zeros_f32(client, n_fine),
+            l_bkg_fine: alloc_zeros_f32(client, n_fine_alloc),
+            vscratch_a: alloc_zeros_f32(client, n_v_alloc),
+            log_l_bkg: alloc_zeros_f32(client, n_fine_alloc),
+            log_l_bkg_dis: alloc_zeros_f32(client, n_fine_alloc),
             vscratch_c: [
-                alloc_zeros_f32(client, n_v),
-                alloc_zeros_f32(client, n_v),
-                alloc_zeros_f32(client, n_v),
+                alloc_zeros_f32(client, n_v_alloc),
+                alloc_zeros_f32(client, n_v_alloc),
+                alloc_zeros_f32(client, n_v_alloc),
             ],
             upscaled_c,
             upscaled_c_strip,
@@ -5655,8 +5693,26 @@ impl<R: Runtime> Cvvdp<R> {
         let n_strip_window = (fine_w as usize) * (strip_window_h as usize);
         let count_v_window = CubeCount::Static((n_strip_v_window as u32).div_ceil(64), 1, 1);
         let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
-        let byte_off_v_window: u64 = u64::from(top_global) * u64::from(coarse_w) * 4;
-        let byte_off_fine_window: u64 = u64::from(top_global) * u64::from(fine_w) * 4;
+
+        // `byte_off_*_full` slice FULL-image buffers (gauss_ref, plus
+        // any weber_scratch buffer that was NOT strip-shaped this
+        // commit). Always required: gauss_ref is full-image in P2.3
+        // and only retires to strip in P2.7.
+        let byte_off_v_full: u64 = u64::from(top_global) * u64::from(coarse_w) * 4;
+        let byte_off_fine_full: u64 = u64::from(top_global) * u64::from(fine_w) * 4;
+
+        // P2.6 (2026-05-27): when `band_ref_strip_local`, the caller
+        // also allocated `vscratch_a` / `vscratch_c` / `l_bkg_fine` /
+        // `log_l_bkg` / `log_l_bkg_dis` at strip dims (per shallow
+        // level). These buffers no longer need slicing — buffer row 0
+        // IS the strip start. The strip-aware kernels still get
+        // `body_off_kernel = top_global` so the reflection math is
+        // unchanged.
+        let (byte_off_v_window, byte_off_fine_window) = if band_ref_strip_local {
+            (0_u64, 0_u64)
+        } else {
+            (byte_off_v_full, byte_off_fine_full)
+        };
 
         // Stage 1: upscale_v/h of coarse A → l_bkg_fine body+halo.
         // l_bkg_fine is full-image; we slice it at top_global and
@@ -5757,21 +5813,25 @@ impl<R: Runtime> Cvvdp<R> {
                 &self.client,
                 count_window.clone(),
                 cube_dim,
+                // gauss_ref planes are full-image; always slice at full top_global.
                 ArrayArg::from_raw_parts(
-                    fine_a_full.offset_start(byte_off_fine_window),
+                    fine_a_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(
-                    fine_rg_full.offset_start(byte_off_fine_window),
+                    fine_rg_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(
-                    fine_vy_full.offset_start(byte_off_fine_window),
+                    fine_vy_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
                 ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
                 ArrayArg::from_raw_parts(upscaled_c_strip[2].clone(), n_strip_buf),
+                // P2.6: l_bkg_fine + log_l_bkg_dis are weber_scratch;
+                // strip-shaped (offset 0) under strip-major outer,
+                // full-image (offset top_global) otherwise.
                 ArrayArg::from_raw_parts(
                     scratch
                         .l_bkg_fine
@@ -5987,8 +6047,21 @@ impl<R: Runtime> Cvvdp<R> {
         let n_strip_window = (fine_w as usize) * (strip_window_h as usize);
         let count_v_window = CubeCount::Static((n_strip_v_window as u32).div_ceil(64), 1, 1);
         let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
-        let byte_off_v_window: u64 = u64::from(top_global) * u64::from(coarse_w) * 4;
-        let byte_off_fine_window: u64 = u64::from(top_global) * u64::from(fine_w) * 4;
+        // gauss_alt is full-image: always slice at top_global * w * 4.
+        // (`byte_off_v_full` unused — vscratch_a in stage 1 reads from
+        // strip-shaped weber_scratch.vscratch_a with offset 0; gauss_alt
+        // is the SRC for upscale_v, not a sliced read.)
+        let _byte_off_v_full: u64 = u64::from(top_global) * u64::from(coarse_w) * 4;
+        let byte_off_fine_full: u64 = u64::from(top_global) * u64::from(fine_w) * 4;
+        // P2.6 (2026-05-27): REF strip helper always runs at shallow
+        // Mode B (caller gates `k < k_split` in
+        // `_run_d_bands_strip_major_shallow`), so the weber_scratch
+        // buffers (vscratch_a, l_bkg_fine, log_l_bkg, vscratch_c) are
+        // ALWAYS strip-shaped here — no slice needed. Byte offsets
+        // are 0 for weber_scratch buffers, `byte_off_fine_full` for
+        // gauss_alt stage-3 fine reads.
+        let byte_off_v_window: u64 = 0;
+        let byte_off_fine_window: u64 = 0;
 
         // Stage 1: upscale_v/h of gauss_alt[k+1] A → l_bkg_fine body+halo.
         // l_bkg_fine is full-image scratch shared with the DIST helper;
@@ -6066,10 +6139,12 @@ impl<R: Runtime> Cvvdp<R> {
         }
 
         // Stage 3: subtract_weber → writes bands_ref_strip (strip-local)
-        // + log_l_bkg (full-image, sliced at byte_off_fine_window). The
-        // strip-aware kernel uses `src_strip_offset = top_global` so
-        // every buffer's row 0 corresponds to global row top_global —
-        // identical to the DIST helper's stage 3 layout.
+        // + log_l_bkg (strip-shaped at P2.6, offset 0). The strip-aware
+        // kernel uses `src_strip_offset = top_global` so every buffer's
+        // row 0 corresponds to global row top_global — identical to
+        // the DIST helper's stage 3 layout. gauss_alt fine_* are full-
+        // image; slice at `byte_off_fine_full`. weber_scratch buffers
+        // (l_bkg_fine, log_l_bkg) are strip-shaped; no slice.
         let fine_a_full = gauss_alt[k].planes[0].clone();
         let fine_rg_full = gauss_alt[k].planes[1].clone();
         let fine_vy_full = gauss_alt[k].planes[2].clone();
@@ -6079,15 +6154,15 @@ impl<R: Runtime> Cvvdp<R> {
                 count_window.clone(),
                 cube_dim,
                 ArrayArg::from_raw_parts(
-                    fine_a_full.offset_start(byte_off_fine_window),
+                    fine_a_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(
-                    fine_rg_full.offset_start(byte_off_fine_window),
+                    fine_rg_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(
-                    fine_vy_full.offset_start(byte_off_fine_window),
+                    fine_vy_full.offset_start(byte_off_fine_full),
                     n_strip_window,
                 ),
                 ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
