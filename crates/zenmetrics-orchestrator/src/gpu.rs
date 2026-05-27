@@ -22,7 +22,29 @@ use crate::GpuCapability;
 ///    text. We extract the `release X.Y` token if present.
 ///
 /// Returns `GpuCapability { present: false, .. }` when step 1 fails.
+///
+/// ## Phase 8a — `ZENMETRICS_FORCE_NO_GPU=1` override
+///
+/// When the environment variable `ZENMETRICS_FORCE_NO_GPU` is set to
+/// `"1"`, this function short-circuits and returns
+/// `GpuCapability { present: false, model: "(forced absent)", .. }`
+/// without spawning `nvidia-smi`. This is the test/CI fixture for the
+/// no-GPU graceful-fallback path. Production callers should leave the
+/// variable unset.
 pub fn detect_gpu() -> GpuCapability {
+    if std::env::var("ZENMETRICS_FORCE_NO_GPU")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        return GpuCapability {
+            present: false,
+            model: "(forced absent)".to_string(),
+            total_vram_mib: 0,
+            driver_version: String::new(),
+            cuda_runtime: None,
+            compute_capability: None,
+        };
+    }
     let Some((model, total_vram_mib, driver_version)) = query_primary_gpu() else {
         return GpuCapability::default();
     };
@@ -181,4 +203,12 @@ Build cuda_13.2.r13.2/compiler.34795729_0
         // the call doesn't blow up on hosts without nvidia-smi.
         let _ = detect_gpu();
     }
+
+    // Phase 8a — the `ZENMETRICS_FORCE_NO_GPU=1` short-circuit is
+    // covered in `tests/no_gpu_fallback.rs`. We don't add a unit test
+    // here because mutating `std::env` requires an unsafe block on
+    // edition-2024+ and this crate forbids unsafe (lib.rs's
+    // `#![forbid(unsafe_code)]`). The integration test file is a
+    // separate compilation unit without that lint, so it can drive
+    // the env-var path directly.
 }

@@ -145,6 +145,14 @@ pub enum RejectReason {
     /// given backend; re-running `bench` at the requested size cures
     /// it.
     NonPositivePrediction,
+    /// Phase 8a: the cached `CapabilityProfile.gpu.present == false`
+    /// so no GPU backend is feasible. Every `Backend::Gpu*` candidate
+    /// is rejected with this reason on hosts with no NVIDIA driver,
+    /// or when `ZENMETRICS_FORCE_NO_GPU=1` is set, or after the
+    /// executor caught a runtime libcuda-missing error and downgraded
+    /// the profile in place. Only [`Backend::Cpu`] candidates can
+    /// survive when this fires.
+    NoGpuPresent,
 }
 
 /// Final decision returned by [`Orchestrator::choose_backend`].
@@ -520,17 +528,39 @@ impl Orchestrator {
         let cpu_feature_on = cpu_feature_enabled_for(metric);
         let mut considered: Vec<ConsideredCandidate> = Vec::with_capacity(ALL_BACKENDS.len());
 
+        // Phase 8a fast-path: when the capability profile says no GPU
+        // is present, every GPU backend is rejected up-front with
+        // `NoGpuPresent` and only the Cpu candidate goes through the
+        // regular evaluator. This skips the cache lookups for GPU
+        // cells (which are absent anyway because Phase 2's bench
+        // short-circuits) and surfaces a clearer "no GPU" reason than
+        // `NoMeasuredData` to operators reading the `considered` list.
+        let gpu_absent = !self.capability().gpu.present;
+
         for &backend in &ALL_BACKENDS {
-            let status = evaluate_candidate(
-                profile,
-                metric,
-                backend,
-                pixels,
-                supported,
-                cpu_feature_on,
-                usable_vram_mib,
-                config,
-            );
+            let status = if gpu_absent
+                && matches!(
+                    backend,
+                    Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair
+                )
+            {
+                CandidateStatus::Rejected {
+                    reason: RejectReason::NoGpuPresent,
+                    predicted_ns_per_px: None,
+                    predicted_vram_mib: None,
+                }
+            } else {
+                evaluate_candidate(
+                    profile,
+                    metric,
+                    backend,
+                    pixels,
+                    supported,
+                    cpu_feature_on,
+                    usable_vram_mib,
+                    config,
+                )
+            };
             considered.push(ConsideredCandidate { backend, status });
         }
 

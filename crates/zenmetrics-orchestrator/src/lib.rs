@@ -603,7 +603,15 @@ impl Orchestrator {
 
     /// Same as [`Self::bench`] but with an explicit [`BenchPlan`] (test
     /// suites use this to override sizes / iterations / timeouts).
-    pub fn bench_with_plan(&mut self, plan: BenchPlan) -> Result<()> {
+    ///
+    /// Phase 8a: the orchestrator forces `plan.gpu_present` to match
+    /// its detected `capability.gpu.present`. Callers that flip the
+    /// field manually before passing the plan in get overwritten —
+    /// this prevents a CPU-only host from accidentally attempting GPU
+    /// cells that would panic in the per-crate constructor. Drive
+    /// `bench::run` directly if you need the unfiltered behaviour.
+    pub fn bench_with_plan(&mut self, mut plan: BenchPlan) -> Result<()> {
+        plan.gpu_present = self.capability.gpu.present;
         let report = bench::run(&plan);
         self.capability.metrics = report.metrics;
         self.capability.last_validated = SystemTime::now();

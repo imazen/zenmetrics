@@ -17,6 +17,30 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- **`zenmetrics-orchestrator` Phase 8a — graceful CPU fallback when no
+  GPU is present.** `detect_gpu()` honours
+  `ZENMETRICS_FORCE_NO_GPU=1` to short-circuit the nvidia-smi path,
+  returning `GpuCapability { present: false, model: "(forced absent)",
+  .. }` as the test/CI fixture for hosts that DO have a GPU but want
+  to exercise the no-GPU path. The bench runner skips every GPU cell
+  when `capability.gpu.present == false` (only CPU cells run, gated
+  by the `cpu-<metric>` features). The chooser introduces
+  `RejectReason::NoGpuPresent` and rejects every `Backend::Gpu*` with
+  it on the no-GPU fast-path so operators see a clearer reason than
+  `NoMeasuredData` in the `considered` list. The executor catches a
+  runtime libcuda-dlopen failure
+  (`is_no_cuda_driver` heuristic: `libcuda.so`, `cuInit`,
+  `CUDA_ERROR_NOT_INITIALIZED`, `CUDA_ERROR_OPERATING_SYSTEM`,
+  `nvml`, `DriverError` substrings) on the first GPU attempt,
+  downgrades `capability.gpu.present` to `false`, and persists the
+  cache so the same task and every subsequent task lands on CPU. A
+  CPU-only build (`--features cpu-all`) routes the full ladder to
+  the per-metric CPU adapter without the executor seeing any GPU
+  construction at all. See `crates/zenmetrics-api/docs/PHASE8_PLAN.md`
+  Phase 8a section for the verified scenarios.
+
 ### Changed
 
 - **Phase 8c — `cvvdp-cpu` crate renamed to `cvvdp`.** Mechanical

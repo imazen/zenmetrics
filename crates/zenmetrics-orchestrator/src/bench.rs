@@ -80,6 +80,13 @@ pub struct BenchPlan {
     /// parent can sample `nvidia-smi memory.used` during a quiescent
     /// window. Default 400 ms — matches `audit_gpu_metrics.py`.
     pub subprocess_hold: Duration,
+    /// Phase 8a: when `false`, skip every GPU cell and only run CPU
+    /// cells (for metrics whose `cpu-<metric>` feature is enabled).
+    /// Set by [`crate::Orchestrator::bench_with_plan`] from the
+    /// detected `gpu.present` flag — callers driving `bench::run`
+    /// directly typically leave the default (`true`) and let the
+    /// per-cell constructor fail loudly if the host has no GPU.
+    pub gpu_present: bool,
 }
 
 impl Default for BenchPlan {
@@ -105,6 +112,12 @@ impl Default for BenchPlan {
             // READY line (CUDA driver decommits pool pages lazily on
             // exit, not immediately on `drop`). Trim to fit budget.
             subprocess_hold: Duration::from_millis(250),
+            // Default-true preserves Phase 1-7 callers that drive the
+            // bench directly from a real-GPU host.
+            // [`crate::Orchestrator::bench_with_plan`] overrides this
+            // from the detected `gpu.present` flag so a CPU-only host
+            // populates only CPU cells.
+            gpu_present: true,
         }
     }
 }
@@ -309,6 +322,21 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
         let mut profile = MetricProfile::default();
 
         for &backend in backends_for_kind(kind) {
+            // Phase 8a: skip GPU cells when the host has no GPU. The
+            // orchestrator populates `plan.gpu_present` from its
+            // detected `CapabilityProfile.gpu.present`; direct callers
+            // of `bench::run` default to `true`. Without this guard,
+            // the per-cell constructor would attempt to dlopen
+            // libcuda.so.1 and panic (cubecl-cuda assumes the runtime
+            // is reachable when the `cuda` feature is enabled).
+            if !plan.gpu_present
+                && matches!(
+                    backend,
+                    Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair
+                )
+            {
+                continue;
+            }
             // Iterate sizes descending — largest first. This way the
             // cubecl pool grows to its max early; subsequent smaller-
             // size cells slot into existing free blocks instead of
