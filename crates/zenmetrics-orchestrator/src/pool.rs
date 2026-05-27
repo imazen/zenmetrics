@@ -446,6 +446,33 @@ struct MetricSignature {
     backend: Backend,
 }
 
+/// Process-wide warm-instance construction counter. Incremented every
+/// time a worker constructs a new `ExecMetric` (i.e., on signature
+/// change or first-task-of-worker). Phase 7.6 test surface — callers
+/// MUST NOT depend on this in production code; it's the only way to
+/// observe warm-instance churn from the integration test layer
+/// without instrumenting the umbrella crate.
+///
+/// Reset between tests with [`reset_warm_instance_construction_count`].
+static WARM_INSTANCE_CONSTRUCTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// Read the current warm-instance construction count. Useful for the
+/// `warm_instance_churn_minimal_on_mixed_chunk` test plan in
+/// `crates/zenmetrics-orchestrator/docs/REORDERING_DESIGN.md`.
+pub fn warm_instance_construction_count() -> usize {
+    WARM_INSTANCE_CONSTRUCTIONS.load(Ordering::Relaxed)
+}
+
+/// Reset the warm-instance construction counter to zero. Test helper.
+pub fn reset_warm_instance_construction_count() {
+    WARM_INSTANCE_CONSTRUCTIONS.store(0, Ordering::Relaxed);
+}
+
+/// Internal — called by the worker once per successful construction.
+fn record_warm_instance_construction() {
+    WARM_INSTANCE_CONSTRUCTIONS.fetch_add(1, Ordering::Relaxed);
+}
+
 /// GPU worker — pulls [`WorkerTask`]s from its queue, reuses a warm
 /// [`ExecMetric`] when the signature matches, otherwise rebuilds.
 fn gpu_worker_main(
@@ -494,6 +521,18 @@ fn gpu_worker_main(
         };
         let signature_changed = current_signature != Some(sig);
         if signature_changed {
+            // Phase 7.6 Layer 4 — observable VRAM budget at swap time.
+            // Log when the swap is about to happen so operators can
+            // tune `vram_safety_floor_mib` from real workload patterns.
+            // This logs ALL signature-change swaps (not just budget
+            // violations); the WARN-level "vram budget gates instance
+            // swap" log fires only when a budget violation is detected.
+            let free_mib = vram_snapshot.load(Ordering::Acquire);
+            log::debug!(
+                target: "zenmetrics_orchestrator::pool",
+                "warm-instance swap: metric={:?}, size={}x{}, backend={:?}, free_vram_mib={}",
+                task.metric, task.width, task.height, task.chosen_backend, free_mib,
+            );
             // Drop the old metric first to release device buffers.
             current_metric = None;
             cached_ref_hash = None;
@@ -505,10 +544,16 @@ fn gpu_worker_main(
                 task.params.clone(),
             ) {
                 ConstructOutcomePub::Ok(m) => {
+                    record_warm_instance_construction();
                     current_metric = Some(m);
                     current_signature = Some(sig);
                 }
                 ConstructOutcomePub::Oom => {
+                    log::warn!(
+                        target: "zenmetrics_orchestrator::pool",
+                        "vram budget gates instance swap: metric={:?}, size={}x{}, backend={:?}, free_vram_mib={}, outcome=OomAtConstruction",
+                        task.metric, task.width, task.height, task.chosen_backend, free_mib,
+                    );
                     let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtConstruction)];
                     let _ = result_tx.send(WorkerResult {
                         handle_id,
@@ -726,6 +771,7 @@ fn cpu_worker_main(
                 task.params.clone(),
             ) {
                 ConstructOutcomePub::Ok(m) => {
+                    record_warm_instance_construction();
                     current_metric = Some(m);
                     current_signature = Some(sig);
                 }
@@ -1380,6 +1426,30 @@ impl Orchestrator {
     /// completion order (NOT submission order — see the module docs).
     /// Callers correlate via [`Task::task_id`].
     ///
+    /// ## Phase 7.6 — internal reorder
+    ///
+    /// `run_all` collects every input task, populates
+    /// [`Task::ref_hash`] from the reference bytes (or pre-upload
+    /// handle id), and **sorts internally** by
+    /// `(metric.tag(), width, height, ref_hash, task_id)` before
+    /// dispatching. The sort drastically reduces warm-instance
+    /// signature churn (one construction per `(metric, dims, backend)`
+    /// instead of one per task) and maximises cached-ref hit rate
+    /// (consecutive tasks with the same ref reuse the device-resident
+    /// reference).
+    ///
+    /// `task_id` is the final tie-breaker so the dispatch order across
+    /// runs is deterministic when refs are identical.
+    ///
+    /// Yield order is still **completion order** — sorting the input
+    /// only changes dispatch order, not output order. Callers
+    /// correlate via [`Task::task_id`] regardless.
+    ///
+    /// Callers who require strict submit-order dispatch should use
+    /// [`Self::submit`] with
+    /// [`OrchestratorConfig::stream_reorder_window`] set to
+    /// `(Duration::ZERO, 1)`. `run_all` always sorts.
+    ///
     /// The iterator blocks on each `next()` until at least one task
     /// completes; it returns `None` once every submitted task has been
     /// drained. Errors at submit time (chooser failure, unsupported
@@ -1390,6 +1460,29 @@ impl Orchestrator {
     where
         I: IntoIterator<Item = Task>,
     {
+        // Collect tasks; hash refs into ref_hash; sort by
+        // (metric, w, h, ref_hash, task_id) for warm-instance reuse +
+        // cached-ref hit rate. The dispatch order after sorting groups
+        // every task that shares (metric, dims) together so the GPU
+        // worker's signature only changes K times for K distinct
+        // (metric, dims) tuples instead of N times for N tasks.
+        let mut tasks: Vec<Task> = tasks.into_iter().collect();
+        for t in &mut tasks {
+            populate_ref_hash(t);
+        }
+        // Stable sort for deterministic output when keys tie. task_id
+        // is the final disambiguator so two runs with the same input
+        // produce the same dispatch order.
+        tasks.sort_by_key(|t| {
+            (
+                t.metric.tag(),
+                t.width,
+                t.height,
+                t.ref_hash,
+                t.task_id,
+            )
+        });
+
         let mut total_submitted: usize = 0;
         let mut submit_errors: Vec<TaskResult> = Vec::new();
         let mut submitted_handles: Vec<u64> = Vec::new();
@@ -1415,6 +1508,11 @@ impl Orchestrator {
                 }
             }
         }
+        // Layer 3 will add a streaming reorder window in submit(); when
+        // it lands run_all will need to call flush_pending() here so
+        // its contract ("all tasks dispatched before the iterator
+        // returns") holds. Currently submit() is straight-through, so
+        // no flush is needed.
         RunAllIter {
             orch: self,
             remaining: total_submitted,
@@ -1422,6 +1520,27 @@ impl Orchestrator {
             errors: submit_errors,
         }
     }
+}
+
+/// Populate `t.ref_hash` from its `ref_data`. xxhash3_64 over the byte
+/// buffer for `Srgb8` / `Path` (path strings hash directly — Phase 5
+/// rejects `Path` at submit anyway, but the sort key still needs *some*
+/// stable value), and the pre-upload's stable `inner_id` for
+/// `PreUploaded`. Idempotent: a non-zero `ref_hash` already set by the
+/// caller is preserved.
+pub(crate) fn populate_ref_hash(t: &mut Task) {
+    if t.ref_hash != 0 {
+        return;
+    }
+    t.ref_hash = match &t.ref_data {
+        TaskData::Srgb8(b) => hash_ref_bytes(b),
+        TaskData::Path(p) => hash_ref_bytes(p.to_string_lossy().as_bytes()),
+        TaskData::PreUploaded(h) => h.inner_id,
+    };
+    // A legitimate hash of "0" is theoretically possible but
+    // astronomically unlikely; if it happens we treat the value as
+    // unhashed but the rest of the sort still works (all such tasks
+    // cluster together at sort position 0).
 }
 
 // ---------------------------------------------------------------------------

@@ -70,6 +70,12 @@ cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim"]
 [dependencies]
 thiserror = { workspace = true }
 serde = { workspace = true }
+# Phase 7.6 Layer 4 — observable VRAM budget at instance swap. The
+# pool's GPU worker logs debug-level events on every swap and warn-
+# level events when the swap surfaces an OOM-at-construction. `log`
+# is leaf-only here (no `env_logger`), so it costs nothing in
+# production callers that don't enable a logger backend.
+log = "0.4.30"
 
 # Phase 2 bench-runner deps. Only pulled when `bench` is enabled — this
 # keeps the Phase 1 surface (capability detection + TOML cache) free of

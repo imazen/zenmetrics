@@ -55,7 +55,10 @@ pub use executor::{
 };
 pub use gpu::detect_gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
-pub use pool::{CachedRefStats, PoolConfig, RunAllIter, TaskHandle, TaskRefHandle};
+pub use pool::{
+    reset_warm_instance_construction_count, warm_instance_construction_count, CachedRefStats,
+    PoolConfig, RunAllIter, TaskHandle, TaskRefHandle,
+};
 
 /// Error type for orchestrator operations. Variants will be extended in
 /// later phases (benchmark failures, scheduler errors, etc.) — callers
