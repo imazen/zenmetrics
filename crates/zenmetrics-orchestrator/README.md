@@ -375,28 +375,37 @@ Light callers that just want the capability detection (e.g. a CI sanity
 check that the machine has the expected GPU model) build with default
 features.
 
-## Dependency on `lilith/cubecl` fork
+## Dependency on `zenforks-cubecl-*` (crates.io)
 
 This crate (and the rest of the zenmetrics GPU stack) pins cubecl to
-the `lilith/cubecl` fork via `[patch.crates-io]` in the workspace
-root `Cargo.toml`. The fork carries a single patch on top of stock
-cubecl 0.10.0: a pinned-host-buffer fast path for `create_from_slice`
-uploads.
+the [imazen/zenforks-cubecl](https://github.com/imazen/zenforks-cubecl)
+rename of the upstream
+[tracel-ai/cubecl](https://github.com/tracel-ai/cubecl) v0.10.x. The
+11 patched-or-transitive crates ship to crates.io under the
+`zenforks-cubecl-*` namespace; their `[lib]` names stay as the
+upstream `cubecl_*`, so source code reads `use cubecl_runtime::*;`
+unchanged.
 
-**Why.** CUDA's `cuMemcpyHtoDAsync` from pageable host memory caps at
-~5-6 GB/s because the driver internally stages through a hidden
-pinned bounce buffer. Allocating the host buffer with
-`cuMemAllocHost_v2` (= "pinned" / "page-locked") lets the driver DMA
-directly at 12-25 GB/s on PCIe 4.0. cvvdp-gpu's 12 MP warm-ref bench
-goes from 95 ms to 22 ms — a ~4.3× speedup — purely from this
-patch. See `docs/CUBECL_GOTCHAS.md` §G6.5 in the workspace root for
-the full diagnosis.
+The renamed crates carry these patches on top of upstream v0.10.0:
 
-The patch:
+1. **Pinned-host-buffer fast path** (`zenforks-cubecl-runtime`, 0.10.0+)
+2. **PTX cache widening** (`zenforks-cubecl-cuda`, 0.10.1+)
+3. **Metal `Atomic<f32>` capability honesty** (`zenforks-cubecl-wgpu`, 0.10.1+)
+
+**Pinned-upload (patch 1) — why.** CUDA's `cuMemcpyHtoDAsync` from
+pageable host memory caps at ~5-6 GB/s because the driver internally
+stages through a hidden pinned bounce buffer. Allocating the host
+buffer with `cuMemAllocHost_v2` (= "pinned" / "page-locked") lets the
+driver DMA directly at 12-25 GB/s on PCIe 4.0. cvvdp-gpu's 12 MP
+warm-ref bench goes from 95 ms to 22 ms — a ~4.3x speedup — purely
+from this patch. See `docs/CUBECL_GOTCHAS.md` §G6.5 in the workspace
+root for the full diagnosis.
+
+The pinned-upload patch:
 
 - Adds `ComputeClient::create_from_slice_pinned(&[u8]) -> Handle` for
   hot per-call uploads that want to skip the
-  `caller → pageable Vec<u8> → pinned Bytes` extra memcpy.
+  `caller -> pageable Vec<u8> -> pinned Bytes` extra memcpy.
 - Adds `ComputeClient::reserve_staging(&[usize]) -> Vec<Bytes>` for
   pre-reserving pinned slabs the caller fills in place.
 - Adds `ComputeClient::create_tensors_from_slices_pinned` for batch
@@ -406,43 +415,47 @@ The patch:
   through `ComputeServer::staging`, so any caller of the default API
   gets the pinned-upload speedup without source changes.
 
-**Upstream PR.** The patch has been drafted as a PR against
+**Upstream PR.** The pinned-upload patch is drafted as a PR against
 `tracel-ai/cubecl` (referenced as draft PR **#1334**). See
 [`../zenmetrics-api/docs/PINNED_UPLOAD_UPSTREAM_PR.md`](../zenmetrics-api/docs/PINNED_UPLOAD_UPSTREAM_PR.md)
-for the full diff, bench numbers, and submission steps.
+for the full diff, bench numbers, and submission steps. The PTX cache
+and Metal atomic patches are tracked in the same docs directory.
 
 **Workspace pin** (from the root `Cargo.toml`):
 
 ```toml
-[patch.crates-io]
-cubecl         = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-runtime = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-core    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-common  = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-ir      = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-cuda    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-cpu     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-wgpu    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-hip     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
-cubecl-cpp     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+[workspace.dependencies]
+# 11 renamed crates from zenforks-cubecl (carry the patches above)
+cubecl         = { package = "zenforks-cubecl",         version = "0.10.1" }
+cubecl-runtime = { package = "zenforks-cubecl-runtime", version = "0.10.1" }
+cubecl-core    = { package = "zenforks-cubecl-core",    version = "0.10.1" }
+cubecl-cuda    = { package = "zenforks-cubecl-cuda",    version = "0.10.1" }
+cubecl-cpu     = { package = "zenforks-cubecl-cpu",     version = "0.10.1" }
+cubecl-wgpu    = { package = "zenforks-cubecl-wgpu",    version = "0.10.1" }
+cubecl-hip     = { package = "zenforks-cubecl-hip",     version = "0.10.1" }
+cubecl-cpp     = { package = "zenforks-cubecl-cpp",     version = "0.10.1" }
+# 5 leaf crates that don't need patching — consumed directly from upstream:
+cubecl-common  = "0.10.0"
+cubecl-ir      = "0.10.0"
 ```
 
 **Downstream opt-in.** If you're consuming `zenmetrics-orchestrator`
-from a separate workspace, add the same `[patch.crates-io]` block to
-your workspace `Cargo.toml`. All ten `cubecl-*` crates must be patched
-to the same rev — partial patches mix patched and unpatched code
-paths in the dep graph and silently lose the speedup. Backends without
-a pinned-memory concept (cubecl-wgpu Metal/Vulkan, cubecl-cpu) ignore
+from a separate workspace, copy the `[workspace.dependencies]` block
+above into your workspace `Cargo.toml`. All 11 patched-or-transitive
+crates must point at the same `0.10.x` of the rename, and the 5
+non-renamed crates stay on upstream's `0.10.0`. Backends without a
+pinned-memory concept (cubecl-wgpu Metal/Vulkan, cubecl-cpu) ignore
 `staging` and behave exactly as stock cubecl, so the patch is safe to
 apply unconditionally even when CUDA isn't in use.
 
-**Sunset plan.** Once the upstream PR merges and a cubecl release
-ships the change, this crate will drop the fork pin entirely and
-return to crates.io versions. The `create_from_slice_pinned` and
-`reserve_staging` API symbols are stable across that transition —
-they exist on the fork today and will exist on upstream post-merge —
-so downstream code paths in cvvdp-gpu / iwssim-gpu / etc. don't need
-to change.
+**Sunset plan.** When upstream cubecl ships a release that contains
+these patches (e.g., once PR #1334 merges and is released), the
+specific patch we carry on top of upstream goes away and our next
+`zenforks-cubecl-*` release drops it. The renamed crates stay on
+crates.io for ABI stability — downstream pins don't churn — but
+become a near-zero-diff rename of upstream until the next patch lands.
+See [`../zenmetrics-api/docs/ZENFORKS_CUBECL_STRATEGY.md`](../zenmetrics-api/docs/ZENFORKS_CUBECL_STRATEGY.md)
+for the full maintenance playbook.
 
 ## Migration from `zenmetrics-api`
 
