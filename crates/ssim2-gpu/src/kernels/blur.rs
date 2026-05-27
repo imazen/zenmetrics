@@ -225,6 +225,122 @@ pub const BLOCK_WIDTH: u32 = 96;
 const BLOCK_WIDTH_USIZE: usize = 96;
 const BLOCK_TIMES_RING_USIZE: usize = BLOCK_WIDTH_USIZE * RING_SIZE_USIZE;
 
+/// One thread = one row. Walks `x` from `-N + 1` to `width - 1` and
+/// emits one output per non-negative `x`.
+///
+/// `src` and `dst` are single-plane f32 of length `width × height`,
+/// row-major. The H-pass companion to [`blur_pass_kernel`] — same
+/// recursive IIR Gaussian coefficients (Charalampidis 2016), same
+/// boundary handling (state seeded to zero, zero-padding outside the
+/// row), just walking horizontally rather than vertically.
+///
+/// Together with `blur_pass_kernel` this produces a separable 2D
+/// Gaussian: `h_pass(v_pass(src))` is bit-equivalent (up to summation
+/// order, which doesn't apply since the order of v then h is the same
+/// as v then transpose then v under separability) to the current
+/// `v_pass + transpose + v_pass` three-step. Eliminates the explicit
+/// `transpose_kernel` launch and the `t_scratch` plane family per
+/// scale.
+///
+/// Launch geometry: cubes `(ceil(height / BLOCK_WIDTH), 1, 1)`, cube
+/// dim `(BLOCK_WIDTH, 1, 1)`. Each thread owns one row `y = ABSOLUTE_POS`.
+///
+/// **Output orientation: untransposed.** Caller no longer needs to
+/// pre-transpose the input; the fully-blurred output is in the same
+/// `(y, x)` row-major layout as `src`. Downstream consumers that expect
+/// the transposed layout (today's `error_maps_kernel`) need to be
+/// updated to read untransposed — see the fused-features kernel work
+/// in `docs/SSIM2_FIX_ASSESSMENT.md` for the planned consumer.
+#[cube(launch_unchecked)]
+pub fn blur_h_pass_kernel(src: &Array<f32>, dst: &mut Array<f32>, width: u32, height: u32) {
+    // y = absolute row index across the launch grid.
+    let y = ABSOLUTE_POS;
+    if y >= height as usize {
+        terminate!();
+    }
+
+    // Per-thread ring buffer — same shape as the v-pass: BLOCK_WIDTH
+    // threads × RING_SIZE entries each. Each entry stores one column's
+    // pixel from this row's history window.
+    let mut ring = SharedMemory::<f32>::new(BLOCK_TIMES_RING_USIZE);
+    let tx = UNIT_POS_X as usize;
+    let ring_base = tx * RING_SIZE_USIZE;
+
+    let mut k: u32 = 0;
+    while k < RING_SIZE {
+        ring[ring_base + (k as usize)] = f32::new(0.0);
+        k += 1;
+    }
+
+    let mut prev_1 = 0.0_f32;
+    let mut prev_3 = 0.0_f32;
+    let mut prev_5 = 0.0_f32;
+    let mut prev2_1 = 0.0_f32;
+    let mut prev2_3 = 0.0_f32;
+    let mut prev2_5 = 0.0_f32;
+
+    let w = width;
+    let w_us = width as usize;
+
+    // x ranges over `(-N + 1) ..= (width - 1)`. Phase offset by `N - 1`
+    // so the loop variable is non-negative; the mathematical x is
+    // `i - (N - 1)`.
+    let span = w + RADIUS_U32 - 1;
+    let row_base = y * w_us;
+    let mut i: u32 = 0;
+    while i < span {
+        let right = i; // = x + N - 1
+        let left_present = i >= TWO_N; // x - N - 1 >= 0  <=>  i >= 2N
+        let x_emit = i + 1 >= RADIUS_U32; // x >= 0  <=>  i + 1 >= N
+
+        let right_val = if right < w {
+            src[row_base + (right as usize)]
+        } else {
+            f32::new(0.0)
+        };
+
+        let left_val = if left_present {
+            let slot = (i - TWO_N) % RING_SIZE;
+            ring[ring_base + (slot as usize)]
+        } else {
+            f32::new(0.0)
+        };
+
+        let sum = left_val + right_val;
+
+        // Three IIR taps; same coefficients as v-pass.
+        let mut out_1 = sum * consts::MUL_IN_1;
+        let mut out_3 = sum * consts::MUL_IN_3;
+        let mut out_5 = sum * consts::MUL_IN_5;
+
+        out_1 += consts::MUL_PREV2_1 * prev2_1;
+        out_3 += consts::MUL_PREV2_3 * prev2_3;
+        out_5 += consts::MUL_PREV2_5 * prev2_5;
+        prev2_1 = prev_1;
+        prev2_3 = prev_3;
+        prev2_5 = prev_5;
+
+        out_1 += consts::MUL_PREV_1 * prev_1;
+        out_3 += consts::MUL_PREV_3 * prev_3;
+        out_5 += consts::MUL_PREV_5 * prev_5;
+        prev_1 = out_1;
+        prev_3 = out_3;
+        prev_5 = out_5;
+
+        if x_emit {
+            let x = i + 1 - RADIUS_U32;
+            if x < w {
+                dst[row_base + (x as usize)] = out_1 + out_3 + out_5;
+            }
+        }
+
+        let slot = right % RING_SIZE;
+        ring[ring_base + (slot as usize)] = right_val;
+
+        i += 1;
+    }
+}
+
 /// Batched recursive Gaussian column walk.
 ///
 /// `src` and `dst` hold `batch_size` planes of `width × height` packed

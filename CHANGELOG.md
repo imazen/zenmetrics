@@ -17,6 +17,29 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### ssim2-gpu — perf: add H-pass IIR blur kernel (row-walking) — 2026-05-27
+
+Adds `blur_h_pass_kernel` (row-walking sibling of the column-walking
+`blur_pass_kernel`). Each thread owns one row, walks `x` from `-N+1`
+to `width-1` with the same 6-floats-of-IIR-state recurrence as the
+v-pass. Same Charalampidis coefficients, same zero-padded boundary
+handling, same `prev_1 + prev_3 + prev_5` summation order.
+
+This is the building block for collapsing the 2-pass blur from
+`v_pass + transpose + v_pass` (3 launches) to `v_pass + h_pass`
+(2 launches). The transpose is no longer needed because the IIR is
+separable: `h_pass(v_pass(src))` = `v_pass(transpose(v_pass(src)))`
+= `transpose(v_pass(v_pass(transpose(src))))` modulo storage order.
+
+Parity gate: new `examples/blur_h_pass_parity` confirms BIT-IDENTICAL
+output (max diff = 0) between `v+t+v` and `v+h` at 7 test cases
+including 32², 64×32, 256², 1024×768, 2048².
+
+NOT yet wired into the pipeline — `blur_plane_two_pass_iir` still
+uses the 3-step `v+t+v`. The wire-in is the next commit. Shipped
+as a kernel-only commit so the parity gate is independently
+reviewable and the pipeline change is a clean follow-on.
+
 ### ssim2-gpu — perf: port 3-channel-fused downscale kernel from zensim-gpu — 2026-05-27
 
 Adds `downscale_2x_3ch_kernel` (3-in, 3-out planar 2× downscale)
