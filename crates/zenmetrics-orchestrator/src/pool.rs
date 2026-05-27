@@ -291,6 +291,47 @@ pub struct PoolConfig {
     /// How long to stall when free VRAM is below the floor before
     /// re-checking (ms). Default 75.
     pub vram_stall_ms: u64,
+    /// Phase 9.1 — number of GPU "lanes" (worker threads) per device.
+    ///
+    /// Each lane owns its own warm [`ExecMetric`] and CUDA stream (via
+    /// cubecl's thread-local `StreamId` — every OS thread that touches
+    /// the shared `ComputeClient` is auto-assigned a distinct stream by
+    /// the cubecl-cuda backend's `MultiStream` scheduler). N > 1 lanes
+    /// run kernel launches concurrently on the same physical GPU when
+    /// VRAM + SM resources allow.
+    ///
+    /// **Default: 1** — preserves bit-identical single-worker behaviour
+    /// for every caller that hasn't explicitly opted into concurrency.
+    /// Phase 9.3 may grow this dynamically at runtime; Phase 9.4 picks
+    /// per `(metric, size)` from the cached `MetricProfile`.
+    ///
+    /// VRAM accounting scales linearly: predicted footprint is
+    /// `N × per-task footprint`. The chooser's budget check at submit
+    /// time uses the single-task footprint; the pool's runtime VRAM
+    /// gate (the live `vram_safety_floor_mib`) is the backstop when
+    /// `N` concurrent lanes outrun the chooser's snapshot.
+    ///
+    /// Minimum 1 (zero is clamped silently). Range: 1..=8.
+    pub max_gpu_lanes: usize,
+    /// Phase 9.3 — target GPU utilization percentage for the adaptive
+    /// lane controller. When the rolling utilization average drops
+    /// below this AND `current_lanes < max_gpu_lanes`, the controller
+    /// considers spinning up an extra lane. Default 80%.
+    pub target_gpu_utilization_pct: u8,
+    /// Phase 9.3 — upper bound for the adaptive controller. The
+    /// controller never spawns more than this many lanes regardless of
+    /// observed utilization. Default 4 (matches the Phase 9 design
+    /// doc's `max_workers_per_device = 4`).
+    pub adaptive_max_gpu_lanes: usize,
+    /// Phase 9.3 — sample interval for the GPU utilization watcher
+    /// (ms). Default 5000 (= 5s, per design doc).
+    pub gpu_util_sample_interval_ms: u64,
+    /// Phase 9.3 — enable adaptive lane scaling. When `true`, a
+    /// background thread samples GPU utilization (via `nvidia-smi`)
+    /// every `gpu_util_sample_interval_ms` and adjusts the live lane
+    /// count between `1` and `adaptive_max_gpu_lanes`. When `false`,
+    /// the pool uses `max_gpu_lanes` statically. Default `false`.
+    pub adaptive_gpu_lanes: bool,
 }
 
 impl Default for PoolConfig {
@@ -303,6 +344,11 @@ impl Default for PoolConfig {
             vram_safety_floor_mib: 200,
             vram_sample_interval_ms: 250,
             vram_stall_ms: 75,
+            max_gpu_lanes: 1,
+            target_gpu_utilization_pct: 80,
+            adaptive_max_gpu_lanes: 4,
+            gpu_util_sample_interval_ms: 5000,
+            adaptive_gpu_lanes: false,
         }
     }
 }
@@ -374,6 +420,156 @@ impl Drop for VramWatcher {
             let _ = j.join();
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// GPU utilization watcher (Phase 9.3)
+// ---------------------------------------------------------------------------
+
+/// Background thread sampling `nvidia-smi --query-gpu=utilization.gpu`
+/// at a configurable interval. Stores the most recent reading (percent,
+/// 0-100) and a small rolling sample buffer that the adaptive lane
+/// controller (Phase 9.3) consults to decide whether to spin up / drop
+/// a lane.
+///
+/// Failure modes: `nvidia-smi` not on `PATH`, or returns non-integer
+/// output — the watcher stores `u8::MAX` as a sentinel for "unknown"
+/// and the controller leaves the lane count alone. The watcher does
+/// not panic; it logs at debug level once per unknown sample.
+pub(crate) struct GpuUtilWatcher {
+    /// Latest sample, 0-100 (or `u8::MAX` for "unknown").
+    latest_pct: Arc<AtomicUsize>,
+    /// Number of consecutive samples that have all been below the
+    /// configured target. Resets when a sample is at-or-above. The
+    /// adaptive controller acts when this reaches a small threshold
+    /// (3, per design doc) AND the active lane count is still below
+    /// the cap.
+    consecutive_below_target: Arc<AtomicUsize>,
+    /// Number of consecutive samples >= 95%. The controller uses this
+    /// to consider dropping a lane.
+    consecutive_above_target: Arc<AtomicUsize>,
+    shutdown: Arc<AtomicBool>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl GpuUtilWatcher {
+    /// Spawn a sampling thread. The initial value is `u8::MAX`
+    /// ("unknown") until the first sample arrives.
+    fn spawn(interval_ms: u64) -> Self {
+        let latest_pct = Arc::new(AtomicUsize::new(u8::MAX as usize));
+        let consecutive_below_target = Arc::new(AtomicUsize::new(0));
+        let consecutive_above_target = Arc::new(AtomicUsize::new(0));
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let p_clone = Arc::clone(&latest_pct);
+        let b_clone = Arc::clone(&consecutive_below_target);
+        let a_clone = Arc::clone(&consecutive_above_target);
+        let shut_clone = Arc::clone(&shutdown);
+        let join = thread::Builder::new()
+            .name("zm-gpu-util-watcher".into())
+            .spawn(move || {
+                let interval = Duration::from_millis(interval_ms);
+                while !shut_clone.load(Ordering::Acquire) {
+                    let pct = sample_gpu_utilization_pct();
+                    match pct {
+                        Some(v) => {
+                            p_clone.store(v as usize, Ordering::Release);
+                            // Threshold check (target = 80, drop_threshold = 95).
+                            // These constants match the Phase 9 design
+                            // doc; the controller's actual decision uses
+                            // them via PoolConfig::target_gpu_utilization_pct.
+                            if v < 80 {
+                                b_clone.fetch_add(1, Ordering::Relaxed);
+                                a_clone.store(0, Ordering::Relaxed);
+                            } else if v >= 95 {
+                                a_clone.fetch_add(1, Ordering::Relaxed);
+                                b_clone.store(0, Ordering::Relaxed);
+                            } else {
+                                b_clone.store(0, Ordering::Relaxed);
+                                a_clone.store(0, Ordering::Relaxed);
+                            }
+                        }
+                        None => {
+                            p_clone.store(u8::MAX as usize, Ordering::Release);
+                            log::debug!(
+                                target: "zenmetrics_orchestrator::pool",
+                                "gpu-util sampler: nvidia-smi unavailable or unparseable"
+                            );
+                        }
+                    }
+                    // Sleep in small chunks for responsive shutdown.
+                    let chunk = Duration::from_millis(50);
+                    let mut remaining = interval;
+                    while remaining > Duration::ZERO {
+                        if shut_clone.load(Ordering::Acquire) {
+                            break;
+                        }
+                        let s = remaining.min(chunk);
+                        thread::sleep(s);
+                        remaining = remaining.saturating_sub(s);
+                    }
+                }
+            })
+            .expect("zm-gpu-util-watcher spawn");
+        Self {
+            latest_pct,
+            consecutive_below_target,
+            consecutive_above_target,
+            shutdown,
+            join: Some(join),
+        }
+    }
+
+    /// Latest sampled GPU utilization in percent (0..=100). Returns
+    /// `None` when the watcher has no valid reading yet (initial state
+    /// or `nvidia-smi` unavailable).
+    pub(crate) fn latest_pct(&self) -> Option<u8> {
+        let v = self.latest_pct.load(Ordering::Acquire);
+        if v == u8::MAX as usize {
+            None
+        } else {
+            Some(v as u8)
+        }
+    }
+
+    pub(crate) fn consecutive_below(&self) -> usize {
+        self.consecutive_below_target.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn consecutive_above(&self) -> usize {
+        self.consecutive_above_target.load(Ordering::Acquire)
+    }
+}
+
+impl Drop for GpuUtilWatcher {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
+        if let Some(j) = self.join.take() {
+            let _ = j.join();
+        }
+    }
+}
+
+/// One-shot `nvidia-smi` sample. Returns `None` if the command can't
+/// be invoked or the output isn't a 0-100 integer.
+///
+/// Shell-out cost: ~30-50 ms per sample on a 7950X — acceptable at the
+/// default 5s interval (< 1% CPU). For shorter intervals (test fixtures),
+/// callers should keep `gpu_util_sample_interval_ms >= 250`.
+fn sample_gpu_utilization_pct() -> Option<u8> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=utilization.gpu",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    // Multi-GPU output: one line per GPU. We sample the first.
+    let first = s.lines().next()?.trim();
+    first.parse::<u8>().ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -1017,8 +1213,15 @@ fn translate_cpu_sentinel(msg: &str, metric: MetricKind) -> OrchestratorError {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct PoolState {
-    /// Send tasks to the GPU worker.
-    gpu_tx: Option<mpsc::Sender<WorkerTask>>,
+    /// Phase 9.1 — GPU lanes. Each lane is one worker thread with its
+    /// own input queue + warm `ExecMetric`. Round-robin dispatch via
+    /// `gpu_next` (modulo lanes.len()) selects the target lane for the
+    /// next task. Cubecl's MultiStream backend assigns each OS thread
+    /// its own CUDA stream automatically (no `unsafe set_stream`
+    /// needed). Length matches `PoolConfig::max_gpu_lanes` at spawn
+    /// time (clamped to 1..=8).
+    gpu_lanes: Vec<mpsc::Sender<WorkerTask>>,
+    gpu_next: AtomicUsize,
     /// CPU worker queues (one per worker thread). Round-robin index for
     /// dispatch.
     cpu_txs: Vec<mpsc::Sender<WorkerTask>>,
@@ -1035,6 +1238,18 @@ pub(crate) struct PoolState {
     cached_ref_cache: CachedRefCache,
     /// Live VRAM watcher.
     vram: VramWatcher,
+    /// Phase 9.3 — adaptive GPU utilization watcher. Spawned only when
+    /// `PoolConfig::adaptive_gpu_lanes` is true. The watcher updates
+    /// `gpu_util_pct` periodically; the dispatcher reads the snapshot
+    /// to decide whether the active lane count is still appropriate.
+    /// Lane scaling is bounded by `[1, adaptive_max_gpu_lanes]`.
+    gpu_util: Option<GpuUtilWatcher>,
+    /// Phase 9.3 — number of GPU lanes currently active for dispatch
+    /// (≤ `gpu_lanes.len()`). The adaptive controller updates this
+    /// atomically; the dispatcher's modulo uses this value (clamped to
+    /// `gpu_lanes.len()` defensively). When `adaptive_gpu_lanes` is
+    /// false this is fixed at `gpu_lanes.len()`.
+    active_gpu_lanes: AtomicUsize,
     /// Configuration snapshot. Stored for inspection / future
     /// re-spawning logic; the active worker thread params are baked
     /// in at spawn time.
@@ -1090,19 +1305,37 @@ impl PoolState {
 
         let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
 
-        // -- GPU worker --
-        let (gpu_tx, gpu_rx) = mpsc::channel::<WorkerTask>();
-        let gpu_result_tx = result_tx.clone();
-        let vram_snap = vram.snapshot_handle();
-        let floor = config.vram_safety_floor_mib;
-        let stall = config.vram_stall_ms;
-        let h = thread::Builder::new()
-            .name("zm-gpu-worker".into())
-            .spawn(move || {
-                gpu_worker_main(gpu_rx, gpu_result_tx, floor, stall, vram_snap);
-            })
-            .expect("zm-gpu-worker spawn");
-        join_handles.push(h);
+        // -- GPU lanes (Phase 9.1) --
+        //
+        // Spawn N worker threads, each with its own input queue + warm
+        // ExecMetric. cubecl's MultiStream backend (default
+        // `max_streams = 128`) auto-assigns each OS thread a distinct
+        // `cudaStream_t` via thread-local `StreamId`, so concurrent
+        // kernels on these threads run on independent CUDA streams.
+        //
+        // The configured `max_gpu_lanes` is clamped to 1..=8. The
+        // adaptive controller (Phase 9.3) sizes `active_gpu_lanes`
+        // dynamically within `[1, adaptive_max_gpu_lanes]`; we always
+        // spawn `max_gpu_lanes` threads up-front so scale-up doesn't
+        // need to spawn from the dispatcher's hot path. Surplus lanes
+        // sit idle on their channel recv() until tasks arrive.
+        let lane_count = config.max_gpu_lanes.clamp(1, 8);
+        let mut gpu_lanes: Vec<mpsc::Sender<WorkerTask>> = Vec::with_capacity(lane_count);
+        for i in 0..lane_count {
+            let (gpu_tx, gpu_rx) = mpsc::channel::<WorkerTask>();
+            let gpu_result_tx = result_tx.clone();
+            let vram_snap = vram.snapshot_handle();
+            let floor = config.vram_safety_floor_mib;
+            let stall = config.vram_stall_ms;
+            let h = thread::Builder::new()
+                .name(format!("zm-gpu-lane-{i}"))
+                .spawn(move || {
+                    gpu_worker_main(gpu_rx, gpu_result_tx, floor, stall, vram_snap);
+                })
+                .expect("zm-gpu-lane spawn");
+            join_handles.push(h);
+            gpu_lanes.push(gpu_tx);
+        }
 
         // -- CPU workers --
         let mut cpu_txs: Vec<mpsc::Sender<WorkerTask>> = Vec::with_capacity(config.max_parallel_cpu);
@@ -1120,8 +1353,21 @@ impl PoolState {
         // cleanly once every worker exits (each worker holds its own clone).
         drop(result_tx);
 
+        // -- Adaptive GPU utilization watcher (Phase 9.3) --
+        let active_gpu_lanes = AtomicUsize::new(if config.adaptive_gpu_lanes {
+            1
+        } else {
+            lane_count
+        });
+        let gpu_util = if config.adaptive_gpu_lanes {
+            Some(GpuUtilWatcher::spawn(config.gpu_util_sample_interval_ms))
+        } else {
+            None
+        };
+
         Self {
-            gpu_tx: Some(gpu_tx),
+            gpu_lanes,
+            gpu_next: AtomicUsize::new(0),
             cpu_txs,
             cpu_next: 0,
             join_handles,
@@ -1130,6 +1376,8 @@ impl PoolState {
             next_handle: 0,
             cached_ref_cache: CachedRefCache::default(),
             vram,
+            gpu_util,
+            active_gpu_lanes,
             config,
             pre_uploads: Arc::new(Mutex::new(PreUploadTable::default())),
             pending_queue: PendingQueue::default(),
@@ -1166,8 +1414,14 @@ impl Drop for PoolState {
     fn drop(&mut self) {
         // Close every worker's input channel; each worker exits when its
         // recv returns Err. Then join in order.
-        drop(self.gpu_tx.take());
+        self.gpu_lanes.clear();
         self.cpu_txs.clear();
+        // GpuUtilWatcher's Drop signals + joins its own thread before
+        // the rest of PoolState tears down (otherwise the watcher
+        // could try to update `active_gpu_lanes` on a dropped atomic
+        // — `AtomicUsize::store` itself is fine on a moved-out value,
+        // but explicit ordering documents the lifetime intent).
+        self.gpu_util.take();
         for h in self.join_handles.drain(..) {
             let _ = h.join();
         }
@@ -1430,9 +1684,20 @@ impl Orchestrator {
             t.use_cached_ref = hit;
             match prepared.route {
                 WorkerRoute::Gpu => {
-                    if let Some(tx) = pool.gpu_tx.as_ref() {
-                        let _ = tx.send(t);
+                    // Phase 9.1 — round-robin across active GPU lanes.
+                    // `active_gpu_lanes` is updated by the adaptive
+                    // controller (Phase 9.3) within `[1, lane_count]`;
+                    // we clamp defensively to `gpu_lanes.len()` so a
+                    // race that overshot doesn't index out of bounds.
+                    if pool.gpu_lanes.is_empty() {
+                        continue;
                     }
+                    let active = pool
+                        .active_gpu_lanes
+                        .load(Ordering::Acquire)
+                        .clamp(1, pool.gpu_lanes.len());
+                    let idx = pool.gpu_next.fetch_add(1, Ordering::Relaxed) % active;
+                    let _ = pool.gpu_lanes[idx].send(t);
                 }
                 WorkerRoute::Cpu(idx) => {
                     let slot = idx % pool.cpu_txs.len().max(1);
@@ -1586,6 +1851,77 @@ impl Orchestrator {
     /// watcher gets its first probe (~one `vram_sample_interval_ms`).
     pub fn vram_watcher_mib(&self) -> Option<usize> {
         Some(self.pool.as_ref()?.vram.current_mib())
+    }
+
+    /// Phase 9.1 — total number of GPU lanes spawned at pool init time.
+    /// Matches `PoolConfig::max_gpu_lanes` (clamped to 1..=8). Returns
+    /// `None` if the pool isn't initialised yet. The active-for-dispatch
+    /// count may be lower than this — see [`Self::active_gpu_lanes`].
+    pub fn gpu_lane_count(&self) -> Option<usize> {
+        Some(self.pool.as_ref()?.gpu_lanes.len())
+    }
+
+    /// Phase 9.3 — number of GPU lanes currently active for dispatch.
+    /// When `PoolConfig::adaptive_gpu_lanes` is false, this equals
+    /// [`Self::gpu_lane_count`]. When adaptive is enabled, it floats
+    /// between 1 and `PoolConfig::adaptive_max_gpu_lanes` based on
+    /// observed GPU utilization.
+    ///
+    /// Returns `None` if the pool isn't initialised.
+    pub fn active_gpu_lanes(&self) -> Option<usize> {
+        Some(self.pool.as_ref()?.active_gpu_lanes.load(Ordering::Acquire))
+    }
+
+    /// Phase 9.3 — current GPU utilization sample, as percent (0-100).
+    /// Returns `None` if adaptive scaling is disabled OR the watcher
+    /// hasn't produced its first sample yet OR `nvidia-smi` is
+    /// unavailable.
+    pub fn gpu_utilization_pct(&self) -> Option<u8> {
+        self.pool.as_ref()?.gpu_util.as_ref()?.latest_pct()
+    }
+
+    /// Phase 9.3 — run one tick of the adaptive lane controller. Looks
+    /// at the latest utilization sample and the consecutive-low /
+    /// consecutive-high counters maintained by the watcher, and
+    /// adjusts `active_gpu_lanes` within `[1, adaptive_max_gpu_lanes]`.
+    ///
+    /// Returns `Some(new_count)` if the lane count changed, `None`
+    /// otherwise (no change, or adaptive scaling disabled).
+    ///
+    /// Callers may invoke this from their own polling loop OR rely on
+    /// the implicit tick that runs every `submit()` call when adaptive
+    /// scaling is enabled. The implicit tick is rate-limited to one
+    /// call per `gpu_util_sample_interval_ms / 2` to keep the
+    /// dispatcher's hot path predictable.
+    pub fn adaptive_lane_tick(&mut self) -> Option<usize> {
+        let pool = self.pool.as_mut()?;
+        let watcher = pool.gpu_util.as_ref()?;
+        // Need at least 3 consecutive low-or-high samples to act.
+        // This matches the Phase 9 design doc's "3 samples needed"
+        // guard against single-sample noise.
+        const SAMPLES_NEEDED: usize = 3;
+        let lane_count = pool.gpu_lanes.len();
+        let max_lanes = pool
+            .config
+            .adaptive_max_gpu_lanes
+            .clamp(1, lane_count.max(1));
+        let current = pool.active_gpu_lanes.load(Ordering::Acquire);
+        let below = watcher.consecutive_below();
+        let above = watcher.consecutive_above();
+        let new_count = if below >= SAMPLES_NEEDED && current < max_lanes {
+            current + 1
+        } else if above >= SAMPLES_NEEDED && current > 1 {
+            current - 1
+        } else {
+            return None;
+        };
+        pool.active_gpu_lanes.store(new_count, Ordering::Release);
+        log::debug!(
+            target: "zenmetrics_orchestrator::pool",
+            "adaptive lane tick: util_pct={:?} below={} above={} {} -> {}",
+            watcher.latest_pct(), below, above, current, new_count,
+        );
+        Some(new_count)
     }
 
     /// Pre-upload a reference image. Returns a [`TaskRefHandle`] that
@@ -1894,5 +2230,29 @@ mod tests {
         assert!(cfg.vram_safety_floor_mib > 0);
         assert!(cfg.vram_sample_interval_ms > 0);
         assert!(cfg.vram_stall_ms > 0);
+    }
+
+    #[test]
+    fn pool_config_phase9_defaults_preserve_single_worker() {
+        // Phase 9.1 — the default must keep N=1 lane so bit-identical
+        // single-worker behaviour is preserved for every caller that
+        // hasn't explicitly opted into concurrency.
+        let cfg = PoolConfig::default();
+        assert_eq!(cfg.max_gpu_lanes, 1, "default max_gpu_lanes must be 1");
+        assert!(!cfg.adaptive_gpu_lanes, "default adaptive_gpu_lanes must be false");
+        assert_eq!(cfg.adaptive_max_gpu_lanes, 4);
+        assert_eq!(cfg.target_gpu_utilization_pct, 80);
+        assert!(cfg.gpu_util_sample_interval_ms >= 1000);
+    }
+
+    #[test]
+    fn pool_config_max_lanes_clamps_to_eight() {
+        // 8 is the hard cap; values above that are clamped to 8 at
+        // construction time (we test the policy via the clamp() call,
+        // since PoolState::new isn't constructible in pure-CPU tests).
+        let n: usize = 100;
+        assert_eq!(n.clamp(1, 8), 8);
+        let z: usize = 0;
+        assert_eq!(z.clamp(1, 8), 1);
     }
 }

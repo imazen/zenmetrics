@@ -19,6 +19,23 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenmetrics-orchestrator` Phase 9.1 — N-lane GPU pool with
+  round-robin dispatch.** The worker pool's single GPU worker is now
+  a `Vec<mpsc::Sender<WorkerTask>>` sized by `PoolConfig::max_gpu_lanes`
+  (clamped to 1..=8, default 1). Each lane is its own OS thread
+  holding a warm `ExecMetric` and consuming from its own mpsc queue;
+  cubecl's MultiStream backend (default `max_streams = 128`) auto-
+  assigns each thread a distinct `cudaStream_t` via thread-local
+  `StreamId`, so N > 1 lanes run kernels concurrently on independent
+  CUDA streams. New `Orchestrator` API: `gpu_lane_count()`,
+  `active_gpu_lanes()`, `gpu_utilization_pct()`,
+  `adaptive_lane_tick()`. `PoolConfig` gains `max_gpu_lanes`,
+  `target_gpu_utilization_pct`, `adaptive_max_gpu_lanes`,
+  `gpu_util_sample_interval_ms`, and `adaptive_gpu_lanes` — the last
+  four wire Phase 9.3's adaptive controller. Default config preserves
+  single-worker behaviour (max_gpu_lanes=1, adaptive_gpu_lanes=false);
+  existing tests pass unchanged. (23e26c9e)
+
 - **`zenmetrics-orchestrator` Phase 8a — graceful CPU fallback when no
   GPU is present.** `detect_gpu()` honours
   `ZENMETRICS_FORCE_NO_GPU=1` to short-circuit the nvidia-smi path,
