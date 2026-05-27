@@ -62,32 +62,12 @@ fast-reduction = []
 # both should land FIR scores in a dedicated parquet column via
 # `SSIM2_FIR_COLUMN_NAME` to avoid mixing with IIR's column.
 fir = []
-# OFF by default. Pulls in coefficient's cudarse/turbo-metrics SSIM2
-# backend as a dev-only optional dep so the `cudarse_parity`
-# integration test can score the same fixtures via BOTH the CubeCL
-# backend (this crate) and the cudarse backend (`coefficient::gpu`)
-# and assert numeric agreement.
-#
-# Requires:
-#   * A working CUDA driver + toolkit (the cudarse stack only builds
-#     against NVIDIA).
-#   * `../turbo-metrics` checked out at the path coefficient's
-#     `Cargo.toml` expects, OR the path-dep below pointed at the
-#     archived location. As of 2026-05-26 the live `~/work/turbo-metrics`
-#     was archived to `~/work/turbo-metrics--archived-2026-05-06`;
-#     enable this feature ONLY in environments where one of the two
-#     paths resolves.
-#
-# The parity test itself is marked `#[ignore]` so `cargo test --features
-# cudarse-parity` does not regress CI even on machines where cudarse
-# fails to build at runtime. Document any divergence in
-# `docs/GPU_METRIC_PARITY.md`.
-# cudarse-parity test machinery — coefficient is now a [dev-dependencies]
-# entry (see below). The feature is retained as a no-op flag so the
-# `[[test]] cudarse_parity` block can still gate on it for opt-in CI,
-# but it no longer pulls coefficient into the [dependencies] graph
-# (which created a coefficient ↔ ssim2-gpu cycle once coefficient
-# itself listed ssim2-gpu as an optional dep, 2026-05-26).
+# `cudarse-parity` was a no-op feature retained from the deleted
+# `tests/cudarse_parity.rs` integration test (removed 2026-05-27 to
+# unbreak CI — see below). Kept as an empty stub so external callers
+# that pass `--features cudarse-parity` from older scripts still see
+# a recognised feature name rather than a hard error. May be removed
+# in a future cleanup once those callers have caught up.
 cudarse-parity = []
 
 [dependencies]
@@ -99,10 +79,34 @@ zenpixels-convert = { version = "0.2.11", default-features = false, features = [
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-# Cross-repo parity dep — only used by tests/cudarse_parity.rs which is
-# `#[ignore]`d by default. Moved out of [dependencies] 2026-05-27 to
-# break the coefficient ↔ ssim2-gpu cargo cycle.
-coefficient = { path = "../../../../coefficient", default-features = false, features = ["gpu"] }
+# `coefficient` was previously a dev-dep here for the now-deleted
+# `tests/cudarse_parity.rs` (which compared this crate's CubeCL SSIM2
+# kernels against coefficient's cudarse/turbo-metrics SSIM2 backend).
+#
+# The dep was removed 2026-05-27 because:
+#
+# 1. CI runners don't have `../../../../coefficient` on disk — the
+#    path-dep manifest read failed at cargo's metadata-load step on
+#    every job (linux/windows/macos/i686-cross), masking every other
+#    CI signal.
+# 2. coefficient's `gpu` feature (default-on) pulls path-deps on
+#    ssim2-gpu / butteraugli-gpu / dssim-gpu / zensim-gpu via
+#    `../zen/zenmetrics/crates/...`, which doesn't resolve cleanly on
+#    CI either even if coefficient itself were cloned. And restoring
+#    the manifest there would re-create the optional cycle that
+#    `e659cf57` originally moved coefficient out of `[dependencies]`
+#    for.
+# 3. The parity test was already `#[ignore]`d — it never ran on CI;
+#    the cross-backend comparison methodology lives in git history
+#    (`a4fe9a5e feat(ssim2-gpu): cross-repo CubeCL vs cudarse SSIM2
+#    parity test skeleton`) and can be re-introduced locally via a
+#    small patch when SSIM2 numeric agreement against the upstream
+#    cudarse stack needs re-checking.
+#
+# If you need to re-enable: `git revert --no-commit <this commit's
+# hash>` restores both the dev-dep line AND the test file. Build it
+# only from a local checkout where `~/work/coefficient/` and
+# `~/work/turbo-metrics/` (or `--archived-*` sibling) both resolve.
 ssimulacra2 = { workspace = true }
 yuvxyb = "0.5.0"
 bytemuck = { workspace = true }
@@ -193,6 +197,5 @@ required-features = ["cubecl-types"]
 name = "reduction_determinism"
 required-features = ["cubecl-types"]
 
-[[test]]
-name = "cudarse_parity"
-required-features = ["cudarse-parity", "cuda", "cubecl-types"]
+# `[[test]] cudarse_parity` was deleted 2026-05-27 — see the
+# `cudarse-parity` feature comment above for the rationale.
