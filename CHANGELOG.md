@@ -19,6 +19,15 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- CI was failing on every platform with `failed to read coefficient/Cargo.toml`
+  because the `coefficient` dev-dep on `ssim2-gpu` (used only by an
+  `#[ignore]`d cross-backend parity test) had a relative path that
+  doesn't exist on CI runners. The test file + dev-dep entry were
+  deleted; the cross-backend parity methodology lives in git history
+  (`a4fe9a5e`) and can be restored locally via `git revert` of the fix
+  commit if needed. Unblocks `zenmetrics-orchestrator` Phase 7+ CI
+  gates (`07d749d6`).
+
 - Sweep worker + `zen-metrics-cli` could not read Snappy-compressed input
   parquets — the `parquet` dep was built with only `["arrow", "zstd"]`, so
   reading any parquet written with the default (Snappy) compression failed
@@ -28,6 +37,53 @@ Workspace conventions per the global rules:
   input-parquet read, before any GPU work, not a node/CUDA issue.
 
 ### Added
+
+- `zenmetrics-orchestrator` Phase 7.5 — **the orchestrator is now
+  production-ready for all metrics, with the per-cell sweep loop
+  flipped to the orchestrator when `--use-orchestrator` is set.**
+  Closes the three Phase 7 honest-stops: butter + cvvdp eligibility,
+  cmd_sweep's MetricCache loop, and the CI infra blocker. Scope:
+
+  - **`TaskResult.output_columns`** (`zenmetrics-orchestrator`):
+    new `BTreeMap<String, f64>` field on `TaskResult` carrying the
+    per-metric output columns the caller should write. Multi-column
+    metrics survive end-to-end: butter exposes both
+    `butteraugli_max_gpu` and `butteraugli_pnorm3_gpu`; cvvdp +
+    iwssim use their versioned column tags
+    (`CVVDP_COLUMN_NAME` / `IWSSIM_COLUMN_NAME`). Bit-identical to
+    the legacy `MetricCache` output for the same CLI input
+    (`957afc5a`).
+
+  - **`butteraugli_gpu::ButteraugliOpaque::compute_srgb_u8_with_pnorm3`**:
+    new public method exposing both the max-norm Score and the
+    libjxl `pnorm_3` aggregate from the same fused reduction
+    kernel. No extra GPU work; the opaque path used to drop
+    `pnorm_3` after producing it. Additive — the existing
+    `compute_srgb_u8` keeps working unchanged (`957afc5a`).
+
+  - **`cmd_sweep` orchestrator-driven loop** (`zen-metrics-cli`):
+    when `--use-orchestrator` is set, the per-cell metric scoring
+    routes through `Orchestrator::run_single` instead of
+    `MetricCache::lock_global`. The two paths are mutually
+    exclusive in any sweep invocation — no double-allocation of
+    warm cubecl `Metric` instances. The legacy path stays compiled
+    in for the `--use-orchestrator=false` default (Phase 7.5
+    default; Phase 7.6 will flip it on after fleet trials). One
+    carve-out: ZensimGpu + `--feature-output` stays on
+    MetricCache because the orchestrator API doesn't yet expose
+    `compute_features_srgb_u8` (`f1fda156`).
+
+  - **Eligibility gate**: `metric_orchestrator_eligible` admits
+    `ButteraugliGpu` + `Cvvdp`. Only CPU `Butteraugli` remains on
+    the legacy path (cpu-butter doesn't expose `pnorm_3` yet).
+    `rekey_orchestrator_columns` helper renames the orchestrator's
+    canonical GPU-variant column keys to CPU-variant keys for CLI
+    callers that asked for a CPU variant.
+
+  Tests added: 6 `build_output_columns_*` shape tests in
+  `executor.rs` (every metric × column-name contract), one
+  `rekey_orchestrator_columns_phase_7_5_*` test on the CLI side.
+  All 54 orchestrator unit tests + 17 CLI lib tests pass.
 
 - `zenmetrics-orchestrator` Phase 7 — **the orchestrator is now the
   recommended entry point** for any caller that scores more than one
@@ -85,6 +141,13 @@ Workspace conventions per the global rules:
   is bypassed; the legacy direct-dispatch code paths (CvvdpBatchScorer,
   MetricCache, run_metric) remain the default. CI continues to verify
   both shapes.
+
+  **Phase 7.5 update (2026-05-27)**: butter + cvvdp are no longer
+  carved out of the orchestrator path, and `cmd_sweep`'s per-cell
+  scoring now dispatches through `Orchestrator::run_single` when
+  `--use-orchestrator` is set (the warm-only behaviour described
+  below applies only to Phase 7 builds — Phase 7.5 graduated to
+  full dispatch). See the Phase 7.5 entry above for details.
 
 - `zenmetrics-orchestrator` Phase 6 — CPU backend wiring for the OOM
   fallback ladder. Replaces the Phase 4-5 `CpuNotYetWired` short-circuit
