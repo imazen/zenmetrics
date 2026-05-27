@@ -61,7 +61,7 @@ fn main() {
         }
         "strip" => {
             let mut b = Butteraugli::<Backend>::new_strip(client, w, h, 256);
-            let res = b.compute(&r, &d).expect("compute strip");
+            let res = b.compute_strip(&r, &d).expect("compute_strip");
             res.score
         }
         other => panic!("unknown WORKER_MODE: {other}"),

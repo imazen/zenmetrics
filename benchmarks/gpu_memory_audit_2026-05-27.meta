@@ -1,0 +1,8 @@
+# gpu_memory_audit metadata
+git_sha: ?
+sizes: [1024, 2048, 4096]
+crates: ['butteraugli-gpu', 'cvvdp-gpu', 'dssim-gpu', 'iwssim-gpu', 'ssim2-gpu', 'zensim-gpu']
+cells: 33
+host: lilith
+cuda_path: /usr/local/cuda
+method: subprocess-per-cell, nvidia-smi delta during ~400ms child hold window after READY.
