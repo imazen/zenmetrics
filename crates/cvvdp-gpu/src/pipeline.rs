@@ -4868,7 +4868,15 @@ impl<R: Runtime> Cvvdp<R> {
         ch_gain: [f32; 3],
         _band_mul: f32,
     ) -> Result<()> {
-        let cube_dim = CubeDim::new_1d(64);
+        // P2.1a refactor (2026-05-27): the body of this walker is now
+        // the per-strip helper `_dispatch_dist_weber_csf_strip_s_for_level`.
+        // The wrapper iterates `s in 0..n_strips` and dispatches each
+        // strip individually. This factorisation is JOD bit-identical
+        // (same kernel launches in the same order) and positions the
+        // strip-major outer dispatch (P2.1b/c) to call the per-strip
+        // helper directly without re-implementing stages 1-4. See
+        // docs/STRIP_PROCESSING.md#phase-2--p21-implementation-analysis-2026-05-27
+        // for the canary decomposition.
         let h_body_at_0 = match self.strip_config {
             Some(StripConfig { h_body, .. }) => h_body,
             None => {
@@ -4880,13 +4888,7 @@ impl<R: Runtime> Cvvdp<R> {
             }
         };
 
-        let coarse_w = self.gauss_ref[k + 1].w;
-        let coarse_h = self.gauss_ref[k + 1].h;
-        let fine_w = self.gauss_ref[k].w;
         let fine_h = self.gauss_ref[k].h;
-        let n_fine = (fine_w * fine_h) as usize;
-        let n_coarse = (coarse_w * coarse_h) as usize;
-
         let strip_h_at_k = (h_body_at_0 >> k).max(1);
         let n_strips = if fine_h <= strip_h_at_k {
             1
@@ -4894,15 +4896,87 @@ impl<R: Runtime> Cvvdp<R> {
             fine_h.div_ceil(strip_h_at_k)
         };
 
+        for s in 0..n_strips {
+            self._dispatch_dist_weber_csf_strip_s_for_level(
+                s,
+                k,
+                &band_ref_a,
+                &band_ref_rg,
+                &band_ref_vy,
+                &log_l_bkg_full,
+                t_p_ref_h,
+                t_p_dis_h,
+                ch_gain,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// P2.1a per-strip helper (2026-05-27). Runs stages 1-4 of the
+    /// fused DIST Weber + csf strip walker for a SINGLE strip
+    /// `s` at non-baseband level `k` in Mode B.
+    ///
+    /// Stages (mirrors the previous in-loop body of
+    /// `_dispatch_dist_weber_csf_strip_walker_for_level`):
+    /// 1. Upscale_v/h of coarse A → `l_bkg_fine` strip body.
+    /// 2. Per-channel upscale of coarse → `upscaled_c_strip`
+    ///    (strip-local; overwritten each strip iteration).
+    /// 3. Fused `subtract_weber_3ch_strip` → writes per-strip
+    ///    `bands_dis_strip[c]` + body rows of full-image
+    ///    `log_l_bkg_dis` (throwaway).
+    /// 4. Fused `csf_apply_6ch` → writes body rows of full-image
+    ///    `t_p_ref[c]` / `t_p_dis[c]`.
+    ///
+    /// **JOD invariant.** This helper is the inner-loop body of the
+    /// old strip walker, extracted verbatim. Two consecutive calls
+    /// with `s = 0` then `s = 1` produce bit-identical state to the
+    /// old wrapper's `for s in 0..2`. Strip-major-outer callers can
+    /// interleave `(s, k)` ordering as long as the per-`(s, k)` body
+    /// order (stages 1→2→3→4) is preserved within each call.
+    ///
+    /// `s` must be `< n_strips_at_level_k`. The caller is responsible
+    /// for that check; the helper does not validate.
+    ///
+    /// `band_ref_*` and `log_l_bkg_full` are borrowed (not owned) so
+    /// the per-strip caller can pass through to many `(s, k)` calls
+    /// without per-call handle clones bumping refcounts at the
+    /// cubecl layer.
+    ///
+    /// **No buffer-shape change.** This helper writes body rows only.
+    /// P2.1b will extend it to write body+halo so the masking
+    /// walker's halo reads find valid data in strip-major-outer
+    /// dispatch — that's the next canary step, not this one.
+    #[allow(clippy::too_many_arguments)]
+    fn _dispatch_dist_weber_csf_strip_s_for_level(
+        &self,
+        s: u32,
+        k: usize,
+        band_ref_a: &cubecl::server::Handle,
+        band_ref_rg: &cubecl::server::Handle,
+        band_ref_vy: &cubecl::server::Handle,
+        log_l_bkg_full: &cubecl::server::Handle,
+        t_p_ref_h: &[cubecl::server::Handle; 3],
+        t_p_dis_h: &[cubecl::server::Handle; 3],
+        ch_gain: [f32; 3],
+    ) -> Result<()> {
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return Err(Error::InvalidImageSize),
+        };
+
+        let coarse_w = self.gauss_ref[k + 1].w;
+        let coarse_h = self.gauss_ref[k + 1].h;
+        let fine_w = self.gauss_ref[k].w;
+        let fine_h = self.gauss_ref[k].h;
+        let n_coarse = (coarse_w * coarse_h) as usize;
+
+        let strip_h_at_k = (h_body_at_0 >> k).max(1);
+
         let scratch = &self.weber_scratch[k];
-        // Mode B DIST Weber writes the throwaway log_l_bkg_dis (cvvdp
-        // uses REF's log_l_bkg for both sides; DIST's value is
-        // computed-then-discarded). The strip walker's
-        // subtract_weber_3ch_strip_kernel writes the per-strip body
-        // here at `body_offset_y` offsets.
         let log_l_bkg_dis_dest = scratch.log_l_bkg_dis.clone();
 
-        // bands_dis_strip MUST be allocated (Mode B invariant).
         let bands_dis_strip = scratch
             .bands_dis_strip
             .as_ref()
@@ -4911,8 +4985,6 @@ impl<R: Runtime> Cvvdp<R> {
                  build_weber_scratch must allocate it under StripMode::Pair",
             );
 
-        // upscaled_c_strip MUST be allocated (Mode B invariant — set
-        // by build_weber_scratch alongside bands_dis_strip).
         let upscaled_c_strip = scratch
             .upscaled_c_strip
             .as_ref()
@@ -4921,28 +4993,62 @@ impl<R: Runtime> Cvvdp<R> {
                  build_weber_scratch must allocate it under StripMode::Pair",
             );
 
-        for s in 0..n_strips {
-            let body_offset_y = s * strip_h_at_k;
-            let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
+        let body_offset_y = s * strip_h_at_k;
+        let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
 
-            let n_strip_v = (coarse_w as usize) * (body_h as usize);
-            let n_strip_fine = (fine_w as usize) * (body_h as usize);
-            let count_v_strip = CubeCount::Static((n_strip_v as u32).div_ceil(64), 1, 1);
-            let count_fine_strip = CubeCount::Static((n_strip_fine as u32).div_ceil(64), 1, 1);
-            let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
-            let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
+        let n_strip_v = (coarse_w as usize) * (body_h as usize);
+        let n_strip_fine = (fine_w as usize) * (body_h as usize);
+        let count_v_strip = CubeCount::Static((n_strip_v as u32).div_ceil(64), 1, 1);
+        let count_fine_strip = CubeCount::Static((n_strip_fine as u32).div_ceil(64), 1, 1);
+        let byte_off_v: u64 = u64::from(body_offset_y) * u64::from(coarse_w) * 4;
+        let byte_off_fine: u64 = u64::from(body_offset_y) * u64::from(fine_w) * 4;
 
-            // Stage 1: upscale_v/h of coarse A → l_bkg_fine body.
-            let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
-            let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
-            let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+        // Stage 1: upscale_v/h of coarse A → l_bkg_fine body.
+        let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
+        let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
+        let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+        unsafe {
+            upscale_v_strip_kernel::launch::<R>(
+                &self.client,
+                count_v_strip.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(coarse_a, n_coarse),
+                ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
+                coarse_w,
+                coarse_h,
+                fine_h,
+                body_offset_y,
+                body_h,
+                0,
+            );
+            upscale_h_strip_kernel::launch::<R>(
+                &self.client,
+                count_fine_strip.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v),
+                ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
+                coarse_w,
+                fine_w,
+                body_h,
+                fine_h,
+                body_offset_y,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 2: per-channel upscale → upscaled_c_strip.
+        for c in 0..N_CHANNELS {
+            let coarse = self.gauss_ref[k + 1].planes[c].clone();
+            let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v);
+            let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
             unsafe {
                 upscale_v_strip_kernel::launch::<R>(
                     &self.client,
                     count_v_strip.clone(),
                     cube_dim,
-                    ArrayArg::from_raw_parts(coarse_a, n_coarse),
-                    ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
+                    ArrayArg::from_raw_parts(coarse, n_coarse),
+                    ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v),
                     coarse_w,
                     coarse_h,
                     fine_h,
@@ -4954,8 +5060,8 @@ impl<R: Runtime> Cvvdp<R> {
                     &self.client,
                     count_fine_strip.clone(),
                     cube_dim,
-                    ArrayArg::from_raw_parts(vscratch_a_strip, n_strip_v),
-                    ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
+                    ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
+                    ArrayArg::from_raw_parts(upscaled_c_strip[c].clone(), n_strip_buf),
                     coarse_w,
                     fine_w,
                     body_h,
@@ -4965,160 +5071,95 @@ impl<R: Runtime> Cvvdp<R> {
             }
             self.strip_dispatch_counter
                 .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 2: per-channel upscale → upscaled_c_strip.
-            for c in 0..N_CHANNELS {
-                let coarse = self.gauss_ref[k + 1].planes[c].clone();
-                let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v);
-                let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
-                unsafe {
-                    upscale_v_strip_kernel::launch::<R>(
-                        &self.client,
-                        count_v_strip.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(coarse, n_coarse),
-                        ArrayArg::from_raw_parts(vscratch_c_strip.clone(), n_strip_v),
-                        coarse_w,
-                        coarse_h,
-                        fine_h,
-                        body_offset_y,
-                        body_h,
-                        0,
-                    );
-                    upscale_h_strip_kernel::launch::<R>(
-                        &self.client,
-                        count_fine_strip.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(vscratch_c_strip, n_strip_v),
-                        ArrayArg::from_raw_parts(upscaled_c_strip[c].clone(), n_strip_buf),
-                        coarse_w,
-                        fine_w,
-                        body_h,
-                        fine_h,
-                        body_offset_y,
-                    );
-                }
-                self.strip_dispatch_counter
-                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-            }
-
-            // Stage 3: subtract_weber → writes bands_dis_strip.
-            // All inputs strip-local (per-strip buffers OR sliced
-            // full-image at body offset). Kernel uses
-            // src_strip_offset = body_offset_y for index translation.
-            let fine_a_full = self.gauss_ref[k].planes[0].clone();
-            let fine_rg_full = self.gauss_ref[k].planes[1].clone();
-            let fine_vy_full = self.gauss_ref[k].planes[2].clone();
-            let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
-            unsafe {
-                subtract_weber_3ch_strip_kernel::launch::<R>(
-                    &self.client,
-                    count_fine_strip.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(
-                        fine_a_full.offset_start(byte_off_fine),
-                        n_strip_fine,
-                    ),
-                    ArrayArg::from_raw_parts(
-                        fine_rg_full.offset_start(byte_off_fine),
-                        n_strip_fine,
-                    ),
-                    ArrayArg::from_raw_parts(
-                        fine_vy_full.offset_start(byte_off_fine),
-                        n_strip_fine,
-                    ),
-                    ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(upscaled_c_strip[2].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(
-                        scratch.l_bkg_fine.clone().offset_start(byte_off_fine),
-                        n_strip_fine,
-                    ),
-                    // Path A bands_dis: write the per-strip contrast
-                    // outputs to the strip-local bands_dis_strip
-                    // buffer (no offset). The kernel writes at
-                    // `buf_y = dy_local` since src_strip_offset =
-                    // body_offset_y.
-                    ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_buf),
-                    ArrayArg::from_raw_parts(
-                        log_l_bkg_dis_dest.clone().offset_start(byte_off_fine),
-                        n_strip_fine,
-                    ),
-                    fine_w,
-                    body_h,
-                    body_offset_y,
-                    fine_h,
-                    body_offset_y, // src_strip_offset — body-relative for bands_dis_strip
-                );
-            }
-            self.strip_dispatch_counter
-                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 4: csf_apply_6ch on this strip's body. Reads
-            // bands_ref[k] sliced at body offset (full-image),
-            // bands_dis_strip[k] at strip-local (no offset),
-            // log_l_bkg (REF's) sliced at body offset. Writes
-            // t_p_ref/t_p_dis body rows of the full-image
-            // transients passed in.
-            //
-            // The csf kernel is per-pixel (no halo) so we dispatch
-            // over `n_strip_fine = body_h * fine_w` and use the
-            // first `n_strip_fine` elements of each buffer. For
-            // bands_dis_strip (sized strip_h_at_k * fine_w >=
-            // body_h * fine_w) the first n_strip_fine elements ARE
-            // the body's data. For the sliced full-image handles
-            // (offset by body_offset_y * fine_w * 4) the first
-            // n_strip_fine elements are the body rows.
-            let band_ref_a_strip = band_ref_a.clone().offset_start(byte_off_fine);
-            let band_ref_rg_strip = band_ref_rg.clone().offset_start(byte_off_fine);
-            let band_ref_vy_strip = band_ref_vy.clone().offset_start(byte_off_fine);
-            let log_l_bkg_strip = log_l_bkg_full.clone().offset_start(byte_off_fine);
-            let t_p_ref_a_strip = t_p_ref_h[0].clone().offset_start(byte_off_fine);
-            let t_p_ref_rg_strip = t_p_ref_h[1].clone().offset_start(byte_off_fine);
-            let t_p_ref_vy_strip = t_p_ref_h[2].clone().offset_start(byte_off_fine);
-            let t_p_dis_a_strip = t_p_dis_h[0].clone().offset_start(byte_off_fine);
-            let t_p_dis_rg_strip = t_p_dis_h[1].clone().offset_start(byte_off_fine);
-            let t_p_dis_vy_strip = t_p_dis_h[2].clone().offset_start(byte_off_fine);
-            unsafe {
-                csf_apply_6ch_kernel::launch::<R>(
-                    &self.client,
-                    count_fine_strip.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(band_ref_a_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(band_ref_rg_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(band_ref_vy_strip, n_strip_fine),
-                    // bands_dis_strip: pass as-is (the strip buffer's
-                    // row 0 IS the body's row 0; csf reads at
-                    // `idx = i` for i in 0..n_strip_fine which lines
-                    // up with the body rows).
-                    ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_fine),
-                    ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_fine),
-                    ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_fine),
-                    ArrayArg::from_raw_parts(log_l_bkg_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
-                    ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
-                    ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
-                    ArrayArg::from_raw_parts(t_p_ref_a_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(t_p_ref_rg_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(t_p_ref_vy_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(t_p_dis_a_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(t_p_dis_rg_strip, n_strip_fine),
-                    ArrayArg::from_raw_parts(t_p_dis_vy_strip, n_strip_fine),
-                    ch_gain[0],
-                    ch_gain[1],
-                    ch_gain[2],
-                    n_strip_fine as u32,
-                );
-            }
-            self.strip_dispatch_counter
-                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         }
 
-        // `n_fine` is the level's full-image element count — kept
-        // alive for parity with the original walker's bookkeeping.
-        let _ = n_fine;
+        // Stage 3: subtract_weber → writes bands_dis_strip.
+        let fine_a_full = self.gauss_ref[k].planes[0].clone();
+        let fine_rg_full = self.gauss_ref[k].planes[1].clone();
+        let fine_vy_full = self.gauss_ref[k].planes[2].clone();
+        let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
+        unsafe {
+            subtract_weber_3ch_strip_kernel::launch::<R>(
+                &self.client,
+                count_fine_strip.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(
+                    fine_a_full.offset_start(byte_off_fine),
+                    n_strip_fine,
+                ),
+                ArrayArg::from_raw_parts(
+                    fine_rg_full.offset_start(byte_off_fine),
+                    n_strip_fine,
+                ),
+                ArrayArg::from_raw_parts(
+                    fine_vy_full.offset_start(byte_off_fine),
+                    n_strip_fine,
+                ),
+                ArrayArg::from_raw_parts(upscaled_c_strip[0].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(upscaled_c_strip[1].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(upscaled_c_strip[2].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(
+                    scratch.l_bkg_fine.clone().offset_start(byte_off_fine),
+                    n_strip_fine,
+                ),
+                ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_buf),
+                ArrayArg::from_raw_parts(
+                    log_l_bkg_dis_dest.clone().offset_start(byte_off_fine),
+                    n_strip_fine,
+                ),
+                fine_w,
+                body_h,
+                body_offset_y,
+                fine_h,
+                body_offset_y, // src_strip_offset — body-relative for bands_dis_strip
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 4: csf_apply_6ch on this strip's body.
+        let band_ref_a_strip = band_ref_a.clone().offset_start(byte_off_fine);
+        let band_ref_rg_strip = band_ref_rg.clone().offset_start(byte_off_fine);
+        let band_ref_vy_strip = band_ref_vy.clone().offset_start(byte_off_fine);
+        let log_l_bkg_strip = log_l_bkg_full.clone().offset_start(byte_off_fine);
+        let t_p_ref_a_strip = t_p_ref_h[0].clone().offset_start(byte_off_fine);
+        let t_p_ref_rg_strip = t_p_ref_h[1].clone().offset_start(byte_off_fine);
+        let t_p_ref_vy_strip = t_p_ref_h[2].clone().offset_start(byte_off_fine);
+        let t_p_dis_a_strip = t_p_dis_h[0].clone().offset_start(byte_off_fine);
+        let t_p_dis_rg_strip = t_p_dis_h[1].clone().offset_start(byte_off_fine);
+        let t_p_dis_vy_strip = t_p_dis_h[2].clone().offset_start(byte_off_fine);
+        unsafe {
+            csf_apply_6ch_kernel::launch::<R>(
+                &self.client,
+                count_fine_strip.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(band_ref_a_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(band_ref_rg_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(band_ref_vy_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(bands_dis_strip[0].clone(), n_strip_fine),
+                ArrayArg::from_raw_parts(bands_dis_strip[1].clone(), n_strip_fine),
+                ArrayArg::from_raw_parts(bands_dis_strip[2].clone(), n_strip_fine),
+                ArrayArg::from_raw_parts(log_l_bkg_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(self.logs_row[k][0].clone(), 32),
+                ArrayArg::from_raw_parts(self.logs_row[k][1].clone(), 32),
+                ArrayArg::from_raw_parts(self.logs_row[k][2].clone(), 32),
+                ArrayArg::from_raw_parts(t_p_ref_a_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(t_p_ref_rg_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(t_p_ref_vy_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(t_p_dis_a_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(t_p_dis_rg_strip, n_strip_fine),
+                ArrayArg::from_raw_parts(t_p_dis_vy_strip, n_strip_fine),
+                ch_gain[0],
+                ch_gain[1],
+                ch_gain[2],
+                n_strip_fine as u32,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
         Ok(())
     }
 
@@ -5178,10 +5219,12 @@ impl<R: Runtime> Cvvdp<R> {
         m_blur_h: &[cubecl::server::Handle; 3],
         d_h: &[cubecl::server::Handle; 3],
     ) {
-        // PU blur radius — `pu_blur_v_3ch_scaled_strip_aware_kernel`
-        // is a 13-tap (half = 6) kernel.
-        const HALO: usize = 6;
-        let cube_dim = CubeDim::new_1d(64);
+        // P2.1a refactor (2026-05-27): the body of this walker is now
+        // the per-strip helper `_run_band_masking_strip_s_for_level`.
+        // The wrapper iterates `s in 0..n_strips` and dispatches each
+        // strip individually. JOD bit-identical refactor; positions
+        // the strip-major outer dispatch (P2.1b/c) to call the per-
+        // strip helper. See docs/STRIP_PROCESSING.md#phase-2--p21-implementation-analysis-2026-05-27.
         let h_body_at_0 = match self.strip_config {
             Some(StripConfig { h_body, .. }) => h_body as usize,
             None => return,
@@ -5197,226 +5240,302 @@ impl<R: Runtime> Cvvdp<R> {
         };
 
         for s in 0..n_strips {
-            let body_offset_y = s * strip_h_at_k;
-            let body_h = (bh - body_offset_y).min(strip_h_at_k);
-
-            // Halo-padded window for the H/V blur chain.
-            let top_global = body_offset_y.saturating_sub(HALO);
-            let bot_global = (body_offset_y + body_h + HALO).min(bh);
-            let strip_window_h = bot_global - top_global;
-            let n_strip_window = bw * strip_window_h;
-            let byte_off_window: u64 = (top_global as u64) * (bw as u64) * 4;
-            let count_window =
-                CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
-
-            // mult_mutual processes ONLY body rows (no halo).
-            let n_strip_body = bw * body_h;
-            let byte_off_body: u64 = (body_offset_y as u64) * (bw as u64) * 4;
-            let count_body =
-                CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
-
-            // Stage 1: min_abs over halo-padded window.
-            // Per-pixel, no reflection — offset handles + n = window size.
-            let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(byte_off_window);
-            let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(byte_off_window);
-            let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(byte_off_window);
-            let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(byte_off_window);
-            let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(byte_off_window);
-            let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(byte_off_window);
-            let m_raw_a_w = m_raw_h[0].clone().offset_start(byte_off_window);
-            let m_raw_rg_w = m_raw_h[1].clone().offset_start(byte_off_window);
-            let m_raw_vy_w = m_raw_h[2].clone().offset_start(byte_off_window);
-            unsafe {
-                min_abs_3ch_kernel::launch::<R>(
-                    &self.client,
-                    count_window.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(t_p_dis_a_w, n_strip_window),
-                    ArrayArg::from_raw_parts(t_p_dis_rg_w, n_strip_window),
-                    ArrayArg::from_raw_parts(t_p_dis_vy_w, n_strip_window),
-                    ArrayArg::from_raw_parts(t_p_ref_a_w, n_strip_window),
-                    ArrayArg::from_raw_parts(t_p_ref_rg_w, n_strip_window),
-                    ArrayArg::from_raw_parts(t_p_ref_vy_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
-                    n_strip_window as u32,
-                );
-            }
-            self.strip_dispatch_counter
-                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 2: pu_blur_h_3ch_strip_aware over halo-padded window.
-            // H-blur is X-only; body_offset_y / logical_h are passed
-            // for API uniformity but ignored by the kernel.
-            let m_mid_a_w = m_mid_h[0].clone().offset_start(byte_off_window);
-            let m_mid_rg_w = m_mid_h[1].clone().offset_start(byte_off_window);
-            let m_mid_vy_w = m_mid_h[2].clone().offset_start(byte_off_window);
-            unsafe {
-                pu_blur_h_3ch_strip_aware_kernel::launch::<R>(
-                    &self.client,
-                    count_window.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_mid_a_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_mid_rg_w.clone(), n_strip_window),
-                    ArrayArg::from_raw_parts(m_mid_vy_w.clone(), n_strip_window),
-                    bw as u32,
-                    strip_window_h as u32,
-                    top_global as u32, // body_offset_y (unused by H-pass)
-                    bh as u32,         // logical_h (unused by H-pass)
-                );
-            }
-            self.strip_dispatch_counter
-                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 3: pu_blur_v_3ch_scaled_strip_aware over halo-padded
-            // window. The strip-aware V kernel resolves reflection
-            // against `logical_h = bh` and reads src via
-            // `s[i] = reflect(y_global, bh) - body_off_kernel`. We pass
-            // body_off_kernel = top_global so that:
-            //   - y_global = y_strip + top_global  (correct absolute
-            //     row of every dispatched output element)
-            //   - s[i] = reflect - top_global      (correct row index
-            //     into the offset src buffer whose row 0 is global
-            //     row top_global)
-            //
-            // Reflections from interior body rows stay within the
-            // strip window. Reflections from halo rows can resolve to
-            // src rows outside [0, strip_window_h) which underflow
-            // usize and write garbage; this is fine because:
-            //   - Halo rows of dst (m_blur) are never read downstream
-            //     — mult_mutual only reads body rows.
-            //   - Halo rows belong to neighbouring strips' bodies, and
-            //     each neighbouring strip recomputes its body
-            //     correctly on its own dispatch (sequential GPU stream
-            //     ordering preserves this).
-            let m_blur_a_w = m_blur_h[0].clone().offset_start(byte_off_window);
-            let m_blur_rg_w = m_blur_h[1].clone().offset_start(byte_off_window);
-            let m_blur_vy_w = m_blur_h[2].clone().offset_start(byte_off_window);
-            unsafe {
-                pu_blur_v_3ch_scaled_strip_aware_kernel::launch::<R>(
-                    &self.client,
-                    count_window.clone(),
-                    cube_dim,
-                    ArrayArg::from_raw_parts(m_mid_a_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_mid_rg_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_mid_vy_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_blur_a_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_blur_rg_w, n_strip_window),
-                    ArrayArg::from_raw_parts(m_blur_vy_w, n_strip_window),
-                    pu_scale,
-                    bw as u32,
-                    strip_window_h as u32,
-                    top_global as u32,
-                    bh as u32,
-                );
-            }
-            self.strip_dispatch_counter
-                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 4: mult_mutual_3ch_with_blurred — process body
-            // rows only. Reads body rows of m_blur (correct from V-blur)
-            // + body rows of t_p/r_p (correct from CSF full-band
-            // dispatch) and writes body rows of d.
-            //
-            // Path A Phase 1d (2026-05-26): in Mode B the `d_h`
-            // buffer passed in is `d_strip` (per-strip-sized, allocated
-            // by build_d_bands_scratch for non-baseband levels). Each
-            // strip dispatch writes into position 0 of d_strip — the
-            // inline pool dispatch below then accumulates that strip's
-            // contribution into `partials_h` before the next strip
-            // iteration overwrites the buffer. Mode E keeps the full-
-            // image d plane and writes at `byte_off_body`.
-            let mode_b = matches!(
-                self.strip_config,
-                Some(StripConfig { mode: StripMode::Pair, .. }),
+            self._run_band_masking_strip_s_for_level(
+                s,
+                k,
+                bw,
+                bh,
+                pu_scale,
+                t_p_ref_h,
+                t_p_dis_h,
+                m_raw_h,
+                m_mid_h,
+                m_blur_h,
+                d_h,
             );
-            let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
-            let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(byte_off_body);
-            let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(byte_off_body);
-            let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(byte_off_body);
-            let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(byte_off_body);
-            let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(byte_off_body);
-            let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(byte_off_body);
-            let m_blur_a_b = m_blur_h[0].clone().offset_start(byte_off_body);
-            let m_blur_rg_b = m_blur_h[1].clone().offset_start(byte_off_body);
-            let m_blur_vy_b = m_blur_h[2].clone().offset_start(byte_off_body);
-            let d_a_b = d_h[0].clone().offset_start(d_byte_off);
-            let d_rg_b = d_h[1].clone().offset_start(d_byte_off);
-            let d_vy_b = d_h[2].clone().offset_start(d_byte_off);
+        }
+
+        // `n_px` is the level's full-band element count — the wrapper
+        // doesn't use it directly. The single-strip helper computes
+        // its own per-strip body/window counts from `(s, k, bw, bh)`.
+        let _ = n_px;
+    }
+
+    /// P2.1a per-strip helper (2026-05-27). Runs stages 1-5 of the
+    /// fused masking chain (`min_abs → pu_blur_h → pu_blur_v → mult_mutual`
+    /// + optional Mode B inline pool) for a SINGLE strip `s` at
+    /// non-baseband level `k`.
+    ///
+    /// Stages (mirrors the previous in-loop body of
+    /// `_run_band_masking_strip_walker`):
+    /// 1. min_abs over halo-padded window of t_p_*.
+    /// 2. pu_blur_h_3ch_strip_aware over halo-padded window of m_raw.
+    /// 3. pu_blur_v_3ch_scaled_strip_aware over halo-padded window of m_mid.
+    /// 4. mult_mutual_3ch_with_blurred over body rows.
+    /// 5. (Mode B only) pool_band_3ch_offset_kernel over body rows.
+    ///
+    /// **JOD invariant.** The helper is the inner-loop body extracted
+    /// verbatim; consecutive calls with `s = 0, 1, 2, ...` produce
+    /// bit-identical state to the wrapper's `for s in 0..n_strips`
+    /// loop.
+    ///
+    /// **Cross-strip halo dependency** (unchanged from the prior in-
+    /// loop body): the V-blur halo reads m_mid rows above and below
+    /// this strip's body, which were populated by H-blur in the SAME
+    /// strip call (the H-blur was dispatched over the halo-padded
+    /// window). m_raw is similarly populated by min_abs in this
+    /// strip's stage 1 over the halo-padded window. So all per-strip
+    /// reads are self-contained.
+    ///
+    /// **Caller invariant** for strip-major-outer dispatch: t_p_*[k]
+    /// must already be populated for the body+halo rows of this
+    /// strip. Today's level-major-outer caller (`_run_d_bands_band_loop`)
+    /// satisfies this by running the csf walker for ALL strips at
+    /// level k BEFORE any masking strip runs. A future strip-major-
+    /// outer caller must extend csf to write t_p_*'s halo rows per
+    /// strip (P2.1b work) — until then, calling this helper in
+    /// strip-major-outer order silently mixes valid + stale t_p data
+    /// in the V-blur halo reads, drifting JOD.
+    #[allow(clippy::too_many_arguments)]
+    fn _run_band_masking_strip_s_for_level(
+        &self,
+        s: usize,
+        k: usize,
+        bw: usize,
+        bh: usize,
+        pu_scale: f32,
+        t_p_ref_h: &[cubecl::server::Handle; 3],
+        t_p_dis_h: &[cubecl::server::Handle; 3],
+        m_raw_h: &[cubecl::server::Handle; 3],
+        m_mid_h: &[cubecl::server::Handle; 3],
+        m_blur_h: &[cubecl::server::Handle; 3],
+        d_h: &[cubecl::server::Handle; 3],
+    ) {
+        // PU blur radius — `pu_blur_v_3ch_scaled_strip_aware_kernel`
+        // is a 13-tap (half = 6) kernel.
+        const HALO: usize = 6;
+        let cube_dim = CubeDim::new_1d(64);
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body as usize,
+            None => return,
+        };
+
+        let strip_h_at_k = (h_body_at_0 >> k).max(1);
+
+        let body_offset_y = s * strip_h_at_k;
+        let body_h = (bh - body_offset_y).min(strip_h_at_k);
+
+        // Halo-padded window for the H/V blur chain.
+        let top_global = body_offset_y.saturating_sub(HALO);
+        let bot_global = (body_offset_y + body_h + HALO).min(bh);
+        let strip_window_h = bot_global - top_global;
+        let n_strip_window = bw * strip_window_h;
+        let byte_off_window: u64 = (top_global as u64) * (bw as u64) * 4;
+        let count_window =
+            CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+
+        // mult_mutual processes ONLY body rows (no halo).
+        let n_strip_body = bw * body_h;
+        let byte_off_body: u64 = (body_offset_y as u64) * (bw as u64) * 4;
+        let count_body =
+            CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
+
+        // Stage 1: min_abs over halo-padded window.
+        // Per-pixel, no reflection — offset handles + n = window size.
+        let t_p_dis_a_w = t_p_dis_h[0].clone().offset_start(byte_off_window);
+        let t_p_dis_rg_w = t_p_dis_h[1].clone().offset_start(byte_off_window);
+        let t_p_dis_vy_w = t_p_dis_h[2].clone().offset_start(byte_off_window);
+        let t_p_ref_a_w = t_p_ref_h[0].clone().offset_start(byte_off_window);
+        let t_p_ref_rg_w = t_p_ref_h[1].clone().offset_start(byte_off_window);
+        let t_p_ref_vy_w = t_p_ref_h[2].clone().offset_start(byte_off_window);
+        let m_raw_a_w = m_raw_h[0].clone().offset_start(byte_off_window);
+        let m_raw_rg_w = m_raw_h[1].clone().offset_start(byte_off_window);
+        let m_raw_vy_w = m_raw_h[2].clone().offset_start(byte_off_window);
+        unsafe {
+            min_abs_3ch_kernel::launch::<R>(
+                &self.client,
+                count_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(t_p_dis_a_w, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_dis_rg_w, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_dis_vy_w, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_ref_a_w, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_ref_rg_w, n_strip_window),
+                ArrayArg::from_raw_parts(t_p_ref_vy_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
+                n_strip_window as u32,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 2: pu_blur_h_3ch_strip_aware over halo-padded window.
+        // H-blur is X-only; body_offset_y / logical_h are passed
+        // for API uniformity but ignored by the kernel.
+        let m_mid_a_w = m_mid_h[0].clone().offset_start(byte_off_window);
+        let m_mid_rg_w = m_mid_h[1].clone().offset_start(byte_off_window);
+        let m_mid_vy_w = m_mid_h[2].clone().offset_start(byte_off_window);
+        unsafe {
+            pu_blur_h_3ch_strip_aware_kernel::launch::<R>(
+                &self.client,
+                count_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(m_raw_a_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_rg_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_raw_vy_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_a_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_rg_w.clone(), n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_vy_w.clone(), n_strip_window),
+                bw as u32,
+                strip_window_h as u32,
+                top_global as u32, // body_offset_y (unused by H-pass)
+                bh as u32,         // logical_h (unused by H-pass)
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 3: pu_blur_v_3ch_scaled_strip_aware over halo-padded
+        // window. The strip-aware V kernel resolves reflection
+        // against `logical_h = bh` and reads src via
+        // `s[i] = reflect(y_global, bh) - body_off_kernel`. We pass
+        // body_off_kernel = top_global so that:
+        //   - y_global = y_strip + top_global  (correct absolute
+        //     row of every dispatched output element)
+        //   - s[i] = reflect - top_global      (correct row index
+        //     into the offset src buffer whose row 0 is global
+        //     row top_global)
+        //
+        // Reflections from interior body rows stay within the
+        // strip window. Reflections from halo rows can resolve to
+        // src rows outside [0, strip_window_h) which underflow
+        // usize and write garbage; this is fine because:
+        //   - Halo rows of dst (m_blur) are never read downstream
+        //     — mult_mutual only reads body rows.
+        //   - Halo rows belong to neighbouring strips' bodies, and
+        //     each neighbouring strip recomputes its body
+        //     correctly on its own dispatch (sequential GPU stream
+        //     ordering preserves this).
+        let m_blur_a_w = m_blur_h[0].clone().offset_start(byte_off_window);
+        let m_blur_rg_w = m_blur_h[1].clone().offset_start(byte_off_window);
+        let m_blur_vy_w = m_blur_h[2].clone().offset_start(byte_off_window);
+        unsafe {
+            pu_blur_v_3ch_scaled_strip_aware_kernel::launch::<R>(
+                &self.client,
+                count_window.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(m_mid_a_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_rg_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_mid_vy_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_blur_a_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_blur_rg_w, n_strip_window),
+                ArrayArg::from_raw_parts(m_blur_vy_w, n_strip_window),
+                pu_scale,
+                bw as u32,
+                strip_window_h as u32,
+                top_global as u32,
+                bh as u32,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 4: mult_mutual_3ch_with_blurred — process body
+        // rows only. Reads body rows of m_blur (correct from V-blur)
+        // + body rows of t_p/r_p (correct from CSF full-band
+        // dispatch) and writes body rows of d.
+        //
+        // Path A Phase 1d (2026-05-26): in Mode B the `d_h`
+        // buffer passed in is `d_strip` (per-strip-sized, allocated
+        // by build_d_bands_scratch for non-baseband levels). Each
+        // strip dispatch writes into position 0 of d_strip — the
+        // inline pool dispatch below then accumulates that strip's
+        // contribution into `partials_h` before the next strip
+        // iteration overwrites the buffer. Mode E keeps the full-
+        // image d plane and writes at `byte_off_body`.
+        let mode_b = matches!(
+            self.strip_config,
+            Some(StripConfig { mode: StripMode::Pair, .. }),
+        );
+        let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
+        let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(byte_off_body);
+        let t_p_dis_rg_b = t_p_dis_h[1].clone().offset_start(byte_off_body);
+        let t_p_dis_vy_b = t_p_dis_h[2].clone().offset_start(byte_off_body);
+        let t_p_ref_a_b = t_p_ref_h[0].clone().offset_start(byte_off_body);
+        let t_p_ref_rg_b = t_p_ref_h[1].clone().offset_start(byte_off_body);
+        let t_p_ref_vy_b = t_p_ref_h[2].clone().offset_start(byte_off_body);
+        let m_blur_a_b = m_blur_h[0].clone().offset_start(byte_off_body);
+        let m_blur_rg_b = m_blur_h[1].clone().offset_start(byte_off_body);
+        let m_blur_vy_b = m_blur_h[2].clone().offset_start(byte_off_body);
+        let d_a_b = d_h[0].clone().offset_start(d_byte_off);
+        let d_rg_b = d_h[1].clone().offset_start(d_byte_off);
+        let d_vy_b = d_h[2].clone().offset_start(d_byte_off);
+        unsafe {
+            mult_mutual_3ch_with_blurred_kernel::launch::<R>(
+                &self.client,
+                count_body.clone(),
+                cube_dim,
+                ArrayArg::from_raw_parts(t_p_dis_a_b, n_strip_body),
+                ArrayArg::from_raw_parts(t_p_dis_rg_b, n_strip_body),
+                ArrayArg::from_raw_parts(t_p_dis_vy_b, n_strip_body),
+                ArrayArg::from_raw_parts(t_p_ref_a_b, n_strip_body),
+                ArrayArg::from_raw_parts(t_p_ref_rg_b, n_strip_body),
+                ArrayArg::from_raw_parts(t_p_ref_vy_b, n_strip_body),
+                ArrayArg::from_raw_parts(m_blur_a_b, n_strip_body),
+                ArrayArg::from_raw_parts(m_blur_rg_b, n_strip_body),
+                ArrayArg::from_raw_parts(m_blur_vy_b, n_strip_body),
+                ArrayArg::from_raw_parts(d_a_b.clone(), n_strip_body),
+                ArrayArg::from_raw_parts(d_rg_b.clone(), n_strip_body),
+                ArrayArg::from_raw_parts(d_vy_b.clone(), n_strip_body),
+                n_strip_body as u32,
+            );
+        }
+        self.strip_dispatch_counter
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+        // Stage 5 (Mode B only): inline pool dispatch over this
+        // strip's d (which lives in `d_strip` at offset 0). The
+        // pool kernel atomic-adds into `self.partials_h[k *
+        // N_CHANNELS + c]`; subsequent strips of this band (and
+        // every other band) accumulate into the same partials
+        // entries, so the final `partials_h` matches the
+        // post-band-loop pool result by atomic associativity.
+        //
+        // Mode E keeps the full-d post-band-loop pool path
+        // (`_pool_and_finalize_jod_strip`); only Mode B interleaves
+        // because only Mode B owns a per-strip-sized d_strip
+        // buffer that the next strip iteration is about to
+        // overwrite.
+        if mode_b {
+            let partial_idx_a = (k * N_CHANNELS) as u32;
+            let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
+            let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
             unsafe {
-                mult_mutual_3ch_with_blurred_kernel::launch::<R>(
+                pool_band_3ch_offset_kernel::launch::<R>(
                     &self.client,
                     count_body.clone(),
                     cube_dim,
-                    ArrayArg::from_raw_parts(t_p_dis_a_b, n_strip_body),
-                    ArrayArg::from_raw_parts(t_p_dis_rg_b, n_strip_body),
-                    ArrayArg::from_raw_parts(t_p_dis_vy_b, n_strip_body),
-                    ArrayArg::from_raw_parts(t_p_ref_a_b, n_strip_body),
-                    ArrayArg::from_raw_parts(t_p_ref_rg_b, n_strip_body),
-                    ArrayArg::from_raw_parts(t_p_ref_vy_b, n_strip_body),
-                    ArrayArg::from_raw_parts(m_blur_a_b, n_strip_body),
-                    ArrayArg::from_raw_parts(m_blur_rg_b, n_strip_body),
-                    ArrayArg::from_raw_parts(m_blur_vy_b, n_strip_body),
-                    ArrayArg::from_raw_parts(d_a_b.clone(), n_strip_body),
-                    ArrayArg::from_raw_parts(d_rg_b.clone(), n_strip_body),
-                    ArrayArg::from_raw_parts(d_vy_b.clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(d_h[0].clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(d_h[1].clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(d_h[2].clone(), n_strip_body),
+                    ArrayArg::from_raw_parts(
+                        self.partials_h.clone(),
+                        (self.n_levels as usize) * N_CHANNELS,
+                    ),
+                    BETA_SPATIAL,
+                    partial_idx_a,
+                    partial_idx_rg,
+                    partial_idx_vy,
+                    0_u32,
+                    n_strip_body as u32,
                     n_strip_body as u32,
                 );
             }
             self.strip_dispatch_counter
                 .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-
-            // Stage 5 (Mode B only): inline pool dispatch over this
-            // strip's d (which lives in `d_strip` at offset 0). The
-            // pool kernel atomic-adds into `self.partials_h[k *
-            // N_CHANNELS + c]`; subsequent strips of this band (and
-            // every other band) accumulate into the same partials
-            // entries, so the final `partials_h` matches the
-            // post-band-loop pool result by atomic associativity.
-            //
-            // Mode E keeps the full-d post-band-loop pool path
-            // (`_pool_and_finalize_jod_strip`); only Mode B interleaves
-            // because only Mode B owns a per-strip-sized d_strip
-            // buffer that the next strip iteration is about to
-            // overwrite.
-            if mode_b {
-                let partial_idx_a = (k * N_CHANNELS) as u32;
-                let partial_idx_rg = (k * N_CHANNELS + 1) as u32;
-                let partial_idx_vy = (k * N_CHANNELS + 2) as u32;
-                unsafe {
-                    pool_band_3ch_offset_kernel::launch::<R>(
-                        &self.client,
-                        count_body.clone(),
-                        cube_dim,
-                        ArrayArg::from_raw_parts(d_h[0].clone(), n_strip_body),
-                        ArrayArg::from_raw_parts(d_h[1].clone(), n_strip_body),
-                        ArrayArg::from_raw_parts(d_h[2].clone(), n_strip_body),
-                        ArrayArg::from_raw_parts(
-                            self.partials_h.clone(),
-                            (self.n_levels as usize) * N_CHANNELS,
-                        ),
-                        BETA_SPATIAL,
-                        partial_idx_a,
-                        partial_idx_rg,
-                        partial_idx_vy,
-                        0_u32,
-                        n_strip_body as u32,
-                        n_strip_body as u32,
-                    );
-                }
-                self.strip_dispatch_counter
-                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-            }
         }
-        // Reference `n_px` to satisfy the helper's signature — the
-        // FULL-band element count is the caller's invariant, not
-        // something this walker uses directly. Same idea as the
-        // `_ = logical_h` annotations on the strip-aware kernels.
-        let _ = n_px;
     }
 
     /// Host-side readback wrapper around the GPU D-bands dispatch.

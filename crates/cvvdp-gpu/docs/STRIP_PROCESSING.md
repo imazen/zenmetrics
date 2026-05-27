@@ -1039,3 +1039,228 @@ without taking on P2.1's full surgery:
 That work is mechanical and JOD-neutral (it changes only memory
 prediction, not the runtime dispatch). It positions the next
 session to start P2.1 with a verified halo budget.
+
+## Phase 2 — P2.1 implementation analysis (2026-05-27)
+
+> **Status: investigation complete, second honest-stop. The P2.1
+> canary remains structurally entangled with kernel/walker rewrite
+> work that exceeds a single session's safe surgical scope.** This
+> section documents the precise dispatch-order semantics, the
+> halo-handling requirement that surfaces inside the masking
+> walker, and a refined decomposition that breaks the canary into
+> three smaller commits — each gated by JOD parity at every
+> production size. The decomposition trades one large commit for
+> three small ones; each shippable in ~half a session, with the
+> first two delivering zero memory change and the third hitting
+> the −70% bands_dis_strip+upscaled_c_strip footprint shrink.
+
+### 1. Why "strip-major outer with full-image buffers" is NOT a no-op
+
+The §5 P2.1 plan above proposes "strip-major outer dispatch with
+FULL-IMAGE buffers" and asserts buffer overlap is "deterministic
+because the kernel is pure". A careful read of the masking walker
+(`_run_band_masking_strip_walker` at pipeline.rs:5167) reveals an
+order-sensitive cross-strip read that the §5 plan does not address:
+
+The masking V-blur (`pu_blur_v_3ch_scaled_strip_aware_kernel`)
+dispatches over a halo-padded window of `t_p_*[k]`:
+```
+top_global = body_offset_y.saturating_sub(HALO=6)
+bot_global = (body_offset_y + body_h + HALO=6).min(bh)
+```
+and reads m_mid rows in `[top_global, bot_global)`. m_mid was
+written by H-blur on the same window of m_raw which was written
+by min_abs from t_p_*[k] over the same window. So masking strip s
+**reads t_p_*[k] rows above and below its own body** — those rows
+belong to strip s-1 (above) and strip s+1 (below).
+
+In today's level-major-outer + strip-major-inner pattern, by the
+time level k's masking strip walker fires, the csf walker (one
+loop earlier in the band loop body) has fully populated t_p_*[k]
+for ALL strips of level k. So the halo reads find valid data
+written by sibling strips' csf passes.
+
+Inverting to strip-major outer breaks this. When strip s's
+masking runs for level k, strip s+1's body of t_p_*[k] has NOT
+yet been written (we're still iterating s). The V-blur reads
+stale data (zeros from construction or leftover from a prior
+call) and the JOD output diverges.
+
+The fix is to **extend the csf walker so each strip writes
+body+halo rows of t_p_*[k]** (not just body rows). Each strip
+then computes the halo redundantly; when masking strip s reads
+its halo, the data is valid (computed by this strip's own csf
+pass or overwritten by the next strip's csf with the same
+deterministic result).
+
+### 2. The extend-csf-to-body+halo requirement cascades to bands_dis_strip
+
+Looking at `_dispatch_dist_weber_csf_strip_walker_for_level` at
+pipeline.rs:4859, csf reads three per-pixel inputs:
+- `band_ref_*` (full-image bands_ref[k]) — slice at offset, no shape change
+- `log_l_bkg` (full-image weber_scratch[k].log_l_bkg) — slice at offset, no shape change
+- `bands_dis_strip[k]` (strip-local, fine_w × strip_h_at_k) — **READS first n_strip_fine = body_h × fine_w elements, indexed from buffer row 0**
+
+For csf to read bands_dis_strip body+halo (n_strip_window = strip_window_h × fine_w elements), bands_dis_strip must be sized fine_w × strip_window_h (= fine_w × `mode_b_strip_h_at_level(k, ...)`), not fine_w × strip_h_at_k.
+
+This is what P2.2 in the §5 plan calls for: grow bands_dis_strip
+to the back-projected R_k. But P2.2 alone is meaningless without
+P2.1's extended csf dispatch — they ARE the same atomic change.
+
+### 3. The bands_dis_strip growth path requires a bigger weber strip dispatch
+
+Stage 3 of `_dispatch_dist_weber_csf_strip_walker_for_level`
+(`subtract_weber_3ch_strip_kernel`) writes bands_dis_strip body
+rows. To write body+halo, the dispatch needs:
+- Input `gauss_ref[k].planes[c]` sliced at `top_global * fine_w * 4`
+  (full-image; slice is valid).
+- Input `upscaled_c_strip[c]` body+halo data. **upscaled_c_strip is
+  also strip-local (fine_w × strip_h_at_k today)** — must also grow.
+- Input `l_bkg_fine` sliced at `top_global * fine_w * 4` (full-image; OK).
+- Output `bands_dis_strip[c]` body+halo (sized fine_w × R_k now).
+- Output `log_l_bkg_dis` sliced at `top_global * fine_w * 4` (full-image; OK).
+
+Stages 1-2 (separable upscales) similarly write upscaled_c_strip
+body rows; to write body+halo, the upscale_v_strip + upscale_h_strip
+dispatches grow correspondingly.
+
+So the canary really needs three buffer changes (bands_dis_strip,
+upscaled_c_strip, and one vscratch sibling) **plus** the kernel
+dispatch shape changes (extend each per-strip launch from
+n_strip_fine = body_h × fine_w to n_strip_window = strip_window_h
+× fine_w).
+
+### 4. The strip-major outer loop itself is the smallest piece
+
+Once stages 1-4 of the csf walker dispatch over body+halo, the
+existing `_run_band_masking_strip_walker` works unchanged — its
+halo reads find valid data per strip. The strip-major outer
+reordering is then a straightforward refactor of `_run_d_bands_band_loop`:
+
+```rust
+let n_strips_at_0 = self.height.div_ceil(h_body);
+let k_split = mode_b_k_split(h_body, n_levels);
+
+// Shallow levels strip-major-outer.
+for s in 0..n_strips_at_0 {
+    for k in 0..k_split {
+        // One-strip csf walker (body+halo dispatch) for (s, k).
+        // One-strip masking walker for (s, k).
+    }
+}
+// Deep levels level-major (unchanged from today).
+for k in k_split..n_levels {
+    // existing per-level path
+}
+// Baseband bypass + pool.
+```
+
+The "one-strip csf walker" requires factoring `_dispatch_dist_weber_csf_strip_walker_for_level`'s inner `for s in 0..n_strips`
+loop into a `_dispatch_dist_weber_csf_strip_s_for_level(s, k)`
+helper. Similarly for the masking walker.
+
+### 5. Refined 3-commit decomposition
+
+Splitting the canary into three commits that each ship JOD bit-
+identical + a single mechanical change keeps the surgery
+bounded:
+
+**P2.1a — Factor per-strip helpers (JOD bit-identical).**
+- Extract `_dispatch_dist_weber_csf_strip_s_for_level(s, k, ...)`
+  from the current `_dispatch_dist_weber_csf_strip_walker_for_level`.
+  The existing function becomes a thin wrapper that loops `for s in
+  0..n_strips` and calls the per-strip helper.
+- Same for `_run_band_masking_strip_walker` → factor into a
+  `_run_band_masking_strip_s_for_level(s, k, ...)` plus the loop wrapper.
+- No dispatch order change, no buffer change. JOD identical to the
+  current strip walker. Sets up the architecture for P2.1b.
+- Risk: very low. JOD parity must hold bit-exact at 128² / 1024².
+
+**P2.1b — Extend per-strip helpers to dispatch over body+halo.**
+- Modify the new per-strip helpers from P2.1a to dispatch over the
+  halo-padded window (n_strip_window = strip_window_h × fine_w),
+  not the body-only window. Write to bands_dis_strip / t_p_*
+  rows 0..strip_window_h (with src_strip_offset = top_global).
+- Buffer sizes don't change yet (bands_dis_strip / upscaled_c_strip
+  stay at strip_h_at_k rows). This means at strips near the bottom
+  of the image, body_h is small and the body+halo window may not
+  fit — clamp to bh, fall back to the existing body-only dispatch
+  for those.
+- Need to verify: when csf writes redundant halo rows of t_p_*[k]
+  (each strip re-computes its halo), the result is bit-identical
+  to today's level-major (where each strip's csf is computed once
+  per t_p_* row).
+- Strategy: pin a small test that captures one strip's t_p_*[k]
+  body+halo output vs the same window from the full-image dispatch.
+  Must be bit-exact (deterministic CSF, same inputs).
+- Risk: moderate. JOD parity must hold bit-exact.
+
+**P2.1c — Grow bands_dis_strip + upscaled_c_strip to R_k and invert
+the outer loop.**
+- Change `build_weber_scratch` to size bands_dis_strip and
+  upscaled_c_strip at fine_w × R_k where R_k =
+  `mode_b_strip_h_at_level(k, h_body, k_split)`.
+- Replace `_run_d_bands_band_loop`'s level-major outer with strip-
+  major outer for k < k_split (using the per-strip helpers from
+  P2.1a+b).
+- The deep level-major path (k >= k_split) stays unchanged.
+- Risk: low (the order-correctness was proved bit-exact by P2.1a
+  per-strip factorization + P2.1b halo dispatch). Memory savings:
+  bands_dis_strip + upscaled_c_strip grow vs body-only, but vs
+  full-image they shrink. Realistic ratio: vs full-image Mode B
+  buffers ≈ 0.15-0.25 at 4096².
+
+The total work is the same as P2.1+P2.2 in the original brief, but
+each commit's risk is bounded by one parity gate, and the first
+commit (P2.1a) is a JOD-bit-identical factorization that lands the
+architecture without any behavioural change. P2.1b is where the
+correctness work concentrates; P2.1c is mechanical once P2.1b is
+green.
+
+### 6. Why this session did not ship P2.1a–c
+
+The agent landed P2.0 (verified back-projected halo helper) at
+ff6c733d and had the canary decomposition above in scope. The
+honest scope read:
+
+- P2.1a (factor per-strip helpers): tractable in this session,
+  but JOD-bit-identical refactors only land value when the
+  follow-ons (P2.1b + P2.1c) also land. P2.1a alone is dead
+  weight in the source tree.
+- P2.1b (extend per-strip helpers to body+halo dispatch): requires
+  new parity tests pinning the per-strip body+halo output against
+  the full-image dispatch on a per-band basis. Building that test
+  scaffold + iterating until bit-exact is the bulk of the work.
+- P2.1c (buffer growth + outer loop inversion): mechanical once
+  P2.1b is green.
+
+The current cvvdp-gpu test suite gates only `compute_dkl_jod`
+output (the final JOD scalar). A per-strip per-band parity test
+that captures t_p_*[k]'s body+halo window does not yet exist —
+adding it is the actual canary work.
+
+The agent recommends the next session start with the per-strip
+parity test (a new `tests/strip_csf_halo_parity.rs` that compares
+one strip's t_p_*[k] body+halo from the per-strip helper against
+the same window of t_p_*[k] from the full-image csf), and only
+then start P2.1a. That ordering puts the verification scaffold in
+place BEFORE the refactor, so the refactor's correctness is
+machine-checked at every step.
+
+### 7. Recap of the architectural constraints
+
+- `bands_dis_strip[k]` is the canary buffer. Body-only today;
+  must grow to R_k for body+halo dispatch.
+- `upscaled_c_strip[k]` is the second canary buffer. Must grow
+  to R_k in lockstep with bands_dis_strip.
+- `t_p_*[k]`, `m_*[k]` stay full-image in P2.1; subsequent
+  commits (P2.4-P2.5) can shrink them once strip-major outer is
+  in place because each strip writes/reads only its body+halo
+  range.
+- `bands_ref[k]`, `weber_scratch[k].log_l_bkg`, `gauss_ref[k]`,
+  `l_bkg_fine` remain full-image — they're read at per-strip
+  body+halo slices by the per-strip helpers.
+- Deep levels (k >= k_split) continue using the level-major
+  dispatch with full-image storage. Their absolute pixel count
+  is small (level 8 at 4096² = 256 pixels) so the memory hit is
+  negligible.
