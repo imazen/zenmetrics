@@ -520,3 +520,267 @@ add overhead (per-strip dispatch is slower than a single full-image
 dispatch on backends with high launch cost). For large images that
 don't fit Full, both variants restore feasibility — pick Mode E
 for batch, Mode B for one-shot.
+
+## Phase 1: structural strip-major walker — investigation 2026-05-26
+
+> **Status: investigation complete, structural blocker identified.
+> Phase 1 deliverable is the analysis below + the precise Phase 2
+> recipe to unblock. No new dispatch path lands in this push because
+> a partial walker either (a) ships wrong JOD or (b) reduces to the
+> already-level-major dispatch the codebase has today.**
+
+### What Phase 1 was supposed to deliver
+
+A new dispatch path for `MemoryMode::StripPair` (Mode B) where the
+**outer loop is strip-major**: for each strip s in `0..n_strips`,
+run ref weber pyramid + dist weber pyramid + band loop + baseband
+bypass + per-band JOD-partial accumulate, then discard per-strip
+work and advance to strip s+1. Full-image buffers stay in place;
+the walker reads/writes them as `Handle::offset_start`-style strip
+windows. The goal is a dispatch-order change only — Phase 2 then
+replaces the full-image buffers with strip-sized buffers (where
+"strip-sized" includes halo) to deliver the actual memory win.
+
+### Why the simple strip-major inversion does not work
+
+Today's Mode B dispatch is **level-major outer, strip-major inner**:
+
+```text
+ref weber pyramid (level k = 0..n_levels, strip-walks per level)
+dist gauss pyramid (level k = 0..n_levels, strip-walks per level)
+dist weber baseband (one-shot)
+band loop (for k in 0..n_levels):
+  if not baseband and use_blur:
+    fused dist-weber+csf strip walker for level k (strip-walks)
+    masking strip walker for level k (strip-walks; pool inline)
+  else:
+    full csf + full masking + inline pool
+```
+
+Inverting this to a strip-major outer loop requires every kernel
+that reads halo rows to find correct data at those halo rows. Two
+kernel chains have non-trivial cross-strip reads:
+
+1. **Pyramid build (gauss + weber).** The downscale kernel reads
+   `±2` source rows around `2 · dst_y_logical`; the separable
+   upscale reads `±1` source rows around `dst_y / 2`. At each
+   level k the halo at level 0 doubles, so the deepest level's
+   halo at base resolution is `±2^k` rows. For a 9-level pyramid
+   that is `±256` rows at level 0 — much larger than typical
+   strip bodies.
+
+   In a strip-major walk, when strip `s` runs level-1 reduce, it
+   needs level-0 rows in a `±2`-row neighbourhood around
+   `2 · body_offset_y_at_1`. The neighbourhood extends BELOW into
+   strip `s − 1`'s body (already written — OK) and ABOVE into
+   strip `s + 1`'s body region (not written yet — STALE DATA).
+
+   The full-image buffers don't hold zeroes either. `gauss_ref` is
+   shared between the REF pass and the DIST pass; when the DIST
+   pyramid runs strip-major and overwrites strip `s`'s level-0
+   rows, the rows above (= strip `s + 1`'s region) still contain
+   **the REF pass's level-0 data from minutes ago**. A strip-major
+   DIST gauss reduce that reflects against `logical_h = full_h`
+   silently mixes its own strip's DIST output with the previous
+   call's REF residue at the halo, producing wrong DIST data —
+   and wrong JOD.
+
+2. **Masking V-blur.** Each non-baseband band runs
+   `pu_blur_v_3ch_scaled_strip_aware_kernel`, a 13-tap separable
+   Gaussian with `±6` rows of vertical reflection. At level k the
+   halo is `±6` rows at the band's resolution, i.e., `±6 · 2^k`
+   rows at base. For `h_body = 512` and `n_levels = 9`, level-4
+   halo at base is `96` rows, level-5 is `192`, etc.
+
+   The existing `_run_band_masking_strip_walker` already handles
+   this WITHIN a level: the halo-padded window over `t_p_*[k]`
+   reads `[body − 6, body + body_h + 6]` rows of the band's
+   `t_p_*` buffer. That works today because by the time the
+   masking strip walker runs at level k, the **fused dist-weber +
+   csf strip walker has fully populated `t_p_*[k]` for every
+   strip of level k** (the inner strip-walks). The halo rows are
+   real data.
+
+   Inverting to strip-major outer breaks this. When strip s runs
+   the masking chain for level k, only strip s's body rows of
+   `t_p_*[k]` are populated; the halo rows above (= strip s+1's
+   body region) contain stale data (either zeroes from
+   construction or residue from a prior call). The V-blur silently
+   mixes valid + stale data and produces wrong masking output.
+
+Both blockers boil down to the same root cause: **strip-major
+outer dispatch reads halo rows that future strips will eventually
+populate**. There is no read ordering that satisfies the halo
+dependency without either (a) computing the halo redundantly per
+strip from the original input bytes, or (b) carrying halo data
+through buffers explicitly sized to hold body + halo.
+
+### Why "just compute the halo redundantly" doesn't fit Phase 1
+
+Approach (a) — strip `s` recomputes its own halo at every level
+from the original sRGB input bytes — is mathematically correct.
+DKL is per-pixel (trivially halo-extendable). Each pyramid level
+strip recomputes for `body + ±halo_at_level_0` rows. The kernel
+output for the halo rows is bit-identical to what a Full-mode
+dispatch would have written there, because the kernel is
+deterministic and the input data (sRGB bytes) is fully available
+at every strip.
+
+**But Phase 1's constraint is "no buffer changes."** Approach (a)
+requires every per-level buffer (`gauss_ref[k].planes[c]`,
+`bands_dis_strip[k]`, `t_p_*[k]`, `m_raw/m_mid/m_blur`) to hold
+the strip's body + halo at that level. Today's `bands_dis_strip`
+is already strip-only-body-sized (the prior Phase-1d shrink). To
+make strip-major work, `bands_dis_strip` must grow to
+`(body_h + 2 · halo_at_level) · fine_w · 4 · 3 channels`. That is
+a buffer size change. Phase 1 explicitly forbids it.
+
+The other option — leaving today's full-image buffers in place and
+having strip `s` write its halo redundantly into the full image —
+would technically work, but it also DEFEATS Phase 2's memory goal.
+If full-image buffers are kept everywhere, no memory reduction
+ever happens. Phase 1 was supposed to be a dispatch-order change
+that prepares the way for Phase 2 to substitute strip-sized
+buffers for the full-image buffers — but the dispatch-order
+change itself requires the buffer substitution to be correct.
+
+**Phase 1 and Phase 2 are structurally entangled.** The dispatch
+order cannot be inverted without per-strip halo-padded buffers;
+the per-strip halo-padded buffers serve no purpose without the
+inverted dispatch order. Either both ship together (a multi-day
+change) or neither ships.
+
+### What the current dispatch already does
+
+The current code is **level-major outer + strip-major inner**,
+with the strip-major-inner loops handling all the per-level halo
+correctly. Specifically:
+
+- `_reduce_gauss_pyramid_strip_walker` strip-walks each level's
+  reduce. Cross-strip data flow is captured by level-major outer
+  (level k-1 is fully written before any strip of level k runs).
+- `_finalize_weber_pyramid_strip_walker` strip-walks each level's
+  weber. Same level-major outer invariant.
+- `_dispatch_dist_weber_csf_strip_walker_for_level` strip-walks
+  the fused dist Weber + csf for one level k. Reads full-image
+  ref bands + log_l_bkg (written by ref pyramid before band loop)
+  and writes per-strip `bands_dis_strip[k]` + body rows of full-
+  image `t_p_*[k]`.
+- `_run_band_masking_strip_walker` strip-walks the masking chain
+  for one level k. Reads halo-padded window of `t_p_*[k]` (fully
+  populated by the prior dist+csf walker), writes body rows of
+  `d_scratch[k].d_strip`, and pools inline.
+- `_pool_and_finalize_jod_strip` finalizes the baseband pool.
+
+This is already as strip-aware as the dispatch can be **while
+buffers stay at their current sizes**. The pool stage runs strip-
+major within each level (atomic associativity makes the strip-vs-
+level ordering irrelevant for partials_h); the band-internal
+masking chain is halo-aware. Re-ordering the outer loop to be
+strip-major would NOT change anything observable except introduce
+the halo blocker described above.
+
+### Phase 2 recipe (unblocks Phase 1's dispatch-order change)
+
+To actually invert the outer loop to strip-major, the buffer plan
+must change. The precise recipe:
+
+1. **Grow `bands_dis_strip[k]`** from `(strip_h_at_k · fine_w)` to
+   `((strip_h_at_k + 2 · halo_at_k) · fine_w)` for shallow levels
+   (`k < K_SPLIT`). At deep levels (k ≥ K_SPLIT) the band is small
+   enough to keep full-image-shape (or strip = full because
+   `strip_h_at_k` collapses to 1).
+
+2. **Shrink `bands_ref[k]`** the same way (or keep full-image
+   for ref, since Mode B doesn't cache ref across calls — the
+   alloc cost lives once per `score()`). The simpler move: shrink
+   bands_ref to the same `body+halo` shape as bands_dis_strip and
+   have ref weber pyramid run strip-major-outer alongside dist.
+
+3. **Shrink `t_p_*[k]`** to body+halo. Today they are full-image
+   transients (allocated inside `DBandsTransient::new`); making
+   them per-strip body+halo halves their footprint at any given
+   strip, and only ONE strip's transients live on device at a
+   time (the next strip's transients overwrite them).
+
+4. **Shrink `m_raw / m_mid / m_blur`** similarly. They are already
+   per-band transients (`DBandsTransient`); making them per-strip
+   body+halo is mechanical.
+
+5. **Shrink `weber_scratch[k].log_l_bkg` + `log_l_bkg_dis`** to
+   body+halo. Today both are full-image. Strip-major writes them
+   per strip; the band-loop CSF reads them in the same strip
+   iteration.
+
+6. **Shrink `weber_scratch[k].l_bkg_fine`** the same way. Today
+   full-image.
+
+7. **Shrink `gauss_ref[k]`** to body+halo for shallow levels. Deep
+   levels keep their full-image footprint (they're small anyway —
+   level 8 at 4096² is 16×16 pixels).
+
+8. **Shrink `d_scratch[k]` non-`.d` fields** (`csf_pyr`, masks,
+   `d_p_ref`, `d_p_dis`) to body+halo. Today these are part of
+   the per-band scratch.
+
+9. **Compute `halo_at_k`** as `±2^k · 2` (pyramid-level reads) +
+   `±6 · 2^k` (PU-blur halo at level k, converted to level 0 by
+   the per-level scale). For `k = 0`, halo at level 0 is `±14`
+   rows (pyramid: 2, PU: 6, times 2 for the level-1 reduce's
+   halo back-projected through doubling). Halo grows with k until
+   the K_SPLIT cutoff where the body+halo strip is wider than the
+   full-image; at that point the level falls back to full-image
+   processing.
+
+10. **Define K_SPLIT** per the existing `mode_b_k_split` helper
+    (already implemented). At `h_body = 512`, `n_levels = 9`,
+    K_SPLIT = 6 — levels 0..5 run strip-mode, levels 6..8 run
+    full-image-mode (cheap: level 8 at 4096² is 256 pixels total
+    across all three channels). At `h_body = 256` K_SPLIT = 5.
+
+11. **Re-dispatch order**: after all buffer plumbing, the outer
+    loop becomes
+    ```text
+    for s in 0..n_strips_at_level_0:
+      DKL on strip body + halo from src bytes
+      gauss reduce for levels 0..K_SPLIT (per-strip, body+halo)
+      weber finalize for levels 0..K_SPLIT (ref then dist; per-strip body)
+      band loop for levels 0..K_SPLIT (csf + masking + pool inline)
+    for k in K_SPLIT..n_levels:
+      level-major full-image dispatch (existing path)
+    baseband bypass + pool (existing path)
+    finalize JOD from partials_h
+    ```
+
+This is the full Phase 2 implementation. Estimated 3-5 days of
+careful kernel + walker work, with parity tests at every step.
+
+### What Phase 1 ships in this push
+
+Given the structural blocker above, Phase 1 ships **the precise
+analysis and recipe**. A test scaffold (the existing
+`mode_b_walker_parity.rs` tests) already pins the JOD-bit-identity
+gate that Phase 2 must hold against. The Phase 2 work plan above
+is the concrete next move; it is NOT in this push because the
+correctness gate (JOD = Full ± 1e-4) requires the buffer-shape +
+walker-order changes to land together.
+
+### Lessons for the next agent
+
+- **Read this section first.** A strip-major outer loop with
+  today's buffers is a one-line refactor that produces a four-
+  hour debug session ending in wrong JOD. The halo blocker is
+  not visible until you run a real image through it.
+- **The existing strip walkers already do everything that's safe
+  to do with full-image buffers.** Look at `_reduce_gauss_pyramid_strip_walker`,
+  `_finalize_weber_pyramid_strip_walker`,
+  `_dispatch_dist_weber_csf_strip_walker_for_level`, and
+  `_run_band_masking_strip_walker` — they are the level-major-outer
+  + strip-major-inner pattern that hides the halo dependency.
+- **K_SPLIT is the key.** The `mode_b_k_split` helper already
+  computes it correctly for `(h_body, n_levels)` pairs. Phase 2
+  uses it directly.
+- **bands_dis_strip is the canary.** When you see code that
+  treats `bands_dis_strip[k]` as body-only (no halo), and you
+  want to invert the dispatch order, that buffer's shape is the
+  first thing to change.

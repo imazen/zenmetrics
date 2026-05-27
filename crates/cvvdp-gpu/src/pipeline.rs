@@ -4230,6 +4230,19 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Self::_dispatch_d_bands_dist_and_band_loop`] (byte path) and
     /// [`Self::_dispatch_d_bands_dist_and_band_loop_from_handle`]
     /// (handle path).
+    ///
+    /// **Dispatch shape (level-major outer + strip-major inner).** The
+    /// outer `for k in 0..n_levels` loop iterates pyramid levels in
+    /// order; the per-level helpers
+    /// ([`Self::_dispatch_dist_weber_csf_strip_walker_for_level`] and
+    /// [`Self::_run_band_masking_strip_walker`]) strip-walk INSIDE a
+    /// single level. This is **not** the strip-major outer ordering
+    /// that Mode B's Phase 2 buffer shrink ultimately needs — see
+    /// `docs/STRIP_PROCESSING.md#phase-1-structural-strip-major-walker-investigation-2026-05-26`
+    /// for the structural blocker (cross-strip halo dependencies on
+    /// pyramid + masking V-blur) and the Phase 2 recipe that resolves
+    /// it (per-strip body+halo-shaped `bands_dis_strip` / `t_p_*` /
+    /// `m_*` transients + K_SPLIT hybrid for deep levels).
     fn _run_d_bands_band_loop(&mut self, log_l_bkg_baseband: f32) -> Result<()> {
         let trace = std::env::var_os("CVVDP_TRACE").is_some();
         let n_levels = self.n_levels as usize;
