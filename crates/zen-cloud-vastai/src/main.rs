@@ -26,16 +26,16 @@
 //! crashes, the partial state is recoverable from `vastai show
 //! instances-v1` directly.
 
-mod parse;
-#[cfg(feature = "worker")]
-mod worker;
-
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use clap::{Parser, Subcommand};
 
-use parse::{filter_by_label, parse_instances, status_breakdown, total_dph, Instance};
+use zen_cloud_vastai::parse::{
+    Instance, filter_by_label, parse_instances, status_breakdown, total_dph,
+};
+#[cfg(feature = "worker")]
+use zen_cloud_vastai::worker;
 
 /// CLI for managing vast.ai fleets of zenmetrics backfill workers.
 #[derive(Parser, Debug)]
@@ -175,8 +175,24 @@ enum Cmd {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Cmd::Status { label_prefix, format } => cmd_status(&cli.vastai_bin, cli.raw_input.as_deref(), &label_prefix, &format),
-        Cmd::Destroy { label_prefix, dry_run } => cmd_destroy(&cli.vastai_bin, cli.raw_input.as_deref(), &label_prefix, dry_run),
+        Cmd::Status {
+            label_prefix,
+            format,
+        } => cmd_status(
+            &cli.vastai_bin,
+            cli.raw_input.as_deref(),
+            &label_prefix,
+            &format,
+        ),
+        Cmd::Destroy {
+            label_prefix,
+            dry_run,
+        } => cmd_destroy(
+            &cli.vastai_bin,
+            cli.raw_input.as_deref(),
+            &label_prefix,
+            dry_run,
+        ),
         Cmd::SelfDestroy {
             error_log,
             r2_prefix,
@@ -271,7 +287,10 @@ fn cmd_status(
     match format {
         "json" => {
             let mut obj = serde_json::Map::new();
-            obj.insert("label_prefix".into(), serde_json::Value::String(label_prefix.into()));
+            obj.insert(
+                "label_prefix".into(),
+                serde_json::Value::String(label_prefix.into()),
+            );
             obj.insert("count".into(), serde_json::json!(total));
             obj.insert("dph_total".into(), serde_json::json!(dph));
             let mut bk = serde_json::Map::new();
@@ -279,7 +298,10 @@ fn cmd_status(
                 bk.insert(s.clone(), serde_json::json!(n));
             }
             obj.insert("status_breakdown".into(), serde_json::Value::Object(bk));
-            println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(obj))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::Value::Object(obj))?
+            );
         }
         _ => {
             println!("label_prefix:  {label_prefix}");
@@ -297,7 +319,14 @@ fn cmd_status(
                 }
             }
             if !matched.is_empty() {
-                println!("ids: {}", matched.iter().map(|i| i.id.to_string()).collect::<Vec<_>>().join(" "));
+                println!(
+                    "ids: {}",
+                    matched
+                        .iter()
+                        .map(|i| i.id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
             }
         }
     }
@@ -313,7 +342,9 @@ fn cmd_destroy(
     let all = fetch_instances(vastai_bin, raw_input)?;
     let matched = filter_by_label(&all, label_prefix);
     if matched.is_empty() {
-        eprintln!("[vastai-fleet] no instances match label substring {label_prefix:?} — nothing to destroy");
+        eprintln!(
+            "[vastai-fleet] no instances match label substring {label_prefix:?} — nothing to destroy"
+        );
         return Ok(());
     }
     eprintln!(
@@ -324,7 +355,11 @@ fn cmd_destroy(
     let mut failures = 0usize;
     for inst in &matched {
         if dry_run {
-            eprintln!("  DRY-RUN destroy {} ({:?})", inst.id, inst.label.as_deref().unwrap_or(""));
+            eprintln!(
+                "  DRY-RUN destroy {} ({:?})",
+                inst.id,
+                inst.label.as_deref().unwrap_or("")
+            );
             continue;
         }
         let result = Command::new(vastai_bin)
@@ -352,14 +387,21 @@ fn cmd_destroy(
         }
         match child.wait_with_output() {
             Ok(out) if out.status.success() => {
-                eprintln!("  destroyed {} ({:?})", inst.id, inst.label.as_deref().unwrap_or(""));
+                eprintln!(
+                    "  destroyed {} ({:?})",
+                    inst.id,
+                    inst.label.as_deref().unwrap_or("")
+                );
             }
             Ok(out) => {
                 eprintln!(
                     "  WARN destroy {} exited {}: {}",
                     inst.id,
                     out.status,
-                    String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("")
+                    String::from_utf8_lossy(&out.stderr)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
                 );
                 failures += 1;
             }
@@ -369,7 +411,10 @@ fn cmd_destroy(
             }
         }
     }
-    eprintln!("[vastai-fleet] done — {} destroyed, {failures} failures", matched.len() - failures);
+    eprintln!(
+        "[vastai-fleet] done — {} destroyed, {failures} failures",
+        matched.len() - failures
+    );
     if failures > 0 {
         anyhow::bail!("{failures} destroy(s) failed; re-run vastai-fleet destroy to retry");
     }
@@ -401,11 +446,15 @@ fn cmd_watch(args: WatchArgs) -> anyhow::Result<()> {
 
     loop {
         let elapsed = start.elapsed();
-        let n_sidecars = count_sidecars(&args.r2_prefix, args.r2_endpoint.as_deref(), &args.s5cmd_profile)
-            .unwrap_or_else(|e| {
-                eprintln!("[vastai-fleet watch] WARN sidecar count: {e}");
-                0
-            });
+        let n_sidecars = count_sidecars(
+            &args.r2_prefix,
+            args.r2_endpoint.as_deref(),
+            &args.s5cmd_profile,
+        )
+        .unwrap_or_else(|e| {
+            eprintln!("[vastai-fleet watch] WARN sidecar count: {e}");
+            0
+        });
 
         // Always do a fleet status snapshot inside the loop — even if
         // the watcher exits without destroying, the operator gets a
@@ -433,7 +482,12 @@ fn cmd_watch(args: WatchArgs) -> anyhow::Result<()> {
 
         if n_sidecars >= args.target_sidecars {
             eprintln!("[vastai-fleet watch] target hit — destroying fleet");
-            cmd_destroy(&args.vastai_bin, args.raw_input.as_deref(), &args.label_prefix, args.dry_run)?;
+            cmd_destroy(
+                &args.vastai_bin,
+                args.raw_input.as_deref(),
+                &args.label_prefix,
+                args.dry_run,
+            )?;
             return Ok(());
         }
         if elapsed >= max_wall {
@@ -441,7 +495,12 @@ fn cmd_watch(args: WatchArgs) -> anyhow::Result<()> {
                 "[vastai-fleet watch] wall cap {}min hit (sidecars={}/{}); destroying anyway",
                 args.max_wall_min, n_sidecars, args.target_sidecars
             );
-            cmd_destroy(&args.vastai_bin, args.raw_input.as_deref(), &args.label_prefix, args.dry_run)?;
+            cmd_destroy(
+                &args.vastai_bin,
+                args.raw_input.as_deref(),
+                &args.label_prefix,
+                args.dry_run,
+            )?;
             return Ok(());
         }
 
@@ -491,14 +550,11 @@ fn cmd_self_destroy(args: SelfDestroyArgs) -> anyhow::Result<()> {
     // workers use.
     let log_exists = args.error_log.exists();
     if log_exists {
-        let endpoint = args
-            .r2_endpoint
-            .clone()
-            .or_else(|| {
-                std::env::var("R2_ACCOUNT_ID")
-                    .ok()
-                    .map(|aid| format!("https://{aid}.r2.cloudflarestorage.com"))
-            });
+        let endpoint = args.r2_endpoint.clone().or_else(|| {
+            std::env::var("R2_ACCOUNT_ID")
+                .ok()
+                .map(|aid| format!("https://{aid}.r2.cloudflarestorage.com"))
+        });
         // Normalize prefix to have trailing slash, then append <id>.log.
         let prefix = if args.r2_prefix.ends_with('/') {
             args.r2_prefix.clone()
@@ -506,7 +562,10 @@ fn cmd_self_destroy(args: SelfDestroyArgs) -> anyhow::Result<()> {
             format!("{}/", args.r2_prefix)
         };
         let target = format!("{prefix}{instance_id}.log");
-        eprintln!("  step 1/2: uploading {} -> {target}", args.error_log.display());
+        eprintln!(
+            "  step 1/2: uploading {} -> {target}",
+            args.error_log.display()
+        );
         let mut cmd = Command::new(&args.s5cmd_bin);
         if let Some(ep) = endpoint.as_deref() {
             cmd.args(["--endpoint-url", ep]);
@@ -590,7 +649,10 @@ fn count_sidecars(prefix: &str, endpoint: Option<&str>, profile: &str) -> anyhow
     if let Some(ep) = endpoint {
         cmd.args(["--endpoint-url", ep]);
     } else if let Ok(account_id) = std::env::var("R2_ACCOUNT_ID") {
-        cmd.args(["--endpoint-url", &format!("https://{account_id}.r2.cloudflarestorage.com")]);
+        cmd.args([
+            "--endpoint-url",
+            &format!("https://{account_id}.r2.cloudflarestorage.com"),
+        ]);
     }
     cmd.args(["--profile", profile, "ls", prefix]);
     let out = cmd.output()?;

@@ -7,8 +7,8 @@ members = [
     "crates/dssim-gpu",
     "crates/iwssim-gpu",
     "crates/ssim2-gpu",
-    "crates/vastai-fleet",
     "crates/zen-cloud-core",
+    "crates/zen-cloud-vastai",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
@@ -43,6 +43,7 @@ zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features =
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }
 zen-cloud-core = { version = "0.0.1", path = "crates/zen-cloud-core", default-features = false }
+zen-cloud-vastai = { version = "0.0.1", path = "crates/zen-cloud-vastai", default-features = false }
 
 # CubeCL — single source of truth for the GPU backend version.
 cubecl = { version = "0.10.0-pre.4", default-features = false, features = ["std"] }

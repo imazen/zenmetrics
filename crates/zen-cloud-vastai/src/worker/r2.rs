@@ -114,6 +114,49 @@ impl R2Client {
         Ok(())
     }
 
+    /// List object keys under `prefix` via `s5cmd ls`. Returns the
+    /// full key column of each line (the last whitespace-separated
+    /// field). Used by the `zen-cloud-core` `BlobStorage::list` impl.
+    pub async fn ls_keys(&self, prefix: &str) -> Result<Vec<String>> {
+        let out = self
+            .cmd(&["ls", prefix])
+            .output()
+            .await
+            .context("spawn s5cmd ls")?;
+        if !out.status.success() {
+            // s5cmd 2.x returns 1 on no-match; treat as empty rather
+            // than an error so `list` of an absent prefix is `[]`.
+            return Ok(Vec::new());
+        }
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let keys = stdout
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            // `s5cmd ls` prints `<date> <time> <size> <key>`; the key is
+            // the final whitespace-separated field.
+            .filter_map(|l| l.split_whitespace().next_back().map(|s| s.to_owned()))
+            .collect();
+        Ok(keys)
+    }
+
+    /// Remove an R2 object via `s5cmd rm`. Used by the `zen-cloud-core`
+    /// `BlobStorage::delete` impl.
+    pub async fn rm(&self, uri: &str) -> Result<()> {
+        let out = self
+            .cmd(&["rm", uri])
+            .output()
+            .await
+            .context("spawn s5cmd rm")?;
+        if !out.status.success() {
+            return Err(anyhow!(
+                "s5cmd rm failed: status={} stderr={}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
+        Ok(())
+    }
+
     /// Fetch `chunks.jsonl` from R2 and split into one record per
     /// line. Each returned string is the raw JSON for one chunk;
     /// per-chunk parsing happens later (lazily) in
@@ -165,9 +208,7 @@ where
         match op().await {
             Ok(v) => return Ok(v),
             Err(e) => {
-                tracing::warn!(
-                    "{name}: attempt {attempt}/{max_attempts} failed: {e:#}"
-                );
+                tracing::warn!("{name}: attempt {attempt}/{max_attempts} failed: {e:#}");
                 last_err = Some(e);
                 tokio::time::sleep(delay).await;
                 delay = (delay * 2).min(Duration::from_secs(30));

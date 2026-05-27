@@ -1,7 +1,7 @@
 [package]
-name = "vastai-fleet"
+name = "zen-cloud-vastai"
 version = "0.0.1"
-description = "Robust vast.ai fleet status / destroy / watch CLI for zenmetrics backfill sweeps"
+description = "vast.ai provider for the zen-cloud-core worker trait layer: vast.ai API + /proc/1/environ credentials + Cloudflare R2 storage + R2-token-race atomic chunk claim, plus the fleet status / destroy / watch / self-destroy operator CLI."
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -10,11 +10,23 @@ license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
 rust-version.workspace = true
 publish = false
 
+[lib]
+name = "zen_cloud_vastai"
+path = "src/lib.rs"
+
+# The fleet status / destroy / watch / self-destroy operator CLI stays
+# the `vastai-fleet` binary so existing launcher scripts + the error-trap
+# self-destroy invocation keep working unchanged. The cloud-agnostic
+# DEPLOYED worker is the separate `zen-sweep-worker` binary.
 [[bin]]
 name = "vastai-fleet"
 path = "src/main.rs"
 
 [dependencies]
+# The cloud-agnostic trait layer this crate provides an impl of. Tiny,
+# zero gpu/cloud-SDK deps — always linked (the trait impls in `cloud`
+# need the types regardless of the worker feature).
+zen-cloud-core = { workspace = true }
 # Need the `env` feature on top of the workspace flag set so worker-mode
 # CLI args can fall back to env vars like `$SWEEP_RUN_ID`.
 clap = { workspace = true, features = ["env"] }

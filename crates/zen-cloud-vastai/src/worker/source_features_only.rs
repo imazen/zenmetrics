@@ -62,10 +62,7 @@ pub async fn backfill_source_features_for_chunk(
     line: &str,
 ) -> Result<()> {
     let rec: ChunkRecord = serde_json::from_str(line).context("parse chunk JSON")?;
-    let run_id = rec
-        .run_id
-        .clone()
-        .unwrap_or_else(|| args.run_id.clone());
+    let run_id = rec.run_id.clone().unwrap_or_else(|| args.run_id.clone());
 
     let out_uri = format!(
         "s3://zentrain/{run_id}/source_features/{}.parquet",
@@ -78,7 +75,8 @@ pub async fn backfill_source_features_for_chunk(
 
     let scratch = args.workdir.join(format!("sf-{}", rec.chunk_id));
     let sources_dir = scratch.join("sources");
-    tokio::fs::create_dir_all(&sources_dir).await
+    tokio::fs::create_dir_all(&sources_dir)
+        .await
         .with_context(|| format!("mkdir {}", sources_dir.display()))?;
 
     info!(
@@ -86,7 +84,8 @@ pub async fn backfill_source_features_for_chunk(
         n_sources = rec.image_basenames.len(),
         "syncing source PNGs"
     );
-    sync_files(r2, &rec.source_dir_r2, &rec.image_basenames, &sources_dir).await
+    sync_files(r2, &rec.source_dir_r2, &rec.image_basenames, &sources_dir)
+        .await
         .context("sync sources")?;
 
     let out_local = scratch.join("source_features.parquet");
@@ -107,7 +106,9 @@ pub async fn backfill_source_features_for_chunk(
     match result {
         Ok(n) => {
             info!(chunk_id = %rec.chunk_id, n_sources = n, "source_features computed");
-            r2.upload(&out_local, &out_uri).await.context("upload sidecar")?;
+            r2.upload(&out_local, &out_uri)
+                .await
+                .context("upload sidecar")?;
             info!(chunk_id = %rec.chunk_id, uri = %out_uri, "source_features uploaded");
         }
         Err(e) => {

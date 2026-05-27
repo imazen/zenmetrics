@@ -107,10 +107,7 @@ fn num_cpus() -> usize {
 /// available (e.g. running on a developer laptop).
 pub fn nvidia_smi_total_memory_mb() -> Option<u32> {
     let out = std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=memory.total",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
     if !out.status.success() {

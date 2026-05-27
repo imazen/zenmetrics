@@ -29,7 +29,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
-use zen_metrics_cli::sweep::{CodecKind, KnobGrid, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
+use zen_metrics_cli::sweep::{
+    CodecKind, KnobGrid, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep,
+};
 
 /// One sweep-call's worth of work: a single (codec, knob_tuple)
 /// group's worth of cells.
@@ -160,8 +162,7 @@ pub fn knob_tuple_to_grid_json(tuple_json: &str) -> Result<String> {
     for (k, val) in obj {
         out.insert(k.clone(), serde_json::Value::Array(vec![val.clone()]));
     }
-    serde_json::to_string(&serde_json::Value::Object(out))
-        .context("serialise knob_grid")
+    serde_json::to_string(&serde_json::Value::Object(out)).context("serialise knob_grid")
 }
 
 #[cfg(test)]
@@ -175,8 +176,14 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&grid).unwrap();
         let obj = parsed.as_object().unwrap();
         assert_eq!(obj["effort"].as_array().unwrap()[0].as_i64(), Some(1));
-        assert_eq!(obj["subsampling"].as_array().unwrap()[0].as_str(), Some("444"));
-        assert_eq!(obj["aq_enabled"].as_array().unwrap()[0].as_bool(), Some(true));
+        assert_eq!(
+            obj["subsampling"].as_array().unwrap()[0].as_str(),
+            Some("444")
+        );
+        assert_eq!(
+            obj["aq_enabled"].as_array().unwrap()[0].as_bool(),
+            Some(true)
+        );
     }
 
     #[test]

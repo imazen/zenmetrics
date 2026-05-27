@@ -142,8 +142,12 @@ pub fn parse_instances(raw: &str) -> anyhow::Result<ParseReport> {
         return Ok(ParseReport::default());
     }
 
-    let top: serde_json::Value = serde_json::from_str(trimmed)
-        .map_err(|e| anyhow::anyhow!("vastai output is not JSON: {e}; first 200 chars: {:?}", &trimmed[..trimmed.len().min(200)]))?;
+    let top: serde_json::Value = serde_json::from_str(trimmed).map_err(|e| {
+        anyhow::anyhow!(
+            "vastai output is not JSON: {e}; first 200 chars: {:?}",
+            &trimmed[..trimmed.len().min(200)]
+        )
+    })?;
 
     // Find the instance array. v1 wraps in {"instances": [...], ...};
     // legacy v0 returns a bare array.
@@ -198,9 +202,7 @@ fn parse_one(idx: usize, row: serde_json::Value) -> Result<Instance, String> {
     let raw: RawInstance = match serde_json::from_value(row.clone()) {
         Ok(r) => r,
         Err(e) => {
-            return Err(format!(
-                "row {idx}: failed to deserialise: {e}; raw: {row}"
-            ));
+            return Err(format!("row {idx}: failed to deserialise: {e}; raw: {row}"));
         }
     };
 
@@ -223,11 +225,7 @@ fn parse_one(idx: usize, row: serde_json::Value) -> Result<Instance, String> {
         .or(raw.cur_state.as_ref())
         .and_then(coerce_str);
 
-    let dph_total = raw
-        .dph_total
-        .as_ref()
-        .and_then(coerce_f64)
-        .unwrap_or(0.0);
+    let dph_total = raw.dph_total.as_ref().and_then(coerce_f64).unwrap_or(0.0);
 
     let gpu_name = raw.gpu_name.as_ref().and_then(coerce_str);
 
@@ -245,10 +243,7 @@ fn parse_one(idx: usize, row: serde_json::Value) -> Result<Instance, String> {
 /// labeled instance (does not match unlabeled ones — destroying every
 /// box on the account is too dangerous a default; require an explicit
 /// match string).
-pub fn filter_by_label(
-    instances: &[Instance],
-    label_prefix: &str,
-) -> Vec<Instance> {
+pub fn filter_by_label(instances: &[Instance], label_prefix: &str) -> Vec<Instance> {
     instances
         .iter()
         .filter(|i| match &i.label {
@@ -262,8 +257,7 @@ pub fn filter_by_label(
 /// Aggregate by status. Returns a sorted Vec<(status, count)> for stable
 /// output.
 pub fn status_breakdown(instances: &[Instance]) -> Vec<(String, usize)> {
-    let mut map: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
+    let mut map: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for i in instances {
         let key = i.status.clone().unwrap_or_else(|| "unknown".to_string());
         *map.entry(key).or_insert(0) += 1;
@@ -289,7 +283,8 @@ mod tests {
 
     #[test]
     fn v1_envelope_with_empty_array_parses() {
-        let raw = r#"{"instances": [], "instances_found": 0, "label_counts": {}, "next_token": null}"#;
+        let raw =
+            r#"{"instances": [], "instances_found": 0, "label_counts": {}, "next_token": null}"#;
         let r = parse_instances(raw).unwrap();
         assert_eq!(r.instances.len(), 0);
     }
@@ -343,7 +338,10 @@ mod tests {
         // not numeric), so we should have rows 1 and 4 only.
         assert!(ids.contains(&1), "row 1 should parse, got ids={ids:?}");
         assert!(ids.contains(&4), "row 4 should parse, got ids={ids:?}");
-        assert!(!r.warnings.is_empty(), "expected at least one warning for the missing-id row");
+        assert!(
+            !r.warnings.is_empty(),
+            "expected at least one warning for the missing-id row"
+        );
     }
 
     #[test]
@@ -401,11 +399,14 @@ mod tests {
         ]"#;
         let r = parse_instances(raw).unwrap();
         let b = status_breakdown(&r.instances);
-        assert_eq!(b, vec![
-            ("exited".to_string(), 1),
-            ("loading".to_string(), 1),
-            ("running".to_string(), 2),
-        ]);
+        assert_eq!(
+            b,
+            vec![
+                ("exited".to_string(), 1),
+                ("loading".to_string(), 1),
+                ("running".to_string(), 2),
+            ]
+        );
     }
 
     #[test]

@@ -5474,29 +5474,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vastai-fleet"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "arrow",
- "arrow-array",
- "arrow-schema",
- "chrono",
- "clap",
- "hex",
- "image",
- "parquet",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zen-metrics-cli",
- "zenanalyze",
-]
-
-[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6462,6 +6439,30 @@ name = "zen-cloud-core"
 version = "0.0.1"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "zen-cloud-vastai"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "arrow",
+ "arrow-array",
+ "arrow-schema",
+ "chrono",
+ "clap",
+ "hex",
+ "image",
+ "parquet",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zen-cloud-core",
+ "zen-metrics-cli",
+ "zenanalyze",
 ]
 
 [[package]]

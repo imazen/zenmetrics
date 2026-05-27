@@ -39,9 +39,9 @@ use serde::Deserialize;
 use tokio::process::Command;
 use tracing::{info, warn};
 
+use super::WorkerArgs;
 use super::claim::{ClaimConfig, ClaimOutcome, try_claim};
 use super::r2::R2Client;
-use super::WorkerArgs;
 
 /// Subset of the chunks.jsonl record we need at the dispatcher
 /// level. The bash worker re-parses the full record itself so we
@@ -69,15 +69,12 @@ pub async fn process_chunk(
     line: &str,
 ) -> Result<()> {
     let rec = parse_chunk_json(line)?;
-    let sidecar_uri = rec
-        .out_sidecar_omni
-        .clone()
-        .unwrap_or_else(|| {
-            format!(
-                "s3://zentrain/{}/omni/{}.parquet",
-                args.run_id, rec.chunk_id
-            )
-        });
+    let sidecar_uri = rec.out_sidecar_omni.clone().unwrap_or_else(|| {
+        format!(
+            "s3://zentrain/{}/omni/{}.parquet",
+            args.run_id, rec.chunk_id
+        )
+    });
     let claim_uri = format!(
         "s3://coefficient/claims/{}/{}.claim",
         args.run_id, rec.chunk_id

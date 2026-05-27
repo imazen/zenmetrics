@@ -59,29 +59,24 @@ struct ChunkRecord {
 
 /// Top-level entry point. The caller (chunk.rs::process_chunk) has
 /// already won the claim race for this chunk.
-pub async fn process_chunk_inline(
-    args: &WorkerArgs,
-    r2: &R2Client,
-    line: &str,
-) -> Result<()> {
+pub async fn process_chunk_inline(args: &WorkerArgs, r2: &R2Client, line: &str) -> Result<()> {
     let rec: ChunkRecord = serde_json::from_str(line).context("parse chunk JSON")?;
-    let run_id = rec
-        .run_id
-        .clone()
-        .unwrap_or_else(|| args.run_id.clone());
+    let run_id = rec.run_id.clone().unwrap_or_else(|| args.run_id.clone());
 
     let scratch = args.workdir.join(&rec.chunk_id);
     let sources = scratch.join("sources");
     let sweeps = scratch.join("sweeps");
     let encoded = scratch.join("encoded");
     for dir in [&sources, &sweeps, &encoded] {
-        tokio::fs::create_dir_all(dir).await
+        tokio::fs::create_dir_all(dir)
+            .await
             .with_context(|| format!("mkdir {}", dir.display()))?;
     }
 
-    let out_sidecar = rec.out_sidecar_omni.clone().unwrap_or_else(|| {
-        format!("s3://zentrain/{run_id}/omni/{}.parquet", rec.chunk_id)
-    });
+    let out_sidecar = rec
+        .out_sidecar_omni
+        .clone()
+        .unwrap_or_else(|| format!("s3://zentrain/{run_id}/omni/{}.parquet", rec.chunk_id));
     let out_encoded_prefix = rec
         .out_encoded_prefix
         .clone()
@@ -167,8 +162,8 @@ pub async fn process_chunk_inline(
     // back to the omni sidecar by
     // `(image_path, codec, q, knob_tuple_json)`. CPU emits 300 floats;
     // GPU honours `feature_regime` (default WithIw = 372).
-    let want_features = metrics.contains(&MetricKind::Zensim)
-        || metrics.contains(&MetricKind::ZensimGpu);
+    let want_features =
+        metrics.contains(&MetricKind::Zensim) || metrics.contains(&MetricKind::ZensimGpu);
     let feature_out_path = if want_features {
         Some(scratch.join(format!("{}.zensim_features.parquet", rec.chunk_id)))
     } else {
@@ -188,7 +183,8 @@ pub async fn process_chunk_inline(
     for (gid, group) in groups.iter().enumerate() {
         let gid_str = format!("{gid}");
         let group_sources = scratch.join(format!("g{gid_str}/sources"));
-        tokio::fs::create_dir_all(&group_sources).await
+        tokio::fs::create_dir_all(&group_sources)
+            .await
             .with_context(|| format!("mkdir {}", group_sources.display()))?;
         for b in &group.image_basenames {
             let src = sources.join(b);
@@ -204,9 +200,7 @@ pub async fn process_chunk_inline(
             .map(|q| q.to_string())
             .collect::<Vec<_>>()
             .join(",");
-        let knob_grid_json = if group.knob_tuple_json == "{}"
-            || group.knob_tuple_json.is_empty()
-        {
+        let knob_grid_json = if group.knob_tuple_json == "{}" || group.knob_tuple_json.is_empty() {
             String::new() // empty knob grid -> zen-metrics defaults
         } else {
             knob_tuple_to_grid_json(&group.knob_tuple_json)?
@@ -399,9 +393,8 @@ fn parse_feature_regime_env_or_default() -> ZensimFeatureRegime {
 /// who want iwssim coverage on a 24 GB+ box must pass METRICS
 /// explicitly including `iwssim-gpu`.
 fn parse_metrics_env_or_default() -> Vec<MetricKind> {
-    let raw = std::env::var("METRICS").unwrap_or_else(|_| {
-        "zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu".to_string()
-    });
+    let raw = std::env::var("METRICS")
+        .unwrap_or_else(|_| "zensim-gpu,ssim2-gpu,butteraugli-gpu,cvvdp,dssim-gpu".to_string());
     let mut out = Vec::new();
     for name in raw.split(',') {
         let n = name.trim();
@@ -432,14 +425,11 @@ async fn sync_sources(
     for b in basenames {
         let src = format!("{source_dir_r2}/{b}");
         let dst = local_sources.join(b);
-        run_lines.push_str(&format!(
-            "cp {} {}\n",
-            src,
-            dst.to_string_lossy()
-        ));
+        run_lines.push_str(&format!("cp {} {}\n", src, dst.to_string_lossy()));
     }
     let run_file = local_sources.join("_dl.run");
-    tokio::fs::write(&run_file, run_lines).await
+    tokio::fs::write(&run_file, run_lines)
+        .await
         .with_context(|| format!("write run file {}", run_file.display()))?;
 
     let out = tokio::process::Command::new(&r2.bin)
@@ -518,7 +508,10 @@ async fn upload_encoded_variants(
 /// feature parquets exist (e.g. CPU zensim wasn't in the metric
 /// set, or all groups failed before writing any features).
 #[cfg(feature = "inline-sweep")]
-fn concat_feature_parquets(sweep_dir: &std::path::Path, output_path: &std::path::Path) -> Result<usize> {
+fn concat_feature_parquets(
+    sweep_dir: &std::path::Path,
+    output_path: &std::path::Path,
+) -> Result<usize> {
     use arrow::compute::concat_batches;
     use arrow_array::RecordBatch;
     use parquet::arrow::ArrowWriter;
@@ -549,14 +542,14 @@ fn concat_feature_parquets(sweep_dir: &std::path::Path, output_path: &std::path:
     let mut batches: Vec<RecordBatch> = Vec::new();
     let mut schema_arc: Option<Arc<arrow_schema::Schema>> = None;
     for f in &files {
-        let file = std::fs::File::open(f)
-            .with_context(|| format!("open {}", f.display()))?;
+        let file = std::fs::File::open(f).with_context(|| format!("open {}", f.display()))?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)
             .with_context(|| format!("init reader {}", f.display()))?;
         if schema_arc.is_none() {
             schema_arc = Some(builder.schema().clone());
         }
-        let reader = builder.build()
+        let reader = builder
+            .build()
             .with_context(|| format!("build reader {}", f.display()))?;
         for batch in reader {
             batches.push(batch.with_context(|| format!("read batch from {}", f.display()))?);
@@ -574,8 +567,8 @@ fn concat_feature_parquets(sweep_dir: &std::path::Path, output_path: &std::path:
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(Default::default()))
         .build();
-    let mut wtr = ArrowWriter::try_new(out_file, schema, Some(props))
-        .context("arrow writer for features")?;
+    let mut wtr =
+        ArrowWriter::try_new(out_file, schema, Some(props)).context("arrow writer for features")?;
     wtr.write(&merged).context("write feature batch")?;
     wtr.close().context("close feature writer")?;
     Ok(n_rows)

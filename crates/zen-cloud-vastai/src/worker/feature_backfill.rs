@@ -38,9 +38,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
-use arrow_array::{ArrayRef, Float32Array, Int64Array, RecordBatch, StringArray, UInt32Array};
 use arrow_array::cast::AsArray as _;
 use arrow_array::types::Int64Type;
+use arrow_array::{ArrayRef, Float32Array, Int64Array, RecordBatch, StringArray, UInt32Array};
 use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -103,10 +103,7 @@ pub async fn backfill_features_for_chunk(
     line: &str,
 ) -> Result<()> {
     let rec: ChunkRecord = serde_json::from_str(line).context("parse chunk JSON")?;
-    let run_id = rec
-        .run_id
-        .clone()
-        .unwrap_or_else(|| args.run_id.clone());
+    let run_id = rec.run_id.clone().unwrap_or_else(|| args.run_id.clone());
 
     let out_uri = format!(
         "s3://zentrain/{run_id}/zensim_features/{}.parquet",
@@ -120,10 +117,7 @@ pub async fn backfill_features_for_chunk(
     }
 
     // Locate the omni sidecar — same scheme the inline mode uses.
-    let omni_uri = format!(
-        "s3://zentrain/{run_id}/omni/{}.parquet",
-        rec.chunk_id
-    );
+    let omni_uri = format!("s3://zentrain/{run_id}/omni/{}.parquet", rec.chunk_id);
     if !r2.exists(&omni_uri).await {
         warn!(
             chunk_id = %rec.chunk_id,
@@ -137,7 +131,8 @@ pub async fn backfill_features_for_chunk(
     let sources_dir = scratch.join("sources");
     let encoded_dir = scratch.join("encoded");
     for d in [&sources_dir, &encoded_dir] {
-        tokio::fs::create_dir_all(d).await
+        tokio::fs::create_dir_all(d)
+            .await
             .with_context(|| format!("mkdir {}", d.display()))?;
     }
 
@@ -245,7 +240,8 @@ pub async fn backfill_features_for_chunk(
     .await
     .map_err(|e| anyhow!("write task panicked: {e}"))??;
 
-    r2.upload(&out_local, &out_uri).await
+    r2.upload(&out_local, &out_uri)
+        .await
         .context("upload feature parquet")?;
     info!(chunk_id = %rec.chunk_id, uri = %out_uri, "feature parquet uploaded");
 
@@ -259,12 +255,17 @@ pub async fn backfill_features_for_chunk(
 /// encoded_filename)` columns into a Vec<OmniRow>. Strict on schema:
 /// missing required columns is an error.
 fn read_omni_rows(path: &Path) -> Result<Vec<OmniRow>> {
-    let file = std::fs::File::open(path)
-        .with_context(|| format!("open {}", path.display()))?;
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
-        .context("parquet reader builder")?;
+    let file = std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let builder =
+        ParquetRecordBatchReaderBuilder::try_new(file).context("parquet reader builder")?;
     let schema = builder.schema().clone();
-    for col in ["image_path", "codec", "q", "knob_tuple_json", "encoded_filename"] {
+    for col in [
+        "image_path",
+        "codec",
+        "q",
+        "knob_tuple_json",
+        "encoded_filename",
+    ] {
         if schema.index_of(col).is_err() {
             return Err(anyhow!("omni sidecar missing column `{col}`"));
         }
@@ -274,7 +275,10 @@ fn read_omni_rows(path: &Path) -> Result<Vec<OmniRow>> {
     // impossible without re-encoding. Fail loud so the dispatcher
     // logs + skips.
     let enc_idx = schema.index_of("encoded_filename")?;
-    if matches!(schema.field(enc_idx).data_type(), arrow_schema::DataType::Null) {
+    if matches!(
+        schema.field(enc_idx).data_type(),
+        arrow_schema::DataType::Null
+    ) {
         return Err(anyhow!(
             "encoded_filename column is Null type — no encoded variants on R2 to score"
         ));
@@ -331,8 +335,10 @@ fn compute_features_for_rows(
     // Cache decoded reference images by basename so we decode each
     // source once. `Rgb8Image` doesn't implement Clone, so wrap in
     // Arc and pass &*Arc<Rgb8Image> as &Rgb8Image.
-    let mut ref_cache: std::collections::HashMap<String, std::sync::Arc<zen_metrics_cli::decode::Rgb8Image>> =
-        std::collections::HashMap::new();
+    let mut ref_cache: std::collections::HashMap<
+        String,
+        std::sync::Arc<zen_metrics_cli::decode::Rgb8Image>,
+    > = std::collections::HashMap::new();
     let mut n_skip_missing = 0usize;
     let mut n_skip_decode = 0usize;
     let mut n_skip_score = 0usize;
@@ -427,7 +433,10 @@ fn write_feature_parquet(rows: &[FeatureRow], path: &Path, _chunk_id: &str) -> R
     let ip: StringArray = rows.iter().map(|r| Some(r.image_path.as_str())).collect();
     let cd: StringArray = rows.iter().map(|r| Some(r.codec.as_str())).collect();
     let q: UInt32Array = rows.iter().map(|r| r.q).collect();
-    let kt: StringArray = rows.iter().map(|r| Some(r.knob_tuple_json.as_str())).collect();
+    let kt: StringArray = rows
+        .iter()
+        .map(|r| Some(r.knob_tuple_json.as_str()))
+        .collect();
     let zs: Float32Array = rows.iter().map(|r| r.zensim_score).collect();
     let mut cols: Vec<ArrayRef> = vec![
         Arc::new(ip),
@@ -442,8 +451,7 @@ fn write_feature_parquet(rows: &[FeatureRow], path: &Path, _chunk_id: &str) -> R
     }
     let batch = RecordBatch::try_new(schema.clone(), cols).context("build record batch")?;
 
-    let file = std::fs::File::create(path)
-        .with_context(|| format!("create {}", path.display()))?;
+    let file = std::fs::File::create(path).with_context(|| format!("create {}", path.display()))?;
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(Default::default()))
         .build();

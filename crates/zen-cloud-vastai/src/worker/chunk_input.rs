@@ -36,9 +36,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow};
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use arrow_array::cast::AsArray as _;
 use arrow_array::types::Int64Type;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 /// One (codec, knob_tuple_json) group's worth of cells, ready to be
 /// turned into an `InlineGroupSpec` and handed to `run_group_inline`.
@@ -78,8 +78,7 @@ pub fn read_and_group(
 ) -> Result<Vec<ChunkGroup>> {
     let file = std::fs::File::open(parquet_path)
         .with_context(|| format!("open parquet {}", parquet_path.display()))?;
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
-        .context("init parquet reader")?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file).context("init parquet reader")?;
 
     // Project to the four columns we need. Some chunk parquets
     // carry encoded_bytes / encode_ms / etc. — irrelevant here.
@@ -147,7 +146,10 @@ pub fn read_and_group(
             let q_i64 = qs.value(i);
             let knob_tuple = knob_tuples.value(i).to_string();
             if !(0..=100).contains(&q_i64) {
-                return Err(anyhow!("q={q_i64} out of [0,100] at row {}", batch_start + i));
+                return Err(anyhow!(
+                    "q={q_i64} out of [0,100] at row {}",
+                    batch_start + i
+                ));
             }
             let q = q_i64 as u32;
             let basename = image_path

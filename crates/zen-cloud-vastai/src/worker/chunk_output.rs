@@ -97,20 +97,18 @@ pub fn concat_groups_to_parquet(
         }
     }
     if batches.is_empty() {
-        anyhow::bail!("zero usable rows after parsing {} group TSVs", group_files.len());
+        anyhow::bail!(
+            "zero usable rows after parsing {} group TSVs",
+            group_files.len()
+        );
     }
     let n_total: usize = batches.iter().map(|b| b.num_rows()).sum();
     tracing::info!(n_total, n_bad_rows, "concat done");
 
     // Concat then append metadata columns.
-    let concatenated = arrow::compute::concat_batches(&schema_arc, &batches)
-        .context("concat batches")?;
-    let with_meta = append_metadata_columns(
-        concatenated,
-        chunk_id,
-        run_id,
-        encoded_r2_prefix,
-    )?;
+    let concatenated =
+        arrow::compute::concat_batches(&schema_arc, &batches).context("concat batches")?;
+    let with_meta = append_metadata_columns(concatenated, chunk_id, run_id, encoded_r2_prefix)?;
 
     write_parquet(&with_meta, output_path)?;
     Ok(n_total)
@@ -169,12 +167,8 @@ fn infer_schema_pooled(files: &[std::path::PathBuf]) -> Result<Schema> {
     Ok(Schema::new(fields))
 }
 
-fn read_tsv_into_batches(
-    tsv: &Path,
-    schema: Arc<Schema>,
-) -> Result<(Vec<RecordBatch>, usize)> {
-    let file = std::fs::File::open(tsv)
-        .with_context(|| format!("open {}", tsv.display()))?;
+fn read_tsv_into_batches(tsv: &Path, schema: Arc<Schema>) -> Result<(Vec<RecordBatch>, usize)> {
+    let file = std::fs::File::open(tsv).with_context(|| format!("open {}", tsv.display()))?;
     let reader = arrow::csv::ReaderBuilder::new(schema)
         .with_delimiter(b'\t')
         .with_header(true)
@@ -225,32 +219,31 @@ fn append_metadata_columns(
         // `encoded_filename` column. If it's missing, we still emit
         // an empty `encoded_r2_uri` column — downstream readers
         // expect it.
-        let uri_values: Vec<String> = if let Some(idx) =
-            batch.schema().index_of("encoded_filename").ok()
-        {
-            let enc = batch.column(idx);
-            let mut out = Vec::with_capacity(n);
-            // Try Utf8 first (most common); fall back to LargeUtf8
-            // if zen-metrics ever switches the column type.
-            if let Some(s) = enc.as_any().downcast_ref::<StringArray>() {
-                for i in 0..n {
-                    if s.is_null(i) || s.value(i).is_empty() {
-                        out.push(String::new());
-                    } else {
-                        out.push(format!("{prefix}{}", s.value(i)));
+        let uri_values: Vec<String> =
+            if let Some(idx) = batch.schema().index_of("encoded_filename").ok() {
+                let enc = batch.column(idx);
+                let mut out = Vec::with_capacity(n);
+                // Try Utf8 first (most common); fall back to LargeUtf8
+                // if zen-metrics ever switches the column type.
+                if let Some(s) = enc.as_any().downcast_ref::<StringArray>() {
+                    for i in 0..n {
+                        if s.is_null(i) || s.value(i).is_empty() {
+                            out.push(String::new());
+                        } else {
+                            out.push(format!("{prefix}{}", s.value(i)));
+                        }
                     }
+                } else {
+                    // Unexpected type; treat all as empty.
+                    tracing::warn!(
+                        "encoded_filename column is not Utf8; emitting empty encoded_r2_uri"
+                    );
+                    out.extend(std::iter::repeat(String::new()).take(n));
                 }
+                out
             } else {
-                // Unexpected type; treat all as empty.
-                tracing::warn!(
-                    "encoded_filename column is not Utf8; emitting empty encoded_r2_uri"
-                );
-                out.extend(std::iter::repeat(String::new()).take(n));
-            }
-            out
-        } else {
-            vec![String::new(); n]
-        };
+                vec![String::new(); n]
+            };
         fields.push(Field::new("encoded_r2_uri", DataType::Utf8, false));
         cols.push(Arc::new(StringArray::from(uri_values)));
     }
@@ -260,8 +253,8 @@ fn append_metadata_columns(
 }
 
 fn write_parquet(batch: &RecordBatch, output: &Path) -> Result<()> {
-    let file = std::fs::File::create(output)
-        .with_context(|| format!("create {}", output.display()))?;
+    let file =
+        std::fs::File::create(output).with_context(|| format!("create {}", output.display()))?;
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(Default::default()))
         .build();
@@ -282,10 +275,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let p = std::env::temp_dir().join(format!(
-            "vastai-output-test-{}-{nanos}",
-            std::process::id()
-        ));
+        let p =
+            std::env::temp_dir().join(format!("vastai-output-test-{}-{nanos}", std::process::id()));
         std::fs::create_dir_all(&p).unwrap();
         p
     }
@@ -323,8 +314,8 @@ mod tests {
 
         // Read back and inspect.
         let file = std::fs::File::open(&out).unwrap();
-        let builder = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-            .unwrap();
+        let builder =
+            parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
         let reader = builder.build().unwrap();
         let batches: Vec<_> = reader.collect::<std::result::Result<_, _>>().unwrap();
         assert_eq!(batches.len(), 1);

@@ -141,7 +141,10 @@ pub fn write_parquet(
 
     let chunk_col: StringArray = (0..n).map(|_| Some(chunk_id)).collect();
     let run_col: StringArray = (0..n).map(|_| Some(run_id)).collect();
-    let basename_col: StringArray = rows.iter().map(|r| Some(r.image_basename.as_str())).collect();
+    let basename_col: StringArray = rows
+        .iter()
+        .map(|r| Some(r.image_basename.as_str()))
+        .collect();
     let path_col: StringArray = rows.iter().map(|r| Some(r.image_path.as_str())).collect();
     let width_col: UInt32Array = rows.iter().map(|r| r.width).collect();
     let height_col: UInt32Array = rows.iter().map(|r| r.height).collect();
@@ -164,7 +167,10 @@ pub fn write_parquet(
                     .map(|(_, v)| *v)
                     .or_else(|| {
                         // Defensive: re-search if order misaligned.
-                        r.features.iter().find(|(fid, _)| *fid == *id).map(|(_, v)| *v)
+                        r.features
+                            .iter()
+                            .find(|(fid, _)| *fid == *id)
+                            .map(|(_, v)| *v)
                     })
             })
             .collect();

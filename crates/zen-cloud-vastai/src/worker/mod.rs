@@ -51,13 +51,13 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
-mod adapt;
+pub mod adapt;
 mod chunk;
 #[cfg(feature = "inline-sweep")]
 mod chunk_input;
 #[cfg(feature = "inline-sweep")]
 mod chunk_output;
-mod claim;
+pub mod claim;
 #[cfg(feature = "inline-sweep")]
 mod feature_backfill;
 #[cfg(feature = "inline-sweep")]
@@ -71,7 +71,7 @@ mod source_features_only;
 pub use feature_backfill::backfill_features_for_chunk;
 #[cfg(feature = "source-features")]
 pub use source_features_only::backfill_source_features_for_chunk;
-mod r2;
+pub mod r2;
 #[cfg(feature = "inline-sweep")]
 mod sweep_runner;
 mod util;
@@ -232,14 +232,12 @@ pub fn cmd_worker(args: WorkerArgs) -> Result<()> {
     rt.block_on(run_worker_async(args, worker_id, r2))
 }
 
-async fn run_worker_async(
-    args: WorkerArgs,
-    worker_id: String,
-    r2: r2::R2Client,
-) -> Result<()> {
+async fn run_worker_async(args: WorkerArgs, worker_id: String, r2: r2::R2Client) -> Result<()> {
     info!(worker_id = %worker_id, run_id = %args.run_id, "worker starting");
 
-    let initial_pc = args.parallel_chunks.unwrap_or_else(adapt::auto_parallel_chunks);
+    let initial_pc = args
+        .parallel_chunks
+        .unwrap_or_else(adapt::auto_parallel_chunks);
     let pc_max = args
         .parallel_chunks_max
         .unwrap_or_else(adapt::derive_pc_max);
@@ -248,7 +246,9 @@ async fn run_worker_async(
     // Pull chunks.jsonl from R2 into memory. Even at 2568 lines × 1KB,
     // that's <3 MB — fits cleanly in RAM. Avoids holding an fd to a
     // temp file across the dispatcher's lifetime.
-    let chunks = r2.fetch_chunks_jsonl(&args.chunks_r2).await
+    let chunks = r2
+        .fetch_chunks_jsonl(&args.chunks_r2)
+        .await
         .context("download chunks.jsonl")?;
     info!(n_chunks = chunks.len(), "chunks downloaded");
 
@@ -381,13 +381,21 @@ fn init_tracing() {
 /// pid-1 environment, not into every spawned process. The bash
 /// onstart copies them out by reading `/proc/1/environ` (which is
 /// NUL-separated `KEY=VALUE` strings). We do the same.
+//
+// The single `unsafe { set_var }` below is the crate's only unsafe;
+// it is pre-existing, documented, and called before the tokio runtime
+// spins up (single-threaded). Scoped allow keeps the crate-level
+// `deny(unsafe_code)` gate active everywhere else.
+#[allow(unsafe_code)]
 fn hydrate_pid1_env() {
     let Ok(buf) = std::fs::read("/proc/1/environ") else {
         return;
     };
     for entry in buf.split(|b| *b == 0) {
         let s = String::from_utf8_lossy(entry);
-        let Some((k, v)) = s.split_once('=') else { continue };
+        let Some((k, v)) = s.split_once('=') else {
+            continue;
+        };
         // Only copy variables we care about — don't pollute env.
         if matches!(
             k,
