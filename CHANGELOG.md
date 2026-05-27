@@ -29,6 +29,63 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zenmetrics-orchestrator` Phase 7 — **the orchestrator is now the
+  recommended entry point** for any caller that scores more than one
+  pair at a time (sweeps, batch, picker training, RD curves). The
+  scope of Phase 7 is integration, not new orchestrator surface:
+
+  - `zen-metrics-cli` (the `zen-metrics` binary): new `orchestrator`
+    feature pulls `zenmetrics-orchestrator` as an optional dep, with
+    `orchestrator-cuda` + per-metric `orchestrator-cpu-*` variants
+    forwarding the orchestrator's own feature gates. New global CLI
+    flags (apply to every subcommand) — `--use-orchestrator`,
+    `--orchestrator-cache <PATH>`, `--bench-on-start <auto|yes|no>`,
+    `--cpu-features <list>`. Env var `ZENMETRICS_USE_ORCHESTRATOR=1`
+    is equivalent to the flag. `cmd_score` routes
+    orchestrator-eligible metrics through `Orchestrator::run_single`;
+    `cmd_batch` / `cmd_compare` / `cmd_sweep` warm the capability
+    cache + print the active machine profile to stderr so subsequent
+    workers on the same box start warm.
+
+  - `Dockerfile.sweep.v27` — bakes the new orchestrator binary
+    features (`orchestrator,orchestrator-cuda,orchestrator-cpu-all`)
+    so the OOM fallback ladder reaches every CPU reference in
+    production. Extends v26's layer plan (~30 MB binary delta).
+    Sanity gates the new top-level flags are exposed. Default
+    ENTRYPOINT unchanged from v26 to keep existing fleet launchers
+    working; orchestrator opt-in is `--entrypoint
+    /usr/local/bin/onstart_orchestrator.sh`.
+
+  - `scripts/sweep/onstart_orchestrator.sh` — bake-everything-clean
+    onstart that hydrates env from `/proc/1/environ`, verifies every
+    baked tool (zen-metrics, s5cmd, jq, python3 + pyarrow, libnvrtc),
+    optionally fetches a fleet-shared `capability_<hash>.toml` from
+    R2, exports `ZENMETRICS_USE_ORCHESTRATOR=1` +
+    `ZENMETRICS_CACHE_DIR`, and delegates to onstart_unified.sh for
+    the chunk-claim loop.
+
+  - `crates/zenmetrics-orchestrator/README.md` (new) — quickstart,
+    batch + streaming APIs, OOM handling, cached-ref semantics, CPU
+    backend selection, capability cache lifecycle, full config surface.
+
+  - `crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md` (new)
+    — side-by-side code samples for migrating
+    `zenmetrics-api` call sites to the orchestrator (single-call
+    score, batch sweep, cached-ref pattern) + the behaviour
+    differences callers should know (automatic backend selection,
+    OOM-doesn't-bubble-by-default, completion-order results).
+
+  - Top-level `README.md` — new "Recommended entry point" section
+    surfacing the orchestrator with a decision table and pointers to
+    the quickstart + migration guide. The orchestrator crate is now
+    listed in the main Crates table.
+
+  Backwards-compat: every existing CLI flag + output format is
+  preserved. Without `--use-orchestrator` the entire orchestrator path
+  is bypassed; the legacy direct-dispatch code paths (CvvdpBatchScorer,
+  MetricCache, run_metric) remain the default. CI continues to verify
+  both shapes.
+
 - `zenmetrics-orchestrator` Phase 6 — CPU backend wiring for the OOM
   fallback ladder. Replaces the Phase 4-5 `CpuNotYetWired` short-circuit
   with per-metric reference adapters: cvvdp-cpu (in-tree), ssimulacra2,

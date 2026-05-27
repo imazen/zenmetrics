@@ -20,6 +20,53 @@ build-time CPU fallback.
 | [`cvvdp-cpu`](crates/cvvdp-cpu/) | ColorVideoVDP (still-image, CPU, JXL buttloop) | JOD 0–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
 | [`zen-metrics-cli`](crates/zen-metrics-cli/) | CLI front-end | — | uses the five metrics above |
 | [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | shared test images | — | (test infra) |
+| [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) | Capability-aware scheduler + persistent benchmark cache + OOM fallback ladder | — | wraps the umbrella `zenmetrics-api` |
+
+## Recommended entry point: `zenmetrics-orchestrator`
+
+For any caller that scores **more than one (ref, dist) pair** —
+sweeps, picker training, RD curves, batch comparison, anything with
+multiple tasks — use [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/).
+It adds three things every previous in-tree caller had to hand-roll:
+
+1. **Backend selection.** Persistent per-machine benchmark cache picks
+   the fastest backend that fits available VRAM for each task. Knows
+   which `(metric, size)` combinations OOM on this machine and avoids
+   them on subsequent runs.
+2. **OOM-safe fallback ladder.** `GpuFull → GpuStrip → (Cvvdp:
+   GpuStripPair) → Cpu`. Each downgrade is recorded in the cache so the
+   same machine never tries the failing combination twice.
+3. **Cached-reference auto-detect.** xxhash3 hashes ref bytes per task,
+   promotes consecutive same-ref tasks to the `set_reference` +
+   `compute_with_cached_reference` API for the 1.5–3× speedup that
+   sweeps benefit from.
+
+**Quick decision table:**
+
+| Caller shape | Use |
+| --- | --- |
+| One `(ref, dist)` per process, no fallback needed | `zenmetrics-api` directly |
+| Batch / sweep / picker training / RD curve | **`zenmetrics-orchestrator`** |
+| Streaming workload | **`zenmetrics-orchestrator`** |
+| OOM-tolerant scoring | **`zenmetrics-orchestrator`** |
+| One-ref / many-dist workloads | **`zenmetrics-orchestrator`** |
+
+See [`crates/zenmetrics-orchestrator/README.md`](crates/zenmetrics-orchestrator/README.md)
+for quickstart, the streaming + batch APIs, OOM handling details,
+cached-ref semantics, CPU backend selection, capability cache lifecycle,
+and the full configuration surface. Migration code samples in
+[`crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md`](crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md).
+
+The `zen-metrics` CLI also exposes the orchestrator as an opt-in path:
+`zen-metrics --use-orchestrator score …` (or set
+`ZENMETRICS_USE_ORCHESTRATOR=1`) routes scoring through the
+orchestrator while preserving every existing flag and output format.
+The new sweep image
+[`Dockerfile.sweep.v27`](Dockerfile.sweep.v27) bakes the orchestrator
+features in and ships
+[`scripts/sweep/onstart_orchestrator.sh`](scripts/sweep/onstart_orchestrator.sh)
+as an entrypoint that drives the per-cell scoring through the
+orchestrator's worker pool.
 
 ## SRCC sanity table
 
