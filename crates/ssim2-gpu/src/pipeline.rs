@@ -235,6 +235,13 @@ pub struct Ssim2<R: Runtime> {
 
     has_cached_reference: bool,
 
+    /// Whether the cached reference's blur outputs are in untransposed
+    /// orientation (IIR fast path, default) or transposed orientation
+    /// (FIR fallback). `true` until `set_reference` is called with FIR
+    /// mode active. Read by `compute_with_reference_with_mode` to pick
+    /// the right error_maps inputs.
+    cached_ref_is_untransposed: bool,
+
     /// Strip-processing metadata. `None` for whole-image instances
     /// (constructed via `new` / `new_with_memory_mode { Full | Auto→Full }`);
     /// `Some` for strip-mode instances constructed via `new_strip`. When
@@ -374,6 +381,7 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            cached_ref_is_untransposed: true,
             strip: None,
             strip_cached_ref: None,
             #[cfg(feature = "fir")]
@@ -480,6 +488,7 @@ impl<R: Runtime> Ssim2<R> {
             partials,
             sums,
             has_cached_reference: false,
+            cached_ref_is_untransposed: true,
             strip: Some(StripMeta {
                 image_w,
                 image_h,
@@ -806,15 +815,25 @@ impl<R: Runtime> Ssim2<R> {
         self.check_dims(ref_srgb)?;
         self.upload_and_srgb_to_linear(true, ref_srgb);
         self.build_linear_pyramid(true);
+        let mut blur_untransposed = true;
         for s in 0..self.scales.len() {
             self.run_xyb(s, true);
             self.run_self_products(s, true);
-            self.run_blur_pair(s, true);
-            // Pre-transpose the raw reference XYB so subsequent
-            // compute_with_reference / Ssim2Batch::compute_batch calls
-            // can read it directly without re-transposing.
+            blur_untransposed = self.run_blur_pair(s, true) && blur_untransposed;
+            // Pre-transpose the raw reference XYB into ref_xyb_t. The
+            // single-image cached-ref path (compute_with_reference_with_mode)
+            // doesn't need this when blurs are untransposed (IIR), but
+            // the batched path (Ssim2Batch::compute_batch) reads ref_xyb_t
+            // via the `cached_ref_xyb_t` accessor in
+            // error_maps_broadcast_batched_kernel — that path is still on
+            // the transposed-orientation contract. set_reference runs
+            // ONCE per encoder loop so the per-scale transpose is cheap
+            // (called once, then thousands of dist-side compute calls
+            // benefit from the cache). Migrating Ssim2Batch to the
+            // untransposed orientation is queued as a follow-on.
             self.run_transpose_raw_xyb_pair(s, true, false);
         }
+        self.cached_ref_is_untransposed = blur_untransposed;
         self.has_cached_reference = true;
         Ok(())
     }
@@ -1137,6 +1156,13 @@ impl<R: Runtime> Ssim2<R> {
             .unwrap_or(0);
         self.build_linear_pyramid_until(false, last_active);
 
+        // Cached-ref path: the ref-side cache (mu1_full, sigma11_full,
+        // ref_xyb_t) is committed to TRANSPOSED orientation today (so
+        // Ssim2Batch's broadcast_batched_kernel keeps working — see
+        // `run_blur_pair` for the rationale). The dis-side blurs MUST
+        // match. Use the legacy transposed-blur path for parity. The
+        // process_scale (non-cached compute) path uses the untransposed
+        // fast path independently.
         for s in 0..self.scales.len() {
             if skip_scale(mode, s) {
                 continue;
@@ -1144,10 +1170,10 @@ impl<R: Runtime> Ssim2<R> {
             self.run_xyb_masked(s, false, mode);
             self.run_self_products_masked(s, false, mode); // sigma22
             self.run_cross_product_masked(s, mode); // sigma12
-            self.run_blur_dis_only_masked(s, mode);
-            // ref_xyb_t was cached by set_reference; only transpose dis.
+            self.run_blur_dis_only_masked_transposed(s, mode);
+            // Cached-ref dis-side transpose: pair of raw transposes.
             self.run_transpose_raw_xyb_pair_masked(s, false, true, mode);
-            self.run_error_maps_masked(s, mode);
+            self.run_error_maps_masked_oriented(s, mode, false);
             self.run_reductions_masked(s, mode);
         }
         self.run_finalizer();
@@ -1308,9 +1334,10 @@ impl<R: Runtime> Ssim2<R> {
         // `image_w_s` cols, so the strip's slice starts at flat index
         // `strip_top_at_s * image_w_s`.
         self.run_cross_product_strip_cached_ref(scale, mode, strip_top_at_s);
-        // Blur dist-side planes: sigma22, mu2=dis, sigma12 — all
-        // produced in strip-shape transposed orientation.
-        self.run_blur_dis_only_masked(scale, mode);
+        // Strip-mode mode-E uses transposed orientation throughout (the
+        // ref-side cached `*_t_full` slots are transposed). Use the
+        // legacy v+t+v blur path for dis-side consistency.
+        self.run_blur_dis_only_masked_transposed(scale, mode);
         // Transpose raw dist XYB (ref's transpose is already cached).
         self.run_transpose_raw_xyb_pair_masked(scale, false, true, mode);
         // Error maps: ref-side inputs from the cached full buffers,
@@ -1683,9 +1710,12 @@ impl<R: Runtime> Ssim2<R> {
         self.run_self_products_masked(scale, true, mode);
         self.run_self_products_masked(scale, false, mode);
         self.run_cross_product_masked(scale, mode);
+        // run_blur_full_masked returns false (transposed) until the
+        // batched/cached-ref orientation migration lands. Use legacy
+        // transposed-orientation error_maps inputs.
         self.run_blur_full_masked(scale, mode);
         self.run_transpose_raw_xyb_pair_masked(scale, true, true, mode);
-        self.run_error_maps_masked(scale, mode);
+        self.run_error_maps_masked_oriented(scale, mode, false);
         self.run_reductions_strip_masked(scale, mode, scale_strip_h, body_col_start, body_col_end);
     }
 
@@ -2037,7 +2067,85 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
+    /// Untransposed-output variant of [`Self::blur_plane_two_pass`].
+    ///
+    /// **Not yet wired into the production paths** — preserved as a
+    /// building block for the follow-on migration where Ssim2Batch's
+    /// `error_maps_broadcast_batched_kernel` is ported to untransposed
+    /// orientation, at which point `set_reference` + all error_maps
+    /// callers can flip together to the v+h fast path.
+    #[allow(dead_code)]
+    ///
+    /// IIR path: `v + h` (2 launches, output in untransposed orientation
+    /// via the new [`blur::blur_h_pass_kernel`]).
+    ///
+    /// FIR path: falls back to [`Self::blur_plane_two_pass_fir`] (the
+    /// pre-fix v+t+v shape). The FIR output stays in transposed
+    /// orientation. Callers that consume FIR-blurred values must
+    /// therefore still use the transposed-orientation consumers (and
+    /// the `_t` raw xyb pair). The perf-fix work to make FIR
+    /// untransposed is queued as a follow-on; FIR is opt-in (gated by
+    /// the `fir` Cargo feature) and rarely adopted in production
+    /// sweeps, so the optimisation lives on the IIR path first.
+    ///
+    /// Whole-image and whole-image-cached-ref paths call this when the
+    /// blur is IIR. Strip-mode mode-E keeps using the transposed-output
+    /// [`Self::blur_plane_two_pass`] because its cached layout is
+    /// committed to transposed orientation.
+    ///
+    /// Returns `true` if the output landed in untransposed orientation
+    /// (IIR), `false` if it stayed in transposed orientation (FIR
+    /// fallback). The caller uses this to decide whether to feed
+    /// untransposed or transposed inputs to the error_maps kernel.
+    #[cfg_attr(not(feature = "fir"), allow(clippy::unnecessary_wraps))]
+    fn blur_plane_two_pass_untransposed(
+        &self,
+        width: u32,
+        height: u32,
+        n: usize,
+        src: &cubecl::server::Handle,
+        v_buf: &cubecl::server::Handle,
+        t_buf: &cubecl::server::Handle,
+        full: &cubecl::server::Handle,
+    ) -> bool {
+        #[cfg(feature = "fir")]
+        {
+            match self.blur {
+                Ssim2Blur::Iir => {
+                    let _ = t_buf;
+                    self.blur_plane_two_pass_iir_untransposed(width, height, n, src, v_buf, full);
+                    true
+                }
+                Ssim2Blur::Fir => {
+                    self.blur_plane_two_pass_fir(width, height, n, src, v_buf, t_buf, full);
+                    false
+                }
+            }
+        }
+        #[cfg(not(feature = "fir"))]
+        {
+            let _ = t_buf;
+            self.blur_plane_two_pass_iir_untransposed(width, height, n, src, v_buf, full);
+            true
+        }
+    }
+
     /// Default IIR path (Charalampidis recursive Gaussian).
+    ///
+    /// Output orientation: TRANSPOSED (`height × width` row-major).
+    /// This is the original "v-pass + transpose + v-pass" three-step;
+    /// it's still used by strip-mode mode-E (`set_reference_strip_mode`
+    /// + `compute_with_reference_strip_with_mode`) because the cached
+    /// `ref_xyb_t_full`, `mu1_full_full`, `sigma11_full_full` slots are
+    /// in transposed orientation and the `error_maps_strip_from_full_ref_kernel`
+    /// indexes them under the `full_inner_stride = full_h` (transposed
+    /// inner-dim) convention.
+    ///
+    /// For the whole-image and whole-image-cached-ref paths use
+    /// [`Self::blur_plane_two_pass_iir_untransposed`] instead — it's
+    /// `v + h` (2 launches), no transpose, output in untransposed
+    /// orientation matching the raw XYB. That path is the perf
+    /// optimisation; this one stays for strip-mode-E migration backlog.
     fn blur_plane_two_pass_iir(
         &self,
         width: u32,
@@ -2060,9 +2168,6 @@ impl<R: Runtime> Ssim2<R> {
                 height,
             );
             // 2. tiled transpose v_buf → t_buf (now height × width).
-            //    T_x.B (2026-05-17): 32×32 LDS tile with +1 col pad to
-            //    avoid bank conflicts; both loads and stores coalesced.
-            //    Was ~600 µs scale-0 (uncoalesced); now ~150 µs.
             transpose::transpose_kernel::launch_unchecked::<R>(
                 &self.client,
                 Self::transpose_cube_count(width, height),
@@ -2072,8 +2177,7 @@ impl<R: Runtime> Ssim2<R> {
                 width,
                 height,
             );
-            // 3. v-pass on t_buf (walks columns of height × width) → full.
-            //    Note: the transposed buffer's "width" is the original height.
+            // 3. v-pass on t_buf → full (transposed orientation).
             blur::blur_pass_kernel::launch_unchecked::<R>(
                 &self.client,
                 Self::blur_cube_count(height),
@@ -2082,6 +2186,60 @@ impl<R: Runtime> Ssim2<R> {
                 ArrayArg::from_raw_parts(full.clone(), n),
                 height,
                 width,
+            );
+        }
+    }
+
+    /// Untransposed-output IIR path (`v + h` via
+    /// [`blur::blur_h_pass_kernel`]) — the perf-optimised version added
+    /// in the 2026-05-27 work.
+    ///
+    /// Output orientation: UNTRANSPOSED (`width × height` row-major,
+    /// same as `src`). Mathematically equivalent (bit-identical, per
+    /// `examples/blur_h_pass_parity`) to `v + transpose + v` because
+    /// the IIR is separable. Saves one transpose launch per blur AND
+    /// eliminates the `t_buf` write/read DRAM roundtrip.
+    ///
+    /// Use this in the whole-image / whole-image-cached-ref paths.
+    /// Strip-mode mode-E still uses [`Self::blur_plane_two_pass_iir`]
+    /// because its caching layout is committed to transposed
+    /// orientation.
+    ///
+    /// **Not yet wired into production paths** — see
+    /// `blur_plane_two_pass_untransposed`'s docstring for the gate on
+    /// the follow-on Ssim2Batch migration. Kept as a building block
+    /// + parity-tested via `examples/blur_h_pass_parity`.
+    #[allow(dead_code)]
+    fn blur_plane_two_pass_iir_untransposed(
+        &self,
+        width: u32,
+        height: u32,
+        n: usize,
+        src: &cubecl::server::Handle,
+        v_buf: &cubecl::server::Handle,
+        full: &cubecl::server::Handle,
+    ) {
+        unsafe {
+            // 1. v-pass on src (walks columns of width × height) → v_buf.
+            blur::blur_pass_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::blur_cube_count(width),
+                Self::blur_cube_dim(),
+                ArrayArg::from_raw_parts(src.clone(), n),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                width,
+                height,
+            );
+            // 2. h-pass on v_buf (walks rows of width × height) → full.
+            //    Output is in untransposed orientation.
+            blur::blur_h_pass_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::blur_cube_count(height),
+                Self::blur_cube_dim(),
+                ArrayArg::from_raw_parts(v_buf.clone(), n),
+                ArrayArg::from_raw_parts(full.clone(), n),
+                width,
+                height,
             );
         }
     }
@@ -2191,9 +2349,21 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    /// Reference-only blur pass (sigma11 + mu1). Used by `set_reference`
+    /// Reference-only blur pair (sigma11 + mu1). Used by `set_reference`
     /// — populates `sigma11_full` and `mu1_full`.
-    fn run_blur_pair(&self, scale: usize, is_a: bool) {
+    ///
+    /// Uses the legacy v+t+v path (transposed-output) for **all** modes.
+    /// Why: the `Ssim2Batch` path (`pipeline_batch.rs`) consumes
+    /// `cached_mu1_full(s)` / `cached_sigma11_full(s)` via
+    /// `error_maps_broadcast_batched_kernel` which is committed to the
+    /// transposed-orientation contract. Migrating Ssim2Batch's blur +
+    /// error_maps kernels to untransposed is the obvious follow-on; for
+    /// now keep set_reference on the legacy path so the batched-path
+    /// parity stays unbroken.
+    ///
+    /// Returns `false` (transposed) always to signal the orientation
+    /// to the caller.
+    fn run_blur_pair(&self, scale: usize, is_a: bool) -> bool {
         let s = &self.scales[scale];
         let n = s.n;
         let w = s.width;
@@ -2201,46 +2371,31 @@ impl<R: Runtime> Ssim2<R> {
         if is_a {
             for ch in 0..3 {
                 self.blur_plane_two_pass(
-                    w,
-                    h,
-                    n,
-                    &s.sigma11_in[ch],
-                    &s.v_scratch[ch],
-                    &s.t_scratch[ch],
+                    w, h, n,
+                    &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
                     &s.sigma11_full[ch],
                 );
                 self.blur_plane_two_pass(
-                    w,
-                    h,
-                    n,
-                    &s.ref_xyb[ch],
-                    &s.v_scratch[ch],
-                    &s.t_scratch[ch],
+                    w, h, n,
+                    &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
                     &s.mu1_full[ch],
                 );
             }
         } else {
             for ch in 0..3 {
                 self.blur_plane_two_pass(
-                    w,
-                    h,
-                    n,
-                    &s.sigma22_in[ch],
-                    &s.v_scratch[ch],
-                    &s.t_scratch[ch],
+                    w, h, n,
+                    &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
                     &s.sigma22_full[ch],
                 );
                 self.blur_plane_two_pass(
-                    w,
-                    h,
-                    n,
-                    &s.dis_xyb[ch],
-                    &s.v_scratch[ch],
-                    &s.t_scratch[ch],
+                    w, h, n,
+                    &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
                     &s.mu2_full[ch],
                 );
             }
         }
+        false
     }
 
     // (Unmasked variants `run_blur_dis_only`, `run_blur_full`,
@@ -2354,46 +2509,21 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
-    fn run_blur_full_masked(&self, scale: usize, mode: Ssim2Mode) {
-        let s = &self.scales[scale];
-        let n = s.n;
-        let w = s.width;
-        let h = s.height;
-        for ch in 0..3 {
-            if skip_error_map(mode, scale, ch) {
-                continue;
-            }
-            // sigma11 = ref². v_scratch/t_scratch are rolling scratch
-            // buffers reused across all 5 blurs in this scale × channel
-            // (see `Scale::v_scratch` doc for the aliasing argument).
-            self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma11_full[ch],
-            );
-            // mu1 = blur(ref)
-            self.blur_plane_two_pass(
-                w, h, n,
-                &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu1_full[ch],
-            );
-            // sigma22 = dis²
-            self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma22_full[ch],
-            );
-            // mu2 = blur(dis)
-            self.blur_plane_two_pass(
-                w, h, n,
-                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu2_full[ch],
-            );
-            // sigma12 = ref·dis
-            self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma12_full[ch],
-            );
-        }
-    }
-
-    fn run_blur_dis_only_masked(&self, scale: usize, mode: Ssim2Mode) {
+    /// Run all 5 blurs (sigma11/22/12 + ref + dis = mu1/mu2) for one
+    /// scale × selected channels.
+    ///
+    /// Currently produces TRANSPOSED outputs (legacy v+t+v path) — the
+    /// shared `_full` plane slots between this path (non-cached compute)
+    /// and `set_reference` (cached compute) must stay in matching
+    /// orientation, and `set_reference` is committed to transposed for
+    /// Ssim2Batch compatibility. The h-pass IIR kernel and the
+    /// `blur_plane_two_pass_iir_untransposed` helper exist but aren't
+    /// wired into this path yet — the follow-on migration is to (a)
+    /// port Ssim2Batch to untransposed, then (b) flip this path AND
+    /// set_reference to untransposed simultaneously.
+    ///
+    /// Returns `false` (transposed) for now to signal callers.
+    fn run_blur_full_masked(&self, scale: usize, mode: Ssim2Mode) -> bool {
         let s = &self.scales[scale];
         let n = s.n;
         let w = s.width;
@@ -2404,32 +2534,106 @@ impl<R: Runtime> Ssim2<R> {
             }
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma22_full[ch],
+                &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.sigma11_full[ch],
             );
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.mu2_full[ch],
+                &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.mu1_full[ch],
             );
             self.blur_plane_two_pass(
                 w, h, n,
-                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch], &s.sigma12_full[ch],
+                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.sigma22_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.mu2_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.sigma12_full[ch],
+            );
+        }
+        false
+    }
+
+    /// Run the 3 dist-side blurs only via the LEGACY transposed-output
+    /// path (`v + transpose + v`). Used by `compute_with_reference_with_mode`
+    /// because the ref-side cache is committed to transposed orientation.
+    /// Migrating the cache + Ssim2Batch to untransposed is the obvious
+    /// follow-on — at that point this function becomes dead code and
+    /// the optimised `run_blur_dis_only_masked` becomes the only path.
+    fn run_blur_dis_only_masked_transposed(&self, scale: usize, mode: Ssim2Mode) {
+        let s = &self.scales[scale];
+        let n = s.n;
+        let w = s.width;
+        let h = s.height;
+        for ch in 0..3 {
+            if skip_error_map(mode, scale, ch) {
+                continue;
+            }
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.sigma22_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.mu2_full[ch],
+            );
+            self.blur_plane_two_pass(
+                w, h, n,
+                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                &s.sigma12_full[ch],
             );
         }
     }
 
-    fn run_error_maps_masked(&self, scale: usize, mode: Ssim2Mode) {
+    // `run_blur_dis_only_masked` (the untransposed-output variant) was
+    // landed-and-removed in the 2026-05-27 wiring attempt — when the
+    // cached-ref + Ssim2Batch paths force transposed-orientation cache
+    // (set_reference contract), the untransposed dis-only variant has
+    // no callers. Keeping it around as dead code is misleading. The
+    // h-pass kernel + blur_plane_two_pass_iir_untransposed are
+    // available for the eventual full migration; the wiring landing
+    // is gated on Ssim2Batch's broadcast_batched_kernel being ported
+    // to untransposed orientation. See SSIM2_FIX_ASSESSMENT.md.
+
+    /// Orientation-aware error_maps dispatch. `untransposed_raw` selects
+    /// whether to feed the raw `ref_xyb` / `dis_xyb` directly (true,
+    /// IIR fast path) or the pre-transposed `ref_xyb_t` / `dis_xyb_t`
+    /// (false, FIR fallback). The blurred sigma/mu inputs are taken from
+    /// `*_full` slots regardless — those are written by the same blur
+    /// kernel that produced the orientation in the first place, so
+    /// orientations align.
+    fn run_error_maps_masked_oriented(
+        &self,
+        scale: usize,
+        mode: Ssim2Mode,
+        untransposed_raw: bool,
+    ) {
         let s = &self.scales[scale];
         for ch in 0..3 {
             if skip_error_map(mode, scale, ch) {
                 continue;
             }
+            let (src_h, dis_h) = if untransposed_raw {
+                (s.ref_xyb[ch].clone(), s.dis_xyb[ch].clone())
+            } else {
+                (s.ref_xyb_t[ch].clone(), s.dis_xyb_t[ch].clone())
+            };
             unsafe {
                 error_maps::error_maps_kernel::launch_unchecked::<R>(
                     &self.client,
                     Self::cube_count_1d(s.n),
                     Self::cube_dim_1d(),
-                    ArrayArg::from_raw_parts(s.ref_xyb_t[ch].clone(), s.n),
-                    ArrayArg::from_raw_parts(s.dis_xyb_t[ch].clone(), s.n),
+                    ArrayArg::from_raw_parts(src_h, s.n),
+                    ArrayArg::from_raw_parts(dis_h, s.n),
                     ArrayArg::from_raw_parts(s.mu1_full[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.mu2_full[ch].clone(), s.n),
                     ArrayArg::from_raw_parts(s.sigma11_full[ch].clone(), s.n),
@@ -2441,6 +2645,15 @@ impl<R: Runtime> Ssim2<R> {
                 );
             }
         }
+    }
+
+    /// Legacy non-oriented entry point — defaults to the IIR untransposed
+    /// orientation. Used by `pipeline_batch.rs` and other callers that
+    /// don't track the per-call blur orientation. Such callers are
+    /// expected to run in IIR mode (the default).
+    #[allow(dead_code)]
+    fn run_error_maps_masked(&self, scale: usize, mode: Ssim2Mode) {
+        self.run_error_maps_masked_oriented(scale, mode, true);
     }
 
     fn run_reductions_masked(&self, scale: usize, mode: Ssim2Mode) {
@@ -2495,13 +2708,15 @@ impl<R: Runtime> Ssim2<R> {
         self.run_self_products_masked(scale, true, mode);
         self.run_self_products_masked(scale, false, mode);
         self.run_cross_product_masked(scale, mode);
-        // 3. Blur all 5: sigma11/22/12 + ref_xyb (mu1) + dis_xyb (mu2).
+        // 3. Blur all 5. Stays on the legacy v+t+v path while the
+        //    cached-ref + Ssim2Batch contract for transposed-orientation
+        //    cache holds — see `run_blur_full_masked` docstring.
         self.run_blur_full_masked(scale, mode);
         // 4. Transpose raw XYB so error_maps reads them in the same
-        //    orientation as the (transposed) blurred buffers.
+        //    (transposed) orientation as the blurred buffers.
         self.run_transpose_raw_xyb_pair_masked(scale, true, true, mode);
         // 5. Per-pixel error maps.
-        self.run_error_maps_masked(scale, mode);
+        self.run_error_maps_masked_oriented(scale, mode, false);
         // 6. Reduce to (Σ, Σ⁴) per (channel × map type).
         self.run_reductions_masked(scale, mode);
     }

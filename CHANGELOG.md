@@ -17,6 +17,29 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### ssim2-gpu — refactor: orientation-aware error_maps + IIR untransposed building blocks — 2026-05-27
+
+Adds `Ssim2::blur_plane_two_pass_iir_untransposed` (uses the new
+`blur_h_pass_kernel`, output in untransposed orientation) and a
+`blur_plane_two_pass_untransposed` dispatcher that routes IIR through
+the v+h fast path and falls back to v+t+v for FIR. Adds
+`run_error_maps_masked_oriented(scale, mode, untransposed_raw)` that
+picks the right `ref_xyb` / `ref_xyb_t` reads based on the orientation
+flag.
+
+These land as **`#[allow(dead_code)]` building blocks** — the
+production paths (`process_scale`, `compute_with_reference_with_mode`,
+`process_scale_strip`, `process_scale_strip_cached_ref`) all still use
+the legacy v+t+v transposed-orientation path. The wire-in is blocked
+on the Ssim2Batch migration (porting `error_maps_broadcast_batched_kernel`
+to untransposed orientation). See `docs/SSIM2_FIX_ASSESSMENT.md`
+"Refined commit plan (REVISED 2)" for the full unblock chain.
+
+Tests: all 21 parity_lock + 5 ssim2_skipmap_audit + 2
+reduction_determinism + 14 aliasing_invariants (excluding the
+pre-existing 4096² OOM) pass. Scores bit-identical to pre-fix at
+1024² / 2048² / 4096².
+
 ### ssim2-gpu — perf: add H-pass IIR blur kernel (row-walking) — 2026-05-27
 
 Adds `blur_h_pass_kernel` (row-walking sibling of the column-walking

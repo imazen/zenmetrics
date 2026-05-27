@@ -243,40 +243,98 @@ revised estimate is 2-3 days because of the new IIR kernel + 5-plane
 fusion. The score-parity gate is more demanding: bit-identical IIR
 behavior must be preserved through the new kernel boundary.
 
-### Refined commit plan (REVISED)
+### Refined commit plan (REVISED 2 — post-attempt landing analysis)
 
-The original 4-commit plan above presumed a zensim-verbatim port.
-The revision splits the hard work into smaller chunks because the
-IIR-vs-FIR algorithmic difference forces us to write new kernels
-rather than port:
+The original 4-commit plan presumed a zensim-verbatim port. After
+attempting the wire-in (this session), here's what actually shipped
+and what got blocked.
 
-1. **`perf(ssim2-gpu): port 3-channel-fused downscale`** — DONE
-   (commit `3ac28448`).
-2. **`perf(ssim2-gpu): H-pass IIR kernel (row-walking blur)`** —
-   ~120 LOC new kernel (mirror of `blur_pass_kernel` with X/Y axes
-   swapped). Eliminates the explicit-transpose step in the two-pass
-   blur. Same per-pixel output (separable IIR). Parity gate:
-   `v_pass + transpose + v_pass` ≡ `v_pass + h_pass`.
-3. **`perf(ssim2-gpu): use h_pass to drop the t_scratch family`** —
-   wire #2 into `blur_plane_two_pass_iir`; eliminate the transpose
-   launches AND the `t_scratch` buffer family (3 planes × 6 scales).
-4. **`perf(ssim2-gpu): fused h-pass+features kernel (per-channel)`** —
-   the big one. Reads 5 v-pass outputs (untransposed) per channel +
-   raw ref_xyb / dis_xyb (untransposed). Walks horizontally with
-   5×6=30 floats of IIR state per thread. Emits per-thread
-   (Σ_ssim, Σ_ssim⁴, Σ_art, Σ_art⁴, Σ_det, Σ_det⁴). Drops 5 `_full`
-   plane families + `ssim/artifact/detail` per channel.
-5. **`perf(ssim2-gpu): wire fused kernel through compute path`** —
-   replace the `run_blur_full_masked` + `run_error_maps_masked` +
-   `run_reductions_masked` triplet. Channels processed serially to
-   share the 5 v_bufs. Drop dead Scale fields.
+**Shipped:**
 
-Each commit ships if its parity gate passes. If a commit's gate
-fails and parity can't be restored, honest-stop: document the
-failure mode here and leave the prior commit pushed.
+1. **`perf(ssim2-gpu): port 3-channel-fused downscale`** — commit
+   `3ac28448`. Bit-identical scores; saves 10 launches/call.
+2. **`perf(ssim2-gpu): add H-pass IIR blur kernel`** — commit
+   `d3d1c3ec`. ~120 LOC kernel mirroring `blur_pass_kernel` with
+   X/Y axes swapped. **Parity gate: bit-identical** (max |diff| = 0)
+   vs `v+t+v` at 7 sizes including 4096² — verified by the new
+   `examples/blur_h_pass_parity`. The
+   `blur_plane_two_pass_iir_untransposed` + `blur_plane_two_pass_untransposed`
+   helpers land as `#[allow(dead_code)]` building blocks.
 
-The 1-2 day estimate in the original task brief was based on the
-zensim-verbatim port. The revised work is closer to 2-3 days because
-of the new IIR-row-walker kernel; the dominant risk lives in commit
-#4 (the 5-plane fused kernel with 30-float IIR state). Commits #2
-and #3 are mechanical with low risk.
+**Blocked at wire-in:**
+
+The h-pass kernel is **NOT** wired into the production compute paths
+in this session. The blocker is the shared `_full` plane slots
+(`sigma11_full`, `sigma22_full`, `sigma12_full`, `mu1_full`,
+`mu2_full` per Scale) between three paths that must agree on
+orientation:
+
+- `set_reference` writes the cache (`mu1_full`, `sigma11_full`).
+- `compute_with_reference_with_mode` reads the cache + writes dis-side
+  blurs.
+- `Ssim2Batch::compute_batch` reads the cache + uses its own
+  `error_maps_broadcast_batched_kernel` which is committed to
+  **transposed-orientation** broadcast indexing.
+- `process_scale` (non-cached `compute`) re-writes the cache for the
+  ref-side blurs (because the slots are shared with set_reference's
+  cache). The test `cached_reference_matches_direct_all_modes`
+  guards against the patterns interleaving — if `compute_with_mode`
+  is called between `set_reference` and `compute_with_reference_with_mode`,
+  the cache is clobbered.
+
+If only some of those paths switch to untransposed while others stay
+transposed, the cache is interpreted inconsistently and scores break.
+The whole set must move together. The dependency chain to migrate:
+
+1. Port `error_maps_broadcast_batched_kernel` (in
+   `crates/ssim2-gpu/src/kernels/error_maps.rs`) to untransposed
+   orientation — its broadcast math assumes inner-stride = full_h
+   (transposed). The change: inner-stride = full_w (untransposed),
+   adjust the `idx % plane_stride` / `idx / plane_stride` math.
+   **Estimated ~50 LOC + a fresh batched parity test.**
+2. Port `pipeline_batch.rs::Ssim2Batch::compute_batch` to use the
+   untransposed dispatcher. **Estimated ~80 LOC.**
+3. Flip `set_reference`, `process_scale`, `compute_with_reference_with_mode`
+   to use the untransposed dispatcher. **Estimated ~150 LOC.**
+4. Drop `s.ref_xyb_t`, `s.dis_xyb_t`, `s.t_scratch` from `Scale`
+   (now unused). Drop `cache_s.ref_xyb_t_full` from
+   `StripCachedRefScale`. **Estimated -200 LOC.**
+
+Steps 1+2 are independent of the ssim2 perf-fix work — they're
+isolated changes to the Ssim2Batch infrastructure. Steps 3+4 are
+the actual perf-fix wire-in.
+
+Estimated total: 1-2 more days of work, mostly in step 1's batched
+parity test (which exercises the broadcast math at the edges).
+
+**Strip-mode mode-E** stays on the transposed contract for the
+foreseeable — its `error_maps_strip_from_full_ref_kernel` indexes
+the full ref buffer by `(outer * full_h + inner_full)` which is the
+transposed-orientation walk. Migrating that path is a separate
+refactor (the `inner_offset` math assumes transposed layout).
+
+### Honest-stop notes for this session
+
+What got shipped this session:
+- The 3-channel-fused downscale port (`3ac28448`, perf neutral on VRAM
+  but -10 launches/call).
+- The H-pass IIR kernel + bit-identical parity gate (`d3d1c3ec`).
+- The orientation-aware error_maps + untransposed building-block
+  helpers (this commit). All `#[allow(dead_code)]` until the
+  Ssim2Batch migration lands.
+
+What did NOT ship:
+- The 5-plane fused-features kernel (the original assessment's
+  "Fix #1" — the 3 GB VRAM drop). Requires either: an IIR-respecting
+  per-thread accumulator that maintains 5×6=30 floats of state +
+  reads 7 input planes (5 v-pass outputs + raw ref_xyb + raw dis_xyb),
+  OR the much bigger refactor of running v-pass on all 5 planes
+  serially per channel and then a fused-h-pass+features kernel.
+  Estimated 1-2 days standalone.
+- The h-pass production wire-in. Blocked on Ssim2Batch migration
+  (~1-2 days first).
+
+The user's "1-2 day estimate" in the task brief was based on the
+zensim-verbatim port, which doesn't apply because of the
+IIR-vs-FIR algorithmic difference. Realistic total to land the
+full perf-fix vision: 4-6 days from where the work currently stands.
