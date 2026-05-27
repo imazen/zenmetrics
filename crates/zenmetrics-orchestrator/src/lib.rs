@@ -1006,14 +1006,22 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "bench"))]
     fn bench_report_empty_without_feature() {
-        // Without the `bench` feature, BenchPlan + run still exist —
-        // run returns an empty report. This keeps the public API
-        // stable regardless of feature mix.
+        // Without the `bench` feature, run() returns an empty report —
+        // this keeps the public API stable across feature mixes.
+        // Gated to default builds because under `--features bench` this
+        // would actually run the full 30-cell bench (>>60s).
         let plan = BenchPlan::default();
         let report = bench::run(&plan);
-        // Either zero metrics (bench feature off) OR populated (on).
-        // We only assert structural shape, not contents.
-        let _ = report.metrics.len();
+        assert!(report.metrics.is_empty());
+    }
+
+    #[test]
+    fn bench_plan_default_round_trip_stable() {
+        // Smoke check that BenchPlan::default() compiles and the
+        // public field shape is what callers expect.
+        let p = BenchPlan::default();
+        assert_eq!(p.sizes, vec![1024u32, 2048, 4096]);
     }
 }

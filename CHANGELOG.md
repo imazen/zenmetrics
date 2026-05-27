@@ -32,6 +32,37 @@ Workspace conventions per the global rules:
   No scheduling, no benchmark runner, no worker pool — those come
   in later phases. See `crates/zenmetrics-api/docs/ORCHESTRATOR_DESIGN.md`.
 
+- `zenmetrics-orchestrator` Phase 2 — quick-bench harness behind a new
+  `bench` cargo feature. `Orchestrator::bench()` (unconditional re-run)
+  and `Orchestrator::warm()` (cache-aware) populate
+  `capability.metrics` with `(metric, backend, size_pixels)`
+  measurements: wall-time p50 in ns/px + peak VRAM in MiB, sampled
+  via a background nvidia-smi thread during the compute loop.
+  New types: `Backend` (`GpuFull`/`GpuStrip`/`GpuStripPair`/`Cpu`),
+  `BackendBench`, `BackendVram`, plus the populated `MetricProfile`
+  with `BTreeMap<u64, _>` keyed on `width × height`. Embedded
+  `synth_pair_offset_dist(w, h)` matches the per-crate test helper
+  bit-identically so no external corpus is needed. TOML round-trip
+  via `u64_keyed_map_{bench,vram}` serde helpers. `BenchPlan` knobs:
+  sizes (default `[1024, 2048, 4096]`), warmup/timed iter counts,
+  soft per-cell timeout (default 5s), VRAM sample interval (10 ms).
+  Cells iterate sizes descending so the cubecl pool grows to its
+  max early. Cells that surface OOM at construction or runtime are
+  recorded in `MetricProfile::cells_failed_oom` for Phase 3's chooser.
+  Total bench runtime on RTX 5070 + 7950X: ≈ 56-60 s cold cache.
+  In-process measurement keeps cubecl pool reuse visible — the
+  orchestrator schedules in-process so the cumulative-pool numbers
+  are more representative than subprocess-isolated audit values.
+
+- `zenmetrics-orchestrator::detect_wsl2_host_ram_mib_hint` — detects
+  WSL2 via `/proc/version` and surfaces a hint so callers can
+  interpret `ram_mib` correctly (WSL2 caps RAM at `.wslconfig:memory=`,
+  which on the 7950X workstation is 50 GB / 50185 MiB out of 128 GB
+  physical). Phase 1's `ram_mib = 50185` value is the actual Linux-
+  kernel-visible total and remains the correct scheduling input —
+  surfacing 128 GB would lie about what the orchestrator can
+  allocate.
+
 - `zen-cloud-core::r2creds` — shared, provider-agnostic Cloudflare R2
   scoped-credential minter. `mint_scoped_r2_cred(...)` hits the verified
   account-level `temp-access-credentials` endpoint; `Permission` enum

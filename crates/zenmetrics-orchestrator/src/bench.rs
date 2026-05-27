@@ -33,6 +33,10 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 #[cfg(feature = "bench")]
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(feature = "bench")]
+use std::sync::Arc;
+#[cfg(feature = "bench")]
 use std::time::{Instant, SystemTime};
 
 #[cfg(feature = "bench")]
@@ -70,7 +74,11 @@ impl Default for BenchPlan {
             warmup_iters: 2,
             timed_iters: 5,
             soft_timeout_per_cell: Duration::from_secs(5),
-            vram_sample_interval: Duration::from_millis(25),
+            // 10 ms — fast enough to catch the steady-state peak even
+            // on small-image cells where total GPU time per call is
+            // ~5 ms × 5 iters = 25 ms. 25 ms sampling missed most
+            // small-cell peaks.
+            vram_sample_interval: Duration::from_millis(10),
         }
     }
 }
@@ -190,20 +198,21 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
         let mut profile = MetricProfile::default();
 
         for &backend in backends_for_kind(kind) {
-            let mut backend_timed_out_at: Option<u32> = None;
-            for &size in &plan.sizes {
-                if let Some(prev) = backend_timed_out_at {
-                    if size > prev {
-                        // Already hit the soft timeout at a smaller
-                        // size — record this cell as OOM (treated by
-                        // Phase 3 as "do not try").
-                        profile
-                            .cells_failed_oom
-                            .push((backend, (size as u64) * (size as u64)));
-                        continue;
-                    }
-                }
-
+            // Iterate sizes descending — largest first. This way the
+            // cubecl pool grows to its max early; subsequent smaller-
+            // size cells slot into existing free blocks instead of
+            // triggering page allocations that might trip into OOM
+            // mid-bench. Important for in-process bench accuracy where
+            // the pool is shared across metric instances.
+            let mut sizes_desc: Vec<u32> = plan.sizes.clone();
+            sizes_desc.sort();
+            sizes_desc.reverse();
+            // With descending iteration, a soft-timeout at the largest
+            // size means smaller sizes might still finish under the
+            // budget — keep trying them. (The reverse — timeout at
+            // small size aborting larger — would never apply since
+            // we visit large first.)
+            for &size in &sizes_desc {
                 let cell = measure_cell(kind, backend, size, plan);
                 let size_px = (size as u64) * (size as u64);
                 match cell {
@@ -225,7 +234,6 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
                     CellOutcome::TimedOut => {
                         report.timed_out_cells.push((tag.clone(), backend, size));
                         profile.cells_failed_oom.push((backend, size_px));
-                        backend_timed_out_at = Some(size);
                     }
                     CellOutcome::SkippedNoBackend | CellOutcome::SkippedNoMetric => {
                         // Backend / metric not enabled by features. Do
@@ -258,6 +266,16 @@ enum CellOutcome {
 /// Construct + warmup + time + drop one cell. Errors are translated
 /// into structured outcomes so the parent sweep can decide whether to
 /// keep going at this size or skip ahead.
+///
+/// VRAM sampling runs on a background thread that polls
+/// `nvidia-smi --query-gpu=memory.used` at `plan.vram_sample_interval`
+/// throughout the construct + warmup + timed phases. The parent thread
+/// reads the atomic-tracked peak after the timed loop completes and
+/// signals the sampler to exit. Sampling-during-compute is the only
+/// way to catch the peak: `compute_srgb_u8` is host-side synchronous
+/// (waits for the GPU to finish), so by the time it returns cubecl
+/// has already released per-call scratch buffers back into the pool —
+/// the peak is invisible to post-call sampling.
 #[cfg(feature = "bench")]
 fn measure_cell(
     kind: MetricKind,
@@ -272,47 +290,100 @@ fn measure_cell(
     // this baseline during the timed loop — that gives the marginal
     // VRAM cost of this cell, which is the meaningful number for
     // scheduling. Absolute used-MiB is dominated by the cubecl pool
-    // (~4.5 GB on a 12 GB card) and isn't what Phase 3 needs to know.
+    // (which retains allocations across metric instances within one
+    // process) and isn't what Phase 3 needs to know.
     let baseline_mib = nvidia_smi_used_mib().unwrap_or(0);
+
+    // -------- Background VRAM sampler --------
+    let peak_mib = Arc::new(AtomicUsize::new(baseline_mib));
+    let stop = Arc::new(AtomicBool::new(false));
+    let sampler_peak = Arc::clone(&peak_mib);
+    let sampler_stop = Arc::clone(&stop);
+    let sample_interval = plan.vram_sample_interval;
+    let sampler = std::thread::spawn(move || {
+        while !sampler_stop.load(Ordering::Relaxed) {
+            if let Some(v) = nvidia_smi_used_mib() {
+                let prev = sampler_peak.load(Ordering::Relaxed);
+                if v > prev {
+                    sampler_peak.store(v, Ordering::Relaxed);
+                }
+            }
+            std::thread::sleep(sample_interval);
+        }
+    });
+
+    let finalize = |outcome: CellOutcome,
+                    stop: Arc<AtomicBool>,
+                    sampler: std::thread::JoinHandle<()>,
+                    peak: Arc<AtomicUsize>,
+                    baseline: usize|
+     -> CellOutcome {
+        stop.store(true, Ordering::Relaxed);
+        let _ = sampler.join();
+        match outcome {
+            CellOutcome::Ok { ns_per_px, .. } => {
+                let p = peak.load(Ordering::Relaxed);
+                CellOutcome::Ok {
+                    ns_per_px,
+                    vram_mib: p.saturating_sub(baseline),
+                }
+            }
+            other => other,
+        }
+    };
 
     // -------- Construct --------
     let mut metric = match construct_metric(kind, backend, size, size) {
         ConstructOutcome::Ok(m) => m,
-        ConstructOutcome::Oom => return CellOutcome::Oom,
-        ConstructOutcome::NoBackend => return CellOutcome::SkippedNoBackend,
-        ConstructOutcome::NoMetric => return CellOutcome::SkippedNoMetric,
-        ConstructOutcome::OtherErr(_msg) => return CellOutcome::Oom,
+        ConstructOutcome::Oom => {
+            return finalize(CellOutcome::Oom, stop, sampler, peak_mib, baseline_mib);
+        }
+        ConstructOutcome::NoBackend => {
+            return finalize(
+                CellOutcome::SkippedNoBackend,
+                stop,
+                sampler,
+                peak_mib,
+                baseline_mib,
+            );
+        }
+        ConstructOutcome::NoMetric => {
+            return finalize(
+                CellOutcome::SkippedNoMetric,
+                stop,
+                sampler,
+                peak_mib,
+                baseline_mib,
+            );
+        }
+        ConstructOutcome::OtherErr(_msg) => {
+            return finalize(CellOutcome::Oom, stop, sampler, peak_mib, baseline_mib);
+        }
     };
 
     // -------- Warmup --------
     for _ in 0..plan.warmup_iters {
-        match metric.compute(&r, &d) {
-            Ok(()) => {}
-            Err(CallErr::Oom) => return CellOutcome::Oom,
-            Err(CallErr::Other(_)) => return CellOutcome::Oom,
+        if let Err(_e) = metric.compute(&r, &d) {
+            return finalize(CellOutcome::Oom, stop, sampler, peak_mib, baseline_mib);
+        }
+        if cell_start.elapsed() > plan.soft_timeout_per_cell {
+            return finalize(CellOutcome::TimedOut, stop, sampler, peak_mib, baseline_mib);
         }
     }
 
-    // -------- Timed (with VRAM sampling interleaved) --------
-    let mut peak_mib = baseline_mib;
+    // -------- Timed --------
     let mut durations: Vec<Duration> = Vec::with_capacity(plan.timed_iters);
     for _ in 0..plan.timed_iters {
         let t0 = Instant::now();
         match metric.compute(&r, &d) {
             Ok(()) => durations.push(t0.elapsed()),
-            Err(CallErr::Oom) | Err(CallErr::Other(_)) => return CellOutcome::Oom,
-        }
-        // Sample after each timed call — captures the steady-state
-        // peak without dragging GPU time into the timer.
-        if let Some(v) = nvidia_smi_used_mib() {
-            if v > peak_mib {
-                peak_mib = v;
+            Err(_) => {
+                return finalize(CellOutcome::Oom, stop, sampler, peak_mib, baseline_mib);
             }
         }
         if cell_start.elapsed() > plan.soft_timeout_per_cell {
-            return CellOutcome::TimedOut;
+            return finalize(CellOutcome::TimedOut, stop, sampler, peak_mib, baseline_mib);
         }
-        std::thread::sleep(plan.vram_sample_interval);
     }
 
     // Median (p50) duration in ns / pixels.
@@ -320,16 +391,21 @@ fn measure_cell(
     let p50 = median_duration(&mut durations);
     let ns_per_px = (p50.as_nanos() as f64) / (pixels as f64);
 
-    // Drop the metric instance — cubecl's pool keeps the buffers, but
-    // the dispatcher's per-call working set returns immediately.
+    // Drop the metric instance BEFORE stopping the sampler — gives the
+    // sampler one last chance to catch any post-drop pool shrink (rare
+    // but happens on big allocs).
     drop(metric);
 
-    let vram_delta_mib = peak_mib.saturating_sub(baseline_mib);
-
-    CellOutcome::Ok {
-        ns_per_px,
-        vram_mib: vram_delta_mib,
-    }
+    finalize(
+        CellOutcome::Ok {
+            ns_per_px,
+            vram_mib: 0, // overwritten in finalize from atomic peak.
+        },
+        stop,
+        sampler,
+        peak_mib,
+        baseline_mib,
+    )
 }
 
 #[allow(dead_code)]
