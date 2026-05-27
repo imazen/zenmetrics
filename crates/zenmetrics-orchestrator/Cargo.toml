@@ -89,3 +89,27 @@ required-features = ["bench"]
 name = "chooser"
 path = "tests/chooser.rs"
 required-features = ["bench"]
+
+# Phase 4 executor integration tests. Requires `cuda` (which implies
+# `bench`) because the executor module is gated on both. The real-GPU
+# tests inside the file are individually `#[ignore]`d; the rest of the
+# suite exercises chooser + cache-persistence paths without touching
+# the device. **Build note (2026-05-27):** in a jj sibling workspace
+# (`zenmetrics--*`) cargo discovers TWO `butteraugli-gpu` packages via
+# jxl-encoder's hardcoded `../zenmetrics/crates/butteraugli-gpu` path,
+# producing a lockfile collision. Build/run these tests from the
+# primary `zenmetrics/` checkout instead — that's also how the Phase 3
+# `chooser` tests are run.
+[[test]]
+name = "executor"
+path = "tests/executor.rs"
+required-features = ["cuda"]
+
+# Phase 4 single-task executor example. Drives `Orchestrator::run_single`
+# end-to-end against a real CUDA device — useful for manual smoke tests
+# and the brief's "produce a sensible Score" acceptance gate. Same
+# sibling-workspace caveat as the `executor` test above.
+[[example]]
+name = "run_single"
+path = "examples/run_single.rs"
+required-features = ["cuda"]
