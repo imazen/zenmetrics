@@ -31,11 +31,18 @@
 //! of one per group. The 4-5 min/chunk wall time is dominated by
 //! cubecl init overhead × 30 groups; phase B should drop it ~2x.
 
-use std::process::Stdio;
 use std::time::Instant;
+// The bash-subprocess execute path (and the `Stdio` / `Command` / `anyhow!`
+// items it alone uses) only compiles when `inline-sweep` is OFF — the inline
+// Rust pipeline is the sole execute path otherwise, so these would be unused.
+#[cfg(not(feature = "inline-sweep"))]
+use std::process::Stdio;
 
-use anyhow::{Context, Result, anyhow};
+#[cfg(not(feature = "inline-sweep"))]
+use anyhow::anyhow;
+use anyhow::{Context, Result};
 use serde::Deserialize;
+#[cfg(not(feature = "inline-sweep"))]
 use tokio::process::Command;
 use tracing::{info, warn};
 
@@ -59,9 +66,13 @@ pub fn parse_chunk_json(line: &str) -> Result<ChunkRecord> {
     serde_json::from_str(line).context("parse chunk JSON")
 }
 
-/// Process one chunk: claim it, shell out to the bash worker, log.
-/// Never returns an error that should kill the dispatcher — chunk
-/// failures are logged + counted; the next chunk proceeds.
+/// Process one chunk: claim it, run the execute path, log. With
+/// `inline-sweep` (the default + production build) the execute path is the
+/// in-process Rust pipeline ([`super::inline::process_chunk_inline`]); a
+/// failure there fails honestly (its durable error sidecar is already in R2).
+/// Without `inline-sweep` the execute path is the bash subprocess
+/// ([`run_chunk_via_bash`]). The caller in [`super`] logs + counts the
+/// returned error without killing the dispatcher; the next chunk proceeds.
 pub async fn process_chunk(
     args: &WorkerArgs,
     worker_id: &str,
@@ -115,17 +126,22 @@ pub async fn process_chunk(
     //     variants and computes zensim features without re-encoding.
     //   - `omni` (default) runs the full encode+score+upload pipeline.
     let started = Instant::now();
+
+    // With `inline-sweep` (default + production), the in-process Rust pipeline
+    // is the sole execute path. Each mode returns its own result; an inline
+    // failure FAILS HONESTLY (see the omni `Err` arm below) — there is no bash
+    // fallback. The bash subprocess is gated out of this build entirely.
     #[cfg(feature = "inline-sweep")]
     {
         if args.mode == "feature-backfill" {
-            match super::backfill_features_for_chunk(args, r2, line).await {
+            return match super::backfill_features_for_chunk(args, r2, line).await {
                 Ok(()) => {
                     info!(
                         chunk_id = %rec.chunk_id,
                         elapsed_sec = started.elapsed().as_secs_f32(),
                         "done (feature-backfill)"
                     );
-                    return Ok(());
+                    Ok(())
                 }
                 Err(e) => {
                     warn!(
@@ -133,20 +149,20 @@ pub async fn process_chunk(
                         error = %e,
                         "feature-backfill failed"
                     );
-                    return Err(e);
+                    Err(e)
                 }
-            }
+            };
         }
         #[cfg(feature = "source-features")]
         if args.mode == "source-features" {
-            match super::backfill_source_features_for_chunk(args, r2, line).await {
+            return match super::backfill_source_features_for_chunk(args, r2, line).await {
                 Ok(()) => {
                     info!(
                         chunk_id = %rec.chunk_id,
                         elapsed_sec = started.elapsed().as_secs_f32(),
                         "done (source-features)"
                     );
-                    return Ok(());
+                    Ok(())
                 }
                 Err(e) => {
                     warn!(
@@ -154,29 +170,59 @@ pub async fn process_chunk(
                         error = %e,
                         "source-features failed"
                     );
-                    return Err(e);
+                    Err(e)
                 }
-            }
+            };
         }
-        match super::inline::process_chunk_inline(args, r2, line).await {
+        return match super::inline::process_chunk_inline(args, r2, line).await {
             Ok(()) => {
                 info!(
                     chunk_id = %rec.chunk_id,
                     elapsed_sec = started.elapsed().as_secs_f32(),
                     "done (inline)"
                 );
-                return Ok(());
+                Ok(())
             }
             Err(e) => {
+                // FAIL HONESTLY — do NOT fall back to the bash subprocess.
+                // `process_chunk_inline` has ALREADY uploaded a durable
+                // Failed→R2 marker for this chunk; the claim/atomic-sidecar
+                // discipline lets a peer retry the (still-not-marked-done)
+                // chunk later. Re-running it through the deprecated bash
+                // worker would be a DIVERGENT code path (W44 incident: it
+                // discards encoded bytes, keeping only `len() as u32`). A bash
+                // "success" after an inline failure would then leave a
+                // Failed→R2 error marker AND a contradictory omni sidecar
+                // produced by the wrong pipeline. Match the `feature-backfill`
+                // / `source-features` arms above and surface the real error.
                 warn!(
                     chunk_id = %rec.chunk_id,
                     error = %e,
-                    "inline pipeline failed; falling back to bash subprocess"
+                    "inline pipeline failed"
                 );
-                // Fall through to bash subprocess as a safety net.
+                Err(e)
             }
-        }
+        };
     }
+
+    // The bash subprocess is the execute path ONLY when `inline-sweep` is NOT
+    // compiled in — there it is the sole pipeline by design.
+    #[cfg(not(feature = "inline-sweep"))]
+    run_chunk_via_bash(args, &rec, line, started).await
+}
+
+/// Phase A bash-subprocess execute path: shells out to
+/// `omni_backfill_chunk_worker.sh --chunk-json <line>` and propagates the exit
+/// status. This is the SOLE execute path when the crate is built WITHOUT the
+/// `inline-sweep` feature; the inline Rust pipeline supersedes it in the
+/// default (and production) build.
+#[cfg(not(feature = "inline-sweep"))]
+async fn run_chunk_via_bash(
+    args: &WorkerArgs,
+    rec: &ChunkRecord,
+    line: &str,
+    started: Instant,
+) -> Result<()> {
     let mut cmd = Command::new(&args.chunk_worker_bin);
     cmd.arg("--chunk-json").arg(line);
     // Pass through env vars the bash worker reads. We don't override

@@ -19,6 +19,21 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- `zen-cloud-vastai` sweep worker no longer silently falls back to the
+  deprecated bash subprocess when the inline Rust pipeline fails. With
+  `inline-sweep` (the default + production build) a failed `omni` chunk
+  now fails honestly and surfaces the real error, matching the
+  `feature-backfill` / `source-features` arms. The old fall-through
+  re-ran the failed chunk through `omni_backfill_chunk_worker.sh` (the
+  W44 path that discards encoded bytes, keeping only `len() as u32`)
+  AFTER `process_chunk_inline` had already uploaded a durable Failed→R2
+  marker — producing contradictory state (an error marker plus a
+  bash-success sidecar from a divergent code path; per the
+  "two code paths, different output → bug" rule). The bash subprocess is
+  now extracted into `run_chunk_via_bash`, compiled only when
+  `inline-sweep` is OFF, where it remains the sole execute path
+  (unchanged) (4581f017).
+
 - CI was failing on every platform with `failed to read coefficient/Cargo.toml`
   because the `coefficient` dev-dep on `ssim2-gpu` (used only by an
   `#[ignore]`d cross-backend parity test) had a relative path that
