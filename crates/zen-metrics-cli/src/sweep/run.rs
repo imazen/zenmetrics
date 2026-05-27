@@ -400,8 +400,18 @@ pub fn run_sweep(
             feature = "gpu-cvvdp"
         ))]
         if src_idx > 0 && cleanup_between_sources {
-            let mut cache = MetricCache::lock_global(cfg.gpu_runtime);
-            let _ = cache.cleanup_all();
+            // Skip the MetricCache flush when the orchestrator drives
+            // scoring — MetricCache isn't touched in that mode, so
+            // nothing to flush. Touching it here would just wake up
+            // the OnceLock for nothing.
+            #[cfg(feature = "orchestrator")]
+            let skip_cache = orch.is_some();
+            #[cfg(not(feature = "orchestrator"))]
+            let skip_cache = false;
+            if !skip_cache {
+                let mut cache = MetricCache::lock_global(cfg.gpu_runtime);
+                let _ = cache.cleanup_all();
+            }
         }
         // Decode the source once per image so we don't re-PNG-decode for
         // every cell. The bytes are freed when we move to the next image
