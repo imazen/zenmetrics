@@ -50,7 +50,8 @@ zen-cloud-core    (pure traits + types; NO gpu / cloud / parquet deps)
    │   generic job-loop runner: claim → fetch → compute → upload → refresh
    │
    ▼   provider impls (each its own crate, each implements the core traits):
-zen-cloud-vastai  · vast.ai API + /proc/1/environ + Cloudflare R2
+zen-cloud-vastai  · vast.ai API + /proc/1/environ + Cloudflare R2   (pull / BYO-queue)
+zen-cloud-salad   · SaladCloud API + IMDS + managed Job Queue + R2/S3 (push / managed-queue)
 zen-cloud-gcp     · GCP Batch + GCS                (from coefficient/gcp.rs)
 zen-cloud-do      · DigitalOcean + Spaces          (from coefficient/digitalocean.rs)
 zen-cloud-local   · localhost + filesystem + sqlite queue (dev / Tower NAS)
@@ -189,14 +190,30 @@ train, IQA panel batch) — everything around it is shared.
   fix them HERE — cheaply, before more providers. Add a local-backend
   integration test to CI (no cloud spend).
 
-**Phase C — extract coefficient's providers.**
+**Phase C — SaladCloud provider `zen-cloud-salad` (USER PRIORITY — the
+vast.ai alternative; full design in § 1.9).**
+- New `zen-cloud-salad` crate implementing the core traits for
+  SaladCloud. This is the user's primary second provider, prioritised
+  AHEAD of the coefficient gcp/do extraction (which is legacy cleanup).
+- Worker side: bake the multi-arch Go `salad-cloud-job-queue-worker`
+  sidecar into the image; `zen-cloud-salad`'s `JobQueue` impl speaks the
+  sidecar's local gRPC contract (blocking receive in `next_chunk()`),
+  `CredentialSource`/`WorkerHost` read the Salad IMDS, `BlobStorage`
+  reuses the R2/S3 impl shared with vast.
+- Launcher side: `zen-fleet-launch` gains a Salad provider — create
+  container group via the public API, attach a managed queue, set GPU
+  class + replica count, push jobs to the Salad queue.
+- Acceptance gate: a 1-replica Salad container-group smoke sweep
+  produces the same artifacts as the vast.ai path on the same chunks.
+
+**Phase D — extract coefficient's providers.**
 - `zen-cloud-gcp` (from `coefficient/gcp.rs` + GCS) and `zen-cloud-do`
   (from `coefficient/digitalocean.rs` + Spaces). coefficient becomes a
   thin `zen-fleet-launch` wrapper that adds provisioning for those
   providers on top of the shared worker. Cross-repo GPU-parity check
   (CubeCL vs cudarse) lands here as the one missing conformance test.
 
-**Phase D — adopt everywhere, delete the forks.**
+**Phase E — adopt everywhere, delete the forks.**
 - `jxl-encoder/zenjxl-tuning-sweep`, per-codec picker-training sweeps,
   and V_X bake sweeps all switch to `zen-sweep-worker` + a per-sweep
   `compute` closure instead of forking the bash.
@@ -210,6 +227,90 @@ The launcher does NOT get unified — provisioning a vast.ai box vs a GCP
 Batch node vs a k8s pod is structurally different and stays per-provider
 in `zen-fleet-launch`. Accepted: the launcher is the operator's
 workstation tool, not the hot path. The worker being generic is the win.
+
+### 1.9 SaladCloud provider (`zen-cloud-salad`) — full design
+
+Added 2026-05-26 on user request ("add salad.com as a vast.ai
+alternative"). SaladCloud runs containers on distributed consumer GPUs
+at low $/hr — a strong commodity-GPU alternative to vast.ai. It is the
+first real exercise of the "add a provider" path, and it validates the
+push-vs-pull `JobQueue` abstraction.
+
+**The architectural wrinkle: Salad's queue is MANAGED + PUSH.** vast.ai
+is bring-your-own-queue + pull (the worker claims chunks from R2 via
+atomic If-Match ETag writes). SaladCloud provides a *managed* Job Queue
+plus a multi-arch Go sidecar binary (`salad-cloud-job-queue-worker`,
+Apache-2.0, github.com/SaladTechnologies/salad-cloud-job-queue-worker)
+that runs INSIDE your container, receives jobs from the queue, and
+forwards them to your application over local gRPC. This is exactly the
+divergence `JobQueue::next_chunk()` was designed to hide:
+
+| | vast.ai | SaladCloud |
+|---|---|---|
+| queue ownership | BYO (we use R2) | managed by Salad |
+| distribution model | pull (worker claims) | push (sidecar → app gRPC) |
+| `next_chunk()` impl | atomic R2 ETag claim | blocking recv on sidecar gRPC |
+| object storage | Cloudflare R2 | BYO R2/S3 (Salad has none) |
+| worker identity | `/proc/1/environ` | Salad IMDS |
+| credential source | vast env injection | IMDS + container-group env |
+
+**Worker-side integration (`zen-cloud-salad`, Phase 1 = pragmatic):**
+1. Bake the Go `salad-cloud-job-queue-worker` sidecar into the
+   `zen-sweep-worker` docker image (tiny multi-arch Go binary; per the
+   BAKE-EVERYTHING rule, no boot-time fetch). It is the queue→app bridge.
+2. `JobQueue` impl: `next_chunk()` blocks reading the next job off the
+   sidecar's local gRPC stream; `ack_chunk()` returns the result to the
+   sidecar, which returns it to the managed queue. (The sidecar speaks
+   protobuf/gRPC — its `.proto` is in the upstream repo; we generate a
+   thin Rust gRPC client with `tonic`, OR run the sidecar as the gRPC
+   *server* and zen-sweep-worker as the client per the sample's pattern.)
+3. `CredentialSource` + `WorkerHost`: read the Salad IMDS (instance
+   metadata service auto-discovered on a Salad node — `SALAD_MACHINE_ID`,
+   container-group id, GPU info) plus any env vars set in the container
+   group definition.
+4. `BlobStorage`: reuse the shared R2/S3 impl (factor it out of
+   `zen-cloud-vastai` into a `zen-cloud-s3` helper both depend on, OR
+   keep an S3 impl in `zen-cloud-core` behind a feature — decide during
+   Phase C; do not duplicate the R2 client).
+5. `Heartbeat`: Salad manages instance liveness natively and the sidecar
+   handles per-job acks, so the Salad `Heartbeat` impl is largely a
+   no-op / thin status-report. Don't reimplement vast's R2-heartbeat.
+
+**Phase 2 (future optimization, NOT Phase C):** reimplement the sidecar
+protocol natively in Rust (talk to Salad's queue + IMDS directly,
+dropping the Go sidecar). Only worth it if the sidecar proves a
+reliability or packaging burden — the bake-the-Go-binary path ships
+faster and reuses Salad's supported, tested bridge.
+
+**Launcher-side (`zen-fleet-launch` Salad provider):**
+- Auth: `Salad-Api-Key: <key>` header. Key from the portal
+  (portal.salad.com → API Keys); store in `~/.config/salad/credentials`
+  mirroring the R2 creds convention.
+- Provision: `POST https://api.salad.com/api/public/organizations/
+  {org}/projects/{project}/containers` — body sets the image, replica
+  count, GPU class id (GET the class list first to resolve the id),
+  vCPU/RAM, container-registry auth, env vars, and the attached job
+  queue. There is NO Rust SDK (Salad ships Python/Go/Java/JS/.NET only),
+  so hand-roll the REST calls with `reqwest` + serde, or generate a
+  thin client from Salad's OpenAPI spec (in salad-cloud-docs repo).
+- Job submission: push chunk descriptors into the Salad managed queue
+  via the queue API; Salad fans them out to the sidecars.
+- Monitor / scale: poll container-group + instance status; adjust
+  replica count.
+
+**Local-testing caveat:** the Salad sidecar "only runs on a SaladCloud
+node" (IMDS dependency) — so the Salad path canNOT be exercised by
+`zen-cloud-local` the way other backends can. Phase C's smoke test must
+run on a real 1-replica Salad container group. Salad has stated a
+local-test tool is planned; until then, the `compute` closure itself is
+backend-agnostic and IS covered by the `zen-cloud-local` integration
+test (Phase B), so only the thin Salad `JobQueue`/`CredentialSource`
+glue is Salad-node-only.
+
+**Why prioritised ahead of gcp/do:** the user actively wants Salad as a
+running vast.ai alternative (cheap commodity GPUs, same workload class).
+gcp/do are coefficient-legacy cleanup with no active demand. Salad is
+Phase C; gcp/do drop to Phase D.
 
 ---
 
@@ -348,6 +449,7 @@ thin, frequently-touched index, not a deep doc.
 | `zenstats` | zenmetrics workspace | landed 36d71ca3; self-contained member |
 | `zen-cloud-core` | zenmetrics workspace | self-contained, zero gpu deps |
 | `zen-cloud-vastai` | zenmetrics workspace | renamed from vastai-fleet |
+| `zen-cloud-salad` | zenmetrics workspace | SaladCloud (managed queue + IMDS), user-priority alt |
 | `zen-cloud-local` | zenmetrics workspace | dev/Tower backend |
 | `zen-cloud-gcp` / `-do` | zenmetrics workspace | from coefficient |
 | `zen-sweep-worker` | zenmetrics workspace | the deployed binary |
@@ -355,9 +457,10 @@ thin, frequently-touched index, not a deep doc.
 | `zenpicker-train` | zenanalyze workspace | next to zenpicker |
 | `ARCHITECTURE.md` | new `imazen/zen-workspace` | workspace-wide map |
 
-coefficient depends on `zen-cloud-{core,vastai,gcp,do}`; jxl-encoder +
-zensim picker training depend on `zen-sweep-worker`. No dependency cycle:
-the `zen-cloud-*` crates have zero `zenmetrics-root` deps.
+coefficient depends on `zen-cloud-{core,vastai,salad,gcp,do}`;
+jxl-encoder + zensim picker training depend on `zen-sweep-worker`. No
+dependency cycle: the `zen-cloud-*` crates have zero `zenmetrics-root`
+deps.
 
 ---
 
@@ -365,15 +468,19 @@ the `zen-cloud-*` crates have zero `zenmetrics-root` deps.
 
 | Phase | Repo | Independent? | Status |
 |---|---|---|---|
-| §1 Phase A — cloud carve | zenmetrics | foundational | **DISPATCHED** |
+| §1 Phase A — cloud carve | zenmetrics | foundational | **IN FLIGHT** (zen-cloud-core landed de66b1b0) |
 | §1 Phase B — local backend | zenmetrics | after A | queued |
-| §1 Phase C — gcp/do extract | zenmetrics + coefficient | after B | queued |
-| §1 Phase D — adopt + delete forks | all | after C | queued |
+| §1 Phase C — **SaladCloud** `zen-cloud-salad` | zenmetrics | after A (user priority) | queued |
+| §1 Phase D — gcp/do extract | zenmetrics + coefficient | after B | queued |
+| §1 Phase E — adopt + delete forks | all | after C/D | queued |
 | §2 stats finish + publish | zensim + coefficient | independent | queued |
 | §3 TOML-driven trainer | zensim | independent of cloud | queued |
 | §4 zenpicker-train | zenanalyze | needs §2 (zenstats) + §3 pattern | queued |
 | §5 ARCHITECTURE.md | new repo | independent | queued |
 
-Phase A lands first because §1 B/C/D depend on the trait abstraction it
-introduces, and §4 reuses the same `compute`-closure worker shape. §2,
+Phase A lands first because the rest of §1 depends on the trait
+abstraction it introduces, and §4 reuses the same `compute`-closure
+worker shape. Salad (Phase C) needs only the trait layer (Phase A), NOT
+the local backend (Phase B) — so it can start the moment A lands, in
+parallel with B. §2,
 §3, §5 are independent and can run in parallel as capacity allows.
