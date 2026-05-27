@@ -100,6 +100,33 @@ Workspace conventions per the global rules:
   itself is feature-gated on `bench` because it references
   `MetricKind` from `zenmetrics-api` (4228a168).
 
+- `zenmetrics-orchestrator` Phase 4 — single-task executor with OOM
+  recovery (`Orchestrator::run_single(Task) -> TaskResult`). Asks
+  the Phase 3 chooser for a primary backend, constructs the metric
+  via the umbrella `zenmetrics-api::Metric::new_with_memory_mode`,
+  runs `compute_srgb_u8`, and recovers from OOM at either
+  construction or runtime by walking the fallback ladder
+  `GpuFull → GpuStrip → GpuStripPair → Cpu → FullyExhausted`. Each
+  OOM observation appends `(backend, size_pixels)` to
+  `cells_failed_oom` AND persists the cache to disk immediately so
+  the learning survives a process crash mid-task. Non-OOM errors
+  surface as `MetricApi(...)` without retry. New public types:
+  `Task`, `TaskData`, `TaskResult`, `AttemptOutcome`,
+  `executor::OrchestratorError` (re-exported as `ExecutorError`).
+  Behind the new `cuda` feature (implies `bench`); Phase 5 widens
+  to wgpu/hip. Synthetic-profile integration tests in
+  `tests/executor.rs` cover the ladder shape, cache persistence,
+  path-task-data rejection, and force-exhaust paths without
+  touching GPU hardware; the two GPU-only tests are `#[ignore]`d.
+  CLI example `examples/run_single.rs` drives the executor end-
+  to-end with optional `ZM_FORCE_OOM_FULL=1` to demonstrate the
+  fallback. Tests + example land in source for execution from the
+  primary `zenmetrics/` checkout — jj sibling-workspace cargo
+  builds fail with a pre-existing cross-workspace path collision
+  for `butteraugli-gpu` (same constraint blocks Phase 3's
+  `chooser` tests). Two commits: feat 86c84ee2 (executor module)
+  + test 4da664c3 (integration tests + example).
+
 - `zenmetrics-orchestrator::detect_wsl2_host_ram_mib_hint` — detects
   WSL2 via `/proc/version` and surfaces a hint so callers can
   interpret `ram_mib` correctly (WSL2 caps RAM at `.wslconfig:memory=`,
