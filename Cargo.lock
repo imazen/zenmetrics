@@ -6894,18 +6894,25 @@ version = "0.1.0"
 name = "zenmetrics-orchestrator"
 version = "0.0.1"
 dependencies = [
+ "butteraugli",
+ "cvvdp-cpu",
  "cvvdp-gpu",
  "dirs",
+ "dssim-core 3.4.0",
+ "imgref",
  "raw-cpuid",
  "rayon",
+ "rgb",
  "serde",
  "sha2",
+ "ssimulacra2",
  "sysinfo 0.38.4",
  "tempfile",
  "thiserror",
  "toml",
  "xxhash-rust",
  "zenmetrics-api",
+ "zensim",
 ]
 
 [[package]]
