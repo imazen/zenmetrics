@@ -1547,6 +1547,26 @@ impl Orchestrator {
         Some(result)
     }
 
+    /// Number of tasks currently buffered in the streaming reorder
+    /// window. Returns `0` if the pool isn't initialised. Useful for
+    /// Phase 7.6 tests verifying the window's buffering behaviour;
+    /// production code generally doesn't need this — callers should
+    /// rely on `flush_pending()` to dispatch on demand.
+    pub fn pending_queue_len(&self) -> usize {
+        self.pool
+            .as_ref()
+            .map(|p| p.pending_queue.tasks.len())
+            .unwrap_or(0)
+    }
+
+    /// Number of tasks dispatched to a worker queue but not yet
+    /// completed. Returns `0` if the pool isn't initialised.
+    /// Counts both `submit()` (immediate dispatch path) and
+    /// `flush_pending()` (deferred dispatch path).
+    pub fn in_flight_len(&self) -> usize {
+        self.pool.as_ref().map(|p| p.pending.len()).unwrap_or(0)
+    }
+
     /// Snapshot of the cached-ref auto-detect counters. Useful for
     /// tests verifying the auto-detect fires; production code rarely
     /// needs this.

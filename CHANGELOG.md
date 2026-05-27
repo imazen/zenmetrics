@@ -38,6 +38,72 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- `zenmetrics-orchestrator` Phase 7.6 — **internal task reordering
+  for warm-instance reuse + cached-ref hit rate**. User directive
+  2026-05-27: "orchestrator should reorder tasks". Four layers
+  build on Phase 7.5's single-warm-instance Layer 1:
+
+  - **Layer 1 (Task.ref_hash field)**: new `u64 ref_hash` field on
+    `Task`, default `0`. The orchestrator populates it with
+    `xxhash3_64(ref_bytes)` (or the pre-upload's stable `inner_id`)
+    before sorting. Required field — every in-tree caller (tests,
+    examples, README, MIGRATION) updated to set `ref_hash: 0`.
+
+  - **Layer 2 (run_all internal sort)**: `Orchestrator::run_all`
+    collects every task, populates ref_hash, sorts internally by
+    `(metric.tag(), width, height, ref_hash, task_id)`, then
+    submits in sorted order. Yield order remains completion order
+    (callers correlate via task_id). On a real-host 60-task mixed
+    chunk (3 metrics × 2 sizes × 10 dist each) with single GPU + 1
+    CPU worker, the sort reduces warm-instance constructions from
+    40 (FIFO) to 6 (sorted) — 85% reduction.
+
+  - **Layer 3 (streaming reorder window)**:
+    `OrchestratorConfig.stream_reorder_window: (Duration, usize)`
+    defaults to `(50ms, 16)`. `submit()` now buffers tasks into a
+    pending queue; the window flushes when either limit trips. The
+    cached-ref auto-detect runs after sort so consecutive tasks
+    with identical refs hit each other. New public method
+    `flush_pending()` lets callers using
+    `(Duration::MAX, usize::MAX)` dispatch explicitly.
+    `(Duration::ZERO, 1)` disables — strict FIFO. `poll()` /
+    `poll_any_blocking()` auto-drain stale windows so a slow
+    caller doesn't park tasks indefinitely.
+
+  - **Layer 4 (observable VRAM budget at swap)**: GPU worker logs
+    every signature-change swap. WARN level when live free-VRAM
+    at swap time has dropped below the chooser's prediction
+    (external pressure) OR when the swap surfaces
+    `OomAtConstruction`. DEBUG level otherwise.
+    `TaskResult.vram_peak_mib` now carries the chooser's
+    prediction through the pool path (previously `None`).
+
+  Public surface additions (non-breaking except Task.ref_hash):
+  `Orchestrator::flush_pending`,
+  `Orchestrator::pending_queue_len` (test surface),
+  `Orchestrator::in_flight_len` (test surface),
+  `warm_instance_construction_count` (test surface),
+  `reset_warm_instance_construction_count` (test surface).
+
+  Tests: 6 new pure-logic tests in `tests/reorder.rs` for the
+  streaming-window and run_all sort behaviours
+  (`strict_fifo_when_window_disabled`,
+  `streaming_window_buffers_then_dispatches`,
+  `streaming_window_count_limit_flushes`,
+  `explicit_flush_pending_drains_immediately`,
+  `streaming_window_duration_triggers_flush_via_poll`,
+  `run_all_sort_groups_by_metric_dims_ref`). 3 `#[ignore]` GPU
+  integration tests verify churn reduction
+  (`warm_instance_churn_minimal_on_mixed_chunk` — measured 6 vs
+  40 on the workstation), cached-ref hits
+  (`cached_ref_hit_rate_high_on_repeat_ref` — measured 1 miss /
+  49 hits on 50 same-ref tasks), and peak VRAM bound
+  (`peak_vram_equals_max_single_metric_footprint`).
+
+  Spec: `crates/zenmetrics-orchestrator/docs/REORDERING_DESIGN.md`
+  (status: RESOLVED). Migration note added to
+  `crates/zenmetrics-orchestrator/docs/MIGRATION_FROM_API.md`.
+
 - `zenmetrics-orchestrator` Phase 7.5 — **the orchestrator is now
   production-ready for all metrics, with the per-cell sweep loop
   flipped to the orchestrator when `--use-orchestrator` is set.**

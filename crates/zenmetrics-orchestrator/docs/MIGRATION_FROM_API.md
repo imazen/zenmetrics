@@ -249,6 +249,35 @@ order tasks were submitted. Correlate via `Task::task_id`. This avoids
 unbounded memory growth on long sweeps where one slow task would
 otherwise hold every later result in a buffer.
 
+### Tasks may be reordered before dispatch (Phase 7.6)
+
+Beyond completion-order yield, Phase 7.6 also reorders tasks *before*
+they reach a worker:
+
+- `run_all` collects the whole input, populates `Task.ref_hash`, sorts
+  by `(metric.tag(), width, height, ref_hash, task_id)`, then
+  dispatches. This caps warm-instance constructions at one per
+  `(metric, dims, backend)` tuple and maximises cached-ref hit rate.
+  On a real-host 60-task mixed chunk (3 metrics × 2 sizes) sorted
+  dispatch produced 6 warm-instance constructions vs 40 for unsorted
+  FIFO — a 6.7× reduction.
+- `submit` buffers each call into a streaming reorder window
+  (`OrchestratorConfig.stream_reorder_window`, default `(50ms, 16)`).
+  When either limit trips, the window sorts by the same key and
+  dispatches as one batch. `flush_pending()` lets callers using
+  `(Duration::MAX, usize::MAX)` dispatch explicitly.
+
+Callers always correlate via `Task::task_id` — the ID survives both
+the sort and the completion-order yield. Set `stream_reorder_window =
+(Duration::ZERO, 1)` to disable buffering and dispatch on every
+submit (strict FIFO), useful when downstream logic depends on
+submit-order completion tracking.
+
+The `Task.ref_hash: u64` field is *required* to construct a `Task`
+(default `0` — the orchestrator overwrites with `xxhash3_64` of the
+ref bytes before sorting). Callers that already hashed the ref bytes
+may set this field to skip the auto-hash.
+
 ### Worker pool is lazy
 
 `Orchestrator::new` does NOT spawn any threads. The pool initialises on

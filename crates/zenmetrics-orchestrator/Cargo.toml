@@ -200,6 +200,17 @@ name = "cpu_backend"
 path = "tests/cpu_backend.rs"
 required-features = ["cuda"]
 
+# Phase 7.6 reordering tests — warm-instance churn + cached-ref hit
+# rate + streaming reorder window. Most tests inspect submit/flush
+# plumbing without driving compute (so they run without --ignored);
+# the GPU-only warm-churn + cached-ref + peak-VRAM tests are
+# individually marked `#[ignore]` because they require a real CUDA
+# device. Sibling-workspace caveat applies.
+[[test]]
+name = "reorder"
+path = "tests/reorder.rs"
+required-features = ["cuda"]
+
 # Phase 5 batch example. Drives `Orchestrator::run_all` against a real
 # CUDA device. Sibling-workspace caveat applies.
 [[example]]

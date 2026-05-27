@@ -95,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             height: size,
             metric,
             params: None,
+            ref_hash: 0,
         });
     }
 

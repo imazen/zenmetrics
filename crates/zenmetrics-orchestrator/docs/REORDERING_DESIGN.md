@@ -2,9 +2,16 @@
 
 User directive 2026-05-27: **"orchestrator should reorder tasks"**.
 
-Status: **DESIGN — Phase 7.6 implementation pending.** Phase 7.5
-(running) ships single-warm-instance (Layer 1). Phase 7.6 adds the
-sort-batching layers on top.
+Status: **RESOLVED — Phase 7.6 landed 2026-05-27.** Layers 2/3/4
+shipped as four commits on top of master. Real-GPU measurement on
+the RTX 5070 / 7950X workstation: sorted dispatch reduces
+warm-instance constructions on a 60-task mixed chunk from 40 (FIFO)
+to 6 — a 6.7× reduction. Cached-ref hit rate on a 50-task
+same-ref chunk: 1 miss, 49 hits as designed.
+
+See `CHANGELOG.md`'s "Phase 7.6" entry for the public-API additions
+and `MIGRATION_FROM_API.md`'s "Tasks may be reordered before
+dispatch" section for caller migration notes.
 
 ## Goal
 
