@@ -9,6 +9,7 @@ members = [
     "crates/ssim2-gpu",
     "crates/zen-cloud-core",
     "crates/zen-cloud-vastai",
+    "crates/zen-sweep-worker",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",

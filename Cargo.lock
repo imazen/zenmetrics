@@ -6500,6 +6500,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-sweep-worker"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "zen-cloud-core",
+ "zen-cloud-vastai",
+]
+
+[[package]]
 name = "zenanalyze"
 version = "0.1.0"
 dependencies = [

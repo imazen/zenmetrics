@@ -1,0 +1,46 @@
+[package]
+name = "zen-sweep-worker"
+description = "Cloud-agnostic sweep worker binary. Selects a cloud backend at runtime via --backend (cargo-feature-gated) over the zen-cloud-core trait layer and runs the encode+score sweep compute loop. The single compute binary baked into the deploy image."
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "MIT OR Apache-2.0"
+keywords = ["cloud", "worker", "sweep", "vastai"]
+categories = ["command-line-utilities"]
+publish = false
+
+[[bin]]
+name = "zen-sweep-worker"
+path = "src/main.rs"
+
+[features]
+# vast.ai is the only backend in Phase A. Future backends
+# (zen-cloud-local in Phase B, zen-cloud-gcp / -do in Phase C) become
+# additional feature-gated deps + `Backend` arms; `--backend <name>`
+# picks among the compiled-in set at runtime (spec §1.6 decision 4 —
+# cargo features + trait objects, NOT dlopen).
+default = ["vastai"]
+# The vast.ai backend, including the full inline-sweep encode+score
+# worker (the production deploy path). Mirrors the v26 image build
+# (`--features inline-sweep`) so the compute closure is byte-identical
+# to today's vastai-fleet worker.
+vastai = ["_vastai-backend", "zen-cloud-vastai/inline-sweep", "zen-cloud-vastai/source-features"]
+# Verification-only: the cloud-agnostic binary wiring without the
+# GPU/codec encode+score tree. Lets `cargo build --features vastai-min`
+# typecheck the --backend dispatch on machines/checkouts where the
+# heavy sibling deps don't compile. NOT a production build.
+vastai-min = ["_vastai-backend", "zen-cloud-vastai/worker"]
+# Internal marker: the vast.ai backend code (the `Worker` subcommand +
+# dispatch) is compiled in. Both `vastai` (full) and `vastai-min`
+# (verification) enable it; the source gates on this, not on a specific
+# feature-set, so the code path is identical under either.
+_vastai-backend = ["dep:zen-cloud-vastai"]
+
+[dependencies]
+zen-cloud-core = { workspace = true }
+zen-cloud-vastai = { workspace = true, optional = true, default-features = false }
+clap = { workspace = true, features = ["env"] }
+anyhow = "1.0.102"
