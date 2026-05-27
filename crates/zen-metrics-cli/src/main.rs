@@ -29,6 +29,12 @@ mod output;
 #[cfg(feature = "sweep")]
 mod sweep;
 
+#[cfg(feature = "orchestrator")]
+mod orchestrator_glue;
+
+#[cfg(feature = "orchestrator")]
+mod orchestrator_runner;
+
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 // `Path` is consumed only by `score_one_pair`, which lives behind
@@ -49,6 +55,38 @@ use crate::output::{OutputFormat, print_score};
 #[derive(Parser, Debug)]
 #[command(version, author = "Lilith River", about, long_about = None)]
 struct Cli {
+    /// Route scoring through the `zenmetrics-orchestrator` crate
+    /// instead of the legacy direct-dispatch handlers. The orchestrator
+    /// adds OOM-safe fallback (GPU full → strip → CPU), a persistent
+    /// machine-capability cache, and cached-reference auto-detect for
+    /// many-dist-one-ref workloads. Only meaningful when the binary
+    /// was built with `--features orchestrator,orchestrator-cuda`.
+    ///
+    /// May also be enabled by setting `ZENMETRICS_USE_ORCHESTRATOR=1`.
+    #[arg(long, global = true)]
+    use_orchestrator: bool,
+
+    /// Override the orchestrator's persistent capability cache
+    /// location. Defaults to `$XDG_CACHE_HOME/zenmetrics/` or
+    /// `~/.cache/zenmetrics/`. Sweep workers use this to mount a
+    /// fleet-shared profile read-only from R2.
+    #[arg(long, global = true)]
+    orchestrator_cache: Option<PathBuf>,
+
+    /// Whether to run the orchestrator's quick-bench at startup.
+    /// `auto` (default) re-benches only when the cache is missing or
+    /// stale; `yes` forces a fresh bench; `no` trusts the cache as-is.
+    #[arg(long, global = true, default_value = "auto")]
+    bench_on_start: String,
+
+    /// Comma-separated whitelist of CPU backend names to enable when
+    /// the orchestrator runs. Recognised: `cvvdp`, `ssim2`, `dssim`,
+    /// `butter`, `zensim`, `all`. Empty (default) honours the build's
+    /// compiled-in feature set; sweep workers use this to opt out of
+    /// unused CPU crates when they bake an image with `cpu-all`.
+    #[arg(long, global = true, default_value = "")]
+    cpu_features: String,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -329,22 +367,81 @@ struct ScorePairsArgs {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    // Top-level orchestrator opt-in: flag OR env var either is sufficient.
+    #[cfg(feature = "orchestrator")]
+    let use_orchestrator =
+        cli.use_orchestrator || orchestrator_glue::use_orchestrator_from_env();
+    #[cfg(feature = "orchestrator")]
+    let orchestrator_opts = match orchestrator_runner::bench_on_start_from_flag(
+        Some(cli.bench_on_start.as_str()),
+    )
+    .and_then(|bos| {
+        orchestrator_runner::runtime_opts_from_cli(
+            cli.orchestrator_cache.clone(),
+            bos,
+            cli.cpu_features.as_str(),
+        )
+    }) {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    #[cfg(feature = "orchestrator")]
+    if use_orchestrator {
+        eprintln!(
+            "[orchestrator] enabled (cache_dir={:?}, bench_on_start={:?}, cpu_features={:?})",
+            orchestrator_opts.cache_dir,
+            orchestrator_opts.bench_on_start,
+            orchestrator_opts.cpu_features,
+        );
+    }
+    // Suppress unused-warning when the orchestrator feature is off:
+    // the top-level flags are still parsed (so users get a clear error
+    // about feature-not-enabled instead of "unknown flag") but unused.
+    #[cfg(not(feature = "orchestrator"))]
+    {
+        let _ = cli.use_orchestrator;
+        let _ = &cli.orchestrator_cache;
+        let _ = &cli.bench_on_start;
+        let _ = &cli.cpu_features;
+    }
+
     match cli.command {
-        Command::Score(args) => match cmd_score(args) {
+        Command::Score(args) => match cmd_score(
+            args,
+            #[cfg(feature = "orchestrator")]
+            use_orchestrator,
+            #[cfg(feature = "orchestrator")]
+            &orchestrator_opts,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
                 ExitCode::FAILURE
             }
         },
-        Command::Batch(args) => match cmd_batch(args) {
+        Command::Batch(args) => match cmd_batch(
+            args,
+            #[cfg(feature = "orchestrator")]
+            use_orchestrator,
+            #[cfg(feature = "orchestrator")]
+            &orchestrator_opts,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
                 ExitCode::FAILURE
             }
         },
-        Command::Compare(args) => match cmd_compare(args) {
+        Command::Compare(args) => match cmd_compare(
+            args,
+            #[cfg(feature = "orchestrator")]
+            use_orchestrator,
+            #[cfg(feature = "orchestrator")]
+            &orchestrator_opts,
+        ) {
             Ok(success) => {
                 if success {
                     ExitCode::SUCCESS
@@ -361,7 +458,13 @@ fn main() -> ExitCode {
             }
         },
         #[cfg(feature = "sweep")]
-        Command::Sweep(args) => match cmd_sweep(args) {
+        Command::Sweep(args) => match cmd_sweep(
+            args,
+            #[cfg(feature = "orchestrator")]
+            use_orchestrator,
+            #[cfg(feature = "orchestrator")]
+            &orchestrator_opts,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("error: {e}");
@@ -402,8 +505,29 @@ fn main() -> ExitCode {
 }
 
 #[cfg(feature = "sweep")]
-fn cmd_sweep(args: SweepArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_sweep(
+    args: SweepArgs,
+    #[cfg(feature = "orchestrator")] use_orchestrator: bool,
+    #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
+) -> Result<(), Box<dyn std::error::Error>> {
     use crate::sweep::{SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
+
+    // Phase 7 sweep integration: when `--use-orchestrator` is set,
+    // warm the orchestrator's capability cache and print the active
+    // machine profile to stderr. The per-cell scoring loop still
+    // routes through the existing process-global MetricCache because
+    // the cache holds warm `Metric` instances that the orchestrator's
+    // pool cannot yet share — switching to `Orchestrator::run_all`
+    // requires invalidating the per-process cubecl plane footprint,
+    // which is a Phase 7+ enhancement. The capability cache being
+    // populated is the immediate benefit: subsequent workers on the
+    // same machine reuse the bench measurements.
+    #[cfg(feature = "orchestrator")]
+    if use_orchestrator {
+        let orch = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+        orchestrator_runner::print_capability_summary(&orch);
+        drop(orch);
+    }
 
     let q_grid = parse_q_grid(&args.q_grid)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
@@ -887,7 +1011,11 @@ fn score_one_pair(
     Ok(value)
 }
 
-fn cmd_score(args: ScoreArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_score(
+    args: ScoreArgs,
+    #[cfg(feature = "orchestrator")] use_orchestrator: bool,
+    #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
+) -> Result<(), Box<dyn std::error::Error>> {
     let reference = decode::decode_image_to_rgb8(&args.reference)?;
     let distorted = decode::decode_image_to_rgb8(&args.distorted)?;
     if reference.width != distorted.width || reference.height != distorted.height {
@@ -897,12 +1025,53 @@ fn cmd_score(args: ScoreArgs) -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
+    #[cfg(feature = "orchestrator")]
+    if use_orchestrator && orchestrator_runner::metric_orchestrator_eligible(args.metric) {
+        // Route through the orchestrator. This honours the global
+        // capability cache, OOM fallback ladder, and cached-ref
+        // auto-detect from `zenmetrics-orchestrator`.
+        let mut orch = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+        orchestrator_runner::print_capability_summary(&orch);
+        let rows = orchestrator_runner::orchestrator_score_one(
+            &mut orch,
+            args.metric,
+            &reference,
+            &distorted,
+        )?;
+        // Re-emit as (name, value) tuples in the same shape as
+        // `run_metric` so `print_score` doesn't branch.
+        let scores: Vec<(&'static str, f64)> = rows
+            .into_iter()
+            .map(|r| (r.column, r.value))
+            .collect();
+        print_score(args.output, args.metric, &scores);
+        return Ok(());
+    }
     let scores = run_metric(args.metric, &reference, &distorted, args.gpu_runtime)?;
     print_score(args.output, args.metric, &scores);
     Ok(())
 }
 
-fn cmd_batch(args: BatchArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_batch(
+    args: BatchArgs,
+    #[cfg(feature = "orchestrator")] use_orchestrator: bool,
+    #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Optional orchestrator preflight: warm the capability cache so
+    // subsequent invocations on this machine reuse the bench. Per-pair
+    // scoring inside the batch loop continues through the legacy path
+    // to preserve butteraugli's two-column output shape.
+    #[cfg(feature = "orchestrator")]
+    if use_orchestrator {
+        let orch = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+        orchestrator_runner::print_capability_summary(&orch);
+        // Drop the orchestrator before the legacy batch loop runs — it
+        // holds a lazy worker pool which we don't need for the legacy
+        // per-row path. Phase 7's additive integration: the cache is
+        // populated for OTHER subcommands; this batch run still uses
+        // the optimised CvvdpBatchScorer / direct dispatch.
+        drop(orch);
+    }
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b'\t')
         .has_headers(true)
@@ -997,7 +1166,11 @@ fn cmd_batch(args: BatchArgs) -> Result<(), Box<dyn std::error::Error>> {
 /// least one cell failed (the report is still rendered in full). `Err` is
 /// reserved for setup failures that prevent any output (currently: empty
 /// argument lists, which clap also enforces via `required = true`).
-fn cmd_compare(args: CompareArgs) -> Result<bool, Box<dyn std::error::Error>> {
+fn cmd_compare(
+    args: CompareArgs,
+    #[cfg(feature = "orchestrator")] use_orchestrator: bool,
+    #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
+) -> Result<bool, Box<dyn std::error::Error>> {
     if args.references.is_empty() {
         return Err("at least one --reference is required".into());
     }
@@ -1006,6 +1179,18 @@ fn cmd_compare(args: CompareArgs) -> Result<bool, Box<dyn std::error::Error>> {
     }
     if args.metrics.is_empty() {
         return Err("at least one --metric is required".into());
+    }
+    // Phase 7 additive: warm the orchestrator's capability cache so the
+    // machine profile is up-to-date for subsequent (sweep, batch)
+    // workloads. The per-pair comparison loop still flows through
+    // `run_compare` to preserve historical output shape — switching
+    // it to `Orchestrator::run_all` is a Phase 7+ enhancement once
+    // the parity numbers are validated across the full metric set.
+    #[cfg(feature = "orchestrator")]
+    if use_orchestrator {
+        let orch = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
+        orchestrator_runner::print_capability_summary(&orch);
+        drop(orch);
     }
     let report = run_compare(
         &args.references,

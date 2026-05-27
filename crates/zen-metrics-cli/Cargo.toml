@@ -148,6 +148,29 @@ sweep = [
     "assemble",
 ]
 
+# `orchestrator` wires the `zenmetrics-orchestrator` crate into the CLI as
+# the recommended scoring backend. When enabled (and a runtime opt-in via
+# `--use-orchestrator` or `ZENMETRICS_USE_ORCHESTRATOR=1`), every metric
+# task routes through `Orchestrator::run_all` / `run_single` so the OOM
+# fallback ladder, persistent capability cache, and cached-ref auto-detect
+# all kick in. The legacy direct-dispatch code paths remain compiled and
+# selectable as the default — adding orchestrator is additive, not a
+# replacement.
+#
+# Default: NOT in the bundled `sweep` feature. Production sweep workers
+# turn it on explicitly via
+# `--features sweep,orchestrator,orchestrator-cuda,orchestrator-cpu-all`
+# so the image build is opt-in. CI checks both shapes (without and with
+# orchestrator) to keep the legacy path healthy.
+orchestrator = ["dep:zenmetrics-orchestrator", "dep:zenmetrics-api"]
+orchestrator-cuda = ["zenmetrics-orchestrator?/cuda", "zenmetrics-api?/cuda", "orchestrator"]
+orchestrator-cpu-all = ["zenmetrics-orchestrator?/cpu-all", "orchestrator"]
+orchestrator-cpu-cvvdp = ["zenmetrics-orchestrator?/cpu-cvvdp", "orchestrator"]
+orchestrator-cpu-ssim2 = ["zenmetrics-orchestrator?/cpu-ssim2", "orchestrator"]
+orchestrator-cpu-dssim = ["zenmetrics-orchestrator?/cpu-dssim", "orchestrator"]
+orchestrator-cpu-butter = ["zenmetrics-orchestrator?/cpu-butter", "orchestrator"]
+orchestrator-cpu-zensim = ["zenmetrics-orchestrator?/cpu-zensim", "orchestrator"]
+
 # `assemble` enables the `zen-metrics assemble` subcommand: the typed,
 # full-key corpus join that replaces the Python corpus-assembly builders
 # (`build_per_codec_training.py` + the canonical-corpus join layer) and
@@ -257,6 +280,12 @@ cubecl = { workspace = true, optional = true }
 # which is why it's kept as a runtime dep gated on the `sweep` feature
 # rather than dev-only.
 tempfile = { version = "3", optional = true }
+
+# Orchestrator integration (Phase 7). Optional — pulled only when the
+# `orchestrator` feature (or one of its variants) is enabled. The
+# orchestrator's own feature gating (cuda / cpu-cvvdp / cpu-all / …)
+# pulls through via the `orchestrator-*` aliases above.
+zenmetrics-orchestrator = { workspace = true, optional = true, default-features = false }
 
 # Parquet output sidecar for the `sweep` subcommand. Stores zensim's
 # 300-feature extended vector per encoded cell so future selector / MLP

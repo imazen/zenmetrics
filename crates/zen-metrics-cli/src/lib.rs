@@ -60,3 +60,20 @@ pub mod sweep;
 pub mod compare;
 #[allow(dead_code)]
 pub mod decode;
+
+/// Orchestrator integration (Phase 7). Bridges the CLI's
+/// [`metrics::MetricKind`] enum and the
+/// [`zenmetrics_orchestrator::Orchestrator`] surface. Library callers
+/// that want OOM-safe, perf-aware multi-task scoring should drive the
+/// orchestrator directly via this module's helpers; the legacy
+/// per-subcommand handlers below the surface here still work for
+/// simple cases.
+#[cfg(feature = "orchestrator")]
+pub mod orchestrator_glue;
+
+/// Orchestrator-driven re-implementations of the legacy subcommand
+/// handlers. Lives behind the `orchestrator` feature and only fires
+/// when `--use-orchestrator` (CLI flag) or
+/// `ZENMETRICS_USE_ORCHESTRATOR=1` (env) is set.
+#[cfg(feature = "orchestrator")]
+pub mod orchestrator_runner;
