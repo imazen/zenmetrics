@@ -132,8 +132,11 @@ WORKER_PID=$!
 log "sidecar pid=${SIDECAR_PID} worker pid=${WORKER_PID}; waiting for first exit"
 
 # wait -n returns when EITHER exits; capture its status and propagate.
-wait -n
-rc=$?
+# `|| rc=$?` keeps `set -e` from aborting the script before we run the
+# cleanup + diagnostic below when the first-exiting process returns
+# nonzero (the common crash case).
+rc=0
+wait -n || rc=$?
 log "a process exited (rc=${rc}); shutting down the other and exiting"
 # Best-effort: stop the surviving process so the container exits cleanly.
 kill "${SIDECAR_PID}" "${WORKER_PID}" 2>/dev/null || true
