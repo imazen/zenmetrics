@@ -162,10 +162,119 @@ pub fn try_init_thread_pool(jobs: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Phase 7.5: score one (ref, dist) pair via the shared
+/// orchestrator handle. Returns `(column_name, value)` tuples
+/// matching the shape the legacy `MetricCache::run_metric_cached`
+/// produces, so the sweep loop's row-writer doesn't branch.
+///
+/// Column names are determined by
+/// [`crate::orchestrator_runner::rekey_orchestrator_columns`] —
+/// which maps from the orchestrator's canonical GPU-variant keys
+/// back to the CLI-variant-specific names (e.g. `ssim2_gpu` stays
+/// the same for `Ssim2Gpu`; `ssim2_gpu` becomes `ssim2` for
+/// `Ssim2`). The column names are leaked to `&'static str` to
+/// match the existing row-builder signature; the leak is bounded
+/// by metric-count × cells × variants (single-digit) and the
+/// process exits shortly after.
+///
+/// The orchestrator's `run_single` is synchronous and blocks the
+/// rayon worker thread for the duration of the GPU dispatch. The
+/// `Mutex<Orchestrator>` lock contention is bounded by GPU compute
+/// time per call — the same shape as the legacy
+/// `MetricCache::lock_global` path.
+#[cfg(feature = "orchestrator")]
+fn score_via_orchestrator(
+    orch: &SweepOrchestratorHandle,
+    cli_metric: MetricKind,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
+    use crate::orchestrator_glue::OrchestratorMetricSpec;
+    use crate::orchestrator_runner::rekey_orchestrator_columns;
+    use zenmetrics_orchestrator::{Task, TaskData};
+
+    if reference.width != distorted.width || reference.height != distorted.height {
+        return Err(format!(
+            "{}: reference ({}×{}) and distorted ({}×{}) differ in size",
+            cli_metric.name(),
+            reference.width,
+            reference.height,
+            distorted.width,
+            distorted.height
+        )
+        .into());
+    }
+
+    let spec = OrchestratorMetricSpec::from_cli(cli_metric);
+    let task = Task {
+        task_id: 1,
+        ref_data: TaskData::Srgb8(reference.pixels.clone()),
+        dist_data: TaskData::Srgb8(distorted.pixels.clone()),
+        width: reference.width,
+        height: reference.height,
+        metric: spec.kind,
+        params: None,
+    };
+    let result = {
+        let mut g = orch.lock().expect("orchestrator handle poisoned");
+        g.run_single(task)
+    };
+
+    match result.outcome {
+        Ok(_score) => {
+            let rekeyed = rekey_orchestrator_columns(cli_metric, &result.output_columns);
+            // Leak Strings to &'static str to match the
+            // legacy row-builder's column-name lifetime.
+            let leaked: Vec<(&'static str, f64)> = rekeyed
+                .into_iter()
+                .map(|(k, v)| (String::leak(k) as &'static str, v))
+                .collect();
+            Ok(leaked)
+        }
+        Err(e) => Err(format!(
+            "orchestrator: {} ({e}; backends_attempted={:?})",
+            cli_metric.name(),
+            result.backends_attempted
+        )
+        .into()),
+    }
+}
+
+/// Optional handle to an orchestrator-driven scoring backend. When
+/// `Some`, the sweep per-cell loop dispatches every metric through
+/// the orchestrator instead of the legacy [`MetricCache`]. The two
+/// paths produce **bit-identical parquet sidecars** for the same
+/// inputs — see `crates/zenmetrics-orchestrator/src/executor.rs::build_output_columns`.
+///
+/// **Critical: when this is `Some`, MetricCache MUST NOT be used in
+/// the same process.** Both maintain warm cubecl `Metric` instances;
+/// activating both simultaneously double-allocates GPU buffers and
+/// triggers cubecl-cuda's pool to saturate ~2× faster. The sweep
+/// loop's branching enforces this: orchestrator-on means
+/// `cache.run_metric_cached(...)` is never called.
+///
+/// The handle is shared across rayon threads via the wrapped
+/// `Arc<Mutex<...>>` — GPU dispatch is serialised by the driver
+/// anyway, so the lock contention is bounded by GPU compute time
+/// (the same shape as the legacy `MetricCache::lock_global` path).
+#[cfg(feature = "orchestrator")]
+pub type SweepOrchestratorHandle =
+    std::sync::Arc<std::sync::Mutex<zenmetrics_orchestrator::Orchestrator>>;
+
 /// Drive the sweep end-to-end. Outer loop over sources is serial (one
 /// decoded image in memory at a time); inner cell loop is parallel via
 /// rayon, with row writes funnelled through a `Mutex`.
-pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
+///
+/// `orch` is an optional orchestrator handle (Phase 7.5). When
+/// `Some`, every cell's metric scoring routes through
+/// `Orchestrator::run_single` instead of the legacy `MetricCache`
+/// (which would otherwise warm a separate set of cubecl instances).
+/// `None` keeps the legacy code path (the production default until
+/// Phase 7.6 flips it).
+pub fn run_sweep(
+    cfg: &SweepConfig,
+    #[cfg(feature = "orchestrator")] orch: Option<&SweepOrchestratorHandle>,
+) -> Result<SweepStats, Box<dyn Error>> {
     // Honour the configured thread budget. No-op if the rayon global
     // pool is already initialised; first call wins.
     try_init_thread_pool(cfg.jobs)?;
@@ -343,6 +452,8 @@ pub fn run_sweep(cfg: &SweepConfig) -> Result<SweepStats, Box<dyn Error>> {
                         feature = "gpu-cvvdp"
                     ))]
                     gpu_runtime_for_cache,
+                    #[cfg(feature = "orchestrator")]
+                    orch,
                 )
             }))
             .unwrap_or_else(|panic_payload| {
@@ -504,6 +615,7 @@ fn compute_cell(
         feature = "gpu-cvvdp"
     ))]
     gpu_runtime_for_cache: GpuRuntime,
+    #[cfg(feature = "orchestrator")] orch: Option<&SweepOrchestratorHandle>,
 ) -> CellOutcome {
     let knob_json = tuple.to_canonical_json();
     let mut row: Vec<String> = vec![
@@ -617,6 +729,21 @@ fn compute_cell(
         && zensim_in_metrics
         && !zensim_gpu_in_metrics;
     let mut zensim_features: Option<(f32, Vec<f64>)> = None;
+
+    // Phase 7.5 routing: when an orchestrator handle is provided,
+    // dispatch every metric through it INSTEAD of MetricCache to
+    // avoid double-allocating warm cubecl instances on the GPU.
+    // The exception is zensim with feature-vector emit: the
+    // orchestrator's API doesn't yet expose
+    // `compute_features_srgb_u8`, so a sweep that needs the
+    // sidecar parquet of zensim features still falls back to
+    // MetricCache. This is documented in `INTEGRATION_NOTES.md`
+    // as a Phase 7.5+ enhancement.
+    #[cfg(feature = "orchestrator")]
+    let use_orch_for_cell = orch.is_some();
+    #[cfg(not(feature = "orchestrator"))]
+    let use_orch_for_cell = false;
+
     for &metric in &cfg.metrics {
         let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> =
             if metric == MetricKind::Zensim && want_features_cpu {
@@ -628,6 +755,28 @@ fn compute_cell(
                         Ok(vec![("zensim", score)])
                     }
                     Err(e) => Err(e),
+                }
+            } else if use_orch_for_cell
+                && !(metric == MetricKind::ZensimGpu && want_features_gpu)
+            {
+                // Phase 7.5: orchestrator-driven scoring. Skipped for
+                // ZensimGpu+want_features_gpu because the orchestrator
+                // doesn't yet expose feature emission; that branch
+                // still uses MetricCache below.
+                #[cfg(feature = "orchestrator")]
+                {
+                    score_via_orchestrator(
+                        orch.expect("use_orch_for_cell true => orch Some"),
+                        metric,
+                        source,
+                        &decoded,
+                    )
+                }
+                #[cfg(not(feature = "orchestrator"))]
+                {
+                    // Unreachable — use_orch_for_cell is `false` when
+                    // the feature is off.
+                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
                 }
             } else if metric == MetricKind::ZensimGpu && want_features_gpu {
                 // GPU zensim with feature emit — go through the cache

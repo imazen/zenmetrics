@@ -935,12 +935,24 @@ fn finalize_err(
 /// Build the per-task output column map from a successful score +
 /// any metric-specific extras returned by [`ExecMetric::compute_phase4_with_extras`].
 ///
-/// The map always contains the metric's primary column name. Butter
-/// merges the GPU `pnorm_3` extra alongside the max-norm score.
-/// Cvvdp's column key is the versioned tag baked into
-/// `cvvdp_gpu::CVVDP_COLUMN_NAME` (mirroring what `MetricCache` /
-/// `CvvdpBatchScorer` emit, so the orchestrator path's parquet
-/// sidecar is byte-identical to the legacy path's).
+/// **The keys emitted here are the canonical / GPU-variant column
+/// names** — i.e. the same shape the legacy `MetricCache` produces
+/// when its CLI input is the `*Gpu` variant (or `Cvvdp` / `Iwssim`,
+/// which have only one variant). The orchestrator's chooser may pick
+/// CPU at runtime via OOM fallback, but the column name carries the
+/// CLI-requested-variant intent. CLI consumers using the orchestrator
+/// for a CPU-only variant (e.g. `--metric ssim2` not `ssim2-gpu`)
+/// re-key these strings before writing to a sweep TSV.
+///
+/// - butter -> `butteraugli_max_gpu` + extras carry
+///   `butteraugli_pnorm3_gpu`.
+/// - cvvdp -> versioned `CVVDP_COLUMN_NAME` (e.g.
+///   `cvvdp_imazen_v0_0_1`). CVVDP has no CPU/GPU split in the CLI
+///   variant — same column name on both paths.
+/// - iwssim -> versioned `IWSSIM_COLUMN_NAME`. Iwssim has no CPU
+///   reference at all; column name is always the versioned tag.
+/// - ssim2 / dssim / zensim -> `<tag>_gpu` (matching legacy GPU
+///   MetricCache output).
 ///
 /// `pub(crate)` so the worker pool can call it too; the pool's
 /// streaming path needs the same column mapping.
@@ -950,27 +962,15 @@ pub(crate) fn build_output_columns(
     extras: &BTreeMap<String, f64>,
 ) -> BTreeMap<String, f64> {
     let mut out = BTreeMap::new();
-    // Primary column.
+    // Primary column. Matches the legacy `MetricCache::run_metric_cached`
+    // output keys exactly so a downstream parquet writer that joins
+    // the orchestrator + legacy paths sees byte-identical column
+    // names.
     match metric {
         MetricKind::Butter => {
-            // Match legacy `MetricCache::compute_butter` column names:
-            // `butteraugli_max_gpu` for the max-norm,
-            // `butteraugli_pnorm3_gpu` for the second column (filled
-            // from `extras`).
             out.insert("butteraugli_max_gpu".to_string(), score.value);
         }
         MetricKind::Cvvdp => {
-            // The cvvdp column is versioned via the `CVVDP_IMPL_TAG`
-            // build env var, surfaced as `Score::metric_version`. The
-            // legacy path emits `CVVDP_COLUMN_NAME` (default
-            // `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`); the umbrella's
-            // `Score.metric_version` carries the same version string
-            // so callers can reconstruct the column name.
-            //
-            // Use the canonical column name from the cvvdp crate to
-            // stay bit-identical with `MetricCache::run_metric_cached`
-            // (which calls `compute_umbrella` and emits the legacy
-            // column name directly).
             #[cfg(feature = "bench")]
             {
                 out.insert(
@@ -984,10 +984,6 @@ pub(crate) fn build_output_columns(
             }
         }
         MetricKind::Iwssim => {
-            // iwssim's column is also versioned in the legacy path
-            // (`IWSSIM_COLUMN_NAME`). Use the canonical constant for
-            // bit-identity with `MetricCache::run_metric_cached`'s
-            // `MetricKind::Iwssim` branch.
             #[cfg(feature = "bench")]
             {
                 out.insert(
@@ -997,19 +993,17 @@ pub(crate) fn build_output_columns(
             }
             #[cfg(not(feature = "bench"))]
             {
-                out.insert(metric.tag().to_string(), score.value);
+                out.insert("iwssim".to_string(), score.value);
             }
         }
-        // ssim2 / dssim / zensim — the legacy GPU path emits
-        // `<metric>_gpu`, but the orchestrator's chooser picks the
-        // backend at runtime so the column name can't pre-bake the
-        // suffix. Use the bare metric tag here; CLI consumers append
-        // `_gpu` when they know the backend was GPU. This matches the
-        // shape the legacy `OrchestratorScoreRow` already produces
-        // for one-shot scoring (see
-        // `orchestrator_runner::cli_metric_to_column_name`).
-        _ => {
-            out.insert(metric.tag().to_string(), score.value);
+        MetricKind::Ssim2 => {
+            out.insert("ssim2_gpu".to_string(), score.value);
+        }
+        MetricKind::Dssim => {
+            out.insert("dssim_gpu".to_string(), score.value);
+        }
+        MetricKind::Zensim => {
+            out.insert("zensim_gpu".to_string(), score.value);
         }
     }
     // Merge metric-specific extras. Extras keys take precedence on
@@ -1233,5 +1227,84 @@ pub(crate) fn classify_cvvdp_construct_err_pub(
         ConstructOutcome::Ok(m) => ConstructOutcomePub::Ok(m),
         ConstructOutcome::Oom => ConstructOutcomePub::Oom,
         ConstructOutcome::Other(s) => ConstructOutcomePub::Other(s),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7.5 tests — build_output_columns column-name shape
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zenmetrics_api::Score;
+
+    fn mk_score(name: &'static str, version: &'static str, v: f64) -> Score {
+        Score {
+            value: v,
+            metric_name: name,
+            metric_version: version,
+        }
+    }
+
+    #[test]
+    fn build_output_columns_ssim2_emits_gpu_suffix() {
+        let s = mk_score("ssim2", "0.0.1", 95.5);
+        let cols = build_output_columns(MetricKind::Ssim2, &s, &BTreeMap::new());
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols.get("ssim2_gpu"), Some(&95.5));
+    }
+
+    #[test]
+    fn build_output_columns_dssim_emits_gpu_suffix() {
+        let s = mk_score("dssim", "0.0.1", 0.05);
+        let cols = build_output_columns(MetricKind::Dssim, &s, &BTreeMap::new());
+        assert_eq!(cols.get("dssim_gpu"), Some(&0.05));
+    }
+
+    #[test]
+    fn build_output_columns_zensim_emits_gpu_suffix() {
+        let s = mk_score("zensim", "0.0.1", 82.4);
+        let cols = build_output_columns(MetricKind::Zensim, &s, &BTreeMap::new());
+        assert_eq!(cols.get("zensim_gpu"), Some(&82.4));
+    }
+
+    #[test]
+    fn build_output_columns_butter_merges_extras() {
+        let s = mk_score("butter", "0.0.1", 1.2);
+        let mut extras = BTreeMap::new();
+        extras.insert("butteraugli_pnorm3_gpu".to_string(), 2.4_f64);
+        let cols = build_output_columns(MetricKind::Butter, &s, &extras);
+        assert_eq!(cols.len(), 2);
+        assert_eq!(cols.get("butteraugli_max_gpu"), Some(&1.2));
+        assert_eq!(cols.get("butteraugli_pnorm3_gpu"), Some(&2.4));
+    }
+
+    #[test]
+    fn build_output_columns_cvvdp_uses_versioned_column() {
+        let s = mk_score("cvvdp", "0.0.1", 9.5);
+        let cols = build_output_columns(MetricKind::Cvvdp, &s, &BTreeMap::new());
+        // The exact key depends on CVVDP_COLUMN_NAME (which depends
+        // on the build-time CVVDP_IMPL_TAG env var). Default is
+        // `cvvdp_imazen_v<MAJOR>_<MINOR>_<PATCH>`.
+        assert!(
+            cols.keys().any(|k| k.starts_with("cvvdp_")),
+            "expected cvvdp_ prefix in {:?}",
+            cols.keys().collect::<Vec<_>>()
+        );
+        // Value lookup is independent of the key prefix.
+        let (_, v) = cols.iter().next().unwrap();
+        assert_eq!(*v, 9.5);
+    }
+
+    #[test]
+    fn build_output_columns_iwssim_uses_versioned_column() {
+        let s = mk_score("iwssim", "0.0.1", 0.987);
+        let cols = build_output_columns(MetricKind::Iwssim, &s, &BTreeMap::new());
+        assert!(
+            cols.keys().any(|k| k.starts_with("iwssim_")),
+            "expected iwssim_ prefix in {:?}",
+            cols.keys().collect::<Vec<_>>()
+        );
     }
 }

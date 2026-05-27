@@ -106,22 +106,20 @@ pub fn orchestrator_score_one(
 
     match result.outcome {
         Ok(score) => {
-            // Phase 7.5: consume output_columns when populated. Sorted
-            // by key (BTreeMap iteration order) for deterministic
-            // column order across runs.
+            // Phase 7.5: consume output_columns when populated, then
+            // re-key per CLI variant so the column names match the
+            // legacy path's output exactly. Empty output_columns
+            // (older orchestrator build) falls back to the static
+            // primary-column-name mapping.
             let rows: Vec<OrchestratorScoreRow> = if result.output_columns.is_empty() {
                 vec![OrchestratorScoreRow {
                     column: cli_metric_to_column_name(cli_kind).to_string(),
                     value: score.value,
                 }]
             } else {
-                result
-                    .output_columns
-                    .iter()
-                    .map(|(k, v)| OrchestratorScoreRow {
-                        column: k.clone(),
-                        value: *v,
-                    })
+                rekey_orchestrator_columns(cli_kind, &result.output_columns)
+                    .into_iter()
+                    .map(|(column, value)| OrchestratorScoreRow { column, value })
                     .collect()
             };
             Ok(rows)
@@ -148,8 +146,11 @@ pub fn orchestrator_score_one(
     Err("orchestrator-driven scoring requires the `orchestrator-cuda` feature".into())
 }
 
-/// Map a CLI metric kind to its primary output column name. Butteraugli
-/// is excluded — its two-column shape is handled by the legacy path.
+/// Map a CLI metric kind to its primary output column name. Used as
+/// the fallback when `TaskResult.output_columns` is empty (an older
+/// orchestrator build without Phase 7.5's column emission); modern
+/// builds drive column names from `output_columns` directly so this
+/// function only fires for graceful degradation.
 fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
     match kind {
         CliMetricKind::Ssim2 => "ssim2",
@@ -160,17 +161,63 @@ fn cli_metric_to_column_name(kind: CliMetricKind) -> &'static str {
         CliMetricKind::Zensim => "zensim",
         CliMetricKind::ZensimGpu => "zensim_gpu",
         CliMetricKind::Iwssim => "iwssim",
-        // Cvvdp's column name is versioned at the umbrella level —
-        // fall back to a stable bare name for the orchestrator path
-        // since the upstream tag is only available with `gpu-cvvdp`
-        // enabled. The legacy path still produces the versioned name.
         CliMetricKind::Cvvdp => "cvvdp",
-        // Butteraugli single-column fallback (the legacy path also
-        // emits a `_pnorm3` column; for orchestrator-driven scoring
-        // Phase 7 surfaces only the max-norm).
         CliMetricKind::Butteraugli => "butteraugli_max",
         CliMetricKind::ButteraugliGpu => "butteraugli_max_gpu",
     }
+}
+
+/// Re-key the orchestrator's `output_columns` BTreeMap to match the
+/// legacy CLI variant's column names. The orchestrator emits canonical
+/// (GPU-variant-style) keys via `executor::build_output_columns`;
+/// sweep / batch / score callers using a CPU-variant CLI metric (e.g.
+/// `--metric ssim2` not `--metric ssim2-gpu`) need to drop the `_gpu`
+/// suffix to match the legacy MetricCache's CPU path.
+///
+/// **Bit-identical parquet contract**: the keys produced here MUST
+/// match what the legacy `run_metric` writes for the same CLI metric.
+/// The mapping is `gpu_cli_variant -> orchestrator_key -> sweep_key`.
+/// For GPU variants the orchestrator key == sweep key (no rename).
+/// For CPU variants we strip the `_gpu` suffix.
+///
+/// Returns a `Vec<(String, f64)>` in the input BTreeMap's iteration
+/// order (sorted-by-key), so callers iterating the result emit
+/// deterministic column order.
+pub fn rekey_orchestrator_columns(
+    cli_kind: CliMetricKind,
+    columns: &std::collections::BTreeMap<String, f64>,
+) -> Vec<(String, f64)> {
+    // Renames applied per CLI variant. GPU variants need no renames
+    // (their column name matches what the orchestrator produces).
+    let rename: &[(&str, &str)] = match cli_kind {
+        CliMetricKind::Ssim2 => &[("ssim2_gpu", "ssim2")],
+        CliMetricKind::Dssim => &[("dssim_gpu", "dssim")],
+        CliMetricKind::Zensim => &[("zensim_gpu", "zensim")],
+        CliMetricKind::Butteraugli => {
+            &[
+                ("butteraugli_max_gpu", "butteraugli_max"),
+                ("butteraugli_pnorm3_gpu", "butteraugli_pnorm3"),
+            ]
+        }
+        CliMetricKind::Iwssim
+        | CliMetricKind::IwssimGpu
+        | CliMetricKind::Cvvdp
+        | CliMetricKind::Ssim2Gpu
+        | CliMetricKind::DssimGpu
+        | CliMetricKind::ZensimGpu
+        | CliMetricKind::ButteraugliGpu => &[],
+    };
+    columns
+        .iter()
+        .map(|(k, v)| {
+            let renamed = rename
+                .iter()
+                .find(|(orig, _)| *orig == k.as_str())
+                .map(|(_, new)| new.to_string())
+                .unwrap_or_else(|| k.clone());
+            (renamed, *v)
+        })
+        .collect()
 }
 
 /// Decide whether a given CLI metric kind can flow through the
@@ -375,6 +422,54 @@ mod tests {
             BenchOnStart::Auto
         ));
         assert!(bench_on_start_from_flag(Some("maybe")).is_err());
+    }
+
+    #[test]
+    fn rekey_orchestrator_columns_phase_7_5_renames_cpu_variants() {
+        use std::collections::BTreeMap;
+
+        // Orchestrator emits GPU-variant key for ssim2; the CLI's
+        // `Ssim2Gpu` variant should pass it through unchanged.
+        let mut cols = BTreeMap::new();
+        cols.insert("ssim2_gpu".to_string(), 95.5_f64);
+        let gpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2Gpu, &cols);
+        assert_eq!(gpu_rekeyed, vec![("ssim2_gpu".to_string(), 95.5)]);
+
+        // CPU variant of ssim2 (CLI `Ssim2`) strips the _gpu suffix
+        // to match what the legacy `MetricCache` would emit.
+        let cpu_rekeyed = rekey_orchestrator_columns(CliMetricKind::Ssim2, &cols);
+        assert_eq!(cpu_rekeyed, vec![("ssim2".to_string(), 95.5)]);
+
+        // Butter GPU keeps two columns (max + pnorm3) as-is.
+        let mut butter_cols = BTreeMap::new();
+        butter_cols.insert("butteraugli_max_gpu".to_string(), 1.5_f64);
+        butter_cols.insert("butteraugli_pnorm3_gpu".to_string(), 2.5_f64);
+        let butter_gpu = rekey_orchestrator_columns(CliMetricKind::ButteraugliGpu, &butter_cols);
+        // BTreeMap iteration is sorted by key — max before pnorm3
+        // alphabetically.
+        assert_eq!(
+            butter_gpu,
+            vec![
+                ("butteraugli_max_gpu".to_string(), 1.5),
+                ("butteraugli_pnorm3_gpu".to_string(), 2.5),
+            ]
+        );
+
+        // Butter CPU strips _gpu from both columns.
+        let butter_cpu = rekey_orchestrator_columns(CliMetricKind::Butteraugli, &butter_cols);
+        assert_eq!(
+            butter_cpu,
+            vec![
+                ("butteraugli_max".to_string(), 1.5),
+                ("butteraugli_pnorm3".to_string(), 2.5),
+            ]
+        );
+
+        // Cvvdp uses a versioned column; no rename ever.
+        let mut cvvdp_cols = BTreeMap::new();
+        cvvdp_cols.insert("cvvdp_imazen_v0_0_1".to_string(), 9.2_f64);
+        let cvvdp = rekey_orchestrator_columns(CliMetricKind::Cvvdp, &cvvdp_cols);
+        assert_eq!(cvvdp, vec![("cvvdp_imazen_v0_0_1".to_string(), 9.2)]);
     }
 
     #[test]

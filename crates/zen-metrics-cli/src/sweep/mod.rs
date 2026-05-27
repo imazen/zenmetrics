@@ -35,3 +35,11 @@ pub use encode::CodecKind;
 #[allow(unused_imports)]
 pub use grid::{KnobGrid, KnobTuple, parse_knob_grid, parse_q_grid};
 pub use run::{SweepConfig, run_sweep, try_init_thread_pool};
+
+/// Re-export of the orchestrator handle type used by the sweep
+/// runner — pulled only when the `orchestrator` feature is on.
+/// `cmd_sweep` builds the wrapped orchestrator at sweep entry and
+/// passes it into `run_sweep` so the per-cell loop can dispatch
+/// through it instead of `MetricCache`.
+#[cfg(feature = "orchestrator")]
+pub use run::SweepOrchestratorHandle;

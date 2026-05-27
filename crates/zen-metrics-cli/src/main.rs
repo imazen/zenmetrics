@@ -512,22 +512,30 @@ fn cmd_sweep(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crate::sweep::{SweepConfig, parse_knob_grid, parse_q_grid, run_sweep};
 
-    // Phase 7 sweep integration: when `--use-orchestrator` is set,
-    // warm the orchestrator's capability cache and print the active
-    // machine profile to stderr. The per-cell scoring loop still
-    // routes through the existing process-global MetricCache because
-    // the cache holds warm `Metric` instances that the orchestrator's
-    // pool cannot yet share — switching to `Orchestrator::run_all`
-    // requires invalidating the per-process cubecl plane footprint,
-    // which is a Phase 7+ enhancement. The capability cache being
-    // populated is the immediate benefit: subsequent workers on the
-    // same machine reuse the bench measurements.
+    // Phase 7.5 sweep integration: when `--use-orchestrator` is set,
+    // build an `Orchestrator` and hand a wrapped `Arc<Mutex<...>>`
+    // handle to `run_sweep`. The per-cell scoring loop dispatches
+    // every metric through the orchestrator instead of the legacy
+    // `MetricCache`, avoiding the double-allocation of warm cubecl
+    // `Metric` instances that the additive Phase 7 design carried.
+    //
+    // The orchestrator's chooser handles OOM fallback (GPU full ->
+    // strip -> CPU) per task, the persistent capability cache
+    // survives across sweep invocations, and cached-ref auto-detect
+    // kicks in for many-dist-one-ref workloads (which sweep cells
+    // satisfy by construction).
+    //
+    // `MetricCache` stays compiled-in for the `--use-orchestrator=false`
+    // path, which remains the Phase 7.5 default until production
+    // sweep workers verify equivalence on a real chunk.
     #[cfg(feature = "orchestrator")]
-    if use_orchestrator {
+    let sweep_orch_handle: Option<crate::sweep::SweepOrchestratorHandle> = if use_orchestrator {
         let orch = orchestrator_runner::build_orchestrator(orchestrator_opts)?;
         orchestrator_runner::print_capability_summary(&orch);
-        drop(orch);
-    }
+        Some(std::sync::Arc::new(std::sync::Mutex::new(orch)))
+    } else {
+        None
+    };
 
     let q_grid = parse_q_grid(&args.q_grid)?;
     let knob_grid = parse_knob_grid(&args.knob_grid)?;
@@ -575,7 +583,11 @@ fn cmd_sweep(
         pairs_tsv: args.pairs_tsv,
         jobs,
     };
-    let stats = run_sweep(&cfg)?;
+    let stats = run_sweep(
+        &cfg,
+        #[cfg(feature = "orchestrator")]
+        sweep_orch_handle.as_ref(),
+    )?;
     eprintln!(
         "[sweep] done: {emitted}/{total} cells emitted; \
          encode-fail={ef} decode-fail={df} score-fail={sf}",
