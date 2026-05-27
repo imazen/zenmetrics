@@ -98,6 +98,25 @@ pub struct OrchestratorConfig {
     /// days. After this elapses the orchestrator re-runs detection +
     /// rewrites the file (Phase 2 will also re-bench).
     pub cache_validity: Duration,
+    /// Phase 7.6 Layer 3 — streaming `submit()` reorder window.
+    ///
+    /// Submissions are collected into a pending queue until either the
+    /// duration elapses OR the count is reached, then the window is
+    /// sorted by `(metric.tag(), width, height, ref_hash, task_id)`
+    /// and dispatched as one batch. The 50ms default is invisible for
+    /// sweep workloads (`run_all` ignores the window since it sorts
+    /// the whole input) and below perceptual-latency thresholds for
+    /// interactive callers.
+    ///
+    /// - `(Duration::ZERO, 1)` — disable reordering, strict FIFO
+    ///   dispatch on every `submit()`. Use when downstream code
+    ///   depends on completion order tracking submit order.
+    /// - `(Duration::MAX, usize::MAX)` — buffer indefinitely; caller
+    ///   must invoke [`Orchestrator::flush_pending`] explicitly to
+    ///   dispatch the window.
+    ///
+    /// Default: `(Duration::from_millis(50), 16)`.
+    pub stream_reorder_window: (Duration, usize),
 }
 
 impl Default for OrchestratorConfig {
@@ -105,6 +124,7 @@ impl Default for OrchestratorConfig {
         Self {
             cache_dir: default_cache_dir().unwrap_or_else(|| PathBuf::from(".cache/zenmetrics")),
             cache_validity: Duration::from_secs(7 * 24 * 60 * 60),
+            stream_reorder_window: (Duration::from_millis(50), 16),
         }
     }
 }
@@ -907,6 +927,7 @@ mod tests {
         let cfg = OrchestratorConfig {
             cache_dir: dir.path().to_path_buf(),
             cache_validity: Duration::from_secs(60),
+            ..OrchestratorConfig::default()
         };
         let orch = Orchestrator::new(cfg).expect("Orchestrator::new");
         let path = orch.cache_path();
@@ -922,6 +943,7 @@ mod tests {
         let cfg = OrchestratorConfig {
             cache_dir: dir.path().to_path_buf(),
             cache_validity: Duration::from_secs(60),
+            ..OrchestratorConfig::default()
         };
         let orch1 = Orchestrator::new(cfg.clone()).unwrap();
         let detected_at_1_secs = orch1

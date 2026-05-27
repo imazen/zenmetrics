@@ -1017,6 +1017,44 @@ pub(crate) struct PoolState {
     /// Pre-upload table — guarded by Mutex so the pool's API methods can
     /// extend it without going through the worker.
     pre_uploads: Arc<Mutex<PreUploadTable>>,
+    /// Phase 7.6 Layer 3 — streaming reorder window.
+    ///
+    /// Tasks accumulate here until either the configured count or
+    /// duration is reached, then the window is sorted by
+    /// `(metric.tag(), w, h, ref_hash, task_id)` and dispatched as a
+    /// batch. Disabled by `stream_reorder_window = (Duration::ZERO, 1)`.
+    pending_queue: PendingQueue,
+}
+
+/// Phase 7.6 Layer 3 — submission reorder buffer.
+///
+/// Tasks held here have already been *prepared* (chooser ran, ref bytes
+/// materialised, cached-ref auto-detect observed) but not yet
+/// dispatched to a worker. The `submit()` path enqueues into here; the
+/// flush path drains, sorts, and dispatches.
+#[derive(Default)]
+struct PendingQueue {
+    tasks: Vec<PreparedTask>,
+    window_started_at: Option<Instant>,
+}
+
+/// A task prepared for dispatch but parked in the reorder window. Holds
+/// every piece of state the worker needs; the only thing left at flush
+/// time is the mpsc send.
+struct PreparedTask {
+    task: WorkerTask,
+    /// Which worker queue this should land on. The chooser's choice
+    /// was made at submit() time; storing it here means the sort
+    /// order doesn't have to re-derive the routing.
+    route: WorkerRoute,
+}
+
+/// Routing decision for a prepared task. `Cpu(idx)` carries the
+/// round-robin worker index pre-computed at submit time.
+#[derive(Debug, Clone, Copy)]
+enum WorkerRoute {
+    Gpu,
+    Cpu(usize),
 }
 
 impl PoolState {
@@ -1068,6 +1106,7 @@ impl PoolState {
             vram,
             config,
             pre_uploads: Arc::new(Mutex::new(PreUploadTable::default())),
+            pending_queue: PendingQueue::default(),
         }
     }
 
@@ -1166,10 +1205,15 @@ impl Orchestrator {
         let width = task.width;
         let height = task.height;
         let params = task.params;
+        let task_supplied_ref_hash = task.ref_hash;
 
         let (ref_payload, ref_hash) = match task.ref_data {
             TaskData::Srgb8(bytes) => {
-                let h = hash_ref_bytes(&bytes);
+                let h = if task_supplied_ref_hash != 0 {
+                    task_supplied_ref_hash
+                } else {
+                    hash_ref_bytes(&bytes)
+                };
                 (RefPayload::Bytes(bytes), h)
             }
             TaskData::Path(p) => {
@@ -1237,20 +1281,36 @@ impl Orchestrator {
             .map_err(OrchestratorError::Chooser)?;
         let chosen_backend = choice.backend;
 
-        // Cached-ref auto-detect — observe the (metric, w, h, hash) tuple
-        // against the sliding window. The worker uses the bool to decide
-        // whether to install + re-use the cached reference state.
-        let use_cached_ref = {
-            let pool = self.pool.as_mut().expect("pool initialized");
-            pool.cached_ref_cache
-                .observe(metric, width, height, ref_hash)
-        };
-
         // Allocate handle + register pending slot.
         let pool = self.pool.as_mut().expect("pool initialized");
         let handle_id = pool.next_handle;
         pool.next_handle = pool.next_handle.wrapping_add(1);
         pool.pending.insert(handle_id, None);
+
+        // Pre-compute the routing decision now. `use_cached_ref` is
+        // deliberately set at flush time (cached-ref auto-detect
+        // observe order depends on dispatch order; sorting before
+        // observe maximises hit rate).
+        let route = match chosen_backend {
+            Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair => WorkerRoute::Gpu,
+            Backend::Cpu => {
+                if pool.cpu_txs.is_empty() {
+                    // No CPU workers spawned — surface a structured
+                    // error so callers can react. Modern config never
+                    // hits this (max_parallel_cpu has a floor of 1),
+                    // but it's possible to construct a pool with
+                    // `max_parallel_cpu = 0` for testing.
+                    pool.pending.remove(&handle_id);
+                    return Err(OrchestratorError::CpuBackendUnavailable {
+                        metric,
+                        required_feature: "cpu-all",
+                    });
+                }
+                let idx = pool.cpu_next % pool.cpu_txs.len();
+                pool.cpu_next = pool.cpu_next.wrapping_add(1);
+                WorkerRoute::Cpu(idx)
+            }
+        };
 
         let worker_task = WorkerTask {
             handle_id,
@@ -1263,38 +1323,115 @@ impl Orchestrator {
             dist_bytes,
             chosen_backend,
             ref_hash,
-            use_cached_ref,
+            // Filled in at flush time via cached-ref observe.
+            use_cached_ref: false,
         };
 
-        // Route by backend.
-        match chosen_backend {
-            Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair => {
-                let tx = pool.gpu_tx.as_ref().expect("gpu_tx live");
-                tx.send(worker_task).map_err(|_| {
-                    OrchestratorError::MetricApi("GPU worker channel closed".into())
-                })?;
-            }
-            Backend::Cpu => {
-                if pool.cpu_txs.is_empty() {
-                    // No CPU workers spawned — surface a structured
-                    // error so callers can react. Modern config never
-                    // hits this (max_parallel_cpu has a floor of 1),
-                    // but it's possible to construct a pool with
-                    // `max_parallel_cpu = 0` for testing.
-                    return Err(OrchestratorError::CpuBackendUnavailable {
-                        metric,
-                        required_feature: "cpu-all",
-                    });
-                }
-                let idx = pool.cpu_next % pool.cpu_txs.len();
-                pool.cpu_next = pool.cpu_next.wrapping_add(1);
-                pool.cpu_txs[idx].send(worker_task).map_err(|_| {
-                    OrchestratorError::MetricApi("CPU worker channel closed".into())
-                })?;
-            }
+        // Enqueue into the streaming reorder window. The window is
+        // flushed when either the count or duration limit is reached;
+        // disabled by `stream_reorder_window = (Duration::ZERO, 1)`
+        // (which always trips the count check and flushes immediately).
+        let (window_dur, window_cnt) = self.config.stream_reorder_window;
+        pool.pending_queue.tasks.push(PreparedTask { task: worker_task, route });
+        if pool.pending_queue.window_started_at.is_none() {
+            pool.pending_queue.window_started_at = Some(Instant::now());
+        }
+        let count_reached = pool.pending_queue.tasks.len() >= window_cnt;
+        let duration_elapsed = pool
+            .pending_queue
+            .window_started_at
+            .map(|t| t.elapsed() >= window_dur)
+            .unwrap_or(false);
+        if count_reached || duration_elapsed {
+            self.flush_pending_internal();
         }
 
         Ok(TaskHandle { id: handle_id })
+    }
+
+    /// Flush the streaming reorder window: drain pending submissions,
+    /// sort by `(metric.tag(), w, h, ref_hash, task_id)`, run the
+    /// cached-ref auto-detect observe pass in sorted order, and
+    /// dispatch every prepared task to its worker queue.
+    ///
+    /// Idempotent — calling on an empty queue is a no-op.
+    ///
+    /// Phase 7.6 Layer 3. Public so callers using a custom
+    /// `stream_reorder_window` (e.g. `(Duration::MAX, usize::MAX)` for
+    /// fully-buffered batching) can dispatch explicitly without
+    /// waiting for the window to time out.
+    pub fn flush_pending(&mut self) {
+        self.flush_pending_internal();
+    }
+
+    /// Internal flush — called from `submit()` when the window fills,
+    /// from `poll()` when the window has aged past its duration, and
+    /// from the public `flush_pending()`.
+    fn flush_pending_internal(&mut self) {
+        let pool = match self.pool.as_mut() {
+            Some(p) => p,
+            None => return,
+        };
+        if pool.pending_queue.tasks.is_empty() {
+            pool.pending_queue.window_started_at = None;
+            return;
+        }
+        let mut window: Vec<PreparedTask> = pool.pending_queue.tasks.drain(..).collect();
+        pool.pending_queue.window_started_at = None;
+        // Sort the window. Tie-break on task_id for deterministic
+        // output across runs.
+        window.sort_by_key(|p| {
+            (
+                p.task.metric.tag(),
+                p.task.width,
+                p.task.height,
+                p.task.ref_hash,
+                p.task.task_id,
+            )
+        });
+
+        // In sorted order: run cached-ref observe to refresh the
+        // sliding window's hit/miss accounting, then dispatch. Doing
+        // observe AFTER sort means consecutive tasks with identical
+        // refs hit each other and the worker reuses its cached
+        // reference state — the whole point of the reorder window.
+        for prepared in window {
+            let mut t = prepared.task;
+            let hit = pool
+                .cached_ref_cache
+                .observe(t.metric, t.width, t.height, t.ref_hash);
+            t.use_cached_ref = hit;
+            match prepared.route {
+                WorkerRoute::Gpu => {
+                    if let Some(tx) = pool.gpu_tx.as_ref() {
+                        let _ = tx.send(t);
+                    }
+                }
+                WorkerRoute::Cpu(idx) => {
+                    let slot = idx % pool.cpu_txs.len().max(1);
+                    if let Some(tx) = pool.cpu_txs.get(slot) {
+                        let _ = tx.send(t);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Drain any pending streaming-window tasks whose window has
+    /// expired. Called automatically by `poll` / `poll_any` /
+    /// `poll_any_blocking` so a slow caller doesn't park tasks
+    /// indefinitely.
+    fn drain_stale_window(&mut self) {
+        let (window_dur, _) = self.config.stream_reorder_window;
+        let needs_flush = self
+            .pool
+            .as_ref()
+            .and_then(|p| p.pending_queue.window_started_at)
+            .map(|t| t.elapsed() >= window_dur)
+            .unwrap_or(false);
+        if needs_flush {
+            self.flush_pending_internal();
+        }
     }
 
     /// Poll a specific [`TaskHandle`]. Returns `Some(TaskResult)` if the
@@ -1303,6 +1440,9 @@ impl Orchestrator {
     /// Each successful poll consumes the result — calling `poll` on the
     /// same handle a second time returns `None`.
     pub fn poll(&mut self, handle: TaskHandle) -> Option<TaskResult> {
+        // Drain stale streaming window first so a slow caller doesn't
+        // park tasks indefinitely.
+        self.drain_stale_window();
         let pool = self.pool.as_mut()?;
         pool.drain_completed();
         let slot = pool.pending.get_mut(&handle.id)?;
@@ -1319,6 +1459,7 @@ impl Orchestrator {
     /// first task whose result was waiting in the channel, `None` if no
     /// task is currently complete.
     pub fn poll_any(&mut self) -> Option<TaskResult> {
+        self.drain_stale_window();
         let pool = self.pool.as_mut()?;
         pool.drain_completed();
         // Find the first pending entry that has a result.
@@ -1336,6 +1477,20 @@ impl Orchestrator {
     /// Returns `None` only when no task is pending (caller hasn't
     /// submitted anything, or every prior task already drained).
     pub fn poll_any_blocking(&mut self) -> Option<TaskResult> {
+        // Drain stale streaming window first — if a long block on the
+        // result channel started before the window timed out, we'd
+        // otherwise leak tasks in the pending buffer.
+        self.drain_stale_window();
+        // Then ensure any tasks waiting in the reorder window get
+        // dispatched if the caller has nothing in flight yet (e.g.,
+        // submit() -> poll_any_blocking() with stream_reorder_window
+        // count > 1: the window won't fill, but a blocking poll
+        // implies the caller wants results NOW).
+        if let Some(p) = self.pool.as_ref() {
+            if !p.pending_queue.tasks.is_empty() {
+                self.flush_pending_internal();
+            }
+        }
         let pool = self.pool.as_mut()?;
         if pool.pending.is_empty() {
             return None;
@@ -1508,11 +1663,12 @@ impl Orchestrator {
                 }
             }
         }
-        // Layer 3 will add a streaming reorder window in submit(); when
-        // it lands run_all will need to call flush_pending() here so
-        // its contract ("all tasks dispatched before the iterator
-        // returns") holds. Currently submit() is straight-through, so
-        // no flush is needed.
+        // run_all flushes any pending streaming-reorder window so its
+        // contract ("all tasks dispatched before the iterator
+        // returns") holds even when stream_reorder_window > (0, 1).
+        // The flush is a no-op when the count limit already tripped on
+        // the last submit() above.
+        self.flush_pending_internal();
         RunAllIter {
             orch: self,
             remaining: total_submitted,
