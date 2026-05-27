@@ -222,7 +222,7 @@ pub fn cmd_worker(args: WorkerArgs) -> Result<()> {
     hydrate_pid1_env();
 
     let worker_id = args.worker_id.clone().unwrap_or_else(default_worker_id);
-    let r2 = r2::R2Client::new(&args)?;
+    let r2 = r2::new_from_args(&args)?;
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

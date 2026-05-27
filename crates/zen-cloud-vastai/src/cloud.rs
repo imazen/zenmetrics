@@ -23,7 +23,7 @@
 use std::path::PathBuf;
 
 use zen_cloud_core::{
-    ArtifactKey, BlobMeta, BlobStorage, Chunk, ChunkId, ChunkOutcome, CloudError, CredentialSource,
+    ArtifactKey, BlobStorage, Chunk, ChunkId, ChunkOutcome, CloudError, CredentialSource,
     Credentials, Heartbeat, JobQueue, WorkerHost, WorkerId, WorkerStatus,
 };
 
@@ -45,85 +45,23 @@ fn block_on<F: std::future::Future>(fut: F) -> Result<F::Output, CloudError> {
 
 // ───────────────────────── BlobStorage ─────────────────────────
 
-/// `BlobStorage` over Cloudflare R2 via the existing s5cmd client.
+/// `BlobStorage` over Cloudflare R2.
 ///
-/// Keys are full `s3://bucket/key` URIs (the provider-native locator),
-/// matching every other tool in the fleet. `head`/`list` are derived
-/// from the same `s5cmd ls` the worker already uses.
-pub struct R2BlobStorage {
-    client: R2Client,
-}
+/// The impl itself now lives in the shared `zen-cloud-s3` crate (R2 is
+/// S3-compatible, so one impl serves vast.ai + SaladCloud + DO + AWS —
+/// spec §1.9 item 4). `R2BlobStorage` is a vast.ai-named alias for that
+/// shared [`zen_cloud_s3::S3BlobStorage`], kept so every call site that
+/// referenced `R2BlobStorage` compiles unchanged.
+pub use zen_cloud_s3::S3BlobStorage as R2BlobStorage;
 
-impl R2BlobStorage {
-    pub fn new(client: R2Client) -> Self {
-        Self { client }
-    }
-
-    /// Convenience: build from the same args the worker uses.
-    pub fn from_worker_args(args: &crate::worker::WorkerArgs) -> Result<Self, CloudError> {
-        let client = R2Client::new(args).map_err(CloudError::storage)?;
-        Ok(Self { client })
-    }
-}
-
-impl BlobStorage for R2BlobStorage {
-    fn put(&self, key: &ArtifactKey, bytes: &[u8]) -> Result<(), CloudError> {
-        // s5cmd uploads files, not stdin streams — stage to a temp file
-        // then `cp`, mirroring the claim writer's temp-file pattern.
-        let tmp = std::env::temp_dir().join(format!(
-            "zen-cloud-vastai-put-{}-{}.bin",
-            std::process::id(),
-            blob_basename(key)
-        ));
-        std::fs::write(&tmp, bytes).map_err(CloudError::storage)?;
-        let r = block_on(self.client.upload(&tmp, key.as_str()))?;
-        let _ = std::fs::remove_file(&tmp);
-        r.map_err(CloudError::storage)
-    }
-
-    fn get(&self, key: &ArtifactKey) -> Result<Vec<u8>, CloudError> {
-        let bytes = block_on(self.client.cat(key.as_str()))?;
-        if bytes.is_empty() && !block_on(self.client.exists(key.as_str()))? {
-            return Err(CloudError::Storage(format!("object not found: {key}")));
-        }
-        Ok(bytes)
-    }
-
-    fn head(&self, key: &ArtifactKey) -> Result<Option<BlobMeta>, CloudError> {
-        // s5cmd `ls <uri>` prints `<date> <time> <size> <key>` for a
-        // single object. We surface size; ETag is not exposed by the
-        // s5cmd ls path (Phase C's native aws-sdk client will add it).
-        let exists = block_on(self.client.exists(key.as_str()))?;
-        if !exists {
-            return Ok(None);
-        }
-        // We don't currently parse size out of `ls`; report size 0 +
-        // no etag. Callers that only need existence use `exists`/`list`.
-        Ok(Some(BlobMeta {
-            size: 0,
-            etag: None,
-        }))
-    }
-
-    fn list(&self, prefix: &str) -> Result<Vec<ArtifactKey>, CloudError> {
-        let out = block_on(self.client.ls_keys(prefix))?;
-        out.map_err(CloudError::storage)
-            .map(|keys| keys.into_iter().map(ArtifactKey).collect())
-    }
-
-    fn delete(&self, key: &ArtifactKey) -> Result<(), CloudError> {
-        block_on(self.client.rm(key.as_str()))?.map_err(CloudError::storage)
-    }
-}
-
-fn blob_basename(key: &ArtifactKey) -> String {
-    key.as_str()
-        .rsplit('/')
-        .next()
-        .unwrap_or("blob")
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
-        .collect()
+/// Convenience constructor: build an [`R2BlobStorage`] from the same
+/// args the worker uses. The shared `S3BlobStorage` takes an
+/// already-built client, so this bridges from vast.ai `WorkerArgs`.
+pub fn r2_blob_storage_from_worker_args(
+    args: &crate::worker::WorkerArgs,
+) -> Result<R2BlobStorage, CloudError> {
+    let client = crate::worker::r2::new_from_args(args).map_err(CloudError::storage)?;
+    Ok(R2BlobStorage::new(client))
 }
 
 // ───────────────────────── CredentialSource ─────────────────────────
@@ -405,10 +343,23 @@ mod tests {
     }
 
     #[test]
-    fn blob_basename_sanitizes() {
+    fn r2_blob_storage_alias_is_the_shared_s3_impl() {
+        // The R2 `BlobStorage` impl + temp-file basename sanitisation
+        // were factored into the shared `zen-cloud-s3` crate (spec §1.9
+        // item 4); `R2BlobStorage` here is the re-exported alias of
+        // `zen_cloud_s3::S3BlobStorage`. This asserts the alias really
+        // is the shared impl, exposes its client, and still satisfies
+        // the core `BlobStorage` trait. (The basename-sanitisation
+        // behaviour itself is unit-tested in `zen-cloud-s3`'s `blob`
+        // module, which is where that code now lives.)
+        let client = R2Client::new("s5cmd", "https://example.r2.cloudflarestorage.com", "r2");
+        let storage = R2BlobStorage::new(client);
         assert_eq!(
-            blob_basename(&ArtifactKey("s3://b/run/omni/abc 123.parquet".into())),
-            "abc123.parquet"
+            storage.client().endpoint,
+            "https://example.r2.cloudflarestorage.com"
         );
+        // It satisfies the core `BlobStorage` trait (compile-time check).
+        fn _assert_blob_storage<T: BlobStorage>(_: &T) {}
+        _assert_blob_storage(&storage);
     }
 }
