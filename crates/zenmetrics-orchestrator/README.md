@@ -375,6 +375,75 @@ Light callers that just want the capability detection (e.g. a CI sanity
 check that the machine has the expected GPU model) build with default
 features.
 
+## Dependency on `lilith/cubecl` fork
+
+This crate (and the rest of the zenmetrics GPU stack) pins cubecl to
+the `lilith/cubecl` fork via `[patch.crates-io]` in the workspace
+root `Cargo.toml`. The fork carries a single patch on top of stock
+cubecl 0.10.0: a pinned-host-buffer fast path for `create_from_slice`
+uploads.
+
+**Why.** CUDA's `cuMemcpyHtoDAsync` from pageable host memory caps at
+~5-6 GB/s because the driver internally stages through a hidden
+pinned bounce buffer. Allocating the host buffer with
+`cuMemAllocHost_v2` (= "pinned" / "page-locked") lets the driver DMA
+directly at 12-25 GB/s on PCIe 4.0. cvvdp-gpu's 12 MP warm-ref bench
+goes from 95 ms to 22 ms — a ~4.3× speedup — purely from this
+patch. See `docs/CUBECL_GOTCHAS.md` §G6.5 in the workspace root for
+the full diagnosis.
+
+The patch:
+
+- Adds `ComputeClient::create_from_slice_pinned(&[u8]) -> Handle` for
+  hot per-call uploads that want to skip the
+  `caller → pageable Vec<u8> → pinned Bytes` extra memcpy.
+- Adds `ComputeClient::reserve_staging(&[usize]) -> Vec<Bytes>` for
+  pre-reserving pinned slabs the caller fills in place.
+- Adds `ComputeClient::create_tensors_from_slices_pinned` for batch
+  variants.
+- Transparently routes the existing `create_from_slice` /
+  `create_tensor_from_slice` / `create_tensors_from_slices` paths
+  through `ComputeServer::staging`, so any caller of the default API
+  gets the pinned-upload speedup without source changes.
+
+**Upstream PR.** The patch has been drafted as a PR against
+`tracel-ai/cubecl` (referenced as draft PR **#1334**). See
+[`../zenmetrics-api/docs/PINNED_UPLOAD_UPSTREAM_PR.md`](../zenmetrics-api/docs/PINNED_UPLOAD_UPSTREAM_PR.md)
+for the full diff, bench numbers, and submission steps.
+
+**Workspace pin** (from the root `Cargo.toml`):
+
+```toml
+[patch.crates-io]
+cubecl         = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-runtime = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-core    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-common  = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-ir      = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cuda    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cpu     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-wgpu    = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-hip     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+cubecl-cpp     = { git = "https://github.com/lilith/cubecl.git", rev = "de2f98573902efe60717cbfc7f8e4f9d630d723e" }
+```
+
+**Downstream opt-in.** If you're consuming `zenmetrics-orchestrator`
+from a separate workspace, add the same `[patch.crates-io]` block to
+your workspace `Cargo.toml`. All ten `cubecl-*` crates must be patched
+to the same rev — partial patches mix patched and unpatched code
+paths in the dep graph and silently lose the speedup. Backends without
+a pinned-memory concept (cubecl-wgpu Metal/Vulkan, cubecl-cpu) ignore
+`staging` and behave exactly as stock cubecl, so the patch is safe to
+apply unconditionally even when CUDA isn't in use.
+
+**Sunset plan.** Once the upstream PR merges and a cubecl release
+ships the change, this crate will drop the fork pin entirely and
+return to crates.io versions. The `create_from_slice_pinned` and
+`reserve_staging` API symbols are stable across that transition —
+they exist on the fork today and will exist on upstream post-merge —
+so downstream code paths in cvvdp-gpu / iwssim-gpu / etc. don't need
+to change.
+
 ## Migration from `zenmetrics-api`
 
 See [`docs/MIGRATION_FROM_API.md`](docs/MIGRATION_FROM_API.md) for
