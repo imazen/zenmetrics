@@ -71,12 +71,16 @@ jobs:
           git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
-          # butteraugli sits one directory up from the `zen/` tree
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
           # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). CI mirrors that by cloning to ../../butteraugli.
-          mkdir -p ../../butteraugli
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
-          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -155,12 +159,16 @@ jobs:
           git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
-          # butteraugli sits one directory up from the `zen/` tree
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
           # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). CI mirrors that by cloning to ../../butteraugli.
-          mkdir -p ../../butteraugli
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
-          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cross
         run: cargo install --locked cross
@@ -234,12 +242,16 @@ jobs:
           git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
-          # butteraugli sits one directory up from the `zen/` tree
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
           # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). CI mirrors that by cloning to ../../butteraugli.
-          mkdir -p ../../butteraugli
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
-          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -304,12 +316,16 @@ jobs:
           git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
-          # butteraugli sits one directory up from the `zen/` tree
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
           # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). CI mirrors that by cloning to ../../butteraugli.
-          mkdir -p ../../butteraugli
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
-          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -360,12 +376,16 @@ jobs:
           git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
-          # butteraugli sits one directory up from the `zen/` tree
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
           # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). CI mirrors that by cloning to ../../butteraugli.
-          mkdir -p ../../butteraugli
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli/butteraugli
-          git -C ../../butteraugli/butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
