@@ -32,6 +32,31 @@ Workspace conventions per the global rules:
   No scheduling, no benchmark runner, no worker pool — those come
   in later phases. See `crates/zenmetrics-api/docs/ORCHESTRATOR_DESIGN.md`.
 
+- `zen-cloud-core::r2creds` — shared, provider-agnostic Cloudflare R2
+  scoped-credential minter. `mint_scoped_r2_cred(...)` hits the verified
+  account-level `temp-access-credentials` endpoint; `Permission` enum
+  (`ObjectReadWrite`/`ObjectReadOnly`/`AdminReadWrite`/`AdminReadOnly`)
+  serializes to the exact CF wire strings; `ScopedR2Cred` carries the
+  session token consumers MUST inject as `AWS_SESSION_TOKEN`. Reused by
+  the salad/runpod/vastai launchers (3c233dc).
+- `zen-cloud-salad` launcher — per-sweep scoped R2 cred mint+inject:
+  `R2ParentCreds::from_env`, `ScopedCredSpec` (bucket + prefixes + TTL,
+  6h default, object-read-write), `SaladApi::mint_sweep_r2_cred`, and
+  `SaladApi::create_container_group_with_scoped_cred` (opt-in minting;
+  injects `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`
+  into the container-group env). `SaladEnvCredentials` now also resolves
+  `AWS_SESSION_TOKEN`/`R2_SESSION_TOKEN`. Scoped creds limit a compromised
+  consumer-GPU node's blast radius to one bucket (d861b9b).
+
+### Fixed
+
+- `scripts/sweep/entrypoint_salad.sh` — write `aws_session_token` into
+  `~/.aws/credentials` when `AWS_SESSION_TOKEN` (or `R2_SESSION_TOKEN`) is
+  present, so minted scoped/temporary R2 creds work (a temp key+secret
+  without the session token 403s). Absent => unchanged back-compat for
+  permanent-token / root-key use (0ff85b4). NOTE: requires a local image
+  rebuild before temp creds work end-to-end on a Salad node.
+
 ### ssim2-gpu — refactor: orientation-aware error_maps + IIR untransposed building blocks — 2026-05-27
 
 Adds `Ssim2::blur_plane_two_pass_iir_untransposed` (uses the new
