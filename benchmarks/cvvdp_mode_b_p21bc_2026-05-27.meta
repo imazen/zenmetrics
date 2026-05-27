@@ -1,0 +1,41 @@
+benchmark: cvvdp_mode_b_p21bc_2026-05-27
+date: 2026-05-27
+host: lilith (water-cooled AMD Ryzen 9 7950X + RTX 5070 12 GB)
+gpu: NVIDIA GeForce RTX 5070 (driver 596.21, CUDA 13.2)
+backend: cubecl-cuda 0.10.0 (lilith fork, rev de2f98573902efe60717cbfc7f8e4f9d630d723e)
+commits:
+  - P2.1b: 3a1adf68 (perf(cvvdp-gpu): P2.1b — extend per-strip CSF helper to body+halo dispatch)
+  - P2.1c: (this commit) perf(cvvdp-gpu): P2.1c — invert outer loop to strip-major for k < k_split
+command: cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda
+purpose: |
+  Verify P2.1b+P2.1c together preserve JOD bit-identity Full vs
+  Mode B at 1024² and 4096², and confirm the strip-major-outer
+  refactor doesn't introduce a wall-time regression beyond
+  MODE_SELECTION.md's budgets (full ≤20% slower, strip ≤3× full).
+
+  Memory result: 4096² Mode B nvsmi delta moved from -22.7% (pre-
+  P2.1b, body-only strip buffers) to -18.2% (P2.1b+P2.1c, R_k-sized
+  strip buffers). The 4.5pp delta is the buffer-growth cost of body+
+  halo CSF dispatch — necessary for correctness in strip-major-outer.
+  The user-visible memory drop toward the -80% estimator target
+  arrives with P2.4-P2.8 (transient buffer shrinks enabled by strip-
+  major-outer dispatch).
+
+  Wall-time result: at 4096², Mode B is now FASTER than Full
+  (4.67s vs 5.61s, -16.8% wall). P2.1c's strip-major-outer with
+  upfront transient allocation avoids the cubecl pool churn of the
+  pre-P2.1c lazy-per-level allocation pattern under level-major-
+  outer. This is well within MODE_SELECTION.md's "strip ≤ 3× full"
+  budget; Mode B exceeds Full at this size.
+findings:
+  - JOD bit-identical (|diff| = 0.000000) Full vs Mode B at 1024² and 4096²
+  - 1024² wall-time: Full 1.67s, Mode B 1.53s (-8.4%)
+  - 4096² wall-time: Full 5.61s, Mode B 4.67s (-16.8%)
+  - 1024² nvsmi delta: identical at 385 MiB (driver noise floor)
+  - 4096² nvsmi delta: Full +4225 MiB, Mode B +3457 MiB (-18.2%)
+  - 18 cvvdp-gpu strip-related parity tests pass (mode_b_walker_parity,
+    strip_mode_b_parity, strip_mode_b_csf_halo_parity, strip_mode_e_parity,
+    strip_mode_e_phase3, capped_pyramid_smoke)
+  - Pre-existing failures (not P2.1bc-related):
+    - compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend (cubecl-cpu atomic-f32)
+    - mode_e_strip_h_body_explicit_override (h_body=768 violates power-of-two)

@@ -1,0 +1,33 @@
+# cvvdp Mode B P2.1b + P2.1c — body+halo CSF + strip-major-outer (2026-05-27)
+#
+# Source code state: HEAD after P2.1b (perf(cvvdp-gpu): P2.1b — extend
+# per-strip CSF helper to body+halo dispatch) + P2.1c (perf(cvvdp-gpu):
+# P2.1c — invert outer loop to strip-major for k < k_split). Hardware:
+# water-cooled 7950X + NVIDIA RTX 5070 (CUDA driver 596.21, runtime 13.2).
+#
+# Measurement: examples/mem_mode_b_vs_full.rs (subprocess-per-cell;
+# child process holds GPU buffers for CHILD_HOLD_MS=400 while parent
+# samples nvidia-smi memory.used delta).
+#
+# columns: size_label, mode, estimate_mib, nvsmi_delta_mib, wall_s, jod
+#
+# JOD parity vs Full mode at both sizes: |diff| = 0.000000 (bit-identical).
+#
+# Key result: at 4096² Mode B (h_body=256) now sits at -18.2% vs Full
+# at the nvsmi-driver level (3457 MiB vs 4225 MiB). The estimator
+# predicts -82.2% (565 MiB vs 3178 MiB master-baseline) — the gap is
+# the dominant cubecl pool over-allocation + full-image t_p_*/m_*
+# transients which are NOT YET shrunk to per-strip in P2.1b/c. Those
+# shrinks land in P2.4-P2.8.
+#
+# Wall-time: Mode B is FASTER than Full at 4096² (4.67s vs 5.61s)
+# because P2.1c's strip-major-outer with upfront transient
+# allocation avoids the cubecl pool churn of today's lazy-per-level
+# allocation under level-major-outer. Well within MODE_SELECTION.md's
+# ≤3× strip vs full budget; in fact Mode B is now faster.
+
+size_label,mode,estimate_mib,nvsmi_delta_mib,wall_s,jod
+1024sq,full,178,385,1.67,9.4583
+1024sq,mode_b_p21bc,104,385,1.53,9.4583
+4096sq,full,2858,4225,5.61,9.4585
+4096sq,mode_b_p21bc,565,3457,4.67,9.4585

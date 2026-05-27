@@ -4386,8 +4386,49 @@ impl<R: Runtime> Cvvdp<R> {
             Some(StripConfig { mode: StripMode::Pair, .. }),
         );
 
+        // P2.1c outer-loop inversion (2026-05-27): in Mode B
+        // (StripPair) the shallow levels (k < k_split) run strip-
+        // major-outer: each strip's CSF + masking + pool fire across
+        // all shallow levels in sequence, before the next strip
+        // starts. P2.1b's body+halo CSF dispatch lets each strip's
+        // masking find valid t_p_*[k] data in its halo window — the
+        // CSF for strip s writes t_p_*[k]'s body+halo rows, and
+        // masking for the same strip reads them. Deep levels (k >=
+        // k_split) and the baseband continue level-major-outer in
+        // the existing `for k in 0..n_levels` loop below — Mode B
+        // skips already-handled shallow levels via `if k < k_split
+        // && mode_b_pair && shallow_done { continue }`.
+        let k_split_us = if mode_b_pair {
+            let n_levels_u32 = n_levels as u32;
+            let h_body = match self.strip_config {
+                Some(StripConfig { h_body, .. }) => h_body,
+                None => 0, // unreachable — mode_b_pair implies strip_config
+            };
+            // Cap at non-baseband-level count. `mode_b_k_split` can
+            // return `n_levels` for tiny images where h_body covers
+            // every level — but the baseband (k = n_levels - 1) is
+            // handled by the level-major-outer loop below (it uses
+            // `diff_abs_3ch` not csf/masking, so the strip-major-outer
+            // dispatch doesn't apply). At minimum we exclude the
+            // baseband from the strip-major-outer phase.
+            let k_raw = mode_b_k_split(h_body, n_levels_u32) as usize;
+            k_raw.min(n_levels.saturating_sub(1))
+        } else {
+            0
+        };
+        // Run strip-major-outer for shallow levels (Mode B only).
+        // The deep-level + baseband loop below picks up at k_split.
+        if mode_b_pair && k_split_us > 0 {
+            self._run_d_bands_strip_major_shallow(k_split_us)?;
+        }
+
         let t_band_loop = std::time::Instant::now();
         for k in 0..n_levels {
+            // P2.1c: Mode B already ran shallow levels strip-major-
+            // outer above; skip them in the level-major-outer loop.
+            if mode_b_pair && k < k_split_us {
+                continue;
+            }
             let is_baseband = k == n_levels - 1;
             // band_mul = 2.0 on every level except the finest (k=0) and the
             // baseband — those use 1.0 per cvvdp's `lpyr.get_band` contract.
@@ -4847,6 +4888,265 @@ impl<R: Runtime> Cvvdp<R> {
             );
         }
 
+        Ok(())
+    }
+
+    /// P2.1c strip-major-outer band loop for shallow levels in Mode
+    /// B. (2026-05-27)
+    ///
+    /// **Dispatch shape** (vs the existing level-major-outer loop in
+    /// `_run_d_bands_band_loop`):
+    ///
+    /// ```text
+    /// Allocate full-image DBandsTransient for each shallow level k in
+    /// 0..k_split (k_split levels alive simultaneously).
+    /// For each strip s in 0..n_strips_at_level_0:
+    ///     For each k in 0..k_split:
+    ///         CSF strip helper (P2.1b) writes body+halo of t_p_*[k].
+    ///         Masking strip helper (P2.1a) reads body+halo of t_p_*[k]
+    ///                                       writes body of d_strip[k]
+    ///                                       inline pool into partials_h.
+    /// Drop all shallow transients.
+    /// ```
+    ///
+    /// **Why strip-major outer.** The masking V-blur reads m_mid rows
+    /// in the body+halo window of `t_p_*[k]` (chained through
+    /// min_abs/H-blur from t_p_*[k]). P2.1b's body+halo CSF dispatch
+    /// populates `t_p_*[k]` for the strip's body+halo rows, so the
+    /// masking helper reads its own halo from its own CSF dispatch
+    /// instead of relying on sibling strips' contributions — the
+    /// strict precondition for strip-major-outer correctness.
+    ///
+    /// **JOD invariant.** Bit-identical to today's level-major-outer
+    /// dispatch because:
+    ///   1. CSF for each (s, k) writes deterministic values at every
+    ///      global row (band_ref + log_l_bkg are full-image; the
+    ///      strip-aware upscale + subtract_weber are pure functions
+    ///      of the global row index via `zy_base = local_y +
+    ///      body_offset_y`). Halo overlap rows receive bit-identical
+    ///      writes from any strip touching them.
+    ///   2. Masking strip helper's halo m_mid reads pull from t_p_*[k]
+    ///      that this strip just wrote (body+halo from CSF), so the
+    ///      read pattern is identical to today's where each strip's
+    ///      masking ran after ALL strips' CSF at level k.
+    ///   3. mult_mutual writes only body rows of d_strip[k]; the
+    ///      inline pool dispatch reads body rows and atomic-adds into
+    ///      partials_h. Atomic-f32 reduction order can vary across
+    ///      strips but the values at each global row are identical
+    ///      to the level-major-outer dispatch.
+    ///
+    /// **Memory cost.** k_split full-image DBandsTransients alive
+    /// simultaneously. At 4096² h_body=256 that's 5 transients
+    /// (k_split=5), ~250 MiB additional vs the lazy-per-level path.
+    /// P2.4-P2.5 will shrink these transients to per-strip sizes,
+    /// recovering the memory plus more. P2.1c is the enabling
+    /// refactor; the user-visible memory drop arrives with those
+    /// shrinks.
+    ///
+    /// **Constraints**:
+    ///   - `k_split` ≥ 1 (caller checks; we still bail safely).
+    ///   - Mode B `strip_config.h_body` is Some and h_body > 0
+    ///     (enforced by `Cvvdp::new_strip_pair`).
+    ///   - Per-strip d_strip buffer exists at every shallow level
+    ///     (`build_d_bands_scratch` allocates under StripPair).
+    ///
+    /// # Errors
+    ///
+    /// Propagates errors from
+    /// [`Self::_dispatch_dist_weber_csf_strip_s_for_level`] (the only
+    /// fallible op in the chain). Masking helper is infallible.
+    fn _run_d_bands_strip_major_shallow(&mut self, k_split_us: usize) -> Result<()> {
+        // PU blur post-scale (10^MASK_C) — constant per Cvvdp config.
+        let pu_scale = 10.0_f32.powf(MASK_C);
+
+        let h_body_at_0 = match self.strip_config {
+            Some(StripConfig { h_body, .. }) => h_body,
+            None => return Err(Error::InvalidImageSize),
+        };
+
+        let n_strips_at_0 = {
+            let fine_h_0 = self.gauss_ref[0].h;
+            if fine_h_0 <= h_body_at_0 {
+                1
+            } else {
+                fine_h_0.div_ceil(h_body_at_0)
+            }
+        };
+
+        // Allocate full-image DBandsTransients for every shallow
+        // level upfront. These live for the whole strip-major-outer
+        // phase; each strip's CSF + masking writes into the level-k
+        // transient. After the phase, the transients drop (cubecl
+        // pool recycles).
+        let mut transients: Vec<DBandsTransient> = Vec::with_capacity(k_split_us);
+        for k in 0..k_split_us {
+            let (_bw, _bh, n_px) = self.level_dims(k);
+            transients.push(DBandsTransient::new(&self.client, n_px));
+        }
+
+        // Resolve REF source per shallow level once (mode-dependent,
+        // but uniform across strips within this phase). For Mode B
+        // (StripPair) the REF data lives in `self.bands_ref[k].planes`
+        // and `self.weber_scratch[k].log_l_bkg`. Mode E (CachedRef)
+        // does NOT use this strip-major-outer path — see caller's
+        // mode_b_pair gate.
+        // Resolve the (ch_gain_a, ch_gain_rg, ch_gain_vy) tuple per
+        // level once. `is_baseband = false` for k < k_split (k_split
+        // never reaches n_levels-1 for h_body satisfying the design
+        // table — design table caps k_split at log2(h_body / 12)+1).
+        struct ShallowLevelInputs {
+            band_ref_a: cubecl::server::Handle,
+            band_ref_rg: cubecl::server::Handle,
+            band_ref_vy: cubecl::server::Handle,
+            log_l_bkg: cubecl::server::Handle,
+            ch_gain: [f32; N_CHANNELS],
+            bw: usize,
+            bh: usize,
+        }
+        let mut per_level_inputs: Vec<ShallowLevelInputs> =
+            Vec::with_capacity(k_split_us);
+        for k in 0..k_split_us {
+            let (bw, bh, _n_px) = self.level_dims(k);
+            // band_mul = 1.0 at k=0, else 2.0 (shallow levels never
+            // include baseband).
+            let band_mul: f32 = if k == 0 { 1.0 } else { 2.0 };
+            let ch_gain = ch_gain_for_band(false, band_mul);
+            per_level_inputs.push(ShallowLevelInputs {
+                band_ref_a: self.bands_ref[k].planes[0].clone(),
+                band_ref_rg: self.bands_ref[k].planes[1].clone(),
+                band_ref_vy: self.bands_ref[k].planes[2].clone(),
+                log_l_bkg: self.weber_scratch[k].log_l_bkg.clone(),
+                ch_gain,
+                bw,
+                bh,
+            });
+        }
+
+        // Strip-major outer over shallow levels.
+        for s in 0..n_strips_at_0 {
+            for k in 0..k_split_us {
+                let inp = &per_level_inputs[k];
+                let band_ref_a = &inp.band_ref_a;
+                let band_ref_rg = &inp.band_ref_rg;
+                let band_ref_vy = &inp.band_ref_vy;
+                let log_l_bkg_full = &inp.log_l_bkg;
+                let ch_gain = &inp.ch_gain;
+                let bw = &inp.bw;
+                let bh = &inp.bh;
+
+                // Strip index at level k is `s` because all shallow
+                // levels' strips share the level-0 strip partition
+                // (strip s at level k covers rows
+                // `[s*strip_h_at_k, s*strip_h_at_k + strip_h_at_k)`
+                // where `strip_h_at_k = (h_body >> k).max(1)`).
+                let t_p_ref_h: [cubecl::server::Handle; 3] = [
+                    transients[k].t_p_ref[0].clone(),
+                    transients[k].t_p_ref[1].clone(),
+                    transients[k].t_p_ref[2].clone(),
+                ];
+                let t_p_dis_h: [cubecl::server::Handle; 3] = [
+                    transients[k].t_p_dis[0].clone(),
+                    transients[k].t_p_dis[1].clone(),
+                    transients[k].t_p_dis[2].clone(),
+                ];
+
+                // Stage A: P2.1b body+halo CSF strip helper.
+                self._dispatch_dist_weber_csf_strip_s_for_level(
+                    s,
+                    k,
+                    band_ref_a,
+                    band_ref_rg,
+                    band_ref_vy,
+                    log_l_bkg_full,
+                    &t_p_ref_h,
+                    &t_p_dis_h,
+                    *ch_gain,
+                )?;
+
+                // Stage B: P2.1a masking strip helper. Reads body+halo
+                // of t_p_*[k] (populated by Stage A), writes body of
+                // d_strip[k], inline-pools into partials_h.
+                let scratch_d = &self.d_scratch[k];
+                let d_strip = scratch_d.d_strip.as_ref().expect(
+                    "DBandsScratch.d_strip must be Some at non-baseband levels in StripMode::Pair",
+                );
+                let d_h: [cubecl::server::Handle; 3] = [
+                    d_strip[0].clone(),
+                    d_strip[1].clone(),
+                    d_strip[2].clone(),
+                ];
+
+                // Masking transients for this level.
+                let m_raw_h: [cubecl::server::Handle; 3] = [
+                    transients[k].m_raw[0].clone(),
+                    transients[k].m_raw[1].clone(),
+                    transients[k].m_raw[2].clone(),
+                ];
+                let m_mid_h: [cubecl::server::Handle; 3] = [
+                    transients[k].m_mid[0].clone(),
+                    transients[k].m_mid[1].clone(),
+                    transients[k].m_mid[2].clone(),
+                ];
+                let m_blur_h: [cubecl::server::Handle; 3] = [
+                    transients[k].m_blur[0].clone(),
+                    transients[k].m_blur[1].clone(),
+                    transients[k].m_blur[2].clone(),
+                ];
+
+                // Masking helper requires `use_blur` semantics. For
+                // shallow levels at production sizes, bw and bh are
+                // always > PU_PADSIZE (k_split is chosen so all
+                // shallow levels have body dim ≥ 12). If somehow a
+                // tiny shallow level lands here, fall back to the
+                // no-blur dispatch with single full-band launch +
+                // pool. The strip helper itself is the use_blur path.
+                let use_blur = *bw > PU_PADSIZE && *bh > PU_PADSIZE;
+                if use_blur {
+                    self._run_band_masking_strip_s_for_level(
+                        s as usize,
+                        k,
+                        *bw,
+                        *bh,
+                        pu_scale,
+                        &t_p_ref_h,
+                        &t_p_dis_h,
+                        &m_raw_h,
+                        &m_mid_h,
+                        &m_blur_h,
+                        &d_h,
+                    );
+                } else {
+                    // Small shallow level (shouldn't happen at
+                    // production sizes given k_split's design table,
+                    // but stays correct as a defensive fallback).
+                    // Run the no-blur dispatch + pool on this strip's
+                    // body rows. n_px here equals bw*bh — the full
+                    // band — because the no_blur fallback dispatches
+                    // over the whole band rather than per-strip. So
+                    // we only fire this branch once per band (when s
+                    // == 0) to avoid double-counting.
+                    if s == 0 {
+                        self._run_band_masking_strip_s_for_level(
+                            s as usize,
+                            k,
+                            *bw,
+                            *bh,
+                            pu_scale,
+                            &t_p_ref_h,
+                            &t_p_dis_h,
+                            &m_raw_h,
+                            &m_mid_h,
+                            &m_blur_h,
+                            &d_h,
+                        );
+                    }
+                }
+            }
+        }
+
+        // Drop transients implicitly here (Vec goes out of scope at
+        // function return). cubecl pool reclaims the GPU memory.
+        let _ = transients;
         Ok(())
     }
 

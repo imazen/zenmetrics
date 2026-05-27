@@ -1344,3 +1344,116 @@ the existing level-major caller (P2.1b). The outer-loop inversion is
 then a pure scheduling refactor (P2.1c) — no kernel changes, no
 buffer changes. Splitting commits keeps each commit's risk bounded
 by one parity gate.
+
+## Phase 2 — P2.1c LANDED (2026-05-27)
+
+### Summary
+
+P2.1c inverts the outer dispatch loop in
+`_run_d_bands_band_loop` for shallow levels (`k < k_split`) in Mode
+B. A new helper `_run_d_bands_strip_major_shallow(k_split_us)`:
+
+1. Allocates `DBandsTransient` for every shallow level upfront
+   (k_split levels alive simultaneously).
+2. Iterates `for s in 0..n_strips_at_level_0 { for k in 0..k_split }`.
+3. Per (s, k): calls the P2.1b CSF strip helper (writes body+halo of
+   `t_p_*[k]`) then the P2.1a masking strip helper (reads body+halo
+   of `t_p_*[k]`, writes body of `d_strip[k]`, inline-pools into
+   `partials_h`).
+4. Drops transients after the strip-major-outer phase.
+
+Deep levels (`k >= k_split`) and the baseband (`k = n_levels-1`)
+continue via the existing level-major-outer loop. Mode B's outer
+loop now skips already-handled shallow levels via the `if mode_b_pair
+&& k < k_split_us { continue }` gate.
+
+### Why this works (correctness argument)
+
+The masking V-blur reads `m_mid` rows above and below the strip's
+body, which chain back to needing `t_p_*[k]` for the strip's body+
+halo window. In today's level-major-outer, all strips' CSF complete
+at level k BEFORE any masking strip runs, so masking's halo reads
+find sibling-strip-written data. In P2.1c's strip-major-outer, each
+strip's masking immediately follows its CSF — but P2.1b's body+halo
+CSF dispatch ensures `t_p_*[k]` for this strip's body+halo is
+populated by THIS strip's CSF before masking reads it. So masking
+finds its own halo data, never reading stale/uninitialized rows.
+
+### JOD parity gates (all bit-identical |diff|=0.0)
+
+Same scaffold as P2.1b — all parity tests pass:
+- `mode_b_walker_jod_matches_full_at_128` — 128² h_body=32
+- `mode_b_walker_jod_matches_full_at_1024` / `_h_body_256` — 1024²
+- `p21b_csf_halo_parity_256_h_body_128` — 256² 2 strips
+- `p21b_csf_halo_parity_512_h_body_128_4_strips` — 512² 4 strips
+- `p21b_csf_halo_parity_1024_h_body_128_8_strips` — 1024² 8 strips
+- `p21b_csf_halo_deterministic_across_calls` — cross-call determinism
+- `p21b_csf_halo_parity_single_strip_degenerate` — single-strip case
+
+Plus existing strip mode tests still pass:
+- `strip_mode_b_parity` (6 tests): 6/6 ok (including 64×64 with
+  k_split capped at n_levels-1)
+- `strip_mode_e_parity` (10 tests, skipping pre-existing h_body=768 fail)
+- `strip_mode_e_phase3` (6 tests including 1024² Mode E)
+- `capped_pyramid_smoke` (1 test)
+
+### Measured nvidia-smi delta + wall-time (subprocess-per-cell)
+
+| size  | mode    | nvsmi MiB | wall_s | jod    |
+|-------|---------|-----------|--------|--------|
+| 1024² | Full    | +385      | 1.67   | 9.4583 |
+| 1024² | Mode B  | +385      | 1.53   | 9.4583 |
+| 4096² | Full    | +4225     | 5.61   | 9.4585 |
+| 4096² | Mode B  | +3457     | 4.67   | 9.4585 |
+
+JOD bit-identical at both sizes. **Mode B is now FASTER than Full at
+4096² (4.67s vs 5.61s, -16.8% wall)** — the strip-major-outer
+allocates k_split transients upfront instead of churning per level,
+saving cubecl pool reallocation cost.
+
+Memory: 4096² Mode B is -18.2% vs Full at the nvsmi-driver level.
+The estimator predicts -82.2% — the gap is the full-image t_p_*/m_*
+transients still alive in the strip-major-outer phase. P2.4-P2.8
+shrink those to per-strip; that's where the user-visible memory drop
+toward -80% nvsmi lands.
+
+### What P2.1c does NOT do
+
+- Does NOT shrink any buffers: t_p_*[k], m_*[k] stay full-image
+  per shallow level, and now k_split of them are alive
+  simultaneously (vs lazy-per-level today).
+- Does NOT change deep-level dispatch (k >= k_split keeps level-
+  major-outer + lazy transient).
+- Does NOT change baseband dispatch (k = n_levels-1 uses
+  diff_abs_3ch, unchanged).
+
+### Memory bookkeeping
+
+Strip-major-outer with k=k_split transients alive simultaneously
+adds memory vs lazy-per-level pattern. At 4096² h_body=256:
+- k_split = 5 → 5 levels' transients alive
+- Per-level transient: 5 buffer kinds × 3 channels × n_px × 4 bytes
+- Levels 0-4 n_px: 16M, 4M, 1M, 0.25M, 0.0625M = ~21.3M
+- Total simultaneous: 5 × 3 × 4 × 21.3M = ~1.28 GiB
+
+The 4225 - 3457 = 768 MiB nvsmi delta is consistent with this
+(the cubecl pool would have reused level transients in the lazy-
+per-level path, never holding 5 levels at once). The savings come
+from shallow-level d_strip + bands_dis_strip + upscaled_c_strip
+being per-strip-sized (much smaller than full-image).
+
+### Wall-time analysis
+
+The Mode B speedup at 4096² is counter-intuitive but explained by:
+- Lazy-per-level transient allocation under level-major-outer:
+  alloc → use → drop → cubecl pool stashes → next level alloc reuses
+  but kernel launches block on the pool while it returns the buffer.
+- Strip-major-outer with upfront allocation: zero pool churn during
+  the shallow-level work — all transients are committed memory the
+  whole time, so kernel launches don't stall on pool ops.
+
+This is a hidden win: the dispatch-order change happens to suit
+cubecl's pool semantics better than the previous lazy pattern.
+Whether the win persists at deeper levels (k_split=6 at h_body=512)
+is an open question, but the 4096² case shows the strip-major-outer
+isn't a perf regression — it's a perf improvement.

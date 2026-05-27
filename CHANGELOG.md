@@ -17,6 +17,49 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.1c — outer loop strip-major for k < k_split (2026-05-27)
+
+Inverts the outer dispatch loop in `_run_d_bands_band_loop` for
+shallow levels (`k < k_split`) in Mode B. New helper
+`_run_d_bands_strip_major_shallow(k_split)`:
+
+1. Allocates `DBandsTransient` for every shallow level upfront
+   (k_split levels simultaneously, ~1.3 GiB at 4096²).
+2. Iterates `for s in 0..n_strips { for k in 0..k_split }`.
+3. Per (s, k): P2.1b CSF strip helper (body+halo of `t_p_*[k]`)
+   → P2.1a masking strip helper (body of `d_strip[k]`, inline pool).
+
+Deep levels (k >= k_split) and baseband continue level-major-outer
+via the existing band loop (Mode B skips already-handled shallow
+levels via `if mode_b_pair && k < k_split { continue }`).
+
+Correctness rests on P2.1b's body+halo CSF guarantee: each strip's
+masking finds valid t_p_*[k] data in its halo window because the
+same strip's CSF just wrote those rows. JOD bit-identical
+(|diff|=0.0) Full vs Mode B at all tested sizes (128², 256², 512²,
+1024², 4096²) including 8-strip-per-image configurations.
+
+Measured at 4096² (subprocess-per-cell, nvidia-smi delta):
+- Wall-time: Mode B = 4.67s vs Full = 5.61s (**Mode B is FASTER**)
+- nvsmi delta: Mode B = +3457 MiB vs Full = +4225 MiB (-18.2%)
+
+The wall-time speedup is from avoiding cubecl pool churn — strip-
+major-outer pre-allocates k_split transients vs lazy-per-level's
+alloc/drop/reuse cycle. The memory delta vs Full stays at -18.2%
+(same as P2.1b) because strip-major-outer alone doesn't shrink
+full-image transients; P2.4-P2.8 do that work.
+
+Pre-existing failures (not P2.1c-related):
+- compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend
+- mode_e_strip_h_body_explicit_override (h_body=768 violates align)
+
+Files:
+- crates/cvvdp-gpu/src/pipeline.rs — `_run_d_bands_strip_major_shallow`
+  + Mode B early-call from `_run_d_bands_band_loop`.
+- crates/cvvdp-gpu/docs/STRIP_PROCESSING.md — P2.1c landed section.
+- benchmarks/cvvdp_mode_b_p21bc_2026-05-27.{csv,meta} — measurement
+  artifacts (commit hashes for reproduction).
+
 ### cvvdp-gpu — perf: P2.1b — per-strip CSF helper dispatches body+halo (2026-05-27)
 
 Extends `_dispatch_dist_weber_csf_strip_s_for_level` to dispatch
