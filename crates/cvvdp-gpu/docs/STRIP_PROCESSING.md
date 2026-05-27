@@ -803,59 +803,76 @@ walker-order changes to land together.
 > reading each `*_strip_kernel` / `*_strip_aware_kernel` against
 > the actual reflection bounds before sizing buffers off them.**
 
-### 1. Halo math is the first thing to nail down
+### 1. Halo math — VERIFIED 2026-05-27 (P2.0)
 
-The Phase 1 recipe (line 695) cites
-`halo_at_level_0(k) = ±2^k · 2 + ±6 · 2^k = 8·2^k`
-as the back-projected halo at level 0 needed to provide an
-8-band-row halo at level k.
+The pre-implementation analysis above hypothesized different
+formulas (`8·2^k` from the recipe, `max(body+halo, 2·next+2)` from
+§1's earlier pass arriving at 830 rows). Reading
+`downscale_strip_kernel` (`crates/cvvdp-gpu/src/kernels/pyramid.rs:928`)
+directly gives the verified semantics:
 
-The existing `mode_b_halo_at_level(k, k_split)` helper instead
-returns a **constant `8` band-resolution rows** for every shallow
-level. The two formulas describe different regimes:
+- The downscale kernel reads source rows at logical positions
+  `{2·dy_logical − 2, −1, 0, +1, +2}` per output row, with
+  reflection against logical bounds at image edges.
+- A strip needs halo on BOTH sides of the body (PU blur ±6 reads
+  both directions; reduce stencil reads ±2 above AND below).
+- Producing `H_dst` valid level-(k+1) rows from level-k source
+  needs `2·H_dst + 4` valid level-k source rows.
+- The level-k buffer must satisfy BOTH its own band-loop body+halo
+  (`body_k + 2·halo_band` with `halo_band = 8`) AND the next-level
+  reduce's source-row appetite (`2·R_{k+1} + 4`).
 
-- **`8` band-resolution rows** is the right halo at a band's own
-  resolution. The downscale stencil reads ±2 of input per output
-  row; the PU-blur reads ±6 of input per output row. 8 rows at
-  band k's resolution gives both stencils valid context within
-  the strip's own buffer at level k.
-- **`8·2^k` level-0 rows** is the brief's back-projected halo —
-  the number of level-0 rows the strip must hold so the chain of
-  reduces produces 8 valid rows of halo at level k.
+Recursion (deepest-shallow → shallowest):
+```
+R_{K−1} = body_{K−1} + 16
+R_k     = max(body_k + 16, 2·R_{k+1} + 4)   for K−1 > k ≥ 0
+```
 
-For h_body=512, n_levels=9, K_SPLIT=6, the back-projection chain
-(each level k's strip storage needs both body+halo_k at its own
-resolution AND `2·(body_{k+1} + halo_{k+1}) + 2` rows at the next
-level for the reduce stencil; the max wins):
+For `h_body = 512, K_SPLIT = 6`:
 
-- Level 5 (deepest shallow): body=16 + halo=8 = 24 rows.
-- Level 4: max(32+8, 2·24+2) = max(40, 50) = 50 rows.
-- Level 3: max(64+8, 2·50+2) = max(72, 102) = 102 rows.
-- Level 2: max(128+8, 2·102+2) = 206 rows.
-- Level 1: max(256+8, 2·206+2) = 414 rows.
-- Level 0: max(512+8, 2·414+2) = 830 rows.
+| k | body_k | R_k                          |
+|---|--------|------------------------------|
+| 5 | 16     | 32                           |
+| 4 | 32     | max(48, 2·32+4) = 68         |
+| 3 | 64     | max(80, 2·68+4) = 140        |
+| 2 | 128    | max(144, 2·140+4) = 284      |
+| 1 | 256    | max(272, 2·284+4) = 572      |
+| 0 | 512    | max(528, 2·572+4) = **1148** |
 
-So the level-0 strip needs ~830 rows (not 528 as the helper
-currently models, and not 16384 as a full-image alloc costs at
-4096²). The level-0 buffer footprint is ~`830·W·4 = 13.6 MiB` per
-channel per buffer at 4096² instead of `4096·W·4 = 64 MiB` —
-substantial savings, but smaller than the helper's optimistic
-`528·W·4 = 8.6 MiB`.
+Level-0 strip = **1148 rows** (not 528 from the optimistic helper,
+not 830 from the pre-impl analysis). At 4096² fine_w that's
+`1148·4096·4 = 18.8 MiB` per channel per buffer (vs 64 MiB full-
+image — **−70.6%** per buffer at level 0).
 
-These numbers depend on the EXACT reflection / stencil semantics
-in `downscale_strip_kernel`, `upscale_v_strip_kernel`,
-`pu_blur_v_3ch_scaled_strip_aware_kernel`, etc. The next agent
-MUST verify by reading those kernels' bounds before settling on
-the back-projection formula.
+The verified formula ships as `mode_b_strip_h_at_level(k, h_body,
+k_split)`. The estimator clamps `min(R_k, image_h_at_level_k)` at
+each level to handle the degenerate case where back-projected strip
+exceeds full-image (e.g. `1024² h_body=512` back-projects to 1148 >
+1024 at level 0 — degenerates to full-image storage, signaling the
+Auto resolver to pick Full).
 
-### 2. The current estimator (pipeline.rs:1213) is OPTIMISTIC
+### 2. Estimator — UPDATED 2026-05-27 (P2.0)
 
-`estimate_gpu_memory_bytes_strip_pair` uses
-`mode_b_halo_at_level(k) = 8` at every level. Under the
-back-projected halo (§1) the level-0 buffer grows by roughly
-`(830 / 528) ≈ 1.57×`. Across all shallow-level buffers the
-revised estimate sits between the existing optimistic `-88%`
-prediction and the full-image baseline — needs measurement.
+`estimate_gpu_memory_bytes_strip_pair` now uses
+`mode_b_strip_h_at_level` with the per-level clamp. Verified ratios:
+
+| size  | h_body | ratio (StripPair / Full)  | savings    |
+|-------|--------|---------------------------|------------|
+| 1024² | 256    | 58.7%                     | −41.3%     |
+| 1024² | 512    | 100% (degenerate)         | 0% — pick Full |
+| 4096² | 256    | **19.8%**                 | **−80.2%** |
+
+The 4096² result is excellent — the deep-level full-image floor is
+tiny (level 8 at 4096² is 16×16 px). Today's measured nvsmi delta
+of −22.7% will move to roughly the −80% estimator target once the
+per-strip buffers actually shrink (Phase 2's 7 buffer shrinks).
+
+`tests/mode_b_walker_parity.rs` asserts:
+- `1024² h_body=256 → ratio < 0.65` (P2.0: passes at 0.587)
+- `1024² h_body=512 → 0.99 ≤ ratio ≤ 1.05` (degenerate fallback)
+- `4096² h_body=256 → ratio < 0.25` (P2.0: passes at 0.198)
+
+JOD parity preserved (bit-identical |diff|=0.0 at 128² and 1024²).
 
 ### 3. The REF/DIST gauss_ref clobber forces a per-strip reorganization
 

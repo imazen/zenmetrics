@@ -1241,16 +1241,20 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
     let mut sum_level_pixels_v: usize = 0; // for vscratch (half-width fine_h)
     let mut buf_w = width;
     let mut buf_h = height; // updated each level
-    let mut buf_body = h_body;
     for k in 0..n_levels {
-        // Level pixel count.
+        // Level pixel count. Strip buffer height comes from the
+        // back-projected helper `mode_b_strip_h_at_level` (which
+        // accounts for the reduce chain's source-row requirements
+        // recursively); we clamp it to the level's full-image height
+        // because the strip can't legitimately exceed the whole image
+        // (happens at small (h, h_body) pairs — e.g. 1024² h_body=512
+        // back-projects to 1148 > 1024 at level 0, in which case the
+        // strip degenerates to full-image storage). Deep levels
+        // (k >= k_split) use full-image dims unconditionally.
         let n_lvl = if k < k_split {
-            // Strip buffer height = body_h + 2*halo at this level.
-            let halo = mode_b_halo_at_level(k as u32, k_split as u32);
-            let strip_h = buf_body.saturating_add(2 * halo);
+            let strip_h = mode_b_strip_h_at_level(k as u32, h_body, k_split as u32).min(buf_h);
             (buf_w as usize) * (strip_h as usize)
         } else {
-            // Full-image storage at this level.
             (buf_w as usize) * (buf_h as usize)
         };
         sum_level_pixels += n_lvl;
@@ -1260,8 +1264,7 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
         if k < n_levels.saturating_sub(1) {
             let cw = buf_w.div_ceil(2);
             let fine_h_eff = if k < k_split {
-                let halo = mode_b_halo_at_level(k as u32, k_split as u32);
-                buf_body.saturating_add(2 * halo)
+                mode_b_strip_h_at_level(k as u32, h_body, k_split as u32).min(buf_h)
             } else {
                 buf_h
             };
@@ -1271,9 +1274,6 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
         // Advance buffer dims for next level.
         buf_w = buf_w.div_ceil(2);
         buf_h = buf_h.div_ceil(2);
-        if buf_body > 1 {
-            buf_body = buf_body.div_ceil(2);
-        }
     }
 
     // gauss_ref + bands_ref + bands_dis: 3 pyramids × 3 channels each.
@@ -1286,9 +1286,10 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
         // Compute the largest per-level buffer pixel count the way
         // sum_level_pixels was computed above (strip-buf for k <
         // k_split, full-image for k >= k_split). The fine band
-        // (k = 0) always dominates.
-        let halo0 = mode_b_halo_at_level(0, k_split as u32);
-        let strip_h0 = h_body.saturating_add(2 * halo0);
+        // (k = 0) always dominates because back-projection accumulates
+        // halo as you climb up the pyramid. Clamp to full-image height
+        // for the small-image-large-h_body degenerate case.
+        let strip_h0 = mode_b_strip_h_at_level(0, h_body, k_split as u32).min(height);
         (width as usize) * (strip_h0 as usize)
     };
     let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
@@ -1311,11 +1312,11 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
             let mut last_pixels = 0usize;
             let mut bw = width;
             let mut bh = height;
-            let mut bbod = h_body;
             for k in 0..n_levels {
                 let n_lvl = if k < k_split {
-                    let halo = mode_b_halo_at_level(k as u32, k_split as u32);
-                    (bw as usize) * ((bbod.saturating_add(2 * halo)) as usize)
+                    let strip_h =
+                        mode_b_strip_h_at_level(k as u32, h_body, k_split as u32).min(bh);
+                    (bw as usize) * (strip_h as usize)
                 } else {
                     (bw as usize) * (bh as usize)
                 };
@@ -1324,9 +1325,6 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
                 }
                 bw = bw.div_ceil(2);
                 bh = bh.div_ceil(2);
-                if bbod > 1 {
-                    bbod = bbod.div_ceil(2);
-                }
             }
             last_pixels
         },
@@ -1381,25 +1379,85 @@ pub fn mode_b_k_split(h_body: u32, n_levels: u32) -> u32 {
     k_split.min(n_levels)
 }
 
-/// Per-level halo (in band-resolution rows) for the Mode B strip
-/// walker. The 13-tap PU blur kernel reads ±6 rows; the 5-tap
-/// pyramid downscale reads ±2 rows. We allocate `halo = 8` rows
-/// (PU blur ±6 + slack for downscale halo accumulation at this level).
+/// Per-level **band-resolution** halo for the Mode B strip walker.
 ///
-/// The halo is constant per level — the strip-aware kernels handle
-/// reflection at the logical-image edges, so per-strip buffers don't
-/// need to grow with `k` once we're inside the hybrid shallow-band
-/// regime.
+/// This is the halo a single level needs *at its own resolution* for
+/// its own band-loop (PU blur reads ±6, pyramid downscale reads ±2,
+/// so 8 rows covers both). It does NOT account for back-projection
+/// through the reduce chain — see [`mode_b_strip_h_at_level`] for
+/// the correct buffer height accounting cross-level reduce halos.
+///
+/// Kept as a separate helper because some callers (e.g., the band-
+/// loop's own per-strip halo math) need the level-local value.
+/// Allocator + estimator callers should prefer
+/// [`mode_b_strip_h_at_level`].
 #[doc(hidden)]
 #[must_use]
 pub fn mode_b_halo_at_level(k: u32, k_split: u32) -> u32 {
     if k >= k_split {
         0 // deep levels use full-image storage, no halo padding
     } else {
-        // PU blur radius (6) + 2-tap downscale slack accumulated from
-        // adjacent shallow levels.
+        // PU blur radius (6) + 2-tap downscale slack at this level.
         8
     }
+}
+
+/// Strip buffer height at level `k` for the Mode B walker
+/// (back-projected through the reduce chain).
+///
+/// `downscale_strip_kernel` reads `±2` source rows around `2·dy_logical`,
+/// so producing `R_{k+1}` valid level-(k+1) output rows from level-k
+/// source requires `2·R_{k+1} + 4` level-k source rows. The level-k
+/// buffer must satisfy two constraints simultaneously:
+///
+/// 1. Its own band loop reads body+halo at level k:
+///    `R_k ≥ body_k + 2·halo_k = (h_body >> k) + 16`.
+/// 2. It must feed the level-(k+1) reduce:
+///    `R_k ≥ 2·R_{k+1} + 4` for `k < k_split − 1`.
+///
+/// The recursion runs deepest-shallow → shallowest. At `h_body = 512,
+/// k_split = 6`:
+///
+/// | k | body_k | R_k                              |
+/// |---|--------|----------------------------------|
+/// | 5 | 16     | 32                               |
+/// | 4 | 32     | max(48, 2·32+4) = 68             |
+/// | 3 | 64     | max(80, 2·68+4) = 140            |
+/// | 2 | 128    | max(144, 2·140+4) = 284          |
+/// | 1 | 256    | max(272, 2·284+4) = 572          |
+/// | 0 | 512    | max(528, 2·572+4) = **1148**     |
+///
+/// Compared to the band-resolution-only model (which would give 528 at
+/// level 0), back-projection roughly doubles the level-0 buffer at
+/// h_body=512. The level-0 strip is `1148·W·4 ≈ 18.8 MiB` per channel
+/// at 4096² fine_w vs `4096·W·4 = 64 MiB` for full-image — a ~71%
+/// per-buffer saving at level 0.
+///
+/// Returns 0 for `k >= k_split` since deep levels use full-image
+/// storage (caller substitutes the level-k full image dim).
+#[doc(hidden)]
+#[must_use]
+pub fn mode_b_strip_h_at_level(k: u32, h_body: u32, k_split: u32) -> u32 {
+    if k >= k_split {
+        return 0; // caller uses full-image dim instead
+    }
+    // Iterate deepest-shallow → up. Track R_{k+1} as we walk down to k.
+    // Deepest shallow level (k_split - 1): only the body+halo constraint
+    // applies (no further reduce to feed).
+    let halo_band = 8_u32;
+    let deepest = k_split - 1;
+    let mut r_deeper: u32 = (h_body >> deepest).saturating_add(2 * halo_band);
+    if k == deepest {
+        return r_deeper;
+    }
+    // Walk from k_split - 2 down to k.
+    for ki in (k..deepest).rev() {
+        let body_ki = h_body >> ki;
+        let own = body_ki.saturating_add(2 * halo_band);
+        let from_reduce = r_deeper.saturating_mul(2).saturating_add(4);
+        r_deeper = own.max(from_reduce);
+    }
+    r_deeper
 }
 
 /// Safety factor applied by [`recommend_parallel`] on top of the raw

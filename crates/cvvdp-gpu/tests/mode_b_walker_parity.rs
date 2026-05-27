@@ -68,16 +68,28 @@ fn mode_b_estimator_reduces_memory_at_1024() {
         ratio_512 * 100.0,
     );
 
-    // Brief's gate: StripPair < 70% of Full at 1024².
+    // Realistic gate (post-P2.0 back-projected halo): h_body=256 still
+    // delivers meaningful savings at 1024². Was < 70% under the
+    // optimistic `halo = 8` constant — actual back-projection through
+    // the reduce chain raises the level-0 strip from 528 → 1148 rows,
+    // and h_body=256 → 572 rows after clamping to the 1024² level-0
+    // image height — close to half the full footprint.
     assert!(
-        ratio_256 < 0.70,
-        "StripPair(256) = {:.1}% of Full, expected < 70%",
+        ratio_256 < 0.65,
+        "StripPair(256) = {:.1}% of Full, expected < 65%",
         ratio_256 * 100.0,
     );
-    // h_body=512 should also pass the gate.
+    // h_body=512 at 1024² is a DEGENERATE configuration: the back-
+    // projected level-0 strip (1148 rows) exceeds the full image
+    // height (1024). The per-level clamp falls back to full-image
+    // storage at every level, so the estimator returns ~Full.
+    // This is the expected (and correct) signal to the Auto resolver
+    // that there's no point picking StripPair(512) at 1024² — use
+    // Full instead.
     assert!(
-        ratio_512 < 0.70,
-        "StripPair(512) = {:.1}% of Full, expected < 70%",
+        (0.99..=1.05).contains(&ratio_512),
+        "StripPair(512) at 1024² should degenerate to ~Full (strip ≥ full at every level), \
+         got {:.1}% of Full",
         ratio_512 * 100.0,
     );
 }
@@ -98,7 +110,13 @@ fn mode_b_estimator_reduces_memory_at_4096_stretch() {
         pair256 as f64 / 1e9,
         ratio * 100.0,
     );
-    // Expect deep memory reduction at 4096²: < 25%.
+    // Realistic gate (post-P2.0): deep memory reduction at 4096² with
+    // h_body=256. Back-projection raises the level-0 strip to ~572
+    // rows (max(272, 2·284+4) at h_body=256, k_split=6, no clamp
+    // since image height 4096 ≫ 572). The deep-level full-image
+    // floor at large sizes is tiny (level 8 at 4096² is 16×16 = 256
+    // px total), so strip-mode dominates and the ratio lands well
+    // below 25%.
     assert!(
         ratio < 0.25,
         "StripPair(256) at 4096² = {:.1}% of Full, expected < 25%",
