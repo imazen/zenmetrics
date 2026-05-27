@@ -1264,3 +1264,83 @@ machine-checked at every step.
   dispatch with full-image storage. Their absolute pixel count
   is small (level 8 at 4096² = 256 pixels) so the memory hit is
   negligible.
+
+## Phase 2 — P2.1b LANDED (2026-05-27)
+
+### Summary
+
+P2.1b extends the per-strip CSF walker
+(`_dispatch_dist_weber_csf_strip_s_for_level`) to dispatch stages 1-4
+over a **body+halo window** at level k for shallow levels (k <
+k_split). The strip-local buffers `bands_dis_strip` and
+`upscaled_c_strip` grow from body-only (`fine_w × strip_h_at_k`) to
+back-projected **R_k** (`fine_w × mode_b_strip_h_at_level(k, h_body,
+k_split)`) to accommodate the halo writes.
+
+Under the existing level-major-outer caller, adjacent strips overlap
+at halo rows of `t_p_*[k]`. The CSF kernel is deterministic on the
+same inputs (band_ref + log_l_bkg are full-image; bands_dis_strip is
+recomputed per strip from full-image gauss + the strip-local upscale,
+which is itself a function of the global row index via the strip-
+aware kernels' `zy_base = local_y + body_offset_y` math). So overlap
+rows receive identical values from both strips that touch them, and
+the final t_p_*[k] state — and the JOD scalar — is bit-identical to
+today's body-only dispatch.
+
+### JOD parity gates (all bit-identical |diff|=0.0)
+
+- `mode_b_walker_jod_matches_full_at_128` — 128² h_body=32 (4 strips
+  at L0). JOD 9.456145, |diff|=0.000e0, strip_dispatch_counter=506.
+- `mode_b_walker_jod_matches_full_at_1024` / `_h_body_256` — 1024²
+  h_body=256. JOD 9.458330, |diff|=0, counter=716.
+- `p21b_csf_halo_parity_256_h_body_128` — 256² h_body=128 (2 strips).
+  JOD 9.457394, |diff|=0.
+- `p21b_csf_halo_parity_512_h_body_128_4_strips` — 512² h_body=128.
+  JOD 9.457932, |diff|=0.
+- `p21b_csf_halo_parity_1024_h_body_128_8_strips` — 1024² h_body=128
+  (8 strips at L0, 7 inter-strip halo overlaps). JOD 9.458330, |diff|=0.
+- `p21b_csf_halo_deterministic_across_calls` — two consecutive
+  `score()` calls produce identical JOD (no halo-row state leakage).
+- `p21b_csf_halo_parity_single_strip_degenerate` — single-strip
+  degenerate (h_body=h). JOD 9.457394, |diff|=0.
+
+### Measured memory (nvidia-smi delta during compute_dkl_jod)
+
+| size  | Full       | StripPair(256) | Δ vs Full |
+|-------|------------|----------------|-----------|
+| 1024² | +385 MiB   | +353 MiB       | **−8.3%** |
+| 4096² | +4225 MiB  | +3457 MiB      | **−18.2%** |
+
+P2.1b's per-strip buffer growth (body-only → R_k) is the reason the
+4096² nvsmi delta moved from today's −22.7% to −18.2% — strictly more
+strip-side memory now allocated for halo coverage. This is the
+**necessary** cost of body+halo dispatch; the user-visible memory
+win requires the follow-on commits (P2.4-P2.8) that shrink the
+full-image transients (t_p_*, m_*) per-strip — only possible AFTER
+the outer-loop inversion in P2.1c.
+
+### Parity test scaffold
+
+`tests/strip_mode_b_csf_halo_parity.rs` pins five `(size, h_body,
+n_strips_at_L0)` combinations that stress the inter-strip halo
+overlap. All currently bit-identical to Full mode JOD.
+
+### What P2.1b does NOT do
+
+- Does NOT change the outer-loop order: the caller
+  `_dispatch_dist_weber_csf_strip_walker_for_level` still iterates
+  strips inside the level-major band loop. P2.1c flips this.
+- Does NOT shrink t_p_*[k] / m_*[k] — those stay full-image. Those
+  shrinks land in P2.4-P2.5 (after P2.1c enables them by inverting
+  the outer loop).
+- Does NOT change deep-level (k >= k_split) dispatch — those keep
+  body-only sizing because `mode_b_halo_at_level` returns 0 for deep
+  levels and the helper's halo extension reduces to body-only there.
+
+### Why ship P2.1b separately from P2.1c
+
+The buffer-growth + dispatch-extension can be JOD-bit-verified under
+the existing level-major caller (P2.1b). The outer-loop inversion is
+then a pure scheduling refactor (P2.1c) — no kernel changes, no
+buffer changes. Splitting commits keeps each commit's risk bounded
+by one parity gate.

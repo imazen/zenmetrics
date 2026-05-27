@@ -17,6 +17,31 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### cvvdp-gpu — perf: P2.1b — per-strip CSF helper dispatches body+halo (2026-05-27)
+
+Extends `_dispatch_dist_weber_csf_strip_s_for_level` to dispatch
+stages 1-4 over a body+halo window at level k for shallow levels
+(`k < k_split`). Grows `bands_dis_strip` and `upscaled_c_strip` per-
+strip buffers from body-only to back-projected `R_k = mode_b_strip_h_at_level(
+k, h_body, k_split)` per the P2.0 helper. Bit-identical JOD vs Full
+mode at 128² / 256² / 512² / 1024² (|diff|=0.0) at strip counts
+1-8 — verified by new `tests/strip_mode_b_csf_halo_parity.rs`.
+Inter-strip halo writes are deterministic: the CSF kernel produces
+the same value for overlap rows from any strip touching them
+(band_ref + log_l_bkg are full-image; bands_dis_strip recomputes
+from full-image gauss + deterministic-per-global-row upscale).
+
+Memory at HEAD (subprocess-per-cell nvsmi):
+- 1024² StripPair(256) = +353 MiB (Full = +385 MiB), -8.3%
+- 4096² StripPair(256) = +3457 MiB (Full = +4225 MiB), -18.2%
+
+The -18.2% at 4096² is the necessary cost of body+halo strip
+buffers: today's strip-only -22.7% used body-only sizing which
+could not support halo dispatch. The follow-on P2.1c (outer-loop
+inversion) is mechanical; the user-visible memory drop toward the
+-80% estimator target arrives with P2.4-P2.8 (transient buffer
+shrinks enabled by strip-major-outer dispatch).
+
 ### zensim-gpu — perf: Phase 1b chunk 3 — GPU diffmap kernels WIRED + VALIDATED, default-OFF (2026-05-27)
 
 Wires the Phase 1b chunk-1/2 CubeCL diffmap kernels (`b50b8f57`,
