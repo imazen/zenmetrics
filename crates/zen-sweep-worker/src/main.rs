@@ -47,6 +47,10 @@ enum Backend {
     /// RunPod Pods (pull) + R2 chunks.jsonl atomic claim + pod-env
     /// credentials + BYO R2/S3.
     Runpod,
+    /// Localhost (no cloud) + filesystem queue + filesystem storage +
+    /// env/.env credentials. The no-spend dev / abstraction-validation
+    /// backend (Phase B).
+    Local,
 }
 
 /// Cloud-agnostic sweep worker.
@@ -123,6 +127,16 @@ fn run_worker_backend(
         Backend::Runpod => anyhow::bail!(
             "--backend runpod selected but the runpod backend is not compiled \
              in; rebuild with --features runpod (glue) or --features runpod-sweep \
+             (full encode+score)"
+        ),
+
+        #[cfg(feature = "_local-backend")]
+        Backend::Local => local::run(wargs),
+
+        #[cfg(not(feature = "_local-backend"))]
+        Backend::Local => anyhow::bail!(
+            "--backend local selected but the local backend is not compiled \
+             in; rebuild with --features local (glue) or --features local-sweep \
              (full encode+score)"
         ),
     }
@@ -388,6 +402,158 @@ mod runpod {
             .with_env_filter(
                 EnvFilter::try_from_default_env()
                     .unwrap_or_else(|_| EnvFilter::new("info,zen_cloud_runpod=info")),
+            )
+            .try_init();
+    }
+}
+
+/// Local (no-cloud) backend: drive the generic `run_worker` loop with the
+/// local filesystem traits + the shared inline encode+score compute.
+///
+/// This is the no-spend dev / abstraction-validation path (spec §1.7
+/// Phase B). The worker reads chunks from a local `chunks.jsonl` (or a
+/// queue dir) instead of R2, mirrors blobs under a local base dir, and
+/// runs the SAME backend-agnostic `run_worker` loop the cloud backends
+/// use. The `local` glue build wires + typechecks the loop, queue, host,
+/// creds, and storage GPU-free; the `local-sweep` build adds the shared
+/// inline encode+score compute (which can be pointed at a real R2 bucket
+/// to debug the GPU path on a local GPU box).
+///
+/// ## Arg mapping
+///
+/// The shared [`WorkerArgs`] are reused, reinterpreted for localhost:
+/// - `--chunks-r2` (`CHUNKS_R2`): the local `chunks.jsonl` path or queue
+///   dir. A `file://` URI, a plain path to a `*.jsonl` file (jsonl mode),
+///   or a path to a directory (dir mode of `*.json` chunk files).
+/// - `--workdir` (`WORKDIR`): the filesystem blob-storage base (the local
+///   mirror dir) — `s3://bucket/key` artifacts land at
+///   `<workdir>/bucket/key`.
+#[cfg(feature = "_local-backend")]
+mod local {
+    use anyhow::{Context, Result};
+    use std::path::PathBuf;
+    use zen_cloud_core::{Chunk, ChunkOutcome, CloudError, run_worker};
+    use zen_cloud_local::{
+        LocalDirQueue, LocalFsStorage, LocalHeartbeat, LocalQueueConfig, LocalQueueSource,
+        LocalWorkerHost,
+    };
+    use zen_cloud_vastai::worker::WorkerArgs;
+
+    /// Run the local sweep worker.
+    ///
+    /// Wires the five local traits and runs the backend-agnostic
+    /// [`run_worker`] loop entirely on the filesystem — no cloud, no
+    /// spend. The `compute` closure runs the SAME inline encode+score the
+    /// vast.ai worker runs (in the `local-sweep` build).
+    pub fn run(args: WorkerArgs) -> Result<()> {
+        init_tracing();
+
+        // Resolve the local chunk source from `--chunks-r2`: a directory
+        // (dir mode) or a `*.jsonl` file (jsonl mode). A `file://` URI is
+        // accepted and stripped to a plain path.
+        let source = chunk_source(&args.chunks_r2).context("resolve local chunk source")?;
+        let mut queue =
+            LocalDirQueue::open(LocalQueueConfig::new(source)).context("open local job queue")?;
+
+        // The filesystem storage base is the workdir — `s3://bucket/key`
+        // artifacts mirror to `<workdir>/bucket/key`.
+        let storage = LocalFsStorage::new(&args.workdir);
+        let heartbeat = LocalHeartbeat;
+        // Honour `--worker-id` (else env/hostname via the host).
+        let host = match args.worker_id.as_deref().filter(|s| !s.is_empty()) {
+            Some(id) => LocalWorkerHost::new(id, &args.workdir),
+            None => LocalWorkerHost::from_env(),
+        };
+
+        tracing::info!(
+            run_id = %args.run_id,
+            chunks = %args.chunks_r2,
+            workdir = %args.workdir.display(),
+            "local sweep worker starting; reading chunks from the filesystem"
+        );
+
+        let summary = run_worker(&mut queue, &storage, &heartbeat, &host, |chunk, _s, _h| {
+            compute_chunk(&args, chunk)
+        })
+        .map_err(|e| anyhow::anyhow!("local run_worker loop: {e}"))?;
+
+        tracing::info!(
+            dispatched = summary.dispatched,
+            done = summary.done,
+            skipped = summary.skipped,
+            failed = summary.failed,
+            "local sweep worker finished"
+        );
+        Ok(())
+    }
+
+    /// Map `--chunks-r2` to a [`LocalQueueSource`]: a `file://` URI is
+    /// stripped to a path; a directory becomes dir mode; anything else
+    /// (a `*.jsonl` file) becomes jsonl mode.
+    fn chunk_source(chunks: &str) -> Result<LocalQueueSource> {
+        let path = PathBuf::from(chunks.strip_prefix("file://").unwrap_or(chunks));
+        if path.is_dir() {
+            Ok(LocalQueueSource::Dir(path))
+        } else {
+            Ok(LocalQueueSource::Jsonl(path))
+        }
+    }
+
+    /// Per-chunk compute. `chunk.payload` is the raw chunk record the
+    /// local queue surfaced (the same `{chunk_id}` shape vast.ai reads
+    /// from `chunks.jsonl`).
+    fn compute_chunk(args: &WorkerArgs, chunk: &Chunk) -> Result<ChunkOutcome, CloudError> {
+        #[cfg(feature = "_local-sweep")]
+        {
+            // Real encode+score path (the `local-sweep` build): reuse the
+            // exact inline compute the vast.ai worker runs per chunk. It
+            // shells s5cmd against the R2/S3 bucket referenced by the
+            // chunk + args, so a developer debugging the GPU path points
+            // it at a real bucket with local creds.
+            run_inline_sweep(args, &chunk.payload)
+        }
+        #[cfg(not(feature = "_local-sweep"))]
+        {
+            let _ = (args, chunk);
+            // GPU-free `local` glue build: the loop, queue, host, creds,
+            // and storage are all live and exercised, but the encode+score
+            // tree was not compiled in. Surface a terminal failure so the
+            // operator rebuilds with `--features local-sweep` rather than
+            // silently dropping the chunk. (The abstraction-validation
+            // loop is covered end-to-end by the `zen-cloud-local`
+            // integration test with a stub compute closure.)
+            Err(CloudError::Compute(
+                "local glue build has no encode+score compute; \
+                 rebuild zen-sweep-worker with --features local-sweep"
+                    .into(),
+            ))
+        }
+    }
+
+    #[cfg(feature = "_local-sweep")]
+    fn run_inline_sweep(args: &WorkerArgs, payload: &str) -> Result<ChunkOutcome, CloudError> {
+        use zen_cloud_vastai::worker::{process_chunk_inline, r2::new_from_args};
+
+        let r2 = new_from_args(args)
+            .map_err(|e| CloudError::Storage(format!("build R2 client: {e}")))?;
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| CloudError::Compute(format!("build compute runtime: {e}")))?;
+        match rt.block_on(process_chunk_inline(args, &r2, payload)) {
+            Ok(()) => Ok(ChunkOutcome::Done),
+            Err(e) => Ok(ChunkOutcome::Failed {
+                error: format!("{e:#}"),
+            }),
+        }
+    }
+
+    fn init_tracing() {
+        use tracing_subscriber::EnvFilter;
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| EnvFilter::new("info,zen_cloud_local=info")),
             )
             .try_init();
     }

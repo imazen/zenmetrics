@@ -6793,6 +6793,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zen-cloud-core",
+ "zen-cloud-local",
  "zen-cloud-runpod",
  "zen-cloud-salad",
  "zen-cloud-vastai",
