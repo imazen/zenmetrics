@@ -70,3 +70,12 @@ path = "examples/print_capability.rs"
 name = "bench_worker"
 path = "examples/bench_worker.rs"
 required-features = ["bench"]
+
+# Phase 3 chooser integration tests. Requires `bench` because the
+# test suite imports `MetricKind` from zenmetrics-api (the bench
+# feature pulls that crate in). The chooser module itself is gated
+# on `bench` for the same reason.
+[[test]]
+name = "chooser"
+path = "tests/chooser.rs"
+required-features = ["bench"]

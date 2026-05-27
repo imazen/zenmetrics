@@ -414,10 +414,10 @@ fn measure_cell_subprocess(
     let mut peak = baseline_mib;
     let sample_until = Instant::now() + plan.subprocess_hold - Duration::from_millis(50);
     while Instant::now() < sample_until {
-        if let Some(v) = nvidia_smi_used_mib() {
-            if v > peak {
-                peak = v;
-            }
+        if let Some(v) = nvidia_smi_used_mib()
+            && v > peak
+        {
+            peak = v;
         }
         std::thread::sleep(plan.vram_sample_interval);
     }

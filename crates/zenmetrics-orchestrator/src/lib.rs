@@ -31,10 +31,17 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 mod bench;
+#[cfg(feature = "bench")]
+mod chooser;
 mod cpu;
 mod gpu;
 
 pub use bench::{locate_bench_worker, synth_pair_offset_dist, BenchPlan, BenchReport};
+#[cfg(feature = "bench")]
+pub use chooser::{
+    BackendChoice, CandidateStatus, ChooserConfig, ChooserError, ConsideredCandidate,
+    RejectReason, TaskShape,
+};
 pub use cpu::{detect_cpu, detect_wsl2_host_ram_mib_hint};
 pub use gpu::detect_gpu;
 
@@ -461,6 +468,24 @@ impl Orchestrator {
     /// Borrow the active capability profile.
     pub fn capability(&self) -> &CapabilityProfile {
         &self.capability
+    }
+
+    /// Construct an orchestrator from a pre-built `CapabilityProfile`
+    /// + config without running detection or touching the cache file.
+    ///
+    /// Use cases:
+    /// - Tests that need to feed a deterministic profile into the
+    ///   chooser without depending on real hardware.
+    /// - Fleet deployments that load a curated profile from a shared
+    ///   store (S3, NFS) instead of running the local bench.
+    /// - Re-creating an orchestrator from a profile produced by a
+    ///   separate detection pass (e.g., a privileged daemon).
+    ///
+    /// Phase 3 onwards relies on this constructor for the chooser
+    /// test suite (`tests/chooser.rs`). Production code paths should
+    /// still prefer [`Self::new`].
+    pub fn from_capability(config: OrchestratorConfig, capability: CapabilityProfile) -> Self {
+        Self { config, capability }
     }
 
     /// Borrow the active config.
