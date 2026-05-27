@@ -200,3 +200,98 @@ pub fn srgb_to_positive_xyb_kernel(
     y_out[idx] = y_pos;
     b_out[idx] = b_pos;
 }
+
+/// Linear-RGB (3 planar f32 buffers) → 3 planar positive-XYB f32
+/// buffers, with SIMD-padding columns mirror-filled in the same
+/// launch.
+///
+/// This is the linear-light sibling of [`srgb_to_positive_xyb_kernel`]
+/// — identical opsin matrix + Halley-cbrt + positive-shift math, but
+/// reads three tight-strided `width × height` linear-RGB planes
+/// instead of decoding packed sRGB-u8 through the 256-entry LUT.
+/// Mirrors CPU zensim's `linear_to_positive_xyb_planar_into`
+/// (`zensim::color`), which is the path
+/// `compute_with_ref_and_diffmap_linear_planar` feeds.
+///
+/// Inputs:
+/// - `r_in`, `g_in`, `b_in` — tight `width × height` linear-RGB f32
+///   planes (row stride = `width`). Each is `width * height` long.
+/// - `mirror_offsets` — `padded_w - width` entries; for pad column
+///   `x ∈ [width, padded_w)` the source column is
+///   `mirror_offsets[x - width]` (same table the sRGB kernel uses).
+/// - `x_out`, `y_out`, `b_out` — `padded_w × height` planar XYB
+///   destinations.
+/// - `absorbance_bias_neg = -cbrtf_fast(K_B0)` precomputed host-side.
+///
+/// FMA fusion order matches the CPU linear inner
+/// (`m00.mul_add(r, m01.mul_add(g, m02.mul_add(b, bias)))`) AND the
+/// sRGB GPU kernel above, so the two GPU paths produce bit-identical
+/// XYB at f32 precision when their RGB inputs agree.
+#[cube(launch_unchecked)]
+#[allow(clippy::too_many_arguments)]
+pub fn linear_to_positive_xyb_kernel(
+    r_in: &Array<f32>,
+    g_in: &Array<f32>,
+    b_in: &Array<f32>,
+    mirror_offsets: &Array<u32>,
+    x_out: &mut Array<f32>,
+    y_out: &mut Array<f32>,
+    b_out: &mut Array<f32>,
+    width: u32,
+    height: u32,
+    padded_w: u32,
+    absorbance_bias_neg: f32,
+) {
+    let idx = ABSOLUTE_POS;
+    let total = (padded_w * height) as usize;
+    if idx >= total {
+        terminate!();
+    }
+    let pw = padded_w as usize;
+    let w = width as usize;
+    let y = idx / pw;
+    let x = idx - y * pw;
+
+    // For pad columns, redirect to the mirror source column. The
+    // mirror table has `padded_w - width` entries indexed
+    // `[x - width]` for `x ∈ [width, padded_w)`.
+    let src_x = if x < (width as usize) {
+        x
+    } else {
+        mirror_offsets[x - w] as usize
+    };
+    let src_idx = y * w + src_x;
+    let r = r_in[src_idx];
+    let g = g_in[src_idx];
+    let b = b_in[src_idx];
+
+    // Match CPU SIMD FMA fusion: `m00 * r + (m01 * g + (m02 * b + K_B0))`.
+    let inner0 = fma(K_M02, b, K_B0);
+    let m0g = fma(K_M01, g, inner0);
+    let mixed0 = f32::max(fma(K_M00, r, m0g), 0.0);
+    let inner1 = fma(K_M12, b, K_B0);
+    let m1g = fma(K_M11, g, inner1);
+    let mixed1 = f32::max(fma(K_M10, r, m1g), 0.0);
+    let inner2 = fma(K_M22, b, K_B0);
+    let m2g = fma(K_M21, g, inner2);
+    let mixed2 = f32::max(fma(K_M20, r, m2g), 0.0);
+
+    let t0 = cbrtf_fast_runtime(mixed0);
+    let t1 = cbrtf_fast_runtime(mixed1);
+    let t2 = cbrtf_fast_runtime(mixed2);
+
+    let c0 = t0 + absorbance_bias_neg;
+    let c1 = t1 + absorbance_bias_neg;
+
+    let x_val = 0.5 * (c0 - c1);
+    let y_val = 0.5 * (c0 + c1);
+
+    // CPU's positive shift: x.mul_add(14, 0.42), y + 0.01, (t2 - y) + 0.55.
+    let x_pos = fma(x_val, 14.0, 0.42);
+    let y_pos = y_val + 0.01;
+    let b_pos = (t2 - y_val) + 0.55;
+
+    x_out[idx] = x_pos;
+    y_out[idx] = y_pos;
+    b_out[idx] = b_pos;
+}

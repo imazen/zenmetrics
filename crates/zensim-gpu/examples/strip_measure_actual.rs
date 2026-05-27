@@ -64,7 +64,5 @@ fn main() {
 
     let peak_delta_mb = after_compute.saturating_sub(baseline);
     eprintln!("peak_delta_mb={peak_delta_mb}");
-    println!(
-        "{mode},{regime:?},{w}x{h},peak_delta_mb={peak_delta_mb},compute_ms={cf_ms}"
-    );
+    println!("{mode},{regime:?},{w}x{h},peak_delta_mb={peak_delta_mb},compute_ms={cf_ms}");
 }

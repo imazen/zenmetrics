@@ -31,7 +31,7 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::{self, blit, color, downscale, fused, masked_iw_strip, reduce};
+use crate::kernels::{self, blit, color, diffmap, downscale, fused, masked_iw_strip, reduce};
 use zensim::{
     DiffmapOptions, PrecomputedReference, Zensim as ZensimCpu, ZensimError, ZensimProfile,
 };
@@ -381,6 +381,70 @@ pub struct Zensim<R: Runtime> {
 
     /// Reduced masked + IW finals: per-(scale, channel, slot in [0,12)).
     finals_ext_f64: cubecl::server::Handle,
+
+    /// Lazy **pure-GPU diffmap scratch** (Phase 1b). Allocated on first
+    /// call to a GPU-native diffmap path. Holds per-scale mu1/mu2/ssq/s12
+    /// persist planes (independent of the outer `regime` — the diffmap
+    /// path always needs them even on Basic) plus the base-resolution
+    /// upsample accumulator + the trimmed output buffer + the linear-RGB
+    /// upload planes. See [`GpuDiffmapScratch`] + the
+    /// `gpu_diffmap_*` methods.
+    gpu_diffmap_scratch: Option<GpuDiffmapScratch<R>>,
+}
+
+/// Pure-GPU diffmap scratch (Phase 1b). Lazily allocated on first GPU
+/// diffmap call; reused across calls so the warm buttloop pays the
+/// alloc once.
+///
+/// Strategy: an inner WithIw-regime [`Zensim<R>`] runs the full
+/// 372-feature GPU pipeline (which also writes the per-scale
+/// mu1/mu2/ssq/s12 persist planes the diffmap kernels need). The
+/// 372 features feed the CPU V0_3 MLP for the scalar score (proven
+/// bit-equivalent to the CPU `score_features_with_profile` path by
+/// `tests/opaque_default_weights_v03.rs`); the persist planes feed
+/// the GPU diffmap kernel chain ([`diffmap::per_scale_weighted_ssim_kernel`]
+/// → [`diffmap::pow2x_upsample_add_kernel`] → [`diffmap::diffmap_trim_padded_kernel`]).
+///
+/// All buffers are sized from the inner `Zensim`'s `scales` geometry
+/// at construction time — the diffmap path never resizes them.
+struct GpuDiffmapScratch<R: Runtime> {
+    /// Inner WithIw-regime pipeline. Owns the XYB pyramid + persist
+    /// planes + 372-feature reduction. Boxed to keep `Zensim<R>`'s own
+    /// size bounded (it's stored behind an `Option` field on `Zensim`).
+    inner: Box<Zensim<R>>,
+    /// Per-scale weighted-SSIM plane (`pad_total × 1` f32) — output of
+    /// [`diffmap::per_scale_weighted_ssim_kernel`] for one scale,
+    /// consumed by [`diffmap::pow2x_upsample_add_kernel`].
+    scale_dm: Vec<cubecl::server::Handle>,
+    /// Base-resolution upsample accumulator (`padded_w0 × height` f32).
+    acc: cubecl::server::Handle,
+    /// Trimmed `width × height` f32 output buffer (drops pad columns).
+    out: cubecl::server::Handle,
+    /// Distorted-side linear-RGB upload planes (`width × height` each).
+    /// Filled host-side from the caller's planes, uploaded once per
+    /// distorted candidate.
+    dist_lin: [cubecl::server::Handle; 3],
+    /// Reference-side linear-RGB upload planes — used by the one-shot
+    /// / cold path to seed the inner pipeline's reference XYB pyramid.
+    ref_lin: [cubecl::server::Handle; 3],
+    /// Per-scale (per-channel SSIM weight) and per-scale blend weight
+    /// for the default `DiffmapOptions` Trained path, precomputed once
+    /// from [`diffmap::trained_multiscale_ssim_weights_default`].
+    /// Cached so the warm loop doesn't recompute the f64 reduction.
+    per_scale_w: Vec<[f32; 3]>,
+    scale_blend: Vec<f32>,
+    /// CPU scorer bound to V0_3. The scalar score comes from the CPU
+    /// canonical `compute_with_ref_and_diffmap_linear_planar` path
+    /// (byte-exact to Phase 1) — NOT from the GPU-feature → MLP path,
+    /// which is catastrophically wrong on the pinned zensim 0.3.0 (a
+    /// documented pre-existing WithIw-feature/V0_3-MLP parity bug; see
+    /// `docs/DIFFMAP_DIVERGENCES.md` §9 + §2 and the Phase 1 memo).
+    /// The GPU produces the diffmap; the CPU produces the score.
+    cpu_scorer: ZensimCpu,
+    /// Cached CPU `PrecomputedReference` for the warm-ref score path.
+    cpu_ref: Option<PrecomputedReference>,
+    /// Profile the score is computed against.
+    profile: ZensimProfile,
 }
 
 impl<R: Runtime> Zensim<R> {
@@ -726,6 +790,7 @@ impl<R: Runtime> Zensim<R> {
             partials_ext_f64,
             partials_ext_f64_len: partials_ext_total.max(1),
             finals_ext_f64,
+            gpu_diffmap_scratch: None,
         })
     }
 
@@ -865,6 +930,15 @@ impl<R: Runtime> Zensim<R> {
                 .map_err(map_zensim_error)?;
             state.warm_ref = Some(pre);
         }
+        // Phase 1b: invalidate the GPU diffmap scratch reference so the
+        // next warm-ref-diffmap call re-warms it from the freshly
+        // decoded `state.ref_linear_planes`. (We DON'T rebuild the GPU
+        // ref pyramid eagerly here — only diffmap callers need it, and
+        // the lazy rewarm in `score_with_warm_ref_diffmap` keeps the
+        // scalar-only fast path free of the GPU diffmap cost.)
+        if let Some(g) = self.gpu_diffmap_scratch.as_mut() {
+            g.inner.has_cached_reference = false;
+        }
         Ok(())
     }
 
@@ -879,6 +953,9 @@ impl<R: Runtime> Zensim<R> {
         self.ref_full_xyb = None;
         if let Some(state) = self.diffmap_state.as_mut() {
             state.warm_ref = None;
+        }
+        if let Some(g) = self.gpu_diffmap_scratch.as_mut() {
+            g.inner.has_cached_reference = false;
         }
     }
 
@@ -1227,12 +1304,7 @@ impl<R: Runtime> Zensim<R> {
             scale_image_h[s] = hs;
             hs = hs.div_ceil(2);
         }
-        Ok(self.pack_feature_vector(
-            &acc_f64,
-            &acc_max,
-            &acc_ext_f64,
-            &scale_image_h[..n_scales],
-        ))
+        Ok(self.pack_feature_vector(&acc_f64, &acc_max, &acc_ext_f64, &scale_image_h[..n_scales]))
     }
 
     /// Run one strip end-to-end: upload, xyb pyramid, fused features,
@@ -1750,12 +1822,7 @@ impl<R: Runtime> Zensim<R> {
     /// at body rows are buffer-correct (which means
     /// image-correct in strip mode when halo rows ship the image's
     /// rows adjacent to the body region).
-    fn launch_blur_and_features_with_body(
-        &self,
-        scale: usize,
-        y_body_start: u32,
-        y_body_end: u32,
-    ) {
+    fn launch_blur_and_features_with_body(&self, scale: usize, y_body_start: u32, y_body_end: u32) {
         // Keep in sync with `kernels::fused::TX`.
         const TX: u32 = 64;
         let s = &self.scales[scale];
@@ -1865,12 +1932,7 @@ impl<R: Runtime> Zensim<R> {
         self.launch_masked_iw_with_body(scale, 0, h);
     }
 
-    fn launch_masked_iw_with_body(
-        &self,
-        scale: usize,
-        y_body_start: u32,
-        y_body_end: u32,
-    ) {
+    fn launch_masked_iw_with_body(&self, scale: usize, y_body_start: u32, y_body_end: u32) {
         const TX: u32 = 64;
 
         let s = &self.scales[scale];
@@ -2142,6 +2204,32 @@ fn srgb_u8_to_linear_planes_tight(
     }
 }
 
+/// Whether the **pure-GPU diffmap kernel chain** (Phase 1b) is enabled
+/// for diffmap production.
+///
+/// Default: `false` — the production diffmap path keeps the Phase 1
+/// CPU pipeline (score + diffmap both from
+/// `zensim::Zensim::compute_with_ref_and_diffmap_linear_planar`). This
+/// is a **deliberate honest-stop**: the GPU diffmap *kernels* are
+/// validated bit-close to the CPU canonical (≤ 2.08e-4 pointwise, see
+/// `tests/cpu_gpu_diffmap_parity.rs`), BUT they cannot yet replace the
+/// CPU path on the wall axis because the SCALAR SCORE must still come
+/// from the CPU canonical: the GPU-feature → V0_3 MLP score path is
+/// catastrophically wrong on the pinned zensim 0.3.0 (a pre-existing
+/// WithIw-feature / V0_3-MLP-sensitivity bug — see
+/// `docs/DIFFMAP_DIVERGENCES.md` §2 + §9). Running GPU-diffmap +
+/// CPU-score is strictly slower than Phase 1 (CPU does the full
+/// pipeline anyway), so the default stays on CPU until chunk N+1 fixes
+/// the GPU score path.
+///
+/// Setting env `ZENSIM_GPU_DIFFMAP=1` routes diffmap production through
+/// the GPU kernel chain (score still from CPU canonical) — for A/B
+/// validation + as the wired infrastructure the score-path fix
+/// unblocks.
+fn gpu_diffmap_enabled() -> bool {
+    std::env::var_os("ZENSIM_GPU_DIFFMAP").is_some_and(|v| v == "1")
+}
+
 /// Map a [`ZensimError`] from the CPU side into the GPU crate's
 /// [`Error`] type. Unmappable variants fold to `InvalidImageSize`
 /// with the error preserved in `Display`.
@@ -2206,7 +2294,41 @@ impl<R: Runtime> Zensim<R> {
             srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
         }
 
-        self.compute_diffmap_from_linear_planes_into(w, h, true, diffmap_out)
+        if !gpu_diffmap_enabled() {
+            // Default: Phase 1 CPU score + CPU diffmap (zero regression).
+            return self.compute_diffmap_from_linear_planes_into(w, h, true, diffmap_out);
+        }
+
+        // Opt-in (ZENSIM_GPU_DIFFMAP=1): GPU diffmap + CPU score. Move
+        // the decoded linear planes out of the diffmap state into owned
+        // scratch so the borrow doesn't alias `self` during the GPU call.
+        let (rp, dp) = {
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            (
+                [
+                    core::mem::take(&mut state.ref_linear_planes[0]),
+                    core::mem::take(&mut state.ref_linear_planes[1]),
+                    core::mem::take(&mut state.ref_linear_planes[2]),
+                ],
+                [
+                    core::mem::take(&mut state.dist_linear_planes[0]),
+                    core::mem::take(&mut state.dist_linear_planes[1]),
+                    core::mem::take(&mut state.dist_linear_planes[2]),
+                ],
+            )
+        };
+        let score = self.gpu_diffmap_linear_into(
+            Some([&rp[0], &rp[1], &rp[2]]),
+            [&dp[0], &dp[1], &dp[2]],
+            true,
+            diffmap_out,
+        );
+        // Return the decoded planes to the state (reuse buffers).
+        if let Some(state) = self.diffmap_state.as_mut() {
+            state.ref_linear_planes = rp;
+            state.dist_linear_planes = dp;
+        }
+        score
     }
 
     /// Warm-ref variant of [`Self::score_with_diffmap`]. Requires a
@@ -2236,13 +2358,58 @@ impl<R: Runtime> Zensim<R> {
         let lut = srgb_lut_256();
 
         self.ensure_diffmap_state();
-        let state = self.diffmap_state.as_mut().expect("ensured");
-        if state.warm_ref.is_none() {
-            return Err(Error::NoCachedReference);
+        {
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            if state.warm_ref.is_none() {
+                return Err(Error::NoCachedReference);
+            }
+            srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
         }
-        srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
 
-        self.compute_diffmap_from_linear_planes_into(w, h, false, diffmap_out)
+        if !gpu_diffmap_enabled() {
+            // Default: Phase 1 CPU score + CPU diffmap (zero regression).
+            return self.compute_diffmap_from_linear_planes_into(w, h, false, diffmap_out);
+        }
+
+        // Opt-in: warm the GPU scratch reference (if not already) from
+        // the cached ref linear planes that `set_reference` decoded,
+        // then run the GPU diffmap on the distorted planes.
+        self.ensure_gpu_diffmap_scratch()?;
+        let gpu_ref_warmed = self
+            .gpu_diffmap_scratch
+            .as_ref()
+            .map(|s| s.inner.has_cached_reference)
+            .unwrap_or(false);
+        if !gpu_ref_warmed {
+            let rp = {
+                let state = self.diffmap_state.as_mut().expect("ensured");
+                [
+                    core::mem::take(&mut state.ref_linear_planes[0]),
+                    core::mem::take(&mut state.ref_linear_planes[1]),
+                    core::mem::take(&mut state.ref_linear_planes[2]),
+                ]
+            };
+            let res = self.gpu_diffmap_warm_ref_linear(&rp[0], &rp[1], &rp[2]);
+            if let Some(state) = self.diffmap_state.as_mut() {
+                state.ref_linear_planes = rp;
+            }
+            res?;
+        }
+
+        let dp = {
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            [
+                core::mem::take(&mut state.dist_linear_planes[0]),
+                core::mem::take(&mut state.dist_linear_planes[1]),
+                core::mem::take(&mut state.dist_linear_planes[2]),
+            ]
+        };
+        let score =
+            self.gpu_diffmap_linear_into(None, [&dp[0], &dp[1], &dp[2]], false, diffmap_out);
+        if let Some(state) = self.diffmap_state.as_mut() {
+            state.dist_linear_planes = dp;
+        }
+        score
     }
 
     /// One-shot zensim score from 6 planar linear-RGB f32 buffers
@@ -2326,28 +2493,37 @@ impl<R: Runtime> Zensim<R> {
         validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
         validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
-        self.ensure_diffmap_state();
-        // Build a fresh PrecomputedReference each call (one-shot
-        // semantics; the warm-ref variant amortises this).
-        let stride = w;
-        let state = self.diffmap_state.as_mut().expect("ensured");
-        let pre = state
-            .cpu_zensim
-            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
-            .map_err(map_zensim_error)?;
-        let res = state
-            .cpu_zensim
-            .compute_with_ref_and_diffmap_linear_planar(
-                &pre,
-                [dist_r, dist_g, dist_b],
-                w,
-                h,
-                stride,
-                DiffmapOptions::default(),
-            )
-            .map_err(map_zensim_error)?;
-        write_diffmap_into(diffmap_out, res.diffmap());
-        Ok(normalize_zensim_score(res.score()))
+        if !gpu_diffmap_enabled() {
+            // Default: Phase 1 CPU score + CPU diffmap (zero regression).
+            self.ensure_diffmap_state();
+            let stride = w;
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            let pre = state
+                .cpu_zensim
+                .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+                .map_err(map_zensim_error)?;
+            let res = state
+                .cpu_zensim
+                .compute_with_ref_and_diffmap_linear_planar(
+                    &pre,
+                    [dist_r, dist_g, dist_b],
+                    w,
+                    h,
+                    stride,
+                    DiffmapOptions::default(),
+                )
+                .map_err(map_zensim_error)?;
+            write_diffmap_into(diffmap_out, res.diffmap());
+            return Ok(normalize_zensim_score(res.score()));
+        }
+
+        // Opt-in: GPU diffmap + CPU canonical score.
+        self.gpu_diffmap_linear_into(
+            Some([ref_r, ref_g, ref_b]),
+            [dist_r, dist_g, dist_b],
+            true,
+            diffmap_out,
+        )
     }
 
     /// Warm the diffmap-state's `PrecomputedReference` from three
@@ -2378,12 +2554,21 @@ impl<R: Runtime> Zensim<R> {
 
         self.ensure_diffmap_state();
         let stride = w;
-        let state = self.diffmap_state.as_mut().expect("ensured");
-        let pre = state
-            .cpu_zensim
-            .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
-            .map_err(map_zensim_error)?;
-        state.warm_ref = Some(pre);
+        {
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            let pre = state
+                .cpu_zensim
+                .precompute_reference_linear_planar([ref_r, ref_g, ref_b], w, h, stride)
+                .map_err(map_zensim_error)?;
+            state.warm_ref = Some(pre);
+        }
+        // Phase 1b (opt-in): also warm the GPU diffmap scratch's
+        // reference XYB pyramid so subsequent warm-ref-diffmap calls
+        // run the GPU kernel chain. Skipped by default to avoid the
+        // GPU scratch alloc on the CPU-default path.
+        if gpu_diffmap_enabled() {
+            self.gpu_diffmap_warm_ref_linear(ref_r, ref_g, ref_b)?;
+        }
         Ok(())
     }
 
@@ -2439,23 +2624,39 @@ impl<R: Runtime> Zensim<R> {
         let h = self.height as usize;
         validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
-        self.ensure_diffmap_state();
-        let stride = w;
-        let state = self.diffmap_state.as_mut().expect("ensured");
-        let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
-        let res = state
-            .cpu_zensim
-            .compute_with_ref_and_diffmap_linear_planar(
-                pre,
-                [dist_r, dist_g, dist_b],
-                w,
-                h,
-                stride,
-                DiffmapOptions::default(),
-            )
-            .map_err(map_zensim_error)?;
-        write_diffmap_into(diffmap_out, res.diffmap());
-        Ok(normalize_zensim_score(res.score()))
+        if !gpu_diffmap_enabled() {
+            // Default: Phase 1 CPU score + CPU diffmap (zero regression).
+            self.ensure_diffmap_state();
+            let stride = w;
+            let state = self.diffmap_state.as_mut().expect("ensured");
+            let pre = state.warm_ref.as_ref().ok_or(Error::NoCachedReference)?;
+            let res = state
+                .cpu_zensim
+                .compute_with_ref_and_diffmap_linear_planar(
+                    pre,
+                    [dist_r, dist_g, dist_b],
+                    w,
+                    h,
+                    stride,
+                    DiffmapOptions::default(),
+                )
+                .map_err(map_zensim_error)?;
+            write_diffmap_into(diffmap_out, res.diffmap());
+            return Ok(normalize_zensim_score(res.score()));
+        }
+
+        // Opt-in: GPU warm-ref diffmap + CPU canonical score. Requires
+        // the GPU scratch reference to have been warmed via
+        // [`Self::warm_reference_from_linear_planes`].
+        let gpu_ref_warmed = self
+            .gpu_diffmap_scratch
+            .as_ref()
+            .map(|s| s.inner.has_cached_reference)
+            .unwrap_or(false);
+        if !gpu_ref_warmed {
+            return Err(Error::NoCachedReference);
+        }
+        self.gpu_diffmap_linear_into(None, [dist_r, dist_g, dist_b], false, diffmap_out)
     }
 
     // ─────────────────────── private helpers ───────────────────────
@@ -2479,6 +2680,13 @@ impl<R: Runtime> Zensim<R> {
     /// discards it after use (one-shot diffmap). When false, it uses
     /// the warm-cached reference (which must exist; caller's
     /// responsibility to check).
+    ///
+    /// **Phase 1b**: this is the DEFAULT diffmap production path
+    /// (CPU score + CPU diffmap, zero regression vs Phase 1). The
+    /// opt-in GPU diffmap path ([`Self::gpu_diffmap_linear_into`],
+    /// `ZENSIM_GPU_DIFFMAP=1`) keeps the CPU score but produces the
+    /// diffmap on GPU — see [`gpu_diffmap_enabled`] for why the GPU
+    /// path is opt-in (broken GPU V0_3 score on the pinned zensim).
     fn compute_diffmap_from_linear_planes_into(
         &mut self,
         w: usize,
@@ -2532,6 +2740,482 @@ impl<R: Runtime> Zensim<R> {
         };
         write_diffmap_into(diffmap_out, res.diffmap());
         Ok(normalize_zensim_score(res.score()))
+    }
+}
+
+// ============================================================
+// Pure-GPU diffmap pipeline (Phase 1b).
+//
+// Replaces the Phase 1 CPU-delegation for the default
+// `DiffmapOptions` path. An inner WithIw-regime `Zensim<R>` runs the
+// full 372-feature GPU pipeline (XYB pyramid + per-scale persist
+// planes + masked/IW + reduction). From one GPU feature pass we get:
+//   • the per-scale mu1/mu2/ssq/s12 persist planes → fed to the
+//     chunk-1/2 diffmap kernels to produce the multi-scale SSIM
+//     diffmap on-device;
+//   • the 372 features → fed to the CPU V0_3 MLP for the scalar
+//     score (bit-equivalent to `score_features_with_profile_and_codec`
+//     per `tests/opaque_default_weights_v03.rs`, which is the same
+//     score the Phase 1 CPU path produced).
+//
+// See `docs/DIFFMAP_DIVERGENCES.md` §2 for the strategy + the residual
+// CPU dependency (the V0_3 MLP forward pass, ~µs).
+// ============================================================
+
+impl<R: Runtime> Zensim<R> {
+    /// Upload three tight `width × height` linear-RGB f32 planes into
+    /// the scale-0 XYB planes (ref or dist side) via
+    /// [`color::linear_to_positive_xyb_kernel`], then build the 2× box
+    /// downscale pyramid (reusing [`Self::run_xyb_pyramid`]'s downscale
+    /// loop). After this returns, `scales[*].ref_xyb` (or `dis_xyb`)
+    /// hold the positive-XYB pyramid for the linear input.
+    ///
+    /// Mirrors [`Self::run_xyb_pyramid`] but ingests linear f32 planes
+    /// instead of decoding packed sRGB-u8 through the LUT — bit-exact
+    /// to CPU zensim's `linear_to_positive_xyb_planar_into` path.
+    fn run_xyb_pyramid_linear(&mut self, is_ref: bool, r: &[f32], g: &[f32], b: &[f32]) {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let n = w * h;
+        // Upload the three tight planes (pinned for fast DMA).
+        let r_h = self.client.create_from_slice_pinned(f32::as_bytes(&r[..n]));
+        let g_h = self.client.create_from_slice_pinned(f32::as_bytes(&g[..n]));
+        let b_h = self.client.create_from_slice_pinned(f32::as_bytes(&b[..n]));
+
+        let s0 = &self.scales[0];
+        let xyb = if is_ref { &s0.ref_xyb } else { &s0.dis_xyb };
+        let absorbance_bias_neg = -color::cbrtf_fast_host(color::K_B0);
+        // Mirror table: same fallback the sRGB path uses (a 1-element
+        // dummy when there are no pad columns — the kernel never reads
+        // it then because `x < width` for every pixel).
+        let mirror_arg = match s0.mirror_offsets.as_ref() {
+            Some(mo) => (mo.clone(), s0.pad_count as usize),
+            None => (self.srgb_lut.clone(), 1),
+        };
+        let this_padded_pixels = (s0.padded_w as usize) * h;
+        unsafe {
+            color::linear_to_positive_xyb_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(this_padded_pixels),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(r_h, n),
+                ArrayArg::from_raw_parts(g_h, n),
+                ArrayArg::from_raw_parts(b_h, n),
+                ArrayArg::from_raw_parts(mirror_arg.0, mirror_arg.1),
+                ArrayArg::from_raw_parts(xyb[0].clone(), s0.n_padded),
+                ArrayArg::from_raw_parts(xyb[1].clone(), s0.n_padded),
+                ArrayArg::from_raw_parts(xyb[2].clone(), s0.n_padded),
+                self.width,
+                self.height,
+                s0.padded_w,
+                absorbance_bias_neg,
+            );
+        }
+        // Build the rest of the pyramid via 2× planar downscale —
+        // identical to the tail of `run_xyb_pyramid`.
+        for s in 1..self.scales.len() {
+            let prev = &self.scales[s - 1];
+            let curr = &self.scales[s];
+            let prev_xyb = if is_ref { &prev.ref_xyb } else { &prev.dis_xyb };
+            let curr_xyb = if is_ref { &curr.ref_xyb } else { &curr.dis_xyb };
+            let curr_active = (curr.padded_w as usize) * (curr.h as usize);
+            unsafe {
+                downscale::downscale_2x_3ch_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(curr_active),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(prev_xyb[0].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(prev_xyb[1].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(prev_xyb[2].clone(), prev.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[0].clone(), curr.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[1].clone(), curr.n_padded),
+                    ArrayArg::from_raw_parts(curr_xyb[2].clone(), curr.n_padded),
+                    prev.padded_w,
+                    prev.h,
+                    curr.padded_w,
+                    curr.h,
+                );
+            }
+        }
+    }
+
+    /// Run the WithIw feature pipeline assuming both `ref_xyb` and
+    /// `dis_xyb` pyramids are already built (by
+    /// [`Self::run_xyb_pyramid_linear`]). Writes the per-scale persist
+    /// planes (mu1/mu2/ssq/s12) AND reduces the 372-feature vector.
+    /// Requires the WithIw regime (persist planes allocated).
+    ///
+    /// Returns the packed 372-feature vector. Mirrors the body of
+    /// [`Self::compute_with_reference_vec`] from the post-pyramid
+    /// point onward.
+    fn compute_withiw_features_from_built_xyb(&mut self) -> Vec<f64> {
+        debug_assert!(self.regime.needs_extended_kernel());
+        let n_scales = self.scales.len();
+
+        for s in 0..n_scales {
+            self.launch_blur_and_features_persist(s);
+        }
+        for s in 0..n_scales {
+            self.launch_masked_iw(s);
+        }
+        self.launch_reduction();
+        self.launch_reduction_ext();
+
+        let f64_bytes = self
+            .client
+            .read_one(self.finals_f64.clone())
+            .expect("read finals_f64");
+        let max_bytes = self
+            .client
+            .read_one(self.finals_max.clone())
+            .expect("read finals_max");
+        let finals_f64 = f64::from_bytes(&f64_bytes);
+        let finals_max = f32::from_bytes(&max_bytes);
+        let ext_bytes = self
+            .client
+            .read_one(self.finals_ext_f64.clone())
+            .expect("read finals_ext_f64");
+        let finals_ext_f64 = f64::from_bytes(&ext_bytes);
+
+        let mut scale_image_h: [u32; SCALES] = [0; SCALES];
+        let mut hs = self.height;
+        for sh in scale_image_h.iter_mut().take(n_scales) {
+            *sh = hs;
+            hs = hs.div_ceil(2);
+        }
+        self.pack_feature_vector(
+            finals_f64,
+            finals_max,
+            finals_ext_f64,
+            &scale_image_h[..n_scales],
+        )
+    }
+
+    /// Run the GPU diffmap kernel chain on the per-scale persist planes
+    /// currently resident in `persist_planes_ref` (written by the last
+    /// [`Self::compute_withiw_features_from_built_xyb`] call). Produces
+    /// the multi-scale weighted-SSIM diffmap on-device, trims pad
+    /// columns, and reads it back into `diffmap_out` (length
+    /// `width × height`).
+    ///
+    /// `scale_dm[s]` are per-scale weighted-SSIM scratch planes;
+    /// `acc` is the base-resolution accumulator; `out` is the trimmed
+    /// destination. `per_scale_w[s] = [w_x, w_y, w_b]` and
+    /// `scale_blend[s]` come from
+    /// [`diffmap::trained_multiscale_ssim_weights_default`].
+    #[allow(clippy::too_many_arguments)]
+    fn run_gpu_diffmap_chain(
+        &self,
+        scale_dm: &[cubecl::server::Handle],
+        acc: &cubecl::server::Handle,
+        out: &cubecl::server::Handle,
+        per_scale_w: &[[f32; 3]],
+        scale_blend: &[f32],
+        diffmap_out: &mut Vec<f32>,
+    ) {
+        let n_scales = self.scales.len();
+        let width = self.width;
+        let height = self.height;
+        let base_padded_w = self.scales[0].padded_w;
+        let base_n = (base_padded_w as usize) * (height as usize);
+
+        // Step 1: zero the base accumulator.
+        unsafe {
+            diffmap::diffmap_zero_kernel::launch_unchecked::<R>(
+                &self.client,
+                Self::cube_count_1d(base_n),
+                Self::cube_dim_1d(),
+                ArrayArg::from_raw_parts(acc.clone(), base_n),
+                base_n as u32,
+            );
+        }
+
+        // Step 2: per scale, compute the weighted-SSIM plane then
+        // upsample-add it into the base accumulator with the per-scale
+        // blend weight. factor = 1 << scale (scale 0 = identity copy).
+        for s in 0..n_scales {
+            let blend = scale_blend.get(s).copied().unwrap_or(0.0);
+            if blend <= 0.0 {
+                continue;
+            }
+            let sc = &self.scales[s];
+            let pad_total = sc.n_padded;
+            let plane_len = pad_total * 3;
+            let planes = &self.persist_planes_ref[s];
+            let w = per_scale_w.get(s).copied().unwrap_or([1.0 / 3.0; 3]);
+
+            // Per-scale weighted SSIM error → scale_dm[s].
+            unsafe {
+                diffmap::per_scale_weighted_ssim_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(pad_total),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(planes[0].clone(), plane_len),
+                    ArrayArg::from_raw_parts(planes[1].clone(), plane_len),
+                    ArrayArg::from_raw_parts(planes[2].clone(), plane_len),
+                    ArrayArg::from_raw_parts(planes[3].clone(), plane_len),
+                    ArrayArg::from_raw_parts(scale_dm[s].clone(), pad_total),
+                    sc.padded_w,
+                    sc.h,
+                    pad_total as u32,
+                    w[0],
+                    w[1],
+                    w[2],
+                );
+            }
+
+            // Upsample-add scale_dm[s] into the base accumulator.
+            unsafe {
+                diffmap::pow2x_upsample_add_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(base_n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(scale_dm[s].clone(), pad_total),
+                    ArrayArg::from_raw_parts(acc.clone(), base_n),
+                    sc.padded_w,
+                    sc.h,
+                    base_padded_w,
+                    height,
+                    s as u32,
+                    blend,
+                );
+            }
+        }
+
+        // Step 3: trim padded accumulator → tight width × height output.
+        let tight_n = (width as usize) * (height as usize);
+        if base_padded_w == width {
+            // No pad columns — read the accumulator directly (its first
+            // `width × height` slots are exactly the tight output).
+            let bytes = self.client.read_one(acc.clone()).expect("read acc");
+            let data = f32::from_bytes(&bytes);
+            diffmap_out.clear();
+            diffmap_out.extend_from_slice(&data[..tight_n]);
+        } else {
+            unsafe {
+                diffmap::diffmap_trim_padded_kernel::launch_unchecked::<R>(
+                    &self.client,
+                    Self::cube_count_1d(tight_n),
+                    Self::cube_dim_1d(),
+                    ArrayArg::from_raw_parts(acc.clone(), base_n),
+                    ArrayArg::from_raw_parts(out.clone(), tight_n),
+                    width,
+                    base_padded_w,
+                    height,
+                );
+            }
+            let bytes = self.client.read_one(out.clone()).expect("read out");
+            let data = f32::from_bytes(&bytes);
+            diffmap_out.clear();
+            diffmap_out.extend_from_slice(&data[..tight_n]);
+        }
+    }
+
+    /// Lazily allocate the [`GpuDiffmapScratch`] (inner WithIw
+    /// pipeline + accumulator + per-scale dm planes + linear upload
+    /// planes + cached trained weights). One-time alloc; reused across
+    /// calls so the warm buttloop pays it once.
+    ///
+    /// The inner pipeline binds to `ZensimProfile::A` (== V0_3) — the
+    /// same profile the Phase 1 CPU path used.
+    fn ensure_gpu_diffmap_scratch(&mut self) -> Result<()> {
+        if self.gpu_diffmap_scratch.is_some() {
+            return Ok(());
+        }
+        let profile = ZensimProfile::A;
+        // Inner WithIw pipeline on the same client + dims. WithIw is
+        // required so the persist planes (mu1/mu2/ssq/s12) the diffmap
+        // kernels consume are allocated, AND so the 372-feature vector
+        // for the V0_3 MLP score is produced.
+        let inner = Box::new(Zensim::new_with_regime(
+            self.client.clone(),
+            self.width,
+            self.height,
+            ZensimFeatureRegime::WithIw,
+        )?);
+
+        let n_scales = inner.scales.len();
+        let base_padded_w = inner.scales[0].padded_w as usize;
+        let height = inner.height as usize;
+        let width = inner.width as usize;
+        let base_n = base_padded_w * height;
+        let tight_n = width * height;
+
+        let scale_dm: Vec<cubecl::server::Handle> = inner
+            .scales
+            .iter()
+            .map(|s| alloc_empty_f32(&self.client, s.n_padded))
+            .collect();
+        let acc = alloc_empty_f32(&self.client, base_n);
+        let out = alloc_empty_f32(&self.client, tight_n);
+        let dist_lin = [
+            alloc_empty_f32(&self.client, tight_n),
+            alloc_empty_f32(&self.client, tight_n),
+            alloc_empty_f32(&self.client, tight_n),
+        ];
+        let ref_lin = [
+            alloc_empty_f32(&self.client, tight_n),
+            alloc_empty_f32(&self.client, tight_n),
+            alloc_empty_f32(&self.client, tight_n),
+        ];
+
+        // Precompute the default-options Trained multi-scale weights
+        // from the canonical V0_2 weight table (the diffmap weighting
+        // is profile-independent — it's pure SSIM from
+        // WEIGHTS_PREVIEW_V0_2, matching CPU `trained_multiscale_weights`
+        // with edge_mse + hf disabled).
+        let weights_f64: Vec<f64> = crate::weights::WEIGHTS_PREVIEW_V0_2.to_vec();
+        let (per_scale_w, scale_blend) =
+            diffmap::trained_multiscale_ssim_weights_default(&weights_f64, n_scales);
+
+        self.gpu_diffmap_scratch = Some(GpuDiffmapScratch {
+            inner,
+            scale_dm,
+            acc,
+            out,
+            dist_lin,
+            ref_lin,
+            per_scale_w,
+            scale_blend,
+            cpu_scorer: ZensimCpu::new(profile),
+            cpu_ref: None,
+            profile,
+        });
+        Ok(())
+    }
+
+    /// Pure-GPU diffmap + score from linear-RGB f32 planes.
+    ///
+    /// `build_ref`: when true, builds the reference XYB pyramid from
+    /// `ref_planes` (one-shot / cold path). When false, reuses the
+    /// inner pipeline's cached reference pyramid (warm-ref path) —
+    /// `ref_planes` is ignored.
+    ///
+    /// Returns the butteraugli-direction normalized score; fills
+    /// `diffmap_out` with the `width × height` multi-scale SSIM diffmap.
+    fn gpu_diffmap_linear_into(
+        &mut self,
+        ref_planes: Option<[&[f32]; 3]>,
+        dist_planes: [&[f32]; 3],
+        build_ref: bool,
+        diffmap_out: &mut Vec<f32>,
+    ) -> Result<f32> {
+        self.ensure_gpu_diffmap_scratch()?;
+        let (w, h) = (self.width as usize, self.height as usize);
+
+        // Pull the scratch out so we can mutably drive the inner
+        // pipeline + read the cached weights without aliasing `self`.
+        let mut scratch = self.gpu_diffmap_scratch.take().expect("ensured");
+
+        // ── Reference setup ──
+        // GPU side: build the reference XYB pyramid on the inner
+        // pipeline (cold path). CPU side: build / reuse the cached
+        // PrecomputedReference for the SCORE.
+        if build_ref {
+            let rp = ref_planes.ok_or(Error::NoCachedReference)?;
+            scratch
+                .inner
+                .run_xyb_pyramid_linear(true, rp[0], rp[1], rp[2]);
+            scratch.inner.has_cached_reference = true;
+            // CPU reference for the score path.
+            let pre = match scratch.cpu_scorer.precompute_reference_linear_planar(
+                [rp[0], rp[1], rp[2]],
+                w,
+                h,
+                w,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    self.gpu_diffmap_scratch = Some(scratch);
+                    return Err(map_zensim_error(e));
+                }
+            };
+            scratch.cpu_ref = Some(pre);
+        } else if !scratch.inner.has_cached_reference || scratch.cpu_ref.is_none() {
+            self.gpu_diffmap_scratch = Some(scratch);
+            return Err(Error::NoCachedReference);
+        }
+
+        // ── Score (CPU canonical) ──
+        // The score MUST come from the CPU canonical path: the
+        // GPU-feature → V0_3 MLP path is catastrophically wrong on the
+        // pinned zensim 0.3.0 (pre-existing WithIw-feature / V0_3-MLP
+        // parity bug, documented in DIFFMAP_DIVERGENCES.md §9). The CPU
+        // call also yields the canonical diffmap, but we DISCARD it —
+        // the diffmap is produced on GPU below (the future win, once
+        // the score-path bug is fixed in chunk N+1, is to drop this CPU
+        // call entirely).
+        let raw_score = {
+            let cpu_ref = scratch.cpu_ref.as_ref().expect("set above");
+            match scratch
+                .cpu_scorer
+                .compute_with_ref_and_diffmap_linear_planar(
+                    cpu_ref,
+                    dist_planes,
+                    w,
+                    h,
+                    w,
+                    DiffmapOptions::default(),
+                ) {
+                Ok(res) => res.score(),
+                Err(e) => {
+                    self.gpu_diffmap_scratch = Some(scratch);
+                    return Err(map_zensim_error(e));
+                }
+            }
+        };
+
+        // ── Diffmap (GPU) ──
+        // Build distorted XYB pyramid + WithIw features on the inner
+        // pipeline (writes the mu1/mu2/ssq/s12 persist planes the
+        // diffmap kernels consume). We do NOT use the 372-feature
+        // vector for scoring (see above) — only the persist planes
+        // matter here. The reduction still runs (it's cheap) so the
+        // inner pipeline state stays self-consistent.
+        scratch
+            .inner
+            .run_xyb_pyramid_linear(false, dist_planes[0], dist_planes[1], dist_planes[2]);
+        let _features = scratch.inner.compute_withiw_features_from_built_xyb();
+
+        {
+            let inner = scratch.inner.as_ref();
+            inner.run_gpu_diffmap_chain(
+                &scratch.scale_dm,
+                &scratch.acc,
+                &scratch.out,
+                &scratch.per_scale_w,
+                &scratch.scale_blend,
+                diffmap_out,
+            );
+        }
+
+        let _ = (&scratch.ref_lin, &scratch.dist_lin, scratch.profile);
+
+        self.gpu_diffmap_scratch = Some(scratch);
+        Ok(normalize_zensim_score(raw_score))
+    }
+
+    /// Warm the GPU diffmap reference pyramid + the CPU score reference
+    /// from linear-RGB planes.
+    fn gpu_diffmap_warm_ref_linear(&mut self, r: &[f32], g: &[f32], b: &[f32]) -> Result<()> {
+        self.ensure_gpu_diffmap_scratch()?;
+        let (w, h) = (self.width as usize, self.height as usize);
+        let mut scratch = self.gpu_diffmap_scratch.take().expect("ensured");
+        scratch.inner.run_xyb_pyramid_linear(true, r, g, b);
+        scratch.inner.has_cached_reference = true;
+        let pre = match scratch
+            .cpu_scorer
+            .precompute_reference_linear_planar([r, g, b], w, h, w)
+        {
+            Ok(p) => p,
+            Err(e) => {
+                self.gpu_diffmap_scratch = Some(scratch);
+                return Err(map_zensim_error(e));
+            }
+        };
+        scratch.cpu_ref = Some(pre);
+        self.gpu_diffmap_scratch = Some(scratch);
+        Ok(())
     }
 }
 

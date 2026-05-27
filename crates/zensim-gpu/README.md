@@ -167,17 +167,26 @@ let score = z.score_from_linear_planes_with_warm_ref_diffmap(
 # Ok::<(), zensim_gpu::Error>(())
 ```
 
-### Phase 1 implementation note
+### Diffmap implementation note (Phase 1 + Phase 1b)
 
-Phase 1 of the zensim-fork RFC arc delegates the per-pixel diffmap
-*production* to zensim's canonical CPU pipeline
-(`zensim::compute_with_ref_and_diffmap_linear_planar`) — the GPU side
-stays the fast path for scalar feature extraction. The scalar score
-returned alongside the diffmap therefore comes from the CPU pipeline
-(NOT the GPU 372-feature MLP). See
-[`docs/DIFFMAP_DIVERGENCES.md`](docs/DIFFMAP_DIVERGENCES.md) for the
-full rationale; Phase 1b will port the diffmap chain to pure-GPU
-kernels.
+The per-pixel diffmap **production** defaults to zensim's canonical CPU
+pipeline (`zensim::compute_with_ref_and_diffmap_linear_planar`) — the
+GPU side stays the fast path for scalar feature extraction, and the
+scalar score returned alongside the diffmap comes from the CPU pipeline
+(NOT the GPU 372-feature MLP).
+
+Phase 1b added a **pure-GPU diffmap kernel chain** (per-scale weighted
+SSIM → power-of-2 upsample-add → trim) wired behind the env gate
+`ZENSIM_GPU_DIFFMAP=1`. The GPU kernels are validated bit-close to the
+CPU canonical (≤ 2.08e-4 pointwise — `tests/cpu_gpu_diffmap_parity.rs`).
+The gate is **default-OFF**: the scalar score must still come from the
+CPU canonical path (the GPU-feature → V0_3 MLP score is unreliable on
+the pinned zensim 0.3.0 — see `docs/DIFFMAP_DIVERGENCES.md` §2b + §9),
+so GPU-diffmap + CPU-score is currently slower than CPU-only. The gate
+ships the validated GPU diffmap infrastructure; flipping it to
+default-ON (and crushing the diffmap wall overhead) is the chunk-N+1
+score-path fix. See
+[`docs/DIFFMAP_DIVERGENCES.md`](docs/DIFFMAP_DIVERGENCES.md) §2 + §2b.
 
 ## Status
 

@@ -100,8 +100,7 @@ fn pattern_photo_wash(w: usize, h: usize) -> Vec<u8> {
         for x in 0..w {
             let fx = (x as f32) / (w as f32);
             let fy = (y as f32) / (h as f32);
-            let r =
-                127.5 + 80.0 * (4.0 * fx + 1.7 * fy).cos() + 25.0 * (11.0 * fx).sin();
+            let r = 127.5 + 80.0 * (4.0 * fx + 1.7 * fy).cos() + 25.0 * (11.0 * fx).sin();
             let g = 127.5 + 70.0 * (3.0 * fx - 2.5 * fy).sin() + 30.0 * (7.0 * fy).cos();
             let b = 127.5 + 65.0 * (2.0 * fx + 3.0 * fy).cos() + 20.0 * (9.0 * fx + fy).sin();
             v.push(r.clamp(0.0, 255.0) as u8);
@@ -245,20 +244,10 @@ fn slot_budget(kind: BlockKind, off: usize, scale: usize) -> (f64, f64) {
     }
 }
 
-fn compare_372(
-    label: &str,
-    rgb_ref: &[u8],
-    rgb_dis: &[u8],
-    w: u32,
-    h: u32,
-) -> Result<(), String> {
-    let mut z = Zensim::<Backend>::new_with_regime(
-        make_client!(),
-        w,
-        h,
-        ZensimFeatureRegime::WithIw,
-    )
-    .map_err(|e| format!("[{label}] GPU construct {w}x{h} failed: {e}"))?;
+fn compare_372(label: &str, rgb_ref: &[u8], rgb_dis: &[u8], w: u32, h: u32) -> Result<(), String> {
+    let mut z =
+        Zensim::<Backend>::new_with_regime(make_client!(), w, h, ZensimFeatureRegime::WithIw)
+            .map_err(|e| format!("[{label}] GPU construct {w}x{h} failed: {e}"))?;
     let gpu = z
         .compute_features_vec(rgb_ref, rgb_dis)
         .map_err(|e| format!("[{label}] GPU compute failed: {e}"))?;
@@ -417,8 +406,8 @@ macro_rules! sweep_test {
             // distortion to keep the assertion ~0 ms.
             {
                 let dis = add_noise(&ref_buf, 4, 0xABCD_EF01);
-                let mut z = Zensim::<Backend>::new(make_client!(), w, h)
-                    .expect("typed new (Basic)");
+                let mut z =
+                    Zensim::<Backend>::new(make_client!(), w, h).expect("typed new (Basic)");
                 let basic = z
                     .compute_features(&ref_buf, &dis)
                     .expect("Basic compute_features");
@@ -484,13 +473,7 @@ macro_rules! sweep_test {
                 } else {
                     add_noise(&ref_buf, noise, 0xCAFEBABE)
                 };
-                let label = format!(
-                    "{}x{}-{}-{}",
-                    w,
-                    h,
-                    content.label(),
-                    noise_label
-                );
+                let label = format!("{}x{}-{}-{}", w, h, content.label(), noise_label);
                 if let Err(e) = compare_372(&label, &ref_buf, &dis, w, h) {
                     panic!("{e}");
                 }

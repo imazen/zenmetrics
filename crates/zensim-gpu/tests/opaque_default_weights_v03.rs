@@ -127,9 +127,8 @@ fn default_weights_routes_through_profile_not_shim() {
     // call, same regime). The CPU `score_features_with_profile_and_codec`
     // dispatch lives on these features.
     let client = BackendT::client(&Default::default());
-    let mut typed =
-        Zensim::<BackendT>::new_with_regime(client, w, h, ZensimFeatureRegime::WithIw)
-            .expect("typed new_with_regime");
+    let mut typed = Zensim::<BackendT>::new_with_regime(client, w, h, ZensimFeatureRegime::WithIw)
+        .expect("typed new_with_regime");
     let features = typed
         .compute_features_vec(&ref_rgb, &dist_rgb)
         .expect("typed compute_features_vec");
@@ -140,7 +139,10 @@ fn default_weights_routes_through_profile_not_shim() {
 
     eprintln!("opaque (v0.3 MLP+spline): {opaque_score:.5}");
     eprintln!("legacy (v0.2 linear)    : {legacy:.5}");
-    eprintln!("|Δ|                     : {:.5}", (opaque_score - legacy).abs());
+    eprintln!(
+        "|Δ|                     : {:.5}",
+        (opaque_score - legacy).abs()
+    );
 
     // Sanity checks: both numbers must be finite and inside the dial.
     assert!(
@@ -201,16 +203,14 @@ fn opaque_v03_matches_cpu_score_features_with_profile_and_codec() {
         .value;
 
     let client = BackendT::client(&Default::default());
-    let mut typed =
-        Zensim::<BackendT>::new_with_regime(client, w, h, ZensimFeatureRegime::WithIw)
-            .expect("typed new_with_regime");
+    let mut typed = Zensim::<BackendT>::new_with_regime(client, w, h, ZensimFeatureRegime::WithIw)
+        .expect("typed new_with_regime");
     let features = typed
         .compute_features_vec(&ref_rgb, &dist_rgb)
         .expect("typed compute_features_vec");
 
-    let cpu_score =
-        zensim::score_features_with_profile_and_codec(profile, &features, w, h, None)
-            .expect("cpu score_features_with_profile_and_codec");
+    let cpu_score = zensim::score_features_with_profile_and_codec(profile, &features, w, h, None)
+        .expect("cpu score_features_with_profile_and_codec");
 
     eprintln!("opaque: {opaque_score:.5}  cpu(profile_and_codec): {cpu_score:.5}");
     let abs = (opaque_score - cpu_score).abs();

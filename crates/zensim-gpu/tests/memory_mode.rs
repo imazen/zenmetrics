@@ -1,11 +1,11 @@
 //! Tests for the unified [`MemoryMode`] API. Host-side only.
 
 use std::sync::{Mutex, OnceLock};
+use zensim_gpu::memory_mode::CUBECL_OVERHEAD_BYTES;
 use zensim_gpu::{
     Error, MemoryMode, ResolvedMode, ZensimFeatureRegime, estimate_gpu_memory_bytes,
     estimate_strip_gpu_memory_bytes, memory_mode,
 };
-use zensim_gpu::memory_mode::CUBECL_OVERHEAD_BYTES;
 
 const VRAM_CAP_VAR: &str = "ZENMETRICS_VRAM_CAP_BYTES";
 
@@ -114,7 +114,10 @@ fn estimator_matches_measured() {
             failures.push((regime, w, h, measured_mb, total_mb, pct));
         }
     }
-    eprintln!("estimator vs measured: max |%err| = {max_pct:.1}% over {} rows", ROWS.len());
+    eprintln!(
+        "estimator vs measured: max |%err| = {max_pct:.1}% over {} rows",
+        ROWS.len()
+    );
     if !failures.is_empty() {
         for (regime, w, h, meas, pred, pct) in &failures {
             eprintln!(
@@ -219,4 +222,3 @@ fn vram_cap_env_override() {
         assert_eq!(memory_mode::vram_cap_bytes(), 123_456_789);
     });
 }
-

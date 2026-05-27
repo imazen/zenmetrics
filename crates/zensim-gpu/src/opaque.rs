@@ -623,10 +623,7 @@ impl ZensimOpaque {
     /// — those should use the one-shot [`Self::compute_srgb_u8`]
     /// instead. The umbrella `zenmetrics-api` cached-ref API
     /// dispatches through this method for the profile-mode default.
-    pub fn compute_with_cached_reference_score_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_score_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         if self.params.profile.is_some() {
             let features = self.inner.compute_with_reference_vec(dis_rgb)?;
             let (w, h) = self.inner.dims();

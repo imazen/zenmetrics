@@ -52,8 +52,8 @@ fn main() {
 
     // Path A: host-cached only (pre-task-#75 baseline).
     {
-        let mut z = Zensim::<CudaRuntime>::new_strip(client.clone(), w, h, h_body)
-            .expect("new_strip");
+        let mut z =
+            Zensim::<CudaRuntime>::new_strip(client.clone(), w, h, h_body).expect("new_strip");
         z.set_reference_host_cached_only(&ref_bytes)
             .expect("set_reference_host_cached_only");
         // 2 warmup iters not counted.
@@ -79,8 +79,8 @@ fn main() {
 
     // Path B: device-cached (task #75).
     {
-        let mut z = Zensim::<CudaRuntime>::new_strip(client.clone(), w, h, h_body)
-            .expect("new_strip");
+        let mut z =
+            Zensim::<CudaRuntime>::new_strip(client.clone(), w, h, h_body).expect("new_strip");
         z.set_reference(&ref_bytes).expect("set_reference");
         for _ in 0..2 {
             let _ = z.compute_with_reference(&dist_bytes).expect("warmup");

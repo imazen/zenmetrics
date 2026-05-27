@@ -25,9 +25,7 @@ type Backend = cubecl::cuda::CudaRuntime;
 type Backend = cubecl::wgpu::WgpuRuntime;
 
 #[cfg(not(any(feature = "cuda", feature = "wgpu")))]
-compile_error!(
-    "zensim-gpu strip_parity test requires either the `cuda` or `wgpu` feature"
-);
+compile_error!("zensim-gpu strip_parity test requires either the `cuda` or `wgpu` feature");
 
 macro_rules! make_client {
     () => {
@@ -249,7 +247,10 @@ fn strip_rejects_misaligned_body() {
     // h_body must be a multiple of STRIP_ALIGN=8.
     let client = make_client!();
     let r = Zensim::<Backend>::new_strip(client, 256, 256, 100);
-    assert!(r.is_err(), "h_body=100 should be rejected (not multiple of 8)");
+    assert!(
+        r.is_err(),
+        "h_body=100 should be rejected (not multiple of 8)"
+    );
 }
 
 #[test]
@@ -326,22 +327,11 @@ fn diffmap_strip_matches_full_bit_for_bit_512x512() {
         .score_with_warm_ref_diffmap(&dist_img, &mut diff_strip)
         .unwrap();
 
-    assert_eq!(
-        diff_full.len(),
-        diff_strip.len(),
-        "diffmap length mismatch"
-    );
-    assert_eq!(
-        diff_full.len(),
-        w * h,
-        "diffmap should be width x height"
-    );
+    assert_eq!(diff_full.len(), diff_strip.len(), "diffmap length mismatch");
+    assert_eq!(diff_full.len(), w * h, "diffmap should be width x height");
     // CPU is deterministic; the diffmap should be bit-identical.
     for (i, (&a, &b)) in diff_full.iter().zip(diff_strip.iter()).enumerate() {
-        assert_eq!(
-            a, b,
-            "diffmap[{i}] differs: full={a:?} strip={b:?}"
-        );
+        assert_eq!(a, b, "diffmap[{i}] differs: full={a:?} strip={b:?}");
     }
     // Score is f32; deterministic CPU path → bit-identical.
     assert_eq!(score_full, score_strip, "warm-ref score mismatch");
@@ -361,7 +351,8 @@ fn host_cached_only_matches_device_cached_512x512() {
     let ref_img = gradient(w, h);
     let dist_img = add_noise(&ref_img, 8);
 
-    let mut strip_dev = Zensim::<Backend>::new_strip(client.clone(), w as u32, h as u32, 128).unwrap();
+    let mut strip_dev =
+        Zensim::<Backend>::new_strip(client.clone(), w as u32, h as u32, 128).unwrap();
     strip_dev.set_reference(&ref_img).unwrap();
     let feat_dev = strip_dev.compute_with_reference_vec(&dist_img).unwrap();
 

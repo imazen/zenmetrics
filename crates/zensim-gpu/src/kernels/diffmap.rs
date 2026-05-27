@@ -257,9 +257,7 @@ pub fn trained_multiscale_ssim_weights_default(
             // are disabled for default options so we don't accumulate
             // their per-channel sums.
             if base + 2 < weights.len() {
-                ssim_w[c] = weights[base].abs()
-                    + weights[base + 1].abs()
-                    + weights[base + 2].abs();
+                ssim_w[c] = weights[base].abs() + weights[base + 1].abs() + weights[base + 2].abs();
             }
             // Sum ALL features at this scale (the blend weight uses
             // the FULL weight mass, not just ssim, even when extended
@@ -654,10 +652,7 @@ mod tests {
         // -> num_m = 1, num_s = 2.0009, denom_s = 0.5 + 0.5 + 0.0009 = 1.0009
         // -> sd_raw = 1 - 2.0009 / 1.0009 = -1.0 → clamps to 0.
         let v = per_pixel_ssim_error_scalar(0.0, 0.0, 0.5, 1.0);
-        assert!(
-            v == 0.0,
-            "negative sd_raw should clamp to zero, got {v}"
-        );
+        assert!(v == 0.0, "negative sd_raw should clamp to zero, got {v}");
     }
 
     #[test]
@@ -692,8 +687,7 @@ mod tests {
         // disabled edge_mse + hf, only ssim is active).
         // Use the canonical zensim weights.
         let weights = &zensim::profile::WEIGHTS_PREVIEW_V0_2;
-        let (per_scale, _blend) =
-            trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
+        let (per_scale, _blend) = trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
         assert_eq!(per_scale.len(), 4);
         for (s, w) in per_scale.iter().enumerate() {
             let sum = w[0] + w[1] + w[2];
@@ -707,8 +701,7 @@ mod tests {
     #[test]
     fn trained_blend_weights_sum_to_one() {
         let weights = &zensim::profile::WEIGHTS_PREVIEW_V0_2;
-        let (_per_scale, blend) =
-            trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
+        let (_per_scale, blend) = trained_multiscale_ssim_weights_default(weights.as_slice(), 4);
         assert_eq!(blend.len(), 4);
         let sum: f32 = blend.iter().sum();
         assert!(
