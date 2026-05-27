@@ -549,6 +549,77 @@ impl Drop for GpuUtilWatcher {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Test-only utilities for Phase 9.3 controller exercises.
+// ---------------------------------------------------------------------------
+
+/// Test-only helper exposing the watcher's internal counters so the
+/// Phase 9.3 controller can be exercised without a live `nvidia-smi`.
+///
+/// Production code MUST NOT depend on this — the counters are an
+/// implementation detail of the adaptive scaling heuristic.
+#[doc(hidden)]
+#[cfg(test)]
+pub(crate) struct WatcherCounters {
+    pub latest_pct: Arc<AtomicUsize>,
+    pub below: Arc<AtomicUsize>,
+    pub above: Arc<AtomicUsize>,
+}
+
+#[cfg(test)]
+impl GpuUtilWatcher {
+    /// Construct a watcher without spawning the sampling thread — for
+    /// unit tests that want to manipulate counters directly.
+    pub(crate) fn test_only_fake() -> Self {
+        Self {
+            latest_pct: Arc::new(AtomicUsize::new(u8::MAX as usize)),
+            consecutive_below_target: Arc::new(AtomicUsize::new(0)),
+            consecutive_above_target: Arc::new(AtomicUsize::new(0)),
+            shutdown: Arc::new(AtomicBool::new(true)),
+            join: None,
+        }
+    }
+
+    pub(crate) fn test_only_counters(&self) -> WatcherCounters {
+        WatcherCounters {
+            latest_pct: Arc::clone(&self.latest_pct),
+            below: Arc::clone(&self.consecutive_below_target),
+            above: Arc::clone(&self.consecutive_above_target),
+        }
+    }
+}
+
+/// Phase 9.3 — pure-function controller logic. Given the current
+/// active lane count, the watcher's consecutive-below / consecutive-
+/// above counters, and the configured max, decide the next lane count.
+///
+/// Returns `None` when no change is warranted (insufficient samples,
+/// or already at the boundary). Returns `Some(N)` with `1 <= N <= max`
+/// when a transition should fire.
+///
+/// Heuristic:
+/// - >= 3 consecutive low-util samples + room to grow -> +1 lane
+/// - >= 3 consecutive high-util samples + room to shrink -> -1 lane
+/// - Else: no change
+///
+/// The 3-sample threshold matches the Phase 9 design doc's
+/// "samples_needed = 3" guard against single-sample noise.
+pub(crate) fn compute_next_lane_count(
+    current: usize,
+    below_samples: usize,
+    above_samples: usize,
+    max_lanes: usize,
+) -> Option<usize> {
+    const SAMPLES_NEEDED: usize = 3;
+    if below_samples >= SAMPLES_NEEDED && current < max_lanes {
+        Some(current + 1)
+    } else if above_samples >= SAMPLES_NEEDED && current > 1 {
+        Some(current - 1)
+    } else {
+        None
+    }
+}
+
 /// One-shot `nvidia-smi` sample. Returns `None` if the command can't
 /// be invoked or the output isn't a 0-100 integer.
 ///
@@ -1888,18 +1959,12 @@ impl Orchestrator {
     /// Returns `Some(new_count)` if the lane count changed, `None`
     /// otherwise (no change, or adaptive scaling disabled).
     ///
-    /// Callers may invoke this from their own polling loop OR rely on
-    /// the implicit tick that runs every `submit()` call when adaptive
-    /// scaling is enabled. The implicit tick is rate-limited to one
-    /// call per `gpu_util_sample_interval_ms / 2` to keep the
-    /// dispatcher's hot path predictable.
+    /// Callers may invoke this from their own polling loop. A future
+    /// Phase 9.3.1 wires an implicit rate-limited tick into the
+    /// `submit()` hot path so callers don't have to drive it manually.
     pub fn adaptive_lane_tick(&mut self) -> Option<usize> {
         let pool = self.pool.as_mut()?;
         let watcher = pool.gpu_util.as_ref()?;
-        // Need at least 3 consecutive low-or-high samples to act.
-        // This matches the Phase 9 design doc's "3 samples needed"
-        // guard against single-sample noise.
-        const SAMPLES_NEEDED: usize = 3;
         let lane_count = pool.gpu_lanes.len();
         let max_lanes = pool
             .config
@@ -1908,13 +1973,7 @@ impl Orchestrator {
         let current = pool.active_gpu_lanes.load(Ordering::Acquire);
         let below = watcher.consecutive_below();
         let above = watcher.consecutive_above();
-        let new_count = if below >= SAMPLES_NEEDED && current < max_lanes {
-            current + 1
-        } else if above >= SAMPLES_NEEDED && current > 1 {
-            current - 1
-        } else {
-            return None;
-        };
+        let new_count = compute_next_lane_count(current, below, above, max_lanes)?;
         pool.active_gpu_lanes.store(new_count, Ordering::Release);
         log::debug!(
             target: "zenmetrics_orchestrator::pool",
@@ -2254,5 +2313,75 @@ mod tests {
         assert_eq!(n.clamp(1, 8), 8);
         let z: usize = 0;
         assert_eq!(z.clamp(1, 8), 1);
+    }
+
+    // ---- Phase 9.3 controller logic — pure function ---------------
+
+    #[test]
+    fn adaptive_controller_holds_when_no_samples() {
+        // Fewer than 3 samples in either direction: no change.
+        assert_eq!(compute_next_lane_count(1, 0, 0, 4), None);
+        assert_eq!(compute_next_lane_count(2, 2, 2, 4), None);
+        assert_eq!(compute_next_lane_count(1, 1, 0, 4), None);
+        assert_eq!(compute_next_lane_count(4, 0, 2, 4), None);
+    }
+
+    #[test]
+    fn adaptive_controller_scales_up_on_3_low_samples() {
+        // 3 consecutive low samples + room to grow -> +1.
+        assert_eq!(compute_next_lane_count(1, 3, 0, 4), Some(2));
+        assert_eq!(compute_next_lane_count(2, 3, 0, 4), Some(3));
+        assert_eq!(compute_next_lane_count(3, 5, 0, 4), Some(4));
+    }
+
+    #[test]
+    fn adaptive_controller_no_scale_up_at_max() {
+        // Already at the cap: no scale-up regardless of low samples.
+        assert_eq!(compute_next_lane_count(4, 100, 0, 4), None);
+    }
+
+    #[test]
+    fn adaptive_controller_scales_down_on_3_high_samples() {
+        // 3 consecutive high samples + room to shrink -> -1.
+        assert_eq!(compute_next_lane_count(4, 0, 3, 4), Some(3));
+        assert_eq!(compute_next_lane_count(2, 0, 5, 4), Some(1));
+    }
+
+    #[test]
+    fn adaptive_controller_no_scale_down_at_one() {
+        // Already at the floor: no scale-down regardless of high samples.
+        assert_eq!(compute_next_lane_count(1, 0, 100, 4), None);
+    }
+
+    #[test]
+    fn adaptive_controller_low_beats_high_in_tie() {
+        // Pathological: both counters >= 3 simultaneously. The
+        // scale-up branch comes first by code order, so scale-up
+        // wins. This is acceptable because the watcher resets the
+        // OTHER counter on any sample in the opposing bin, so this
+        // state shouldn't persist for more than one tick in practice.
+        assert_eq!(compute_next_lane_count(2, 3, 3, 4), Some(3));
+    }
+
+    #[test]
+    fn watcher_fake_starts_unknown() {
+        // The test-only fake watcher starts with no samples — both
+        // counters at 0, latest_pct = u8::MAX sentinel.
+        let w = GpuUtilWatcher::test_only_fake();
+        assert!(w.latest_pct().is_none());
+        assert_eq!(w.consecutive_below(), 0);
+        assert_eq!(w.consecutive_above(), 0);
+    }
+
+    #[test]
+    fn watcher_fake_counters_externally_manipulable() {
+        // Test-only fake exposes counter handles so controller tests
+        // can simulate a "below target" run without real nvidia-smi.
+        let w = GpuUtilWatcher::test_only_fake();
+        let h = w.test_only_counters();
+        h.below.store(3, Ordering::Release);
+        assert_eq!(w.consecutive_below(), 3);
+        h.latest_pct.store(45, Ordering::Release);
+        assert_eq!(w.latest_pct(), Some(45));
     }
 }
