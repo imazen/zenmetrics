@@ -192,6 +192,18 @@ zenavif      = { path = "../zenavif--main" }
 # match the new field shape. main has the fix.
 zenjxl       = { path = "../zenjxl--main" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
+# butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
+# version 0.9.2 but carries `compare_linear_planar_into` (the recycled-
+# buffer planar-compare production path) which the PUBLISHED crates.io
+# 0.9.2 does NOT expose. jxl-encoder (patched above) calls it from its
+# vardct perceptual backend (perceptual_backend.rs:637); without this
+# patch the workspace unifies on crates.io 0.9.2 and the jxl-encoder
+# build fails `no method compare_linear_planar_into`. This points
+# zenmetrics at the SAME local sibling jxl-encoder's own Cargo.toml uses
+# (../../butteraugli/butteraugli from each repo root), so the whole
+# workspace resolves one butteraugli. Equivalent git ref when the
+# sibling checkout is gone: { git = "https://github.com/imazen/butteraugli", rev = "<commit>" }.
+butteraugli  = { path = "../../butteraugli/butteraugli" }
 # T4.M (2026-05-16, repointed 2026-05-17): cubecl with pinned-host-buffer
 # fast path. `pr/pinned-v0.10.0` on lilith/cubecl cherry-picks
 # `create_from_slice_pinned` + default-path pinned-staging routing onto
