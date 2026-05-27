@@ -19,7 +19,7 @@ Workspace conventions per the global rules:
 
 ### infra — feat: SaladCloud deploy image + CI publish to ghcr (2026-05-27)
 
-Adds `Dockerfile.sweep.salad.v1` (the SaladCloud sibling of the vast.ai
+(`410cf6ae`) Adds `Dockerfile.sweep.salad.v1` (the SaladCloud sibling of the vast.ai
 `Dockerfile.sweep.v26`) + `scripts/sweep/entrypoint_salad.sh` + the
 `.github/workflows/sweep-image-salad.yml` publish pipeline. The image
 reuses v26's L1-L8 base (ubuntu → apt → pyarrow → CUDA 12-6 runtime+dev →
