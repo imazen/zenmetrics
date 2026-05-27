@@ -102,6 +102,14 @@ pub const fn cpu_strip_count(height: u32) -> u32 {
 /// block; the kernel branches to skip work for the disabled path.
 #[cube(launch_unchecked)]
 #[allow(clippy::too_many_arguments)]
+// `inner_start - inner_start` (the cube-DSL typed-zero workaround at
+// the saturating-sub branch below) trips clippy's `eq_op` lint, which
+// became deny-by-default in Rust 1.95. The expression is intentional —
+// cubecl rejects mixing a `u32` literal with an expanded value in the
+// if-else branch; the self-subtraction yields a typed `u32` zero. (Not
+// introduced by the Phase 1b diffmap work; this annotation un-breaks
+// the crate's `clippy -D warnings` gate on Rust 1.95+.)
+#[allow(clippy::eq_op)]
 pub fn masked_iw_strip_kernel(
     src_a: &Array<f32>,
     dst_a: &Array<f32>,
