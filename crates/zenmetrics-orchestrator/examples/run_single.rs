@@ -85,6 +85,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if cfg!(feature = "cpu-zensim") {
             v.push("zensim");
         }
+        if cfg!(feature = "cpu-iwssim") {
+            v.push("iwssim");
+        }
         v
     };
 
