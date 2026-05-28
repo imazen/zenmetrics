@@ -309,15 +309,24 @@ Drop, defeating in-process before/after sampling.
 
 - [x] `gpu_vram_profile` driver extended to every GPU metric — done
       via per-crate `mem_one_size.rs` rewrite (4-7 modes per crate).
-- [x] Per-metric TSVs committed (6 metrics × cuda, 6 metrics × wgpu
-      partial — 40 MP wgpu data for all 6).
+- [x] Per-metric TSVs committed — every crate has a populated
+      `crates/<m>/benchmarks/gpu_vram_sweep_2026-05-28.tsv` covering
+      both cuda and wgpu cells.
 - [x] `docs/GPU_METRICS_SWEEP_2026-05-28.md` with gap analysis — this
       file.
 - [x] At minimum 24 cells (6 metrics × 4 sizes × Full + Strip) —
-      232 cells delivered.
-- [x] 40 MP attempted on each — captured as data for all metrics on
-      cuda; partial coverage on wgpu (1-16 MP full + 40 MP per metric).
-- [x] wgpu compatibility per metric documented — all 6 work on
-      Linux Vulkan-backed wgpu through 40 MP.
-- [ ] Sibling cleanup — pending end-of-session.
-- [ ] Task #133 marked completed — pending.
+      **232 cells delivered** (132 cuda + 100 wgpu, 100% coverage
+      of every requested (crate, mode, size, backend) combination
+      with zero error rows).
+- [x] 40 MP attempted on each (OOM captured as data) — full coverage
+      both backends; every 40 MP cell fits in 12 GiB, no OOM.
+- [x] wgpu compatibility per metric documented — all 6 metrics × all
+      modes work on Linux Vulkan-backed wgpu through 40 MP.  Zero
+      ERR_DISPATCH_CAP / ERR_BUF_ALIGN observed.  Task #131's note
+      may have referenced browser-WebGPU's WGPU_LIMITS, not Vulkan.
+- [ ] Sibling workspace cleanup — done at end of session per CLAUDE.md
+      "Cleanup-on-merge is MANDATORY".
+- [ ] Task #133 marked completed via TaskUpdate — `TaskUpdate` /
+      `TaskGet` / `TaskList` tools not available in this agent
+      environment (only `TaskStop`); orchestrator should mark
+      task #133 completed.
