@@ -47,6 +47,34 @@ Workspace conventions per the global rules:
   a pinned body height continue to use
   `compute_with_cached_reference_strip` explicitly.
 
+### Investigated
+
+- **ssim2-gpu warm_ref VRAM "regression" is a measurement artifact, not
+  a real retention bug** (task #138, 2026-05-28). The
+  `gpu_metrics_sweep_2026-05-28.tsv` reading that whole-image `warm_ref`
+  peaks above `full` at 40 MP (10.71 vs 9.23 GiB CUDA) is the cubecl
+  dynamic memory pool sampled at different points on its growth curve
+  for the two modes' differing per-call wall times under `WORKER_REPS=2`.
+  Code: whole-image `warm_ref` and `full` both construct via
+  `Ssim2::new` and share the identical 57-plane/scale `Scale` buffer set
+  — `set_reference` allocates no persistent device buffers, only
+  populating pre-existing slots, so there is no transient ref scratch to
+  free (the brief's hypothesis matched cvvdp-gpu Mode E, not ssim2).
+  Pool-stabilized re-measure (WORKER_REPS=8, CUDA, RTX 5070): 16 MP both
+  6274 MiB; 18 MP 6273≈6271 MiB — byte-identical; at 40 MP both hit the
+  same ~11.9 GiB pool ceiling and OOM. Score bit-identical (warm_ref ==
+  full). Under reps=2 a re-run had `full` HIGHER at 16 MP, confirming
+  ±60 MiB sampling noise. `warm_ref_strip` is the parity-safe
+  memory-bounded 40 MP mode (measured 7.33 GiB, score bit-identical,
+  inside the 5e-5 strip-parity gate). 8-GiB-safety would require either
+  plain cold-ref `strip` (GATE-BREAKING: ~1.2e-3 rel score divergence,
+  24× the gate) or widening the strip-parity tolerance (a relaxation —
+  NOT done, needs user sign-off). Data:
+  `crates/ssim2-gpu/benchmarks/ssim2_warmref_trim_2026-05-28.tsv`;
+  detail: `crates/ssim2-gpu/docs/WARM_REF_VRAM_INVESTIGATION_2026-05-28.md`;
+  sweep-doc correction noted inline in
+  `docs/GPU_METRICS_SWEEP_2026-05-28.md`.
+
 ### Added
 
 - **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports

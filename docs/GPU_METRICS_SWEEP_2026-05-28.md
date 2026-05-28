@@ -262,6 +262,23 @@ In priority order (`<crate>` + 1-line action):
 7. **dssim-gpu, ssim2-gpu** wall-time regression in strip mode at 16
    MP — 5.5× / 4.0× slowdown vs Full.  Mode E refinement queued in
    task #75 should target these.
+
+> **CORRECTION (task #138, 2026-05-28): ssim2-gpu warm_ref VRAM is
+> NOT a regression.** The table reading `warm_ref` 40 MP > `full`
+> (10.71 vs 9.23 GiB CUDA) is a measurement artifact of the cubecl
+> dynamic pool sampled at different points on its growth curve — NOT
+> retained ref state. Whole-image `warm_ref` and `full` share the
+> identical 57-plane/scale `Scale` buffer set (`Ssim2::new`); their
+> pool-stabilized peaks are byte-identical (16 MP both 6274 MiB; 18
+> MP 6273≈6271 MiB) and at 40 MP both hit the same ~11.9 GiB pool
+> ceiling and OOM. Under the published `reps=2` protocol the
+> which-mode-is-higher is ±60 MiB noise (a re-run had `full` HIGHER
+> at 16 MP). Full investigation + data:
+> `crates/ssim2-gpu/docs/WARM_REF_VRAM_INVESTIGATION_2026-05-28.md`
+> + `crates/ssim2-gpu/benchmarks/ssim2_warmref_trim_2026-05-28.tsv`.
+> The parity-safe memory-bounded 40 MP mode is `warm_ref_strip`
+> (measured 7.33 GiB, score bit-identical).
+
 8. **HtoD-per-iter audit** — strip vs warm_ref strip wall-time
    regression in butter / zensim suggests strip cached-ref may be
    re-uploading the reference per-call.  Run `nsys` on

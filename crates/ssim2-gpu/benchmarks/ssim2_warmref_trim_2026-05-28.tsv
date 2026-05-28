@@ -1,0 +1,23 @@
+# ssim2-gpu warm_ref VRAM remeasurement — task138 Part 1
+# base_commit=e9aa4426f7b6 host=lilith gpu=NVIDIA GeForce RTX 5070 driver=596.21 date=2026-05-28
+# command: WORKER_MODE=<mode> WORKER_W=<w> WORKER_H=<h> WORKER_REPS=<reps> target/release/examples/mem_one_size
+#   (cargo build --release -p ssim2-gpu --no-default-features --features cuda --example mem_one_size)
+# Protocol: subprocess-per-cell, nvidia-smi memory.used polled tightly during run, peak-baseline delta.
+# CUDA backend. reps column = WORKER_REPS. OOM rows: pool grew past card ceiling (~11.9GiB used) and CUDA_ERROR_OUT_OF_MEMORY.
+# KEY FINDING: ssim2-gpu whole-image warm_ref shares the IDENTICAL 57-plane/scale Scale buffer set with full
+# (Ssim2::new). No transient ref scratch exists to free. Steady-state peak is identical to full at every
+# measurable size; the published TSV "warm_ref > full" gap is a cubecl-pool-growth-vs-sampling-window artifact.
+crate	size_mp	size_w	size_h	mode	backend	reps	baseline_mib	peak_mib	delta_mib	delta_bytes	rc	score	notes
+ssim2-gpu	16mp	4096	4096	full	cuda	8	-	-	6274	6576521728	0	-382.580852	pool-stabilized
+ssim2-gpu	16mp	4096	4096	warm_ref	cuda	8	-	-	6274	6576521728	0	-382.580852	pool-stabilized; == full (no regression)
+ssim2-gpu	18mp	5120	3584	full	cuda	8	-	-	6273	6575521792	0	-389.846324	pool-stabilized
+ssim2-gpu	18mp	5120	3584	warm_ref	cuda	8	-	-	6271	6573424640	0	-389.846324	pool-stabilized; == full (no regression)
+ssim2-gpu	40mp	7680	5184	full	cuda	1	1206	11875	10669	11187257344	101	nan	OOM-pool-ceiling
+ssim2-gpu	40mp	7680	5184	warm_ref	cuda	1	884	11850	10966	11498684416	101	nan	OOM-pool-ceiling; same ceiling as full
+ssim2-gpu	40mp	7680	5184	warm_ref_strip	cuda	1	703	8207	7504	7868514304	0	-394.688187	parity-safe memory-bounded mode
+# --- reps=2 variance trials at 16mp (smoking gun: under the published protocol the which-mode-is-higher is NOISE ~+-60MiB) ---
+ssim2-gpu	16mp	4096	4096	full	cuda	2	-	-	6274	6576521728	0	-382.580852	reps2-trial1
+ssim2-gpu	16mp	4096	4096	warm_ref	cuda	2	-	-	6274	6576521728	0	-382.580852	reps2-trial1
+ssim2-gpu	16mp	4096	4096	full	cuda	2	-	-	6332	6637342720	0	-382.580852	reps2-trial2 (full HIGHER than warm_ref — opposite of published 'regression')
+ssim2-gpu	16mp	4096	4096	warm_ref	cuda	2	-	-	6273	6575521792	0	-382.580852	reps2-trial2
+ssim2-gpu	16mp	4096	4096	full	cuda	2	-	-	6273	6575521792	0	-382.580852	reps2-trial3
