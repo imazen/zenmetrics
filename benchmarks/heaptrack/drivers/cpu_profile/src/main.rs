@@ -77,8 +77,16 @@ fn synth_pair(width: u32, height: u32) -> (Vec<u8>, Vec<u8>) {
     (r, d)
 }
 
-fn rgb_pix_vec(bytes: &[u8]) -> Vec<[u8; 3]> {
-    bytes.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
+/// Borrow the interleaved sRGB-u8 byte buffer as `&[[u8; 3]]`.
+///
+/// Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
+/// path that allocated a 120 MB Vec per side at 40 MP. `[u8; 3]` is
+/// `bytemuck::Pod`, so the reinterpret is zero-copy and safe. Mirrors
+/// the change in `crates/zenmetrics-orchestrator/src/cpu_adapter.rs` so
+/// the heaptrack driver's accounting reflects the production adapter
+/// allocation pattern, not the obsolete `chunks_exact` overhead.
+fn rgb_pix(bytes: &[u8]) -> &[[u8; 3]] {
+    bytemuck::cast_slice(bytes)
 }
 
 // ---------------------------------------------------------------------------
@@ -106,26 +114,22 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 
 fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
     use fast_ssim2::Ssimulacra2Reference;
-    use imgref::ImgVec;
+    use imgref::ImgRef;
     let wu = w as usize;
     let hu = h as usize;
     match mode {
         "full" => {
-            let rp = rgb_pix_vec(r);
-            let dp = rgb_pix_vec(d);
-            let ri = ImgVec::new(rp, wu, hu);
-            let di = ImgVec::new(dp, wu, hu);
-            let v = fast_ssim2::compute_ssimulacra2(ri.as_ref(), di.as_ref())
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let v = fast_ssim2::compute_ssimulacra2(ri, di)
                 .map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "warm_ref" => {
-            let rp = rgb_pix_vec(r);
-            let dp = rgb_pix_vec(d);
-            let ri = ImgVec::new(rp, wu, hu);
-            let di = ImgVec::new(dp, wu, hu);
-            let pre = Ssimulacra2Reference::new(ri.as_ref()).map_err(|e| format!("{e:?}"))?;
-            let v = pre.compare(di.as_ref()).map_err(|e| format!("{e:?}"))?;
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
+            let v = pre.compare(di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "strip" | "warm_ref_strip" => Err(format!("GAP:ssim2:{mode}")),
@@ -134,19 +138,18 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 }
 
 fn run_dssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
-    use dssim_core::{Dssim, ToRGBAPLU};
-    use imgref::ImgVec;
+    use dssim_core::Dssim;
     let wu = w as usize;
     let hu = h as usize;
     let dssim = Dssim::new();
     let to_img = |bytes: &[u8]| -> dssim_core::DssimImage<f32> {
-        let rgb_vec: Vec<rgb::RGB<u8>> = bytes
-            .chunks_exact(3)
-            .map(|c| rgb::RGB::new(c[0], c[1], c[2]))
-            .collect();
-        let rgbplu = rgb_vec.to_rgblu();
-        let img = ImgVec::new(rgbplu, wu, hu);
-        dssim.create_image(&img).expect("dssim create_image")
+        // Phase 9.Y: zero-copy reinterpret via bytemuck — mirrors the
+        // adapter's `make_dssim_image`. Uses `create_image_rgb`, the
+        // dssim-core 3.4 shortcut that runs `to_rgblu()` internally.
+        let rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(bytes);
+        dssim
+            .create_image_rgb(rgb, wu, hu)
+            .expect("dssim create_image_rgb")
     };
     match mode {
         "full" => {
@@ -167,24 +170,31 @@ fn run_dssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 }
 
 fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
-    use butteraugli::ButteraugliParams;
+    use butteraugli::{ButteraugliParams, ButteraugliReference};
     use imgref::ImgRef;
     let wu = w as usize;
     let hu = h as usize;
     let p = ButteraugliParams::new();
-    let to_rgb = |bytes: &[u8]| -> Vec<rgb::RGB<u8>> {
-        bytes
-            .chunks_exact(3)
-            .map(|c| rgb::RGB::new(c[0], c[1], c[2]))
-            .collect()
-    };
     match mode {
-        "full" | "warm_ref" => {
-            let rb = to_rgb(r);
-            let db = to_rgb(d);
-            let ri = ImgRef::new(&rb, wu, hu);
-            let di = ImgRef::new(&db, wu, hu);
+        "full" => {
+            // Phase 9.Y: zero-copy reinterpret via bytemuck — mirrors the
+            // adapter's `compute_butter`.
+            let rb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
+            let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+            let ri = ImgRef::new(rb, wu, hu);
+            let di = ImgRef::new(db, wu, hu);
             let result = butteraugli::butteraugli(ri, di, &p).map_err(|e| format!("{e:?}"))?;
+            Ok(result.score)
+        }
+        "warm_ref" => {
+            // Phase 9.Y: butteraugli 0.9.2 has a proper warm-ref API
+            // (`ButteraugliReference::new(&[u8], ...)` + `.compare(&[u8])`).
+            // The original heaptrack driver compared `full` to itself
+            // here — fixed now so warm_ref measures the cached path the
+            // adapter actually uses.
+            let pre = ButteraugliReference::new(r, wu, hu, p.clone())
+                .map_err(|e| format!("ButteraugliReference::new: {e:?}"))?;
+            let result = pre.compare(d).map_err(|e| format!("compare: {e:?}"))?;
             Ok(result.score)
         }
         "strip" | "warm_ref_strip" => Err(format!("GAP:butter:{mode}")),
@@ -214,10 +224,9 @@ fn run_iwssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
 fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
     use zensim::{RgbSlice, Zensim, ZensimProfile};
     let z = Zensim::new(ZensimProfile::latest_preview());
-    let rp = rgb_pix_vec(r);
-    let dp = rgb_pix_vec(d);
-    let ri = RgbSlice::new(&rp, w as usize, h as usize);
-    let di = RgbSlice::new(&dp, w as usize, h as usize);
+    // Phase 9.Y: zero-copy reinterpret via bytemuck — mirrors the adapter.
+    let ri = RgbSlice::new(rgb_pix(r), w as usize, h as usize);
+    let di = RgbSlice::new(rgb_pix(d), w as usize, h as usize);
     match mode {
         "full" | "warm_ref" => {
             // zensim has no public per-instance warm-reference; warm_ref

@@ -1,0 +1,73 @@
+metric	mode	w	h	size_label	outcome	wall_s	score	heaptrack_file
+cvvdp	full	1024	1024	1MP	OK	0.336	9.458330154418945	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_full_1MP.zst
+cvvdp	full	4096	4096	16MP	OK	5.978	9.458502769470215	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_full_16MP.zst
+cvvdp	full	7000	5728	40MP	OK	13.475	9.458556175231934	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_full_40MP.zst
+cvvdp	warm_ref	1024	1024	1MP	OK	0.308	9.458330154418945	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_1MP.zst
+cvvdp	warm_ref	4096	4096	16MP	OK	5.366	9.458502769470215	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_16MP.zst
+cvvdp	warm_ref	7000	5728	40MP	OK	12.115	9.458556175231934	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_40MP.zst
+cvvdp	strip	1024	1024	1MP	GAP	0.150		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_strip_1MP.zst
+cvvdp	strip	4096	4096	16MP	GAP	0.222		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_strip_16MP.zst
+cvvdp	strip	7000	5728	40MP	GAP	0.342		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_strip_40MP.zst
+cvvdp	warm_ref_strip	1024	1024	1MP	GAP	0.149		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_strip_1MP.zst
+cvvdp	warm_ref_strip	4096	4096	16MP	GAP	0.223		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_strip_16MP.zst
+cvvdp	warm_ref_strip	7000	5728	40MP	GAP	0.344		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_warm_ref_strip_40MP.zst
+ssim2	full	1024	1024	1MP	OK	0.180	82.6463630946432	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_full_1MP.zst
+ssim2	full	4096	4096	16MP	OK	2.521	84.3884410066658	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_full_16MP.zst
+ssim2	full	7000	5728	40MP	OK	5.841	84.71076692165143	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_full_40MP.zst
+ssim2	warm_ref	1024	1024	1MP	OK	0.191	82.6463630946432	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_1MP.zst
+ssim2	warm_ref	4096	4096	16MP	OK	2.878	84.3884410066658	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_16MP.zst
+ssim2	warm_ref	7000	5728	40MP	OK	6.241	84.71076692165143	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_40MP.zst
+ssim2	strip	1024	1024	1MP	GAP	0.149		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_strip_1MP.zst
+ssim2	strip	4096	4096	16MP	GAP	0.220		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_strip_16MP.zst
+ssim2	strip	7000	5728	40MP	GAP	0.344		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_strip_40MP.zst
+ssim2	warm_ref_strip	1024	1024	1MP	GAP	0.155		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_strip_1MP.zst
+ssim2	warm_ref_strip	4096	4096	16MP	GAP	0.223		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_strip_16MP.zst
+ssim2	warm_ref_strip	7000	5728	40MP	GAP	0.341		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/ssim2_warm_ref_strip_40MP.zst
+dssim	full	1024	1024	1MP	OK	0.269	0.0009076181133820249	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_full_1MP.zst
+dssim	full	4096	4096	16MP	OK	4.187	0.00090713410150145	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_full_16MP.zst
+dssim	full	7000	5728	40MP	OK	10.637	0.0009070904012009606	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_full_40MP.zst
+dssim	warm_ref	1024	1024	1MP	OK	0.268	0.0009076181133820249	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_1MP.zst
+dssim	warm_ref	4096	4096	16MP	OK	4.185	0.00090713410150145	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_16MP.zst
+dssim	warm_ref	7000	5728	40MP	OK	10.573	0.0009070904012009606	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_40MP.zst
+dssim	strip	1024	1024	1MP	GAP	0.147		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_strip_1MP.zst
+dssim	strip	4096	4096	16MP	GAP	0.228		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_strip_16MP.zst
+dssim	strip	7000	5728	40MP	GAP	0.343		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_strip_40MP.zst
+dssim	warm_ref_strip	1024	1024	1MP	GAP	0.148		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_strip_1MP.zst
+dssim	warm_ref_strip	4096	4096	16MP	GAP	0.221		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_strip_16MP.zst
+dssim	warm_ref_strip	7000	5728	40MP	GAP	0.346		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_warm_ref_strip_40MP.zst
+butter	full	1024	1024	1MP	OK	0.153	4.653627395629883	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_full_1MP.zst
+butter	full	4096	4096	16MP	OK	1.784	4.666544437408447	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_full_16MP.zst
+butter	full	7000	5728	40MP	OK	3.873	4.653627395629883	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_full_40MP.zst
+butter	warm_ref	1024	1024	1MP	OK	0.166	4.653627395629883	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_1MP.zst
+butter	warm_ref	4096	4096	16MP	OK	2.225	4.666544437408447	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_16MP.zst
+butter	warm_ref	7000	5728	40MP	OK	5.076	4.653627395629883	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_40MP.zst
+butter	strip	1024	1024	1MP	GAP	0.148		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_strip_1MP.zst
+butter	strip	4096	4096	16MP	GAP	0.229		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_strip_16MP.zst
+butter	strip	7000	5728	40MP	GAP	0.347		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_strip_40MP.zst
+butter	warm_ref_strip	1024	1024	1MP	GAP	0.148		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_strip_1MP.zst
+butter	warm_ref_strip	4096	4096	16MP	GAP	0.220		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_strip_16MP.zst
+butter	warm_ref_strip	7000	5728	40MP	GAP	0.371		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_strip_40MP.zst
+iwssim	full	1024	1024	1MP	OK	0.398	0.9988505986968338	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_full_1MP.zst
+iwssim	full	4096	4096	16MP	OK	7.175	0.9988000369227074	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_full_16MP.zst
+iwssim	full	7000	5728	40MP	OK	16.834	0.9988008961043233	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_full_40MP.zst
+iwssim	warm_ref	1024	1024	1MP	OK	0.434	0.9988505986968338	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_1MP.zst
+iwssim	warm_ref	4096	4096	16MP	OK	7.113	0.9988000369227074	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_16MP.zst
+iwssim	warm_ref	7000	5728	40MP	OK	17.258	0.9988008961043233	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_40MP.zst
+iwssim	strip	1024	1024	1MP	GAP	0.151		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_strip_1MP.zst
+iwssim	strip	4096	4096	16MP	GAP	0.219		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_strip_16MP.zst
+iwssim	strip	7000	5728	40MP	GAP	0.344		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_strip_40MP.zst
+iwssim	warm_ref_strip	1024	1024	1MP	GAP	0.145		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_strip_1MP.zst
+iwssim	warm_ref_strip	4096	4096	16MP	GAP	0.221		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_strip_16MP.zst
+iwssim	warm_ref_strip	7000	5728	40MP	GAP	0.355		/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/iwssim_warm_ref_strip_40MP.zst
+zensim	full	1024	1024	1MP	OK	0.159	80.45376256741984	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_full_1MP.zst
+zensim	full	4096	4096	16MP	OK	0.547	80.45233848723095	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_full_16MP.zst
+zensim	full	7000	5728	40MP	OK	1.409	80.4513412056085	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_full_40MP.zst
+zensim	warm_ref	1024	1024	1MP	OK	0.158	80.45376256741984	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_1MP.zst
+zensim	warm_ref	4096	4096	16MP	OK	0.558	80.45233848723095	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_16MP.zst
+zensim	warm_ref	7000	5728	40MP	OK	1.418	80.4513412056085	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_40MP.zst
+zensim	strip	1024	1024	1MP	OK	0.156	80.45376256741984	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_strip_1MP.zst
+zensim	strip	4096	4096	16MP	OK	0.493	80.45233848723095	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_strip_16MP.zst
+zensim	strip	7000	5728	40MP	OK	1.467	80.4513412056085	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_strip_40MP.zst
+zensim	warm_ref_strip	1024	1024	1MP	OK	0.153	80.45376256741984	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_strip_1MP.zst
+zensim	warm_ref_strip	4096	4096	16MP	OK	0.483	80.45233848723095	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_strip_16MP.zst
+zensim	warm_ref_strip	7000	5728	40MP	OK	1.430	80.4513412056085	/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/zensim_warm_ref_strip_40MP.zst

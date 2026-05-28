@@ -1,11 +1,11 @@
-heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_full_40MP.zst"
+heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_full_40MP.zst"
 /usr/lib/heaptrack/libheaptrack_preload.so
 starting application, this might take some time...
-OK metric=dssim mode=full w=7000 h=5728 score=0.0009070904012009606 t_synth_ms=211.10 t_score_ms=12151.67
+OK metric=dssim mode=full w=7000 h=5728 score=0.0009070904012009606 t_synth_ms=217.00 t_score_ms=11087.22
 heaptrack stats:
-	allocations:          	1167
+	allocations:          	1165
 	leaked allocations:   	1
 	temporary allocations:	885
 Heaptrack finished! Now run the following to investigate the data:
 
-  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_full_40MP.zst"
+  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/dssim_full_40MP.zst"

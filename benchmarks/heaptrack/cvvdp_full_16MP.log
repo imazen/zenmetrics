@@ -1,11 +1,11 @@
-heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_full_16MP.zst"
+heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_full_16MP.zst"
 /usr/lib/heaptrack/libheaptrack_preload.so
 starting application, this might take some time...
-OK metric=cvvdp mode=full w=4096 h=4096 score=9.458502769470215 t_synth_ms=97.28 t_score_ms=6512.69
+OK metric=cvvdp mode=full w=4096 h=4096 score=9.458502769470215 t_synth_ms=91.94 t_score_ms=5805.70
 heaptrack stats:
 	allocations:          	553
 	leaked allocations:   	1
 	temporary allocations:	125
 Heaptrack finished! Now run the following to investigate the data:
 
-  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_full_16MP.zst"
+  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/cvvdp_full_16MP.zst"

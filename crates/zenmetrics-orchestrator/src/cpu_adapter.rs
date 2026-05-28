@@ -35,9 +35,11 @@
 //!
 //! - **cvvdp** has a true cached-reference path (`warm_reference` +
 //!   `score_with_warm_ref`). Skips ~50% of the pipeline.
-//! - **butteraugli** has no public cached-ref API today. The adapter
-//!   falls back to the regular `compute` on cached-ref calls — still
-//!   correct, just no speedup.
+//! - **butteraugli** (Phase 9.Y, 2026-05-27): now wired to the
+//!   `ButteraugliReference::new(&[u8], …) + .compare(&[u8])` precompute
+//!   API. The ref-side sRGB→linear→XYB→frequency-separated→mask path
+//!   is built once and reused across compare calls. Replaces the prior
+//!   byte-stash wiring that recomputed `full` on every warm-ref call.
 //! - **dssim-core** lets you `create_image(reference)` once and reuse;
 //!   the adapter caches the prepared `DssimImage`.
 //! - **fast-ssim2** has a true cached-ref path (`Ssimulacra2Reference::new`
@@ -159,9 +161,17 @@ struct ButterState {
     width: usize,
     height: usize,
     params: butteraugli::ButteraugliParams,
-    /// butteraugli has no public cached-ref path; we stash bytes for
-    /// API-shape parity.
-    cached_ref: Option<Vec<u8>>,
+    /// Phase 9.Y (2026-05-27): butteraugli 0.9.2 exposes a true
+    /// `ButteraugliReference::new(&[u8], w, h, params)` precompute API
+    /// with `.compare(&[u8]) -> ButteraugliResult`. The precompute path
+    /// runs sRGB → linear → XYB → mask + frequency-separation on the
+    /// reference once and reuses the result across compare calls — the
+    /// dist-side pipeline still runs per call, but the ref-side half
+    /// (≈30-50% of the per-pair work) is hoisted. Replaces the prior
+    /// `Option<Vec<u8>>` byte-stash that just recomputed `full` on the
+    /// warm path. The corresponding `supports_cached_ref()` arm is
+    /// flipped from `false` to `true`.
+    cached_ref: Option<butteraugli::ButteraugliReference>,
 }
 
 #[cfg(feature = "cpu-zensim")]
@@ -290,8 +300,16 @@ impl CpuAdapter {
             // crate had no precompute API.
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(_) => true,
+            // Phase 9.Y (2026-05-27): butteraugli 0.9.2's
+            // `ButteraugliReference` precomputes the reference XYB +
+            // masks once and reuses across `compare(dist_bytes)` calls.
+            // Prior wiring stored raw bytes and recomputed `full` per
+            // warm-ref call — equivalent but with no speedup. The
+            // upgrade keeps the public API identical and turns
+            // `set_reference` + `compute_with_cached_reference` into a
+            // true warm path.
             #[cfg(feature = "cpu-butter")]
-            CpuAdapterState::Butter(_) => false,
+            CpuAdapterState::Butter(_) => true,
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(_) => false,
             // iwssim has a true warm path: `warm_reference` caches the
@@ -365,7 +383,7 @@ impl CpuAdapter {
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
                 let img = ssim2_image_ref(ref_bytes, s.width, s.height);
-                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img.as_ref())
+                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img)
                     .map_err(|e| {
                         CpuAdapterError::Failed(format!(
                             "fast-ssim2 Ssimulacra2Reference::new: {e}"
@@ -382,7 +400,25 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-butter")]
             CpuAdapterState::Butter(s) => {
-                s.cached_ref = Some(ref_bytes.to_vec());
+                // Phase 9.Y: build a `ButteraugliReference` from the
+                // sRGB-u8 reference bytes once. The precompute runs:
+                //   sRGB → linear → XYB → frequency-separated (LF/MF/HF/UHF)
+                //   → reference mask. Roughly 30-50% of the per-pair
+                // pipeline cost — the half/sub-res mirror builds in
+                // parallel via rayon. Holds onto a BufferPool that the
+                // compare path reuses.
+                let pre = butteraugli::ButteraugliReference::new(
+                    ref_bytes,
+                    s.width,
+                    s.height,
+                    s.params.clone(),
+                )
+                .map_err(|e| {
+                    CpuAdapterError::Failed(format!(
+                        "butteraugli ButteraugliReference::new: {e:?}"
+                    ))
+                })?;
+                s.cached_ref = Some(pre);
                 Ok(())
             }
             #[cfg(feature = "cpu-zensim")]
@@ -434,7 +470,7 @@ impl CpuAdapter {
                 })?;
                 let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
                 let v = precomputed
-                    .compare(dist_img.as_ref())
+                    .compare(dist_img)
                     .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compare: {e}")))?;
                 Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
             }
@@ -449,14 +485,19 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-butter")]
             CpuAdapterState::Butter(s) => {
-                let r = s
-                    .cached_ref
-                    .as_ref()
-                    .ok_or_else(|| {
-                        CpuAdapterError::Failed("butter: no cached reference; call set_reference first".into())
-                    })?
-                    .clone();
-                compute_butter(s, &r, dist_bytes)
+                // Phase 9.Y: dispatch against the cached `ButteraugliReference`.
+                // The compare path runs the dist-side sRGB → linear → XYB
+                // → frequency-separation, then diffs against the precomputed
+                // ref-side data. ~30-50 % fewer ops per call than `full`.
+                let pre = s.cached_ref.as_ref().ok_or_else(|| {
+                    CpuAdapterError::Failed(
+                        "butter: no cached reference; call set_reference first".into(),
+                    )
+                })?;
+                let result = pre.compare(dist_bytes).map_err(|e| {
+                    CpuAdapterError::Failed(format!("butteraugli compare: {e:?}"))
+                })?;
+                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
             }
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(s) => {
@@ -597,20 +638,20 @@ fn construct_ssim2(
     Err(CpuAdapterError::FeatureNotEnabled(MetricKind::Ssim2))
 }
 
-/// Build an `imgref::ImgVec<[u8; 3]>` from interleaved sRGB-u8 bytes.
+/// Borrow an interleaved sRGB-u8 byte buffer as an `ImgRef<'_, [u8; 3]>`.
 ///
 /// fast-ssim2's `ToLinearRgb` impl for `ImgRef<'_, [u8; 3]>` reads `[r, g, b]`
-/// triplets directly — chunking and collecting once here is cheaper than
-/// the per-pixel work the prior ssimulacra2 0.5 path did. The returned
-/// `ImgVec` owns the pixel buffer; the caller turns it into a borrowing
-/// `ImgRef` via `.as_ref()` at the call site.
+/// triplets directly. `[u8; 3]` is `bytemuck::Pod`, so we can reinterpret the
+/// raw bytes in place via `bytemuck::cast_slice` — no allocation, no copy.
+///
+/// Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
+/// path that built a 120 MB `Vec<[u8; 3]>` per side at 40 MP. Heaptrack
+/// confirmed 240 MB / pair adapter overhead on the ssim2 row before this
+/// swap.
 #[cfg(feature = "cpu-ssim2")]
-fn ssim2_image_ref(bytes: &[u8], w: usize, h: usize) -> imgref::ImgVec<[u8; 3]> {
-    let pixels: Vec<[u8; 3]> = bytes
-        .chunks_exact(3)
-        .map(|c| [c[0], c[1], c[2]])
-        .collect();
-    imgref::ImgVec::new(pixels, w, h)
+fn ssim2_image_ref<'a>(bytes: &'a [u8], w: usize, h: usize) -> imgref::ImgRef<'a, [u8; 3]> {
+    let pixels: &[[u8; 3]] = bytemuck::cast_slice(bytes);
+    imgref::ImgRef::new(pixels, w, h)
 }
 
 #[cfg(feature = "cpu-ssim2")]
@@ -621,7 +662,7 @@ fn compute_ssim2(
 ) -> Result<Score, CpuAdapterError> {
     let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
     let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
-    let v = fast_ssim2::compute_ssimulacra2(ref_img.as_ref(), dist_img.as_ref())
+    let v = fast_ssim2::compute_ssimulacra2(ref_img, dist_img)
         .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compute_ssimulacra2: {e}")))?;
     Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
 }
@@ -662,17 +703,20 @@ fn make_dssim_image(
     w: usize,
     h: usize,
 ) -> Result<dssim_core::DssimImage<f32>, CpuAdapterError> {
-    use dssim_core::ToRGBAPLU;
-    use imgref::ImgVec;
-    let rgb: Vec<rgb::RGB<u8>> = bytes
-        .chunks_exact(3)
-        .map(|c| rgb::RGB::new(c[0], c[1], c[2]))
-        .collect();
-    let rgbplu = rgb.to_rgblu();
-    let img = ImgVec::new(rgbplu, w, h);
+    // dssim-core 3.4 exposes `create_image_rgb(&[RGB<u8>], w, h)` — a thin
+    // wrapper that runs `to_rgblu()` internally and then dispatches to the
+    // generic `create_image`. `rgb::RGB<u8>` is `bytemuck::Pod` (via the
+    // `as-bytes` default-on rgb feature), so we can reinterpret the raw
+    // interleaved byte buffer as `&[RGB<u8>]` in place — no allocation.
+    //
+    // Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
+    // path that built a 120 MB `Vec<RGB<u8>>` per side at 40 MP. The
+    // upstream multi-scale LAB pyramid still allocates per call (~9 GB at
+    // 40 MP) — that's a dssim-core internal we don't touch.
+    let rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(bytes);
     dssim
-        .create_image(&img)
-        .ok_or_else(|| CpuAdapterError::Failed("dssim_core create_image returned None".into()))
+        .create_image_rgb(rgb, w, h)
+        .ok_or_else(|| CpuAdapterError::Failed("dssim_core create_image_rgb returned None".into()))
 }
 
 #[cfg(feature = "cpu-dssim")]
@@ -733,16 +777,16 @@ fn compute_butter(
     dist_bytes: &[u8],
 ) -> Result<Score, CpuAdapterError> {
     use imgref::ImgRef;
-    let ref_rgb: Vec<rgb::RGB<u8>> = ref_bytes
-        .chunks_exact(3)
-        .map(|c| rgb::RGB::new(c[0], c[1], c[2]))
-        .collect();
-    let dist_rgb: Vec<rgb::RGB<u8>> = dist_bytes
-        .chunks_exact(3)
-        .map(|c| rgb::RGB::new(c[0], c[1], c[2]))
-        .collect();
-    let ref_img = ImgRef::new(&ref_rgb, s.width, s.height);
-    let dist_img = ImgRef::new(&dist_rgb, s.width, s.height);
+    // `rgb::RGB<u8>` is `bytemuck::Pod` (via rgb's default `as-bytes`
+    // feature), so we can reinterpret the raw interleaved byte buffer as
+    // `&[RGB<u8>]` in place — no allocation, no copy.
+    //
+    // Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
+    // pair that built two 120 MB `Vec<RGB<u8>>` allocations at 40 MP.
+    let ref_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(ref_bytes);
+    let dist_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(dist_bytes);
+    let ref_img = ImgRef::new(ref_rgb, s.width, s.height);
+    let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
     let result = butteraugli::butteraugli(ref_img, dist_img, &s.params)
         .map_err(|e| CpuAdapterError::Failed(format!("butteraugli: {e:?}")))?;
     Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
@@ -786,16 +830,18 @@ fn compute_zensim(
     ref_bytes: &[u8],
     dist_bytes: &[u8],
 ) -> Result<Score, CpuAdapterError> {
-    // RgbSlice expects `&[[u8; 3]]`. Chunk + collect into owned vectors
-    // — the alternative is an unsafe pointer cast that this codebase
-    // forbids.
-    let to_pix = |buf: &[u8]| -> Vec<[u8; 3]> {
-        buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
-    };
-    let src = to_pix(ref_bytes);
-    let dst = to_pix(dist_bytes);
-    let ref_slice = zensim::RgbSlice::new(&src, s.width, s.height);
-    let dist_slice = zensim::RgbSlice::new(&dst, s.width, s.height);
+    // RgbSlice expects `&[[u8; 3]]`. `[u8; 3]` is `bytemuck::Pod`, so we
+    // can reinterpret the raw interleaved byte buffer as `&[[u8; 3]]`
+    // in place via `bytemuck::cast_slice` — no allocation, no copy, and
+    // (importantly) no `unsafe` code in our adapter (bytemuck's `cast_slice`
+    // is the safe wrapper around the underlying transmute).
+    //
+    // Phase 9.Y (2026-05-27): replaces the prior `chunks_exact(3).collect()`
+    // pair that built two 120 MB `Vec<[u8; 3]>` allocations at 40 MP.
+    let src: &[[u8; 3]] = bytemuck::cast_slice(ref_bytes);
+    let dst: &[[u8; 3]] = bytemuck::cast_slice(dist_bytes);
+    let ref_slice = zensim::RgbSlice::new(src, s.width, s.height);
+    let dist_slice = zensim::RgbSlice::new(dst, s.width, s.height);
     let result = s
         .zensim
         .compute(&ref_slice, &dist_slice)

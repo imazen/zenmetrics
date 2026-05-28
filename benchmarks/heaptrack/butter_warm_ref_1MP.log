@@ -1,11 +1,11 @@
-heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_1MP.zst"
+heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_1MP.zst"
 /usr/lib/heaptrack/libheaptrack_preload.so
 starting application, this might take some time...
-OK metric=butter mode=warm_ref w=1024 h=1024 score=4.653627395629883 t_synth_ms=5.48 t_score_ms=135.59
+OK metric=butter mode=warm_ref w=1024 h=1024 score=4.653627395629883 t_synth_ms=5.34 t_score_ms=132.92
 heaptrack stats:
-	allocations:          	729
+	allocations:          	702
 	leaked allocations:   	461
-	temporary allocations:	3
+	temporary allocations:	2
 Heaptrack finished! Now run the following to investigate the data:
 
-  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_1MP.zst"
+  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9yb/benchmarks/heaptrack/butter_warm_ref_1MP.zst"

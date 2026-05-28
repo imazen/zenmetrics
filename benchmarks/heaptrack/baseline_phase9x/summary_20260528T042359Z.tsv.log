@@ -1,0 +1,216 @@
+
+=== cvvdp full 1024x1024 (1MP) ===
+outcome=OK wall=0.331s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_full_1MP.zst
+
+=== cvvdp full 4096x4096 (16MP) ===
+outcome=OK wall=6.652s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_full_16MP.zst
+
+=== cvvdp full 7000x5728 (40MP) ===
+outcome=OK wall=18.135s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_full_40MP.zst
+
+=== cvvdp warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.396s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_1MP.zst
+
+=== cvvdp warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=7.258s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_16MP.zst
+
+=== cvvdp warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=14.629s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_40MP.zst
+
+=== cvvdp strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.176s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_strip_1MP.zst
+
+=== cvvdp strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.249s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_strip_16MP.zst
+
+=== cvvdp strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.443s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_strip_40MP.zst
+
+=== cvvdp warm_ref_strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.189s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_strip_1MP.zst
+
+=== cvvdp warm_ref_strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.253s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_strip_16MP.zst
+
+=== cvvdp warm_ref_strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.387s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/cvvdp_warm_ref_strip_40MP.zst
+
+=== ssim2 full 1024x1024 (1MP) ===
+outcome=OK wall=0.205s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_full_1MP.zst
+
+=== ssim2 full 4096x4096 (16MP) ===
+outcome=OK wall=3.594s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_full_16MP.zst
+
+=== ssim2 full 7000x5728 (40MP) ===
+outcome=OK wall=7.714s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_full_40MP.zst
+
+=== ssim2 warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.220s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_1MP.zst
+
+=== ssim2 warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=3.195s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_16MP.zst
+
+=== ssim2 warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=7.133s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_40MP.zst
+
+=== ssim2 strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.170s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_strip_1MP.zst
+
+=== ssim2 strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.233s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_strip_16MP.zst
+
+=== ssim2 strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.377s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_strip_40MP.zst
+
+=== ssim2 warm_ref_strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.157s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_strip_1MP.zst
+
+=== ssim2 warm_ref_strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.230s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_strip_16MP.zst
+
+=== ssim2 warm_ref_strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.382s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/ssim2_warm_ref_strip_40MP.zst
+
+=== dssim full 1024x1024 (1MP) ===
+outcome=OK wall=0.291s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_full_1MP.zst
+
+=== dssim full 4096x4096 (16MP) ===
+outcome=OK wall=4.978s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_full_16MP.zst
+
+=== dssim full 7000x5728 (40MP) ===
+outcome=OK wall=12.410s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_full_40MP.zst
+
+=== dssim warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.312s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_1MP.zst
+
+=== dssim warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=4.810s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_16MP.zst
+
+=== dssim warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=10.645s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_40MP.zst
+
+=== dssim strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.149s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_strip_1MP.zst
+
+=== dssim strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.225s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_strip_16MP.zst
+
+=== dssim strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.346s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_strip_40MP.zst
+
+=== dssim warm_ref_strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.150s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_strip_1MP.zst
+
+=== dssim warm_ref_strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.230s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_strip_16MP.zst
+
+=== dssim warm_ref_strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.347s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/dssim_warm_ref_strip_40MP.zst
+
+=== butter full 1024x1024 (1MP) ===
+outcome=OK wall=0.165s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_full_1MP.zst
+
+=== butter full 4096x4096 (16MP) ===
+outcome=OK wall=2.062s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_full_16MP.zst
+
+=== butter full 7000x5728 (40MP) ===
+outcome=OK wall=4.940s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_full_40MP.zst
+
+=== butter warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.169s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_1MP.zst
+
+=== butter warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=2.165s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_16MP.zst
+
+=== butter warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=5.743s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_40MP.zst
+
+=== butter strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.166s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_strip_1MP.zst
+
+=== butter strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.227s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_strip_16MP.zst
+
+=== butter strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.351s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_strip_40MP.zst
+
+=== butter warm_ref_strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.173s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_strip_1MP.zst
+
+=== butter warm_ref_strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.222s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_strip_16MP.zst
+
+=== butter warm_ref_strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.356s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/butter_warm_ref_strip_40MP.zst
+
+=== iwssim full 1024x1024 (1MP) ===
+outcome=OK wall=0.408s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_full_1MP.zst
+
+=== iwssim full 4096x4096 (16MP) ===
+outcome=OK wall=8.805s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_full_16MP.zst
+
+=== iwssim full 7000x5728 (40MP) ===
+outcome=OK wall=20.489s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_full_40MP.zst
+
+=== iwssim warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.479s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_1MP.zst
+
+=== iwssim warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=8.846s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_16MP.zst
+
+=== iwssim warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=19.543s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_40MP.zst
+
+=== iwssim strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.175s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_strip_1MP.zst
+
+=== iwssim strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.237s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_strip_16MP.zst
+
+=== iwssim strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.391s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_strip_40MP.zst
+
+=== iwssim warm_ref_strip 1024x1024 (1MP) ===
+outcome=GAP wall=0.165s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_strip_1MP.zst
+
+=== iwssim warm_ref_strip 4096x4096 (16MP) ===
+outcome=GAP wall=0.237s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_strip_16MP.zst
+
+=== iwssim warm_ref_strip 7000x5728 (40MP) ===
+outcome=GAP wall=0.378s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/iwssim_warm_ref_strip_40MP.zst
+
+=== zensim full 1024x1024 (1MP) ===
+outcome=OK wall=0.171s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_full_1MP.zst
+
+=== zensim full 4096x4096 (16MP) ===
+outcome=OK wall=0.679s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_full_16MP.zst
+
+=== zensim full 7000x5728 (40MP) ===
+outcome=OK wall=1.714s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_full_40MP.zst
+
+=== zensim warm_ref 1024x1024 (1MP) ===
+outcome=OK wall=0.172s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_1MP.zst
+
+=== zensim warm_ref 4096x4096 (16MP) ===
+outcome=OK wall=0.721s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_16MP.zst
+
+=== zensim warm_ref 7000x5728 (40MP) ===
+outcome=OK wall=1.696s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_40MP.zst
+
+=== zensim strip 1024x1024 (1MP) ===
+outcome=OK wall=0.166s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_strip_1MP.zst
+
+=== zensim strip 4096x4096 (16MP) ===
+outcome=OK wall=0.643s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_strip_16MP.zst
+
+=== zensim strip 7000x5728 (40MP) ===
+outcome=OK wall=1.752s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_strip_40MP.zst
+
+=== zensim warm_ref_strip 1024x1024 (1MP) ===
+outcome=OK wall=0.163s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_strip_1MP.zst
+
+=== zensim warm_ref_strip 4096x4096 (16MP) ===
+outcome=OK wall=0.596s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_strip_16MP.zst
+
+=== zensim warm_ref_strip 7000x5728 (40MP) ===
+outcome=OK wall=1.669s heaptrack=/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_strip_40MP.zst

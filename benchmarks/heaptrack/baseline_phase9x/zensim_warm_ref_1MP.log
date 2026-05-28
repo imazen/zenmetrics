@@ -1,0 +1,11 @@
+heaptrack output will be written to "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_1MP.zst"
+/usr/lib/heaptrack/libheaptrack_preload.so
+starting application, this might take some time...
+OK metric=zensim mode=warm_ref w=1024 h=1024 score=80.45376256741984 t_synth_ms=5.25 t_score_ms=35.73
+heaptrack stats:
+	allocations:          	1414
+	leaked allocations:   	473
+	temporary allocations:	75
+Heaptrack finished! Now run the following to investigate the data:
+
+  heaptrack --analyze "/home/lilith/work/zen/zenmetrics--phase9x/benchmarks/heaptrack/zensim_warm_ref_1MP.zst"

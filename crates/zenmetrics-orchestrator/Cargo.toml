@@ -66,10 +66,10 @@ cpu-cvvdp = ["bench", "dep:cvvdp"]
 # implements its own `ImgRef<[u8; 3]> -> ToLinearRgb` path, so `imgref`
 # and `rgb` are no longer mandatory transitive deps for this feature;
 # they remain pulled by `cpu-dssim`/`cpu-butter` below.
-cpu-ssim2 = ["bench", "dep:fast-ssim2", "dep:imgref"]
-cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb"]
-cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb"]
-cpu-zensim = ["bench", "dep:zensim"]
+cpu-ssim2 = ["bench", "dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
+cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
+cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
+cpu-zensim = ["bench", "dep:zensim", "dep:bytemuck"]
 # Phase 8g (2026-05-27): added in-tree `iwssim` CPU port (Python-IW-SSIM
 # faithful port with magetypes SIMD on the SSIM-stats hot loops). The
 # umbrella's `MetricKind::Iwssim` arm no longer surfaces
@@ -128,6 +128,11 @@ iwssim = { workspace = true, optional = true }
 # for dssim+butter; `rgb` provides `RGB<u8>` / `Rgb` color pixel types.
 imgref = { workspace = true, optional = true }
 rgb = { workspace = true, optional = true }
+# Phase 9.Y (2026-05-27): zero-copy reinterpretation of interleaved sRGB-u8
+# byte buffers as `&[[u8; 3]]` / `&[RGB<u8>]` for cpu-* adapter inputs.
+# Replaces the prior `chunks_exact(3).collect::<Vec<_>>()` materialization
+# that allocated 120 MB / side at 40 MP across four adapters.
+bytemuck = { workspace = true, optional = true }
 
 # Hashing the machine fingerprint. Workspace already pins sha2 0.10 via
 # transitive deps; we depend on it directly for `Sha256`.

@@ -1,0 +1,73 @@
+metric	mode	size_label	total_runtime_s	n_alloc	n_temp_alloc	peak_heap	peak_rss	leaked	top1_calls	top1_peak	top1_caller	top2_calls	top2_peak	top2_caller	top3_calls	top3_peak	top3_caller
+butter	full	16MP	2.04	737	25	3.49G	3.30G	248.87K	31	1.49K	rayon_core::registry::Registry::new	4	167.77M	butteraugli::blur::__arcane_gaussian_blur_dispatch_v4	32	1.02K	crossbeam_deque::deque::Stealer
+butter	full	1MP	0.14	729	22	238.65M	240.62M	248.87K	31	1.49K	rayon_core::registry::Registry::new	2	4.19M	butteraugli::image::Image3F::from_pool_dirty	2	1.05M	butteraugli::malta::__arcane_malta_diff_map_dispatch_v4
+butter	full	40MP	4.91	737	27	8.03G	7.30G	248.87K	31	1.49K	rayon_core::registry::Registry::new	4	321.13M	butteraugli::blur::__arcane_gaussian_blur_dispatch_v4	2	160.57M	butteraugli::image::Image3F::from_pool_dirty
+butter	strip	16MP	0.09	21	2	100.74M	102.63M	544B	5	87B	cpu_profile::main						
+butter	strip	1MP	0.01	21	2	6.37M	5.50M	544B	5	87B	cpu_profile::main						
+butter	strip	40MP	0.22	21	2	240.65M	244.76M	544B	5	87B	cpu_profile::main						
+butter	warm_ref	16MP	2.14	737	18	3.36G	3.16G	248.87K	31	1.49K	rayon_core::registry::Registry::new	4	134.22M	butteraugli::blur::__arcane_gaussian_blur_dispatch_v4	2	16.97M	butteraugli::malta::__arcane_malta_diff_map_dispatch_v4
+butter	warm_ref	1MP	0.14	729	29	235.50M	221.40M	248.87K	31	1.49K	rayon_core::registry::Registry::new	2	4.19M	butteraugli::image::Image3F::from_pool_dirty	2	0B	butteraugli::malta::__arcane_malta_diff_map_dispatch_v4
+butter	warm_ref	40MP	5.72	737	22	7.59G	7.60G	248.87K	31	1.49K	rayon_core::registry::Registry::new	4	321.13M	butteraugli::blur::__arcane_gaussian_blur_dispatch_v4	32	1.02K	crossbeam_deque::deque::Stealer
+butter	warm_ref_strip	16MP	0.09	22	3	100.74M	103.78M	544B	5	96B	cpu_profile::main						
+butter	warm_ref_strip	1MP	0.01	22	3	6.37M	5.53M	544B	5	96B	cpu_profile::main						
+butter	warm_ref_strip	40MP	0.21	22	3	240.65M	236.16M	544B	5	96B	cpu_profile::main						
+cvvdp	full	16MP	6.62	553	126	4.73G	4.74G	544B	9	89.48M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	full	1MP	0.31	553	126	295.81M	302.13M	544B	9	5.59M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	full	40MP	18.10	553	126	11.31G	11.31G	544B	9	213.85M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	strip	16MP	0.11	21	2	100.74M	101.81M	544B	5	86B	cpu_profile::main						
+cvvdp	strip	1MP	0.01	21	2	6.37M	5.58M	544B	5	86B	cpu_profile::main						
+cvvdp	strip	40MP	0.28	21	2	240.65M	235.03M	544B	5	86B	cpu_profile::main						
+cvvdp	warm_ref	16MP	7.22	557	127	3.89G	3.70G	544B	9	89.48M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	warm_ref	1MP	0.35	557	127	243.37M	236.68M	544B	9	5.59M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	warm_ref	40MP	14.60	557	127	9.30G	8.83G	544B	9	213.85M	cvvdp::pyramid::weber_contrast_pyr_into	8	0B	cvvdp::simd_pyramid::expand_vertical_pass	2	640B	cvvdp::pyramid::build_gauss_pyramid_into
+cvvdp	warm_ref_strip	16MP	0.10	22	3	100.74M	99.56M	544B	5	95B	cpu_profile::main						
+cvvdp	warm_ref_strip	1MP	0.01	22	3	6.37M	5.61M	544B	5	95B	cpu_profile::main						
+cvvdp	warm_ref_strip	40MP	0.24	22	3	240.65M	239.65M	544B	5	95B	cpu_profile::main						
+dssim	full	16MP	4.95	1075	794	3.25G	3.28G	544B	90	201.33M	dssim_core::dssim::Dssim::lab_chan	66	201.33M	dssim_core::dssim::DssimChan	1	1.05M	dssim_core::lieon::join
+dssim	full	1MP	0.27	891	610	203.48M	223.81M	544B	70	12.58M	dssim_core::dssim::Dssim::lab_chan	54	12.58M	dssim_core::dssim::DssimChan	1	65.54K	dssim_core::lieon::join
+dssim	full	40MP	12.38	1167	886	9.29G	7.82G	544B	100	805.31M	dssim_core::dssim::Dssim::lab_chan	72	805.31M	dssim_core::dssim::DssimChan	1	2.51M	dssim_core::lieon::join
+dssim	strip	16MP	0.09	22	2	100.74M	100.91M	544B	5	86B	cpu_profile::main						
+dssim	strip	1MP	0.01	22	2	6.37M	5.53M	544B	5	86B	cpu_profile::main						
+dssim	strip	40MP	0.22	22	2	240.65M	234.21M	544B	5	86B	cpu_profile::main						
+dssim	warm_ref	16MP	4.79	1075	794	3.25G	3.28G	544B	90	201.33M	dssim_core::dssim::Dssim::lab_chan	66	201.33M	dssim_core::dssim::DssimChan	1	1.05M	dssim_core::lieon::join
+dssim	warm_ref	1MP	0.28	891	610	203.48M	223.80M	544B	70	12.58M	dssim_core::dssim::Dssim::lab_chan	54	12.58M	dssim_core::dssim::DssimChan	1	65.54K	dssim_core::lieon::join
+dssim	warm_ref	40MP	10.62	1167	886	9.29G	7.82G	544B	100	805.31M	dssim_core::dssim::Dssim::lab_chan	72	805.31M	dssim_core::dssim::DssimChan	1	2.51M	dssim_core::lieon::join
+dssim	warm_ref_strip	16MP	0.10	23	3	100.74M	99.52M	544B	5	95B	cpu_profile::main						
+dssim	warm_ref_strip	1MP	0.01	23	3	6.37M	5.50M	544B	5	95B	cpu_profile::main						
+dssim	warm_ref_strip	40MP	0.22	23	3	240.65M	236.17M	544B	5	95B	cpu_profile::main						
+iwssim	full	16MP	8.78	220	6	2.47G	2.57G	544B	4	67.11M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::score_gray	3	0B	iwssim::weights::compute_iw_maps
+iwssim	full	1MP	0.39	220	6	153.83M	170.13M	544B	4	4.19M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::score_gray	3	0B	iwssim::weights::compute_iw_maps
+iwssim	full	40MP	20.46	220	6	5.90G	5.96G	544B	4	160.38M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::score_gray	3	0B	iwssim::weights::compute_iw_maps
+iwssim	strip	16MP	0.10	21	2	100.74M	105.59M	544B	5	87B	cpu_profile::main						
+iwssim	strip	1MP	0.01	21	2	6.37M	5.52M	544B	5	87B	cpu_profile::main						
+iwssim	strip	40MP	0.25	21	2	240.65M	244.67M	544B	5	87B	cpu_profile::main						
+iwssim	warm_ref	16MP	8.82	220	6	2.33G	2.43G	544B	4	67.11M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::warm_reference_gray	5	89.39M	iwssim::pipeline::Iwssim::score_with_warm_ref_gray
+iwssim	warm_ref	1MP	0.45	220	6	145.44M	161.73M	544B	4	4.19M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::warm_reference_gray	5	5.59M	iwssim::pipeline::Iwssim::score_with_warm_ref_gray
+iwssim	warm_ref	40MP	19.52	220	6	5.58G	5.64G	544B	4	160.38M	iwssim::pipeline::score_with_split	4	0B	iwssim::pipeline::Iwssim::warm_reference_gray	5	213.64M	iwssim::pipeline::Iwssim::score_with_warm_ref_gray
+iwssim	warm_ref_strip	16MP	0.10	22	3	100.74M	104.52M	544B	5	96B	cpu_profile::main						
+iwssim	warm_ref_strip	1MP	0.01	22	3	6.37M	5.59M	544B	5	96B	cpu_profile::main						
+iwssim	warm_ref_strip	40MP	0.24	22	3	240.65M	242.57M	544B	5	96B	cpu_profile::main						
+ssim2	full	16MP	3.54	658	136	2.75G	2.69G	544B	6	0B	fast_ssim2::blur::Blur::blur_into	22	201.33M	fast_ssim2::input::imgref_impl::_	1	0B	fast_ssim2::compute_ssimulacra2_with_config
+ssim2	full	1MP	0.18	650	128	184.65M	173.64M	544B	6	0B	fast_ssim2::blur::Blur::blur_into	18	12.58M	fast_ssim2::input::imgref_impl::_	1	0B	fast_ssim2::compute_ssimulacra2_with_config
+ssim2	full	40MP	7.65	663	141	7.29G	6.42G	544B	6	0B	fast_ssim2::blur::Blur::blur_into	24	805.31M	fast_ssim2::input::imgref_impl::_	1	229.38M	fast_ssim2::compute_ssimulacra2_with_config
+ssim2	strip	16MP	0.10	21	2	100.74M	104.93M	544B	5	86B	cpu_profile::main						
+ssim2	strip	1MP	0.01	21	2	6.37M	5.61M	544B	5	86B	cpu_profile::main						
+ssim2	strip	40MP	0.24	21	2	240.65M	246.07M	544B	5	86B	cpu_profile::main						
+ssim2	warm_ref	16MP	3.17	769	136	2.55G	2.50G	544B	6	0B	fast_ssim2::blur::Blur::blur	22	0B	fast_ssim2::input::imgref_impl::_	1	0B	fast_ssim2::precompute::Ssimulacra2Reference::compare
+ssim2	warm_ref	1MP	0.20	761	128	172.05M	159.40M	544B	6	0B	fast_ssim2::blur::Blur::blur	18	0B	fast_ssim2::input::imgref_impl::_	1	0B	fast_ssim2::precompute::Ssimulacra2Reference::compare
+ssim2	warm_ref	40MP	7.11	775	141	6.49G	5.97G	544B	6	0B	fast_ssim2::blur::Blur::blur	24	0B	fast_ssim2::input::imgref_impl::_	1	0B	fast_ssim2::precompute::Ssimulacra2Reference::new
+ssim2	warm_ref_strip	16MP	0.09	22	3	100.74M	99.45M	544B	5	95B	cpu_profile::main						
+ssim2	warm_ref_strip	1MP	0.01	22	3	6.37M	5.52M	544B	5	95B	cpu_profile::main						
+ssim2	warm_ref_strip	40MP	0.24	22	3	240.65M	234.91M	544B	5	95B	cpu_profile::main						
+zensim	full	16MP	0.65	1874	96	1.11G	1.16G	250.61K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	56	36.32M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	full	1MP	0.04	1414	96	72.04M	68.67M	250.58K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	30	2.45M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	full	40MP	1.63	1884	98	2.64G	2.70G	161.18M	219	0B	zenpredict::feature_transform::parse_feature_transform_params	49	85.13M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	strip	16MP	0.62	2146	143	1.37G	1.40G	250.15K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	62	0B	zensim::streaming::convert_source_to_xyb_into	32	18.16M	zensim::pool::ScaleBuffers::ensure_capacity
+zensim	strip	1MP	0.05	1232	94	69.98M	84.37M	250.15K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	14	0B	zensim::streaming::convert_source_to_xyb_into	8	349.44K	zensim::pool::ScaleBuffers::ensure_capacity
+zensim	strip	40MP	1.71	2675	150	3.59G	3.61G	250.15K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	88	0B	zensim::streaming::convert_source_to_xyb_into	44	208.96M	zensim::streaming::PrecomputedReference::new
+zensim	warm_ref	16MP	0.68	1874	95	1.11G	1.16G	250.80K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	55	36.32M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	warm_ref	1MP	0.04	1414	101	71.51M	84.75M	250.58K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	30	2.45M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	warm_ref	40MP	1.64	1884	93	2.64G	2.70G	250.80K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	49	85.13M	zensim::pool::ScaleBuffers::ensure_capacity	31	1.49K	rayon_core::registry::Registry::new
+zensim	warm_ref_strip	16MP	0.57	1831	115	1.12G	1.16G	249.60K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	62	0B	zensim::streaming::convert_source_to_xyb_into	32	18.16M	zensim::pool::ScaleBuffers::ensure_capacity
+zensim	warm_ref_strip	1MP	0.05	1170	96	57.25M	73.34M	250.15K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	14	0B	zensim::streaming::convert_source_to_xyb_into	8	349.44K	zensim::pool::ScaleBuffers::ensure_capacity
+zensim	warm_ref_strip	40MP	1.63	2214	120	2.99G	3.06G	250.15K	219	0B	zenpredict::feature_transform::parse_feature_transform_params	88	0B	zensim::streaming::convert_source_to_xyb_into	44	62.43M	zensim::pool::ScaleBuffers::ensure_capacity

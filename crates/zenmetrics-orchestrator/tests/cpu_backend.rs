@@ -623,6 +623,286 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 9.Y (2026-05-27): butter cached-ref parity.
+//
+// Wired to butteraugli 0.9.2's `ButteraugliReference::new + .compare`
+// precompute API (replaces the prior byte-stash that recomputed `full`).
+// Scoring the same (ref, dist) pair via the warm path must produce the
+// exact same score as the one-shot `compute(ref, dist)` path.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-butter")]
+#[test]
+fn cached_ref_butter_cpu_matches_one_shot() {
+    // Score 4 distortions one-shot, then score the same 4 via the
+    // pool's cached-ref dispatch. Each pair must match within
+    // butteraugli's float-pipeline tolerance (the warm path skips the
+    // ref-side recompute but uses bit-identical fixed-point math
+    // afterwards).
+    let (r, _) = synth(256);
+    let n = 256usize * 256usize * 3;
+    let make_d = |seed: u8| -> Vec<u8> {
+        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
+    };
+    let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
+
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+
+    // One-shot scoring via run_single.
+    let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let (mut orch, _td) =
+            fake_orch_with_metrics(&[(MetricKind::Butter, profile.clone())]);
+        let task = Task {
+            task_id: (300 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Butter,
+            params: None,
+            ref_hash: 0,
+        };
+        let result = orch.run_single(task);
+        let s = result.outcome.as_ref().unwrap_or_else(|e| {
+            panic!(
+                "one-shot butter cpu failed: {e:?}; attempts={:?}",
+                result.backends_attempted
+            )
+        });
+        oneshot_scores.push(s.value);
+    }
+
+    // Cached-ref scoring via submit/poll_any.
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Butter, profile)]);
+    let mut handles = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let task = Task {
+            task_id: (400 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Butter,
+            params: None,
+            ref_hash: 0,
+        };
+        let h = orch
+            .submit(task)
+            .unwrap_or_else(|e| panic!("submit failed: {e:?}"));
+        handles.push(h);
+    }
+    let mut pooled_by_task_id: std::collections::BTreeMap<u64, f64> = Default::default();
+    for _ in 0..handles.len() {
+        let r = orch
+            .poll_any_blocking()
+            .expect("at least one result expected");
+        let score = r
+            .outcome
+            .as_ref()
+            .unwrap_or_else(|e| panic!("cached butter cpu task {} failed: {e:?}", r.task_id));
+        pooled_by_task_id.insert(r.task_id, score.value);
+    }
+
+    // Compare per-task. Butteraugli is float-deterministic for a fixed
+    // input; the warm path runs the same compare kernel just with a
+    // precomputed ref-side. Score tolerance kept tight (1e-3) — wider
+    // gaps would indicate the warm path mismatches the full path.
+    for i in 0..4 {
+        let one = oneshot_scores[i];
+        let two = pooled_by_task_id
+            .get(&((400 + i) as u64))
+            .copied()
+            .expect("missing pooled result");
+        let diff = (one - two).abs();
+        assert!(
+            diff < 1e-3,
+            "task {i}: one-shot={one:.6}, cached={two:.6}, diff={diff:.6}"
+        );
+    }
+    let stats = orch.cached_ref_stats();
+    assert!(
+        stats.hit_count > 0,
+        "expected cached-ref hits; got {} hits / {} misses",
+        stats.hit_count,
+        stats.miss_count
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9.Y (2026-05-27): ssim2 + dssim cached-ref parity.
+//
+// These adapters were wired with cached-ref support already (Phase 8h
+// for ssim2's `Ssimulacra2Reference`; from the start for dssim's
+// `DssimImage<f32>`). The Phase 9.Y chunks_exact swap touched the same
+// code paths — these tests are the explicit parity gates that the
+// reinterpret didn't change the cached-ref outputs.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-ssim2")]
+#[test]
+fn cached_ref_ssim2_cpu_matches_one_shot() {
+    let (r, _) = synth(256);
+    let n = 256usize * 256usize * 3;
+    let make_d = |seed: u8| -> Vec<u8> {
+        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
+    };
+    let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
+
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+
+    let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let (mut orch, _td) =
+            fake_orch_with_metrics(&[(MetricKind::Ssim2, profile.clone())]);
+        let task = Task {
+            task_id: (500 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Ssim2,
+            params: None,
+            ref_hash: 0,
+        };
+        let result = orch.run_single(task);
+        let s = result.outcome.as_ref().unwrap_or_else(|e| {
+            panic!(
+                "one-shot ssim2 cpu failed: {e:?}; attempts={:?}",
+                result.backends_attempted
+            )
+        });
+        oneshot_scores.push(s.value);
+    }
+
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Ssim2, profile)]);
+    let mut handles = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let task = Task {
+            task_id: (600 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Ssim2,
+            params: None,
+            ref_hash: 0,
+        };
+        let h = orch
+            .submit(task)
+            .unwrap_or_else(|e| panic!("submit failed: {e:?}"));
+        handles.push(h);
+    }
+    let mut pooled_by_task_id: std::collections::BTreeMap<u64, f64> = Default::default();
+    for _ in 0..handles.len() {
+        let r = orch
+            .poll_any_blocking()
+            .expect("at least one result expected");
+        let score = r
+            .outcome
+            .as_ref()
+            .unwrap_or_else(|e| panic!("cached ssim2 cpu task {} failed: {e:?}", r.task_id));
+        pooled_by_task_id.insert(r.task_id, score.value);
+    }
+
+    for i in 0..4 {
+        let one = oneshot_scores[i];
+        let two = pooled_by_task_id
+            .get(&((600 + i) as u64))
+            .copied()
+            .expect("missing pooled result");
+        let diff = (one - two).abs();
+        assert!(
+            diff < 1e-3,
+            "task {i}: one-shot={one:.6}, cached={two:.6}, diff={diff:.6}"
+        );
+    }
+}
+
+#[cfg(feature = "cpu-dssim")]
+#[test]
+fn cached_ref_dssim_cpu_matches_one_shot() {
+    let (r, _) = synth(256);
+    let n = 256usize * 256usize * 3;
+    let make_d = |seed: u8| -> Vec<u8> {
+        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
+    };
+    let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
+
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+
+    let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let (mut orch, _td) =
+            fake_orch_with_metrics(&[(MetricKind::Dssim, profile.clone())]);
+        let task = Task {
+            task_id: (700 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Dssim,
+            params: None,
+            ref_hash: 0,
+        };
+        let result = orch.run_single(task);
+        let s = result.outcome.as_ref().unwrap_or_else(|e| {
+            panic!(
+                "one-shot dssim cpu failed: {e:?}; attempts={:?}",
+                result.backends_attempted
+            )
+        });
+        oneshot_scores.push(s.value);
+    }
+
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Dssim, profile)]);
+    let mut handles = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let task = Task {
+            task_id: (800 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Dssim,
+            params: None,
+            ref_hash: 0,
+        };
+        let h = orch
+            .submit(task)
+            .unwrap_or_else(|e| panic!("submit failed: {e:?}"));
+        handles.push(h);
+    }
+    let mut pooled_by_task_id: std::collections::BTreeMap<u64, f64> = Default::default();
+    for _ in 0..handles.len() {
+        let r = orch
+            .poll_any_blocking()
+            .expect("at least one result expected");
+        let score = r
+            .outcome
+            .as_ref()
+            .unwrap_or_else(|e| panic!("cached dssim cpu task {} failed: {e:?}", r.task_id));
+        pooled_by_task_id.insert(r.task_id, score.value);
+    }
+
+    for i in 0..4 {
+        let one = oneshot_scores[i];
+        let two = pooled_by_task_id
+            .get(&((800 + i) as u64))
+            .copied()
+            .expect("missing pooled result");
+        let diff = (one - two).abs();
+        assert!(
+            diff < 1e-6,
+            "task {i}: one-shot={one:.8}, cached={two:.8}, diff={diff:.8}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Chooser-level direct test: Cpu Selected when every GPU candidate is
 // rejected.
 // ---------------------------------------------------------------------------

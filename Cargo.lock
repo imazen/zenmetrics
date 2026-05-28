@@ -991,6 +991,7 @@ name = "cpu-profile"
 version = "0.0.0"
 dependencies = [
  "butteraugli",
+ "bytemuck",
  "cvvdp",
  "dssim-core",
  "fast-ssim2 0.8.0",
@@ -6705,6 +6706,7 @@ name = "zenmetrics-orchestrator"
 version = "0.0.1"
 dependencies = [
  "butteraugli",
+ "bytemuck",
  "cvvdp",
  "cvvdp-gpu",
  "dirs",

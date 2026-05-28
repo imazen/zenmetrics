@@ -18,6 +18,10 @@ dssim-core   = { version = "3.4", default-features = false }
 butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
 imgref       = "1"
 rgb          = "0.8"
+# Phase 9.Y: zero-copy reinterpret of interleaved sRGB-u8 byte buffers as
+# `&[[u8; 3]]` / `&[RGB<u8>]` — mirrors the adapter so the driver's heap
+# accounting reflects the production allocation pattern.
+bytemuck     = "1"
 
 [profile.release]
 debug = 1

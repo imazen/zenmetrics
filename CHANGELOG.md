@@ -17,6 +17,57 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **Phase 9.Y — eliminate `chunks_exact(3).collect()` materialization
+  in the four CPU adapters that previously built `Vec<[u8; 3]>` /
+  `Vec<RGB<u8>>` intermediates before handing buffers to the underlying
+  metric crate.** Phase 9.X heaptrack report attributed 240 MB / pair
+  of adapter overhead to this pattern at 40 MP. `[u8; 3]` and
+  `rgb::RGB<u8>` are both `bytemuck::Pod`, so we reinterpret the raw
+  sRGB-u8 interleaved bytes in place via `bytemuck::cast_slice` — zero
+  allocation, zero copy, zero `unsafe` in the adapter. Sites swapped:
+  `ssim2_image_ref` (fast-ssim2 `ImgRef<'_, [u8; 3]>`),
+  `make_dssim_image` (dssim-core's `create_image_rgb` shortcut),
+  `compute_butter` (butteraugli `ImgRef<RGB<u8>>` pair),
+  `compute_zensim` (zensim `RgbSlice<&[[u8; 3]]>` pair). Heap delta:
+  ssim2 −245 MB / butter full −245 MB / zensim −245 MB at 40 MP;
+  dssim 0 MB peak (upstream pyramid hides it) but −2 allocs and
+  −14 % wall time. Phase 9.X heaptrack driver mirrors the same swap
+  so its accounting matches the production adapter pattern.
+- **Phase 9.Y — wire butter cached-ref to `ButteraugliReference`.**
+  The prior `ButterState` stored raw bytes in `Option<Vec<u8>>` and
+  the warm-ref path recomputed `full` against the cached bytes —
+  same score, no speedup. butteraugli 0.9.2 has had
+  `ButteraugliReference::new(&[u8], …, params)` + `.compare(&[u8])`
+  since its precompute landed; this change wires it up. The
+  precompute runs sRGB → linear → XYB → frequency-separated bands
+  → reference mask once and reuses across compares (half-resolution
+  mirror in parallel via rayon). `supports_cached_ref()` flips
+  from `false` to `true` for butter; the pool's worker now routes
+  butter through the warm path. Per-compare wall time −12 % at 40 MP
+  (5.72s → 5.05s). Peak heap rises +1.15 GB / 40 MP because the
+  reference state stays live during compare — this is the expected
+  trade for batched workloads (N compares vs one ref): peak stays
+  flat as N grows, vs N × full for the prior recompute path.
+  Parity tests added for cvvdp / ssim2 / dssim / butter in
+  `tests/cpu_backend.rs` confirm warm path produces the same score
+  as one-shot. (`benchmarks/heaptrack/PHASE9YB_DELTA_REPORT.md`)
+
+- **`iwssim` / `iwssim-gpu` — single source of truth for filter-tap
+  codegen (Phase 8j Part A).** Both crates' `build.rs` scripts now
+  call into a new internal helper crate
+  `iwssim-filter-codegen` for the BINOM5 / SSIM_WIN_1D / SCALE_WEIGHTS
+  emission. Previously the two build scripts contained verbatim-
+  duplicated `binom5_taps()` / `gaussian_1d()` functions kept
+  in-sync by hand. Each crate still emits its own
+  `OUT_DIR/filters.rs` (cube-macros in `iwssim-gpu` capture
+  `crate::filters::*` paths at expansion time, so a single
+  consolidated module is structurally impossible); the new helper
+  guarantees the two generated files are bit-identical by
+  construction. Closes the Phase 8g.1 architectural debt
+  documented at the top of `crates/iwssim-gpu/src/filters.rs`.
+
 ### Fixed
 
 - **Phase 9.Y finding #5 — zensim strip mode no longer re-precomputes
@@ -66,22 +117,6 @@ Workspace conventions per the global rules:
     `downscale_kernel` for odd input dimensions. Tracked as
     upstream-cubecl-cpu work under task #80 rather than papered
     over with a tolerance widen.
-
-### Changed
-
-- **`iwssim` / `iwssim-gpu` — single source of truth for filter-tap
-  codegen (Phase 8j Part A).** Both crates' `build.rs` scripts now
-  call into a new internal helper crate
-  `iwssim-filter-codegen` for the BINOM5 / SSIM_WIN_1D / SCALE_WEIGHTS
-  emission. Previously the two build scripts contained verbatim-
-  duplicated `binom5_taps()` / `gaussian_1d()` functions kept
-  in-sync by hand. Each crate still emits its own
-  `OUT_DIR/filters.rs` (cube-macros in `iwssim-gpu` capture
-  `crate::filters::*` paths at expansion time, so a single
-  consolidated module is structurally impossible); the new helper
-  guarantees the two generated files are bit-identical by
-  construction. Closes the Phase 8g.1 architectural debt
-  documented at the top of `crates/iwssim-gpu/src/filters.rs`.
 ### Added
 
 - **Phase 9x — CPU heaptrack gate report
