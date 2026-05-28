@@ -26,8 +26,12 @@
 #![allow(clippy::excessive_precision)]
 
 use cubecl::Runtime;
+use cubecl::prelude::*;
 use cvvdp_gpu::Cvvdp;
 use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+use cvvdp_gpu::kernels::pyramid::{
+    DOWNSCALE_TILED_BLOCK_DIM, downscale_kernel, downscale_tiled_kernel, gausspyr_reduce_scalar,
+};
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel};
 
 #[path = "common/mod.rs"]
@@ -179,7 +183,6 @@ fn compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend() {
 }
 
 #[test]
-#[ignore = "task #80 — cubecl-cpu odd-dim divergence: 73×91 host_pool returns ~7.71 vs pycvvdp golden 9.39 (drift ~1.7 JOD). CUDA backend matches the golden at 0.0004 (pipeline_color::compute_dkl_jod_matches_pycvvdp_at_73x91_odd passes), so this is a cubecl-cpu kernel-translation bug, NOT a cvvdp-gpu logic regression. Same algorithm works on 32×32 cpu (host_pool == host_scalar at diff=0.000 — see compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend). The drift is too large to be f32 noise; suspected root cause is cubecl-cpu mis-translating one of the boundary-handling branches in downscale_kernel (the tick-206 mixed-parity delta correction at the right column) for odd input dimensions, but this needs upstream cubecl-cpu investigation rather than a workaround in cvvdp-gpu."]
 fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
     // Tick 223: direct cpu-backend vs pycvvdp parity on the 73×91
     // odd-dim fixture. synth_pair() above uses the exact
@@ -203,16 +206,21 @@ fn compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend() {
     // scripts/cvvdp_goldens/pycvvdp_synth_goldens.json via the
     // common helper (was hardcoded 9.390370, kept in sync by hand).
     //
-    // Phase 8j: marked #[ignore] for task #80. The cubecl-cpu
-    // path returns ~7.71 JOD at 73×91 vs the pycvvdp golden 9.39
-    // (drift ~1.7 JOD). CUDA matches at 0.0004 JOD
-    // (`compute_dkl_jod_matches_pycvvdp_at_73x91_odd` in
-    // `tests/pipeline_color.rs`), and 32×32 cpu matches host_scalar
-    // bit-equal (`compute_dkl_jod_host_pool_matches_host_scalar_on_cpu_backend`).
-    // So this is a cubecl-cpu kernel-translation bug on odd-input
-    // dimensions, not a cvvdp-gpu logic regression. Run with
-    // `cargo test -p cvvdp-gpu --features cpu --test cpu_backend
-    // -- --ignored` once the upstream cubecl-cpu fix lands.
+    // Phase 9zc (2026-05-28): re-enabled. Root cause was a
+    // multi-cube SharedMemory + sync_cube isolation bug in
+    // zenforks-cubecl-cpu: the runtime generated 3 nested
+    // scf::for loops over CubeCount* inside the per-unit MLIR
+    // kernel body, but the global sync_cube barrier (counted
+    // in cube_dim_size arrivals) lost isolation between cubes.
+    // Different units could advance to different cube iterations
+    // between syncs — cube k's units could read shared memory
+    // written by cube k+1's unit 0. Surfaced on the 73×91
+    // odd-dim fixture because the gauss pyramid's
+    // `downscale_tiled_kernel` (LDS-tiled) launches 3×3
+    // workgroups at this size and uses `SharedMemory` for the
+    // cooperative tile load. Fixed in zenforks-cubecl-cpu 0.10.2
+    // by emitting an implicit sync_cube at the end of every
+    // cube-iteration body.
     let pycvvdp_golden = common::pycvvdp_synth_golden_jod("synth_73x91_odd");
     const TOLERANCE: f32 = 0.005;
 
@@ -566,4 +574,659 @@ fn host_pool_warm_ref_monotonically_decreases_with_noise_amplitude() {
         jod_a2 < 10.0 - 1e-4,
         "a=2 noise should detectably drop host_pool warm-ref JOD below 10, got {jod_a2}",
     );
+}
+
+// ============================================================================
+// Diagnostic tests for task #120: cubecl-cpu odd-dim downscale_kernel divergence
+// ============================================================================
+
+/// Drive `downscale_kernel` on the cpu runtime directly for the input
+/// size and compare against the host scalar reference
+/// `gausspyr_reduce_scalar`. Returns the max-abs error.
+fn diag_downscale_on_cpu(sw: u32, sh: u32) -> (Vec<f32>, Vec<f32>, f32) {
+    let client = Backend::client(&Default::default());
+    let nsrc = (sw * sh) as usize;
+    let dw = sw.div_ceil(2);
+    let dh = sh.div_ceil(2);
+    let ndst = (dw * dh) as usize;
+
+    // Deterministic input: same pattern as the synth_pair_odd_dim
+    // generator, but as a single f32 channel so we drive downscale
+    // directly. Values stay in a similar scale (0..32) so f32 noise
+    // is in the 1e-6 range like the rest of the pipeline.
+    let src: Vec<f32> = (0..nsrc)
+        .map(|i| {
+            let y = i / sw as usize;
+            let x = i - y * sw as usize;
+            ((x % 8 + y % 8) as f32) * 0.5
+        })
+        .collect();
+    let dst = vec![0.0_f32; ndst];
+
+    let src_h = client.create_from_slice(f32::as_bytes(&src));
+    let dst_h = client.create_from_slice(f32::as_bytes(&dst));
+
+    let cube_dim = CubeDim::new_1d(64);
+    let cube_count = CubeCount::Static((ndst as u32).div_ceil(64), 1, 1);
+    unsafe {
+        downscale_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(src_h.clone(), nsrc),
+            ArrayArg::from_raw_parts(dst_h.clone(), ndst),
+            sw,
+            sh,
+            dw,
+            dh,
+        );
+    }
+    let out_bytes = client.read_one(dst_h.clone()).expect("read dst");
+    let gpu_out: Vec<f32> = f32::from_bytes(&out_bytes).to_vec();
+
+    let mut cpu_out = Vec::new();
+    gausspyr_reduce_scalar(&src, sw as usize, sh as usize, &mut cpu_out);
+    assert_eq!(cpu_out.len(), gpu_out.len(), "len mismatch sw={sw} sh={sh}");
+
+    let max_err = gpu_out
+        .iter()
+        .zip(&cpu_out)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+
+    (gpu_out, cpu_out, max_err)
+}
+
+#[test]
+fn diag_downscale_cpu_even_w_even_h() {
+    // sw=8 sh=8 — both even. Baseline: should pass on cpu backend.
+    let (gpu, cpu, e) = diag_downscale_on_cpu(8, 8);
+    eprintln!("diag 8×8: max-abs = {e:.2e}\ngpu={gpu:?}\ncpu={cpu:?}");
+    assert!(e < 1e-5, "8×8 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_cpu_odd_w_even_h() {
+    // sw=7 sh=8 — sw odd, sh even.
+    // pycvvdp picks even-W patch using sh's parity; reflect gives
+    // "odd-W" patch. Delta correction applies.
+    let (gpu, cpu, e) = diag_downscale_on_cpu(7, 8);
+    eprintln!("diag 7×8: max-abs = {e:.4}\ngpu={gpu:?}\ncpu={cpu:?}");
+    assert!(e < 1e-5, "7×8 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_cpu_even_w_odd_h() {
+    // sw=8 sh=7 — sw even, sh odd.
+    // Reflect gives "even-W" patch; pycvvdp picks odd-W. Delta correction applies.
+    let (gpu, cpu, e) = diag_downscale_on_cpu(8, 7);
+    eprintln!("diag 8×7: max-abs = {e:.4}\ngpu={gpu:?}\ncpu={cpu:?}");
+    assert!(e < 1e-5, "8×7 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_cpu_odd_w_odd_h() {
+    // sw=7 sh=7 — both odd. Same parity, no delta correction. Should pass.
+    let (gpu, cpu, e) = diag_downscale_on_cpu(7, 7);
+    eprintln!("diag 7×7: max-abs = {e:.4}\ngpu={gpu:?}\ncpu={cpu:?}");
+    assert!(e < 1e-5, "7×7 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_cpu_at_73x91() {
+    // The exact size where the 73×91 cvvdp parity test fails.
+    let (_gpu, _cpu, e) = diag_downscale_on_cpu(73, 91);
+    eprintln!("diag 73×91: max-abs = {e:.6}");
+    assert!(e < 1e-5, "73×91 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_host_pool_vs_host_scalar_at_73x91_odd() {
+    // Direct cpu-backend host_pool vs host_scalar at 73×91, the
+    // exact size where the pycvvdp parity test fails. If this also
+    // diverges, the bug is in a GPU kernel (cpu-backend codegen).
+    // If this matches, the bug is somewhere in the host->JOD chain
+    // (less likely given the 32×32 test passes bit-equal).
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, dist_b) = synth_pair(w, h);
+    let cpu_jod = cvvdp
+        .compute_dkl_jod_host_pool(&ref_b, &dist_b, ppd)
+        .expect("compute_dkl_jod_host_pool on cpu");
+    let host_jod = predict_jod_still_3ch(&ref_b, &dist_b, w as usize, h as usize, display, ppd);
+    let diff = (cpu_jod - host_jod).abs();
+    eprintln!(
+        "[diag] 73×91 cpu host_pool = {cpu_jod:.6}, host_scalar = {host_jod:.6}, |diff| = {diff:.6}"
+    );
+    // At 32×32 this diff is 0.0; at 73×91 we expect a divergence
+    // since the pycvvdp parity test diverges by 1.73 JOD. Document
+    // here that the bug exists in a GPU stage (since host_scalar
+    // computes everything on host).
+    if diff > 0.005 {
+        eprintln!(
+            "[diag] CONFIRMED: cpu-backend host_pool diverges from host_scalar at 73×91 by {diff:.6} JOD."
+        );
+        eprintln!("[diag] Bug is in cubecl-cpu codegen of one of the GPU kernels in the host_pool dispatch chain.");
+    }
+    // Don't assert — this is diagnostic. Just print.
+}
+
+/// Compute per-band per-channel D arrays using fully-scalar reference
+/// code. Mirrors the inner loop of `predict_jod_still_3ch` but
+/// returns the D arrays instead of pooling. Used by the
+/// stage-probe to compare against the GPU-computed D bands.
+fn scalar_d_bands(
+    ref_srgb: &[u8],
+    dist_srgb: &[u8],
+    width: usize,
+    height: usize,
+    display: DisplayModel,
+    ppd: f32,
+) -> Vec<[Vec<f32>; 3]> {
+    use cvvdp::kernels::color::display_byte_to_dkl_scalar;
+    use cvvdp::kernels::csf::{CSF_BASEBAND_RHO, CsfChannel, sensitivity_corrected_scalar};
+    use cvvdp::kernels::masking::{CH_GAIN, mult_mutual_band};
+    use cvvdp::kernels::pyramid::{band_frequencies, weber_contrast_pyr_dec_scalar};
+
+    let ch_gain: [f32; 3] = CH_GAIN;
+
+    let n = width * height;
+    let mut ref_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    let mut dis_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = display_byte_to_dkl_scalar(
+            ref_srgb[i * 3],
+            ref_srgb[i * 3 + 1],
+            ref_srgb[i * 3 + 2],
+            display,
+        );
+        ref_planes[0][i] = a;
+        ref_planes[1][i] = rg;
+        ref_planes[2][i] = vy;
+        let (a, rg, vy) = display_byte_to_dkl_scalar(
+            dist_srgb[i * 3],
+            dist_srgb[i * 3 + 1],
+            dist_srgb[i * 3 + 2],
+            display,
+        );
+        dis_planes[0][i] = a;
+        dis_planes[1][i] = rg;
+        dis_planes[2][i] = vy;
+    }
+
+    let n_levels_query = band_frequencies(ppd, width, height).len();
+    let ref_weber = [
+        weber_contrast_pyr_dec_scalar(&ref_planes[0], &ref_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&ref_planes[1], &ref_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&ref_planes[2], &ref_planes[0], width, height, n_levels_query),
+    ];
+    let dis_weber = [
+        weber_contrast_pyr_dec_scalar(&dis_planes[0], &dis_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&dis_planes[1], &dis_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&dis_planes[2], &dis_planes[0], width, height, n_levels_query),
+    ];
+    let n_levels = ref_weber[0].bands.len();
+    let freqs = band_frequencies(ppd, width, height);
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+
+    let mut d_bands: Vec<[Vec<f32>; 3]> = Vec::with_capacity(n_levels);
+    for k in 0..n_levels {
+        let is_first = k == 0;
+        let is_baseband = k == n_levels - 1;
+        let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+        let bw = ref_weber[0].bands[k].w;
+        let bh = ref_weber[0].bands[k].h;
+        let n_px = bw * bh;
+        let rho = if is_baseband { CSF_BASEBAND_RHO } else { freqs[k] };
+        let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+
+        let mut t_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        let mut r_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+        for i in 0..n_px {
+            let log_l = log_l_bkg_band[i];
+            let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);
+            let s_rg = sensitivity_corrected_scalar(rho, log_l, channels[1]);
+            let s_vy = sensitivity_corrected_scalar(rho, log_l, channels[2]);
+            t_p_per_ch[0][i] = band_mul * dis_weber[0].bands[k].data[i] * s_a * ch_gain[0];
+            t_p_per_ch[1][i] = band_mul * dis_weber[1].bands[k].data[i] * s_rg * ch_gain[1];
+            t_p_per_ch[2][i] = band_mul * dis_weber[2].bands[k].data[i] * s_vy * ch_gain[2];
+            r_p_per_ch[0][i] = band_mul * ref_weber[0].bands[k].data[i] * s_a * ch_gain[0];
+            r_p_per_ch[1][i] = band_mul * ref_weber[1].bands[k].data[i] * s_rg * ch_gain[1];
+            r_p_per_ch[2][i] = band_mul * ref_weber[2].bands[k].data[i] * s_vy * ch_gain[2];
+        }
+
+        let d_per_ch = if is_baseband {
+            let mut out: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
+            for i in 0..n_px {
+                let log_l = log_l_bkg_band[i];
+                let s_a = sensitivity_corrected_scalar(rho, log_l, channels[0]);
+                let s_rg = sensitivity_corrected_scalar(rho, log_l, channels[1]);
+                let s_vy = sensitivity_corrected_scalar(rho, log_l, channels[2]);
+                let diff_a = dis_weber[0].bands[k].data[i] - ref_weber[0].bands[k].data[i];
+                let diff_rg = dis_weber[1].bands[k].data[i] - ref_weber[1].bands[k].data[i];
+                let diff_vy = dis_weber[2].bands[k].data[i] - ref_weber[2].bands[k].data[i];
+                out[0][i] = diff_a.abs() * s_a;
+                out[1][i] = diff_rg.abs() * s_rg;
+                out[2][i] = diff_vy.abs() * s_vy;
+            }
+            out
+        } else {
+            mult_mutual_band(&t_p_per_ch, &r_p_per_ch, bw, bh)
+        };
+        d_bands.push(d_per_ch);
+    }
+    d_bands
+}
+
+#[test]
+fn diag_d_bands_per_band_at_73x91_odd() {
+    // Compare GPU-computed D bands against scalar D bands. This will
+    // tell us WHICH band the divergence first appears in, narrowing
+    // down the kernel responsible.
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, dist_b) = synth_pair(w, h);
+
+    let gpu_d = cvvdp
+        .compute_dkl_d_bands(&ref_b, &dist_b, ppd)
+        .expect("compute_dkl_d_bands on cpu");
+    let cpu_d = scalar_d_bands(&ref_b, &dist_b, w as usize, h as usize, display, ppd);
+
+    assert_eq!(gpu_d.len(), cpu_d.len(), "n_levels mismatch");
+    eprintln!("[diag] n_levels = {}", gpu_d.len());
+
+    for k in 0..gpu_d.len() {
+        for c in 0..3 {
+            let g = &gpu_d[k][c];
+            let s = &cpu_d[k][c];
+            assert_eq!(g.len(), s.len(), "band {k} channel {c} len mismatch");
+
+            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let mean_g = g.iter().sum::<f32>() / g.len() as f32;
+            let mean_s = s.iter().sum::<f32>() / s.len() as f32;
+
+            // Find argmax of the divergence
+            let mut max_i = 0;
+            let mut max_d = 0.0_f32;
+            for (i, (&a, &b)) in g.iter().zip(s).enumerate() {
+                let d = (a - b).abs();
+                if d > max_d {
+                    max_d = d;
+                    max_i = i;
+                }
+            }
+            eprintln!(
+                "[diag] band k={k} ch={c}: max_err={max_err:.6} mean_gpu={mean_g:.6} mean_scl={mean_s:.6} argmax_i={max_i} gpu[i]={:.6} scl[i]={:.6}",
+                g[max_i], s[max_i],
+            );
+        }
+    }
+}
+
+#[test]
+fn diag_dkl_planes_at_73x91_odd() {
+    // First sanity check: just the sRGB->DKL color stage. If this
+    // diverges, the color kernel is the culprit. If it matches,
+    // we move further down the chain.
+    use cvvdp::kernels::color::display_byte_to_dkl_scalar;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, _dist_b) = synth_pair(w, h);
+    let gpu_planes = cvvdp.compute_dkl_planes(&ref_b).expect("compute_dkl_planes");
+    let n = (w * h) as usize;
+    let mut scl_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = display_byte_to_dkl_scalar(
+            ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display,
+        );
+        scl_planes[0][i] = a;
+        scl_planes[1][i] = rg;
+        scl_planes[2][i] = vy;
+    }
+    for c in 0..3 {
+        let max_err = gpu_planes[c].iter().zip(&scl_planes[c]).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+        eprintln!("[diag] dkl plane ch={c}: max_err={max_err:.6}");
+    }
+}
+
+#[test]
+fn diag_weber_pyramid_at_73x91_odd() {
+    // Compare GPU weber pyramid against scalar weber pyramid.
+    // If the weber pyramid is already broken, the cause is in
+    // pyramid kernels (downscale + upscale + subtract_weber). If
+    // weber is fine, the bug is in CSF / masking.
+    use cvvdp::kernels::color::display_byte_to_dkl_scalar;
+    use cvvdp::kernels::pyramid::weber_contrast_pyr_dec_scalar;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let geom = DisplayGeometry::STANDARD_4K;
+    let ppd = geom.pixels_per_degree();
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, _dist_b) = synth_pair(w, h);
+
+    // GPU weber pyramid
+    let gpu_weber = cvvdp.compute_dkl_weber_pyramid(&ref_b).expect("gpu weber");
+
+    // Scalar weber pyramid (one per channel, with channel 0 = luminance as backg)
+    let n = (w as usize) * (h as usize);
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+    let n_levels_query = cvvdp::kernels::pyramid::band_frequencies(ppd, w as usize, h as usize).len();
+    let scl_weber: [_; 3] = [
+        weber_contrast_pyr_dec_scalar(&planes[0], &planes[0], w as usize, h as usize, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&planes[1], &planes[0], w as usize, h as usize, n_levels_query),
+        weber_contrast_pyr_dec_scalar(&planes[2], &planes[0], w as usize, h as usize, n_levels_query),
+    ];
+
+    let (gpu_bands, gpu_logl) = gpu_weber;
+    eprintln!("[diag] n_levels: gpu={} scl={}", gpu_bands.len(), scl_weber[0].bands.len());
+    let n_levels = gpu_bands.len().min(scl_weber[0].bands.len());
+    for k in 0..n_levels {
+        for c in 0..3 {
+            let g = &gpu_bands[k][c];
+            let s = &scl_weber[c].bands[k].data;
+            let bw = scl_weber[c].bands[k].w;
+            let bh = scl_weber[c].bands[k].h;
+            assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch (gpu {} vs scl {})", g.len(), s.len());
+
+            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let mean_g = g.iter().sum::<f32>() / g.len() as f32;
+            let mean_s = s.iter().sum::<f32>() / s.len() as f32;
+            eprintln!(
+                "[diag] weber band k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}",
+                bw, bh,
+            );
+        }
+        // also log_l_bkg comparison
+        let g_logl = &gpu_logl[k];
+        let s_logl = &scl_weber[0].log_l_bkg[k];
+        let max_err = g_logl.iter().zip(s_logl).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+        eprintln!("[diag] weber band k={k} log_l_bkg: max_err={max_err:.6}");
+    }
+}
+
+#[test]
+fn diag_gauss_pyramid_at_73x91_odd() {
+    // Build the Gaussian pyramid (no subtract, no weber) at 73x91 and
+    // compare to scalar reference. If gauss is wrong, it's a downscale
+    // issue, but we already showed downscale is fine in diag_downscale_*.
+    // If gauss is fine, the bug is in upscale/subtract/weber.
+    use cvvdp::kernels::color::display_byte_to_dkl_scalar;
+    use cvvdp::kernels::pyramid::gausspyr_reduce_scalar;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, _dist_b) = synth_pair(w, h);
+
+    let gpu_gauss = cvvdp.compute_dkl_gauss_pyramid(&ref_b).expect("gpu gauss");
+
+    let n = (w as usize) * (h as usize);
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+
+    // Build scalar Gauss pyramid for each channel
+    let n_levels = gpu_gauss.len();
+    eprintln!("[diag] gauss n_levels = {n_levels}");
+    let mut scl_per_ch: [Vec<(Vec<f32>, usize, usize)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    for c in 0..3 {
+        let mut cur = planes[c].clone();
+        let mut cw = w as usize;
+        let mut ch = h as usize;
+        scl_per_ch[c].push((cur.clone(), cw, ch));
+        for _ in 1..n_levels {
+            let mut next = Vec::new();
+            let (dw, dh) = gausspyr_reduce_scalar(&cur, cw, ch, &mut next);
+            scl_per_ch[c].push((next.clone(), dw, dh));
+            cur = next;
+            cw = dw;
+            ch = dh;
+        }
+    }
+
+    for k in 0..n_levels {
+        for c in 0..3 {
+            let g = &gpu_gauss[k][c];
+            let (s, sw, sh) = &scl_per_ch[c][k];
+            assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch");
+            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let mean_g = g.iter().sum::<f32>() / g.len() as f32;
+            let mean_s = s.iter().sum::<f32>() / s.len() as f32;
+            eprintln!("[diag] gauss k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}", sw, sh);
+        }
+    }
+}
+
+#[test]
+fn diag_laplacian_pyramid_at_73x91_odd() {
+    // Build the Laplacian pyramid (downscale + upscale + subtract,
+    // BUT without weber contrast) at 73x91 and compare to scalar.
+    // Pinpoints whether the upscale or subtract are causing the
+    // divergence (the weber kernel is upstream of pyramid).
+    use cvvdp::kernels::color::display_byte_to_dkl_scalar;
+    use cvvdp::kernels::pyramid::laplacian_pyramid_dec_scalar;
+
+    let client = Backend::client(&Default::default());
+    let (w, h) = (73u32, 91u32);
+    let display = DisplayModel::STANDARD_4K;
+    let mut cvvdp = Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new on cubecl-cpu");
+
+    let (ref_b, _dist_b) = synth_pair(w, h);
+
+    let gpu_lap = cvvdp.compute_dkl_laplacian_pyramid(&ref_b).expect("gpu lap");
+
+    let n = (w as usize) * (h as usize);
+    let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    for i in 0..n {
+        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        planes[0][i] = a;
+        planes[1][i] = rg;
+        planes[2][i] = vy;
+    }
+
+    let n_levels_query = cvvdp::kernels::pyramid::band_frequencies(
+        DisplayGeometry::STANDARD_4K.pixels_per_degree(),
+        w as usize, h as usize,
+    ).len();
+
+    let scl_lap: [_; 3] = [
+        laplacian_pyramid_dec_scalar(&planes[0], w as usize, h as usize, n_levels_query),
+        laplacian_pyramid_dec_scalar(&planes[1], w as usize, h as usize, n_levels_query),
+        laplacian_pyramid_dec_scalar(&planes[2], w as usize, h as usize, n_levels_query),
+    ];
+
+    eprintln!("[diag] lap gpu n_levels={} scl n_levels={}", gpu_lap.len(), scl_lap[0].len());
+
+    let n_levels = gpu_lap.len().min(scl_lap[0].len());
+    for k in 0..n_levels {
+        for c in 0..3 {
+            let g = &gpu_lap[k][c];
+            let s = &scl_lap[c][k].data;
+            let sw = scl_lap[c][k].w;
+            let sh = scl_lap[c][k].h;
+            assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch");
+            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let mean_g = g.iter().sum::<f32>() / g.len() as f32;
+            let mean_s = s.iter().sum::<f32>() / s.len() as f32;
+            eprintln!("[diag] lap k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}", sw, sh);
+        }
+    }
+}
+
+/// Drive `downscale_tiled_kernel` on cpu and compare to scalar.
+/// This is the LDS-tiled variant used by `compute_dkl_gauss_pyramid`
+/// via `_reduce_gauss_pyramid_tiled`.
+fn diag_downscale_tiled_on_cpu(sw: u32, sh: u32) -> (Vec<f32>, Vec<f32>, f32) {
+    let client = Backend::client(&Default::default());
+    let nsrc = (sw * sh) as usize;
+    let dw = sw.div_ceil(2);
+    let dh = sh.div_ceil(2);
+    let ndst = (dw * dh) as usize;
+
+    let src: Vec<f32> = (0..nsrc)
+        .map(|i| {
+            let y = i / sw as usize;
+            let x = i - y * sw as usize;
+            ((x % 8 + y % 8) as f32) * 0.5
+        })
+        .collect();
+    let dst = vec![0.0_f32; ndst];
+
+    let src_h = client.create_from_slice(f32::as_bytes(&src));
+    let dst_h = client.create_from_slice(f32::as_bytes(&dst));
+
+    let cube_dim = CubeDim::new_2d(DOWNSCALE_TILED_BLOCK_DIM, DOWNSCALE_TILED_BLOCK_DIM);
+    let cube_count = CubeCount::Static(
+        dw.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+        dh.div_ceil(DOWNSCALE_TILED_BLOCK_DIM),
+        1,
+    );
+    unsafe {
+        downscale_tiled_kernel::launch::<Backend>(
+            &client,
+            cube_count,
+            cube_dim,
+            ArrayArg::from_raw_parts(src_h.clone(), nsrc),
+            ArrayArg::from_raw_parts(dst_h.clone(), ndst),
+            sw,
+            sh,
+            dw,
+            dh,
+        );
+    }
+    let out_bytes = client.read_one(dst_h.clone()).expect("read dst");
+    let gpu_out: Vec<f32> = f32::from_bytes(&out_bytes).to_vec();
+
+    let mut cpu_out = Vec::new();
+    gausspyr_reduce_scalar(&src, sw as usize, sh as usize, &mut cpu_out);
+    assert_eq!(cpu_out.len(), gpu_out.len(), "len mismatch sw={sw} sh={sh}");
+
+    let max_err = gpu_out
+        .iter()
+        .zip(&cpu_out)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    (gpu_out, cpu_out, max_err)
+}
+
+#[test]
+fn diag_downscale_tiled_cpu_at_73x91_odd() {
+    let (_g, _c, e) = diag_downscale_tiled_on_cpu(73, 91);
+    eprintln!("diag tiled 73×91: max-abs = {e:.6}");
+    assert!(e < 1e-5, "tiled 73×91 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_tiled_cpu_sweep_sizes() {
+    // Sweep across sizes to find the threshold where the tiled
+    // kernel starts diverging on cpu backend.
+    let sizes = [
+        (32u32, 32u32),   // 1×1 workgroups for dst 16×16
+        (33, 33),
+        (34, 34),         // mixed-parity reduce starts at non-pow-2
+        (40, 40),         // dst 20x20: 2x2 workgroups
+        (48, 48),         // dst 24x24: 2x2 workgroups
+        (56, 56),
+        (64, 64),         // dst 32x32: 2x2 workgroups
+        (65, 65),         // odd-W odd-H
+        (66, 66),
+        (72, 72),
+        (73, 73),
+        (73, 91),
+        (74, 92),         // both even — multiple workgroups
+    ];
+    for (w, h) in sizes {
+        let (_g, _c, e) = diag_downscale_tiled_on_cpu(w, h);
+        let dw = w.div_ceil(2);
+        let dh = h.div_ceil(2);
+        let n_wg_x = dw.div_ceil(16);
+        let n_wg_y = dh.div_ceil(16);
+        eprintln!(
+            "[diag] tiled {}×{} → {}×{}, wg={}×{}: max_err={:.6}",
+            w, h, dw, dh, n_wg_x, n_wg_y, e
+        );
+    }
+}
+
+#[test]
+fn diag_downscale_tiled_cpu_at_32x32() {
+    // Even-dim sanity check
+    let (_g, _c, e) = diag_downscale_tiled_on_cpu(32, 32);
+    eprintln!("diag tiled 32×32: max-abs = {e:.6}");
+    assert!(e < 1e-5, "tiled 32×32 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_tiled_cpu_at_8x8_even() {
+    let (g, c, e) = diag_downscale_tiled_on_cpu(8, 8);
+    eprintln!("diag tiled 8×8: max-abs = {e:.6}");
+    eprintln!("gpu = {g:?}");
+    eprintln!("cpu = {c:?}");
+    assert!(e < 1e-5, "tiled 8×8 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_tiled_cpu_at_7x7_odd() {
+    let (g, c, e) = diag_downscale_tiled_on_cpu(7, 7);
+    eprintln!("diag tiled 7×7: max-abs = {e:.6}");
+    eprintln!("gpu = {g:?}");
+    eprintln!("cpu = {c:?}");
+    assert!(e < 1e-5, "tiled 7×7 cpu downscale max-abs = {e}");
+}
+
+#[test]
+fn diag_downscale_cpu_at_46x37_mixed_parity() {
+    // 46×37 — second-level reduce of 91 → ceil(91/2)=46, and a
+    // mixed-parity case (sw even, sh odd). This is the exact level
+    // where pycvvdp's bug-compat delta fires in the 73×91 chain.
+    let (gpu, cpu, e) = diag_downscale_on_cpu(46, 37);
+    eprintln!("diag 46×37: max-abs = {e:.6}\ngpu_last_col={:?}\ncpu_last_col={:?}",
+        (0..(46u32.div_ceil(2)) as usize).step_by(46usize.div_ceil(2).saturating_sub(1).max(1)).take(3).collect::<Vec<_>>(),
+        (0..(46u32.div_ceil(2)) as usize).step_by(46usize.div_ceil(2).saturating_sub(1).max(1)).take(3).collect::<Vec<_>>(),
+    );
+    // Extract right column for easier diff inspection
+    let dw = 46u32.div_ceil(2);
+    let dh = 37u32.div_ceil(2);
+    for dy in 0..dh as usize {
+        let i = dy * dw as usize + (dw as usize - 1);
+        let g = gpu[i];
+        let c = cpu[i];
+        eprintln!("  right-col dy={dy}: gpu={g:.6} cpu={c:.6} d={:.6}", g - c);
+    }
+    assert!(e < 1e-5, "46×37 cpu downscale max-abs = {e}");
 }
