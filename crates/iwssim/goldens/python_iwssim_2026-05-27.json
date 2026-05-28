@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "captured_utc": "2026-05-28T00:58:01.160172+00:00",
+  "python_reference": {
+    "repo": "https://github.com/Jack-guo-xy/Python-IW-SSIM",
+    "commit": "f9de37cdb4c459fd188c611e377a87a54516d3cd",
+    "use_double": false,
+    "iw_flag": true,
+    "Nsc": 5,
+    "blSzX": 3,
+    "blSzY": 3,
+    "parent": true,
+    "sigma_nsq": 0.4
+  },
+  "pairs": [
+    {
+      "name": "synth_256_identical",
+      "kind": "synthetic",
+      "distortion": "identical",
+      "width": 256,
+      "height": 256,
+      "seed": 1,
+      "ref_sha": "fa3686c36283e158",
+      "dist_sha": "fa3686c36283e158",
+      "score": 1.0000001192092896
+    },
+    {
+      "name": "synth_256_offset",
+      "kind": "synthetic",
+      "distortion": "offset",
+      "width": 256,
+      "height": 256,
+      "seed": 2,
+      "ref_sha": "add53ddcca85cc19",
+      "dist_sha": "1e68552d6d79572a",
+      "score": 0.9999049305915833
+    },
+    {
+      "name": "synth_256_shift1px",
+      "kind": "synthetic",
+      "distortion": "shift1px",
+      "width": 256,
+      "height": 256,
+      "seed": 3,
+      "ref_sha": "0312cd3a99fbb574",
+      "dist_sha": "3cb4d09c70d77607",
+      "score": 0.8040657043457031
+    },
+    {
+      "name": "synth_256_swap",
+      "kind": "synthetic",
+      "distortion": "swap",
+      "width": 256,
+      "height": 256,
+      "seed": 4,
+      "ref_sha": "ec4638a3706c8912",
+      "dist_sha": "e3ba86d0ac354022",
+      "score": 0.812677264213562
+    },
+    {
+      "name": "synth_320x240_identical",
+      "kind": "synthetic",
+      "distortion": "identical",
+      "width": 320,
+      "height": 240,
+      "seed": 10,
+      "ref_sha": "48effd646a755055",
+      "dist_sha": "48effd646a755055",
+      "score": 1.0
+    },
+    {
+      "name": "synth_320x240_shift1px",
+      "kind": "synthetic",
+      "distortion": "shift1px",
+      "width": 320,
+      "height": 240,
+      "seed": 11,
+      "ref_sha": "6248232f3e62b1fd",
+      "dist_sha": "0ea1ca4deab6b857",
+      "score": 0.8046802878379822
+    },
+    {
+      "name": "synth_176_shift1px",
+      "kind": "synthetic",
+      "distortion": "shift1px",
+      "width": 176,
+      "height": 176,
+      "seed": 100,
+      "ref_sha": "6de13e2f62f122b9",
+      "dist_sha": "a7520245d09cb70e",
+      "score": 0.8049007654190063
+    }
+  ]
+}
