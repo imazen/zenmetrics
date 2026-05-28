@@ -120,12 +120,15 @@ impl Cvvdp {
         let w = width as usize;
         let h = height as usize;
         let ppd = geometry.pixels_per_degree();
+        // Pre-compute n_levels so Scratch can pre-allocate every
+        // per-level weber pyramid Vec<f32>. Phase 9.YA Part 2.
+        let n_levels = band_frequencies(ppd, w, h).len();
         Ok(Self {
             width: w,
             height: h,
             params,
             ppd,
-            scratch: Scratch::new(w, h),
+            scratch: Scratch::new(w, h, n_levels),
             warm_active: false,
         })
     }

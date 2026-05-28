@@ -93,7 +93,19 @@ pub(crate) struct Scratch {
 }
 
 impl Scratch {
-    pub fn new(width: usize, height: usize) -> Self {
+    /// Construct with full pre-allocation for `width × height` image and
+    /// `n_levels` weber pyramid bands.
+    ///
+    /// Phase 9.YA Part 2: every per-level Vec<f32> in
+    /// `weber_ref` / `weber_dist` (output bands + log_l_bkg) and in
+    /// `weber_cache_ref` / `weber_cache_dist` (gauss_img + gauss_l +
+    /// inner PyramidScratch) is sized at construction time so the
+    /// first `score()` call doesn't take the cold-allocation hit. This
+    /// pre-allocation is large (~3 GB at 40 MP for the 6 caches + 6
+    /// outputs combined) but the alternative was paying it inside the
+    /// first per-call build path. Both `score()` cold path and
+    /// `warm_reference` cold-path callers benefit.
+    pub fn new(width: usize, height: usize, n_levels: usize) -> Self {
         let n = width * height;
         Self {
             dist_a: vec![0.0; n],
@@ -104,24 +116,39 @@ impl Scratch {
             ref_vy: vec![0.0; n],
             pyr: PyramidScratch::default(),
             weber_ref: [
-                WeberPyramid::empty(),
-                WeberPyramid::empty(),
-                WeberPyramid::empty(),
+                WeberPyramid::with_capacity(width, height, n_levels),
+                WeberPyramid::with_capacity(width, height, n_levels),
+                WeberPyramid::with_capacity(width, height, n_levels),
             ],
             weber_dist: [
-                WeberPyramid::empty(),
-                WeberPyramid::empty(),
-                WeberPyramid::empty(),
+                WeberPyramid::with_capacity(width, height, n_levels),
+                WeberPyramid::with_capacity(width, height, n_levels),
+                WeberPyramid::with_capacity(width, height, n_levels),
             ],
+            // weber_cache_ref is NOT pre-allocated — it's only used by
+            // the cold `score()` path, never by the warm
+            // `warm_reference` + `score_with_warm_ref` path (which uses
+            // local caches in `build_one_side_warm_ref_into` from
+            // Phase 9.YA Part 1). Pre-allocating it would burn ~640 MB
+            // of peak heap in the warm path with no benefit.
+            //
+            // The cold score() path's first call still pays the
+            // alloc cost for weber_cache_ref's gauss_img + gauss_l
+            // band growth (~213 MB × 6 = 1.3 GB across 3 ref channels'
+            // gauss_img + gauss_l). Subsequent calls reuse capacity.
             weber_cache_ref: [
                 WeberPyramidCache::default(),
                 WeberPyramidCache::default(),
                 WeberPyramidCache::default(),
             ],
+            // weber_cache_dist IS pre-allocated — it's used by both
+            // cold `score()` and warm `score_with_warm_ref` paths.
+            // Pre-allocation removes the first-call cost for the
+            // distorted-side pyramid build in both modes.
             weber_cache_dist: [
-                WeberPyramidCache::default(),
-                WeberPyramidCache::default(),
-                WeberPyramidCache::default(),
+                WeberPyramidCache::with_capacity(width, height, n_levels),
+                WeberPyramidCache::with_capacity(width, height, n_levels),
+                WeberPyramidCache::with_capacity(width, height, n_levels),
             ],
             band_ws: Vec::new(),
         }

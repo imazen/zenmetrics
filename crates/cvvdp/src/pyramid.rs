@@ -16,6 +16,7 @@
 //!   `crate::kernels::pyramid::band_frequencies` (avoiding a
 //!   redefinition).
 
+use alloc::vec;
 use alloc::vec::Vec;
 
 pub(crate) use crate::kernels::pyramid::{GAUSS5, band_frequencies};
@@ -45,6 +46,30 @@ impl WeberPyramid {
             bands: Vec::new(),
             log_l_bkg: Vec::new(),
         }
+    }
+
+    /// Pre-allocate all per-level band + log_l_bkg buffers for an
+    /// image of `sw × sh` decomposed into `n_levels` bands. Each
+    /// level's Vec<f32> is sized correctly so the first
+    /// `weber_contrast_pyr_into` call doesn't take an alloc hit.
+    /// Phase 9.YA Part 2: amortizes the 213 MB × 9 first-call
+    /// allocations measured at 40 MP into a single `Scratch::new`
+    /// upfront cost.
+    pub(crate) fn with_capacity(sw: usize, sh: usize, n_levels: usize) -> Self {
+        let mut bands = Vec::with_capacity(n_levels);
+        let mut log_l_bkg = Vec::with_capacity(n_levels);
+        let (mut w, mut h) = (sw, sh);
+        for _ in 0..n_levels {
+            bands.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * h],
+            });
+            log_l_bkg.push(vec![0.0_f32; w * h]);
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        Self { bands, log_l_bkg }
     }
 }
 
@@ -236,6 +261,45 @@ pub(crate) struct WeberPyramidCache {
     pub gauss_img: Vec<Band>,
     pub gauss_l: Vec<Band>,
     pub scratch: PyramidScratch,
+}
+
+impl WeberPyramidCache {
+    /// Pre-allocate all per-level Vec<f32> buffers in `gauss_img` and
+    /// `gauss_l` for an image of `sw × sh` decomposed into `n_levels`
+    /// bands. The inner `PyramidScratch` is left in `Default` state
+    /// and lazily resized inside `gausspyr_reduce` / `gausspyr_expand`
+    /// at the actual high-water mark — pre-allocating it at the
+    /// finest-level worst case pushed peak heap above the natural
+    /// runtime peak by ~640 MB × 6 caches during Phase 9.YA Part 2
+    /// iteration.
+    ///
+    /// Phase 9.YA Part 2: removes the first-call growth cost of the
+    /// gauss_img / gauss_l band Vecs (the dominant 213 MB × 6 sites
+    /// at 40 MP).
+    pub(crate) fn with_capacity(sw: usize, sh: usize, n_levels: usize) -> Self {
+        let mut gauss_img = Vec::with_capacity(n_levels);
+        let mut gauss_l = Vec::with_capacity(n_levels);
+        let (mut w, mut h) = (sw, sh);
+        for _ in 0..n_levels {
+            gauss_img.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * h],
+            });
+            gauss_l.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * h],
+            });
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        Self {
+            gauss_img,
+            gauss_l,
+            scratch: PyramidScratch::default(),
+        }
+    }
 }
 
 /// Single-channel Weber-contrast pyramid (`weber_g1`).
