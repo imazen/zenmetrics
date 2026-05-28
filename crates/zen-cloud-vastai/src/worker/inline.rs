@@ -80,14 +80,48 @@ pub async fn process_chunk_inline(args: &WorkerArgs, r2: &R2Client, line: &str) 
     }
 }
 
-/// Build the R2 URI for a chunk's durable error sidecar. Derives the
-/// output bucket from the chunk's `out_sidecar_omni` (an
-/// `s3://<bucket>/...` URI) so errors land in the SAME bucket the worker
-/// already has write access to via its scoped cred — falls back to the
-/// production `zentrain` bucket when the chunk record omits the sidecar.
+/// Build the R2 URI for a chunk's durable error sidecar.
+///
+/// Derives the path from the chunk's `out_sidecar_omni` (an
+/// `s3://<bucket>/<prefix>/omni/<chunk>.parquet` URI) by swapping the
+/// trailing `omni/<chunk>.parquet` segment for `errors/<chunk>.txt`.
+/// This preserves whatever scoped-cred prefix the launcher used for the
+/// omni sidecar (e.g. `runs/<sweep_id>/`), so the error upload lands
+/// under the SAME scoped prefix the worker has write access to.
+///
+/// Historical bug (fixed 2026-05-28): the prior implementation hard-coded
+/// `s3://<bucket>/<run_id>/errors/...` which DROPPED any `runs/` (or other)
+/// prefix the launcher had baked into `out_sidecar_omni`. With a scoped
+/// cred restricted to `runs/<sweep_id>/`, every error-sidecar upload 403'd
+/// silently — masking the underlying chunk failure across all of Salad
+/// Runs 1-6b 2026-05-28. The path-derivation form below stays correctly
+/// inside the scope as long as the launcher's omni-sidecar path does.
+///
+/// Falls back to the production `zentrain` bucket when the chunk record
+/// omits the sidecar.
 fn error_sidecar_uri(rec: &ChunkRecord, run_id: &str) -> String {
-    // `out_sidecar_omni` is like `s3://<bucket>/<prefix>/omni/<chunk>.parquet`.
-    // Extract `s3://<bucket>` and place errors under `<bucket>/<run>/errors/`.
+    // Path-derivation form: take `s3://<bucket>/<prefix>/omni/<chunk>.parquet`
+    // and rewrite the trailing `omni/<chunk>.parquet` to `errors/<chunk>.txt`.
+    // Preserves <prefix> verbatim so a scoped-cred prefix like `runs/<sweep>/`
+    // still covers the error upload.
+    if let Some(omni) = rec.out_sidecar_omni.as_deref()
+        && let Some(rest) = omni.strip_prefix("s3://")
+    {
+        // Find the LAST `/omni/` segment so we don't accidentally match an
+        // earlier path component named `omni`. Fall back to the bucket-only
+        // form if the omni path doesn't have an `/omni/` segment we
+        // recognise.
+        if let Some(idx) = rest.rfind("/omni/") {
+            let prefix = &rest[..idx]; // `<bucket>/<prefix>` (no trailing slash)
+            return format!("s3://{prefix}/errors/{}.txt", rec.chunk_id);
+        }
+    }
+    // Fallback: extract bucket from out_sidecar_omni (or default to zentrain),
+    // emit the legacy `<bucket>/<run_id>/errors/` form. This path is OUTSIDE
+    // any `runs/` scoped prefix the launcher may have set — callers relying
+    // on this branch need to either set out_sidecar_omni with the full
+    // `runs/<sweep>/omni/<chunk>.parquet` shape OR widen the scoped cred to
+    // cover the bucket-root-level `<run_id>/` prefix.
     let bucket = rec
         .out_sidecar_omni
         .as_deref()
@@ -694,7 +728,10 @@ mod tests {
     }
 
     #[test]
-    fn error_sidecar_uri_derives_bucket_from_out_sidecar() {
+    fn error_sidecar_uri_derives_path_from_out_sidecar() {
+        // Legacy layout (no `runs/` prefix): omni path is
+        // `<bucket>/<run_id>/omni/<chunk>.parquet`; error becomes
+        // `<bucket>/<run_id>/errors/<chunk>.txt` — same prefix.
         let rec = rec_with_sidecar(Some(
             "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/omni/salad-smoke-001.parquet",
         ));
@@ -705,11 +742,49 @@ mod tests {
     }
 
     #[test]
+    fn error_sidecar_uri_preserves_runs_prefix_for_scoped_cred() {
+        // Current launcher layout: omni path is
+        // `<bucket>/runs/<sweep_id>/omni/<chunk>.parquet`. The error
+        // sidecar MUST land at `<bucket>/runs/<sweep_id>/errors/<chunk>.txt`
+        // — preserving the `runs/<sweep_id>/` prefix so a scoped-cred
+        // restricted to `runs/<sweep_id>/` still permits the upload.
+        // This is the bug exposed by Salad Runs 1-6b 2026-05-28: the
+        // prior URI form dropped the `runs/` prefix and every error
+        // upload 403'd, masking the chunk failures entirely.
+        // rec_with_sidecar hard-codes chunk_id = "salad-smoke-001"; the
+        // out_sidecar_omni path uses a different stem for clarity but the
+        // assertion's chunk_id MUST match the helper's hard-coded value.
+        let rec = rec_with_sidecar(Some(
+            "s3://zen-tuning-ephemeral/runs/n1-v5-1779959731/omni/scaleup-000.parquet",
+        ));
+        // run_id is the LAUNCHER's sweep_id (no `runs/` prefix). The URI
+        // must still anchor under `runs/n1-v5-1779959731/`.
+        assert_eq!(
+            error_sidecar_uri(&rec, "n1-v5-1779959731"),
+            "s3://zen-tuning-ephemeral/runs/n1-v5-1779959731/errors/salad-smoke-001.txt"
+        );
+    }
+
+    #[test]
     fn error_sidecar_uri_falls_back_to_zentrain_without_sidecar() {
         let rec = rec_with_sidecar(None);
         assert_eq!(
             error_sidecar_uri(&rec, "run-x"),
             "s3://zentrain/run-x/errors/salad-smoke-001.txt"
+        );
+    }
+
+    #[test]
+    fn error_sidecar_uri_handles_nested_prefix() {
+        // Defensive: deeper prefix like `runs/<sweep>/<sub>/omni/...` —
+        // confirm we strip the LAST `/omni/<chunk>.parquet`, not an
+        // earlier one.
+        let rec = rec_with_sidecar(Some(
+            "s3://b/runs/x/omni-subdir/omni/c.parquet",
+        ));
+        assert_eq!(
+            error_sidecar_uri(&rec, "x"),
+            "s3://b/runs/x/omni-subdir/errors/salad-smoke-001.txt"
         );
     }
 }

@@ -412,13 +412,56 @@ async fn main() -> Result<()> {
     }
 
     // 3. Load R2 parent creds + mint scoped child.
+    //
+    // Scoped-cred prefix list MUST cover every R2 path the worker will
+    // touch — both the writable `runs/<sweep>/` per-sweep output prefix
+    // AND every readable input prefix the chunks reference. Missing a
+    // prefix produces a 403 the worker can't recover from (the durable
+    // error sidecar would also 403 under the same scope, masking the
+    // failure entirely — see Salad Runs 1-6b 2026-05-28 forensic doc).
+    //
+    // We derive the read prefixes from the chunks themselves so any future
+    // launcher that retargets `--input-parquet-r2` / `--source-dir-r2` to
+    // a non-default location automatically widens the scope. The cred is
+    // still single-bucket; cross-bucket inputs require a different cred
+    // model (see SALAD.md's "reads-from-A-writes-to-B" note).
     let parent = load_r2_parent_creds_or_env()?;
+    let mut cred_prefixes: Vec<String> = Vec::new();
+    cred_prefixes.push(format!("runs/{sweep_id}/"));
+    // Read scope: extract the bucket-relative prefix from each input URI.
+    // The s3 URI form is `s3://<bucket>/<key>`; the scoped cred lives
+    // under one bucket (`args.bucket`), so we only honour inputs in that
+    // bucket. Inputs in other buckets will 403 — surface a loud warning
+    // (preflight already HEADs them, but with the PARENT cred; the worker
+    // uses the scoped cred and gets a different result).
+    let bucket_prefix_with_slash = format!("s3://{}/", args.bucket);
+    for input_uri in [&args.input_parquet_r2, &args.source_dir_r2] {
+        if let Some(rest) = input_uri.strip_prefix(&bucket_prefix_with_slash) {
+            // Take the LEADING key segment (everything up to the first '/')
+            // and re-add the trailing slash so the scoped prefix covers
+            // every object under that subtree. Empty rest (= bucket root)
+            // → whole-bucket scope, which we just inject as "" (the
+            // CF minter omits an empty entry from the wire request).
+            let leading = rest.split('/').next().unwrap_or("");
+            if !leading.is_empty() {
+                let p = format!("{leading}/");
+                if !cred_prefixes.contains(&p) {
+                    cred_prefixes.push(p);
+                }
+            }
+        } else {
+            eprintln!(
+                "[launcher] WARN input {} is outside scoped bucket {}; worker will 403 on read",
+                input_uri, args.bucket
+            );
+        }
+    }
     let scoped_spec = ScopedCredSpec::new(&args.bucket)
-        .with_prefixes(vec![format!("runs/{sweep_id}/")])
+        .with_prefixes(cred_prefixes.clone())
         .with_ttl_seconds(3600);
     eprintln!(
-        "[launcher] minting scoped R2 cred (bucket={} prefix=runs/{}/ ttl=3600s)",
-        args.bucket, sweep_id
+        "[launcher] minting scoped R2 cred (bucket={} prefixes={:?} ttl=3600s)",
+        args.bucket, cred_prefixes
     );
     let scoped = api
         .mint_sweep_r2_cred(&parent, &scoped_spec)
