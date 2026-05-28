@@ -71,6 +71,60 @@ impl WeberPyramid {
         }
         Self { bands, log_l_bkg }
     }
+
+    /// Strip-shape pre-allocation for the K_SPLIT walker.
+    ///
+    /// At shallow levels (`k < k_split`) the per-level `bands[k].data`
+    /// and `log_l_bkg[k]` are sized at `bw × R_k` where
+    /// `R_k = mode_b_strip_h_at_level(k, h_body, k_split)` — the
+    /// strip's back-projected buffer height. At deep levels (`k >=
+    /// k_split`) the full `bw × bh` allocation is used (these levels
+    /// are small in absolute terms; level 8 at 4096² is 16×16 = ~1 KB).
+    ///
+    /// Saves ~80% of the 1 GB WeberPyramid footprint at 16 MP. Mirrors
+    /// the GPU's strip-shape allocator policy.
+    ///
+    /// The per-level `Band::h` value is set to `bh` (the FULL band
+    /// height) — the band's logical shape is preserved for downstream
+    /// callers that read `bh`. Only the underlying `data` Vec capacity
+    /// is strip-shaped at shallow levels. Strip-major dispatchers must
+    /// ensure they write at most `bw × R_k` entries before consuming
+    /// the band's data; bands are NOT cumulative-full across strips.
+    ///
+    /// **Phase 9.Z.F chunk 6 of the CPU K_SPLIT walker port.**
+    #[allow(dead_code)]
+    pub(crate) fn with_capacity_strip(
+        sw: usize,
+        sh: usize,
+        n_levels: usize,
+        h_body: u32,
+    ) -> Self {
+        let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32);
+        let mut bands = Vec::with_capacity(n_levels);
+        let mut log_l_bkg = Vec::with_capacity(n_levels);
+        let (mut w, mut h) = (sw, sh);
+        for k in 0..n_levels {
+            let alloc_h = if (k as u32) < k_split {
+                let r_back = crate::strip::mode_b_strip_h_at_level(k as u32, h_body, k_split);
+                if r_back == 0 {
+                    h
+                } else {
+                    (r_back as usize).min(h)
+                }
+            } else {
+                h
+            };
+            bands.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * alloc_h],
+            });
+            log_l_bkg.push(vec![0.0_f32; w * alloc_h]);
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        Self { bands, log_l_bkg }
+    }
 }
 
 /// Scratch buffers used by reduce/expand passes. Owned by the
@@ -290,6 +344,70 @@ impl WeberPyramidCache {
                 w,
                 h,
                 data: vec![0.0_f32; w * h],
+            });
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+        Self {
+            gauss_img,
+            gauss_l,
+            scratch: PyramidScratch::default(),
+        }
+    }
+
+    /// Strip-shape pre-allocation matching
+    /// [`WeberPyramid::with_capacity_strip`]'s policy.
+    ///
+    /// At shallow levels (`k < k_split`) the per-level `gauss_img[k]`
+    /// and `gauss_l[k]` are sized at `bw × R_k` where
+    /// `R_k = mode_b_strip_h_at_level(k, h_body, k_split)`. Deep levels
+    /// use the full `bw × bh` allocation.
+    ///
+    /// The per-level `Band::h` value is set to `bh` (the FULL band
+    /// height) — the band's logical shape is preserved for downstream
+    /// callers that read `bh`. Only the underlying `data` Vec capacity
+    /// is strip-shaped at shallow levels.
+    ///
+    /// Saves ~80% of the 510 MB cache footprint at 16 MP. Mirrors the
+    /// GPU's strip-shape cache allocator. Caller must use the
+    /// strip-major dispatcher (chunk 6's `_run_d_bands_strip_major_shallow`
+    /// CPU port) to consume the strip-shaped cache safely — the
+    /// upstream `weber_contrast_pyr_into` path writes full-image
+    /// shape and will panic on `data.len() < w*h` accesses against a
+    /// strip-shape cache.
+    ///
+    /// **Phase 9.Z.F chunk 6 of the CPU K_SPLIT walker port.**
+    #[allow(dead_code)]
+    pub(crate) fn with_capacity_strip(
+        sw: usize,
+        sh: usize,
+        n_levels: usize,
+        h_body: u32,
+    ) -> Self {
+        let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32);
+        let mut gauss_img = Vec::with_capacity(n_levels);
+        let mut gauss_l = Vec::with_capacity(n_levels);
+        let (mut w, mut h) = (sw, sh);
+        for k in 0..n_levels {
+            let alloc_h = if (k as u32) < k_split {
+                let r_back = crate::strip::mode_b_strip_h_at_level(k as u32, h_body, k_split);
+                if r_back == 0 {
+                    h
+                } else {
+                    (r_back as usize).min(h)
+                }
+            } else {
+                h
+            };
+            gauss_img.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * alloc_h],
+            });
+            gauss_l.push(Band {
+                w,
+                h,
+                data: vec![0.0_f32; w * alloc_h],
             });
             w = w.div_ceil(2);
             h = h.div_ceil(2);
