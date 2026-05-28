@@ -335,6 +335,19 @@ impl SaladApi {
         self.post_empty(&url).await
     }
 
+    /// `GET .../containers/{name}/instances` — list the replicas in a
+    /// container group. Salad's response shape varies a bit by version;
+    /// we return the raw JSON Value so the caller can extract whatever
+    /// fields are present (machine_id, state, started_at, version_hash,
+    /// etc.) without coupling the launcher to a precise schema.
+    pub async fn list_container_group_instances(
+        &self,
+        name: &str,
+    ) -> Result<serde_json::Value> {
+        let url = self.proj_url(&format!("/containers/{name}/instances"));
+        self.get_json(&url).await
+    }
+
     /// `POST .../queues/{queue}/jobs` — push one job chunk into the
     /// managed queue. Salad fans these out to the sidecars.
     pub async fn push_job(&self, queue: &str, req: &CreateQueueJobRequest) -> Result<QueueJob> {

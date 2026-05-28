@@ -148,6 +148,23 @@ if [[ -f cubecl.toml ]]; then
 else
     log "WARN: cubecl.toml not in cwd ($(pwd)); PTX cache may be disabled"
 fi
+# Per :v6-visibility iter1: write a boot-info file the worker reads + uploads
+# to R2 under the run's scoped prefix. Workers self-report their GPU class +
+# warmup duration so the launcher / operator can attribute throughput.
+BOOT_INFO_FILE="${BOOT_INFO_FILE:-/var/run/zen-boot.txt}"
+mkdir -p "$(dirname "${BOOT_INFO_FILE}")" 2>/dev/null || true
+
+# Capture GPU info BEFORE warmup so a warmup OOM/crash still leaves the gpu
+# class in the boot record.
+gpu_info_csv=""
+if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_info_csv=$(nvidia-smi --query-gpu=name,uuid,driver_version,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d '\r')
+fi
+gpu_name=$(echo "${gpu_info_csv}" | awk -F', ' '{print $1}')
+gpu_uuid=$(echo "${gpu_info_csv}" | awk -F', ' '{print $2}')
+gpu_driver=$(echo "${gpu_info_csv}" | awk -F', ' '{print $3}')
+gpu_vram=$(echo "${gpu_info_csv}" | awk -F', ' '{print $4}')
+
 warmup_t0=$(date +%s)
 if command -v warmup_kernels.sh >/dev/null 2>&1; then
     log "starting kernel-cache warmup pass…"
@@ -157,6 +174,32 @@ else
 fi
 warmup_elapsed=$(( $(date +%s) - warmup_t0 ))
 log "warmup phase: ${warmup_elapsed}s total wall (per-metric breakdown in [warmup] log lines above)"
+
+# Boot record — plain key:value, the worker reads + uploads to
+# <scoped-prefix>/boot/<machine_id>.txt. machine_id resolution mirrors
+# the worker (HOSTNAME → SALAD_MACHINE_ID → "unknown"); we record both
+# so the upload key matches whichever the worker chose.
+{
+    echo "machine_id: ${SALAD_MACHINE_ID:-${HOSTNAME:-unknown}}"
+    echo "hostname: ${HOSTNAME:-unknown}"
+    echo "salad_machine_id: ${SALAD_MACHINE_ID:-}"
+    echo "salad_container_group_id: ${SALAD_CONTAINER_GROUP_ID:-}"
+    echo "gpu_class: ${gpu_name:-unknown}"
+    echo "gpu_uuid: ${gpu_uuid:-}"
+    echo "driver: ${gpu_driver:-}"
+    echo "vram_mib: ${gpu_vram:-}"
+    echo "warmup_seconds: ${warmup_elapsed}"
+    echo "warmup_begin_unix: ${warmup_t0}"
+    echo "warmup_end_unix: $(date +%s)"
+    echo "boot_unix_ts: $(date +%s)"
+    echo "image_tag: ${IMAGE_TAG:-unknown}"
+    echo "run_id: ${SWEEP_RUN_ID:-unknown}"
+} > "${BOOT_INFO_FILE}" 2>/dev/null || log "WARN: could not write boot info to ${BOOT_INFO_FILE}"
+log "boot info written to ${BOOT_INFO_FILE} (gpu_class=${gpu_name:-unknown} warmup=${warmup_elapsed}s)"
+# Also export for the worker process to pick up without re-reading the file.
+export ZEN_BOOT_INFO_FILE="${BOOT_INFO_FILE}"
+export ZEN_BOOT_GPU_CLASS="${gpu_name:-unknown}"
+export ZEN_BOOT_WARMUP_SECONDS="${warmup_elapsed}"
 
 log "launching salad-http-job-queue-worker sidecar + zen-sweep-worker (--backend salad)"
 

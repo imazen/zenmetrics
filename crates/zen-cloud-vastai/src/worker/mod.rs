@@ -241,6 +241,11 @@ pub fn cmd_worker(args: WorkerArgs) -> Result<()> {
 async fn run_worker_async(args: WorkerArgs, worker_id: String, r2: r2::R2Client) -> Result<()> {
     info!(worker_id = %worker_id, run_id = %args.run_id, "worker starting");
 
+    // Boot report — upload /var/run/zen-boot.txt (written by
+    // entrypoint_salad.sh) to <scoped-prefix>/boot/<machine_id>.txt
+    // for fleet visibility. Best-effort; never blocks the worker.
+    upload_boot_record(&args, &worker_id, &r2).await;
+
     let initial_pc = args
         .parallel_chunks
         .unwrap_or_else(adapt::auto_parallel_chunks);
@@ -439,3 +444,88 @@ fn hydrate_pid1_env() {
         }
     }
 }
+
+/// Derive the bucket-scoped prefix from `chunks_r2`.
+///
+/// `chunks_r2` is `s3://<bucket>/<prefix>/chunks.jsonl`. Returns
+/// `(bucket, prefix_with_slash)` — e.g. `("zen-tuning-ephemeral",
+/// "runs/scaleup-2026-05-28T010203/")`.
+pub(crate) fn split_chunks_uri(chunks_r2: &str) -> Option<(String, String)> {
+    let rest = chunks_r2.strip_prefix("s3://")?;
+    let (bucket, key) = rest.split_once('/')?;
+    // Strip the trailing `chunks.jsonl` (or whatever filename) leaving
+    // the prefix with a trailing `/`.
+    let prefix = match key.rfind('/') {
+        Some(idx) => &key[..=idx],
+        None => "",
+    };
+    Some((bucket.to_string(), prefix.to_string()))
+}
+
+/// Best-effort: read /var/run/zen-boot.txt (written by
+/// entrypoint_salad.sh) and upload it to R2 at
+/// `s3://<bucket>/<prefix>boot/<worker_id>.txt`. Failures are logged
+/// at `warn` and never block worker startup — boot records are
+/// observational, not load-bearing.
+async fn upload_boot_record(args: &WorkerArgs, worker_id: &str, r2: &r2::R2Client) {
+    // 1. Find the local boot file (env wins; default to the path
+    //    the entrypoint writes).
+    let local_path = std::env::var("ZEN_BOOT_INFO_FILE")
+        .unwrap_or_else(|_| "/var/run/zen-boot.txt".to_string());
+    let local = std::path::PathBuf::from(&local_path);
+    if !local.exists() {
+        // Not Salad (no entrypoint wrote it) — synthesize a minimal
+        // record so the launcher always sees SOMETHING per replica.
+        let synth = format!(
+            "machine_id: {worker_id}\n\
+             hostname: {hostname}\n\
+             salad_machine_id: {salad}\n\
+             gpu_class: {gpu_class}\n\
+             warmup_seconds: {warm}\n\
+             boot_unix_ts: {ts}\n\
+             synthesized: true\n",
+            worker_id = worker_id,
+            hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".into()),
+            salad = std::env::var("SALAD_MACHINE_ID").unwrap_or_default(),
+            gpu_class = std::env::var("ZEN_BOOT_GPU_CLASS").unwrap_or_else(|_| "unknown".into()),
+            warm = std::env::var("ZEN_BOOT_WARMUP_SECONDS").unwrap_or_default(),
+            ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        );
+        if tokio::fs::write(&local, synth.as_bytes()).await.is_err() {
+            // Fall back to a writable tmp file.
+            let tmp = std::env::temp_dir().join("zen-boot.txt");
+            if let Err(e) = tokio::fs::write(&tmp, synth.as_bytes()).await {
+                warn!(error = %e, "could not write synthesized boot record");
+                return;
+            }
+            return upload_boot_to_r2(args, worker_id, r2, &tmp).await;
+        }
+    }
+    upload_boot_to_r2(args, worker_id, r2, &local).await;
+}
+
+async fn upload_boot_to_r2(
+    args: &WorkerArgs,
+    worker_id: &str,
+    r2: &r2::R2Client,
+    local: &std::path::Path,
+) {
+    let Some((bucket, prefix)) = split_chunks_uri(&args.chunks_r2) else {
+        warn!(chunks_r2 = %args.chunks_r2, "could not derive bucket/prefix; skipping boot upload");
+        return;
+    };
+    // Sanitize worker_id for an object key (hostnames can have ':' etc.).
+    let safe: String = worker_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let uri = format!("s3://{bucket}/{prefix}boot/{safe}.txt");
+    match r2.upload(local, &uri).await {
+        Ok(()) => info!(uri = %uri, "boot record uploaded"),
+        Err(e) => warn!(uri = %uri, error = %e, "boot record upload failed (non-fatal)"),
+    }
+}
+

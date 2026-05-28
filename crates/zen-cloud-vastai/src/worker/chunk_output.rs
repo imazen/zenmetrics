@@ -34,11 +34,27 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use arrow_array::{Array, ArrayRef, RecordBatch, StringArray};
+use arrow_array::{Array, ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
+
+/// Worker-side identity + timing columns appended to every chunk
+/// sidecar (added 2026-05-28, image :v6-visibility). Lets downstream
+/// aggregators attribute each scored row to a specific Salad replica +
+/// GPU class WITHOUT a separate join. Defaults are all empty / null,
+/// so the back-compat schema (callers passing `None`) keeps producing
+/// the legacy `chunk_id / run_id / encoded_r2_uri` shape.
+#[derive(Debug, Clone, Default)]
+pub struct WorkerColumns {
+    pub machine_id: String,
+    pub gpu_class: String,
+    pub chunk_claim_unix: Option<i64>,
+    pub chunk_start_unix: Option<i64>,
+    pub chunk_end_unix: Option<i64>,
+    pub warmup_seconds: Option<f64>,
+}
 
 /// Concat all `g*.tsv` files in `sweep_dir` into one parquet sidecar
 /// at `output_path`.
@@ -55,6 +71,30 @@ pub fn concat_groups_to_parquet(
     chunk_id: &str,
     run_id: &str,
     encoded_r2_prefix: Option<&str>,
+) -> Result<usize> {
+    concat_groups_to_parquet_with_worker(
+        sweep_dir,
+        output_path,
+        chunk_id,
+        run_id,
+        encoded_r2_prefix,
+        None,
+    )
+}
+
+/// Same as [`concat_groups_to_parquet`] but accepts optional
+/// [`WorkerColumns`] — when `Some(_)`, six additional columns are
+/// appended to every row (worker_machine_id / worker_gpu_class /
+/// worker_chunk_claim_unix / worker_chunk_start_unix /
+/// worker_chunk_end_unix / worker_warmup_seconds). Default-null on
+/// non-Salad runs to keep the schema back-compatible.
+pub fn concat_groups_to_parquet_with_worker(
+    sweep_dir: &Path,
+    output_path: &Path,
+    chunk_id: &str,
+    run_id: &str,
+    encoded_r2_prefix: Option<&str>,
+    worker: Option<&WorkerColumns>,
 ) -> Result<usize> {
     let mut group_files: Vec<std::path::PathBuf> = std::fs::read_dir(sweep_dir)
         .with_context(|| format!("read sweep_dir {}", sweep_dir.display()))?
@@ -108,7 +148,8 @@ pub fn concat_groups_to_parquet(
     // Concat then append metadata columns.
     let concatenated =
         arrow::compute::concat_batches(&schema_arc, &batches).context("concat batches")?;
-    let with_meta = append_metadata_columns(concatenated, chunk_id, run_id, encoded_r2_prefix)?;
+    let with_meta =
+        append_metadata_columns(concatenated, chunk_id, run_id, encoded_r2_prefix, worker)?;
 
     write_parquet(&with_meta, output_path)?;
     Ok(n_total)
@@ -192,12 +233,14 @@ fn read_tsv_into_batches(tsv: &Path, schema: Arc<Schema>) -> Result<(Vec<RecordB
 }
 
 /// Append `chunk_id`, `run_id`, and (optionally) `encoded_r2_uri`
-/// columns to the concatenated batch.
+/// columns to the concatenated batch. When `worker` is `Some`, also
+/// append the six worker_* columns documented on [`WorkerColumns`].
 fn append_metadata_columns(
     batch: RecordBatch,
     chunk_id: &str,
     run_id: &str,
     encoded_r2_prefix: Option<&str>,
+    worker: Option<&WorkerColumns>,
 ) -> Result<RecordBatch> {
     let n = batch.num_rows();
     let mut fields: Vec<Field> = batch
@@ -246,6 +289,24 @@ fn append_metadata_columns(
             };
         fields.push(Field::new("encoded_r2_uri", DataType::Utf8, false));
         cols.push(Arc::new(StringArray::from(uri_values)));
+    }
+
+    // Worker identity + timing — appended when present so Salad's
+    // per-replica attribution is durable in the omni sidecar without
+    // a join. Schema is back-compat: `None` means no columns added.
+    if let Some(w) = worker {
+        fields.push(Field::new("worker_machine_id", DataType::Utf8, true));
+        cols.push(Arc::new(StringArray::from(vec![w.machine_id.clone(); n])));
+        fields.push(Field::new("worker_gpu_class", DataType::Utf8, true));
+        cols.push(Arc::new(StringArray::from(vec![w.gpu_class.clone(); n])));
+        fields.push(Field::new("worker_chunk_claim_unix", DataType::Int64, true));
+        cols.push(Arc::new(Int64Array::from(vec![w.chunk_claim_unix; n])));
+        fields.push(Field::new("worker_chunk_start_unix", DataType::Int64, true));
+        cols.push(Arc::new(Int64Array::from(vec![w.chunk_start_unix; n])));
+        fields.push(Field::new("worker_chunk_end_unix", DataType::Int64, true));
+        cols.push(Arc::new(Int64Array::from(vec![w.chunk_end_unix; n])));
+        fields.push(Field::new("worker_warmup_seconds", DataType::Float64, true));
+        cols.push(Arc::new(Float64Array::from(vec![w.warmup_seconds; n])));
     }
 
     let schema = Arc::new(Schema::new(fields));

@@ -39,9 +39,40 @@ use zen_metrics_cli::sweep::CodecKind;
 
 use super::WorkerArgs;
 use super::chunk_input::read_and_group;
-use super::chunk_output::concat_groups_to_parquet;
+use super::chunk_output::{WorkerColumns, concat_groups_to_parquet_with_worker};
 use super::r2::R2Client;
 use super::sweep_runner::{InlineGroupSpec, knob_tuple_to_grid_json, run_group_inline};
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Build a [`WorkerColumns`] from env + the captured timing.
+/// `chunk_start_unix` is the unix-ts when the worker began processing
+/// this chunk; `chunk_end_unix` is the moment we serialize the sidecar.
+fn build_worker_columns(start: i64, end: i64) -> WorkerColumns {
+    // Prefer Salad-injected machine_id; fall back to hostname or
+    // worker id env.
+    let machine_id = std::env::var("SALAD_MACHINE_ID")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .or_else(|_| std::env::var("WORKER_ID"))
+        .unwrap_or_default();
+    let gpu_class = std::env::var("ZEN_BOOT_GPU_CLASS").unwrap_or_default();
+    let warmup_seconds = std::env::var("ZEN_BOOT_WARMUP_SECONDS")
+        .ok()
+        .and_then(|s| s.trim().parse::<f64>().ok());
+    WorkerColumns {
+        machine_id,
+        gpu_class,
+        chunk_claim_unix: Some(start), // claim and start coincide in this worker's flow
+        chunk_start_unix: Some(start),
+        chunk_end_unix: Some(end),
+        warmup_seconds,
+    }
+}
 
 /// Full chunk record. Mirrors the bash worker's `jq` extractions.
 #[derive(Debug, Deserialize)]
@@ -199,6 +230,7 @@ async fn run_chunk_inline_impl(
     run_id: &str,
 ) -> Result<()> {
     let run_id = run_id.to_string();
+    let chunk_start_unix = unix_now();
     let scratch = args.workdir.join(&rec.chunk_id);
     let sources = scratch.join("sources");
     let sweeps = scratch.join("sweeps");
@@ -414,13 +446,15 @@ async fn run_chunk_inline_impl(
     };
     let sweeps_clone = sweeps.clone();
     let sidecar_local_clone = sidecar_local.clone();
+    let worker_cols = build_worker_columns(chunk_start_unix, unix_now());
     let n_rows = tokio::task::spawn_blocking(move || {
-        concat_groups_to_parquet(
+        concat_groups_to_parquet_with_worker(
             &sweeps_clone,
             &sidecar_local_clone,
             &chunk_id_owned,
             &run_id_owned,
             encoded_prefix_owned.as_deref(),
+            Some(&worker_cols),
         )
     })
     .await
