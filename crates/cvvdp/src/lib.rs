@@ -104,6 +104,7 @@ mod pyramid;
 mod scratch;
 mod simd_math;
 mod simd_pyramid;
+pub(crate) mod strip;
 
 pub use pipeline::Cvvdp;
 
