@@ -20,6 +20,7 @@ members = [
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-orchestrator",
+    "crates/zenfleet-orchestrator",
     "crates/zensim-gpu",
     "crates/zenstats",
     "benchmarks/heaptrack/drivers/cpu_profile",
@@ -55,6 +56,7 @@ zensim-gpu = { version = "0.0.1", path = "crates/zensim-gpu", default-features =
 zenmetrics-api = { version = "0.0.1", path = "crates/zenmetrics-api", default-features = false }
 zenmetrics-corpus = { version = "0.1.0", path = "crates/zenmetrics-corpus", default-features = false }
 zenmetrics-orchestrator = { version = "0.0.1", path = "crates/zenmetrics-orchestrator", default-features = false }
+zenfleet-orchestrator = { version = "0.0.1", path = "crates/zenfleet-orchestrator" }
 zen-cloud-core = { version = "0.0.1", path = "crates/zen-cloud-core", default-features = false }
 zen-cloud-local = { version = "0.0.1", path = "crates/zen-cloud-local", default-features = false }
 zen-cloud-runpod = { version = "0.0.1", path = "crates/zen-cloud-runpod", default-features = false }

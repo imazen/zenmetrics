@@ -6221,6 +6221,7 @@ dependencies = [
  "tracing",
  "zen-cloud-core",
  "zen-cloud-s3",
+ "zenfleet-orchestrator",
 ]
 
 [[package]]
@@ -6409,6 +6410,15 @@ dependencies = [
  "archmage",
  "enough",
  "libm",
+]
+
+[[package]]
+name = "zenfleet-orchestrator"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

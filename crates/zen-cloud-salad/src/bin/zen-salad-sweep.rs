@@ -56,6 +56,10 @@ use zen_cloud_salad::launch::{
     QueueConnection, R2ParentCreds, RegistryAuth, ResourceRequirements, SaladApi, ScopedCredSpec,
     inject_r2_cred_into_env,
 };
+use zenfleet_orchestrator::{
+    SpeculativeConfig, SpeculativeState, SweepConfig, compute_provisioned_replicas,
+    ttl_redispatch_decisions,
+};
 
 /// Default working bucket (matches existing smoke setup).
 const DEFAULT_BUCKET: &str = "zen-tuning-ephemeral";
@@ -276,6 +280,33 @@ struct Args {
     /// Default 2.0.
     #[arg(long, default_value_t = 2.0)]
     min_productive_chunks: f64,
+
+    /// Disable speculative execution. When enabled (the default), the
+    /// launcher tracks the running per-chunk completion-time
+    /// distribution and re-dispatches any in-flight chunk whose
+    /// elapsed time exceeds `p95 × straggler-factor`, capped at one
+    /// speculative dispatch per chunk. Worker-side idempotency
+    /// (sidecar HEAD pre-check) reconciles duplicates. See
+    /// `zenfleet-orchestrator::SpeculativeState` for the algorithm.
+    #[arg(long, default_value_t = false)]
+    no_speculative: bool,
+
+    /// Speculative-execution straggler factor. A chunk's in-flight
+    /// time must exceed `p95(completed) × straggler_factor` to be
+    /// flagged. Default 1.5 (Dean & Ghemawat 2004's value).
+    #[arg(long, default_value_t = 1.5)]
+    speculative_straggler_factor: f64,
+
+    /// Minimum completed chunks before speculative execution kicks in.
+    /// Below this many samples the p95 is too noisy to trust.
+    /// Default 3.
+    #[arg(long, default_value_t = 3)]
+    speculative_min_completed: u32,
+
+    /// Maximum speculative dispatches per chunk. Worker idempotency
+    /// makes higher values safe but they waste compute. Default 1.
+    #[arg(long, default_value_t = 1)]
+    speculative_cap_per_chunk: u32,
 }
 
 /// One row of `chunks.jsonl`. Matches the schema the worker's inline
@@ -339,6 +370,11 @@ struct Summary {
     replicas_provisioned: u32,
     /// Number of chunks re-pushed by the TTL re-dispatch logic.
     chunks_redispatched: u32,
+    /// Number of chunks re-pushed by the speculative-execution logic.
+    /// Disjoint counter from `chunks_redispatched` (TTL fires once per
+    /// chunk before completion; speculative fires AFTER enough chunks
+    /// have completed to fit a p95).
+    chunks_speculatively_dispatched: u32,
     /// Classes the prior-fleet-summary filter dropped (empty when
     /// `--prior-fleet-summary` was not set).
     classes_dropped_by_filter: Vec<String>,
@@ -459,12 +495,15 @@ async fn main() -> Result<()> {
     // count; the result is clamped to the Salad org quota (10) and
     // a minimum of 1. Once enough chunks complete, teardown drops
     // the excess — billing stops as soon as the group stops.
+    //
+    // Logic hoisted to `zenfleet-orchestrator::compute_provisioned_replicas`
+    // so RunPod / Vast / future provider launchers reuse it.
     const SALAD_ORG_REPLICA_QUOTA: u32 = 10;
-    let replicas_provisioned: u32 = {
-        let overshoot = args.replicas_overshoot.max(1.0);
-        let raw = (args.replicas as f64 * overshoot).ceil() as u32;
-        raw.clamp(1, SALAD_ORG_REPLICA_QUOTA)
-    };
+    let replicas_provisioned: u32 = compute_provisioned_replicas(
+        args.replicas,
+        args.replicas_overshoot,
+        SALAD_ORG_REPLICA_QUOTA,
+    );
     if replicas_provisioned != args.replicas {
         eprintln!(
             "[launcher] replicas overshoot: requested={} multiplier={:.2} -> provisioned={} (quota cap {})",
@@ -877,6 +916,7 @@ async fn main() -> Result<()> {
         replicas_requested: args.replicas,
         replicas_provisioned,
         chunks_redispatched: poll.chunks_redispatched,
+        chunks_speculatively_dispatched: poll.chunks_speculatively_dispatched,
         classes_dropped_by_filter,
         classes_kept_after_filter,
     };
@@ -902,6 +942,9 @@ struct PollResult {
     /// Count of chunks re-pushed to the queue after exceeding
     /// `--chunk-ttl-secs` without their sidecar landing.
     chunks_redispatched: u32,
+    /// Count of chunks re-pushed by the speculative-execution
+    /// scheduler. Worker idempotency reconciles duplicates.
+    chunks_speculatively_dispatched: u32,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -932,7 +975,7 @@ async fn poll_until_done(
     let cap = Duration::from_secs(args.max_wall_secs);
     let interval = Duration::from_secs(args.poll_secs.max(2));
 
-    // ─────── iter2: TTL re-dispatch state ─────────────────────────
+    // ─────── iter2 + iter2.5: TTL re-dispatch + speculative state ──
     // Track when each chunk was first pushed (we just pushed them
     // all in the caller, so `t_post` is the proxy for all). The
     // launcher peeks at sidecar arrivals; for any chunk still
@@ -940,10 +983,49 @@ async fn poll_until_done(
     // same chunk JSON. Worker idempotency (sidecar-existence
     // check in claim.rs) makes the re-push safe — a worker that
     // claims a chunk whose sidecar already exists exits early.
+    //
+    // Logic hoisted to `zenfleet-orchestrator`:
+    //   * `ttl_redispatch_decisions` returns the list of chunk_ids to
+    //     re-push and updates the "already-redispatched" set.
+    //   * `SpeculativeState` tracks per-chunk dispatch times +
+    //     completion-time distribution + per-chunk speculative cap.
     use std::collections::HashSet;
     let chunk_ids: Vec<String> = chunks.iter().map(|c| c.chunk_id.clone()).collect();
     let mut already_redispatched: HashSet<String> = HashSet::new();
-    let ttl = Duration::from_secs(args.chunk_ttl_secs);
+
+    let sweep_cfg = SweepConfig {
+        replicas: args.replicas,
+        replicas_overshoot: args.replicas_overshoot,
+        provider_replica_quota: 10,
+        chunk_ttl_secs: args.chunk_ttl_secs,
+        cells_per_chunk: args.cells_per_chunk,
+        max_warmup_secs: args.max_warmup_secs as u32,
+        min_productive_chunks: args.min_productive_chunks as f32,
+        speculative: SpeculativeConfig {
+            enabled: !args.no_speculative,
+            straggler_factor: args.speculative_straggler_factor,
+            min_completed_for_stats: args.speculative_min_completed,
+            speculation_cap_per_chunk: args.speculative_cap_per_chunk,
+        },
+    };
+    let mut spec_state = SpeculativeState::new();
+    // The initial dispatch already happened in the caller before we
+    // entered the poll loop; record t=0 as the first-dispatch time for
+    // every chunk so the speculative scheduler has correct elapsed
+    // measurements.
+    for cid in &chunk_ids {
+        spec_state.record_dispatched(cid, 0.0);
+    }
+    if sweep_cfg.speculative.enabled {
+        eprintln!(
+            "[spec] speculative execution ENABLED (factor={:.2} min_completed={} cap_per_chunk={})",
+            sweep_cfg.speculative.straggler_factor,
+            sweep_cfg.speculative.min_completed_for_stats,
+            sweep_cfg.speculative.speculation_cap_per_chunk,
+        );
+    } else {
+        eprintln!("[spec] speculative execution DISABLED");
+    }
 
     let mut tick: u32 = 0;
     loop {
@@ -991,31 +1073,46 @@ async fn poll_until_done(
             );
         }
 
-        // ─── iter2: TTL re-dispatch ───────────────────────────────
-        // If elapsed > TTL and chunks are missing from omni/, re-push.
-        // We use `t_post`-based elapsed as a proxy for "time since
-        // first push" — all chunks were pushed in the same batch right
-        // after t_post. Each chunk is re-pushed AT MOST ONCE.
-        if elapsed >= ttl {
-            // Extract the set of completed chunk_ids from omni filenames.
-            // omni keys look like `runs/<sweep>/omni/<chunk_id>.parquet`.
-            let mut completed: HashSet<&str> = HashSet::new();
-            for k in &omni {
-                if let Some(stem) = k
-                    .rsplit('/')
-                    .next()
-                    .and_then(|f| f.strip_suffix(".parquet"))
-                {
-                    completed.insert(stem);
-                }
+        // ─── iter2 + 2.5: TTL re-dispatch + speculative execution ─
+        // Build the completed-chunk_id set from omni filenames once
+        // (used by both TTL and speculative decisions, plus to update
+        // the speculative scheduler's completion-time distribution).
+        // omni keys look like `runs/<sweep>/omni/<chunk_id>.parquet`.
+        let mut completed: HashSet<String> = HashSet::new();
+        for k in &omni {
+            if let Some(stem) = k
+                .rsplit('/')
+                .next()
+                .and_then(|f| f.strip_suffix(".parquet"))
+            {
+                completed.insert(stem.to_string());
             }
-            for chunk in chunks.iter() {
-                if completed.contains(chunk.chunk_id.as_str()) {
-                    continue;
-                }
-                if already_redispatched.contains(&chunk.chunk_id) {
-                    continue;
-                }
+        }
+        // Feed the completion-time distribution. We approximate per-chunk
+        // completion time as the time of THIS poll tick — the true
+        // completion time is bracketed between this and the previous
+        // tick (poll_secs ≤ 10s by default). For the p95 ranking we
+        // need ordering and rough magnitude, not perfect precision, so
+        // this is good enough.
+        let elapsed_secs = elapsed.as_secs_f64();
+        for cid in &completed {
+            spec_state.record_completed(cid, elapsed_secs);
+        }
+
+        // (1) TTL re-dispatch — hoisted to zenfleet-orchestrator.
+        let ttl_redispatches = ttl_redispatch_decisions(
+            elapsed_secs,
+            &sweep_cfg,
+            &chunk_ids,
+            &completed,
+            &mut already_redispatched,
+        );
+        for cid in &ttl_redispatches {
+            // Find the chunk record (we mutated already_redispatched
+            // before pushing, so on push failure we DON'T un-insert —
+            // this matches the original semantics of "try once per
+            // chunk via TTL").
+            if let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid) {
                 let body = serde_json::to_value(chunk).unwrap_or_default();
                 match api
                     .push_job(
@@ -1028,24 +1125,64 @@ async fn poll_until_done(
                     .await
                 {
                     Ok(_) => {
-                        already_redispatched.insert(chunk.chunk_id.clone());
                         out.chunks_redispatched += 1;
                         eprintln!(
                             "[poll] TTL re-dispatch: chunk_id={} (elapsed={:.1}s > ttl={}s)",
-                            chunk.chunk_id, elapsed.as_secs_f64(), args.chunk_ttl_secs
+                            cid, elapsed_secs, args.chunk_ttl_secs
                         );
                     }
                     Err(e) => {
                         eprintln!(
-                            "[poll] TTL re-dispatch FAILED chunk_id={}: {e:#}",
-                            chunk.chunk_id
+                            "[poll] TTL re-dispatch FAILED chunk_id={cid}: {e:#}"
                         );
                     }
                 }
             }
-            // Tiny placebo to silence unused-warning if we ever drop the
-            // populated vector path; intentional no-op otherwise.
-            let _ = &chunk_ids;
+        }
+
+        // (2) Speculative execution — re-dispatch in-flight chunks whose
+        // elapsed exceeds p95 × straggler_factor. Worker-side
+        // idempotency (sidecar HEAD pre-check) reconciles duplicates;
+        // if two sidecars race, the OLDEST `worker_chunk_start_unix`
+        // wins (per the fleet_summary stitch).
+        if sweep_cfg.speculative.enabled {
+            let p95 = spec_state.p95_completion_secs();
+            for cid in &chunk_ids {
+                if let Some(spec_elapsed) =
+                    spec_state.decide_speculative(cid, elapsed_secs, &sweep_cfg.speculative)
+                {
+                    if let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid) {
+                        let body = serde_json::to_value(chunk).unwrap_or_default();
+                        match api
+                            .push_job(
+                                queue_name,
+                                &CreateQueueJobRequest {
+                                    input: body,
+                                    metadata: None,
+                                },
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                spec_state.record_speculative_dispatched(cid);
+                                out.chunks_speculatively_dispatched += 1;
+                                eprintln!(
+                                    "[spec] re-dispatch: chunk_id={} elapsed={:.1}s p95={:.1}s factor={:.2}",
+                                    cid,
+                                    spec_elapsed,
+                                    p95.unwrap_or(0.0),
+                                    sweep_cfg.speculative.straggler_factor
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "[spec] re-dispatch FAILED chunk_id={cid}: {e:#}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Container-group state (best-effort).
