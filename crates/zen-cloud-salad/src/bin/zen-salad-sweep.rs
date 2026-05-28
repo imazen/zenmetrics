@@ -116,9 +116,21 @@ struct Args {
     #[arg(long)]
     chunks: Option<u32>,
 
-    /// GPU class name. Resolved to id via `GET /gpu-classes`.
+    /// GPU class name. Resolved to id via `GET /gpu-classes`. Used
+    /// when `--gpu-classes` (plural) is NOT provided. Kept for
+    /// back-compat with the v4-era single-class CLI.
     #[arg(long, default_value = DEFAULT_GPU_CLASS)]
     gpu_class: String,
+
+    /// Comma-separated list of GPU class names, in priority order.
+    /// Salad's scheduler treats `resources.gpu_classes` as a Vec of
+    /// acceptable classes — useful when one tier is starved upstream.
+    /// Each name is resolved via `GET /gpu-classes`; failures surface
+    /// at preflight, not mid-launch. When set, this overrides
+    /// `--gpu-class`. Example:
+    /// `--gpu-classes "RTX 3060 (12 GB),RTX 3090 (24 GB),RTX 4090 (24 GB)"`.
+    #[arg(long, value_delimiter = ',')]
+    gpu_classes: Vec<String>,
 
     /// CPU cores per replica.
     #[arg(long, default_value_t = 4)]
@@ -181,6 +193,14 @@ struct Args {
     /// Defaults to `runs/<sweep_id>/chunks.jsonl`.
     #[arg(long)]
     chunks_key: Option<String>,
+
+    /// Resolve GPU classes + print the container-group request body
+    /// JSON, then exit before any container group / queue / job is
+    /// created (no R2 writes either). Used to verify
+    /// `--gpu-classes` plumbs through to a multi-element
+    /// `resources.gpu_classes` Vec without spending any money.
+    #[arg(long)]
+    dry_run: bool,
 }
 
 /// One row of `chunks.jsonl`. Matches the schema the worker's inline
@@ -248,7 +268,10 @@ async fn main() -> Result<()> {
         .group_name
         .clone()
         .unwrap_or_else(|| format!("scaleup-{}", short_id_for_name(&sweep_id)));
-    let queue_name = args.queue_name.clone().unwrap_or_else(|| group_name.clone());
+    let queue_name = args
+        .queue_name
+        .clone()
+        .unwrap_or_else(|| group_name.clone());
     let chunks_count = args.chunks.unwrap_or(args.replicas * 3);
     let chunks_key = args
         .chunks_key
@@ -260,9 +283,22 @@ async fn main() -> Result<()> {
     eprintln!("[launcher] queue_name={queue_name}");
     eprintln!("[launcher] bucket={}", args.bucket);
     eprintln!("[launcher] image={}", args.image);
+    // Determine the GPU class list. `--gpu-classes` (plural)
+    // overrides `--gpu-class` (singular) when present; otherwise
+    // collapse to a single-element list. The list is in priority
+    // order — Salad's scheduler picks the first class with capacity.
+    let gpu_class_names: Vec<String> = if args.gpu_classes.is_empty() {
+        vec![args.gpu_class.clone()]
+    } else {
+        args.gpu_classes
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
     eprintln!(
-        "[launcher] replicas={} chunks={} gpu_class={:?}",
-        args.replicas, chunks_count, args.gpu_class
+        "[launcher] replicas={} chunks={} gpu_classes={:?}",
+        args.replicas, chunks_count, gpu_class_names
     );
     eprintln!("[launcher] max_wall_secs={}", args.max_wall_secs);
 
@@ -270,13 +306,45 @@ async fn main() -> Result<()> {
     let api = SaladApi::new(&args.organization, &args.project, None)
         .context("build Salad API client (set SALAD_API_KEY or ~/.config/salad/credentials)")?;
 
-    // 2. Resolve GPU class id.
-    eprintln!("[launcher] resolving GPU class {:?}", args.gpu_class);
-    let gpu_class_id = api
-        .resolve_gpu_class(&args.gpu_class)
-        .await
-        .with_context(|| format!("resolve GPU class {:?}", args.gpu_class))?;
-    eprintln!("[launcher] gpu_class_id={gpu_class_id}");
+    // 2. Resolve every requested GPU class. Resolve all up-front so a
+    // typo'd class name fails at preflight, not after the container
+    // group is half-created.
+    eprintln!("[launcher] resolving GPU classes {:?}", gpu_class_names);
+    let mut gpu_class_ids: Vec<String> = Vec::with_capacity(gpu_class_names.len());
+    for name in &gpu_class_names {
+        let id = api
+            .resolve_gpu_class(name)
+            .await
+            .with_context(|| format!("resolve GPU class {name:?}"))?;
+        eprintln!("[launcher] gpu_class {name:?} -> {id}");
+        gpu_class_ids.push(id);
+    }
+    if gpu_class_ids.is_empty() {
+        bail!("no GPU classes resolved — provide --gpu-class or --gpu-classes");
+    }
+
+    // Dry-run: synthesise a representative container-group request body
+    // (without minting creds, uploading chunks, or creating any Salad
+    // resource) so the operator can verify the multi-class plumbing.
+    // Exits zero on success.
+    if args.dry_run {
+        let dry_req = json!({
+            "name": group_name,
+            "container": {
+                "image": args.image,
+                "resources": {
+                    "cpu": args.cpu,
+                    "memory": args.memory_mib,
+                    "gpu_classes": gpu_class_ids,
+                },
+            },
+            "replicas": args.replicas,
+            "gpu_class_names": gpu_class_names,
+        });
+        println!("{}", serde_json::to_string_pretty(&dry_req)?);
+        eprintln!("[launcher] dry-run: NO Salad / R2 calls were made; exiting 0");
+        return Ok(());
+    }
 
     // 3. Load R2 parent creds + mint scoped child.
     let parent = load_r2_parent_creds_or_env()?;
@@ -357,7 +425,7 @@ async fn main() -> Result<()> {
             resources: ResourceRequirements {
                 cpu: args.cpu,
                 memory: args.memory_mib,
-                gpu_classes: vec![gpu_class_id.clone()],
+                gpu_classes: gpu_class_ids.clone(),
             },
             command: None,
             environment_variables: env,
@@ -464,10 +532,12 @@ async fn main() -> Result<()> {
         PollResult::default()
     });
     let wall = t_start.elapsed().as_secs_f64();
-    let throughput = match (poll.t_done_secs, poll.t_first_sidecar_secs, poll.omni_sidecars) {
-        (Some(td), Some(tf), n) if n > 0 && td > tf => {
-            Some(f64::from(n) / (td - tf).max(0.001))
-        }
+    let throughput = match (
+        poll.t_done_secs,
+        poll.t_first_sidecar_secs,
+        poll.omni_sidecars,
+    ) {
+        (Some(td), Some(tf), n) if n > 0 && td > tf => Some(f64::from(n) / (td - tf).max(0.001)),
         _ => None,
     };
     let spend = args.price_per_hour * f64::from(args.replicas) * wall / 3600.0;
@@ -477,7 +547,11 @@ async fn main() -> Result<()> {
         image: args.image.clone(),
         replicas: args.replicas,
         chunks: chunks.len() as u32,
-        gpu_class: args.gpu_class.clone(),
+        // Summary keeps a single string for back-compat with downstream
+        // parsers (jq selectors in scripts/sweep). When multiple GPU
+        // classes were resolved, join them with `|` so the original
+        // order is preserved without breaking quoting.
+        gpu_class: gpu_class_names.join("|"),
         wall_secs: wall,
         t_first_sidecar_secs: poll.t_first_sidecar_secs,
         t_all_n_sidecars_secs: poll.t_all_n_sidecars_secs,
@@ -741,10 +815,7 @@ async fn preflight_smoke_inputs(parent: &R2ParentCreds, args: &Args) -> Result<(
 // scoped child cred.
 
 fn r2_endpoint(parent: &R2ParentCreds) -> String {
-    format!(
-        "https://{}.r2.cloudflarestorage.com",
-        parent.account_id
-    )
+    format!("https://{}.r2.cloudflarestorage.com", parent.account_id)
 }
 
 fn split_s3_uri(uri: &str) -> Result<(String, String)> {
@@ -830,11 +901,7 @@ async fn upload_to_r2_with_parent(
     Ok(())
 }
 
-async fn list_r2_prefix(
-    parent: &R2ParentCreds,
-    bucket: &str,
-    prefix: &str,
-) -> Result<Vec<String>> {
+async fn list_r2_prefix(parent: &R2ParentCreds, bucket: &str, prefix: &str) -> Result<Vec<String>> {
     let endpoint = r2_endpoint(parent);
     let url = format!("{endpoint}/{bucket}/?list-type=2&prefix={prefix}");
     let now = chrono_now();
@@ -894,8 +961,8 @@ async fn list_r2_prefix(
 // completeness — only the call shapes above need to work.
 
 struct AmzDate {
-    amz: String,    // YYYYMMDDTHHMMSSZ
-    short: String,  // YYYYMMDD
+    amz: String,   // YYYYMMDDTHHMMSSZ
+    short: String, // YYYYMMDD
 }
 
 fn chrono_now() -> AmzDate {
@@ -934,11 +1001,7 @@ fn epoch_to_ymdhms(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
 
 fn host_of(url: &str) -> String {
     let after_scheme = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
-    after_scheme
-        .split('/')
-        .next()
-        .unwrap_or("")
-        .to_string()
+    after_scheme.split('/').next().unwrap_or("").to_string()
 }
 
 fn empty_payload_hash() -> &'static str {
@@ -982,7 +1045,17 @@ fn sigv4_auth_header(
     now: &AmzDate,
 ) -> String {
     sigv4_auth_header_with_query(
-        parent, method, _bucket, key, _url, headers, body, region, service, now, &[],
+        parent,
+        method,
+        _bucket,
+        key,
+        _url,
+        headers,
+        body,
+        region,
+        service,
+        now,
+        &[],
     )
 }
 

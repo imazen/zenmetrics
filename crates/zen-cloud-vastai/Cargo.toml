@@ -67,6 +67,15 @@ zen-metrics-cli = { path = "../zen-metrics-cli", optional = true, default-featur
     "gpu-cuda",
     "gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp",
     "gpu-iwssim", "gpu-zensim",
+    # Phase A audit (2026-05-28): the inline-sweep path was calling
+    # `run_sweep(&cfg)` without an orchestrator handle, so every
+    # cell flowed through the legacy MetricCache — bypassing the
+    # OOM ladder, capability cache, and cached-ref auto-detect the
+    # orchestrator provides. Adding `orchestrator,orchestrator-cuda`
+    # lights up `SweepOrchestratorHandle` and the `Option<&handle>`
+    # parameter on `run_sweep`; sweep_runner.rs builds a process-wide
+    # orchestrator once and threads it through every group.
+    "orchestrator", "orchestrator-cuda",
 ] }
 # Arrow + Parquet for chunk-input + sidecar IO in phase B. arrow-rs's
 # parquet crate is already pulled by zen-metrics-cli's --feature-output

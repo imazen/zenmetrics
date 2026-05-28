@@ -26,12 +26,84 @@
 #![cfg(feature = "inline-sweep")]
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use zen_metrics_cli::metrics::{GpuRuntime, MetricKind, ZensimFeatureRegime};
 use zen_metrics_cli::sweep::{
-    CodecKind, KnobGrid, SweepConfig, parse_knob_grid, parse_q_grid, run_sweep,
+    CodecKind, KnobGrid, SweepConfig, SweepOrchestratorHandle, parse_knob_grid, parse_q_grid,
+    run_sweep,
 };
+
+/// Process-wide orchestrator handle. Built lazily on the first
+/// [`run_group_inline`] call and reused for every subsequent group
+/// within the worker process. Phase A wire-through (2026-05-28):
+/// the inline-sweep path previously skipped the orchestrator entirely,
+/// landing every cell on the legacy `MetricCache` — bypassing the OOM
+/// ladder, capability cache, and cached-ref auto-detect. Constructing
+/// once at process scope keeps the warm cubecl instances shared across
+/// all chunks the worker processes (same lifecycle the existing
+/// `MetricCache::global` OnceLock used).
+///
+/// Build failures are recorded as `None` and the call site falls back
+/// to the legacy MetricCache path with a one-time warning. Refusing to
+/// fall back would surface as a hard chunk failure on machines whose
+/// capability-cache directory isn't writeable — better to keep working
+/// with the legacy path than to lose the chunk.
+static ORCHESTRATOR: OnceLock<Option<SweepOrchestratorHandle>> = OnceLock::new();
+
+/// Force-disable the orchestrator wire-through via env. Set
+/// `ZENMETRICS_SWEEP_LEGACY=1` to take the historical MetricCache path
+/// even when this binary is built with the `orchestrator` features.
+/// Kept as an escape hatch in case the wire-through surfaces a sweep
+/// parity regression in production before the next image rebuild.
+fn legacy_sweep_from_env() -> bool {
+    std::env::var("ZENMETRICS_SWEEP_LEGACY")
+        .ok()
+        .as_deref()
+        .map(|s| matches!(s.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+/// Lazily build a single orchestrator handle for the worker process.
+/// First call pays orchestrator init (~50-200 ms — capability cache
+/// hydrate, optional warm-bench). Subsequent calls return the cached
+/// handle. Returns `None` (and logs a warning ONCE) when:
+///   * `ZENMETRICS_SWEEP_LEGACY=1` is set in env, OR
+///   * `OrchestratorRuntimeOpts::build()` errors (cache I/O failure,
+///     etc.). In that case `run_group_inline` falls back to the
+///     legacy MetricCache path.
+fn orchestrator_handle() -> Option<&'static SweepOrchestratorHandle> {
+    ORCHESTRATOR
+        .get_or_init(|| {
+            if legacy_sweep_from_env() {
+                tracing::warn!(
+                    "ZENMETRICS_SWEEP_LEGACY=1 — sweep cells will use legacy MetricCache path"
+                );
+                return None;
+            }
+            // Default runtime opts: auto bench-on-start (re-bench only if
+            // cache is stale), default cache directory, no CPU-feature
+            // whitelist. The sweep worker fixes the GPU runtime to CUDA
+            // (see `InlineGroupSpec::gpu_runtime`), so we don't need the
+            // CPU paths.
+            let opts = zen_metrics_cli::orchestrator_glue::OrchestratorRuntimeOpts::default();
+            match zen_metrics_cli::orchestrator_runner::build_orchestrator(&opts) {
+                Ok(orch) => {
+                    zen_metrics_cli::orchestrator_runner::print_capability_summary(&orch);
+                    Some(std::sync::Arc::new(std::sync::Mutex::new(orch)))
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "orchestrator init failed — sweep cells will fall back to legacy MetricCache"
+                    );
+                    None
+                }
+            }
+        })
+        .as_ref()
+}
 
 /// One sweep-call's worth of work: a single (codec, knob_tuple)
 /// group's worth of cells.
@@ -143,7 +215,15 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
     // discard it for now (the parquet conversion stage doesn't
     // need it). Phase B.4 will plumb it through for per-chunk
     // success metrics.
-    run_sweep(&cfg).map_err(|e| anyhow::anyhow!("run_sweep: {e}"))?;
+    //
+    // Phase A wire-through (2026-05-28): pass the process-wide
+    // orchestrator handle so each cell flows through the
+    // OOM-ladder/capability-cache code path instead of the legacy
+    // MetricCache. `orchestrator_handle()` returns `None` when env
+    // overrides or init fails; `run_sweep` accepts that and falls
+    // back to MetricCache automatically.
+    let orch = orchestrator_handle();
+    run_sweep(&cfg, orch).map_err(|e| anyhow::anyhow!("run_sweep: {e}"))?;
     Ok(())
 }
 
