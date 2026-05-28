@@ -19,6 +19,42 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Phase 9.Z.F Path A (2026-05-28) — cvvdp CPU strip-major dispatcher
+  shipped.** Lands the architectural change that drops `score_strip`
+  peak heap from 3.66 GB → 1.55 GB at 16 MP (under 1.7 GB target) and
+  8.68 GB → 3.24 GB at 40 MP (under 4.2 GB target). New
+  `Cvvdp::new_strip(width, height, params, h_body)` constructor
+  pre-allocates `Scratch::new_strip` with strip-shape persistent
+  weber slots. The `score_strip` cold path runs through a new
+  `score_internal_strip` that:
+  1. Builds full-image gauss pyramids for ref + dist, dropping DKL
+     planes inline per channel.
+  2. Builds full-image weber bands for DEEP levels only (k >= k_split).
+  3. Strip-major outer loop: for each strip s, for each shallow k,
+     builds per-strip weber band data on-the-fly using chunk-5 strip
+     kernels then runs CSF + masking + pool, accumulating into
+     per-level LpNormAccumulators.
+  4. Combines shallow + deep q values via existing JOD pooling.
+
+  `score_with_warm_ref_strip` routes through a parallel
+  `score_internal_strip_with_warm` path: when `warm_reference` is
+  called on a strip-mode `Cvvdp`, the warm cache holds the ref gauss
+  pyramid (not the weber pyramid) plus pre-built DEEP weber bands.
+  Subsequent `score_with_warm_ref_strip` calls build dist gauss + dist
+  deep weber + strip-major dispatch (reading from cached ref gauss).
+
+  Wall time IMPROVEMENT (strip is faster than full at 16 MP):
+  - strip: 11.32 s → 6.04 s (-47%)
+  - warm_ref_strip: 10.01 s → 6.06 s (-39%)
+
+  Bit-identical parity: 6/6 parity tests pass including the new
+  `strip_parity_default_grid_new_strip_cold` /
+  `strip_parity_default_grid_new_strip_warm` (90 cells each) for the
+  `Cvvdp::new_strip` constructor path, plus the existing 270-cell
+  big_grid_cold / big_grid_warm tests under the
+  `cvvdp-strip-parity-big` feature flag (f7e293b6, 9a40f318,
+  fbc52cab, f848c55f, 11e406d0).
+
 - **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports
   (chunks 1, 2, 3, 5 + chunk 4 data structure).** Ports the GPU's
   six K_SPLIT strip-aware kernels to scalar CPU helpers in a new
