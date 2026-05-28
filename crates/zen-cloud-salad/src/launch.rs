@@ -128,7 +128,7 @@ pub struct ResourceRequirements {
 }
 
 /// Container registry auth (for a private image).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RegistryAuth {
     pub username: String,
     pub password: String,

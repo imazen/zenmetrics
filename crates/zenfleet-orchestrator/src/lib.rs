@@ -58,6 +58,15 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod driver;
+pub mod provider;
+
+pub use driver::FleetSweep;
+pub use provider::{
+    FleetSummary, GroupId, GroupStatus, InstanceStatus, PollResult, ProviderHandle, ProvisionSpec,
+    QueueJob, R2Operator, r2_layout,
+};
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 

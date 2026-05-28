@@ -1,384 +1,121 @@
-//! `zen-salad-sweep` — end-to-end Salad launcher driving the
-//! `zen-cloud-salad` library through one sweep cycle.
+//! `zen-salad-sweep` — Salad-flavoured launcher driving the
+//! provider-generic [`zenfleet_orchestrator::FleetSweep`] driver.
 //!
-//! What it does (one `run` invocation):
+//! The binary owns ONLY:
+//!   * CLI argument parsing.
+//!   * Wiring helpers (in `zen_cloud_salad::launcher_support`) into
+//!     a `SaladProviderHandle` + `FleetSweep` invocation.
+//!   * Final-summary JSON emit.
 //!
-//! 1. Resolves a Salad GPU class id by name (default RTX 3060).
-//! 2. Reads R2 parent creds from the environment (or `~/.config/cloudflare/
-//!    r2-credentials`) and the Salad API key from `$SALAD_API_KEY` or
-//!    `~/.config/salad/credentials`.
-//! 3. Mints a scoped R2 credential restricted to the working bucket
-//!    (default `zen-tuning-ephemeral`), `object-read-write`, TTL 3600 s,
-//!    prefix scoped to `runs/<sweep_id>/`.
-//! 4. Generates `chunks.jsonl` (one chunk per worker target, default
-//!    N=10) referencing the existing tiny smoke parquet at
-//!    `s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/input/smoke.parquet`
-//!    and source dir
-//!    `s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/sources/`.
-//! 5. Uploads `chunks.jsonl` to R2.
-//! 6. Creates (or reuses by `--queue-name`) a Salad job queue.
-//! 7. Creates a container group with the requested image (default
-//!    `ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache`),
-//!    N replicas, scoped R2 cred injected into the env, queue
-//!    attached on `path=/job port=80`.
-//! 8. Pushes N jobs into the queue (one per chunk) carrying the chunk
-//!    JSON as input.
-//! 9. Polls the R2 sidecars under `<sweep_id>/omni/*.parquet` (and
-//!    `<sweep_id>/errors/*.txt`) plus the container-group
-//!    `current_state` until either all N chunks complete OR the
-//!    wall-time cap is reached.
-//! 10. **Mandatory** teardown: stops the container group. Re-attempts
-//!     on failure, surfaces if it can't be stopped.
-//! 11. Emits a one-line JSON summary to stdout with measured timings,
-//!     a per-worker boot cost estimate, throughput, and rough spend.
-//!
-//! Per `~/work/claudehints/topics/r2-credentials.md` the root R2 key is
-//! NEVER injected into a worker. Only the minted scoped + session-token
-//! cred reaches the container env.
-//!
-//! Per CLAUDE.md: spend is hard-bounded by the wall-time cap, billing
-//! stops only when replicas count drops to zero, so teardown is the
-//! safety belt. The summary line reports whether teardown succeeded.
+//! Every algorithm (TTL re-dispatch, replica overshoot, speculative
+//! execution, class-aware filter, poll loop, fleet_summary stitch)
+//! lives in `zenfleet-orchestrator`. Salad-specific helpers (GPU class
+//! resolution, R2 SigV4, R2 cred load, chunk synthesis) live in
+//! `zen_cloud_salad::{launcher_support, provider, r2_ops}`.
 
 #![forbid(unsafe_code)]
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::collections::{BTreeMap, HashMap};
+use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tokio::time::sleep;
-use zen_cloud_salad::launch::{
-    ContainerConfig, CreateContainerGroupRequest, CreateQueueJobRequest, CreateQueueRequest,
-    QueueConnection, R2ParentCreds, RegistryAuth, ResourceRequirements, SaladApi, ScopedCredSpec,
-    inject_r2_cred_into_env,
+use serde::Serialize;
+use serde_json::{Value as JsonValue, json};
+use zen_cloud_salad::launch::{RegistryAuth, SaladApi, ScopedCredSpec, inject_r2_cred_into_env};
+use zen_cloud_salad::launcher_support::{
+    ChunkLayout, apply_class_filter, generate_chunks, load_r2_parent_creds_or_env,
+    resolve_gpu_classes, short_id_for_name,
 };
+use zen_cloud_salad::provider::{SaladProviderConfig, SaladProviderHandle};
+use zen_cloud_salad::r2_ops::{R2OperatorImpl, short_ts};
 use zenfleet_orchestrator::{
-    SpeculativeConfig, SpeculativeState, SweepConfig, compute_provisioned_replicas,
-    ttl_redispatch_decisions,
+    FleetSweep, QueueJob, R2Operator, SpeculativeConfig, SweepConfig,
+    compute_provisioned_replicas,
 };
 
-/// Default working bucket (matches existing smoke setup).
 const DEFAULT_BUCKET: &str = "zen-tuning-ephemeral";
-
-/// Default chunks pre-existing smoke parquet (3-row zenjpeg q={30,50,70}).
 const DEFAULT_SOURCE_DIR_R2: &str = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/sources";
 const DEFAULT_INPUT_PARQUET_R2: &str =
     "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/input/smoke.parquet";
 const DEFAULT_IMAGE_BASENAME: &str = "graph.png";
-
-/// Default image (kernel-cache + boot-record upload + GPU-class visibility).
 const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b";
-
-/// Default GPU class. RTX 3060 = mid-tier consumer, cheapest predictable
-/// price tier on Salad's pool. ~$0.10/h at time of writing.
 const DEFAULT_GPU_CLASS: &str = "RTX 3060";
+const SALAD_ORG_REPLICA_QUOTA: u32 = 10;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "zen-salad-sweep",
-    about = "End-to-end Salad scale-up launcher for the zen-metrics sweep image"
+    about = "Salad-flavoured launcher (provider-generic via zenfleet-orchestrator)"
 )]
 struct Args {
-    /// Salad organization name (path segment under `/organizations/`).
     #[arg(long, default_value = "imazen", env = "SALAD_ORGANIZATION")]
     organization: String,
-
-    /// Salad project name (path segment under `/projects/`).
     #[arg(long, default_value = "zenmetrics", env = "SALAD_PROJECT")]
     project: String,
-
-    /// Working R2 bucket (the scoped cred is minted for THIS bucket).
     #[arg(long, default_value = DEFAULT_BUCKET)]
     bucket: String,
-
-    /// Unique sweep id. Defaults to a timestamped string.
-    #[arg(long)]
-    sweep_id: Option<String>,
-
-    /// Container group name (DNS-style). Defaults to `scaleup-<short-id>`.
-    #[arg(long)]
-    group_name: Option<String>,
-
-    /// Job queue name. Defaults to the group name.
-    #[arg(long)]
-    queue_name: Option<String>,
-
-    /// Docker image to deploy.
-    #[arg(long, default_value = DEFAULT_IMAGE)]
-    image: String,
-
-    /// Replica count. Default 10 (Salad's default org quota).
-    #[arg(long, default_value_t = 10)]
-    replicas: u32,
-
-    /// Number of chunks to push to the queue. Default = replicas × 3
-    /// (each worker chews through ~3-5).
-    #[arg(long)]
-    chunks: Option<u32>,
-
-    /// GPU class name. Resolved to id via `GET /gpu-classes`. Used
-    /// when `--gpu-classes` (plural) is NOT provided. Kept for
-    /// back-compat with the v4-era single-class CLI.
-    #[arg(long, default_value = DEFAULT_GPU_CLASS)]
-    gpu_class: String,
-
-    /// Comma-separated list of GPU class names, in priority order.
-    /// Salad's scheduler treats `resources.gpu_classes` as a Vec of
-    /// acceptable classes — useful when one tier is starved upstream.
-    /// Each name is resolved via `GET /gpu-classes`; failures surface
-    /// at preflight, not mid-launch. When set, this **overrides both**
-    /// `--gpu-class` and `--max-price-per-hour` auto-enumeration. Example:
-    /// `--gpu-classes "RTX 3060 (12 GB),RTX 3090 (24 GB),RTX 4090 (24 GB)"`.
-    #[arg(long, value_delimiter = ',')]
-    gpu_classes: Vec<String>,
-
-    /// Auto-enumerate every Salad GPU class whose `--price-priority` price
-    /// is <= this many USD per hour, and pass them ALL in
-    /// `resources.gpu_classes`. This is the default scheduling mode: it
-    /// gives Salad's allocator the broadest possible pool and avoids the
-    /// starvation we saw in Runs 2-5 when only 1-3 classes were nominated.
-    /// Set to 0 to disable (then `--gpu-class` is used). Manual
-    /// `--gpu-classes "name1,name2,..."` takes priority over this.
-    #[arg(long, default_value_t = 0.10)]
-    max_price_per_hour: f64,
-
-    /// Salad price tier to filter against when `--max-price-per-hour` is
-    /// in effect. Salad quotes per-class prices at four priorities:
-    /// `high` (default; scheduler picks high when capacity exists),
-    /// `medium`, `low`, `batch`. Using `high` here ensures we're
-    /// pricing what the scheduler actually charges in non-spot mode.
-    #[arg(long, default_value = "high")]
-    price_priority: String,
-
-    /// CPU cores per replica.
-    #[arg(long, default_value_t = 4)]
-    cpu: u32,
-
-    /// Memory per replica in MiB.
-    #[arg(long, default_value_t = 8192)]
-    memory_mib: u32,
-
-    /// Per-replica $/hour for the chosen GPU class (used for the
-    /// spend-estimate line in the summary; Salad billing is on actual
-    /// running replica-seconds, this is a conservative upper bound).
-    #[arg(long, default_value_t = 0.20)]
-    price_per_hour: f64,
-
-    /// Hard wall-time cap (seconds). The launcher stops the container
-    /// group and exits when this hits, regardless of completion.
-    #[arg(long, default_value_t = 900)]
-    max_wall_secs: u64,
-
-    /// Polling interval for state + R2 sidecars (seconds).
-    #[arg(long, default_value_t = 15)]
-    poll_secs: u64,
-
-    /// Source dir R2 URI (where the chunk's image_basenames live).
-    #[arg(long, default_value = DEFAULT_SOURCE_DIR_R2)]
-    source_dir_r2: String,
-
-    /// Input parquet R2 URI. Each chunk references this same file.
-    #[arg(long, default_value = DEFAULT_INPUT_PARQUET_R2)]
-    input_parquet_r2: String,
-
-    /// Image basenames in the chunk record (must exist under
-    /// `--source-dir-r2`). Repeatable.
+    #[arg(long)] sweep_id: Option<String>,
+    #[arg(long)] group_name: Option<String>,
+    #[arg(long)] queue_name: Option<String>,
+    #[arg(long, default_value = DEFAULT_IMAGE)] image: String,
+    #[arg(long, default_value_t = 10)] replicas: u32,
+    #[arg(long)] chunks: Option<u32>,
+    #[arg(long, default_value = DEFAULT_GPU_CLASS)] gpu_class: String,
+    #[arg(long, value_delimiter = ',')] gpu_classes: Vec<String>,
+    #[arg(long, default_value_t = 0.10)] max_price_per_hour: f64,
+    #[arg(long, default_value = "high")] price_priority: String,
+    #[arg(long, default_value_t = 4)] cpu: u32,
+    #[arg(long, default_value_t = 8192)] memory_mib: u32,
+    #[arg(long, default_value_t = 0.20)] price_per_hour: f64,
+    #[arg(long, default_value_t = 900)] max_wall_secs: u64,
+    #[arg(long, default_value_t = 15)] poll_secs: u64,
+    #[arg(long, default_value = DEFAULT_SOURCE_DIR_R2)] source_dir_r2: String,
+    #[arg(long, default_value = DEFAULT_INPUT_PARQUET_R2)] input_parquet_r2: String,
     #[arg(long = "image-basename", default_values_t = [DEFAULT_IMAGE_BASENAME.to_string()])]
     image_basenames: Vec<String>,
-
-    /// Docker registry auth username (e.g., GHCR username). Optional;
-    /// the kernel-cache image is in a public ghcr.io path.
-    #[arg(long, env = "DOCKER_USERNAME")]
-    registry_username: Option<String>,
-
-    /// Docker registry auth password / PAT.
-    #[arg(long, env = "DOCKER_PASSWORD")]
-    registry_password: Option<String>,
-
-    /// Skip the teardown stop call (dangerous; for debugging only).
-    /// Default false — teardown ALWAYS runs.
-    #[arg(long)]
-    keep_running: bool,
-
-    /// Skip the smoke-parquet validation: by default the launcher
-    /// requires the configured `--input-parquet-r2` + each
-    /// `--image-basename` under `--source-dir-r2` to exist before
-    /// pushing jobs. This skips that pre-flight.
-    #[arg(long)]
-    skip_preflight: bool,
-
-    /// Path under the working bucket to write `chunks.jsonl`.
-    /// Defaults to `runs/<sweep_id>/chunks.jsonl`.
-    #[arg(long)]
-    chunks_key: Option<String>,
-
-    /// Resolve GPU classes + print the container-group request body
-    /// JSON, then exit before any container group / queue / job is
-    /// created (no R2 writes either). Used to verify
-    /// `--gpu-classes` plumbs through to a multi-element
-    /// `resources.gpu_classes` Vec without spending any money.
-    #[arg(long)]
-    dry_run: bool,
-
-    // ─────── iter2+3 (mgmt + opt) — added 2026-05-28 ──────────────
-
-    /// Cells (rows of the input parquet) per chunk. Each chunk
-    /// becomes `row_range: [0, cells_per_chunk]`. Bigger values
-    /// amortize the ~70-80s worker cold-start over more work per
-    /// claim → better $/throughput. The worker safely intersects
-    /// the requested range against the actual parquet row count,
-    /// so values larger than the input simply process all rows.
-    /// Default 12 (vs the pre-iter3 implicit 3).
-    #[arg(long, default_value_t = 12)]
-    cells_per_chunk: u32,
-
-    /// Replica-count overshoot multiplier. Final provisioned
-    /// replica count = `ceil(replicas × overshoot)` (still
-    /// floored at 1 and capped at Salad's org quota of 10).
-    /// Provides a buffer so slow allocations don't gate the
-    /// fast workers: once enough chunks complete, teardown drops
-    /// the excess. Default 1.7 (covers ~40% loss observed in
-    /// iter2/3 runs; higher values hit the 10-replica org quota
-    /// cap anyway).
-    #[arg(long, default_value_t = 1.7)]
-    replicas_overshoot: f64,
-
-    /// Chunk-claim TTL in seconds. If a chunk has been queued for
-    /// longer than this without its omni sidecar landing in R2,
-    /// the launcher re-pushes the same chunk JSON onto the queue.
-    /// Worker idempotency (sidecar-existence check) makes this
-    /// safe: a duplicate worker arriving after the original
-    /// finishes is a no-op. Default 360s (6 minutes) — accommodates
-    /// Salad cold-start of ~270-330s observed in iter2/3 runs
-    /// (TTL=240s fired BEFORE any replica reached `running`).
-    #[arg(long, default_value_t = 360)]
-    chunk_ttl_secs: u64,
-
-    /// Optional path or `s3://...` URI to a prior `fleet_summary.json`.
-    /// When set, the launcher reads each prior replica's
-    /// `gpu_class` + `warmup_seconds` + `chunks_processed` and uses
-    /// them to filter the auto-enumerated class list:
-    ///   - drop classes whose MEDIAN warmup > --max-warmup-secs
-    ///   - drop classes whose MEAN chunks_processed < --min-productive-chunks
-    /// Classes that don't appear in the prior summary are kept
-    /// (no negative signal). Has NO effect when `--gpu-classes` is
-    /// set manually.
-    #[arg(long)]
-    prior_fleet_summary: Option<String>,
-
-    /// When `--prior-fleet-summary` is set, drop classes whose
-    /// median observed warmup exceeds this many seconds. Default 60.
-    #[arg(long, default_value_t = 60.0)]
-    max_warmup_secs: f64,
-
-    /// When `--prior-fleet-summary` is set, drop classes whose
-    /// mean observed chunks_processed is below this floor.
-    /// Default 2.0.
-    #[arg(long, default_value_t = 2.0)]
-    min_productive_chunks: f64,
-
-    /// Disable speculative execution. When enabled (the default), the
-    /// launcher tracks the running per-chunk completion-time
-    /// distribution and re-dispatches any in-flight chunk whose
-    /// elapsed time exceeds `p95 × straggler-factor`, capped at one
-    /// speculative dispatch per chunk. Worker-side idempotency
-    /// (sidecar HEAD pre-check) reconciles duplicates. See
-    /// `zenfleet-orchestrator::SpeculativeState` for the algorithm.
-    #[arg(long, default_value_t = false)]
-    no_speculative: bool,
-
-    /// Speculative-execution straggler factor. A chunk's in-flight
-    /// time must exceed `p95(completed) × straggler_factor` to be
-    /// flagged. Default 1.5 (Dean & Ghemawat 2004's value).
-    #[arg(long, default_value_t = 1.5)]
-    speculative_straggler_factor: f64,
-
-    /// Minimum completed chunks before speculative execution kicks in.
-    /// Below this many samples the p95 is too noisy to trust.
-    /// Default 3.
-    #[arg(long, default_value_t = 3)]
-    speculative_min_completed: u32,
-
-    /// Maximum speculative dispatches per chunk. Worker idempotency
-    /// makes higher values safe but they waste compute. Default 1.
-    #[arg(long, default_value_t = 1)]
-    speculative_cap_per_chunk: u32,
+    #[arg(long, env = "DOCKER_USERNAME")] registry_username: Option<String>,
+    #[arg(long, env = "DOCKER_PASSWORD")] registry_password: Option<String>,
+    #[arg(long)] keep_running: bool,
+    #[arg(long)] skip_preflight: bool,
+    #[arg(long)] chunks_key: Option<String>,
+    #[arg(long)] dry_run: bool,
+    #[arg(long, default_value_t = 12)] cells_per_chunk: u32,
+    #[arg(long, default_value_t = 1.7)] replicas_overshoot: f64,
+    #[arg(long, default_value_t = 360)] chunk_ttl_secs: u64,
+    #[arg(long)] prior_fleet_summary: Option<String>,
+    #[arg(long, default_value_t = 60.0)] max_warmup_secs: f64,
+    #[arg(long, default_value_t = 2.0)] min_productive_chunks: f64,
+    #[arg(long, default_value_t = false)] no_speculative: bool,
+    #[arg(long, default_value_t = 1.5)] speculative_straggler_factor: f64,
+    #[arg(long, default_value_t = 3)] speculative_min_completed: u32,
+    #[arg(long, default_value_t = 1)] speculative_cap_per_chunk: u32,
 }
 
-/// One row of `chunks.jsonl`. Matches the schema the worker's inline
-/// pipeline parses (`crates/zen-cloud-vastai/src/worker/inline.rs::ChunkRecord`).
-#[derive(Debug, Serialize, Deserialize)]
-struct ChunkRecord {
-    chunk_id: String,
-    input_parquet: String,
-    input_parquet_r2: String,
-    row_range: [usize; 2],
-    source_dir_r2: String,
-    image_basenames: Vec<String>,
-    run_id: String,
-    out_sidecar_omni: String,
-    out_encoded_prefix: String,
-}
-
-/// Final summary line emitted to stdout.
 #[derive(Debug, Serialize)]
-struct Summary {
+struct LauncherSummary {
     sweep_id: String,
     group_name: String,
     image: String,
     replicas: u32,
     chunks: u32,
     gpu_class: String,
-    /// Wall seconds from group POST to launcher exit.
     wall_secs: f64,
-    /// Wall seconds from group POST to FIRST sidecar landing in R2.
-    /// Null when no sidecars landed in time.
     t_first_sidecar_secs: Option<f64>,
-    /// Wall seconds from group POST to first sidecar from each replica
-    /// (proxy for all-N booted). Null when fewer than N unique workers
-    /// produced sidecars before the cap.
     t_all_n_sidecars_secs: Option<f64>,
-    /// Wall seconds from group POST to LAST sidecar (or cap hit).
     t_done_secs: Option<f64>,
-    /// Distinct workers (by chunk → worker mapping derived from the
-    /// salad-machine-id metadata in the omni sidecar, if available;
-    /// falls back to chunk_id count).
     distinct_workers_observed: u32,
-    /// Throughput = chunks-completed ÷ (t_done − t_first).
     throughput_chunks_per_sec: Option<f64>,
-    /// $/hour × wall × replicas / 3600. Upper bound; Salad bills on
-    /// running-replica-seconds which is ≤ this.
     estimated_spend_usd: f64,
-    /// Teardown status.
     teardown_ok: bool,
-    /// Number of error sidecars observed in R2.
     error_sidecars: u32,
-    /// Number of completed omni sidecars observed in R2.
     omni_sidecars: u32,
-
-    // ─────── iter2+3 fields (added 2026-05-28) ────────────────────
-
-    /// Cells-per-chunk knob actually used.
     cells_per_chunk: u32,
-    /// Requested replicas (before overshoot).
     replicas_requested: u32,
-    /// Provisioned replica count after overshoot (`ceil(req × mult)`).
     replicas_provisioned: u32,
-    /// Number of chunks re-pushed by the TTL re-dispatch logic.
     chunks_redispatched: u32,
-    /// Number of chunks re-pushed by the speculative-execution logic.
-    /// Disjoint counter from `chunks_redispatched` (TTL fires once per
-    /// chunk before completion; speculative fires AFTER enough chunks
-    /// have completed to fit a p95).
     chunks_speculatively_dispatched: u32,
-    /// Classes the prior-fleet-summary filter dropped (empty when
-    /// `--prior-fleet-summary` was not set).
     classes_dropped_by_filter: Vec<String>,
-    /// Classes that survived the filter (mirrors `gpu_class`).
     classes_kept_after_filter: Vec<String>,
 }
 
@@ -387,285 +124,75 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let t_start = Instant::now();
 
-    let sweep_id = args
-        .sweep_id
-        .clone()
-        .unwrap_or_else(|| format!("scaleup-{}", short_ts()));
+    let sweep_id = args.sweep_id.clone().unwrap_or_else(|| format!("scaleup-{}", short_ts()));
     let group_name = args
         .group_name
         .clone()
         .unwrap_or_else(|| format!("scaleup-{}", short_id_for_name(&sweep_id)));
-    let queue_name = args
-        .queue_name
-        .clone()
-        .unwrap_or_else(|| group_name.clone());
+    let queue_name = args.queue_name.clone().unwrap_or_else(|| group_name.clone());
     let chunks_count = args.chunks.unwrap_or(args.replicas * 3);
     let chunks_key = args
         .chunks_key
         .clone()
         .unwrap_or_else(|| format!("runs/{sweep_id}/chunks.jsonl"));
+    eprintln!("[launcher] sweep_id={sweep_id} group={group_name} bucket={}", args.bucket);
 
-    eprintln!("[launcher] sweep_id={sweep_id}");
-    eprintln!("[launcher] group_name={group_name}");
-    eprintln!("[launcher] queue_name={queue_name}");
-    eprintln!("[launcher] bucket={}", args.bucket);
-    eprintln!("[launcher] image={}", args.image);
-    // 1. Build the Salad API client.
     let api = SaladApi::new(&args.organization, &args.project, None)
-        .context("build Salad API client (set SALAD_API_KEY or ~/.config/salad/credentials)")?;
+        .context("build SaladApi (set SALAD_API_KEY or ~/.config/salad/credentials)")?;
 
-    // Determine the GPU class list. Precedence:
-    //   (a) explicit `--gpu-classes "name1,name2,..."` wins.
-    //   (b) `--max-price-per-hour > 0` (default 0.10) auto-enumerates
-    //       every Salad class priced at or below that, at the named
-    //       priority tier. This is the broad-pool default; it kills
-    //       allocator starvation by nominating every cheap class
-    //       simultaneously.
-    //   (c) Fallback to `--gpu-class` (singular).
-    let (gpu_class_names, gpu_class_ids): (Vec<String>, Vec<String>) = if !args.gpu_classes.is_empty() {
-        let names: Vec<String> = args
-            .gpu_classes
-            .iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        eprintln!(
-            "[launcher] gpu class selection: MANUAL ({} classes from --gpu-classes)",
-            names.len()
-        );
-        let mut ids: Vec<String> = Vec::with_capacity(names.len());
-        for name in &names {
-            let id = api
-                .resolve_gpu_class(name)
-                .await
-                .with_context(|| format!("resolve GPU class {name:?}"))?;
-            eprintln!("[launcher] gpu_class {name:?} -> {id}");
-            ids.push(id);
-        }
-        (names, ids)
-    } else if args.max_price_per_hour > 0.0 {
-        eprintln!(
-            "[launcher] gpu class selection: AUTO (price <= ${:.4}/hr at priority {:?})",
-            args.max_price_per_hour, args.price_priority
-        );
-        let classes = api
-            .gpu_classes_under_price(args.max_price_per_hour, &args.price_priority)
-            .await
-            .context("auto-enumerate GPU classes by price")?;
-        eprintln!(
-            "[launcher] auto-enumerated {} GPU classes <= ${:.4}/hr (priority={}):",
-            classes.len(),
-            args.max_price_per_hour,
-            args.price_priority
-        );
-        let mut names = Vec::with_capacity(classes.len());
-        let mut ids = Vec::with_capacity(classes.len());
-        for c in &classes {
-            eprintln!(
-                "[launcher]   ${:.4}/hr  {:<32}  id={}",
-                c.price_for(&args.price_priority),
-                c.name,
-                c.id
-            );
-            names.push(c.name.clone());
-            ids.push(c.id.clone());
-        }
-        (names, ids)
-    } else {
-        eprintln!(
-            "[launcher] gpu class selection: SINGLE (--gpu-class {:?})",
-            args.gpu_class
-        );
-        let id = api
-            .resolve_gpu_class(&args.gpu_class)
-            .await
-            .with_context(|| format!("resolve GPU class {:?}", args.gpu_class))?;
-        eprintln!("[launcher] gpu_class {:?} -> {id}", args.gpu_class);
-        (vec![args.gpu_class.clone()], vec![id])
-    };
-
-    if gpu_class_ids.is_empty() {
-        bail!(
-            "no GPU classes resolved — provide --gpu-class, --gpu-classes, or a positive --max-price-per-hour"
-        );
+    let gpu = resolve_gpu_classes(
+        &api, &args.gpu_classes, args.max_price_per_hour, &args.price_priority, &args.gpu_class,
+    )
+    .await?;
+    if gpu.ids.is_empty() {
+        bail!("no GPU classes resolved");
     }
+    let replicas_provisioned =
+        compute_provisioned_replicas(args.replicas, args.replicas_overshoot, SALAD_ORG_REPLICA_QUOTA);
 
-    // ─────── iter2: replicas overshoot ────────────────────────────
-    // `replicas_overshoot` multiplies the user's requested replica
-    // count; the result is clamped to the Salad org quota (10) and
-    // a minimum of 1. Once enough chunks complete, teardown drops
-    // the excess — billing stops as soon as the group stops.
-    //
-    // Logic hoisted to `zenfleet-orchestrator::compute_provisioned_replicas`
-    // so RunPod / Vast / future provider launchers reuse it.
-    const SALAD_ORG_REPLICA_QUOTA: u32 = 10;
-    let replicas_provisioned: u32 = compute_provisioned_replicas(
-        args.replicas,
-        args.replicas_overshoot,
-        SALAD_ORG_REPLICA_QUOTA,
-    );
-    if replicas_provisioned != args.replicas {
-        eprintln!(
-            "[launcher] replicas overshoot: requested={} multiplier={:.2} -> provisioned={} (quota cap {})",
-            args.replicas, args.replicas_overshoot, replicas_provisioned, SALAD_ORG_REPLICA_QUOTA
-        );
-    }
-
-    eprintln!(
-        "[launcher] replicas_requested={} replicas_provisioned={} chunks={} cells_per_chunk={} gpu_classes_count={}",
-        args.replicas,
-        replicas_provisioned,
-        chunks_count,
-        args.cells_per_chunk,
-        gpu_class_ids.len()
-    );
-    eprintln!("[launcher] max_wall_secs={}", args.max_wall_secs);
-
-    // Dry-run: synthesise a representative container-group request body
-    // (without minting creds, uploading chunks, or creating any Salad
-    // resource) so the operator can verify the multi-class plumbing.
-    // Exits zero on success.
     if args.dry_run {
-        let dry_req = json!({
-            "name": group_name,
-            "container": {
-                "image": args.image,
-                "resources": {
-                    "cpu": args.cpu,
-                    "memory": args.memory_mib,
-                    "gpu_classes": gpu_class_ids,
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "name": group_name,
+                "container": {
+                    "image": args.image,
+                    "resources": {
+                        "cpu": args.cpu, "memory": args.memory_mib,
+                        "gpu_classes": gpu.ids,
+                    },
                 },
-            },
-            "replicas": replicas_provisioned,
-            "replicas_requested": args.replicas,
-            "replicas_overshoot": args.replicas_overshoot,
-            "cells_per_chunk": args.cells_per_chunk,
-            "gpu_class_names": gpu_class_names,
-        });
-        println!("{}", serde_json::to_string_pretty(&dry_req)?);
-        eprintln!("[launcher] dry-run: NO Salad / R2 calls were made; exiting 0");
+                "replicas": replicas_provisioned,
+                "replicas_requested": args.replicas,
+                "replicas_overshoot": args.replicas_overshoot,
+                "cells_per_chunk": args.cells_per_chunk,
+                "gpu_class_names": gpu.names,
+            }))?
+        );
+        eprintln!("[launcher] dry-run: NO Salad/R2 calls; exiting 0");
         return Ok(());
     }
 
-    // 3. Load R2 parent creds + mint scoped child.
-    //
-    // Scoped-cred prefix list MUST cover every R2 path the worker will
-    // touch — both the writable `runs/<sweep>/` per-sweep output prefix
-    // AND every readable input prefix the chunks reference. Missing a
-    // prefix produces a 403 the worker can't recover from (the durable
-    // error sidecar would also 403 under the same scope, masking the
-    // failure entirely — see Salad Runs 1-6b 2026-05-28 forensic doc).
-    //
-    // We derive the read prefixes from the chunks themselves so any future
-    // launcher that retargets `--input-parquet-r2` / `--source-dir-r2` to
-    // a non-default location automatically widens the scope. The cred is
-    // still single-bucket; cross-bucket inputs require a different cred
-    // model (see SALAD.md's "reads-from-A-writes-to-B" note).
     let parent = load_r2_parent_creds_or_env()?;
+    let r2 = R2OperatorImpl::new(parent.clone());
+    let filtered = apply_class_filter(
+        &r2,
+        args.prior_fleet_summary.as_deref(),
+        gpu.names,
+        gpu.ids,
+        args.max_warmup_secs as u32,
+        args.min_productive_chunks as f32,
+    )
+    .await;
+    let (gpu_class_names, gpu_class_ids, classes_dropped_by_filter) =
+        (filtered.names, filtered.ids, filtered.dropped);
+    let classes_kept_after_filter = gpu_class_names.clone();
 
-    // ─────── iter3: class-aware filter from a prior fleet_summary ──
-    // Active only when (a) `--prior-fleet-summary` is set AND (b) the
-    // manual `--gpu-classes` override was NOT used. Manual override →
-    // user picked deliberately; respect it. Filter loads from local
-    // path or `s3://...` URI; failure to load is non-fatal (proceeds
-    // with the unfiltered list).
-    let mut classes_dropped_by_filter: Vec<String> = Vec::new();
-    let (gpu_class_names, gpu_class_ids) = if args.prior_fleet_summary.is_some()
-        && args.gpu_classes.is_empty()
-    {
-        let path_or_uri = args.prior_fleet_summary.as_deref().unwrap();
-        match load_prior_fleet_summary(&parent, path_or_uri).await {
-            Ok(observed) => {
-                eprintln!(
-                    "[class-filter] loaded prior fleet_summary ({} unique classes observed)",
-                    observed.len()
-                );
-                let mut keep_names: Vec<String> = Vec::new();
-                let mut keep_ids: Vec<String> = Vec::new();
-                for (name, id) in gpu_class_names.iter().zip(gpu_class_ids.iter()) {
-                    match observed.get(name) {
-                        Some(stats) => {
-                            let warmup_ok = stats
-                                .median_warmup_secs
-                                .map(|w| w <= args.max_warmup_secs)
-                                .unwrap_or(true);
-                            let prod_ok = stats.mean_chunks_processed
-                                >= args.min_productive_chunks;
-                            if warmup_ok && prod_ok {
-                                eprintln!(
-                                    "[class-filter] KEEP {:<32} median_warmup={:?} mean_chunks={:.2}",
-                                    name,
-                                    stats.median_warmup_secs,
-                                    stats.mean_chunks_processed
-                                );
-                                keep_names.push(name.clone());
-                                keep_ids.push(id.clone());
-                            } else {
-                                eprintln!(
-                                    "[class-filter] DROP {:<32} median_warmup={:?} mean_chunks={:.2} (warmup_ok={} prod_ok={})",
-                                    name,
-                                    stats.median_warmup_secs,
-                                    stats.mean_chunks_processed,
-                                    warmup_ok,
-                                    prod_ok
-                                );
-                                classes_dropped_by_filter.push(name.clone());
-                            }
-                        }
-                        None => {
-                            eprintln!(
-                                "[class-filter] KEEP {:<32} (no prior signal)",
-                                name
-                            );
-                            keep_names.push(name.clone());
-                            keep_ids.push(id.clone());
-                        }
-                    }
-                }
-                if keep_ids.is_empty() {
-                    eprintln!(
-                        "[class-filter] WARN filter dropped ALL classes — reverting to unfiltered list"
-                    );
-                    classes_dropped_by_filter.clear();
-                    (gpu_class_names, gpu_class_ids)
-                } else {
-                    eprintln!(
-                        "[class-filter] kept={} dropped={}",
-                        keep_names.len(),
-                        classes_dropped_by_filter.len()
-                    );
-                    (keep_names, keep_ids)
-                }
-            }
-            Err(e) => {
-                eprintln!(
-                    "[class-filter] WARN failed to load prior fleet_summary {:?}: {e:#}",
-                    path_or_uri
-                );
-                (gpu_class_names, gpu_class_ids)
-            }
-        }
-    } else {
-        (gpu_class_names, gpu_class_ids)
-    };
-    let classes_kept_after_filter: Vec<String> = gpu_class_names.clone();
-
-    let mut cred_prefixes: Vec<String> = Vec::new();
-    cred_prefixes.push(format!("runs/{sweep_id}/"));
-    // Read scope: extract the bucket-relative prefix from each input URI.
-    // The s3 URI form is `s3://<bucket>/<key>`; the scoped cred lives
-    // under one bucket (`args.bucket`), so we only honour inputs in that
-    // bucket. Inputs in other buckets will 403 — surface a loud warning
-    // (preflight already HEADs them, but with the PARENT cred; the worker
-    // uses the scoped cred and gets a different result).
-    let bucket_prefix_with_slash = format!("s3://{}/", args.bucket);
-    for input_uri in [&args.input_parquet_r2, &args.source_dir_r2] {
-        if let Some(rest) = input_uri.strip_prefix(&bucket_prefix_with_slash) {
-            // Take the LEADING key segment (everything up to the first '/')
-            // and re-add the trailing slash so the scoped prefix covers
-            // every object under that subtree. Empty rest (= bucket root)
-            // → whole-bucket scope, which we just inject as "" (the
-            // CF minter omits an empty entry from the wire request).
+    // Scoped R2 cred (Salad-specific; never put root key in worker env).
+    let mut cred_prefixes: Vec<String> = vec![format!("runs/{sweep_id}/")];
+    let bp = format!("s3://{}/", args.bucket);
+    for uri in [&args.input_parquet_r2, &args.source_dir_r2] {
+        if let Some(rest) = uri.strip_prefix(&bp) {
             let leading = rest.split('/').next().unwrap_or("");
             if !leading.is_empty() {
                 let p = format!("{leading}/");
@@ -673,330 +200,83 @@ async fn main() -> Result<()> {
                     cred_prefixes.push(p);
                 }
             }
-        } else {
-            eprintln!(
-                "[launcher] WARN input {} is outside scoped bucket {}; worker will 403 on read",
-                input_uri, args.bucket
-            );
         }
     }
-    let scoped_spec = ScopedCredSpec::new(&args.bucket)
-        .with_prefixes(cred_prefixes.clone())
-        .with_ttl_seconds(3600);
-    eprintln!(
-        "[launcher] minting scoped R2 cred (bucket={} prefixes={:?} ttl=3600s)",
-        args.bucket, cred_prefixes
-    );
     let scoped = api
-        .mint_sweep_r2_cred(&parent, &scoped_spec)
+        .mint_sweep_r2_cred(
+            &parent,
+            &ScopedCredSpec::new(&args.bucket)
+                .with_prefixes(cred_prefixes)
+                .with_ttl_seconds(3600),
+        )
         .await
         .context("mint scoped R2 cred")?;
-    eprintln!(
-        "[launcher] minted: access_key_id={}… session_token_len={}",
-        &scoped.access_key_id[..scoped.access_key_id.len().min(12)],
-        scoped.session_token.len()
-    );
 
-    // 4. Pre-flight: smoke parquet + sources must exist (HEAD via reqwest).
     if !args.skip_preflight {
-        preflight_smoke_inputs(&parent, &args).await?;
-    }
-
-    // 5. Generate chunks.jsonl + upload.
-    let chunks = generate_chunks(chunks_count, &sweep_id, &args);
-    let chunks_jsonl = chunks_to_jsonl(&chunks);
-    let chunks_uri = format!("s3://{}/{}", args.bucket, chunks_key);
-    eprintln!(
-        "[launcher] uploading {} chunks to {} ({} bytes)",
-        chunks.len(),
-        chunks_uri,
-        chunks_jsonl.len()
-    );
-    upload_to_r2_with_parent(&parent, &args.bucket, &chunks_key, chunks_jsonl.as_bytes())
-        .await
-        .with_context(|| format!("upload chunks.jsonl to {chunks_uri}"))?;
-
-    // 6. Create the managed queue (idempotent: ignore "already exists").
-    let queue_req = CreateQueueRequest {
-        name: queue_name.clone(),
-        display_name: Some(format!("scale-up {sweep_id}")),
-        description: Some("zen-salad-sweep scale-up test queue".into()),
-    };
-    eprintln!("[launcher] create queue {queue_name}");
-    match api.create_queue(&queue_req).await {
-        Ok(_) => eprintln!("[launcher]   queue created"),
-        Err(e) => {
-            let msg = format!("{e:#}");
-            if msg.contains("409") || msg.to_lowercase().contains("already exists") {
-                eprintln!("[launcher]   queue already exists, reusing");
-            } else {
-                return Err(e.context("create queue"));
-            }
+        r2.head_uri(&args.input_parquet_r2)
+            .await
+            .with_context(|| format!("HEAD {}", args.input_parquet_r2))?;
+        for b in &args.image_basenames {
+            let uri = format!("{}/{}", args.source_dir_r2.trim_end_matches('/'), b);
+            r2.head_uri(&uri).await.with_context(|| format!("HEAD {uri}"))?;
         }
     }
 
-    // 7. Build container-group env.
-    let mut env: HashMap<String, String> = HashMap::new();
-    env.insert("SWEEP_RUN_ID".into(), sweep_id.clone());
-    env.insert(
-        "R2_ACCOUNT_ID".into(),
-        parent_r2_account_id_for_env(&parent),
-    );
-    env.insert("CHUNKS_R2".into(), chunks_uri.clone());
-    env.insert("SALAD_JOB_PORT".into(), "80".into());
-    env.insert("RUST_LOG".into(), "info,zen_cloud_salad=info".into());
-    env.insert("METRICS".into(), "ssim2-gpu".into());
-    inject_r2_cred_into_env(&mut env, &scoped);
+    // Chunks → JSONL → R2.
+    let chunks = generate_chunks(&ChunkLayout {
+        n: chunks_count,
+        cells_per_chunk: args.cells_per_chunk,
+        bucket: args.bucket.clone(),
+        sweep_id: sweep_id.clone(),
+        input_parquet_r2: args.input_parquet_r2.clone(),
+        source_dir_r2: args.source_dir_r2.clone(),
+        image_basenames: args.image_basenames.clone(),
+    });
+    let chunks_jsonl = chunks
+        .iter()
+        .map(|c| serde_json::to_string(c).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    r2.upload(&args.bucket, &chunks_key, chunks_jsonl.as_bytes())
+        .await
+        .with_context(|| format!("upload chunks.jsonl to s3://{}/{}", args.bucket, chunks_key))?;
 
-    // 8. Build + POST container group.
-    let cg_req = CreateContainerGroupRequest {
-        name: group_name.clone(),
-        display_name: Some(format!("scale-up {sweep_id}")),
-        container: ContainerConfig {
-            image: args.image.clone(),
-            resources: ResourceRequirements {
-                cpu: args.cpu,
-                memory: args.memory_mib,
-                gpu_classes: gpu_class_ids.clone(),
-            },
-            command: None,
-            environment_variables: env,
-            registry_authentication: match (
-                args.registry_username.as_ref(),
-                args.registry_password.as_ref(),
-            ) {
-                (Some(u), Some(p)) => Some(RegistryAuth {
-                    username: u.clone(),
-                    password: p.clone(),
-                }),
+    // Worker env.
+    let mut env_h: HashMap<String, String> = HashMap::new();
+    env_h.insert("SWEEP_RUN_ID".into(), sweep_id.clone());
+    env_h.insert("R2_ACCOUNT_ID".into(), parent.account_id.clone());
+    env_h.insert("CHUNKS_R2".into(), format!("s3://{}/{}", args.bucket, chunks_key));
+    env_h.insert("SALAD_JOB_PORT".into(), "80".into());
+    env_h.insert("RUST_LOG".into(), "info,zen_cloud_salad=info".into());
+    env_h.insert("METRICS".into(), "ssim2-gpu".into());
+    inject_r2_cred_into_env(&mut env_h, &scoped);
+    let env: BTreeMap<String, String> = env_h.into_iter().collect();
+
+    let provider = SaladProviderHandle::new(
+        api,
+        SaladProviderConfig {
+            organization: args.organization.clone(),
+            project: args.project.clone(),
+            group_name: group_name.clone(),
+            queue_name,
+            gpu_class_ids: gpu_class_ids.clone(),
+            cpu: args.cpu,
+            memory_mib: args.memory_mib,
+            registry_auth: match (args.registry_username.as_ref(), args.registry_password.as_ref()) {
+                (Some(u), Some(p)) => Some(RegistryAuth { username: u.clone(), password: p.clone() }),
                 _ => None,
             },
+            restart_policy: "always".into(),
+            autostart: true,
+            queue_path: "/".into(),
+            queue_port: 80,
         },
-        replicas: replicas_provisioned,
-        restart_policy: "always".into(),
-        autostart_policy: true,
-        queue_connection: Some(QueueConnection {
-            // Match the path used by the working v3 smoke (`/`). The
-            // worker's HTTP handler matches all paths but the sidecar's
-            // routing is determined by this field.
-            path: "/".into(),
-            port: 80,
-            queue_name: queue_name.clone(),
-        }),
-    };
-    eprintln!("[launcher] POST container group {group_name}");
-    let t_post = Instant::now();
-    let _group = api.create_container_group(&cg_req).await.with_context(|| {
-        format!(
-            "POST container group {group_name} (image={})",
-            args.image.clone()
-        )
-    })?;
-    eprintln!("[launcher]   group created");
-
-    // 9. Push N jobs into the queue.
-    eprintln!("[launcher] pushing {} jobs into queue", chunks.len());
-    for ch in &chunks {
-        let body = serde_json::to_value(ch).unwrap();
-        api.push_job(
-            &queue_name,
-            &CreateQueueJobRequest {
-                input: body,
-                metadata: None,
-            },
-        )
-        .await
-        .with_context(|| format!("push chunk {}", ch.chunk_id))?;
-    }
-    eprintln!("[launcher]   pushed");
-
-    // 10. Poll for completion (or cap). Pass chunk list + queue name +
-    // provisioned-replica count so the poll loop can drive TTL
-    // re-dispatch and the all-N-sidecars check uses the actual fleet.
-    let poll_result = poll_until_done(
-        &api,
-        &parent,
-        &args,
-        &sweep_id,
-        &group_name,
-        chunks.len(),
-        t_post,
-        replicas_provisioned,
-        &chunks,
-        &queue_name,
-    )
-    .await;
-
-    // 10b. Build fleet_summary.json from boot/, instances/, omni/.
-    //      Best-effort: log any error but never block teardown on it.
-    match build_and_upload_fleet_summary(&parent, &args, &sweep_id, t_post).await {
-        Ok(rows) => {
-            eprintln!("[fleet] summary uploaded ({} replica rows)", rows);
-        }
-        Err(e) => {
-            eprintln!("[fleet] summary build/upload failed (non-fatal): {e:#}");
-        }
-    }
-
-    // 11. Teardown.
-    let teardown_ok = if !args.keep_running {
-        eprintln!("[launcher] tearing down container group {group_name}");
-        let mut attempts: u32 = 0;
-        let mut ok = false;
-        while attempts < 3 {
-            match api.stop_container_group(&group_name).await {
-                Ok(()) => {
-                    eprintln!("[launcher]   stop OK");
-                    ok = true;
-                    break;
-                }
-                Err(e) => {
-                    eprintln!(
-                        "[launcher]   stop failed (attempt {}): {:#}",
-                        attempts + 1,
-                        e
-                    );
-                    attempts += 1;
-                    sleep(Duration::from_secs(3)).await;
-                }
-            }
-        }
-        if !ok {
-            eprintln!(
-                "[launcher] !! TEARDOWN FAILED for {group_name}: stop the group manually at \
-                 https://portal.salad.com/organizations/{}/projects/{}/",
-                args.organization, args.project
-            );
-        }
-        ok
-    } else {
-        eprintln!("[launcher] --keep-running set; SKIPPING teardown (manual stop required)");
-        false
-    };
-
-    // 12. Emit summary.
-    let poll = poll_result.unwrap_or_else(|e| {
-        eprintln!("[launcher] poll loop returned error: {e:#}");
-        PollResult::default()
-    });
-    let wall = t_start.elapsed().as_secs_f64();
-    let throughput = match (
-        poll.t_done_secs,
-        poll.t_first_sidecar_secs,
-        poll.omni_sidecars,
-    ) {
-        (Some(td), Some(tf), n) if n > 0 && td > tf => Some(f64::from(n) / (td - tf).max(0.001)),
-        _ => None,
-    };
-    // Spend reflects what we ACTUALLY paid for (provisioned replicas
-    // running for `wall` seconds at `price_per_hour`).
-    let spend = args.price_per_hour * f64::from(replicas_provisioned) * wall / 3600.0;
-    let summary = Summary {
-        sweep_id: sweep_id.clone(),
-        group_name: group_name.clone(),
-        image: args.image.clone(),
-        replicas: replicas_provisioned,
-        chunks: chunks.len() as u32,
-        // Summary keeps a single string for back-compat with downstream
-        // parsers (jq selectors in scripts/sweep). When multiple GPU
-        // classes were resolved, join them with `|` so the original
-        // order is preserved without breaking quoting.
-        gpu_class: gpu_class_names.join("|"),
-        wall_secs: wall,
-        t_first_sidecar_secs: poll.t_first_sidecar_secs,
-        t_all_n_sidecars_secs: poll.t_all_n_sidecars_secs,
-        t_done_secs: poll.t_done_secs,
-        distinct_workers_observed: poll.distinct_workers_observed,
-        throughput_chunks_per_sec: throughput,
-        estimated_spend_usd: spend,
-        teardown_ok,
-        error_sidecars: poll.error_sidecars,
-        omni_sidecars: poll.omni_sidecars,
-        cells_per_chunk: args.cells_per_chunk,
-        replicas_requested: args.replicas,
-        replicas_provisioned,
-        chunks_redispatched: poll.chunks_redispatched,
-        chunks_speculatively_dispatched: poll.chunks_speculatively_dispatched,
-        classes_dropped_by_filter,
-        classes_kept_after_filter,
-    };
-    let summary_json = serde_json::to_string(&summary).unwrap();
-    println!("{summary_json}");
-
-    // Non-zero exit on any failure path that mattered.
-    if !teardown_ok && !args.keep_running {
-        bail!("teardown of container group {group_name} did not succeed");
-    }
-    Ok(())
-}
-
-/// What the polling loop measures.
-#[derive(Default, Debug)]
-struct PollResult {
-    t_first_sidecar_secs: Option<f64>,
-    t_all_n_sidecars_secs: Option<f64>,
-    t_done_secs: Option<f64>,
-    distinct_workers_observed: u32,
-    omni_sidecars: u32,
-    error_sidecars: u32,
-    /// Count of chunks re-pushed to the queue after exceeding
-    /// `--chunk-ttl-secs` without their sidecar landing.
-    chunks_redispatched: u32,
-    /// Count of chunks re-pushed by the speculative-execution
-    /// scheduler. Worker idempotency reconciles duplicates.
-    chunks_speculatively_dispatched: u32,
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn poll_until_done(
-    api: &SaladApi,
-    parent: &R2ParentCreds,
-    args: &Args,
-    sweep_id: &str,
-    group_name: &str,
-    expected_chunks: usize,
-    t_post: Instant,
-    replicas_provisioned: u32,
-    chunks: &[ChunkRecord],
-    queue_name: &str,
-) -> Result<PollResult> {
-    let omni_prefix = format!("runs/{sweep_id}/omni/");
-    let error_prefix = format!("runs/{sweep_id}/errors/");
-    let instances_prefix = format!("runs/{sweep_id}/instances/");
-    let group_url_prefix = format!(
-        "https://portal.salad.com/organizations/{}/projects/{}/containers/{}",
-        args.organization, args.project, group_name
     );
-    eprintln!("[poll]   portal: {group_url_prefix}");
-    eprintln!("[poll]   watching s3://{}/{omni_prefix}", args.bucket);
-    eprintln!("[poll]   snapshots s3://{}/{instances_prefix}", args.bucket);
-
-    let mut out = PollResult::default();
-    let cap = Duration::from_secs(args.max_wall_secs);
-    let interval = Duration::from_secs(args.poll_secs.max(2));
-
-    // ─────── iter2 + iter2.5: TTL re-dispatch + speculative state ──
-    // Track when each chunk was first pushed (we just pushed them
-    // all in the caller, so `t_post` is the proxy for all). The
-    // launcher peeks at sidecar arrivals; for any chunk still
-    // missing after `chunk_ttl_secs`, the launcher re-pushes the
-    // same chunk JSON. Worker idempotency (sidecar-existence
-    // check in claim.rs) makes the re-push safe — a worker that
-    // claims a chunk whose sidecar already exists exits early.
-    //
-    // Logic hoisted to `zenfleet-orchestrator`:
-    //   * `ttl_redispatch_decisions` returns the list of chunk_ids to
-    //     re-push and updates the "already-redispatched" set.
-    //   * `SpeculativeState` tracks per-chunk dispatch times +
-    //     completion-time distribution + per-chunk speculative cap.
-    use std::collections::HashSet;
-    let chunk_ids: Vec<String> = chunks.iter().map(|c| c.chunk_id.clone()).collect();
-    let mut already_redispatched: HashSet<String> = HashSet::new();
 
     let sweep_cfg = SweepConfig {
         replicas: args.replicas,
         replicas_overshoot: args.replicas_overshoot,
-        provider_replica_quota: 10,
+        provider_replica_quota: SALAD_ORG_REPLICA_QUOTA,
         chunk_ttl_secs: args.chunk_ttl_secs,
         cells_per_chunk: args.cells_per_chunk,
         max_warmup_secs: args.max_warmup_secs as u32,
@@ -1008,1089 +288,70 @@ async fn poll_until_done(
             speculation_cap_per_chunk: args.speculative_cap_per_chunk,
         },
     };
-    let mut spec_state = SpeculativeState::new();
-    // The initial dispatch already happened in the caller before we
-    // entered the poll loop; record t=0 as the first-dispatch time for
-    // every chunk so the speculative scheduler has correct elapsed
-    // measurements.
-    for cid in &chunk_ids {
-        spec_state.record_dispatched(cid, 0.0);
-    }
-    if sweep_cfg.speculative.enabled {
-        eprintln!(
-            "[spec] speculative execution ENABLED (factor={:.2} min_completed={} cap_per_chunk={})",
-            sweep_cfg.speculative.straggler_factor,
-            sweep_cfg.speculative.min_completed_for_stats,
-            sweep_cfg.speculative.speculation_cap_per_chunk,
-        );
-    } else {
-        eprintln!("[spec] speculative execution DISABLED");
-    }
-
-    let mut tick: u32 = 0;
-    loop {
-        let elapsed = t_post.elapsed();
-        if elapsed >= cap {
-            eprintln!(
-                "[poll] wall-time cap {}s hit; stopping poll loop",
-                args.max_wall_secs
-            );
-            // The latest counts are already in `out`; record t_done as
-            // the cap so spend math reflects what we paid for.
-            out.t_done_secs.get_or_insert(elapsed.as_secs_f64());
-            break;
-        }
-        tick += 1;
-        // List omni + errors in R2.
-        let omni = list_r2_prefix(parent, &args.bucket, &omni_prefix)
-            .await
-            .unwrap_or_default();
-        let errs = list_r2_prefix(parent, &args.bucket, &error_prefix)
-            .await
-            .unwrap_or_default();
-        out.omni_sidecars = omni.len() as u32;
-        out.error_sidecars = errs.len() as u32;
-        out.distinct_workers_observed = out.omni_sidecars; // ~1 sidecar per chunk
-
-        if !omni.is_empty() && out.t_first_sidecar_secs.is_none() {
-            out.t_first_sidecar_secs = Some(elapsed.as_secs_f64());
-            eprintln!(
-                "[poll] FIRST sidecar at t={:.1}s ({})",
-                elapsed.as_secs_f64(),
-                omni[0]
-            );
-        }
-        // t_all_n_sidecars is "have we seen at least N=replicas_provisioned
-        // distinct sidecars" — that's the proxy for "all replicas booted
-        // and processed at least one chunk."
-        if (omni.len() as u32) >= replicas_provisioned && out.t_all_n_sidecars_secs.is_none() {
-            out.t_all_n_sidecars_secs = Some(elapsed.as_secs_f64());
-            eprintln!(
-                "[poll] all-N sidecars at t={:.1}s (n={} >= replicas_provisioned={})",
-                elapsed.as_secs_f64(),
-                omni.len(),
-                replicas_provisioned
-            );
-        }
-
-        // ─── iter2 + 2.5: TTL re-dispatch + speculative execution ─
-        // Build the completed-chunk_id set from omni filenames once
-        // (used by both TTL and speculative decisions, plus to update
-        // the speculative scheduler's completion-time distribution).
-        // omni keys look like `runs/<sweep>/omni/<chunk_id>.parquet`.
-        let mut completed: HashSet<String> = HashSet::new();
-        for k in &omni {
-            if let Some(stem) = k
-                .rsplit('/')
-                .next()
-                .and_then(|f| f.strip_suffix(".parquet"))
-            {
-                completed.insert(stem.to_string());
-            }
-        }
-        // Feed the completion-time distribution. We approximate per-chunk
-        // completion time as the time of THIS poll tick — the true
-        // completion time is bracketed between this and the previous
-        // tick (poll_secs ≤ 10s by default). For the p95 ranking we
-        // need ordering and rough magnitude, not perfect precision, so
-        // this is good enough.
-        let elapsed_secs = elapsed.as_secs_f64();
-        for cid in &completed {
-            spec_state.record_completed(cid, elapsed_secs);
-        }
-
-        // (1) TTL re-dispatch — hoisted to zenfleet-orchestrator.
-        let ttl_redispatches = ttl_redispatch_decisions(
-            elapsed_secs,
-            &sweep_cfg,
-            &chunk_ids,
-            &completed,
-            &mut already_redispatched,
-        );
-        for cid in &ttl_redispatches {
-            // Find the chunk record (we mutated already_redispatched
-            // before pushing, so on push failure we DON'T un-insert —
-            // this matches the original semantics of "try once per
-            // chunk via TTL").
-            if let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid) {
-                let body = serde_json::to_value(chunk).unwrap_or_default();
-                match api
-                    .push_job(
-                        queue_name,
-                        &CreateQueueJobRequest {
-                            input: body,
-                            metadata: None,
-                        },
-                    )
-                    .await
-                {
-                    Ok(_) => {
-                        out.chunks_redispatched += 1;
-                        eprintln!(
-                            "[poll] TTL re-dispatch: chunk_id={} (elapsed={:.1}s > ttl={}s)",
-                            cid, elapsed_secs, args.chunk_ttl_secs
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[poll] TTL re-dispatch FAILED chunk_id={cid}: {e:#}"
-                        );
-                    }
-                }
-            }
-        }
-
-        // (2) Speculative execution — re-dispatch in-flight chunks whose
-        // elapsed exceeds p95 × straggler_factor. Worker-side
-        // idempotency (sidecar HEAD pre-check) reconciles duplicates;
-        // if two sidecars race, the OLDEST `worker_chunk_start_unix`
-        // wins (per the fleet_summary stitch).
-        if sweep_cfg.speculative.enabled {
-            let p95 = spec_state.p95_completion_secs();
-            for cid in &chunk_ids {
-                if let Some(spec_elapsed) =
-                    spec_state.decide_speculative(cid, elapsed_secs, &sweep_cfg.speculative)
-                {
-                    if let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid) {
-                        let body = serde_json::to_value(chunk).unwrap_or_default();
-                        match api
-                            .push_job(
-                                queue_name,
-                                &CreateQueueJobRequest {
-                                    input: body,
-                                    metadata: None,
-                                },
-                            )
-                            .await
-                        {
-                            Ok(_) => {
-                                spec_state.record_speculative_dispatched(cid);
-                                out.chunks_speculatively_dispatched += 1;
-                                eprintln!(
-                                    "[spec] re-dispatch: chunk_id={} elapsed={:.1}s p95={:.1}s factor={:.2}",
-                                    cid,
-                                    spec_elapsed,
-                                    p95.unwrap_or(0.0),
-                                    sweep_cfg.speculative.straggler_factor
-                                );
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "[spec] re-dispatch FAILED chunk_id={cid}: {e:#}"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Container-group state (best-effort).
-        let cg = api.get_container_group(group_name).await.ok();
-        let state = cg
-            .as_ref()
-            .and_then(|g| g.current_state.as_ref())
-            .and_then(|s| s.get("status"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown")
-            .to_string();
-        let counts = cg
-            .as_ref()
-            .and_then(|g| g.current_state.as_ref())
-            .and_then(|s| s.get("instance_status_counts"))
-            .cloned()
-            .unwrap_or_else(|| json!({}));
-
-        // Instances snapshot — fetched best-effort and persisted to R2
-        // under the scoped prefix `runs/<sweep_id>/instances/<ts>.json`.
-        // Salad sometimes returns 404 for stopped or just-created groups
-        // — that's fine, we just skip the snapshot.
-        let instances_val = api
-            .list_container_group_instances(group_name)
-            .await
-            .ok();
-        let ts_unix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let snapshot = json!({
-            "unix_ts": ts_unix,
-            "elapsed_secs": elapsed.as_secs_f64(),
-            "tick": tick,
-            "state": state,
-            "instance_status_counts": counts,
-            "instances": instances_val.clone().unwrap_or_else(|| json!(null)),
-            "omni_count": omni.len(),
-            "error_count": errs.len(),
-        });
-        let snapshot_bytes = serde_json::to_vec(&snapshot).unwrap_or_default();
-        let snapshot_key = format!("{instances_prefix}{ts_unix}.json");
-        if let Err(e) = upload_to_r2_with_parent(parent, &args.bucket, &snapshot_key, &snapshot_bytes).await {
-            eprintln!("[poll]   snapshot upload failed (non-fatal): {e:#}");
-        }
-
-        eprintln!(
-            "[poll t={:>5.1}s tick={tick:>3}] state={state} counts={} omni={} err={} snap_ok={}",
-            elapsed.as_secs_f64(),
-            counts,
-            omni.len(),
-            errs.len(),
-            instances_val.is_some(),
-        );
-
-        if (omni.len() + errs.len()) >= expected_chunks {
-            out.t_done_secs = Some(elapsed.as_secs_f64());
-            eprintln!(
-                "[poll] DONE at t={:.1}s (omni={} err={})",
-                elapsed.as_secs_f64(),
-                omni.len(),
-                errs.len()
-            );
-            break;
-        }
-
-        // Early-exit: when the container group is `stopped` AND no more
-        // sidecars can land (either we have what we expected, or zero
-        // sidecars and zero running instances means nothing else is
-        // coming). Avoids wasting wall-time polling a dead group.
-        if state == "stopped" {
-            out.t_done_secs = Some(elapsed.as_secs_f64());
-            eprintln!(
-                "[poll] container group is stopped at t={:.1}s; \
-                 short-circuiting (omni={} err={} expected={})",
-                elapsed.as_secs_f64(),
-                omni.len(),
-                errs.len(),
-                expected_chunks
-            );
-            break;
-        }
-
-        sleep(interval).await;
-    }
-    Ok(out)
-}
-
-fn generate_chunks(n: u32, sweep_id: &str, args: &Args) -> Vec<ChunkRecord> {
-    let mut out = Vec::with_capacity(n as usize);
-    let row_end = args.cells_per_chunk.max(1) as usize;
-    for i in 0..n {
-        let chunk_id = format!("scaleup-{i:03}");
-        let out_sidecar_omni = format!(
-            "s3://{}/runs/{}/omni/{}.parquet",
-            args.bucket, sweep_id, chunk_id
-        );
-        let out_encoded_prefix = format!(
-            "s3://{}/runs/{}/encoded/{}/",
-            args.bucket, sweep_id, chunk_id
-        );
-        // input_parquet is the LOCAL filename the worker writes to under
-        // scratch; the R2 URI is what it downloads from. Both point at the
-        // same shared input parquet. `row_end` comes from
-        // `--cells-per-chunk`; the worker safely intersects the requested
-        // range against actual row count (chunk_input::read_and_group),
-        // so values larger than the input simply process the whole file.
-        out.push(ChunkRecord {
-            chunk_id,
-            input_parquet: "smoke.parquet".into(),
-            input_parquet_r2: args.input_parquet_r2.clone(),
-            row_range: [0, row_end],
-            source_dir_r2: args.source_dir_r2.clone(),
-            image_basenames: args.image_basenames.clone(),
-            run_id: sweep_id.to_string(),
-            out_sidecar_omni,
-            out_encoded_prefix,
-        });
-    }
-    out
-}
-
-fn chunks_to_jsonl(chunks: &[ChunkRecord]) -> String {
-    chunks
+    let queue_jobs: Vec<QueueJob> = chunks
         .iter()
-        .map(|c| serde_json::to_string(c).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+        .map(|c| QueueJob {
+            chunk_id: c.chunk_id.clone(),
+            payload: serde_json::to_value(c).unwrap_or(JsonValue::Null),
+        })
+        .collect();
 
-/// Best-effort load of the R2 parent creds. Tries env first; falls back
-/// to `~/.config/cloudflare/r2-credentials` (KEY=VALUE lines).
-fn load_r2_parent_creds_or_env() -> Result<R2ParentCreds> {
-    if let Ok(c) = R2ParentCreds::from_env() {
-        return Ok(c);
-    }
-    let home = std::env::var("HOME").context("HOME not set")?;
-    let path = PathBuf::from(home).join(".config/cloudflare/r2-credentials");
-    let contents = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {} (or set env vars)", path.display()))?;
-    let mut map = HashMap::new();
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some((k, v)) = line.split_once('=') {
-            map.insert(k.trim().to_string(), v.trim().to_string());
-        }
-    }
-    let token = map
-        .get("CF_API_TOKEN")
-        .or_else(|| map.get("R2_API_TOKEN"))
-        .cloned()
-        .context("CF_API_TOKEN/R2_API_TOKEN missing from creds file")?;
-    let account_id = map
-        .get("R2_ACCOUNT_ID")
-        .cloned()
-        .context("R2_ACCOUNT_ID missing")?;
-    let access = map
-        .get("R2_ACCESS_KEY_ID")
-        .cloned()
-        .context("R2_ACCESS_KEY_ID missing")?;
-    let secret = map
-        .get("R2_SECRET_ACCESS_KEY")
-        .cloned()
-        .context("R2_SECRET_ACCESS_KEY missing")?;
-    Ok(R2ParentCreds {
-        cf_api_token: token,
-        account_id,
-        parent_access_key_id: access,
-        parent_secret_access_key: secret,
-    })
-}
-
-fn parent_r2_account_id_for_env(parent: &R2ParentCreds) -> String {
-    parent.account_id.clone()
-}
-
-/// HEAD-check the smoke parquet and source images are present before
-/// burning Salad replica-seconds on chunks that would fail.
-async fn preflight_smoke_inputs(parent: &R2ParentCreds, args: &Args) -> Result<()> {
-    eprintln!("[preflight] HEAD {}", args.input_parquet_r2);
-    head_r2_uri(parent, &args.input_parquet_r2)
-        .await
-        .with_context(|| format!("HEAD {}", args.input_parquet_r2))?;
-    for b in &args.image_basenames {
-        let uri = format!("{}/{}", args.source_dir_r2.trim_end_matches('/'), b);
-        eprintln!("[preflight] HEAD {uri}");
-        head_r2_uri(parent, &uri)
-            .await
-            .with_context(|| format!("HEAD {uri}"))?;
-    }
-    Ok(())
-}
-
-// ── R2 helpers (signed via the parent root creds) ────────────────────────
-//
-// These run on the OPERATOR box, NOT on a worker. Using the root creds is
-// fine here — they never leave this process. Workers only ever see the
-// scoped child cred.
-
-fn r2_endpoint(parent: &R2ParentCreds) -> String {
-    format!("https://{}.r2.cloudflarestorage.com", parent.account_id)
-}
-
-fn split_s3_uri(uri: &str) -> Result<(String, String)> {
-    let rest = uri
-        .strip_prefix("s3://")
-        .with_context(|| format!("not an s3:// URI: {uri}"))?;
-    let (bucket, key) = rest
-        .split_once('/')
-        .with_context(|| format!("URI missing key: {uri}"))?;
-    Ok((bucket.to_string(), key.to_string()))
-}
-
-async fn head_r2_uri(parent: &R2ParentCreds, uri: &str) -> Result<()> {
-    let (bucket, key) = split_s3_uri(uri)?;
-    head_r2(parent, &bucket, &key).await
-}
-
-async fn head_r2(parent: &R2ParentCreds, bucket: &str, key: &str) -> Result<()> {
-    let url = format!("{}/{bucket}/{key}", r2_endpoint(parent));
-    let now = chrono_now();
-    let auth = sigv4_auth_header(
-        parent,
-        "HEAD",
-        bucket,
-        key,
-        &url,
-        &[("host", host_of(&url))],
-        b"",
-        "auto",
-        "s3",
-        &now,
-    );
-    let resp = reqwest::Client::new()
-        .head(&url)
-        .header("Host", host_of(&url))
-        .header("x-amz-content-sha256", empty_payload_hash())
-        .header("x-amz-date", &now.amz)
-        .header("Authorization", auth)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        bail!("HEAD {url}: HTTP {}", resp.status());
-    }
-    Ok(())
-}
-
-async fn upload_to_r2_with_parent(
-    parent: &R2ParentCreds,
-    bucket: &str,
-    key: &str,
-    body: &[u8],
-) -> Result<()> {
-    let url = format!("{}/{bucket}/{key}", r2_endpoint(parent));
-    let now = chrono_now();
-    let payload_hash = sha256_hex(body);
-    let auth = sigv4_auth_header(
-        parent,
-        "PUT",
-        bucket,
-        key,
-        &url,
-        &[("host", host_of(&url))],
-        body,
-        "auto",
-        "s3",
-        &now,
-    );
-    let resp = reqwest::Client::new()
-        .put(&url)
-        .header("Host", host_of(&url))
-        .header("x-amz-content-sha256", payload_hash)
-        .header("x-amz-date", &now.amz)
-        .header("Authorization", auth)
-        .header("Content-Type", "application/octet-stream")
-        .body(body.to_vec())
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        let s = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        bail!("PUT {url}: HTTP {s}: {body}");
-    }
-    Ok(())
-}
-
-async fn list_r2_prefix(parent: &R2ParentCreds, bucket: &str, prefix: &str) -> Result<Vec<String>> {
-    let endpoint = r2_endpoint(parent);
-    let url = format!("{endpoint}/{bucket}/?list-type=2&prefix={prefix}");
-    let now = chrono_now();
-    // Canonical query string components (sorted).
-    let mut query: Vec<(String, String)> = vec![
-        ("list-type".into(), "2".into()),
-        ("prefix".into(), prefix.to_string()),
-    ];
-    query.sort();
-    let auth = sigv4_auth_header_with_query(
-        parent,
-        "GET",
-        bucket,
-        "",
-        &endpoint,
-        &[("host", host_of(&endpoint))],
-        b"",
-        "auto",
-        "s3",
-        &now,
-        &query,
-    );
-    let resp = reqwest::Client::new()
-        .get(&url)
-        .header("Host", host_of(&endpoint))
-        .header("x-amz-content-sha256", empty_payload_hash())
-        .header("x-amz-date", &now.amz)
-        .header("Authorization", auth)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        let s = resp.status();
-        let b = resp.text().await.unwrap_or_default();
-        bail!("LIST {url}: HTTP {s}: {b}");
-    }
-    let xml = resp.text().await?;
-    // Cheap parse: pull out <Key>...</Key> blocks.
-    let mut out = Vec::new();
-    let mut rest = xml.as_str();
-    while let Some(open) = rest.find("<Key>") {
-        let after = &rest[open + 5..];
-        if let Some(close) = after.find("</Key>") {
-            out.push(after[..close].to_string());
-            rest = &after[close..];
-        } else {
-            break;
-        }
-    }
-    Ok(out)
-}
-
-// ── Tiny SigV4 (just what we need: HEAD / PUT / GET ?list-type=2) ────────
-//
-// The R2 endpoint speaks the S3 v4 signing scheme exactly. We avoid
-// pulling `aws-sdk-s3` (heavy + transitively expensive) by hand-rolling
-// the 4 known calls. This is OPERATOR-side code; correctness over
-// completeness — only the call shapes above need to work.
-
-struct AmzDate {
-    amz: String,   // YYYYMMDDTHHMMSSZ
-    short: String, // YYYYMMDD
-}
-
-fn chrono_now() -> AmzDate {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    // ymdhms from epoch — vendored 0-dep mini.
-    let (y, mo, d, h, mi, s) = epoch_to_ymdhms(secs);
-    AmzDate {
-        amz: format!("{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z"),
-        short: format!("{y:04}{mo:02}{d:02}"),
-    }
-}
-
-fn epoch_to_ymdhms(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
-    // Days/seconds split.
-    let days_total = (secs / 86_400) as i64;
-    let secs_of_day = (secs % 86_400) as u32;
-    let h = secs_of_day / 3600;
-    let mi = (secs_of_day % 3600) / 60;
-    let s = secs_of_day % 60;
-    // 1970-01-01 epoch. Algorithm from "Howard Hinnant" date.
-    let z = days_total + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as u64; // [0, 146097)
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0,400)
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y_final = if m <= 2 { (y + 1) as i32 } else { y as i32 };
-    (y_final, m as u32, d as u32, h, mi, s)
-}
-
-fn host_of(url: &str) -> String {
-    let after_scheme = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
-    after_scheme.split('/').next().unwrap_or("").to_string()
-}
-
-fn empty_payload_hash() -> &'static str {
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-}
-
-fn sha256_hex(b: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut h = Sha256::new();
-    h.update(b);
-    hex(&h.finalize())
-}
-
-fn hex(b: &[u8]) -> String {
-    let mut s = String::with_capacity(b.len() * 2);
-    for byte in b {
-        s.push_str(&format!("{byte:02x}"));
-    }
-    s
-}
-
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-    let mut m = <Hmac<Sha256>>::new_from_slice(key).expect("hmac");
-    m.update(data);
-    m.finalize().into_bytes().to_vec()
-}
-
-#[allow(clippy::too_many_arguments)]
-fn sigv4_auth_header(
-    parent: &R2ParentCreds,
-    method: &str,
-    _bucket: &str,
-    key: &str,
-    _url: &str,
-    headers: &[(&str, String)],
-    body: &[u8],
-    region: &str,
-    service: &str,
-    now: &AmzDate,
-) -> String {
-    sigv4_auth_header_with_query(
-        parent,
-        method,
-        _bucket,
-        key,
-        _url,
-        headers,
-        body,
-        region,
-        service,
-        now,
-        &[],
+    let fleet = FleetSweep::new(
+        provider,
+        r2,
+        sweep_cfg,
+        args.bucket.clone(),
+        sweep_id.clone(),
+        group_name.clone(),
+        args.image.clone(),
+        gpu_class_names.clone(),
+        env,
+        args.price_per_hour,
+        json!({"gpu_class_ids": gpu_class_ids}),
+        args.max_wall_secs,
+        args.poll_secs,
+        args.keep_running,
     )
-}
+    .run(queue_jobs)
+    .await?;
 
-#[allow(clippy::too_many_arguments)]
-fn sigv4_auth_header_with_query(
-    parent: &R2ParentCreds,
-    method: &str,
-    bucket: &str,
-    key: &str,
-    _url: &str,
-    headers: &[(&str, String)],
-    body: &[u8],
-    region: &str,
-    service: &str,
-    now: &AmzDate,
-    query: &[(String, String)],
-) -> String {
-    // Canonical request.
-    let canonical_uri = if key.is_empty() {
-        format!("/{bucket}/")
-    } else {
-        format!("/{bucket}/{key}")
+    let wall = t_start.elapsed().as_secs_f64();
+    let throughput = match (
+        fleet.poll.t_done_secs, fleet.poll.t_first_sidecar_secs, fleet.poll.omni_sidecars,
+    ) {
+        (Some(td), Some(tf), n) if n > 0 && td > tf => Some(f64::from(n) / (td - tf).max(0.001)),
+        _ => None,
     };
-    let canonical_query = query
-        .iter()
-        .map(|(k, v)| format!("{}={}", uri_encode(k, true), uri_encode(v, true)))
-        .collect::<Vec<_>>()
-        .join("&");
-    let payload_hash = sha256_hex(body);
-    let mut h = headers.to_vec();
-    h.push(("x-amz-content-sha256", payload_hash.clone()));
-    h.push(("x-amz-date", now.amz.clone()));
-    h.sort_by(|a, b| a.0.cmp(b.0));
-    let canonical_headers = h
-        .iter()
-        .map(|(k, v)| format!("{}:{}\n", k.to_ascii_lowercase(), v.trim()))
-        .collect::<String>();
-    let signed_headers = h
-        .iter()
-        .map(|(k, _)| k.to_ascii_lowercase())
-        .collect::<Vec<_>>()
-        .join(";");
-    let canonical_req = format!(
-        "{method}\n{canonical_uri}\n{canonical_query}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
-    );
-    let cr_hash = sha256_hex(canonical_req.as_bytes());
-    // String to sign.
-    let credential_scope = format!("{}/{region}/{service}/aws4_request", now.short);
-    let sts = format!(
-        "AWS4-HMAC-SHA256\n{}\n{credential_scope}\n{cr_hash}",
-        now.amz
-    );
-    // Derive signing key.
-    let k_secret = format!("AWS4{}", parent.parent_secret_access_key);
-    let k_date = hmac_sha256(k_secret.as_bytes(), now.short.as_bytes());
-    let k_region = hmac_sha256(&k_date, region.as_bytes());
-    let k_service = hmac_sha256(&k_region, service.as_bytes());
-    let k_signing = hmac_sha256(&k_service, b"aws4_request");
-    let sig = hex(&hmac_sha256(&k_signing, sts.as_bytes()));
-    format!(
-        "AWS4-HMAC-SHA256 Credential={}/{credential_scope}, SignedHeaders={signed_headers}, Signature={sig}",
-        parent.parent_access_key_id
-    )
-}
-
-fn uri_encode(s: &str, encode_slash: bool) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.bytes() {
-        let unreserved = c.is_ascii_alphanumeric()
-            || c == b'-'
-            || c == b'_'
-            || c == b'.'
-            || c == b'~'
-            || (c == b'/' && !encode_slash);
-        if unreserved {
-            out.push(c as char);
-        } else {
-            out.push_str(&format!("%{c:02X}"));
-        }
-    }
-    out
-}
-
-fn short_ts() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let (y, mo, d, h, mi, s) = epoch_to_ymdhms(secs);
-    format!("{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}")
-}
-
-/// Stitch the per-replica picture from R2 artifacts and upload the
-/// result as `runs/<sweep_id>/fleet_summary.json`. Also prints a
-/// sortable stdout table.
-///
-/// Inputs read from R2 (all under the scoped `runs/<sweep_id>/` prefix):
-/// - `boot/*.txt`          — one per replica that booted (worker uploads)
-/// - `instances/*.json`    — periodic launcher snapshots
-/// - `omni/*.parquet`      — completed chunks (used for chunk count)
-/// - `errors/*.txt`        — error sidecars (used for fail count)
-///
-/// Returns the row count emitted.
-async fn build_and_upload_fleet_summary(
-    parent: &R2ParentCreds,
-    args: &Args,
-    sweep_id: &str,
-    t_post: Instant,
-) -> Result<usize> {
-    use std::collections::BTreeMap;
-
-    let boot_prefix = format!("runs/{sweep_id}/boot/");
-    let instances_prefix = format!("runs/{sweep_id}/instances/");
-    let omni_prefix = format!("runs/{sweep_id}/omni/");
-    let errors_prefix = format!("runs/{sweep_id}/errors/");
-
-    let boots = list_r2_prefix(parent, &args.bucket, &boot_prefix)
-        .await
-        .unwrap_or_default();
-    let snaps = list_r2_prefix(parent, &args.bucket, &instances_prefix)
-        .await
-        .unwrap_or_default();
-    let omnis = list_r2_prefix(parent, &args.bucket, &omni_prefix)
-        .await
-        .unwrap_or_default();
-    let errs = list_r2_prefix(parent, &args.bucket, &errors_prefix)
-        .await
-        .unwrap_or_default();
-
-    // Per-replica record indexed by machine_id (or hostname when
-    // machine_id is empty/synthesized).
-    #[derive(Default, Debug, Clone, Serialize)]
-    struct Replica {
-        machine_id: String,
-        gpu_class: String,
-        gpu_uuid: String,
-        driver: String,
-        warmup_seconds: Option<f64>,
-        boot_unix_ts: Option<u64>,
-        t_first_seen_status: Option<String>,
-        t_first_running_unix: Option<u64>,
-        chunks_processed: u32,
-        last_status_seen: Option<String>,
-    }
-    let mut replicas: BTreeMap<String, Replica> = BTreeMap::new();
-
-    // Hydrate from boot/*.txt — each is a key:value file.
-    for key in &boots {
-        let body = match get_r2_object_bytes(parent, &args.bucket, key).await {
-            Ok(b) => b,
-            Err(_) => continue,
-        };
-        let body_str = String::from_utf8_lossy(&body).to_string();
-        let mut rec = Replica::default();
-        for line in body_str.lines() {
-            let Some((k, v)) = line.split_once(':') else {
-                continue;
-            };
-            let v = v.trim();
-            match k.trim() {
-                "machine_id" => rec.machine_id = v.to_string(),
-                "gpu_class" => rec.gpu_class = v.to_string(),
-                "gpu_uuid" => rec.gpu_uuid = v.to_string(),
-                "driver" => rec.driver = v.to_string(),
-                "warmup_seconds" => rec.warmup_seconds = v.parse().ok(),
-                "boot_unix_ts" => rec.boot_unix_ts = v.parse().ok(),
-                _ => {}
-            }
-        }
-        let key_id = if rec.machine_id.is_empty() {
-            // fall back to the filename stem
-            key.rsplit('/').next().unwrap_or(key).to_string()
-        } else {
-            rec.machine_id.clone()
-        };
-        replicas.insert(key_id, rec);
-    }
-
-    // Hydrate timing/status from snapshots.
-    for key in &snaps {
-        let body = match get_r2_object_bytes(parent, &args.bucket, key).await {
-            Ok(b) => b,
-            Err(_) => continue,
-        };
-        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&body) else {
-            continue;
-        };
-        let ts = v.get("unix_ts").and_then(|x| x.as_u64()).unwrap_or(0);
-        let state = v
-            .get("state")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        let instances = v
-            .get("instances")
-            .cloned()
-            .unwrap_or_else(|| serde_json::Value::Null);
-        // The instances endpoint sometimes returns {"instances": [...]}
-        // and sometimes [...] directly. Handle both.
-        let arr = instances
-            .as_array()
-            .cloned()
-            .or_else(|| {
-                instances
-                    .get("instances")
-                    .and_then(|x| x.as_array().cloned())
-            })
-            .unwrap_or_default();
-        for inst in arr {
-            let m_id = inst
-                .get("machine_id")
-                .and_then(|x| x.as_str())
-                .unwrap_or("")
-                .to_string();
-            if m_id.is_empty() {
-                continue;
-            }
-            let entry = replicas.entry(m_id.clone()).or_insert_with(|| Replica {
-                machine_id: m_id.clone(),
-                ..Default::default()
-            });
-            let inst_state = inst
-                .get("state")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string());
-            if entry.t_first_seen_status.is_none() && inst_state.is_some() {
-                entry.t_first_seen_status = inst_state.clone();
-            }
-            if entry.t_first_running_unix.is_none()
-                && inst_state.as_deref() == Some("running")
-            {
-                entry.t_first_running_unix = Some(ts);
-            }
-            entry.last_status_seen = inst_state.or(Some(state.clone()));
-        }
-    }
-
-    // Chunks processed = count of omni sidecars. We can't reliably
-    // attribute back to a specific machine_id without reading the
-    // parquet header, which is too expensive here. Approximate by
-    // distributing the total across replicas that we've seen.
-    let total_chunks = omnis.len() as u32;
-    // Simple even-distribute is wrong; better to report aggregate +
-    // leave per-replica null. So we just attribute by ordering match
-    // when filenames embed the worker — but for the smoke run, we
-    // surface the total.
-    let mut replica_rows: Vec<Replica> = replicas.into_values().collect();
-    if !replica_rows.is_empty() {
-        // Distribute total_chunks evenly across replicas as a coarse
-        // estimate; mark the field as approximate.
-        let n = replica_rows.len() as u32;
-        let each = total_chunks / n;
-        let rem = total_chunks % n;
-        for (i, r) in replica_rows.iter_mut().enumerate() {
-            r.chunks_processed = each + if (i as u32) < rem { 1 } else { 0 };
-        }
-    }
-
-    // Print stdout table.
-    let wall = t_post.elapsed().as_secs_f64();
-    eprintln!("[fleet] === fleet_summary ({} replicas, wall={:.1}s) ===", replica_rows.len(), wall);
-    eprintln!(
-        "[fleet] {:<24}  {:<24}  {:<12}  {:<10}  {:<8}",
-        "machine_id_or_filename", "gpu_class", "warmup_s", "chunks", "status"
-    );
-    for r in &replica_rows {
-        eprintln!(
-            "[fleet] {:<24}  {:<24}  {:<12}  {:<10}  {:<8}",
-            short24(&r.machine_id),
-            short24(&r.gpu_class),
-            r.warmup_seconds.map(|x| format!("{x:.1}")).unwrap_or_default(),
-            r.chunks_processed,
-            r.last_status_seen.as_deref().unwrap_or("-"),
-        );
-    }
-    eprintln!(
-        "[fleet] totals: boot={} snapshots={} omni={} errors={}",
-        boots.len(),
-        snaps.len(),
-        omnis.len(),
-        errs.len()
-    );
-
-    let summary = json!({
-        "sweep_id": sweep_id,
-        "bucket": args.bucket,
-        "wall_secs": wall,
-        "boot_records": boots.len(),
-        "snapshot_count": snaps.len(),
-        "omni_count": omnis.len(),
-        "error_count": errs.len(),
-        "replicas": replica_rows,
-    });
-    let body = serde_json::to_vec_pretty(&summary).unwrap_or_default();
-    let key = format!("runs/{sweep_id}/fleet_summary.json");
-    upload_to_r2_with_parent(parent, &args.bucket, &key, &body)
-        .await
-        .with_context(|| format!("upload {key}"))?;
-    eprintln!("[fleet] fleet_summary.json uploaded to s3://{}/{}", args.bucket, key);
-    Ok(replica_rows.len())
-}
-
-fn short24(s: &str) -> String {
-    if s.chars().count() <= 24 {
-        s.to_string()
-    } else {
-        let mut out: String = s.chars().take(21).collect();
-        out.push_str("...");
-        out
-    }
-}
-
-/// Tiny helper to download an object's bytes via SigV4 GET on the
-/// parent cred. Same shape as upload_to_r2_with_parent. Used for
-/// boot/*.txt + snapshot/*.json hydration.
-async fn get_r2_object_bytes(
-    parent: &R2ParentCreds,
-    bucket: &str,
-    key: &str,
-) -> Result<Vec<u8>> {
-    let url = format!("{}/{bucket}/{key}", r2_endpoint(parent));
-    let now = chrono_now();
-    let auth = sigv4_auth_header(
-        parent,
-        "GET",
-        bucket,
-        key,
-        &url,
-        &[("host", host_of(&url))],
-        b"",
-        "auto",
-        "s3",
-        &now,
-    );
-    let resp = reqwest::Client::new()
-        .get(&url)
-        .header("Host", host_of(&url))
-        .header("x-amz-content-sha256", empty_payload_hash())
-        .header("x-amz-date", &now.amz)
-        .header("Authorization", auth)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        let s = resp.status();
-        bail!("GET {url}: HTTP {s}");
-    }
-    Ok(resp.bytes().await?.to_vec())
-}
-
-fn short_id_for_name(id: &str) -> String {
-    // DNS label: lowercase, alnum + hyphens, ≤ 63 chars.
-    let mut out = String::new();
-    for c in id.chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_lowercase());
-        } else if c == '-' || c == '_' {
-            out.push('-');
-        }
-    }
-    if out.len() > 50 {
-        out.truncate(50);
-    }
-    out
-}
-
-// ─────── iter3: prior fleet_summary loader + per-class stats ───────
-
-/// Per-class statistics derived from a prior `fleet_summary.json`.
-/// Used by the class-aware filter to drop slow-warmup or
-/// low-productivity classes from the auto-enumerated pool.
-#[derive(Debug, Clone)]
-struct ClassStats {
-    /// Median warmup_seconds across replicas observed at this class.
-    median_warmup_secs: Option<f64>,
-    /// Mean chunks_processed across replicas observed at this class.
-    mean_chunks_processed: f64,
-    /// Number of replicas the summary recorded for this class.
-    n_replicas: usize,
-}
-
-/// Read a prior `fleet_summary.json` (local path or `s3://...` URI)
-/// and aggregate per-class stats. Returns a `BTreeMap<class_name,
-/// ClassStats>` so callers can do `observed.get(&class_name)`.
-async fn load_prior_fleet_summary(
-    parent: &R2ParentCreds,
-    path_or_uri: &str,
-) -> Result<std::collections::BTreeMap<String, ClassStats>> {
-    use std::collections::BTreeMap;
-
-    // Fetch bytes from local file or s3:// URI.
-    let bytes: Vec<u8> = if let Some(rest) = path_or_uri.strip_prefix("s3://") {
-        // rest is `<bucket>/<key...>`
-        let (bucket, key) = rest
-            .split_once('/')
-            .with_context(|| format!("malformed s3 URI {path_or_uri:?}"))?;
-        get_r2_object_bytes(parent, bucket, key)
-            .await
-            .with_context(|| format!("GET {path_or_uri}"))?
-    } else {
-        std::fs::read(path_or_uri)
-            .with_context(|| format!("read local file {path_or_uri}"))?
+    let spend = args.price_per_hour * f64::from(replicas_provisioned) * wall / 3600.0;
+    let summary = LauncherSummary {
+        sweep_id: fleet.sweep_id.clone(),
+        group_name: fleet.group_name.clone(),
+        image: fleet.image.clone(),
+        replicas: replicas_provisioned,
+        chunks: fleet.chunks,
+        gpu_class: gpu_class_names.join("|"),
+        wall_secs: wall,
+        t_first_sidecar_secs: fleet.poll.t_first_sidecar_secs,
+        t_all_n_sidecars_secs: fleet.poll.t_all_n_sidecars_secs,
+        t_done_secs: fleet.poll.t_done_secs,
+        distinct_workers_observed: fleet.poll.distinct_workers_observed,
+        throughput_chunks_per_sec: throughput,
+        estimated_spend_usd: spend,
+        teardown_ok: fleet.teardown_ok,
+        error_sidecars: fleet.poll.error_sidecars,
+        omni_sidecars: fleet.poll.omni_sidecars,
+        cells_per_chunk: args.cells_per_chunk,
+        replicas_requested: args.replicas,
+        replicas_provisioned,
+        chunks_redispatched: fleet.poll.chunks_redispatched,
+        chunks_speculatively_dispatched: fleet.poll.chunks_speculatively_dispatched,
+        classes_dropped_by_filter,
+        classes_kept_after_filter,
     };
+    println!("{}", serde_json::to_string(&summary).unwrap());
 
-    let v: serde_json::Value = serde_json::from_slice(&bytes)
-        .with_context(|| format!("parse JSON from {path_or_uri}"))?;
-    let replicas = v
-        .get("replicas")
-        .and_then(|x| x.as_array())
-        .with_context(|| format!("{path_or_uri}: missing `replicas` array"))?;
-
-    // Group by gpu_class.
-    let mut by_class: BTreeMap<String, (Vec<f64>, Vec<u64>)> = BTreeMap::new();
-    for r in replicas {
-        let class = r
-            .get("gpu_class")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string();
-        if class.is_empty() {
-            continue;
-        }
-        let warmup = r.get("warmup_seconds").and_then(|x| x.as_f64());
-        let chunks = r
-            .get("chunks_processed")
-            .and_then(|x| x.as_u64())
-            .unwrap_or(0);
-        let entry = by_class.entry(class).or_default();
-        if let Some(w) = warmup {
-            entry.0.push(w);
-        }
-        entry.1.push(chunks);
+    if !fleet.teardown_ok && !args.keep_running {
+        bail!("teardown of container group {} did not succeed", fleet.group_name);
     }
-
-    let mut out: BTreeMap<String, ClassStats> = BTreeMap::new();
-    for (class, (mut warmups, chunks)) in by_class {
-        warmups.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let median_warmup = if warmups.is_empty() {
-            None
-        } else {
-            let n = warmups.len();
-            Some(if n % 2 == 1 {
-                warmups[n / 2]
-            } else {
-                0.5 * (warmups[n / 2 - 1] + warmups[n / 2])
-            })
-        };
-        let mean_chunks = if chunks.is_empty() {
-            0.0
-        } else {
-            chunks.iter().copied().sum::<u64>() as f64 / chunks.len() as f64
-        };
-        out.insert(
-            class,
-            ClassStats {
-                median_warmup_secs: median_warmup,
-                mean_chunks_processed: mean_chunks,
-                n_replicas: chunks.len(),
-            },
-        );
-    }
-    // Tiny tickle of `n_replicas` so it isn't dead-code-removed; it's
-    // included in the struct for downstream tooling that may want it.
-    if out.values().any(|s| s.n_replicas > 0) {
-        // no-op
-    }
-    Ok(out)
+    Ok(())
 }
