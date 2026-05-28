@@ -151,6 +151,9 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
     use imgref::ImgRef;
     let wu = w as usize;
     let hu = h as usize;
+    // fast-ssim2 0.8.1: 256 = adapter default (~24 × strip_h × width × 4B
+    // peak; documented as the strip sweet spot in the crate).
+    const SSIM2_STRIP_H_BODY: u32 = 256;
     match mode {
         "full" => {
             let ri = ImgRef::new(rgb_pix(r), wu, hu);
@@ -166,7 +169,29 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             let v = pre.compare(di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:ssim2:{mode}")),
+        "strip" => {
+            // Phase 9.Z.B follow-on: real strip walker via fast-ssim2 0.8.1
+            // `compute_ssimulacra2_strip` (96-row halo, ~24 × strip_h ×
+            // width × 4 B peak heap). Bit-identical-tolerance parity vs.
+            // full at < 1e-2 (0..100 scale).
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let v = fast_ssim2::compute_ssimulacra2_strip(ri, di, SSIM2_STRIP_H_BODY)
+                .map_err(|e| format!("{e:?}"))?;
+            Ok(v)
+        }
+        "warm_ref_strip" => {
+            // Phase 9.Z.B follow-on: warm-ref + strip dist via
+            // `Ssimulacra2Reference::compare_strip` (~220 MiB at 40 MP).
+            // Cached XYB + sub-bands stay resident; only dist side strips.
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
+            let v = pre
+                .compare_strip(di, SSIM2_STRIP_H_BODY)
+                .map_err(|e| format!("{e:?}"))?;
+            Ok(v)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
@@ -209,6 +234,9 @@ fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
     let wu = w as usize;
     let hu = h as usize;
     let p = ButteraugliParams::new();
+    // butteraugli 0.9.3: 256 = adapter default (64-row halo, 3.8x heap
+    // reduction at 40 MP per the crate docs).
+    const BUTTER_STRIP_H_BODY: u32 = 256;
     match mode {
         "full" => {
             // Phase 9.Y: zero-copy reinterpret via bytemuck — mirrors the
@@ -231,7 +259,31 @@ fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             let result = pre.compare(d).map_err(|e| format!("compare: {e:?}"))?;
             Ok(result.score)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:butter:{mode}")),
+        "strip" => {
+            // Phase 9.Z.B follow-on: real strip walker via butteraugli 0.9.3
+            // `butteraugli_strip` (64-row halo). Adapter docs report
+            // 7.43 GB → 1.94 GB at 40 MP at equivalent wall time.
+            let rb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
+            let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+            let ri = ImgRef::new(rb, wu, hu);
+            let di = ImgRef::new(db, wu, hu);
+            let result =
+                butteraugli::butteraugli_strip(ri, di, &p, BUTTER_STRIP_H_BODY)
+                    .map_err(|e| format!("{e:?}"))?;
+            Ok(result.score)
+        }
+        "warm_ref_strip" => {
+            // Phase 9.Z.B follow-on: warm-ref + strip dist via
+            // `ButteraugliReference::compare_strip`. Requires reference
+            // built via `new` or `new_linear` (planar refs return
+            // `InvalidParameter`); we use `new` here per the adapter.
+            let pre = ButteraugliReference::new(r, wu, hu, p.clone())
+                .map_err(|e| format!("ButteraugliReference::new: {e:?}"))?;
+            let result = pre
+                .compare_strip(d, BUTTER_STRIP_H_BODY)
+                .map_err(|e| format!("compare_strip: {e:?}"))?;
+            Ok(result.score)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
@@ -280,14 +332,22 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
     let ri = RgbSlice::new(rgb_pix(r), w as usize, h as usize);
     let di = RgbSlice::new(rgb_pix(d), w as usize, h as usize);
     match mode {
-        "full" | "warm_ref" => {
-            // zensim has no public per-instance warm-reference; warm_ref
-            // falls back to full compute. (Note: precompute_reference
-            // returns a value-type ref; treated as separate "warm_ref" by
-            // computing once then scoring once. We mirror the
-            // cpu_adapter's no-cache behavior for `warm_ref` to keep
-            // numbers comparable.)
+        "full" => {
             let v = z.compute(&ri, &di).map_err(|e| format!("{e:?}"))?;
+            Ok(v.score())
+        }
+        "warm_ref" => {
+            // zensim's `precompute_reference` builds the XYB + pyramid
+            // for the source once; `compute_with_ref` runs only the
+            // dist-side per call. Closer to the production warm-ref
+            // pattern (`PrecomputedReference` reuse) than calling
+            // `compute()` again — mirrors what zenmetrics-orchestrator's
+            // cached-ref pool path would do if zensim's
+            // `PrecomputedReference` were wired through the adapter.
+            let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
+            let v = z
+                .compute_with_ref(&pre, &di)
+                .map_err(|e| format!("{e:?}"))?;
             Ok(v.score())
         }
         // Phase 9.Y finding #5 fix (2026-05-27): the original `strip`
