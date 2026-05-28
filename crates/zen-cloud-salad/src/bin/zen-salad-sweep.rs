@@ -237,8 +237,10 @@ struct Args {
     /// floored at 1 and capped at Salad's org quota of 10).
     /// Provides a buffer so slow allocations don't gate the
     /// fast workers: once enough chunks complete, teardown drops
-    /// the excess. Default 1.0 (no overshoot); recommended ≥1.4.
-    #[arg(long, default_value_t = 1.0)]
+    /// the excess. Default 1.7 (covers ~40% loss observed in
+    /// iter2/3 runs; higher values hit the 10-replica org quota
+    /// cap anyway).
+    #[arg(long, default_value_t = 1.7)]
     replicas_overshoot: f64,
 
     /// Chunk-claim TTL in seconds. If a chunk has been queued for
@@ -246,10 +248,10 @@ struct Args {
     /// the launcher re-pushes the same chunk JSON onto the queue.
     /// Worker idempotency (sidecar-existence check) makes this
     /// safe: a duplicate worker arriving after the original
-    /// finishes is a no-op. Default 240s (4 minutes) — long enough
-    /// to span a normal cold-start (~80s) + first chunk processing
-    /// (~80s) with margin.
-    #[arg(long, default_value_t = 240)]
+    /// finishes is a no-op. Default 360s (6 minutes) — accommodates
+    /// Salad cold-start of ~270-330s observed in iter2/3 runs
+    /// (TTL=240s fired BEFORE any replica reached `running`).
+    #[arg(long, default_value_t = 360)]
     chunk_ttl_secs: u64,
 
     /// Optional path or `s3://...` URI to a prior `fleet_summary.json`.
