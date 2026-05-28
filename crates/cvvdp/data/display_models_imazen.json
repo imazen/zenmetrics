@@ -1,0 +1,12 @@
+{
+    "modern_oled_phone_indoor": {
+        "name": "Modern OLED smartphone, indoor SDR viewing with auto-brightness. y_peak is the SDR auto-brightness setpoint (~400 cd/m^2 indoors), NOT the panel's HDR/sunlight peak (1000-2000 cd/m^2). The OLED's near-zero native black (0.0005 cd/m^2) is washed out by 250 lux ambient reflection, so effective contrast is ~1000:1. Imazen reference condition for phone-targeted web image scoring; not from upstream ColorVideoVDP.",
+        "resolution": [2532, 1170],
+        "viewing_distance_meters": 0.35,
+        "diagonal_size_inches": 6.1,
+        "max_luminance": 400,
+        "min_luminance": 0.0005,
+        "E_ambient": 250,
+        "source": "imazen"
+    }
+}

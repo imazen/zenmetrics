@@ -58,7 +58,7 @@
 
 use alloc::vec::Vec;
 
-use cvvdp_gpu::kernels::csf::N_L_BKG;
+use crate::kernels::csf::N_L_BKG;
 
 use crate::simd_math::vexp_into;
 
@@ -66,7 +66,7 @@ use crate::simd_math::vexp_into;
 /// to `log_s` before the `10^x` step (matches the GPU 3ch fused
 /// kernel's `log_correction` constant + the legacy
 /// `pipeline.rs::LOG_SENSITIVITY_CORRECTION`).
-const LOG_SENSITIVITY_CORRECTION: f32 = cvvdp_gpu::kernels::csf::SENSITIVITY_CORRECTION_DB / 20.0;
+const LOG_SENSITIVITY_CORRECTION: f32 = crate::kernels::csf::SENSITIVITY_CORRECTION_DB / 20.0;
 
 /// `1.0 / (LOG_L_BKG_AXIS[N-1] - LOG_L_BKG_AXIS[0]) * (N - 1)` = 31 /
 /// 6.30103 ≈ 4.919830570... — the CSF L_bkg axis is uniform in log10
@@ -170,7 +170,7 @@ pub(crate) fn compute_sensitivities_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvvdp_gpu::kernels::csf::{CsfChannel, precompute_logs_row};
+    use crate::kernels::csf::{CsfChannel, precompute_logs_row};
 
     /// Scalar reference replicating `pipeline::apply_csf_row_per_pixel`
     /// exactly so we can directly compare.

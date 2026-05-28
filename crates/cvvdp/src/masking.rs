@@ -1,6 +1,6 @@
 //! Fast `mult_mutual_band` with caller-owned scratch.
 //!
-//! Functionally identical to `cvvdp_gpu::kernels::masking::mult_mutual_band`
+//! Functionally identical to `crate::kernels::masking::mult_mutual_band`
 //! but:
 //!
 //! - Precomputes `D_MAX_LINEAR = 10^D_MAX`, `MASK_C_LINEAR = 10^MASK_C`
@@ -17,7 +17,7 @@
 
 use alloc::vec::Vec;
 
-use cvvdp_gpu::kernels::masking::{D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
+use crate::kernels::masking::{D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
 
 use crate::simd_math::safe_pow_with_offset_into;
 use crate::simd_pyramid::gaussian_blur_sigma3_simd;
@@ -215,7 +215,7 @@ pub(crate) fn mult_mutual_band_into(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvvdp_gpu::kernels::masking::mult_mutual_band;
+    use crate::kernels::masking::mult_mutual_band;
 
     #[test]
     fn matches_upstream_on_random() {

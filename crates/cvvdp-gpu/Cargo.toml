@@ -32,9 +32,14 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 cubecl-types = []
 
 [dependencies]
+# CPU-side scalar reference + shared params/presets/Score types. Phase
+# 8c.1-B flipped this direction so the GPU crate consumes from the CPU
+# crate (the canonical "no GPU" reference now lives in cvvdp).
+cvvdp = { workspace = true, default-features = false, features = ["std"] }
 cubecl = { workspace = true }
 # JSON parsing for the vendored display_models.json / color_spaces.json
-# preset registry (src/presets.rs). Workspace serde_json is 1.x.
+# preset registry (re-exported from cvvdp::presets, but cvvdp-gpu's own
+# tests still parse JSON directly). Workspace serde_json is 1.x.
 serde_json = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }

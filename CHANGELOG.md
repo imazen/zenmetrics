@@ -60,6 +60,24 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Phase 8c.1-B — `cvvdp-gpu` now depends on `cvvdp` (gpu→cpu dep direction)**
+  (cc4046fe). Shared params, host_scalar reference impl, presets +
+  vendored JSON data files, and the scalar portions of the kernel
+  files (pool / masking / pyramid / csf / color / diffmap constants
+  and reference functions) moved from `cvvdp-gpu` to `cvvdp`. The GPU
+  crate's `cvvdp_gpu::{params, presets}` modules are now thin
+  `pub use cvvdp::{params, presets}::*` shims so existing callsites
+  resolve unchanged. cvvdp-gpu retains its own copies of the kernel
+  scalar constants alongside the `#[cube(launch)]` kernels (the cube
+  macros reference them by-name in the module scope; making them
+  re-exports would require careful cube-macro name-resolution work
+  deferred to a follow-up). The duplicated constants are bit-identical
+  between the two crates — verified by 43/43 cvvdp lib tests passing
+  + workspace builds clean + parity sweep cell values matching the
+  `phase771_run3` baseline bit-for-bit (8/9 cvvdp cells PASS-EXACT,
+  cvvdp 4096/q=20 PASS within 1.4e-4 JOD tolerance, matching baseline
+  exactly). Audit reference: `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`
+  section A.5.
 - **`zenmetrics-orchestrator` Phase 8h — ssim2 CPU adapter switched
   from upstream `ssimulacra2` 0.5 to Imazen's SIMD-accelerated
   `fast-ssim2` 0.8.** Per the global crate index, `fast-ssim2` is our

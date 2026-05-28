@@ -3,9 +3,9 @@
 //! Honors `display.eotf` (Srgb / Pq / Hlg / Linear / Bt1886 /
 //! Gamma(g)) and `display.primaries` (Bt709 / Bt2020 / DisplayP3 /
 //! DciP3) via the host-scalar helpers in
-//! [`cvvdp_gpu::kernels::color`]. For `Eotf::Srgb + Primaries::Bt709`
+//! [`crate::kernels::color`]. For `Eotf::Srgb + Primaries::Bt709`
 //! the result is bit-identical to the historical hardcoded path (and
-//! to `cvvdp_gpu::host_scalar::predict_jod_still_3ch`). For any
+//! to `crate::host_scalar::predict_jod_still_3ch`). For any
 //! other configuration the EOTF + matrix dispatch fires per-pixel.
 //!
 //! The 256-entry sRGB→linear LUT path is preserved for the common
@@ -14,10 +14,10 @@
 
 use alloc::vec::Vec;
 
-use cvvdp_gpu::kernels::color::{
+use crate::kernels::color::{
     SRGB8_TO_LINEAR_LUT, display_byte_to_dkl_scalar, display_linear_rgb_to_dkl_scalar,
 };
-use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
+use crate::params::{DisplayModel, Eotf, Primaries};
 
 /// sRGB packed-u8 (RGBRGB…) → DKL planar (A, RG, VY).
 ///
@@ -168,7 +168,7 @@ pub(crate) fn linear_planes_to_dkl_planar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
+    use crate::params::{DisplayModel, Eotf, Primaries};
 
     /// W44 test naming: each test pins ONE upstream parity claim.
 
@@ -176,7 +176,7 @@ mod tests {
     fn srgb_byte_matches_scalar_reference() {
         // Identical pixel data feeding our planar fn should match
         // cvvdp-gpu's host scalar (which is the goldens contract).
-        use cvvdp_gpu::kernels::color::srgb_byte_to_dkl_scalar;
+        use crate::kernels::color::srgb_byte_to_dkl_scalar;
         let display = DisplayModel::STANDARD_4K;
         let w = 4;
         let h = 4;
@@ -257,7 +257,7 @@ mod tests {
     /// helper.
     #[test]
     fn fast_path_matches_dispatch_on_standard_4k() {
-        use cvvdp_gpu::kernels::color::display_byte_to_dkl_scalar;
+        use crate::kernels::color::display_byte_to_dkl_scalar;
         let display = DisplayModel::STANDARD_4K;
         let w = 8;
         let h = 8;
@@ -287,7 +287,7 @@ mod tests {
     /// per-pixel output that matches `display_byte_to_dkl_scalar`.
     #[test]
     fn dispatch_path_matches_scalar_for_pq_bt2020() {
-        use cvvdp_gpu::kernels::color::display_byte_to_dkl_scalar;
+        use crate::kernels::color::display_byte_to_dkl_scalar;
         let display = DisplayModel {
             y_peak: 1500.0,
             y_black: 0.0015,
@@ -328,7 +328,7 @@ mod tests {
     /// branch end-to-end through the planar entry point.
     #[test]
     fn dispatch_path_matches_scalar_for_hlg_bt2020() {
-        use cvvdp_gpu::kernels::color::display_byte_to_dkl_scalar;
+        use crate::kernels::color::display_byte_to_dkl_scalar;
         let display = DisplayModel {
             y_peak: 1500.0,
             y_black: 0.0015,
@@ -364,7 +364,7 @@ mod tests {
     /// Verifies dispatch correctness for the non-LUT EOTF.
     #[test]
     fn dispatch_path_matches_scalar_for_gamma_bt709() {
-        use cvvdp_gpu::kernels::color::display_byte_to_dkl_scalar;
+        use crate::kernels::color::display_byte_to_dkl_scalar;
         let display = DisplayModel {
             y_peak: 200.0,
             y_black: 0.2,
@@ -425,7 +425,7 @@ mod tests {
         linear_planes_to_dkl_planar(&r, &g, &b, w, h, w, display, &mut a, &mut rg, &mut vy);
         // BT.2020 matrix produces NOTICEABLY different chroma values
         // than BT.709 for the same primary-saturated input.
-        use cvvdp_gpu::kernels::color::display_linear_rgb_to_dkl_scalar;
+        use crate::kernels::color::display_linear_rgb_to_dkl_scalar;
         for i in 0..w * h {
             let (ea, erg, evy) = display_linear_rgb_to_dkl_scalar(r[i], g[i], b[i], display);
             assert!((a[i] - ea).abs() < 1e-4, "A mismatch at i={i}");
@@ -455,7 +455,7 @@ mod tests {
         let mut vy = vec![];
         linear_planes_to_dkl_planar(&r, &g, &b, w, h, w, display, &mut a, &mut rg, &mut vy);
         // Recompute via the historical inline arithmetic.
-        use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
+        use crate::params::SRGB_LINEAR_TO_DKL as M;
         let s = display.y_peak - display.y_black;
         let bias = display.y_black + display.y_refl;
         for i in 0..w * h {

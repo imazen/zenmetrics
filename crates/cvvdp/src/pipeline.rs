@@ -1,6 +1,6 @@
 //! Public `Cvvdp` scorer + the end-to-end pipeline orchestration.
 //!
-//! Mirrors `cvvdp_gpu::host_scalar::predict_jod_still_3ch_capped`
+//! Mirrors `crate::host_scalar::predict_jod_still_3ch_capped`
 //! algorithmically — the host-scalar path IS the f32-precision
 //! reference the GPU pipeline is validated against. We re-use cvvdp-gpu's
 //! constants and per-pixel masking/CSF helpers verbatim. The CPU-port
@@ -21,11 +21,11 @@ use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_co
 use crate::scratch::{BandWorkspace, Scratch};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
-use cvvdp_gpu::kernels::csf::{
+use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, SENSITIVITY_CORRECTION_DB,
     precompute_logs_row,
 };
-use cvvdp_gpu::kernels::masking::CH_GAIN;
+use crate::kernels::masking::CH_GAIN;
 
 use crate::masking::mult_mutual_band_into;
 

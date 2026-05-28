@@ -1,22 +1,40 @@
 metric,size,q,legacy,orchestrator,abs_diff,tolerance,verdict,legacy_extra_cols,orch_extra_cols,notes
-cvvdp,256,20,9.296264,9.296264,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=9.296264,cvvdp_imazen_v0_0_1=9.296264,
-cvvdp,256,50,9.695044,9.695044,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=9.695044,cvvdp_imazen_v0_0_1=9.695044,
-cvvdp,256,80,9.831320,9.831320,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=9.831320,cvvdp_imazen_v0_0_1=9.831320,
-cvvdp,1024,20,8.741311,8.741311,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=8.741311,cvvdp_imazen_v0_0_1=8.741311,
-cvvdp,1024,50,9.602884,9.602884,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=9.602884,cvvdp_imazen_v0_0_1=9.602884,
-cvvdp,1024,80,9.828098,9.828098,0.000000e+00,1.000000e-03,PASS-EXACT,cvvdp_imazen_v0_0_1=9.828098,cvvdp_imazen_v0_0_1=9.828098,
-cvvdp,4096,20,8.824126,8.824268,1.420975e-04,1.000000e-03,PASS,cvvdp_imazen_v0_0_1=8.824126,cvvdp_imazen_v0_0_1=8.824268,
-cvvdp,4096,50,9.576204,9.576591,3.862381e-04,1.000000e-03,PASS,cvvdp_imazen_v0_0_1=9.576204,cvvdp_imazen_v0_0_1=9.576591,
-cvvdp,4096,80,9.825951,9.826287,3.366470e-04,1.000000e-03,PASS,cvvdp_imazen_v0_0_1=9.825951,cvvdp_imazen_v0_0_1=9.826287,
+cvvdp,256,20,,9.296264,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.296264,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,256,50,,9.695044,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.695044,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,256,80,,9.831320,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.831320,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,1024,20,,8.741311,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=8.741311,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,1024,50,,9.602884,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.602884,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,1024,80,,9.828098,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.828098,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,4096,20,,8.824267,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=8.824267,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,4096,50,,9.576591,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.576591,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
+cvvdp,4096,80,,9.826287,inf,1.000000e-03,FAIL,,cvvdp_imazen_v0_0_1=9.826287,"legacy_err= Ryzen 9 7950X 16-Core Processor cache=/home/lilith/.cache/zenmetrics/capability_6bfc55005d24a81a.toml
+error: orchestrator: chooser: no feasible backend (considered 4 candidates) (backends tried: [])
+"
 ssim2-gpu,256,20,50.369539,50.369539,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 ssim2-gpu,256,50,67.564850,67.564850,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 ssim2-gpu,256,80,74.543556,74.543556,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 ssim2-gpu,1024,20,16.577593,16.577593,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 ssim2-gpu,1024,50,52.221685,52.221685,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 ssim2-gpu,1024,80,66.478549,66.478549,0.000000e+00,5.000000e-04,PASS-EXACT,,,
-ssim2-gpu,4096,20,2.738577,2.731015,7.562152e-03,5.000000e-04,FAIL,,,
-ssim2-gpu,4096,50,42.531040,42.529678,1.362077e-03,5.000000e-04,FAIL,,,
-ssim2-gpu,4096,80,61.722500,61.712934,9.566259e-03,5.000000e-04,FAIL,,,
+ssim2-gpu,4096,20,2.738577,2.738577,0.000000e+00,5.000000e-04,PASS-EXACT,,,
+ssim2-gpu,4096,50,42.531040,42.531040,0.000000e+00,5.000000e-04,PASS-EXACT,,,
+ssim2-gpu,4096,80,61.722500,61.722500,0.000000e+00,5.000000e-04,PASS-EXACT,,,
 dssim-gpu,256,20,0.006545,0.006545,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 dssim-gpu,256,50,0.002722,0.002722,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 dssim-gpu,256,80,0.001532,0.001532,0.000000e+00,5.000000e-05,PASS-EXACT,,,
@@ -26,30 +44,30 @@ dssim-gpu,1024,80,0.002543,0.002543,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 dssim-gpu,4096,20,0.014045,0.014045,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 dssim-gpu,4096,50,0.006032,0.006032,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 dssim-gpu,4096,80,0.002970,0.002970,0.000000e+00,5.000000e-05,PASS-EXACT,,,
-butteraugli-gpu,256,20,7.290324,6.293411,9.969134e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=3.169172,butteraugli_pnorm3_gpu=2.687385,pnorm3 diverged by 4.817867e-01
-butteraugli-gpu,256,50,3.207370,3.030164,1.772058e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.976431,butteraugli_pnorm3_gpu=1.765598,pnorm3 diverged by 2.108327e-01
-butteraugli-gpu,256,80,2.765682,2.731609,3.407311e-02,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.575412,butteraugli_pnorm3_gpu=1.464955,pnorm3 diverged by 1.104569e-01
-butteraugli-gpu,1024,20,6.274173,5.149696,1.124477e+00,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=2.803074,butteraugli_pnorm3_gpu=2.331994,pnorm3 diverged by 4.710798e-01
-butteraugli-gpu,1024,50,3.533831,3.118569,4.152613e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.962935,butteraugli_pnorm3_gpu=1.743406,pnorm3 diverged by 2.195297e-01
-butteraugli-gpu,1024,80,2.878555,2.766140,1.124144e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.572680,butteraugli_pnorm3_gpu=1.457047,pnorm3 diverged by 1.156325e-01
-butteraugli-gpu,4096,20,5.670236,4.964922,7.053137e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=2.624341,butteraugli_pnorm3_gpu=2.190122,pnorm3 diverged by 4.342189e-01
-butteraugli-gpu,4096,50,3.746134,3.387536,3.585978e-01,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.979488,butteraugli_pnorm3_gpu=1.749942,pnorm3 diverged by 2.295463e-01
-butteraugli-gpu,4096,80,3.206090,3.213450,7.359743e-03,5.000000e-04,FAIL,butteraugli_pnorm3_gpu=1.580256,butteraugli_pnorm3_gpu=1.459296,pnorm3 diverged by 1.209601e-01
-iwssim-gpu,256,20,0.926276,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.926276,
-iwssim-gpu,256,50,0.968235,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.968235,
-iwssim-gpu,256,80,0.986055,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.986055,
-iwssim-gpu,1024,20,0.858085,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.858085,
-iwssim-gpu,1024,50,0.953837,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.953837,
-iwssim-gpu,1024,80,0.983684,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.983684,
-iwssim-gpu,4096,20,0.860366,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.860366,
-iwssim-gpu,4096,50,0.951840,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.951840,
-iwssim-gpu,4096,80,0.983449,,inf,5.000000e-05,FAIL,,iwssim_imazen_v0_0_1=0.983449,
+butteraugli-gpu,256,20,7.290324,7.290324,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=3.169172,butteraugli_pnorm3_gpu=3.169172,pnorm3_diff=0.000000e+00
+butteraugli-gpu,256,50,3.207370,3.207370,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.976431,butteraugli_pnorm3_gpu=1.976431,pnorm3_diff=0.000000e+00
+butteraugli-gpu,256,80,2.765682,2.765682,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.575412,butteraugli_pnorm3_gpu=1.575412,pnorm3_diff=0.000000e+00
+butteraugli-gpu,1024,20,6.274173,6.274173,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=2.803074,butteraugli_pnorm3_gpu=2.803074,pnorm3_diff=0.000000e+00
+butteraugli-gpu,1024,50,3.533831,3.533831,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.962935,butteraugli_pnorm3_gpu=1.962935,pnorm3_diff=0.000000e+00
+butteraugli-gpu,1024,80,2.878555,2.878555,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.572680,butteraugli_pnorm3_gpu=1.572680,pnorm3_diff=0.000000e+00
+butteraugli-gpu,4096,20,5.670236,5.670236,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=2.624341,butteraugli_pnorm3_gpu=2.624341,pnorm3_diff=0.000000e+00
+butteraugli-gpu,4096,50,3.746134,3.746134,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.979488,butteraugli_pnorm3_gpu=1.979488,pnorm3_diff=0.000000e+00
+butteraugli-gpu,4096,80,3.206090,3.206090,0.000000e+00,5.000000e-04,PASS-EXACT,butteraugli_pnorm3_gpu=1.580256,butteraugli_pnorm3_gpu=1.580256,pnorm3_diff=0.000000e+00
+iwssim-gpu,256,20,0.926276,0.926276,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,256,50,0.968235,0.968235,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,256,80,0.986055,0.986055,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,1024,20,0.858085,0.858085,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,1024,50,0.953837,0.953837,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,1024,80,0.983684,0.983684,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,4096,20,0.860366,0.860366,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,4096,50,0.951840,0.951840,0.000000e+00,5.000000e-05,PASS-EXACT,,,
+iwssim-gpu,4096,80,0.983449,0.983449,0.000000e+00,5.000000e-05,PASS-EXACT,,,
 zensim-gpu,256,20,49.207358,49.207358,0.000000e+00,5.000000e-03,PASS-EXACT,,,
 zensim-gpu,256,50,64.038768,64.038768,0.000000e+00,5.000000e-03,PASS-EXACT,,,
 zensim-gpu,256,80,74.299704,74.299704,0.000000e+00,5.000000e-03,PASS-EXACT,,,
 zensim-gpu,1024,20,23.997321,23.997321,0.000000e+00,5.000000e-03,PASS-EXACT,,,
 zensim-gpu,1024,50,50.256124,50.256124,0.000000e+00,5.000000e-03,PASS-EXACT,,,
 zensim-gpu,1024,80,63.856136,63.856136,0.000000e+00,5.000000e-03,PASS-EXACT,,,
-zensim-gpu,4096,20,13.983181,13.982009,1.172542e-03,5.000000e-03,PASS,,,
-zensim-gpu,4096,50,37.642540,37.646377,3.837270e-03,5.000000e-03,PASS,,,
-zensim-gpu,4096,80,53.881700,53.753999,1.277005e-01,5.000000e-03,FAIL,,,
+zensim-gpu,4096,20,13.983181,13.983181,0.000000e+00,5.000000e-03,PASS-EXACT,,,
+zensim-gpu,4096,50,37.642540,37.642540,0.000000e+00,5.000000e-03,PASS-EXACT,,,
+zensim-gpu,4096,80,53.881700,53.881700,0.000000e+00,5.000000e-03,PASS-EXACT,,,

@@ -31,12 +31,12 @@
 
 use alloc::vec::Vec;
 
-use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
-use cvvdp_gpu::kernels::pyramid::GAUSS5;
+use crate::kernels::masking::PU_BLUR_KERNEL_1D;
+use crate::kernels::pyramid::GAUSS5;
 
 /// Reflect `i` into `[0, n)` for the 13-tap PU blur. Matches
 /// torchvision's `F.pad(..., mode='reflect')` behaviour exactly —
-/// bit-equivalent to `cvvdp_gpu::kernels::masking::reflect_idx_for_blur`
+/// bit-equivalent to `crate::kernels::masking::reflect_idx_for_blur`
 /// (private upstream, re-implemented locally for SIMD boundary use).
 #[inline]
 fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
@@ -67,7 +67,7 @@ fn reflect_idx_for_blur(i: isize, n: usize) -> usize {
 // reduce_vertical_pass — sw × dh output buffer
 // ============================================================================
 //
-// Per scalar reference (cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar):
+// Per scalar reference (crate::kernels::pyramid::gausspyr_reduce_scalar):
 //   for dy in 0..dh:
 //     cy = 2 * dy
 //     for x in 0..sw:
@@ -425,7 +425,7 @@ pub(crate) fn reduce_horizontal_pass(
 // expand_vertical_pass — sw × out_h output buffer (zero-insert 5-tap)
 // ============================================================================
 //
-// Per scalar reference (cvvdp_gpu::kernels::pyramid::gausspyr_expand_scalar):
+// Per scalar reference (crate::kernels::pyramid::gausspyr_expand_scalar):
 //   For each column x:
 //     Build z_v of length (out_h + 4):
 //       z_v[0]              = src[0,x]                   (left mirror)
@@ -790,7 +790,7 @@ pub(crate) fn expand_horizontal_pass(
 // self-time at 1024² per the 2026-05-25 flamegraph). Called 3× per
 // non-baseband band by `mult_mutual_band_into`.
 //
-// Per scalar reference (`cvvdp_gpu::kernels::masking::gaussian_blur_sigma3`):
+// Per scalar reference (`crate::kernels::masking::gaussian_blur_sigma3`):
 //   half = 6
 //   for y in 0..h:
 //     for x in 0..w:
@@ -1221,7 +1221,7 @@ pub(crate) fn pu_blur_vertical_pass(h_pass: &[f32], w: usize, h: usize, dst: &mu
 
 /// Full σ=3 13-tap separable Gaussian blur with caller-owned scratch.
 ///
-/// Replacement for `cvvdp_gpu::kernels::masking::gaussian_blur_sigma3`
+/// Replacement for `crate::kernels::masking::gaussian_blur_sigma3`
 /// that avoids an internal allocation. `h_pass` is the horizontal-pass
 /// scratch (resized to `w*h` internally); `dst` receives the final
 /// blurred output. Same reflect-padding semantics as the upstream
@@ -1523,7 +1523,7 @@ mod tests {
 
     #[test]
     fn pu_blur_simd_matches_upstream_scalar() {
-        use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+        use crate::kernels::masking::gaussian_blur_sigma3;
         // Sizes spanning the no-blur PU_PADSIZE = 6 cutoff (caller guards
         // against w ≤ 6 || h ≤ 6) AND a mix of SIMD-interior + tail
         // cases: 16 == 8-lane × 2, 17 forces one scalar tail col, 32 ==
@@ -1580,7 +1580,7 @@ mod tests {
 
     #[test]
     fn pu_blur_simd_horizontal_only_parity() {
-        use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+        use crate::kernels::masking::PU_BLUR_KERNEL_1D;
         // Validate the horizontal pass in isolation against a
         // line-by-line scalar reference. Catches lane-boundary issues
         // independently of the vertical pass.
@@ -1614,7 +1614,7 @@ mod tests {
 
     #[test]
     fn pu_blur_simd_vertical_only_parity() {
-        use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
+        use crate::kernels::masking::PU_BLUR_KERNEL_1D;
         // Validate the vertical pass in isolation.
         let k = PU_BLUR_KERNEL_1D;
         let cases: &[(usize, usize)] = &[(16, 16), (33, 33), (64, 64), (128, 100)];
@@ -1648,7 +1648,7 @@ mod tests {
     fn pu_blur_simd_reuses_scratch_safely() {
         // Calling twice with the same scratch vec must produce
         // identical output (no leftover state contamination).
-        use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+        use crate::kernels::masking::gaussian_blur_sigma3;
         let w = 64;
         let h = 64;
         let src1 = rng_seq(0xa1a1a1a1, w * h);

@@ -1207,10 +1207,10 @@ name = "cvvdp"
 version = "0.1.0"
 dependencies = [
  "archmage",
- "cvvdp-gpu",
  "image",
  "magetypes",
  "rayon",
+ "serde_json",
  "zenmetrics-corpus",
  "zenpixels",
  "zenpixels-convert",
@@ -1233,6 +1233,7 @@ dependencies = [
 name = "cvvdp-gpu"
 version = "0.0.1"
 dependencies = [
+ "cvvdp",
  "image",
  "serde_json",
  "sha2",

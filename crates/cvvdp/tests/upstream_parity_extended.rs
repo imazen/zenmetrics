@@ -17,7 +17,7 @@
 //! NOT widen the 1e-4 JOD tolerance the historical tests pinned.
 
 use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
-use cvvdp_gpu::params::{DisplayModel, Eotf, Primaries};
+use cvvdp::params::{DisplayModel, Eotf, Primaries};
 
 /// PPD that upstream computes for a `(W, H, distance_m, diag_inches)`
 /// tuple. Algebra in `vvdp_display_geometry.get_ppd()` —
@@ -734,7 +734,7 @@ fn primaries_change_shifts_chroma_score() {
 fn standard_4k_path_still_at_parity_against_host_scalar() {
     // This is the historic 1e-4 JOD parity contract. If THIS test
     // fails, we broke v0.0.1 numerics — STOP and revert.
-    use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
+    use cvvdp::host_scalar::predict_jod_still_3ch;
     let w = 64_usize;
     let h = 48_usize;
     let mut s = 1234_u32;

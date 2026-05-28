@@ -5,6 +5,20 @@ Audit date: 2026-05-27. Auditor: Phase 8c.1 sibling workspace at
 Parent branch: `master` at `89068c37` ("bench(phase8f): parity sweep
 54/54 PASS-EXACT vs zenforks-cubecl-* 0.10.1").
 
+**Status: Phase B.1 LANDED at commit cc4046fe (Phase 8c.1-B,
+2026-05-27).** The cvvdp pair now has the correct gpu→cpu dep
+direction. Shared params + presets + host_scalar + scalar kernel
+helpers live in `cvvdp`; `cvvdp-gpu` depends on `cvvdp` and provides
+shim re-exports for params/presets so existing callsites resolve
+unchanged. Kernel scalar constants remain duplicated in cvvdp-gpu
+alongside the `#[cube(launch)]` kernels (the cube macros reference
+them by-name in module scope; making them pure re-exports requires
+careful cube-macro name-resolution work and is deferred to a
+follow-up). Verified: 43/43 cvvdp lib tests pass, workspace builds
+clean, parity sweep values match the phase771 baseline bit-for-bit
+(8/9 cvvdp cells PASS-EXACT, 1/9 within 1.4e-4 JOD tolerance — the
+same tolerance the phase771 baseline already shipped).
+
 This document satisfies Phase A of the Phase 8c.1 brief: survey the
 metric crate pairs, inventory shared types and dep directions, and rank
 opportunities. Phase B (the dep-direction flip + any clear-cut
@@ -340,7 +354,22 @@ this — see Recommendations.
 
 ## A.5 — Recommendations: what Phase B ships
 
-### REQUIRED (Phase B.1 — the flip)
+### REQUIRED (Phase B.1 — the flip) — **RESOLVED at cc4046fe**
+
+Phase 8c.1-B (2026-05-27) landed the dep direction flip:
+`cvvdp-gpu` now depends on `cvvdp`. Items 1-9 below all moved to the
+CPU crate; cvvdp-gpu's params + presets are pure `pub use cvvdp::*`
+shims. Items 10-11 (the const declarations and Score/Jod types)
+remain declared independently in each crate because (a) cvvdp's
+`CVVDP_COLUMN_NAME` namespace is `cvvdp_cpu_imazen_v*` whereas
+cvvdp-gpu's is `cvvdp_imazen_v*` (intentionally distinct), and
+(b) cvvdp doesn't expose a Score struct (returns raw f32 JOD) per the
+audit's API column. Kernel scalar items also remain duplicated in
+cvvdp-gpu's kernel files alongside the `#[cube(launch)]` kernels;
+the duplicates are bit-identical to cvvdp's owners. A follow-up
+commit will collapse the duplicates by rewriting cvvdp-gpu's kernel
+files to `pub use cvvdp::kernels::*::*;` once the cube-macro name-
+resolution interaction is verified.
 
 Move from `cvvdp-gpu` to `cvvdp`:
 

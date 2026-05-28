@@ -727,7 +727,7 @@ fn blur_sigma3_full_equiv_vs_upstream() {
     // Full two-pass blur vs the canonical upstream scalar
     // `gaussian_blur_sigma3` (cvvdp-gpu). This is the end-to-end blur
     // contract — both passes composed.
-    use cvvdp_gpu::kernels::masking::gaussian_blur_sigma3;
+    use cvvdp::kernels::masking::gaussian_blur_sigma3;
     let mut env = Envelope::default();
     let mut rng = Rng::new(0x5151_5151_0003);
     let dists = [Dist::Unit, Dist::Large, Dist::Gaussian, Dist::LogUniform];

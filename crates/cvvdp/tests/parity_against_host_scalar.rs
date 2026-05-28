@@ -9,8 +9,8 @@
 //! csf / masking / pool).
 
 use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
-use cvvdp_gpu::host_scalar::predict_jod_still_3ch;
-use cvvdp_gpu::params::DisplayModel;
+use cvvdp::host_scalar::predict_jod_still_3ch;
+use cvvdp::params::DisplayModel;
 
 fn score_via_host_scalar(ref_srgb: &[u8], dist_srgb: &[u8], w: usize, h: usize) -> f32 {
     let display = DisplayModel::STANDARD_4K;
@@ -117,7 +117,7 @@ fn warm_ref_matches_cold_path() {
 
 #[test]
 fn linear_planes_entry_matches_srgb_byte_entry() {
-    use cvvdp_gpu::kernels::color::SRGB8_TO_LINEAR_LUT;
+    use cvvdp::kernels::color::SRGB8_TO_LINEAR_LUT;
     let w = 64;
     let h = 48;
     let r = make_grid(w, h, 71);

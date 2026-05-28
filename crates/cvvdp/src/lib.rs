@@ -44,12 +44,27 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-// Re-export upstream cvvdp-gpu params + JOD reference version so
-// callers can construct a CvvdpParams without an extra dependency
-// import. (The CPU port re-uses the same constants — there's exactly
-// one canonical set.)
-pub use cvvdp_gpu::PYCVVDP_REFERENCE_VERSION;
-pub use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry, DisplayModel, PerfMode};
+// Phase 8c.1-B: params + presets + the JOD reference version live in
+// this crate (CPU) as the canonical owner. cvvdp-gpu re-exports them
+// to preserve existing `cvvdp_gpu::params::*` callsites.
+pub mod params;
+pub mod presets;
+
+pub use params::{CvvdpParams, DisplayGeometry, DisplayModel, PerfMode};
+
+/// The pinned [`gfxdisp/ColorVideoVDP`](https://github.com/gfxdisp/ColorVideoVDP)
+/// reference version this implementation tracks for parity. Mirrors the
+/// const in `cvvdp-gpu` (which re-exports this); the canonical owner is
+/// the CPU crate per Phase 8c.1-B.
+pub const PYCVVDP_REFERENCE_VERSION: &str = "v0.5.4";
+
+/// Maximum pyramid depth supported by the kernel allocations.
+/// Pinned by `cvvdp-gpu/tests/lib_constants.rs::max_levels_cap_at_nine`.
+pub const MAX_LEVELS: usize = 9;
+
+/// Smallest logical width/height at which the pyramid keeps building
+/// further coarse levels. Pinned by `cvvdp-gpu/tests/lib_constants.rs`.
+pub const PYRAMID_MIN_DIM: u32 = 4;
 
 /// Stable column-name identifier for sweep sidecars.
 ///
@@ -73,6 +88,12 @@ pub const CVVDP_COLUMN_NAME: &str = match option_env!("CVVDP_CPU_IMPL_TAG") {
 /// Number of color channels in DKL opponent space (achromatic +
 /// red-green + violet-yellow).
 pub const N_CHANNELS: usize = 3;
+
+// Scalar kernel helpers (moved from cvvdp-gpu in Phase 8c.1-B).
+pub mod kernels;
+
+// Composed scalar reference pipeline (canonical "no GPU" impl).
+pub mod host_scalar;
 
 mod color;
 #[allow(dead_code)]
@@ -102,8 +123,8 @@ pub mod __simd_equiv_test_api {
     use alloc::vec::Vec;
 
     /// Kernel constants used by the scalar references in the harness.
-    pub use cvvdp_gpu::kernels::masking::PU_BLUR_KERNEL_1D;
-    pub use cvvdp_gpu::kernels::pyramid::GAUSS5;
+    pub use crate::kernels::masking::PU_BLUR_KERNEL_1D;
+    pub use crate::kernels::pyramid::GAUSS5;
 
     // Thin `pub fn` wrappers around the `pub(crate)` kernel entry
     // points. A `pub use` of a `pub(crate)` item is rejected by the

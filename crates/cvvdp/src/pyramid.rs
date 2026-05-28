@@ -1,6 +1,6 @@
 //! Gaussian reduce/expand + Weber-contrast pyramid per channel.
 //!
-//! Bit-exact port of `cvvdp_gpu::kernels::pyramid::{gausspyr_reduce_scalar,
+//! Bit-exact port of `crate::kernels::pyramid::{gausspyr_reduce_scalar,
 //! gausspyr_expand_scalar, weber_contrast_pyr_dec_scalar}` — preserves
 //! the pycvvdp v0.5.4 boundary bug compatibility (lpyr_dec.py:204-209
 //! "x.shape[-2]" parity quirk) so goldens match.
@@ -13,12 +13,12 @@
 //! - Allocates output `Band` data lazily into a single contiguous
 //!   `Vec<f32>` then re-slices per band (less heap fragmentation).
 //! - The `band_frequencies` helper is identical and re-exported via
-//!   `cvvdp_gpu::kernels::pyramid::band_frequencies` (avoiding a
+//!   `crate::kernels::pyramid::band_frequencies` (avoiding a
 //!   redefinition).
 
 use alloc::vec::Vec;
 
-pub(crate) use cvvdp_gpu::kernels::pyramid::{GAUSS5, band_frequencies};
+pub(crate) use crate::kernels::pyramid::{GAUSS5, band_frequencies};
 
 /// One Laplacian / Weber pyramid band.
 pub(crate) struct Band {
@@ -65,7 +65,7 @@ pub(crate) struct PyramidScratch {
 }
 
 /// 2D separable 5-tap Gaussian + 2× decimation, ceil-halving.
-/// Bit-identical to `cvvdp_gpu::kernels::pyramid::gausspyr_reduce_scalar`
+/// Bit-identical to `crate::kernels::pyramid::gausspyr_reduce_scalar`
 /// for FMA-grouping-equivalent values, and within `< 1e-5 abs` for the
 /// SIMD inner-loop chunks (the 5-tap dot accumulator may schedule FMAs
 /// differently than the scalar `+` chain — the resulting numeric delta
@@ -147,7 +147,7 @@ pub(crate) fn gausspyr_reduce(
 
 /// 2× upscale: zero-insert + 5-tap Gaussian (×4 reconstruction gain
 /// split 2× per separable pass). Bit-identical to
-/// `cvvdp_gpu::kernels::pyramid::gausspyr_expand_scalar` for
+/// `crate::kernels::pyramid::gausspyr_expand_scalar` for
 /// FMA-grouping-equivalent values, and within `< 1e-5 abs` for the
 /// SIMD inner-loop chunks (see [`gausspyr_reduce`] for the FMA grouping
 /// note).
@@ -412,7 +412,7 @@ pub(crate) fn weber_contrast_pyr(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvvdp_gpu::kernels::pyramid::{
+    use crate::kernels::pyramid::{
         gausspyr_expand_scalar, gausspyr_reduce_scalar, weber_contrast_pyr_dec_scalar,
     };
 

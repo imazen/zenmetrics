@@ -49,9 +49,6 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 __simd_equiv_test = []
 
 [dependencies]
-# Shared CSF + DKL + masking constants come from cvvdp-gpu — we depend
-# directly so a future LUT bump only needs one update site.
-cvvdp-gpu = { workspace = true, default-features = false }
 # Safe SIMD dispatch via capability tokens. Used by:
 #  - the pyramid 5-tap Gaussian SIMD port (Chunk 2 of the SIMD plan,
 #    `simd_pyramid.rs`),
@@ -60,6 +57,9 @@ cvvdp-gpu = { workspace = true, default-features = false }
 #    used by the masking `safe_pow` calls.
 archmage = { workspace = true }
 magetypes = { workspace = true }
+# JSON parsing for vendored display_models.json / color_spaces.json
+# preset registry (src/presets.rs).
+serde_json = { workspace = true }
 rayon = { version = "1.10", optional = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
