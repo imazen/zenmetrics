@@ -180,16 +180,27 @@ fn mode_e_via_new_with_memory_mode_routes_to_strip() {
 
 #[test]
 fn mode_e_strip_h_body_explicit_override() {
+    // Phase 8j: `h_body` must be a positive power of two per the
+    // `Cvvdp::new_strip` / `new_with_memory_mode` constructor
+    // contract (see `memory_mode.rs::MemoryMode::Strip` docs and
+    // the `mode_e_rejects_misaligned_h_body` test below). The
+    // pre-Phase-8j form of this test passed `Some(768)` (= 3 ×
+    // STRIP_ALIGN), which is no longer accepted now that the
+    // constructor validates the power-of-two rule directly. 1024
+    // is the next valid value above the default (STRIP_H_BODY_DEFAULT
+    // = STRIP_ALIGN = 256); using a non-default value still
+    // exercises the "explicit override survives round-trip" contract
+    // that the original test was pinning.
     let client = Backend::client(&Default::default());
     let cvvdp = Cvvdp::<Backend>::new_with_memory_mode(
         client,
         64,
         64,
         CvvdpParams::PLACEHOLDER,
-        MemoryMode::Strip { h_body: Some(768) }, // 3 × STRIP_ALIGN
+        MemoryMode::Strip { h_body: Some(1024) }, // valid power-of-two override above default
     )
     .expect("new_with_memory_mode Strip explicit");
-    assert_eq!(cvvdp.strip_h_body(), Some(768));
+    assert_eq!(cvvdp.strip_h_body(), Some(1024));
 }
 
 #[test]
