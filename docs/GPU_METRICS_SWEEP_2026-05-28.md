@@ -100,14 +100,31 @@ The headline strip-mode value: how much VRAM does going Strip save?
 | dssim-gpu        | 3233     | 897       | 3.6×             | Strip pays              |
 | iwssim-gpu (gray)| 2209     | 545       | 4.1×             | Strip pays              |
 | iwssim-gpu (rgb) | 2210     | 546       | 4.1×             | Strip pays (RGB native) |
-| zensim-gpu       | 1185     | 1249      | **0.95×**        | Strip ≈ Full at 16 MP   |
+| zensim-gpu       | 1185     | 289 †     | **4.1×** †       | Strip pays (post task #138 fix) |
 | cvvdp-gpu        | 3969     | n/a       | (warm_ref_strip 3969) | Strip-only mode panics; Mode E warm_ref_strip retains full REF state |
 
-**zensim-gpu finding**: strip mode does NOT meaningfully reduce VRAM
-at 16 MP because the per-scale pyramid (`41 B × pyramid_pixels`) is
-already small, and the strip walker still pays the pyramid for each
-strip's height.  At 40 MP, strip drops from 2209 → 1281 MiB (1.7×) —
-the savings only kick in once the full-image pyramid is large enough.
+`†` zensim-gpu strip remeasured after task #138 (2026-05-28). The
+1249 MiB / 0.95× shown by the original sweep was a redundant
+full-image device ref XYB pyramid built by the cold one-shot
+`compute_features_vec` path; routing it through
+`set_reference_host_cached_only` drops strip to 289 MiB (0.24× of
+Full) at 16 MP. See `crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`.
+
+**zensim-gpu finding** (UPDATED task #138, 2026-05-28): the original
+sweep's "strip ≈ Full at 16 MP (0.95×)" was a measurement of the
+redundant full-image device ref XYB pyramid that the cold one-shot
+`compute_features_vec` path built via `set_reference` (task #75's
+warm-loop device cache). That cache earns its keep only across MANY
+warm `compute_with_reference` iters; for a single dist call it was
+pure additive device-side overhead. Task #138 routes cold one-shot
+strip through `set_reference_host_cached_only`, eliminating it. After
+the fix (RTX 5070, CUDA, reps=4, back-to-back same baseline): 16 MP
+strip 1249 → **289 MiB** (1.05× → 0.24× of Full's 1185 MiB); 40 MP
+strip 1281 → **513 MiB** (0.58× → 0.23× of Full's 2209 MiB). Score
+bit-identical (feat[0] 0.978717 @16 MP, 0.978719 @40 MP). The
+warm-loop `warm_ref_strip` path is unchanged and keeps the device
+cache for its 1.07-1.89× speedup. Data:
+`crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`.
 
 **cvvdp-gpu finding**: the `strip` constructor produces a Mode E
 strip pipeline, but `compute_dkl_jod` (cold-ref) panics because Mode

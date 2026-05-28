@@ -17,6 +17,37 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Fixed
+
+- **zensim-gpu cold one-shot strip no longer builds the redundant
+  full-image device ref XYB pyramid** (task #138, 2026-05-28).
+  `Zensim::compute_features_vec` (the cold one-shot
+  set-reference-then-one-compute entry, used by `compute_features`,
+  the opaque score paths, and all parity tests) now routes strip-mode
+  reference setup through `set_reference_host_cached_only` instead of
+  `set_reference`. `set_reference` builds a full-image device ref XYB
+  pyramid (task #75) that earns its keep only across MANY warm
+  `compute_with_reference` iterations; building it for a single dist
+  call was pure additive device-side overhead, making strip peak VRAM
+  ≈ Full ("the mode that wins nothing"). The host-cached-only path
+  rebuilds the ref XYB per strip — bit-exact to the device-cache
+  row-slice (aligned strip starts) — so scores are unchanged. The
+  warm-loop path (`set_reference` once + repeated
+  `compute_with_reference`) is **untouched** and keeps the device cache
+  for its speed benefit; `compute_features_vec` is never the warm
+  entry, so no warm regression. Measured (RTX 5070, CUDA, reps=4,
+  back-to-back same baseline): 16 MP strip 1249 → **289 MiB** (1.05× →
+  0.24× of Full's 1185 MiB); 40 MP strip 1281 → **513 MiB** (0.58× →
+  0.23× of Full's 2209 MiB). Score bit-identical (feat[0] 0.978717 @16
+  MP, 0.978719 @40 MP; full == strip, old == new). All 10
+  `tests/strip_parity.rs` pass including
+  `host_cached_only_matches_device_cached_512x512`. Data:
+  `crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`.
+  Also corrects stale `Error::ModeUnsupported` / `Error::TooBigForFull`
+  doc + Display strings in `lib.rs` that claimed "zensim-gpu has no
+  Strip path / implementation" — Strip + Auto have been implemented
+  since task #75; only Tile is unsupported.
+
 ### Changed
 
 - **butteraugli 0.9.3 → 0.9.4** workspace-wide pin bump (task #135,

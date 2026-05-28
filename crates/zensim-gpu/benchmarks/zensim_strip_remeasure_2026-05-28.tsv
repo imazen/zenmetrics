@@ -1,0 +1,19 @@
+# zensim-gpu cold-strip device-ref-cache cleanup — task138 Part 2
+# base_commit=0ebf231f2e70 host=lilith gpu=NVIDIA GeForce RTX 5070 driver=596.21 date=2026-05-28
+# command: WORKER_MODE=<mode> WORKER_W=<w> WORKER_H=<h> WORKER_REPS=4 target/release/examples/mem_one_size
+#   (cargo build --release -p zensim-gpu --no-default-features --features cuda --example mem_one_size)
+# Protocol: subprocess-per-cell, nvidia-smi memory.used polled tightly during run, peak-baseline delta. CUDA.
+# FIX: compute_features_vec (cold one-shot) now routes strip-mode set_reference through
+# set_reference_host_cached_only, skipping the redundant FULL-image device ref XYB pyramid that
+# set_reference (task #75 warm-loop device cache) builds. Cold strip per-call re-uploads + rebuilds the
+# ref XYB per strip (bit-exact row-slice equivalent). warm_ref_strip (set_reference + many
+# compute_with_reference) is UNCHANGED — it keeps the device cache for the warm benefit.
+# old/new measured back-to-back same baseline (~1900 MiB) by swapping pipeline.rs to the parent commit.
+# score column = feat[0]; bit-identical full vs strip and old vs new.
+crate	size_mp	size_w	size_h	mode	variant	backend	reps	delta_mib	delta_bytes	strip_over_full	score	notes
+zensim-gpu	16mp	4096	4096	full	-	cuda	4	1185	1242562560	-	0.978717	baseline (unchanged by fix)
+zensim-gpu	16mp	4096	4096	strip	old	cuda	4	1249	1309671424	1.05x	0.978717	pre-fix: built full-image device ref pyramid -> strip ~= full ("wins nothing")
+zensim-gpu	16mp	4096	4096	strip	new	cuda	4	289	303038464	0.24x	0.978717	post-fix: -960 MiB vs old; strip now decisively beats full
+zensim-gpu	40mp	7680	5184	full	-	cuda	4	2209	2316304384	-	0.978719	baseline (unchanged by fix)
+zensim-gpu	40mp	7680	5184	strip	old	cuda	4	1281	1343225856	0.58x	0.978719	pre-fix (matches published 0.58x)
+zensim-gpu	40mp	7680	5184	strip	new	cuda	4	513	537919488	0.23x	0.978719	post-fix: -768 MiB vs old

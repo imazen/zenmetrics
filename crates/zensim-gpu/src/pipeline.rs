@@ -872,8 +872,35 @@ impl<R: Runtime> Zensim<R> {
     /// Compute the regime-appropriate feature vector for one (reference,
     /// distorted) pair. Length matches `self.regime().total_features()`:
     /// 228 / 300 / 372.
+    ///
+    /// This is a **cold one-shot** entry: it sets the reference and then
+    /// runs exactly one `compute_with_reference_vec`. It is never the
+    /// warm-loop entry point (a warm loop calls
+    /// [`Self::set_reference`] once and then
+    /// [`Self::compute_with_reference_vec`] / [`Self::compute_with_reference`]
+    /// repeatedly). Because of that, in strip mode we route the cold
+    /// reference through [`Self::set_reference_host_cached_only`] rather
+    /// than [`Self::set_reference`]: the device-cached full-image ref
+    /// XYB pyramid (task #75) earns its keep only across MANY warm dist
+    /// iterations, so building it for a single dist call is redundant
+    /// device-side work. The host-cached-only path rebuilds the ref XYB
+    /// per strip — bit-identical to the device-cache row-slice (aligned
+    /// strip starts; see `STRIP_PROCESSING.md` "Cached reference (Mode E
+    /// device cache)") — and avoids allocating the full-image
+    /// `src_u8_full` + per-scale ref XYB planes that Full-height device
+    /// state would pin.
+    ///
+    /// In Full (non-strip) mode `set_reference_host_cached_only` is
+    /// exactly equivalent to `set_reference` (no host cache is used), so
+    /// this routing is a strip-only behaviour change.
     pub fn compute_features_vec(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<Vec<f64>> {
-        self.set_reference(ref_srgb)?;
+        if self.strip.is_some() {
+            // Cold one-shot strip: skip the redundant full-image device
+            // ref cache; the per-strip ref rebuild is bit-exact.
+            self.set_reference_host_cached_only(ref_srgb)?;
+        } else {
+            self.set_reference(ref_srgb)?;
+        }
         self.compute_with_reference_vec(dist_srgb)
     }
 

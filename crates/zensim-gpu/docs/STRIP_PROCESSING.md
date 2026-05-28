@@ -169,6 +169,21 @@ can call `set_reference_host_cached_only` instead. This keeps the
 old behaviour — host-side `cached_ref_strip_srgb` cache, per-strip
 ref re-upload + ref XYB rebuild.
 
+**Automatic opt-out for the cold one-shot path** (task #138,
+2026-05-28): `compute_features_vec` (cold set-reference-then-one-
+compute, used by `compute_features` + the opaque score paths + the
+parity tests) routes strip-mode reference setup through
+`set_reference_host_cached_only` rather than `set_reference`. The
+device cache only pays off across MANY warm dist iters; for a single
+dist call it's pure additive device-side overhead. Measured win (RTX
+5070, CUDA, reps=4, `benchmarks/zensim_strip_remeasure_2026-05-28.tsv`):
+strip peak VRAM dropped from ~1.05× Full to ~0.24× Full at 16 MP
+(1249 → 289 MiB) and from 0.58× to 0.23× at 40 MP (1281 → 513 MiB) —
+the 289 MiB matches this section's "strip working set" row exactly,
+i.e. the redundant full-image device ref pyramid is gone. Warm-loop
+callers (`set_reference` once + repeated `compute_with_reference`)
+are unaffected and keep the device cache.
+
 **Lifecycle**:
 - `set_reference` allocates `RefFullXybState` lazily; subsequent
   `set_reference` calls for the same resolution reuse the same

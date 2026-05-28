@@ -234,11 +234,13 @@ pub enum Error {
         max_bytes: usize,
     },
     /// The requested [`MemoryMode`](crate::MemoryMode) variant isn't
-    /// implemented yet (Strip and Tile in zensim-gpu's current
-    /// revision).
+    /// implemented yet. As of task #75 (Mode-E strip) only `Tile`
+    /// remains unsupported; `Strip` and `Auto` are implemented.
     ModeUnsupported(&'static str),
     /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
-    /// into the VRAM cap. zensim-gpu has no Strip implementation.
+    /// into the VRAM cap — even the per-strip working set exceeds the
+    /// cap. (Strip is implemented since task #75; this fires only when
+    /// the smallest viable strip still doesn't fit.)
     TooBigForFull { needed: usize, cap: usize },
 }
 
@@ -267,7 +269,8 @@ impl std::fmt::Display for Error {
             Error::TooBigForFull { needed, cap } => write!(
                 f,
                 "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
-                 (zensim-gpu has no Strip path — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
+                 (even the smallest strip working set exceeds the cap — raise \
+                 ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
             ),
         }
     }
