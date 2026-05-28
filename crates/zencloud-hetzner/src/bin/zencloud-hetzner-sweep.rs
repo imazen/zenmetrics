@@ -8,8 +8,9 @@
 #![forbid(unsafe_code)]
 
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -126,6 +127,28 @@ struct Args {
     speculative_min_completed: u32,
     #[arg(long, default_value_t = 1)]
     speculative_cap_per_chunk: u32,
+    /// Path to the ed25519 public key injected into every worker's
+    /// `/root/.ssh/authorized_keys`. Defaults to `~/.ssh/zen-fleet.pub`
+    /// — if absent, SSH-based diagnostics are silently disabled
+    /// (server boots with no inbound SSH, matching the prior default).
+    #[arg(long)]
+    ssh_pubkey_file: Option<PathBuf>,
+    /// Path to the ed25519 private key the diagnostic watchdog uses
+    /// to SSH into a stuck replica. Defaults to `~/.ssh/zen-fleet`.
+    #[arg(long)]
+    ssh_private_key: Option<PathBuf>,
+    /// When set, the launcher spawns a diagnostic watchdog that SSHes
+    /// into the first `running` replica after `--diagnostic-after-secs`
+    /// and pulls cloud-init / docker / env logs. Default: ON. Use
+    /// `--no-diagnostic-on-ttl` to disable.
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    diagnostic_on_ttl: bool,
+    /// Seconds after `provision` (post body POSTed) at which the
+    /// watchdog fires its first log-pull. Defaults to `chunk_ttl_secs
+    /// + 60` — i.e. ~60s after the first TTL re-dispatch could have
+    /// fired. Override for faster smoke tests.
+    #[arg(long)]
+    diagnostic_after_secs: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,6 +175,179 @@ struct LauncherSummary {
     replicas_provisioned: u32,
     chunks_redispatched: u32,
     chunks_speculatively_dispatched: u32,
+}
+
+/// Resolve `~/...` paths. Returns the path unchanged on non-tilde input.
+fn expand_tilde(p: &std::path::Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home).join(rest);
+        }
+    } else if s == "~" {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home);
+        }
+    }
+    p.to_path_buf()
+}
+
+/// Load the diagnostic SSH public key. Returns `None` if the file
+/// does not exist OR the launcher was given an explicit empty path
+/// (no override) AND the default `~/.ssh/zen-fleet.pub` is missing.
+fn load_ssh_pubkey(arg: Option<&std::path::Path>) -> Result<Option<String>> {
+    let path = match arg {
+        Some(p) => expand_tilde(p),
+        None => {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".ssh/zen-fleet.pub")
+        }
+    };
+    if !path.exists() {
+        eprintln!(
+            "[launcher] ssh pubkey file {} not found — SSH diagnostics DISABLED",
+            path.display()
+        );
+        return Ok(None);
+    }
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("read SSH pubkey {}", path.display()))?;
+    let line = body
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("SSH pubkey file {} is empty", path.display()))?
+        .to_string();
+    eprintln!("[launcher] ssh pubkey loaded from {}", path.display());
+    Ok(Some(line))
+}
+
+/// Run the diagnostic watchdog as a tokio task. Waits `after_secs`,
+/// polls the Hetzner API for the first replica reporting a public
+/// IPv4, runs an SSH command pulling cloud-init / docker / env logs,
+/// writes the captured log to disk + stderr. Best-effort — every
+/// failure path logs and returns; the task never panics.
+async fn diagnostic_watchdog(
+    api: HetznerApi,
+    label_selector: String,
+    private_key: PathBuf,
+    after_secs: u64,
+    out_log: PathBuf,
+) {
+    eprintln!(
+        "[diag] watchdog scheduled: fires in {after_secs}s (selector={label_selector})"
+    );
+    tokio::time::sleep(Duration::from_secs(after_secs)).await;
+
+    // Pick the first running replica with a public IP.
+    let servers = match api.list_servers_by_label(&label_selector).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("[diag] list_servers_by_label failed: {e:#}");
+            return;
+        }
+    };
+    let target = servers.iter().find_map(|s| {
+        let ip = s.ipv4()?;
+        Some((s.id, s.name.clone(), s.status.clone(), ip))
+    });
+    let (id, name, status, ip) = match target {
+        Some(t) => t,
+        None => {
+            eprintln!(
+                "[diag] no replica with a public IP yet (n={}, statuses=[{}])",
+                servers.len(),
+                servers
+                    .iter()
+                    .map(|s| s.status.clone())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            return;
+        }
+    };
+    eprintln!(
+        "[diag] target replica id={id} name={name} status={status} ip={ip}"
+    );
+
+    // Run the SSH command. Multi-line shell payload — log everything
+    // useful for disambiguating the four failure modes (cloud-init
+    // stall / docker pull / container crash / R2 creds).
+    let remote_cmd = r#"
+echo "=== uname / uptime ==="
+uname -a; uptime
+echo "=== cloud-init status ==="
+cloud-init status --long 2>&1 || echo "(cloud-init missing)"
+echo "=== /var/log/cloud-init-output.log (last 200) ==="
+tail -200 /var/log/cloud-init-output.log 2>&1 || echo "(missing)"
+echo "=== /var/log/zen-bootstrap.log (last 200) ==="
+tail -200 /var/log/zen-bootstrap.log 2>&1 || echo "(missing)"
+echo "=== docker ps -a ==="
+docker ps -a 2>&1 || echo "(docker missing)"
+echo "=== docker logs worker (last 200) ==="
+docker logs --tail 200 worker 2>&1 || echo "(no worker container)"
+echo "=== /etc/zen/worker.env (sanitized) ==="
+if [ -f /etc/zen/worker.env ]; then
+  sed -E 's/(R2_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|R2_SESSION_TOKEN)=.*$/\1=<redacted>/' /etc/zen/worker.env | head -40
+else
+  echo "(missing)"
+fi
+echo "=== journalctl -u docker (last 50) ==="
+journalctl -u docker --no-pager -n 50 2>&1 || echo "(journalctl missing)"
+echo "=== done ==="
+"#;
+
+    let known_hosts = PathBuf::from("/tmp/zen-fleet-known-hosts");
+    let ssh_args = vec![
+        "-i".to_string(),
+        private_key.to_string_lossy().to_string(),
+        "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
+        "-o".to_string(),
+        "ConnectTimeout=10".to_string(),
+        "-o".to_string(),
+        "BatchMode=yes".to_string(),
+        "-o".to_string(),
+        format!("UserKnownHostsFile={}", known_hosts.display()),
+        format!("root@{ip}"),
+        remote_cmd.to_string(),
+    ];
+
+    let out = match tokio::process::Command::new("ssh")
+        .args(&ssh_args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .await
+    {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("[diag] ssh spawn failed: {e:#}");
+            return;
+        }
+    };
+
+    let mut report = String::new();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    report.push_str(&format!(
+        "=== diagnostic at unix_ts={ts} ===\nreplica id={id} name={name} status={status} ip={ip}\nexit_status={}\n",
+        out.status.code().unwrap_or(-1),
+    ));
+    report.push_str("--- stdout ---\n");
+    report.push_str(&String::from_utf8_lossy(&out.stdout));
+    report.push_str("\n--- stderr ---\n");
+    report.push_str(&String::from_utf8_lossy(&out.stderr));
+    report.push_str("\n=== end diagnostic ===\n");
+
+    if let Err(e) = std::fs::write(&out_log, &report) {
+        eprintln!("[diag] write {} failed: {e:#}", out_log.display());
+    } else {
+        eprintln!("[diag] log written to {}", out_log.display());
+    }
+    eprintln!("{report}");
 }
 
 #[tokio::main]
@@ -182,6 +378,19 @@ async fn main() -> Result<()> {
     )?;
     let api = HetznerApi::new(&token);
 
+    // Load the diagnostic SSH public key (best-effort; absent file =>
+    // disable SSH diagnostics, no error).
+    let ssh_pubkey = load_ssh_pubkey(args.ssh_pubkey_file.as_deref())
+        .context("load SSH pubkey")?;
+    let ssh_private_key_path = args
+        .ssh_private_key
+        .clone()
+        .map(|p| expand_tilde(&p))
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".ssh/zen-fleet")
+        });
+
     let replicas_provisioned = compute_provisioned_replicas(
         args.replicas,
         args.replicas_overshoot,
@@ -208,6 +417,7 @@ async fn main() -> Result<()> {
                 registry_server: None,
                 extra_env: preview_env,
                 chunks_queue_prefix: format!("runs/{sweep_id}/queue/"),
+                ssh_authorized_pubkey: ssh_pubkey.clone(),
             });
         let synth_post = json!({
             "name": format!("{}-000", group_name),
@@ -340,6 +550,37 @@ async fn main() -> Result<()> {
     ) {
         provider_cfg = provider_cfg.with_registry_auth(u.clone(), p.clone(), None);
     }
+    if let Some(pk) = &ssh_pubkey {
+        provider_cfg = provider_cfg.with_ssh_authorized_pubkey(pk.clone());
+    }
+
+    // Spawn diagnostic watchdog BEFORE fleet.run(). It sleeps
+    // `diagnostic_after_secs`, then SSH-pulls logs from the first
+    // running replica. Best-effort: failures log + return without
+    // affecting the main flow.
+    let diagnostic_handle = if args.diagnostic_on_ttl && ssh_pubkey.is_some() {
+        let api_clone = HetznerApi::new(&token);
+        let label_selector = format!("group={group_name}");
+        let after_secs = args
+            .diagnostic_after_secs
+            .unwrap_or(args.chunk_ttl_secs + 60);
+        let out_log = PathBuf::from(format!(
+            "/tmp/hetzner_replica_diag_{}.log",
+            sweep_id
+        ));
+        let pk_path = ssh_private_key_path.clone();
+        Some(tokio::spawn(async move {
+            diagnostic_watchdog(api_clone, label_selector, pk_path, after_secs, out_log)
+                .await;
+        }))
+    } else {
+        if !args.diagnostic_on_ttl {
+            eprintln!("[launcher] diagnostic watchdog disabled (--no-diagnostic-on-ttl)");
+        } else {
+            eprintln!("[launcher] diagnostic watchdog disabled (no SSH pubkey)");
+        }
+        None
+    };
 
     let provider = HetznerProviderHandle::new(api, provider_cfg);
 
@@ -426,6 +667,13 @@ async fn main() -> Result<()> {
         chunks_speculatively_dispatched: fleet.poll.chunks_speculatively_dispatched,
     };
     println!("{}", serde_json::to_string(&summary).unwrap());
+
+    // Diagnostic watchdog: if still pending (sweep completed before
+    // its scheduled fire), abort. If already fired, the join is fast.
+    if let Some(h) = diagnostic_handle {
+        h.abort();
+        let _ = h.await;
+    }
 
     if !fleet.teardown_ok && !args.keep_running {
         bail!(

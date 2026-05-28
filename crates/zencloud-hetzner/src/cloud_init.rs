@@ -49,6 +49,15 @@ pub struct WorkerBootstrap {
     /// R2 chunks-queue prefix (`runs/<sweep_id>/queue/`). The worker
     /// LISTs this on a loop.
     pub chunks_queue_prefix: String,
+    /// Optional SSH ed25519 public key to inject into the box's
+    /// `/root/.ssh/authorized_keys`. When `Some`, the launcher can
+    /// SSH in as `root` to pull `/var/log/cloud-init-output.log` +
+    /// `/var/log/zen-bootstrap.log` + `docker logs worker` to
+    /// disambiguate cloud-init stall / docker pull / R2 cred / worker
+    /// crash failure modes. The key is appended to authorized_keys
+    /// from the cloud-init script (which runs as root), so it works
+    /// even when no provider-managed `ssh_keys` list is set.
+    pub ssh_authorized_pubkey: Option<String>,
 }
 
 /// Synthesize a cloud-init script that boots the worker.
@@ -64,6 +73,32 @@ pub fn build_user_data(spec: &WorkerBootstrap) -> String {
     script.push_str("set -eu\n");
     script.push_str("exec > >(tee -a /var/log/zen-bootstrap.log) 2>&1\n");
     script.push_str("echo \"[$(date -u +%Y-%m-%dT%H:%M:%SZ)] zen-bootstrap starting\"\n\n");
+
+    // ── SSH pubkey inject (diagnostic surface) ───────────────────────
+    // BEFORE the apt-install block — even if apt hangs we still have
+    // SSH for log-pull. cloud-init runs as root, so we drop the key
+    // straight into /root/.ssh/authorized_keys (Hetzner Cloud Ubuntu
+    // images permit root login when an authorized_keys is present).
+    if let Some(pubkey) = &spec.ssh_authorized_pubkey {
+        // One trimmed line; reject anything that looks like an attempt
+        // to inject extra commands (newlines / quotes).
+        let cleaned = pubkey
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if !cleaned.is_empty() && !cleaned.contains('\'') {
+            script.push_str("# Diagnostic SSH key (launcher-side debugger).\n");
+            script.push_str("mkdir -p /root/.ssh\n");
+            script.push_str("chmod 700 /root/.ssh\n");
+            script.push_str(&format!(
+                "echo {key} >> /root/.ssh/authorized_keys\n",
+                key = sh_squote(&cleaned),
+            ));
+            script.push_str("chmod 600 /root/.ssh/authorized_keys\n\n");
+        }
+    }
 
     // ── docker install ───────────────────────────────────────────────
     script.push_str("# Install docker (the one apt install we can't bake).\n");
@@ -187,7 +222,7 @@ mod tests {
 
     fn sample_spec() -> WorkerBootstrap {
         let mut extra = BTreeMap::new();
-        extra.insert("METRICS".into(), "ssim2-cpu".into());
+        extra.insert("METRICS".into(), "ssim2-gpu".into());
         WorkerBootstrap {
             image: "ghcr.io/imazen/zen-metrics-sweep-hetzner:v1".into(),
             sweep_id: "hetzner-iter1-2026-05-28".into(),
@@ -201,6 +236,7 @@ mod tests {
             registry_server: None,
             extra_env: extra,
             chunks_queue_prefix: "runs/hetzner-iter1-2026-05-28/queue/".into(),
+            ssh_authorized_pubkey: None,
         }
     }
 
@@ -234,6 +270,39 @@ mod tests {
         assert!(s.contains("docker login 'ghcr.io' -u 'user' --password-stdin"));
         // Single-quoted to keep it out of `ps`.
         assert!(s.contains("printf '%s' 'pat-token'"));
+    }
+
+    #[test]
+    fn ssh_pubkey_injected_into_authorized_keys_when_present() {
+        let mut spec = sample_spec();
+        spec.ssh_authorized_pubkey = Some(
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx zen-fleet"
+                .into(),
+        );
+        let s = build_user_data(&spec);
+        assert!(s.contains("mkdir -p /root/.ssh"));
+        assert!(s.contains(">> /root/.ssh/authorized_keys"));
+        assert!(s.contains("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5"));
+        // Permission tightening lands too.
+        assert!(s.contains("chmod 700 /root/.ssh"));
+        assert!(s.contains("chmod 600 /root/.ssh/authorized_keys"));
+    }
+
+    #[test]
+    fn ssh_pubkey_skipped_when_none() {
+        let spec = sample_spec();
+        let s = build_user_data(&spec);
+        assert!(!s.contains("/root/.ssh/authorized_keys"));
+    }
+
+    #[test]
+    fn ssh_pubkey_with_embedded_quote_is_rejected() {
+        let mut spec = sample_spec();
+        spec.ssh_authorized_pubkey =
+            Some("ssh-ed25519 AAAAC3xxx 'comment'".into());
+        let s = build_user_data(&spec);
+        // The cleaned-line check drops the injection; nothing lands.
+        assert!(!s.contains("/root/.ssh/authorized_keys"));
     }
 
     #[test]

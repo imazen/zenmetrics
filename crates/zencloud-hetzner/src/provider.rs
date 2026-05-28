@@ -63,6 +63,11 @@ pub struct HetznerProviderConfig {
     /// We use it inside `push_jobs` to upload the queue files. Wrapped
     /// in an `Arc` so cloning the provider is cheap.
     pub r2: std::sync::Arc<R2OperatorImpl>,
+    /// Optional SSH ed25519 public key (one line) injected into every
+    /// worker's `/root/.ssh/authorized_keys` via cloud-init. Enables
+    /// the launcher to SSH in and pull diagnostic logs when a worker
+    /// reaches Hetzner-reported `running` but never claims a chunk.
+    pub ssh_authorized_pubkey: Option<String>,
 }
 
 impl HetznerProviderConfig {
@@ -86,6 +91,7 @@ impl HetznerProviderConfig {
             registry_password: None,
             registry_server: None,
             r2,
+            ssh_authorized_pubkey: None,
         }
     }
 
@@ -104,6 +110,12 @@ impl HetznerProviderConfig {
     /// Set the SSH key list.
     pub fn with_ssh_keys(mut self, keys: Vec<String>) -> Self {
         self.ssh_keys = keys;
+        self
+    }
+
+    /// Set the diagnostic SSH public key (injected into cloud-init).
+    pub fn with_ssh_authorized_pubkey(mut self, pubkey: impl Into<String>) -> Self {
+        self.ssh_authorized_pubkey = Some(pubkey.into());
         self
     }
 
@@ -227,6 +239,7 @@ impl ProviderHandle for HetznerProviderHandle {
             registry_server: self.cfg.registry_server.clone(),
             extra_env,
             chunks_queue_prefix: format!("runs/{sweep_id}/queue/"),
+            ssh_authorized_pubkey: self.cfg.ssh_authorized_pubkey.clone(),
         };
         let user_data = build_user_data(&bootstrap);
 
