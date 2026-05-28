@@ -492,10 +492,23 @@ def main() -> int:
     git_sha = "?"
     try:
         git_sha = subprocess.check_output(
-            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], text=True
+            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL,
         ).strip()
     except Exception:
         pass
+    if git_sha == "?":
+        # jj workspace — no .git/ visible from here.
+        try:
+            out = subprocess.check_output(
+                ["jj", "log", "-r", "@-", "-T", "commit_id.short()",
+                 "--no-graph"],
+                cwd=str(repo_root), text=True, stderr=subprocess.DEVNULL,
+            ).strip()
+            if out:
+                git_sha = out
+        except Exception:
+            pass
 
     smi_info = nvidia_smi_info()
     host = os.uname().nodename
@@ -625,8 +638,21 @@ def main() -> int:
                             "notes": "",
                         }
                     )
-        # Per-crate TSV
+        # Per-crate TSV — read existing rows from previous runs, drop
+        # rows that match (size_mp, mode, backend) we just measured,
+        # and append the fresh measurements.
         crate_tsv = repo_root / "crates" / crate / "benchmarks" / CRATE_TSV_NAME
+        existing_crate: list[dict] = []
+        if crate_tsv.exists():
+            with crate_tsv.open() as f:
+                rd = csv.DictReader(f, delimiter="\t")
+                for row in rd:
+                    key = (row.get("size_mp"), row.get("mode"), row.get("backend"))
+                    fresh_keys = {(r["size_mp"], r["mode"], r["backend"])
+                                  for r in crate_rows}
+                    if key not in fresh_keys:
+                        existing_crate.append(row)
+        merged_crate = existing_crate + crate_rows
         meta = {
             "tool": "scripts/memory_audit/sweep_gpu_metrics_2026-05-28.py",
             "git_sha": git_sha,
@@ -644,35 +670,53 @@ def main() -> int:
                        "wall_median_ms = median of WORKER_REPS post-warm runs."),
             "started_utc": started,
         }
-        write_tsv(crate_tsv, crate_rows, meta)
-        print(f"\nwrote {crate_tsv} ({len(crate_rows)} rows)\n", flush=True)
+        write_tsv(crate_tsv, merged_crate, meta)
+        print(
+            f"\nwrote {crate_tsv} ({len(merged_crate)} total, "
+            f"+{len(crate_rows)} this run)\n",
+            flush=True,
+        )
         global_rows.extend(
-            [{**r, "crate": crate} for r in crate_rows]
+            [{**r, "crate": crate} for r in merged_crate]
         )
 
-    # Global summary TSV
+    # Global summary TSV — read existing rows for crates NOT in this
+    # run so multi-run invocations accumulate instead of clobbering.
     global_tsv = repo_root / f"{args.out_base}.tsv"
     global_tsv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "crate",
+        "size_mp",
+        "size_w",
+        "size_h",
+        "mode",
+        "backend",
+        "peak_vram_bytes",
+        "peak_vram_human",
+        "wall_median_ms",
+        "warm_ms",
+        "score",
+        "notes",
+    ]
+    existing: list[dict] = []
+    if global_tsv.exists():
+        with global_tsv.open() as f:
+            r = csv.DictReader(f, delimiter="\t")
+            for row in r:
+                # Drop rows for crates we're re-running; keep the rest.
+                if row.get("crate") not in metric_names:
+                    existing.append(row)
+    all_rows = existing + global_rows
     with global_tsv.open("w", newline="") as f:
-        fieldnames = [
-            "crate",
-            "size_mp",
-            "size_w",
-            "size_h",
-            "mode",
-            "backend",
-            "peak_vram_bytes",
-            "peak_vram_human",
-            "wall_median_ms",
-            "warm_ms",
-            "score",
-            "notes",
-        ]
         w = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
         w.writeheader()
-        for r in global_rows:
+        for r in all_rows:
             w.writerow({k: r.get(k, "") for k in fieldnames})
-    print(f"wrote global summary {global_tsv} ({len(global_rows)} rows)", flush=True)
+    print(
+        f"wrote global summary {global_tsv} "
+        f"({len(all_rows)} total, +{len(global_rows)} this run)",
+        flush=True,
+    )
     return 0
 
 
