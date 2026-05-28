@@ -33,7 +33,13 @@ const DEFAULT_SOURCE_DIR_R2: &str =
 const DEFAULT_INPUT_PARQUET_R2: &str =
     "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/inputs.parquet";
 const DEFAULT_IMAGE_BASENAME: &str = "graph.png";
-const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b";
+// Default to the Hetzner ARM64 image (CPU-only, R2-polling). The
+// Salad image cannot run on Hetzner workers — it bakes the Salad
+// managed-queue sidecar and an x86_64 binary that won't execute
+// on CAX ARM hardware. The v1 mutable tag tracks the latest pushed
+// image; pin via `--image ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-<sha>`
+// when reproducibility matters.
+const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-hetzner:v1";
 const DEFAULT_SERVER_TYPE: &str = "cax21";
 const DEFAULT_LOCATION: &str = "fsn1";
 /// Hetzner per-project server quota is generous (10+); pick a safe
