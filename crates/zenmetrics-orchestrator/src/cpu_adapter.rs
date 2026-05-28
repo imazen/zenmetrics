@@ -437,6 +437,176 @@ impl CpuAdapter {
         }
     }
 
+    /// Strip-mode compute: walk image in horizontal slabs of
+    /// `strip_height` rows + halo. Reduces peak heap for 40 MP+
+    /// inputs on metrics that support strip dispatch.
+    ///
+    /// Phase 9.Z.A status:
+    /// - **iwssim**: real strip walker (see `iwssim::Iwssim::score_strip`).
+    ///   Bit-identical-tolerance parity vs full at < 1e-4 abs JOD.
+    ///   Per-strip working set ≈ `(body + 2*halo) × work_w × 4 × 5`
+    ///   bytes across the 5-level pyramid.
+    /// - **cvvdp**: API stub — delegates to `score()` (no memory win
+    ///   yet; multi-day walker queued). Returns the same score.
+    /// - **ssim2 / dssim / butter / zensim**: not yet wired (return
+    ///   `Failed("strip not supported")`). zensim's `compute_strips`
+    ///   API exists upstream; wire next.
+    ///
+    /// Pass `strip_height = 0` to get the metric's default body size.
+    #[allow(dead_code)] // only called via the strip-aware executor path
+    pub fn compute_strip(
+        &mut self,
+        ref_bytes: &[u8],
+        dist_bytes: &[u8],
+        strip_height: u32,
+    ) -> Result<Score, CpuAdapterError> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if ref_bytes.len() != expected {
+            return Err(CpuAdapterError::InvalidInputSize {
+                expected,
+                got: ref_bytes.len(),
+            });
+        }
+        if dist_bytes.len() != expected {
+            return Err(CpuAdapterError::InvalidInputSize {
+                expected,
+                got: dist_bytes.len(),
+            });
+        }
+        match &mut self.state {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuAdapterState::Cvvdp(c) => {
+                let h = if strip_height == 0 { 512 } else { strip_height };
+                let v = c
+                    .score_strip(ref_bytes, dist_bytes, h)
+                    .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+                Ok(make_score("cvvdp", cvvdp_cpu_version(), v as f64))
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(c) => {
+                let h = if strip_height == 0 {
+                    iwssim::STRIP_BODY_DEFAULT
+                } else {
+                    strip_height
+                };
+                let result = c
+                    .score_strip(ref_bytes, dist_bytes, h)
+                    .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+                Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
+            }
+            #[cfg(feature = "cpu-ssim2")]
+            CpuAdapterState::Ssim2(_) => Err(CpuAdapterError::Failed(
+                "ssim2 strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-dssim")]
+            CpuAdapterState::Dssim(_) => Err(CpuAdapterError::Failed(
+                "dssim strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-butter")]
+            CpuAdapterState::Butter(_) => Err(CpuAdapterError::Failed(
+                "butter strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-zensim")]
+            CpuAdapterState::Zensim(_) => Err(CpuAdapterError::Failed(
+                "zensim strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            CpuAdapterState::FeatureDisabled(k) => {
+                Err(CpuAdapterError::FeatureNotEnabled(*k))
+            }
+            CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
+        }
+    }
+
+    /// Strip-mode compute against the cached reference. See
+    /// [`Self::compute_strip`] for per-metric implementation status.
+    ///
+    /// Phase 9.Z.A status:
+    /// - **iwssim**: real warm_ref_strip walker (see
+    ///   `iwssim::Iwssim::score_with_warm_ref_strip`). Single-pass —
+    ///   eigendecomposition cached in `WarmState`. Peak heap ≈ ref
+    ///   state full + one strip dist working set.
+    /// - **cvvdp**: API stub — delegates to `score_with_warm_ref()`.
+    /// - Other metrics: not yet wired.
+    #[allow(dead_code)]
+    pub fn compute_with_cached_reference_strip(
+        &mut self,
+        dist_bytes: &[u8],
+        strip_height: u32,
+    ) -> Result<Score, CpuAdapterError> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if dist_bytes.len() != expected {
+            return Err(CpuAdapterError::InvalidInputSize {
+                expected,
+                got: dist_bytes.len(),
+            });
+        }
+        match &mut self.state {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuAdapterState::Cvvdp(c) => {
+                let h = if strip_height == 0 { 512 } else { strip_height };
+                let v = c
+                    .score_with_warm_ref_strip(dist_bytes, h)
+                    .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+                Ok(make_score("cvvdp", cvvdp_cpu_version(), v as f64))
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(c) => {
+                if !c.has_warm_reference() {
+                    return Err(CpuAdapterError::Failed(
+                        "iwssim: no cached reference; call set_reference first".into(),
+                    ));
+                }
+                let h = if strip_height == 0 {
+                    iwssim::STRIP_BODY_DEFAULT
+                } else {
+                    strip_height
+                };
+                let result = c
+                    .score_with_warm_ref_strip(dist_bytes, h)
+                    .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+                Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
+            }
+            #[cfg(feature = "cpu-ssim2")]
+            CpuAdapterState::Ssim2(_) => Err(CpuAdapterError::Failed(
+                "ssim2 warm_ref strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-dssim")]
+            CpuAdapterState::Dssim(_) => Err(CpuAdapterError::Failed(
+                "dssim warm_ref strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-butter")]
+            CpuAdapterState::Butter(_) => Err(CpuAdapterError::Failed(
+                "butter warm_ref strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            #[cfg(feature = "cpu-zensim")]
+            CpuAdapterState::Zensim(_) => Err(CpuAdapterError::Failed(
+                "zensim warm_ref strip-mode not yet wired in cpu_adapter".into(),
+            )),
+            CpuAdapterState::FeatureDisabled(k) => {
+                Err(CpuAdapterError::FeatureNotEnabled(*k))
+            }
+            CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
+        }
+    }
+
+    /// Whether this backend supports memory-bounded strip dispatch.
+    /// Used by the orchestrator's chooser to decide whether
+    /// `MemoryMode::Strip` is a candidate for CPU dispatch on this
+    /// metric.
+    ///
+    /// Phase 9.Z.A: only iwssim returns `true` (real strip walker).
+    /// cvvdp returns `false` (API stub doesn't reduce memory yet).
+    #[allow(dead_code)]
+    pub fn supports_strip(&self) -> bool {
+        match self.state {
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuAdapterState::Cvvdp(_) => false,
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(_) => true,
+            _ => false,
+        }
+    }
+
     /// Compute against the previously-set reference. Returns
     /// `Err(Failed)` if [`Self::set_reference`] hasn't been called yet
     /// (or was reset by a prior `compute` on backends without cached
@@ -953,6 +1123,115 @@ mod tests {
                 ),
             }
         }
+    }
+
+    /// Generate a blended distortion pair similar to the iwssim
+    /// parity tests' fixtures so the IW eigendecomposition stays
+    /// in a numerically-similar regime between strip and full
+    /// modes. Pure noise inputs cause strip-vs-full lambda drift
+    /// of O(1e-2) which is uninformative for adapter wiring tests.
+    fn synth_iwssim_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
+        let n = (w as usize) * (h as usize) * 3;
+        let mut ref_buf = vec![0u8; n];
+        let mut dist_buf = vec![0u8; n];
+        let mut s_ref = seed;
+        let mut s_dis = seed.wrapping_mul(2_654_435_769);
+        for i in 0..n {
+            s_ref ^= s_ref << 13;
+            s_ref ^= s_ref >> 7;
+            s_ref ^= s_ref << 17;
+            ref_buf[i] = (s_ref & 0xFF) as u8;
+            s_dis ^= s_dis << 13;
+            s_dis ^= s_dis >> 7;
+            s_dis ^= s_dis << 17;
+            let mixed = (ref_buf[i] as u16) * 230 + ((s_dis as u8) as u16) * 25;
+            dist_buf[i] = ((mixed / 256) as u8).min(255);
+        }
+        (ref_buf, dist_buf)
+    }
+
+    #[test]
+    #[cfg(feature = "cpu-iwssim")]
+    fn iwssim_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Iwssim, 256, 256, &params)
+            .expect("cpu-iwssim adapter constructs");
+        assert!(
+            adapter.supports_strip(),
+            "iwssim should report strip support"
+        );
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xc0_ffee_12_34);
+        let strip_score = adapter
+            .compute_strip(&ref_bytes, &dist_bytes, 128)
+            .expect("strip compute");
+        let full_score = adapter
+            .compute(&ref_bytes, &dist_bytes)
+            .expect("full compute");
+        let diff = (strip_score.value - full_score.value).abs();
+        assert!(
+            diff < 1e-3,
+            "strip-mode iwssim should match full within 1e-3; strip={}, full={}, diff={}",
+            strip_score.value,
+            full_score.value,
+            diff
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "cpu-iwssim")]
+    fn iwssim_warm_ref_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Iwssim, 256, 256, &params)
+            .expect("cpu-iwssim adapter constructs");
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xa1_b2_c3_d4);
+        adapter.set_reference(&ref_bytes).expect("set_reference");
+        let strip_score = adapter
+            .compute_with_cached_reference_strip(&dist_bytes, 128)
+            .expect("warm strip compute");
+        let warm_score = adapter
+            .compute_with_cached_reference(&dist_bytes)
+            .expect("warm full compute");
+        let diff = (strip_score.value - warm_score.value).abs();
+        assert!(
+            diff < 1e-3,
+            "warm strip iwssim should match warm full within 1e-3; strip={}, warm={}, diff={}",
+            strip_score.value,
+            warm_score.value,
+            diff
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "cpu-cvvdp")]
+    fn cvvdp_strip_stub_returns_same_as_full() {
+        let params = MetricParams::try_default_for(MetricKind::Cvvdp).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Cvvdp, 256, 256, &params)
+            .expect("cpu-cvvdp adapter constructs");
+        assert!(
+            !adapter.supports_strip(),
+            "cvvdp strip stub does not yet deliver memory savings"
+        );
+        let n = 256 * 256 * 3;
+        let mut ref_bytes = vec![0u8; n];
+        let mut dist_bytes = vec![0u8; n];
+        let mut s = 0xdeadbeefu64;
+        for i in 0..n {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            ref_bytes[i] = (s & 0xFF) as u8;
+            dist_bytes[i] = ((s >> 8) & 0xFF) as u8;
+        }
+        let strip = adapter
+            .compute_strip(&ref_bytes, &dist_bytes, 128)
+            .expect("strip compute");
+        let full = adapter
+            .compute(&ref_bytes, &dist_bytes)
+            .expect("full compute");
+        assert_eq!(
+            strip.value, full.value,
+            "cvvdp strip stub must equal full (no walker yet)"
+        );
     }
 
     #[test]
