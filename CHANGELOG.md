@@ -75,6 +75,40 @@ Workspace conventions per the global rules:
   sweep-doc correction noted inline in
   `docs/GPU_METRICS_SWEEP_2026-05-28.md`.
 
+### Fixed
+
+- **GPU VRAM estimators recalibrated — iwssim-gpu / dssim-gpu /
+  cvvdp-gpu (task #137, 2026-05-28).** Three estimators under-predicted
+  the measured GPU peak (committed in
+  `benchmarks/gpu_metrics_sweep_2026-05-28.tsv`), which misled
+  `resolve_auto` / the OOM-ladder into picking Full when a
+  memory-bounded mode was needed. All three now OVER-predict (the safe
+  budgeting direction) within ±20% at 4/16/40 MP.
+  - **iwssim-gpu**: 10 → 19 planes/scale, +6.39 MiB reduction/cov
+    scratch, ×1.40 pool factor, 256 MiB floor; doc comment corrected to
+    Wang & Li Laplacian-pyramid IW-SSIM (no orientation dimension).
+    `examples/strip_memory_tally.rs` scratch constants fixed
+    (NUM_BLOCKS 32→16, COV cells 110→100·64). 16 MP peak/est 2.25× →
+    0.90×.
+  - **dssim-gpu**: 13 → 31 planes/scale (`Scale::new` = 9·alloc_3 + 4
+    singles) + GPU-context term (208 MiB base + 18 B/px). 16 MP peak/est
+    2.62× → 0.99×. `estimate_grows_with_pixels` test re-pointed
+    1024²→2048² to 4096²→8192² (the fixed-context base compresses the
+    1→4 MP ratio below the 3.6 quadratic floor; the test still guards
+    quadratic growth at the larger sizes without relaxing the bound).
+  - **cvvdp-gpu Mode B (strip_pair)**: source-faithful pyramid
+    accounting (full gauss_ref, k≤k_split gauss_alt, baseband-only
+    bands_dis) + the persistent full-n0 `DBandsTransient` (+826 MiB
+    miss) + 256 MiB/32 B/px context. 16 MP peak/est ~3.9× → 0.89×.
+    Mode E (warm_ref_strip) gets a 200 MiB floor + "not a memory win"
+    comment; `resolve_auto` unchanged. The cvvdp Full estimator
+    under-prediction remains (out of scope) and propagates into Mode E.
+    `examples/mem_estimate_tsv.rs` added; the memory-audit Python proxy
+    now shells out to it instead of a drifting hand-copied formula.
+    Mode B estimator parity tests re-pointed from the old
+    under-predicting "< 25%/65% of Full" bounds to over-predict the
+    measured peak, + off-calibration body=128/512 tests added.
+
 ### Added
 
 - **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports

@@ -51,10 +51,11 @@ releases transient scratch the moment compute returns).
 |------------------|-----------|-------------|----------------|-------------|----------|-------------|
 | butteraugli-gpu  | full      | 3.91 GiB    | 3.12 GiB       | +801 MiB    |  1.25×   |  62.3 ms    |
 | ssim2-gpu        | full      | 6.15 GiB    | 4.87 GiB       | +1.27 GiB   |  1.26×   |  50.7 ms    |
-| dssim-gpu        | full      | 3.16 GiB    | 1.21 GiB       | +1.95 GiB   |  2.62×   |  50.5 ms    |
-| iwssim-gpu       | full      | 2.16 GiB    | 980 MiB        | +1.20 GiB   |  2.25×   |  45.3 ms    |
+| dssim-gpu        | full      | 3.16 GiB    | 3.19 GiB       |  −34 MiB    |  0.99×   |  50.5 ms    |
+| iwssim-gpu       | full      | 2.16 GiB    | 2.40 GiB       |  −247 MiB   |  0.90×   |  45.3 ms    |
 | zensim-gpu       | full      | 1.16 GiB    | 875 MiB        |  +310 MiB   |  1.36×   |  38.1 ms    |
-| cvvdp-gpu        | full      | 3.88 GiB    | 3.57 GiB       |  +312 MiB   |  1.09×   |  45.5 ms    |
+| cvvdp-gpu        | full      | 3.88 GiB    | 2.79 GiB       | +1.11 GiB   |  1.39×   |  45.5 ms    |
+| cvvdp-gpu        | strip_pair| 2.22 GiB    | 2.50 GiB       |  −291 MiB   |  0.89×   | 203.0 ms    |
 
 (`est` = analytic estimator from `<crate>::estimate_gpu_memory_bytes`,
 joined in `benchmarks/gpu_metrics_gap_2026-05-28.tsv`.)
@@ -65,17 +66,28 @@ Calibration check vs each crate's `examples/mem_*.rs` reference at
 - **butteraugli-gpu** 16 MP Full delta = 4001 MiB matches the
   expected ~4 GiB working-set range (50 planes × 16 MP × 4 B
   = 3.13 GiB; +25% cubecl pool overhead).
-- **cvvdp-gpu** 16 MP Full delta = 3969 MiB matches the documented
-  Path B chunk-1 post-refactor estimate of ~3.7 GiB +5% pool overhead.
+- **dssim-gpu** (task137 RECALIBRATED): estimator now over-predicts by
+  1% at 16 MP (peak/est = 0.99×, was 2.62× under).  Fixed by counting
+  31 planes/scale (was 13 — `Scale::new` = 9·alloc_3 + 4 singles) plus
+  a base + per-pixel GPU-context term (208 MiB + 18 B/px).
+- **iwssim-gpu** (task137 RECALIBRATED): estimator now over-predicts by
+  10% at 16 MP (peak/est = 0.90×, was 2.25× under).  Fixed by counting
+  19 planes/scale (was 10), 6.39 MiB reduction/cov scratch, a 1.40 pool
+  factor, and a 256 MiB floor.
+- **cvvdp-gpu strip_pair (Mode B)** (task137 RECALIBRATED): estimator
+  now over-predicts by 11% at 16 MP (peak/est = 0.89×).  The prior
+  estimator under-predicted ~3-4× — it sized all three pyramids strip-
+  shaped and omitted the persistent full-n0 `DBandsTransient`.  Fixed
+  to be source-faithful (full gauss_ref, k≤k_split gauss_alt, baseband-
+  only bands_dis, the +826 MiB transient) plus a 256 MiB + 32 B/px
+  context term.
+- **cvvdp-gpu Full** estimator still under-predicts at small/mid sizes
+  (peak/est = 1.39× at 16 MP).  This is OUT OF task137's Mode B/E
+  scope; it propagates into Mode E (warm_ref_strip = Full + RefFullState),
+  which therefore also under-predicts at small/mid sizes.  Filed as
+  follow-up: recalibrate the cvvdp Full estimator.
 - **zensim-gpu** estimator UNDER-estimates by 36% at 16 MP (peak/est
-  = 1.36×).  The cubecl pool plus per-scale staging contribute
-  beyond the `41 B × pyramid_pixels` Basic-regime model.
-- **dssim-gpu** estimator under-estimates by 2.62× at 16 MP — the
-  analytic formula counts 13 planes × N0 + lower-pyramid levels, but
-  the runtime keeps additional packed-u32 sRGB and per-scale gaussian
-  / mu / sigma buffers the estimator doesn't model.  Filed as
-  follow-up: rework `dssim-gpu/src/memory_mode.rs` estimator to
-  reflect the runtime planes.
+  = 1.36×) — separate follow-up (owned by agent #138).
 
 # Strip vs Full peak VRAM ratio at 16 MP (CUDA)
 
