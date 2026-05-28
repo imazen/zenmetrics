@@ -443,8 +443,32 @@ fn known_oom_cell(profile: &MetricProfile, backend: Backend, pixels: u64) -> boo
         if *px == snapped {
             return true;
         }
-        // OOMed cell is smaller than the request — bigger is worse.
+        // OOMed cell is smaller than the request — bigger is worse,
+        // EXCEPT when the cache contains a *positive* measurement at
+        // a size >= the OOMed size for this backend. A successful
+        // later measurement contradicts the cascade hypothesis: the
+        // OOM is stale (transient pressure during bench, fossilized
+        // from a prior binary version, or recorded after positive
+        // bench data via record_oom_and_persist). The chooser should
+        // believe the measurement, not the cascade.
+        //
+        // Phase 8i (2026-05-27): see
+        // `docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md` for the
+        // failure mode this defeats — a single fossilized 256² OOM
+        // for cvvdp/GpuFull was locking out every cvvdp request at
+        // any size >= 256² for the cache file's lifetime even though
+        // the bench had recorded positive measurements at 1024² and
+        // 4096² for that same backend.
         if *px < pixels {
+            let has_positive_measurement = profile
+                .ns_per_px_at
+                .iter()
+                .any(|(size, bench)| *size >= *px && bench.get(backend).is_some());
+            if has_positive_measurement {
+                // Stale OOM — positive measurement at size >= *px
+                // proves the cascade hypothesis wrong. Ignore.
+                continue;
+            }
             return true;
         }
     }

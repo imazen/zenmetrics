@@ -743,3 +743,109 @@ fn rejects_negative_extrapolated_cpu_prediction() {
         choice.backend,
     );
 }
+
+// ---------------------------------------------------------------------------
+// Phase 8i — cache-hygiene regression tests
+// ---------------------------------------------------------------------------
+
+/// Fix A: a smaller-size OOM entry must NOT cascade-reject a larger
+/// request when the cache holds a positive measurement at any
+/// size >= the OOMed size for that backend. The investigation in
+/// `docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md` documented this
+/// as the root cause of the 9 cvvdp parity rejections at HEAD:
+/// `cells_failed_oom = [(GpuFull, 256²)]` was cascading to every
+/// request at any larger size, even though `ns_per_px_at[1024²]`
+/// recorded a successful GpuFull measurement.
+#[test]
+fn oom_cascade_defeated_by_positive_measurement_at_or_above_oom_size() {
+    let mut profile = cvvdp_profile();
+    // Pre-poison: GpuFull OOMed at 256² (65 536 px). The 1024²
+    // positive measurement in cvvdp_profile() must defeat the
+    // cascade so the chooser still picks GpuFull at 1024².
+    profile
+        .cells_failed_oom
+        .push((Backend::GpuFull, 256u64 * 256u64));
+
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
+    let choice = orch
+        .choose_backend(MetricKind::Cvvdp, 1024, 1024, 12288)
+        .expect("choose_backend should succeed once cascade is defeated");
+
+    // GpuFull is the fastest survivor (5.34 < 6.10 ns/px) and the
+    // 1024² positive measurement proves the 256² OOM is stale.
+    assert_eq!(
+        choice.backend,
+        Backend::GpuFull,
+        "expected GpuFull selection (cascade defeated by positive \
+         measurement at 1024²), got {:?}",
+        choice.backend,
+    );
+    let full = find(&choice.considered, Backend::GpuFull);
+    match full.status {
+        CandidateStatus::Selected { .. } => {}
+        ref s => panic!(
+            "expected GpuFull Selected after positive-measurement \
+             defeats cascade, got {s:?}",
+        ),
+    }
+}
+
+/// Fix A — negative control: without ANY positive measurement at
+/// size >= the OOMed size for this backend, the cascade still
+/// rejects. Construct a profile where GpuFull's only positive
+/// measurement is BELOW the OOMed size, so the cascade rule must
+/// fire.
+#[test]
+fn oom_cascade_still_rejects_when_no_positive_measurement_at_or_above() {
+    // Hand-build a profile so GpuFull has a positive measurement
+    // ONLY at 32² (1024 px), well below the 256² OOM. The cascade
+    // rule must still reject a 1024² request (much larger than the
+    // OOMed size).
+    let mut profile = MetricProfile::default();
+    profile.ns_per_px_at.insert(
+        1024,
+        bench_row(&[(Backend::GpuFull, 8.0), (Backend::GpuStripPair, 9.0)]),
+    );
+    profile.vram_mib_at.insert(
+        1024,
+        vram_row(&[(Backend::GpuFull, 8), (Backend::GpuStripPair, 6)]),
+    );
+    // Add 1024² ns_per_px so the interpolator doesn't return
+    // `NoMeasuredData` (we want to test the cascade specifically).
+    profile.ns_per_px_at.insert(
+        1024 * 1024,
+        bench_row(&[(Backend::GpuStripPair, 6.10)]),
+    );
+    profile.vram_mib_at.insert(
+        1024 * 1024,
+        vram_row(&[(Backend::GpuStripPair, 142)]),
+    );
+    profile.last_measured = Some(SystemTime::now());
+    // GpuFull's only positive measurement is at 1024 px (32²);
+    // the 256² (65 536 px) OOM cascades to anything > 65 536 px.
+    profile
+        .cells_failed_oom
+        .push((Backend::GpuFull, 256u64 * 256u64));
+
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
+    let choice = orch
+        .choose_backend(MetricKind::Cvvdp, 1024, 1024, 12288)
+        .expect("StripPair should still be feasible");
+
+    let full = find(&choice.considered, Backend::GpuFull);
+    match full.status {
+        CandidateStatus::Rejected {
+            reason: RejectReason::KnownOomCell,
+            ..
+        } => {}
+        ref s => panic!(
+            "expected GpuFull KnownOomCell rejection (no positive \
+             measurement at size >= 65 536 px), got {s:?}",
+        ),
+    }
+    assert_eq!(
+        choice.backend,
+        Backend::GpuStripPair,
+        "expected StripPair fallback when GpuFull cascade is valid",
+    );
+}

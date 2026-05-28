@@ -363,6 +363,26 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`zenmetrics-orchestrator` Phase 8i — known_oom_cell cascade
+  defeated by positive measurement (Fix A).** The investigation in
+  `crates/zenmetrics-api/docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md`
+  documented that a single fossilized OOM entry at 256² in the
+  persistent capability cache was cascading via the `*px < pixels`
+  rule to reject every cvvdp request at any size >= 256² for the
+  cache file's lifetime, even when the cache also held positive
+  bench measurements at 1024² + 4096² for the same backend. Fix:
+  `known_oom_cell` now consults `ns_per_px_at` before falling
+  through to the cascade rule — if a positive measurement exists at
+  any `size >= oomed_pixels` for that backend, the OOM is treated
+  as stale and ignored (the successful later measurement contradicts
+  the cascade hypothesis). Exact-match and snapped-size matches
+  remain unconditional. Two regression tests added in
+  `tests/chooser.rs`:
+  `oom_cascade_defeated_by_positive_measurement_at_or_above_oom_size`
+  (cascade defeated) and
+  `oom_cascade_still_rejects_when_no_positive_measurement_at_or_above`
+  (cascade still fires without a contradicting measurement).
+
 - **`zenmetrics-orchestrator` Phase 7.7.1 — three structural bugs
   cleared the parity gate so the CLI default could flip.** (1)
   `executor::construct` was forcing `MemoryMode::Full` or
