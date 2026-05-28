@@ -270,14 +270,28 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
     let ri = RgbSlice::new(rgb_pix(r), w as usize, h as usize);
     let di = RgbSlice::new(rgb_pix(d), w as usize, h as usize);
     match mode {
-        "full" | "warm_ref" => {
-            // zensim has no public per-instance warm-reference; warm_ref
-            // falls back to full compute. (Note: precompute_reference
-            // returns a value-type ref; treated as separate "warm_ref" by
-            // computing once then scoring once. We mirror the
-            // cpu_adapter's no-cache behavior for `warm_ref` to keep
-            // numbers comparable.)
+        "full" => {
             let v = z.compute(&ri, &di).map_err(|e| format!("{e:?}"))?;
+            Ok(v.score())
+        }
+        // Task #134 (2026-05-28): wire the real `precompute_reference` +
+        // `compute_with_ref` warm path. The cpu_adapter now advertises
+        // `supports_cached_ref() == true` for zensim and routes warm
+        // dispatch through this pair. The driver previously fell back
+        // to `compute(&ri, &di)` for `warm_ref` (treating it as a
+        // duplicate of `full`), masking the +46 % speedup CPU sweep
+        // #132 surfaced. With this wired the heaptrack `warm_ref` cell
+        // measures the actual amortized cost — ref-side XYB +
+        // multi-scale downscale runs once, then the compare path skips
+        // both stages on subsequent calls. The driver itself only does
+        // a single compare per process so the speedup shows as a wall
+        // delta vs. `full`; production callers iterate `compute_with_ref`
+        // many times against one `precompute_reference`.
+        "warm_ref" => {
+            let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
+            let v = z
+                .compute_with_ref(&pre, &di)
+                .map_err(|e| format!("{e:?}"))?;
             Ok(v.score())
         }
         // Phase 9.Y finding #5 fix (2026-05-27): the original `strip`
