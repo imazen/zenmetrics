@@ -310,7 +310,9 @@ impl Cvvdp {
             srgb_to_dkl_planar(ref_srgb, w, h, display, ra, rrg, rvy);
 
             // 2. Build ref-side gauss pyramids (img + l_bkg for cache[0],
-            //    img only for cache[1] and cache[2]).
+            //    img only for cache[1] and cache[2]). Share one
+            //    PyramidScratch to avoid per-cache vscratch bloat.
+            let mut shared_pyr_scratch = crate::pyramid::PyramidScratch::default();
             let Scratch {
                 ref_a,
                 ref_rg,
@@ -323,7 +325,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[0].gauss_img,
             );
             build_gauss_pyramid_into(
@@ -331,33 +333,35 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[0].gauss_l,
             );
+            ref_a.clear();
+            ref_a.shrink_to_fit();
             build_gauss_pyramid_into(
                 ref_rg,
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[1].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[1].gauss_img,
             );
+            ref_rg.clear();
+            ref_rg.shrink_to_fit();
             build_gauss_pyramid_into(
                 ref_vy,
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[2].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[2].gauss_img,
             );
+            ref_vy.clear();
+            ref_vy.shrink_to_fit();
+            // shared_pyr_scratch drops here, freeing the vscratch (32 MB at 16 MP).
+            drop(shared_pyr_scratch);
 
-            // 3. Drop DKL planes (no longer needed).
-            self.scratch.ref_a.clear();
-            self.scratch.ref_a.shrink_to_fit();
-            self.scratch.ref_rg.clear();
-            self.scratch.ref_rg.shrink_to_fit();
-            self.scratch.ref_vy.clear();
-            self.scratch.ref_vy.shrink_to_fit();
+            // 3. DKL planes already dropped inline above.
 
             // 4. Drop unused gauss_l buffers (cache[1/2] and cache[0]'s level 0).
             for c in 1..3 {
@@ -747,6 +751,11 @@ impl Cvvdp {
         //   - cache_*[0].gauss_l:  pyramid of achromatic plane (the
         //     L_bkg reference shared across all 3 channels)
         // The redundant gauss_l in cache_*[1/2] is NOT built.
+        //
+        // Share a single PyramidScratch across all gauss builds (we
+        // run sequentially in strip mode) — saves ~32 MB × 5 = 160 MB
+        // vs the 6 per-cache scratches.
+        let mut shared_pyr_scratch = crate::pyramid::PyramidScratch::default();
         {
             let Scratch {
                 ref_a,
@@ -767,7 +776,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[0].gauss_img,
             );
             build_gauss_pyramid_into(
@@ -775,7 +784,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[0].gauss_l,
             );
             ref_a.clear();
@@ -785,7 +794,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[1].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[1].gauss_img,
             );
             ref_rg.clear();
@@ -795,7 +804,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_ref[2].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_ref[2].gauss_img,
             );
             ref_vy.clear();
@@ -806,7 +815,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[0].gauss_img,
             );
             build_gauss_pyramid_into(
@@ -814,7 +823,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[0].gauss_l,
             );
             dist_a.clear();
@@ -824,7 +833,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[1].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[1].gauss_img,
             );
             dist_rg.clear();
@@ -834,12 +843,13 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[2].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[2].gauss_img,
             );
             dist_vy.clear();
             dist_vy.shrink_to_fit();
         }
+        // shared_pyr_scratch drops here, freeing the vscratch.
 
         // Step 1b: release the gauss-build vscratch + z_v/z_h scratches
         // from each cache. These were used by `build_gauss_pyramid_into`'s
@@ -1087,6 +1097,8 @@ impl Cvvdp {
 
         // Step 1: build DIST gauss pyramids (3 gauss_img + 1 gauss_l on cache[0]).
         // Drop DKL planes inline per channel for minimal peak.
+        // Share one PyramidScratch across all gauss builds.
+        let mut shared_pyr_scratch = crate::pyramid::PyramidScratch::default();
         {
             let Scratch {
                 dist_a,
@@ -1100,7 +1112,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[0].gauss_img,
             );
             build_gauss_pyramid_into(
@@ -1108,7 +1120,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[0].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[0].gauss_l,
             );
             dist_a.clear();
@@ -1118,7 +1130,7 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[1].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[1].gauss_img,
             );
             dist_rg.clear();
@@ -1128,12 +1140,13 @@ impl Cvvdp {
                 w,
                 h,
                 n_levels,
-                &mut weber_cache_dist[2].scratch,
+                &mut shared_pyr_scratch,
                 &mut weber_cache_dist[2].gauss_img,
             );
             dist_vy.clear();
             dist_vy.shrink_to_fit();
         }
+        drop(shared_pyr_scratch);
 
         // Drop dist cache scratch buffers post-build (gauss-reduce vscratch
         // is no longer needed; expand buffers stay since deep weber will use them).
