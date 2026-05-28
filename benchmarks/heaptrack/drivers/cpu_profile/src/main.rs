@@ -120,21 +120,31 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             Ok(v as f64)
         }
         "strip" => {
-            // Phase 9.Z.B: real strip walker (was GAP through 2026-05-27).
-            // Memory impact today: ZERO vs `full` — only the pool stage
-            // iterates in strips; weber pyramid + masking + d_scratch
-            // remain full-image-sized. Matches the GPU's currently-
-            // shipped strip walker. Heaptrack will report ~same peak as
-            // `full`; the parity gate (bit-identical JOD) is the real
-            // contract this run validates.
-            let mut c = Cvvdp::new(w, h, CvvdpParams::default()).map_err(|e| e.to_string())?;
+            // Phase 9.Z.F Path A (2026-05-28): strip-major dispatcher with
+            // Scratch::new_strip pre-allocation. Persistent weber pyramid
+            // + cache slots shrink to strip shape (`bw * R_k`) at shallow
+            // levels, dropping 16 MP peak from 3.66 GB → ~1.7 GB target.
+            let mut c =
+                Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
+                    .map_err(|e| e.to_string())?;
             let v = c.score_strip(r, d, STRIP_H_BODY).map_err(|e| e.to_string())?;
             Ok(v as f64)
         }
         "warm_ref_strip" => {
-            // Phase 9.Z.B: Mode E (cached-ref) strip variant. Same
-            // ZERO-memory-impact caveat as `strip`.
-            let mut c = Cvvdp::new(w, h, CvvdpParams::default()).map_err(|e| e.to_string())?;
+            // Phase 9.Z.F Path A: warm_ref + strip dist via Cvvdp::new_strip
+            // pre-allocation. Mirror of `strip` cell but the strip-major
+            // dispatcher for the warm path is queued for chunk 6 step 4 —
+            // this run uses the legacy path which preserves the warm cache
+            // but doesn't reduce shallow-level heap (the persistent weber
+            // ref slot is strip-shape but the warm path writes full-image
+            // weber bands into it, growing it back to full).
+            //
+            // The Scratch::new_strip pre-allocation still saves the upfront
+            // 1.07 GB Scratch::new peak that the original full-image path
+            // paid.
+            let mut c =
+                Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
+                    .map_err(|e| e.to_string())?;
             c.warm_reference(r).map_err(|e| e.to_string())?;
             let v = c
                 .score_with_warm_ref_strip(d, STRIP_H_BODY)
