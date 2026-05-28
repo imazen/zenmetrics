@@ -10,6 +10,7 @@ measured outcome where applicable.
 |---|-----|--------|------|------------------|
 | 1 | `CpuAdapter::supports_cached_ref(Metric::Zensim)` returns `false` even though `precompute_reference` + `compute_with_ref` exists on the underlying crate. | **DONE** (2026-05-28) | #134 | +11.9 % per amortized warm call at 16 MP (vs `+46 %` brief target — see provenance note below) |
 | 2 | `butter warm_ref` peak heap regresses +18 % vs cold at 16 MP (3.61 GB vs 3.07 GB) and +18.7 % at 40 MP (8.71 GB vs 7.34 GB). Root cause: 0.9.3 strip-API work added a 12 B/pixel linear-f32 source clone + the persistent `BufferPool` 48-buffer cap. | **DONE** (2026-05-28) | #135 | warm_ref ≤ cold-path peak heap restored at every measured size: -1.9 % @ 4 MP, -0.9 % @ 16 MP, +0.5 % @ 40 MP. Wall time unchanged within run-to-run variance. butteraugli bumped to 0.9.4. |
+| 3 | `iwssim warm_ref` peak heap is identical to Full (the warm state caches `lp_ref + g_ref` but the dist side still builds full-image `lp_dis` + `compute_iw_maps` + `build_y_matrix` scratch). The strip variant `score_with_warm_ref_strip` keeps the same warm state and reduces peak heap by 33-48 % at 1-40 MP, with +9.5 → +34.7 % wall regression. The orchestrator's "cached_ref" entry point should route through it. | **DONE** (2026-05-28) | #136 | Adapter routes `compute_with_cached_reference` for `Metric::Iwssim` through `score_with_warm_ref_strip(STRIP_BODY_DEFAULT)`. Peak heap reduction: -33 % @ 1 MP (153.8 → 103.6 MB), -48 % @ 16 MP (2.47 GB → 1.29 GB), -48 % @ 40 MP (5.90 GB → 3.07 GB). Score diff ≤ 2e-6 (within iwssim's 1e-4 strip parity tolerance). 12/12 cpu_adapter unit + 15/15 cpu_backend integration + 14/14 iwssim parity tests pass. |
 
 ## Task #134 — zensim cached_ref wiring (DONE)
 
@@ -171,7 +172,45 @@ on the cpu_profile synth pair: 4.666544437408447 for both modes at
 tests pass. cpu_adapter integration tests (54 in zenmetrics-orchestrator)
 pass. No collateral fast-ssim2 / zensim warm-ref impact.
 
-## Pending follow-ups (not in scope of #135)
+## Task #136 — iwssim cached_ref routes through strip walker (DONE)
+
+**Change.** `crates/zenmetrics-orchestrator/src/cpu_adapter.rs` —
+`compute_with_cached_reference` for `Metric::Iwssim` now dispatches
+through `iwssim::Iwssim::score_with_warm_ref_strip` with
+`iwssim::STRIP_BODY_DEFAULT`. The non-strip
+`score_with_warm_ref` retains the warm `lp_ref + g_ref + eigs` state
+but STILL builds full-image-sized dist-side scratch in
+`compute_iw_maps` (~11 × `h·w` f32) + `build_y_matrix`
+(+`nexp × big_n × 4`), so it cannot deliver heap savings. The strip
+variant carries the same warm reference state AND uses the strip
+walker for the dist side, delivering the -48 % heap win measured by
+the CPU sweep at #132.
+
+**Measured** (heaptrack process peak, 7950X, synth pair, 3-trial median):
+
+| size  | full     | warm_ref (pre) | warm_ref (post) | delta vs full |
+|-------|----------|----------------|-----------------|---------------|
+| 1 MP  | 153.8 MB | 153.8 MB       | 103.6 MB        | **-33 %**     |
+| 16 MP | 2.47 GB  | 2.47 GB        | 1.29 GB         | **-48 %**     |
+| 40 MP | 5.90 GB  | 5.90 GB        | 3.07 GB         | **-48 %**     |
+
+Wall regression: +9.5 % (1 MP) → +23.9 % (16 MP) → +34.7 % (40 MP).
+Per-pair score diff ≤ 2e-6 absolute at all sizes — well inside
+iwssim's documented 1e-4 strip parity tolerance.
+
+**Accepted tradeoff.** The cached-ref entry's value proposition for
+the orchestrator is amortizing the ref-side eigendecomposition (which
+the strip variant ALSO does — warm state is identical: `lp_ref`,
+`g_ref`, per-scale `eigs`). The heap savings unlock 40 MP scoring on
+8 GiB cards that would otherwise OOM at 5.90 GB. Callers that want to
+pin a body height continue to use `compute_with_cached_reference_strip`
+explicitly; the new default body is `STRIP_BODY_DEFAULT`.
+
+**Tests.** 12/12 cpu_adapter unit tests pass. 15/15 cpu_backend
+integration tests pass (`--features cpu-all,cuda`). 14/14 iwssim
+strip parity tests pass.
+
+## Pending follow-ups (not in scope of #136)
 
 None right now. Future sweeps that surface orchestrator-side wiring
 gaps append rows to the table above with their own task numbers.

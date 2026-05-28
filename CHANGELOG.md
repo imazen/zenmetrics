@@ -30,6 +30,23 @@ Workspace conventions per the global rules:
   the new `drop_strip_source` / `shrink_to_fit` retention-control
   helpers are available if a future workload needs them.
 
+- **iwssim cached-ref now routes through the strip walker** (task #136,
+  2026-05-28). `CpuAdapter::compute_with_cached_reference` for
+  `Metric::Iwssim` dispatches `iwssim::Iwssim::score_with_warm_ref_strip`
+  with `iwssim::STRIP_BODY_DEFAULT`. The non-strip
+  `score_with_warm_ref` retains the warm `lp_ref + g_ref + eigs` state
+  but still builds full-image-sized dist-side scratch, so it cannot
+  deliver heap savings; the strip variant carries the same warm state
+  and adds the dist-side strip walker. Measured peak-heap reduction
+  (heaptrack process peak, 7950X, synth pair, 3-trial median): **-33 %
+  at 1 MP, -48 % at 16 MP, -48 % at 40 MP**. Wall regression:
+  +9.5 % (1 MP) → +23.9 % (16 MP) → +34.7 % (40 MP); accepted because
+  the cached-ref entry's value proposition is amortizing the ref-side
+  eigendecomposition (which both modes do equally). Per-pair score diff
+  ≤ 2e-6 absolute, inside iwssim's 1e-4 strip tolerance. Callers wanting
+  a pinned body height continue to use
+  `compute_with_cached_reference_strip` explicitly.
+
 ### Added
 
 - **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports
