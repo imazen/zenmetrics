@@ -1,0 +1,64 @@
+# cvvdp CPU heap scaling — 16 → 40 MP intermediate-size sweep (task #130)
+#
+# Diagnosed 2026-05-28 to determine whether the 16→40 MP heap growth is
+# super-linear (justifying a targeted Path B fix) or strictly linear
+# (Path A chunks 4+6 required for any meaningful reduction).
+#
+# Finding: peak heap is strictly linear at 218 MB/MP across all 6 sizes,
+# intercept ≈ 0, R² = 0.99999798. The brief's apparent "91.8 → 203 MB/MP"
+# super-linearity was an artifact of comparing top-callstack consumer
+# (1.54 G at 16 MP) to process peak (8.68 G at 40 MP). Apples-to-apples,
+# both views scale linearly.
+#
+# Decision: Path B (cheaper targeted fix) is not viable; Path A required.
+# See crates/cvvdp/docs/CPU_40MP_SCALING_DIAG_2026-05-28.md.
+#
+# Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
+# Kernel:      Linux 6.6.114.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC
+# Rust:        rustc 1.95.0 (59807616e 2026-04-14)
+# Heaptrack:   1.3.0 (binary protocol v3)
+# Build:       cargo build --release -p cpu-profile
+#              (workspace target/, default-features=false +std, parallel OFF)
+# Repo:        zenmetrics
+# Parent commit (master@origin):  5979e084594473a535b308a113555ab404a94d40
+# Workspace:   zenmetrics--cvvdp-diag-40mp
+# Driver:      benchmarks/heaptrack/drivers/cpu_profile/src/main.rs
+# Synth seed:  deterministic XorShift-ish (see synth_pair in driver:
+#                rr = (x*17+y*5)%251 + 40
+#                gg = (x*11+y*13)%247 + 40
+#                bb = (x*7+y*19)%241 + 40
+#              dist = ref with (-8, -4, +12) per channel saturating)
+#
+# Sizes:
+#   16 MP:   4096 × 4096   (16.78 MP, square)
+#   24 MP:   5120 × 4683   (23.98 MP)
+#   28 MP:   5824 × 4807   (28.00 MP)
+#   32 MP:   6144 × 5208   (32.00 MP)
+#   36 MP:   6656 × 5402   (35.96 MP)
+#   40 MP:   7680 × 5184   (39.81 MP, task's "40 MP" target)
+#
+# Mode: full (Cvvdp::new + Cvvdp::score) only — strip ≡ full and warm_ref
+#       have been characterised in cpu_kspl_40mp_2026-05-28.{tsv,meta}.
+#       This sweep focuses on the size-axis scaling question.
+#
+# Output:
+#   crates/cvvdp/benchmarks/cpu_scaling_diag_40mp_2026-05-28.tsv (peak heap, MB/MP, JOD)
+#   benchmarks/heaptrack/scaling_2026-05-28/cvvdp_full_{16,24,28,32,36,40}mp.zst
+#   crates/cvvdp/docs/CPU_40MP_SCALING_DIAG_2026-05-28.md (full diagnosis + decision)
+#
+# Replay:
+#   cargo build --release -p cpu-profile
+#   for size_wh in "4096 4096" "5120 4683" "5824 4807" "6144 5208" "6656 5402" "7680 5184"; do
+#     read W H <<< "$size_wh"
+#     heaptrack -o benchmarks/heaptrack/scaling_2026-05-28/cvvdp_full_${W}x${H} \
+#       target/release/cpu-profile cvvdp full $W $H
+#   done
+#   for f in benchmarks/heaptrack/scaling_2026-05-28/*.zst; do
+#     heaptrack_print "$f" 2>&1 | grep -m1 "peak heap memory consumption:"
+#   done
+#
+# Sanity:
+#   - All JOD scores agree with the prior 40 MP baseline within FP noise.
+#   - Massif cross-check via `heaptrack_print -M /tmp/x.massif` + max mem_heap_B
+#     matches heaptrack peak header at every size to 4+ sig figs.
+#   - Linear fit residuals ≤ 5 MB on multi-GB peaks (R² = 0.999998).
