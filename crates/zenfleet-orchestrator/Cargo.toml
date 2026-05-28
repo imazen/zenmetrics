@@ -1,0 +1,30 @@
+[package]
+name = "zenfleet-orchestrator"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.93"
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Provider-generic fleet orchestration: chunk TTL re-dispatch, replica overshoot, class-aware filtering, speculative execution"
+publish = false
+
+[lib]
+name = "zenfleet_orchestrator"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Async runtime — the FleetSweep driver runs an async poll loop that
+# alternates between ProviderHandle calls (provision / poll / push /
+# teardown) and R2 reads/writes via R2Operator. The trait methods use
+# `async fn` (Rust 1.93 + 2024 ed. return-position-impl-trait in
+# traits), so no extra macro deps; we just need `tokio::time::sleep`.
+tokio = { version = "1.52.3", default-features = false, features = ["time", "rt", "macros"] }
+anyhow = "1.0.102"
+
+[dev-dependencies]
+tokio = { version = "1.52.3", default-features = false, features = ["time", "rt", "macros", "rt-multi-thread"] }

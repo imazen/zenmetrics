@@ -49,7 +49,21 @@ pub mod launch;
 pub mod queue;
 pub mod storage;
 
+// Operator-side modules — only compiled when the launcher binary is
+// being built. They depend on sha2 / hmac via `--features launcher`.
+#[cfg(feature = "launcher")]
+pub mod launcher_support;
+#[cfg(feature = "launcher")]
+pub mod provider;
+#[cfg(feature = "launcher")]
+pub mod r2_ops;
+
 pub use heartbeat::SaladHeartbeat;
 pub use host::{SaladEnvCredentials, SaladImds, SaladWorkerHost};
 pub use queue::{SaladJobQueue, SaladQueueConfig};
 pub use storage::{SaladBlobStorage, blob_storage, blob_storage_from_credentials};
+
+#[cfg(feature = "launcher")]
+pub use provider::{SaladProviderConfig, SaladProviderHandle};
+#[cfg(feature = "launcher")]
+pub use r2_ops::{R2OperatorImpl, short_ts, split_s3_uri};

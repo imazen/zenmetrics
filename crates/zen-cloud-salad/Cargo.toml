@@ -35,6 +35,11 @@ zen-cloud-core = { workspace = true }
 # object store, so workers bring their own R2/S3 bucket (spec §1.9
 # item 4). Do NOT write a second S3 client.
 zen-cloud-s3 = { workspace = true }
+# Provider-generic fleet orchestration logic (TTL re-dispatch, replica
+# overshoot, class filtering, speculative execution). The launcher
+# binary calls into this for the launcher-side decisions; the lib
+# itself does not depend on it.
+zenfleet-orchestrator = { workspace = true }
 # anyhow for the launcher-side REST plumbing's error model.
 anyhow = "1.0.102"
 # Async runtime. The JobQueue runs a tiny HTTP server (the local
