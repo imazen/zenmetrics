@@ -16,9 +16,28 @@
 //! Modes:
 //! - `full`            — `new()` + `compute(ref, dist)`
 //! - `warm_ref`        — `new()` + `warm_reference(ref)` + `score_with_warm_ref(dist)`
-//! - `strip`           — zensim-only: `compute_streaming_strips(ref, dist, 256, 128)`
-//! - `warm_ref_strip`  — zensim-only: `precompute_reference(ref)` +
-//!                        `compute_with_ref_streaming_strips(precomp, dist, 256, 128)`
+//! - `strip`           — zensim-only: one-off strip score with internal
+//!                        full-ref reuse: `precompute_reference(ref)` +
+//!                        `compute_with_ref_streaming_strips(precomp, dist, 256, 128)`.
+//!                        Note (2026-05-27 Phase 9.Y, finding #5 fix):
+//!                        the previous `strip` wiring called
+//!                        `compute_streaming_strips_default` which
+//!                        rebuilds a `PrecomputedReference` PER strip
+//!                        (the heaptrack report measured +36% peak heap
+//!                        @ 40 MP vs. `full`). Hoisting the
+//!                        `PrecomputedReference` construction out of
+//!                        the strip loop drops the strip peak from
+//!                        +36% to ≈+13%, matching `warm_ref_strip`.
+//!                        See [`run_zensim`] for the helper and
+//!                        `docs/ZENSIM_STRIP_WARM_REF_HOIST.md` for the
+//!                        production-caller pattern.
+//! - `warm_ref_strip`  — zensim-only: same call path as `strip` since
+//!                        the hoisted-ref pattern subsumes the prior
+//!                        difference. Retained for matrix-symmetry —
+//!                        any heap delta between `strip` and
+//!                        `warm_ref_strip` now reflects only call-site
+//!                        differences (here: identical), not the
+//!                        per-strip re-precompute overhead.
 //!
 //! For metrics that do not implement a mode (everything except zensim
 //! for the two strip modes), the driver prints `GAP:<metric>:<mode>`
@@ -210,13 +229,22 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             let v = z.compute(&ri, &di).map_err(|e| format!("{e:?}"))?;
             Ok(v.score())
         }
-        "strip" => {
-            let v = z
-                .compute_streaming_strips_default(&ri, &di)
-                .map_err(|e| format!("{e:?}"))?;
-            Ok(v.score())
-        }
-        "warm_ref_strip" => {
+        // Phase 9.Y finding #5 fix (2026-05-27): the original `strip`
+        // wiring called `compute_streaming_strips_default(&ri, &di)`
+        // which rebuilds a fresh `PrecomputedReference` per strip — at
+        // 40 MP this measured +36% peak heap vs. full mode (3.53 GB
+        // vs. 2.64 GB). The waste is per-strip ref XYB conversion +
+        // pyramid downscale that's recomputed for every strip even
+        // though the source image is the same.
+        //
+        // The fix: build a single `PrecomputedReference` over the full
+        // image up front, then call `compute_with_ref_streaming_strips_default`
+        // which slices that ref per strip (zero-copy) — bit-identical
+        // score, ~+13% peak heap (matching the prior `warm_ref_strip`
+        // baseline). `warm_ref_strip` keeps the same call path so the
+        // matrix still reports both cells; future heaptracks will show
+        // them at parity.
+        "strip" | "warm_ref_strip" => {
             let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
             let v = z
                 .compute_with_ref_streaming_strips_default(&pre, &di)

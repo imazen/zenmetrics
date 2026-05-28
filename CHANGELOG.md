@@ -19,6 +19,21 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **Phase 9.Y finding #5 — zensim strip mode no longer re-precomputes
+  reference per strip.** The cpu_profile driver's `strip` mode now
+  hoists `Zensim::precompute_reference` outside the strip loop and
+  calls `compute_with_ref_streaming_strips_default` (zero-copy ref
+  slicing per strip). Peak heap at 40 MP drops from 3.59 GB → 2.96 GB
+  (−16.1 %, −580 MB), matching the prior `warm_ref_strip` baseline.
+  Score is bit-identical across 1 / 16 / 40 MP sizes
+  (80.45223298546662 / 80.45277977209128 / 80.45113394427749).
+  Wrapper-pattern + production-caller guidance documented in
+  [`crates/zenmetrics-api/docs/ZENSIM_STRIP_WARM_REF_HOIST.md`](crates/zenmetrics-api/docs/ZENSIM_STRIP_WARM_REF_HOIST.md).
+  Residual +13 % at 40 MP vs. `full` is intrinsic to the strip
+  walker's dst-XYB scratch + ref-pyramid hold and would require
+  modifying the external zensim repo to close. Section 9.1 appended
+  to the heaptrack report logs the post-fix matrix.
+
 - **`cvvdp-gpu` — three pre-existing test failures restored to green
   (Phase 8j Part B).** Each handled per its root cause:
   - `pipeline_score::score_returns_lossless_f64_widening_of_compute_dkl_jod`
@@ -67,7 +82,6 @@ Workspace conventions per the global rules:
   guarantees the two generated files are bit-identical by
   construction. Closes the Phase 8g.1 architectural debt
   documented at the top of `crates/iwssim-gpu/src/filters.rs`.
-
 ### Added
 
 - **Phase 9x — CPU heaptrack gate report

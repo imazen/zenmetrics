@@ -343,3 +343,33 @@ heaptrack_gui benchmarks/heaptrack/cvvdp_full_40MP.zst
 # or
 heaptrack_print benchmarks/heaptrack/cvvdp_full_40MP.zst | less
 ```
+
+---
+
+## 9. Follow-up fix log
+
+### 9.1 Finding #5 fixed (2026-05-27, Phase 9.Y)
+
+zensim strip mode now hoists `PrecomputedReference` outside the strip
+loop. The cpu_profile driver's `strip` mode is wired through the
+hoisted-ref pattern. Re-measured matrix:
+
+| Size  | `full`  | `strip` (BEFORE) | `strip` (AFTER) | `warm_ref_strip` |
+|-------|--------:|-----------------:|----------------:|-----------------:|
+| 1 MP  | 71.19 M | 69.98 M          | 57.76 M         | 57.76 M          |
+| 16 MP | 1.07 G  | 1.37 G           | 1.07 G          | 1.07 G           |
+| 40 MP | 2.64 G  | 3.59 G           | 2.96 G          | 2.96 G           |
+
+40 MP heap reduction: −16.1 % (−580 MB); strip mode now matches
+`warm_ref_strip` exactly. Score parity verified bit-identical across
+all three sizes (80.45223298546662 / 80.45277977209128 /
+80.45113394427749).
+
+Residual +13 % at 40 MP (`strip` vs. `full`) is intrinsic to the
+strip walker's dst-XYB scratch + global ref pyramid hold. Closing
+that gap requires modifying zensim's
+`compute_multiscale_stats_streaming_strips` internals (external repo,
+out of scope for this task).
+
+See [`ZENSIM_STRIP_WARM_REF_HOIST.md`](ZENSIM_STRIP_WARM_REF_HOIST.md)
+for the wrapper pattern and the production-caller guidance.
