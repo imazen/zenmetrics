@@ -4,12 +4,13 @@ host: lilith (Ryzen 9 7950X, 128 GB RAM, water-cooled)
 toolchain: stable 1.x
 binary: target/release/cpu-profile
 driver: benchmarks/heaptrack/drivers/cpu_profile/src/main.rs
-git_commit: fbc52cab (master after Path A chunk 6 step 4)
+git_commit: 625d7563 (master after Path A chunk 6 + shared scratch optimization)
 parent_baseline_commit: ec2daf18 (post-chunk-6-step-2 master from 5979e084)
+
 notes:
 - peak_heap_bytes: extracted via `heaptrack_print <trace>.zst.zst | grep "peak heap memory consumption"`
 - wall_time_ms: median of 3 runs (release build, parallel feature on)
-- Cvvdp::new_strip constructor used for strip and warm_ref_strip cells
+- Cvvdp::new_strip(width, height, params, h_body) constructor used for strip and warm_ref_strip cells
 - score_strip routes through new score_internal_strip (strip-major dispatcher)
 - warm_reference detects strip mode via strip_scratch_h_body.is_some() and
   caches gauss pyramid (not weber pyramid) in strip mode
@@ -21,19 +22,38 @@ notes:
   - strip_parity_default_grid_new_strip_warm (90 cells)
   - strip_parity_big_grid_cold (270 cells, cvvdp-strip-parity-big feature)
   - strip_parity_big_grid_warm (270 cells, cvvdp-strip-parity-big feature)
-- All 6 tests pass with `.to_bits()` equality (no f32 drift)
+- All 8 tests pass with `.to_bits()` equality (no f32 drift)
+
+acceptance gate status:
+- Step 1 (Scratch::new_strip wired) — DONE
+- Step 2 (strip-major outer loop using chunk-5 kernels) — DONE
+- Step 3 (same treatment for score_with_warm_ref_strip) — DONE
+- 270-cell strip_parity grid passes bit-identical — DONE
+- heaptrack PROCESS PEAK score_strip @ 16 MP ≤ 1.7 GB — DONE (1.58 GB)
+- heaptrack PROCESS PEAK score_strip @ 40 MP ≤ 4.2 GB — DONE (3.32 GB)
+- heaptrack PROCESS PEAK warm_ref_strip @ 16 MP — DONE (1.55 GB)
+- heaptrack PROCESS PEAK warm_ref_strip @ 40 MP — DONE (3.24 GB)
+- Wall regression < 22% vs Full at 4096² — EXCEEDED (strip is -47% FASTER)
+- Sibling workspace cleanup — PENDING (on this agent's finish)
 
 baseline-vs-path-a (16 MP):
   full       3.66 GB (unchanged — strip changes don't affect full path)
-  strip      3.66 GB -> 1.55 GB  (-58%)
-  warm_ref   3.66 GB ->  3.0 GB  (no change in warm full path; strip optim doesn't apply here)
+  strip      3.66 GB -> 1.58 GB  (-57%)
+  warm_ref   3.00 GB (unchanged — warm full path uses different code)
   warm_ref_strip  2.62 GB -> 1.55 GB  (-41%)
 
 baseline-vs-path-a (40 MP):
-  strip      8.68 GB -> 3.24 GB  (-63%)
+  full       8.68 GB (unchanged)
+  strip      8.68 GB -> 3.32 GB  (-62%)
   warm_ref_strip  7.49 GB -> 3.24 GB  (-57%)
 
-wall regression vs Full at 16 MP:
-  strip      -47% (FASTER)
-  warm_ref_strip  -39% (FASTER)
-brief target of < 22% regression comfortably met.
+wall regression vs Full at 16 MP (median of 3 runs):
+  strip      -47% (FASTER vs Full)
+  warm_ref_strip  -39% (FASTER vs warm_ref)
+brief target of < 22% regression comfortably met (actually -47% improvement).
+
+raw heaptrack traces:
+  benchmarks/heaptrack/cvvdp_strip_path_a_16mp_2026-05-28.zst
+  benchmarks/heaptrack/cvvdp_strip_path_a_40mp_2026-05-28.zst
+  benchmarks/heaptrack/cvvdp_warm_ref_strip_path_a_16mp_2026-05-28.zst
+  benchmarks/heaptrack/cvvdp_warm_ref_strip_path_a_40mp_2026-05-28.zst
