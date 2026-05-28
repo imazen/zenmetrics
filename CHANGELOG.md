@@ -17,6 +17,20 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- **Phase 8c.1 audit — `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`.**
+  Surveys the six metric crate pairs, inventories shared types, and
+  ranks opportunities. Key finding: `cvvdp` (CPU) currently depends on
+  `cvvdp-gpu` — the inverse of the user's stated principle that GPU
+  versions should depend on CPU versions. All other metric pairs are
+  either independent (butter/dssim/ssim2) or already correct (zensim
+  → its CPU sibling). The audit recommends Phase B.1 flip the cvvdp
+  dep direction by moving pure constants + scalar reference functions
+  out of `cvvdp-gpu::{params, kernels::*, host_scalar, presets}` into
+  `cvvdp`. zenpixels interface is already consistent across all 6
+  `-gpu` crates (no B.3 gaps to fill).
+
 ### Changed
 
 - **Phase 8f — switch from `lilith/cubecl` git-rev pins to
