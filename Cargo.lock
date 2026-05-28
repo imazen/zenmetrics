@@ -2396,7 +2396,6 @@ version = "0.1.0"
 dependencies = [
  "archmage",
  "image",
- "iwssim-gpu",
  "magetypes",
  "rayon",
  "serde",
@@ -2411,6 +2410,7 @@ version = "0.0.1"
 dependencies = [
  "bytemuck",
  "image",
+ "iwssim",
  "zenforks-cubecl",
  "zenpixels",
  "zenpixels-convert",

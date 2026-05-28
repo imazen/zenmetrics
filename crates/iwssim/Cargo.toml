@@ -28,10 +28,10 @@ avx512 = ["archmage/avx512", "magetypes/avx512"]
 parallel = ["std", "dep:rayon"]
 # zenpixels integration smoke (RGB scoring from PixelLayout).
 pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
-# Opt-in parity test against iwssim-gpu. Off by default because cubecl
-# pulls a heavy build graph; the test binary is also gated on a real
-# CUDA device. See tests/parity_gpu.rs.
-gpu-parity-test = ["dep:iwssim-gpu"]
+# Phase 8g.1: the GPU↔CPU parity test was moved to `iwssim-gpu/tests/parity_cpu.rs`
+# to break the dependency cycle (iwssim-gpu now depends on iwssim). To run
+# CPU↔GPU parity, use:
+#   cargo test -p iwssim-gpu --features cuda --test parity_cpu -- --ignored
 
 [dependencies]
 # Safe SIMD dispatch via capability tokens. Used by:
@@ -44,8 +44,6 @@ magetypes = { workspace = true }
 rayon = { version = "1.10", optional = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-# Optional GPU parity test (disabled by default — see `gpu-parity-test`).
-iwssim-gpu = { workspace = true, optional = true, features = ["cuda", "cubecl-types"] }
 
 [dev-dependencies]
 # Used for golden capture (decode test fixtures + load JSON).
@@ -53,11 +51,6 @@ image = { workspace = true, features = ["png", "jpeg", "bmp"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
-
-[[test]]
-name = "parity_gpu"
-path = "tests/parity_gpu.rs"
-required-features = ["gpu-parity-test"]
 
 [build-dependencies]
 # Gaussian / binomial coefficient generation at build time — mirrors

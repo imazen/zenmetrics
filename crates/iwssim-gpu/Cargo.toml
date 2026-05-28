@@ -28,6 +28,10 @@ cubecl-types = []
 
 [dependencies]
 cubecl = { workspace = true }
+# Phase 8g.1 — canonical scalar reference + shared algorithm constants
+# (NUM_SCALES, MIN_NATIVE_DIM) live in `iwssim`. gpu→cpu direction
+# matches the cvvdp-gpu/cvvdp split (Phase 8c.1-B).
+iwssim = { workspace = true, default-features = false, features = ["std"] }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
@@ -104,3 +108,10 @@ required-features = ["cubecl-types"]
 
 [[test]]
 name = "vram_probe"
+
+# Phase 8g.1: GPU↔CPU parity. Was iwssim/tests/parity_gpu.rs gated on
+# the `gpu-parity-test` feature; relocated here to break the iwssim ↔
+# iwssim-gpu dep cycle.
+[[test]]
+name = "parity_cpu"
+required-features = ["cuda"]

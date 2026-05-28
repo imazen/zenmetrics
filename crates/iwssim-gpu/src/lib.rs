@@ -68,17 +68,11 @@ pub use opaque::{Backend, IwssimOpaque, IwssimParams, Score};
 #[cfg(feature = "cubecl-types")]
 pub use pipeline::Iwssim;
 
-/// Number of pyramid scales — fixed at 5 by the IW-SSIM paper.
-pub const NUM_SCALES: usize = 5;
-
-/// Minimum native pyramid dimension required by the reference algorithm.
-///
-/// The paper's `iwssim.m` requires `min(W, H) ≥ 11 · 2^(Nsc-1) = 176` so
-/// the coarsest scale (`L_5`) still has enough pixels for a valid-mode
-/// 11×11 Gaussian. For inputs smaller than this along either axis we
-/// either reject (default — bit-exact stock IW-SSIM) or reflect-pad up
-/// to `MIN_NATIVE_DIM` on the short axis (`IwssimConfig::allow_small`).
-pub const MIN_NATIVE_DIM: u32 = 176;
+// Phase 8g.1 — algorithm-shared constants (`NUM_SCALES`, `MIN_NATIVE_DIM`)
+// are owned by the canonical CPU crate `iwssim`. They're re-exported
+// here so existing `iwssim_gpu::{NUM_SCALES, MIN_NATIVE_DIM}` callsites
+// continue to resolve. See `crates/iwssim/src/lib.rs` for the docs.
+pub use iwssim::{MIN_NATIVE_DIM, NUM_SCALES};
 
 /// How to handle inputs smaller than [`MIN_NATIVE_DIM`] on either axis.
 ///

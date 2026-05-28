@@ -37,9 +37,12 @@ provenance:
 2. **Upstream CPU (sibling repo) + in-tree GPU (five pairs):**
    `butteraugli` / `ssimulacra2` / `dssim-core` / `zensim` (all
    external) + the matching `-gpu` crate (in-tree).
-3. **No-CPU-pair (one pair):** `iwssim-gpu` — there is no in-tree
+3. ~~**No-CPU-pair (one pair):** `iwssim-gpu` — there is no in-tree
    CPU implementation of IW-SSIM; the orchestrator's `CpuAdapter`
-   surfaces `Unavailable` for that metric.
+   surfaces `Unavailable` for that metric.~~ *(Closed in Phase 8g —
+   the `iwssim` CPU crate landed. Phase 8g.1 then flipped the dep
+   direction to gpu→cpu, matching A.1.1's pattern. See §A.1.5 for
+   the current state.)*
 
 ### A.1.1 — cvvdp pair (ONLY pair where we own both sides)
 
@@ -203,20 +206,48 @@ embedded / no-cubecl targets.
 - **Action**: NONE. Naming asymmetry (`dssim-core` vs `dssim-gpu`) is
   consistent with the upstream-crate naming convention; do NOT rename.
 
-### A.1.5 — iwssim pair
+### A.1.5 — iwssim pair (updated post Phase 8g + 8g.1)
 
-- **CPU crate**: NONE (no clean reference CPU implementation exists in
-  the workspace; orchestrator's `CpuAdapter` returns `Unavailable`).
-- **GPU crate**: `crates/iwssim-gpu/`.
-- **Dep direction**: trivially correct (no CPU crate to depend on).
-- **Action**: NONE. A future tier-3 priority could be to extract a
-  pure-CPU IW-SSIM reference from `iwssim-gpu/src/host_scalar.rs`
-  equivalent (if one exists), but that's out of scope for 8c.1.
-- **Side note**: this is the one metric where `Metric::compute_pixels`
-  currently routes through `iwssim-gpu` exclusively. If a future
-  `iwssim` (CPU) crate lands, its constants + scalar helpers should
-  follow the same "pure stuff lives CPU-side, GPU consumes" pattern
-  that Phase B.1 establishes for cvvdp.
+- **CPU crate**: `crates/iwssim/` (landed in Phase 8g, 2026-05-27) —
+  pure-Rust port of the canonical Python-IW-SSIM reference with
+  magetypes SIMD on the SSIM-stats hot loops. Owns `IwssimParams`
+  (paper knobs: `iw_flag`, `bl_sz_x/y`, `parent`, `sigma_nsq`,
+  `allow_small`), `IwssimScore`, `Error`, `NUM_SCALES`, `MIN_NATIVE_DIM`,
+  `IWSSIM_COLUMN_NAME` (`iwssim_cpu_imazen_v*` — distinct from the
+  GPU column to disambiguate atomic-tolerance score drift in joined
+  parquets).
+- **GPU crate**: `crates/iwssim-gpu/`. Owns `IwssimOpaque`, `Score`,
+  `Backend`, `GpuIwssimResult`, `IwssimConfig`/`IwssimStrategy`,
+  `MemoryMode`, and the opaque-API `IwssimParams` (different shape
+  from `iwssim::IwssimParams` — opaque is `{ allow_small }` only).
+  Also retains its own `IWSSIM_COLUMN_NAME` (`iwssim_imazen_v*`).
+- **Dep direction**: Phase 8g.1 (2026-05-27) flipped to gpu→cpu.
+  `iwssim-gpu` now has `iwssim = { workspace = true, default-features
+  = false, features = ["std"] }` as a required dep, and re-exports
+  `NUM_SCALES` + `MIN_NATIVE_DIM` from `iwssim` so existing
+  `iwssim_gpu::*` callsites resolve. The reverse direction (iwssim
+  optionally pulled iwssim-gpu for `gpu-parity-test`) was removed to
+  break the cycle; the parity test moved to
+  `iwssim-gpu/tests/parity_cpu.rs`.
+- **Kept-duplicate constants**: `BINOM5`, `SSIM_WIN_1D`, `SCALE_WEIGHTS`
+  (build.rs-generated) stay in `iwssim-gpu/src/filters.rs` alongside
+  the bit-identical `iwssim/src/filters.rs` source. The cube-macro
+  `#[cube(launch_unchecked)]` kernels in `kernels/lap_pyramid.rs`
+  and `kernels/gauss11.rs` reference these by-name through the
+  `crate::filters::*` path; cube codegen captures that path at
+  expansion and re-emits it on the device side, so re-exporting from
+  `iwssim::filters::*` is not name-resolvable. The two `build.rs`
+  files share the same coefficient generator — any drift would be
+  caught by `parity_cpu` (CPU↔GPU agreement to atomic-tolerance) and
+  by `parity_python` on the CPU side.
+- **Score-shape divergence (left in place)**: `iwssim_gpu::Score`
+  (opaque struct with `value/metric_name/metric_version`) vs.
+  `iwssim::IwssimScore` (struct with `score: f64` + `per_scale:
+  [f64; NUM_SCALES]`) serve different consumers — the opaque API
+  needs a uniform shape across all GPU metric crates; the CPU library
+  exposes per-scale diagnostics. Keeping both is intentional.
+- **Action**: NONE further required. The "pure stuff lives CPU-side,
+  GPU consumes" pattern from B.1 (cvvdp) is now applied to iwssim.
 
 ### A.1.6 — zensim pair
 
@@ -346,7 +377,7 @@ this — see Recommendations.
 | MEDIUM | `cvvdp-gpu::presets` | Display-preset registry (JSON-loaded named displays) is pure data + JSON parse; no GPU dep | Move `presets` to `cvvdp::presets` as part of B.1 | LOW | **B.1** |
 | LOW | All `-gpu` opaque crates | cached-ref naming split (`set_reference_*` vs `warm_reference_*`) | Add deprecated alias `set_reference_srgb_u8` → `warm_reference_srgb` on `CvvdpOpaque`; umbrella already normalizes | LOW but API churn | **DEFER** — umbrella already normalizes; direct consumers are few |
 | LOW | `ssim2-gpu` | Naming inconsistency with upstream `ssimulacra2` crate | Rename `ssim2-gpu` → `ssimulacra2-gpu` | MEDIUM — every consumer (CLI, orchestrator, parity script, sweep workers, docs, R2 column-names) carries the `ssim2` short name; rename ripples broadly | **DEFER** — cost > benefit |
-| LOW | `iwssim-gpu` | No CPU reference crate exists; orchestrator returns `Unavailable` | Extract scalar reference path from `iwssim-gpu/src/host_scalar*` (if present) into a new `iwssim` CPU crate, follow the same B.1 pattern | MEDIUM — new crate; depends on whether there's a clean scalar reference today | **DEFER** to a future phase |
+| ~~LOW~~ DONE | `iwssim-gpu` | ~~No CPU reference crate exists; orchestrator returns `Unavailable`~~ | ~~Extract scalar reference path from `iwssim-gpu/src/host_scalar*` (if present) into a new `iwssim` CPU crate, follow the same B.1 pattern~~ — closed by **Phase 8g** (CPU port landed) + **Phase 8g.1** (gpu→cpu dep flip; `NUM_SCALES` + `MIN_NATIVE_DIM` re-exported from `iwssim`; `BINOM5`/`SSIM_WIN_1D`/`SCALE_WEIGHTS` kept duplicated for cube-macro name resolution). | — | **8g + 8g.1** |
 | LOW | `cvvdp` (CPU) | `score` returns `Result<f32>`, not a `Score` struct (asymmetric with `-gpu` shims) | Add a `score_with_metadata` returning `Score`-like struct; keep `score` as-is for callers that just want the f32 | LOW but adds API surface | **DEFER** |
 | LOW | `zenmetrics-api` | `MetricParams::Cvvdp(cvvdp_gpu::CvvdpParams)` will become `cvvdp::CvvdpParams` after B.1 | One-line edit in B.1 commit set | LOW | **B.1** (same commit set) |
 
