@@ -1,5 +1,30 @@
 # Phase #110 — CVVDP chooser-feasibility regression investigation
 
+> **RESOLVED at `daf26f45`** (Phase 8i, 2026-05-27). The three
+> cache-hygiene fixes recommended at the end of this document
+> (Fix A / Fix B / Fix C) landed as three small commits on master:
+>
+> - **Fix A** `1d7535b1` — `known_oom_cell` cascade defeated by
+>   positive measurement at `size >= oomed_pixels`.
+> - **Fix B** `0530282f` — `record_oom_and_persist` prunes stale +
+>   contradictory entries via a `retain()` cleanup pass on every
+>   call. Existing cache files self-heal on the next legitimate OOM
+>   recording — no migration script needed.
+> - **Fix C** `daf26f45` — `CpuMetricUnavailable` /
+>   `CpuBackendUnavailable` / `CpuNotYetWired` sentinels skip
+>   `record_oom_and_persist` (they are feature-flag failures, not
+>   memory failures).
+>
+> Regression tests landed alongside the fixes:
+> `oom_cascade_defeated_by_positive_measurement_at_or_above_oom_size`,
+> `oom_cascade_still_rejects_when_no_positive_measurement_at_or_above`,
+> `record_oom_prunes_fossilized_unsupported_backend`,
+> `record_oom_prunes_entry_contradicted_by_positive_measurement`,
+> `sentinel_errors_do_not_pollute_cells_failed_oom`.
+>
+> The chooser's per-cell decision logic was correct as-shipped; the
+> cache-write/read invariants needed the fix.
+
 **Date**: 2026-05-28 (UTC)
 **Investigator**: Phase #110 sibling-workspace agent
 **Worktree**: `/home/lilith/work/zen/zenmetrics--phase110-bisect/`
