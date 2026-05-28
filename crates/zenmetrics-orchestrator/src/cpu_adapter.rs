@@ -5,16 +5,23 @@
 //! already uses. The orchestrator's OOM-fallback ladder swaps a GPU
 //! backend for a CPU one without changing the call site.
 //!
-//! ## Per-metric mapping (initial release — see `docs/CPU_BACKENDS.md`)
+//! ## Per-metric mapping (see `docs/CPU_BACKENDS.md`)
 //!
 //! | Metric  | CPU reference crate     | Feature flag   |
 //! |---------|-------------------------|----------------|
 //! | Cvvdp   | `cvvdp` (in-tree)       | `cpu-cvvdp`    |
-//! | Ssim2   | `ssimulacra2`           | `cpu-ssim2`    |
+//! | Ssim2   | `fast-ssim2` (Imazen)   | `cpu-ssim2`    |
 //! | Dssim   | `dssim-core`            | `cpu-dssim`    |
 //! | Butter  | `butteraugli`           | `cpu-butter`   |
 //! | Zensim  | `zensim`                | `cpu-zensim`   |
 //! | Iwssim  | *(no clean reference)*  | —              |
+//!
+//! Phase 8h (2026-05-27): the ssim2 row was switched from upstream
+//! `ssimulacra2 0.5` to Imazen's SIMD-accelerated `fast-ssim2 0.8`.
+//! Per-call scores may shift by atomic-add tolerance vs. the prior
+//! implementation; the input shape is unchanged (sRGB u8 × 3-channel)
+//! and the call surface (`compute` / `set_reference` / `compute_with_cached_reference`)
+//! is untouched. See `docs/CPU_BACKENDS.md` for the rationale.
 //!
 //! Iwssim returns [`CpuAdapterError::Unavailable`] at construction time —
 //! the chooser advances the OOM ladder to the next backend. See
@@ -31,7 +38,13 @@
 //!   correct, just no speedup.
 //! - **dssim-core** lets you `create_image(reference)` once and reuse;
 //!   the adapter caches the prepared `DssimImage`.
-//! - **ssimulacra2** has no cached-ref API; falls back to recompute.
+//! - **fast-ssim2** has a true cached-ref path (`Ssimulacra2Reference::new`
+//!   + `compare`) that skips ~50 % of the pipeline. The adapter wires it
+//!   up so `set_reference` + `compute_with_cached_reference` are now
+//!   amortised, not recompute. **Change vs. Phase 6's `ssimulacra2` 0.5
+//!   wiring**: that crate had no precompute API and the adapter just
+//!   stashed bytes for shape parity. fast-ssim2's `Ssimulacra2Reference`
+//!   replaces that with a true warm path.
 //! - **zensim** has no cached-ref API; falls back to recompute.
 //!
 //! The pool's worker decides whether to dispatch through
@@ -50,8 +63,10 @@
 //!   buffers). 4096² = ~600 MiB.
 //! - dssim-core: ~40 bytes/pixel (multi-scale LAB pyramid).
 //!   4096² = ~700 MiB.
-//! - ssimulacra2: ~50 bytes/pixel (XYB + sub-band buffers).
-//!   4096² = ~850 MiB.
+//! - fast-ssim2: ~50 bytes/pixel (XYB + sub-band buffers; ~24 image-sized
+//!   f32 planes plus the downscale pyramid per `fast_ssim2::MAX_IMAGE_PIXELS`
+//!   docs). 4096² = ~850 MiB. fast-ssim2 caps inputs at 16384² to bound
+//!   the working set.
 //! - zensim: ~10-15 bytes/pixel (XYB working set + per-scale features).
 //!   4096² = ~250 MiB.
 //!
@@ -115,11 +130,12 @@ enum CpuAdapterState {
 struct Ssim2State {
     width: usize,
     height: usize,
-    /// Cached reference bytes — `set_reference` stashes the most recent
-    /// reference here; `compute_with_cached_reference` reuses it instead
-    /// of receiving fresh ref bytes. ssimulacra2 has no native cached-ref
-    /// API; we just keep the bytes around for the same call shape.
-    cached_ref: Option<Vec<u8>>,
+    /// Cached fast-ssim2 reference — `set_reference` builds the precomputed
+    /// reference data (~50 % of the SSIMULACRA2 pipeline) once; subsequent
+    /// `compute_with_cached_reference` calls reuse it. Phase 8h replaced
+    /// the prior `Option<Vec<u8>>` byte-stash (used by the ssimulacra2 0.5
+    /// fallback) with this true warm-state cache.
+    cached_ref: Option<fast_ssim2::Ssimulacra2Reference>,
 }
 
 #[cfg(feature = "cpu-dssim")]
@@ -268,8 +284,13 @@ impl CpuAdapter {
             CpuAdapterState::Cvvdp(_) => true,
             #[cfg(feature = "cpu-dssim")]
             CpuAdapterState::Dssim(_) => true,
+            // Phase 8h: fast-ssim2's `Ssimulacra2Reference` precomputes
+            // the source's XYB / sub-bands once and reuses them across
+            // distorted candidates — true warm path. The prior
+            // `ssimulacra2` 0.5 wiring returned false here because that
+            // crate had no precompute API.
             #[cfg(feature = "cpu-ssim2")]
-            CpuAdapterState::Ssim2(_) => false,
+            CpuAdapterState::Ssim2(_) => true,
             #[cfg(feature = "cpu-butter")]
             CpuAdapterState::Butter(_) => false,
             #[cfg(feature = "cpu-zensim")]
@@ -335,7 +356,14 @@ impl CpuAdapter {
                 .map_err(|e| CpuAdapterError::Failed(e.to_string())),
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
-                s.cached_ref = Some(ref_bytes.to_vec());
+                let img = ssim2_image_ref(ref_bytes, s.width, s.height);
+                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img.as_ref())
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!(
+                            "fast-ssim2 Ssimulacra2Reference::new: {e}"
+                        ))
+                    })?;
+                s.cached_ref = Some(precomputed);
                 Ok(())
             }
             #[cfg(feature = "cpu-dssim")]
@@ -387,14 +415,16 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
-                let r = s
-                    .cached_ref
-                    .as_ref()
-                    .ok_or_else(|| {
-                        CpuAdapterError::Failed("ssim2: no cached reference; call set_reference first".into())
-                    })?
-                    .clone();
-                compute_ssim2(s, &r, dist_bytes)
+                let precomputed = s.cached_ref.as_ref().ok_or_else(|| {
+                    CpuAdapterError::Failed(
+                        "ssim2: no cached reference; call set_reference first".into(),
+                    )
+                })?;
+                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
+                let v = precomputed
+                    .compare(dist_img.as_ref())
+                    .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compare: {e}")))?;
+                Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
             }
             #[cfg(feature = "cpu-dssim")]
             CpuAdapterState::Dssim(s) => {
@@ -506,8 +536,19 @@ fn cvvdp_cpu_version() -> &'static str {
 }
 
 // ---------------------------------------------------------------------------
-// ssimulacra2 wiring
+// fast-ssim2 wiring (Phase 8h — replaces upstream ssimulacra2 0.5)
 // ---------------------------------------------------------------------------
+//
+// fast-ssim2 implements `ToLinearRgb` for `ImgRef<'_, [u8; 3]>` (with the
+// `imgref` feature, enabled by our `cpu-ssim2`). The crate takes care of
+// sRGB → linear RGB → XYB conversion internally, including a SIMD-accelerated
+// LUT for the u8 sRGB → linear step (`srgb_u8_to_linear`). We hand it an
+// `ImgRef` backed by an interleaved `[u8; 3]` buffer constructed from the
+// raw sRGB-u8 input. The prior ssimulacra2 0.5 path did this conversion
+// manually via `Xyb::try_from(Rgb::new(...))`, which forced the adapter to
+// build a `Vec<[f32; 3]>` of normalised RGB before every call. fast-ssim2's
+// `ImgRef` path skips that intermediate allocation when the caller already
+// has u8 bytes on hand (our case).
 
 #[cfg(feature = "cpu-ssim2")]
 fn construct_ssim2(
@@ -515,9 +556,6 @@ fn construct_ssim2(
     height: u32,
     _params: &MetricParams,
 ) -> Result<CpuAdapterState, CpuAdapterError> {
-    // ssimulacra2::compute_frame_ssimulacra2 takes prepared Xyb inputs;
-    // the adapter holds dims for input validation but the per-call
-    // path builds Xyb each time (the crate has no separate "warm" hook).
     Ok(CpuAdapterState::Ssim2(Ssim2State {
         width: width as usize,
         height: height as usize,
@@ -535,32 +573,20 @@ fn construct_ssim2(
     Err(CpuAdapterError::FeatureNotEnabled(MetricKind::Ssim2))
 }
 
+/// Build an `imgref::ImgVec<[u8; 3]>` from interleaved sRGB-u8 bytes.
+///
+/// fast-ssim2's `ToLinearRgb` impl for `ImgRef<'_, [u8; 3]>` reads `[r, g, b]`
+/// triplets directly — chunking and collecting once here is cheaper than
+/// the per-pixel work the prior ssimulacra2 0.5 path did. The returned
+/// `ImgVec` owns the pixel buffer; the caller turns it into a borrowing
+/// `ImgRef` via `.as_ref()` at the call site.
 #[cfg(feature = "cpu-ssim2")]
-fn srgb_u8_to_xyb(
-    bytes: &[u8],
-    w: usize,
-    h: usize,
-) -> Result<ssimulacra2::Xyb, CpuAdapterError> {
-    use ssimulacra2::{ColorPrimaries, Rgb, TransferCharacteristic, Xyb};
-    let pixels: Vec<[f32; 3]> = bytes
+fn ssim2_image_ref(bytes: &[u8], w: usize, h: usize) -> imgref::ImgVec<[u8; 3]> {
+    let pixels: Vec<[u8; 3]> = bytes
         .chunks_exact(3)
-        .map(|c| {
-            [
-                c[0] as f32 / 255.0,
-                c[1] as f32 / 255.0,
-                c[2] as f32 / 255.0,
-            ]
-        })
+        .map(|c| [c[0], c[1], c[2]])
         .collect();
-    let rgb = Rgb::new(
-        pixels,
-        w,
-        h,
-        TransferCharacteristic::SRGB,
-        ColorPrimaries::BT709,
-    )
-    .map_err(|e| CpuAdapterError::Failed(format!("ssimulacra2 Rgb::new: {e:?}")))?;
-    Xyb::try_from(rgb).map_err(|e| CpuAdapterError::Failed(format!("ssimulacra2 Xyb: {e:?}")))
+    imgref::ImgVec::new(pixels, w, h)
 }
 
 #[cfg(feature = "cpu-ssim2")]
@@ -569,10 +595,10 @@ fn compute_ssim2(
     ref_bytes: &[u8],
     dist_bytes: &[u8],
 ) -> Result<Score, CpuAdapterError> {
-    let ref_xyb = srgb_u8_to_xyb(ref_bytes, s.width, s.height)?;
-    let dist_xyb = srgb_u8_to_xyb(dist_bytes, s.width, s.height)?;
-    let v = ssimulacra2::compute_frame_ssimulacra2(ref_xyb, dist_xyb)
-        .map_err(|e| CpuAdapterError::Failed(format!("ssimulacra2 compute_frame: {e:?}")))?;
+    let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
+    let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
+    let v = fast_ssim2::compute_ssimulacra2(ref_img.as_ref(), dist_img.as_ref())
+        .map_err(|e| CpuAdapterError::Failed(format!("fast-ssim2 compute_ssimulacra2: {e}")))?;
     Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
 }
 

@@ -33,6 +33,31 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **`zenmetrics-orchestrator` Phase 8h — ssim2 CPU adapter switched
+  from upstream `ssimulacra2` 0.5 to Imazen's SIMD-accelerated
+  `fast-ssim2` 0.8.** Per the global crate index, `fast-ssim2` is our
+  in-house SIMD SSIMULACRA2 implementation; the `ssimulacra2 0.5`
+  pin used by Phase 6's initial wiring (commit 0fc139a3) was a stop-
+  gap. The adapter now consumes `imgref::ImgRef<[u8; 3]>` directly via
+  fast-ssim2's `ToLinearRgb` impl, skipping the manual
+  `Xyb::try_from(Rgb::new(...))` transcode the prior path required.
+  fast-ssim2 also exposes a true cached-reference path
+  (`Ssimulacra2Reference`); `set_reference` now precomputes the
+  reference once and `compute_with_cached_reference` reuses it,
+  promoting `CpuAdapter::supports_cached_ref()` from `false` to `true`
+  for `MetricKind::Ssim2`. Per-call score may shift by atomic-add /
+  SIMD-reorder tolerance vs. the prior implementation; the score scale
+  (~0-100, 100 = identical) is unchanged. Production callers using
+  `--use-orchestrator` see the change transparently; legacy
+  `--use-legacy-scheduler` path is unaffected (still uses ssim2-gpu's
+  GPU implementation, which has not changed). `ssim2-gpu`'s parity
+  tests against the upstream `ssimulacra2` crate are untouched —
+  they exercise a separate concern. Verified locally: `cpu_backend`
+  test suite all 10/10 pass; `ZENMETRICS_FORCE_NO_GPU=1` ssim2 task on
+  256² synth offset-distortion pair scored 79.67 (sensible
+  noticeable-degradation range). See
+  `crates/zenmetrics-orchestrator/docs/CPU_BACKENDS.md` for the full
+  swap rationale.
 - **Phase 8f — switch from `lilith/cubecl` git-rev pins to
   `zenforks-cubecl-*` crates.io publication.** The 11 patched-or-
   transitive cubecl crates are now published to crates.io under the

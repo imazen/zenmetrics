@@ -10,11 +10,24 @@ added, swapped, or marked unavailable.
 | MetricKind | CPU crate         | Feature flag    | Cached-ref API     | Notes |
 |------------|-------------------|-----------------|--------------------|-------|
 | Cvvdp      | `cvvdp` (in-tree) | `cpu-cvvdp` | yes (`warm_reference`) | Pure-Rust CPU port; matches pycvvdp v0.5.4 within ≤1e-3 JOD. |
-| Ssim2      | `ssimulacra2`     | `cpu-ssim2`     | no (recompute)     | Builds Xyb per-call; no warm-state API. |
+| Ssim2      | `fast-ssim2` (Imazen) [^ssim2-8h] | `cpu-ssim2`     | yes (`Ssimulacra2Reference`) | SIMD-accelerated SSIMULACRA2 (archmage AVX2/AVX-512/NEON/WASM128). Accepts `ImgRef<[u8; 3]>` directly; precompute path skips ~50 % of pipeline. |
 | Dssim      | `dssim-core`      | `cpu-dssim`     | yes (`DssimImage` cache) | Multi-scale LAB; reuses prepared image. |
 | Butter     | `butteraugli`     | `cpu-butter`    | no (recompute)     | `butteraugli()` is one-shot. |
 | Zensim     | `zensim`          | `cpu-zensim`    | no (recompute)     | `Zensim::compute()` is one-shot. |
 | Iwssim     | *(none)*          | —               | —                  | No clean CPU reference upstream. Chooser routes around. |
+
+[^ssim2-8h]: Phase 8h (2026-05-27) replaced the original `ssimulacra2`
+    0.5 wiring (from Phase 6, commit `0fc139a3`) with Imazen's
+    SIMD-accelerated `fast-ssim2` 0.8 per the global crate index. The
+    swap unlocked three improvements: (1) `ImgRef<[u8; 3]>` input
+    skips the manual `Xyb::try_from(Rgb::new(...))` transcode, (2)
+    SIMD path via `archmage` gives 2-3× speedup on AVX2/AVX-512/NEON
+    hosts, (3) `Ssimulacra2Reference` precompute API replaces the
+    "stash bytes for shape parity" fallback with a true warm path.
+    `ssim2-gpu`'s parity dev-dependency on upstream `ssimulacra2` is
+    a separate concern and was not touched (the ssim2-gpu crate tests
+    GPU↔upstream-CPU agreement; this row tests orchestrator CPU
+    fallback behaviour).
 
 ## Feature flags
 
@@ -79,7 +92,13 @@ Per-crate cached-ref behavior:
 - **dssim-core** (`supports_cached_ref = true`): caches the prepared
   `DssimImage<f32>` (multi-scale LAB representation); `compare` reuses
   it. Speedup ~2× on reference-reuse workloads.
-- **ssimulacra2**, **butteraugli**, **zensim**
+- **fast-ssim2** (`supports_cached_ref = true`, Phase 8h): caches a
+  `Ssimulacra2Reference` (precomputed reference XYB + sub-bands +
+  blur scratch). Subsequent `compare` calls skip ~50 % of the
+  pipeline. Speedup ~2× on reference-reuse workloads. Replaces the
+  Phase 6 byte-stash fallback that the upstream `ssimulacra2 0.5`
+  wiring required.
+- **butteraugli**, **zensim**
   (`supports_cached_ref = false`): no upstream cached-ref API. The
   adapter caches the *bytes* of the reference so the cached-ref call
   shape still works, but the implementation recomputes the per-call
@@ -102,8 +121,12 @@ RAM workstation, peak resident-set during compute):
 | dssim   | ~40         | ~120 MiB     | ~700 MiB      |
 | ssim2   | ~50         | ~150 MiB     | ~850 MiB      |
 
-`butteraugli` and `ssimulacra2` at 4096² are within tolerance for a
-128 GB workstation but **not** for a 16 GB GitHub Action runner. If
+fast-ssim2 documents ~24 image-sized f32 planes plus a downscale
+pyramid (`fast_ssim2::MAX_IMAGE_PIXELS` = 16384²) and caps inputs to
+16384² to bound the working set; the per-pixel estimate matches the
+prior `ssimulacra2 0.5` row. `butteraugli` and `fast-ssim2` at 4096²
+are within tolerance for a 128 GB workstation but **not** for a
+16 GB GitHub Action runner. If
 the orchestrator is targeting a low-RAM environment, callers should
 either:
 
@@ -146,3 +169,44 @@ cargo test  -p zenmetrics-orchestrator --no-default-features \
 Per-CPU-backend selective builds (one feature at a time) are smoke-
 tested in `tests/cpu_backend.rs` to make sure no implicit
 cross-feature dependency creeps in.
+
+## Other CPU adapter choices to audit (added Phase 8h, 2026-05-27)
+
+Phase 8h swapped `ssim2` from upstream `ssimulacra2 0.5` to
+Imazen's SIMD-accelerated `fast-ssim2`. The other four Phase 6
+wirings were not changed in 8h, but they MAY benefit from similar
+swaps in a future tick. This section documents the audit so the
+next session doesn't have to re-discover the picture.
+
+| Metric  | Current CPU crate | Imazen SIMD alternative? | Action |
+|---------|-------------------|--------------------------|--------|
+| Butter  | `butteraugli` 0.9.2 | **Already Imazen.** `imazen/butteraugli` is the canonical workspace; uses `archmage` AVX-512/AVX2/NEON dispatch. The `0.9.2` workspace-pin and the `butteraugli` crate name happen to overlap with the historical Google name but this IS the Imazen pure-Rust port. | **No swap needed.** Already correct. |
+| Dssim   | `dssim-core` 3.5 (kornelski/dssim) | **No Imazen alternative known** as of 2026-05-27. `dssim-core` upstream is well-maintained, uses Rayon for parallelism, and is the de-facto Rust SSIM library. We do not have an in-house SSIM crate — `fast-ssim2` is SSIMULACRA2 (different algorithm), and `zensim` is a separate metric family. | **No swap planned.** Keep `dssim-core` unless an Imazen alternative ships. |
+| Zensim  | `zensim` (workspace) | N/A — already Imazen. | **No swap needed.** |
+| Cvvdp   | `cvvdp` (workspace, in-tree) | N/A — already Imazen, in-tree. The Phase 8c renamed this from the historical name; the implementation is the pure-Rust CPU port that matches pycvvdp v0.5.4 within ≤1e-3 JOD. | **No swap needed.** |
+| Ssim2   | `fast-ssim2` 0.8 (Imazen, **Phase 8h**) | Now correct. | Already swapped. |
+
+### Honesty note on the `butteraugli` crate name
+
+The `butteraugli` crate name on crates.io was originally claimed by
+Imazen for the pure-Rust port; the global crate index (`~/.claude/CLAUDE.md`)
+lists `butteraugli` as "Butteraugli perceptual image difference metric"
+under the Metrics section without a "Pure Rust" prefix, but the
+`imazen/butteraugli` repo is the source-of-truth (BSD-3-Clause,
+archmage SIMD, no C FFI). Production callers consuming `butteraugli =
+"0.9"` from crates.io get the Imazen implementation. The audit row
+above is correct: this is already an Imazen SIMD path.
+
+### When to revisit
+
+If any of the following change, re-run this audit:
+
+- A new Imazen SIMD SSIM-family crate ships on crates.io (we'd swap
+  the dssim row).
+- The upstream `dssim-core` regresses on a SIMD path that we'd want
+  to fix in a fork (we'd vendor or fork).
+- A Phase X migration moves `cvvdp` to its own crates.io publication
+  (the row stays correct; the build-from-path adjustment is
+  Cargo-only).
+- `butteraugli 0.9` releases a major version bump with API changes
+  (the adapter's `ButteraugliParams::new()` call site needs review).

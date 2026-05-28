@@ -1629,6 +1629,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast-ssim2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0bbcfa44e1cabf11af96ece5e9273f4dc238f2a557668e70f80cfd662fae25b"
+dependencies = [
+ "archmage",
+ "imgref",
+ "magetypes",
+ "num-traits",
+ "thiserror",
+ "yuvxyb 0.5.0",
+ "yuvxyb-math",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2507,7 +2522,7 @@ dependencies = [
  "butteraugli",
  "bytemuck",
  "enough",
- "fast-ssim2",
+ "fast-ssim2 0.7.1",
  "hashbrown 0.16.1",
  "imgref",
  "jxl-encoder-macros",
@@ -6644,6 +6659,7 @@ dependencies = [
  "cvvdp-gpu",
  "dirs",
  "dssim-core",
+ "fast-ssim2 0.8.0",
  "imgref",
  "log",
  "raw-cpuid",
@@ -6651,7 +6667,6 @@ dependencies = [
  "rgb",
  "serde",
  "sha2",
- "ssimulacra2",
  "sysinfo 0.38.4",
  "tempfile",
  "thiserror",

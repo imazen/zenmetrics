@@ -61,7 +61,12 @@ cuda = ["bench"]
 # `docs/CPU_BACKENDS.md`). Iwssim Cpu attempts surface
 # `CpuMetricUnavailable` and the OOM ladder advances.
 cpu-cvvdp = ["bench", "dep:cvvdp"]
-cpu-ssim2 = ["bench", "dep:ssimulacra2", "dep:imgref", "dep:rgb"]
+# Phase 8h (2026-05-27): swapped upstream `ssimulacra2` 0.5 for Imazen's
+# SIMD-accelerated `fast-ssim2` (per CLAUDE.md crate index). fast-ssim2
+# implements its own `ImgRef<[u8; 3]> -> ToLinearRgb` path, so `imgref`
+# and `rgb` are no longer mandatory transitive deps for this feature;
+# they remain pulled by `cpu-dssim`/`cpu-butter` below.
+cpu-ssim2 = ["bench", "dep:fast-ssim2", "dep:imgref"]
 cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb"]
 cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb"]
 cpu-zensim = ["bench", "dep:zensim"]
@@ -99,7 +104,14 @@ rayon = { version = "1.12.0", optional = true }
 # pins (which themselves match the dev-deps that the corresponding
 # `-gpu` crates already use for parity tests).
 cvvdp = { workspace = true, optional = true }
-ssimulacra2 = { workspace = true, optional = true }
+# Phase 8h (2026-05-27): replaced upstream `ssimulacra2` 0.5 with
+# Imazen's SIMD-accelerated `fast-ssim2`. fast-ssim2 0.8 is on crates.io
+# and pulled at version-level (no workspace pin yet — only this crate
+# depends on it directly). The `imgref` feature wires up the
+# `ImgRef<[u8; 3]> -> LinearRgbImage` adapter so we don't have to
+# manually transcode sRGB-u8 bytes ourselves like the prior `ssimulacra2`
+# path did. See `docs/CPU_BACKENDS.md` for the rationale.
+fast-ssim2 = { version = "0.8.0", optional = true, features = ["imgref"] }
 dssim-core = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim = { workspace = true, optional = true }
