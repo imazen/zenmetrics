@@ -1,0 +1,32 @@
+[package]
+name = "iwssim-filter-codegen"
+version = "0.0.1"
+description = "Internal build-time helper: shared filter-tap codegen for iwssim and iwssim-gpu"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# Tiny build-only helper. Both `iwssim/build.rs` and
+# `iwssim-gpu/build.rs` depend on this crate (via `[build-dependencies]`)
+# and call `emit_filters_rs(&mut out)` so the two crates' generated
+# `OUT_DIR/filters.rs` files are bit-identical by construction.
+#
+# Why a helper crate and not a single source-of-truth at runtime: cube-
+# macros in `iwssim-gpu` resolve `crate::filters::*` paths at macro-
+# expansion time. Pulling the constants via `iwssim::filters::*` is not
+# name-resolvable inside a `#[cube]` body — the cube codegen captures
+# `crate`-relative paths and re-emits them on the device side. So each
+# crate must own its own `crate::filters` module. Sharing the codegen
+# logic via this helper eliminates the prior duplication of build-script
+# math (the constants themselves were already bit-identical via two
+# verbatim-copied `binom5_taps()` / `gaussian_1d()` functions).
+#
+# Phase 8j: replaces the prior iwssim/build.rs ↔ iwssim-gpu/build.rs
+# duplication documented at the top of iwssim-gpu/src/filters.rs.
+
+[lib]
+path = "src/lib.rs"

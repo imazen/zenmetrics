@@ -2410,6 +2410,7 @@ version = "0.1.0"
 dependencies = [
  "archmage",
  "image",
+ "iwssim-filter-codegen",
  "magetypes",
  "rayon",
  "serde",
@@ -2419,12 +2420,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "iwssim-filter-codegen"
+version = "0.0.1"
+
+[[package]]
 name = "iwssim-gpu"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
  "image",
  "iwssim",
+ "iwssim-filter-codegen",
  "zenforks-cubecl",
  "zenpixels",
  "zenpixels-convert",

@@ -17,6 +17,22 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **`iwssim` / `iwssim-gpu` — single source of truth for filter-tap
+  codegen (Phase 8j Part A).** Both crates' `build.rs` scripts now
+  call into a new internal helper crate
+  `iwssim-filter-codegen` for the BINOM5 / SSIM_WIN_1D / SCALE_WEIGHTS
+  emission. Previously the two build scripts contained verbatim-
+  duplicated `binom5_taps()` / `gaussian_1d()` functions kept
+  in-sync by hand. Each crate still emits its own
+  `OUT_DIR/filters.rs` (cube-macros in `iwssim-gpu` capture
+  `crate::filters::*` paths at expansion time, so a single
+  consolidated module is structurally impossible); the new helper
+  guarantees the two generated files are bit-identical by
+  construction. Closes the Phase 8g.1 architectural debt
+  documented at the top of `crates/iwssim-gpu/src/filters.rs`.
+
 ### Added
 
 - **Phase 9x — CPU heaptrack gate report
