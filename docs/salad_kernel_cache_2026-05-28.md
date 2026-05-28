@@ -201,11 +201,15 @@ prior work; mid-tier x86 host CPUs are slower than the dev box's
   first ~60–90 s of real job processing, because the first sidecar-
   POST'd job has to wait for kernels to compile inline.
 
-## Scale-up test (N=20 replicas) — not run this session
+## Scale-up test (N=10 replicas) — not run this session
 
-Phase 4 of the original brief (the 20-replica scale-up test on a
-real Salad container group with chunks pushed through the managed
-queue) was not run. The remaining work is:
+Phase 4 of the original brief (a scale-up test on a real Salad
+container group with chunks pushed through the managed queue) was
+not run. Note: Salad's default org quota is **10 container replicas
+total** (verified via `GET /organizations/imazen/quotas`:
+`container_replicas_quota: 10`), so the brief's "N=20" target needs
+to be reduced to N=10 unless a quota bump is requested via Salad
+support. The remaining work is:
 
 1. A launcher tool. `crates/zen-cloud-salad/src/launch.rs` has the
    API client (`SaladApi`) and scoped-cred minting (`create_
@@ -230,7 +234,7 @@ queue) was not run. The remaining work is:
    - Worker entrypoint logs visible via Salad's portal-side stream
      (or our durable error sidecars on failure).
 4. Spend budget. Each replica costs roughly $0.10–$0.30/hour
-   depending on GPU class. 20 × $0.20/h × 20 min hard cap ≈ $1.30
+   depending on GPU class. 10 × $0.20/h × 20 min hard cap ≈ $0.67
    worst case, well under $5. Tear-down: `SaladApi::stop_
    container_group(name)` + delete the queue + (optional) clean
    up the container group resource itself.
