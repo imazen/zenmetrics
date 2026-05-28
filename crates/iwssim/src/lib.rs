@@ -68,10 +68,12 @@ mod pipeline;
 mod pyramid;
 mod simd_kernels;
 mod ssim;
+mod strip;
 mod weights;
 
 pub use params::IwssimParams;
 pub use pipeline::Iwssim;
+pub use strip::{STRIP_BODY_DEFAULT, STRIP_BODY_MIN, STRIP_HALO_ROWS};
 
 /// Number of pyramid scales — fixed at 5 by the IW-SSIM paper.
 pub const NUM_SCALES: usize = 5;

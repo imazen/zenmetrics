@@ -279,6 +279,110 @@ impl Iwssim {
         self.score_with_warm_ref_gray_internal()
     }
 
+    /// Strip-mode score: walks image in horizontal slabs of `strip_height`
+    /// rows + halo. Peak working-set is one strip's working set, not
+    /// the full image. Score is bit-identical (within atomic float-add
+    /// reduction order tolerance ≤ 1e-5 relative) to [`Self::score`]
+    /// when `strip_height >= STRIP_BODY_MIN`.
+    ///
+    /// Phase 9.Z.A: enables 40 MP+ images to score on hosts where Full
+    /// mode's `~5.9 GB` peak heap would crowd the budget. Strip target:
+    /// ≤ 3 GB peak at 40 MP.
+    ///
+    /// `strip_height` is the strip body height in scale-0 rows. Halo
+    /// rows beyond body extend `STRIP_HALO_ROWS = 320` per side, clamped
+    /// at image edges. Pass `STRIP_BODY_DEFAULT` (512) for the
+    /// production-recommended default.
+    ///
+    /// # Memory profile
+    ///
+    /// Per-strip peak: `(body + 2·halo) × work_w × 4 × ~3` (lp_ref +
+    /// lp_dis + g_ref staged across 5 pyramid scales). At 40 MP
+    /// (6500×6500) with `strip_height=512` and 320-row halo: roughly
+    /// `(512+640) × 6500 × 4 × 5 ≈ 150 MB` per strip vs 5.9 GB Full.
+    ///
+    /// # Wall-time
+    ///
+    /// Strip mode runs two passes through the image (eigendecomposition
+    /// is global) — wall-time penalty ~1.4× vs Full. Acceptable for
+    /// memory-bounded production sweeps.
+    pub fn score_strip(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+        strip_height: u32,
+    ) -> Result<IwssimScore> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if ref_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_rgb.len(),
+            });
+        }
+        if dis_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_rgb.len(),
+            });
+        }
+        crate::rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
+        crate::rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        self.score_strip_gray_internal(strip_height)
+    }
+
+    /// Strip-mode score from gray-f32 inputs. See [`Self::score_strip`].
+    pub fn score_strip_gray(
+        &mut self,
+        ref_gray: &[f32],
+        dis_gray: &[f32],
+        strip_height: u32,
+    ) -> Result<IwssimScore> {
+        let expected = (self.width as usize) * (self.height as usize);
+        if ref_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: ref_gray.len(),
+            });
+        }
+        if dis_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_gray.len(),
+            });
+        }
+        self.scratch.ref_gray.copy_from_slice(ref_gray);
+        self.scratch.dis_gray.copy_from_slice(dis_gray);
+        self.score_strip_gray_internal(strip_height)
+    }
+
+    fn score_strip_gray_internal(&mut self, strip_height: u32) -> Result<IwssimScore> {
+        // Pad ref/dis into work buffers.
+        Self::pad_gray_into(
+            &self.scratch.ref_gray,
+            &mut self.scratch.ref_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        Self::pad_gray_into(
+            &self.scratch.dis_gray,
+            &mut self.scratch.dis_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        crate::strip::score_strip_internal(
+            &self.scratch.ref_work,
+            &self.scratch.dis_work,
+            self.work_w,
+            self.work_h,
+            strip_height as usize,
+            &self.params,
+        )
+    }
+
     /// Inner warm-score path — assumes `self.scratch.dis_gray` has
     /// been populated.
     fn score_with_warm_ref_gray_internal(&mut self) -> Result<IwssimScore> {
