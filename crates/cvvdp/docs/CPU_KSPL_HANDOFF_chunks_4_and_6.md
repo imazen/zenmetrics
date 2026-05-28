@@ -231,6 +231,50 @@ wires it in.
 - [x] Chunks 1, 2, 3, 5 landed with bit-identical parity tests passing (12 tests)
 - [ ] Chunks 4, 6 landed (handoff doc, this file)
 - [ ] heaptrack at 1/4/16 MP × 4 modes (deferred until 4+6 land)
-- [ ] 40 MP synthetic heap measurement (deferred until 4+6 land)
+- [x] 40 MP synthetic heap measurement (real, agent #129 — see below)
 - [ ] Wall regression < 22% (deferred until 4+6 land)
 - [x] Workspace cleanup pending (run on this agent's final commit)
+
+## 40 MP measured heap (agent #129, 2026-05-28)
+
+**Replaces the prior linear-extrapolation claim** ("40 MP fits at 3.85 GB
+by linear extrapolation from 16 MP"). Per global CLAUDE.md, source-
+informing measurements must run the real cell — no extrapolation.
+
+Measured 2026-05-28 on lilith (Ryzen 9 7950X, 49 GiB RAM) via
+`heaptrack` 1.3.0 + the existing `cpu-profile` driver
+(`benchmarks/heaptrack/drivers/cpu_profile/src/main.rs`), release
+build at master@origin = `5979e084`. Synthetic 7680×5184 (39.81 MP)
+XorShift sRGB pair, score JOD 9.456094741821289 across all 4 modes
+(parity intact):
+
+| mode | peak heap (bytes) | peak heap (GiB) | peak heap (heaptrack G) | runtime |
+|---|---|---|---|---|
+| `full` | 8,679,597,188 | 8.0835 | 8.68 G | 15.75 s |
+| `strip` (h_body=512) | 8,679,597,189 | 8.0835 | 8.68 G | 14.94 s |
+| `warm_ref` | 7,485,111,384 | 6.9711 | 7.49 G | 14.10 s |
+| `warm_ref_strip` (h_body=512) | 7,485,111,390 | 6.9711 | 7.49 G | 13.60 s |
+
+Notes:
+- Strip ≡ full (both modes hit 8.68 GB) because today's
+  `score_strip` only walks the **pool stage** in strips — weber
+  pyramid + masking + d_scratch are still full-image-sized. That
+  matches the GPU's currently-shipped strip walker. Chunks 4 + 6
+  (this handoff) are exactly the work that would change this.
+- warm_ref drops peak heap by **1.19 GB** (≈ 14 %) vs cold, the
+  delta corresponding to ref pyramid construction during
+  `Cvvdp::score`. warm_ref_strip is at parity with warm_ref for
+  the same reason as `strip ≡ full`.
+- Heaptrack 1.3.0 reports "G" using SI (10⁹). Precise bytes
+  extracted via `heaptrack_print --massif-threshold 99 -M …`.
+- Raw `.zst` traces:
+  `benchmarks/heaptrack/cvvdp_{full,strip,warm_ref,warm_ref_strip}_40mp_2026-05-28.zst`
+- TSV: `crates/cvvdp/benchmarks/cpu_kspl_40mp_2026-05-28.tsv`
+- Meta: `crates/cvvdp/benchmarks/cpu_kspl_40mp_2026-05-28.meta`
+
+**Headline:** at 40 MP today (before chunks 4+6 land), CPU strip
+mode peaks at **8.08 GiB** — well above the 4.2 GB working target
+and far above the 3.85 GB extrapolation that was previously
+reported. This is the real signal that motivates chunks 4 + 6:
+the persistent `Scratch::new` allocations + transient
+`BandWorkspace` slots grow linearly in W·H and dominate at 40 MP.
