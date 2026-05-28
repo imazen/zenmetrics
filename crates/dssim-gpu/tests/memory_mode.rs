@@ -36,8 +36,17 @@ fn with_cap<R>(cap: Option<&str>, f: impl FnOnce() -> R) -> R {
 
 #[test]
 fn estimate_grows_with_pixels() {
-    let a = estimate_gpu_memory_bytes(1024, 1024);
-    let b = estimate_gpu_memory_bytes(2048, 2048);
+    // Re-pointed from 1024²→2048² to 4096²→8192² (task137): the
+    // recalibrated estimator adds a fixed GPU-context base (208 MiB) +
+    // per-pixel context term on top of the 31-plane pyramid. At small
+    // sizes the fixed base dilutes the quadratic scaling and the 1→4 MP
+    // ratio drops to ~2.44 (< quadratic 4×). At 16→64 MP the fixed base
+    // is negligible relative to the working set, so the ratio recovers
+    // to ~3.81 — still guarding the quadratic working-set growth this
+    // test was written to catch, without relaxing the bound. (The
+    // previous 1024²/2048² pair would have failed the 3.6 lower bound.)
+    let a = estimate_gpu_memory_bytes(4096, 4096);
+    let b = estimate_gpu_memory_bytes(8192, 8192);
     let ratio = b as f64 / a as f64;
     assert!(ratio > 3.6 && ratio < 4.4, "ratio = {ratio}");
 }

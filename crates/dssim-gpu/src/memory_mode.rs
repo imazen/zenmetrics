@@ -135,21 +135,58 @@ fn auto_size_strip_body(width: u32, height: u32, cap: usize) -> Option<u32> {
     Some(max_body)
 }
 
-/// Estimate the GPU working-set bytes [`crate::pipeline::Dssim::new`]
-/// allocates for `width × height` images.
+/// Number of f32 planes allocated per pyramid scale, counted directly
+/// from [`crate::pipeline::Scale::new`] (verified against source
+/// 2026-05-28): nine `alloc_3` triples (`ref_lin`, `dis_lin`,
+/// `ref_lab`, `dis_lab`, `ref_mu`, `ref_sq_blur`, `dis_mu`,
+/// `dis_sq_blur`, `cross_blur` = 27 planes) plus four single planes
+/// (`temp1`, `temp2`, `ssim_map`, `mad_map`) = **31**. The prior value
+/// of 13 was ~2.4× too low and is the main reason the estimator
+/// under-predicted the measured peak by 55-64%.
+const PLANES_PER_SCALE: usize = 31;
+
+/// Fixed GPU-context base term added to every estimate.
 ///
-/// Counted buffers per scale (5 scales): the `Scale` struct allocates
-/// roughly 13 planes of `(w_s × h_s) × f32` (LP_ref, LP_dis, mu1, mu2,
-/// sig11, sig22, sig12, ssim, ssim_mu, scratch_a/b/c, plus a couple
-/// of small reduction buffers). Two staging packed-u32 sRGB buffers
-/// at scale 0 (`n × 4` each) round out the global state. Constants
-/// from `crates/dssim-gpu/src/pipeline.rs::Scale::new`.
+/// The CUDA/WGPU context, cubecl kernel cache, and the per-instance
+/// reduction `partials`/`sums` buffers cost VRAM that the working-set
+/// pyramid sum does not capture. The previously-diagnosed flat
+/// "256 MiB context" choice was wrong: the measured residual
+/// (`measured_peak − raw_31_plane_working_set`) is NOT flat — it grows
+/// 212 → 268 → 462 → 594 MiB across 1/4/16/40 MP (see
+/// `benchmarks/gpu_metrics_sweep_2026-05-28.tsv`). A flat 256 MiB
+/// constant under-predicts at 16 MP (−6.4%) and 40 MP (−4.7%) — the
+/// UNSAFE direction for `resolve_auto`. The residual fits cleanly to a
+/// linear model `≈ 234 MiB + 9.7 MiB/MP`, so we model it as a base
+/// term plus a per-pixel overhead ([`CONTEXT_PER_PIXEL_BYTES`]) rather
+/// than a single flat constant. Calibrated so every size OVER-predicts
+/// within ±20%:
+///   1 MP   418.7 MiB est / 385 MiB meas  (+3.7%)
+///   4 MP   972.5 MiB est / 961 MiB meas  (+1.2%)
+///  16 MP  3265.5 MiB est / 3233 MiB meas (+1.0%)
+///  40 MP  7470.6 MiB est / 7169 MiB meas (+4.2%)
+const CONTEXT_BASE_BYTES: usize = 208 * 1024 * 1024;
+
+/// Per-pixel slice of the context/allocator overhead (page rounding,
+/// per-buffer alignment slack, runtime staging that scales with image
+/// area). See [`CONTEXT_BASE_BYTES`] for the residual-fit rationale.
+const CONTEXT_PER_PIXEL_BYTES: usize = 18;
+
+/// Estimate the GPU working-set bytes [`crate::pipeline::Dssim::new`]
+/// allocates for `width × height` images, plus the fixed + per-pixel
+/// GPU-context overhead.
+///
+/// 31 f32 planes per scale ([`PLANES_PER_SCALE`], counted from
+/// `Scale::new`) across [`NUM_SCALES`] = 5 pyramid levels, two staging
+/// packed-u32 sRGB buffers at scale 0 (`n0 × 4` each), plus the
+/// context term ([`CONTEXT_BASE_BYTES`] + [`CONTEXT_PER_PIXEL_BYTES`] ·
+/// `n0`). The context term over-predicts at all four calibration sizes,
+/// which is the safe budgeting bias for `resolve_auto` — see the
+/// constant docs.
 #[must_use]
 pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> usize {
     let mut w = width;
     let mut h = height;
     let mut total: usize = 0;
-    const PLANES_PER_SCALE: usize = 13;
     for _ in 0..NUM_SCALES {
         let w_eff = w.max(8) as usize;
         let h_eff = h.max(8) as usize;
@@ -160,13 +197,19 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> usize {
     // Two staging packed-u32 sRGB buffers (4 B per pixel).
     let n0 = (width as usize) * (height as usize);
     total = total.saturating_add(n0 * 4 * 2);
+    // Fixed + per-pixel GPU-context overhead.
+    total = total.saturating_add(CONTEXT_BASE_BYTES);
+    total = total.saturating_add(n0.saturating_mul(CONTEXT_PER_PIXEL_BYTES));
     total
 }
 
-/// Strip-mode estimator. Same planes as
-/// [`estimate_gpu_memory_bytes`] but sized for
+/// Strip-mode estimator. Same 31 planes/scale + context overhead as
+/// [`estimate_gpu_memory_bytes`] but the pyramid is sized for
 /// `width × (h_body + 2 × HALO)`. HALO = 256 is fixed in
-/// [`crate::pipeline::Dssim::new_strip`].
+/// [`crate::pipeline::Dssim::new_strip`]. The per-pixel context term is
+/// billed on the strip pixel count, so the marginal cost per added
+/// pyramid-aligned body row stays positive and [`auto_size_strip_body`]
+/// can linearize it.
 #[must_use]
 pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize> {
     const HALO: u32 = 256;
@@ -174,7 +217,6 @@ pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize>
     let mut w = width as usize;
     let mut h = strip_h;
     let mut total: usize = 0;
-    const PLANES_PER_SCALE: usize = 13;
     for _ in 0..NUM_SCALES {
         let w_eff = w.max(8);
         let h_eff = h.max(8);
@@ -185,5 +227,8 @@ pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize>
     // Two staging packed-u32 sRGB buffers at the strip pixel count.
     let n = (width as usize).saturating_mul(strip_h);
     total = total.saturating_add(n * 4 * 2);
+    // Fixed + per-strip-pixel GPU-context overhead.
+    total = total.saturating_add(CONTEXT_BASE_BYTES);
+    total = total.saturating_add(n.saturating_mul(CONTEXT_PER_PIXEL_BYTES));
     Some(total)
 }
