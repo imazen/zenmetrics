@@ -1,0 +1,26 @@
+[package]
+name = "cpu-profile"
+version = "0.0.0"
+publish = false
+edition = "2024"
+description = "Phase 9x — single-call heaptrack/callgrind harness for the 6 CPU metrics."
+
+[[bin]]
+name = "cpu-profile"
+path = "src/main.rs"
+
+[dependencies]
+cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
+iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
+zensim       = { path = "../../../../../zensim/zensim" }
+fast-ssim2   = { version = "0.8.0", features = ["imgref"] }
+dssim-core   = { version = "3.4", default-features = false }
+butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
+imgref       = "1"
+rgb          = "0.8"
+
+[profile.release]
+debug = 1
+lto = false
+codegen-units = 1
+incremental = false

@@ -987,6 +987,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "cpu-profile"
+version = "0.0.0"
+dependencies = [
+ "butteraugli",
+ "cvvdp",
+ "dssim-core",
+ "fast-ssim2 0.8.0",
+ "imgref",
+ "iwssim",
+ "rgb",
+ "zensim",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6203,7 +6217,7 @@ dependencies = [
  "zen-cloud-core",
  "zen-cloud-s3",
  "zen-metrics-cli",
- "zenanalyze",
+ "zenanalyze 0.1.0",
 ]
 
 [[package]]
@@ -6260,6 +6274,20 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.1.0"
+dependencies = [
+ "archmage",
+ "garb",
+ "linear-srgb",
+ "magetypes",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
+name = "zenanalyze"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9711cf1c3363003dd436f5b5dc113f7881f9b377613eecbf41f91b6b85626442"
 dependencies = [
  "archmage",
  "garb",
@@ -6582,7 +6610,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze",
+ "zenanalyze 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zencodec",
  "zenpixels",
  "zenyuv 0.1.3",

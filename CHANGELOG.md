@@ -19,6 +19,23 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Phase 9x — CPU heaptrack gate report
+  (`crates/zenmetrics-api/docs/CPU_HEAPTRACK_REPORT_2026-05-27.md`).**
+  Profiles all six CPU metrics (cvvdp / ssim2 / dssim / butter /
+  iwssim / zensim) × four execution modes (full / warm_ref / strip /
+  warm_ref_strip) × three sizes (1 MP, 16 MP, 40 MP) under
+  `heaptrack 1.3.0`. Produces a ranked low-hanging-fruit list for
+  Phase 9.Y optimization. Key findings: cvvdp peaks at 11.31 GB at
+  40 MP (YELLOW for concurrent batch); only zensim has stripwise
+  APIs (the other 5 metrics need them for 80 MP+); cvvdp + iwssim
+  reallocate entry-side planes per call despite having `Scratch` /
+  `&mut self` already (P0 fix). New driver crate `cpu-profile`
+  under `benchmarks/heaptrack/drivers/cpu_profile/` (workspace
+  member, never published) — single-call profiling harness with
+  deterministic synth-pair fixture. Heaptrack artifacts (72 cells
+  × ~16 KB zst) committed to `benchmarks/heaptrack/`. Companion
+  parser (`parse_heaptracks.py`) and matrix runner
+  (`run_matrix.sh`) checked in alongside the report.
 - **`iwssim` crate (Phase 8g) — pure-Rust CPU port of Python-IW-SSIM
   with magetypes SIMD.** Faithful port of the canonical Python-IW-SSIM
   reference (Jack-guo-xy/Python-IW-SSIM, commit `f9de37cd`) for
