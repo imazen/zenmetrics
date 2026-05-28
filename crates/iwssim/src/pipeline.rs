@@ -9,6 +9,42 @@ use crate::ssim::compute_cs;
 use crate::weights::compute_iw_maps;
 use crate::{Error, IwssimScore, MIN_NATIVE_DIM, NUM_SCALES, Result, rgb_u8_to_gray_bt601};
 
+/// Persistent per-call scratch buffers, allocated once at
+/// [`Iwssim::new`] and reused across calls.
+///
+/// Phase 9.YA Part 1: eliminates the per-call
+/// `alloc::vec![0.0_f32; w*h]` for the input-side gray planes and the
+/// `pad_gray` working buffers. At 40 MP that's 4 × 160 MB = 640 MB
+/// per `score()` call of pure allocation churn that's now replaced by
+/// in-place writes into these scratch buffers.
+struct Scratch {
+    /// RGB → BT.601 grayscale destination for the REF side. Sized
+    /// `width * height` f32 at `Iwssim::new`. Reused across `score` /
+    /// `warm_reference` calls.
+    ref_gray: Vec<f32>,
+    /// Same for the DIST side.
+    dis_gray: Vec<f32>,
+    /// Padded REF working buffer used by [`Iwssim::pad_gray_into`].
+    /// Sized `work_w * work_h` f32 at `Iwssim::new`. When no padding
+    /// is required (the common case where `width >= MIN_NATIVE_DIM`
+    /// etc.), `pad_gray_into` does a single `copy_from_slice` into
+    /// this buffer.
+    ref_work: Vec<f32>,
+    /// Same for the DIST side.
+    dis_work: Vec<f32>,
+}
+
+impl Scratch {
+    fn new(width: usize, height: usize, work_w: usize, work_h: usize) -> Self {
+        Self {
+            ref_gray: alloc::vec![0.0_f32; width * height],
+            dis_gray: alloc::vec![0.0_f32; width * height],
+            ref_work: alloc::vec![0.0_f32; work_w * work_h],
+            dis_work: alloc::vec![0.0_f32; work_w * work_h],
+        }
+    }
+}
+
 /// Scratch-owning IW-SSIM scorer.
 ///
 /// Lifecycle:
@@ -26,6 +62,8 @@ pub struct Iwssim {
     /// when `width >= MIN_NATIVE_DIM && height >= MIN_NATIVE_DIM`).
     work_w: usize,
     work_h: usize,
+    /// Per-call scratch buffers — see [`Scratch`].
+    scratch: Scratch,
     /// Cached state from `warm_reference`, if any.
     warm: Option<WarmState>,
 }
@@ -54,12 +92,14 @@ impl Iwssim {
         }
         let work_w = width.max(MIN_NATIVE_DIM) as usize;
         let work_h = height.max(MIN_NATIVE_DIM) as usize;
+        let scratch = Scratch::new(width as usize, height as usize, work_w, work_h);
         Ok(Self {
             width,
             height,
             params,
             work_w,
             work_h,
+            scratch,
             warm: None,
         })
     }
@@ -94,11 +134,14 @@ impl Iwssim {
                 got: dis_rgb.len(),
             });
         }
-        let mut ref_gray = alloc::vec![0.0_f32; (self.width as usize) * (self.height as usize)];
-        let mut dis_gray = alloc::vec![0.0_f32; (self.width as usize) * (self.height as usize)];
-        rgb_u8_to_gray_bt601(ref_rgb, &mut ref_gray);
-        rgb_u8_to_gray_bt601(dis_rgb, &mut dis_gray);
-        self.score_gray(&ref_gray, &dis_gray)
+        // Phase 9.YA Part 1: reuse scratch.ref_gray / scratch.dis_gray
+        // instead of allocating 2 × W*H*4 fresh per call. Then
+        // pad_gray_into routes into scratch.ref_work / scratch.dis_work,
+        // also reused.  At 40 MP these two changes save 4 × 160 MB =
+        // 640 MB of per-call allocator churn.
+        rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
+        rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        self.score_gray_internal()
     }
 
     /// Score from grayscale-f32 inputs (`width * height` samples each).
@@ -119,8 +162,43 @@ impl Iwssim {
                 got: dis_gray.len(),
             });
         }
-        let (ref_work, dis_work) = (self.pad_gray(ref_gray), self.pad_gray(dis_gray));
-        score_from_gray(&ref_work, &dis_work, self.work_w, self.work_h, &self.params)
+        // Caller-supplied gray planes — copy into the persistent
+        // scratch slots so downstream paths can rely on `self.scratch`
+        // exclusively.
+        self.scratch.ref_gray.copy_from_slice(ref_gray);
+        self.scratch.dis_gray.copy_from_slice(dis_gray);
+        self.score_gray_internal()
+    }
+
+    /// Inner score-from-gray path. Assumes `self.scratch.ref_gray` and
+    /// `self.scratch.dis_gray` have been populated by the caller.
+    /// Routes through `pad_gray_into` for the work-size buffers.
+    fn score_gray_internal(&mut self) -> Result<IwssimScore> {
+        // pad_gray_into fills scratch.ref_work / scratch.dis_work in
+        // place, reusing capacity across calls.
+        Self::pad_gray_into(
+            &self.scratch.ref_gray,
+            &mut self.scratch.ref_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        Self::pad_gray_into(
+            &self.scratch.dis_gray,
+            &mut self.scratch.dis_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        score_from_gray(
+            &self.scratch.ref_work,
+            &self.scratch.dis_work,
+            self.work_w,
+            self.work_h,
+            &self.params,
+        )
     }
 
     /// Cache `ref_rgb`'s pyramid state — subsequent
@@ -134,9 +212,10 @@ impl Iwssim {
                 got: ref_rgb.len(),
             });
         }
-        let mut ref_gray = alloc::vec![0.0_f32; (self.width as usize) * (self.height as usize)];
-        rgb_u8_to_gray_bt601(ref_rgb, &mut ref_gray);
-        self.warm_reference_gray(&ref_gray)
+        // Phase 9.YA Part 1: write into scratch.ref_gray instead of
+        // allocating a fresh `vec![0.0; w*h]` (saves 160 MB at 40 MP).
+        rgb_u8_to_gray_bt601(ref_rgb, &mut self.scratch.ref_gray);
+        self.warm_reference_gray_internal()
     }
 
     /// Cache from gray-f32 reference (mirrors [`Self::warm_reference`]).
@@ -148,8 +227,25 @@ impl Iwssim {
                 got: ref_gray.len(),
             });
         }
-        let work = self.pad_gray(ref_gray);
-        let levels = build_laplacian_pyramid(&work, self.work_w, self.work_h, NUM_SCALES);
+        // Copy into scratch.ref_gray so the internal path can rely on
+        // scratch buffers exclusively.
+        self.scratch.ref_gray.copy_from_slice(ref_gray);
+        self.warm_reference_gray_internal()
+    }
+
+    /// Inner warm path — assumes `self.scratch.ref_gray` has been
+    /// populated.
+    fn warm_reference_gray_internal(&mut self) -> Result<()> {
+        Self::pad_gray_into(
+            &self.scratch.ref_gray,
+            &mut self.scratch.ref_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        let levels =
+            build_laplacian_pyramid(&self.scratch.ref_work, self.work_w, self.work_h, NUM_SCALES);
         let (lp_ref, g_ref) = split_levels(levels);
         self.warm = Some(WarmState { lp_ref, g_ref });
         Ok(())
@@ -164,9 +260,10 @@ impl Iwssim {
                 got: dis_rgb.len(),
             });
         }
-        let mut dis_gray = alloc::vec![0.0_f32; (self.width as usize) * (self.height as usize)];
-        rgb_u8_to_gray_bt601(dis_rgb, &mut dis_gray);
-        self.score_with_warm_ref_gray(&dis_gray)
+        // Phase 9.YA Part 1: write into scratch.dis_gray instead of
+        // allocating a fresh `vec![0.0; w*h]` (saves 160 MB at 40 MP).
+        rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        self.score_with_warm_ref_gray_internal()
     }
 
     /// Score from gray-f32 candidate against the warmed reference.
@@ -178,9 +275,24 @@ impl Iwssim {
                 got: dis_gray.len(),
             });
         }
-        let work = self.pad_gray(dis_gray);
+        self.scratch.dis_gray.copy_from_slice(dis_gray);
+        self.score_with_warm_ref_gray_internal()
+    }
+
+    /// Inner warm-score path — assumes `self.scratch.dis_gray` has
+    /// been populated.
+    fn score_with_warm_ref_gray_internal(&mut self) -> Result<IwssimScore> {
+        Self::pad_gray_into(
+            &self.scratch.dis_gray,
+            &mut self.scratch.dis_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
         let warm = self.warm.as_ref().ok_or(Error::NoWarmReference)?;
-        let dis_levels = build_laplacian_pyramid(&work, self.work_w, self.work_h, NUM_SCALES);
+        let dis_levels =
+            build_laplacian_pyramid(&self.scratch.dis_work, self.work_w, self.work_h, NUM_SCALES);
         let (lp_dis, _g_dis) = split_levels(dis_levels);
         score_with_split(
             &warm.lp_ref,
@@ -194,22 +306,38 @@ impl Iwssim {
 
     /// Tile / replicate `src` to `(work_w, work_h)` when `allow_small`
     /// is enabled and the source is smaller; otherwise the source is
-    /// copied 1:1.
-    fn pad_gray(&self, src: &[f32]) -> Vec<f32> {
-        let sw = self.width as usize;
-        let sh = self.height as usize;
-        if sw == self.work_w && sh == self.work_h {
-            return src.to_vec();
+    /// copied 1:1 into `dst`.
+    ///
+    /// Associated function (no `&self`) so it can be called via
+    /// `Self::pad_gray_into` while holding split borrows on
+    /// `self.scratch.ref_gray` and `self.scratch.ref_work` at the same
+    /// time.
+    ///
+    /// Phase 9.YA Part 1: replaces the prior `pad_gray(&self, src) ->
+    /// Vec<f32>` which allocated 160 MB per call at 40 MP. The
+    /// destination buffer is now pre-allocated in `Scratch::new` and
+    /// reused across calls.
+    fn pad_gray_into(
+        src: &[f32],
+        dst: &mut [f32],
+        sw: usize,
+        sh: usize,
+        work_w: usize,
+        work_h: usize,
+    ) {
+        debug_assert_eq!(src.len(), sw * sh);
+        debug_assert_eq!(dst.len(), work_w * work_h);
+        if sw == work_w && sh == work_h {
+            dst.copy_from_slice(src);
+            return;
         }
-        let mut out = alloc::vec![0.0_f32; self.work_w * self.work_h];
-        for y in 0..self.work_h {
+        for y in 0..work_h {
             let sy = y % sh;
-            for x in 0..self.work_w {
+            for x in 0..work_w {
                 let sx = x % sw;
-                out[y * self.work_w + x] = src[sy * sw + sx];
+                dst[y * work_w + x] = src[sy * sw + sx];
             }
         }
-        out
     }
 }
 
