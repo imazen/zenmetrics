@@ -123,3 +123,132 @@ the 24-cell × 5-worker × ~5-15 s/cell math.
   the CMD fix works.
 - Worker / orchestrator / R2-queue logic — untouched.
 - Salad / vast.ai / RunPod launchers — untouched.
+
+## Phase 2 redo iter 3 (2026-05-28 23:36 UTC) — third bug found
+
+The third sweep launch under the corrected `DEFAULT_IMAGE` ran with
+the fleet image confirmed correct (no Salad image in synthesized
+POST body) — verified at dry-run time per
+`/tmp/hetzner_dryrun_2026-05-28.log` and at runtime by inspecting
+the cloud-init `user_data` that the launcher synthesized
+(`docker pull 'ghcr.io/imazen/zen-metrics-sweep-hetzner:v1'`).
+
+A pre-flight gotcha: the launcher's default
+`--input-parquet-r2 s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/inputs.parquet`
+is stale — the actual fixture lives at
+`.../salad-smoke-2026-05-28-24cell/input/smoke.parquet`. First
+launch errored at preflight HEAD (404). Worked around by passing
+explicit `--input-parquet-r2 …/input/smoke.parquet` +
+`--source-dir-r2 …/sources` overrides. Source dir + parquet path
+mismatch is a queued fix for the launcher defaults (not changed
+this commit per "no code unless a third bug surfaces" rule, since
+the explicit-override path works).
+
+### Timeline (manual teardown at 7:48 wall)
+
+| Event | Time | Notes |
+|---|---|---|
+| Sweep launch (corrected fixture) | t=0 (23:36:40 UTC) | `sweep_id=hetzner-20260528T233640` |
+| 4 of 5 replicas running | t=22.5 s | (`t_first_replica_running` in range with #71's 15-22 s) |
+| All 5 replicas running | t=38.2 s | |
+| First TTL re-dispatch | t=366.5 s | every chunk redispatched once at +6 min (TTL=360 s) — SAME pattern as iter 2 |
+| Manual teardown (no chunks processed) | t=448 s | 5 servers deleted via API DELETE (http 200 each) |
+| Project servers post-teardown | t=450 s | 0 (verified via label_selector + project-wide GET) |
+| Total wall | 7.5 min | |
+
+`t_first_sidecar = null` (no chunks completed). `omni=0` throughout
+(29 polling ticks). `processed=0`. No `fleet_summary.json` was
+written (launcher killed mid-wait via SIGINT before driver's
+graceful summary path). All 5 servers torn down.
+
+### Per-cell ARM CPU time on CAX11 — UNMEASURED
+
+Same as iter 2: the headline number we've been chasing is still
+not produced. Workers booted and stayed in Hetzner-reported
+`running` state for 7+ minutes but never claimed a chunk from
+`runs/<sweep>/queue/`. Comparison to Salad's 3.9 s/cell warm
+GPU baseline still pending.
+
+### Speculative + boot stats
+
+- Speculative dispatch count: 0 (gate is
+  `min_completed=3`; never reached).
+- TTL re-dispatch count: 15 (every chunk once at t=366 s).
+- Per-replica boot: provisioning → `running` ≈ 22-38 s; running
+  → first sidecar = ∞ (no sidecars).
+
+### Image confirmation (proves DEFAULT_IMAGE fix landed)
+
+Synthesized `user_data` from the dry-run dump shows
+`docker pull 'ghcr.io/imazen/zen-metrics-sweep-hetzner:v1'` —
+confirming the Salad image string is no longer being shipped.
+The DEFAULT_IMAGE fix (`7800dd61`) is functional in the rebuilt
+launcher binary.
+
+### Bug #3 (UNRESOLVED) — workers never claim chunks
+
+After 7+ min of `running` state across 5 boxes, queue prefix
+`s3://zen-tuning-ephemeral/runs/hetzner-20260528T233640/queue/`
+still has all 15 original `scaleup-*.json` entries (one per
+chunk plus TTL re-dispatch overwrites), and `omni/` is empty.
+The worker container never wrote a heartbeat to
+`s3://zen-tuning-ephemeral/heartbeat/` — the newest entry in
+that prefix is from 2026-05-24, days before this sweep.
+
+Possible causes (cannot disambiguate without SSH or rescue mode
+access — both intentionally avoided per "no leaky monitor
+patterns" discipline this pass):
+
+1. **Cloud-init blocked on apt mirror.** Ubuntu 24.04 ARM
+   `apt update + apt install docker.io` on Hetzner's fsn1 ARM
+   mirror has been known to take 3-6 min cold. 7 min is at the
+   upper edge but plausible.
+2. **Cloud-init blocked on `docker pull` of the ARM64 image.**
+   The arm64 manifest (`sha256:129486b4b…`) lives on GHCR;
+   pulling it cold over Hetzner's transit could be slow on a
+   2-core CAX11.
+3. **Worker container started but `R2QueueLoopConfig::from_env`
+   panicked.** The env vars `BUCKET=zen-tuning-ephemeral` +
+   `CHUNKS_QUEUE_PREFIX=runs/<sweep>/queue/` are written to
+   `/etc/zen/worker.env` and passed via `--env-file`. If parsing
+   fails or R2 credentials are wrong, the container would
+   `--restart=on-failure:5` and eventually exit. No
+   container-side log surface visible to the launcher.
+4. **R2 credentials in worker.env mismatched.** The launcher mints
+   per-sweep scoped creds via the salad-shared minter; if those
+   creds were issued without write to `omni/` or `claims/`,
+   workers would silently fail their first claim.
+
+The launcher cannot distinguish these — Hetzner only reports
+`running` (the kernel is up) and cloud-init's stdout is teed to
+`/var/log/zen-bootstrap.log` inside the box. Recovering that log
+requires SSH-key injection (next iteration: add an SSH key to the
+synthesized POST body via `ssh_keys: [<launcher_pubkey>]` so the
+launcher can pull the bootstrap log on TTL re-dispatch firing).
+
+### Spend + teardown
+
+| Item | Value |
+|---|---|
+| Servers provisioned | 5× CAX11 fsn1 |
+| Wall time | 7.5 min |
+| Estimated spend | €0.07 / $0.08 (Hetzner 1-hour minimum × 5 boxes ≈ €0.018) |
+| Teardown | Manual API DELETE (5× http 200, all servers) |
+| Post-teardown verification | 0 servers in group, 0 project-wide (both `GET /servers?label_selector` + bare `GET /servers`) |
+
+Combined spend across all three iterations: $0.09 + $0.09 + $0.08
+≈ $0.26 — under the $0.30 brief cap.
+
+### Next action (not started this pass)
+
+Add SSH key injection to the launcher's `ServerCreateBody` so the
+next iter can pull `/var/log/zen-bootstrap.log` via SSH on the
+first TTL re-dispatch firing. That single log line will
+disambiguate causes 1-4 above. Until that diagnostic surface
+exists, blind iteration on the worker container will waste more
+sweep cycles guessing at the symptom.
+
+The DEFAULT_IMAGE fix has shipped; the CMD fix has shipped; both
+are byte-equivalent in the published `:v1` image. The remaining
+blocker is a worker-side opacity issue, not an image-build or
+launcher-default issue.
