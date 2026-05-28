@@ -27,6 +27,13 @@ use crate::pyramid::{PyramidScratch, WeberPyramid, WeberPyramidCache};
 ///
 /// All fields are `pub(crate)` so the band loop can directly resize
 /// + write into them. Sizes match the per-band pixel count.
+///
+/// **Strip variant (Phase 9.Z.F / chunk 4)**: see
+/// [`StripBandWorkspace`] below — a slimmed-down version sized at
+/// `R_k × bw` (strip-shaped) rather than `bh × bw` (full-image). For
+/// shallow levels (`k < k_split`) the strip walker allocates one
+/// `StripBandWorkspace` per shallow level; deep levels reuse the
+/// existing full-image `BandWorkspace`.
 #[derive(Default)]
 pub(crate) struct BandWorkspace {
     // T_p / R_p per channel: CSF-weighted contrasts.
@@ -48,6 +55,84 @@ pub(crate) struct BandWorkspace {
     pub term_rg: Vec<f32>,
     pub term_vy: Vec<f32>,
     pub pu_h: Vec<f32>,
+}
+
+/// Strip-shaped per-band workspace owned by `Scratch`.
+///
+/// Chunk 4 of the cvvdp CPU K_SPLIT walker port. For shallow levels
+/// (`k < k_split`) the strip walker dispatches band-fold work in
+/// row-strips of `R_k` rows × `bw` columns instead of the full
+/// `bh × bw` rectangle. Each shallow level gets one
+/// `StripBandWorkspace` slot sized at `R_k × bw` (a strict subset of
+/// the full band's pixel count for `R_k < bh`).
+///
+/// At `h_body = 512, k = 0, W = H = 4096`, this is `1148 × 4096 × 4
+/// bytes = 18.4 MB` per buffer vs the full-image's `4096 × 4096 × 4
+/// bytes = 64 MB` per buffer — a ~3.5× reduction at the level
+/// dominating peak heap.
+///
+/// Mirrors the GPU's `DBandsTransient::new_strip` (cvvdp-gpu
+/// `pipeline.rs:6388` allocator). Allocated by `Scratch::ensure_strip_band_ws`
+/// (added in chunk 6's dispatcher wiring); unused until then.
+#[derive(Default)]
+#[allow(dead_code)] // wired in by chunk 6 (strip-major dispatcher)
+pub(crate) struct StripBandWorkspace {
+    pub t_p_a: Vec<f32>,
+    pub t_p_rg: Vec<f32>,
+    pub t_p_vy: Vec<f32>,
+    pub r_p_a: Vec<f32>,
+    pub r_p_rg: Vec<f32>,
+    pub r_p_vy: Vec<f32>,
+    pub d_a: Vec<f32>,
+    pub d_rg: Vec<f32>,
+    pub d_vy: Vec<f32>,
+    pub m_mm_a: Vec<f32>,
+    pub m_mm_rg: Vec<f32>,
+    pub m_mm_vy: Vec<f32>,
+    pub term_a: Vec<f32>,
+    pub term_rg: Vec<f32>,
+    pub term_vy: Vec<f32>,
+    pub pu_h: Vec<f32>,
+}
+
+#[allow(dead_code)] // wired in by chunk 6
+impl StripBandWorkspace {
+    /// Allocate (or resize) every per-band slot to `n_strip = R_k × bw`
+    /// f32 entries.
+    pub(crate) fn ensure_strip_sized(&mut self, n_strip: usize) {
+        self.t_p_a.clear();
+        self.t_p_a.resize(n_strip, 0.0);
+        self.t_p_rg.clear();
+        self.t_p_rg.resize(n_strip, 0.0);
+        self.t_p_vy.clear();
+        self.t_p_vy.resize(n_strip, 0.0);
+        self.r_p_a.clear();
+        self.r_p_a.resize(n_strip, 0.0);
+        self.r_p_rg.clear();
+        self.r_p_rg.resize(n_strip, 0.0);
+        self.r_p_vy.clear();
+        self.r_p_vy.resize(n_strip, 0.0);
+        self.d_a.clear();
+        self.d_a.resize(n_strip, 0.0);
+        self.d_rg.clear();
+        self.d_rg.resize(n_strip, 0.0);
+        self.d_vy.clear();
+        self.d_vy.resize(n_strip, 0.0);
+        self.m_mm_a.clear();
+        self.m_mm_a.resize(n_strip, 0.0);
+        self.m_mm_rg.clear();
+        self.m_mm_rg.resize(n_strip, 0.0);
+        self.m_mm_vy.clear();
+        self.m_mm_vy.resize(n_strip, 0.0);
+        self.term_a.clear();
+        self.term_a.resize(n_strip, 0.0);
+        self.term_rg.clear();
+        self.term_rg.resize(n_strip, 0.0);
+        self.term_vy.clear();
+        self.term_vy.resize(n_strip, 0.0);
+        self.pu_h.clear();
+        self.pu_h.resize(n_strip, 0.0);
+    }
 }
 
 /// All scratch state owned by a `Cvvdp` instance.
@@ -90,6 +175,17 @@ pub(crate) struct Scratch {
     pub weber_cache_dist: [WeberPyramidCache; 3],
     // Per-band workspaces. Indexed by band id; grown lazily.
     pub band_ws: Vec<BandWorkspace>,
+    // Per-shallow-level strip workspaces. `Some(slots)` only when strip
+    // mode is active and the dispatcher has called
+    // `ensure_strip_band_ws`. `slots[k]` is a strip-shaped
+    // `StripBandWorkspace` for shallow level `k`; deep levels reuse
+    // `band_ws[k]` (which is small at deep levels).
+    //
+    // Chunk 4 of the CPU K_SPLIT walker port. Allocated lazily so
+    // Full-mode `Scratch::new` doesn't pay the strip allocator's
+    // cost.
+    #[allow(dead_code)] // wired in by chunk 6
+    pub strip_band_ws: Option<Vec<StripBandWorkspace>>,
 }
 
 impl Scratch {
@@ -151,6 +247,7 @@ impl Scratch {
                 WeberPyramidCache::with_capacity(width, height, n_levels),
             ],
             band_ws: Vec::new(),
+            strip_band_ws: None,
         }
     }
 
@@ -159,6 +256,26 @@ impl Scratch {
     pub fn ensure_band_ws(&mut self, n_levels: usize) {
         while self.band_ws.len() < n_levels {
             self.band_ws.push(BandWorkspace::default());
+        }
+    }
+
+    /// Grow the per-shallow-level strip workspace vector to at least
+    /// `k_split` entries. Called by the strip-major dispatcher before
+    /// strip iteration. Each shallow level's slot is sized at
+    /// `R_k × bw` via [`StripBandWorkspace::ensure_strip_sized`] when
+    /// the strip is dispatched.
+    ///
+    /// Chunk 4 of the CPU K_SPLIT walker port; populated lazily so
+    /// the Full-mode path's `Scratch::new` doesn't pay the strip
+    /// allocator's cost.
+    #[allow(dead_code)] // wired in by chunk 6
+    pub fn ensure_strip_band_ws(&mut self, k_split: usize) {
+        if self.strip_band_ws.is_none() {
+            self.strip_band_ws = Some(Vec::new());
+        }
+        let slots = self.strip_band_ws.as_mut().unwrap();
+        while slots.len() < k_split {
+            slots.push(StripBandWorkspace::default());
         }
     }
 }

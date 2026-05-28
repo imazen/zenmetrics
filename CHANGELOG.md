@@ -19,6 +19,39 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports
+  (chunks 1, 2, 3, 5 + chunk 4 data structure).** Ports the GPU's
+  six K_SPLIT strip-aware kernels to scalar CPU helpers in a new
+  `crates/cvvdp/src/strip_kernels.rs` module. The kernels are
+  prerequisites for the CPU strip-major dispatcher (chunks 4-wiring +
+  6) that will reduce `score_strip` peak heap from 4.73 GB to ≤1.7 GB
+  at 16 MP and enable 40 MP CPU support (≤4.2 GB target).
+
+  Shipped:
+  - `pu_blur_h_strip_aware_3ch_into` + `pu_blur_v_strip_aware_3ch_into`:
+    σ=3 PU blur with logical-h reflection then strip-local translation.
+    H-blur is degenerate (X-only); V-blur is load-bearing.
+  - `downscale_strip_into`: 2× reduce with pycvvdp parity-on-rows
+    bug-compat keyed on `logical_src_h`. Caller-owned vscratch.
+  - `upscale_v_strip_into` + `upscale_h_strip_into`: 2× expand
+    body-only V + X-only H.
+  - `subtract_weber_3ch_strip_into`: per-pixel weber-contrast +
+    log_l_bkg.
+  - `StripBandWorkspace` in `scratch.rs` + `Scratch::strip_band_ws`
+    optional slot + `ensure_strip_band_ws(k_split)` helper. Allocated
+    lazily (None in Full mode → no allocation cost).
+
+  16 bit-identical (`to_bits()`) parity tests prove every kernel
+  matches the existing CPU full-mode reference at the body rows of
+  arbitrary strips. Chunks 2 + 3 (per-pixel CSF + masking) are
+  strip-degenerate per audit AUDIT_2026-05-28.md §A rows 8-11; no
+  new kernel needed.
+
+  Chunks 4 (full wiring) + 6 (strip-major dispatcher) remain queued.
+  See `crates/cvvdp/docs/CPU_KSPL_HANDOFF_chunks_4_and_6.md` for the
+  architectural design, peak-heap decomposition, and remaining
+  Scratch refactor work (de57ab01, f4a80cd6).
+
 - **Phase 9.Z.B follow-on (2026-05-28) — orchestrator CpuAdapter
   strip dispatchers for ssim2 / butter / zensim.** Now that
   `fast-ssim2 0.8.1` (`compute_ssimulacra2_strip` +
