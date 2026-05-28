@@ -54,13 +54,19 @@
 //!   `compute_with_cached_reference`. The reference-side sRGB → linear → XYB
 //!   conversion + multi-scale downscale pyramid runs once per source;
 //!   subsequent compare calls reuse the cached `PrecomputedReference`.
-//!   CPU sweep #132 measured a +46% wall speedup at 16 MP on this path
-//!   vs. cold-ref recompute, but the previous wiring stashed raw bytes
-//!   and re-converted them on every call — `supports_cached_ref` returned
-//!   `false`, so the orchestrator never picked the warm dispatch. The
-//!   strip warm-ref variant now dispatches through
-//!   `compute_with_ref_streaming_strips` so the warm dispatch carries
-//!   into the memory-bounded strip mode too.
+//!   Measured speedup on the 7950X at 16 MP is ≈+12 % per amortized
+//!   warm call (3-trial median, 10-distorteds-per-ref sweep — see
+//!   `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`). The previous
+//!   wiring stashed raw bytes and re-converted them on every call —
+//!   `supports_cached_ref` returned `false`, so the orchestrator never
+//!   picked the warm dispatch. The strip warm-ref variant now
+//!   dispatches through `compute_with_ref_streaming_strips` so the
+//!   warm dispatch carries into the memory-bounded strip mode too.
+//!   (Note: the GPU cached_ref sweep at
+//!   `benchmarks/zensim_cached_ref_2026-05-22.csv` measures 38–40 % on
+//!   CUDA / wgpu — the GPU win is larger because it skips device
+//!   uploads and ref-side kernel launches across the sweep, neither of
+//!   which apply on the CPU path.)
 //!
 //! The pool's worker decides whether to dispatch through
 //! `compute_with_cached_reference` based on a static feature query
@@ -194,9 +200,11 @@ struct ZensimState {
     /// returns a `PrecomputedReference` that owns the multi-scale XYB
     /// pyramid for the source image. We cache it here so subsequent
     /// `compute_with_ref` calls can skip the sRGB → linear → XYB
-    /// conversion + downscale (≈+46 % wall at 16 MP per CPU sweep #132).
-    /// Replaces the prior `Option<Vec<u8>>` byte stash that recomputed
-    /// the full cold path on every warm-ref call.
+    /// conversion + downscale (≈+12 % per amortized warm call on the
+    /// 7950X at 16 MP — see `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`
+    /// for the measured 3-trial median). Replaces the prior
+    /// `Option<Vec<u8>>` byte stash that recomputed the full cold path
+    /// on every warm-ref call.
     cached_ref: Option<zensim::PrecomputedReference>,
 }
 
@@ -330,10 +338,10 @@ impl CpuAdapter {
             // Task #134 (2026-05-28): zensim has a true cached-reference
             // path via `Zensim::precompute_reference` + `compute_with_ref`.
             // The reference XYB conversion + downscale pyramid is hoisted
-            // out of the per-pair compare — CPU sweep #132 measured a
-            // +46 % wall speedup at 16 MP on this path. The prior wiring
-            // returned `false` here even though `set_reference` stashed
-            // bytes, so the orchestrator never selected the warm dispatch.
+            // out of the per-pair compare — measured +12 % per amortized
+            // warm call on the 7950X at 16 MP. The prior wiring returned
+            // `false` here even though `set_reference` stashed bytes, so
+            // the orchestrator never selected the warm dispatch.
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(_) => true,
             // iwssim has a true warm path: `warm_reference` caches the
@@ -452,14 +460,10 @@ impl CpuAdapter {
                 // sRGB → linear → XYB conversion + multi-scale pyramid
                 // downscale internally; subsequent
                 // `compute_with_cached_reference` calls dispatch through
-                // `compute_with_ref` and skip both stages. Per CPU sweep
-                // #132, the warm path is +46 % faster than cold-ref at
-                // 16 MP. We still stash the raw bytes — the strip
-                // warm-ref dispatcher prefers
-                // `compute_with_ref_streaming_strips` (which uses the
-                // PrecomputedReference) but a fall-back to the cold
-                // strip path is retained if the cached precompute is
-                // ever cleared independently.
+                // `compute_with_ref` and skip both stages. Measured
+                // +12 % per amortized warm call on the 7950X at 16 MP
+                // (see `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`
+                // for the 3-trial median wall data).
                 let src: &[[u8; 3]] = bytemuck::cast_slice(ref_bytes);
                 let ref_slice = zensim::RgbSlice::new(src, s.width, s.height);
                 let precomputed = s.zensim.precompute_reference(&ref_slice).map_err(|e| {
@@ -1186,10 +1190,12 @@ fn compute_butter(
 // `Zensim::compute_with_ref`, plumbed through `set_reference` +
 // `compute_with_cached_reference` above. Wired so the orchestrator's
 // cached-ref dispatch (which queries `supports_cached_ref`) actually
-// selects the +46 %-faster warm path that CPU sweep #132 surfaced. The
-// strip variant (`compute_with_cached_reference_strip`) dispatches
-// through `Zensim::compute_with_ref_streaming_strips` so the warm
-// amortization carries into memory-bounded strip mode.
+// selects the +12 %-faster warm path on the 7950X at 16 MP (measured
+// 3-trial median, 10-distorteds-per-ref sweep; see
+// `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`). The strip variant
+// (`compute_with_cached_reference_strip`) dispatches through
+// `Zensim::compute_with_ref_streaming_strips` so the warm amortization
+// carries into memory-bounded strip mode.
 
 #[cfg(feature = "cpu-zensim")]
 fn construct_zensim(

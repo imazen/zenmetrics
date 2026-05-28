@@ -314,7 +314,9 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
         // callers iterate `compute_with_ref` many times against one
         // `precompute_reference` — only `t_warm_compare_ms` is the
         // per-distorted apples-to-apples comparable to `full` mode's
-        // `t_score_ms`.
+        // `t_score_ms`. Measured 3-trial median at 16 MP on the 7950X:
+        // full ≈ 380 ms, warm hot ≈ 340 ms (+12 % per amortized warm
+        // call; see `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`).
         "warm_ref" => {
             let t_pre = std::time::Instant::now();
             let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
