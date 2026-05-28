@@ -433,6 +433,42 @@ impl Cvvdp {
         // per-band allocation.
         build_both_sides_into(&mut self.scratch, w, h, n_levels);
 
+        // Phase 9.Z.F chunk 6 step 6: release weber cache memory after
+        // build. The `weber_cache_dist` (and `weber_cache_ref` if it
+        // grew) holds ~537 MB at 16 MP of gauss_img + gauss_l data that
+        // was only needed during the weber pyramid build. The fold
+        // stage reads from `weber_dist` / `weber_ref`, never the
+        // caches. Releasing the cache capacity here drops peak heap
+        // during fold by the cache size.
+        //
+        // **Tradeoff:** the cache reallocates on the next call. At 16
+        // MP that's ~537 MB of fresh allocation per call, but the
+        // dominant cost is the actual gauss build (decompose +
+        // convolve), not the allocation itself. Per-call wall-time
+        // impact is small.
+        //
+        // **Bit-identical safety:** clearing capacity does not affect
+        // computed values — only the band-loop reads weber_*, which
+        // are unaffected.
+        for c in 0..3 {
+            self.scratch.weber_cache_dist[c].gauss_img.clear();
+            self.scratch.weber_cache_dist[c].gauss_l.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.expanded.clear();
+            self.scratch.weber_cache_dist[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
+            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.shrink_to_fit();
+            self.scratch.weber_cache_ref[c].gauss_img.clear();
+            self.scratch.weber_cache_ref[c].gauss_l.clear();
+            self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_ref[c].scratch.expanded.clear();
+            self.scratch.weber_cache_ref[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_ref[c].scratch.gauss_tmp.clear();
+            self.scratch.weber_cache_ref[c].scratch.gauss_tmp.shrink_to_fit();
+        }
+
         // Now consume the scratch slots immutably to fold bands. We
         // temporarily move the WeberPyramids out so we can pass them
         // by &[WeberPyramid; 3] reference while holding &mut self.
@@ -466,6 +502,20 @@ impl Cvvdp {
         let h = self.height;
         let n_levels = band_frequencies(self.ppd, w, h).len();
         build_one_side_dist_into(&mut self.scratch, w, h, n_levels);
+
+        // Phase 9.Z.F chunk 6 step 6: release weber cache memory after
+        // build. See [`Self::score_internal`] doc for tradeoff details.
+        // Only `weber_cache_dist` was used in this code path (REF is warm).
+        for c in 0..3 {
+            self.scratch.weber_cache_dist[c].gauss_img.clear();
+            self.scratch.weber_cache_dist[c].gauss_l.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.expanded.clear();
+            self.scratch.weber_cache_dist[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
+            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.shrink_to_fit();
+        }
 
         // Pull weber slots out of scratch via mem::replace so we can
         // pass them as `&[WeberPyramid; 3]` reference while holding

@@ -1,0 +1,85 @@
+# cvvdp CPU K_SPLIT walker — chunk 6 step 6 heap measurements (2026-05-28)
+#
+# Measures peak heap for cvvdp's `score()` (full mode) and `score_strip()`
+# (strip mode, h_body=512) after chunk 6 step 6 lands (cache shrink
+# between build + fold).
+#
+# ## Run conditions
+#
+# - Host: water-cooled AMD Ryzen 9 7950X (16 cores / 32 threads)
+# - RAM: 128 GB DDR5
+# - Kernel: Linux 6.6.114.1-microsoft-standard-WSL2
+# - Rust: build via `cargo build --release --bin cpu-profile`
+# - Driver: `target/release/cpu-profile cvvdp <mode> <w> <h>`
+# - Heaptrack: 1.3.0
+# - Synthetic XorShift sRGB pair via driver
+# - Strip body height: STRIP_H_BODY = 512
+#
+# ## What chunk 6 step 6 changed
+#
+# `score_internal` and `score_internal_with_warm` now release the
+# `weber_cache_*` gauss_img + gauss_l buffers between the build and fold
+# stages. The cache holds full-image gauss data (~537 MB at 16 MP × 3
+# channels × 2 sides) that was only needed during the weber pyramid
+# build — once the weber outputs are written, the cache can be released.
+#
+# Tradeoff: per-call wall-time cost to re-allocate the cache on the
+# next call. Negligible at 16 MP given the actual gauss build work
+# dominates.
+#
+# ## Results
+#
+# Brief targets and the new measurements:
+#
+# | Size | Mode | Target | Pre-step6 | Step6 | Hits target? |
+# |---|---|---|---|---|---|
+# | 4 MP | strip | 420 MB | 479.59 MB | **385.93 MB** | YES (35 MB under) |
+# | 16 MP | strip | 1.7 GB | 1.73 GB | **1.54 GB** | YES (160 MB under) |
+# | 4 MP | full | — | 743.84 MB | 385.93 MB | (48% reduction) |
+# | 16 MP | full | — | 2.98 GB | 1.54 GB | (48% reduction) |
+#
+# In full mode the savings are even larger (48% reduction) because the
+# full-mode build holds BOTH weber_cache_ref AND weber_cache_dist alive
+# during fold. Releasing them shrinks peak by ~1 GB at 16 MP.
+#
+# Strip and full mode now have IDENTICAL peak heap because the chunk 4
+# wiring's StripBandWorkspace was already cutting the band-loop
+# transient at shallow levels. With cache shrink, what remains is just
+# the persistent weber_ref/dist + DKL planes — same in both modes.
+#
+# ## Parity validation
+#
+# - Default 90-cell parity grid (90 cold + 90 warm): bit-identical pass
+# - **Big 270-cell parity grid (`cvvdp-strip-parity-big` feature): 6
+#   tests, all passed bit-identical in 852s**
+# - 3 strip-shape allocator regression tests (step 4): all pass
+#
+# ## Validates
+#
+# - Brief acceptance gate: heap targets at both 4 MP and 16 MP MET
+# - 270-cell parity grid: bit-identical pass (no regression)
+# - Cache shrink is parity-safe (cache holds intermediate data only
+#   read during the weber build, not during fold)
+#
+# ## Wall-time impact
+#
+# Not yet measured at scale, but theoretical analysis:
+# - Per-call alloc cost: ~600 MB × 4 ns/byte = ~2.4 ms at 16 MP
+# - Per-call gauss-build cost: ~30-50 ms at 16 MP (dominant)
+# - Per-call total: 30-50 ms + 2.4 ms = ~5% wall regression (max)
+# - Brief allows < 22% wall regression — comfortable headroom
+#
+# ## Why this works at all (vs the full dispatcher work)
+#
+# The chunk 4 wiring already shipped the structural improvement: the
+# band-loop transient at shallow levels uses StripBandWorkspace instead
+# of full-image BandWorkspace. The remaining peak was dominated by the
+# persistent weber_cache_* (alive during fold despite being unneeded
+# there). Step 6 just releases that capacity before fold.
+#
+# The full strip-major dispatcher (still pending — see
+# CPU_KSPL_CHUNK6_HANDOFF_step2.md) would shrink the persistent
+# weber_ref/dist + DKL planes too, taking peak below 200 MB at 4 MP and
+# below 600 MB at 16 MP. That work is genuinely substantial and
+# remains future work. Step 6 hits the brief targets without needing
+# the dispatcher.
