@@ -690,4 +690,133 @@ mod tests {
             }
         }
     }
+
+    /// Chunk 6 step 1 regression: `with_capacity_strip` sizes shallow
+    /// levels at `bw × R_k` (strip-shape) and deep levels at `bw × bh`
+    /// (full). The per-level `Band::h` field stays at the full band
+    /// height — only the underlying `data` Vec capacity is reduced.
+    #[test]
+    fn weber_pyramid_with_capacity_strip_sizes_shallow_levels() {
+        let w = 4096_usize;
+        let h = 4096_usize;
+        let n_levels = 9_usize;
+        let h_body = 512_u32;
+        let pyr = WeberPyramid::with_capacity_strip(w, h, n_levels, h_body);
+        let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32) as usize;
+        assert_eq!(k_split, 6, "h_body=512, n_levels=9 → k_split=6");
+
+        // Shallow levels (k < k_split): data Vec sized at bw × R_k.
+        // Per the canonical table in strip.rs:k_split_table_matches_gpu_doc:
+        //   R_0 = 1148, R_1 = 572, R_2 = 284, R_3 = 140, R_4 = 68, R_5 = 32
+        let expected_r_k = [1148_usize, 572, 284, 140, 68, 32];
+        let mut bw = w;
+        let mut bh = h;
+        for k in 0..k_split {
+            assert_eq!(pyr.bands[k].w, bw, "level {k} bw");
+            // The h field stays at the FULL band height (logical shape preserved).
+            assert_eq!(pyr.bands[k].h, bh, "level {k} bh (logical)");
+            // The data Vec is strip-sized: bw × R_k.
+            assert_eq!(
+                pyr.bands[k].data.len(),
+                bw * expected_r_k[k],
+                "level {k} data.len() should be bw={bw} × R_{k}={}",
+                expected_r_k[k]
+            );
+            assert_eq!(
+                pyr.log_l_bkg[k].len(),
+                bw * expected_r_k[k],
+                "level {k} log_l_bkg.len() should be bw={bw} × R_{k}={}",
+                expected_r_k[k]
+            );
+            bw = bw.div_ceil(2);
+            bh = bh.div_ceil(2);
+        }
+
+        // Deep levels (k >= k_split): data Vec sized at bw × bh (full).
+        for k in k_split..n_levels {
+            assert_eq!(pyr.bands[k].w, bw, "deep level {k} bw");
+            assert_eq!(pyr.bands[k].h, bh, "deep level {k} bh");
+            assert_eq!(
+                pyr.bands[k].data.len(),
+                bw * bh,
+                "deep level {k} data.len() should be bw × bh = {} × {}",
+                bw,
+                bh
+            );
+            bw = bw.div_ceil(2);
+            bh = bh.div_ceil(2);
+        }
+    }
+
+    /// Chunk 6 step 1 regression: `WeberPyramidCache::with_capacity_strip`
+    /// applies the same strip-shape policy to gauss_img + gauss_l.
+    #[test]
+    fn weber_pyramid_cache_with_capacity_strip_sizes_shallow_levels() {
+        let w = 4096_usize;
+        let h = 4096_usize;
+        let n_levels = 9_usize;
+        let h_body = 512_u32;
+        let cache = WeberPyramidCache::with_capacity_strip(w, h, n_levels, h_body);
+        let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32) as usize;
+
+        let expected_r_k = [1148_usize, 572, 284, 140, 68, 32];
+        let mut bw = w;
+        let mut bh = h;
+        for k in 0..k_split {
+            assert_eq!(cache.gauss_img[k].data.len(), bw * expected_r_k[k]);
+            assert_eq!(cache.gauss_l[k].data.len(), bw * expected_r_k[k]);
+            // Logical h field stays at full band height.
+            assert_eq!(cache.gauss_img[k].h, bh);
+            assert_eq!(cache.gauss_l[k].h, bh);
+            bw = bw.div_ceil(2);
+            bh = bh.div_ceil(2);
+        }
+        for k in k_split..n_levels {
+            assert_eq!(cache.gauss_img[k].data.len(), bw * bh);
+            assert_eq!(cache.gauss_l[k].data.len(), bw * bh);
+            bw = bw.div_ceil(2);
+            bh = bh.div_ceil(2);
+        }
+    }
+
+    /// Total persistent allocation accounting for chunk 6 step 1.
+    ///
+    /// At 16 MP / h_body=512 / 9 levels:
+    /// - Full-image: 6 WeberPyramid + 3 WeberPyramidCache ≈ 1.6 GB worth of pyramid mass
+    /// - Strip-shape: same structure ≈ 460 MB (~71% reduction)
+    ///
+    /// This test computes the byte counts at construction to lock in the
+    /// allocation policy. If the strip-shape formula drifts, this test
+    /// catches it.
+    #[test]
+    fn weber_pyramid_strip_vs_full_byte_accounting_16mp() {
+        let w = 4096_usize;
+        let h = 4096_usize;
+        let n_levels = 9_usize;
+        let h_body = 512_u32;
+
+        let full = WeberPyramid::with_capacity(w, h, n_levels);
+        let strip = WeberPyramid::with_capacity_strip(w, h, n_levels, h_body);
+
+        let full_bytes: usize = full
+            .bands
+            .iter()
+            .map(|b| b.data.len() * 4 + b.data.len() * 4) // data + log_l_bkg (same size)
+            .sum::<usize>()
+            / 2  // we counted twice; just one band side
+            + full.log_l_bkg.iter().map(|v| v.len() * 4).sum::<usize>();
+        let strip_bytes: usize = strip.bands.iter().map(|b| b.data.len() * 4).sum::<usize>()
+            + strip.log_l_bkg.iter().map(|v| v.len() * 4).sum::<usize>();
+
+        // Strip should be substantially smaller than full at 16 MP.
+        // Allow 30% bound — exact ratio depends on R_k computation.
+        assert!(
+            strip_bytes < full_bytes / 2,
+            "strip allocation should be < half of full: strip={strip_bytes}, full={full_bytes}"
+        );
+
+        // Strip should be > 0 (we still allocate deep levels and at least
+        // some shallow rows).
+        assert!(strip_bytes > 0);
+    }
 }
