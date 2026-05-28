@@ -60,6 +60,28 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Phase 8g.1 — `iwssim-gpu` now depends on `iwssim` (gpu→cpu dep direction).**
+  Shared algorithm constants `NUM_SCALES` (= 5) and `MIN_NATIVE_DIM`
+  (= 176) moved from `iwssim-gpu` to `iwssim`; the GPU crate keeps them
+  reachable via `pub use iwssim::{NUM_SCALES, MIN_NATIVE_DIM};` so
+  existing `iwssim_gpu::*` callsites resolve unchanged. The build.rs-
+  generated filter tables (`BINOM5`, `SSIM_WIN_1D`, `SCALE_WEIGHTS`)
+  stay duplicated in `iwssim-gpu/src/filters.rs` because they're
+  referenced by-name inside `#[cube(launch_unchecked)]` kernel bodies
+  (`lap_pyramid::corr_dn_*_kernel`, `up_conv_*_kernel`, `gauss11`'s
+  separable taps) — cube codegen captures the `crate::filters::*`
+  path at macro expansion and re-emits it on device, so a re-export
+  from another crate breaks resolution. The two `build.rs` files are
+  bit-identical (same coefficient generator) and a `parity_cpu` test
+  catches any drift. The `iwssim/tests/parity_gpu.rs` test moved to
+  `iwssim-gpu/tests/parity_cpu.rs` to break the dep cycle (`iwssim`
+  no longer optionally depends on `iwssim-gpu`); run via
+  `cargo test -p iwssim-gpu --features cuda --test parity_cpu -- --ignored`.
+  Parity unchanged: 9/9 PASS-EXACT on the orchestrator iwssim parity
+  sweep (256/1024/4096 × q={20,50,80} JPEG synthetic) and 5/5 PASS on
+  the GPU↔CPU `parity_cpu` test suite. Audit reference:
+  `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`.
+
 - **Phase 8c.1-B — `cvvdp-gpu` now depends on `cvvdp` (gpu→cpu dep direction)**
   (cc4046fe). Shared params, host_scalar reference impl, presets +
   vendored JSON data files, and the scalar portions of the kernel

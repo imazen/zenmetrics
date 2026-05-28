@@ -1,23 +1,23 @@
-//! Parity test against `iwssim-gpu` — feature-gated on
-//! `gpu-parity-test` so that ordinary `cargo test -p iwssim` runs
-//! don't pull cubecl + CUDA into the build graph.
-//!
-//! Each test scores the same synthetic fixture via both the CPU port
-//! and the CUDA-backed GPU port and asserts the results agree within
+//! GPU ↔ CPU parity test — runs the CUDA-backed `iwssim-gpu` against
+//! the canonical CPU `iwssim` port and asserts the scores agree within
 //! atomic-add / SIMD-reorder tolerance.
+//!
+//! Moved from `iwssim/tests/parity_gpu.rs` in Phase 8g.1 to break the
+//! dep cycle introduced when `iwssim-gpu` started depending on `iwssim`.
+//! The test lives here now because `iwssim-gpu` already requires both
+//! crates for compilation.
 //!
 //! ## Running
 //!
 //! ```bash
 //! # Requires a real CUDA device + libcuda on PATH.
-//! cargo test -p iwssim --features gpu-parity-test --test parity_gpu -- --ignored
+//! cargo test -p iwssim-gpu --features cuda --test parity_cpu -- --ignored
 //! ```
 //!
 //! The tests are `#[ignore]`d by default. Manual runs after a port-side
-//! refactor (or after a cubecl bump in `iwssim-gpu`) opt them in via
-//! `--ignored`.
+//! refactor (or after a cubecl bump) opt them in via `--ignored`.
 
-#![cfg(feature = "gpu-parity-test")]
+#![cfg(feature = "cuda")]
 
 use iwssim::{Iwssim, IwssimParams};
 
