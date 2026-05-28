@@ -73,7 +73,130 @@ Projected 16 MP strip peak after step 3: **~570 MB** (well below 1.7 GB target).
 
 Projected 4 MP strip peak: **~190 MB** (well below 420 MB target).
 
-## Step 3: the dispatcher work (NOT shipped)
+## Concrete code sketch for the dispatcher
+
+The dispatcher's structure in `crates/cvvdp/src/pipeline.rs`. This is the
+recommended implementation pattern after spending a session analyzing
+the existing chunk 4 wiring:
+
+```rust
+// New function: extract per-strip body from process_shallow_strip_band.
+// Takes external accumulators so the strip-major outer can persist them
+// across (s, k) calls.
+#[allow(clippy::too_many_arguments)]
+fn process_shallow_strip_band_at_s(
+    sws: &mut StripBandWorkspace,
+    acc_a: &mut LpNormAccumulator,
+    acc_rg: &mut LpNormAccumulator,
+    acc_vy: &mut LpNormAccumulator,
+    ref_a_band: &[f32], ref_rg_band: &[f32], ref_vy_band: &[f32],
+    dis_a_band: &[f32], dis_rg_band: &[f32], dis_vy_band: &[f32],
+    log_l_bkg_band: &[f32],
+    bw: usize, bh: usize,
+    k: usize, is_first: bool, rho: f32,
+    h_body: u32, k_split: u32,
+    s: usize,  // which strip
+    diffmap_d_out: Option<(&mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>)>,
+) -> u32 /* dispatches counted */ {
+    // ... lines 1486-1547 from process_shallow_strip_band setup, but
+    // hoisted to the caller in band-loop callers (we re-compute per (s, k)
+    // for the strip-major caller; cost is negligible)
+    //
+    // Then EXACTLY the body of the for-loop at lines 1553-1760, with `s` as
+    // an input parameter.
+}
+
+// Refactor: process_shallow_strip_band becomes a thin wrapper.
+fn process_shallow_strip_band(... existing args ...) -> [f32; 3] {
+    let mut acc_a = LpNormAccumulator::default();
+    let mut acc_rg = LpNormAccumulator::default();
+    let mut acc_vy = LpNormAccumulator::default();
+    let mut dispatches: u32 = 0;
+    let strip_h_at_band = strip_h_at_band(h_body, k as u32) as usize;
+    let n_strips = if bh <= strip_h_at_band { 1 } else { bh.div_ceil(strip_h_at_band) };
+
+    for s in 0..n_strips {
+        dispatches += process_shallow_strip_band_at_s(
+            sws, &mut acc_a, &mut acc_rg, &mut acc_vy,
+            ref_a_band, ref_rg_band, ref_vy_band,
+            dis_a_band, dis_rg_band, dis_vy_band,
+            log_l_bkg_band, bw, bh, k, is_first, rho,
+            h_body, k_split, s,
+            None, // diffmap pass-through here (need to figure out routing)
+        );
+    }
+    strip_counter.fetch_add(dispatches, ...);
+    [acc_a.finalize(BETA_SPATIAL), acc_rg.finalize(BETA_SPATIAL), acc_vy.finalize(BETA_SPATIAL)]
+}
+
+// New outer: strip-major dispatcher.
+fn fold_bands_parallel_strip_major(...) -> (f32, Option<Vec<f32>>) {
+    // Per-shallow-level accumulators (3 channels each)
+    let mut shallow_accs: Vec<(LpNormAccumulator, LpNormAccumulator, LpNormAccumulator)> =
+        (0..k_split).map(|_| Default::default()).collect();
+
+    let n_strips_at_0 = if h <= h_body as usize { 1 } else { (h as usize).div_ceil(h_body as usize) };
+
+    for s in 0..n_strips_at_0 {
+        for k in 0..k_split {
+            let (acc_a, acc_rg, acc_vy) = &mut shallow_accs[k];
+            process_shallow_strip_band_at_s(
+                sws_for_k[k], acc_a, acc_rg, acc_vy,
+                ... band data refs, level dims, constants for level k ...
+                s,
+                None, // diffmap routing
+            );
+        }
+    }
+
+    let shallow_q_per_ch: Vec<[f32; 3]> = shallow_accs
+        .iter()
+        .map(|(a, rg, vy)| [a.clone().finalize(BETA_SPATIAL), rg.clone().finalize(BETA_SPATIAL), vy.clone().finalize(BETA_SPATIAL)])
+        .collect();
+
+    // Deep levels: run existing process_deep_band in parallel
+    let deep_q_per_ch = ... existing par_iter_mut over k_split..n_levels ...;
+
+    // Combine + JOD
+    let q_per_ch: Vec<[f32; 3]> = shallow_q_per_ch.into_iter().chain(deep_q_per_ch).collect();
+    let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
+    (jod, ...)
+}
+```
+
+### Parity argument for the strip-major refactor
+
+At each shallow level k, the strip-major outer + band-inner produces the
+same `acc_a` sequence as the band-major outer + strip-inner (chunk 4
+wiring). Reason: at every (s, k) call, the strip-major dispatcher
+processes the rows `[s × strip_h_at_k, (s+1) × strip_h_at_k)` at
+level k. The chunk 4 wiring processes the SAME row range when its
+inner-loop `for s_inner in 0..n_strips_at_k` reaches `s_inner == s`.
+Since s walks in row order in both, the per-level accumulator sees
+strips in the same row order.
+
+So the LpNormAccumulator's `acc += safe_pow_lp(v_i, p)` sequence is
+bit-identical across the two iteration orders. The only divergence
+risk is in the per-band setup work (CSF row constants, etc.) being
+computed at different points — those are pure functions of band-
+constant inputs, so they don't depend on iteration order.
+
+### Then strip-shape the weber buffers
+
+Once the strip-major dispatcher is in place and parity-validated, the
+next step is to:
+
+1. Allocate `weber_dist` + `weber_cache_dist` via `with_capacity_strip`
+   (already exists; just call from a new `Cvvdp::new_strip_mode`
+   constructor).
+2. Wire a new strip-aware build path (`weber_contrast_pyr_strip_into`)
+   that writes per-(s, k) strip data into the strip-shape buffers.
+3. The dispatcher reads from the strip-shape buffers (which now hold
+   ONE strip's data — the current s).
+
+This is where the heap savings land.
+
+## Step 3 (original) — the dispatcher work (NOT shipped)
 
 ### Required changes
 
