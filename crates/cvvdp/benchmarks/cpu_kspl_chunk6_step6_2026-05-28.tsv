@@ -1,9 +1,10 @@
-size_mp	mode	step	peak_heap_bytes	peak_heap_human	delta_vs_pre_step6	notes
-4.19	full	pre_step6	743840000	743.84M	0	post-chunk4-wiring + chunk6 steps 1-5
-4.19	full	step6	385930000	385.93M	-357910000	cache shrink between build + fold
-4.19	strip	pre_step6	479590000	479.59M	0	post-chunk4-wiring + chunk6 steps 1-5
-4.19	strip	step6	385930000	385.93M	-93660000	cache shrink: hits brief target of 420 MB
-16.78	full	pre_step6	2980000000	2.98G	0	post-chunk4-wiring + chunk6 steps 1-5
-16.78	full	step6	1540000000	1.54G	-1440000000	cache shrink: 48% reduction
-16.78	strip	pre_step6	1730000000	1.73G	0	post-chunk4-wiring + chunk6 steps 1-5
-16.78	strip	step6	1540000000	1.54G	-190000000	cache shrink: hits brief target of 1.7 GB
+size_mp	mode	step	peak_heap_bytes	peak_heap_human	t_score_ms	delta_vs_pre_step6	notes
+4.19	full	pre_step6	743840000	743.84M	NA	0	post-chunk4-wiring + chunk6 steps 1-5
+4.19	full	step6	385930000	385.93M	NA	-357910000	cache shrink between build + fold
+4.19	strip	pre_step6	479590000	479.59M	NA	0	post-chunk4-wiring + chunk6 steps 1-5
+4.19	strip	step6	385930000	385.93M	NA	-93660000	cache shrink: hits brief target of 420 MB
+16.78	full	pre_step6	2980000000	2.98G	NA	0	post-chunk4-wiring + chunk6 steps 1-5
+16.78	full	step6	1540000000	1.54G	2775	-1440000000	cache shrink: 48% reduction
+16.78	strip	pre_step6	1730000000	1.73G	NA	0	post-chunk4-wiring + chunk6 steps 1-5
+16.78	strip	step6	1540000000	1.54G	2522	-190000000	cache shrink: hits brief target of 1.7 GB
+

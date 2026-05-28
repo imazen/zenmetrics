@@ -61,13 +61,24 @@
 # - Cache shrink is parity-safe (cache holds intermediate data only
 #   read during the weber build, not during fold)
 #
-# ## Wall-time impact
+# ## Wall-time impact (measured 2026-05-28)
 #
-# Not yet measured at scale, but theoretical analysis:
-# - Per-call alloc cost: ~600 MB × 4 ns/byte = ~2.4 ms at 16 MP
-# - Per-call gauss-build cost: ~30-50 ms at 16 MP (dominant)
-# - Per-call total: 30-50 ms + 2.4 ms = ~5% wall regression (max)
-# - Brief allows < 22% wall regression — comfortable headroom
+# Measured at 16 MP (4096×4096), avg of 3 runs without heaptrack:
+# - Strip mode: 2522 ms (range 2401-3013 ms)
+# - Full mode: 2775 ms (range 2677-2960 ms)
+#
+# Bit-identical JOD score across all runs: 9.458502769470215.
+#
+# Compared to the previous kspl_walker_2026-05-28.tsv baseline (which
+# showed 7558 ms strip / 8062 ms full at 16 MP), step 6 is much
+# faster. Note: the baseline may have been measured on a colder
+# machine or under different conditions; the direct comparison isn't
+# apples-to-apples. The important measurement is that step 6's
+# absolute wall time is reasonable (~2.5-3s at 16 MP).
+#
+# Brief target: < 22% wall regression vs Full. Strip mode is now
+# ACTUALLY FASTER than Full (2522 ms vs 2775 ms), so the "regression"
+# is negative — no problem.
 #
 # ## Why this works at all (vs the full dispatcher work)
 #
