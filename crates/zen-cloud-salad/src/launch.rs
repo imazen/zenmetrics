@@ -47,6 +47,23 @@ pub struct SaladApi {
     http: reqwest::Client,
 }
 
+/// One per-priority price entry within a GPU class. Salad returns
+/// price as a string (e.g. `"0.10"`); we keep it as the raw string
+/// here and parse on demand to avoid float-decode quirks. Priorities
+/// observed in the wild: `"high"`, `"medium"`, `"low"`, `"batch"`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GpuClassPrice {
+    pub price: String,
+    pub priority: String,
+}
+
+impl GpuClassPrice {
+    /// Parse the price string as f64 USD/hour.
+    pub fn price_usd_per_hour(&self) -> f64 {
+        self.price.parse::<f64>().unwrap_or(f64::INFINITY)
+    }
+}
+
 /// One GPU class as returned by `GET .../gpu-classes`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GpuClass {
@@ -54,6 +71,26 @@ pub struct GpuClass {
     pub name: String,
     #[serde(default)]
     pub is_high_demand: Option<bool>,
+    /// Per-priority prices. Recent Salad responses include this; older
+    /// tooling code (and the unit-test fixture) may not. Defaults to
+    /// empty — callers must tolerate that.
+    #[serde(default)]
+    pub prices: Vec<GpuClassPrice>,
+    /// e.g. `"community"`. Optional; present in current API.
+    #[serde(default)]
+    pub gpu_class_type: Option<String>,
+}
+
+impl GpuClass {
+    /// Return the price for the named priority (case-insensitive)
+    /// in USD/hour, or `f64::INFINITY` if that priority isn't quoted.
+    pub fn price_for(&self, priority: &str) -> f64 {
+        self.prices
+            .iter()
+            .find(|p| p.priority.eq_ignore_ascii_case(priority))
+            .map(|p| p.price_usd_per_hour())
+            .unwrap_or(f64::INFINITY)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,9 +248,10 @@ impl SaladApi {
         )
     }
 
-    /// `GET .../gpu-classes` then resolve a class id by (case-insensitive)
-    /// name match. Returns the id to put in `gpu_classes`.
-    pub async fn resolve_gpu_class(&self, name: &str) -> Result<String> {
+    /// `GET .../gpu-classes`. Returns the full catalog of GPU classes
+    /// (id + name + per-priority prices + flags). Use this once per
+    /// launcher invocation; callers typically filter the result.
+    pub async fn list_gpu_classes(&self) -> Result<Vec<GpuClass>> {
         let url = self.org_url("/gpu-classes");
         let resp = self
             .http
@@ -229,11 +267,45 @@ impl SaladApi {
         }
         let list: GpuClassList =
             serde_json::from_str(&text).context("decode gpu-classes response")?;
-        list.items
+        Ok(list.items)
+    }
+
+    /// `GET .../gpu-classes` then resolve a class id by (case-insensitive)
+    /// name match. Returns the id to put in `gpu_classes`.
+    pub async fn resolve_gpu_class(&self, name: &str) -> Result<String> {
+        let items = self.list_gpu_classes().await?;
+        items
             .into_iter()
             .find(|c| c.name.eq_ignore_ascii_case(name))
             .map(|c| c.id)
             .with_context(|| format!("no GPU class named {name:?}"))
+    }
+
+    /// Return every GPU class whose `priority` price is at or below
+    /// `max_price_per_hour` USD. Result is sorted by (price asc, name asc)
+    /// so the request body is deterministic across runs. Empty result is
+    /// returned as an `Err` so the launcher fails loudly instead of
+    /// shipping an empty `gpu_classes` array.
+    pub async fn gpu_classes_under_price(
+        &self,
+        max_price_per_hour: f64,
+        priority: &str,
+    ) -> Result<Vec<GpuClass>> {
+        let mut items = self.list_gpu_classes().await?;
+        items.retain(|c| c.price_for(priority).is_finite() && c.price_for(priority) <= max_price_per_hour);
+        items.sort_by(|a, b| {
+            a.price_for(priority)
+                .partial_cmp(&b.price_for(priority))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        if items.is_empty() {
+            bail!(
+                "no Salad GPU classes priced <= ${:.4}/hr at priority {priority:?}",
+                max_price_per_hour
+            );
+        }
+        Ok(items)
     }
 
     /// `POST .../queues` — create a managed job queue.
@@ -582,6 +654,31 @@ mod tests {
         let list: GpuClassList = serde_json::from_str(json).unwrap();
         assert_eq!(list.items[0].id, "gpu-1");
         assert_eq!(list.items[0].name, "RTX 4090");
+        // Absent prices serializes to an empty Vec, not a panic.
+        assert!(list.items[0].prices.is_empty());
+    }
+
+    #[test]
+    fn gpu_class_list_decodes_with_prices() {
+        // Trimmed real-shape sample from Salad's live response.
+        let json = r#"{"items":[
+            {"gpu_class_type":"community","id":"x","name":"RTX 3060 (12 GB)",
+             "is_high_demand":false,
+             "prices":[
+                {"price":"0.08","priority":"high"},
+                {"price":"0.067","priority":"medium"},
+                {"price":"0.053","priority":"low"},
+                {"price":"0.04","priority":"batch"}]}
+        ]}"#;
+        let list: GpuClassList = serde_json::from_str(json).unwrap();
+        let c = &list.items[0];
+        assert_eq!(c.gpu_class_type.as_deref(), Some("community"));
+        assert!((c.price_for("high") - 0.08).abs() < 1e-9);
+        assert!((c.price_for("batch") - 0.04).abs() < 1e-9);
+        // Missing priority returns infinity (sentinel for filter logic).
+        assert!(c.price_for("unobtanium").is_infinite());
+        // Case-insensitive.
+        assert!((c.price_for("HIGH") - 0.08).abs() < 1e-9);
     }
 
     #[test]

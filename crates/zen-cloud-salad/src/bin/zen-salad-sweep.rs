@@ -126,11 +126,29 @@ struct Args {
     /// Salad's scheduler treats `resources.gpu_classes` as a Vec of
     /// acceptable classes — useful when one tier is starved upstream.
     /// Each name is resolved via `GET /gpu-classes`; failures surface
-    /// at preflight, not mid-launch. When set, this overrides
-    /// `--gpu-class`. Example:
+    /// at preflight, not mid-launch. When set, this **overrides both**
+    /// `--gpu-class` and `--max-price-per-hour` auto-enumeration. Example:
     /// `--gpu-classes "RTX 3060 (12 GB),RTX 3090 (24 GB),RTX 4090 (24 GB)"`.
     #[arg(long, value_delimiter = ',')]
     gpu_classes: Vec<String>,
+
+    /// Auto-enumerate every Salad GPU class whose `--price-priority` price
+    /// is <= this many USD per hour, and pass them ALL in
+    /// `resources.gpu_classes`. This is the default scheduling mode: it
+    /// gives Salad's allocator the broadest possible pool and avoids the
+    /// starvation we saw in Runs 2-5 when only 1-3 classes were nominated.
+    /// Set to 0 to disable (then `--gpu-class` is used). Manual
+    /// `--gpu-classes "name1,name2,..."` takes priority over this.
+    #[arg(long, default_value_t = 0.10)]
+    max_price_per_hour: f64,
+
+    /// Salad price tier to filter against when `--max-price-per-hour` is
+    /// in effect. Salad quotes per-class prices at four priorities:
+    /// `high` (default; scheduler picks high when capacity exists),
+    /// `medium`, `low`, `batch`. Using `high` here ensures we're
+    /// pricing what the scheduler actually charges in non-spot mode.
+    #[arg(long, default_value = "high")]
+    price_priority: String,
 
     /// CPU cores per replica.
     #[arg(long, default_value_t = 4)]
@@ -283,45 +301,92 @@ async fn main() -> Result<()> {
     eprintln!("[launcher] queue_name={queue_name}");
     eprintln!("[launcher] bucket={}", args.bucket);
     eprintln!("[launcher] image={}", args.image);
-    // Determine the GPU class list. `--gpu-classes` (plural)
-    // overrides `--gpu-class` (singular) when present; otherwise
-    // collapse to a single-element list. The list is in priority
-    // order — Salad's scheduler picks the first class with capacity.
-    let gpu_class_names: Vec<String> = if args.gpu_classes.is_empty() {
-        vec![args.gpu_class.clone()]
-    } else {
-        args.gpu_classes
-            .iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
-    };
-    eprintln!(
-        "[launcher] replicas={} chunks={} gpu_classes={:?}",
-        args.replicas, chunks_count, gpu_class_names
-    );
-    eprintln!("[launcher] max_wall_secs={}", args.max_wall_secs);
-
     // 1. Build the Salad API client.
     let api = SaladApi::new(&args.organization, &args.project, None)
         .context("build Salad API client (set SALAD_API_KEY or ~/.config/salad/credentials)")?;
 
-    // 2. Resolve every requested GPU class. Resolve all up-front so a
-    // typo'd class name fails at preflight, not after the container
-    // group is half-created.
-    eprintln!("[launcher] resolving GPU classes {:?}", gpu_class_names);
-    let mut gpu_class_ids: Vec<String> = Vec::with_capacity(gpu_class_names.len());
-    for name in &gpu_class_names {
-        let id = api
-            .resolve_gpu_class(name)
+    // Determine the GPU class list. Precedence:
+    //   (a) explicit `--gpu-classes "name1,name2,..."` wins.
+    //   (b) `--max-price-per-hour > 0` (default 0.10) auto-enumerates
+    //       every Salad class priced at or below that, at the named
+    //       priority tier. This is the broad-pool default; it kills
+    //       allocator starvation by nominating every cheap class
+    //       simultaneously.
+    //   (c) Fallback to `--gpu-class` (singular).
+    let (gpu_class_names, gpu_class_ids): (Vec<String>, Vec<String>) = if !args.gpu_classes.is_empty() {
+        let names: Vec<String> = args
+            .gpu_classes
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        eprintln!(
+            "[launcher] gpu class selection: MANUAL ({} classes from --gpu-classes)",
+            names.len()
+        );
+        let mut ids: Vec<String> = Vec::with_capacity(names.len());
+        for name in &names {
+            let id = api
+                .resolve_gpu_class(name)
+                .await
+                .with_context(|| format!("resolve GPU class {name:?}"))?;
+            eprintln!("[launcher] gpu_class {name:?} -> {id}");
+            ids.push(id);
+        }
+        (names, ids)
+    } else if args.max_price_per_hour > 0.0 {
+        eprintln!(
+            "[launcher] gpu class selection: AUTO (price <= ${:.4}/hr at priority {:?})",
+            args.max_price_per_hour, args.price_priority
+        );
+        let classes = api
+            .gpu_classes_under_price(args.max_price_per_hour, &args.price_priority)
             .await
-            .with_context(|| format!("resolve GPU class {name:?}"))?;
-        eprintln!("[launcher] gpu_class {name:?} -> {id}");
-        gpu_class_ids.push(id);
-    }
+            .context("auto-enumerate GPU classes by price")?;
+        eprintln!(
+            "[launcher] auto-enumerated {} GPU classes <= ${:.4}/hr (priority={}):",
+            classes.len(),
+            args.max_price_per_hour,
+            args.price_priority
+        );
+        let mut names = Vec::with_capacity(classes.len());
+        let mut ids = Vec::with_capacity(classes.len());
+        for c in &classes {
+            eprintln!(
+                "[launcher]   ${:.4}/hr  {:<32}  id={}",
+                c.price_for(&args.price_priority),
+                c.name,
+                c.id
+            );
+            names.push(c.name.clone());
+            ids.push(c.id.clone());
+        }
+        (names, ids)
+    } else {
+        eprintln!(
+            "[launcher] gpu class selection: SINGLE (--gpu-class {:?})",
+            args.gpu_class
+        );
+        let id = api
+            .resolve_gpu_class(&args.gpu_class)
+            .await
+            .with_context(|| format!("resolve GPU class {:?}", args.gpu_class))?;
+        eprintln!("[launcher] gpu_class {:?} -> {id}", args.gpu_class);
+        (vec![args.gpu_class.clone()], vec![id])
+    };
+
     if gpu_class_ids.is_empty() {
-        bail!("no GPU classes resolved — provide --gpu-class or --gpu-classes");
+        bail!(
+            "no GPU classes resolved — provide --gpu-class, --gpu-classes, or a positive --max-price-per-hour"
+        );
     }
+    eprintln!(
+        "[launcher] replicas={} chunks={} gpu_classes_count={}",
+        args.replicas,
+        chunks_count,
+        gpu_class_ids.len()
+    );
+    eprintln!("[launcher] max_wall_secs={}", args.max_wall_secs);
 
     // Dry-run: synthesise a representative container-group request body
     // (without minting creds, uploading chunks, or creating any Salad
