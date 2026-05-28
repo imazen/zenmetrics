@@ -459,6 +459,200 @@ under the $2 cap for this session.
   wire-through is in `zen-cloud-vastai`, which `runpod-sweep`
   also pulls.
 
+## Runs 6 + 6b (2026-05-28, post-price-filter — broad-pool from catalog)
+
+**Code delta vs Run 5**: launcher auto-enumerates Salad's GPU-class
+catalog (`GET /organizations/{org}/gpu-classes`) and filters to every
+class whose high-priority price is ≤ `--max-price-per-hour` (default
+$0.10/hr). The filtered set sorts deterministically by (price asc,
+name asc) and is passed as a 19-element `resources.gpu_classes` Vec.
+This replaces the prior 1-3-class manual selection that was the
+ROOT cause of allocator starvation in Runs 2-5.
+
+### Catalog endpoint + schema
+
+`GET https://api.salad.com/api/public/organizations/imazen/gpu-classes`
+returns 37 community-tier classes with per-priority pricing. Sample
+item:
+
+```json
+{ "id":"f51baccc-…","name":"RTX 3060 (12 GB)",
+  "gpu_class_type":"community","is_high_demand":false,
+  "prices":[{"price":"0.08","priority":"high"},
+            {"price":"0.067","priority":"medium"},
+            {"price":"0.053","priority":"low"},
+            {"price":"0.04","priority":"batch"}] }
+```
+
+At the default `--max-price-per-hour 0.10 --price-priority high`,
+**19 of 37 classes** match: GTX 1050 Ti through RTX 3070 Ti.
+Dry-run verified (`--dry-run`) that `resources.gpu_classes` carries
+19 ids before any spend.
+
+### Run 6 — N=1, price ≤ $0.10/hr, 7-min cap (allocator FIXED; image-pull stalled host)
+
+Launcher invocation:
+```sh
+zen-salad-sweep --replicas 1 --chunks 1 \
+    --max-wall-secs 420 --poll-secs 10 \
+    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator \
+    --price-per-hour 0.10   # default
+# (no --gpu-class, no --gpu-classes — auto-enumerated)
+```
+
+Sweep: `pricefilter-n1-1779961321`.
+
+| t (s) | State | counts |
+|---:|---|---|
+| 0 | POST container group | — |
+| 12 | `state=deploying` | `allocating_count=1` |
+| 12 → 87 | unchanged | allocating |
+| **97** | **`creating_count=1`** | **allocator bound — first time since Run 1** |
+| 97 → 139 | creating | container starting |
+| **149** | **`state=running` `running_count=1`** | **worker live** |
+| 149 → 286 | running | — |
+| ~286 | manual kill (saw stuck-pull) | — |
+
+Manual probe at t=270s on the API: `instances[0].pulling_progress=6%`
+**stuck since t=149s** (update_time frozen for ~2 minutes). The
+instance reported `state=running, ready=True, started=True` but the
+image only reached 6% of its layers, then download stalled. The
+Salad sidecar opened the worker's port 80 anyway and routed the job
+— but the worker process inside the (mostly unpopulated) container
+returned failure in ~0.5s. Salad's queue retried 4× over 5 seconds,
+all failed, job ended `status=failed`.
+
+**Wall**: 295 s. **Sidecars**: 0 omni, 0 errors. **Teardown**: manual
+(launcher SIGTERM didn't run teardown; manual stop+delete+queue-delete
++ quota probe at zero used to confirm).
+
+### Run 6b — N=1 retry, fresh host (allocator FIXED + image pull succeeded; worker still fail-fast)
+
+Re-launched immediately after Run 6 teardown to bind a different
+host from the 19-class pool.
+
+Sweep: `pricefilter-n1b-1779961665`.
+
+| t (s) | State | counts | pulling_progress |
+|---:|---|---|---|
+| 0 | POST | — | — |
+| 26 | `state=deploying` | `allocating_count=1` | — |
+| **88** | **`creating_count=1`** | allocator bound at t=88s | 0% |
+| 100 | downloading | — | 0% |
+| 113 | downloading | — | 17% |
+| 138 | downloading | — | 100% (full pull!) |
+| **~173** | **`state=running running_count=1`** | worker live | 100% |
+
+Image pull succeeded this time (host network was healthy).
+**Total to-running on a fresh-host cold-cache pull: ~173 s**.
+
+Then queue events captured from the API at t=180s:
+
+```
+created   09:47:48 (chunk pushed)
+started   09:50:41 (worker port live)
+failed    09:50:42  (0.8 s delta — fail-fast)
+started   09:50:42
+failed    09:50:43
+started   09:50:43
+failed    09:50:44
+started   09:50:44
+failed    09:50:45
+```
+
+4 retries within 4 seconds, each ~0.8 s. Job ended `status=failed`.
+**Same fail-fast pattern as Run 1 (the original `path='/job'` bug
+report), despite this run using the confirmed-correct `path='/'`
+queue_connection.** Teardown manual; quota=0 confirmed.
+
+**Wall**: ~185 s. **Sidecars**: 0 omni, 0 errors.
+
+### What Runs 6 + 6b DO prove
+
+1. **Price-filter broad-pool kills allocator starvation.** N=1
+   reached `creating_count=1` in 88-97 s vs Runs 2-5 which never
+   left `allocating` (∞s). The 19-class pool is enough breadth
+   for Salad's scheduler to bind quickly. The user's intuition was
+   correct: the prior 1-3-class manual selections were the bug.
+2. **The catalog endpoint is `GET .../organizations/{org}/gpu-classes`**
+   and ships per-priority pricing in a `prices: [{price, priority}]`
+   array. Defaults to 19 classes at $0.10/hr high-priority.
+3. **The image-pull stall is host-specific, not image-specific.**
+   The same v5-orchestrator manifest pulled fully on the Run 6b host
+   in ~50 s (138 - 88) but never progressed past 6% on the Run 6
+   host. Cold-cache pull cost on a healthy host: ~50-60 s for the
+   ~700 MB image.
+4. **The price-filter end-to-end is correct from the operator side**:
+   catalog fetch, filter, sort, request emission, allocator binding,
+   container creation, image download, and `state=running` transition
+   ALL worked. The flag is shippable as the default.
+
+### What Runs 6 + 6b reveal as the NEXT bug
+
+**The worker is rejecting jobs in 0.5-0.8 s** even on a fully-pulled,
+running container. With queue_connection.path='/', queue_connection.port=80,
+and v5-orchestrator pulled to 100%, the worker fails 4/4 retries in <1s
+each. The orchestrator wire-through (Phase A, commit `6187c5c6`) has
+not been validated under production load — and Run 6b is the first time
+we even GOT a job to "started" against a fully-loaded worker. The
+0.8 s failure rate is too fast for the chunk pipeline (~5 s min), so
+something in the worker entrypoint (`scripts/sweep/entrypoint_salad.sh`)
+or the inline pipeline is returning a non-200 immediately. Likely
+suspects (in priority order):
+
+- **R2 cred injection failing** — but the env vars showed up in the
+  container group record. Verify the worker actually exports them
+  to its inline pipeline subprocess (not just the host shell).
+- **Warmup script crash before the worker boots.** The v4 image
+  pre-baked CUDA warmup; if v5 didn't carry that through, the worker
+  might be panicking on the first CUDA call.
+- **Sidecar→worker handshake schema mismatch.** `path='/'` lands but
+  the actual POST body or headers may not match what the worker's
+  inline pipeline expects (the Run 5 doc notes the sidecar response
+  contract is `200 = succeeded, 500 = retryable, etc.`).
+
+The path mismatch hypothesis from Runs 1-5 is **falsified**: that fix
+DID land in the container group config (verified by direct API GET)
+and the same fail-fast pattern persists. The bug is downstream of
+the queue_connection.
+
+### Decision: do NOT proceed to N=10 with v5-orchestrator
+
+N=10 at this point would multiply the worker-fast-fail by 10 without
+producing chunks (Run 6b proves the failure is per-replica, not
+per-pool-binding). The right next step is local-reproduction of the
+worker fail-fast (run the sweep-worker image with the same sidecar
+contract locally) — NOT another paid Salad smoke that surfaces the
+same bug.
+
+### Cumulative spend & teardown
+
+- Run 6: ~$0.05 (started running for ~140 s on a stuck-pull instance)
+- Run 6b: ~$0.04 (instance reached running for ~15 s before kill)
+- **Session total this date**: $0.70 (Runs 1-5) + ~$0.09 (Runs 6+6b)
+  = ~$0.79. Well under the $2 session cap.
+- All container groups deleted + queues deleted + `replicas_used=0`
+  verified on the Salad quotas endpoint.
+
+### Catalog enumeration details (committed)
+
+Live response (37 items, 7 cheapest):
+
+| Price/hr (high) | Name | id |
+|---:|---|---|
+| $0.020 | GTX 1050 Ti (4 GB) | `ce8950bc…` |
+| $0.020 | GTX 1650 (4 GB)    | `0f60d6f5…` |
+| $0.030 | GTX 1060 (6 GB)    | `b550790a…` |
+| $0.040 | GTX 1070, 1080, 1080Ti (8 GB) | `6b17a5e7…` |
+| $0.040 | GTX 1660 (6 GB)    | `0ec75caa…` |
+| $0.040 | GTX 1660 Super (6 GB) | `f474c159…` |
+| $0.050 | RTX 2060 (6 GB)    | `3eae6ce4…` |
+| … | … | … |
+
+Full 19-class list at $0.10/hr threshold visible in the dry-run
+output of the launcher (sorted by price asc, name asc for
+determinism).
+
 ## How to reproduce
 
 ```sh
@@ -469,15 +663,17 @@ export SALAD_API_KEY=$(grep -v '^#' ~/.config/salad/credentials | head -1 | sed 
 cd zenmetrics
 cargo build --release -p zen-cloud-salad --features launcher --bin zen-salad-sweep
 
-# Tiny validation run:
+# Default (auto-enumerated broad pool, price ≤ $0.10/hr at 'high'):
 ./target/release/zen-salad-sweep \
-    --replicas 3 --chunks 6 \
-    --max-wall-secs 480 --poll-secs 12 \
-    --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
-
-# Full scale-up:
+    --replicas 1 --chunks 1 \
+    --max-wall-secs 420 --poll-secs 10 \
+    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator
+# Dry-run (no spend, prints request body):
+./target/release/zen-salad-sweep --dry-run \
+    --replicas 1 --chunks 1
+# Manual narrow selection (overrides auto-enumerate):
 ./target/release/zen-salad-sweep \
     --replicas 10 --chunks 30 \
-    --max-wall-secs 900 --poll-secs 15 \
-    --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
+    --gpu-classes "RTX 3060 (12 GB),RTX 3090 (24 GB)" \
+    --image ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator
 ```
