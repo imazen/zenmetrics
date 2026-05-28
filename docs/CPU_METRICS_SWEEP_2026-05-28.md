@@ -9,6 +9,7 @@ measured outcome where applicable.
 | # | Gap | Status | Task | Measured outcome |
 |---|-----|--------|------|------------------|
 | 1 | `CpuAdapter::supports_cached_ref(Metric::Zensim)` returns `false` even though `precompute_reference` + `compute_with_ref` exists on the underlying crate. | **DONE** (2026-05-28) | #134 | +11.9 % per amortized warm call at 16 MP (vs `+46 %` brief target — see provenance note below) |
+| 2 | `butter warm_ref` peak heap regresses +18 % vs cold at 16 MP (3.61 GB vs 3.07 GB) and +18.7 % at 40 MP (8.71 GB vs 7.34 GB). Root cause: 0.9.3 strip-API work added a 12 B/pixel linear-f32 source clone + the persistent `BufferPool` 48-buffer cap. | **DONE** (2026-05-28) | #135 | warm_ref ≤ cold-path peak heap restored at every measured size: -1.9 % @ 4 MP, -0.9 % @ 16 MP, +0.5 % @ 40 MP. Wall time unchanged within run-to-run variance. butteraugli bumped to 0.9.4. |
 
 ## Task #134 — zensim cached_ref wiring (DONE)
 
@@ -103,7 +104,74 @@ modes — `full_n<N>` and `warm_ref_n<N>` — drive the orchestrator's
 production "N distorteds against one reference" workload and emit
 `FULL_N_TOTAL` / `WARM_REF_N_AMORT` breakdowns.
 
-## Pending follow-ups (not in scope of #134)
+## Task #135 — butter warm_ref +18 % peak heap regression (DONE)
+
+**Root cause.** Two compounding sources of persistent retention added in
+butteraugli 0.9.3's strip-API work:
+
+1. `ButteraugliReference::new(&[u8], ...)` and `new_linear(&[f32], ...)`
+   clone the input into a `Vec<f32>` `linear_source` field, so
+   `compare_strip` can slice strip-shaped windows from it. At 16 MP this
+   is 192 MB per reference; at 40 MP, 480 MB. The sRGB constructor case
+   (the common path from cpu_adapter) inflates the original 48 MB u8
+   buffer 4× by pre-converting to f32 even though the strip walker
+   already runs that same LUT conversion on the distorted side per
+   call.
+2. `BufferPool` cap of 48 — sized for the parallel join's worst-case
+   concurrent buffer count plus headroom. In practice the persistent
+   reference's pool fills to its cap between compares and holds those
+   buffers (each ~67 MB at 16 MP, ~257 MB at 40 MP) through the next
+   compare's peak. Cold-path `butteraugli()` doesn't see this because
+   it creates a fresh local pool per call and drops it at end of
+   function.
+
+**Fix** (butteraugli 0.9.4):
+
+1. Replace `linear_source: Option<Vec<f32>>` with
+   `source: Option<ReferenceSource>` enum that retains the cheap form:
+   `Srgb(Vec<u8>)` for `new()`-built references (3 B/pixel),
+   `Linear(Vec<f32>)` for `new_linear()`-built (12 B/pixel, no
+   compression opportunity). The strip walker calls the new
+   `source_linear_rgb_owned` accessor which converts via the
+   `SRGB_TO_LINEAR_LUT` on demand for `Srgb` references and clones for
+   `Linear` references.
+2. Reduce `BufferPool::put` cap 48 → 8 buffers. The retained ones still
+   cover the inner pool reuse within a single compare; the gain comes
+   from preventing the pool's idle-state footprint from dominating
+   peak heap.
+3. Added `drop_strip_source(&mut self)` and `shrink_to_fit(&mut self)`
+   for callers that want explicit retention control.
+
+**Bench.** Water-cooled AMD Ryzen 9 7950X, 128 GB DDR5,
+Linux 6.6.114.1-microsoft-standard-WSL2. Release build of
+`benchmarks/heaptrack/drivers/cpu_profile` with default features (LTO
+off, codegen-units=1, debuginfo=1). 3 trials per cell; peak heap
+median. Both 0.9.3 baseline and 0.9.4 fix measurements taken on
+2026-05-28 with identical machine state.
+
+| size | mode     | 0.9.3 peak (median) | 0.9.4 peak (median) | Δ vs cold (0.9.4) |
+|------|----------|---------------------|---------------------|-------------------|
+| 4 MP   | full     | n/a (regression unreported) | 814.61 MB | — |
+| 4 MP   | warm_ref | n/a                 | **799.02 MB**       | **-1.9 %** |
+| 16 MP  | full     | 3.26 GB             | 3.26 GB             | — |
+| 16 MP  | warm_ref | 3.81 GB (+16.9 %)   | **3.23 GB**         | **-0.9 %** |
+| 40 MP  | full     | 7.34 GB             | 7.79 GB             | — |
+| 40 MP  | warm_ref | 8.71 GB (+18.7 %)   | **7.83 GB**         | **+0.5 %** |
+
+Wall time (`t_score_ms`) unchanged within run-to-run variance: warm_ref
+remains slower per single compare (the precompute is wasted on N=1)
+and matches the +25 % gap that existed pre-0.9.4 (warm_ref 2.30 s vs
+full 1.82 s at 16 MP).
+
+**Score parity.** warm_ref score bit-identical to full at 4 / 16 / 40 MP
+on the cpu_profile synth pair: 4.666544437408447 for both modes at
+16 MP (sample run).
+
+**Tests.** All 88 butteraugli unit tests + 11 strip-parity integration
+tests pass. cpu_adapter integration tests (54 in zenmetrics-orchestrator)
+pass. No collateral fast-ssim2 / zensim warm-ref impact.
+
+## Pending follow-ups (not in scope of #135)
 
 None right now. Future sweeps that surface orchestrator-side wiring
 gaps append rows to the table above with their own task numbers.

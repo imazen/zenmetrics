@@ -86,7 +86,7 @@ cubecl-common  = "0.10.0"
 cubecl-ir      = "0.10.0"
 
 # CPU reference crates used by parity tests.
-butteraugli = { version = "0.9.3" }
+butteraugli = { version = "0.9.4" }
 dssim-core = { version = "3.4", default-features = false }
 ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }

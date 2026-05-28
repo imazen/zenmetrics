@@ -17,6 +17,19 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Changed
+
+- **butteraugli 0.9.3 → 0.9.4** workspace-wide pin bump (task #135,
+  2026-05-28). Picks up the warm-ref +18 % peak-heap regression fix at
+  16-40 MP (see `~/work/butteraugli/CHANGELOG.md` for the per-step
+  decomposition and the 3-trial heaptrack medians). cpu_adapter
+  `compute_with_cached_reference` (non-strip) and
+  `compute_with_cached_reference_strip` paths continue to use the same
+  `ButteraugliReference` cache; the smaller persistent footprint is
+  transparent at the call site. No cpu_adapter code changes required —
+  the new `drop_strip_source` / `shrink_to_fit` retention-control
+  helpers are available if a future workload needs them.
+
 ### Added
 
 - **Phase 9.Z.F (2026-05-28) — cvvdp CPU strip-aware kernel ports
