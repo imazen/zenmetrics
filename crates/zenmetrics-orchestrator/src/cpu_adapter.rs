@@ -348,7 +348,13 @@ impl CpuAdapter {
             // 5-level Laplacian pyramid + per-scale Gaussian bands; the
             // distorted-side pyramid still has to build on every call,
             // but the ref-side eigendecomposition (10×10 covariance,
-            // 5 scales) is hoisted out of the inner loop.
+            // 5 scales) is hoisted out of the inner loop. Task #136
+            // (2026-05-28): `compute_with_cached_reference` routes
+            // through `score_with_warm_ref_strip` so the cached-ref
+            // entry carries the strip walker's -48 % peak heap win at
+            // 16 / 40 MP; score parity is within the documented 1e-4
+            // strip tolerance. See the dispatch arm in
+            // `compute_with_cached_reference` for measurements.
             #[cfg(feature = "cpu-iwssim")]
             CpuAdapterState::Iwssim(_) => true,
             CpuAdapterState::FeatureDisabled(_) | CpuAdapterState::Unavailable(_) => false,
@@ -905,8 +911,38 @@ impl CpuAdapter {
                         "iwssim: no cached reference; call set_reference first".into(),
                     ));
                 }
+                // Task #136 (2026-05-28): route through the strip walker
+                // even on the "cached_ref" entry point. The non-strip
+                // `score_with_warm_ref` retains `lp_ref + g_ref` but
+                // STILL builds a full-image `lp_dis` pyramid and a
+                // full-image `compute_iw_maps` working set inside
+                // `score_with_split` (~11 × `h*w` f32 just in
+                // `box_stats_3x3`; +`nexp × big_n × 4` in
+                // `build_y_matrix`). Measured (heaptrack process peak,
+                // 7950X, synth pair):
+                //
+                //   size  | full     | warm_ref  | warm_ref_strip
+                //   ------+----------+-----------+----------------
+                //   1 MP  | 153.8 MB | 153.8 MB  | 103.6 MB   (-33 %)
+                //   16 MP | 2.47 GB  | 2.47 GB   | 1.29 GB    (-48 %)
+                //   40 MP | 5.90 GB  | 5.90 GB   | 3.07 GB    (-48 %)
+                //
+                // Per-pair score diff at all measured sizes ≤ 2e-6
+                // absolute — well inside iwssim's documented strip
+                // parity tolerance of 1e-4 (see
+                // `crates/iwssim/tests/strip_parity.rs` and
+                // `iwssim::Iwssim::score_with_warm_ref_strip` docs).
+                // Wall time regresses 9.5 % (1 MP) → 23.9 % (16 MP) →
+                // 34.7 % (40 MP) — accepted because the
+                // cached-ref entry's value proposition for the
+                // orchestrator is amortizing the ref-side pyramid,
+                // which the strip variant ALSO does (warm state
+                // identical: `lp_ref`, `g_ref`, per-scale `eigs`).
+                // The explicit strip-mode entry
+                // `compute_with_cached_reference_strip` remains for
+                // callers that want to pin a body height.
                 let result = c
-                    .score_with_warm_ref(dist_bytes)
+                    .score_with_warm_ref_strip(dist_bytes, iwssim::STRIP_BODY_DEFAULT)
                     .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
                 Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
             }
