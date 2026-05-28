@@ -203,7 +203,7 @@ fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
 }
 
 fn run_iwssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
-    use iwssim::Iwssim;
+    use iwssim::{Iwssim, STRIP_BODY_DEFAULT};
     match mode {
         "full" => {
             let mut c = Iwssim::new(w, h).map_err(|e| e.to_string())?;
@@ -216,7 +216,25 @@ fn run_iwssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             let v = c.score_with_warm_ref(d).map_err(|e| e.to_string())?;
             Ok(v.score)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:iwssim:{mode}")),
+        "strip" => {
+            // Phase 9.Z.A: real strip walker. Uses STRIP_BODY_DEFAULT
+            // = 512 rows + STRIP_HALO_ROWS = 320 per side.
+            let mut c = Iwssim::new(w, h).map_err(|e| e.to_string())?;
+            let v = c
+                .score_strip(r, d, STRIP_BODY_DEFAULT)
+                .map_err(|e| e.to_string())?;
+            Ok(v.score)
+        }
+        "warm_ref_strip" => {
+            // Phase 9.Z.A: warm_ref + strip dist. Cached ref pyramid
+            // + eigendecomp in WarmState; per-strip dist working set.
+            let mut c = Iwssim::new(w, h).map_err(|e| e.to_string())?;
+            c.warm_reference(r).map_err(|e| e.to_string())?;
+            let v = c
+                .score_with_warm_ref_strip(d, STRIP_BODY_DEFAULT)
+                .map_err(|e| e.to_string())?;
+            Ok(v.score)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
