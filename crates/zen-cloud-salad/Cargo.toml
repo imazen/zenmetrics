@@ -16,6 +16,18 @@ publish = false
 name = "zen_cloud_salad"
 path = "src/lib.rs"
 
+[[bin]]
+name = "zen-salad-sweep"
+path = "src/bin/zen-salad-sweep.rs"
+required-features = ["launcher"]
+
+[features]
+default = []
+# The launcher binary needs a clap parser + SHA-256/HMAC for the SigV4
+# signing of the operator-side R2 calls (HEAD/PUT/GET). Gated to keep
+# the library lean.
+launcher = ["dep:clap", "dep:sha2", "dep:hmac"]
+
 [dependencies]
 # The cloud-agnostic trait layer this crate implements.
 zen-cloud-core = { workspace = true }
@@ -46,6 +58,15 @@ tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+
+# ── launcher-binary-only deps (gated by feature = "launcher") ─────────
+# CLI parser for the operator-side launcher binary.
+clap = { workspace = true, optional = true, features = ["env"] }
+# SHA-256 + HMAC for the SigV4 signing of operator-side R2 HEAD/PUT/GET
+# calls in the launcher binary. The library itself is signing-free
+# (workers shell to s5cmd which uses ~/.aws/credentials).
+sha2 = { version = "0.10", optional = true }
+hmac = { version = "0.12", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.52.3", default-features = false, features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros"] }
