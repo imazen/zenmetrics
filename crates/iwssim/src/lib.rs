@@ -66,6 +66,7 @@ mod filters;
 mod params;
 mod pipeline;
 mod pyramid;
+mod simd_kernels;
 mod ssim;
 mod weights;
 

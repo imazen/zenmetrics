@@ -340,18 +340,12 @@ fn crop_2d(src: &[f32], h: usize, w: usize, bound: usize) -> (usize, usize, Vec<
     (crop_h, crop_w, out)
 }
 
-/// Σ cs·iw and Σ iw (both as `f64` for precision).
+/// Σ cs·iw and Σ iw (both as `f64` for precision). SIMD-routed via
+/// `simd_kernels::weighted_sum_pair`.
 fn weighted_sum(cs: &[f32], iw: &[f32], n: usize) -> (f32, f32) {
     debug_assert_eq!(cs.len(), n);
     debug_assert_eq!(iw.len(), n);
-    let mut sum_csiw = 0.0_f64;
-    let mut sum_iw = 0.0_f64;
-    for i in 0..n {
-        let c = cs[i] as f64;
-        let w = iw[i] as f64;
-        sum_csiw += c * w;
-        sum_iw += w;
-    }
+    let (sum_csiw, sum_iw) = crate::simd_kernels::weighted_sum_pair(cs, iw);
     (sum_csiw as f32, sum_iw as f32)
 }
 

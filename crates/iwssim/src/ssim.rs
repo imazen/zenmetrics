@@ -15,7 +15,8 @@
 
 use alloc::vec::Vec;
 
-use crate::filters::{SSIM_WIN_1D, SSIM_WIN_LEN, SSIM_WIN_RADIUS};
+use crate::filters::SSIM_WIN_LEN;
+use crate::simd_kernels::{cs_combine_into, mul_into, square_into, ssim_gauss_h_pass, ssim_gauss_v_pass};
 
 const SSIM_L: f32 = 255.0;
 const SSIM_K1: f32 = 0.01;
@@ -23,8 +24,8 @@ const SSIM_K2: f32 = 0.03;
 pub(crate) const SSIM_C1: f32 = (SSIM_K1 * SSIM_L) * (SSIM_K1 * SSIM_L);
 pub(crate) const SSIM_C2: f32 = (SSIM_K2 * SSIM_L) * (SSIM_K2 * SSIM_L);
 
-/// 11×11 Gaussian (σ=1.5) **valid** convolution. Output dims are
-/// `(h - 10, w - 10)`.
+/// 11×11 Gaussian (σ=1.5) **valid** convolution via separable SIMD
+/// passes. Output dims are `(h - 10, w - 10)`.
 pub(crate) fn gaussian_11x11_valid(
     src: &[f32],
     h: usize,
@@ -36,37 +37,13 @@ pub(crate) fn gaussian_11x11_valid(
 ) {
     debug_assert_eq!(src.len(), h * w);
     debug_assert_eq!(dst.len(), dst_h * dst_w);
-    // Stage 1 horizontal: valid → (h, w - 10), but caller only needs
-    // (h, dst_w) and our dst_w = w - 10.
     debug_assert!(dst_w + (SSIM_WIN_LEN - 1) == w);
     debug_assert!(dst_h + (SSIM_WIN_LEN - 1) == h);
     debug_assert_eq!(h_scratch.len(), h * dst_w);
-    let r = SSIM_WIN_RADIUS as usize;
-    for y in 0..h {
-        let row = &src[y * w..(y + 1) * w];
-        let out_row = &mut h_scratch[y * dst_w..(y + 1) * dst_w];
-        for ox in 0..dst_w {
-            // Output x maps to source x range [ox, ox + 10]; centered
-            // at ox + 5.
-            let mut acc = 0.0_f32;
-            for k in 0..SSIM_WIN_LEN {
-                acc += SSIM_WIN_1D[k] * row[ox + k];
-            }
-            out_row[ox] = acc;
-        }
-        let _ = r;
-    }
-    // Stage 2 vertical: (h, dst_w) → (dst_h, dst_w).
-    for oy in 0..dst_h {
-        let out_row = &mut dst[oy * dst_w..(oy + 1) * dst_w];
-        for x in 0..dst_w {
-            let mut acc = 0.0_f32;
-            for k in 0..SSIM_WIN_LEN {
-                acc += SSIM_WIN_1D[k] * h_scratch[(oy + k) * dst_w + x];
-            }
-            out_row[x] = acc;
-        }
-    }
+    // Stage 1: horizontal pass. `(h, w)` → `(h, dst_w)`.
+    ssim_gauss_h_pass(src, h, w, dst_w, h_scratch);
+    // Stage 2: vertical pass. `(h, dst_w)` → `(dst_h, dst_w)`.
+    ssim_gauss_v_pass(h_scratch, h, dst_h, dst_w, dst);
 }
 
 /// SSIM stats for one pyramid level.
@@ -114,35 +91,18 @@ pub(crate) fn compute_cs(
     gaussian_11x11_valid(img_ref, h, w, cs_h, cs_w, &mut h_scratch, &mut mu1);
     gaussian_11x11_valid(img_dis, h, w, cs_h, cs_w, &mut h_scratch, &mut mu2);
 
-    // mu_sq inputs.
+    // E[x²], E[y²], E[x·y].
     let mut sq_buf = alloc::vec![0.0_f32; h * w];
-    for i in 0..(h * w) {
-        sq_buf[i] = img_ref[i] * img_ref[i];
-    }
+    square_into(img_ref, &mut sq_buf);
     gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma1_sq);
-    for i in 0..(h * w) {
-        sq_buf[i] = img_dis[i] * img_dis[i];
-    }
+    square_into(img_dis, &mut sq_buf);
     gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma2_sq);
-    for i in 0..(h * w) {
-        sq_buf[i] = img_ref[i] * img_dis[i];
-    }
+    mul_into(img_ref, img_dis, &mut sq_buf);
     gaussian_11x11_valid(&sq_buf, h, w, cs_h, cs_w, &mut h_scratch, &mut sigma12);
 
-    // σ² and σ₁₂ from raw moments.
+    // σ² and σ₁₂ from raw moments + luminance (top scale).
     let mut cs = alloc::vec![0.0_f32; n_cs];
-    for i in 0..n_cs {
-        let m1 = mu1[i];
-        let m2 = mu2[i];
-        let s1 = (sigma1_sq[i] - m1 * m1).max(0.0);
-        let s2 = (sigma2_sq[i] - m2 * m2).max(0.0);
-        let s12 = sigma12[i] - m1 * m2;
-        cs[i] = (2.0 * s12 + SSIM_C2) / (s1 + s2 + SSIM_C2);
-        if with_luminance {
-            let l = (2.0 * m1 * m2 + SSIM_C1) / (m1 * m1 + m2 * m2 + SSIM_C1);
-            cs[i] *= l;
-        }
-    }
+    cs_combine_into(&mu1, &mu2, &sigma1_sq, &sigma2_sq, &sigma12, &mut cs, with_luminance);
 
     CsStats {
         cs_w,

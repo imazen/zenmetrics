@@ -2,4 +2,12 @@
 //! `iwssim-gpu/src/filters.rs` (same `build.rs`). Any drift here
 //! silently breaks GPU/CPU parity.
 
-include!(concat!(env!("OUT_DIR"), "/filters.rs"));
+// SSIM_WIN_RADIUS is currently read only in tests; suppress the
+// dead-code warning rather than gating it behind cfg(test) (we may
+// need it in production paths once boundary handling moves to SIMD).
+#[allow(dead_code)]
+mod consts {
+    include!(concat!(env!("OUT_DIR"), "/filters.rs"));
+}
+
+pub(crate) use consts::*;
