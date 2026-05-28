@@ -376,7 +376,10 @@ async fn main() -> Result<()> {
         restart_policy: "always".into(),
         autostart_policy: true,
         queue_connection: Some(QueueConnection {
-            path: "/job".into(),
+            // Match the path used by the working v3 smoke (`/`). The
+            // worker's HTTP handler matches all paths but the sidecar's
+            // routing is determined by this field.
+            path: "/".into(),
             port: 80,
             queue_name: queue_name.clone(),
         }),
