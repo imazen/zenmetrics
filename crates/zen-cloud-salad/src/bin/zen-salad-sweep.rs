@@ -66,8 +66,8 @@ const DEFAULT_INPUT_PARQUET_R2: &str =
     "s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/input/smoke.parquet";
 const DEFAULT_IMAGE_BASENAME: &str = "graph.png";
 
-/// Default image (kernel-cache enabled).
-const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-salad:v4-kernel-cache";
+/// Default image (kernel-cache + boot-record upload + GPU-class visibility).
+const DEFAULT_IMAGE: &str = "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b";
 
 /// Default GPU class. RTX 3060 = mid-tier consumer, cheapest predictable
 /// price tier on Salad's pool. ~$0.10/h at time of writing.

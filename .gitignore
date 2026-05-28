@@ -25,6 +25,7 @@ scripts/cvvdp_goldens/out/
 # `cp target/release/zen-metrics ./zen-metrics-vNN`. Never commit it.
 /zen-metrics
 /zen-metrics-v*
+/zen-sweep-worker
 # Anchor to root: the docker-build artifact at /vastai-fleet, NOT
 # the source directory crates/vastai-fleet/.
 /vastai-fleet
