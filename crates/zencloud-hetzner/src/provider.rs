@@ -129,6 +129,11 @@ pub struct HetznerProviderHandle {
     /// used as a fast-path on teardown if the label selector ever
     /// disagrees with what we created.
     created_ids: Vec<i64>,
+    /// R2 prefix the queue files land under, derived from
+    /// `SWEEP_RUN_ID` at provision time (matches the cloud-init's
+    /// CHUNKS_QUEUE_PREFIX). Set by `provision`; consumed by
+    /// `push_jobs`.
+    cached_sweep_prefix: Option<String>,
 }
 
 impl HetznerProviderHandle {
@@ -138,6 +143,7 @@ impl HetznerProviderHandle {
             api,
             cfg,
             created_ids: Vec::new(),
+            cached_sweep_prefix: None,
         }
     }
 
@@ -262,6 +268,7 @@ impl ProviderHandle for HetznerProviderHandle {
             );
             self.created_ids.push(srv.id);
         }
+        self.cached_sweep_prefix = Some(format!("runs/{sweep_id}/queue/"));
         Ok(GroupId(self.cfg.group_name.clone()))
     }
 
@@ -367,12 +374,24 @@ impl ProviderHandle for HetznerProviderHandle {
     async fn push_jobs(&mut self, _group: &GroupId, jobs: &[QueueJob]) -> Result<()> {
         // Workers poll R2 at `runs/<sweep_id>/queue/<chunk_id>.json`.
         // Push = write one JSON object per chunk under that prefix.
-        // Sweep id is the group_name (the orchestrator uses the same).
-        // Worker-side idempotency on the omni sidecar reconciles a
-        // duplicate push (e.g. TTL re-dispatch / speculative).
-        let prefix = format!("runs/{}/queue/", self.cfg.group_name);
+        //
+        // We use the FIRST job's chunk_id's prefix to determine the
+        // sweep id — pulling it from the cached prefix the provider
+        // stored at provision-time. This keeps push_jobs consistent
+        // with the cloud-init's CHUNKS_QUEUE_PREFIX env var (which is
+        // built from SWEEP_RUN_ID, not from the group_name).
+        //
+        // The sweep_id was injected into ProvisionSpec.env by the
+        // launcher; we cached it in `provision` so push_jobs (called
+        // after provision) sees it. If provision wasn't called yet
+        // (e.g. test harness pushing before provision), fall back to
+        // group_name so writes at least land somewhere predictable.
+        let sweep_prefix = self
+            .cached_sweep_prefix
+            .clone()
+            .unwrap_or_else(|| format!("runs/{}/queue/", self.cfg.group_name));
         for j in jobs {
-            let key = format!("{prefix}{}.json", j.chunk_id);
+            let key = format!("{sweep_prefix}{}.json", j.chunk_id);
             // The payload IS the chunk JSON; the worker reads it raw.
             let body = serde_json::to_vec(&j.payload).with_context(|| {
                 format!("serialize chunk payload for {}", j.chunk_id)
