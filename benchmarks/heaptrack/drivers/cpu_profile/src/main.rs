@@ -39,10 +39,19 @@
 //!                        differences (here: identical), not the
 //!                        per-strip re-precompute overhead.
 //!
-//! For metrics that do not implement a mode (everything except zensim
-//! for the two strip modes), the driver prints `GAP:<metric>:<mode>`
-//! to stdout and exits 2 so the calling harness records the gap
-//! without running heaptrack on a degenerate call.
+//! For metrics that do not implement a mode, the driver prints
+//! `GAP:<metric>:<mode>` to stdout and exits 2 so the calling harness
+//! records the gap without running heaptrack on a degenerate call.
+//!
+//! Task #139 (2026-05-28): strip + warm_ref_strip are now wired to the
+//! REAL crate APIs for every metric that has them:
+//!   - cvvdp:  score_strip / score_with_warm_ref_strip (Path A, #127)
+//!   - ssim2:  compute_ssimulacra2_strip / Ssimulacra2Reference::compare_strip (0.8.1)
+//!   - butter: butteraugli_strip / ButteraugliReference::compare_strip_srgb (0.9.4)
+//!   - iwssim: score_strip / score_with_warm_ref_strip
+//!   - zensim: compute_with_ref_streaming_strips_default (hoisted ref)
+//! Only dssim emits GAP for strip / warm_ref_strip — dssim-core 3.4 has
+//! no strip walker (genuinely NOT_SUPPORTED, not a stub).
 
 use std::env;
 use std::process::ExitCode;
@@ -139,6 +148,10 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
     use fast_ssim2::Ssimulacra2Reference;
     use imgref::ImgRef;
+    // Strip body height — picks 512 to match cvvdp/iwssim's
+    // STRIP_H_BODY_DEFAULT. fast-ssim2 takes an explicit strip_height; it
+    // has no separate "body" const (only HALO_ROWS_DEFAULT = 96).
+    const STRIP_H: u32 = 512;
     let wu = w as usize;
     let hu = h as usize;
     match mode {
@@ -156,7 +169,25 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             let v = pre.compare(di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:ssim2:{mode}")),
+        "strip" => {
+            // fast-ssim2 0.8.1 real strip walker: bounds peak working set
+            // to O(strip_height * width). Cold (each call builds both
+            // sides). ImgRef<RGB8> satisfies the ToLinearRgb bound.
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let v = fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H)
+                .map_err(|e| format!("{e:?}"))?;
+            Ok(v)
+        }
+        "warm_ref_strip" => {
+            // Cached-ref + strip-bounded dist: ref held in the
+            // Ssimulacra2Reference, dist strip-walked.
+            let ri = ImgRef::new(rgb_pix(r), wu, hu);
+            let di = ImgRef::new(rgb_pix(d), wu, hu);
+            let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
+            let v = pre.compare_strip(di, STRIP_H).map_err(|e| format!("{e:?}"))?;
+            Ok(v)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
@@ -196,6 +227,10 @@ fn run_dssim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
 fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
     use butteraugli::{ButteraugliParams, ButteraugliReference};
     use imgref::ImgRef;
+    // Strip body height — 512 to match cvvdp/iwssim. butteraugli takes an
+    // explicit strip_height; it has no separate "body" const
+    // (only HALO_ROWS_DEFAULT = 64).
+    const STRIP_H: u32 = 512;
     let wu = w as usize;
     let hu = h as usize;
     let p = ButteraugliParams::new();
@@ -211,7 +246,7 @@ fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             Ok(result.score)
         }
         "warm_ref" => {
-            // Phase 9.Y: butteraugli 0.9.2 has a proper warm-ref API
+            // Phase 9.Y: butteraugli 0.9.x has a proper warm-ref API
             // (`ButteraugliReference::new(&[u8], ...)` + `.compare(&[u8])`).
             // The original heaptrack driver compared `full` to itself
             // here — fixed now so warm_ref measures the cached path the
@@ -221,7 +256,29 @@ fn run_butter(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             let result = pre.compare(d).map_err(|e| format!("compare: {e:?}"))?;
             Ok(result.score)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:butter:{mode}")),
+        "strip" => {
+            // butteraugli 0.9.4 real strip walker (sRGB u8 entry). Cold:
+            // both sides converted per call, peak bounded to the strip.
+            let rb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
+            let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+            let ri = ImgRef::new(rb, wu, hu);
+            let di = ImgRef::new(db, wu, hu);
+            let result = butteraugli::butteraugli_strip(ri, di, &p, STRIP_H)
+                .map_err(|e| format!("{e:?}"))?;
+            Ok(result.score)
+        }
+        "warm_ref_strip" => {
+            // Cached-ref + strip-bounded dist: ref held in the
+            // ButteraugliReference, dist strip-walked via compare_strip_srgb.
+            let pre = ButteraugliReference::new(r, wu, hu, p.clone())
+                .map_err(|e| format!("ButteraugliReference::new: {e:?}"))?;
+            let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+            let di = ImgRef::new(db, wu, hu);
+            let result = pre
+                .compare_strip_srgb(di, STRIP_H)
+                .map_err(|e| format!("{e:?}"))?;
+            Ok(result.score)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
