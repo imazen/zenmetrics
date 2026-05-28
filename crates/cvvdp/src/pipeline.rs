@@ -594,15 +594,19 @@ impl Cvvdp {
         let k_split = mode_b_k_split(h_body, n_levels as u32) as usize;
 
         // Step 1: build full-image gauss pyramids for both sides into
-        // weber_cache_ref / weber_cache_dist. We build:
+        // weber_cache_ref / weber_cache_dist. Interleave gauss build
+        // + DKL drop so each plane's 64 MB persists only as long as
+        // needed (it's consumed by the gauss reduce + then can be
+        // dropped — the gauss pyramid contains all downstream-required
+        // info).
+        //
+        // We build:
         //   - cache_*[0].gauss_img: pyramid of achromatic plane
         //   - cache_*[1].gauss_img: pyramid of RG plane
         //   - cache_*[2].gauss_img: pyramid of VY plane
         //   - cache_*[0].gauss_l:  pyramid of achromatic plane (the
         //     L_bkg reference shared across all 3 channels)
-        // The redundant gauss_l in cache_*[1/2] is NOT built — we save
-        // 4 × ~85 MB at 16 MP. Deep-level processing reads gauss_l from
-        // cache_*[0] explicitly.
+        // The redundant gauss_l in cache_*[1/2] is NOT built.
         {
             let Scratch {
                 ref_a,
@@ -615,7 +619,9 @@ impl Cvvdp {
                 weber_cache_dist,
                 ..
             } = &mut self.scratch;
-            // Ref side: 3 gauss_img pyramids + 1 gauss_l pyramid.
+            // Ref side: build ref_a's gauss_img + gauss_l simultaneously
+            // (both read ref_a), then drop ref_a. Then ref_rg gauss → drop
+            // ref_rg. Then ref_vy gauss → drop ref_vy.
             build_gauss_pyramid_into(
                 ref_a,
                 w,
@@ -632,6 +638,8 @@ impl Cvvdp {
                 &mut weber_cache_ref[0].scratch,
                 &mut weber_cache_ref[0].gauss_l,
             );
+            ref_a.clear();
+            ref_a.shrink_to_fit();
             build_gauss_pyramid_into(
                 ref_rg,
                 w,
@@ -640,6 +648,8 @@ impl Cvvdp {
                 &mut weber_cache_ref[1].scratch,
                 &mut weber_cache_ref[1].gauss_img,
             );
+            ref_rg.clear();
+            ref_rg.shrink_to_fit();
             build_gauss_pyramid_into(
                 ref_vy,
                 w,
@@ -648,9 +658,9 @@ impl Cvvdp {
                 &mut weber_cache_ref[2].scratch,
                 &mut weber_cache_ref[2].gauss_img,
             );
-            // Dist side: same shape (3 gauss_img + 1 gauss_l).
-            // `plane_a` here is DIST achromatic per
-            // `build_one_side_recycle`'s call shape.
+            ref_vy.clear();
+            ref_vy.shrink_to_fit();
+            // Dist side: same pattern.
             build_gauss_pyramid_into(
                 dist_a,
                 w,
@@ -667,6 +677,8 @@ impl Cvvdp {
                 &mut weber_cache_dist[0].scratch,
                 &mut weber_cache_dist[0].gauss_l,
             );
+            dist_a.clear();
+            dist_a.shrink_to_fit();
             build_gauss_pyramid_into(
                 dist_rg,
                 w,
@@ -675,6 +687,8 @@ impl Cvvdp {
                 &mut weber_cache_dist[1].scratch,
                 &mut weber_cache_dist[1].gauss_img,
             );
+            dist_rg.clear();
+            dist_rg.shrink_to_fit();
             build_gauss_pyramid_into(
                 dist_vy,
                 w,
@@ -683,6 +697,8 @@ impl Cvvdp {
                 &mut weber_cache_dist[2].scratch,
                 &mut weber_cache_dist[2].gauss_img,
             );
+            dist_vy.clear();
+            dist_vy.shrink_to_fit();
         }
 
         // Step 1b: release the gauss-build vscratch + z_v/z_h scratches
@@ -718,6 +734,27 @@ impl Cvvdp {
                 level.data.shrink_to_fit();
             }
             for level in self.scratch.weber_cache_dist[c].gauss_l.iter_mut() {
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+        }
+
+        // Step 1d: DKL planes were already dropped inline above as each
+        // channel's gauss pyramid completed.
+
+        // Step 1e: release gauss_l[0] for cache_*[0]. The strip-major
+        // loop reads gauss_l[k+1] for k=0..k_split-1 (= gauss_l[1..k_split])
+        // and the deep loop reads gauss_l[k] / gauss_l[k+1] for
+        // k=k_split..n_levels. gauss_l[0] is NEVER read after the
+        // gauss build. At 16 MP this saves 2 × 64 MB = 128 MB.
+        for c in [0_usize] {
+            if !self.scratch.weber_cache_ref[c].gauss_l.is_empty() {
+                let level = &mut self.scratch.weber_cache_ref[c].gauss_l[0];
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+            if !self.scratch.weber_cache_dist[c].gauss_l.is_empty() {
+                let level = &mut self.scratch.weber_cache_dist[c].gauss_l[0];
                 level.data.clear();
                 level.data.shrink_to_fit();
             }
