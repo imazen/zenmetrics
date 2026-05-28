@@ -70,7 +70,12 @@ cpu-ssim2 = ["bench", "dep:fast-ssim2", "dep:imgref"]
 cpu-dssim = ["bench", "dep:dssim-core", "dep:imgref", "dep:rgb"]
 cpu-butter = ["bench", "dep:butteraugli", "dep:imgref", "dep:rgb"]
 cpu-zensim = ["bench", "dep:zensim"]
-cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim"]
+# Phase 8g (2026-05-27): added in-tree `iwssim` CPU port (Python-IW-SSIM
+# faithful port with magetypes SIMD on the SSIM-stats hot loops). The
+# umbrella's `MetricKind::Iwssim` arm no longer surfaces
+# `CpuMetricUnavailable` when this feature is on.
+cpu-iwssim = ["bench", "dep:iwssim"]
+cpu-all = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
 [dependencies]
 thiserror = { workspace = true }
@@ -115,6 +120,8 @@ fast-ssim2 = { version = "0.8.0", optional = true, features = ["imgref"] }
 dssim-core = { workspace = true, optional = true }
 butteraugli = { workspace = true, optional = true }
 zensim = { workspace = true, optional = true }
+# Phase 8g: in-tree CPU IW-SSIM port.
+iwssim = { workspace = true, optional = true }
 
 # Shared support crates pulled in only when one of `cpu-ssim2`,
 # `cpu-dssim`, `cpu-butter` is on. `imgref` provides `ImgVec`/`ImgRef`

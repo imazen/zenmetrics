@@ -17,11 +17,14 @@
 //!
 //! `Backend::Cpu` is no longer universally rejected. The chooser
 //! evaluates CPU as a real candidate when the metric has a CPU
-//! reference (every metric except Iwssim — see `docs/CPU_BACKENDS.md`).
+//! reference. Phase 8g (2026-05-27) landed the iwssim CPU port from
+//! Python-IW-SSIM, so all six metrics now expose a CPU backend; the
+//! historical `CpuMetricUnavailable` rejection is unreachable for
+//! ordinary callers. The reason variant is retained for forwards
+//! compatibility with future CPU-only-blocking metrics. See
+//! `docs/CPU_BACKENDS.md`.
 //! CPU candidates report `vram_mib = 0` since they consume RAM, not
-//! VRAM. Metrics without a CPU reference surface
-//! [`RejectReason::CpuMetricUnavailable`] so the operator can see the
-//! decision in `considered`.
+//! VRAM.
 
 #![cfg(feature = "bench")]
 
@@ -238,8 +241,8 @@ const ALL_BACKENDS: [Backend; 4] = [
 
 /// Which backends a given metric supports. Matches the
 /// `backends_for_kind` table in `bench.rs` plus `Cpu` (Phase 6 wires
-/// per-metric CPU references — Iwssim has no clean upstream port and
-/// is omitted; see `docs/CPU_BACKENDS.md`).
+/// per-metric CPU references — Phase 8g landed the Iwssim port so
+/// every metric in this release surfaces a CPU backend).
 fn supported_backends(metric: MetricKind) -> &'static [Backend] {
     match metric {
         // cvvdp uniquely supports StripPair via its single-pass
@@ -247,12 +250,13 @@ fn supported_backends(metric: MetricKind) -> &'static [Backend] {
         MetricKind::Cvvdp => &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu],
         // zensim has a fused full-image kernel only. CPU reference: zensim.
         MetricKind::Zensim => &[Backend::GpuFull, Backend::Cpu],
-        // Butter / Ssim2 / Dssim each have a CPU reference crate.
-        MetricKind::Butter | MetricKind::Ssim2 | MetricKind::Dssim => {
+        // Butter / Ssim2 / Dssim / Iwssim each have a CPU reference crate.
+        MetricKind::Butter
+        | MetricKind::Ssim2
+        | MetricKind::Dssim
+        | MetricKind::Iwssim => {
             &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
         }
-        // Iwssim has no clean CPU port; GPU only.
-        MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip],
     }
 }
 
@@ -261,8 +265,6 @@ fn supported_backends(metric: MetricKind) -> &'static [Backend] {
 /// to surface `CpuMetricUnavailable` for metrics whose CPU feature is
 /// disabled at compile time, rather than picking CPU and having the
 /// executor crash at construct time.
-///
-/// **Iwssim**: always returns `false` — no CPU reference exists.
 fn cpu_feature_enabled_for(metric: MetricKind) -> bool {
     match metric {
         MetricKind::Cvvdp => cfg!(feature = "cpu-cvvdp"),
@@ -270,7 +272,7 @@ fn cpu_feature_enabled_for(metric: MetricKind) -> bool {
         MetricKind::Dssim => cfg!(feature = "cpu-dssim"),
         MetricKind::Butter => cfg!(feature = "cpu-butter"),
         MetricKind::Zensim => cfg!(feature = "cpu-zensim"),
-        MetricKind::Iwssim => false,
+        MetricKind::Iwssim => cfg!(feature = "cpu-iwssim"),
     }
 }
 

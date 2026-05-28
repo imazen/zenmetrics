@@ -6676,6 +6676,7 @@ dependencies = [
  "dssim-core",
  "fast-ssim2 0.8.0",
  "imgref",
+ "iwssim",
  "log",
  "raw-cpuid",
  "rayon",

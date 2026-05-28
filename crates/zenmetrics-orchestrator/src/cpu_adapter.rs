@@ -14,7 +14,7 @@
 //! | Dssim   | `dssim-core`            | `cpu-dssim`    |
 //! | Butter  | `butteraugli`           | `cpu-butter`   |
 //! | Zensim  | `zensim`                | `cpu-zensim`   |
-//! | Iwssim  | *(no clean reference)*  | —              |
+//! | Iwssim  | `iwssim` (in-tree, 8g)  | `cpu-iwssim`   |
 //!
 //! Phase 8h (2026-05-27): the ssim2 row was switched from upstream
 //! `ssimulacra2 0.5` to Imazen's SIMD-accelerated `fast-ssim2 0.8`.
@@ -23,9 +23,11 @@
 //! and the call surface (`compute` / `set_reference` / `compute_with_cached_reference`)
 //! is untouched. See `docs/CPU_BACKENDS.md` for the rationale.
 //!
-//! Iwssim returns [`CpuAdapterError::Unavailable`] at construction time —
-//! the chooser advances the OOM ladder to the next backend. See
-//! `docs/CPU_BACKENDS.md` for the upstream-research notes.
+//! Phase 8g (2026-05-27): added `iwssim` — a pure-Rust CPU port of the
+//! canonical Python-IW-SSIM reference (Wang & Li 2011) with magetypes
+//! SIMD on the SSIM-stats hot loops. The historical `Unavailable`
+//! arm for iwssim is retained for build configurations that omit the
+//! `cpu-iwssim` feature.
 //!
 //! ## Cached-reference semantics
 //!
@@ -111,13 +113,16 @@ enum CpuAdapterState {
     Butter(ButterState),
     #[cfg(feature = "cpu-zensim")]
     Zensim(ZensimState),
+    #[cfg(feature = "cpu-iwssim")]
+    Iwssim(Box<iwssim::Iwssim>),
     /// Built without ANY CPU backend feature, or built without the
     /// specific feature for `metric`. The compute path returns
     /// [`CpuAdapterError::FeatureNotEnabled`].
     #[allow(dead_code)]
     FeatureDisabled(MetricKind),
-    /// Metric has no CPU reference in this initial release (Iwssim).
-    /// Calls return [`CpuAdapterError::Unavailable`].
+    /// Reserved for any future metric whose CPU backend isn't yet
+    /// implemented. Phase 8g landed iwssim; this arm is currently
+    /// unreachable for ordinary callers but kept for symmetry.
     #[allow(dead_code)]
     Unavailable(MetricKind),
 }
@@ -227,8 +232,7 @@ impl std::error::Error for CpuAdapterError {}
 impl CpuAdapter {
     /// Build a CPU adapter for `metric` at `width × height` with
     /// `params`. Returns `Err(FeatureNotEnabled)` when the matching
-    /// `cpu-<metric>` feature is off, or `Err(Unavailable)` when the
-    /// metric has no CPU reference in this release (Iwssim).
+    /// `cpu-<metric>` feature is off in the current build.
     pub fn new(
         metric: MetricKind,
         width: u32,
@@ -241,12 +245,7 @@ impl CpuAdapter {
             MetricKind::Dssim => construct_dssim(width, height, params),
             MetricKind::Butter => construct_butter(width, height, params),
             MetricKind::Zensim => construct_zensim(width, height, params),
-            MetricKind::Iwssim => {
-                // No upstream CPU reference for IW-SSIM that's clean to
-                // wire (see docs/CPU_BACKENDS.md). Surface as
-                // Unavailable so the ladder advances rather than failing.
-                Err(CpuAdapterError::Unavailable(metric))
-            }
+            MetricKind::Iwssim => construct_iwssim(width, height, params),
         }?;
         Ok(Self {
             metric,
@@ -295,6 +294,13 @@ impl CpuAdapter {
             CpuAdapterState::Butter(_) => false,
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(_) => false,
+            // iwssim has a true warm path: `warm_reference` caches the
+            // 5-level Laplacian pyramid + per-scale Gaussian bands; the
+            // distorted-side pyramid still has to build on every call,
+            // but the ref-side eigendecomposition (10×10 covariance,
+            // 5 scales) is hoisted out of the inner loop.
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(_) => true,
             CpuAdapterState::FeatureDisabled(_) | CpuAdapterState::Unavailable(_) => false,
         }
     }
@@ -329,6 +335,8 @@ impl CpuAdapter {
             CpuAdapterState::Butter(s) => compute_butter(s, ref_bytes, dist_bytes),
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(s) => compute_zensim(s, ref_bytes, dist_bytes),
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(c) => compute_iwssim(c, ref_bytes, dist_bytes),
             CpuAdapterState::FeatureDisabled(k) => {
                 Err(CpuAdapterError::FeatureNotEnabled(*k))
             }
@@ -382,6 +390,10 @@ impl CpuAdapter {
                 s.cached_ref = Some(ref_bytes.to_vec());
                 Ok(())
             }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(c) => c
+                .warm_reference(ref_bytes)
+                .map_err(|e| CpuAdapterError::Failed(e.to_string())),
             CpuAdapterState::FeatureDisabled(k) => {
                 Err(CpuAdapterError::FeatureNotEnabled(*k))
             }
@@ -456,6 +468,18 @@ impl CpuAdapter {
                     })?
                     .clone();
                 compute_zensim(s, &r, dist_bytes)
+            }
+            #[cfg(feature = "cpu-iwssim")]
+            CpuAdapterState::Iwssim(c) => {
+                if !c.has_warm_reference() {
+                    return Err(CpuAdapterError::Failed(
+                        "iwssim: no cached reference; call set_reference first".into(),
+                    ));
+                }
+                let result = c
+                    .score_with_warm_ref(dist_bytes)
+                    .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+                Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
             }
             CpuAdapterState::FeatureDisabled(k) => {
                 Err(CpuAdapterError::FeatureNotEnabled(*k))
@@ -784,6 +808,55 @@ fn compute_zensim(
 }
 
 // ---------------------------------------------------------------------------
+// iwssim wiring (Phase 8g)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-iwssim")]
+fn construct_iwssim(
+    width: u32,
+    height: u32,
+    _params: &MetricParams,
+) -> Result<CpuAdapterState, CpuAdapterError> {
+    // The umbrella has no per-metric IwssimParams variant (the GPU
+    // path uses iwssim_gpu::IwssimParams which is feature-gated).
+    // The CPU adapter uses crate defaults — production callers tuning
+    // IW-SSIM should configure via the typed API in `iwssim::Iwssim`
+    // directly. `allow_small = false` mirrors the GPU port's default
+    // (sub-176 inputs are rejected); the OOM ladder downgrades to a
+    // smaller backend rather than tiling.
+    let scorer = iwssim::Iwssim::new(width, height)
+        .map_err(|e| CpuAdapterError::Failed(format!("iwssim::Iwssim::new: {e}")))?;
+    Ok(CpuAdapterState::Iwssim(Box::new(scorer)))
+}
+
+#[cfg(not(feature = "cpu-iwssim"))]
+#[allow(unused_variables)]
+fn construct_iwssim(
+    _width: u32,
+    _height: u32,
+    _params: &MetricParams,
+) -> Result<CpuAdapterState, CpuAdapterError> {
+    Err(CpuAdapterError::FeatureNotEnabled(MetricKind::Iwssim))
+}
+
+#[cfg(feature = "cpu-iwssim")]
+fn compute_iwssim(
+    c: &mut iwssim::Iwssim,
+    ref_bytes: &[u8],
+    dist_bytes: &[u8],
+) -> Result<Score, CpuAdapterError> {
+    let result = c
+        .score(ref_bytes, dist_bytes)
+        .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+    Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
+}
+
+#[cfg(feature = "cpu-iwssim")]
+fn iwssim_cpu_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+// ---------------------------------------------------------------------------
 // Compile-time fallthrough: when ALL cpu-* features are off, the
 // constructors above route to FeatureNotEnabled. To keep the dispatch
 // uniform we declare versions for cvvdp_cpu_version / dssim_cpu_version
@@ -805,13 +878,34 @@ mod tests {
     // tables / cubecl / linker symbols into the test binary.
 
     #[test]
-    fn iwssim_is_unavailable() {
+    fn iwssim_constructs_or_feature_not_enabled() {
         let params = MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
-        let r = CpuAdapter::new(MetricKind::Iwssim, 64, 64, &params);
-        match r {
-            Err(CpuAdapterError::Unavailable(MetricKind::Iwssim)) => {}
-            Err(other) => panic!("expected Unavailable(Iwssim), got error {other:?}"),
-            Ok(_) => panic!("expected Unavailable(Iwssim), got Ok"),
+        // Default test config uses 256×256 (above the 176-px floor
+        // required by Iwssim's algorithm).
+        let r = CpuAdapter::new(MetricKind::Iwssim, 256, 256, &params);
+        if cfg!(feature = "cpu-iwssim") {
+            match r {
+                Ok(adapter) => {
+                    assert_eq!(adapter.metric(), MetricKind::Iwssim);
+                    // iwssim does have a true warm-reference path
+                    // (refs's pyramid + per-scale Cu eig hoisted).
+                    assert!(adapter.supports_cached_ref(),
+                        "iwssim should advertise cached-ref support");
+                }
+                Err(e) => panic!("expected Ok(adapter) with cpu-iwssim enabled, got {e:?}"),
+            }
+        } else {
+            // Build without cpu-iwssim feature → adapter must surface
+            // FeatureNotEnabled so the ladder can advance.
+            match r {
+                Err(CpuAdapterError::FeatureNotEnabled(MetricKind::Iwssim)) => {}
+                Err(other) => panic!(
+                    "expected FeatureNotEnabled(Iwssim) without cpu-iwssim, got error {other:?}"
+                ),
+                Ok(_) => panic!(
+                    "expected FeatureNotEnabled(Iwssim) without cpu-iwssim, got Ok"
+                ),
+            }
         }
     }
 

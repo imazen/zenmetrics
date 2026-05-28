@@ -264,8 +264,15 @@ fn backends_for_kind(kind: MetricKind) -> &'static [Backend] {
                 &[Backend::GpuFull, Backend::GpuStrip]
             }
         }
-        // Iwssim has no CPU reference upstream.
-        MetricKind::Iwssim => &[Backend::GpuFull, Backend::GpuStrip],
+        // Phase 8g: iwssim now ships an in-tree CPU port (pure Rust
+        // port of Python-IW-SSIM with magetypes SIMD).
+        MetricKind::Iwssim => {
+            if cfg!(feature = "cpu-iwssim") {
+                &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
+            } else {
+                &[Backend::GpuFull, Backend::GpuStrip]
+            }
+        }
     }
 }
 

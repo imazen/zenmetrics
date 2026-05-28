@@ -14,7 +14,33 @@ added, swapped, or marked unavailable.
 | Dssim      | `dssim-core`      | `cpu-dssim`     | yes (`DssimImage` cache) | Multi-scale LAB; reuses prepared image. |
 | Butter     | `butteraugli`     | `cpu-butter`    | no (recompute)     | `butteraugli()` is one-shot. |
 | Zensim     | `zensim`          | `cpu-zensim`    | no (recompute)     | `Zensim::compute()` is one-shot. |
-| Iwssim     | *(none)*          | —               | —                  | No clean CPU reference upstream. Chooser routes around. |
+| Iwssim     | `iwssim` (in-tree, 8g) [^iwssim-8g] | `cpu-iwssim`    | yes (`warm_reference`) | Pure-Rust port of Python-IW-SSIM with magetypes SIMD; CPU↔Python parity ≤8e-5 in `[0, 1]` score space. |
+
+[^iwssim-8g]: Phase 8g (2026-05-27) added an in-tree `iwssim` CPU port,
+    replacing the prior honest-stop. The port is a faithful translation
+    of the canonical Python-IW-SSIM reference
+    (<https://github.com/Jack-guo-xy/Python-IW-SSIM>, commit `f9de37cd`)
+    with magetypes SIMD on the SSIM-stats hot loops (11×11 separable
+    Gaussian, per-pixel cs/l combine, weighted-sum pooling). The
+    Laplacian-pyramid + 3×3 box-stat + IW-weight-map paths remain
+    scalar this release; SIMD-izing those is queued for a follow-up
+    when the bench data justifies the effort.
+
+    Parity validation: 7 deterministic synthetic fixtures (XorShift64-
+    seeded RGB at 176/256/320 × identical/offset/shift1px/swap
+    distortions) captured from the unmodified Python reference. The
+    Rust port reproduces all 7 scores to within `max |diff| 8e-5`
+    in `[0, 1]` score space — far below the documented 5e-3 tolerance
+    for distorted pairs. See `crates/iwssim/goldens/` for the manifest
+    and `crates/iwssim/tests/parity_python.rs` for the harness.
+
+    Cached-reference semantics: `warm_reference` builds the reference's
+    Laplacian pyramid + per-scale Gaussian bands once;
+    `score_with_warm_ref` then only has to build the distorted-side
+    pyramid (the per-scale 10×10 covariance eigendecomposition is
+    hoisted out of the inner loop). Speedup on reference-reuse
+    workloads is roughly 1.5× (pyramid build dominates over the
+    eigendecomp).
 
 [^ssim2-8h]: Phase 8h (2026-05-27) replaced the original `ssimulacra2`
     0.5 wiring (from Phase 6, commit `0fc139a3`) with Imazen's
@@ -39,39 +65,47 @@ added, swapped, or marked unavailable.
   workers that want the fallback ladder must enable explicitly:
   `--features cuda,cpu-all`.
 
-## Iwssim honest-stop rationale
+## Iwssim CPU port (Phase 8g, 2026-05-27)
 
-There is no clean CPU reference crate for IW-SSIM in the wider Rust
-ecosystem. The original IW-SSIM paper has a MATLAB implementation
-(Wang et al., 2011) and `iwssim-gpu` ports the algorithm directly. We
-deliberately did NOT spend the implementation budget porting it to CPU
-in Phase 6 because:
+Phase 6 documented Iwssim as having "no clean CPU reference upstream"
+and the chooser surfaced `CpuMetricUnavailable` for the Cpu candidate.
+Phase 8g closes that gap: the in-tree `iwssim` crate is a pure-Rust
+port of the canonical Python-IW-SSIM reference
+(<https://github.com/Jack-guo-xy/Python-IW-SSIM>), enabled via the
+`cpu-iwssim` feature.
 
-1. The orchestrator's CPU backend is a fallback for VRAM-constrained
-   environments. Iwssim is a parity-style metric with relatively low
-   production volume; sites that run out of VRAM on Iwssim can either
-   pick a different metric or move to a higher-VRAM machine.
-2. Writing a from-scratch CPU port without a published reference
-   implementation to validate against risks shipping a metric whose
-   scores diverge from the GPU path — exactly the failure mode the
-   CLAUDE.md "zero tolerance for precision loss" rule flags.
+What changed:
 
-What happens at runtime when a caller asks for `MetricKind::Iwssim`
-with `Backend::Cpu`:
+- `chooser.rs` — `supported_backends(Iwssim)` now includes
+  `Backend::Cpu`; `cpu_feature_enabled_for(Iwssim)` returns
+  `cfg!(feature = "cpu-iwssim")`.
+- `cpu_adapter.rs` — new `CpuAdapterState::Iwssim` variant boxing an
+  `iwssim::Iwssim` scorer; `compute` / `set_reference` /
+  `compute_with_cached_reference` all dispatch through it.
+  `supports_cached_ref(Iwssim) == true`.
+- `bench.rs` — `backends_for_kind(Iwssim)` adds `Backend::Cpu` when
+  the `cpu-iwssim` feature is on.
+- `Cargo.toml` — adds `cpu-iwssim = ["bench", "dep:iwssim"]` and
+  bundles it into `cpu-all`.
 
-- The chooser surfaces `RejectReason::CpuMetricUnavailable` for the
-  Cpu candidate — visible in `BackendChoice::considered`.
-- The OOM-fallback ladder advances past Cpu to the next available
-  backend (which, for Iwssim, is none beyond GpuStrip).
-- If both GPU candidates also fail, `run_single` returns
-  `OrchestratorError::FullyExhausted`. The caller can:
-  - Try a smaller image size
-  - Use a different metric
-  - Move to a higher-VRAM GPU
+Sub-176-px inputs are still rejected by `iwssim::Iwssim::new`
+(matching the GPU port's default). The OOM ladder for tiny inputs
+behaves the same as before: no `Backend::Cpu` candidate is built and
+the operator sees the chooser route around. To opt into tiling at
+construction, callers can configure the typed API directly:
 
-If upstream eventually publishes a clean Rust CPU implementation
-(e.g., `iwssim-core` on crates.io) we will wire it behind a new
-`cpu-iwssim` feature flag in a follow-up release.
+```rust
+use iwssim::{Iwssim, IwssimParams};
+let scorer = Iwssim::with_params(w, h, IwssimParams::allow_small(true))?;
+```
+
+The umbrella `MetricParams::Iwssim` doesn't currently surface this
+knob — production sweep workers running large images don't hit it.
+
+The historical `CpuMetricUnavailable` `RejectReason` variant is
+retained for forwards compatibility with any future CPU-only-blocking
+metric. With the current six metrics in the umbrella it's
+unreachable.
 
 ## Cached-reference semantics
 
@@ -98,6 +132,13 @@ Per-crate cached-ref behavior:
   pipeline. Speedup ~2× on reference-reuse workloads. Replaces the
   Phase 6 byte-stash fallback that the upstream `ssimulacra2 0.5`
   wiring required.
+- **iwssim** (`supports_cached_ref = true`, Phase 8g): caches the
+  reference's 5-level Laplacian pyramid + per-scale Gaussian bands
+  (latter for the IW parent-band `imenlarge2` lookup). The per-scale
+  10×10 covariance eigendecomposition is hoisted out of the
+  inner loop. The distorted-side pyramid still has to be rebuilt on
+  every call; speedup is roughly ~1.5× on reference-reuse workloads
+  (pyramid build dominates).
 - **butteraugli**, **zensim**
   (`supports_cached_ref = false`): no upstream cached-ref API. The
   adapter caches the *bytes* of the reference so the cached-ref call
@@ -117,6 +158,7 @@ RAM workstation, peak resident-set during compute):
 |---------|-------------|--------------|---------------|
 | cvvdp   | ~5-7        | ~20 MiB      | ~120 MiB      |
 | zensim  | ~10-15      | ~40 MiB      | ~250 MiB      |
+| iwssim  | ~12-20      | ~50 MiB      | ~300 MiB      |
 | butter  | ~30-40      | ~100 MiB     | ~600 MiB      |
 | dssim   | ~40         | ~120 MiB     | ~700 MiB      |
 | ssim2   | ~50         | ~150 MiB     | ~850 MiB      |
