@@ -1,0 +1,50 @@
+# cvvdp CPU strip walker — 40 MP heaptrack measurement (real, not extrapolated)
+#
+# Measured 2026-05-28 to replace the prior linear-extrapolation claim
+# ("40 MP fits at 3.85 GB by linear extrapolation from 16 MP") that
+# closed task #127. Per global CLAUDE.md: extrapolation in source-
+# informing measurements is forbidden — always run the real cell.
+#
+# Host:        lilith (water-cooled AMD Ryzen 9 7950X, 49 GiB RAM)
+# Kernel:      Linux 6.6.114.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC
+# Rust:        rustc 1.95.0 (59807616e 2026-04-14)
+# Heaptrack:   1.3.0 (binary protocol v3)
+# Build:       cargo build --release --bin cpu-profile
+#              (workspace target/, lto=false, codegen-units=1, debug=1)
+# Repo:        zenmetrics
+# Parent commit (master@origin):  5979e084594473a535b308a113555ab404a94d40
+# Driver:      benchmarks/heaptrack/drivers/cpu_profile/src/main.rs
+# Synth seed:  deterministic XorShift-ish (see synth_pair in driver:
+#                rr = (x*17+y*5)%251 + 40
+#                gg = (x*11+y*13)%247 + 40
+#                bb = (x*7+y*19)%241 + 40
+#              dist = ref with (-8, -4, +12) per channel saturating)
+# Size:        7680 × 5184 (39.81 MP) — task's "40 MP" target
+#
+# Modes:
+#   full            — Cvvdp::new + Cvvdp::score (cold path)
+#   strip           — Cvvdp::new + Cvvdp::score_strip (h_body=512)
+#   warm_ref        — Cvvdp::new + warm_reference + score_with_warm_ref
+#   warm_ref_strip  — Cvvdp::new + warm_reference + score_with_warm_ref_strip
+#                     (h_body=512)
+#
+# Strip-mode note (from driver doc): the current `score_strip` and
+# `score_with_warm_ref_strip` only walk the pool stage in strips —
+# weber pyramid + masking + d_scratch are STILL full-image-sized.
+# This matches the GPU's currently-shipped strip walker. The
+# k_split walker (chunks 4 + 6 in CPU_KSPL_HANDOFF_chunks_4_and_6.md)
+# is the work that would reduce peak heap at strip modes; until it
+# lands, strip ≡ full and warm_ref_strip ≡ warm_ref for memory.
+#
+# Output:
+#   crates/cvvdp/benchmarks/cpu_kspl_40mp_2026-05-28.tsv
+#   benchmarks/heaptrack/cvvdp_{full,strip,warm_ref,warm_ref_strip}_40mp_2026-05-28.zst
+#
+# Replay:
+#   heaptrack target/release/cpu-profile cvvdp <mode> 7680 5184
+#   heaptrack_print -M /tmp/x.massif <out>.zst > /dev/null
+#   grep ^mem_heap_B /tmp/x.massif | awk -F= '{print $2}' | sort -n | tail -1
+#
+# Sanity:
+#   All four modes produced identical JOD 9.456094741821289 — score parity
+#   intact across cold/warm and full/strip variants.
