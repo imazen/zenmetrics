@@ -1341,6 +1341,174 @@ mod tests {
         );
     }
 
+    /// Phase 9.Z.B follow-on (2026-05-28): verify ssim2 strip walker
+    /// produces a finite score and roughly tracks the full-image path.
+    /// The strip walker's score may differ by atomic-tolerance vs full
+    /// (~1e-2 on the 0..100 scale at the test size) — guard the
+    /// magnitude of the divergence rather than expecting bit-exact.
+    #[test]
+    #[cfg(feature = "cpu-ssim2")]
+    fn ssim2_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Ssim2).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Ssim2, 256, 256, &params)
+            .expect("cpu-ssim2 adapter constructs");
+        assert!(
+            adapter.supports_strip(),
+            "ssim2 should report strip support after Phase 9.Z.B"
+        );
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xe5_55_1a_22_u64);
+        let strip_score = adapter
+            .compute_strip(&ref_bytes, &dist_bytes, 128)
+            .expect("ssim2 strip compute");
+        let full_score = adapter
+            .compute(&ref_bytes, &dist_bytes)
+            .expect("ssim2 full compute");
+        assert!(
+            strip_score.value.is_finite() && full_score.value.is_finite(),
+            "both scores must be finite"
+        );
+        let diff = (strip_score.value - full_score.value).abs();
+        assert!(
+            diff < 0.5,
+            "ssim2 strip vs full diff < 0.5 (0..100 scale); strip={}, full={}, diff={}",
+            strip_score.value,
+            full_score.value,
+            diff
+        );
+    }
+
+    /// Phase 9.Z.B follow-on (2026-05-28): verify ssim2 warm-ref strip
+    /// path produces a finite score consistent with the warm-ref full
+    /// path.
+    #[test]
+    #[cfg(feature = "cpu-ssim2")]
+    fn ssim2_warm_ref_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Ssim2).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Ssim2, 256, 256, &params)
+            .expect("cpu-ssim2 adapter constructs");
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xe5_55_1a_44_u64);
+        adapter.set_reference(&ref_bytes).expect("set_reference");
+        let strip_score = adapter
+            .compute_with_cached_reference_strip(&dist_bytes, 128)
+            .expect("ssim2 warm strip compute");
+        let warm_score = adapter
+            .compute_with_cached_reference(&dist_bytes)
+            .expect("ssim2 warm full compute");
+        assert!(
+            strip_score.value.is_finite() && warm_score.value.is_finite(),
+            "both scores must be finite"
+        );
+        let diff = (strip_score.value - warm_score.value).abs();
+        assert!(
+            diff < 0.5,
+            "ssim2 warm strip vs warm full diff < 0.5; strip={}, warm={}, diff={}",
+            strip_score.value,
+            warm_score.value,
+            diff
+        );
+    }
+
+    /// Phase 9.Z.B follow-on (2026-05-28): butter strip walker
+    /// (butteraugli 0.9.3).
+    #[test]
+    #[cfg(feature = "cpu-butter")]
+    fn butter_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Butter).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Butter, 256, 256, &params)
+            .expect("cpu-butter adapter constructs");
+        assert!(
+            adapter.supports_strip(),
+            "butter should report strip support after Phase 9.Z.B"
+        );
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xb0_77_e1_2a);
+        let strip_score = adapter
+            .compute_strip(&ref_bytes, &dist_bytes, 128)
+            .expect("butter strip compute");
+        let full_score = adapter
+            .compute(&ref_bytes, &dist_bytes)
+            .expect("butter full compute");
+        assert!(
+            strip_score.value.is_finite() && full_score.value.is_finite(),
+            "both scores must be finite"
+        );
+        // butteraugli FIR strip parity is documented at ~1e-2 at 1024.
+        // Tighter at 256.
+        let diff = (strip_score.value - full_score.value).abs();
+        assert!(
+            diff < 0.05,
+            "butter strip vs full diff < 0.05; strip={}, full={}, diff={}",
+            strip_score.value,
+            full_score.value,
+            diff
+        );
+    }
+
+    /// Phase 9.Z.B follow-on (2026-05-28): butter warm-ref strip.
+    #[test]
+    #[cfg(feature = "cpu-butter")]
+    fn butter_warm_ref_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Butter).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Butter, 256, 256, &params)
+            .expect("cpu-butter adapter constructs");
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0xb0_77_e1_2b);
+        adapter.set_reference(&ref_bytes).expect("set_reference");
+        let strip_score = adapter
+            .compute_with_cached_reference_strip(&dist_bytes, 128)
+            .expect("butter warm strip compute");
+        let warm_score = adapter
+            .compute_with_cached_reference(&dist_bytes)
+            .expect("butter warm full compute");
+        assert!(
+            strip_score.value.is_finite() && warm_score.value.is_finite(),
+            "both scores must be finite"
+        );
+        let diff = (strip_score.value - warm_score.value).abs();
+        assert!(
+            diff < 0.05,
+            "butter warm strip vs warm full diff < 0.05; strip={}, warm={}, diff={}",
+            strip_score.value,
+            warm_score.value,
+            diff
+        );
+    }
+
+    /// Phase 9.Z.B follow-on (2026-05-28): zensim
+    /// compute_streaming_strips dispatch.
+    #[test]
+    #[cfg(feature = "cpu-zensim")]
+    fn zensim_strip_dispatch_works() {
+        let params = MetricParams::try_default_for(MetricKind::Zensim).unwrap();
+        let mut adapter = CpuAdapter::new(MetricKind::Zensim, 256, 256, &params)
+            .expect("cpu-zensim adapter constructs");
+        assert!(
+            adapter.supports_strip(),
+            "zensim should report strip support after Phase 9.Z.B"
+        );
+        let (ref_bytes, dist_bytes) = synth_iwssim_pair(256, 256, 0x2e_15_1d_77);
+        let strip_score = adapter
+            .compute_strip(&ref_bytes, &dist_bytes, 128)
+            .expect("zensim strip compute");
+        let full_score = adapter
+            .compute(&ref_bytes, &dist_bytes)
+            .expect("zensim full compute");
+        assert!(
+            strip_score.value.is_finite() && full_score.value.is_finite(),
+            "both scores must be finite"
+        );
+        // zensim is documented byte-exact equivalent to compute_with_ref
+        // within f64 epsilon — but compute() vs compute_streaming_strips
+        // is a slightly different reduction order. Allow ~1 unit on the
+        // 0..100 scale.
+        let diff = (strip_score.value - full_score.value).abs();
+        assert!(
+            diff < 1.0,
+            "zensim strip vs full diff < 1.0; strip={}, full={}, diff={}",
+            strip_score.value,
+            full_score.value,
+            diff
+        );
+    }
+
     #[test]
     #[cfg(feature = "cpu-cvvdp")]
     fn cvvdp_strip_stub_returns_same_as_full() {

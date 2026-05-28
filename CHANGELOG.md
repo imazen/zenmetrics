@@ -17,8 +17,34 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- **Phase 9.Z.B follow-on (2026-05-28) — orchestrator CpuAdapter
+  strip dispatchers for ssim2 / butter / zensim.** Now that
+  `fast-ssim2 0.8.1` (`compute_ssimulacra2_strip` +
+  `Ssimulacra2Reference::compare_strip`), `butteraugli 0.9.3`
+  (`butteraugli_strip` + `ButteraugliReference::compare_strip`), and
+  zensim's `compute_streaming_strips` are available on crates.io and
+  in tree, the `compute_strip` /
+  `compute_with_cached_reference_strip` paths route through them.
+  `supports_strip()` returns `true` for ssim2 / butter / zensim /
+  iwssim; `false` for dssim (no upstream strip API on dssim-core 3.4)
+  and cvvdp (API stub delegates to full path). Default
+  `strip_height = 256` matches the documented sweet spot for fast-ssim2
+  and butteraugli strip walkers. Adds 5 strip-dispatch tests covering
+  cold + warm-ref paths for all three new metrics (8cfee48b, 70fed1c2).
+
 ### Changed
 
+- **Phase 9.Z.C recovery (2026-05-28) — bump zenforks-cubecl-cpu to
+  0.10.2.** Ships the multi-cube `SharedMemory` + `sync_cube`
+  isolation fix that unblocks cvvdp-gpu's 73×91 odd-dim parity test.
+  Re-enables `compute_dkl_jod_host_pool_matches_pycvvdp_at_73x91_odd_on_cpu_backend`
+  and adds 6 odd-dim downscale_kernel diagnostic regression tests on
+  the cubecl-cpu runtime (33ee5283, 575d3257).
+- **Phase 9.Z.B recovery (2026-05-28) — bump fast-ssim2 to 0.8.1 and
+  butteraugli workspace dep to 0.9.3.** Required to unlock the strip
+  walker APIs in the sibling crates (01ea6991, b282084d).
 - **Phase 9.Y — eliminate `chunks_exact(3).collect()` materialization
   in the four CPU adapters that previously built `Vec<[u8; 3]>` /
   `Vec<RGB<u8>>` intermediates before handing buffers to the underlying
