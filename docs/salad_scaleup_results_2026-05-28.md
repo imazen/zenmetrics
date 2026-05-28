@@ -387,6 +387,78 @@ group that had already stopped. The fix is in this commit.
   `s3://zen-tuning-ephemeral/runs/scaleup-20260528T081005/` (Run 3),
   `s3://zen-tuning-ephemeral/runs/scaleup-20260528T082314/` (Run 4)
 
+## Run 5 (2026-05-28, post-orchestrator-wire-through + multi-class) — pool still starved
+
+**Image under test**: `ghcr.io/imazen/zen-metrics-sweep-salad:v5-orchestrator`
+(sha-mirror `v5-orchestrator-6187c5c6`,
+`sha256:5b753ae29393dd0d7ac40fd41e2136f35310cac491b80a0588df1f7820fe69e2`).
+Two code deltas vs v4:
+
+- Phase A: the sweep-worker's inline path now passes a
+  process-wide orchestrator handle to `run_sweep`. Previously every
+  cell went through `MetricCache::lock_global` regardless of build
+  features — `cmd_sweep` (the standalone CLI) wired the orchestrator
+  but `process_chunk_inline → run_group_inline → run_sweep` did not.
+  Wired through in commit `6187c5c6`. The orchestrator features
+  (`orchestrator,orchestrator-cuda`) were added to
+  `zen-cloud-vastai`'s zen-metrics-cli dep so `SweepOrchestratorHandle`
+  is in the build.
+- Phase B: `--gpu-classes` (plural, comma-separated) flag added to
+  `zen-salad-sweep`. Resolves each name to an id and emits a
+  multi-element `resources.gpu_classes` Vec. `--gpu-class`
+  (singular) stays for back-compat. New `--dry-run` flag prints the
+  synthesised request body without hitting Salad / R2.
+
+**Configuration**: N=1, chunks=1, gpu_classes=
+`["RTX 3060 (12 GB)","RTX 3090 (24 GB)","RTX 4090 (24 GB)"]`,
+max_wall_secs=360, poll_secs=10.
+
+**Result**: progressive smoke at N=1 stayed in `allocating_count=1`
+across the full 360 s wall, never transitioning `running_count=1`,
+across all three GPU class fallbacks. Same allocation-starvation
+pattern as Runs 2-4. Did not proceed to N=10 (the spec's
+"N=1 fails to produce a sidecar → accept partial result" branch).
+
+Verified post-teardown via Salad API: the stored container-group
+record shows
+`resources.gpu_classes=["f51baccc-...","a5db5c50-...","ed563892-..."]`
+— three distinct ids — confirming the multi-class fallback request
+landed exactly as the launcher emitted it. The block is upstream
+on Salad's pool, not on this side. Group: `scaleup-n1-v5-1779959731`,
+sweep_id `n1-v5-1779959731`.
+
+**Wall**: 367 s. **Spend**: $0.02. **Sidecars**: 0 omni, 0 errors
+(no worker ever ran). **Teardown**: OK (status=stopped,
+running_count=0, finish_time=2026-05-28T09:21:38Z).
+
+What this RUN tells us is narrow:
+
+- The image rebuild is OK (manifest pushed; container record shows
+  the v5 image hash). Salad isn't rejecting the image.
+- The multi-class fallback plumbing is verified end-to-end via
+  Salad's stored request body, not just the launcher's dry-run.
+- Runs 1-5 inclusive have NEVER produced a chunk-processing
+  measurement; the only chunk-processing-time data we have is the
+  Run 1 N=10 RTX 3060 allocator path (which DID allocate workers
+  but the queue-path bug stopped them producing sidecars).
+- The orchestrator wire-through is NOT validated under production
+  load yet — the workers it would have run through never started.
+
+**Total cumulative spend on Salad retests this date**: $0.68 from
+Runs 1-4 plus $0.02 from Run 5 = ~$0.70 of the $5 cap. Still well
+under the $2 cap for this session.
+
+### Suggested next concrete step
+
+- Either retry N=10 against `v5-orchestrator` during a future
+  off-peak window on the same multi-class fallback, OR pivot to
+  RunPod's `runpod-sweep` flavour (the codebase already has
+  `--features runpod-sweep` and the Cargo.toml mirrors the salad
+  layout). RunPod's pool is independent of Salad's so the same
+  starvation pattern wouldn't apply — and the orchestrator
+  wire-through is in `zen-cloud-vastai`, which `runpod-sweep`
+  also pulls.
+
 ## How to reproduce
 
 ```sh
