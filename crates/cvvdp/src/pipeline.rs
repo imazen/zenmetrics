@@ -867,6 +867,58 @@ impl Cvvdp {
         self.warm_active
     }
 
+    /// Strip-mode score: walks image in horizontal slabs of
+    /// `strip_height` rows + halo. Designed to reduce peak heap on
+    /// 40 MP+ inputs where the full pipeline's 11.3 GB peak crowds
+    /// the budget.
+    ///
+    /// # Status (Phase 9.Z.A)
+    ///
+    /// **This method is API-only — it delegates to [`Self::score`]
+    /// and does NOT reduce peak heap.** The memory-bounded walker is
+    /// queued; reasons:
+    /// 1. cvvdp's 9-level Weber pyramid + per-band σ=3 PU blur
+    ///    produces cumulative halo at scale 0 of `~8 × 2^k` rows for
+    ///    level k. At level 8 of 4096² this is `~2048 rows ≈ 50%
+    ///    of image height` — strip pattern requires hybrid K_SPLIT
+    ///    dispatch (shallow bands per-strip, deep bands full-image)
+    ///    as documented in the GPU cvvdp Mode E strip design at
+    ///    `crates/cvvdp-gpu/docs/STRIP_PROCESSING.md`.
+    /// 2. The band-fold's spatial Minkowski pool IS strip-associative
+    ///    (`Σ|d|^β` + `n` accumulate cleanly across strips); the
+    ///    refactor is plumbing, not algorithmic.
+    /// 3. The cvvdp-gpu Phase 1 + Phase 2 investigation explicitly
+    ///    documented this as multi-day work; the CPU port faces the
+    ///    same structural blocker.
+    ///
+    /// The API is exposed NOW so the orchestrator's `cpu_adapter` can
+    /// wire a `MemoryMode::Strip` dispatch slot for cvvdp without API
+    /// churn when the walker ships. **Until then, this method delivers
+    /// correct scores at no memory benefit.**
+    pub fn score_strip(
+        &mut self,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+        _strip_height: u32,
+    ) -> Result<f32> {
+        self.score(ref_srgb, dist_srgb)
+    }
+
+    /// Strip-mode score against the warm reference. See
+    /// [`Self::score_strip`] for implementation status.
+    ///
+    /// Phase 9.Z.A: delegates to [`Self::score_with_warm_ref`]; the
+    /// memory-bounded walker is queued. API exists for orchestrator
+    /// `MemoryMode::CachedStrip` integration without churning the
+    /// public API when the walker ships.
+    pub fn score_with_warm_ref_strip(
+        &mut self,
+        dist_srgb: &[u8],
+        _strip_height: u32,
+    ) -> Result<f32> {
+        self.score_with_warm_ref(dist_srgb)
+    }
+
     /// Score from `zenpixels::PixelSlice` references — converts the
     /// input to the `RGB8_SRGB` descriptor first via
     /// `zenpixels_convert`, then dispatches to [`Cvvdp::score`].
