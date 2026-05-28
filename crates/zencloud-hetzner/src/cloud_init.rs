@@ -96,7 +96,18 @@ pub fn build_user_data(spec: &WorkerBootstrap) -> String {
                 "echo {key} >> /root/.ssh/authorized_keys\n",
                 key = sh_squote(&cleaned),
             ));
-            script.push_str("chmod 600 /root/.ssh/authorized_keys\n\n");
+            script.push_str("chmod 600 /root/.ssh/authorized_keys\n");
+            // Hetzner Cloud's Ubuntu 24.04 image ships root with
+            // `chage -d 0` (force-password-change-on-first-login).
+            // A non-TTY ssh session hits PAM password-aging BEFORE
+            // the shell starts and exits with status 1 — even
+            // though key auth succeeded — leaving the diagnostic
+            // blind. Clear the password-expired flag so root SSH
+            // command channels work. Confirmed live iter 4
+            // (2026-05-28): the watchdog SSH connected fine but
+            // got "Password change required but no TTY available."
+            script.push_str("chage -d 99999 -E -1 -I -1 -M -1 root || true\n");
+            script.push_str("passwd -u root 2>/dev/null || true\n\n");
         }
     }
 
