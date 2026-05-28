@@ -36,9 +36,13 @@ use std::time::{Duration, SystemTime};
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
     compute_machine_hash, save_profile, Backend, BackendBench, BackendVram, CapabilityProfile,
-    CpuCapability, ExecutorError, GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig,
-    Task, TaskData,
+    CpuCapability, GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, Task, TaskData,
 };
+
+// Only the `cpu-iwssim`-off variant of the iwssim test pattern-matches on
+// ExecutorError; gated import keeps the build clean under `cpu-all`.
+#[cfg(not(feature = "cpu-iwssim"))]
+use zenmetrics_orchestrator::ExecutorError;
 
 // ---------------------------------------------------------------------------
 // Helpers (mirror tests/executor.rs — kept inline; the two suites share
@@ -318,15 +322,60 @@ fn zensim_cpu_constructs_and_computes_256() {
 }
 
 // ---------------------------------------------------------------------------
-// Iwssim — no CPU reference; chooser surfaces CpuMetricUnavailable
+// Iwssim — Phase 8g landed an in-tree CPU reference (the `iwssim` crate).
+// Behaviour now matches the other CPU-capable metrics: with `cpu-iwssim`
+// on the executor lands on Cpu after every GPU is poisoned; without the
+// feature the chooser surfaces `CpuMetricUnavailable` and the ladder
+// short-circuits.
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "cpu-iwssim")]
+#[test]
+fn iwssim_cpu_constructs_and_computes_256() {
+    // Mirror the cvvdp / ssim2 / dssim / butter / zensim shape: poison
+    // every GPU candidate, expect the executor to land on the CPU
+    // adapter and return a finite iwssim score. 256² clears the
+    // 176-px floor enforced by `iwssim::Iwssim::new`.
+    let (r, d) = synth(256);
+    let params = zenmetrics_api::MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Iwssim, profile)]);
+    let task = Task {
+        task_id: 61,
+        ref_data: TaskData::Srgb8(r),
+        dist_data: TaskData::Srgb8(d),
+        width: 256,
+        height: 256,
+        metric: MetricKind::Iwssim,
+        params: Some(params),
+        ref_hash: 0,
+    };
+    let result = orch.run_single(task);
+    let score = result.outcome.as_ref().unwrap_or_else(|e| {
+        panic!(
+            "expected Ok iwssim cpu score, got Err({e:?}); attempts={:?}",
+            result.backends_attempted
+        )
+    });
+    assert_eq!(result.backend_used, Some(Backend::Cpu));
+    assert_eq!(score.metric_name, "iwssim");
+    // IW-SSIM is bounded in [0, 1] for matched-format inputs.
+    assert!(
+        score.value.is_finite() && score.value >= 0.0 && score.value <= 1.01,
+        "iwssim cpu score out of range: {}",
+        score.value
+    );
+}
+
+#[cfg(not(feature = "cpu-iwssim"))]
 #[test]
 fn iwssim_cpu_unavailable_advances_ladder() {
-    // Iwssim has no CPU reference. Poisoning every GPU candidate
-    // should leave NO feasible backend — the chooser returns
-    // NoFeasibleBackend, which the executor converts to FullyExhausted
-    // (or surfaces directly when no attempt was made before).
+    // Without `cpu-iwssim`, the chooser admits Cpu via `supported_backends`
+    // but rejects it as `CpuMetricUnavailable`. Combined with every GPU
+    // candidate poisoned, no backend is feasible — the chooser returns
+    // NoFeasibleBackend, which the executor surfaces as Chooser(...) (or
+    // FullyExhausted if any attempt was logged before).
     let mut profile = profile_with_gpu_at(256, 256);
     poison_gpu_at(&mut profile, 256u64 * 256u64);
     let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Iwssim, profile)]);
@@ -347,7 +396,6 @@ fn iwssim_cpu_unavailable_advances_ladder() {
         Err(ExecutorError::Chooser(_)) | Err(ExecutorError::FullyExhausted { .. }) => {}
         other => panic!("expected Chooser/FullyExhausted, got {:?}", other),
     }
-    // Confirm `backend_used` is None — no backend was ever Selected.
     assert!(result.backend_used.is_none());
 }
 

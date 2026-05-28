@@ -186,6 +186,29 @@ Workspace conventions per the global rules:
   `crates/zenmetrics-api/docs/ZENFORKS_CUBECL_STRATEGY.md`. Original
   fork-strategy doc (`CUBECL_FORK_STRATEGY.md`) marked superseded.
 
+### Fixed
+
+- **`zenmetrics-orchestrator` Phase 8g.2 — retire stale
+  "iwssim has no CPU backend" test assumptions.** Phase 8g landed
+  iwssim's in-tree CPU reference and Phase 8g.1 extracted shared
+  constants, but four orchestrator integration tests still asserted
+  the pre-8g shape and broke under `cuda,cpu-all`. Updated:
+  `tests/cpu_backend.rs::iwssim_cpu_unavailable_advances_ladder`
+  now splits into `iwssim_cpu_constructs_and_computes_256`
+  (cpu-iwssim ON — asserts `Backend::Cpu` selection + finite score)
+  and the original `iwssim_cpu_unavailable_advances_ladder` gated
+  on `not(cpu-iwssim)`. Same split for
+  `tests/no_gpu_fallback.rs::{run_single_iwssim_no_gpu_no_cpu_returns_chooser_error,
+  iwssim_with_force_no_gpu_returns_chooser_error_end_to_end}`
+  (positive cpu-iwssim variants land on Cpu via the no-GPU ladder).
+  `tests/chooser.rs::rejects_negative_extrapolated_cpu_prediction`
+  gated on `cpu-ssim2` (the test exercises the Ssim2 chooser path —
+  without cpu-ssim2 the Cpu candidate is rejected as
+  `CpuMetricUnavailable` before reaching the negative-extrapolation
+  guard). Full orchestrator suite under `cuda,cpu-all`: 126 passed,
+  0 failed, 17 ignored. Under `bench,cuda` (no cpu-* features):
+  the `not(cpu-iwssim)` branches still compile and pass.
+
 ### Added
 
 - **`zenmetrics-orchestrator` Phase 9.1 — N-lane GPU pool with

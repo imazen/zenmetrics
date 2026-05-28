@@ -676,6 +676,13 @@ fn chooser_runs_in_under_100us() {
 /// Without this gate, ssim2's chooser would pick CPU (predicted -179.76
 /// "faster" than GpuStrip at 5 ns/px) and produce a divergent score
 /// vs the legacy GPU path.
+///
+/// Phase 8g.2 — this test requires the `cpu-ssim2` feature so the
+/// chooser admits the Cpu candidate to the ns/px comparison instead
+/// of short-circuiting `CpuMetricUnavailable`. Without the feature,
+/// the negative-prediction code path is unreachable and the test's
+/// `RejectReason::NonPositivePrediction` assertion would never fire.
+#[cfg(feature = "cpu-ssim2")]
 #[test]
 fn rejects_negative_extrapolated_cpu_prediction() {
     let mut m = MetricProfile::default();

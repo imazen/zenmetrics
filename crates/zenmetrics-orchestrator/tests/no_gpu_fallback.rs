@@ -331,13 +331,49 @@ fn run_single_lands_on_cpu_when_gpu_absent_ssim2() {
     assert!(score.value.is_finite());
 }
 
+#[cfg(feature = "cpu-iwssim")]
+#[test]
+fn run_single_iwssim_no_gpu_lands_on_cpu() {
+    // Phase 8g landed iwssim's CPU reference (the `iwssim` crate). With
+    // `cpu-iwssim` on and `gpu.present = false`, the chooser rejects
+    // every Gpu* as NoGpuPresent and selects Cpu — the executor lands
+    // on the CPU adapter exactly like cvvdp / ssim2 / dssim / butter
+    // / zensim above.
+    let (r, d) = synth(256);
+    let profile = cpu_only_profile_at(256 * 256);
+    let (mut orch, _td) = no_gpu_orch_with(MetricKind::Iwssim, profile);
+    let params = zenmetrics_api::MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
+    let task = Task {
+        task_id: 1099,
+        ref_data: TaskData::Srgb8(r),
+        dist_data: TaskData::Srgb8(d),
+        width: 256,
+        height: 256,
+        metric: MetricKind::Iwssim,
+        params: Some(params),
+        ref_hash: 0,
+    };
+    let result = orch.run_single(task);
+    let score = result.outcome.as_ref().unwrap_or_else(|e| {
+        panic!(
+            "expected Ok iwssim cpu score, got Err({e:?}); attempts={:?}",
+            result.backends_attempted
+        )
+    });
+    assert_eq!(result.backend_used, Some(Backend::Cpu));
+    assert_eq!(score.metric_name, "iwssim");
+    assert!(score.value.is_finite());
+}
+
+#[cfg(not(feature = "cpu-iwssim"))]
 #[test]
 fn run_single_iwssim_no_gpu_no_cpu_returns_chooser_error() {
-    // Iwssim has no CPU reference upstream. When gpu.present=false,
-    // every Gpu* is rejected NoGpuPresent and Cpu is rejected
-    // CpuMetricUnavailable — the chooser returns NoFeasibleBackend,
-    // and the executor's first iteration surfaces that as Chooser(...)
-    // (no attempts logged → not FullyExhausted).
+    // Without `cpu-iwssim`, iwssim has no CPU reference reachable from
+    // this build. When gpu.present=false, every Gpu* is rejected
+    // NoGpuPresent and Cpu is rejected CpuMetricUnavailable — the
+    // chooser returns NoFeasibleBackend, and the executor's first
+    // iteration surfaces that as Chooser(...) (no attempts logged →
+    // not FullyExhausted).
     let (r, d) = synth(256);
     let profile = cpu_only_profile_at(256 * 256);
     let (mut orch, _td) = no_gpu_orch_with(MetricKind::Iwssim, profile);
@@ -355,7 +391,7 @@ fn run_single_iwssim_no_gpu_no_cpu_returns_chooser_error() {
     let result = orch.run_single(task);
     assert!(
         result.outcome.is_err(),
-        "iwssim with no GPU + no CPU reference must error"
+        "iwssim without cpu-iwssim + no GPU must error"
     );
     assert_eq!(result.backend_used, None);
     // Every Gpu* candidate should be in the considered list as
@@ -547,11 +583,58 @@ fn capability_round_trips_with_gpu_absent_state() {
     assert_eq!(loaded.machine_hash, cap.machine_hash);
 }
 
+#[cfg(feature = "cpu-iwssim")]
+#[test]
+fn iwssim_with_force_no_gpu_lands_on_cpu_end_to_end() {
+    // Combination test: ZENMETRICS_FORCE_NO_GPU=1 against iwssim. With
+    // `cpu-iwssim` on, Orchestrator::new succeeds and run_single lands
+    // on the CPU adapter — Phase 8g landed iwssim's in-tree CPU
+    // reference, so the OOM/no-GPU ladder has a feasible Cpu rung.
+    let (r, d) = synth(256);
+    let tmpdir = tempfile::tempdir().unwrap();
+    let cfg = no_gpu_config(&tmpdir);
+    let params = zenmetrics_api::MetricParams::try_default_for(MetricKind::Iwssim).unwrap();
+    let outcome = run_with_force_no_gpu(|| {
+        let orch = Orchestrator::new(cfg).expect("orchestrator should construct");
+        assert!(!orch.capability().gpu.present);
+        // Seed a CPU-only iwssim measurement so the chooser has data
+        // to score Cpu against (otherwise the candidate would be
+        // rejected as NoMeasuredData).
+        let m = cpu_only_profile_at(256 * 256);
+        let mut cap = orch.capability().clone();
+        cap.metrics.insert(MetricKind::Iwssim.tag().to_string(), m);
+        let cfg2 = orch.config().clone();
+        let mut orch2 = Orchestrator::from_capability(cfg2, cap);
+        let task = Task {
+            task_id: 7777,
+            ref_data: TaskData::Srgb8(r),
+            dist_data: TaskData::Srgb8(d),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Iwssim,
+            params: Some(params),
+            ref_hash: 0,
+        };
+        orch2.run_single(task)
+    });
+    let score = outcome.outcome.as_ref().unwrap_or_else(|e| {
+        panic!(
+            "expected Ok iwssim cpu score, got Err({e:?}); attempts={:?}",
+            outcome.backends_attempted
+        )
+    });
+    assert_eq!(outcome.backend_used, Some(Backend::Cpu));
+    assert_eq!(score.metric_name, "iwssim");
+    assert!(score.value.is_finite());
+}
+
+#[cfg(not(feature = "cpu-iwssim"))]
 #[test]
 fn iwssim_with_force_no_gpu_returns_chooser_error_end_to_end() {
-    // Combination test: ZENMETRICS_FORCE_NO_GPU=1 against iwssim (no
-    // CPU reference). Orchestrator::new succeeds, then run_single
-    // surfaces a Chooser error because no backend is feasible.
+    // Combination test: ZENMETRICS_FORCE_NO_GPU=1 against iwssim
+    // (without `cpu-iwssim`, no CPU reference compiled in).
+    // Orchestrator::new succeeds, then run_single surfaces a Chooser
+    // error because no backend is feasible.
     let (r, d) = synth(256);
     let tmpdir = tempfile::tempdir().unwrap();
     let cfg = no_gpu_config(&tmpdir);
