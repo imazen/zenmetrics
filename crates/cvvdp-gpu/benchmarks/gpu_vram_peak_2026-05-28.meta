@@ -1,0 +1,109 @@
+# gpu_vram_peak_2026-05-28 — companion metadata
+
+# Identity
+date              : 2026-05-28
+parent_commit_sha : b7fc7c783eda5b9a9ed60e06d0ad0d35690f7e87
+tsv_file          : gpu_vram_peak_2026-05-28.tsv
+task              : 131 (gpu_vram_profile harness)
+
+# Host & GPU
+hostname          : lilith
+cpu               : AMD Ryzen 9 7950X 16-Core Processor (water-cooled)
+gpu               : NVIDIA GeForce RTX 5070
+gpu_total_mib     : 12227
+gpu_driver_version: 596.21
+gpu_compute_cap   : 12.0
+cuda_runtime      : 13.2 (per /usr/local/cuda symlink)
+
+# Methodology
+methodology       : subprocess-per-cell, nvidia-smi memory.used polling
+sampler           : background thread, 30 ms interval
+child_hold_ms     : 800 (post-READY steady-state window)
+warmup            : 500 ms settle before baseline sample
+strip_h_body      : 256 (matches CHANGELOG P2.7 reference 4096² number)
+synth_pair        : deterministic offset distortion ((x*17 + y*5) % 251)
+backend           : CUDA (cubecl::cuda::CudaRuntime)
+build             : --release --features cuda
+binary            : target/release/gpu-vram-profile
+harness           : benchmarks/heaptrack/drivers/gpu_vram_profile/src/main.rs
+
+# What's measured
+metric            : peak `nvidia-smi --query-gpu=memory.used` - baseline
+                    during one `compute_dkl_jod()` call (or
+                    `warm_reference + compute_dkl_jod_with_warm_ref`
+                    for Mode E strip).
+estimator_bytes   : output of cvvdp_gpu::estimate_gpu_memory_bytes*
+                    (analytical pipeline estimator, does NOT include
+                    cubecl pool over-allocation or driver page rounding).
+
+# Cells
+n_cells           : 16
+sizes_swept       : 1024² (1.05 MP), 2048² (4.19 MP), 2896² (8.39 MP),
+                    4096² (16.78 MP), 7680×5184 (39.81 MP stretch)
+modes_swept       : full, strip (Mode E warm-ref path), strip_pair
+                    (Mode B), capped_pyramid5
+
+# Calibration vs CHANGELOG.md:1361-1363 P2.7 partial
+calibration_target_4096sq_modeB_mib : 1502
+calibration_measured_4096sq_modeB_mib: 2273
+calibration_status   : DIVERGENT (+771 MiB above CHANGELOG target)
+calibration_root_cause: The "Path B unfix (2026-05-27)" commit after
+                        P2.7 added a persistent `DBandsTransient`
+                        sized at base-level n0 = width × height to
+                        eliminate per-band `alloc_zeros_f32` calls
+                        (208 zero-upload HtoDs at 4096²). At 4096²,
+                        5 buffer kinds × 3 channels × 16 MP × 4 bytes
+                        = 960 MiB returned to the persistent working
+                        set. The CHANGELOG's 1502 MiB number was
+                        measured BEFORE this unfix; current master is
+                        2273 MiB on the same code path. See
+                        `crates/cvvdp-gpu/src/pipeline.rs:925-957`
+                        (the `d_bands_transient` field doc) for the
+                        wall-time-vs-peak-memory tradeoff rationale.
+verification         : cross-checked with
+                       `cargo run --release --example mem_mode_b_vs_full -p cvvdp-gpu --features cuda`
+                       on the same commit → 4096² Mode B nvsmi delta
+                       2274 MiB (matches gpu-vram-profile within 1 MiB,
+                       confirming the harness is calibrated against
+                       the reference example and the divergence from
+                       CHANGELOG is a real source-level change, not
+                       a methodology artifact).
+
+# Estimator-vs-runtime gap (per cell, MiB)
+# Computed in TSV column `runtime_vs_estimator_bytes`.
+# At 4096² Full: runtime delta 3969 MiB vs estimator 2859 MiB → +1110 MiB pool overhead
+# At 4096² Mode B: runtime delta 2273 MiB vs estimator 565 MiB → +1708 MiB pool overhead
+# The Mode B estimator is even more optimistic than the Full estimator
+# because it models the post-P2.7-FULL design target (where gauss_ref
+# and gauss_alt would also be strip-shaped at shallow levels). The
+# Path B unfix did not touch the estimator, so the gap to runtime
+# widened with the unfix.
+
+# JOD bit-identical check
+jod_full_vs_modeB_4096sq    : both 9.458503 (delta = 0.0)
+jod_full_vs_modeB_2048sq    : both 9.458460
+jod_full_vs_modeB_1024sq    : both 9.458330
+                              → Mode B JOD preservation gate from
+                                CHANGELOG P2.x holds on this run.
+jod_capped5_vs_full_4096sq  : 9.458780 vs 9.458503 (delta 0.000277,
+                              within the JOD ≤0.005 historical bench
+                              gate from memory_mode.rs:32).
+
+# 40 MP stretch — did NOT OOM
+40mp_full_status            : OK (delta 7362 MiB, peak 9083 MiB on
+                              12 GB RTX 5070 — 75% full)
+40mp_modeB_status           : OK (delta 5153 MiB, peak 6875 MiB)
+40mp_observation            : Full at 40 MP fits with 3 GiB headroom
+                              on RTX 5070; Mode B leaves 5 GiB headroom.
+                              An 8 GB card would OOM Full at 40 MP
+                              but tolerate Mode B.
+
+# wgpu backend status
+wgpu_backend_tested         : NO — cubecl-wgpu build adds ~5 min and
+                              wgpu can't probe nvsmi memory the same
+                              way (NVIDIA wgpu sits below the CUDA
+                              driver, so memory.used will still report
+                              CUDA-context bytes, not pure wgpu
+                              allocations, on this NVIDIA host). The
+                              CUDA backend is what production hits;
+                              that's what we measure here.

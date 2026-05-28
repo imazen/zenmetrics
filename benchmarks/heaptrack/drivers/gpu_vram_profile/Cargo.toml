@@ -1,0 +1,29 @@
+[package]
+name = "gpu-vram-profile"
+version = "0.0.0"
+publish = false
+edition = "2024"
+description = "Phase 9.AA — peak-VRAM measurement harness for cvvdp-gpu memory modes."
+
+[[bin]]
+name = "gpu-vram-profile"
+path = "src/main.rs"
+
+[features]
+# Match cvvdp-gpu's default backends. The harness is GPU-only; one of
+# `cuda` or `wgpu` MUST be enabled at build time. The runtime selector
+# (`--backend` CLI flag) is best-effort: the binary picks whichever
+# backend was compiled in.
+default = ["cuda"]
+cuda = ["cvvdp-gpu/cuda"]
+wgpu = ["cvvdp-gpu/wgpu"]
+
+[dependencies]
+cubecl = { workspace = true }
+cvvdp-gpu = { workspace = true, default-features = false, features = ["cubecl-types"] }
+
+[profile.release]
+debug = 1
+lto = false
+codegen-units = 1
+incremental = false
