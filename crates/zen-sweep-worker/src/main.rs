@@ -51,6 +51,8 @@ enum Backend {
     /// env/.env credentials. The no-spend dev / abstraction-validation
     /// backend (Phase B).
     Local,
+    /// Hetzner Cloud + R2-queue polling (no managed queue) + BYO R2.
+    Hetzner,
 }
 
 /// Cloud-agnostic sweep worker.
@@ -138,6 +140,15 @@ fn run_worker_backend(
             "--backend local selected but the local backend is not compiled \
              in; rebuild with --features local (glue) or --features local-sweep \
              (full encode+score)"
+        ),
+
+        #[cfg(feature = "_hetzner-backend")]
+        Backend::Hetzner => hetzner::run(wargs),
+
+        #[cfg(not(feature = "_hetzner-backend"))]
+        Backend::Hetzner => anyhow::bail!(
+            "--backend hetzner selected but the hetzner backend is not compiled \
+             in; rebuild with --features hetzner"
         ),
     }
 }
@@ -578,6 +589,44 @@ mod local {
             .with_env_filter(
                 EnvFilter::try_from_default_env()
                     .unwrap_or_else(|_| EnvFilter::new("info,zen_cloud_local=info")),
+            )
+            .try_init();
+    }
+}
+
+/// Hetzner backend: poll R2 for chunks, run the inline pipeline, delete
+/// the queue entry. No managed queue, no managed object store — workers
+/// BYO R2 and the launcher's `push_jobs` writes one `<chunk_id>.json`
+/// queue file per chunk under `runs/<sweep_id>/queue/`.
+#[cfg(feature = "_hetzner-backend")]
+mod hetzner {
+    use anyhow::{Context, Result};
+    use zen_cloud_vastai::worker::{
+        WorkerArgs,
+        r2::new_from_args as new_r2,
+        r2_queue_loop::{R2QueueLoopConfig, run_r2_queue_loop},
+    };
+
+    pub fn run(args: WorkerArgs) -> Result<()> {
+        init_tracing();
+        let r2 = new_r2(&args).context("build R2 client for hetzner backend")?;
+        let cfg = R2QueueLoopConfig::from_env()
+            .context("R2QueueLoopConfig::from_env (BUCKET + CHUNKS_QUEUE_PREFIX)")?;
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .context("build tokio runtime")?;
+        let processed = rt.block_on(run_r2_queue_loop(&args, &r2, &cfg))?;
+        tracing::info!(processed, "hetzner sweep worker finished");
+        Ok(())
+    }
+
+    fn init_tracing() {
+        use tracing_subscriber::EnvFilter;
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| EnvFilter::new("info,zen_cloud_vastai=info,zencloud_hetzner=info")),
             )
             .try_init();
     }

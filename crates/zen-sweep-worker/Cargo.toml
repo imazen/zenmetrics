@@ -112,6 +112,12 @@ _local-backend = ["dep:zen-cloud-local", "dep:tracing", "dep:tracing-subscriber"
 # `zen-cloud-vastai/inline-sweep`).
 _local-sweep = ["dep:tokio"]
 
+# Hetzner backend GLUE: R2-queue polling loop. Hetzner has no managed
+# queue + no managed object store, so workers BYO R2 and poll the queue
+# prefix directly. The full encode+score build mirrors vastai's tree.
+hetzner = ["_hetzner-backend", "_vastai-backend", "zen-cloud-vastai/inline-sweep", "zen-cloud-vastai/source-features"]
+_hetzner-backend = ["dep:tracing", "dep:tracing-subscriber", "dep:tokio"]
+
 [dependencies]
 zen-cloud-core = { workspace = true }
 zen-cloud-vastai = { workspace = true, optional = true, default-features = false }

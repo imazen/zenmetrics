@@ -6382,6 +6382,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zencloud-hetzner"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zen-cloud-salad",
+ "zenfleet-orchestrator",
+]
+
+[[package]]
 name = "zencodec"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"

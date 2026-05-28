@@ -15,6 +15,7 @@ members = [
     "crates/zen-cloud-s3",
     "crates/zen-cloud-salad",
     "crates/zen-cloud-vastai",
+    "crates/zencloud-hetzner",
     "crates/zen-sweep-worker",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",
@@ -61,6 +62,7 @@ zen-cloud-runpod = { version = "0.0.1", path = "crates/zen-cloud-runpod", defaul
 zen-cloud-s3 = { version = "0.0.1", path = "crates/zen-cloud-s3", default-features = false }
 zen-cloud-salad = { version = "0.0.1", path = "crates/zen-cloud-salad", default-features = false }
 zen-cloud-vastai = { version = "0.0.1", path = "crates/zen-cloud-vastai", default-features = false }
+zencloud-hetzner = { version = "0.0.1", path = "crates/zencloud-hetzner", default-features = false }
 zenfleet-orchestrator = { version = "0.0.1", path = "crates/zenfleet-orchestrator" }
 
 # CubeCL — single source of truth for the GPU backend version.

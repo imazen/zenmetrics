@@ -62,6 +62,8 @@ pub mod claim;
 mod feature_backfill;
 #[cfg(feature = "inline-sweep")]
 mod inline;
+#[cfg(feature = "inline-sweep")]
+pub mod r2_queue_loop;
 #[cfg(feature = "source-features")]
 mod source_features;
 #[cfg(feature = "source-features")]
