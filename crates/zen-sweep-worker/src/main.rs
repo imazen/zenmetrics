@@ -186,6 +186,30 @@ mod salad {
             "salad sweep worker starting; awaiting jobs from the sidecar"
         );
 
+        // Fire-and-forget boot-record upload (iter1 :v6-visibility).
+        // Reads /var/run/zen-boot.txt (written by entrypoint_salad.sh)
+        // and uploads to <scoped-prefix>/boot/<worker_id>.txt so the
+        // launcher's fleet_summary stitch can attribute GPU class to
+        // each replica. Best-effort; never blocks job processing.
+        #[cfg(feature = "_salad-sweep")]
+        if let Ok(r2) = zen_cloud_vastai::worker::r2::new_from_args(&args) {
+            let worker_id = std::env::var("SALAD_MACHINE_ID")
+                .or_else(|_| std::env::var("HOSTNAME"))
+                .or_else(|_| std::env::var("WORKER_ID"))
+                .unwrap_or_else(|_| "salad-unknown".to_string());
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .ok();
+            if let Some(rt) = rt {
+                rt.block_on(zen_cloud_vastai::worker::fire_boot_upload(
+                    &args,
+                    &worker_id,
+                    &r2,
+                ));
+            }
+        }
+
         let summary = run_worker(&mut queue, &storage, &heartbeat, &host, |chunk, _s, _h| {
             compute_chunk(&args, chunk)
         })
