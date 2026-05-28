@@ -67,6 +67,39 @@ Workspace conventions per the global rules:
   and butteraugli strip walkers. Adds 5 strip-dispatch tests covering
   cold + warm-ref paths for all three new metrics (8cfee48b, 70fed1c2).
 
+- **Task #134 (2026-05-28) — wire zensim cached_ref through cpu_adapter.**
+  Switches `CpuAdapter::supports_cached_ref(Metric::Zensim)` from `false`
+  to `true` and wires the real warm path:
+  `set_reference` calls `Zensim::precompute_reference` (owned
+  `PrecomputedReference`); `compute_with_cached_reference` dispatches
+  `Zensim::compute_with_ref` against the cached precompute;
+  `compute_with_cached_reference_strip` dispatches
+  `Zensim::compute_with_ref_streaming_strips` so the warm amortization
+  carries into memory-bounded strip mode. The prior wiring stashed raw
+  bytes in `Option<Vec<u8>>` and re-ran the cold path on every warm
+  call, so the orchestrator's cached-ref dispatcher never landed on a
+  warm code path even when callers set a reference hint.
+
+  Bench (water-cooled 7950X, 16 MP / 4096×4096, 3-trial median, 10-
+  distorted amortized sweep, `target/release/cpu-profile`):
+  `full_n10`: 383.19 ms / call, `warm_ref_n10`: 337.67 ms / call,
+  speedup +11.9 % per amortized warm call (≈44 ms one-time precompute,
+  break-even after one call). The brief cited `+46 %` as the target —
+  that figure is from the GPU CUDA / wgpu cached-ref sweep at
+  `benchmarks/zensim_cached_ref_2026-05-22.csv` (38 % on CUDA / 40 %
+  on wgpu at 1024², 10 distorteds), not from a CPU sweep. The CPU win
+  is structurally smaller because `compute()` already does a fused
+  joint-pass over ref + dist, so the precompute hoist removes less of
+  the per-pair work. The 11.9 % CPU speedup that lands is real and
+  structural; reporting `+46 %` would have meant extrapolating from
+  the GPU figure. Full bench data + provenance in
+  `benchmarks/zensim_cached_ref_cpu_2026-05-28.meta`. The heaptrack
+  driver's `warm_ref` mode now exercises the real warm pair (the prior
+  driver fell back to `compute()` for `warm_ref`, masking the
+  speedup that did exist). Adds two adapter tests: warm-vs-cold
+  byte-exact parity at 256² and warm-ref-strip vs warm-ref-full
+  parity within zensim's documented strip tolerance.
+
 ### Changed
 
 - **Phase 9.Z.C recovery (2026-05-28) — bump zenforks-cubecl-cpu to

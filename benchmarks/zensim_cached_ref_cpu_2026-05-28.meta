@@ -1,0 +1,59 @@
+# zensim CPU cached-reference wall measurement, task #134
+# Host: water-cooled AMD Ryzen 9 7950X (16 cores / 32 threads), 128 GB DDR5
+# OS:   Linux 6.6.114.1-microsoft-standard-WSL2
+# Date: 2026-05-28
+# Commit: see corresponding task134 commit in zenmetrics master
+# Build: cargo build --release --manifest-path benchmarks/heaptrack/drivers/cpu_profile/Cargo.toml
+#         (release, lto=false, codegen-units=1, debuginfo=1)
+# zensim profile: PreviewV0_4 (latest_preview, MLP-scored)
+# Run command:
+#   ./target/release/cpu-profile zensim <mode> 4096 4096
+# Mode legend:
+#   full           — z.compute(&ri, &di)           [single call, cold]
+#   warm_ref       — z.precompute_reference + z.compute_with_ref [single call, includes precompute]
+#   full_n10       — z.compute(&ri, &di) × 10      [10-distorted sweep, no caching]
+#   warm_ref_n10   — z.precompute_reference + z.compute_with_ref × 10 [10-distorted sweep, ref reused]
+#
+# Side-channel breakdown lines on stderr:
+#   WARM_REF_BREAKDOWN t_precompute_ms=... t_warm_compare_ms=...
+#   WARM_REF_N_AMORT   n=N t_precompute_ms=... t_loop_ms=... t_per_call_mean_ms=...
+#   FULL_N_TOTAL       n=N t_loop_ms=... t_per_call_mean_ms=...
+#
+# Headline (16 MP, 3-trial median per-call amortized):
+#   full_n10    mean per call: 383.19 ms
+#   warm_ref_n10 mean per call: 337.67 ms
+#   speedup:     (383.19 - 337.67) / 383.19 = 11.9 % per amortized warm call
+#   precompute_ms (one-time): ~44 ms
+#   break-even (full vs warm including precompute): 44 / 45.5 ≈ 1 distorted
+#   (the warm path pays for the precompute after roughly the first call)
+#
+# Speedup gap vs. task brief: the brief cited "+46 % faster" sourced from
+# the GPU cached-ref sweep at benchmarks/zensim_cached_ref_2026-05-22.csv
+# (cuda backend: (55.23 - 34.08) / 55.23 = 38 % at 1024², 10 distorteds;
+# wgpu: (3610 - 2150) / 3610 = 40 %). On CUDA / wgpu the win is dominated
+# by skipping ref-side device uploads + ref-side kernel launches across N
+# calls. On CPU the same fusion is already partially expressed by the
+# `compute()` streaming joint-pass (one fused stride over both ref and
+# dist), so the savings are smaller. The win that does land — ~12 % per
+# warm call — is structural (hoists the ref-side XYB conversion + downscale
+# pyramid out of every per-distorted compare) and ships as a real speedup
+# for any production caller scoring N distorteds against one source.
+#
+# Acceptance gate as written in the task brief ("+46 % ± 5 %") cannot be
+# met on the CPU at 16 MP. The measured 11.6 % speedup is what the wiring
+# actually delivers; reporting anything else would violate the
+# "NO EXTRAPOLATION / NO FAKED RESULTS" rule.
+
+mode	trial	w	h	t_score_ms	t_per_call_mean_ms	t_precompute_ms	score
+full	1	4096	4096	382.88			80.45233848723095
+full	2	4096	4096	380.36			80.45233848723095
+full	3	4096	4096	378.15			80.45233848723095
+warm_ref	1	4096	4096	408.20	339.28	42.56	80.45233848723095
+warm_ref	2	4096	4096	417.52	344.90	44.20	80.45233848723095
+warm_ref	3	4096	4096	411.40	340.19	43.87	80.45233848723095
+full_n10	1	4096	4096	3775.36	377.53		80.45233848723095
+full_n10	2	4096	4096	3831.90	383.19		80.45233848723095
+full_n10	3	4096	4096	3840.22	384.02		80.45233848723095
+warm_ref_n10	1	4096	4096	3442.04	336.10	45.20	80.45233848723095
+warm_ref_n10	2	4096	4096	3453.14	337.67	44.06	80.45233848723095
+warm_ref_n10	3	4096	4096	3459.46	337.89	44.47	80.45233848723095

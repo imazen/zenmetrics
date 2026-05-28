@@ -903,6 +903,112 @@ fn cached_ref_dssim_cpu_matches_one_shot() {
 }
 
 // ---------------------------------------------------------------------------
+// Task #134 (2026-05-28): zensim cached-ref parity.
+//
+// Wired to `Zensim::precompute_reference + Zensim::compute_with_ref`
+// (replaces the prior `Option<Vec<u8>>` byte-stash that recomputed the
+// cold path on every warm call). Scoring the same (ref, dist) pair
+// via the cached-ref dispatch must produce a score within zensim's
+// documented `compute_with_ref` vs `compute` tolerance.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-zensim")]
+#[test]
+fn cached_ref_zensim_cpu_matches_one_shot() {
+    let (r, _) = synth(256);
+    let n = 256usize * 256usize * 3;
+    let make_d = |seed: u8| -> Vec<u8> {
+        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
+    };
+    let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
+
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+
+    // One-shot scoring via run_single (cold `Zensim::compute`).
+    let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let (mut orch, _td) =
+            fake_orch_with_metrics(&[(MetricKind::Zensim, profile.clone())]);
+        let task = Task {
+            task_id: (900 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Zensim,
+            params: None,
+            ref_hash: 0,
+        };
+        let result = orch.run_single(task);
+        let s = result.outcome.as_ref().unwrap_or_else(|e| {
+            panic!(
+                "one-shot zensim cpu failed: {e:?}; attempts={:?}",
+                result.backends_attempted
+            )
+        });
+        oneshot_scores.push(s.value);
+    }
+
+    // Cached-ref scoring via submit/poll_any. The orchestrator's
+    // auto-detector sees the same `ref_data` bytes across all 4 tasks
+    // and routes them through `set_reference` + `compute_with_cached_reference`.
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Zensim, profile)]);
+    let mut handles = Vec::with_capacity(4);
+    for (i, d) in dists.iter().enumerate() {
+        let task = Task {
+            task_id: (1000 + i) as u64,
+            ref_data: TaskData::Srgb8(r.clone()),
+            dist_data: TaskData::Srgb8(d.clone()),
+            width: 256,
+            height: 256,
+            metric: MetricKind::Zensim,
+            params: None,
+            ref_hash: 0,
+        };
+        let h = orch
+            .submit(task)
+            .unwrap_or_else(|e| panic!("submit failed: {e:?}"));
+        handles.push(h);
+    }
+    let mut pooled_by_task_id: std::collections::BTreeMap<u64, f64> = Default::default();
+    for _ in 0..handles.len() {
+        let r = orch
+            .poll_any_blocking()
+            .expect("at least one result expected");
+        let score = r
+            .outcome
+            .as_ref()
+            .unwrap_or_else(|e| panic!("cached zensim cpu task {} failed: {e:?}", r.task_id));
+        pooled_by_task_id.insert(r.task_id, score.value);
+    }
+
+    // Per-pair tolerance: zensim documents `compute_with_ref` as
+    // byte-equivalent to `compute()` within f64 epsilon (< 1e-13 rel).
+    // The score lives on the 0..100 scale so absolute < 1e-6 is a
+    // generous gate (sub-ULP of the float final score).
+    for i in 0..4 {
+        let one = oneshot_scores[i];
+        let two = pooled_by_task_id
+            .get(&((1000 + i) as u64))
+            .copied()
+            .expect("missing pooled result");
+        let diff = (one - two).abs();
+        assert!(
+            diff < 1e-6,
+            "task {i}: one-shot={one:.8}, cached={two:.8}, diff={diff:.8}"
+        );
+    }
+    let stats = orch.cached_ref_stats();
+    assert!(
+        stats.hit_count > 0,
+        "expected cached-ref hits; got {} hits / {} misses",
+        stats.hit_count,
+        stats.miss_count
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Chooser-level direct test: Cpu Selected when every GPU candidate is
 // rejected.
 // ---------------------------------------------------------------------------

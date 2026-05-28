@@ -274,25 +274,93 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             let v = z.compute(&ri, &di).map_err(|e| format!("{e:?}"))?;
             Ok(v.score())
         }
+        // Task #134 (2026-05-28): N-distorted cold sweep — the
+        // matched cold baseline for the `warm_ref_n<N>` mode above.
+        // Same construction-pattern but uses `compute()` for every
+        // call; nothing is cached between iterations. Reports
+        // `FULL_N_TOTAL n=… t_loop_ms=… t_per_call_mean_ms=…` so the
+        // per-call mean is directly subtractable from the warm-N
+        // mean to expose the amortized speedup.
+        mode if mode.starts_with("full_n") => {
+            let n: usize = mode["full_n".len()..]
+                .parse()
+                .map_err(|_| format!("bad-mode:{mode}"))?;
+            if n == 0 {
+                return Err(format!("bad-mode:{mode} (N must be >= 1)"));
+            }
+            let t_loop = std::time::Instant::now();
+            let mut last_score = 0.0;
+            for _ in 0..n {
+                let v = z.compute(&ri, &di).map_err(|e| format!("{e:?}"))?;
+                last_score = v.score();
+            }
+            let loop_ms = t_loop.elapsed().as_secs_f64() * 1000.0;
+            let mean_ms = loop_ms / (n as f64);
+            eprintln!(
+                "FULL_N_TOTAL n={n} t_loop_ms={loop_ms:.2} t_per_call_mean_ms={mean_ms:.2}"
+            );
+            Ok(last_score)
+        }
         // Task #134 (2026-05-28): wire the real `precompute_reference` +
         // `compute_with_ref` warm path. The cpu_adapter now advertises
         // `supports_cached_ref() == true` for zensim and routes warm
         // dispatch through this pair. The driver previously fell back
         // to `compute(&ri, &di)` for `warm_ref` (treating it as a
-        // duplicate of `full`), masking the +46 % speedup CPU sweep
-        // #132 surfaced. With this wired the heaptrack `warm_ref` cell
-        // measures the actual amortized cost — ref-side XYB +
-        // multi-scale downscale runs once, then the compare path skips
-        // both stages on subsequent calls. The driver itself only does
-        // a single compare per process so the speedup shows as a wall
-        // delta vs. `full`; production callers iterate `compute_with_ref`
-        // many times against one `precompute_reference`.
+        // duplicate of `full`), masking the speedup the warm dispatch
+        // provides on the cpu_adapter side. The single-call `t_score_ms`
+        // includes the precompute build cost; the side-channel
+        // `WARM_REF_BREAKDOWN` line splits the precompute from the
+        // amortizable hot-call cost (`t_warm_compare_ms`). Production
+        // callers iterate `compute_with_ref` many times against one
+        // `precompute_reference` — only `t_warm_compare_ms` is the
+        // per-distorted apples-to-apples comparable to `full` mode's
+        // `t_score_ms`.
         "warm_ref" => {
+            let t_pre = std::time::Instant::now();
             let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
+            let pre_ms = t_pre.elapsed().as_secs_f64() * 1000.0;
+            let t_cmp = std::time::Instant::now();
             let v = z
                 .compute_with_ref(&pre, &di)
                 .map_err(|e| format!("{e:?}"))?;
+            let cmp_ms = t_cmp.elapsed().as_secs_f64() * 1000.0;
+            eprintln!(
+                "WARM_REF_BREAKDOWN t_precompute_ms={pre_ms:.2} t_warm_compare_ms={cmp_ms:.2}"
+            );
             Ok(v.score())
+        }
+        // Task #134 (2026-05-28): N-distorted amortized sweep —
+        // representative of the production cpu_adapter workload (one
+        // reference scored against N candidates). Mode string is
+        // `warm_ref_n<N>` where N is the candidate count. The driver
+        // builds one `PrecomputedReference` (untimed) and then loops N
+        // `compute_with_ref` calls (timed total). Final mean per-call
+        // wall is printed via `WARM_REF_N_AMORT` so the per-distorted
+        // amortized cost is directly comparable to a `full` cold call.
+        mode if mode.starts_with("warm_ref_n") => {
+            let n: usize = mode["warm_ref_n".len()..]
+                .parse()
+                .map_err(|_| format!("bad-mode:{mode}"))?;
+            if n == 0 {
+                return Err(format!("bad-mode:{mode} (N must be >= 1)"));
+            }
+            let t_pre = std::time::Instant::now();
+            let pre = z.precompute_reference(&ri).map_err(|e| format!("{e:?}"))?;
+            let pre_ms = t_pre.elapsed().as_secs_f64() * 1000.0;
+            let t_loop = std::time::Instant::now();
+            let mut last_score = 0.0;
+            for _ in 0..n {
+                let v = z
+                    .compute_with_ref(&pre, &di)
+                    .map_err(|e| format!("{e:?}"))?;
+                last_score = v.score();
+            }
+            let loop_ms = t_loop.elapsed().as_secs_f64() * 1000.0;
+            let mean_ms = loop_ms / (n as f64);
+            eprintln!(
+                "WARM_REF_N_AMORT n={n} t_precompute_ms={pre_ms:.2} t_loop_ms={loop_ms:.2} t_per_call_mean_ms={mean_ms:.2}"
+            );
+            Ok(last_score)
         }
         // Phase 9.Y finding #5 fix (2026-05-27): the original `strip`
         // wiring called `compute_streaming_strips_default(&ri, &di)`
@@ -328,7 +396,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
         eprintln!(
-            "usage: cpu-profile <metric> <mode> <width> <height>\n  metrics: cvvdp ssim2 dssim butter iwssim zensim\n  modes:   full warm_ref strip warm_ref_strip"
+            "usage: cpu-profile <metric> <mode> <width> <height>\n  metrics: cvvdp ssim2 dssim butter iwssim zensim\n  modes:   full warm_ref strip warm_ref_strip\n  zensim-only amortized modes: full_n<N> warm_ref_n<N> (e.g. warm_ref_n10)"
         );
         return ExitCode::from(64);
     }
