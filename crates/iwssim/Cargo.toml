@@ -1,0 +1,60 @@
+[package]
+name = "iwssim"
+version = "0.1.0"
+description = "Pure-Rust CPU port of IW-SSIM (Wang & Li 2011), with magetypes SIMD"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+# archmage::incant! macro internally checks `cfg(feature = "avx512")`
+# even when no AVX-512 tier is used — suppress the unexpected_cfgs
+# warning from the macro expansion (matches the cvvdp + zenblend pattern).
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("avx512"))'] }
+
+[features]
+default = ["std"]
+# Use the standard library — most users want this. Off → core + alloc only.
+std = []
+# Opt-in AVX-512 tier on archmage `incant!` sites. Without this flag the
+# pyramid 5-tap blur runs the 8-wide AVX2 tier on AVX-512 CPUs — still
+# faster than scalar, just not the 16-wide AVX-512 win.
+avx512 = ["archmage/avx512", "magetypes/avx512"]
+# Rayon-backed cross-scale parallelism (5 scales × per-scale work).
+parallel = ["std", "dep:rayon"]
+# zenpixels integration smoke (RGB scoring from PixelLayout).
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Opt-in parity test against iwssim-gpu. Off by default because cubecl
+# pulls a heavy build graph; the test binary is also gated on a real
+# CUDA device. See tests/parity_gpu.rs.
+gpu-parity-test = ["dep:iwssim-gpu"]
+
+[dependencies]
+# Safe SIMD dispatch via capability tokens. Used by:
+#  - the pyramid 5-tap binom5 SIMD port (build.rs-generated filters
+#    drive the same blur shape as cvvdp's pyramid 5-tap).
+#  - the 11-tap separable Gaussian for SSIM stats.
+#  - the 3×3 box filter for IW weight map.
+archmage = { workspace = true }
+magetypes = { workspace = true }
+rayon = { version = "1.10", optional = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# Optional GPU parity test (disabled by default — see `gpu-parity-test`).
+iwssim-gpu = { workspace = true, optional = true, features = ["cuda", "cubecl-types"] }
+
+[dev-dependencies]
+# Used for golden capture (decode test fixtures + load JSON).
+image = { workspace = true, features = ["png", "jpeg", "bmp"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
+
+[build-dependencies]
+# Gaussian / binomial coefficient generation at build time — mirrors
+# iwssim-gpu/build.rs so the two crates share identical filter taps to
+# the bit. (Diverging tap values would silently break parity.)
