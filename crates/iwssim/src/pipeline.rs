@@ -65,17 +65,27 @@ pub struct Iwssim {
     /// Per-call scratch buffers — see [`Scratch`].
     scratch: Scratch,
     /// Cached state from `warm_reference`, if any.
-    warm: Option<WarmState>,
+    pub(crate) warm: Option<WarmState>,
 }
 
 /// State cached by `warm_reference`. Holds the per-scale Laplacian
 /// bands + per-scale Gaussian bands (for parent-band lookup) so the
 /// scoring path only has to build the distorted side.
-struct WarmState {
+///
+/// Phase 9.Z.A also caches the per-scale eigendecomposition results
+/// (lambdas + Cu_inv) so `score_with_warm_ref_strip` can use the
+/// global IW covariance without recomputing it across strips.
+pub(crate) struct WarmState {
     /// Reference Laplacian bands (one per scale, finest first).
-    lp_ref: Vec<Vec<f32>>,
+    pub(crate) lp_ref: Vec<Vec<f32>>,
     /// Reference Gaussian bands (one per scale).
-    g_ref: Vec<Vec<f32>>,
+    pub(crate) g_ref: Vec<Vec<f32>>,
+    /// Per-scale eigendecomposition (one per IW scale; index s holds
+    /// the result for scale s ∈ 0..NUM_SCALES-1). `None` indicates
+    /// either an empty scale or a build before the strip path was
+    /// exercised — in the latter case the strip path lazily fills it
+    /// from `lp_ref` / `g_ref`.
+    pub(crate) eigs: Vec<Option<crate::eig::EigResult>>,
 }
 
 impl Iwssim {
@@ -247,7 +257,12 @@ impl Iwssim {
         let levels =
             build_laplacian_pyramid(&self.scratch.ref_work, self.work_w, self.work_h, NUM_SCALES);
         let (lp_ref, g_ref) = split_levels(levels);
-        self.warm = Some(WarmState { lp_ref, g_ref });
+        let eigs = (0..NUM_SCALES - 1).map(|_| None).collect();
+        self.warm = Some(WarmState {
+            lp_ref,
+            g_ref,
+            eigs,
+        });
         Ok(())
     }
 
@@ -375,6 +390,80 @@ impl Iwssim {
         );
         crate::strip::score_strip_internal(
             &self.scratch.ref_work,
+            &self.scratch.dis_work,
+            self.work_w,
+            self.work_h,
+            strip_height as usize,
+            &self.params,
+        )
+    }
+
+    /// Strip-mode score against the warm reference. The cached ref
+    /// state (full-image Laplacian pyramid + per-scale `Cu` eigendecomp)
+    /// lives in `WarmState`; the dist side is walked in strips of
+    /// `strip_height` rows + `STRIP_HALO_ROWS` halo.
+    ///
+    /// Phase 9.Z.A: best-of-both-worlds memory profile for "many
+    /// dist per ref" batch sweeps:
+    /// - Ref state stays full-image cached (~150 MB at 4096²).
+    /// - Per-strip dist working set bounded at one strip's pyramid.
+    /// - No two-pass walk — the eigendecomp is in `WarmState` from
+    ///   `warm_reference`.
+    ///
+    /// Peak memory at 40 MP: roughly RAM(`lp_ref + g_ref` full image)
+    /// + RAM(one strip's dist pyramid) ≈ `image_h × work_w × 4 × 5 ×
+    /// 2 (lp + g) + (body + 2*halo) × work_w × 4 × 5 ≈ 5 × 130 + 150
+    /// ≈ 800 MB` vs 5.58 GB warm-ref Full.
+    pub fn score_with_warm_ref_strip(
+        &mut self,
+        dis_rgb: &[u8],
+        strip_height: u32,
+    ) -> Result<IwssimScore> {
+        let expected = (self.width as usize) * (self.height as usize) * 3;
+        if dis_rgb.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_rgb.len(),
+            });
+        }
+        crate::rgb_u8_to_gray_bt601(dis_rgb, &mut self.scratch.dis_gray);
+        self.score_with_warm_ref_strip_gray_internal(strip_height)
+    }
+
+    /// Strip-mode warm-ref score from gray-f32 dist. See
+    /// [`Self::score_with_warm_ref_strip`].
+    pub fn score_with_warm_ref_strip_gray(
+        &mut self,
+        dis_gray: &[f32],
+        strip_height: u32,
+    ) -> Result<IwssimScore> {
+        let expected = (self.width as usize) * (self.height as usize);
+        if dis_gray.len() != expected {
+            return Err(Error::DimensionMismatch {
+                expected,
+                got: dis_gray.len(),
+            });
+        }
+        self.scratch.dis_gray.copy_from_slice(dis_gray);
+        self.score_with_warm_ref_strip_gray_internal(strip_height)
+    }
+
+    fn score_with_warm_ref_strip_gray_internal(
+        &mut self,
+        strip_height: u32,
+    ) -> Result<IwssimScore> {
+        // Pad dist into work buffer.
+        Self::pad_gray_into(
+            &self.scratch.dis_gray,
+            &mut self.scratch.dis_work,
+            self.width as usize,
+            self.height as usize,
+            self.work_w,
+            self.work_h,
+        );
+        let warm = self.warm.as_mut().ok_or(Error::NoWarmReference)?;
+        crate::strip::score_with_warm_ref_strip_internal(
+            warm,
             &self.scratch.dis_work,
             self.work_w,
             self.work_h,

@@ -78,8 +78,9 @@
 
 use alloc::vec::Vec;
 
-use crate::eig::{decompose_and_invert, EigResult};
+use crate::eig::{cov_from_neighborhood, decompose_and_invert, EigResult};
 use crate::params::IwssimParams;
+use crate::pipeline::WarmState;
 use crate::pyramid::{build_laplacian_pyramid, imenlarge2, pyramid_dims, PyrLevel};
 use crate::ssim::{compute_cs, CsStats};
 use crate::{Error, IwssimScore, NUM_SCALES, Result};
@@ -1145,6 +1146,384 @@ fn split_levels(levels: &[PyrLevel]) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
         g.push(level.g.clone());
     }
     (lp, g)
+}
+
+/// Score in strip mode against a warm reference. The warm state
+/// holds the full-image reference Laplacian pyramid + Gaussian
+/// pyramid, plus (lazily filled) per-scale eigendecomposition.
+///
+/// Single-pass: per strip, build only the dist pyramid (memory-
+/// bounded to one strip's worth of work), then compute cs + infow
+/// using the cached ref state + global eigendecomp, accumulate
+/// `Σ(cs·iw)` / `Σ(iw)` per scale + the top-scale `Σ cs`. Finalize
+/// once at the end.
+///
+/// The eigendecomposition lives in `warm.eigs` and is built once,
+/// either lazily on the first strip walk (if not yet populated) or
+/// by a separate setup pass. For now we compute it lazily on the
+/// global ref pyramid the first time `score_with_warm_ref_strip`
+/// is called — the cost is one full-image Y matrix build per scale,
+/// amortized across many dist scores.
+pub(crate) fn score_with_warm_ref_strip_internal(
+    warm: &mut WarmState,
+    dis_work: &[f32],
+    work_w: usize,
+    work_h: usize,
+    body_h: usize,
+    params: &IwssimParams,
+) -> Result<IwssimScore> {
+    if body_h < STRIP_BODY_MIN as usize {
+        return score_with_warm_ref_strip_internal(
+            warm,
+            dis_work,
+            work_w,
+            work_h,
+            STRIP_BODY_DEFAULT as usize,
+            params,
+        );
+    }
+
+    let dims = pyramid_dims(work_w, work_h, NUM_SCALES);
+    let block_h = params.bl_sz_y as usize;
+    let block_w = params.bl_sz_x as usize;
+    let parent_enabled = params.parent;
+    let bound1 = params.bound1() as usize;
+
+    let big_n_at = |s: usize| -> usize {
+        if parent_enabled && s < NUM_SCALES - 2 {
+            block_h * block_w + 1
+        } else {
+            block_h * block_w
+        }
+    };
+
+    // ====== Lazy eigendecomp on the warm reference ======
+    // Computes per-scale C_u from the FULL reference Y matrix once.
+    // Subsequent strip walks reuse the cached eigendecomposition.
+    if params.iw_flag {
+        for s in 0..NUM_SCALES - 1 {
+            if warm.eigs[s].is_some() {
+                continue;
+            }
+            let (w_s, h_s) = dims[s];
+            let big_n = big_n_at(s);
+            let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
+            // Build the parent_band from g_ref[s+1] if enabled.
+            let parent_band: Option<Vec<f32>> = if parent_enabled_at {
+                let (w_nxt, h_nxt) = dims[s + 1];
+                Some(imenlarge2(&warm.g_ref[s + 1], w_nxt, h_nxt, w_s, h_s))
+            } else {
+                None
+            };
+            // Build the full Y matrix for the reference at this
+            // scale. This is the same Y the full-image `compute_iw_maps`
+            // path produces — same `cov_from_neighborhood` input.
+            // Memory cost: ~`nblv * nblh * big_n * 4` bytes ≈ 380 MB
+            // at scale 0 of 40 MP; freed after this loop.
+            let (y_full, nexp, _, _) =
+                build_y_matrix_full(&warm.lp_ref[s], parent_band.as_deref(), h_s, w_s, block_h, block_w);
+            let cu = cov_from_neighborhood(&y_full, nexp, big_n);
+            let eig = decompose_and_invert(&cu, big_n);
+            warm.eigs[s] = Some(eig);
+        }
+    }
+
+    // ====== Walk strips for dist + accumulate ======
+    let strips = plan_strips(work_h, body_h, STRIP_HALO_ROWS);
+    let mut scale_accums: Vec<ScaleAccum> = (0..NUM_SCALES - 1)
+        .map(|s| {
+            let n = big_n_at(s);
+            ScaleAccum {
+                yty: alloc::vec![0.0_f64; n * n],
+                nexp_total: 0,
+                sum_csiw: 0.0,
+                sum_iw: 0.0,
+            }
+        })
+        .collect();
+    let mut top_accum = TopAccum::default();
+
+    for sg in &strips {
+        let strip_h = sg.strip_h();
+        let body_in_strip = sg.body_in_strip();
+
+        // Slice the dist strip and build its pyramid.
+        let dis_strip = {
+            let n = strip_h * work_w;
+            let mut buf = alloc::vec![0.0_f32; n];
+            buf.copy_from_slice(&dis_work[sg.strip_start * work_w..sg.strip_end * work_w]);
+            buf
+        };
+        let dis_levels = build_laplacian_pyramid(&dis_strip, work_w, strip_h, NUM_SCALES);
+        let (lp_dis_v, _) = split_levels(&dis_levels);
+
+        for s in 0..NUM_SCALES - 1 {
+            if !params.iw_flag {
+                break;
+            }
+            let Some(eig) = warm.eigs[s].as_ref() else {
+                continue;
+            };
+            let (w_s, _) = dims[s];
+            let dims_s_strip = pyramid_dims(work_w, strip_h, NUM_SCALES);
+            let (_, strip_h_at_s) = dims_s_strip[s];
+            let body_in_strip_s_raw = body_at_scale(body_in_strip.0, body_in_strip.1, s);
+            if body_in_strip_s_raw.1 <= body_in_strip_s_raw.0 {
+                continue;
+            }
+            let ly = (block_h - 1) / 2;
+            let strip_start_at_s = sg.strip_start.div_ceil(1 << s);
+            let body_start_image = body_in_strip_s_raw.0 + strip_start_at_s;
+            let body_end_image = body_in_strip_s_raw.1 + strip_start_at_s;
+            let (_, image_h_at_s) = dims[s];
+            let body_start_image_trim = body_start_image.max(ly);
+            let body_end_image_trim = body_end_image.min(image_h_at_s.saturating_sub(ly));
+            if body_end_image_trim <= body_start_image_trim {
+                continue;
+            }
+            let body_in_strip_s = (
+                body_start_image_trim - strip_start_at_s,
+                body_end_image_trim - strip_start_at_s,
+            );
+            if body_in_strip_s.0 < ly || body_in_strip_s.1 + ly > strip_h_at_s {
+                continue;
+            }
+            if strip_h_at_s <= 10 {
+                continue;
+            }
+
+            // The cs computation needs both ref and dis at this scale.
+            // The REF lp at this scale is full-image (warm.lp_ref[s]).
+            // The DIS lp is per-strip (lp_dis_v[s]).
+            //
+            // For the strip we need the ref's STRIP slice at scale s
+            // covering the same strip rows as the dist. Slice it from
+            // warm.lp_ref[s].
+            let ref_lp_strip_at_s = {
+                let n = strip_h_at_s * w_s;
+                let mut buf = alloc::vec![0.0_f32; n];
+                let src_start = strip_start_at_s * w_s;
+                buf.copy_from_slice(
+                    &warm.lp_ref[s][src_start..src_start + n],
+                );
+                buf
+            };
+
+            let cs_full = compute_cs(
+                &ref_lp_strip_at_s,
+                &lp_dis_v[s],
+                strip_h_at_s,
+                w_s,
+                false,
+            );
+
+            // Body cs rows in strip-cs coords.
+            let cs_body_start_i = (body_in_strip_s.0 + bound1) as isize - 5;
+            let cs_body_end_i = (body_in_strip_s.1 as isize - bound1 as isize) - 5;
+            let cs_body_start = cs_body_start_i.max(0) as usize;
+            let cs_body_end =
+                (cs_body_end_i.max(0) as usize).min(cs_full.cs_h);
+            if cs_body_end <= cs_body_start {
+                continue;
+            }
+            let cs_body_h = cs_body_end - cs_body_start;
+            let cs_w_at_s = cs_full.cs_w;
+            let cs_body_w = cs_w_at_s;
+            if cs_body_w == 0 {
+                continue;
+            }
+            let body_y_start_offset = (-cs_body_start_i).max(0) as usize;
+            let body_y_end_offset =
+                ((cs_body_end_i - cs_body_end as isize).max(0)) as usize;
+            let body_in_strip_s_final = (
+                body_in_strip_s.0 + body_y_start_offset,
+                body_in_strip_s.1 - body_y_end_offset,
+            );
+
+            let mut cs_body = alloc::vec![0.0_f32; cs_body_h * cs_body_w];
+            for r in 0..cs_body_h {
+                let src_row = &cs_full.cs[(cs_body_start + r) * cs_w_at_s
+                    ..(cs_body_start + r + 1) * cs_w_at_s];
+                cs_body[r * cs_body_w..(r + 1) * cs_body_w].copy_from_slice(src_row);
+            }
+
+            let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
+            let parent_band: Option<Vec<f32>> = if parent_enabled_at {
+                let (w_nxt, _) = dims[s + 1];
+                // For the warm path we have the ref's full-image
+                // Gaussian. We could slice it to the strip's range,
+                // but parent_band is computed via imenlarge2 over
+                // the WHOLE g_ref[s+1] — equivalent to the full-image
+                // path. The result is a (w_s, image_h_at_s)
+                // full-image parent_band; we slice the strip-rows
+                // out of it.
+                //
+                // For Phase 9.Z.A simplicity, just slice g_ref[s+1]
+                // to the strip rows + halo at scale s+1 and run
+                // imenlarge2 on that strip. The strip's parent_band
+                // at scale s = imenlarge2(strip_g_ref[s+1]). Memory
+                // bounded.
+                let (_, h_nxt_strip) = dims_s_strip[s + 1];
+                let strip_start_at_s1 = sg.strip_start.div_ceil(1 << (s + 1));
+                let strip_end_at_s1 = (sg.strip_end + ((1 << (s + 1)) - 1)) >> (s + 1);
+                // Use the full-image warm.g_ref[s+1] slice at
+                // strip rows.
+                let h_actual = strip_end_at_s1 - strip_start_at_s1;
+                let n = h_actual * w_nxt;
+                let mut g_ref_strip_at_s1 = alloc::vec![0.0_f32; n];
+                let src_start = strip_start_at_s1 * w_nxt;
+                if src_start + n <= warm.g_ref[s + 1].len() {
+                    g_ref_strip_at_s1.copy_from_slice(
+                        &warm.g_ref[s + 1][src_start..src_start + n],
+                    );
+                } else {
+                    // Strip extends past image; fall back to full
+                    // image (should not happen in practice).
+                    g_ref_strip_at_s1.copy_from_slice(&warm.g_ref[s + 1]);
+                }
+                let _ = h_nxt_strip;
+                Some(imenlarge2(
+                    &g_ref_strip_at_s1,
+                    w_nxt,
+                    h_actual,
+                    w_s,
+                    strip_h_at_s,
+                ))
+            } else {
+                None
+            };
+
+            fold_iw_for_strip_scale(
+                &ref_lp_strip_at_s,
+                &lp_dis_v[s],
+                parent_band.as_deref(),
+                strip_h_at_s,
+                w_s,
+                body_in_strip_s_final,
+                params,
+                eig,
+                &cs_body,
+                cs_body_h,
+                cs_body_w,
+                &mut scale_accums[s],
+            );
+        }
+
+        // Top scale (NUM_SCALES-1).
+        {
+            let s = NUM_SCALES - 1;
+            let (w_s, _) = dims[s];
+            let dims_s_strip = pyramid_dims(work_w, strip_h, NUM_SCALES);
+            let (_, strip_h_at_s) = dims_s_strip[s];
+            if strip_h_at_s > 10 {
+                let strip_start_at_s = sg.strip_start.div_ceil(1 << s);
+                let ref_lp_strip_at_s = {
+                    let n = strip_h_at_s * w_s;
+                    let mut buf = alloc::vec![0.0_f32; n];
+                    let src_start = strip_start_at_s * w_s;
+                    if src_start + n <= warm.lp_ref[s].len() {
+                        buf.copy_from_slice(&warm.lp_ref[s][src_start..src_start + n]);
+                    } else {
+                        buf.copy_from_slice(&warm.lp_ref[s]);
+                    }
+                    buf
+                };
+                let cs_full = compute_cs(
+                    &ref_lp_strip_at_s,
+                    &lp_dis_v[s],
+                    strip_h_at_s,
+                    w_s,
+                    true,
+                );
+                let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
+                let (cs_body_start, cs_body_end) = body_cs_range_at_scale(
+                    cs_full.cs_h,
+                    body_in_strip_s,
+                    strip_h_at_s,
+                );
+                let cs_body_h = cs_body_end.saturating_sub(cs_body_start);
+                if cs_body_h > 0 {
+                    let cs_w_at_s = cs_full.cs_w;
+                    for r in cs_body_start..cs_body_end {
+                        let cs_row = &cs_full.cs[r * cs_w_at_s..(r + 1) * cs_w_at_s];
+                        for &v in cs_row {
+                            top_accum.sum_cs += v as f64;
+                        }
+                    }
+                    top_accum.n_cs += cs_body_h * cs_w_at_s;
+                }
+            }
+        }
+    }
+
+    // ====== Finalize ======
+    let mut wmcs: [f64; NUM_SCALES] = [0.0; NUM_SCALES];
+    for s in 0..NUM_SCALES - 1 {
+        let acc = &scale_accums[s];
+        let denom = if acc.sum_iw == 0.0 { 1.0 } else { acc.sum_iw };
+        wmcs[s] = acc.sum_csiw / denom;
+    }
+    let top_denom = if top_accum.n_cs == 0 {
+        1.0
+    } else {
+        top_accum.n_cs as f64
+    };
+    wmcs[NUM_SCALES - 1] = top_accum.sum_cs / top_denom;
+
+    let mut score = 1.0_f64;
+    for s in 0..NUM_SCALES {
+        score *= wmcs[s].abs().powf(crate::filters::SCALE_WEIGHTS[s] as f64);
+    }
+    Ok(IwssimScore {
+        score,
+        per_scale: wmcs,
+    })
+}
+
+/// Build the FULL Y matrix for `compute_iw_maps`-style covariance
+/// — equivalent to `crate::weights::build_y_matrix` but visible to
+/// the strip module. Used by `score_with_warm_ref_strip_internal`
+/// to lazily eig-decompose the warm reference once per scale.
+fn build_y_matrix_full(
+    img: &[f32],
+    parent: Option<&[f32]>,
+    h: usize,
+    w: usize,
+    block_h: usize,
+    block_w: usize,
+) -> (Vec<f32>, usize, usize, usize) {
+    let lx = (block_w - 1) / 2;
+    let ly = (block_h - 1) / 2;
+    let nblv = h - block_h + 1;
+    let nblh = w - block_w + 1;
+    let nexp = nblv * nblh;
+    let big_n = block_h * block_w + parent.is_some() as usize;
+    let mut y = alloc::vec![0.0_f32; nexp * big_n];
+    let mut col = 0;
+    for ny in -(ly as i32)..=(ly as i32) {
+        for nx in -(lx as i32)..=(lx as i32) {
+            for r in 0..nblv {
+                for c in 0..nblh {
+                    let yy = (r + ly) as i32 + ny;
+                    let xx = (c + lx) as i32 + nx;
+                    let row_index = r * nblh + c;
+                    y[row_index * big_n + col] = img[(yy as usize) * w + (xx as usize)];
+                }
+            }
+            col += 1;
+        }
+    }
+    if let Some(parent_band) = parent {
+        for r in 0..nblv {
+            for c in 0..nblh {
+                let yy = r + ly;
+                let xx = c + lx;
+                let row_index = r * nblh + c;
+                y[row_index * big_n + col] = parent_band[yy * w + xx];
+            }
+        }
+    }
+    (y, nexp, nblv, nblh)
 }
 
 // Force the Error / CsStats imports to stay used even when feature

@@ -127,6 +127,81 @@ fn strip_constants_round_to_halving_alignment() {
     assert_eq!(STRIP_BODY_DEFAULT % 16, 0);
 }
 
+fn warm_ref_parity_at(w: u32, h: u32, strip_h: u32, seed: u64, tol_abs: f64) {
+    let (ref_buf, dis_buf) = synth_rgb_pair(w, h, seed);
+    let mut scorer_full = Iwssim::new(w, h).expect("full Iwssim");
+    scorer_full
+        .warm_reference(&ref_buf)
+        .expect("warm_reference");
+    let full = scorer_full
+        .score_with_warm_ref(&dis_buf)
+        .expect("warm score");
+    let mut scorer_strip = Iwssim::new(w, h).expect("strip Iwssim");
+    scorer_strip
+        .warm_reference(&ref_buf)
+        .expect("warm_reference strip");
+    let strip = scorer_strip
+        .score_with_warm_ref_strip(&dis_buf, strip_h)
+        .expect("warm_ref_strip score");
+    let diff = (full.score - strip.score).abs();
+    eprintln!(
+        "warm_ref_strip {}x{} strip {} seed {}: full={:.6} strip={:.6} diff={:.6e}",
+        w, h, strip_h, seed, full.score, strip.score, diff
+    );
+    for s in 0..5 {
+        eprintln!(
+            "  scale {}: full={:.6} strip={:.6} diff={:.6e}",
+            s,
+            full.per_scale[s],
+            strip.per_scale[s],
+            (full.per_scale[s] - strip.per_scale[s]).abs()
+        );
+    }
+    assert!(
+        diff < tol_abs,
+        "warm_ref_strip {}x{} strip {} seed {}: score diff {:.6e} exceeds tol {:.6e} (full={}, strip={})",
+        w,
+        h,
+        strip_h,
+        seed,
+        diff,
+        tol_abs,
+        full.score,
+        strip.score
+    );
+}
+
+#[test]
+fn warm_ref_strip_parity_512x512_body512() {
+    warm_ref_parity_at(512, 512, 512, 0xc0_ffee_12_34, 1e-5);
+}
+
+#[test]
+fn warm_ref_strip_parity_512x512_body256() {
+    warm_ref_parity_at(512, 512, 256, 0xc0_ffee_12_34, 1e-4);
+}
+
+#[test]
+fn warm_ref_strip_parity_1024x1024_body512() {
+    warm_ref_parity_at(1024, 1024, 512, 0xa1_b2_c3_d4, 1e-4);
+}
+
+#[test]
+fn warm_ref_strip_parity_1024x1024_body256() {
+    warm_ref_parity_at(1024, 1024, 256, 0xa1_b2_c3_d4, 1e-4);
+}
+
+#[test]
+fn warm_ref_strip_no_warm_returns_error() {
+    let (_, dis_buf) = synth_rgb_pair(256, 256, 0xc0_ffee_12_34);
+    let mut scorer = Iwssim::new(256, 256).expect("Iwssim");
+    let result = scorer.score_with_warm_ref_strip(&dis_buf, 256);
+    assert!(
+        result.is_err(),
+        "score_with_warm_ref_strip should error without warm_reference"
+    );
+}
+
 #[test]
 fn strip_with_iw_flag_off() {
     // Sanity test the non-IW path through the strip walker too.
