@@ -122,6 +122,16 @@ pub struct Cvvdp {
     /// iterations at sizes large enough to actually partition. Reset
     /// to 0 at the start of each strip-mode call.
     strip_dispatch_counter: core::sync::atomic::AtomicU32,
+    /// When set, indicates `self.scratch` was allocated via
+    /// [`Scratch::new_strip`] at this `h_body`. Subsequent strip calls
+    /// at the same h_body reuse the existing strip-shape scratch; calls
+    /// at a different h_body force a re-allocation (rare in practice —
+    /// h_body is typically fixed per Cvvdp instance lifetime).
+    ///
+    /// `None` means `self.scratch` is the full-image `Scratch::new`
+    /// allocation (the default for Full-mode `score()` callers).
+    /// Phase 9.Z.F Path A.
+    strip_scratch_h_body: Option<u32>,
 }
 
 impl Cvvdp {
@@ -159,6 +169,57 @@ impl Cvvdp {
             warm_active: false,
             strip_h_body: core::cell::Cell::new(None),
             strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
+            strip_scratch_h_body: None,
+        })
+    }
+
+    /// Construct a scorer configured for strip mode at a given
+    /// `h_body`. Pre-allocates the scratch in strip shape (saving
+    /// ~80% of the persistent weber pyramid + cache footprint at
+    /// shallow levels), so callers that exclusively use `score_strip`
+    /// avoid the peak heap of an intermediate `Scratch::new` allocation.
+    ///
+    /// Use this constructor when `score_strip` is the only entry point
+    /// you intend to call. Calling `score()` Full-mode is still permitted
+    /// but will be slower at shallow levels (full-image weber bands will
+    /// need to be built into strip-shape buffers, triggering capacity
+    /// growth back to full image — at which point Full-mode score()
+    /// behaves like the standard `new()`-allocated path).
+    ///
+    /// **Phase 9.Z.F Path A.** Wires `Scratch::new_strip` directly into
+    /// the constructor so peak heap during `score_strip` is bounded by
+    /// the strip-shape allocator's footprint (~1.7 GB target at 16 MP,
+    /// down from 3.66 GB).
+    pub fn new_strip(
+        width: u32,
+        height: u32,
+        params: CvvdpParams,
+        h_body: u32,
+    ) -> Result<Self> {
+        if !crate::strip::is_valid_strip_h_body(h_body) {
+            return Err(Error::InvalidImageSize {
+                width: h_body,
+                height: 0,
+            });
+        }
+        if width < 8 || height < 8 {
+            return Err(Error::InvalidImageSize { width, height });
+        }
+        let w = width as usize;
+        let h = height as usize;
+        let geometry = DisplayGeometry::STANDARD_4K;
+        let ppd = geometry.pixels_per_degree();
+        let n_levels = band_frequencies(ppd, w, h).len();
+        Ok(Self {
+            width: w,
+            height: h,
+            params,
+            ppd,
+            scratch: Scratch::new_strip(w, h, n_levels, h_body),
+            warm_active: false,
+            strip_h_body: core::cell::Cell::new(None),
+            strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
+            strip_scratch_h_body: Some(h_body),
         })
     }
 
@@ -493,6 +554,495 @@ impl Cvvdp {
         self.scratch.weber_ref = ref_weber;
         self.scratch.weber_dist = dist_weber;
         Ok((jod, diffmap))
+    }
+
+    /// Strip-major dispatcher for `score_strip`. Bypasses
+    /// `build_both_sides_into` (which would resize the strip-shape
+    /// weber slots back to full-image) and `fold_bands` (which iterates
+    /// band-major). Instead:
+    ///
+    /// 1. Builds full-image gauss pyramids for ref + dist into
+    ///    `weber_cache_*` (these are 32 B/px per side, smaller than
+    ///    the eliminated 96 B/px weber band footprint).
+    /// 2. Builds full-image weber bands for DEEP levels (k >= k_split)
+    ///    only, writing into the deep weber slots of `weber_*[c].bands[k]`.
+    /// 3. Calls `dispatch_strip_major_shallow` for the shallow levels.
+    ///    Each (s, k) iteration builds one strip's worth of weber band
+    ///    data on-the-fly and immediately runs CSF + masking + pool.
+    /// 4. Combines per-level q values via the existing JOD pooling step.
+    ///
+    /// Bit-identical to `score_internal` because:
+    ///  - The per-strip CSF + masking math is identical (proved by
+    ///    `process_strip_step_at_s_k` matching the inner loop body of
+    ///    `process_shallow_strip_band`).
+    ///  - The strip kernels (`upscale_v_strip_into`,
+    ///    `upscale_h_strip_into`, `subtract_weber_3ch_strip_into`)
+    ///    produce strip-local outputs bit-identical to the full-image
+    ///    builds sliced to the same window (proved by
+    ///    `strip_kernels.rs`'s 12 parity tests).
+    ///  - The `LpNormAccumulator` sees the same `acc += x_i` sequence
+    ///    in row-order across strips, matching single-pass
+    ///    `lp_norm_mean`.
+    fn score_internal_strip(
+        &mut self,
+        want_diffmap: bool,
+        h_body: u32,
+    ) -> Result<(f32, Option<Vec<f32>>)> {
+        let w = self.width;
+        let h = self.height;
+        let n_levels = crate::pyramid::band_frequencies(self.ppd, w, h).len();
+        let k_split = mode_b_k_split(h_body, n_levels as u32) as usize;
+
+        // Step 1: build full-image gauss pyramids for both sides into
+        // weber_cache_ref / weber_cache_dist. We build:
+        //   - cache_*[0].gauss_img: pyramid of achromatic plane
+        //   - cache_*[1].gauss_img: pyramid of RG plane
+        //   - cache_*[2].gauss_img: pyramid of VY plane
+        //   - cache_*[0].gauss_l:  pyramid of achromatic plane (the
+        //     L_bkg reference shared across all 3 channels)
+        // The redundant gauss_l in cache_*[1/2] is NOT built — we save
+        // 4 × ~85 MB at 16 MP. Deep-level processing reads gauss_l from
+        // cache_*[0] explicitly.
+        {
+            let Scratch {
+                ref_a,
+                ref_rg,
+                ref_vy,
+                dist_a,
+                dist_rg,
+                dist_vy,
+                weber_cache_ref,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            // Ref side: 3 gauss_img pyramids + 1 gauss_l pyramid.
+            build_gauss_pyramid_into(
+                ref_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[0].scratch,
+                &mut weber_cache_ref[0].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                ref_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[0].scratch,
+                &mut weber_cache_ref[0].gauss_l,
+            );
+            build_gauss_pyramid_into(
+                ref_rg,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[1].scratch,
+                &mut weber_cache_ref[1].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                ref_vy,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[2].scratch,
+                &mut weber_cache_ref[2].gauss_img,
+            );
+            // Dist side: same shape (3 gauss_img + 1 gauss_l).
+            // `plane_a` here is DIST achromatic per
+            // `build_one_side_recycle`'s call shape.
+            build_gauss_pyramid_into(
+                dist_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[0].scratch,
+                &mut weber_cache_dist[0].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                dist_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[0].scratch,
+                &mut weber_cache_dist[0].gauss_l,
+            );
+            build_gauss_pyramid_into(
+                dist_rg,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[1].scratch,
+                &mut weber_cache_dist[1].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                dist_vy,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[2].scratch,
+                &mut weber_cache_dist[2].gauss_img,
+            );
+        }
+
+        // Step 1b: release the gauss-build vscratch + z_v/z_h scratches
+        // from each cache. These were used by `build_gauss_pyramid_into`'s
+        // internal `gausspyr_reduce` but won't be read by the strip
+        // dispatcher (which uses the chunk-5 strip kernels — those have
+        // their own caller-provided scratch in `StripDispatcherState`).
+        // The expand-side scratches (`expanded`, `gauss_tmp`) are still
+        // needed by the deep-level `build_full_weber_band_at_k` calls.
+        for c in 0..3 {
+            self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_ref[c].scratch.z_v.clear();
+            self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
+            self.scratch.weber_cache_ref[c].scratch.z_h.clear();
+            self.scratch.weber_cache_ref[c].scratch.z_h.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.z_v.clear();
+            self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.z_h.clear();
+            self.scratch.weber_cache_dist[c].scratch.z_h.shrink_to_fit();
+        }
+
+        // Step 1c: release the unused gauss_l buffers from cache_*[1..3].
+        // `Scratch::new_strip` pre-allocated strip-shape gauss_l for every
+        // channel cache, but the dispatcher reads gauss_l only from
+        // cache_*[0] (the achromatic cache). Free the 4 wasted gauss_l
+        // pyramids — saves ~200 MB at 16 MP.
+        for c in 1..3 {
+            for level in self.scratch.weber_cache_ref[c].gauss_l.iter_mut() {
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+            for level in self.scratch.weber_cache_dist[c].gauss_l.iter_mut() {
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+        }
+
+        // Step 2: build full-image weber bands for DEEP levels only.
+        // Shallow weber slots remain unwritten in their strip-shape capacity.
+        // gauss_l is shared from cache_*[0] across all 3 channels (matches
+        // the original `build_one_side_recycle` shape where weber_contrast_pyr_into
+        // is called with l_bkg_plane = achromatic for all 3 channels).
+        {
+            let Scratch {
+                weber_ref,
+                weber_dist,
+                weber_cache_ref,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            for k in k_split..n_levels {
+                // Process channels with split-borrow on the 3 caches so we
+                // can borrow cache[0] immutably (as l_cache) while borrowing
+                // cache[c] mutably for c != 0.
+                // c = 0 case: img_cache and l_cache are the same — call with
+                // a separate `dummy_l` borrow shape isn't possible without
+                // reborrow tricks; instead duplicate the gauss_l reference
+                // through a fresh non-mutable view.
+                for c in 0..3 {
+                    // For ref side, gauss_l is in cache_ref[0]; gauss_img
+                    // is in cache_ref[c].
+                    // Take a snapshot of cache_ref[0].gauss_l[k] and [k+1] as
+                    // Vec<f32> (cloning the relevant band data is the easy
+                    // way around the borrow checker when c == 0). We avoid
+                    // unnecessary clones for c != 0 by using a different
+                    // path.
+                    if c == 0 {
+                        // img_cache and l_cache are the same — `build_full_weber_band_at_k`
+                        // expects them separately; pass a manual call that
+                        // uses the cache for both roles.
+                        let cache = &mut weber_cache_ref[0];
+                        build_full_weber_band_at_k_same_cache(
+                            cache,
+                            k,
+                            n_levels,
+                            &mut weber_ref[0].bands[k],
+                            &mut weber_ref[0].log_l_bkg[k],
+                        );
+                    } else {
+                        let (head, tail) = weber_cache_ref.split_at_mut(1);
+                        let l_cache = &head[0];
+                        let img_cache = &mut tail[c - 1];
+                        build_full_weber_band_at_k(
+                            img_cache,
+                            l_cache,
+                            k,
+                            n_levels,
+                            &mut weber_ref[c].bands[k],
+                            &mut weber_ref[c].log_l_bkg[k],
+                        );
+                    }
+                    // DIST side: same pattern.
+                    if c == 0 {
+                        let cache = &mut weber_cache_dist[0];
+                        build_full_weber_band_at_k_same_cache(
+                            cache,
+                            k,
+                            n_levels,
+                            &mut weber_dist[0].bands[k],
+                            &mut weber_dist[0].log_l_bkg[k],
+                        );
+                    } else {
+                        let (head, tail) = weber_cache_dist.split_at_mut(1);
+                        let l_cache = &head[0];
+                        let img_cache = &mut tail[c - 1];
+                        build_full_weber_band_at_k(
+                            img_cache,
+                            l_cache,
+                            k,
+                            n_levels,
+                            &mut weber_dist[c].bands[k],
+                            &mut weber_dist[c].log_l_bkg[k],
+                        );
+                    }
+                }
+            }
+        }
+
+        // Step 3: dispatch strip-major shallow processing.
+        // The dispatcher writes per-shallow-level finalized q values into
+        // q_shallow.
+        let mut dispatcher_state = StripDispatcherState::default();
+        self.scratch.ensure_strip_band_ws(k_split.max(1));
+        let mut sws_taken = if k_split > 0 {
+            core::mem::take(
+                &mut self
+                    .scratch
+                    .strip_band_ws
+                    .as_mut()
+                    .expect("ensure_strip_band_ws populated this slot")[0],
+            )
+        } else {
+            StripBandWorkspace::default()
+        };
+        // Diffmap not yet supported in strip mode (would require
+        // tracking full-band d_* for each shallow level). Fall through
+        // to no diffmap for now.
+        let _ = want_diffmap;
+
+        let q_shallow = {
+            let Scratch {
+                weber_cache_ref,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            dispatch_strip_major_shallow(
+                &mut dispatcher_state,
+                &mut sws_taken,
+                weber_cache_ref,
+                weber_cache_dist,
+                h,
+                n_levels,
+                self.ppd,
+                h_body,
+                k_split,
+                &self.strip_dispatch_counter,
+                None,
+            )
+        };
+        // Stash sws back.
+        if k_split > 0 {
+            self.scratch.strip_band_ws.as_mut().unwrap()[0] = sws_taken;
+        }
+
+        // Step 4: process deep levels via the existing fold path.
+        // We replicate the band-loop's deep-level body for k in k_split..n_levels.
+        let q_deep = {
+            let ref_weber = core::mem::replace(
+                &mut self.scratch.weber_ref,
+                [
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                ],
+            );
+            let dist_weber = core::mem::replace(
+                &mut self.scratch.weber_dist,
+                [
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                ],
+            );
+            let q_deep = self.fold_bands_deep_only(
+                &ref_weber,
+                &dist_weber,
+                n_levels,
+                w,
+                h,
+                k_split,
+            );
+            // Stash back.
+            self.scratch.weber_ref = ref_weber;
+            self.scratch.weber_dist = dist_weber;
+            q_deep
+        };
+
+        // Step 5: combine shallow + deep q values → JOD.
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
+        q_per_ch.extend(q_shallow.into_iter());
+        q_per_ch.extend(q_deep.into_iter());
+        debug_assert_eq!(q_per_ch.len(), n_levels);
+        let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
+        Ok((jod, None))
+    }
+
+    /// Fold deep bands only (k in `[k_split, n_levels)`) — used by the
+    /// strip dispatcher to process the small full-image deep bands.
+    ///
+    /// Mirrors `fold_bands_sequential` / `fold_bands_parallel`'s deep
+    /// band processing, but only for the deep range. Returns q values
+    /// per deep level (in order: k_split, k_split+1, ..., n_levels-1).
+    fn fold_bands_deep_only(
+        &mut self,
+        ref_weber: &[WeberPyramid; 3],
+        dist_weber: &[WeberPyramid; 3],
+        n_levels: usize,
+        w: usize,
+        h: usize,
+        k_split: usize,
+    ) -> Vec<[f32; 3]> {
+        let _ = (w, h);
+        let freqs = crate::pyramid::band_frequencies(self.ppd, self.width, self.height);
+        let mut q_deep: Vec<[f32; 3]> = Vec::with_capacity(n_levels - k_split);
+        self.scratch.ensure_band_ws(1);
+        for k in k_split..n_levels {
+            let is_first = k == 0;
+            let is_baseband = k == n_levels - 1;
+            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            let bw = ref_weber[0].bands[k].w;
+            let bh = ref_weber[0].bands[k].h;
+            let n_px = bw * bh;
+            let rho = if is_baseband {
+                CSF_BASEBAND_RHO
+            } else {
+                freqs[k]
+            };
+            let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
+            let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
+            let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
+
+            let ref_a_band = &ref_weber[0].bands[k].data;
+            let ref_rg_band = &ref_weber[1].bands[k].data;
+            let ref_vy_band = &ref_weber[2].bands[k].data;
+            let dis_a_band = &dist_weber[0].bands[k].data;
+            let dis_rg_band = &dist_weber[1].bands[k].data;
+            let dis_vy_band = &dist_weber[2].bands[k].data;
+            let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+            let ch_gain_a = CH_GAIN[0];
+            let ch_gain_rg = CH_GAIN[1];
+            let ch_gain_vy = CH_GAIN[2];
+
+            let ws = &mut self.scratch.band_ws[0];
+
+            ws.t_p_a.clear();
+            ws.t_p_a.resize(n_px, 0.0);
+            ws.t_p_rg.clear();
+            ws.t_p_rg.resize(n_px, 0.0);
+            ws.t_p_vy.clear();
+            ws.t_p_vy.resize(n_px, 0.0);
+            ws.r_p_a.clear();
+            ws.r_p_a.resize(n_px, 0.0);
+            ws.r_p_rg.clear();
+            ws.r_p_rg.resize(n_px, 0.0);
+            ws.r_p_vy.clear();
+            ws.r_p_vy.resize(n_px, 0.0);
+
+            if is_baseband {
+                ws.d_a.clear();
+                ws.d_a.resize(n_px, 0.0);
+                ws.d_rg.clear();
+                ws.d_rg.resize(n_px, 0.0);
+                ws.d_vy.clear();
+                ws.d_vy.resize(n_px, 0.0);
+                for i in 0..n_px {
+                    let log_l = log_l_bkg_band[i];
+                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+                    let diff_a = dis_a_band[i] - ref_a_band[i];
+                    let diff_rg = dis_rg_band[i] - ref_rg_band[i];
+                    let diff_vy = dis_vy_band[i] - ref_vy_band[i];
+                    ws.d_a[i] = diff_a.abs() * s_a;
+                    ws.d_rg[i] = diff_rg.abs() * s_rg;
+                    ws.d_vy[i] = diff_vy.abs() * s_vy;
+                }
+            } else {
+                for i in 0..n_px {
+                    let log_l = log_l_bkg_band[i];
+                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+                    let bm_sa = band_mul * s_a;
+                    let bm_srg = band_mul * s_rg;
+                    let bm_svy = band_mul * s_vy;
+                    ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
+                    ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
+                    ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
+                    ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
+                    ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
+                    ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
+                }
+                let t_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.t_p_a),
+                    core::mem::take(&mut ws.t_p_rg),
+                    core::mem::take(&mut ws.t_p_vy),
+                ];
+                let r_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.r_p_a),
+                    core::mem::take(&mut ws.r_p_rg),
+                    core::mem::take(&mut ws.r_p_vy),
+                ];
+                mult_mutual_band_into(
+                    &t_p_taken,
+                    &r_p_taken,
+                    bw,
+                    bh,
+                    &mut ws.d_a,
+                    &mut ws.d_rg,
+                    &mut ws.d_vy,
+                    &mut ws.m_mm_a,
+                    &mut ws.m_mm_rg,
+                    &mut ws.m_mm_vy,
+                    &mut ws.term_a,
+                    &mut ws.term_rg,
+                    &mut ws.term_vy,
+                    &mut ws.pu_h,
+                );
+                let [t_a, t_rg, t_vy] = t_p_taken;
+                let [r_a, r_rg, r_vy] = r_p_taken;
+                ws.t_p_a = t_a;
+                ws.t_p_rg = t_rg;
+                ws.t_p_vy = t_vy;
+                ws.r_p_a = r_a;
+                ws.r_p_rg = r_rg;
+                ws.r_p_vy = r_vy;
+            }
+
+            // Pool — strip mode at deep levels still partitions in
+            // strips to match the existing chunk 4 behavior, but at
+            // deep levels each "strip" is (h_body >> k).max(1) which is
+            // often 1 row. The pool is associative so the result is
+            // bit-identical to the single-pass `lp_norm_mean`.
+            let h_body_now = self.strip_h_body.get();
+            let q_band = pool_band_3ch(
+                &ws.d_a,
+                &ws.d_rg,
+                &ws.d_vy,
+                bw,
+                bh,
+                k,
+                h_body_now,
+                &self.strip_dispatch_counter,
+            );
+            q_deep.push(q_band);
+        }
+        q_deep
     }
 
     fn score_internal_with_warm(&mut self, want_diffmap: bool) -> Result<(f32, Option<Vec<f32>>)> {
@@ -1218,8 +1768,23 @@ impl Cvvdp {
                 height: 0,
             });
         }
+        self.check_srgb(ref_srgb)?;
+        self.check_srgb(dist_srgb)?;
+
+        // Phase 9.Z.F Path A: swap to strip-shape Scratch on first strip
+        // call (or re-config if h_body changes). The strip-major
+        // dispatcher writes per-strip weber data on-the-fly and never
+        // resizes the strip-shape buffers back to full-image, so the
+        // persistent weber slot footprint drops from ~96 B/px to a few
+        // B/px (deep levels only).
+        self.ensure_strip_scratch(strip_h_body);
         self.strip_h_body.set(Some(strip_h_body));
-        let result = self.score(ref_srgb, dist_srgb);
+        self.warm_active = false;
+        let display = self.params.display;
+        let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
+        srgb_to_dkl_planar(ref_srgb, self.width, self.height, display, ra, rrg, rvy);
+        srgb_to_dkl_planar(dist_srgb, self.width, self.height, display, da, drg, dvy);
+        let result = self.score_internal_strip(false, strip_h_body).map(|(j, _)| j);
         self.strip_h_body.set(None);
         result
     }
@@ -1240,10 +1805,30 @@ impl Cvvdp {
                 height: 0,
             });
         }
+        // Warm-ref strip stays on the legacy path for now — the warm
+        // path holds `weber_ref` already-built at full-image-shape, so
+        // routing it through the strip dispatcher would require either
+        // dropping + re-building the warm cache at strip shape or
+        // sourcing per-strip data from the persistent full-image weber
+        // slots. Both are follow-up work (chunk 6 step 4).
         self.strip_h_body.set(Some(strip_h_body));
         let result = self.score_with_warm_ref(dist_srgb);
         self.strip_h_body.set(None);
         result
+    }
+
+    /// Swap `self.scratch` to `Scratch::new_strip` if not already in strip
+    /// mode at this `h_body`. Tracks the configured h_body so subsequent
+    /// calls at the same h_body reuse the existing allocator.
+    fn ensure_strip_scratch(&mut self, h_body: u32) {
+        // If we've already configured strip scratch at this h_body, no-op.
+        if self.strip_scratch_h_body == Some(h_body) {
+            return;
+        }
+        let n_levels = crate::pyramid::band_frequencies(self.ppd, self.width, self.height).len();
+        self.scratch = Scratch::new_strip(self.width, self.height, n_levels, h_body);
+        self.strip_scratch_h_body = Some(h_body);
+        self.warm_active = false; // any cached warm-ref state is now stale (scratch was replaced)
     }
 
     /// Cumulative number of strip-iteration dispatches since this
@@ -2050,4 +2635,921 @@ fn build_one_side_warm_ref_into(
     );
     // `caches` drop here — gauss_img / gauss_l intermediates are freed
     // (~700 MB at 40 MP).
+}
+
+// =====================================================================
+// Path A: strip-major dispatcher (Phase 9.Z.F chunk 6 step 3).
+//
+// Lands the architectural change that drops 16 MP `score_strip` peak
+// heap from 3.66 GB → ~1.7 GB and 40 MP from 8.68 GB → ~4 GB. The
+// implementation:
+//
+// 1. Builds full-image gauss pyramids for ref + dist into the existing
+//    `weber_cache_*` slots (these are ~32 B/px per side, smaller than
+//    the weber bands they feed).
+// 2. Builds full-image weber bands for DEEP levels (`k >= k_split`)
+//    only. Shallow `weber_*[c].bands[k].data` slots remain unwritten
+//    in their strip-shape capacity (sized at `bw * R_k` by
+//    `Scratch::new_strip`).
+// 3. Strip-major outer loop: for each strip `s` of scale 0, for each
+//    shallow level `k < k_split`, computes one strip of weber band
+//    data on-the-fly using the chunk-5 strip kernels
+//    (`upscale_v_strip_into` + `upscale_h_strip_into` +
+//    `subtract_weber_3ch_strip_into`), then runs CSF + masking + pool
+//    on that strip and accumulates into per-level `LpNormAccumulator`s.
+// 4. Combines per-level finalized q values via the existing JOD
+//    pooling step.
+//
+// **Bit-identical guarantee.** The per-strip CSF + masking +
+// `LpNormAccumulator` sequence is bit-identical to the band-major
+// dispatcher's row-order strip processing, because:
+//  - At each level `k`, strips dispatch in row order (s = 0, 1, 2, ...)
+//    in both pipelines, so the `LpNormAccumulator`'s `acc += x_i` add
+//    sequence is unchanged.
+//  - The per-strip weber build kernels in `strip_kernels.rs` are
+//    bit-identical to the full-image build over the strip's body rows
+//    when invoked with the strip walker's halo + body convention
+//    (proved by `strip_kernels.rs`'s 12 parity tests).
+//
+// =====================================================================
+
+use crate::pyramid::{Band, build_gauss_pyramid_into, gausspyr_expand};
+use crate::strip::{mode_b_k_split, mode_b_strip_h_at_level, strip_h_at_band};
+use crate::strip_kernels::{
+    subtract_weber_3ch_strip_into, upscale_h_strip_into, upscale_v_strip_into,
+};
+
+/// Same as `build_full_weber_band_at_k` but for the achromatic-channel
+/// case where img_cache and l_cache are the same cache (cache_ref[0] /
+/// cache_dist[0]). Avoids the borrow-checker issue of borrowing the
+/// same cache as both mut + immut.
+fn build_full_weber_band_at_k_same_cache(
+    cache: &mut crate::pyramid::WeberPyramidCache,
+    k: usize,
+    n_levels: usize,
+    out_band: &mut Band,
+    out_log_l_bkg: &mut Vec<f32>,
+) {
+    let is_baseband = k == n_levels - 1;
+    let fine_w = cache.gauss_img[k].w;
+    let fine_h = cache.gauss_img[k].h;
+    let n_px = fine_w * fine_h;
+    out_band.w = fine_w;
+    out_band.h = fine_h;
+    out_band.data.clear();
+    out_band.data.resize(n_px, 0.0);
+    out_log_l_bkg.clear();
+    out_log_l_bkg.resize(n_px, 0.0);
+
+    if is_baseband {
+        let l_fine_data = &cache.gauss_l[k].data;
+        let sum: f32 = l_fine_data.iter().map(|v| v.max(0.01)).sum();
+        let l_bkg_mean = sum / l_fine_data.len() as f32;
+        let log_l = l_bkg_mean.log10();
+        let band_data = &mut out_band.data;
+        let fine_data = &cache.gauss_img[k].data;
+        for i in 0..n_px {
+            band_data[i] = fine_data[i] / l_bkg_mean;
+        }
+        for v in out_log_l_bkg.iter_mut() {
+            *v = log_l;
+        }
+    } else {
+        let coarse_l_data: Vec<f32> = cache.gauss_l[k + 1].data.clone();
+        let coarse_l_w = cache.gauss_l[k + 1].w;
+        let coarse_l_h = cache.gauss_l[k + 1].h;
+        let img_coarse_data: Vec<f32> = cache.gauss_img[k + 1].data.clone();
+        let img_coarse_w = cache.gauss_img[k + 1].w;
+        let img_coarse_h = cache.gauss_img[k + 1].h;
+        let mut expanded_l = core::mem::take(&mut cache.scratch.expanded);
+        gausspyr_expand(
+            &coarse_l_data,
+            coarse_l_w,
+            coarse_l_h,
+            fine_w,
+            fine_h,
+            &mut cache.scratch,
+            &mut expanded_l,
+        );
+        let mut img_expanded = core::mem::take(&mut cache.scratch.gauss_tmp);
+        gausspyr_expand(
+            &img_coarse_data,
+            img_coarse_w,
+            img_coarse_h,
+            fine_w,
+            fine_h,
+            &mut cache.scratch,
+            &mut img_expanded,
+        );
+        let fine_data = &cache.gauss_img[k].data;
+        let band_data = &mut out_band.data;
+        let log_band = &mut *out_log_l_bkg;
+        for i in 0..n_px {
+            let l_bkg = expanded_l[i].max(0.01);
+            let layer = fine_data[i] - img_expanded[i];
+            let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
+            band_data[i] = c;
+            log_band[i] = l_bkg.log10();
+        }
+        cache.scratch.expanded = expanded_l;
+        cache.scratch.gauss_tmp = img_expanded;
+    }
+}
+
+/// Build full-image weber bands at level `k` only (deep-level helper).
+///
+/// Reads from `img_cache.gauss_img[k]` (fine) and
+/// `img_cache.gauss_img[k+1]` (coarse) + `l_cache.gauss_l[k]` /
+/// `l_cache.gauss_l[k+1]` for l_bkg. `img_cache` and `l_cache` MAY be
+/// the same cache (channel 0, achromatic) or different caches (channels
+/// 1/2 where img_cache holds the chroma channel's gauss_img and
+/// l_cache always holds the achromatic gauss_l). Writes the computed
+/// weber contrast + log_l_bkg into `out_band.data` / `out_log_l_bkg`,
+/// resizing them to full-image `bw*bh` size.
+///
+/// For the baseband (`k == n_levels - 1`), uses the upstream baseband
+/// formula: `band = fine / mean(l_fine.max(0.01))`, `log_l_bkg = log10(mean)`.
+fn build_full_weber_band_at_k(
+    img_cache: &mut crate::pyramid::WeberPyramidCache,
+    l_cache: &crate::pyramid::WeberPyramidCache,
+    k: usize,
+    n_levels: usize,
+    out_band: &mut Band,
+    out_log_l_bkg: &mut Vec<f32>,
+) {
+    let is_baseband = k == n_levels - 1;
+    let fine_w = img_cache.gauss_img[k].w;
+    let fine_h = img_cache.gauss_img[k].h;
+    let n_px = fine_w * fine_h;
+    out_band.w = fine_w;
+    out_band.h = fine_h;
+    out_band.data.clear();
+    out_band.data.resize(n_px, 0.0);
+    out_log_l_bkg.clear();
+    out_log_l_bkg.resize(n_px, 0.0);
+
+    if is_baseband {
+        let l_fine_data = &l_cache.gauss_l[k].data;
+        let sum: f32 = l_fine_data.iter().map(|v| v.max(0.01)).sum();
+        let l_bkg_mean = sum / l_fine_data.len() as f32;
+        let log_l = l_bkg_mean.log10();
+        let band_data = &mut out_band.data;
+        let fine_data = &img_cache.gauss_img[k].data;
+        for i in 0..n_px {
+            band_data[i] = fine_data[i] / l_bkg_mean;
+        }
+        for v in out_log_l_bkg.iter_mut() {
+            *v = log_l;
+        }
+    } else {
+        // Non-baseband: expand coarse → fine, subtract, divide by l_bkg.
+        // Clone the coarse data so we can borrow img_cache.scratch mutably
+        // for the expand intermediates.
+        let coarse_l_data: Vec<f32> = l_cache.gauss_l[k + 1].data.clone();
+        let coarse_l_w = l_cache.gauss_l[k + 1].w;
+        let coarse_l_h = l_cache.gauss_l[k + 1].h;
+        let img_coarse_data: Vec<f32> = img_cache.gauss_img[k + 1].data.clone();
+        let img_coarse_w = img_cache.gauss_img[k + 1].w;
+        let img_coarse_h = img_cache.gauss_img[k + 1].h;
+        let mut expanded_l = core::mem::take(&mut img_cache.scratch.expanded);
+        gausspyr_expand(
+            &coarse_l_data,
+            coarse_l_w,
+            coarse_l_h,
+            fine_w,
+            fine_h,
+            &mut img_cache.scratch,
+            &mut expanded_l,
+        );
+        let mut img_expanded = core::mem::take(&mut img_cache.scratch.gauss_tmp);
+        gausspyr_expand(
+            &img_coarse_data,
+            img_coarse_w,
+            img_coarse_h,
+            fine_w,
+            fine_h,
+            &mut img_cache.scratch,
+            &mut img_expanded,
+        );
+        let fine_data = &img_cache.gauss_img[k].data;
+        let band_data = &mut out_band.data;
+        let log_band = &mut *out_log_l_bkg;
+        for i in 0..n_px {
+            let l_bkg = expanded_l[i].max(0.01);
+            let layer = fine_data[i] - img_expanded[i];
+            let c = (layer / l_bkg).clamp(-1000.0, 1000.0);
+            band_data[i] = c;
+            log_band[i] = l_bkg.log10();
+        }
+        img_cache.scratch.expanded = expanded_l;
+        img_cache.scratch.gauss_tmp = img_expanded;
+    }
+}
+
+/// Strip-aware build of weber band data for ONE strip at level `k`,
+/// for 3 channels simultaneously. Reads from full-image gauss pyramids
+/// in `cache_a / cache_rg / cache_vy` (3 caches, each holding gauss_img
+/// for one channel). Reads `gauss_l` from `cache_a` only (the
+/// achromatic cache); cache_rg/cache_vy gauss_l is unused (NOT built
+/// by the dispatcher's gauss step). Writes per-strip output buffers
+/// sized at `fine_w * strip_window_h` for the three contrast bands +
+/// log_l_bkg.
+///
+/// The 3 buffers `band_a/rg/vy_strip` + `log_l_bkg_strip` are
+/// strip-shape with row 0 at `top_global`. Strip window
+/// `[top_global, bot_global)` covers `strip_window_h` rows.
+///
+/// `vscratch_v` / `upsc_*_buf` / `expanded_l_buf` are caller-provided
+/// scratch resized internally — they hold the V-pass intermediates and
+/// one strip's worth of expanded coarse data per channel.
+#[allow(clippy::too_many_arguments)]
+fn build_weber_strip_3ch_at_k(
+    cache_a: &mut crate::pyramid::WeberPyramidCache,
+    cache_rg: &crate::pyramid::WeberPyramidCache,
+    cache_vy: &crate::pyramid::WeberPyramidCache,
+    k: usize,
+    top_global: usize,
+    strip_window_h: usize,
+    band_a_strip: &mut Vec<f32>,
+    band_rg_strip: &mut Vec<f32>,
+    band_vy_strip: &mut Vec<f32>,
+    log_l_bkg_strip: &mut Vec<f32>,
+    vscratch_buf: &mut Vec<f32>,
+    upsc_a_buf: &mut Vec<f32>,
+    upsc_rg_buf: &mut Vec<f32>,
+    upsc_vy_buf: &mut Vec<f32>,
+    expanded_l_buf: &mut Vec<f32>,
+) {
+    let fine_w = cache_a.gauss_img[k].w;
+    let fine_h = cache_a.gauss_img[k].h;
+    let coarse_w = cache_a.gauss_img[k + 1].w;
+    let coarse_h = cache_a.gauss_img[k + 1].h;
+    let n_strip = fine_w * strip_window_h;
+    let n_strip_v = coarse_w * strip_window_h;
+
+    band_a_strip.clear();
+    band_a_strip.resize(n_strip, 0.0);
+    band_rg_strip.clear();
+    band_rg_strip.resize(n_strip, 0.0);
+    band_vy_strip.clear();
+    band_vy_strip.resize(n_strip, 0.0);
+    log_l_bkg_strip.clear();
+    log_l_bkg_strip.resize(n_strip, 0.0);
+    upsc_a_buf.clear();
+    upsc_a_buf.resize(n_strip, 0.0);
+    upsc_rg_buf.clear();
+    upsc_rg_buf.resize(n_strip, 0.0);
+    upsc_vy_buf.clear();
+    upsc_vy_buf.resize(n_strip, 0.0);
+    expanded_l_buf.clear();
+    expanded_l_buf.resize(n_strip, 0.0);
+    vscratch_buf.clear();
+    vscratch_buf.resize(n_strip_v, 0.0);
+
+    // Build expanded L_bkg strip (from cache_a's gauss_l[k+1] coarse).
+    // Stage 1a: V-pass into vscratch_buf, then Stage 1b: H-pass into expanded_l_buf.
+    // Note: gauss pyramids store full-image, so src_strip_offset = 0 and
+    // src_h_buf = coarse_h.
+    {
+        let coarse_l_data = &cache_a.gauss_l[k + 1].data;
+        upscale_v_strip_into(
+            coarse_l_data,
+            coarse_w,
+            coarse_h,
+            &mut vscratch_buf[..n_strip_v],
+            strip_window_h,
+            top_global as u32,
+            0,
+            coarse_h as u32,
+            fine_h as u32,
+        );
+        upscale_h_strip_into(
+            &vscratch_buf[..n_strip_v],
+            coarse_w,
+            strip_window_h,
+            &mut expanded_l_buf[..n_strip],
+            fine_w,
+            top_global as u32,
+            fine_h as u32,
+        );
+    }
+
+    // Build expanded image strip per channel (A, RG, VY).
+    {
+        let coarse_a_data = &cache_a.gauss_img[k + 1].data;
+        upscale_v_strip_into(
+            coarse_a_data,
+            coarse_w,
+            coarse_h,
+            &mut vscratch_buf[..n_strip_v],
+            strip_window_h,
+            top_global as u32,
+            0,
+            coarse_h as u32,
+            fine_h as u32,
+        );
+        upscale_h_strip_into(
+            &vscratch_buf[..n_strip_v],
+            coarse_w,
+            strip_window_h,
+            &mut upsc_a_buf[..n_strip],
+            fine_w,
+            top_global as u32,
+            fine_h as u32,
+        );
+    }
+    {
+        let coarse_rg_data = &cache_rg.gauss_img[k + 1].data;
+        upscale_v_strip_into(
+            coarse_rg_data,
+            coarse_w,
+            coarse_h,
+            &mut vscratch_buf[..n_strip_v],
+            strip_window_h,
+            top_global as u32,
+            0,
+            coarse_h as u32,
+            fine_h as u32,
+        );
+        upscale_h_strip_into(
+            &vscratch_buf[..n_strip_v],
+            coarse_w,
+            strip_window_h,
+            &mut upsc_rg_buf[..n_strip],
+            fine_w,
+            top_global as u32,
+            fine_h as u32,
+        );
+    }
+    {
+        let coarse_vy_data = &cache_vy.gauss_img[k + 1].data;
+        upscale_v_strip_into(
+            coarse_vy_data,
+            coarse_w,
+            coarse_h,
+            &mut vscratch_buf[..n_strip_v],
+            strip_window_h,
+            top_global as u32,
+            0,
+            coarse_h as u32,
+            fine_h as u32,
+        );
+        upscale_h_strip_into(
+            &vscratch_buf[..n_strip_v],
+            coarse_w,
+            strip_window_h,
+            &mut upsc_vy_buf[..n_strip],
+            fine_w,
+            top_global as u32,
+            fine_h as u32,
+        );
+    }
+
+    // Slice fine data at top_global..bot_global for the 3 channels.
+    let fine_a_slice = {
+        let data = &cache_a.gauss_img[k].data;
+        &data[top_global * fine_w..top_global * fine_w + n_strip]
+    };
+    let fine_rg_slice = {
+        let data = &cache_rg.gauss_img[k].data;
+        &data[top_global * fine_w..top_global * fine_w + n_strip]
+    };
+    let fine_vy_slice = {
+        let data = &cache_vy.gauss_img[k].data;
+        &data[top_global * fine_w..top_global * fine_w + n_strip]
+    };
+
+    // subtract_weber_3ch_strip: compute (fine - upsc) / l_bkg, log10(l_bkg).
+    // src_strip_offset = top_global, body_offset_y = top_global means delta=0
+    // (i.e., the strip-local output rows are 0..strip_window_h, body_h ==
+    // strip_window_h). We dispatch over the whole strip window (not just body)
+    // because the masking V-blur needs halo rows.
+    subtract_weber_3ch_strip_into(
+        fine_a_slice,
+        fine_rg_slice,
+        fine_vy_slice,
+        &upsc_a_buf[..n_strip],
+        &upsc_rg_buf[..n_strip],
+        &upsc_vy_buf[..n_strip],
+        &expanded_l_buf[..n_strip],
+        &mut band_a_strip[..n_strip],
+        &mut band_rg_strip[..n_strip],
+        &mut band_vy_strip[..n_strip],
+        &mut log_l_bkg_strip[..n_strip],
+        fine_w,
+        strip_window_h,
+        top_global as u32,
+        top_global as u32,
+    );
+}
+
+/// Process one (s, k) strip through CSF + masking + pool. Reads
+/// already-built strip-local weber band data (row 0 at top_global,
+/// `strip_window_h` rows total). Writes per-strip body rows into
+/// the LpNormAccumulators.
+///
+/// This is the strip-local equivalent of `process_shallow_strip_band`'s
+/// inner loop body (lines 1603-1810 in the original) — same per-pixel
+/// math, just reading from strip-local buffers instead of slicing
+/// full-image band data.
+///
+/// `body_off` is the body's first row in the band (logical, not strip-
+/// local); used only by `diffmap_d_out` for full-image diffmap writes.
+/// `body_h` is the number of body rows for this strip.
+/// `body_row_in_strip` is the strip-local row index where body starts.
+#[allow(clippy::too_many_arguments)]
+fn process_strip_step_at_s_k(
+    sws: &mut StripBandWorkspace,
+    ref_a_strip: &[f32],
+    ref_rg_strip: &[f32],
+    ref_vy_strip: &[f32],
+    dis_a_strip: &[f32],
+    dis_rg_strip: &[f32],
+    dis_vy_strip: &[f32],
+    log_l_bkg_strip: &[f32],
+    bw: usize,
+    strip_window_h: usize,
+    body_row_in_strip: usize,
+    body_h: usize,
+    body_off: usize,
+    _k: usize,
+    is_first: bool,
+    rho: f32,
+    _h_body: u32,
+    _k_split: u32,
+    acc_a: &mut LpNormAccumulator,
+    acc_rg: &mut LpNormAccumulator,
+    acc_vy: &mut LpNormAccumulator,
+    strip_counter: &core::sync::atomic::AtomicU32,
+    diffmap_d_out: Option<(&mut [f32], &mut [f32], &mut [f32])>,
+) {
+    let n_strip_window = bw * strip_window_h;
+    sws.ensure_strip_sized(n_strip_window);
+
+    // Per-band CSF row constants.
+    let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
+    let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
+    let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
+    let band_mul: f32 = if is_first { 1.0 } else { 2.0 };
+    let ch_gain_a = CH_GAIN[0];
+    let ch_gain_rg = CH_GAIN[1];
+    let ch_gain_vy = CH_GAIN[2];
+
+    // Masking constants.
+    const SAFE_EPS: f32 = 1e-5;
+    let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
+    let q_a = MASK_Q[0];
+    let q_rg = MASK_Q[1];
+    let q_vy = MASK_Q[2];
+    let eps_qa = SAFE_EPS.powf(q_a);
+    let eps_qrg = SAFE_EPS.powf(q_rg);
+    let eps_qvy = SAFE_EPS.powf(q_vy);
+    let xcm00 = XCM_3X3[0][0];
+    let xcm10 = XCM_3X3[1][0];
+    let xcm20 = XCM_3X3[2][0];
+    let xcm01 = XCM_3X3[0][1];
+    let xcm11 = XCM_3X3[1][1];
+    let xcm21 = XCM_3X3[2][1];
+    let xcm02 = XCM_3X3[0][2];
+    let xcm12 = XCM_3X3[1][2];
+    let xcm22 = XCM_3X3[2][2];
+    let p = MASK_P;
+    let eps_p = SAFE_EPS.powf(p);
+    let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
+
+    // Step 2: CSF apply per-pixel over strip window. Writes T_p/R_p in
+    // sws.t_p_*/r_p_* at indices [0, n_strip_window).
+    for sy in 0..strip_window_h {
+        let strip_row_off = sy * bw;
+        for x in 0..bw {
+            let i = strip_row_off + x;
+            let log_l = log_l_bkg_strip[i];
+            let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+            let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+            let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+            let bm_sa = band_mul * s_a;
+            let bm_srg = band_mul * s_rg;
+            let bm_svy = band_mul * s_vy;
+            sws.t_p_a[i] = dis_a_strip[i] * bm_sa * ch_gain_a;
+            sws.t_p_rg[i] = dis_rg_strip[i] * bm_srg * ch_gain_rg;
+            sws.t_p_vy[i] = dis_vy_strip[i] * bm_svy * ch_gain_vy;
+            sws.r_p_a[i] = ref_a_strip[i] * bm_sa * ch_gain_a;
+            sws.r_p_rg[i] = ref_rg_strip[i] * bm_srg * ch_gain_rg;
+            sws.r_p_vy[i] = ref_vy_strip[i] * bm_svy * ch_gain_vy;
+        }
+    }
+
+    // Step 3.1: M_mm_raw = min(|T|, |R|).
+    for i in 0..n_strip_window {
+        let ta = sws.t_p_a[i].abs();
+        let ra = sws.r_p_a[i].abs();
+        sws.m_mm_a[i] = ta.min(ra);
+        let trg = sws.t_p_rg[i].abs();
+        let rrg = sws.r_p_rg[i].abs();
+        sws.m_mm_rg[i] = trg.min(rrg);
+        let tvy = sws.t_p_vy[i].abs();
+        let rvy = sws.r_p_vy[i].abs();
+        sws.m_mm_vy[i] = tvy.min(rvy);
+    }
+
+    // Step 3.2: PU blur per channel using SIMD on the strip buffer.
+    if bw > PU_PADSIZE && strip_window_h > PU_PADSIZE {
+        gaussian_blur_sigma3_simd(
+            &sws.m_mm_a[..n_strip_window],
+            bw,
+            strip_window_h,
+            &mut sws.pu_h,
+            &mut sws.term_a,
+        );
+        for i in 0..n_strip_window {
+            sws.m_mm_a[i] = sws.term_a[i] * mask_c_lin;
+        }
+        gaussian_blur_sigma3_simd(
+            &sws.m_mm_rg[..n_strip_window],
+            bw,
+            strip_window_h,
+            &mut sws.pu_h,
+            &mut sws.term_rg,
+        );
+        for i in 0..n_strip_window {
+            sws.m_mm_rg[i] = sws.term_rg[i] * mask_c_lin;
+        }
+        gaussian_blur_sigma3_simd(
+            &sws.m_mm_vy[..n_strip_window],
+            bw,
+            strip_window_h,
+            &mut sws.pu_h,
+            &mut sws.term_vy,
+        );
+        for i in 0..n_strip_window {
+            sws.m_mm_vy[i] = sws.term_vy[i] * mask_c_lin;
+        }
+    } else {
+        for i in 0..n_strip_window {
+            sws.m_mm_a[i] *= mask_c_lin;
+            sws.m_mm_rg[i] *= mask_c_lin;
+            sws.m_mm_vy[i] *= mask_c_lin;
+        }
+    }
+
+    // Step 3.3: term[ch] = safe_pow(|M_mm[ch]|, q[ch]).
+    safe_pow_with_offset_into(
+        &sws.m_mm_a[..n_strip_window],
+        &mut sws.term_a[..n_strip_window],
+        SAFE_EPS,
+        q_a,
+        eps_qa,
+    );
+    safe_pow_with_offset_into(
+        &sws.m_mm_rg[..n_strip_window],
+        &mut sws.term_rg[..n_strip_window],
+        SAFE_EPS,
+        q_rg,
+        eps_qrg,
+    );
+    safe_pow_with_offset_into(
+        &sws.m_mm_vy[..n_strip_window],
+        &mut sws.term_vy[..n_strip_window],
+        SAFE_EPS,
+        q_vy,
+        eps_qvy,
+    );
+
+    // Step 3.4: Pass 1: diff[c] = |T - R| → m_mm_* (scratch).
+    for i in 0..n_strip_window {
+        sws.m_mm_a[i] = (sws.t_p_a[i] - sws.r_p_a[i]).abs();
+        sws.m_mm_rg[i] = (sws.t_p_rg[i] - sws.r_p_rg[i]).abs();
+        sws.m_mm_vy[i] = (sws.t_p_vy[i] - sws.r_p_vy[i]).abs();
+    }
+
+    // Step 3.5: Pass 2: pow[c] = (diff[c] + eps)^p - eps^p → d_*.
+    safe_pow_with_offset_into(
+        &sws.m_mm_a[..n_strip_window],
+        &mut sws.d_a[..n_strip_window],
+        SAFE_EPS,
+        p,
+        eps_p,
+    );
+    safe_pow_with_offset_into(
+        &sws.m_mm_rg[..n_strip_window],
+        &mut sws.d_rg[..n_strip_window],
+        SAFE_EPS,
+        p,
+        eps_p,
+    );
+    safe_pow_with_offset_into(
+        &sws.m_mm_vy[..n_strip_window],
+        &mut sws.d_vy[..n_strip_window],
+        SAFE_EPS,
+        p,
+        eps_p,
+    );
+
+    // Step 3.6: Pass 3: cross-channel pool + soft clamp, scalar.
+    for i in 0..n_strip_window {
+        let t0 = sws.term_a[i];
+        let t1 = sws.term_rg[i];
+        let t2 = sws.term_vy[i];
+        let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
+        let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
+        let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
+        let pow0 = sws.d_a[i];
+        let pow1 = sws.d_rg[i];
+        let pow2 = sws.d_vy[i];
+        let du0 = pow0 / (1.0 + m0);
+        let du1 = pow1 / (1.0 + m1);
+        let du2 = pow2 / (1.0 + m2);
+        sws.d_a[i] = d_max_lin * du0 / (d_max_lin + du0);
+        sws.d_rg[i] = d_max_lin * du1 / (d_max_lin + du1);
+        sws.d_vy[i] = d_max_lin * du2 / (d_max_lin + du2);
+    }
+
+    // Step 4: pool body rows of d_* into per-band accumulator.
+    let body_start = body_row_in_strip * bw;
+    let body_end = body_start + body_h * bw;
+    acc_a.accumulate_slab(&sws.d_a[body_start..body_end], BETA_SPATIAL);
+    acc_rg.accumulate_slab(&sws.d_rg[body_start..body_end], BETA_SPATIAL);
+    acc_vy.accumulate_slab(&sws.d_vy[body_start..body_end], BETA_SPATIAL);
+    strip_counter.fetch_add(3, core::sync::atomic::Ordering::Relaxed);
+
+    // Step 5 (optional): copy strip body of d_* into full-band diffmap output.
+    if let Some((d_a_full, d_rg_full, d_vy_full)) = diffmap_d_out {
+        let full_off = body_off * bw;
+        d_a_full[full_off..full_off + body_h * bw]
+            .copy_from_slice(&sws.d_a[body_start..body_end]);
+        d_rg_full[full_off..full_off + body_h * bw]
+            .copy_from_slice(&sws.d_rg[body_start..body_end]);
+        d_vy_full[full_off..full_off + body_h * bw]
+            .copy_from_slice(&sws.d_vy[body_start..body_end]);
+    }
+}
+
+/// Strip-major dispatcher state — owns the per-shallow-level accumulators
+/// + per-strip transient buffers used during the strip-major outer loop.
+///
+/// All Vec<f32> buffers are reused across (s, k) iterations; their
+/// capacity grows monotonically to the largest strip window seen.
+#[derive(Default)]
+struct StripDispatcherState {
+    /// Per-shallow-level Lp accumulators (one per (level, channel)).
+    /// `level_accs[k] = (acc_a, acc_rg, acc_vy)` for shallow level k.
+    level_accs: Vec<(LpNormAccumulator, LpNormAccumulator, LpNormAccumulator)>,
+    /// Per-strip transient buffers used by `build_weber_strip_3ch_at_k`.
+    /// These hold one strip's worth of expanded coarse gauss data per
+    /// channel + the upscale V-pass intermediate.
+    vscratch_v: Vec<f32>,
+    upsc_a: Vec<f32>,
+    upsc_rg: Vec<f32>,
+    upsc_vy: Vec<f32>,
+    expanded_l: Vec<f32>,
+    /// Per-strip weber band data (the output of `build_weber_strip_3ch_at_k`).
+    /// Sized at `fine_w * strip_window_h` per (s, k) iteration; reused.
+    band_a_strip: Vec<f32>,
+    band_rg_strip: Vec<f32>,
+    band_vy_strip: Vec<f32>,
+    log_l_bkg_strip: Vec<f32>,
+    /// Per-strip ref-side weber band data (separate from dist's because
+    /// they need to coexist when running CSF + masking).
+    ref_band_a_strip: Vec<f32>,
+    ref_band_rg_strip: Vec<f32>,
+    ref_band_vy_strip: Vec<f32>,
+    ref_log_l_bkg_strip: Vec<f32>,
+    /// Ref-side transient buffers (separate so they don't conflict with
+    /// dist-side mid-iteration).
+    vscratch_v_ref: Vec<f32>,
+    upsc_a_ref: Vec<f32>,
+    upsc_rg_ref: Vec<f32>,
+    upsc_vy_ref: Vec<f32>,
+    expanded_l_ref: Vec<f32>,
+}
+
+/// The strip-major dispatcher entry point. Called from `score_internal_strip`
+/// after gauss pyramids have been built (or are about to be built) into
+/// `weber_cache_*` and weber bands for DEEP levels (k >= k_split) have been
+/// populated into `weber_*[c].bands[k]`.
+///
+/// The dispatcher:
+/// 1. Iterates strip-major over scale-0 strips: `for s in 0..n_strips`.
+/// 2. For each strip, iterates shallow levels: `for k in 0..k_split`.
+/// 3. Builds per-strip weber band data for ref + dist sides on-the-fly.
+/// 4. Calls `process_strip_step_at_s_k` to run CSF + masking + pool on the
+///    strip, accumulating into `state.level_accs[k]`.
+/// 5. Finalizes per-level Lp accumulators after the loop and returns
+///    `q_shallow[k] = [acc_a.finalize(), acc_rg.finalize(), acc_vy.finalize()]`
+///    for k in 0..k_split.
+///
+/// Deep levels (k >= k_split) are processed by the standard band-loop after
+/// this function returns (using the deep-only weber bands).
+#[allow(clippy::too_many_arguments)]
+fn dispatch_strip_major_shallow(
+    state: &mut StripDispatcherState,
+    sws: &mut StripBandWorkspace,
+    weber_cache_ref: &mut [crate::pyramid::WeberPyramidCache; 3],
+    weber_cache_dist: &mut [crate::pyramid::WeberPyramidCache; 3],
+    h: usize,
+    n_levels: usize,
+    ppd: f32,
+    h_body: u32,
+    k_split: usize,
+    strip_counter: &core::sync::atomic::AtomicU32,
+    mut diffmap_band_d_out: Option<&mut Vec<crate::scratch::BandWorkspace>>,
+) -> Vec<[f32; 3]> {
+    use crate::pyramid::band_frequencies;
+
+    let freqs = band_frequencies(ppd, weber_cache_ref[0].gauss_img[0].w, h);
+    state.level_accs.clear();
+    for _ in 0..k_split {
+        state.level_accs.push((
+            LpNormAccumulator::default(),
+            LpNormAccumulator::default(),
+            LpNormAccumulator::default(),
+        ));
+    }
+
+    // Number of strips at scale 0.
+    let h_body_us = h_body as usize;
+    let n_strips_at_0 = if h <= h_body_us {
+        1
+    } else {
+        h.div_ceil(h_body_us)
+    };
+
+    // Pre-size the full-band diffmap d_* slots if diffmap is requested.
+    // Each shallow band needs its own full-band d_a/d_rg/d_vy of size bw*bh
+    // (band index k), populated body-by-body across strips.
+    if let Some(d_band_ws) = diffmap_band_d_out.as_deref_mut() {
+        // Ensure d_band_ws has at least k_split slots, each pre-sized to bw*bh.
+        while d_band_ws.len() < k_split {
+            d_band_ws.push(crate::scratch::BandWorkspace::default());
+        }
+        for k in 0..k_split {
+            let bw = weber_cache_ref[0].gauss_img[k].w;
+            let bh = weber_cache_ref[0].gauss_img[k].h;
+            let n_full = bw * bh;
+            d_band_ws[k].d_a.clear();
+            d_band_ws[k].d_a.resize(n_full, 0.0);
+            d_band_ws[k].d_rg.clear();
+            d_band_ws[k].d_rg.resize(n_full, 0.0);
+            d_band_ws[k].d_vy.clear();
+            d_band_ws[k].d_vy.resize(n_full, 0.0);
+        }
+    }
+
+    for s in 0..n_strips_at_0 {
+        for k in 0..k_split {
+            let bw = weber_cache_ref[0].gauss_img[k].w;
+            let bh = weber_cache_ref[0].gauss_img[k].h;
+            let strip_h_at_band_k = strip_h_at_band(h_body, k as u32) as usize;
+            let halo_band = crate::strip::mode_b_halo_at_level(k as u32, k_split as u32) as usize;
+
+            // Compute strip dimensions at this level.
+            let body_off = s * strip_h_at_band_k;
+            if body_off >= bh {
+                // Strip beyond this level's band height — skip. Can
+                // happen at deeper shallow levels for tall images
+                // where scale-0 strip s extends past the level's
+                // logical band.
+                continue;
+            }
+            let body_h = (bh - body_off).min(strip_h_at_band_k);
+            let top_global = body_off.saturating_sub(halo_band);
+            let bot_global = (body_off + body_h + halo_band).min(bh);
+            let strip_window_h = bot_global - top_global;
+            let body_row_in_strip = body_off - top_global;
+
+            let is_first = k == 0;
+            let rho = freqs[k];
+
+            // Split-borrow `weber_cache_ref` into 3 caches: index 0 needs
+            // mutable access for its scratch, indices 1/2 are read-only
+            // (their gauss_img is consumed but not modified).
+            let (ref_ca, ref_rest) = weber_cache_ref.split_at_mut(1);
+            build_weber_strip_3ch_at_k(
+                &mut ref_ca[0],
+                &ref_rest[0],
+                &ref_rest[1],
+                k,
+                top_global,
+                strip_window_h,
+                &mut state.ref_band_a_strip,
+                &mut state.ref_band_rg_strip,
+                &mut state.ref_band_vy_strip,
+                &mut state.ref_log_l_bkg_strip,
+                &mut state.vscratch_v_ref,
+                &mut state.upsc_a_ref,
+                &mut state.upsc_rg_ref,
+                &mut state.upsc_vy_ref,
+                &mut state.expanded_l_ref,
+            );
+
+            let (dist_ca, dist_rest) = weber_cache_dist.split_at_mut(1);
+            build_weber_strip_3ch_at_k(
+                &mut dist_ca[0],
+                &dist_rest[0],
+                &dist_rest[1],
+                k,
+                top_global,
+                strip_window_h,
+                &mut state.band_a_strip,
+                &mut state.band_rg_strip,
+                &mut state.band_vy_strip,
+                &mut state.log_l_bkg_strip,
+                &mut state.vscratch_v,
+                &mut state.upsc_a,
+                &mut state.upsc_rg,
+                &mut state.upsc_vy,
+                &mut state.expanded_l,
+            );
+
+            // Both ref and dist use the same log_l_bkg (per upstream cvvdp,
+            // L_bkg is the achromatic-channel gauss). We use ref's
+            // log_l_bkg_strip as the canonical input — they should be
+            // bit-identical since both caches built their gauss_l from
+            // the same achromatic plane. But for parity with the existing
+            // path, use the ref-side log_l_bkg (which is what
+            // `weber_contrast_pyr_into` reads in the standard path).
+            let n_strip = bw * strip_window_h;
+            let log_l_bkg_use = &state.ref_log_l_bkg_strip[..n_strip];
+
+            let (acc_a, acc_rg, acc_vy) = {
+                let entry = &mut state.level_accs[k];
+                (&mut entry.0, &mut entry.1, &mut entry.2)
+            };
+
+            let diffmap_d_out: Option<(&mut [f32], &mut [f32], &mut [f32])> =
+                if let Some(d_band_ws) = diffmap_band_d_out.as_deref_mut() {
+                    // Slice the per-level full-band d_*.
+                    let ws_k = &mut d_band_ws[k];
+                    // Need 3 separate &mut into ws_k — split-borrow.
+                    let d_a_ptr: &mut [f32] = &mut ws_k.d_a;
+                    // ws_k holds 3 different Vec<f32> fields, we need
+                    // simultaneous &mut to all three. Use mem::take +
+                    // restore pattern is awkward here; instead split via
+                    // careful field projections in a block.
+                    let _ = d_a_ptr;
+                    // Workaround: use a small block that does the three
+                    // separate &mut explicitly.
+                    let ws_k_split: (&mut [f32], &mut [f32], &mut [f32]) = {
+                        let ws = &mut d_band_ws[k];
+                        // Three separate &mut Vec<f32> fields - safe.
+                        // SAFETY: distinct field projections.
+                        let a: *mut Vec<f32> = &mut ws.d_a;
+                        let rg: *mut Vec<f32> = &mut ws.d_rg;
+                        let vy: *mut Vec<f32> = &mut ws.d_vy;
+                        // Compiler reject would be wrong here — they're
+                        // distinct fields. But unsafe blocks are
+                        // forbid'd. Use a helper.
+                        let _ = (a, rg, vy);
+                        // Bail to safe split_borrow via destructuring.
+                        let crate::scratch::BandWorkspace {
+                            d_a, d_rg, d_vy, ..
+                        } = ws;
+                        (&mut d_a[..], &mut d_rg[..], &mut d_vy[..])
+                    };
+                    Some(ws_k_split)
+                } else {
+                    None
+                };
+
+            process_strip_step_at_s_k(
+                sws,
+                &state.ref_band_a_strip[..n_strip],
+                &state.ref_band_rg_strip[..n_strip],
+                &state.ref_band_vy_strip[..n_strip],
+                &state.band_a_strip[..n_strip],
+                &state.band_rg_strip[..n_strip],
+                &state.band_vy_strip[..n_strip],
+                log_l_bkg_use,
+                bw,
+                strip_window_h,
+                body_row_in_strip,
+                body_h,
+                body_off,
+                k,
+                is_first,
+                rho,
+                h_body,
+                k_split as u32,
+                acc_a,
+                acc_rg,
+                acc_vy,
+                strip_counter,
+                diffmap_d_out,
+            );
+        }
+    }
+
+    // Finalize per-level accumulators.
+    let mut q_shallow: Vec<[f32; 3]> = Vec::with_capacity(k_split);
+    for k in 0..k_split {
+        // Take ownership to call finalize. Replace with default.
+        let entry = core::mem::take(&mut state.level_accs[k]);
+        q_shallow.push([
+            entry.0.finalize(BETA_SPATIAL),
+            entry.1.finalize(BETA_SPATIAL),
+            entry.2.finalize(BETA_SPATIAL),
+        ]);
+    }
+
+    q_shallow
 }

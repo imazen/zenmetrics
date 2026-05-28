@@ -266,7 +266,7 @@ pub(crate) fn gausspyr_expand(
 /// `out`. `out` is grown / shrunk to `n` bands; existing band Vec
 /// allocations are reused (clear + resize) when present, eliminating
 /// per-call heap churn.
-fn build_gauss_pyramid_into(
+pub(crate) fn build_gauss_pyramid_into(
     src: &[f32],
     sw: usize,
     sh: usize,
