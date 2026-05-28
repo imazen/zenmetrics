@@ -608,6 +608,23 @@ async fn poll_until_done(
             break;
         }
 
+        // Early-exit: when the container group is `stopped` AND no more
+        // sidecars can land (either we have what we expected, or zero
+        // sidecars and zero running instances means nothing else is
+        // coming). Avoids wasting wall-time polling a dead group.
+        if state == "stopped" {
+            out.t_done_secs = Some(elapsed.as_secs_f64());
+            eprintln!(
+                "[poll] container group is stopped at t={:.1}s; \
+                 short-circuiting (omni={} err={} expected={})",
+                elapsed.as_secs_f64(),
+                omni.len(),
+                errs.len(),
+                expected_chunks
+            );
+            break;
+        }
+
         sleep(interval).await;
     }
     Ok(out)

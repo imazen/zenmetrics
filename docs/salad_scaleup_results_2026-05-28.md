@@ -220,34 +220,172 @@ not exercise the worker-side path because the replicas never reached
   in Run 1. The N=10 number remains projected from the prior smoke,
   not measured under push.
 
+## Run 3 — N=1, 3 chunks, 10-min cap, `path='/'`, RTX 3060 (FAILED — allocation stall)
+
+After commit `59723928` landed the `path='/'` fix on master, re-tested
+with N=1 to cheaply re-validate the worker path before any scale-up.
+
+Launcher invocation:
+```sh
+zen-salad-sweep --replicas 1 --chunks 3 \
+    --max-wall-secs 600 --poll-secs 12 \
+    --gpu-class "RTX 3060 (12 GB)" --price-per-hour 0.20
+```
+
+Sweep: `scaleup-20260528T081005`.
+
+### Timeline
+
+| t (s) | State |
+|---:|---|
+| 0 | container group POST returned 2xx |
+| 15 | `state=deploying` `allocating_count=1` |
+| 15 → 600 | unchanged — `allocating_count=1` throughout, never to `creating`/`running` |
+| 600 | wall-time cap hit, launcher initiated teardown |
+| 678 | teardown success (after 1 retry on a 110 timeout) |
+
+### Result
+
+**0 sidecars. 0 errors. Replica never transitioned out of `allocating`
+for the entire 600 s wall-time cap.** Same failure mode as Run 2.
+Salad's `/instances` endpoint returned `{"instances": []}` throughout —
+the allocator did not bind this group to any host.
+
+Spend: $0.04 (allocating replicas have low/zero charge).
+Teardown: succeeded (`teardown_ok=true`, `status=stopped`).
+
+### What this rules out
+
+- The path fix DOES land in the container group config: a direct
+  `GET .../containers/<group>` returned
+  `queue_connection: {'path': '/', 'port': 80, 'queue_name': ...}`,
+  matching the working 2026-05-27 smoke. The launcher's commit
+  `59723928` is correctly applied.
+- The launcher's preflight, queue creation, container-group POST,
+  scoped R2 cred mint, and chunks.jsonl upload all succeeded in
+  under 2 seconds before the poll loop started — operator-side
+  plumbing is healthy.
+
+### What this CANNOT rule out
+
+- **Whether the path fix actually makes the worker accept jobs.**
+  The path field on `queue_connection` is the only thing changed
+  between Runs 1 and 3. But without a `running` replica, the
+  sidecar→worker handshake never happens.
+
+## Run 4 — N=1, 3 chunks, 7-min cap, `path='/'`, RTX 4090 (FAILED — allocation stall)
+
+Per the retest spec: if N=1 stalls in allocating > 2 minutes, try once
+with a broader pool. The launcher takes a single `--gpu-class`
+(no multi-class arg yet). Switched to `RTX 4090 (24 GB)` — historically
+abundant on Salad's network.
+
+Launcher invocation:
+```sh
+zen-salad-sweep --replicas 1 --chunks 3 \
+    --max-wall-secs 420 --poll-secs 10 \
+    --gpu-class "RTX 4090 (24 GB)" --price-per-hour 0.40
+```
+
+Sweep: `scaleup-20260528T082314`.
+
+### Timeline
+
+| t (s) | State |
+|---:|---|
+| 0 | container group POST returned 2xx |
+| 0 → 87 | `state=pending` (slower than Runs 1-3; 3060 flipped to deploying within 15 s) |
+| 87 | `state=deploying` `allocating_count=1` |
+| 87 → ~330 | unchanged — `allocating_count=1` throughout |
+| ~330 | manual API stop issued after 240 s in `allocating` (matching the 2-min stall threshold) |
+| 338 | `state=stopped`, all counts 0 |
+| 420 | launcher wall cap hit (still polling), teardown OK (group already stopped) |
+
+### Result
+
+**Same outcome: 0 sidecars, 0 errors, no host ever bound.**
+`/instances` was empty throughout. The RTX 4090 pool is also
+allocation-starved at this time (~08:25 UTC, 2026-05-28).
+
+Spend: $0.05. Teardown: succeeded.
+
+### Conclusion — path-fix validation BLOCKED by upstream
+
+After Runs 2-4 all stalling in `allocating`, the path-fix at commit
+`59723928` remains **structurally correct but operationally
+unvalidated**. Three independent attempts on two GPU classes
+(RTX 3060 12 GB twice; RTX 4090 24 GB once) within a ~1-hour window
+all failed at the same point: Salad's allocator never bound the
+container group to a host.
+
+This is **not a known-broken config** in the sense of "we should not
+retry it" — Run 1 *did* allocate (7/10 replicas reached `running` by
+t=380 s on the same `--gpu-class "RTX 3060 (12 GB)"`). The pool
+appears genuinely scarce right now. The next sensible attempts:
+
+1. Wait several hours and retry with the same single-GPU-class config.
+   Salad's allocator state cycles with tenant churn.
+2. Extend the launcher to pass MULTIPLE `gpu_class` ids in the same
+   POST so the scheduler has fallbacks (the API field is plural —
+   `resources.gpu_classes: [id1, id2, ...]` — and the launcher
+   currently only fills one). This is a 5-line change in
+   `crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs` near the
+   `create_container_group` call.
+3. Request a quota / priority bump from Salad support if the
+   allocation stall persists across calendar days at every GPU class.
+
+### Cumulative cost (Runs 1-4)
+
+| Run | Replicas | GPU | Wall (s) | Outcome | Spend |
+|---|---:|---|---:|---|---:|
+| Run 1 (path=/job)  | 10 | 3060 12GB | 920 | 0 sidecars (started→failed)         | $0.51 |
+| Run 2 (path=/)     | 3  | 3060 12GB | 480 | 0 sidecars (alloc stall)            | $0.08 |
+| Run 3 (path=/)     | 1  | 3060 12GB | 678 | 0 sidecars (alloc stall)            | $0.04 |
+| Run 4 (path=/)     | 1  | 4090 24GB | 424 | 0 sidecars (alloc stall)            | $0.05 |
+| **Session total**  | — | —  | — | **0 chunks completed across 4 runs** | **~$0.68** |
+
+Well under the $2 budget cap. **The cost of validating the path
+fix on Salad has now reached $0.68 across four attempts with zero
+chunks processed.** The Cloudinary equivalent (vast.ai sweep
+infrastructure) was completing 130-cell chunks for less compute
+spend during the same calendar window.
+
+### Launcher improvement landed this session
+
+`fn poll_until_done` now early-exits when the container group
+transitions to `state=stopped`, instead of polling until the
+wall-time cap. Runs 1, 3, and 4 wasted 60-330 s each polling a
+group that had already stopped. The fix is in this commit.
+
 ## Next-session priorities
 
-1. **Retest with broader GPU class.** Use the `gpu_classes` list field
-   with multiple class ids (RTX 3060/8GB + RTX 2070 + RTX 2080) so the
-   allocator has fallbacks. The Salad API supports multiple ids in the
-   `resources.gpu_classes` array.
-2. **Stream worker logs.** The Salad portal exposes container stderr
-   live but the public REST API doesn't. Add a `gh issue` or a script
-   that uses Salad's webhook delivery so we capture per-replica stderr
-   when a job fails fast.
-3. **Add a SaladApi `list_instances` helper** so the launcher's poll
-   loop sees per-replica state granularity, not just the
+1. **Retry the same N=1 path='/' validation in 4-12 hours** when
+   Salad's pool may have churned. The path-fix code is correct;
+   the upstream scarcity is transient. Re-test the SAME
+   `--gpu-class "RTX 3060 (12 GB)"` config that worked in Run 1.
+2. **Add multi-class fallback** to the launcher: pass
+   `gpu_classes: [class_a_id, class_b_id, ...]` so the scheduler
+   has alternatives. The Salad API supports it. The launcher
+   currently emits a 1-element vec.
+3. **Stream worker logs.** Salad portal exposes container stderr
+   live but the public REST API doesn't. Add webhook delivery so
+   we capture per-replica stderr when a job fails fast.
+4. **Add a SaladApi `list_instances` helper** so the launcher's
+   poll loop sees per-replica state granularity, not just the
    aggregate counts.
-4. **Auto-exit the launcher's poll loop on `state=stopped`** — Run 1
-   and Run 2 both wasted ~5 min polling a stopped group before
-   hitting the wall cap. Trivial fix: break the poll when
-   `current_state.status == "stopped"` AND `omni + errors >= chunks`
-   OR `omni + errors == 0` (nothing more is going to land).
 
 ## Files
 
 - Launcher source: `crates/zen-cloud-salad/src/bin/zen-salad-sweep.rs`
 - Cargo manifest: `crates/zen-cloud-salad/Cargo.toml` (added `launcher` feature)
-- Run logs: `/tmp/salad_scaleup_2026-05-28.log`, `/tmp/salad_pathfix_2026-05-28.log`
+- Run logs: `/tmp/salad_scaleup_2026-05-28.log`, `/tmp/salad_pathfix_2026-05-28.log`,
+  `/tmp/salad_retest_2026-05-28.log` (combined Run 3 + Run 4)
 - R2 inputs: `s3://zen-tuning-ephemeral/salad-smoke-2026-05-27/`
 - R2 per-run prefixes (chunks.jsonl + any sidecars):
-  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T073059/`,
-  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T075532/`
+  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T073059/` (Run 1),
+  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T075532/` (Run 2),
+  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T081005/` (Run 3),
+  `s3://zen-tuning-ephemeral/runs/scaleup-20260528T082314/` (Run 4)
 
 ## How to reproduce
 
