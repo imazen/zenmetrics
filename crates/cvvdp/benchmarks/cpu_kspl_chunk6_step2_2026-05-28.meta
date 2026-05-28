@@ -1,0 +1,64 @@
+# cvvdp CPU K_SPLIT walker — chunk 6 step 2 heap baseline (2026-05-28)
+#
+# Measures peak heap for cvvdp's `score()` (full mode) and `score_strip()`
+# (strip mode, h_body=512) after chunk 6 step 1 + 2 land on master.
+# Step 1 + 2 add strip-shape allocator infrastructure but do NOT wire it
+# through to the build path — these measurements are the same as the
+# post-chunk-4-wiring state.
+#
+# ## Run conditions
+#
+# - Host: water-cooled AMD Ryzen 9 7950X (16 cores / 32 threads)
+# - RAM: 128 GB DDR5
+# - Kernel: Linux 6.6.114.1-microsoft-standard-WSL2
+# - Rust: build via `cargo build --release --bin cpu-profile`
+# - Driver: `target/release/cpu-profile cvvdp <mode> <w> <h>` (driver
+#   at `benchmarks/heaptrack/drivers/cpu_profile/src/main.rs`)
+# - Heaptrack: 1.3.0 (`/usr/bin/heaptrack`)
+# - Synthetic XorShift sRGB pair via `synth_pair(w, h)` in driver
+# - Strip body height: STRIP_H_BODY = 512 (matches GPU default)
+# - Commit: 3bd25014 (master after step 2 push)
+#
+# ## Methodology
+#
+# For each (size, mode) cell:
+#   heaptrack -o /tmp/cvvdp_<mode>_<mp>_baseline ./target/release/cpu-profile cvvdp <mode> <w> <h>
+#   heaptrack_print -f /tmp/cvvdp_<mode>_<mp>_baseline.zst | grep "peak consumption"
+#
+# Peak heap is the topmost "<n> calls to allocation functions with <X> peak consumption from"
+# line in the heaptrack_print output.
+#
+# ## Findings
+#
+# - Chunk 4 wiring already cut a HUGE amount of peak heap. Vs the brief's
+#   stated 4.73 GB baseline at 16 MP, current strip mode is 1.73 GB —
+#   the chunk 4 wiring saved 3 GB by routing shallow-level CSF + masking
+#   through `process_shallow_strip_band` (StripBandWorkspace).
+#
+# - Brief targets:
+#     - 4 MP strip: ≤ 420 MB (current 479 MB, gap 60 MB)
+#     - 16 MP strip: ≤ 1.7 GB (current 1.73 GB, gap 30 MB)
+#
+# - The remaining gap is dominated by the persistent allocations in
+#   Scratch::new:
+#     - 6 × WeberPyramid::with_capacity: 1.07 GB peak at 16 MP
+#     - 3 × WeberPyramidCache::with_capacity: 537 MB peak at 16 MP
+#
+# - Chunk 6 step 3 (the strip-major dispatcher) is needed to wire the
+#   strip-shape allocators from step 1 + 2 into the build path and
+#   close the gap. See CPU_KSPL_CHUNK6_HANDOFF_step2.md for details.
+#
+# ## Validates
+#
+# - 270-cell strip_parity grid: bit-identical pass on master (chunk 4 wiring
+#   + chunk 6 step 1 + 2)
+# - Chunk 4 wiring delivered ~63% peak heap reduction at 16 MP vs the
+#   pre-chunk-4 baseline (4.73 GB → 1.73 GB)
+# - Chunks 1, 2, 3, 5 (strip-kernel ports + audits) are validated by
+#   12 bit-identical per-kernel parity tests in `strip_kernels.rs`
+#
+# ## Does NOT validate
+#
+# - End-to-end memory reduction below brief targets (step 3 not shipped)
+# - 40 MP synthetic measurements (run takes 5+ min × multiple modes;
+#   skipped for this session, deferred to step 3 measurement)
