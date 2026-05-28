@@ -529,3 +529,84 @@ pub fn weber_contrast_pyr_dec_scalar(
     }
     WeberPyramid { bands, log_l_bkg }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gauss5_sums_to_one() {
+        let s: f32 = GAUSS5.iter().sum();
+        assert!((s - 1.0).abs() < 1e-7, "GAUSS5 sums to {s}, not 1.0");
+    }
+
+    #[test]
+    fn reduce_halves_dimensions() {
+        let src = vec![1.0_f32; 16 * 16];
+        let mut dst = Vec::new();
+        let (dw, dh) = gausspyr_reduce_scalar(&src, 16, 16, &mut dst);
+        assert_eq!((dw, dh), (8, 8));
+        assert_eq!(dst.len(), 64);
+    }
+
+    #[test]
+    fn reduce_preserves_constant_signal() {
+        // GAUSS5 sums to 1; on a constant input every output pixel
+        // must equal the constant. Catches coefficient typos and
+        // off-by-one edge errors simultaneously.
+        let src = vec![2.5_f32; 16 * 16];
+        let mut dst = Vec::new();
+        gausspyr_reduce_scalar(&src, 16, 16, &mut dst);
+        for &v in &dst {
+            assert!(
+                (v - 2.5).abs() < 1e-6,
+                "constant-signal reduce produced {v} ≠ 2.5"
+            );
+        }
+    }
+
+    #[test]
+    fn expand_preserves_constant_signal() {
+        // With the cvvdp-style explicit edge extension (z[0] =
+        // src[0], z[back] = src[-1]), every output sample's kernel
+        // hits either the K[0]+K[2]+K[4] subset or the K[1]+K[3]
+        // subset of the 5-tap, each summing to 0.5; the ×2 gain per
+        // axis recovers full unity. So a constant input must produce
+        // a constant output across the entire buffer — boundaries
+        // included.
+        let src = vec![7.5_f32; 8 * 8];
+        let mut dst = Vec::new();
+        gausspyr_expand_scalar(&src, 8, 8, 16, 16, &mut dst);
+        for (i, &v) in dst.iter().enumerate() {
+            assert!(
+                (v - 7.5).abs() < 1e-5,
+                "constant-signal expand produced {v} ≠ 7.5 at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn reduce_then_expand_round_trips_constant() {
+        let src = vec![2.0_f32; 16 * 16];
+        let mut reduced = Vec::new();
+        let (dw, dh) = gausspyr_reduce_scalar(&src, 16, 16, &mut reduced);
+        let mut expanded = Vec::new();
+        gausspyr_expand_scalar(&reduced, dw, dh, 16, 16, &mut expanded);
+        for (i, &v) in expanded.iter().enumerate() {
+            assert!((v - 2.0).abs() < 1e-5, "round-trip {v} ≠ 2.0 at index {i}");
+        }
+    }
+
+    #[test]
+    fn expand_preserves_constant_odd_target() {
+        // Odd target dimension exercises the `out_h & 1` parity branch
+        // in the edge-replication index. cvvdp uses div_ceil on
+        // reduce, so the inverse target can be one less than 2*sh.
+        let src = vec![4.0_f32; 4 * 4];
+        let mut dst = Vec::new();
+        gausspyr_expand_scalar(&src, 4, 4, 7, 7, &mut dst);
+        for (i, &v) in dst.iter().enumerate() {
+            assert!((v - 4.0).abs() < 1e-5, "odd-target expand {v} ≠ 4.0 at {i}");
+        }
+    }
+}
