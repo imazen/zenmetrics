@@ -119,6 +119,41 @@ Workspace conventions per the global rules:
     over with a tolerance widen.
 ### Added
 
+- **Phase 9.Z.A — cvvdp `score_strip` + `score_with_warm_ref_strip`
+  API stubs.** API surface added matching the iwssim shape, but
+  these methods currently delegate to `score()` /
+  `score_with_warm_ref()` and **do not yet reduce peak heap**. The
+  cvvdp memory-bounded strip walker is multi-day refactor work
+  (9-level Weber pyramid + per-band σ=3 PU blur produces cumulative
+  halo `~8 × 2^k` rows at scale 0 for level k → at level 8 of 4096²
+  that exceeds any sensible strip body; hybrid K_SPLIT dispatch
+  required per the GPU cvvdp Mode E design at
+  `crates/cvvdp-gpu/docs/STRIP_PROCESSING.md`). The stubs ship now
+  to unblock orchestrator `MemoryMode::Strip` / `CachedStrip`
+  wiring for cvvdp without API churn when the walker eventually
+  lands. 3 tests (`crates/cvvdp/tests/strip_stub.rs`) pin stub ==
+  full equality.
+- **Phase 9.Z.A — iwssim `score_with_warm_ref_strip` + `_gray`
+  cached-ref strip scoring.** Best-of-both memory profile for
+  batch sweeps: ref state cached full-image in `WarmState`
+  (`lp_ref + g_ref + per-scale eigs`); dist walked per-strip;
+  single-pass walker (no Pass 2 — eigendecomp lazily cached on
+  first warm-strip call). Per-strip dist working set ≈ 150 MB at
+  40 MP vs 5.58 GB warm-ref Full. `WarmState` gains `eigs:
+  Vec<Option<EigResult>>`; exposed as `pub(crate)` so the strip
+  module accesses it directly. 5/5 parity tests pass against
+  `score_with_warm_ref` within 1e-5 to 1e-4 abs JOD; single-strip
+  case matches at < 1e-6.
+- **Phase 9.Z.A — orchestrator CpuAdapter strip dispatch.** Three
+  new methods on `CpuAdapter`: `compute_strip`,
+  `compute_with_cached_reference_strip`, `supports_strip()`. Per-
+  metric routing:
+    - iwssim: real walker (returns `true` for `supports_strip`).
+    - cvvdp: routes to the stubs (returns `false` so chooser does
+      NOT pick CPU-strip for cvvdp yet).
+    - ssim2 / dssim / butter / zensim: surface `Failed` until
+      wired (zensim's `compute_strips` API exists upstream — next).
+  3 new cpu_adapter tests pin behavior under each routing branch.
 - **Phase 9.Z.A — iwssim `score_strip` + `score_strip_gray` strip-mode
   scoring.** Two new public methods on `iwssim::Iwssim` for memory-
   bounded scoring on 40 MP+ inputs. Walks the image in horizontal
