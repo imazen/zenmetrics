@@ -226,8 +226,13 @@ const METRIC_KINDS: &[MetricKind] = &[
 #[cfg(feature = "bench")]
 fn backends_for_kind(kind: MetricKind) -> &'static [Backend] {
     match kind {
-        // cvvdp Mode E (Strip) was rolled back upstream (changes JOD);
-        // we measure Full + StripPair only.
+        // cvvdp Mode E (Strip) is re-introduced via task #79 and ships
+        // JOD-bit-stable with Full, but it's a batch-warm-ref-only API
+        // (warm_reference + compute_dkl_jod_with_warm_ref). This bench
+        // harness measures one-shot score(), so it covers Full +
+        // StripPair (Mode B) only; Mode E doesn't belong in this grid
+        // even though it exists. See cvvdp-gpu/docs/STRIP_PROCESSING.md
+        // for the Mode E vs Mode B distinction.
         MetricKind::Cvvdp => {
             if cfg!(feature = "cpu-cvvdp") {
                 &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu]

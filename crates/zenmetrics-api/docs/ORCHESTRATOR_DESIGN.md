@@ -122,12 +122,20 @@ features = ["avx2", "avx512f", "sse4.2"]
 ram_mib = 131072
 
 # Per-metric per-backend perf+VRAM profile. Sparse: only measured points.
+# NOTE: The numbers below are example/illustrative values. Production
+# capability caches contain runtime-measured values that differ from
+# these. The cvvdp_strip_pair example is from a P2.1c-era measurement
+# (2026-05-27); current post-P2.7-partial measurements show 4096²
+# Mode B nvsmi delta around 1502 MiB (-64% vs Full's 4225 MiB) per
+# cvvdp-gpu CHANGELOG. Numbers shift as cvvdp-gpu's strip walker
+# refines; always trust the live capability cache over this example.
 [metrics.cvvdp.gpu_full]
 ns_per_px_at = { "1024" = 5.34, "2048" = 3.10, "4096" = 2.71 }
 vram_mib_at = { "1024" = 385, "2048" = 1089, "4096" = 3970 }
 last_measured = "2026-05-27T05:30:00Z"
 
 [metrics.cvvdp.gpu_strip_pair]
+# Example only — current measurement is closer to vram_mib_at["4096"] ≈ 1502
 ns_per_px_at = { "4096" = 2.62 }
 vram_mib_at = { "4096" = 2272 }
 
