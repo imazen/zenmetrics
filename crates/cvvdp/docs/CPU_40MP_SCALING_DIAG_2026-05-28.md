@@ -103,6 +103,30 @@ derived from the same heaptrack trace), but the agreement confirms the peak
 heap value is not a rounding artifact in the header. Both views report the
 same 218 B/px slope.
 
+### Massif heap-vs-time at 40 MP — peak is SUSTAINED, not transient
+
+Per task brief step 3: confirm whether the 40 MP peak is a short-lived transient
+or a sustained working set. Result: **sustained**.
+
+| Marker | Time (s) | Heap (GB) | Note |
+|---|---|---|---|
+| First >= 2 GB | 0.20 | 5.02 | DKL+pre-allocated Scratch lands as a single block (5 GB at snapshot 19) |
+| First >= 6 GB | 2.38 | 6.04 | mid-weber-build (per-channel pyramids accumulating) |
+| First >= 8 GB | 7.88 | 8.12 | last weber-build done; fold bands starting |
+| Peak | 10.22 | 8.68 | mid fold-bands (BandWorkspace inflation atop persistent scratch) |
+| Total runtime | 14.55 | — | including dist-buffer drop + cleanup |
+
+Sustained time at >= 80 % of peak: **6.38 s (44 % of runtime)**.
+Sustained time at >= 90 % of peak: **3.87 s (27 % of runtime)**.
+
+This is not an allocator-rounding spike — the memory is held during the entire
+weber + fold compute phase. A "low memory mode B" cannot reclaim this by
+delaying allocations or running things in a different order; the buffers are
+in active use across most of the score() call.
+
+This further reinforces Path A: shrinking the per-call working set at shallow
+levels (via strip-shape allocators) is the only way to bring this number down.
+
 ## Hypothesis ranking — what's NOT happening
 
 Per the task brief's expected suspects, here's what was ruled out:
