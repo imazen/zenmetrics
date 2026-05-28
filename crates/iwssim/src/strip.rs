@@ -75,6 +75,51 @@
 //!
 //! Verified by parity tests: strip output matches full output exactly
 //! at 1024² / 4096² with `strip_height ∈ {256, 512, 1024, 2048}`.
+//!
+//! ## K_SPLIT review (Phase 9.Z.B / task #124 — D6)
+//!
+//! iwssim's pyramid is `NUM_SCALES = 5`, shallower than cvvdp's 9.
+//! At the canonical strip body `h_body = 512`, the K_SPLIT decision
+//! `body_at_k = (h_body >> k).max(1) >= MODE_B_DEEP_THRESHOLD = 12`
+//! evaluates as:
+//!
+//! | k | body_k = (512 >> k) | ≥ 12? |
+//! |---|---------------------|-------|
+//! | 0 | 512                 | yes   |
+//! | 1 | 256                 | yes   |
+//! | 2 | 128                 | yes   |
+//! | 3 | 64                  | yes   |
+//! | 4 | 32                  | yes   |
+//!
+//! Every level passes the shallow-band check, so for iwssim at
+//! `h_body=512` the equivalent `k_split = NUM_SCALES = 5` — i.e.,
+//! **iwssim has no deep bands**. The entire pyramid lives in the
+//! strip-aware regime; there is no full-image-fallback regime for
+//! deep bands like cvvdp has at levels 6/7/8.
+//!
+//! Even at the smallest sensible `h_body = STRIP_BODY_MIN = 64`:
+//!
+//! | k | body_k = (64 >> k) | ≥ 12? |
+//! |---|--------------------|-------|
+//! | 0 | 64                 | yes   |
+//! | 1 | 32                 | yes   |
+//! | 2 | 16                 | yes   |
+//! | 3 | 8                  | no (deep) |
+//! | 4 | 4                  | no (deep) |
+//!
+//! Only at `h_body=64` does iwssim see deep bands (k=3,4). The
+//! production default is 512, so the K_SPLIT/deep-band distinction
+//! is moot for normal iwssim use.
+//!
+//! **Decision: do NOT add K_SPLIT machinery to iwssim.** The current
+//! strip walker uses `STRIP_HALO_ROWS = 320` (a fixed per-level halo
+//! sized for the worst-case scale-0 reach) — a simpler model than
+//! cvvdp's per-level halo with hybrid dispatch. iwssim doesn't have
+//! cvvdp's σ=3 PU blur, so the deep-band halo problem that drove
+//! cvvdp's K_SPLIT (`6 × 2^k`-rows halo at level k > 4) doesn't
+//! occur here. Adding K_SPLIT would be a no-op at production `h_body`
+//! values and dead code at smaller ones (caller pre-validation
+//! rejects `h_body < STRIP_BODY_MIN = 64` already).
 
 use alloc::vec::Vec;
 

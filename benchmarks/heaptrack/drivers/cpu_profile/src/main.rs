@@ -95,6 +95,9 @@ fn rgb_pix(bytes: &[u8]) -> &[[u8; 3]] {
 
 fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, String> {
     use cvvdp::{Cvvdp, CvvdpParams};
+    // Strip body height — picks the canonical GPU default (512) for
+    // strip-mode runs. Aligns with `cvvdp::strip::STRIP_H_BODY_DEFAULT`.
+    const STRIP_H_BODY: u32 = 512;
     match mode {
         "full" => {
             let mut c = Cvvdp::new(w, h, CvvdpParams::default()).map_err(|e| e.to_string())?;
@@ -107,7 +110,28 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             let v = c.score_with_warm_ref(d).map_err(|e| e.to_string())?;
             Ok(v as f64)
         }
-        "strip" | "warm_ref_strip" => Err(format!("GAP:cvvdp:{mode}")),
+        "strip" => {
+            // Phase 9.Z.B: real strip walker (was GAP through 2026-05-27).
+            // Memory impact today: ZERO vs `full` — only the pool stage
+            // iterates in strips; weber pyramid + masking + d_scratch
+            // remain full-image-sized. Matches the GPU's currently-
+            // shipped strip walker. Heaptrack will report ~same peak as
+            // `full`; the parity gate (bit-identical JOD) is the real
+            // contract this run validates.
+            let mut c = Cvvdp::new(w, h, CvvdpParams::default()).map_err(|e| e.to_string())?;
+            let v = c.score_strip(r, d, STRIP_H_BODY).map_err(|e| e.to_string())?;
+            Ok(v as f64)
+        }
+        "warm_ref_strip" => {
+            // Phase 9.Z.B: Mode E (cached-ref) strip variant. Same
+            // ZERO-memory-impact caveat as `strip`.
+            let mut c = Cvvdp::new(w, h, CvvdpParams::default()).map_err(|e| e.to_string())?;
+            c.warm_reference(r).map_err(|e| e.to_string())?;
+            let v = c
+                .score_with_warm_ref_strip(d, STRIP_H_BODY)
+                .map_err(|e| e.to_string())?;
+            Ok(v as f64)
+        }
         _ => Err(format!("bad-mode:{mode}")),
     }
 }
