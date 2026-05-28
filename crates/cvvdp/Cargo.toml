@@ -47,6 +47,11 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # code path enables this; it carries zero logic change and is hidden
 # from rustdoc. See `lib.rs::__simd_equiv_test_api`.
 __simd_equiv_test = []
+# Phase 9.Z.B (#124): run the big strip-parity grid (18 seeds ×
+# 3 sizes × 5 h_body = 270 cells per mode). Takes ~22 min sequentially
+# at 4096²; gated off by default so plain `cargo test` runs fast. CI
+# enables this to lock in bit-identical parity across the full grid.
+cvvdp-strip-parity-big = []
 
 [dependencies]
 # Safe SIMD dispatch via capability tokens. Used by:
