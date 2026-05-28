@@ -119,6 +119,58 @@ Workspace conventions per the global rules:
     over with a tolerance widen.
 ### Added
 
+- **Phase 9.YA — cvvdp Scratch DKL plane reuse + weber pyramid output
+  pre-allocation; iwssim Scratch struct for sRGB plane reuse.**
+  Addresses two of the P0/P1 actions ranked by the Phase 9.X heaptrack
+  report (`crates/zenmetrics-api/docs/CPU_HEAPTRACK_REPORT_2026-05-27.md`).
+  - **cvvdp Part 1 (`e428bf08`)**: removed `Cvvdp::warm:
+    Option<ReferenceState>` (which owned its own `[Vec<f32>; 3]` DKL
+    planes + display + weber pyramid + dims) in favour of
+    `Cvvdp::warm_active: bool`. The DKL planes now live in the
+    persistent `Scratch::ref_*` buffers (already pre-allocated at
+    `Cvvdp::new`) and the per-channel weber pyramid in
+    `Scratch::weber_ref`. The new `build_one_side_warm_ref_into`
+    helper uses LOCAL `WeberPyramidCache` slots that drop at function
+    exit — persisting them in `scratch.weber_cache_ref` would have
+    pushed peak heap up by ~640 MB in the warm path with no benefit.
+    `ReferenceState` removed from `lib.rs`. Measured at 40 MP
+    (7000×5728): warm_ref peak heap 9.30 GB → 8.82 GB (−480 MB =
+    predicted DKL-plane saving); full mode unchanged (already used
+    scratch). Score bit-identical.
+  - **iwssim Part 1 (`77d424fd`)**: added `iwssim::pipeline::Scratch`
+    struct with `ref_gray` / `dis_gray` (W×H f32) + `ref_work` /
+    `dis_work` (work_w × work_h f32). Replaces 4 per-call
+    `alloc::vec![0.0; w*h]` invocations (≈ 640 MB of churn at 40 MP)
+    with in-place writes via the new `pad_gray_into(src, dst, …)`
+    associated function. `score()` / `score_gray()` /
+    `warm_reference()` / `score_with_warm_ref()` all route through
+    the persistent scratch via inner `score_gray_internal` /
+    `warm_reference_gray_internal` / `score_with_warm_ref_gray_internal`
+    helpers. Peak heap at 40 MP unchanged (5.90 GB; bottleneck is
+    `compute_iw_maps`, not entry-side buffers), but alloc churn
+    drops by 4 mallocs per call. Score bit-identical
+    (0.9988008961043233).
+  - **cvvdp Part 2 (`dc13235d`)**: added
+    `WeberPyramid::with_capacity(sw, sh, n_levels)` and
+    `WeberPyramidCache::with_capacity(sw, sh, n_levels)` constructors
+    that pre-size every per-level `Vec<f32>` in the output bands +
+    log_l_bkg arrays and the dist-side cache's gauss_img + gauss_l
+    bands. `Scratch::new` now takes `n_levels` and uses these
+    constructors for `weber_ref` / `weber_dist` (used by all paths)
+    and `weber_cache_dist` (used by cold + warm). `weber_cache_ref`
+    is intentionally left at `Default::default()` — only the cold
+    `score()` path uses it, so pre-allocating would burn ~640 MB in
+    the warm path. Inner `PyramidScratch` buffers (vscratch,
+    expanded, gauss_tmp) remain lazily allocated by gausspyr_reduce
+    / gausspyr_expand — pre-allocating to the finest-level worst
+    case pushed peak above the natural runtime peak by 1.4 GB in
+    iteration. Net effect at 40 MP: full mode peak unchanged
+    (11.31 GB, bound by concurrent 6-pyramid state); alloc count
+    553 → 518 (−35 mallocs/process). Score bit-identical at
+    1 MP / 16 MP / 40 MP.
+  - Heaptrack artifacts (4 × ~16 KB zst) committed to
+    `benchmarks/heaptrack/` as `{cvvdp,iwssim}_{full,warm_ref}_40mp_post9ya_part{1,2}.zst`
+    for traceable before/after comparison with the Phase 9.X baseline.
 - **Phase 9x — CPU heaptrack gate report
   (`crates/zenmetrics-api/docs/CPU_HEAPTRACK_REPORT_2026-05-27.md`).**
   Profiles all six CPU metrics (cvvdp / ssim2 / dssim / butter /
