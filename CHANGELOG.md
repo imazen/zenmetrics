@@ -363,6 +363,26 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`zenmetrics-orchestrator` Phase 8i — sentinel errors skip OOM
+  cache recording (Fix C).** The executor's `run_single` ladder had
+  been recording `(Backend::Cpu, pixels)` as an OOM cell for three
+  non-memory sentinels emitted by the construct path:
+  `CpuMetricUnavailable:` (metric has no CPU reference upstream),
+  `CpuBackendUnavailable:` (build is missing the `cpu-<metric>`
+  feature), and the pre-Phase-6 legacy `CpuNotYetWired`. All three
+  are feature-flag / build-configuration sentinels, not memory
+  failures. Recording an OOM for these cases permanently locked out
+  CPU at the affected size for any future binary that DOES have the
+  feature enabled, and pre-Phase-3 cache files inherited the
+  pollution forever. Fix: remove the `record_oom_and_persist` calls
+  from the three sentinel branches in `executor.rs:925-965` and
+  replace with `log::debug!` skip-records. Chooser-side rejection
+  (`RejectReason::CpuMetricUnavailable` from `chooser.rs:649-678`)
+  continues to handle the prevention path correctly. New regression
+  test `sentinel_errors_do_not_pollute_cells_failed_oom` in
+  `tests/cpu_backend.rs` asserts no `(Backend::Cpu, _)` entry is
+  added to `cells_failed_oom` after a sentinel-triggering run.
+
 - **`zenmetrics-orchestrator` Phase 8i — record_oom_and_persist prunes
   stale + contradictory cache entries (Fix B).** The investigation in
   `crates/zenmetrics-api/docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md`

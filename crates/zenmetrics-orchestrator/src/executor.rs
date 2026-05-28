@@ -925,19 +925,45 @@ impl Orchestrator {
                     // Phase 6 sentinel: CpuMetricUnavailable means the
                     // metric has no CPU reference (Iwssim). Advance the
                     // ladder so a different backend can be picked.
+                    //
+                    // Phase 8i Fix C: do NOT call
+                    // `record_oom_and_persist` here. CpuMetricUnavailable
+                    // is a feature-flag / build-configuration sentinel,
+                    // not a memory failure. The chooser's
+                    // `RejectReason::CpuMetricUnavailable` path already
+                    // handles future calls correctly without polluting
+                    // the OOM list. Recording an OOM for this case
+                    // permanently locks out CPU at this size for any
+                    // future binary that DOES have the feature enabled.
                     if let Some(_tag) = msg.strip_prefix("CpuMetricUnavailable:") {
                         attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
-                        // Mark the cell as failed so the chooser doesn't
-                        // pick this backend again at the same size.
-                        self.record_oom_and_persist(metric, backend, pixels);
+                        log::debug!(
+                            "phase 8i Fix C: skipping record_oom_and_persist \
+                             for CpuMetricUnavailable sentinel ({}, backend={:?}, \
+                             pixels={}) — not a memory failure",
+                            metric.tag(),
+                            backend,
+                            pixels,
+                        );
                         continue;
                     }
                     // Phase 6 sentinel: CpuBackendUnavailable means the
                     // build doesn't include the feature for this metric.
                     // Same recovery as Unavailable — advance ladder.
+                    //
+                    // Phase 8i Fix C: same reasoning as
+                    // CpuMetricUnavailable above — feature-flag missing,
+                    // not a memory failure. Don't poison the OOM list.
                     if msg.starts_with("CpuBackendUnavailable:") {
                         attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
-                        self.record_oom_and_persist(metric, backend, pixels);
+                        log::debug!(
+                            "phase 8i Fix C: skipping record_oom_and_persist \
+                             for CpuBackendUnavailable sentinel ({}, backend={:?}, \
+                             pixels={}) — feature-flag missing, not OOM",
+                            metric.tag(),
+                            backend,
+                            pixels,
+                        );
                         continue;
                     }
                     // Phase 6 sentinel: CpuFailed is a real CPU runtime
@@ -958,9 +984,19 @@ impl Orchestrator {
                     // Pre-Phase-6 legacy: CpuNotYetWired sentinel from
                     // older build paths. Kept for completeness; modern
                     // construct() never emits this. Same recovery.
+                    //
+                    // Phase 8i Fix C: same reasoning — sentinel, not
+                    // a memory failure. Don't poison the OOM list.
                     if msg == "CpuNotYetWired" {
                         attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
-                        self.record_oom_and_persist(metric, backend, pixels);
+                        log::debug!(
+                            "phase 8i Fix C: skipping record_oom_and_persist \
+                             for CpuNotYetWired legacy sentinel ({}, backend={:?}, \
+                             pixels={})",
+                            metric.tag(),
+                            backend,
+                            pixels,
+                        );
                         continue;
                     }
                     attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));

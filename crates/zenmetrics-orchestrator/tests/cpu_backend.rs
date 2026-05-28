@@ -352,6 +352,93 @@ fn iwssim_cpu_unavailable_advances_ladder() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 8i Fix C — sentinel errors must NOT trigger record_oom_and_persist
+// ---------------------------------------------------------------------------
+
+/// Fix C — `CpuMetricUnavailable` / `CpuBackendUnavailable` /
+/// `CpuNotYetWired` are feature-flag / build-configuration sentinels,
+/// not memory failures. The executor must NOT poison
+/// `cells_failed_oom` with `(Backend::Cpu, pixels)` when these
+/// surface, because doing so permanently locks out CPU at that size
+/// for any future binary that DOES have the feature enabled.
+///
+/// Construction: poison every GPU backend at the requested size so
+/// the chooser-pre-rejection / executor sentinel branch is the only
+/// route to FullyExhausted. After `run_single` returns, the
+/// `cells_failed_oom` list must contain ONLY the entries we placed
+/// up front — no `(Backend::Cpu, _)` entries added by the executor.
+#[test]
+fn sentinel_errors_do_not_pollute_cells_failed_oom() {
+    // Iwssim works for this test because:
+    //   (a) Its `supported_backends` table includes Cpu (so the
+    //       chooser progresses to feature-check rather than
+    //       short-circuiting UnsupportedByMetric).
+    //   (b) Iwssim has a CPU reference but, when `cpu-iwssim` is
+    //       OFF, the chooser surfaces CpuMetricUnavailable / the
+    //       executor sentinel branch fires — exactly the path Fix C
+    //       protects.
+    //   (c) When `cpu-iwssim` IS on, Cpu is selected as a real
+    //       candidate and the run succeeds (no FullyExhausted), so
+    //       there's nothing for the sentinel branch to fire on.
+    //       Either way, no `(Cpu, _)` should be in cells_failed_oom
+    //       at the end — Fix C's invariant holds in both modes.
+
+    let mut profile = profile_with_gpu_at(256, 256);
+    poison_gpu_at(&mut profile, 256u64 * 256u64);
+    let initial_oom_count = profile.cells_failed_oom.len();
+    let initial_oom_snapshot = profile.cells_failed_oom.clone();
+
+    let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Iwssim, profile)]);
+    let (r, d) = synth(256);
+    let task = Task {
+        task_id: 162,
+        ref_data: TaskData::Srgb8(r),
+        dist_data: TaskData::Srgb8(d),
+        width: 256,
+        height: 256,
+        metric: MetricKind::Iwssim,
+        params: None,
+        ref_hash: 0,
+    };
+    let _ = orch.run_single(task);
+
+    // Inspect cells_failed_oom AFTER the run.
+    let final_oom_list = &orch
+        .capability()
+        .metrics
+        .get(MetricKind::Iwssim.tag())
+        .expect("iwssim profile must survive run_single")
+        .cells_failed_oom;
+
+    // Crucial Fix C invariant: no `(Backend::Cpu, _)` entry was added
+    // by the executor's sentinel branches.
+    let cpu_oom_entries: Vec<_> = final_oom_list
+        .iter()
+        .filter(|&&(b, _)| b == Backend::Cpu)
+        .collect();
+    assert!(
+        cpu_oom_entries.is_empty(),
+        "Fix C violated: sentinel error caused executor to add \
+         Cpu OOM entries: {:?} (cells_failed_oom = {:?})",
+        cpu_oom_entries,
+        final_oom_list,
+    );
+
+    // Defense-in-depth check: the total count must not have grown
+    // beyond the initial poison (Fix B's prune may have shrunk it,
+    // but no new Cpu entries should appear).
+    assert!(
+        final_oom_list.len() <= initial_oom_count,
+        "cells_failed_oom grew unexpectedly: was {:?} (len={}), \
+         now {:?} (len={})",
+        initial_oom_snapshot,
+        initial_oom_count,
+        final_oom_list,
+        final_oom_list.len(),
+    );
+}
+
+// ---------------------------------------------------------------------------
 // OOM-forced fallback: every GPU backend rejected -> Cpu picked
 // ---------------------------------------------------------------------------
 
