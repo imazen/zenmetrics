@@ -106,6 +106,8 @@ mod simd_math;
 mod simd_pyramid;
 #[allow(dead_code)] // K_SPLIT helpers used by D1 tests + future per-strip pyramid kernels
 pub(crate) mod strip;
+#[allow(dead_code)] // wired in by chunks 1-6 (strip-major dispatcher)
+pub(crate) mod strip_kernels;
 
 pub use pipeline::Cvvdp;
 
