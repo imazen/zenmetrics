@@ -72,10 +72,10 @@ pub(crate) struct BandWorkspace {
 /// dominating peak heap.
 ///
 /// Mirrors the GPU's `DBandsTransient::new_strip` (cvvdp-gpu
-/// `pipeline.rs:6388` allocator). Allocated by `Scratch::ensure_strip_band_ws`
-/// (added in chunk 6's dispatcher wiring); unused until then.
+/// `pipeline.rs:6388` allocator). Allocated by
+/// [`Scratch::ensure_strip_band_ws`] and consumed by
+/// `pipeline::process_shallow_strip_band` (chunk 6's dispatcher).
 #[derive(Default)]
-#[allow(dead_code)] // wired in by chunk 6 (strip-major dispatcher)
 pub(crate) struct StripBandWorkspace {
     pub t_p_a: Vec<f32>,
     pub t_p_rg: Vec<f32>,
@@ -95,7 +95,6 @@ pub(crate) struct StripBandWorkspace {
     pub pu_h: Vec<f32>,
 }
 
-#[allow(dead_code)] // wired in by chunk 6
 impl StripBandWorkspace {
     /// Allocate (or resize) every per-band slot to `n_strip = R_k × bw`
     /// f32 entries.
@@ -184,7 +183,6 @@ pub(crate) struct Scratch {
     // Chunk 4 of the CPU K_SPLIT walker port. Allocated lazily so
     // Full-mode `Scratch::new` doesn't pay the strip allocator's
     // cost.
-    #[allow(dead_code)] // wired in by chunk 6
     pub strip_band_ws: Option<Vec<StripBandWorkspace>>,
 }
 
@@ -268,7 +266,6 @@ impl Scratch {
     /// Chunk 4 of the CPU K_SPLIT walker port; populated lazily so
     /// the Full-mode path's `Scratch::new` doesn't pay the strip
     /// allocator's cost.
-    #[allow(dead_code)] // wired in by chunk 6
     pub fn ensure_strip_band_ws(&mut self, k_split: usize) {
         if self.strip_band_ws.is_none() {
             self.strip_band_ws = Some(Vec::new());

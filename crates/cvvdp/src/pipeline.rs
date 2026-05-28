@@ -16,14 +16,17 @@ use crate::pool::{
     do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_contrast_pyr_into};
-use crate::scratch::{BandWorkspace, Scratch};
+use crate::scratch::{BandWorkspace, Scratch, StripBandWorkspace};
+use crate::strip::{LpNormAccumulator, mode_b_halo_at_level};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
 use crate::kernels::csf::{
     CSF_BASEBAND_RHO, CsfChannel, LOG_L_BKG_AXIS, N_L_BKG, SENSITIVITY_CORRECTION_DB,
     precompute_logs_row,
 };
-use crate::kernels::masking::CH_GAIN;
+use crate::kernels::masking::{CH_GAIN, D_MAX, MASK_C, MASK_P, MASK_Q, PU_PADSIZE, XCM_3X3};
+use crate::simd_math::safe_pow_with_offset_into;
+use crate::simd_pyramid::gaussian_blur_sigma3_simd;
 
 use crate::masking::mult_mutual_band_into;
 
@@ -534,6 +537,15 @@ impl Cvvdp {
         // single-pass lp_norm_mean; Some(h_body) → row-strip walk).
         let strip_h_body = self.strip_h_body.get();
 
+        // Phase 9.Z.F chunk 4 wiring: shallow levels (k < k_split)
+        // dispatch through the strip-major helper using
+        // [`StripBandWorkspace`].
+        let k_split = if let Some(h_body) = strip_h_body {
+            crate::strip::mode_b_k_split(h_body, n_levels as u32) as usize
+        } else {
+            0
+        };
+
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         let mut accum = if want_diffmap {
             Some(DiffmapAccum::new(w, h))
@@ -541,9 +553,14 @@ impl Cvvdp {
             None
         };
 
-        // Reuse band_ws[0] as the single sequential scratch slot.
+        // Reuse band_ws[0] as the single sequential scratch slot for
+        // deep + baseband bands. For shallow bands (k < k_split), the
+        // strip-major helper writes into strip_band_ws[0] (we use a
+        // single shared slot since we're sequential).
         self.scratch.ensure_band_ws(1);
-        let ws = &mut self.scratch.band_ws[0];
+        if k_split > 0 {
+            self.scratch.ensure_strip_band_ws(1);
+        }
 
         for k in 0..n_levels {
             let is_first = k == 0;
@@ -567,6 +584,60 @@ impl Cvvdp {
             debug_assert_eq!(logs_row_a.len(), N_L_BKG);
             debug_assert_eq!(LOG_L_BKG_AXIS.len(), N_L_BKG);
 
+            let ref_a_band = &ref_weber[0].bands[k].data;
+            let ref_rg_band = &ref_weber[1].bands[k].data;
+            let ref_vy_band = &ref_weber[2].bands[k].data;
+            let dis_a_band = &dist_weber[0].bands[k].data;
+            let dis_rg_band = &dist_weber[1].bands[k].data;
+            let dis_vy_band = &dist_weber[2].bands[k].data;
+            let ch_gain_a = CH_GAIN[0];
+            let ch_gain_rg = CH_GAIN[1];
+            let ch_gain_vy = CH_GAIN[2];
+
+            // Shallow strip-major branch: dispatch through the helper.
+            if k < k_split && !is_baseband {
+                let h_body = strip_h_body.expect("strip mode active");
+                let ws = &mut self.scratch.band_ws[0];
+                let diffmap_d_out: Option<(&mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>)> =
+                    if want_diffmap {
+                        Some((&mut ws.d_a, &mut ws.d_rg, &mut ws.d_vy))
+                    } else {
+                        None
+                    };
+                let sws = &mut self.scratch.strip_band_ws.as_mut().unwrap()[0];
+                let q_band = process_shallow_strip_band(
+                    sws,
+                    ref_a_band,
+                    ref_rg_band,
+                    ref_vy_band,
+                    dis_a_band,
+                    dis_rg_band,
+                    dis_vy_band,
+                    log_l_bkg_band,
+                    bw,
+                    bh,
+                    k,
+                    is_first,
+                    rho,
+                    h_body,
+                    k_split as u32,
+                    &self.strip_dispatch_counter,
+                    diffmap_d_out,
+                );
+                q_per_ch.push(q_band);
+                if let Some(acc) = accum.as_mut() {
+                    let ws = &mut self.scratch.band_ws[0];
+                    let d_per_ch: [Vec<f32>; 3] =
+                        [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
+                    accumulate_band_diffmap(acc, &d_per_ch, bw, bh, false, n_levels);
+                }
+                continue;
+            }
+
+            // Full-image deep / baseband path (also the full-mode path
+            // when k_split == 0).
+            let ws = &mut self.scratch.band_ws[0];
+
             // Compute T_p + R_p per channel into recycled workspace.
             ws.t_p_a.clear();
             ws.t_p_a.resize(n_px, 0.0);
@@ -581,15 +652,6 @@ impl Cvvdp {
             ws.r_p_vy.clear();
             ws.r_p_vy.resize(n_px, 0.0);
 
-            let ref_a_band = &ref_weber[0].bands[k].data;
-            let ref_rg_band = &ref_weber[1].bands[k].data;
-            let ref_vy_band = &ref_weber[2].bands[k].data;
-            let dis_a_band = &dist_weber[0].bands[k].data;
-            let dis_rg_band = &dist_weber[1].bands[k].data;
-            let dis_vy_band = &dist_weber[2].bands[k].data;
-            let ch_gain_a = CH_GAIN[0];
-            let ch_gain_rg = CH_GAIN[1];
-            let ch_gain_vy = CH_GAIN[2];
             for i in 0..n_px {
                 let log_l = log_l_bkg_band[i];
                 let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
@@ -701,6 +763,13 @@ impl Cvvdp {
     /// its own `BandWorkspace` slot from `self.scratch.band_ws`,
     /// indexed by band id. The Vec<f32> capacities in each slot
     /// persist across calls — no fresh per-band allocation.
+    ///
+    /// **Chunk 4 wiring (Phase 9.Z.F)**: in strip mode, shallow levels
+    /// (`k < k_split`) dispatch to [`process_shallow_strip_band`]
+    /// which routes work through strip-shaped
+    /// [`StripBandWorkspace`] slots (sized `R_k × bw`, not `bh ×
+    /// bw`). Deep levels (`k >= k_split`) and Full mode use the
+    /// existing full-image [`BandWorkspace`] path unchanged.
     #[cfg(feature = "parallel")]
     fn fold_bands_parallel(
         &mut self,
@@ -722,168 +791,299 @@ impl Cvvdp {
         let strip_h_body = self.strip_h_body.get();
         let strip_counter = &self.strip_dispatch_counter;
 
+        // Phase 9.Z.F chunk 4 wiring: pick K_SPLIT once for the whole
+        // band loop. Shallow levels (k < k_split) dispatch through the
+        // strip-major helper; deep levels use the legacy full-image
+        // path. In full mode k_split == 0 (no shallow levels).
+        let k_split = if let Some(h_body) = strip_h_body {
+            crate::strip::mode_b_k_split(h_body, n_levels as u32) as usize
+        } else {
+            0
+        };
+
         // Grow the per-band workspace vec to at least n_levels and
         // borrow it mutably so each band closure gets its own slot.
         self.scratch.ensure_band_ws(n_levels);
-        let ws_slice: &mut [BandWorkspace] = &mut self.scratch.band_ws[..n_levels];
+        if k_split > 0 {
+            self.scratch.ensure_strip_band_ws(k_split);
+        }
+        // Split-borrow: shallow indices [0, k_split) use strip_band_ws
+        // slots; deep indices [k_split, n_levels) use band_ws slots.
+        // Diffmap (if requested) at shallow levels also writes into
+        // band_ws[k].d_* for the full-band per-pixel storage that
+        // accumulate_band_diffmap expects.
+        let (shallow_band_ws, deep_band_ws) =
+            self.scratch.band_ws[..n_levels].split_at_mut(k_split);
+        let shallow_strip_ws: Option<&mut [StripBandWorkspace]> = if k_split > 0 {
+            Some(
+                &mut self
+                    .scratch
+                    .strip_band_ws
+                    .as_mut()
+                    .expect("ensure_strip_band_ws was called above")[..k_split],
+            )
+        } else {
+            None
+        };
 
         // Each band's result: (q_per_ch, optional accumulated diffmap).
-        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = ws_slice
-            .par_iter_mut()
-            .enumerate()
-            .map(|(k, ws)| {
-                let is_first = k == 0;
-                let is_baseband = k == n_levels - 1;
-                let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
-                let rho = if is_baseband {
-                    CSF_BASEBAND_RHO
-                } else {
-                    ppd_freqs[k]
-                };
-                let bw = ref_weber[0].bands[k].w;
-                let bh = ref_weber[0].bands[k].h;
-                let n_px = bw * bh;
-                let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
-                debug_assert_eq!(log_l_bkg_band.len(), n_px);
+        // Run shallow + deep in parallel via rayon::join so both pools
+        // make progress; within each, par_iter_mut over its band slots.
+        let n_deep = n_levels - k_split;
 
-                let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
-                let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
-                let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
-                debug_assert_eq!(logs_row_a.len(), N_L_BKG);
+        let process_deep_band = |k_deep_local: usize,
+                                 ws: &mut BandWorkspace|
+         -> ([f32; 3], Option<DiffmapAccum>) {
+            let k = k_split + k_deep_local;
+            let is_first = k == 0;
+            let is_baseband = k == n_levels - 1;
+            let band_mul: f32 = if is_first || is_baseband { 1.0 } else { 2.0 };
+            let rho = if is_baseband {
+                CSF_BASEBAND_RHO
+            } else {
+                ppd_freqs[k]
+            };
+            let bw = ref_weber[0].bands[k].w;
+            let bh = ref_weber[0].bands[k].h;
+            let n_px = bw * bh;
+            let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+            debug_assert_eq!(log_l_bkg_band.len(), n_px);
 
-                let ref_a_band = &ref_weber[0].bands[k].data;
-                let ref_rg_band = &ref_weber[1].bands[k].data;
-                let ref_vy_band = &ref_weber[2].bands[k].data;
-                let dis_a_band = &dist_weber[0].bands[k].data;
-                let dis_rg_band = &dist_weber[1].bands[k].data;
-                let dis_vy_band = &dist_weber[2].bands[k].data;
-                let ch_gain_a = CH_GAIN[0];
-                let ch_gain_rg = CH_GAIN[1];
-                let ch_gain_vy = CH_GAIN[2];
+            let logs_row_a = precompute_logs_row(rho, CsfChannel::A);
+            let logs_row_rg = precompute_logs_row(rho, CsfChannel::Rg);
+            let logs_row_vy = precompute_logs_row(rho, CsfChannel::Vy);
+            debug_assert_eq!(logs_row_a.len(), N_L_BKG);
 
-                if is_baseband {
-                    // Reuse d_a/d_rg/d_vy slots in the workspace.
-                    ws.d_a.clear();
-                    ws.d_a.resize(n_px, 0.0);
-                    ws.d_rg.clear();
-                    ws.d_rg.resize(n_px, 0.0);
-                    ws.d_vy.clear();
-                    ws.d_vy.resize(n_px, 0.0);
-                    for i in 0..n_px {
-                        let log_l = log_l_bkg_band[i];
-                        let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                        let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                        let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                        let diff_a = dis_a_band[i] - ref_a_band[i];
-                        let diff_rg = dis_rg_band[i] - ref_rg_band[i];
-                        let diff_vy = dis_vy_band[i] - ref_vy_band[i];
-                        ws.d_a[i] = diff_a.abs() * s_a;
-                        ws.d_rg[i] = diff_rg.abs() * s_rg;
-                        ws.d_vy[i] = diff_vy.abs() * s_vy;
-                    }
-                } else {
-                    // Reuse t_p_*/r_p_* slots in the workspace.
-                    ws.t_p_a.clear();
-                    ws.t_p_a.resize(n_px, 0.0);
-                    ws.t_p_rg.clear();
-                    ws.t_p_rg.resize(n_px, 0.0);
-                    ws.t_p_vy.clear();
-                    ws.t_p_vy.resize(n_px, 0.0);
-                    ws.r_p_a.clear();
-                    ws.r_p_a.resize(n_px, 0.0);
-                    ws.r_p_rg.clear();
-                    ws.r_p_rg.resize(n_px, 0.0);
-                    ws.r_p_vy.clear();
-                    ws.r_p_vy.resize(n_px, 0.0);
-                    for i in 0..n_px {
-                        let log_l = log_l_bkg_band[i];
-                        let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
-                        let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
-                        let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
-                        let bm_sa = band_mul * s_a;
-                        let bm_srg = band_mul * s_rg;
-                        let bm_svy = band_mul * s_vy;
-                        ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
-                        ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
-                        ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
-                        ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
-                        ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
-                        ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
-                    }
-                    // `mult_mutual_band_into` requires `&[Vec<f32>; 3]`
-                    // for t_p and r_p. Move our workspace slots into
-                    // local arrays, call, then move them back.
-                    let t_p_taken: [Vec<f32>; 3] = [
-                        core::mem::take(&mut ws.t_p_a),
-                        core::mem::take(&mut ws.t_p_rg),
-                        core::mem::take(&mut ws.t_p_vy),
-                    ];
-                    let r_p_taken: [Vec<f32>; 3] = [
-                        core::mem::take(&mut ws.r_p_a),
-                        core::mem::take(&mut ws.r_p_rg),
-                        core::mem::take(&mut ws.r_p_vy),
-                    ];
-                    mult_mutual_band_into(
-                        &t_p_taken,
-                        &r_p_taken,
-                        bw,
-                        bh,
-                        &mut ws.d_a,
-                        &mut ws.d_rg,
-                        &mut ws.d_vy,
-                        &mut ws.m_mm_a,
-                        &mut ws.m_mm_rg,
-                        &mut ws.m_mm_vy,
-                        &mut ws.term_a,
-                        &mut ws.term_rg,
-                        &mut ws.term_vy,
-                        &mut ws.pu_h,
-                    );
-                    // Restore the t_p / r_p slots so next call reuses
-                    // the Vec capacity.
-                    let [t_a, t_rg, t_vy] = t_p_taken;
-                    let [r_a, r_rg, r_vy] = r_p_taken;
-                    ws.t_p_a = t_a;
-                    ws.t_p_rg = t_rg;
-                    ws.t_p_vy = t_vy;
-                    ws.r_p_a = r_a;
-                    ws.r_p_rg = r_rg;
-                    ws.r_p_vy = r_vy;
+            let ref_a_band = &ref_weber[0].bands[k].data;
+            let ref_rg_band = &ref_weber[1].bands[k].data;
+            let ref_vy_band = &ref_weber[2].bands[k].data;
+            let dis_a_band = &dist_weber[0].bands[k].data;
+            let dis_rg_band = &dist_weber[1].bands[k].data;
+            let dis_vy_band = &dist_weber[2].bands[k].data;
+            let ch_gain_a = CH_GAIN[0];
+            let ch_gain_rg = CH_GAIN[1];
+            let ch_gain_vy = CH_GAIN[2];
+
+            if is_baseband {
+                ws.d_a.clear();
+                ws.d_a.resize(n_px, 0.0);
+                ws.d_rg.clear();
+                ws.d_rg.resize(n_px, 0.0);
+                ws.d_vy.clear();
+                ws.d_vy.resize(n_px, 0.0);
+                for i in 0..n_px {
+                    let log_l = log_l_bkg_band[i];
+                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+                    let diff_a = dis_a_band[i] - ref_a_band[i];
+                    let diff_rg = dis_rg_band[i] - ref_rg_band[i];
+                    let diff_vy = dis_vy_band[i] - ref_vy_band[i];
+                    ws.d_a[i] = diff_a.abs() * s_a;
+                    ws.d_rg[i] = diff_rg.abs() * s_rg;
+                    ws.d_vy[i] = diff_vy.abs() * s_vy;
                 }
-
-                // Spatial pool per channel. In strip mode the per-band
-                // d arrays are partitioned into row-strips and Σ
-                // safe_pow_lp accumulates across strips; bit-identical
-                // to lp_norm_mean(..) because the spatial pool is
-                // associative under row-order dispatch.
-                let q_band = pool_band_3ch(
-                    &ws.d_a,
-                    &ws.d_rg,
-                    &ws.d_vy,
+            } else {
+                ws.t_p_a.clear();
+                ws.t_p_a.resize(n_px, 0.0);
+                ws.t_p_rg.clear();
+                ws.t_p_rg.resize(n_px, 0.0);
+                ws.t_p_vy.clear();
+                ws.t_p_vy.resize(n_px, 0.0);
+                ws.r_p_a.clear();
+                ws.r_p_a.resize(n_px, 0.0);
+                ws.r_p_rg.clear();
+                ws.r_p_rg.resize(n_px, 0.0);
+                ws.r_p_vy.clear();
+                ws.r_p_vy.resize(n_px, 0.0);
+                for i in 0..n_px {
+                    let log_l = log_l_bkg_band[i];
+                    let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                    let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                    let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+                    let bm_sa = band_mul * s_a;
+                    let bm_srg = band_mul * s_rg;
+                    let bm_svy = band_mul * s_vy;
+                    ws.t_p_a[i] = dis_a_band[i] * bm_sa * ch_gain_a;
+                    ws.t_p_rg[i] = dis_rg_band[i] * bm_srg * ch_gain_rg;
+                    ws.t_p_vy[i] = dis_vy_band[i] * bm_svy * ch_gain_vy;
+                    ws.r_p_a[i] = ref_a_band[i] * bm_sa * ch_gain_a;
+                    ws.r_p_rg[i] = ref_rg_band[i] * bm_srg * ch_gain_rg;
+                    ws.r_p_vy[i] = ref_vy_band[i] * bm_svy * ch_gain_vy;
+                }
+                let t_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.t_p_a),
+                    core::mem::take(&mut ws.t_p_rg),
+                    core::mem::take(&mut ws.t_p_vy),
+                ];
+                let r_p_taken: [Vec<f32>; 3] = [
+                    core::mem::take(&mut ws.r_p_a),
+                    core::mem::take(&mut ws.r_p_rg),
+                    core::mem::take(&mut ws.r_p_vy),
+                ];
+                mult_mutual_band_into(
+                    &t_p_taken,
+                    &r_p_taken,
                     bw,
                     bh,
-                    k,
-                    strip_h_body,
-                    strip_counter,
+                    &mut ws.d_a,
+                    &mut ws.d_rg,
+                    &mut ws.d_vy,
+                    &mut ws.m_mm_a,
+                    &mut ws.m_mm_rg,
+                    &mut ws.m_mm_vy,
+                    &mut ws.term_a,
+                    &mut ws.term_rg,
+                    &mut ws.term_vy,
+                    &mut ws.pu_h,
                 );
+                let [t_a, t_rg, t_vy] = t_p_taken;
+                let [r_a, r_rg, r_vy] = r_p_taken;
+                ws.t_p_a = t_a;
+                ws.t_p_rg = t_rg;
+                ws.t_p_vy = t_vy;
+                ws.r_p_a = r_a;
+                ws.r_p_rg = r_rg;
+                ws.r_p_vy = r_vy;
+            }
 
-                let band_accum = if want_diffmap {
-                    let mut acc = DiffmapAccum::new(w, h);
-                    // accumulate_band_diffmap takes `&[Vec<f32>; 3]`.
-                    // Build a transient array view by cloning out the
-                    // d Vecs. We could avoid this by changing
-                    // accumulate_band_diffmap to take three &[f32]
-                    // refs, which is a follow-on chunk.
-                    let d_per_ch: [Vec<f32>; 3] =
-                        [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
-                    accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
-                    Some(acc)
+            let q_band = pool_band_3ch(
+                &ws.d_a,
+                &ws.d_rg,
+                &ws.d_vy,
+                bw,
+                bh,
+                k,
+                strip_h_body,
+                strip_counter,
+            );
+
+            let band_accum = if want_diffmap {
+                let mut acc = DiffmapAccum::new(w, h);
+                let d_per_ch: [Vec<f32>; 3] =
+                    [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
+                accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
+                Some(acc)
+            } else {
+                None
+            };
+
+            (q_band, band_accum)
+        };
+
+        let process_shallow_band = |k: usize,
+                                    sws: &mut StripBandWorkspace,
+                                    bws_for_diff: &mut BandWorkspace|
+         -> ([f32; 3], Option<DiffmapAccum>) {
+            debug_assert!(k < k_split);
+            // Shallow strip bands are never the baseband (k_split's
+            // design table caps it at log2(h_body / 12) + 1, well
+            // below n_levels - 1 for realistic h_body).
+            debug_assert!(k != n_levels - 1, "k_split should never include the baseband");
+            let is_first = k == 0;
+            let rho = ppd_freqs[k];
+            let bw = ref_weber[0].bands[k].w;
+            let bh = ref_weber[0].bands[k].h;
+
+            let ref_a_band = &ref_weber[0].bands[k].data;
+            let ref_rg_band = &ref_weber[1].bands[k].data;
+            let ref_vy_band = &ref_weber[2].bands[k].data;
+            let dis_a_band = &dist_weber[0].bands[k].data;
+            let dis_rg_band = &dist_weber[1].bands[k].data;
+            let dis_vy_band = &dist_weber[2].bands[k].data;
+            let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
+
+            let h_body =
+                strip_h_body.expect("strip mode active when processing shallow band");
+
+            // For diffmap, allocate the full-band d_* in the BandWorkspace
+            // so accumulate_band_diffmap can read them. Pass references
+            // to process_shallow_strip_band, which writes per-strip body
+            // rows into them.
+            let diffmap_d_out: Option<(&mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>)> =
+                if want_diffmap {
+                    Some((
+                        &mut bws_for_diff.d_a,
+                        &mut bws_for_diff.d_rg,
+                        &mut bws_for_diff.d_vy,
+                    ))
                 } else {
                     None
                 };
 
-                (q_band, band_accum)
-            })
+            let q_band = process_shallow_strip_band(
+                sws,
+                ref_a_band,
+                ref_rg_band,
+                ref_vy_band,
+                dis_a_band,
+                dis_rg_band,
+                dis_vy_band,
+                log_l_bkg_band,
+                bw,
+                bh,
+                k,
+                is_first,
+                rho,
+                h_body,
+                k_split as u32,
+                strip_counter,
+                diffmap_d_out,
+            );
+
+            let band_accum = if want_diffmap {
+                let mut acc = DiffmapAccum::new(w, h);
+                let d_per_ch: [Vec<f32>; 3] = [
+                    bws_for_diff.d_a.clone(),
+                    bws_for_diff.d_rg.clone(),
+                    bws_for_diff.d_vy.clone(),
+                ];
+                accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, false, n_levels);
+                Some(acc)
+            } else {
+                None
+            };
+
+            (q_band, band_accum)
+        };
+
+        // Run shallow + deep band-fold halves in parallel via rayon::join.
+        // Each half does its own par_iter_mut over its band slot vector.
+        let (shallow_results, deep_results): (
+            Vec<([f32; 3], Option<DiffmapAccum>)>,
+            Vec<([f32; 3], Option<DiffmapAccum>)>,
+        ) = rayon::join(
+            || {
+                if k_split == 0 {
+                    return Vec::new();
+                }
+                // shallow_strip_ws is Some when k_split > 0
+                let sws_slice = shallow_strip_ws.expect("shallow_strip_ws Some when k_split > 0");
+                // Zip strip_band_ws[k] with shallow_band_ws[k] (the per-band
+                // BandWorkspace slot, used only for full-band diffmap d_*
+                // storage when diffmap is requested).
+                sws_slice
+                    .par_iter_mut()
+                    .zip(shallow_band_ws.par_iter_mut())
+                    .enumerate()
+                    .map(|(k, (sws, bws))| process_shallow_band(k, sws, bws))
+                    .collect()
+            },
+            || {
+                if n_deep == 0 {
+                    return Vec::new();
+                }
+                deep_band_ws
+                    .par_iter_mut()
+                    .enumerate()
+                    .map(|(k_deep_local, ws)| process_deep_band(k_deep_local, ws))
+                    .collect()
+            },
+        );
+
+        let band_results: Vec<([f32; 3], Option<DiffmapAccum>)> = shallow_results
+            .into_iter()
+            .chain(deep_results.into_iter())
             .collect();
 
         let q_per_ch: Vec<[f32; 3]> = band_results.iter().map(|(q, _)| *q).collect();
@@ -1194,6 +1394,377 @@ fn pool_band_3ch(
         strips_dispatched,
         core::sync::atomic::Ordering::Relaxed,
     );
+    [
+        acc_a.finalize(BETA_SPATIAL),
+        acc_rg.finalize(BETA_SPATIAL),
+        acc_vy.finalize(BETA_SPATIAL),
+    ]
+}
+
+/// Chunk 4 wiring (Phase 9.Z.F): process one shallow non-baseband band
+/// in strip-major mode using a strip-shaped [`StripBandWorkspace`]
+/// instead of the full-image-sized [`BandWorkspace`].
+///
+/// **Memory contract.** All per-band CSF + masking transients
+/// (`t_p_*`, `r_p_*`, `m_mm_*`, `term_*`, `pu_h`, `d_*`) live in the
+/// caller-owned [`StripBandWorkspace`], sized at `n_strip = strip_window_h
+/// × bw` instead of `bh × bw`. For a 4096² source at level 0 with
+/// h_body = 512, strip_window_h is `≤ 512 + 2·8 = 528` rows, ~7.7×
+/// smaller than the full band's 4096 rows.
+///
+/// **Bit-identical to full-mode for body output.** The strip walker
+/// dispatches strips in row-order (`s = 0, 1, 2, ...`), each strip
+/// holding `[top_global, bot_global)` rows of the full-image
+/// `ref_*_band` / `dis_*_band` / `log_l_bkg_band` (just sliced). The
+/// per-pixel CSF + masking chain is run on the strip buffer, with the
+/// key invariant that **`gaussian_blur_sigma3_simd` on the strip
+/// buffer produces bit-identical body row output to the same SIMD
+/// call on the full band** — because:
+///
+/// 1. All body rows in a strip with `halo_band ≥ 6` halo on both sides
+///    land in the SIMD interior region `[6, strip_h - 6)`, where the
+///    SIMD path uses direct reads (no reflection). The 13-tap window
+///    around each body row reads strip-buffer rows that correspond
+///    exactly to the same logical rows as the full-image SIMD would
+///    read at the matching logical y.
+/// 2. For edge strips (top or bottom of the band), the strip's clamped
+///    halo (0 on the edge side) means some body rows fall in the
+///    SIMD scalar boundary region (rows `[0, 6) ∪ [strip_h-6,
+///    strip_h)`). The scalar boundary code uses `reflect_pu_idx(y +
+///    t - 6, strip_h)`. For the top edge (`body_off = 0`,
+///    `top_halo = 0`), negative indices reflect into positive indices
+///    `0..6` — exactly the strip's top body rows = logical rows
+///    `0..6` — same result as full-image reflection. For the bottom
+///    edge (`bot_global = bh`, `bot_halo = 0`), out-of-range indices
+///    reflect into rows `strip_h - 2..strip_h - 7` — corresponding to
+///    logical rows `bh - 2..bh - 7` — same as full-image reflection.
+///    The strip and full reflections commute with the
+///    `top_global` offset translation.
+///
+/// **Per-strip pool accumulation.** Each strip's body rows feed a
+/// per-channel [`LpNormAccumulator`]; after the last strip we finalize
+/// to per-channel `q`. Bit-identical to single-pass `lp_norm_mean`
+/// over the full-band d array because the spatial Minkowski pool is
+/// associative under row-order dispatch (see [`LpNormAccumulator`]).
+///
+/// **Diffmap support.** When `diffmap_d_out` is `Some`, the function
+/// also writes the per-strip body's d values back into the full-band
+/// d_a/rg/vy buffers at the body row range, so the caller can run
+/// [`accumulate_band_diffmap`] afterwards on the full-band data.
+/// When `None`, no full-band d storage is needed — only the
+/// strip-sized [`StripBandWorkspace::d_*`] is written.
+///
+/// **Caller invariants.**
+/// - `sws.t_p_*` / `r_p_*` / `m_mm_*` / `term_*` / `d_*` are resized
+///   internally to fit `n_strip`.
+/// - `ref_*_band`, `dis_*_band`, `log_l_bkg_band` have length `bw * bh`.
+/// - `k < k_split` (this function is for SHALLOW levels only).
+/// - `h_body` is a positive power of 2.
+#[allow(clippy::too_many_arguments)]
+fn process_shallow_strip_band(
+    sws: &mut StripBandWorkspace,
+    ref_a_band: &[f32],
+    ref_rg_band: &[f32],
+    ref_vy_band: &[f32],
+    dis_a_band: &[f32],
+    dis_rg_band: &[f32],
+    dis_vy_band: &[f32],
+    log_l_bkg_band: &[f32],
+    bw: usize,
+    bh: usize,
+    k: usize,
+    is_first: bool,
+    rho: f32,
+    h_body: u32,
+    k_split: u32,
+    strip_counter: &core::sync::atomic::AtomicU32,
+    diffmap_d_out: Option<(&mut Vec<f32>, &mut Vec<f32>, &mut Vec<f32>)>,
+) -> [f32; 3] {
+    debug_assert_eq!(ref_a_band.len(), bw * bh);
+    debug_assert_eq!(log_l_bkg_band.len(), bw * bh);
+
+    let halo_band = mode_b_halo_at_level(k as u32, k_split) as usize;
+    let strip_h_at_band = crate::strip::strip_h_at_band(h_body, k as u32) as usize;
+    let n_strips = if bh <= strip_h_at_band {
+        1
+    } else {
+        bh.div_ceil(strip_h_at_band)
+    };
+
+    // Size the workspace to the max strip window any iteration will need.
+    // For interior strips: strip_h_at_band + 2*halo_band rows.
+    // For edge strips: less (clamped halo). Sizing to max keeps the
+    // allocation stable across iterations.
+    let max_window_h = strip_h_at_band + 2 * halo_band;
+    let max_window_h = max_window_h.min(bh);
+    let n_strip = bw * max_window_h;
+    sws.ensure_strip_sized(n_strip);
+
+    // Optionally clear the full-band diffmap d output. Caller provides
+    // pre-sized full-band Vecs.
+    let mut diffmap_d_out = diffmap_d_out;
+    if let Some((d_a_full, d_rg_full, d_vy_full)) = diffmap_d_out.as_mut() {
+        let n_full = bw * bh;
+        d_a_full.clear();
+        d_a_full.resize(n_full, 0.0);
+        d_rg_full.clear();
+        d_rg_full.resize(n_full, 0.0);
+        d_vy_full.clear();
+        d_vy_full.resize(n_full, 0.0);
+    }
+
+    // Per-band CSF row constants.
+    let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+    let logs_row_a = precompute_logs_row(rho, channels[0]);
+    let logs_row_rg = precompute_logs_row(rho, channels[1]);
+    let logs_row_vy = precompute_logs_row(rho, channels[2]);
+    let band_mul: f32 = if is_first { 1.0 } else { 2.0 };
+    let ch_gain_a = CH_GAIN[0];
+    let ch_gain_rg = CH_GAIN[1];
+    let ch_gain_vy = CH_GAIN[2];
+
+    // Masking constants (hoisted from mult_mutual_band_into).
+    const SAFE_EPS: f32 = 1e-5;
+    let mask_c_lin: f32 = 10.0_f32.powf(MASK_C);
+    let q_a = MASK_Q[0];
+    let q_rg = MASK_Q[1];
+    let q_vy = MASK_Q[2];
+    let eps_qa = SAFE_EPS.powf(q_a);
+    let eps_qrg = SAFE_EPS.powf(q_rg);
+    let eps_qvy = SAFE_EPS.powf(q_vy);
+    let xcm00 = XCM_3X3[0][0];
+    let xcm10 = XCM_3X3[1][0];
+    let xcm20 = XCM_3X3[2][0];
+    let xcm01 = XCM_3X3[0][1];
+    let xcm11 = XCM_3X3[1][1];
+    let xcm21 = XCM_3X3[2][1];
+    let xcm02 = XCM_3X3[0][2];
+    let xcm12 = XCM_3X3[1][2];
+    let xcm22 = XCM_3X3[2][2];
+    let p = MASK_P;
+    let eps_p = SAFE_EPS.powf(p);
+    let d_max_lin: f32 = 10.0_f32.powf(D_MAX);
+
+    let mut acc_a = LpNormAccumulator::default();
+    let mut acc_rg = LpNormAccumulator::default();
+    let mut acc_vy = LpNormAccumulator::default();
+    let mut strips_dispatched: u32 = 0;
+
+    for s in 0..n_strips {
+        let body_off = s * strip_h_at_band;
+        let body_h = (bh - body_off).min(strip_h_at_band);
+        let top_global = body_off.saturating_sub(halo_band);
+        let bot_global = (body_off + body_h + halo_band).min(bh);
+        let strip_window_h = bot_global - top_global;
+        let body_row_in_strip = body_off - top_global; // 0 at top edge, halo_band interior
+
+        let n_strip_window = bw * strip_window_h;
+
+        // Step 1: slice ref_*/dis_*/log_l_bkg into strip-shaped buffers.
+        // Use sws.t_p_a as the temp slot for ref_a, sws.t_p_rg for ref_rg,
+        // sws.t_p_vy for ref_vy, sws.r_p_a/rg/vy for dis_*. (Later we'll
+        // overwrite these with CSF outputs.)
+        //
+        // Actually simpler: just copy. We need to compute T_p / R_p in
+        // sws.t_p_*/r_p_* anyway, and we read from full-band slices for
+        // CSF input. So no need to copy band data first — CSF reads from
+        // ref_*_band[top_global*bw .. bot_global*bw] directly.
+
+        // Step 2: CSF apply per-pixel over the strip window. Writes into
+        // sws.t_p_*/r_p_* at indices [0, n_strip_window).
+        for sy in 0..strip_window_h {
+            let strip_row_off = sy * bw;
+            let full_row = top_global + sy;
+            let full_row_off = full_row * bw;
+            for x in 0..bw {
+                let i = strip_row_off + x;
+                let j = full_row_off + x;
+                let log_l = log_l_bkg_band[j];
+                let s_a = apply_csf_row_per_pixel(log_l, &logs_row_a);
+                let s_rg = apply_csf_row_per_pixel(log_l, &logs_row_rg);
+                let s_vy = apply_csf_row_per_pixel(log_l, &logs_row_vy);
+                let bm_sa = band_mul * s_a;
+                let bm_srg = band_mul * s_rg;
+                let bm_svy = band_mul * s_vy;
+                sws.t_p_a[i] = dis_a_band[j] * bm_sa * ch_gain_a;
+                sws.t_p_rg[i] = dis_rg_band[j] * bm_srg * ch_gain_rg;
+                sws.t_p_vy[i] = dis_vy_band[j] * bm_svy * ch_gain_vy;
+                sws.r_p_a[i] = ref_a_band[j] * bm_sa * ch_gain_a;
+                sws.r_p_rg[i] = ref_rg_band[j] * bm_srg * ch_gain_rg;
+                sws.r_p_vy[i] = ref_vy_band[j] * bm_svy * ch_gain_vy;
+            }
+        }
+
+        // Step 3: mult_mutual chain on strip buffers. The PU blur uses
+        // gaussian_blur_sigma3_simd on the strip dim. For interior body
+        // rows in SIMD-interior region [6, strip_window_h - 6), this is
+        // bit-identical to the same SIMD on the full-band. For edge
+        // strips with clamped halo, the SIMD scalar boundary's reflection
+        // against strip_window_h commutes with the top_global offset
+        // translation, producing the same per-row values as full-band
+        // SIMD.
+
+        // Step 3.1: M_mm_raw = min(|T|, |R|).
+        for i in 0..n_strip_window {
+            let ta = sws.t_p_a[i].abs();
+            let ra = sws.r_p_a[i].abs();
+            sws.m_mm_a[i] = ta.min(ra);
+            let trg = sws.t_p_rg[i].abs();
+            let rrg = sws.r_p_rg[i].abs();
+            sws.m_mm_rg[i] = trg.min(rrg);
+            let tvy = sws.t_p_vy[i].abs();
+            let rvy = sws.r_p_vy[i].abs();
+            sws.m_mm_vy[i] = tvy.min(rvy);
+        }
+
+        // Step 3.2: PU blur per channel using SIMD on the strip buffer.
+        // gaussian_blur_sigma3_simd expects bw > PU_PADSIZE && bh >
+        // PU_PADSIZE. For shallow levels we should always satisfy that
+        // by the k_split design table. Use the no-blur fallback in
+        // edge cases.
+        if bw > PU_PADSIZE && strip_window_h > PU_PADSIZE {
+            // SIMD H+V blur on the strip. h_pass = sws.pu_h.
+            // term_a/rg/vy gets the blurred output.
+            gaussian_blur_sigma3_simd(
+                &sws.m_mm_a[..n_strip_window],
+                bw,
+                strip_window_h,
+                &mut sws.pu_h,
+                &mut sws.term_a,
+            );
+            for i in 0..n_strip_window {
+                sws.m_mm_a[i] = sws.term_a[i] * mask_c_lin;
+            }
+            gaussian_blur_sigma3_simd(
+                &sws.m_mm_rg[..n_strip_window],
+                bw,
+                strip_window_h,
+                &mut sws.pu_h,
+                &mut sws.term_rg,
+            );
+            for i in 0..n_strip_window {
+                sws.m_mm_rg[i] = sws.term_rg[i] * mask_c_lin;
+            }
+            gaussian_blur_sigma3_simd(
+                &sws.m_mm_vy[..n_strip_window],
+                bw,
+                strip_window_h,
+                &mut sws.pu_h,
+                &mut sws.term_vy,
+            );
+            for i in 0..n_strip_window {
+                sws.m_mm_vy[i] = sws.term_vy[i] * mask_c_lin;
+            }
+        } else {
+            for i in 0..n_strip_window {
+                sws.m_mm_a[i] *= mask_c_lin;
+                sws.m_mm_rg[i] *= mask_c_lin;
+                sws.m_mm_vy[i] *= mask_c_lin;
+            }
+        }
+
+        // Step 3.3: term[ch] = safe_pow(|M_mm[ch]|, q[ch]).
+        safe_pow_with_offset_into(
+            &sws.m_mm_a[..n_strip_window],
+            &mut sws.term_a[..n_strip_window],
+            SAFE_EPS,
+            q_a,
+            eps_qa,
+        );
+        safe_pow_with_offset_into(
+            &sws.m_mm_rg[..n_strip_window],
+            &mut sws.term_rg[..n_strip_window],
+            SAFE_EPS,
+            q_rg,
+            eps_qrg,
+        );
+        safe_pow_with_offset_into(
+            &sws.m_mm_vy[..n_strip_window],
+            &mut sws.term_vy[..n_strip_window],
+            SAFE_EPS,
+            q_vy,
+            eps_qvy,
+        );
+
+        // Step 3.4: Pass 1: diff[c] = |T - R| → m_mm_* (free scratch).
+        for i in 0..n_strip_window {
+            sws.m_mm_a[i] = (sws.t_p_a[i] - sws.r_p_a[i]).abs();
+            sws.m_mm_rg[i] = (sws.t_p_rg[i] - sws.r_p_rg[i]).abs();
+            sws.m_mm_vy[i] = (sws.t_p_vy[i] - sws.r_p_vy[i]).abs();
+        }
+
+        // Step 3.5: Pass 2: pow[c] = (diff[c] + eps)^p - eps^p → d_*.
+        safe_pow_with_offset_into(
+            &sws.m_mm_a[..n_strip_window],
+            &mut sws.d_a[..n_strip_window],
+            SAFE_EPS,
+            p,
+            eps_p,
+        );
+        safe_pow_with_offset_into(
+            &sws.m_mm_rg[..n_strip_window],
+            &mut sws.d_rg[..n_strip_window],
+            SAFE_EPS,
+            p,
+            eps_p,
+        );
+        safe_pow_with_offset_into(
+            &sws.m_mm_vy[..n_strip_window],
+            &mut sws.d_vy[..n_strip_window],
+            SAFE_EPS,
+            p,
+            eps_p,
+        );
+
+        // Step 3.6: Pass 3: cross-channel pool + soft clamp, scalar.
+        for i in 0..n_strip_window {
+            let t0 = sws.term_a[i];
+            let t1 = sws.term_rg[i];
+            let t2 = sws.term_vy[i];
+            let m0 = xcm00 * t0 + xcm10 * t1 + xcm20 * t2;
+            let m1 = xcm01 * t0 + xcm11 * t1 + xcm21 * t2;
+            let m2 = xcm02 * t0 + xcm12 * t1 + xcm22 * t2;
+            let pow0 = sws.d_a[i];
+            let pow1 = sws.d_rg[i];
+            let pow2 = sws.d_vy[i];
+            let du0 = pow0 / (1.0 + m0);
+            let du1 = pow1 / (1.0 + m1);
+            let du2 = pow2 / (1.0 + m2);
+            sws.d_a[i] = d_max_lin * du0 / (d_max_lin + du0);
+            sws.d_rg[i] = d_max_lin * du1 / (d_max_lin + du1);
+            sws.d_vy[i] = d_max_lin * du2 / (d_max_lin + du2);
+        }
+
+        // Step 4: pool body rows of d_* into per-band accumulator.
+        // Body rows in strip are [body_row_in_strip, body_row_in_strip
+        // + body_h). The pool sees them in row order — bit-identical to
+        // lp_norm_mean over the full band's d (since strips dispatch
+        // in row order).
+        let body_start = body_row_in_strip * bw;
+        let body_end = body_start + body_h * bw;
+        acc_a.accumulate_slab(&sws.d_a[body_start..body_end], BETA_SPATIAL);
+        acc_rg.accumulate_slab(&sws.d_rg[body_start..body_end], BETA_SPATIAL);
+        acc_vy.accumulate_slab(&sws.d_vy[body_start..body_end], BETA_SPATIAL);
+        strips_dispatched = strips_dispatched.saturating_add(3);
+
+        // Step 5: optional: copy strip's body d_* back to full-band
+        // d_* for diffmap accumulation later.
+        if let Some((d_a_full, d_rg_full, d_vy_full)) = diffmap_d_out.as_mut() {
+            let full_off = body_off * bw;
+            d_a_full[full_off..full_off + body_h * bw]
+                .copy_from_slice(&sws.d_a[body_start..body_end]);
+            d_rg_full[full_off..full_off + body_h * bw]
+                .copy_from_slice(&sws.d_rg[body_start..body_end]);
+            d_vy_full[full_off..full_off + body_h * bw]
+                .copy_from_slice(&sws.d_vy[body_start..body_end]);
+        }
+    }
+
+    strip_counter.fetch_add(
+        strips_dispatched,
+        core::sync::atomic::Ordering::Relaxed,
+    );
+
     [
         acc_a.finalize(BETA_SPATIAL),
         acc_rg.finalize(BETA_SPATIAL),
