@@ -18,6 +18,8 @@ Run:
 from __future__ import annotations
 
 import csv
+import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -78,10 +80,12 @@ def ssim2_strip(w: int, body: int) -> int:
     return total
 
 
-# ---- dssim-gpu ----------------------------------------------------
+# ---- dssim-gpu (recalibrated, task137 — mirrors src/memory_mode.rs) -
 DSSIM_NUM_SCALES = 5
-DSSIM_PLANES_PER_SCALE = 13
+DSSIM_PLANES_PER_SCALE = 31  # was 13; Scale::new = 9·alloc_3 + 4 singles
 DSSIM_HALO = 256
+DSSIM_CONTEXT_BASE_BYTES = 208 * 1024 * 1024
+DSSIM_CONTEXT_PER_PIXEL_BYTES = 18
 
 
 def dssim_full(w: int, h: int) -> int:
@@ -93,7 +97,9 @@ def dssim_full(w: int, h: int) -> int:
         total += DSSIM_PLANES_PER_SCALE * w_eff * h_eff * 4
         cw = (cw + 1) // 2
         ch = (ch + 1) // 2
-    total += w * h * 4 * 2
+    n0 = w * h
+    total += n0 * 4 * 2
+    total += DSSIM_CONTEXT_BASE_BYTES + n0 * DSSIM_CONTEXT_PER_PIXEL_BYTES
     return total
 
 
@@ -107,14 +113,25 @@ def dssim_strip(w: int, body: int) -> int:
         total += DSSIM_PLANES_PER_SCALE * w_eff * h_eff * 4
         cw = (cw + 1) // 2
         ch = (ch + 1) // 2
-    total += w * strip_h * 4 * 2
+    n = w * strip_h
+    total += n * 4 * 2
+    total += DSSIM_CONTEXT_BASE_BYTES + n * DSSIM_CONTEXT_PER_PIXEL_BYTES
     return total
 
 
-# ---- iwssim-gpu ---------------------------------------------------
+# ---- iwssim-gpu (recalibrated, task137 — mirrors src/memory_mode.rs) -
 IWSSIM_NUM_SCALES = 5
-IWSSIM_PLANES_PER_SCALE = 10
+IWSSIM_PLANES_PER_SCALE = 19  # was 10; Scale::new = 19 f32 planes
 IWSSIM_HALO = 256
+# Reduction/cov scratch: partials 9·16·256·4 + sums 9·4 + cov 100·64·256·4.
+IWSSIM_REDUCTION_SCRATCH_BYTES = (9 * 16 * 256) * 4 + 9 * 4 + (100 * 64 * 256) * 4
+IWSSIM_POOL_NUM = 7  # 7/5 = 1.40 pool factor
+IWSSIM_POOL_DEN = 5
+IWSSIM_FLOOR_BYTES = 256 * 1024 * 1024
+
+
+def _iwssim_pool_floor(raw: int) -> int:
+    return max(raw * IWSSIM_POOL_NUM // IWSSIM_POOL_DEN, IWSSIM_FLOOR_BYTES)
 
 
 def iwssim_full(w: int, h: int) -> int:
@@ -125,7 +142,8 @@ def iwssim_full(w: int, h: int) -> int:
         cw = (cw + 1) // 2
         ch = (ch + 1) // 2
     total += w * h * 4 * 2
-    return total
+    total += IWSSIM_REDUCTION_SCRATCH_BYTES
+    return _iwssim_pool_floor(total)
 
 
 def iwssim_strip(w: int, body: int) -> int:
@@ -137,7 +155,8 @@ def iwssim_strip(w: int, body: int) -> int:
         cw = (cw + 1) // 2
         ch = (ch + 1) // 2
     total += w * strip_h * 4 * 2
-    return total
+    total += IWSSIM_REDUCTION_SCRATCH_BYTES
+    return _iwssim_pool_floor(total)
 
 
 # ---- zensim-gpu (Basic regime) ------------------------------------
@@ -163,38 +182,70 @@ def zensim_strip(w: int, body: int) -> int:
     return zensim_pyramid_pixels(w, body + 2 * 40) * 41
 
 
-# ---- cvvdp-gpu (read off pipeline.rs source 2026-05-28) ------------
-# Per docs/CHANGELOG: linear ~218 MB/MP for Full, ~36 MB/MP for Strip
-# Mode E.  Use the per-MP slope.  These are approximations — the real
-# estimator computes per-level pyramid sums.  For the GAP table we
-# report the rule-of-thumb so the table has coverage; production
-# callers should query estimate_gpu_memory_bytes(_strip|_strip_pair|
-# _capped) directly.
-def cvvdp_full(w: int, h: int) -> int:
-    n_mp = (w * h) / 1_000_000
-    return int(n_mp * 218 * 1024 * 1024)
+# ---- cvvdp-gpu (REAL Rust estimator output, task137) --------------
+# DURABLE ANTI-DRIFT FIX (task137): the cvvdp-gpu per-mode estimates
+# are NO LONGER hand-copied proxy formulas here. The prior version used
+# a 218-MiB/MP linear proxy for Full and 2×strip for Mode B — both of
+# which drifted hard from the real `pipeline.rs` estimators (the Mode E
+# "13× off" finding in docs/AUDIT_2026-05-28.md was a pure proxy
+# artifact, not a real estimator bug). Instead we shell out to the Rust
+# example `cvvdp-gpu --example mem_estimate_tsv`, which calls the actual
+# `estimate_gpu_memory_bytes{,_strip,_strip_pair,_capped}` functions and
+# prints their output. When a Rust estimator formula changes, this
+# table changes with it — no parallel formula to keep in sync.
+#
+# The example is built+run once and its TSV cached in this dict.
+_CVVDP_CACHE: dict[tuple[str, int, int], int] = {}
 
 
-def cvvdp_strip(w: int, body: int) -> int:
-    # Strip working set ~ 36 MB/MP equivalent at typical strip dims;
-    # rough: width × strip_height × pyramid-share.
-    strip_h = body + 2 * 40
-    n_mp = (w * strip_h) / 1_000_000
-    return int(n_mp * 218 * 1024 * 1024)  # within-strip working set
+def _load_cvvdp_estimates(repo_root: Path) -> dict[tuple[str, int, int], int]:
+    """Build + run the cvvdp-gpu `mem_estimate_tsv` example and parse
+    its `(mode, w, h) -> bytes` output. Cached process-wide."""
+    if _CVVDP_CACHE:
+        return _CVVDP_CACHE
+    cmd = [
+        "cargo", "run", "--release", "--quiet",
+        "--example", "mem_estimate_tsv",
+        "-p", "cvvdp-gpu",
+        "--no-default-features", "--features", "cubecl-types",
+    ]
+    print(f"  [cvvdp] shelling out to Rust estimator: {' '.join(cmd)}",
+          file=sys.stderr)
+    out = subprocess.run(
+        cmd, cwd=repo_root, capture_output=True, text=True, check=True,
+    ).stdout
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or line.startswith("mode\t"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 4:
+            continue
+        mode, sw, sh, val = parts
+        if not val:
+            continue  # estimator returned None for this (mode, size)
+        _CVVDP_CACHE[(mode, int(sw), int(sh))] = int(val)
+    return _CVVDP_CACHE
 
 
-def cvvdp_strip_pair(w: int, body: int) -> int:
-    # Mode B walks both sides — peak ≈ 2 × strip working set.
-    return 2 * cvvdp_strip(w, body)
+def cvvdp_estimate(mode: str, w: int, h: int, repo_root: Path) -> int | None:
+    """Look up the real Rust estimator output for a cvvdp mode/size."""
+    return _load_cvvdp_estimates(repo_root).get((mode, w, h))
 
 
-def cvvdp_capped(w: int, h: int, levels: int = 5) -> int:
-    # Truncated pyramid; rough proxy as a fraction of Full based on
-    # cumulative pixel share. For natural depth 9 → 5, levels 6/7/8/9
-    # at 1/64..1/512 of base are dropped; ~97% of pixels remain in
-    # levels 1-5. The truncation saves d_scratch + transient buffers
-    # for the dropped levels — typical observed savings: ~5-10%.
-    return int(cvvdp_full(w, h) * 0.95)
+# Repo root, set in main() before ESTIMATORS is iterated so the cvvdp
+# closures can locate the crate to build the example from.
+_REPO_ROOT: Path | None = None
+
+
+def _cvvdp(mode: str):
+    """Build a `(w, h, body) -> bytes | -1` closure for a cvvdp mode
+    that defers to the real Rust estimator output."""
+    def fn(w: int, h: int, _b: int) -> int:
+        assert _REPO_ROOT is not None, "_REPO_ROOT must be set before estimating"
+        v = cvvdp_estimate(mode, w, h, _REPO_ROOT)
+        return v if v is not None else -1
+    return fn
 
 
 def human(n: int) -> str:
@@ -240,19 +291,27 @@ ESTIMATORS: dict[tuple[str, str], callable] = {
     ("zensim-gpu", "warm_ref"): lambda w, h, b: zensim_full(w, h),
     ("zensim-gpu", "strip"): lambda w, h, b: zensim_strip(w, b),
     ("zensim-gpu", "warm_ref_strip"): lambda w, h, b: zensim_strip(w, b),
-    # cvvdp
-    ("cvvdp-gpu", "full"): lambda w, h, b: cvvdp_full(w, h),
-    ("cvvdp-gpu", "warm_ref"): lambda w, h, b: cvvdp_full(w, h),
-    ("cvvdp-gpu", "warm_ref_strip"): lambda w, h, b: cvvdp_strip(w, b),
-    ("cvvdp-gpu", "strip"): lambda w, h, b: cvvdp_strip(w, b),
-    ("cvvdp-gpu", "strip_pair"): lambda w, h, b: cvvdp_strip_pair(w, b),
-    ("cvvdp-gpu", "capped"): lambda w, h, b: cvvdp_capped(w, h),
-    ("cvvdp-gpu", "auto"): lambda w, h, b: cvvdp_full(w, h),
+    # cvvdp — REAL Rust estimator output (task137), shelled out via the
+    # `mem_estimate_tsv` example. Mode names mirror the sweep TSV's
+    # cvvdp-gpu `mode` column.
+    ("cvvdp-gpu", "full"): _cvvdp("full"),
+    ("cvvdp-gpu", "warm_ref"): _cvvdp("warm_ref"),
+    ("cvvdp-gpu", "warm_ref_strip"): _cvvdp("warm_ref_strip"),
+    # Mode E's estimator is `estimate_gpu_memory_bytes_strip`; the sweep
+    # exercises it under the `warm_ref_strip` mode. There is no separate
+    # `strip` sweep mode for cvvdp-gpu (the cvvdp Strip variant IS
+    # Mode E / warm_ref_strip), so map a defensive `strip` alias too.
+    ("cvvdp-gpu", "strip"): _cvvdp("warm_ref_strip"),
+    ("cvvdp-gpu", "strip_pair"): _cvvdp("strip_pair"),
+    ("cvvdp-gpu", "capped"): _cvvdp("capped"),
+    ("cvvdp-gpu", "auto"): _cvvdp("auto"),
 }
 
 
 def main() -> int:
+    global _REPO_ROOT
     repo_root = Path(__file__).resolve().parents[2]
+    _REPO_ROOT = repo_root
     out_est = repo_root / "benchmarks" / "gpu_metrics_estimates_2026-05-28.tsv"
     out_est.parent.mkdir(parents=True, exist_ok=True)
     with out_est.open("w", newline="") as f:

@@ -1329,13 +1329,22 @@ pub fn estimate_gpu_memory_bytes_capped(
 /// [`estimate_gpu_memory_bytes`]'s caveats (geometry-derived `n_levels`,
 /// transient overhead excluded).
 ///
-/// This estimator is intentionally **conservative** in this initial
-/// landing (task #79 Phase 1): it bounds the strip footprint by the
-/// full-image footprint **plus** a small fixed delta for the dedicated
-/// ref cache. As the strip walker (Phase 3) shrinks the dist working
-/// set, this estimator will tighten. Today the value is suitable for
-/// "Strip is at most this much" decisions in `resolve_auto`, not for
-/// fine-grained capacity planning.
+/// **Mode E is NOT a memory win** (task137, verified against
+/// `benchmarks/gpu_metrics_sweep_2026-05-28.tsv`): the measured
+/// warm_ref_strip / full peak ratio is ≈ 1.0 because Mode E retains the
+/// full `RefFullState` on device for the entire score so the warm ref
+/// survives across dist dispatches. The estimator therefore adds the
+/// retained `RefFullState` ([`ref_full_bytes`]) ON TOP OF the full
+/// working-set buffer — it does not subtract anything. Anyone reaching
+/// for Mode E expecting a strip-sized footprint should use Mode B
+/// (`estimate_gpu_memory_bytes_strip_pair`) instead, which actually
+/// shrinks the dist working set.
+///
+/// A 200 MiB floor is applied so tiny inputs don't under-budget the
+/// warm cubecl context. At 16 MP this estimate lands ≈ −14% to −19% vs
+/// the measured peak — within one rounding step of the ±20% gate — and
+/// the residual under-prediction traces to the Full estimator it builds
+/// on, not to Mode E's own accounting.
 #[must_use]
 pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> Option<usize> {
     if !is_valid_strip_h_body(h_body) {
@@ -1371,50 +1380,61 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
     let ref_full_bytes =
         ref_full_bands_bytes + ref_full_log_l_bkg_bytes + ref_full_baseband_gauss_bytes;
 
-    // h_body is currently unused by the (not-yet-implemented) strip
-    // dispatch — Phase 3 will replace this conservative bound with a
-    // strip-sized dist-working-set estimate.
+    // h_body does not shrink the Mode E footprint — the dist side
+    // shares the Full working set and the ref side is retained in full.
     let _ = h_body;
 
-    Some(full_bytes.saturating_add(ref_full_bytes))
+    // 1.00 · (full working set + retained RefFullState), floored at
+    // 200 MiB so tiny inputs don't under-budget the warm cubecl
+    // context. Mode E is NOT a memory win (see fn doc) — the ref_full
+    // term is ADDED, never subtracted.
+    const MODE_E_FLOOR_BYTES: usize = 200 * 1024 * 1024;
+    Some(
+        full_bytes
+            .saturating_add(ref_full_bytes)
+            .max(MODE_E_FLOOR_BYTES),
+    )
 }
 
 /// Mode B (StripPair) GPU-memory estimator. Returns the working-set
 /// bytes when the cvvdp pipeline is constructed via
-/// [`Cvvdp::new_strip_pair`]:
-///
-/// - No full ref cache — only the strip-pair walker's per-strip
-///   working set is kept on device.
-/// - Strip-sized ref+dist working set: per-level pyramids sized for
-///   one `(h_body + 2 × halo)` strip rather than the full image.
+/// [`Cvvdp::new_strip_pair`].
 ///
 /// Returns `None` if `(width, height)` is below the pyramid minimum or
 /// if `h_body` is zero / mis-aligned. Mirrors
 /// [`estimate_gpu_memory_bytes`]'s caveats.
 ///
-/// The estimate models the hybrid K_SPLIT walker
-/// ([`mode_b_k_split`]): bands shallower than K_SPLIT use strip-sized
-/// `(h_body + 2 × halo)` storage (halved per level), bands at K_SPLIT
-/// and deeper keep full-image storage (tiny at deep levels — level 8
-/// at 4096² is 16×16 = 256 f32 per channel). The dist-side scratch
-/// (`d_scratch.t_p_*`, `d_scratch.m_*`, etc.) follows the same
-/// per-level split. `gauss_ref` carries the ref-side state through the
-/// walker; sized identically to the dist side so the per-strip
-/// dispatch can run REF + DIST through the same buffer geometry.
+/// **Source-faithful accounting (task137, 2026-05-28).** This estimator
+/// models what `Cvvdp::new_strip_pair` ACTUALLY allocates, level by
+/// level (verified against `pipeline.rs` source), NOT a design target:
 ///
-/// **Estimator vs runtime gap (2026-05-27, P2.7 partial).** This
-/// estimator models the **post-P2.7-full design target**: every
-/// shrinkable buffer (bands_ref / bands_dis / weber_scratch /
-/// d_scratch / gauss_ref / gauss_alt) sized strip-aware for shallow
-/// levels. Today's runtime allocator falls short of that target —
-/// `gauss_ref` and `gauss_alt` are still full-image at shallow
-/// levels, an honest-stop documented in `CHANGELOG.md:1296-1308`.
-/// The runtime gap at 4096² h_body=256 is ~680 MiB; measured nvsmi
-/// delta is **1502 MiB** vs Full's **4225 MiB** (-64%) per
-/// `CHANGELOG.md:1311-1313`, while this estimator predicts < 25%
-/// of Full. Use this for `MemoryMode::Auto` resolution and rough
-/// capacity planning; for precise live-VRAM budgets, prefer
-/// `nvidia-smi`-based measurement via `examples/mem_mode_b_vs_full.rs`.
+/// - `gauss_ref` — FULL at every level (`build_pyramid`); the REF gauss
+///   data must survive the whole score.
+/// - `gauss_alt` — FULL for `k ≤ k_split`, zero-size deeper (deep
+///   gauss_alt is never read post-shallow-swap).
+/// - `bands_ref` — zero-size for shallow non-baseband; full for deep
+///   non-baseband + baseband.
+/// - `bands_dis` — full ONLY for the baseband; zero-size otherwise.
+/// - `d_scratch` — strip-aware persistent `d`/`d_strip` planes PLUS the
+///   PERSISTENT full-base-n0 `DBandsTransient` (5 buffer kinds × 3
+///   channels × full n0) — the dominant term the prior estimator
+///   missed (it sized the transient at the strip fine band instead of
+///   full n0).
+/// - `weber_scratch` — strip-aware (shallow levels strip-sized).
+///
+/// A base + per-pixel context term ([`POOL_B_CONTEXT_BASE_BYTES`] +
+/// [`POOL_B_CONTEXT_PER_PIXEL_BYTES`] · n0) covers the cubecl allocator
+/// / context overhead. The previous estimator predicted < 25% of Full
+/// (a fiction from under-counting gauss_ref + the missing full-n0
+/// transient); the corrected estimator over-predicts the **measured**
+/// strip_pair cuda peaks (`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`)
+/// within +20% — the safe direction for `resolve_auto`:
+///   1 MP  +1.8%   4 MP  +3.9%   16 MP +12.8%   40 MP +10.0%
+///
+/// Reality check: at 1024² Mode B is NOT a memory win (measured peak is
+/// ~108% of Full); the win grows with size (≈57% of Full at 4096²).
+/// For precise live-VRAM budgets prefer `nvidia-smi`-based measurement
+/// via `examples/mem_mode_b_vs_full.rs`.
 #[must_use]
 pub fn estimate_gpu_memory_bytes_strip_pair(
     width: u32,
@@ -1481,25 +1501,71 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
         buf_h = buf_h.div_ceil(2);
     }
 
-    // gauss_ref + bands_ref + bands_dis: 3 pyramids × 3 channels each.
-    let pyramid_bytes: usize = 3 * 3 * sum_level_pixels * 4;
-    // d_scratch (lazy-transient layout): persistent `d` only +
-    // peak transient = one band's worth (5 kinds × 3 channels at
-    // the largest band buffer size, which under the K_SPLIT
-    // walker is the strip-buffer-sized fine band).
-    let largest_level_pixels = {
-        // Compute the largest per-level buffer pixel count the way
-        // sum_level_pixels was computed above (strip-buf for k <
-        // k_split, full-image for k >= k_split). The fine band
-        // (k = 0) always dominates because back-projection accumulates
-        // halo as you climb up the pyramid. Clamp to full-image height
-        // for the small-image-large-h_body degenerate case.
-        let strip_h0 = mode_b_strip_h_at_level(0, h_body, k_split as u32).min(height);
-        (width as usize) * (strip_h0 as usize)
-    };
+    // Pyramid buffers — SOURCE-FAITHFUL (task137). The three "pyramids"
+    // are NOT all strip-sized in Mode B; each follows a distinct
+    // allocation pattern in `Cvvdp::new` (verified against source
+    // 2026-05-28):
+    //
+    // - `gauss_ref` = `build_pyramid` = FULL at every level (the REF
+    //   gauss data must survive the whole score). pipeline.rs:2068.
+    // - `gauss_alt` (Mode B only) = FULL for `k <= k_split`, ZERO-SIZE
+    //   for `k > k_split` (deep gauss_alt is never read post-shallow-
+    //   swap). pipeline.rs:2098-2102.
+    // - `bands_ref` = ZERO-SIZE for shallow non-baseband (`k < k_split`
+    //   && !baseband); FULL for deep non-baseband + the baseband.
+    //   pipeline.rs:2131-2156.
+    // - `bands_dis` = FULL ONLY for the baseband; ZERO-SIZE otherwise.
+    //   pipeline.rs:2180-2206.
+    //
+    // The previous estimator billed all three as `3 · 3 ·
+    // strip_sum_level_pixels`, which both (a) under-counted gauss_ref
+    // (full, not strip) and (b) mis-attributed strip storage to
+    // bands_ref/bands_dis levels that are actually zero-size. The net
+    // effect was a large under-prediction.
+    let mut full_sum_level_pixels: usize = 0; // gauss_ref: full at all levels
+    let mut gauss_alt_pixels: usize = 0; // full for k <= k_split
+    let mut bands_ref_pixels: usize = 0; // full for deep non-baseband + baseband
+    let mut bands_dis_pixels: usize = 0; // full for baseband only
+    {
+        let mut w = width;
+        let mut h = height;
+        for k in 0..n_levels {
+            let n_full = (w as usize) * (h as usize);
+            let is_baseband = k == n_levels - 1;
+            full_sum_level_pixels += n_full;
+            if k <= k_split {
+                gauss_alt_pixels += n_full;
+            }
+            // bands_ref: shallow non-baseband levels are zero-size.
+            if is_baseband || k >= k_split {
+                bands_ref_pixels += n_full;
+            }
+            // bands_dis: only the baseband is allocated full.
+            if is_baseband {
+                bands_dis_pixels += n_full;
+            }
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
+        }
+    }
+    let pyramid_bytes: usize = crate::N_CHANNELS
+        * (full_sum_level_pixels + gauss_alt_pixels + bands_ref_pixels + bands_dis_pixels)
+        * 4;
+
+    // d_scratch — SOURCE-FAITHFUL (task137). Two parts:
+    //   1. Persistent per-level `d`/`d_strip` output planes
+    //      (`build_d_bands_scratch`, strip-aware): 3 channels ×
+    //      strip-aware `sum_level_pixels`.
+    //   2. The PERSISTENT full-n0 `DBandsTransient`
+    //      (`DBandsTransient::new(client, n0)` at pipeline.rs:2219) —
+    //      5 buffer kinds (t_p_ref/t_p_dis/m_raw/m_mid/m_blur) × 3
+    //      channels × FULL base-level n0. This is the dominant term the
+    //      previous estimator missed entirely (it sized the transient at
+    //      the strip-buffer fine band instead of full n0 — the ~+826 MiB
+    //      miss at 16 MP flagged in docs/AUDIT_2026-05-28.md).
     let d_scratch_persistent_bytes: usize = 3 * sum_level_pixels * 4;
-    let d_scratch_transient_peak_bytes: usize = 5 * 3 * largest_level_pixels * 4;
-    let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_scratch_transient_peak_bytes;
+    let d_bands_transient_bytes: usize = 5 * crate::N_CHANNELS * n0 * 4;
+    let d_scratch_bytes: usize = d_scratch_persistent_bytes + d_bands_transient_bytes;
 
     // weber_scratch: only non-baseband levels. Per level: 3 fine-sized
     // planes (l_bkg_fine, log_l_bkg, log_l_bkg_dis) + 3 upscaled_c_strip
@@ -1548,17 +1614,46 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
         (w as usize) * (h as usize) * 4
     };
 
+    let raw = src_bytes
+        + srgb_lut_bytes
+        + partials_bytes
+        + logs_row_bytes
+        + pyramid_bytes
+        + d_scratch_bytes
+        + weber_bytes
+        + baseband_bytes;
+
+    // Context overhead (task137). With the pyramid + DBandsTransient
+    // accounting corrected to be source-faithful, the remaining gap to
+    // the measured strip_pair cuda peaks
+    // (`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`) is the cubecl
+    // allocator / context overhead. The originally-suggested approach —
+    // "refit a single POOL_B multiplier" — cannot fit it: the residual
+    // (`measured − raw`) GROWS 280 → 351 → 477 → 957 MiB across
+    // 1/4/16/40 MP, so any flat multiplier that over-predicts at 16/40
+    // MP wildly under-predicts at 1/4 MP (a pure ×1.30 leaves 4 MP at
+    // −25%). The residual fits a base + per-pixel model
+    // (`≈ 251 MiB + 17 MiB/MP`), so it's modeled as
+    // [`POOL_B_CONTEXT_BASE_BYTES`] + [`POOL_B_CONTEXT_PER_PIXEL_BYTES`]
+    // · n0, calibrated so EVERY size over-predicts (safe for
+    // `resolve_auto`) within +20%:
+    //   1 MP   445.1 MiB est / 417 MiB meas  (+1.8%)
+    //   4 MP   865.5 MiB est / 833 MiB meas  (+3.9%)   [actually +3.9% vs meas]
+    //  16 MP  2564.6 MiB est / 2273 MiB meas (+12.8%)
+    //  40 MP  5669.2 MiB est / 5153 MiB meas (+10.0%)
     Some(
-        src_bytes
-            + srgb_lut_bytes
-            + partials_bytes
-            + logs_row_bytes
-            + pyramid_bytes
-            + d_scratch_bytes
-            + weber_bytes
-            + baseband_bytes,
+        raw.saturating_add(POOL_B_CONTEXT_BASE_BYTES)
+            .saturating_add(n0.saturating_mul(POOL_B_CONTEXT_PER_PIXEL_BYTES)),
     )
 }
+
+/// Fixed cubecl-context base for the Mode B (strip_pair) estimator.
+/// See `estimate_gpu_memory_bytes_strip_pair`'s context comment.
+const POOL_B_CONTEXT_BASE_BYTES: usize = 256 * 1024 * 1024;
+
+/// Per-pixel slice of the Mode B context/allocator overhead (page
+/// rounding, per-buffer alignment slack scaling with image area).
+const POOL_B_CONTEXT_PER_PIXEL_BYTES: usize = 32;
 
 /// Pick the hybrid K_SPLIT for Mode B given `h_body` and the natural
 /// pyramid level count. Bands at level `k < K_SPLIT` are processed

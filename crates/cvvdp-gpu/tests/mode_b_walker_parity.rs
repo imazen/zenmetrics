@@ -43,85 +43,138 @@ use cvvdp_gpu::{Cvvdp, CvvdpParams};
 
 const PARITY_TOL_JOD: f32 = 1e-4;
 
-/// At 1024² with h_body=256, the estimator predicts substantially
-/// less memory than Full. Pins the design path: even if the runtime
-/// constructor hasn't been reshaped yet (Chunk 2), the estimator
-/// is the source of truth for "Mode B's footprint when the walker
-/// lands".
+/// Mode B estimate vs the **measured** strip_pair peak at 1024²
+/// (task137). The previous version of this test asserted the estimate
+/// was `< 65%` of Full — but that bound validated the OLD
+/// under-predicting estimator, NOT reality. The committed measured
+/// peaks (`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`, cuda) show
+/// strip_pair at 1024² = 417 MB vs Full = 385 MB — i.e. **Mode B is
+/// NOT a memory win at 1024²** (108% of Full). The corrected estimator
+/// must therefore NOT claim a fictional saving here; it must
+/// over-predict the measured peak (the safe direction for
+/// `resolve_auto`).
 #[test]
-fn mode_b_estimator_reduces_memory_at_1024() {
-    let full = estimate_gpu_memory_bytes(1024, 1024).expect("Full estimate at 1024²");
+fn mode_b_estimator_at_1024_over_predicts_measured() {
+    // Measured strip_pair (cuda) peak at 1024², from the committed sweep.
+    const MEASURED_STRIP_PAIR_1024: f64 = 437_256_192.0;
     let pair256 = estimate_gpu_memory_bytes_strip_pair(1024, 1024, 256)
         .expect("StripPair(256) estimate at 1024²");
-    let pair512 = estimate_gpu_memory_bytes_strip_pair(1024, 1024, 512)
-        .expect("StripPair(512) estimate at 1024²");
+    let full = estimate_gpu_memory_bytes(1024, 1024).expect("Full estimate at 1024²");
 
-    let ratio_256 = pair256 as f64 / full as f64;
-    let ratio_512 = pair512 as f64 / full as f64;
+    let pct_vs_measured = (pair256 as f64 - MEASURED_STRIP_PAIR_1024)
+        / MEASURED_STRIP_PAIR_1024
+        * 100.0;
     eprintln!(
-        "1024² memory: Full={:.1} MB, StripPair(256)={:.1} MB ({:.1}%), \
-         StripPair(512)={:.1} MB ({:.1}%)",
-        full as f64 / 1e6,
+        "1024² Mode B: est={:.1} MB, measured={:.1} MB ({:+.1}%), Full est={:.1} MB",
         pair256 as f64 / 1e6,
-        ratio_256 * 100.0,
-        pair512 as f64 / 1e6,
-        ratio_512 * 100.0,
+        MEASURED_STRIP_PAIR_1024 / 1e6,
+        pct_vs_measured,
+        full as f64 / 1e6,
     );
 
-    // Realistic gate (post-P2.0 back-projected halo): h_body=256 still
-    // delivers meaningful savings at 1024². Was < 70% under the
-    // optimistic `halo = 8` constant — actual back-projection through
-    // the reduce chain raises the level-0 strip from 528 → 1148 rows,
-    // and h_body=256 → 572 rows after clamping to the 1024² level-0
-    // image height — close to half the full footprint.
+    // SAFE-DIRECTION gate: estimate must be >= measured (never
+    // under-budget resolve_auto) and not absurdly high (<= +200% leaves
+    // generous headroom; the fixed-context base inflates the small-size
+    // estimate but that's the correct conservative bias at 1 MP, which
+    // the validation gate exempts from the tight ±20% band).
     assert!(
-        ratio_256 < 0.65,
-        "StripPair(256) = {:.1}% of Full, expected < 65%",
-        ratio_256 * 100.0,
+        pair256 as f64 >= MEASURED_STRIP_PAIR_1024,
+        "Mode B estimate {:.1} MB under-predicts the measured peak {:.1} MB \
+         (under-prediction is a resolve_auto bug)",
+        pair256 as f64 / 1e6,
+        MEASURED_STRIP_PAIR_1024 / 1e6,
     );
-    // h_body=512 at 1024² is a DEGENERATE configuration: the back-
-    // projected level-0 strip (1148 rows) exceeds the full image
-    // height (1024). The per-level clamp falls back to full-image
-    // storage at every level, so the estimator returns ~Full.
-    // This is the expected (and correct) signal to the Auto resolver
-    // that there's no point picking StripPair(512) at 1024² — use
-    // Full instead.
     assert!(
-        (0.99..=1.05).contains(&ratio_512),
-        "StripPair(512) at 1024² should degenerate to ~Full (strip ≥ full at every level), \
-         got {:.1}% of Full",
-        ratio_512 * 100.0,
+        pct_vs_measured <= 200.0,
+        "Mode B estimate over-predicts by {pct_vs_measured:+.1}% — far above the \
+         conservative-but-sane ceiling",
     );
 }
 
-/// At 4096² the savings should be even more dramatic — deep bands are
-/// proportionally tinier so the strip-mode storage dominates the
-/// budget. Stretch goal per the brief.
+/// Mode B estimate vs the **measured** strip_pair peak at 4096²
+/// (task137). The previous version asserted `< 25%` of Full, which
+/// again validated the under-predicting estimator. Measured reality
+/// (cuda): strip_pair at 4096² = 2273 MB vs Full = 3969 MB ≈ **57% of
+/// Full** — a real but modest win, NOT the fictional <25%. The
+/// corrected estimator must over-predict the measured peak within the
+/// ±20% gate (safe direction).
 #[test]
-fn mode_b_estimator_reduces_memory_at_4096_stretch() {
-    let full = estimate_gpu_memory_bytes(4096, 4096).expect("Full estimate at 4096²");
+fn mode_b_estimator_at_4096_over_predicts_measured() {
+    // Measured strip_pair (cuda) peak at 4096², from the committed sweep.
+    const MEASURED_STRIP_PAIR_4096: f64 = 2_383_413_248.0;
     let pair256 = estimate_gpu_memory_bytes_strip_pair(4096, 4096, 256)
         .expect("StripPair(256) estimate at 4096²");
+    let full = estimate_gpu_memory_bytes(4096, 4096).expect("Full estimate at 4096²");
 
-    let ratio = pair256 as f64 / full as f64;
+    let pct_vs_measured = (pair256 as f64 - MEASURED_STRIP_PAIR_4096)
+        / MEASURED_STRIP_PAIR_4096
+        * 100.0;
+    let ratio_vs_full = pair256 as f64 / full as f64;
     eprintln!(
-        "4096² memory: Full={:.1} GB, StripPair(256)={:.1} GB ({:.1}%)",
-        full as f64 / 1e9,
+        "4096² Mode B: est={:.2} GB, measured={:.2} GB ({:+.1}%), {:.1}% of Full est",
         pair256 as f64 / 1e9,
-        ratio * 100.0,
+        MEASURED_STRIP_PAIR_4096 / 1e9,
+        pct_vs_measured,
+        ratio_vs_full * 100.0,
     );
-    // Realistic gate (post-P2.0): deep memory reduction at 4096² with
-    // h_body=256. Back-projection raises the level-0 strip to ~572
-    // rows (max(272, 2·284+4) at h_body=256, k_split=6, no clamp
-    // since image height 4096 ≫ 572). The deep-level full-image
-    // floor at large sizes is tiny (level 8 at 4096² is 16×16 = 256
-    // px total), so strip-mode dominates and the ratio lands well
-    // below 25%.
+
+    // SAFE-DIRECTION gate within the ±20% validation band: the estimate
+    // must over-predict the measured peak but stay within +20%.
     assert!(
-        ratio < 0.25,
-        "StripPair(256) at 4096² = {:.1}% of Full, expected < 25%",
-        ratio * 100.0,
+        pair256 as f64 >= MEASURED_STRIP_PAIR_4096,
+        "Mode B estimate {:.2} GB under-predicts the measured peak {:.2} GB \
+         (under-prediction is a resolve_auto bug)",
+        pair256 as f64 / 1e9,
+        MEASURED_STRIP_PAIR_4096 / 1e9,
     );
+    assert!(
+        pct_vs_measured <= 20.0,
+        "Mode B estimate over-predicts by {pct_vs_measured:+.1}% — exceeds the +20% gate",
+    );
+}
+
+/// Off-calibration body sizes (task137). The four other estimator
+/// tests pin the canonical h_body = 256 (and one degenerate 512); a
+/// curve-fit estimator can pass those vacuously while being arbitrary
+/// in between. This test exercises body = 128 AND body = 512 at 1024²
+/// and 4096² with a LOOSE monotonicity/sanity bound — it does not pin
+/// exact bytes (no measured peak for these bodies), but guards that:
+///   1. the estimate stays positive and finite,
+///   2. a SMALLER body never produces a LARGER estimate at a given size
+///      (a smaller strip body can only shrink or hold the working set),
+///   3. the estimate never drops below the per-instance context floor.
+#[test]
+fn mode_b_estimator_off_calibration_bodies_are_sane() {
+    const CONTEXT_FLOOR: usize = 256 * 1024 * 1024; // POOL_B_CONTEXT_BASE_BYTES
+    for &(w, h) in &[(1024_u32, 1024_u32), (4096, 4096)] {
+        let b128 = estimate_gpu_memory_bytes_strip_pair(w, h, 128)
+            .unwrap_or_else(|| panic!("body=128 at {w}×{h}"));
+        let b256 = estimate_gpu_memory_bytes_strip_pair(w, h, 256)
+            .unwrap_or_else(|| panic!("body=256 at {w}×{h}"));
+        let b512 = estimate_gpu_memory_bytes_strip_pair(w, h, 512)
+            .unwrap_or_else(|| panic!("body=512 at {w}×{h}"));
+        eprintln!(
+            "{w}² off-cal bodies: 128={:.1} MB, 256={:.1} MB, 512={:.1} MB",
+            b128 as f64 / 1e6,
+            b256 as f64 / 1e6,
+            b512 as f64 / 1e6,
+        );
+        // Floor: every estimate must clear the context base.
+        for (body, est) in [(128, b128), (256, b256), (512, b512)] {
+            assert!(
+                est > CONTEXT_FLOOR,
+                "body={body} at {w}×{h}: estimate {est} below context floor {CONTEXT_FLOOR}",
+            );
+        }
+        // Monotonicity: a larger body is a larger (or equal) strip
+        // buffer at every level, so the estimate must be non-decreasing
+        // in body.
+        assert!(
+            b128 <= b256 && b256 <= b512,
+            "Mode B estimate not monotonic in h_body at {w}×{h}: \
+             128={b128}, 256={b256}, 512={b512}",
+        );
+    }
 }
 
 /// At 1024² with h_body=256, the Mode B walker should produce JOD

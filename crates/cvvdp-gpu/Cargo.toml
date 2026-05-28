@@ -75,6 +75,10 @@ name = "cvvdp_mem_table"
 required-features = ["cubecl-types"]
 
 [[example]]
+name = "mem_estimate_tsv"
+required-features = ["cubecl-types"]
+
+[[example]]
 name = "diffmap_overhead"
 required-features = ["cubecl-types"]
 
