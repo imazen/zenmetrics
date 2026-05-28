@@ -187,6 +187,77 @@ pub(crate) struct Scratch {
 }
 
 impl Scratch {
+    /// Construct with strip-shape pre-allocation for `width × height`
+    /// image, `n_levels` weber pyramid bands, and `h_body` rows per
+    /// scale-0 strip.
+    ///
+    /// **Phase 9.Z.F chunk 6 of the CPU K_SPLIT walker port.** At
+    /// shallow levels (`k < k_split`) the persistent `weber_dist`,
+    /// `weber_cache_dist`, and `weber_ref` slots are sized at
+    /// `bw × R_k` via
+    /// [`crate::pyramid::WeberPyramid::with_capacity_strip`] /
+    /// [`crate::pyramid::WeberPyramidCache::with_capacity_strip`] —
+    /// the strip-shape variants documented in those types.
+    ///
+    /// This constructor is exposed for the strip-major dispatcher
+    /// (forthcoming in chunk 6). The Full-mode `Cvvdp` constructor
+    /// continues to use [`Self::new`] for full-image allocations.
+    ///
+    /// **NOTE (2026-05-28): the strip-major dispatcher is not yet
+    /// wired through to use this constructor.** The
+    /// `with_capacity_strip` methods exist (chunk 6 step 1) but the
+    /// existing `weber_contrast_pyr_into` build path writes
+    /// full-image-shape outputs, so calling this constructor without
+    /// the dispatcher would resize the strip-shape buffers back to
+    /// full-image on the first `score*` call. The constructor is here
+    /// as an integration point for the next chunk 6 step (the actual
+    /// dispatcher). See `crates/cvvdp/docs/CPU_KSPL_HANDOFF_chunks_4_and_6.md`
+    /// for the remaining work.
+    #[allow(dead_code)]
+    pub fn new_strip(
+        width: usize,
+        height: usize,
+        n_levels: usize,
+        h_body: u32,
+    ) -> Self {
+        let n = width * height;
+        Self {
+            dist_a: vec![0.0; n],
+            dist_rg: vec![0.0; n],
+            dist_vy: vec![0.0; n],
+            ref_a: vec![0.0; n],
+            ref_rg: vec![0.0; n],
+            ref_vy: vec![0.0; n],
+            pyr: PyramidScratch::default(),
+            weber_ref: [
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+            ],
+            weber_dist: [
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramid::with_capacity_strip(width, height, n_levels, h_body),
+            ],
+            // weber_cache_ref stays default (lazy) — same as `Self::new`.
+            // The cold `score()` path uses local caches; this constructor
+            // is intended for strip-mode `score_strip` callers which
+            // build per-strip caches.
+            weber_cache_ref: [
+                WeberPyramidCache::default(),
+                WeberPyramidCache::default(),
+                WeberPyramidCache::default(),
+            ],
+            weber_cache_dist: [
+                WeberPyramidCache::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramidCache::with_capacity_strip(width, height, n_levels, h_body),
+                WeberPyramidCache::with_capacity_strip(width, height, n_levels, h_body),
+            ],
+            band_ws: Vec::new(),
+            strip_band_ws: None,
+        }
+    }
+
     /// Construct with full pre-allocation for `width × height` image and
     /// `n_levels` weber pyramid bands.
     ///
