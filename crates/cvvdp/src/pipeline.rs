@@ -3083,7 +3083,7 @@ fn build_one_side_warm_ref_into(
 // =====================================================================
 
 use crate::pyramid::{Band, build_gauss_pyramid_into, gausspyr_expand};
-use crate::strip::{mode_b_k_split, mode_b_strip_h_at_level, strip_h_at_band};
+use crate::strip::{mode_b_k_split, strip_h_at_band};
 use crate::strip_kernels::{
     subtract_weber_3ch_strip_into, upscale_h_strip_into, upscale_v_strip_into,
 };
@@ -3756,7 +3756,7 @@ fn dispatch_strip_major_shallow(
     weber_cache_ref: &mut [crate::pyramid::WeberPyramidCache; 3],
     weber_cache_dist: &mut [crate::pyramid::WeberPyramidCache; 3],
     h: usize,
-    n_levels: usize,
+    _n_levels: usize,
     ppd: f32,
     h_body: u32,
     k_split: usize,
