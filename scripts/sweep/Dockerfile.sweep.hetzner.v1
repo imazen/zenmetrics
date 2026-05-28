@@ -157,7 +157,19 @@ RUN test -x /usr/local/bin/entrypoint_hetzner.sh \
     && echo "hetzner.v1 entrypoint script baked"
 
 # ── L7: ENTRYPOINT ──────────────────────────────────────────────────────
-# Default ENTRYPOINT is the worker binary itself — the cloud-init script
-# passes the worker subcommand + flags explicitly, so docker run's CMD
-# overrides this. For shell access: `docker run --entrypoint /bin/bash`.
-ENTRYPOINT ["/usr/local/bin/zen-sweep-worker"]
+# The Hetzner cloud-init (see crates/zencloud-hetzner/src/cloud_init.rs)
+# invokes the worker via `docker run ... <image>
+# /usr/local/bin/zen-sweep-worker worker --backend hetzner ...`. Docker's
+# default behavior is to *concatenate* a CMD override onto an ENTRYPOINT
+# array — so if we set `ENTRYPOINT ["/usr/local/bin/zen-sweep-worker"]`,
+# docker would invoke the binary with `/usr/local/bin/zen-sweep-worker`
+# as its first argument (treated as an unknown subcommand → exit nonzero
+# silently). The Hetzner sweep validated this footgun the hard way
+# 2026-05-28: 5/5 workers booted but 0 chunks claimed.
+#
+# Resolution: NO ENTRYPOINT. The cloud-init passes the full command
+# line (binary + subcommand + flags) as docker run's CMD, and docker
+# runs that directly. Ad-hoc shell access: `docker run --entrypoint
+# /bin/bash <image>` still works (no ENTRYPOINT to override).
+# Run via cloud-init: docker uses CMD directly.
+CMD ["/usr/local/bin/zen-sweep-worker"]
