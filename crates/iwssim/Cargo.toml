@@ -54,6 +54,11 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"] }
 
+[[test]]
+name = "parity_gpu"
+path = "tests/parity_gpu.rs"
+required-features = ["gpu-parity-test"]
+
 [build-dependencies]
 # Gaussian / binomial coefficient generation at build time — mirrors
 # iwssim-gpu/build.rs so the two crates share identical filter taps to

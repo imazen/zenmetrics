@@ -19,6 +19,33 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`iwssim` crate (Phase 8g) — pure-Rust CPU port of Python-IW-SSIM
+  with magetypes SIMD.** Faithful port of the canonical Python-IW-SSIM
+  reference (Jack-guo-xy/Python-IW-SSIM, commit `f9de37cd`) for
+  Wang & Li's Information-content Weighted SSIM (IEEE TIP 2011). The
+  GPU port (`iwssim-gpu`) shipped in Phase 4 but had no CPU sibling
+  — Phase 6 documented this as an explicit honest-stop. Phase 8g
+  closes that gap. Public API mirrors `cvvdp`'s pattern:
+  `Iwssim::new` / `score` / `warm_reference` /
+  `score_with_warm_ref`. SIMD coverage: 11×11 separable Gaussian
+  (SSIM stats), per-pixel cs/l combine, weighted-sum pooling — all
+  routed through `archmage::incant!` with the
+  `[v4x, v4, v3, neon, wasm128, scalar]` tier cascade.
+  Pyramid / box-stat / IW-weight-map paths remain scalar this
+  release. Parity vs Python reference: max `|diff| 8e-5` in
+  `[0, 1]` score space across 7 deterministic synthetic fixtures
+  (176/256/320 × identical/offset/shift1px/swap). Goldens captured
+  via `crates/iwssim/goldens/capture_python_goldens.py`; fixtures
+  are reconstructed locally from 32-bit seeds (no PNGs committed).
+  Commits: `76dbdd46` (scaffold), `faa7f58e` (goldens + parity
+  test), `60c3e2b8` (SIMD pass), `a2b80b18` (orchestrator wiring).
+- **`zenmetrics-orchestrator` Phase 8g — `cpu-iwssim` feature
+  + adapter.** Wires the new `iwssim` crate into the orchestrator's
+  CPU backend ladder. Now `MetricKind::Iwssim` surfaces a real
+  `Backend::Cpu` candidate (not `CpuMetricUnavailable`); the
+  cached-reference path is promoted from `false` to `true` (true
+  warm path via `Iwssim::warm_reference`). Added to `cpu-all`.
+  Commit `a2b80b18`.
 - **Phase 8c.1 audit — `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`.**
   Surveys the six metric crate pairs, inventories shared types, and
   ranks opportunities. Key finding: `cvvdp` (CPU) currently depends on
