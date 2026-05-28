@@ -283,11 +283,150 @@ impl Cvvdp {
     /// once in `Cvvdp::new`) and `scratch.weber_ref` slots (capacity
     /// persists across calls) so this is now allocation-free after the
     /// first warm_reference call. Saves 480 MB / call at 40 MP.
+    ///
+    /// **Phase 9.Z.F Path A**: when the scorer was constructed via
+    /// `Cvvdp::new_strip` (i.e., `strip_scratch_h_body.is_some()`),
+    /// this caches the ref gauss pyramid (full-image, ~85 MB per
+    /// channel at 16 MP) instead of the weber pyramid (300+ MB per
+    /// channel at shallow levels). The cached ref gauss is then read
+    /// by `score_with_warm_ref_strip` for per-strip weber computation.
+    /// In strip mode, this saves ~600 MB at 16 MP vs the weber-cache
+    /// path. The DKL planes are also dropped post-build (~384 MB win).
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_srgb(ref_srgb)?;
         let display = self.params.display;
         let w = self.width;
         let h = self.height;
+        let n_levels = band_frequencies(self.ppd, w, h).len();
+
+        if self.strip_scratch_h_body.is_some() {
+            // Strip-mode warm: cache only the gauss pyramids (not weber).
+            // The strip dispatcher in `score_with_warm_ref_strip` will
+            // compute per-strip weber bands on-the-fly from the cached
+            // gauss + dist's freshly built gauss.
+
+            // 1. Fill scratch.ref_a/ref_rg/ref_vy.
+            let (ra, rrg, rvy, _, _, _) = scratch_dkl_planes(&mut self.scratch);
+            srgb_to_dkl_planar(ref_srgb, w, h, display, ra, rrg, rvy);
+
+            // 2. Build ref-side gauss pyramids (img + l_bkg for cache[0],
+            //    img only for cache[1] and cache[2]).
+            let Scratch {
+                ref_a,
+                ref_rg,
+                ref_vy,
+                weber_cache_ref,
+                ..
+            } = &mut self.scratch;
+            build_gauss_pyramid_into(
+                ref_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[0].scratch,
+                &mut weber_cache_ref[0].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                ref_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[0].scratch,
+                &mut weber_cache_ref[0].gauss_l,
+            );
+            build_gauss_pyramid_into(
+                ref_rg,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[1].scratch,
+                &mut weber_cache_ref[1].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                ref_vy,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_ref[2].scratch,
+                &mut weber_cache_ref[2].gauss_img,
+            );
+
+            // 3. Drop DKL planes (no longer needed).
+            self.scratch.ref_a.clear();
+            self.scratch.ref_a.shrink_to_fit();
+            self.scratch.ref_rg.clear();
+            self.scratch.ref_rg.shrink_to_fit();
+            self.scratch.ref_vy.clear();
+            self.scratch.ref_vy.shrink_to_fit();
+
+            // 4. Drop unused gauss_l buffers (cache[1/2] and cache[0]'s level 0).
+            for c in 1..3 {
+                for level in self.scratch.weber_cache_ref[c].gauss_l.iter_mut() {
+                    level.data.clear();
+                    level.data.shrink_to_fit();
+                }
+            }
+            if !self.scratch.weber_cache_ref[0].gauss_l.is_empty() {
+                let level = &mut self.scratch.weber_cache_ref[0].gauss_l[0];
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+
+            // 5. Drop the gauss-reduce scratches.
+            for c in 0..3 {
+                self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
+                self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+                self.scratch.weber_cache_ref[c].scratch.z_v.clear();
+                self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
+                self.scratch.weber_cache_ref[c].scratch.z_h.clear();
+                self.scratch.weber_cache_ref[c].scratch.z_h.shrink_to_fit();
+            }
+
+            // 6. Build deep weber bands for ref (needed for fold_bands_deep_only).
+            //    These persist across score_with_warm_ref_strip calls.
+            let k_split = mode_b_k_split(
+                self.strip_scratch_h_body.expect("set when strip_scratch_h_body is_some"),
+                n_levels as u32,
+            ) as usize;
+            {
+                let Scratch {
+                    weber_ref,
+                    weber_cache_ref,
+                    ..
+                } = &mut self.scratch;
+                for k in k_split..n_levels {
+                    for c in 0..3 {
+                        if c == 0 {
+                            let cache = &mut weber_cache_ref[0];
+                            build_full_weber_band_at_k_same_cache(
+                                cache,
+                                k,
+                                n_levels,
+                                &mut weber_ref[0].bands[k],
+                                &mut weber_ref[0].log_l_bkg[k],
+                            );
+                        } else {
+                            let (head, tail) = weber_cache_ref.split_at_mut(1);
+                            let l_cache = &head[0];
+                            let img_cache = &mut tail[c - 1];
+                            build_full_weber_band_at_k(
+                                img_cache,
+                                l_cache,
+                                k,
+                                n_levels,
+                                &mut weber_ref[c].bands[k],
+                                &mut weber_ref[c].log_l_bkg[k],
+                            );
+                        }
+                    }
+                }
+            }
+
+            self.warm_active = true;
+            return Ok(());
+        }
+
+        // Non-strip-mode warm: cache full weber pyramid (legacy path).
         // 1. Fill scratch.ref_a/ref_rg/ref_vy directly — these are
         //    pre-allocated W*H f32 buffers from Scratch::new and reused
         //    across calls.
@@ -298,7 +437,6 @@ impl Cvvdp {
         //    so the warm cache footprint after warm_reference returns
         //    is just the DKL planes (480 MB) + weber output (~240 MB),
         //    NOT the gauss_img/gauss_l intermediates (~700 MB).
-        let n_levels = band_frequencies(self.ppd, w, h).len();
         let Scratch {
             ref_a,
             ref_rg,
@@ -921,6 +1059,213 @@ impl Cvvdp {
         };
 
         // Step 5: combine shallow + deep q values → JOD.
+        let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
+        q_per_ch.extend(q_shallow.into_iter());
+        q_per_ch.extend(q_deep.into_iter());
+        debug_assert_eq!(q_per_ch.len(), n_levels);
+        let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
+        Ok((jod, None))
+    }
+
+    /// Warm-ref variant of `score_internal_strip`. Reads the ref gauss
+    /// pyramid from `weber_cache_ref` (populated by `warm_reference`
+    /// when strip_scratch_h_body is set), builds dist gauss + deep
+    /// dist weber + strip-major dispatch.
+    ///
+    /// Deep weber bands for REF are also already populated (built by
+    /// `warm_reference` in strip mode). This function builds only the
+    /// DIST deep weber bands fresh.
+    fn score_internal_strip_with_warm(
+        &mut self,
+        want_diffmap: bool,
+        h_body: u32,
+    ) -> Result<(f32, Option<Vec<f32>>)> {
+        let w = self.width;
+        let h = self.height;
+        let n_levels = crate::pyramid::band_frequencies(self.ppd, w, h).len();
+        let k_split = mode_b_k_split(h_body, n_levels as u32) as usize;
+
+        // Step 1: build DIST gauss pyramids (3 gauss_img + 1 gauss_l on cache[0]).
+        // Drop DKL planes inline per channel for minimal peak.
+        {
+            let Scratch {
+                dist_a,
+                dist_rg,
+                dist_vy,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            build_gauss_pyramid_into(
+                dist_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[0].scratch,
+                &mut weber_cache_dist[0].gauss_img,
+            );
+            build_gauss_pyramid_into(
+                dist_a,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[0].scratch,
+                &mut weber_cache_dist[0].gauss_l,
+            );
+            dist_a.clear();
+            dist_a.shrink_to_fit();
+            build_gauss_pyramid_into(
+                dist_rg,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[1].scratch,
+                &mut weber_cache_dist[1].gauss_img,
+            );
+            dist_rg.clear();
+            dist_rg.shrink_to_fit();
+            build_gauss_pyramid_into(
+                dist_vy,
+                w,
+                h,
+                n_levels,
+                &mut weber_cache_dist[2].scratch,
+                &mut weber_cache_dist[2].gauss_img,
+            );
+            dist_vy.clear();
+            dist_vy.shrink_to_fit();
+        }
+
+        // Drop dist cache scratch buffers post-build (gauss-reduce vscratch
+        // is no longer needed; expand buffers stay since deep weber will use them).
+        for c in 0..3 {
+            self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
+            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.z_v.clear();
+            self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
+            self.scratch.weber_cache_dist[c].scratch.z_h.clear();
+            self.scratch.weber_cache_dist[c].scratch.z_h.shrink_to_fit();
+        }
+        // Drop unused gauss_l buffers from cache_dist[1..3] and cache_dist[0]'s level 0.
+        for c in 1..3 {
+            for level in self.scratch.weber_cache_dist[c].gauss_l.iter_mut() {
+                level.data.clear();
+                level.data.shrink_to_fit();
+            }
+        }
+        if !self.scratch.weber_cache_dist[0].gauss_l.is_empty() {
+            let level = &mut self.scratch.weber_cache_dist[0].gauss_l[0];
+            level.data.clear();
+            level.data.shrink_to_fit();
+        }
+
+        // Step 2: build DIST deep weber bands (REF deep bands were built
+        // by warm_reference in strip mode).
+        {
+            let Scratch {
+                weber_dist,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            for k in k_split..n_levels {
+                for c in 0..3 {
+                    if c == 0 {
+                        let cache = &mut weber_cache_dist[0];
+                        build_full_weber_band_at_k_same_cache(
+                            cache,
+                            k,
+                            n_levels,
+                            &mut weber_dist[0].bands[k],
+                            &mut weber_dist[0].log_l_bkg[k],
+                        );
+                    } else {
+                        let (head, tail) = weber_cache_dist.split_at_mut(1);
+                        let l_cache = &head[0];
+                        let img_cache = &mut tail[c - 1];
+                        build_full_weber_band_at_k(
+                            img_cache,
+                            l_cache,
+                            k,
+                            n_levels,
+                            &mut weber_dist[c].bands[k],
+                            &mut weber_dist[c].log_l_bkg[k],
+                        );
+                    }
+                }
+            }
+        }
+
+        // Step 3: strip-major dispatcher for shallow levels.
+        let mut dispatcher_state = StripDispatcherState::default();
+        self.scratch.ensure_strip_band_ws(k_split.max(1));
+        let mut sws_taken = if k_split > 0 {
+            core::mem::take(
+                &mut self
+                    .scratch
+                    .strip_band_ws
+                    .as_mut()
+                    .expect("ensure_strip_band_ws populated this slot")[0],
+            )
+        } else {
+            StripBandWorkspace::default()
+        };
+        let _ = want_diffmap;
+
+        let q_shallow = {
+            let Scratch {
+                weber_cache_ref,
+                weber_cache_dist,
+                ..
+            } = &mut self.scratch;
+            dispatch_strip_major_shallow(
+                &mut dispatcher_state,
+                &mut sws_taken,
+                weber_cache_ref,
+                weber_cache_dist,
+                h,
+                n_levels,
+                self.ppd,
+                h_body,
+                k_split,
+                &self.strip_dispatch_counter,
+                None,
+            )
+        };
+        if k_split > 0 {
+            self.scratch.strip_band_ws.as_mut().unwrap()[0] = sws_taken;
+        }
+
+        // Step 4: process deep levels via fold_bands_deep_only.
+        let q_deep = {
+            let ref_weber = core::mem::replace(
+                &mut self.scratch.weber_ref,
+                [
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                ],
+            );
+            let dist_weber = core::mem::replace(
+                &mut self.scratch.weber_dist,
+                [
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                    WeberPyramid::empty(),
+                ],
+            );
+            let q_deep = self.fold_bands_deep_only(
+                &ref_weber,
+                &dist_weber,
+                n_levels,
+                w,
+                h,
+                k_split,
+            );
+            self.scratch.weber_ref = ref_weber;
+            self.scratch.weber_dist = dist_weber;
+            q_deep
+        };
+
+        // Step 5: combine + JOD.
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         q_per_ch.extend(q_shallow.into_iter());
         q_per_ch.extend(q_deep.into_iter());
@@ -1831,6 +2176,14 @@ impl Cvvdp {
     ///
     /// Phase 9.Z.B: walks the spatial pool in row-strips. Bit-identical
     /// to [`Self::score_with_warm_ref`] under row-order dispatch.
+    ///
+    /// **Phase 9.Z.F Path A**: when the scorer was constructed via
+    /// `Cvvdp::new_strip` AND `warm_reference` was called on this strip
+    /// scorer, the warm cache holds the ref gauss pyramid (not the
+    /// full weber pyramid). This method routes through a strip-major
+    /// dispatcher that reads from the cached ref gauss + builds dist
+    /// gauss + per-strip weber bands on-the-fly. Saves ~600 MB at 16 MP
+    /// vs the legacy warm-weber path.
     pub fn score_with_warm_ref_strip(
         &mut self,
         dist_srgb: &[u8],
@@ -1842,12 +2195,31 @@ impl Cvvdp {
                 height: 0,
             });
         }
-        // Warm-ref strip stays on the legacy path for now — the warm
-        // path holds `weber_ref` already-built at full-image-shape, so
-        // routing it through the strip dispatcher would require either
-        // dropping + re-building the warm cache at strip shape or
-        // sourcing per-strip data from the persistent full-image weber
-        // slots. Both are follow-up work (chunk 6 step 4).
+        if !self.warm_active {
+            return Err(Error::NoWarmReference);
+        }
+
+        if self.strip_scratch_h_body == Some(strip_h_body) {
+            // Strip-mode warm path: cached ref gauss + fresh dist gauss + strip dispatch.
+            self.check_srgb(dist_srgb)?;
+            let display = self.params.display;
+            // Re-allocate DKL planes (they were dropped by warm_reference).
+            self.scratch.dist_a.resize(self.width * self.height, 0.0);
+            self.scratch.dist_rg.resize(self.width * self.height, 0.0);
+            self.scratch.dist_vy.resize(self.width * self.height, 0.0);
+            let (_, _, _, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
+            srgb_to_dkl_planar(dist_srgb, self.width, self.height, display, da, drg, dvy);
+            self.strip_h_body.set(Some(strip_h_body));
+            let result = self
+                .score_internal_strip_with_warm(false, strip_h_body)
+                .map(|(j, _)| j);
+            self.strip_h_body.set(None);
+            return result;
+        }
+
+        // Fallback to legacy path (warm_active set via the legacy code
+        // path before strip-mode reconfig — or strip_scratch_h_body
+        // doesn't match). Stays on the pool-walker-only strip approach.
         self.strip_h_body.set(Some(strip_h_body));
         let result = self.score_with_warm_ref(dist_srgb);
         self.strip_h_body.set(None);

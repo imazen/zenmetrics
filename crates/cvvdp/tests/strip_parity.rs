@@ -137,6 +137,47 @@ fn check_warm_cell(seed: u64, w: u32, h: u32, h_body: u32) {
     );
 }
 
+/// Parity for `Cvvdp::new_strip` constructor path. Same shape as
+/// `check_cell` but the strip Cvvdp is constructed with strip-shape
+/// scratch from the start (no `ensure_strip_scratch` reconfig at
+/// score_strip time).
+fn check_new_strip_cell(seed: u64, w: u32, h: u32, h_body: u32) {
+    let (r, d) = synth_pair(w, h, seed);
+    let mut s_full = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
+    let mut s_strip = Cvvdp::new_strip(w, h, CvvdpParams::default(), h_body).unwrap();
+    let full = s_full.score(&r, &d).unwrap();
+    let strip = s_strip.score_strip(&r, &d, h_body).unwrap();
+    assert_eq!(
+        full.to_bits(),
+        strip.to_bits(),
+        "new_strip cold drift at seed=0x{seed:x}, size={w}×{h}, h_body={h_body}: \
+         full={full:e} (0x{:08x}), strip={strip:e} (0x{:08x})",
+        full.to_bits(),
+        strip.to_bits(),
+    );
+}
+
+/// Parity for the strip-mode warm path: Cvvdp::new_strip + warm_reference
+/// + score_with_warm_ref_strip. Validates that the cached ref gauss +
+/// per-strip dispatch produces bit-identical JOD vs full-mode warm path.
+fn check_new_strip_warm_cell(seed: u64, w: u32, h: u32, h_body: u32) {
+    let (r, d) = synth_pair(w, h, seed);
+    let mut s_full = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
+    let mut s_strip = Cvvdp::new_strip(w, h, CvvdpParams::default(), h_body).unwrap();
+    s_full.warm_reference(&r).unwrap();
+    s_strip.warm_reference(&r).unwrap();
+    let full = s_full.score_with_warm_ref(&d).unwrap();
+    let strip = s_strip.score_with_warm_ref_strip(&d, h_body).unwrap();
+    assert_eq!(
+        full.to_bits(),
+        strip.to_bits(),
+        "new_strip warm drift at seed=0x{seed:x}, size={w}×{h}, h_body={h_body}: \
+         full={full:e} (0x{:08x}), strip={strip:e} (0x{:08x})",
+        full.to_bits(),
+        strip.to_bits(),
+    );
+}
+
 /// 18 seeds × 1 size × 5 h_body = 90 cells. Always runs.
 #[test]
 fn strip_parity_default_grid_cold() {
@@ -156,6 +197,30 @@ fn strip_parity_default_grid_warm() {
         for &(w, h) in &SIZES_DEFAULT {
             for &hb in &H_BODY_VALUES {
                 check_warm_cell(seed, w, h, hb);
+            }
+        }
+    }
+}
+
+/// 90-cell parity grid for `Cvvdp::new_strip` constructor path (cold).
+#[test]
+fn strip_parity_default_grid_new_strip_cold() {
+    for &seed in &SEEDS {
+        for &(w, h) in &SIZES_DEFAULT {
+            for &hb in &H_BODY_VALUES {
+                check_new_strip_cell(seed, w, h, hb);
+            }
+        }
+    }
+}
+
+/// 90-cell parity grid for `Cvvdp::new_strip` + warm reference path.
+#[test]
+fn strip_parity_default_grid_new_strip_warm() {
+    for &seed in &SEEDS {
+        for &(w, h) in &SIZES_DEFAULT {
+            for &hb in &H_BODY_VALUES {
+                check_new_strip_warm_cell(seed, w, h, hb);
             }
         }
     }
