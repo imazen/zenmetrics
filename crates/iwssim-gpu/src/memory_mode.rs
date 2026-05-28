@@ -183,20 +183,80 @@ fn auto_size_strip_body(width: u32, height: u32, cap: usize) -> Option<u32> {
     Some(body)
 }
 
+/// Reduction/cov scratch buffers allocated once per `Iwssim` instance,
+/// independent of image size. Hand-counted from
+/// [`crate::pipeline::Iwssim::new`] (constants verified against source
+/// 2026-05-28):
+///
+/// - `partials` = `NUM_SLOTS(9) · NUM_BLOCKS(16) · BLOCK_SIZE(256)` f32
+/// - `sums`     = `NUM_SLOTS(9)` f32
+/// - `cov_partials` = `COV_MAX_CELLS(100) · COV_N_THREADS(64·256)` f32
+///
+/// Total ≈ 6.39 MiB. Negligible at 16/40 MP but a real fixed cost the
+/// previous estimator omitted entirely.
+const REDUCTION_SCRATCH_BYTES: usize = (9 * 16 * 256) * 4 + 9 * 4 + (100 * 64 * 256) * 4;
+
+/// Pool / runtime-overhead multiplier applied to the raw working-set
+/// sum. cubecl's allocator page-rounds each buffer, keeps a kernel
+/// cache, and the CUDA/WGPU context itself reserves VRAM that scales
+/// with (but is not captured by) the working-set arithmetic. The
+/// previous estimator applied no factor at all and under-predicted the
+/// measured peak by 55–88% (see `benchmarks/gpu_metrics_sweep_2026-05-28.tsv`).
+///
+/// Calibrated to 1.40 — **not** the 1.18 first proposed — because at
+/// 1.18 the 4 MP full estimate lands at −22.3% vs the measured peak,
+/// which is the UNSAFE (under-prediction) direction: `resolve_auto`
+/// would pick Full when a memory-bounded mode is actually needed. At
+/// 1.40 the estimator over-predicts at 16/40 MP and stays within ±20%
+/// at 4 MP, which is the safe budgeting bias. Validated against the
+/// committed cuda full-mode peaks:
+///   1 MP  256.0 MiB est / 513 MiB meas  (floor-bound, exempt — see [`POOL_FLOOR_BYTES`])
+///   4 MP  620.7 MiB est / 673 MiB meas  (−7.8%)
+///  16 MP 2455.8 MiB est / 2209 MiB meas (+11.2%)
+///  40 MP 5815.4 MiB est / 5025 MiB meas (+15.7%)
+const POOL_FACTOR_NUM: usize = 7;
+const POOL_FACTOR_DEN: usize = 5; // 7/5 = 1.40
+
+/// Floor: the smallest VRAM an `Iwssim` instance realistically pins
+/// once the cubecl context + kernel cache are warm. At 1 MP the raw
+/// working set (≈116 MiB × pool) sits below the measured 513 MiB
+/// because the context/runtime fixed cost dominates; clamp up so we
+/// never wildly under-budget tiny inputs. The 1 MP cell remains
+/// ≈−50% vs measured even with this floor (the fixed context cost is
+/// irreducible at that size), which is the documented small-size
+/// exemption — `resolve_auto` always picks Full for 1 MP anyway, so
+/// the under-budget there is harmless.
+const POOL_FLOOR_BYTES: usize = 256 * 1024 * 1024;
+
+fn apply_pool_and_floor(raw: usize) -> usize {
+    let pooled = raw.saturating_mul(POOL_FACTOR_NUM) / POOL_FACTOR_DEN;
+    pooled.max(POOL_FLOOR_BYTES)
+}
+
 /// Estimate the GPU working-set bytes [`crate::pipeline::Iwssim::new`]
 /// allocates for `width × height` images.
 ///
-/// Counted buffers per scale (5 scales): the `Scale` struct allocates
-/// roughly 10 planes of f32 (`lp_ref`, `lp_dis`, `mu1`, `mu2`,
-/// `sig1_sq`, `sig2_sq`, `sig12`, `cs`, `iw`, scratch). Two packed-u32
-/// sRGB staging buffers at scale 0. Plus small reduction buffers
-/// (partials, sums, cov_partials) which are negligible.
+/// This is **Wang & Li Laplacian-pyramid IW-SSIM** (`NUM_SCALES = 5`,
+/// no orientation dimension — there is no steerable-pyramid /
+/// orientation subband decomposition here). Each of the 5 pyramid
+/// scales allocates 19 f32 planes in [`crate::pipeline::Scale::new`]
+/// (`lp_ref`/`lp_dis`/`g_ref`/`g_dis` at LP shape, `gh_*` ×5 at the
+/// horizontal-pass shape, `mu1`/`mu2`/`m11`/`m22`/`m12`/`cs` at SSIM
+/// shape, `g_buf`/`vv_buf`/`parent_band` at LP shape, `iw` at IW
+/// shape, plus tiny fixed `cu`/`cu_inv_dev`/`lambda_dev`). We bill all
+/// 19 at full `w × h` per scale — a deliberate slight over-count, since
+/// the `gh_*`/`mu*`/`cs`/`iw` planes are a few rows/cols smaller. Two
+/// packed-u32 sRGB staging buffers are sized at the scale-0 image
+/// (`n0 × 4 × 2`). The fixed reduction/cov scratch
+/// ([`REDUCTION_SCRATCH_BYTES`], ≈6.39 MiB) is added once. The raw sum
+/// is then scaled by the pool factor and clamped to the floor — see
+/// [`apply_pool_and_floor`].
 #[must_use]
 pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> usize {
     let mut w = width;
     let mut h = height;
     let mut total: usize = 0;
-    const PLANES_PER_SCALE: usize = 10;
+    const PLANES_PER_SCALE: usize = 19;
     for _ in 0..NUM_SCALES {
         let w_eff = w as usize;
         let h_eff = h as usize;
@@ -206,19 +266,22 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> usize {
     }
     let n0 = (width as usize) * (height as usize);
     total = total.saturating_add(n0 * 4 * 2);
-    total
+    total = total.saturating_add(REDUCTION_SCRATCH_BYTES);
+    apply_pool_and_floor(total)
 }
 
-/// Strip-mode estimator. Same planes as
-/// [`estimate_gpu_memory_bytes`] but sized for
-/// `width × (h_body + 2 × halo)`, default halo = 256.
+/// Strip-mode estimator. Same 19 planes/scale + reduction scratch +
+/// pool + floor as [`estimate_gpu_memory_bytes`], but the pyramid is
+/// sized for `width × (h_body + 2 × halo)` (default halo = 256) rather
+/// than the full image height. Used by [`auto_size_strip_body`] to find
+/// the largest pyramid-aligned body that fits the cap.
 #[must_use]
 pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize> {
     let strip_h = (h_body as usize).saturating_add((STRIP_DEFAULT_HALO as usize) * 2);
     let mut w = width as usize;
     let mut h = strip_h;
     let mut total: usize = 0;
-    const PLANES_PER_SCALE: usize = 10;
+    const PLANES_PER_SCALE: usize = 19;
     for _ in 0..NUM_SCALES {
         total = total.saturating_add(PLANES_PER_SCALE.saturating_mul(w * h * 4));
         w = w.div_ceil(2);
@@ -226,5 +289,6 @@ pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize>
     }
     let n = (width as usize).saturating_mul(strip_h);
     total = total.saturating_add(n * 4 * 2);
-    Some(total)
+    total = total.saturating_add(REDUCTION_SCRATCH_BYTES);
+    Some(apply_pool_and_floor(total))
 }

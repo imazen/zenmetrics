@@ -51,10 +51,13 @@ fn scales_bytes(w: u32, h: u32) -> u64 {
 /// cov_partials are fixed-size buffers independent of the input.
 fn scratch_bytes(upload_w: u32, upload_h: u32) -> u64 {
     let src_u32_bytes = (upload_w as u64) * (upload_h as u64) * 4; // u32 packed
-    let n_partials = 9 * 32 * 256; // NUM_SLOTS × NUM_BLOCKS × BLOCK_SIZE (defaults)
+    // Constants verified against pipeline.rs / reduction.rs 2026-05-28:
+    // NUM_SLOTS=9, NUM_BLOCKS=16 (reduction.rs), BLOCK_SIZE=256.
+    let n_partials = 9 * 16 * 256; // NUM_SLOTS × NUM_BLOCKS × BLOCK_SIZE
     let partials_bytes = (n_partials as u64) * 4;
     let sums_bytes = 9 * 4; // NUM_SLOTS f32 sums
-    let cov_partials_bytes: u64 = 110 * 256 * 4; // COV_MAX_CELLS × COV_N_THREADS
+    // COV_MAX_CELLS=100 (pipeline.rs:394), COV_N_THREADS=COV_CUBE_COUNT(64)·COV_CUBE_DIM(256)=16384.
+    let cov_partials_bytes: u64 = 100 * 64 * 256 * 4; // COV_MAX_CELLS × COV_N_THREADS
     // Two src_u32 buffers (a + b), one partials, one sums, one cov.
     src_u32_bytes * 2 + partials_bytes + sums_bytes + cov_partials_bytes
 }

@@ -36,8 +36,16 @@ fn with_cap<R>(cap: Option<&str>, f: impl FnOnce() -> R) -> R {
 
 #[test]
 fn estimate_grows_with_pixels() {
-    let a = estimate_gpu_memory_bytes(1024, 1024);
-    let b = estimate_gpu_memory_bytes(2048, 2048);
+    // Re-pointed from 1024²→2048² to 4096²→8192² (task137): the
+    // recalibrated estimator now applies a 256 MiB floor (the warm
+    // cubecl context + kernel cache fixed cost), which clamps the 1 MP
+    // estimate and compresses the 1→4 MP ratio to ~2.4 — below the
+    // quadratic 4×. At 16→64 MP the floor no longer binds, so the
+    // 19-plane pyramid working set scales cleanly with pixel count and
+    // the test still guards quadratic working-set growth (its original
+    // intent), without relaxing the bound.
+    let a = estimate_gpu_memory_bytes(4096, 4096);
+    let b = estimate_gpu_memory_bytes(8192, 8192);
     let ratio = b as f64 / a as f64;
     assert!(ratio > 3.6 && ratio < 4.4, "ratio = {ratio}");
 }
