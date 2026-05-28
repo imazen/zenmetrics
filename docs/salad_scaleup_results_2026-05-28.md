@@ -871,3 +871,123 @@ The pipeline end-to-end works at scale on Salad:
    chunks landed in R2 (worker-cycled across ~7 distinct replicas),
    on a broad-pool $0.10/hr fleet, with kernel cache hot.
 
+---
+
+## Run 8 — :v6-visibility iter1 (2026-05-28)
+
+**Sweep id**: `scaleup-20260528T112234`  
+**Image**: `ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility`
+(digest `sha256:c81f8d03a791…`)  
+**Replicas**: 5  •  **Chunks**: 15  •  **Pool**: 19 GPU classes
+≤ $0.10/hr.
+
+### What shipped
+
+Per the iteration-1 brief: get fleet visibility plumbed so we stop
+flying blind on (a) which Salad replica got which GPU class and
+(b) per-replica boot timing.
+
+**Worker side** (`crates/zen-cloud-vastai/src/worker/`):
+- `entrypoint_salad.sh` now writes `/var/run/zen-boot.txt` with
+  `machine_id / gpu_class / gpu_uuid / driver / vram_mib /
+  warmup_seconds / boot_unix_ts` (key:value).
+- `worker/mod.rs::upload_boot_record` reads that file and uploads
+  to `<scoped-prefix>/boot/<machine_id>.txt` once at startup. Best-
+  effort; non-fatal.
+- `worker/chunk_output.rs::WorkerColumns` appends six per-row
+  columns to every omni sidecar: `worker_machine_id`,
+  `worker_gpu_class`, `worker_chunk_claim_unix`,
+  `worker_chunk_start_unix`, `worker_chunk_end_unix`,
+  `worker_warmup_seconds`. Default null for non-Salad runs (back-
+  compat).
+
+**Launcher side** (`crates/zen-cloud-salad/`):
+- `launch.rs::list_container_group_instances()` calls
+  `GET .../containers/<group>/instances`.
+- `bin/zen-salad-sweep.rs` polls `/instances` every 15 s and writes
+  `runs/<sweep>/instances/<unix_ts>.json` with the full container-
+  group state + raw instance list.
+- After poll loop exits, `build_and_upload_fleet_summary` reads
+  `boot/`, `instances/`, `omni/`, `errors/` from R2, joins per
+  `machine_id`, and writes the aggregate to
+  `runs/<sweep>/fleet_summary.json` plus a stdout table.
+
+All R2 writes stay inside the scoped-cred prefix `runs/<sweep>/`
+per the 882492a fix discipline.
+
+### What landed in R2
+
+Snapshot cadence: 17+ polls over ~5.5 min, every 15 s
+(`instances/1779967367.json` … ongoing). File size jumps from
+240 B (no instances yet) to ~2.2 KB once Salad starts assigning
+replicas — full schema captured per replica including
+`id, machine_id, state, ready, started, ssh_ip, ssh_port,
+pulling_progress, cpu/memory metrics, update_time, version`.
+
+**Important schema finding** — Salad's `/instances` endpoint does
+**NOT** expose `gpu_class` per replica. The scheduler picks from
+the nominated pool but doesn't tell the API caller which class
+ended up assigned. That's exactly why worker-side `nvidia-smi`
+self-reporting was needed; without it the visibility gap is
+structural, not a "we forgot to query the right endpoint."
+
+### Worker_* columns in omni sidecar (verified)
+
+Sample row from `scaleup-000.parquet`:
+
+| column | value |
+|---|---|
+| `worker_machine_id` | `bf044589-9e94-d353-9754-37d7489c2538` |
+| `worker_gpu_class` | `NVIDIA GeForce GTX 1650` |
+| `worker_chunk_claim_unix` | `1779967504` |
+| `worker_chunk_start_unix` | `1779967504` |
+| `worker_chunk_end_unix` | `1779967559` |
+| `worker_warmup_seconds` | `7.0` |
+
+Cross-sidecar analysis of the first 13 omnis: **all 13 chunks
+came from the SAME machine** (`bf044589`, GTX 1650). The single
+warm replica with the kernel cache primed ate the queue before
+the other 4 replicas finished booting. This is the kind of
+operational behaviour the visibility wiring exposes — a single
+hot replica monopolising the queue was previously inferred by
+narrative; now it's a single SQL group-by-machine query on the
+sidecar.
+
+### Iter1.5 follow-up (known gap)
+
+The `:v6-visibility` image ships with the boot-upload hook in
+the vast.ai backend's `run_worker_async` only. The Salad backend
+in `zen-sweep-worker/src/main.rs::salad::run` uses its own
+`run_worker` loop — it does NOT call `cmd_worker`, so the
+boot-upload never fires on Salad replicas in this image.
+
+**Result**: omni sidecars have the new worker_* columns fully
+populated (because inline.rs threads the WorkerColumns through
+the per-chunk path, which is shared with vast.ai), but
+`boot/<machine_id>.txt` records do NOT land in R2, and
+`fleet_summary.json` falls back to snapshot-derived rows
+(machine_id + last_status_seen) without `gpu_class` /
+`warmup_seconds` per machine from the dedicated boot record.
+
+The fix landed in commit `b00526b9` immediately after the
+validation run: `fire_boot_upload` is exposed publicly on
+`zen_cloud_vastai::worker`, and `salad::run` calls it before the
+`run_worker` loop starts. Will ship as `:v6-visibility-b` on
+the next image build.
+
+### Spend
+
+- N=5 × ~5.5 min wall × $0.10/hr (high-tier pricing ceiling)
+  = ~$0.046 estimated upper bound.
+- Real spend lower since only 2-3 replicas were actually running
+  during the productive window.
+- Cumulative session spend: ~$0.93 of the $2 cap.
+
+### Verdict
+
+iter1 ships the visibility layer end-to-end EXCEPT for the
+Salad-side boot record (iter1.5, b00526b9 queued). The omni
+sidecars carry the load-bearing per-row attribution, so any
+downstream "which GPU class produced these scores" question is
+answerable today via a single Parquet read.
+

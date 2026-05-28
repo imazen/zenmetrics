@@ -462,6 +462,15 @@ pub(crate) fn split_chunks_uri(chunks_r2: &str) -> Option<(String, String)> {
     Some((bucket.to_string(), prefix.to_string()))
 }
 
+/// Public wrapper so backends like Salad (which run their own worker
+/// loop instead of `cmd_worker`) can fire boot-record upload at
+/// startup. Reads `/var/run/zen-boot.txt`, synthesizes a minimal one
+/// if absent, uploads to `<scoped-prefix>/boot/<worker_id>.txt`.
+/// Best-effort — never fails the caller.
+pub async fn fire_boot_upload(args: &WorkerArgs, worker_id: &str, r2: &r2::R2Client) {
+    upload_boot_record(args, worker_id, r2).await
+}
+
 /// Best-effort: read /var/run/zen-boot.txt (written by
 /// entrypoint_salad.sh) and upload it to R2 at
 /// `s3://<bucket>/<prefix>boot/<worker_id>.txt`. Failures are logged
