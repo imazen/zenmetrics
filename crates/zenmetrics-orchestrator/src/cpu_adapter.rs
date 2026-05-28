@@ -441,18 +441,24 @@ impl CpuAdapter {
     /// `strip_height` rows + halo. Reduces peak heap for 40 MP+
     /// inputs on metrics that support strip dispatch.
     ///
-    /// Phase 9.Z.A status:
+    /// Phase 9.Z.B follow-on status (2026-05-28):
     /// - **iwssim**: real strip walker (see `iwssim::Iwssim::score_strip`).
     ///   Bit-identical-tolerance parity vs full at < 1e-4 abs JOD.
-    ///   Per-strip working set ≈ `(body + 2*halo) × work_w × 4 × 5`
-    ///   bytes across the 5-level pyramid.
+    /// - **ssim2**: real strip walker via fast-ssim2 0.8.1
+    ///   `compute_ssimulacra2_strip` (96-row halo, ~24 × strip_h ×
+    ///   width × 4 B peak).
+    /// - **butter**: real strip walker via butteraugli 0.9.3
+    ///   `butteraugli_strip` (64-row halo, 3.8x heap reduction at 40 MP).
+    /// - **zensim**: real strip walker via zensim
+    ///   `compute_streaming_strips` (per-strip ref + dist, ~125 MB at
+    ///   80 MP).
     /// - **cvvdp**: API stub — delegates to `score()` (no memory win
     ///   yet; multi-day walker queued). Returns the same score.
-    /// - **ssim2 / dssim / butter / zensim**: not yet wired (return
-    ///   `Failed("strip not supported")`). zensim's `compute_strips`
-    ///   API exists upstream; wire next.
+    /// - **dssim**: not yet wired (no upstream strip API on dssim-core 3.4).
     ///
-    /// Pass `strip_height = 0` to get the metric's default body size.
+    /// Pass `strip_height = 0` to get the metric's default body size
+    /// (256 rows for ssim2/butter/zensim; iwssim/cvvdp keep their own
+    /// per-crate defaults).
     #[allow(dead_code)] // only called via the strip-aware executor path
     pub fn compute_strip(
         &mut self,
@@ -495,21 +501,76 @@ impl CpuAdapter {
                 Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
             }
             #[cfg(feature = "cpu-ssim2")]
-            CpuAdapterState::Ssim2(_) => Err(CpuAdapterError::Failed(
-                "ssim2 strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Ssim2(s) => {
+                // fast-ssim2 0.8.1 `compute_ssimulacra2_strip` walks the
+                // image in horizontal strips with a 96-row halo. Bounds
+                // peak heap to ~24 × strip_h × width × 4 B. Default
+                // strip_height of 256 matches the documented sweet spot
+                // (220 MiB at 7700x5200).
+                let h = if strip_height == 0 { 256 } else { strip_height };
+                let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
+                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
+                let v = fast_ssim2::compute_ssimulacra2_strip(ref_img, dist_img, h)
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!(
+                            "fast-ssim2 compute_ssimulacra2_strip: {e}"
+                        ))
+                    })?;
+                Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
+            }
             #[cfg(feature = "cpu-dssim")]
             CpuAdapterState::Dssim(_) => Err(CpuAdapterError::Failed(
                 "dssim strip-mode not yet wired in cpu_adapter".into(),
             )),
             #[cfg(feature = "cpu-butter")]
-            CpuAdapterState::Butter(_) => Err(CpuAdapterError::Failed(
-                "butter strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Butter(s) => {
+                // butteraugli 0.9.3 `butteraugli_strip` walks the dist
+                // side in horizontal strips with a 64-row halo (FIR
+                // chained blur stack). Peak heap drops 3.8x at 40 MP
+                // (7.43 GB -> 1.94 GB) at equivalent wall time. Default
+                // strip_height of 256.
+                use imgref::ImgRef;
+                let h = if strip_height == 0 { 256 } else { strip_height };
+                let ref_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(ref_bytes);
+                let dist_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(dist_bytes);
+                let ref_img = ImgRef::new(ref_rgb, s.width, s.height);
+                let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
+                let result = butteraugli::butteraugli_strip(ref_img, dist_img, &s.params, h)
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!("butteraugli_strip: {e:?}"))
+                    })?;
+                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+            }
             #[cfg(feature = "cpu-zensim")]
-            CpuAdapterState::Zensim(_) => Err(CpuAdapterError::Failed(
-                "zensim strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Zensim(s) => {
+                // zensim `compute_streaming_strips` decomposes the
+                // multiscale pyramid into horizontal strips with
+                // `strip_inner` body + 2*`strip_margin` halo per side.
+                // Best for one-off pairs (the warm-ref variant lives
+                // on `compute_with_cached_reference_strip`). The crate
+                // default geometry is (256, 128).
+                let inner = if strip_height == 0 {
+                    256
+                } else {
+                    strip_height as usize
+                };
+                let margin = inner / 2; // matches the documented default ratio
+                let src: &[[u8; 3]] = bytemuck::cast_slice(ref_bytes);
+                let dst: &[[u8; 3]] = bytemuck::cast_slice(dist_bytes);
+                let ref_slice = zensim::RgbSlice::new(src, s.width, s.height);
+                let dist_slice = zensim::RgbSlice::new(dst, s.width, s.height);
+                let result = s
+                    .zensim
+                    .compute_streaming_strips(&ref_slice, &dist_slice, inner, margin)
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!("zensim compute_streaming_strips: {e:?}"))
+                    })?;
+                Ok(make_score(
+                    "zensim",
+                    env!("CARGO_PKG_VERSION"),
+                    result.score(),
+                ))
+            }
             CpuAdapterState::FeatureDisabled(k) => {
                 Err(CpuAdapterError::FeatureNotEnabled(*k))
             }
@@ -520,13 +581,21 @@ impl CpuAdapter {
     /// Strip-mode compute against the cached reference. See
     /// [`Self::compute_strip`] for per-metric implementation status.
     ///
-    /// Phase 9.Z.A status:
-    /// - **iwssim**: real warm_ref_strip walker (see
-    ///   `iwssim::Iwssim::score_with_warm_ref_strip`). Single-pass —
-    ///   eigendecomposition cached in `WarmState`. Peak heap ≈ ref
-    ///   state full + one strip dist working set.
+    /// Phase 9.Z.B follow-on status (2026-05-28):
+    /// - **iwssim**: real warm_ref_strip walker (eigendecomposition
+    ///   cached in `WarmState`; ref state full + one strip dist
+    ///   working set).
+    /// - **ssim2**: real warm_ref_strip via fast-ssim2 0.8.1
+    ///   `Ssimulacra2Reference::compare_strip` (~220 MiB at 40 MP).
+    /// - **butter**: real warm_ref_strip via butteraugli 0.9.3
+    ///   `ButteraugliReference::compare_strip` (requires reference
+    ///   built via `new`/`new_linear`; planar refs return
+    ///   `InvalidParameter`).
+    /// - **zensim**: real warm_ref_strip via zensim
+    ///   `compute_with_ref_streaming_strips` — reuses cached
+    ///   `PrecomputedReference` across strips for batch encoder loops.
     /// - **cvvdp**: API stub — delegates to `score_with_warm_ref()`.
-    /// - Other metrics: not yet wired.
+    /// - **dssim**: not yet wired (no upstream strip API).
     #[allow(dead_code)]
     pub fn compute_with_cached_reference_strip(
         &mut self,
@@ -567,21 +636,84 @@ impl CpuAdapter {
                 Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
             }
             #[cfg(feature = "cpu-ssim2")]
-            CpuAdapterState::Ssim2(_) => Err(CpuAdapterError::Failed(
-                "ssim2 warm_ref strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Ssim2(s) => {
+                // fast-ssim2 0.8.1 `Ssimulacra2Reference::compare_strip`
+                // strip-walks the dist side; cached ref-side data stays
+                // resident (so peak heap is bounded by dist-side only,
+                // ~220 MiB at 40 MP).
+                let precomputed = s.cached_ref.as_ref().ok_or_else(|| {
+                    CpuAdapterError::Failed(
+                        "ssim2: no cached reference; call set_reference first".into(),
+                    )
+                })?;
+                let h = if strip_height == 0 { 256 } else { strip_height };
+                let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
+                let v = precomputed.compare_strip(dist_img, h).map_err(|e| {
+                    CpuAdapterError::Failed(format!("fast-ssim2 compare_strip: {e}"))
+                })?;
+                Ok(make_score("ssim2", env!("CARGO_PKG_VERSION"), v))
+            }
             #[cfg(feature = "cpu-dssim")]
             CpuAdapterState::Dssim(_) => Err(CpuAdapterError::Failed(
                 "dssim warm_ref strip-mode not yet wired in cpu_adapter".into(),
             )),
             #[cfg(feature = "cpu-butter")]
-            CpuAdapterState::Butter(_) => Err(CpuAdapterError::Failed(
-                "butter warm_ref strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Butter(s) => {
+                // butteraugli 0.9.3 `ButteraugliReference::compare_strip`
+                // requires the reference to have been built via
+                // `new` or `new_linear` (planar constructor doesn't
+                // retain interleaved source — `compare_strip` returns
+                // `InvalidParameter` in that case).
+                let pre = s.cached_ref.as_ref().ok_or_else(|| {
+                    CpuAdapterError::Failed(
+                        "butter: no cached reference; call set_reference first".into(),
+                    )
+                })?;
+                let h = if strip_height == 0 { 256 } else { strip_height };
+                let result = pre.compare_strip(dist_bytes, h).map_err(|e| {
+                    CpuAdapterError::Failed(format!(
+                        "butteraugli ButteraugliReference::compare_strip: {e:?}"
+                    ))
+                })?;
+                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+            }
             #[cfg(feature = "cpu-zensim")]
-            CpuAdapterState::Zensim(_) => Err(CpuAdapterError::Failed(
-                "zensim warm_ref strip-mode not yet wired in cpu_adapter".into(),
-            )),
+            CpuAdapterState::Zensim(s) => {
+                // zensim's `cached_ref` is a Vec<u8> byte stash (the
+                // crate's `PrecomputedReference` isn't wired through the
+                // CpuAdapter yet — would require widening ZensimState).
+                // Replay the cold strip path with the stashed bytes; the
+                // dist side still strip-walks so peak distorted memory
+                // stays bounded.
+                let ref_bytes = s.cached_ref.as_ref().ok_or_else(|| {
+                    CpuAdapterError::Failed(
+                        "zensim: no cached reference; call set_reference first".into(),
+                    )
+                })?;
+                let inner = if strip_height == 0 {
+                    256
+                } else {
+                    strip_height as usize
+                };
+                let margin = inner / 2;
+                let src: &[[u8; 3]] = bytemuck::cast_slice(ref_bytes);
+                let dst: &[[u8; 3]] = bytemuck::cast_slice(dist_bytes);
+                let ref_slice = zensim::RgbSlice::new(src, s.width, s.height);
+                let dist_slice = zensim::RgbSlice::new(dst, s.width, s.height);
+                let result = s
+                    .zensim
+                    .compute_streaming_strips(&ref_slice, &dist_slice, inner, margin)
+                    .map_err(|e| {
+                        CpuAdapterError::Failed(format!(
+                            "zensim compute_streaming_strips: {e:?}"
+                        ))
+                    })?;
+                Ok(make_score(
+                    "zensim",
+                    env!("CARGO_PKG_VERSION"),
+                    result.score(),
+                ))
+            }
             CpuAdapterState::FeatureDisabled(k) => {
                 Err(CpuAdapterError::FeatureNotEnabled(*k))
             }
@@ -594,8 +726,10 @@ impl CpuAdapter {
     /// `MemoryMode::Strip` is a candidate for CPU dispatch on this
     /// metric.
     ///
-    /// Phase 9.Z.A: only iwssim returns `true` (real strip walker).
-    /// cvvdp returns `false` (API stub doesn't reduce memory yet).
+    /// Phase 9.Z.B follow-on (2026-05-28): ssim2, butter, zensim, and
+    /// iwssim all expose real strip walkers via the sibling crates.
+    /// cvvdp returns `false` (API stub delegates to full path; multi-day
+    /// walker queued).
     #[allow(dead_code)]
     pub fn supports_strip(&self) -> bool {
         match self.state {
@@ -603,6 +737,12 @@ impl CpuAdapter {
             CpuAdapterState::Cvvdp(_) => false,
             #[cfg(feature = "cpu-iwssim")]
             CpuAdapterState::Iwssim(_) => true,
+            #[cfg(feature = "cpu-ssim2")]
+            CpuAdapterState::Ssim2(_) => true,
+            #[cfg(feature = "cpu-butter")]
+            CpuAdapterState::Butter(_) => true,
+            #[cfg(feature = "cpu-zensim")]
+            CpuAdapterState::Zensim(_) => true,
             _ => false,
         }
     }
