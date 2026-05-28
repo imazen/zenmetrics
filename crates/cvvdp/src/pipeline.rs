@@ -95,6 +95,30 @@ pub struct Cvvdp {
     /// `warm: Option<ReferenceState>` which double-allocated 480 MB
     /// of DKL planes at 40 MP per `warm_reference` call.
     warm_active: bool,
+    /// Phase 9.Z.B (#124): when `Some(h_body)`, the band-fold's spatial
+    /// Minkowski pool partitions each band's `d` array into row-strips
+    /// of `(h_body >> k).max(1)` rows and accumulates `Σ safe_pow_lp`
+    /// across strips. Bit-identical to single-pass `lp_norm_mean`
+    /// because spatial Minkowski is associative under row-order
+    /// dispatch (see `crate::strip::LpNormAccumulator` doc). Mirrors
+    /// the GPU's shipped pool-stage K_SPLIT walker (Phase 3 Approach B
+    /// incremental landing, see `cvvdp-gpu/docs/STRIP_PROCESSING.md`).
+    ///
+    /// Memory impact in this incremental landing: ZERO. Like the GPU
+    /// today, only the pool stage iterates in strips; the full
+    /// weber pyramid + d_scratch + bands_ref + bands_dis remain
+    /// full-image-sized. The pool stage is a tiny fraction of the
+    /// working set. This landing proves the walker is correct
+    /// end-to-end (strip accumulator associativity + per-strip
+    /// iteration + counter visibility). The per-strip pyramid kernels
+    /// are gated on a future chunk — same status as the GPU.
+    strip_h_body: core::cell::Cell<Option<u32>>,
+    /// Counts the number of strip iterations dispatched in the most
+    /// recent strip-mode `score*` call. Visible via
+    /// [`Self::strip_dispatch_counter`]. Tests assert N >= 2 strip
+    /// iterations at sizes large enough to actually partition. Reset
+    /// to 0 at the start of each strip-mode call.
+    strip_dispatch_counter: core::sync::atomic::AtomicU32,
 }
 
 impl Cvvdp {
@@ -130,6 +154,8 @@ impl Cvvdp {
             ppd,
             scratch: Scratch::new(w, h, n_levels),
             warm_active: false,
+            strip_h_body: core::cell::Cell::new(None),
+            strip_dispatch_counter: core::sync::atomic::AtomicU32::new(0),
         })
     }
 
@@ -504,6 +530,9 @@ impl Cvvdp {
     ) -> (f32, Option<Vec<f32>>) {
         let freqs = band_frequencies(self.ppd, w, h);
         let channels = [CsfChannel::A, CsfChannel::Rg, CsfChannel::Vy];
+        // Phase 9.Z.B: strip pool config (None outside strip mode →
+        // single-pass lp_norm_mean; Some(h_body) → row-strip walk).
+        let strip_h_body = self.strip_h_body.get();
 
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
         let mut accum = if want_diffmap {
@@ -636,10 +665,20 @@ impl Cvvdp {
             };
 
             // Spatial pool per channel using the workspace d_*.
-            let mut q_band = [0.0_f32; 3];
-            q_band[0] = lp_norm_mean(&ws.d_a, BETA_SPATIAL);
-            q_band[1] = lp_norm_mean(&ws.d_rg, BETA_SPATIAL);
-            q_band[2] = lp_norm_mean(&ws.d_vy, BETA_SPATIAL);
+            // In strip mode the per-band d arrays are partitioned into
+            // row-strips and Σ safe_pow_lp accumulates across strips;
+            // bit-identical to lp_norm_mean(..) because the spatial
+            // pool is associative under row-order dispatch.
+            let q_band = pool_band_3ch(
+                &ws.d_a,
+                &ws.d_rg,
+                &ws.d_vy,
+                bw,
+                bh,
+                k,
+                strip_h_body,
+                &self.strip_dispatch_counter,
+            );
             q_per_ch.push(q_band);
 
             // Accumulate diffmap. accumulate_band_diffmap takes
@@ -676,6 +715,12 @@ impl Cvvdp {
 
         let freqs = band_frequencies(self.ppd, w, h);
         let ppd_freqs: Vec<f32> = freqs.to_vec();
+        // Phase 9.Z.B: strip pool config snapshotted before the
+        // par_iter_mut borrow takes effect. Each band closure captures
+        // these by value (`Option<u32>` is `Copy`) / by reference
+        // (`&AtomicU32` is `Sync`).
+        let strip_h_body = self.strip_h_body.get();
+        let strip_counter = &self.strip_dispatch_counter;
 
         // Grow the per-band workspace vec to at least n_levels and
         // borrow it mutably so each band closure gets its own slot.
@@ -806,10 +851,21 @@ impl Cvvdp {
                     ws.r_p_vy = r_vy;
                 }
 
-                let mut q_band = [0.0_f32; 3];
-                q_band[0] = lp_norm_mean(&ws.d_a, BETA_SPATIAL);
-                q_band[1] = lp_norm_mean(&ws.d_rg, BETA_SPATIAL);
-                q_band[2] = lp_norm_mean(&ws.d_vy, BETA_SPATIAL);
+                // Spatial pool per channel. In strip mode the per-band
+                // d arrays are partitioned into row-strips and Σ
+                // safe_pow_lp accumulates across strips; bit-identical
+                // to lp_norm_mean(..) because the spatial pool is
+                // associative under row-order dispatch.
+                let q_band = pool_band_3ch(
+                    &ws.d_a,
+                    &ws.d_rg,
+                    &ws.d_vy,
+                    bw,
+                    bh,
+                    k,
+                    strip_h_body,
+                    strip_counter,
+                );
 
                 let band_accum = if want_diffmap {
                     let mut acc = DiffmapAccum::new(w, h);
@@ -867,56 +923,101 @@ impl Cvvdp {
         self.warm_active
     }
 
-    /// Strip-mode score: walks image in horizontal slabs of
-    /// `strip_height` rows + halo. Designed to reduce peak heap on
-    /// 40 MP+ inputs where the full pipeline's 11.3 GB peak crowds
-    /// the budget.
+    /// Strip-mode score: walks the band-fold's spatial Minkowski pool
+    /// in horizontal slabs of `(strip_h_body >> k).max(1)` rows per
+    /// band. Returns the same JOD as [`Self::score`] **bit-identically
+    /// in row-order f32 add sequence** — the spatial pool is
+    /// associative across strips, and the walker dispatches strips
+    /// top-down so the accumulator sees the same `acc += x_i`
+    /// sequence as the single-pass `lp_norm_mean` call.
     ///
-    /// # Status (Phase 9.Z.A)
+    /// # Status (Phase 9.Z.B / task #124)
     ///
-    /// **This method is API-only — it delegates to [`Self::score`]
-    /// and does NOT reduce peak heap.** The memory-bounded walker is
-    /// queued; reasons:
-    /// 1. cvvdp's 9-level Weber pyramid + per-band σ=3 PU blur
-    ///    produces cumulative halo at scale 0 of `~8 × 2^k` rows for
-    ///    level k. At level 8 of 4096² this is `~2048 rows ≈ 50%
-    ///    of image height` — strip pattern requires hybrid K_SPLIT
-    ///    dispatch (shallow bands per-strip, deep bands full-image)
-    ///    as documented in the GPU cvvdp Mode E strip design at
-    ///    `crates/cvvdp-gpu/docs/STRIP_PROCESSING.md`.
-    /// 2. The band-fold's spatial Minkowski pool IS strip-associative
-    ///    (`Σ|d|^β` + `n` accumulate cleanly across strips); the
-    ///    refactor is plumbing, not algorithmic.
-    /// 3. The cvvdp-gpu Phase 1 + Phase 2 investigation explicitly
-    ///    documented this as multi-day work; the CPU port faces the
-    ///    same structural blocker.
+    /// This method ports the GPU's shipped strip pool walker — the
+    /// "Phase 3 Approach B incremental landing" documented at
+    /// `crates/cvvdp-gpu/docs/STRIP_PROCESSING.md:281-320`. **Like the
+    /// GPU today, only the pool stage iterates in strips; the rest of
+    /// the pipeline (weber pyramid build, CSF, masking, mult-mutual)
+    /// stays full-image-sized.** Memory impact: zero. The walker is
+    /// load-bearing for the parity invariant — once the per-strip
+    /// pyramid kernels ship (multi-day kernel work, see GPU notes),
+    /// the same outer-walker geometry holds.
     ///
-    /// The API is exposed NOW so the orchestrator's `cpu_adapter` can
-    /// wire a `MemoryMode::Strip` dispatch slot for cvvdp without API
-    /// churn when the walker ships. **Until then, this method delivers
-    /// correct scores at no memory benefit.**
+    /// The [`crate::strip::mode_b_k_split`] / `mode_b_strip_h_at_level`
+    /// helpers are wired but unused at the pool stage (the pool walker
+    /// uses the simpler `body_at_k = (h_body >> k).max(1)` rule because
+    /// the pool stage doesn't reflect-across-rows; it's a pure
+    /// elementwise sum). They become load-bearing when the per-strip
+    /// pyramid kernels land — which is when the K_SPLIT decision
+    /// gates allocation of strip-vs-full-image buffers per level.
+    ///
+    /// # Parameters
+    ///
+    /// * `strip_h_body` — strip body height at scale 0. Must be a
+    ///   positive power of two; see [`crate::strip::is_valid_strip_h_body`].
+    ///   Use [`crate::strip::STRIP_H_BODY_DEFAULT`] (512) when unsure.
     pub fn score_strip(
         &mut self,
         ref_srgb: &[u8],
         dist_srgb: &[u8],
-        _strip_height: u32,
+        strip_h_body: u32,
     ) -> Result<f32> {
-        self.score(ref_srgb, dist_srgb)
+        if !crate::strip::is_valid_strip_h_body(strip_h_body) {
+            return Err(Error::InvalidImageSize {
+                width: strip_h_body,
+                height: 0,
+            });
+        }
+        self.strip_h_body.set(Some(strip_h_body));
+        let result = self.score(ref_srgb, dist_srgb);
+        self.strip_h_body.set(None);
+        result
     }
 
     /// Strip-mode score against the warm reference. See
-    /// [`Self::score_strip`] for implementation status.
+    /// [`Self::score_strip`] for the walker contract.
     ///
-    /// Phase 9.Z.A: delegates to [`Self::score_with_warm_ref`]; the
-    /// memory-bounded walker is queued. API exists for orchestrator
-    /// `MemoryMode::CachedStrip` integration without churning the
-    /// public API when the walker ships.
+    /// Phase 9.Z.B: walks the spatial pool in row-strips. Bit-identical
+    /// to [`Self::score_with_warm_ref`] under row-order dispatch.
     pub fn score_with_warm_ref_strip(
         &mut self,
         dist_srgb: &[u8],
-        _strip_height: u32,
+        strip_h_body: u32,
     ) -> Result<f32> {
-        self.score_with_warm_ref(dist_srgb)
+        if !crate::strip::is_valid_strip_h_body(strip_h_body) {
+            return Err(Error::InvalidImageSize {
+                width: strip_h_body,
+                height: 0,
+            });
+        }
+        self.strip_h_body.set(Some(strip_h_body));
+        let result = self.score_with_warm_ref(dist_srgb);
+        self.strip_h_body.set(None);
+        result
+    }
+
+    /// Cumulative number of strip-iteration dispatches since this
+    /// `Cvvdp` was constructed (or [`Self::reset_strip_dispatch_counter`]
+    /// was last called). Each strip dispatched in `pool_band_3ch`
+    /// increments by 3 (mirrors the GPU's single-launch-covers-3-
+    /// channels dispatch).
+    ///
+    /// Not part of the stable public API — exposed via `#[doc(hidden)]`
+    /// for tests asserting the walker partitions at large sizes.
+    /// Mirrors `cvvdp_gpu::Cvvdp::strip_dispatch_counter`.
+    #[doc(hidden)]
+    pub fn strip_dispatch_counter(&self) -> u32 {
+        self.strip_dispatch_counter
+            .load(core::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Reset the strip-dispatch counter to 0. Use between sub-tests
+    /// that want to assert partition counts independently. Mirrors
+    /// `cvvdp_gpu::Cvvdp::reset_strip_dispatch_counter`.
+    #[doc(hidden)]
+    pub fn reset_strip_dispatch_counter(&self) {
+        self.strip_dispatch_counter
+            .store(0, core::sync::atomic::Ordering::Relaxed);
     }
 
     /// Score from `zenpixels::PixelSlice` references — converts the
@@ -1017,6 +1118,88 @@ const _: () = {
     let _ = PER_CH_W;
     let _ = BASEBAND_W;
 };
+
+/// Spatial Minkowski pool for one band, 3 channels.
+///
+/// In Full mode (`strip_h_body == None`) this is a direct three-call
+/// `lp_norm_mean(&d, BETA_SPATIAL)` per channel — bit-identical to the
+/// pre-Phase-9.Z.B behavior. In Strip mode (`strip_h_body == Some(hb)`)
+/// the band's `d_*` arrays are partitioned into row-strips of
+/// `(hb >> k).max(1)` rows where `k` is the band's pyramid level;
+/// each strip's `Σ safe_pow_lp` accumulates into a per-channel
+/// [`crate::strip::LpNormAccumulator`] which is finalized after the
+/// last strip.
+///
+/// **Bit-identical to single-pass `lp_norm_mean`** because the
+/// spatial pool is associative and the strips are dispatched in
+/// row-order (the same `acc += x_i` sequence as the single-pass call).
+/// See `crate::strip::LpNormAccumulator` doc for the proof.
+///
+/// `bw` is the band width (so a strip of `s` rows is `s * bw` pixels).
+/// `bh` is the band height (so total pixels per channel = `bw * bh`).
+/// `k` is the band's pyramid level (0 = finest); used as the right-
+/// shift exponent for the scale-0 `h_body` so the band-local strip
+/// body matches the GPU's `(strip_h_body >> k).max(1)` rule.
+/// `strip_counter` is incremented by 3 per strip dispatched (one count
+/// per channel, mirroring the GPU's `pool_band_3ch_offset_kernel`
+/// dispatch where each launch covers all 3 channels of one slab).
+fn pool_band_3ch(
+    d_a: &[f32],
+    d_rg: &[f32],
+    d_vy: &[f32],
+    bw: usize,
+    bh: usize,
+    k: usize,
+    strip_h_body: Option<u32>,
+    strip_counter: &core::sync::atomic::AtomicU32,
+) -> [f32; 3] {
+    let Some(h_body) = strip_h_body else {
+        // Full mode: identical to the pre-strip code path.
+        return [
+            lp_norm_mean(d_a, BETA_SPATIAL),
+            lp_norm_mean(d_rg, BETA_SPATIAL),
+            lp_norm_mean(d_vy, BETA_SPATIAL),
+        ];
+    };
+
+    // Strip mode: per-band strip body at this level.
+    // Mirrors GPU pipeline.rs:7840:
+    //   `let strip_h_at_band = (strip_h_body >> k).max(1);`
+    let strip_h_at_band = crate::strip::strip_h_at_band(h_body, k as u32) as usize;
+    let n_strips = if bh <= strip_h_at_band {
+        1
+    } else {
+        bh.div_ceil(strip_h_at_band)
+    };
+
+    let mut acc_a = crate::strip::LpNormAccumulator::default();
+    let mut acc_rg = crate::strip::LpNormAccumulator::default();
+    let mut acc_vy = crate::strip::LpNormAccumulator::default();
+    let mut strips_dispatched: u32 = 0;
+    for s in 0..n_strips {
+        let row_start = s * strip_h_at_band;
+        let row_count = (bh - row_start).min(strip_h_at_band);
+        let start = row_start * bw;
+        let end = start + row_count * bw;
+        acc_a.accumulate_slab(&d_a[start..end], BETA_SPATIAL);
+        acc_rg.accumulate_slab(&d_rg[start..end], BETA_SPATIAL);
+        acc_vy.accumulate_slab(&d_vy[start..end], BETA_SPATIAL);
+        // Mirror the GPU's "one launch per (level, strip) covers all
+        // 3 channels in a single kernel". Counter increment is 3 per
+        // strip so tests can sanity-check both partitioning AND
+        // channel-fold count.
+        strips_dispatched = strips_dispatched.saturating_add(3);
+    }
+    strip_counter.fetch_add(
+        strips_dispatched,
+        core::sync::atomic::Ordering::Relaxed,
+    );
+    [
+        acc_a.finalize(BETA_SPATIAL),
+        acc_rg.finalize(BETA_SPATIAL),
+        acc_vy.finalize(BETA_SPATIAL),
+    ]
+}
 
 /// Build the 3-channel weber pyramid for one side, writing into
 /// caller-supplied `out` slots + reusing caller-supplied `caches`.

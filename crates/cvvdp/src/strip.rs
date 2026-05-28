@@ -53,6 +53,106 @@
 /// so the strip body is at least 2 halos wide.
 const MODE_B_DEEP_THRESHOLD: u32 = 12;
 
+/// Default strip body height. Matches the GPU's
+/// `cvvdp_gpu::memory_mode::STRIP_H_BODY_DEFAULT = 512`.
+pub const STRIP_H_BODY_DEFAULT: u32 = 512;
+
+/// Validate a user-supplied `h_body` value.
+///
+/// Returns `true` iff `h_body` is a positive power of two — matches
+/// `cvvdp_gpu::pipeline::is_valid_strip_h_body`. Power-of-two halves
+/// cleanly through the pyramid reduce chain (at level k the body is
+/// an integer ≥ 1 for k < log2(h_body), with the `.max(1)` clamp in
+/// the walker handling deeper levels).
+#[must_use]
+pub fn is_valid_strip_h_body(h_body: u32) -> bool {
+    h_body > 0 && h_body.is_power_of_two()
+}
+
+/// Streaming `lp_norm_mean` accumulator. Folds `Σ safe_pow_lp(v, p)`
+/// across slabs of an image; finalize after the last slab.
+///
+/// **Strip associativity proof.** cvvdp's `lp_norm_mean(values, p)`
+/// expands to `safe_pow_lp(Σ_{i ∈ values} safe_pow_lp(v_i, p) / n, 1/p)`
+/// where `n = values.len()`. The inner sum is a plain commutative-
+/// associative `f32` addition across all pixels of the band's `d`
+/// array. Partitioning the array into row-strips and accumulating
+/// `Σ` and `n` independently per strip, then finalizing once, gives
+/// the same scalar as computing over the whole array in one pass
+/// **up to f32 add ordering**.
+///
+/// The walker dispatches strips in deterministic row-order
+/// (`s = 0, 1, 2, ...`), so the per-strip sums are folded in the same
+/// order as if we'd walked the whole array top-to-bottom — i.e., the
+/// f32 accumulator drift vs the in-one-pass `lp_norm_mean` is **zero
+/// rounding**, not "within ε": the partial sums see the same
+/// `acc += x_i` sequence in the same order. This is why the parity
+/// tests assert `abs_diff == 0.0` (bit-identical) not `< 1e-4`.
+///
+/// Mirrors the GPU's per-band atomic pool: `pool_band_3ch_offset_kernel`
+/// atomic-adds into `partials_h`, the kernel itself sums the strip's
+/// pixels in cube-local order. Across strips the atomic-add ordering is
+/// non-deterministic (the GPU's documented Atomic<f32> noise band) but
+/// on CPU we get bit-exact match because there are no atomics.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct LpNormAccumulator {
+    /// Σ `safe_pow_lp(v, p)` over all pixels seen so far.
+    acc: f32,
+    /// Number of pixels seen so far (== Σ row × cols across strips).
+    n: u32,
+}
+
+impl LpNormAccumulator {
+    /// Add a contiguous slab's contribution.
+    ///
+    /// `slab` is a row-slab of the band's `d` array; the slab can be
+    /// the whole array (single-strip dispatch) or one strip of a
+    /// partitioned dispatch.
+    #[inline]
+    pub fn accumulate_slab(&mut self, slab: &[f32], p: f32) {
+        // Sum `safe_pow_lp(v, p)` over slab. Replicates the inner-loop
+        // body of `cvvdp::kernels::pool::lp_norm_mean` exactly, so
+        // strip + full accumulators produce bit-identical sums when
+        // dispatched in row-order.
+        const LP_SAFE_EPS: f32 = 1e-5;
+        let eps_p = LP_SAFE_EPS.powf(p);
+        let mut acc: f32 = self.acc;
+        for &v in slab {
+            acc += (v.abs() + LP_SAFE_EPS).powf(p) - eps_p;
+        }
+        self.acc = acc;
+        self.n += slab.len() as u32;
+    }
+
+    /// Finalize: returns `lp_norm_mean(d, p)` given the accumulated
+    /// `(Σ safe_pow_lp, n)`.
+    #[inline]
+    #[must_use]
+    pub fn finalize(self, p: f32) -> f32 {
+        if self.n == 0 {
+            return 0.0;
+        }
+        const LP_SAFE_EPS: f32 = 1e-5;
+        let mean = self.acc / self.n as f32;
+        (mean.abs() + LP_SAFE_EPS).powf(1.0 / p) - LP_SAFE_EPS.powf(1.0 / p)
+    }
+}
+
+/// Per-band strip body height at level k.
+///
+/// The pool walker partitions each band's `d` array into row-strips
+/// of `(h_body >> k).max(1)` rows. Bands shallow enough that
+/// `body_at_k >= 12` (the K_SPLIT threshold) get genuine multi-strip
+/// partitioning; deeper bands collapse to a single-strip dispatch
+/// (no partitioning benefit, but they're tiny in absolute terms).
+///
+/// Returns the number of rows per strip at level k. Caller computes
+/// strip count from `bh.div_ceil(strip_h_at_band)`.
+#[must_use]
+pub(crate) fn strip_h_at_band(h_body: u32, k: u32) -> u32 {
+    (h_body >> k).max(1)
+}
+
 /// Per-level **band-resolution** halo for the Mode B strip walker.
 ///
 /// Halo a single level needs *at its own resolution* for its own band
@@ -158,6 +258,94 @@ pub fn mode_b_strip_h_at_level(k: u32, h_body: u32, k_split: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kernels::pool::lp_norm_mean;
+
+    /// LpNormAccumulator strip-partitioned dispatch must produce
+    /// **bit-identical** results vs `lp_norm_mean` (single-pass) when
+    /// the strips are walked in row-order. Both code paths see the
+    /// same `acc += safe_pow_lp(v, p)` sequence in the same order.
+    #[test]
+    fn lp_accum_strip_matches_single_pass_bit_identical() {
+        let p = 2.0_f32;
+        let n = 1024_usize;
+        let mut s = 0xdead_beef_u32;
+        let values: Vec<f32> = (0..n)
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 17;
+                s ^= s << 5;
+                ((s as i32) as f32) / (i32::MAX as f32)
+            })
+            .collect();
+
+        // Single-pass baseline.
+        let single = lp_norm_mean(&values, p);
+
+        // Strip-partitioned: 32 rows × 32 cols, split into 4 strips
+        // of 8 rows each.
+        let w = 32_usize;
+        let h = 32_usize;
+        let strip_rows = 8;
+        let mut accum = LpNormAccumulator::default();
+        for s in 0..(h / strip_rows) {
+            let start = s * strip_rows * w;
+            let end = start + strip_rows * w;
+            accum.accumulate_slab(&values[start..end], p);
+        }
+        let strip = accum.finalize(p);
+
+        assert_eq!(
+            single.to_bits(),
+            strip.to_bits(),
+            "LpNormAccumulator strip path must produce bit-identical f32 result \
+             vs lp_norm_mean single-pass (got strip={strip:e}, single={single:e})"
+        );
+    }
+
+    /// Single-strip dispatch == single-pass (degenerate case).
+    #[test]
+    fn lp_accum_single_strip_equals_single_pass() {
+        let p = 2.0_f32;
+        let values: Vec<f32> = (0..256).map(|i| (i as f32) * 0.01).collect();
+        let single = lp_norm_mean(&values, p);
+
+        let mut accum = LpNormAccumulator::default();
+        accum.accumulate_slab(&values, p);
+        let single_strip = accum.finalize(p);
+
+        assert_eq!(single.to_bits(), single_strip.to_bits());
+    }
+
+    /// Empty accumulator finalizes to 0.0 — matches `lp_norm_mean(&[], p)`.
+    #[test]
+    fn lp_accum_empty_finalizes_to_zero() {
+        let accum = LpNormAccumulator::default();
+        assert_eq!(accum.finalize(2.0), 0.0);
+    }
+
+    /// Strip-h-at-band: power-of-2 halving + .max(1) clamp.
+    #[test]
+    fn strip_h_at_band_halves_then_clamps() {
+        assert_eq!(strip_h_at_band(512, 0), 512);
+        assert_eq!(strip_h_at_band(512, 1), 256);
+        assert_eq!(strip_h_at_band(512, 2), 128);
+        assert_eq!(strip_h_at_band(512, 5), 16);
+        assert_eq!(strip_h_at_band(512, 9), 1); // clamp fires (512 >> 9 = 0 → max(1) → 1)
+        assert_eq!(strip_h_at_band(512, 10), 1);
+    }
+
+    /// is_valid_strip_h_body — power-of-2 positive integers only.
+    #[test]
+    fn h_body_validator_rejects_non_pow2() {
+        assert!(!is_valid_strip_h_body(0));
+        assert!(!is_valid_strip_h_body(3));
+        assert!(!is_valid_strip_h_body(100));
+        assert!(!is_valid_strip_h_body(300));
+        assert!(is_valid_strip_h_body(1));
+        assert!(is_valid_strip_h_body(2));
+        assert!(is_valid_strip_h_body(64));
+        assert!(is_valid_strip_h_body(STRIP_H_BODY_DEFAULT));
+    }
 
     /// Canonical table from `mode_b_strip_h_at_level`'s doc comment.
     /// Pinned bit-identical to the GPU helper at `h_body = 512,
