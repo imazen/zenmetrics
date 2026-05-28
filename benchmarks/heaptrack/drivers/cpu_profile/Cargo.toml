@@ -13,7 +13,7 @@ path = "src/main.rs"
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }
-fast-ssim2   = { version = "0.8.0", features = ["imgref"] }
+fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
 dssim-core   = { version = "3.4", default-features = false }
 butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
 imgref       = "1"
