@@ -42,8 +42,6 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-
 // Phase 8c.1-B: params + presets + the JOD reference version live in
 // this crate (CPU) as the canonical owner. cvvdp-gpu re-exports them
 // to preserve existing `cvvdp_gpu::params::*` callsites.
@@ -296,22 +294,8 @@ impl std::error::Error for Error {}
 /// return type.
 pub type Result<T> = core::result::Result<T, Error>;
 
-/// Owned per-channel sRGB-source-derived state used by warm-reference
-/// + diffmap output APIs.
-///
-/// `w`, `h`, `planes`, and `display` are retained for future
-/// debug-inspection (`Cvvdp::warm_inspect`) — currently unused but
-/// pinned so the layout is stable.
-#[allow(dead_code)]
-pub(crate) struct ReferenceState {
-    /// Image dimensions.
-    pub w: usize,
-    /// Image dimensions.
-    pub h: usize,
-    /// DKL planes for the reference (A, RG, VY).
-    pub planes: [Vec<f32>; 3],
-    /// Per-channel weber pyramid bands.
-    pub weber: [pyramid::WeberPyramid; 3],
-    /// Pre-computed display-derived constants for re-entry.
-    pub display: DisplayModel,
-}
+// `ReferenceState` was removed in Phase 9.YA — the warm reference cache
+// now lives directly in `Scratch` (DKL planes via `Scratch::ref_*`,
+// per-channel weber pyramid via `Scratch::weber_ref`). The `Cvvdp::warm_active`
+// boolean replaces the prior `Cvvdp::warm: Option<ReferenceState>` field.
+// This drops 480 MB of per-warm_reference allocation at 40 MP.

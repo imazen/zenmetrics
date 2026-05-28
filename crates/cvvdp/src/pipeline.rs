@@ -7,10 +7,8 @@
 //! contribution is structural: persistent scratch + diffmap output +
 //! optional rayon outer parallelism.
 
-use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::ReferenceState;
 use crate::color::{linear_planes_to_dkl_planar, srgb_to_dkl_planar};
 use crate::diffmap::{DiffmapAccum, accumulate_band_diffmap, finalize_diffmap};
 use crate::pool::{
@@ -88,7 +86,15 @@ pub struct Cvvdp {
     params: CvvdpParams,
     ppd: f32,
     scratch: Scratch,
-    warm: Option<ReferenceState>,
+    /// `true` after a successful `warm_reference` call until the next
+    /// cold `score*` call clears the cache. The cached DKL planes
+    /// live in `scratch.ref_a/ref_rg/ref_vy` and the cached weber
+    /// pyramid in `scratch.weber_ref` — the boolean just gates
+    /// `score_with_warm_ref*` against using stale or never-populated
+    /// scratch slots. Phase 9.YA: replaces the prior
+    /// `warm: Option<ReferenceState>` which double-allocated 480 MB
+    /// of DKL planes at 40 MP per `warm_reference` call.
+    warm_active: bool,
 }
 
 impl Cvvdp {
@@ -120,7 +126,7 @@ impl Cvvdp {
             params,
             ppd,
             scratch: Scratch::new(w, h),
-            warm: None,
+            warm_active: false,
         })
     }
 
@@ -143,7 +149,7 @@ impl Cvvdp {
     pub fn score(&mut self, ref_srgb: &[u8], dist_srgb: &[u8]) -> Result<f32> {
         self.check_srgb(ref_srgb)?;
         self.check_srgb(dist_srgb)?;
-        self.warm = None;
+        self.warm_active = false;
         // Convert both sides to DKL planar.
         let display = self.params.display;
         // SAFETY: split-borrow Scratch fields via separate &mut. Done
@@ -165,7 +171,7 @@ impl Cvvdp {
     ) -> Result<f32> {
         self.check_srgb(ref_srgb)?;
         self.check_srgb(dist_srgb)?;
-        self.warm = None;
+        self.warm_active = false;
         let display = self.params.display;
         let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
         srgb_to_dkl_planar(ref_srgb, self.width, self.height, display, ra, rrg, rvy);
@@ -179,39 +185,46 @@ impl Cvvdp {
     /// Cache the reference's DKL planes + Weber pyramid so subsequent
     /// `score_with_warm_ref` calls skip the half of the pipeline that
     /// only depends on the reference.
+    ///
+    /// Phase 9.YA: reuses persistent `scratch.ref_*` planes (allocated
+    /// once in `Cvvdp::new`) and `scratch.weber_ref` slots (capacity
+    /// persists across calls) so this is now allocation-free after the
+    /// first warm_reference call. Saves 480 MB / call at 40 MP.
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
         self.check_srgb(ref_srgb)?;
         let display = self.params.display;
         let w = self.width;
         let h = self.height;
-        let mut ref_a = vec![0.0; w * h];
-        let mut ref_rg = vec![0.0; w * h];
-        let mut ref_vy = vec![0.0; w * h];
-        srgb_to_dkl_planar(
-            ref_srgb,
-            w,
-            h,
-            display,
-            &mut ref_a,
-            &mut ref_rg,
-            &mut ref_vy,
-        );
+        // 1. Fill scratch.ref_a/ref_rg/ref_vy directly — these are
+        //    pre-allocated W*H f32 buffers from Scratch::new and reused
+        //    across calls.
+        let (ra, rrg, rvy, _, _, _) = scratch_dkl_planes(&mut self.scratch);
+        srgb_to_dkl_planar(ref_srgb, w, h, display, ra, rrg, rvy);
+        // 2. Build the per-channel weber pyramid into scratch.weber_ref.
+        //    Uses local pyramid caches that are freed at function exit
+        //    so the warm cache footprint after warm_reference returns
+        //    is just the DKL planes (480 MB) + weber output (~240 MB),
+        //    NOT the gauss_img/gauss_l intermediates (~700 MB).
         let n_levels = band_frequencies(self.ppd, w, h).len();
-        let [weber_a, weber_rg, weber_vy] =
-            build_one_side(&ref_a, &ref_rg, &ref_vy, w, h, n_levels);
-        self.warm = Some(ReferenceState {
-            w,
-            h,
-            planes: [ref_a, ref_rg, ref_vy],
-            weber: [weber_a, weber_rg, weber_vy],
-            display,
-        });
+        let Scratch {
+            ref_a,
+            ref_rg,
+            ref_vy,
+            weber_ref,
+            ..
+        } = &mut self.scratch;
+        build_one_side_warm_ref_into(
+            ref_a, ref_rg, ref_vy, w, h, n_levels, weber_ref,
+        );
+        // 3. Mark warm cached. The cache lives entirely in scratch:
+        //    DKL planes in scratch.ref_*, weber pyramid in scratch.weber_ref.
+        self.warm_active = true;
         Ok(())
     }
 
     /// Score against the warm reference.
     pub fn score_with_warm_ref(&mut self, dist_srgb: &[u8]) -> Result<f32> {
-        if self.warm.is_none() {
+        if !self.warm_active {
             return Err(Error::NoWarmReference);
         }
         self.check_srgb(dist_srgb)?;
@@ -228,7 +241,7 @@ impl Cvvdp {
         dist_srgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        if self.warm.is_none() {
+        if !self.warm_active {
             return Err(Error::NoWarmReference);
         }
         self.check_srgb(dist_srgb)?;
@@ -260,7 +273,7 @@ impl Cvvdp {
         self.check_linear_planes(dist_r, padded_width)?;
         self.check_linear_planes(dist_g, padded_width)?;
         self.check_linear_planes(dist_b, padded_width)?;
-        self.warm = None;
+        self.warm_active = false;
         let display = self.params.display;
         let w = self.width;
         let h = self.height;
@@ -313,7 +326,7 @@ impl Cvvdp {
         self.check_linear_planes(dist_r, padded_width)?;
         self.check_linear_planes(dist_g, padded_width)?;
         self.check_linear_planes(dist_b, padded_width)?;
-        self.warm = None;
+        self.warm_active = false;
         let display = self.params.display;
         let w = self.width;
         let h = self.height;
@@ -416,16 +429,25 @@ impl Cvvdp {
 
     fn score_internal_with_warm(&mut self, want_diffmap: bool) -> Result<(f32, Option<Vec<f32>>)> {
         // Build dist pyramids in parallel; REF pyramids come from
-        // warm cache.
+        // warm cache (scratch.weber_ref, populated by warm_reference).
         let w = self.width;
         let h = self.height;
         let n_levels = band_frequencies(self.ppd, w, h).len();
         build_one_side_dist_into(&mut self.scratch, w, h, n_levels);
 
-        // Pull the warm reference out so we can call fold_bands with
-        // a clean &mut self. Restored before returning so subsequent
-        // score_with_warm_ref calls still find it cached.
-        let warm = self.warm.take().expect("checked by caller");
+        // Pull weber slots out of scratch via mem::replace so we can
+        // pass them as `&[WeberPyramid; 3]` reference while holding
+        // `&mut self` for the band loop. Same pattern as score_internal
+        // for the cold path. Stashed back before return so the warm
+        // cache persists.
+        let ref_weber = core::mem::replace(
+            &mut self.scratch.weber_ref,
+            [
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+                WeberPyramid::empty(),
+            ],
+        );
         let dist_weber = core::mem::replace(
             &mut self.scratch.weber_dist,
             [
@@ -435,9 +457,9 @@ impl Cvvdp {
             ],
         );
         let (jod, diffmap) =
-            self.fold_bands(&warm.weber, &dist_weber, n_levels, w, h, want_diffmap);
+            self.fold_bands(&ref_weber, &dist_weber, n_levels, w, h, want_diffmap);
+        self.scratch.weber_ref = ref_weber;
         self.scratch.weber_dist = dist_weber;
-        self.warm = Some(warm);
         Ok((jod, diffmap))
     }
 
@@ -830,14 +852,16 @@ impl Cvvdp {
         (jod, diffmap)
     }
 
-    /// Drop the warm reference cache.
+    /// Drop the warm reference cache. The scratch buffers themselves
+    /// are NOT freed — only the `warm_active` flag is cleared so the
+    /// next `score_with_warm_ref` call returns `NoWarmReference`.
     pub fn drop_warm_reference(&mut self) {
-        self.warm = None;
+        self.warm_active = false;
     }
 
     /// Whether a warm reference is currently cached.
     pub fn has_warm_reference(&self) -> bool {
-        self.warm.is_some()
+        self.warm_active
     }
 
     /// Score from `zenpixels::PixelSlice` references — converts the
@@ -1122,26 +1146,38 @@ fn build_one_side_dist_into(scratch: &mut Scratch, w: usize, h: usize, n_levels:
     );
 }
 
-/// Owned-result variant used by `warm_reference` (called once per
-/// buttloop ref change, so allocation here is fine). Returns
-/// `[WeberPyramid; 3]`.
-fn build_one_side(
+/// Build the warm REF side using *local* `WeberPyramidCache` slots
+/// that are dropped at function exit. Writes the resulting per-channel
+/// `WeberPyramid`s into the persistent `scratch.weber_ref` slot so
+/// `score_internal_with_warm` can use them without re-building.
+///
+/// Why local caches: the cache buffers (`gauss_img`/`gauss_l`) are
+/// pyramid INTERMEDIATES only needed during the build itself, not
+/// during subsequent `score_with_warm_ref` calls. Persisting them in
+/// `scratch.weber_cache_ref` would hold ~700 MB of dead memory at
+/// 40 MP between warm_reference and the next reuse — Phase 9.YA
+/// measured this as a 2 GB peak-heap regression on the
+/// cpu-profile-driver-shaped one-shot benchmark. The local-cache
+/// variant frees those intermediates before `score_with_warm_ref`
+/// runs while still saving the 480 MB DKL-plane allocation that was
+/// the original Phase 9.YA Part 1 target.
+///
+/// On the cold path (`score()`), the persistent caches in
+/// `scratch.weber_cache_*` ARE the right choice because the cold loop
+/// re-builds both sides each call and benefits from reuse.
+fn build_one_side_warm_ref_into(
     plane_a: &[f32],
     plane_rg: &[f32],
     plane_vy: &[f32],
     w: usize,
     h: usize,
     n_levels: usize,
-) -> [WeberPyramid; 3] {
+    weber_ref_out: &mut [WeberPyramid; 3],
+) {
     let mut caches = [
         WeberPyramidCache::default(),
         WeberPyramidCache::default(),
         WeberPyramidCache::default(),
-    ];
-    let mut out = [
-        WeberPyramid::empty(),
-        WeberPyramid::empty(),
-        WeberPyramid::empty(),
     ];
     build_one_side_recycle(
         plane_a,
@@ -1151,7 +1187,8 @@ fn build_one_side(
         h,
         n_levels,
         &mut caches,
-        &mut out,
+        weber_ref_out,
     );
-    out
+    // `caches` drop here — gauss_img / gauss_l intermediates are freed
+    // (~700 MB at 40 MP).
 }
