@@ -119,6 +119,33 @@ Workspace conventions per the global rules:
     over with a tolerance widen.
 ### Added
 
+- **Phase 9.Z.A — iwssim `score_strip` + `score_strip_gray` strip-mode
+  scoring.** Two new public methods on `iwssim::Iwssim` for memory-
+  bounded scoring on 40 MP+ inputs. Walks the image in horizontal
+  slabs of `strip_height` rows plus a `STRIP_HALO_ROWS = 320` halo
+  per side (clamped at image edges via the same `reflect1` semantics
+  the full pipeline uses). Two-pass walker:
+    - **Pass 1**: per-strip Laplacian pyramid + accumulate per-scale
+      `Y^T·Y` into a global `(big_n × big_n)` f64 matrix per scale,
+      plus the top-scale (no IW) cs sum directly.
+    - **Eigendecomp** (per scale, once): `C_u = sum(Y^T·Y) /
+      nexp_total` → `decompose_and_invert`.
+    - **Pass 2**: per-strip Laplacian pyramid (rebuilt — eigendecomp
+      depends on global state) + compute `cs` + `infow` per strip
+      using the global eigendecomp; accumulate `Σ(cs·iw)` and `Σ(iw)`
+      partials.
+    - **Finalize**: `wmcs[s] = sum_csiw / sum_iw` per IW scale,
+      top-scale `wmcs = mean(cs · l)`; final score `Π wmcs[s]^β[s]`.
+  Memory profile: per-strip peak is `(body + 2*halo) × work_w × 4 ×
+  ~5` (5-level pyramid staged in flight) — at 40 MP with body=512
+  that's roughly 150 MB vs 5.9 GB Full mode. Wall-time penalty ~1.5×
+  vs Full because Pass 2 rebuilds the per-strip pyramid (Pass 1's
+  pyramid can't be cached without giving up the memory win).
+  Parity: 9/9 tests pass against full `Iwssim::score` across
+  256² / 512² / 1024² / 512×256 at strip heights 128 / 256 / 512;
+  single-strip case matches at < 1e-6 abs JOD; multi-strip at <
+  1e-4 abs JOD. Constants `STRIP_HALO_ROWS = 320`,
+  `STRIP_BODY_DEFAULT = 512`, `STRIP_BODY_MIN = 64` exported.
 - **Phase 9.YA — cvvdp Scratch DKL plane reuse + weber pyramid output
   pre-allocation; iwssim Scratch struct for sRGB plane reuse.**
   Addresses two of the P0/P1 actions ranked by the Phase 9.X heaptrack
