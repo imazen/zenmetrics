@@ -1,0 +1,34 @@
+=== Speculative execution validation — scenario=iter2.5 ===
+Baseline (no speculative): t_done = 388 s
+
+Speculative scheduler decisions:
+  (none — distribution too tight; TTL would fire first)
+
+End-of-run stats:
+  p95(completion) = Some(380.0) s
+  n_speculative_dispatches = 0
+  t_first_speculative = None s
+  simulated t_done WITH speculative = 395.0 s
+  baseline t_done WITHOUT speculative = 388.0 s
+  reduction = -1.8%
+  duplicate compute overhead = 0.00%
+
+--- JSON report ---
+{
+  "assumed_speculative_pickup_secs": 60.0,
+  "baseline_t_done_secs": 388.0,
+  "config": {
+    "min_completed_for_stats": 3,
+    "speculation_cap_per_chunk": 1,
+    "straggler_factor": 1.5
+  },
+  "duplicate_compute_overhead_percent": 0.0,
+  "n_completed": 30,
+  "n_speculative_dispatches": 0,
+  "p95_completion_secs": 380.0,
+  "scenario": "iter2.5",
+  "simulated_t_done_with_speculative_secs": 395.0,
+  "speculative_dispatches": [],
+  "t_first_speculative_secs": null,
+  "wall_reduction_percent": -1.804123711340206
+}

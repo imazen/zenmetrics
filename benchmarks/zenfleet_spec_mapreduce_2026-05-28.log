@@ -1,0 +1,48 @@
+=== Speculative execution validation — scenario=mapreduce-shape ===
+Baseline (no speculative): t_done = 900 s
+
+Speculative scheduler decisions:
+  t=400.0s  chunk=c28  elapsed=400.0s  p95=265.0s  threshold=397.5s
+  t=400.0s  chunk=c29  elapsed=400.0s  p95=265.0s  threshold=397.5s
+
+End-of-run stats:
+  p95(completion) = Some(800.0) s
+  n_speculative_dispatches = 2
+  t_first_speculative = Some(400.0) s
+  simulated t_done WITH speculative = 460.0 s
+  baseline t_done WITHOUT speculative = 900.0 s
+  reduction = +48.9%
+  duplicate compute overhead = 2.61%
+
+--- JSON report ---
+{
+  "assumed_speculative_pickup_secs": 60.0,
+  "baseline_t_done_secs": 900.0,
+  "config": {
+    "min_completed_for_stats": 3,
+    "speculation_cap_per_chunk": 1,
+    "straggler_factor": 1.5
+  },
+  "duplicate_compute_overhead_percent": 2.608695652173913,
+  "n_completed": 30,
+  "n_speculative_dispatches": 2,
+  "p95_completion_secs": 800.0,
+  "scenario": "mapreduce-shape",
+  "simulated_t_done_with_speculative_secs": 460.0,
+  "speculative_dispatches": [
+    {
+      "chunk_id": "c28",
+      "dispatched_at_secs": 400.0,
+      "elapsed_secs": 400.0,
+      "p95_at_dispatch_secs": 265.0
+    },
+    {
+      "chunk_id": "c29",
+      "dispatched_at_secs": 400.0,
+      "elapsed_secs": 400.0,
+      "p95_at_dispatch_secs": 265.0
+    }
+  ],
+  "t_first_speculative_secs": 400.0,
+  "wall_reduction_percent": 48.888888888888886
+}

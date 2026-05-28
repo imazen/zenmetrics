@@ -19,6 +19,26 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenfleet-orchestrator` crate + speculative execution (2026-05-28,
+  `f080564d`).** New provider-generic crate carrying launcher-side
+  fleet orchestration logic hoisted out of the Salad-specific bin.
+  Public API: `compute_provisioned_replicas`,
+  `ttl_redispatch_decisions`, `filter_classes`, `SpeculativeState`,
+  `SweepConfig`, `SpeculativeConfig`, `PriorClassStats`,
+  `ClassFilterOutcome`. The `SpeculativeState` scheduler implements
+  Dean & Ghemawat 2004 §3.6 backup-task semantics: track per-chunk
+  first-dispatch + completion-time distribution, decide
+  `Some(elapsed)` when in-flight elapsed > p95 × straggler_factor
+  (defaults 1.5×, min n=3 samples, cap 1 dispatch / chunk).
+  Worker-side idempotency reconciles duplicates by keeping the
+  OLDEST `worker_chunk_start_unix`. `zen-salad-sweep` now routes
+  overshoot + TTL + speculative through the new crate. New CLI knobs:
+  `--no-speculative`, `--speculative-straggler-factor`,
+  `--speculative-min-completed`, `--speculative-cap-per-chunk`.
+  Summary line adds `chunks_speculatively_dispatched`. Methodology:
+  `docs/zenfleet_orchestrator_hoist_2026-05-28.md`. Full
+  `FleetSweep<P: ProviderHandle>` trait extraction queued for next
+  iter.
 - **Phase 9.Z.F Path A (2026-05-28) — cvvdp CPU strip-major dispatcher
   shipped.** Lands the architectural change that drops `score_strip`
   peak heap from 3.66 GB → 1.55 GB at 16 MP (under 1.7 GB target) and
