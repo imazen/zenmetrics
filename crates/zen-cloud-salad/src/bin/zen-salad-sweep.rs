@@ -219,6 +219,61 @@ struct Args {
     /// `resources.gpu_classes` Vec without spending any money.
     #[arg(long)]
     dry_run: bool,
+
+    // ─────── iter2+3 (mgmt + opt) — added 2026-05-28 ──────────────
+
+    /// Cells (rows of the input parquet) per chunk. Each chunk
+    /// becomes `row_range: [0, cells_per_chunk]`. Bigger values
+    /// amortize the ~70-80s worker cold-start over more work per
+    /// claim → better $/throughput. The worker safely intersects
+    /// the requested range against the actual parquet row count,
+    /// so values larger than the input simply process all rows.
+    /// Default 12 (vs the pre-iter3 implicit 3).
+    #[arg(long, default_value_t = 12)]
+    cells_per_chunk: u32,
+
+    /// Replica-count overshoot multiplier. Final provisioned
+    /// replica count = `ceil(replicas × overshoot)` (still
+    /// floored at 1 and capped at Salad's org quota of 10).
+    /// Provides a buffer so slow allocations don't gate the
+    /// fast workers: once enough chunks complete, teardown drops
+    /// the excess. Default 1.0 (no overshoot); recommended ≥1.4.
+    #[arg(long, default_value_t = 1.0)]
+    replicas_overshoot: f64,
+
+    /// Chunk-claim TTL in seconds. If a chunk has been queued for
+    /// longer than this without its omni sidecar landing in R2,
+    /// the launcher re-pushes the same chunk JSON onto the queue.
+    /// Worker idempotency (sidecar-existence check) makes this
+    /// safe: a duplicate worker arriving after the original
+    /// finishes is a no-op. Default 240s (4 minutes) — long enough
+    /// to span a normal cold-start (~80s) + first chunk processing
+    /// (~80s) with margin.
+    #[arg(long, default_value_t = 240)]
+    chunk_ttl_secs: u64,
+
+    /// Optional path or `s3://...` URI to a prior `fleet_summary.json`.
+    /// When set, the launcher reads each prior replica's
+    /// `gpu_class` + `warmup_seconds` + `chunks_processed` and uses
+    /// them to filter the auto-enumerated class list:
+    ///   - drop classes whose MEDIAN warmup > --max-warmup-secs
+    ///   - drop classes whose MEAN chunks_processed < --min-productive-chunks
+    /// Classes that don't appear in the prior summary are kept
+    /// (no negative signal). Has NO effect when `--gpu-classes` is
+    /// set manually.
+    #[arg(long)]
+    prior_fleet_summary: Option<String>,
+
+    /// When `--prior-fleet-summary` is set, drop classes whose
+    /// median observed warmup exceeds this many seconds. Default 60.
+    #[arg(long, default_value_t = 60.0)]
+    max_warmup_secs: f64,
+
+    /// When `--prior-fleet-summary` is set, drop classes whose
+    /// mean observed chunks_processed is below this floor.
+    /// Default 2.0.
+    #[arg(long, default_value_t = 2.0)]
+    min_productive_chunks: f64,
 }
 
 /// One row of `chunks.jsonl`. Matches the schema the worker's inline
@@ -271,6 +326,22 @@ struct Summary {
     error_sidecars: u32,
     /// Number of completed omni sidecars observed in R2.
     omni_sidecars: u32,
+
+    // ─────── iter2+3 fields (added 2026-05-28) ────────────────────
+
+    /// Cells-per-chunk knob actually used.
+    cells_per_chunk: u32,
+    /// Requested replicas (before overshoot).
+    replicas_requested: u32,
+    /// Provisioned replica count after overshoot (`ceil(req × mult)`).
+    replicas_provisioned: u32,
+    /// Number of chunks re-pushed by the TTL re-dispatch logic.
+    chunks_redispatched: u32,
+    /// Classes the prior-fleet-summary filter dropped (empty when
+    /// `--prior-fleet-summary` was not set).
+    classes_dropped_by_filter: Vec<String>,
+    /// Classes that survived the filter (mirrors `gpu_class`).
+    classes_kept_after_filter: Vec<String>,
 }
 
 #[tokio::main]
@@ -380,10 +451,31 @@ async fn main() -> Result<()> {
             "no GPU classes resolved — provide --gpu-class, --gpu-classes, or a positive --max-price-per-hour"
         );
     }
+
+    // ─────── iter2: replicas overshoot ────────────────────────────
+    // `replicas_overshoot` multiplies the user's requested replica
+    // count; the result is clamped to the Salad org quota (10) and
+    // a minimum of 1. Once enough chunks complete, teardown drops
+    // the excess — billing stops as soon as the group stops.
+    const SALAD_ORG_REPLICA_QUOTA: u32 = 10;
+    let replicas_provisioned: u32 = {
+        let overshoot = args.replicas_overshoot.max(1.0);
+        let raw = (args.replicas as f64 * overshoot).ceil() as u32;
+        raw.clamp(1, SALAD_ORG_REPLICA_QUOTA)
+    };
+    if replicas_provisioned != args.replicas {
+        eprintln!(
+            "[launcher] replicas overshoot: requested={} multiplier={:.2} -> provisioned={} (quota cap {})",
+            args.replicas, args.replicas_overshoot, replicas_provisioned, SALAD_ORG_REPLICA_QUOTA
+        );
+    }
+
     eprintln!(
-        "[launcher] replicas={} chunks={} gpu_classes_count={}",
+        "[launcher] replicas_requested={} replicas_provisioned={} chunks={} cells_per_chunk={} gpu_classes_count={}",
         args.replicas,
+        replicas_provisioned,
         chunks_count,
+        args.cells_per_chunk,
         gpu_class_ids.len()
     );
     eprintln!("[launcher] max_wall_secs={}", args.max_wall_secs);
@@ -403,7 +495,10 @@ async fn main() -> Result<()> {
                     "gpu_classes": gpu_class_ids,
                 },
             },
-            "replicas": args.replicas,
+            "replicas": replicas_provisioned,
+            "replicas_requested": args.replicas,
+            "replicas_overshoot": args.replicas_overshoot,
+            "cells_per_chunk": args.cells_per_chunk,
             "gpu_class_names": gpu_class_names,
         });
         println!("{}", serde_json::to_string_pretty(&dry_req)?);
@@ -426,6 +521,94 @@ async fn main() -> Result<()> {
     // still single-bucket; cross-bucket inputs require a different cred
     // model (see SALAD.md's "reads-from-A-writes-to-B" note).
     let parent = load_r2_parent_creds_or_env()?;
+
+    // ─────── iter3: class-aware filter from a prior fleet_summary ──
+    // Active only when (a) `--prior-fleet-summary` is set AND (b) the
+    // manual `--gpu-classes` override was NOT used. Manual override →
+    // user picked deliberately; respect it. Filter loads from local
+    // path or `s3://...` URI; failure to load is non-fatal (proceeds
+    // with the unfiltered list).
+    let mut classes_dropped_by_filter: Vec<String> = Vec::new();
+    let (gpu_class_names, gpu_class_ids) = if args.prior_fleet_summary.is_some()
+        && args.gpu_classes.is_empty()
+    {
+        let path_or_uri = args.prior_fleet_summary.as_deref().unwrap();
+        match load_prior_fleet_summary(&parent, path_or_uri).await {
+            Ok(observed) => {
+                eprintln!(
+                    "[class-filter] loaded prior fleet_summary ({} unique classes observed)",
+                    observed.len()
+                );
+                let mut keep_names: Vec<String> = Vec::new();
+                let mut keep_ids: Vec<String> = Vec::new();
+                for (name, id) in gpu_class_names.iter().zip(gpu_class_ids.iter()) {
+                    match observed.get(name) {
+                        Some(stats) => {
+                            let warmup_ok = stats
+                                .median_warmup_secs
+                                .map(|w| w <= args.max_warmup_secs)
+                                .unwrap_or(true);
+                            let prod_ok = stats.mean_chunks_processed
+                                >= args.min_productive_chunks;
+                            if warmup_ok && prod_ok {
+                                eprintln!(
+                                    "[class-filter] KEEP {:<32} median_warmup={:?} mean_chunks={:.2}",
+                                    name,
+                                    stats.median_warmup_secs,
+                                    stats.mean_chunks_processed
+                                );
+                                keep_names.push(name.clone());
+                                keep_ids.push(id.clone());
+                            } else {
+                                eprintln!(
+                                    "[class-filter] DROP {:<32} median_warmup={:?} mean_chunks={:.2} (warmup_ok={} prod_ok={})",
+                                    name,
+                                    stats.median_warmup_secs,
+                                    stats.mean_chunks_processed,
+                                    warmup_ok,
+                                    prod_ok
+                                );
+                                classes_dropped_by_filter.push(name.clone());
+                            }
+                        }
+                        None => {
+                            eprintln!(
+                                "[class-filter] KEEP {:<32} (no prior signal)",
+                                name
+                            );
+                            keep_names.push(name.clone());
+                            keep_ids.push(id.clone());
+                        }
+                    }
+                }
+                if keep_ids.is_empty() {
+                    eprintln!(
+                        "[class-filter] WARN filter dropped ALL classes — reverting to unfiltered list"
+                    );
+                    classes_dropped_by_filter.clear();
+                    (gpu_class_names, gpu_class_ids)
+                } else {
+                    eprintln!(
+                        "[class-filter] kept={} dropped={}",
+                        keep_names.len(),
+                        classes_dropped_by_filter.len()
+                    );
+                    (keep_names, keep_ids)
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "[class-filter] WARN failed to load prior fleet_summary {:?}: {e:#}",
+                    path_or_uri
+                );
+                (gpu_class_names, gpu_class_ids)
+            }
+        }
+    } else {
+        (gpu_class_names, gpu_class_ids)
+    };
+    let classes_kept_after_filter: Vec<String> = gpu_class_names.clone();
+
     let mut cred_prefixes: Vec<String> = Vec::new();
     cred_prefixes.push(format!("runs/{sweep_id}/"));
     // Read scope: extract the bucket-relative prefix from each input URI.
@@ -548,7 +731,7 @@ async fn main() -> Result<()> {
                 _ => None,
             },
         },
-        replicas: args.replicas,
+        replicas: replicas_provisioned,
         restart_policy: "always".into(),
         autostart_policy: true,
         queue_connection: Some(QueueConnection {
@@ -586,7 +769,9 @@ async fn main() -> Result<()> {
     }
     eprintln!("[launcher]   pushed");
 
-    // 10. Poll for completion (or cap).
+    // 10. Poll for completion (or cap). Pass chunk list + queue name +
+    // provisioned-replica count so the poll loop can drive TTL
+    // re-dispatch and the all-N-sidecars check uses the actual fleet.
     let poll_result = poll_until_done(
         &api,
         &parent,
@@ -595,6 +780,9 @@ async fn main() -> Result<()> {
         &group_name,
         chunks.len(),
         t_post,
+        replicas_provisioned,
+        &chunks,
+        &queue_name,
     )
     .await;
 
@@ -659,12 +847,14 @@ async fn main() -> Result<()> {
         (Some(td), Some(tf), n) if n > 0 && td > tf => Some(f64::from(n) / (td - tf).max(0.001)),
         _ => None,
     };
-    let spend = args.price_per_hour * f64::from(args.replicas) * wall / 3600.0;
+    // Spend reflects what we ACTUALLY paid for (provisioned replicas
+    // running for `wall` seconds at `price_per_hour`).
+    let spend = args.price_per_hour * f64::from(replicas_provisioned) * wall / 3600.0;
     let summary = Summary {
         sweep_id: sweep_id.clone(),
         group_name: group_name.clone(),
         image: args.image.clone(),
-        replicas: args.replicas,
+        replicas: replicas_provisioned,
         chunks: chunks.len() as u32,
         // Summary keeps a single string for back-compat with downstream
         // parsers (jq selectors in scripts/sweep). When multiple GPU
@@ -681,6 +871,12 @@ async fn main() -> Result<()> {
         teardown_ok,
         error_sidecars: poll.error_sidecars,
         omni_sidecars: poll.omni_sidecars,
+        cells_per_chunk: args.cells_per_chunk,
+        replicas_requested: args.replicas,
+        replicas_provisioned,
+        chunks_redispatched: poll.chunks_redispatched,
+        classes_dropped_by_filter,
+        classes_kept_after_filter,
     };
     let summary_json = serde_json::to_string(&summary).unwrap();
     println!("{summary_json}");
@@ -701,8 +897,12 @@ struct PollResult {
     distinct_workers_observed: u32,
     omni_sidecars: u32,
     error_sidecars: u32,
+    /// Count of chunks re-pushed to the queue after exceeding
+    /// `--chunk-ttl-secs` without their sidecar landing.
+    chunks_redispatched: u32,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn poll_until_done(
     api: &SaladApi,
     parent: &R2ParentCreds,
@@ -711,6 +911,9 @@ async fn poll_until_done(
     group_name: &str,
     expected_chunks: usize,
     t_post: Instant,
+    replicas_provisioned: u32,
+    chunks: &[ChunkRecord],
+    queue_name: &str,
 ) -> Result<PollResult> {
     let omni_prefix = format!("runs/{sweep_id}/omni/");
     let error_prefix = format!("runs/{sweep_id}/errors/");
@@ -726,6 +929,19 @@ async fn poll_until_done(
     let mut out = PollResult::default();
     let cap = Duration::from_secs(args.max_wall_secs);
     let interval = Duration::from_secs(args.poll_secs.max(2));
+
+    // ─────── iter2: TTL re-dispatch state ─────────────────────────
+    // Track when each chunk was first pushed (we just pushed them
+    // all in the caller, so `t_post` is the proxy for all). The
+    // launcher peeks at sidecar arrivals; for any chunk still
+    // missing after `chunk_ttl_secs`, the launcher re-pushes the
+    // same chunk JSON. Worker idempotency (sidecar-existence
+    // check in claim.rs) makes the re-push safe — a worker that
+    // claims a chunk whose sidecar already exists exits early.
+    use std::collections::HashSet;
+    let chunk_ids: Vec<String> = chunks.iter().map(|c| c.chunk_id.clone()).collect();
+    let mut already_redispatched: HashSet<String> = HashSet::new();
+    let ttl = Duration::from_secs(args.chunk_ttl_secs);
 
     let mut tick: u32 = 0;
     loop {
@@ -760,13 +976,74 @@ async fn poll_until_done(
                 omni[0]
             );
         }
-        if (omni.len() as u32) >= args.replicas && out.t_all_n_sidecars_secs.is_none() {
+        // t_all_n_sidecars is "have we seen at least N=replicas_provisioned
+        // distinct sidecars" — that's the proxy for "all replicas booted
+        // and processed at least one chunk."
+        if (omni.len() as u32) >= replicas_provisioned && out.t_all_n_sidecars_secs.is_none() {
             out.t_all_n_sidecars_secs = Some(elapsed.as_secs_f64());
             eprintln!(
-                "[poll] all-N sidecars at t={:.1}s (n={})",
+                "[poll] all-N sidecars at t={:.1}s (n={} >= replicas_provisioned={})",
                 elapsed.as_secs_f64(),
-                omni.len()
+                omni.len(),
+                replicas_provisioned
             );
+        }
+
+        // ─── iter2: TTL re-dispatch ───────────────────────────────
+        // If elapsed > TTL and chunks are missing from omni/, re-push.
+        // We use `t_post`-based elapsed as a proxy for "time since
+        // first push" — all chunks were pushed in the same batch right
+        // after t_post. Each chunk is re-pushed AT MOST ONCE.
+        if elapsed >= ttl {
+            // Extract the set of completed chunk_ids from omni filenames.
+            // omni keys look like `runs/<sweep>/omni/<chunk_id>.parquet`.
+            let mut completed: HashSet<&str> = HashSet::new();
+            for k in &omni {
+                if let Some(stem) = k
+                    .rsplit('/')
+                    .next()
+                    .and_then(|f| f.strip_suffix(".parquet"))
+                {
+                    completed.insert(stem);
+                }
+            }
+            for chunk in chunks.iter() {
+                if completed.contains(chunk.chunk_id.as_str()) {
+                    continue;
+                }
+                if already_redispatched.contains(&chunk.chunk_id) {
+                    continue;
+                }
+                let body = serde_json::to_value(chunk).unwrap_or_default();
+                match api
+                    .push_job(
+                        queue_name,
+                        &CreateQueueJobRequest {
+                            input: body,
+                            metadata: None,
+                        },
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        already_redispatched.insert(chunk.chunk_id.clone());
+                        out.chunks_redispatched += 1;
+                        eprintln!(
+                            "[poll] TTL re-dispatch: chunk_id={} (elapsed={:.1}s > ttl={}s)",
+                            chunk.chunk_id, elapsed.as_secs_f64(), args.chunk_ttl_secs
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[poll] TTL re-dispatch FAILED chunk_id={}: {e:#}",
+                            chunk.chunk_id
+                        );
+                    }
+                }
+            }
+            // Tiny placebo to silence unused-warning if we ever drop the
+            // populated vector path; intentional no-op otherwise.
+            let _ = &chunk_ids;
         }
 
         // Container-group state (best-effort).
@@ -857,6 +1134,7 @@ async fn poll_until_done(
 
 fn generate_chunks(n: u32, sweep_id: &str, args: &Args) -> Vec<ChunkRecord> {
     let mut out = Vec::with_capacity(n as usize);
+    let row_end = args.cells_per_chunk.max(1) as usize;
     for i in 0..n {
         let chunk_id = format!("scaleup-{i:03}");
         let out_sidecar_omni = format!(
@@ -869,12 +1147,15 @@ fn generate_chunks(n: u32, sweep_id: &str, args: &Args) -> Vec<ChunkRecord> {
         );
         // input_parquet is the LOCAL filename the worker writes to under
         // scratch; the R2 URI is what it downloads from. Both point at the
-        // same shared 3-row smoke parquet.
+        // same shared input parquet. `row_end` comes from
+        // `--cells-per-chunk`; the worker safely intersects the requested
+        // range against actual row count (chunk_input::read_and_group),
+        // so values larger than the input simply process the whole file.
         out.push(ChunkRecord {
             chunk_id,
             input_parquet: "smoke.parquet".into(),
             input_parquet_r2: args.input_parquet_r2.clone(),
-            row_range: [0, 3],
+            row_range: [0, row_end],
             source_dir_r2: args.source_dir_r2.clone(),
             image_basenames: args.image_basenames.clone(),
             run_id: sweep_id.to_string(),
@@ -1570,4 +1851,107 @@ fn short_id_for_name(id: &str) -> String {
         out.truncate(50);
     }
     out
+}
+
+// ─────── iter3: prior fleet_summary loader + per-class stats ───────
+
+/// Per-class statistics derived from a prior `fleet_summary.json`.
+/// Used by the class-aware filter to drop slow-warmup or
+/// low-productivity classes from the auto-enumerated pool.
+#[derive(Debug, Clone)]
+struct ClassStats {
+    /// Median warmup_seconds across replicas observed at this class.
+    median_warmup_secs: Option<f64>,
+    /// Mean chunks_processed across replicas observed at this class.
+    mean_chunks_processed: f64,
+    /// Number of replicas the summary recorded for this class.
+    n_replicas: usize,
+}
+
+/// Read a prior `fleet_summary.json` (local path or `s3://...` URI)
+/// and aggregate per-class stats. Returns a `BTreeMap<class_name,
+/// ClassStats>` so callers can do `observed.get(&class_name)`.
+async fn load_prior_fleet_summary(
+    parent: &R2ParentCreds,
+    path_or_uri: &str,
+) -> Result<std::collections::BTreeMap<String, ClassStats>> {
+    use std::collections::BTreeMap;
+
+    // Fetch bytes from local file or s3:// URI.
+    let bytes: Vec<u8> = if let Some(rest) = path_or_uri.strip_prefix("s3://") {
+        // rest is `<bucket>/<key...>`
+        let (bucket, key) = rest
+            .split_once('/')
+            .with_context(|| format!("malformed s3 URI {path_or_uri:?}"))?;
+        get_r2_object_bytes(parent, bucket, key)
+            .await
+            .with_context(|| format!("GET {path_or_uri}"))?
+    } else {
+        std::fs::read(path_or_uri)
+            .with_context(|| format!("read local file {path_or_uri}"))?
+    };
+
+    let v: serde_json::Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse JSON from {path_or_uri}"))?;
+    let replicas = v
+        .get("replicas")
+        .and_then(|x| x.as_array())
+        .with_context(|| format!("{path_or_uri}: missing `replicas` array"))?;
+
+    // Group by gpu_class.
+    let mut by_class: BTreeMap<String, (Vec<f64>, Vec<u64>)> = BTreeMap::new();
+    for r in replicas {
+        let class = r
+            .get("gpu_class")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        if class.is_empty() {
+            continue;
+        }
+        let warmup = r.get("warmup_seconds").and_then(|x| x.as_f64());
+        let chunks = r
+            .get("chunks_processed")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0);
+        let entry = by_class.entry(class).or_default();
+        if let Some(w) = warmup {
+            entry.0.push(w);
+        }
+        entry.1.push(chunks);
+    }
+
+    let mut out: BTreeMap<String, ClassStats> = BTreeMap::new();
+    for (class, (mut warmups, chunks)) in by_class {
+        warmups.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let median_warmup = if warmups.is_empty() {
+            None
+        } else {
+            let n = warmups.len();
+            Some(if n % 2 == 1 {
+                warmups[n / 2]
+            } else {
+                0.5 * (warmups[n / 2 - 1] + warmups[n / 2])
+            })
+        };
+        let mean_chunks = if chunks.is_empty() {
+            0.0
+        } else {
+            chunks.iter().copied().sum::<u64>() as f64 / chunks.len() as f64
+        };
+        out.insert(
+            class,
+            ClassStats {
+                median_warmup_secs: median_warmup,
+                mean_chunks_processed: mean_chunks,
+                n_replicas: chunks.len(),
+            },
+        );
+    }
+    // Tiny tickle of `n_replicas` so it isn't dead-code-removed; it's
+    // included in the struct for downstream tooling that may want it.
+    if out.values().any(|s| s.n_replicas > 0) {
+        // no-op
+    }
+    Ok(out)
 }
