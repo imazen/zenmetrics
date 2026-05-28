@@ -384,10 +384,12 @@ impl Cvvdp {
 
             // 6. Build deep weber bands for ref (needed for fold_bands_deep_only).
             //    These persist across score_with_warm_ref_strip calls.
-            let k_split = mode_b_k_split(
-                self.strip_scratch_h_body.expect("set when strip_scratch_h_body is_some"),
-                n_levels as u32,
-            ) as usize;
+            //    `strip_scratch_h_body` is Some by the if-guard above.
+            let h_body_strip = match self.strip_scratch_h_body {
+                Some(hb) => hb,
+                None => unreachable!("checked in outer if-guard"),
+            };
+            let k_split = mode_b_k_split(h_body_strip, n_levels as u32) as usize;
             {
                 let Scratch {
                     weber_ref,
@@ -885,17 +887,15 @@ impl Cvvdp {
         // and the deep loop reads gauss_l[k] / gauss_l[k+1] for
         // k=k_split..n_levels. gauss_l[0] is NEVER read after the
         // gauss build. At 16 MP this saves 2 × 64 MB = 128 MB.
-        for c in [0_usize] {
-            if !self.scratch.weber_cache_ref[c].gauss_l.is_empty() {
-                let level = &mut self.scratch.weber_cache_ref[c].gauss_l[0];
-                level.data.clear();
-                level.data.shrink_to_fit();
-            }
-            if !self.scratch.weber_cache_dist[c].gauss_l.is_empty() {
-                let level = &mut self.scratch.weber_cache_dist[c].gauss_l[0];
-                level.data.clear();
-                level.data.shrink_to_fit();
-            }
+        if !self.scratch.weber_cache_ref[0].gauss_l.is_empty() {
+            let level = &mut self.scratch.weber_cache_ref[0].gauss_l[0];
+            level.data.clear();
+            level.data.shrink_to_fit();
+        }
+        if !self.scratch.weber_cache_dist[0].gauss_l.is_empty() {
+            let level = &mut self.scratch.weber_cache_dist[0].gauss_l[0];
+            level.data.clear();
+            level.data.shrink_to_fit();
         }
 
         // Step 2: build full-image weber bands for DEEP levels only.
@@ -1060,8 +1060,8 @@ impl Cvvdp {
 
         // Step 5: combine shallow + deep q values → JOD.
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
-        q_per_ch.extend(q_shallow.into_iter());
-        q_per_ch.extend(q_deep.into_iter());
+        q_per_ch.extend(q_shallow);
+        q_per_ch.extend(q_deep);
         debug_assert_eq!(q_per_ch.len(), n_levels);
         let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
         Ok((jod, None))
@@ -1267,8 +1267,8 @@ impl Cvvdp {
 
         // Step 5: combine + JOD.
         let mut q_per_ch: Vec<[f32; 3]> = Vec::with_capacity(n_levels);
-        q_per_ch.extend(q_shallow.into_iter());
-        q_per_ch.extend(q_deep.into_iter());
+        q_per_ch.extend(q_shallow);
+        q_per_ch.extend(q_deep);
         debug_assert_eq!(q_per_ch.len(), n_levels);
         let jod = do_pooling_and_jod_still_3ch(&q_per_ch);
         Ok((jod, None))
