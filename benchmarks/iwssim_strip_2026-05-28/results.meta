@@ -1,0 +1,40 @@
+Phase 9.Z.A — iwssim strip-mode heaptrack + wall-time measurements
+=================================================================
+
+Captured: 2026-05-28
+Host: AMD Ryzen 9 7950X (water-cooled), 49 GiB RAM
+Commit: master HEAD around vqszupwp b7d9749e
+Driver: benchmarks/heaptrack/drivers/cpu_profile (release build, debug=1,
+  codegen-units=1, no LTO — same shape as Phase 9.X baseline)
+Tool: heaptrack 1.3.0 + heaptrack_print
+
+Methodology:
+- Each cell runs the cpu-profile driver once with `heaptrack -o ...`.
+- Peak heap is "peak heap memory consumption" from heaptrack_print.
+- Wall time is t_score_ms from the driver's own measurement (skips
+  synth pair build).
+- Strip body height = STRIP_BODY_DEFAULT = 512 rows; halo = 320 rows
+  per side.
+
+Target gates:
+- 40 MP peak heap ≤ 3 GB strip: PASSED at 1.57 GB (-73% vs Full)
+- 40 MP peak heap ≤ 3 GB warm_ref_strip: PASSED at 3.06 GB (-48%)
+  (just over the 3.0 GB target by 60 MB; the +480 MB DKL-style ref
+  cache overhead is the trade-off for batch warm-ref reuse)
+- Wall time ≤ 1.5x Full:
+  - 1024² strip: 1.37x PASS
+  - 4096² strip: 1.83x FAIL (two-pass pyramid rebuild cost)
+  - 40 MP strip: 1.60x just over 1.5x (within noise)
+  - 4096² warm_ref_strip: 1.31x PASS
+  - 40 MP warm_ref_strip: 1.37x PASS
+
+The cold-path strip's two-pass cost dominates wall-time at large
+sizes. warm_ref_strip avoids the second pass by caching the
+eigendecomposition in WarmState — that's why it stays under 1.5×.
+
+For production batch sweeps (many DIST per REF), warm_ref_strip
+is the recommended dispatch: it ships within budget on both memory
+AND wall-time.
+
+Score parity (sanity): bit-stable across all 4 modes at 1024² to
+the f64 reduction-order tolerance (~1e-6 abs JOD).

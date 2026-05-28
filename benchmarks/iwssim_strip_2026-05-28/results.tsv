@@ -1,0 +1,12 @@
+metric	mode	width	height	peak_heap_mb	wall_time_ms	score	notes
+iwssim	full	1024	1024	153.83	357	0.998851	matches Phase 9.X baseline
+iwssim	warm_ref	1024	1024	145.44	355	0.998851	matches Phase 9.X baseline
+iwssim	strip	1024	1024	-	489	0.998851	1.37x full wall-time
+iwssim	warm_ref_strip	1024	1024	-	411	0.998851	1.15x full wall-time
+iwssim	full	4096	4096	2470	6926	-	-67% mem vs Full at 4MP/4MP
+iwssim	warm_ref	4096	4096	2470	9927	-	-
+iwssim	strip	4096	4096	817	12685	-	-67% mem, 1.83x time vs full
+iwssim	warm_ref_strip	4096	4096	1290	9066	-	-48% mem, 1.31x time
+iwssim	full	6324	6324	5890	18172	-	40 MP baseline (matches Phase 9.X)
+iwssim	strip	6324	6324	1570	29050	-	-73% mem, 1.60x time
+iwssim	warm_ref_strip	6324	6324	3060	24842	-	-48% mem, 1.37x time
