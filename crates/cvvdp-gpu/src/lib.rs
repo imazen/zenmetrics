@@ -431,12 +431,17 @@ pub enum Error {
     /// stability — the unified `MemoryMode` enum may in the future
     /// gain variants this crate doesn't support, and the umbrella
     /// `From` conversions map unsupported umbrella variants down to
-    /// `Auto` so this error never fires today. See
-    /// `docs/STRIP_PROCESSING.md` for why Strip/Tile were rolled
-    /// back (task #77 — capping pyramid depth changes JOD value).
+    /// `Auto` so this error never fires today. Currently supported
+    /// variants: `Full`, `Auto`, `Strip { h_body }` (Mode E),
+    /// `StripPair { h_body }` (Mode B), `CappedPyramid { levels }`.
+    /// See `docs/STRIP_PROCESSING.md` for the strip-walker design and
+    /// the rolled-back capped-levels variant that task #77 removed
+    /// (capped-levels Strip changed JOD; the current CappedPyramid
+    /// is the explicit JOD-shifting opt-in successor).
     ModeUnsupported(&'static str),
     /// [`MemoryMode::Auto`](crate::MemoryMode) couldn't fit the image
-    /// into the VRAM cap. cvvdp-gpu has no Strip implementation.
+    /// into the VRAM cap, even after attempting [`MemoryMode::Strip`]
+    /// fallback.
     TooBigForFull {
         /// Estimated working-set bytes Full would allocate.
         needed: usize,
@@ -464,12 +469,17 @@ impl std::fmt::Display for Error {
             Error::ModeUnsupported(variant) => write!(
                 f,
                 "MemoryMode::{variant} is not supported in cvvdp-gpu \
-                 (see docs/STRIP_PROCESSING.md — only Full + Auto are supported)"
+                 (currently Full / Auto / Strip / StripPair / CappedPyramid \
+                 are supported; see docs/STRIP_PROCESSING.md for the strip-mode lineage)"
             ),
             Error::TooBigForFull { needed, cap } => write!(
                 f,
-                "Auto could not place image in {cap} byte cap; needs at least {needed} bytes \
-                 (cvvdp-gpu has no Strip path — raise ZENMETRICS_VRAM_CAP_BYTES or use a smaller image)"
+                "Auto could not fit image in {cap} byte cap even after \
+                 trying Strip fallback; needs at least {needed} bytes — \
+                 raise ZENMETRICS_VRAM_CAP_BYTES, use a smaller image, or \
+                 construct directly via Cvvdp::new_strip_pair for one-shot \
+                 scoring (which has a lower memory floor than Auto's \
+                 preferred picks)"
             ),
         }
     }

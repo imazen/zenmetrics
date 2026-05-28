@@ -1401,6 +1401,20 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
 /// per-level split. `gauss_ref` carries the ref-side state through the
 /// walker; sized identically to the dist side so the per-strip
 /// dispatch can run REF + DIST through the same buffer geometry.
+///
+/// **Estimator vs runtime gap (2026-05-27, P2.7 partial).** This
+/// estimator models the **post-P2.7-full design target**: every
+/// shrinkable buffer (bands_ref / bands_dis / weber_scratch /
+/// d_scratch / gauss_ref / gauss_alt) sized strip-aware for shallow
+/// levels. Today's runtime allocator falls short of that target —
+/// `gauss_ref` and `gauss_alt` are still full-image at shallow
+/// levels, an honest-stop documented in `CHANGELOG.md:1296-1308`.
+/// The runtime gap at 4096² h_body=256 is ~680 MiB; measured nvsmi
+/// delta is **1502 MiB** vs Full's **4225 MiB** (-64%) per
+/// `CHANGELOG.md:1311-1313`, while this estimator predicts < 25%
+/// of Full. Use this for `MemoryMode::Auto` resolution and rough
+/// capacity planning; for precise live-VRAM budgets, prefer
+/// `nvidia-smi`-based measurement via `examples/mem_mode_b_vs_full.rs`.
 #[must_use]
 pub fn estimate_gpu_memory_bytes_strip_pair(
     width: u32,

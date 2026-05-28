@@ -23,13 +23,15 @@
 //!   batch workloads (REF pyramid recomputed every dist).
 //! - **CappedPyramid { levels }** — Option B safety net. Reduces
 //!   the natural pyramid depth to `levels` so the deepest band's
-//!   σ=3 PU blur halo shrinks. Saves 30-50% peak working set vs
-//!   Full at large images but **is NOT JOD-bit-identical** to Full
-//!   (capping pyramid depth changes JOD at any level shorter than
-//!   the natural depth). Opt-in only — never picked by `Auto`. Use
-//!   when memory pressure forces a metric-value tradeoff (e.g.
-//!   cvvdp on 6 GB VRAM at >16 MP). Pre-rollback bench measured
-//!   ≤0.005 JOD parity gate at k=8.
+//!   σ=3 PU blur halo shrinks and per-level d_scratch / pyramid /
+//!   weber buffers stop allocating for the truncated levels.
+//!   **NOT JOD-bit-identical** to Full (capping pyramid depth
+//!   changes JOD at any level shorter than the natural depth).
+//!   Opt-in only — never picked by `Auto`. Use when memory pressure
+//!   forces a metric-value tradeoff (e.g. cvvdp on 6 GB VRAM at
+//!   >16 MP). See the [`Self::CappedPyramid`] variant docstring for
+//!   historical bench (≤0.005 JOD at k=8, archived) and current
+//!   memory savings (estimator-based; runtime nvsmi not pinned).
 //!
 //! The earlier capped-pyramid Strip variant that lived here before
 //! task #77 was rolled back because **capping the pyramid depth
@@ -161,14 +163,28 @@ pub enum MemoryMode {
         /// crate-default ([`STRIP_H_BODY_DEFAULT`]).
         h_body: Option<u32>,
     },
-    /// JOD-shifting capped-pyramid mode (≤0.005 JOD parity gate at
-    /// k=8 per pre-rollback bench). Reduces natural pyramid depth to
-    /// `levels` to shrink σ=3 PU blur halo at deepest band. Saves
-    /// 30-50% peak working set vs Full at large images.
+    /// JOD-shifting capped-pyramid mode. Reduces natural pyramid depth
+    /// to `levels` to shrink the σ=3 PU blur halo at the deepest band
+    /// and skip allocating per-level d_scratch / pyramid / weber
+    /// buffers for the truncated levels.
     ///
     /// **NOT JOD-bit-identical to Full** — opt-in only. [`Self::Auto`]
     /// does not pick this variant. Use when memory pressure forces a
     /// metric-value tradeoff (e.g. cvvdp on 6 GB VRAM at >16 MP).
+    ///
+    /// **Historical JOD bench (pre-task-#77 rollback, no longer
+    /// runnable in-tree)**: ≤0.005 JOD parity gate at `k=8` vs Full's
+    /// natural depth of 9. The sweep data file
+    /// (`archived/cvvdp_capped_levels_2026-05-22.csv`) was removed
+    /// alongside the capped-levels Strip variant; treat the 0.005
+    /// figure as historical methodology, not a current contract.
+    ///
+    /// **Memory savings**: estimator-based — for natural depth 9
+    /// capped to 5 at 4096², `estimate_gpu_memory_bytes_capped`
+    /// returns substantially less than Full (`tests/capped_pyramid_smoke.rs:60`
+    /// asserts `capped5 + 1024 < full` as a conservative gate). The
+    /// exact ratio depends on the per-level pixel-count contribution;
+    /// no recent runtime nvsmi number is committed.
     ///
     /// `levels` must be `>= 1` and is clamped from above by the
     /// natural pyramid depth (`pipeline::pyramid_levels`) at
