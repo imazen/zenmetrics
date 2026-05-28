@@ -363,6 +363,27 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`zenmetrics-orchestrator` Phase 8i — record_oom_and_persist prunes
+  stale + contradictory cache entries (Fix B).** The investigation in
+  `crates/zenmetrics-api/docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md`
+  identified `cells_failed_oom` as a write-only "punishment list" that
+  survived every binary upgrade and re-bench until the file was
+  manually deleted. Two concrete classes of stale entries were
+  observed in the wild: (i) `(Backend, _)` entries whose backend is no
+  longer in `chooser::supported_backends(metric)` — e.g. fossilized
+  `(gpu_strip, *)` entries for cvvdp written by a pre-orchestrator
+  binary that did expose GpuStrip for cvvdp; (ii) entries contradicted
+  by a co-existing positive measurement at the same `(backend, size)`
+  cell — runtime OOM under transient memory pressure recorded an OOM
+  for a cell the bench had successfully measured. Fix:
+  `record_oom_and_persist` runs a `retain()` cleanup pass on each
+  call. Both prune events are logged at `debug` level (routine cleanup,
+  not pathology). Existing cache files self-heal on the first
+  legitimate OOM recording after this lands — no migration script
+  required. Two new unit tests in `executor::tests`:
+  `record_oom_prunes_fossilized_unsupported_backend` and
+  `record_oom_prunes_entry_contradicted_by_positive_measurement`.
+
 - **`zenmetrics-orchestrator` Phase 8i — known_oom_cell cascade
   defeated by positive measurement (Fix A).** The investigation in
   `crates/zenmetrics-api/docs/CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md`

@@ -1011,6 +1011,63 @@ impl Orchestrator {
         if !already {
             entry.cells_failed_oom.push((backend, pixels));
         }
+
+        // Phase 8i Fix B — cleanup pass on the OOM list. The bench
+        // never produces both a positive measurement and an OOM for
+        // one (backend, size) cell, but `record_oom_and_persist` can
+        // run AFTER the bench succeeded (e.g. a runtime OOM under
+        // memory pressure that the chooser didn't predict). Without
+        // pruning, the OOM list grows monotonically with stale
+        // entries that survive every binary upgrade. The investigation
+        // doc CVVDP_CHOOSER_REGRESSION_INVESTIGATION.md documents
+        // two concrete classes of stale entries observed in the wild:
+        //
+        //  (i)  Backends no longer in `supported_backends(metric)`
+        //       — fossilized `(gpu_strip, *)` entries for cvvdp
+        //       persisted by a pre-orchestrator binary that did
+        //       expose GpuStrip for cvvdp.
+        //  (ii) Entries contradicted by a co-existing positive
+        //       measurement at the same `(backend, size)` cell —
+        //       the bench measured the cell successfully but a
+        //       later runtime task OOMed and the chooser then
+        //       refuses to ever try that backend again.
+        //
+        // Both classes are routine cleanup, not a sign of pathology.
+        // log::debug! the prune events so operators can audit the
+        // cache hygiene without warn/error noise.
+        let supported = crate::chooser::supported_backends(metric);
+        entry.cells_failed_oom.retain(|&(b, px)| {
+            // (i) Drop entries for backends not in the current
+            // supported_backends list.
+            if !supported.contains(&b) {
+                log::debug!(
+                    "phase 8i cache hygiene: pruning stale OOM cell \
+                     ({:?}, {} px) for metric {} — backend no longer \
+                     in supported_backends list",
+                    b,
+                    px,
+                    metric.tag(),
+                );
+                return false;
+            }
+            // (ii) Drop entries contradicted by a co-existing
+            // positive measurement at the same (backend, size) cell.
+            if let Some(bench) = entry.ns_per_px_at.get(&px)
+                && bench.get(b).is_some()
+            {
+                log::debug!(
+                    "phase 8i cache hygiene: pruning stale OOM cell \
+                     ({:?}, {} px) for metric {} — positive measurement \
+                     contradicts OOM at the same cell",
+                    b,
+                    px,
+                    metric.tag(),
+                );
+                return false;
+            }
+            true
+        });
+
         // Persist to disk so a process death mid-task doesn't drop the
         // learning. Log + continue on failure.
         let path = self.cache_path();
@@ -1470,6 +1527,156 @@ mod tests {
             cols.keys().any(|k| k.starts_with("iwssim_")),
             "expected iwssim_ prefix in {:?}",
             cols.keys().collect::<Vec<_>>()
+        );
+    }
+
+    // ----- Phase 8i Fix B — record_oom_and_persist hygiene -----
+
+    use crate::{BackendBench, CapabilityProfile, MetricProfile, OrchestratorConfig};
+    use std::time::SystemTime;
+
+    /// Build a minimal `Orchestrator` from a hand-placed `MetricProfile`
+    /// for use by the Fix B regression tests. Writes the cache to a
+    /// unique tempdir per test invocation so two parallel tests don't
+    /// race on the same on-disk file.
+    fn orch_for_oom_test(metric: MetricKind, profile: MetricProfile, tag: &str) -> Orchestrator {
+        use crate::compute_machine_hash;
+        let gpu = crate::GpuCapability {
+            present: true,
+            model: "synthetic GPU".into(),
+            total_vram_mib: 12288,
+            driver_version: "0.0".into(),
+            cuda_runtime: None,
+            compute_capability: None,
+        };
+        let cpu = crate::CpuCapability {
+            brand: "synthetic CPU".into(),
+            logical_cores: 8,
+            features: vec![],
+            ram_mib: 32768,
+        };
+        let machine_hash = compute_machine_hash(&gpu, &cpu);
+        let now = SystemTime::now();
+        let mut map: BTreeMap<String, MetricProfile> = BTreeMap::new();
+        map.insert(metric.tag().to_string(), profile);
+        let cap = CapabilityProfile {
+            machine_hash,
+            detected_at: now,
+            last_validated: now,
+            gpu,
+            cpu,
+            metrics: map,
+        };
+        let mut cfg = OrchestratorConfig::default();
+        // Unique tempdir per test so save_profile() doesn't race.
+        cfg.cache_dir = std::env::temp_dir().join(format!(
+            "zm-fixB-{}-{}-{}",
+            tag,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        cfg.cache_validity = std::time::Duration::from_secs(60);
+        std::fs::create_dir_all(&cfg.cache_dir).ok();
+        Orchestrator::from_capability(cfg, cap)
+    }
+
+    /// Fix B (i) — fossilized backend pruning. For cvvdp, the legacy
+    /// `(Backend::GpuStrip, *)` entries written by a pre-orchestrator
+    /// binary must be removed by `record_oom_and_persist` because
+    /// GpuStrip is not in `crate::chooser::supported_backends(Cvvdp)`.
+    #[test]
+    fn record_oom_prunes_fossilized_unsupported_backend() {
+        let mut profile = MetricProfile::default();
+        // Fossilized entry: GpuStrip for cvvdp at 256² (65 536 px).
+        // GpuStrip is NOT in supported_backends(Cvvdp) (which is
+        // [GpuFull, GpuStripPair, Cpu]).
+        profile
+            .cells_failed_oom
+            .push((Backend::GpuStrip, 256u64 * 256u64));
+        let mut orch = orch_for_oom_test(MetricKind::Cvvdp, profile, "fossilized");
+
+        // Now record a legitimate OOM at GpuFull / 1024². The cleanup
+        // pass must remove the fossilized GpuStrip entry while keeping
+        // the new GpuFull entry.
+        orch.record_oom_and_persist(MetricKind::Cvvdp, Backend::GpuFull, 1024u64 * 1024u64);
+
+        let oom_list = &orch
+            .capability()
+            .metrics
+            .get(MetricKind::Cvvdp.tag())
+            .expect("cvvdp profile")
+            .cells_failed_oom;
+        // The fossilized GpuStrip entry must be gone.
+        assert!(
+            !oom_list.iter().any(|&(b, _)| b == Backend::GpuStrip),
+            "fossilized GpuStrip entry should be pruned, got {:?}",
+            oom_list,
+        );
+        // The new GpuFull entry must be present.
+        assert!(
+            oom_list
+                .iter()
+                .any(|&(b, px)| b == Backend::GpuFull && px == 1024 * 1024),
+            "new GpuFull / 1024² entry should be present, got {:?}",
+            oom_list,
+        );
+    }
+
+    /// Fix B (ii) — positive-measurement contradiction. When the bench
+    /// recorded a successful measurement at `(backend, size)` and a
+    /// later runtime OOM tried to insert an entry for the same cell,
+    /// the contradicted entry must be pruned so a single transient
+    /// runtime failure doesn't lock out a backend whose bench just
+    /// proved it works.
+    #[test]
+    fn record_oom_prunes_entry_contradicted_by_positive_measurement() {
+        let mut profile = MetricProfile::default();
+        // Positive bench measurement at GpuFull / 1024².
+        let mut bench = BackendBench::default();
+        bench.set(Backend::GpuFull, 5.34_f64);
+        profile.ns_per_px_at.insert(1024u64 * 1024u64, bench);
+        // Pre-poison: a stale OOM at the same cell. Recording a fresh
+        // OOM at a DIFFERENT cell triggers the cleanup pass, which
+        // must drop the contradicted entry.
+        profile
+            .cells_failed_oom
+            .push((Backend::GpuFull, 1024u64 * 1024u64));
+        let mut orch = orch_for_oom_test(MetricKind::Cvvdp, profile, "contradicted");
+
+        // Trigger the cleanup pass by recording a NEW OOM (which the
+        // bench-time path would never produce — a runtime OOM at
+        // GpuStripPair / 2048² for argument's sake).
+        orch.record_oom_and_persist(
+            MetricKind::Cvvdp,
+            Backend::GpuStripPair,
+            2048u64 * 2048u64,
+        );
+
+        let oom_list = &orch
+            .capability()
+            .metrics
+            .get(MetricKind::Cvvdp.tag())
+            .expect("cvvdp profile")
+            .cells_failed_oom;
+        // The contradicted (GpuFull, 1024²) entry must be gone.
+        assert!(
+            !oom_list
+                .iter()
+                .any(|&(b, px)| b == Backend::GpuFull && px == 1024 * 1024),
+            "contradicted GpuFull / 1024² entry should be pruned, \
+             got {:?}",
+            oom_list,
+        );
+        // The new GpuStripPair entry must be present.
+        assert!(
+            oom_list
+                .iter()
+                .any(|&(b, px)| b == Backend::GpuStripPair && px == 2048 * 2048),
+            "new GpuStripPair / 2048² entry should be present, got {:?}",
+            oom_list,
         );
     }
 }

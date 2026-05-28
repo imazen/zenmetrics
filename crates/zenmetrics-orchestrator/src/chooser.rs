@@ -243,7 +243,12 @@ const ALL_BACKENDS: [Backend; 4] = [
 /// `backends_for_kind` table in `bench.rs` plus `Cpu` (Phase 6 wires
 /// per-metric CPU references — Phase 8g landed the Iwssim port so
 /// every metric in this release surfaces a CPU backend).
-fn supported_backends(metric: MetricKind) -> &'static [Backend] {
+///
+/// `pub(crate)` so `executor::record_oom_and_persist` (Phase 8i Fix B)
+/// can prune fossilized OOM entries whose backend is no longer in this
+/// list (e.g. legacy `(gpu_strip, *)` entries for cvvdp written by a
+/// pre-orchestrator binary).
+pub(crate) fn supported_backends(metric: MetricKind) -> &'static [Backend] {
     match metric {
         // cvvdp uniquely supports StripPair via its single-pass
         // one-shot pipeline. CPU reference: cvvdp (in-tree).
