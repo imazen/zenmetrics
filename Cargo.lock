@@ -1986,6 +1986,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu-vram-profile"
+version = "0.0.0"
+dependencies = [
+ "cvvdp-gpu",
+ "zenforks-cubecl",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
