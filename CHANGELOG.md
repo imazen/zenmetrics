@@ -82,6 +82,49 @@ Workspace conventions per the global rules:
   the GPU↔CPU `parity_cpu` test suite. Audit reference:
   `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`.
 
+- **Phase 8c.1-C — `cvvdp-gpu::kernels::{diffmap,color,csf,pool,pyramid,masking}`
+  collapsed to `pub use cvvdp::kernels::*::*` re-exports.** Follow-up to
+  Phase 8c.1-B's audit-flagged kernel-constant duplication. All six
+  kernel files now hold ONLY the `#[cube(launch)]` GPU kernels plus
+  the small set of GPU-launch-config constants that those kernels
+  reference at module scope (`POOL_LDS_BLOCK_DIM`, `POOL_LDS_BLOCK_DIM_USIZE`,
+  the `DOWNSCALE_TILED_*` workgroup-tile constants). Scalar constants
+  (`MASK_P`, `MASK_Q`, `XCM_3X3`, `PU_BLUR_KERNEL_1D`, `BASEBAND_W`,
+  `GAUSS5`, `KERNEL_A`, `SRGB8_TO_LINEAR_LUT`, the 32×32×3 CSF LUT
+  tables, …) and scalar host helpers (`lp_norm_*`, `met2jod`,
+  `gausspyr_*_scalar`, `srgb_byte_to_dkl_scalar`, `sensitivity_scalar`,
+  `mult_mutual_band`, `gaussian_blur_sigma3`, `phase_uncertainty_band`,
+  …) now have a single canonical owner in `cvvdp::kernels::*` and a
+  re-export shim in `cvvdp_gpu::kernels::*` so existing imports
+  (`cvvdp_gpu::kernels::pool::lp_norm_mean` etc.) resolve unchanged.
+
+  The audit doc flagged the cube-macro name-resolution interaction as
+  the main risk; in-source verification (parser stripping doc comments
+  + line comments) confirmed that NO `#[cube(launch)]` kernel
+  references any of the moved scalar constants by name inside its
+  cube body. Every cube kernel uses inline `f32::new(...)` literals
+  for the cvvdp constants (a cube-IR requirement — Rust `const`s don't
+  cross the macro expansion barrier). So the cube macro is unaffected
+  by the re-export.
+
+  PTX bit-identity verified per file: for each kernel file, the
+  before/after `cargo expand --release -p cvvdp-gpu --features cuda`
+  output of the cube-macro-emitted `pub mod <kernel_name> { ... }`
+  block hashes identically (sha256). 34/34 cube kernels across all 6
+  files pass — guarantees the cubecl IR (and hence the runtime-emitted
+  PTX) is bit-identical before vs after.
+
+  Tests redistributed: 6 pyramid-scalar tests + 3 csf interp1_rho_extrap
+  conformance tests moved from `cvvdp-gpu/src/kernels/*.rs` inline
+  modules to `cvvdp/src/kernels/*.rs` to follow the canonical owners.
+  cvvdp lib tests went 43 → 52; cvvdp-gpu lib tests went 14 → 5; sum
+  is unchanged.
+
+  Commits per file: `a8bee1ae` (diffmap), `49447c6a` (color),
+  `01effa89` (csf), `c9f1a366` (pool), `a8261f5a` (pyramid),
+  `a526b0b2` (masking). (Note: per-file commits were rebased; these
+  SHAs reflect the pre-rebase chain — see `jj log master..@` after
+  rebase for the post-rebase SHAs.)
 - **Phase 8c.1-B — `cvvdp-gpu` now depends on `cvvdp` (gpu→cpu dep direction)**
   (cc4046fe). Shared params, host_scalar reference impl, presets +
   vendored JSON data files, and the scalar portions of the kernel
@@ -99,7 +142,7 @@ Workspace conventions per the global rules:
   `phase771_run3` baseline bit-for-bit (8/9 cvvdp cells PASS-EXACT,
   cvvdp 4096/q=20 PASS within 1.4e-4 JOD tolerance, matching baseline
   exactly). Audit reference: `crates/zenmetrics-api/docs/CRATE_GRAPH_AUDIT.md`
-  section A.5.
+  section A.5. Phase 8c.1-C above closes the deferred follow-up.
 - **`zenmetrics-orchestrator` Phase 8h — ssim2 CPU adapter switched
   from upstream `ssimulacra2` 0.5 to Imazen's SIMD-accelerated
   `fast-ssim2` 0.8.** Per the global crate index, `fast-ssim2` is our

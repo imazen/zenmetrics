@@ -395,12 +395,27 @@ remain declared independently in each crate because (a) cvvdp's
 `CVVDP_COLUMN_NAME` namespace is `cvvdp_cpu_imazen_v*` whereas
 cvvdp-gpu's is `cvvdp_imazen_v*` (intentionally distinct), and
 (b) cvvdp doesn't expose a Score struct (returns raw f32 JOD) per the
-audit's API column. Kernel scalar items also remain duplicated in
-cvvdp-gpu's kernel files alongside the `#[cube(launch)]` kernels;
-the duplicates are bit-identical to cvvdp's owners. A follow-up
-commit will collapse the duplicates by rewriting cvvdp-gpu's kernel
-files to `pub use cvvdp::kernels::*::*;` once the cube-macro name-
-resolution interaction is verified.
+audit's API column.
+
+**Phase 8c.1-C (2026-05-27) closes the deferred kernel-scalar
+collapse follow-up.** All six `cvvdp-gpu::kernels::*` files have
+been rewritten so each holds ONLY its `#[cube(launch)]` GPU kernels
+plus the small set of GPU-launch-config constants those kernels
+reference at module scope (`POOL_LDS_BLOCK_DIM`,
+`POOL_LDS_BLOCK_DIM_USIZE`, the `DOWNSCALE_TILED_*` workgroup-tile
+constants). Scalar constants and host helpers (everything from
+items 2-7 below) are now declared once in `cvvdp::kernels::*` and
+re-exported by `cvvdp-gpu::kernels::*` via `pub use cvvdp::kernels::*::{...};`.
+
+The audit flagged the cube-macro name-resolution interaction as the
+main risk. In-source verification (parser stripping doc + line
+comments) confirmed every `#[cube(launch)]` kernel uses inline
+`f32::new(...)` literals for the cvvdp constants — none reference
+the moved scalar names inside their cube bodies. Cube IR codegen is
+unaffected; PTX bit-identity verified per file via `cargo expand`
+hash comparison (34/34 cube kernels across the 6 files). Commits:
+`a8bee1ae` diffmap, `49447c6a` color, `01effa89` csf,
+`c9f1a366` pool, `a8261f5a` pyramid, `a526b0b2` masking.
 
 Move from `cvvdp-gpu` to `cvvdp`:
 
