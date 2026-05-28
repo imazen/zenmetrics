@@ -1,0 +1,13 @@
+tool: scripts/memory_audit/sweep_gpu_metrics_2026-05-28.py
+git_sha: ?
+host: lilith
+gpu_name: NVIDIA GeForce RTX 5070
+gpu_mem_total: 12227 MiB
+gpu_driver: 596.21
+cuda_path: /usr/local/cuda
+metric: butteraugli-gpu
+sizes_run: 1mp,4mp,16mp
+backends_run: cuda
+reps: 2
+method: subprocess-per-cell, nvidia-smi delta during ~400ms hold window after READY; wall_median_ms = median of WORKER_REPS post-warm runs.
+started_utc: 2026-05-28T18:08:11Z
