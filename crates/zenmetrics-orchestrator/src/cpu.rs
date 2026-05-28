@@ -23,6 +23,7 @@
 
 use std::fs;
 
+#[cfg(target_arch = "x86_64")]
 use raw_cpuid::{CpuId, CpuIdReader};
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
@@ -32,27 +33,55 @@ use crate::CpuCapability;
 /// RAM. Always succeeds on supported architectures — returns sensible
 /// defaults (empty brand / 1 core / empty features) on the rare
 /// platforms where CPUID isn't usable.
+///
+/// Architecture support:
+/// - x86_64: full CPUID detection via raw-cpuid (brand string, SIMD
+///   features sse4.1/sse4.2/aes/popcnt/fma/avx/bmi1/bmi2/avx2/avx512*).
+/// - aarch64 (incl. Hetzner CAX Ampere Altra): empty brand, empty
+///   feature list, `logical_cores` + `ram_mib` still populated. The
+///   orchestrator's CpuAdapter does not currently key dispatch on
+///   aarch64 features (NEON is implied baseline), so this is correct
+///   behaviour — the orchestrator falls through to the CPU adapter on
+///   any arch where the GPU runtimes aren't compiled in or dlopen
+///   fails. Other arches behave the same as aarch64.
 pub fn detect_cpu() -> CpuCapability {
-    let cpuid = CpuId::new();
+    #[cfg(target_arch = "x86_64")]
+    {
+        let cpuid = CpuId::new();
 
-    let brand = cpuid
-        .get_processor_brand_string()
-        .map(|b| b.as_str().trim().to_string())
-        .unwrap_or_default();
+        let brand = cpuid
+            .get_processor_brand_string()
+            .map(|b| b.as_str().trim().to_string())
+            .unwrap_or_default();
 
-    let logical_cores = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
+        let logical_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
 
-    let features = collect_features(&cpuid);
+        let features = collect_features(&cpuid);
 
-    let ram_mib = total_ram_mib();
+        let ram_mib = total_ram_mib();
 
-    CpuCapability {
-        brand,
-        logical_cores,
-        features,
-        ram_mib,
+        CpuCapability {
+            brand,
+            logical_cores,
+            features,
+            ram_mib,
+        }
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let logical_cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        let ram_mib = total_ram_mib();
+        CpuCapability {
+            brand: String::new(),
+            logical_cores,
+            features: Vec::new(),
+            ram_mib,
+        }
     }
 }
 
@@ -60,6 +89,7 @@ pub fn detect_cpu() -> CpuCapability {
 /// lowercase strings in a stable order. The list matches what the
 /// orchestrator design doc enumerates: SIMD families relevant to the
 /// CPU metric backends (CVVDP, butter, ssim2, dssim, iwssim, zensim).
+#[cfg(target_arch = "x86_64")]
 fn collect_features<R: CpuIdReader>(cpuid: &CpuId<R>) -> Vec<String> {
     let mut out: Vec<&'static str> = Vec::new();
 
@@ -217,6 +247,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn collect_features_sorted_and_deduped() {
         let cpuid = CpuId::new();

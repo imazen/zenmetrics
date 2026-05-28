@@ -187,9 +187,9 @@ mod tests {
 
     fn sample_spec() -> WorkerBootstrap {
         let mut extra = BTreeMap::new();
-        extra.insert("METRICS".into(), "ssim2-gpu".into());
+        extra.insert("METRICS".into(), "ssim2-cpu".into());
         WorkerBootstrap {
-            image: "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b".into(),
+            image: "ghcr.io/imazen/zen-metrics-sweep-hetzner:v1".into(),
             sweep_id: "hetzner-iter1-2026-05-28".into(),
             r2_account_id: "abc123".into(),
             r2_bucket: "zen-tuning-ephemeral".into(),

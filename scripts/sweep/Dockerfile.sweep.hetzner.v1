@@ -1,0 +1,163 @@
+# Dockerfile.sweep.hetzner.v1 — Hetzner Cloud (Ampere ARM CAX21) deploy image.
+#
+# CPU-only ARM64 sibling of Dockerfile.sweep.salad.v1. Drops every layer
+# that was Salad / vast.ai / GPU specific:
+#
+#   REMOVED  pyarrow (the Hetzner R2-queue loop doesn't need parquet read
+#            on the worker — chunks are JSONL queue files).
+#   REMOVED  CUDA NVRTC + cudart + dev headers (~280 MB) — Hetzner CAX21
+#            is CPU-only; the orchestrator's CpuAdapter handles ssim2 /
+#            butter / dssim / cvvdp on CPU paths.
+#   REMOVED  cuda_dlsym_stub.so (LD_PRELOAD shim only needed on
+#            heterogeneous GPU fleets).
+#   REMOVED  salad-http-job-queue-worker sidecar (Hetzner has no managed
+#            queue; the worker LISTs R2 prefix directly per
+#            r2_queue_loop.rs).
+#   REMOVED  zen-metrics binary as a separate baked artifact (the
+#            inline-sweep tree is linked into zen-sweep-worker; we
+#            could bake it for ad-hoc shells but on Hetzner the
+#            cloud-init only invokes the worker).
+#
+# KEPT  ubuntu:24.04, s5cmd + jq, zen-sweep-worker (--features hetzner),
+#       entrypoint_hetzner.sh (optional — cloud-init invokes the worker
+#       binary directly per zencloud-hetzner's `build_user_data`).
+#
+# Architecture: **linux/arm64**. CAX21 is Ampere Altra ARM64; an x86_64
+# image cannot run on it (no qemu). The image is therefore built either:
+#   (a) Cross-compiled on the x86_64 build host via buildx-qemu, OR
+#   (b) Built natively on a one-shot CAX21 instance (slower cold but
+#       guaranteed-correct for crates with arch-specific code paths).
+# Approach (a) is attempted first per scripts/sweep/build_hetzner_image.sh;
+# (b) is the documented fallback.
+#
+# Layer plan (cheap-changes-rarely → expensive-changes-often):
+#
+#   ┌──────────────────────────────────────────────────────────────┐
+#   │ L1: ubuntu:24.04 (arm64)               ~80 MB   biennial      │
+#   │ L2: stable apt deps (ca-certs, curl)   ~15 MB   per quarter   │
+#   │ L3: s5cmd 2.2.2 (linux-arm64)          ~10 MB   per quarter   │
+#   │ L4: jq 1.7.1 (linux-arm64)             ~2 MB    per quarter   │
+#   │ L5: zen-sweep-worker (hetzner+cpu)     ~150 MB  per code push │
+#   │ L6: cubecl.toml + warmup fixtures      ~50 KB   per script    │
+#   │ L7: entrypoint + LABELs + ENTRYPOINT   ~5 KB    ~never        │
+#   └──────────────────────────────────────────────────────────────┘
+#
+# Build (context: zenmetrics dir, builder OR target arm64):
+#
+#   # 1. Build the ARM64 worker binary FIRST (host-cross or native).
+#   #    Cross-compile path (host: x86_64 with `cross`):
+#   cross build --release --target aarch64-unknown-linux-gnu \
+#       -p zen-sweep-worker --features hetzner --no-default-features
+#   cp target/aarch64-unknown-linux-gnu/release/zen-sweep-worker ./zen-sweep-worker-arm64
+#
+#   #    Native-on-CAX21 fallback (host: CAX21 ARM64):
+#   cargo build --release -p zen-sweep-worker --features hetzner --no-default-features
+#   cp target/release/zen-sweep-worker ./zen-sweep-worker-arm64
+#
+#   # 2. Build + push the image (linux/arm64 platform forced).
+#   docker buildx build --platform linux/arm64 \
+#       -f scripts/sweep/Dockerfile.sweep.hetzner.v1 \
+#       --build-arg ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker-arm64 \
+#       -t ghcr.io/imazen/zen-metrics-sweep-hetzner:v1-$(git rev-parse --short HEAD) \
+#       -t ghcr.io/imazen/zen-metrics-sweep-hetzner:v1 \
+#       --push \
+#       .
+#
+# Run: the Hetzner cloud-init script (see crates/zencloud-hetzner/src/
+# cloud_init.rs) `docker run`s this image with the env-file the launcher
+# wrote. The cloud-init's container command line is:
+#
+#   docker run -d --env-file=/etc/zen/worker.env \
+#     ghcr.io/imazen/zen-metrics-sweep-hetzner:v1 \
+#     /usr/local/bin/zen-sweep-worker worker --backend hetzner \
+#         --run-id <sweep_id> \
+#         --chunks-r2 s3://<bucket>/runs/<sweep_id>/chunks.jsonl
+#
+# So the ENTRYPOINT below is overridden by cloud-init's docker-run cmd;
+# we set ENTRYPOINT for the ad-hoc-shell convenience case only.
+
+FROM --platform=linux/arm64 ubuntu:24.04
+
+LABEL org.opencontainers.image.source="https://github.com/imazen/zenmetrics"
+LABEL org.opencontainers.image.description="zen-metrics Hetzner Cloud sweep worker (hetzner.v1: CPU-only ARM64, R2-queue polling, no managed sidecar). BYO R2."
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later OR LicenseRef-Imazen-Commercial"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── L2: stable apt deps ─────────────────────────────────────────────────
+# Just the essentials for the worker container to call out to R2 via
+# s5cmd. NO python, NO build-essential, NO CUDA — this is a runtime
+# image. ca-certificates for HTTPS; curl for boot-record fetch; libssl3
+# for the worker's rustls-with-openssl-fallback path.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── L3: s5cmd 2.2.2 (linux-arm64) ───────────────────────────────────────
+# ARM64 binary from the upstream release; the salad image uses
+# Linux-64bit (x86_64) so the URL differs.
+RUN curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-arm64.tar.gz" \
+        -o /tmp/s5cmd.tgz \
+    && tar xzf /tmp/s5cmd.tgz -C /usr/local/bin s5cmd \
+    && rm /tmp/s5cmd.tgz \
+    && chmod +x /usr/local/bin/s5cmd \
+    && s5cmd version
+
+# ── L4: jq 1.7.1 (linux-arm64) ──────────────────────────────────────────
+RUN curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-arm64" \
+        -o /usr/local/bin/jq \
+    && chmod +x /usr/local/bin/jq \
+    && jq --version
+
+# ── Environment for the runtime worker ──────────────────────────────────
+# CPU-only — no LD_LIBRARY_PATH for CUDA, no LD_PRELOAD shim. The
+# WORKDIR is the per-sweep work area.
+ENV PATH=/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin \
+    RUST_BACKTRACE=1 \
+    RUST_LOG=info,zen_cloud_vastai=info,zencloud_hetzner=info
+
+WORKDIR /workspace/hetzner-sweep
+
+# Smoke: every base-layer tool runs before we put expensive binaries on
+# top.
+RUN s5cmd version \
+    && jq --version \
+    && echo "hetzner.v1 base-layer smoke passed"
+
+# ── L5: zen-sweep-worker (--features hetzner, ARM64) ────────────────────
+#
+# The cloud-agnostic deployed worker, built for the HETZNER backend:
+# inline encode+score compute (shared with vast.ai's tree) + the R2-queue
+# polling loop (r2_queue_loop.rs). Invoked as
+# `zen-sweep-worker worker --backend hetzner`. The binary MUST be an
+# ARM64 (aarch64-unknown-linux-gnu) artifact — see this file's header
+# build instructions.
+ARG ZEN_SWEEP_WORKER_BINARY=./zen-sweep-worker-arm64
+COPY --chmod=0755 ${ZEN_SWEEP_WORKER_BINARY} /usr/local/bin/zen-sweep-worker
+
+# Sanity gate: the worker subcommand + the --backend selector accept
+# `hetzner`. The fact that this binary RUNS at all on linux/arm64
+# qemu (during this buildx step) is the arch check — if it were x86_64
+# the kernel would refuse exec via ENOEXEC. (We previously called
+# `file` here but it's not in the minimal ubuntu:24.04 base.)
+RUN /usr/local/bin/zen-sweep-worker --version \
+    && /usr/local/bin/zen-sweep-worker --help 2>&1 | grep -q -- '--backend' \
+    && /usr/local/bin/zen-sweep-worker worker --backend hetzner --help 2>&1 | grep -q -- '--run-id' \
+    && /usr/local/bin/zen-sweep-worker worker --backend hetzner --help 2>&1 | grep -q -- '--chunks-r2' \
+    && echo "hetzner.v1 zen-sweep-worker (hetzner) smoke passed"
+
+# ── L6: optional entrypoint shim ────────────────────────────────────────
+# The Hetzner cloud-init invokes the worker binary directly; this
+# entrypoint script exists only for the ad-hoc-shell case where the
+# operator overrides --entrypoint to wrap the worker in env-hydration +
+# fail-loud env checks.
+COPY --chmod=0755 scripts/sweep/entrypoint_hetzner.sh /usr/local/bin/entrypoint_hetzner.sh
+RUN test -x /usr/local/bin/entrypoint_hetzner.sh \
+    && echo "hetzner.v1 entrypoint script baked"
+
+# ── L7: ENTRYPOINT ──────────────────────────────────────────────────────
+# Default ENTRYPOINT is the worker binary itself — the cloud-init script
+# passes the worker subcommand + flags explicitly, so docker run's CMD
+# overrides this. For shell access: `docker run --entrypoint /bin/bash`.
+ENTRYPOINT ["/usr/local/bin/zen-sweep-worker"]

@@ -142,9 +142,6 @@ sha2 = "0.10.9"
 # `toml = "1"` line is already in the workspace lockfile.
 toml = "1.1.2"
 
-# CPU fingerprint — brand string + SIMD feature bits via CPUID.
-raw-cpuid = "11.6.0"
-
 # System total RAM (sysinfo is already in the lockfile transitively;
 # we pin the version explicitly here so the public profile matches).
 sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
@@ -152,8 +149,21 @@ sysinfo = { version = "0.38.4", default-features = false, features = ["system"] 
 # XDG cache dir resolution. `dirs = "6"` is already in the lockfile.
 dirs = "6.0.0"
 
+# CPU fingerprint — brand string + SIMD feature bits via CPUID.
+# x86_64 ONLY — `raw-cpuid` calls the `cpuid` instruction which doesn't
+# exist on aarch64 / other arches. `cpu.rs` cfg-gates the call so the
+# crate compiles on aarch64 (Hetzner CAX21 ARM, Apple Silicon, etc.)
+# with an empty feature list — orchestrator falls through to its CPU
+# adapter regardless, and aarch64 NEON is implied baseline.
+# NOTE: this target-specific section MUST stay at the END of the file
+# (after [dependencies] + [dev-dependencies]), because cargo's TOML
+# parser treats any subsequent key-value pairs as belonging to this
+# target section.
 [dev-dependencies]
 tempfile = "3"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+raw-cpuid = "11.6.0"
 
 [[example]]
 name = "print_capability"
