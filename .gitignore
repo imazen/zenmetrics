@@ -29,3 +29,4 @@ scripts/cvvdp_goldens/out/
 # the source directory crates/vastai-fleet/.
 /vastai-fleet
 /zen-metrics
+.v4_extract/

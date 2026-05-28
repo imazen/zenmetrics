@@ -850,22 +850,25 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     let q_idx = find_col(&headers, &["q"]).ok();
     let knob_idx = find_col(&headers, &["knob_tuple_json"]).ok();
 
-    let metric_cols = args.metric.column_names();
-    if metric_cols.len() != 1 {
-        // CVVDP_SIDECAR_SCHEMA.md fixes one score column per sidecar.
-        // Butteraugli's 2-column metric isn't useful as a "cvvdp-like"
-        // sidecar — callers should use the `batch` subcommand for that
-        // case until we extend the spec to multi-column sidecars.
+    // Many metrics produce multiple named score columns per pair —
+    // butteraugli emits max + pnorm3, future metrics may emit even more
+    // (per-band SSIM, per-channel JOD, etc). `score-pairs` accepts any
+    // column count: it emits one parquet Float64 column per metric
+    // column, named exactly as `MetricKind::column_names()` reports.
+    // The score columns sit alongside the identity-tuple columns
+    // (image_path / codec / q / knob_tuple_json) in the standard
+    // CVVDP_SIDECAR_SCHEMA.md layout — readers indexing by literal
+    // column name still work; readers expecting "one score column" are
+    // updated to enumerate `column_names()` instead.
+    let metric_cols: Vec<&'static str> = args.metric.column_names().to_vec();
+    if metric_cols.is_empty() {
         return Err(format!(
-            "score-pairs supports single-column metrics only; \
-             {} emits {} columns ({:?}). Use `batch` for now.",
+            "score-pairs: metric {} has no declared column_names() — \
+             this is an internal MetricKind wiring bug",
             args.metric.name(),
-            metric_cols.len(),
-            metric_cols,
         )
         .into());
     }
-    let score_col_name = metric_cols[0];
 
     // Buffer everything in memory — score-pairs runs over a bounded
     // pairs TSV (one sweep's worth of cells, typically ≤ 10⁵ rows).
@@ -875,7 +878,8 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     let mut codecs: Vec<String> = Vec::new();
     let mut qs: Vec<i64> = Vec::new();
     let mut knobs: Vec<String> = Vec::new();
-    let mut scores: Vec<f64> = Vec::new();
+    // One vec per metric column; same order as `metric_cols`.
+    let mut score_columns: Vec<Vec<f64>> = (0..metric_cols.len()).map(|_| Vec::new()).collect();
 
     let mut failed = 0usize;
     let mut succeeded = 0usize;
@@ -935,41 +939,49 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             .map(String::from)
             .unwrap_or_else(|| "{}".to_string());
 
-        let pair_result: Result<f64, Box<dyn std::error::Error>> = {
-            if let Some(scorer) = cvvdp_scorer.as_mut() {
-                // Cvvdp fast path: decode + reuse cached Cvvdp instance.
-                match (
-                    decode::decode_image_to_rgb8(&ref_path),
-                    decode::decode_image_to_rgb8(&dist_path),
-                ) {
-                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
-                    (Err(e), _) | (_, Err(e)) => Err(e),
-                }
-            } else {
-                score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
-            }
-            #[cfg(not(feature = "gpu-iwssim"))]
+        // Returns Vec<f64> aligned with `metric_cols`. Cvvdp's cached
+        // scorer path emits a single column; everything else routes
+        // through `score_one_pair` → `run_metric`, which can emit
+        // multiple columns (e.g. butteraugli's max + pnorm3).
+        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> =
             if let Some(scorer) = cvvdp_scorer.as_mut() {
                 match (
                     decode::decode_image_to_rgb8(&ref_path),
                     decode::decode_image_to_rgb8(&dist_path),
                 ) {
-                    (Ok(r), Ok(d)) => scorer.score(&r, &d),
+                    (Ok(r), Ok(d)) => scorer.score(&r, &d).map(|v| vec![v]),
                     (Err(e), _) | (_, Err(e)) => Err(e),
                 }
             } else {
                 score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
-            }
-        };
-        let jod = match pair_result {
-            Ok(v) => {
+            };
+        let per_pair: Vec<f64> = match pair_result {
+            Ok(v) if v.len() == metric_cols.len() => {
                 succeeded += 1;
                 v
             }
-            Err(e) => {
-                eprintln!("[score-pairs] {} q={q} failed: {e}", image_path,);
+            Ok(v) => {
+                // Internal wiring bug — metric returned a different
+                // column count from what column_names() declares.
+                // Treat as a per-row failure so the sidecar still
+                // writes, but emit a loud diagnostic line. Pad/truncate
+                // to keep schema width stable.
+                eprintln!(
+                    "[score-pairs] {} q={q} INTERNAL: metric returned {} scores but column_names() declared {} ({:?}); padding with NaN",
+                    image_path,
+                    v.len(),
+                    metric_cols.len(),
+                    metric_cols,
+                );
                 failed += 1;
-                f64::NAN
+                let mut padded = v;
+                padded.resize(metric_cols.len(), f64::NAN);
+                padded
+            }
+            Err(e) => {
+                eprintln!("[score-pairs] {} q={q} failed: {e}", image_path);
+                failed += 1;
+                vec![f64::NAN; metric_cols.len()]
             }
         };
 
@@ -977,7 +989,9 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         codecs.push(codec);
         qs.push(q);
         knobs.push(knob);
-        scores.push(jod);
+        for (col_idx, value) in per_pair.into_iter().enumerate() {
+            score_columns[col_idx].push(value);
+        }
 
         let total = succeeded + failed;
         if total % 100 == 0 && total > 0 {
@@ -989,26 +1003,39 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         return Err("score-pairs: input TSV produced no rows".into());
     }
 
-    let schema = Arc::new(Schema::new(vec![
+    // Build schema: identity-tuple columns + one Float64 column per
+    // metric_cols entry, in declaration order.
+    let mut schema_fields: Vec<Field> = vec![
         Field::new("image_path", DataType::Utf8, false),
         Field::new("codec", DataType::Utf8, false),
         Field::new("q", DataType::Int64, false),
         Field::new("knob_tuple_json", DataType::Utf8, false),
-        Field::new(score_col_name, DataType::Float64, false),
-    ]));
+    ];
+    for col_name in &metric_cols {
+        schema_fields.push(Field::new(*col_name, DataType::Float64, false));
+    }
+    let schema = Arc::new(Schema::new(schema_fields));
 
-    // Snapshot the score column before it's moved into the Arrow array so
-    // `bogus_check` can inspect it post-write without needing to round-trip
-    // through parquet. Cheap (one Vec<f64> copy) and keeps the sanity
-    // check in-process — important on workers that may not have R2 set up.
-    let scores_snapshot: Vec<f64> = scores.clone();
-    let arrays: Vec<ArrayRef> = vec![
+    // Snapshot the FIRST score column before it's moved into the Arrow
+    // array so `bogus_check` can inspect it post-write without needing
+    // to round-trip through parquet. Multi-column bogus checks aren't
+    // implemented; the first column is the primary score for every
+    // current metric. Cheap (one Vec<f64> clone) and keeps the sanity
+    // check in-process — important on workers that may not have R2
+    // set up.
+    let scores_snapshot: Vec<f64> = score_columns
+        .first()
+        .cloned()
+        .unwrap_or_default();
+    let mut arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(image_paths)),
         Arc::new(StringArray::from(codecs)),
         Arc::new(Int64Array::from(qs)),
         Arc::new(StringArray::from(knobs)),
-        Arc::new(Float64Array::from(scores)),
     ];
+    for col in score_columns {
+        arrays.push(Arc::new(Float64Array::from(col)));
+    }
 
     let batch = RecordBatch::try_new(schema.clone(), arrays)?;
 
@@ -1028,8 +1055,9 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
 
     eprintln!(
         "[score-pairs] wrote {succeeded} rows ({failed} NaN-failures) \
-         to {} with score column `{score_col_name}`",
+         to {} with score column(s) {:?}",
         args.out_parquet.display(),
+        metric_cols,
     );
 
     if args.fail_on_bogus {
@@ -1056,7 +1084,7 @@ fn score_one_pair(
     ref_path: &Path,
     dist_path: &Path,
     gpu_runtime: GpuRuntime,
-) -> Result<f64, Box<dyn std::error::Error>> {
+) -> Result<Vec<f64>, Box<dyn std::error::Error>> {
     use crate::metrics::run_metric;
     let reference = decode::decode_image_to_rgb8(ref_path)?;
     let distorted = decode::decode_image_to_rgb8(dist_path)?;
@@ -1073,11 +1101,10 @@ fn score_one_pair(
         .into());
     }
     let scores = run_metric(metric, &reference, &distorted, gpu_runtime)?;
-    let (_, value) = scores
-        .first()
-        .copied()
-        .ok_or("metric returned zero scores")?;
-    Ok(value)
+    if scores.is_empty() {
+        return Err("metric returned zero scores".into());
+    }
+    Ok(scores.into_iter().map(|(_, v)| v).collect())
 }
 
 fn cmd_score(

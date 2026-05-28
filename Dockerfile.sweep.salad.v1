@@ -229,13 +229,52 @@ RUN curl -fsSL "https://github.com/SaladTechnologies/salad-cloud-job-queue-worke
     && test -x /usr/local/bin/salad-http-job-queue-worker \
     && echo "salad.v1 salad-http-job-queue-worker v${SALAD_JOB_QUEUE_WORKER_VERSION} sidecar baked"
 
+# ── L9c: cubecl PTX cache config + warmup fixtures ──────────────────────
+#
+# Tag: :v4-kernel-cache and later. Earlier image versions (:v1-:v3) shipped
+# without these and paid the full NVRTC compile cost on every cold start.
+#
+# By default cubecl's CompilationConfig.cache = None — the on-disk PTX
+# cache code path compiles, but is never enabled. A `cubecl.toml` in WORKDIR
+# turns it on (cubecl walks up from cwd looking for cubecl.toml / CubeCL.toml
+# per RuntimeConfig::from_current_dir). With `cache = { file = "/var/cache/
+# cubecl" }`, cubecl-cuda writes compiled PTX bytes (Vec<c_char> + entrypoint
+# name) to /var/cache/cubecl/cuda/<cubecl-common-ver>/<sha>/sm_<arch>/<driver>
+# /ptx.json.log, keyed by KernelId::stable_hash. The patched cache key
+# (zenforks-cubecl-cuda 0.10.1, see crates/zenmetrics-api/docs/CUBECL_
+# PERSISTENT_PTX_CACHE_PATCH.md) makes the path per-arch so Salad's
+# heterogeneous GPU fleet (RTX 3060 sm_86 vs RTX 4090 sm_89 etc) gets its
+# own per-node cache.
+COPY scripts/sweep/cubecl.toml /workspace/salad-sweep/cubecl.toml
+RUN test -s /workspace/salad-sweep/cubecl.toml \
+    && grep -q '/var/cache/cubecl' /workspace/salad-sweep/cubecl.toml \
+    && mkdir -p /var/cache/cubecl \
+    && echo "salad.v1 cubecl.toml + cache dir baked"
+
+# Warmup fixtures: small (64x64) for the default 5 GPU metrics, large
+# (256x256) for iwssim-gpu's >=176px requirement. Baked under
+# /opt/zen/warmup; the warmup script reads from there.
+COPY crates/zen-metrics-cli/tests/fixtures/ref_64.png         /opt/zen/warmup/ref_64.png
+COPY crates/zen-metrics-cli/tests/fixtures/dist_noisy_64.png  /opt/zen/warmup/dist_noisy_64.png
+COPY crates/zen-metrics-cli/tests/fixtures/ref_256.png        /opt/zen/warmup/ref_256.png
+COPY crates/zen-metrics-cli/tests/fixtures/dist_noisy_256.png /opt/zen/warmup/dist_noisy_256.png
+RUN test -s /opt/zen/warmup/ref_64.png \
+    && test -s /opt/zen/warmup/dist_noisy_64.png \
+    && test -s /opt/zen/warmup/ref_256.png \
+    && test -s /opt/zen/warmup/dist_noisy_256.png \
+    && echo "salad.v1 warmup fixtures baked"
+
+COPY --chmod=0755 scripts/sweep/warmup_kernels.sh /usr/local/bin/warmup_kernels.sh
+RUN test -x /usr/local/bin/warmup_kernels.sh && echo "salad.v1 warmup script baked"
+
 # ── L10: Salad entrypoint ────────────────────────────────────────────────
 #
 # Hydrates env, verifies the baked tools exist (fail-loud-exit-nonzero if
 # missing — a broken image must NOT paper over it with a runtime install),
-# then launches BOTH the sidecar and `zen-sweep-worker worker --backend
-# salad` concurrently (the upstream with-shell-script pattern). NO
-# apt/pip/curl at boot.
+# then runs the kernel-cache warmup pass (idempotent; ~5–30s cold, <1s
+# warm), and FINALLY launches BOTH the sidecar and `zen-sweep-worker worker
+# --backend salad` concurrently (the upstream with-shell-script pattern).
+# NO apt/pip/curl at boot.
 COPY --chmod=0755 scripts/sweep/entrypoint_salad.sh /usr/local/bin/entrypoint_salad.sh
 
 # ── L11: ENTRYPOINT ─────────────────────────────────────────────────────

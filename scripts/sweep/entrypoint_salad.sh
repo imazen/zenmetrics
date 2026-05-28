@@ -125,6 +125,39 @@ mkdir -p ~/.aws
 
 JOB_PORT="${SALAD_JOB_PORT:-80}"
 log "worker=${WORKER_ID:-${SALAD_MACHINE_ID:-$(hostname)}} run=${SWEEP_RUN_ID} chunks=${CHUNKS_R2} job_port=${JOB_PORT}"
+
+# ── Kernel-cache warmup (NEW in :v4-kernel-cache) ────────────────────────
+# Pre-compile every GPU metric's cubecl kernels BEFORE the sidecar starts
+# POSTing jobs, so the first real job doesn't pay the ~10-90s NVRTC compile
+# burst. The warmup script:
+#   1. Logs the GPU arch (nvidia-smi --query-gpu name,compute_cap).
+#   2. Runs `zen-metrics score-pairs --metric <X>` for each default
+#      GPU metric on 64x64 (256x256 for iwssim-gpu) fixtures.
+#   3. cubecl-cuda persists compiled PTX to /var/cache/cubecl (configured
+#      via the baked cubecl.toml in WORKDIR).
+#   4. Reports per-metric wall time + total + cache-dir size.
+# Fail-soft: a warmup failure does NOT abort the boot. If the GPU is
+# genuinely broken the real job's durable error-sidecar will surface it.
+#
+# WORKDIR must be set so cubecl picks up the cubecl.toml in /workspace/
+# salad-sweep/. The image's WORKDIR directive is set; verify in case
+# something stripped it.
+cd "${WORKDIR:-/workspace/salad-sweep}" 2>/dev/null || true
+if [[ -f cubecl.toml ]]; then
+    log "cubecl.toml present in $(pwd); PTX cache enabled at /var/cache/cubecl"
+else
+    log "WARN: cubecl.toml not in cwd ($(pwd)); PTX cache may be disabled"
+fi
+warmup_t0=$(date +%s)
+if command -v warmup_kernels.sh >/dev/null 2>&1; then
+    log "starting kernel-cache warmup pass…"
+    warmup_kernels.sh || log "warmup script returned non-zero (continuing per fail-soft policy)"
+else
+    log "WARN: warmup_kernels.sh not on PATH; skipping warmup"
+fi
+warmup_elapsed=$(( $(date +%s) - warmup_t0 ))
+log "warmup phase: ${warmup_elapsed}s total wall (per-metric breakdown in [warmup] log lines above)"
+
 log "launching salad-http-job-queue-worker sidecar + zen-sweep-worker (--backend salad)"
 
 # ── Launch both concurrently (upstream with-shell-script pattern) ───────

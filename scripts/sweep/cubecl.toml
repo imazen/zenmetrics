@@ -1,0 +1,54 @@
+# cubecl.toml — baked into the Salad sweep image's WORKDIR so the
+# cubecl runtime's PTX cache is ENABLED + persists to a known node-
+# local path. Without this, `compilation.cache` defaults to None and
+# every fresh container pays the full NVRTC compile cost on its first
+# kernel invocation (~5-30s per kernel × N kernels = ~10-90s of pure
+# kernel-compile time before any chunk processing begins).
+#
+# With `cache = "file" + path = "/var/cache/cubecl"`:
+# - The cubecl-cuda context writes compiled PTX bytes to
+#     /var/cache/cubecl/cuda/<cubecl-common-ver>/<sha>/sm_<arch>/<driver>/ptx.json.log
+#   keyed by KernelId::stable_hash.
+# - The entrypoint runs a one-shot WARMUP pass through every default
+#   GPU metric before the worker starts processing real jobs, which
+#   populates this cache. By the time the sidecar POSTs the first job
+#   to the worker, every kernel the worker will use is already PTX-
+#   cached AND (because the driver also caches PTX→SASS at
+#   `~/.nv/ComputeCache/`) compiled-to-SASS in the driver cache too.
+#
+# WHY a file path (not "target" / "global"):
+# - "target" walks up from CWD looking for Cargo.toml — but the deploy
+#   image has no Cargo workspace, so it would fall through to
+#   `dirs::cache_dir().join("cubecl")` = `~/.cache/cubecl`. That works
+#   too, but a fixed path under `/var/cache/cubecl` is cleaner for
+#   operators to inspect / mount as a node-local volume.
+# - "global" goes under `dirs::config_local_dir()` which on Linux is
+#   `~/.config` — wrong dir family (config vs cache).
+#
+# WHY this is keyed by sm_<arch>:
+# Salad's heterogeneous GPU fleet assigns RTX 3060 (sm_86) / 3090
+# (sm_86) / 4090 (sm_89) / etc. Each architecture needs its own
+# compiled PTX. The cubecl-cuda fork patch (CUBECL_PERSISTENT_PTX_
+# CACHE_PATCH.md) makes the cache path include the compute capability
+# so cross-arch nodes don't trade cache entries. (A node that boots
+# the same container twice on the same physical host with the same
+# GPU gets a cache hit; one that hops between archs writes siblings.)
+#
+# Future: when Salad supports volume mounts that persist across
+# container-group restarts, this path becomes a real cross-restart
+# cache. Today it's per-container-instance only — the warmup pass
+# still pays the NVRTC cost ONCE at startup, but the cost moves from
+# "right before the first real job" to "explicit, measurable,
+# bracketed pre-job phase". That's the win.
+
+[compilation]
+# Enable on-disk PTX cache at a fixed location. CacheConfig is an
+# externally-tagged enum (Local/Target/Global/File(PathBuf)); the
+# `file` variant is shaped as { file = "<path>" } — confirmed by the
+# cubecl-runtime serde derive (see /tmp/cachetest empirical check).
+cache = { file = "/var/cache/cubecl" }
+
+# Default check_mode is "auto"; the cubecl-cuda crates.io publication
+# overrides it to "validate" via its own crate-local cubecl.toml.
+# Leave the choice to that file — listing it here would shadow the
+# crate-local config which is the more conservative default.
