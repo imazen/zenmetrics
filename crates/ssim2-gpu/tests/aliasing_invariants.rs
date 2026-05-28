@@ -172,15 +172,12 @@ fn aliasing_pair_path_2048() {
     assert_cpu_parity(2048, 2048, 6);
 }
 
-// 4096² test: cuda-only. wgpu's `max_compute_workgroups_per_dimension`
-// limit is 65535 per Limits::downlevel_defaults, and the scale-0 kernel
-// grid for ssim2's IIR blur at 4096² (workgroup-x dim 1 per row →
-// 4096 < 65535 ok, but pyramid reductions hit the limit on some
-// backends with smaller workgroup tile sizes). The 65535 cap is a
-// portable WebGPU spec floor; CUDA's effective per-dim cap is 2^31-1.
-// Cuda-only gating preserves coverage on the production backend while
-// keeping wgpu CI green. See strip_parity.rs:151 for the same rationale.
-#[cfg(feature = "cuda")]
+// 4096² test: runs on both cuda AND wgpu since `cube_count_1d` got
+// the 2D-when-large split (pipeline.rs::cube_count_1d). The scale-0
+// kernel grid at 4096² needs 65,536 cubes, which used to exceed
+// wgpu's 65535-per-dim cap (Limits::downlevel_defaults); the 2D
+// split brings each dim under both wgpu's 65535 and CUDA's 2^31
+// limits while keeping the kernel's `ABSOLUTE_POS` reader unchanged.
 #[test]
 fn aliasing_pair_path_4096() {
     // 4096² = 48 MiB raw upload + ~7.3 GB peak GPU after Phase 1

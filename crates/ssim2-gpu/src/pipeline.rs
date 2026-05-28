@@ -1817,10 +1817,42 @@ impl<R: Runtime> Ssim2<R> {
         }
     }
 
+    /// Cube grid for 1D pointwise kernels (one thread per pixel).
+    ///
+    /// **Why 2D-when-large**: the WebGPU portable-floor limit on
+    /// `max_compute_workgroups_per_dimension` is 65535
+    /// (`Limits::downlevel_defaults`), so a 1D dispatch saturates at
+    /// 65535 × TPB = ~16.7M threads. The scale-0 kernel grid at 4096²
+    /// has exactly 16,777,216 pixels → 65,536 cubes, which is +1 over
+    /// the wgpu cap and the runtime rejects the dispatch.
+    ///
+    /// The kernels read `ABSOLUTE_POS` as a flat linear index. Cubecl
+    /// computes that builtin as
+    /// `(absolute_pos_y * cube_count_x * cube_dim_x) + absolute_pos_x`
+    /// (see `cubecl-cpp::shared::kernel::compile_cube_builtin_bindings_decl`
+    /// and the wgsl `body.rs` `let id = ...` template), so splitting
+    /// the 1D `cubes` count into a 2D `(x, y)` grid with the same total
+    /// product preserves the linear index that each thread sees — the
+    /// kernel needs no changes.
+    ///
+    /// Tile shape: keep `x` close to 32768 (well under both wgpu's
+    /// 65535 and CUDA's 2^31 limits) and stretch `y` as needed. The
+    /// kernels bounds-check `ABSOLUTE_POS >= len()` so trailing
+    /// no-op threads from rounding are safe.
     fn cube_count_1d(n: usize) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = (n as u32).div_ceil(TPB);
-        CubeCount::Static(cubes.max(1), 1, 1)
+        const MAX_CUBES_PER_DIM: u32 = 32768;
+        let cubes = (n as u32).div_ceil(TPB).max(1);
+        if cubes <= MAX_CUBES_PER_DIM {
+            CubeCount::Static(cubes, 1, 1)
+        } else {
+            // 2D split. Choose x = MAX_CUBES_PER_DIM and y = ceil(cubes / x).
+            // Total = x * y >= cubes; the kernel's `if idx >= len { terminate; }`
+            // guard makes the overshoot a no-op.
+            let x = MAX_CUBES_PER_DIM;
+            let y = cubes.div_ceil(x);
+            CubeCount::Static(x, y, 1)
+        }
     }
     fn cube_dim_1d() -> CubeDim {
         CubeDim::new_1d(256)
@@ -2302,8 +2334,17 @@ impl<R: Runtime> Ssim2<R> {
 
     #[cfg(feature = "fir")]
     fn fir_cube_count(n: usize) -> CubeCount {
-        let cubes = (n as u32).div_ceil(blur::FIR_BLOCK_WIDTH);
-        CubeCount::Static(cubes.max(1), 1, 1)
+        // Same 2D-when-large split as `cube_count_1d`. See that helper
+        // for the rationale (wgpu's 65535-per-dim cap blocks 4096²).
+        const MAX_CUBES_PER_DIM: u32 = 32768;
+        let cubes = (n as u32).div_ceil(blur::FIR_BLOCK_WIDTH).max(1);
+        if cubes <= MAX_CUBES_PER_DIM {
+            CubeCount::Static(cubes, 1, 1)
+        } else {
+            let x = MAX_CUBES_PER_DIM;
+            let y = cubes.div_ceil(x);
+            CubeCount::Static(x, y, 1)
+        }
     }
     #[cfg(feature = "fir")]
     fn fir_cube_dim() -> CubeDim {

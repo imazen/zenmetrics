@@ -129,6 +129,23 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`ssim2-gpu` — wgpu 4096² dispatch limit unblocked (task #53,
+  2026-05-28).** Split `pipeline.rs::cube_count_1d` (and
+  `fir_cube_count`) into a 2D dispatch when `cubes > 32768`, keeping
+  each grid dimension well under wgpu's 65535-per-dim cap
+  (`Limits::downlevel_defaults`). At 4096² the scale-0 kernel grid
+  needs 65,536 cubes (n = 16,777,216 / TPB = 256), which is +1 over
+  the wgpu cap. The kernels read `ABSOLUTE_POS` as a flat linear
+  index, which cubecl computes as
+  `(absolute_pos_y * cube_count_x * cube_dim_x) + absolute_pos_x`
+  on both CUDA and wgsl backends, so the 2D split preserves the
+  index each thread sees and the kernels need zero changes.
+  Removes the `cfg(feature = "cuda")` gates on four 4096²
+  tests (`strip_parity_4096_body1024`, `strip_parity_4096_body2048`,
+  `strip_cross_tile_size_4096`, `aliasing_pair_path_4096`); all
+  four now run on both backends. Full suites: 30/30 strip_parity
+  and 14/14 aliasing_invariants pass on both wgpu and cuda.
+
 - **Phase 9.Y finding #5 — zensim strip mode no longer re-precomputes
   reference per strip.** The cpu_profile driver's `strip` mode now
   hoists `Zensim::precompute_reference` outside the strip loop and

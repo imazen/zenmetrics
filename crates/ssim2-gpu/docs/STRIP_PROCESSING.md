@@ -244,14 +244,14 @@ The Phase 2 work is now landed. Key components:
   the Full estimate exceeds the VRAM cap.
 - `Error::CachedRefNotSupportedInStripMode` returned when
   `set_reference` is called on a strip-mode instance.
-- `tests/strip_parity.rs`: 27 tests on CUDA (24 on wgpu — 3 `4096²`
-  tests gated `cfg(feature = "cuda")` because wgpu's 65535
-  per-dimension dispatch limit is exceeded by the scale-0 kernel grid
-  at 4096² regardless of whole/strip mode; this is a pre-existing
-  wgpu backend limitation, not strip-specific). Covers parity vs
-  whole at 256² / 1024² / 2048² / 4096², cross-tile-size agreement,
-  uneven last strip, single-strip degenerate case, error paths,
-  KernelMode dispatch (Full / Lossless / Fast), identical-pair
-  sanity, IIR boundary in halo.
+- `tests/strip_parity.rs`: 30 tests, all running on both CUDA and
+  wgpu (task #53, 2026-05-28: the 4096² tests previously gated to
+  cuda-only were unblocked by splitting `pipeline.rs::cube_count_1d`
+  into a 2D dispatch when cubes > 32768, which keeps each dim under
+  wgpu's 65535-per-dim cap). Covers parity vs whole at 256² / 1024²
+  / 2048² / 4096², cross-tile-size agreement, uneven last strip,
+  single-strip degenerate case, error paths, KernelMode dispatch
+  (Full / Lossless / Fast), identical-pair sanity, IIR boundary in
+  halo.
 - `examples/bench_strip_vs_whole.rs`: wall-time + working-set sweep
   at 1 / 4 / 12 / 24 MP. Results land in `benchmarks/`.

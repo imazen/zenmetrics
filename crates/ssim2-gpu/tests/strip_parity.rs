@@ -148,20 +148,18 @@ fn strip_parity_2048_body512() {
     assert_close("2048² h_body=512", whole, strip, STRIP_REL_TOL);
 }
 
-// 4096² tests: cuda-only. wgpu's 65535 per-dimension dispatch-group
-// limit is exceeded by the scale-0 kernel grid at 4096² regardless of
-// whole/strip mode (`assert_cpu_parity(4096, 4096, _)` in
-// aliasing_invariants.rs also fails on wgpu for the same reason). The
-// strip path can't avoid this — at scale 0 the strip buffer has the
-// full image width, so its kernel grid is the same as whole-image.
-#[cfg(feature = "cuda")]
+// 4096² tests: runs on both cuda AND wgpu since `cube_count_1d` got
+// the 2D-when-large split (pipeline.rs::cube_count_1d). The scale-0
+// kernel grid at 4096² needs 65,536 cubes, which used to exceed the
+// wgpu 65535-per-dim cap; the 2D split brings each dim well under
+// both wgpu's 65535 and CUDA's 2^31 limits while keeping the
+// `ABSOLUTE_POS` reader unchanged.
 #[test]
 fn strip_parity_4096_body1024() {
     let (whole, strip) = whole_and_strip(4096, 4096, 1024, 4);
     assert_close("4096² h_body=1024", whole, strip, STRIP_REL_TOL);
 }
 
-#[cfg(feature = "cuda")]
 #[test]
 fn strip_parity_4096_body2048() {
     let (whole, strip) = whole_and_strip(4096, 4096, 2048, 4);
@@ -376,8 +374,8 @@ fn strip_cross_tile_size_2048() {
     );
 }
 
-// 4096² test: cuda-only — see comment above strip_parity_4096_body1024.
-#[cfg(feature = "cuda")]
+// 4096² test: runs on both cuda AND wgpu — see comment above
+// strip_parity_4096_body1024.
 #[test]
 fn strip_cross_tile_size_4096() {
     let (a, b) = synthetic_pair(4096, 4096, 4);
