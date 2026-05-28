@@ -1,13 +1,70 @@
 # Strip processing in cvvdp-gpu
 
+## Current shipped state (last updated 2026-05-28)
+
+The supported `MemoryMode` enum (src/memory_mode.rs:134-180) is
+`{ Auto, Full, Strip { h_body }, StripPair { h_body }, CappedPyramid { levels } }`.
+JOD-preservation contract per mode:
+
+| Mode | JOD vs Full | Mode B / Mode E? | One-shot or batch? |
+|---|---|---|---|
+| `Full` | reference | n/a | both |
+| `Strip { h_body }` (Mode E) | ≤ 1e-4 abs (atomic reduction noise) | Mode E (cached-ref) | batch only — uses `warm_reference` + `compute_dkl_jod_with_warm_ref` |
+| `StripPair { h_body }` (Mode B) | ≤ 1e-4 abs at 1024², bit-identical at 128²/256²/512²/1024² | Mode B (one-shot pair) | one-shot via `score()` |
+| `CappedPyramid { levels }` | shifts JOD at any `levels < n_levels_natural` (NOT preserving) | n/a | one-shot or batch — opt-in safety net |
+| `Auto` | resolves to `Full` if fits, else `Strip { h_body: 512 }`. NEVER picks `CappedPyramid` or `StripPair`. | n/a | both |
+
+### Shipped strip-aware kernels
+
+| Kernel | File:line | Halo params | Used by |
+|---|---|---|---|
+| `downscale_strip_kernel` | `src/kernels/pyramid.rs:290` | `body_offset_y, src_strip_offset, logical_src_h, logical_dst_h` | Mode E + Mode B walkers |
+| `upscale_v_strip_kernel` | `src/kernels/pyramid.rs:784` | strip-aware body offset | Mode E + Mode B walkers |
+| `upscale_h_strip_kernel` | `src/kernels/pyramid.rs:1013` | strip-aware (X-only, no halo) | Mode E + Mode B walkers |
+| `subtract_weber_3ch_strip_kernel` | `src/kernels/pyramid.rs:1396` | strip-aware body offset | Mode E + Mode B walkers |
+| `pu_blur_h_3ch_strip_aware_kernel` | `src/kernels/masking.rs:295` | `body_offset_y, logical_h` (H-blur no-op halo) | Mode E + Mode B walkers |
+| `pu_blur_v_3ch_scaled_strip_aware_kernel` | `src/kernels/masking.rs:598` | `body_offset_y, logical_h` (load-bearing for V-blur) | Mode E + Mode B walkers |
+| `pool_band_3ch_offset_kernel` | `src/kernels/pool.rs:165` | `start_offset, band_total` | Mode E + Mode B per-strip pool |
+| `csf_apply_3ch_kernel` / `csf_apply_6ch_kernel` | `src/kernels/csf.rs:126, 220` | per-pixel — strip-degenerate | dispatched on strip-sized buffers; no separate variant needed |
+| `min_abs_3ch_kernel`, `mult_mutual_3ch_*` | `src/kernels/masking.rs:741, 806, 929` | per-pixel — strip-degenerate | strip-sized dispatch |
+
+### Mode B 4096² h_body=256 memory profile (P2.7 partial, 2026-05-27)
+
+| Buffer | Was (P2.1c) | Now (post-P2.7-partial) | Shrunk by |
+|---|---|---|---|
+| `bands_dis_strip` (shallow) | strip-body-only | strip body+halo (`R_k`) | P2.1b — `build_weber_scratch:543` |
+| `bands_ref_strip` (shallow) | full-image | strip body+halo (`R_k`) | P2.3 — `build_weber_scratch:560` |
+| `DBandsTransient.t_p_* / m_*` (shallow) | full-image | strip body+halo (`R_k`) | P2.4 — `_run_d_bands_strip_major_shallow:5366-5391` |
+| `WeberScratch.{l_bkg_fine, log_l_bkg, log_l_bkg_dis, vscratch_*}` (shallow) | full-image | strip body+halo (`R_k`) | P2.5+P2.6 — `build_weber_scratch:602-625` |
+| `gauss_ref[k]` (shallow) | full-image | full-image (UNSHRUNK) | P2.7 honest-stopped — see CHANGELOG.md:1296-1308 |
+| `gauss_alt[k]` (deep) | full-image (allocated for swap) | zero-size | P2.7 partial — `new_with_geometry_inner:2069-2104` |
+
+**Measured 4096² h_body=256 (`examples/mem_mode_b_vs_full.rs`,
+manually run; not auto-pinned by CI):**
+
+| Mode | nvsmi delta (MiB) | wall_s | Source |
+|---|---|---|---|
+| Full | +4225 | 5.61 | CHANGELOG.md:1454 (P2.1c bench) |
+| Mode B (post-P2.7-partial) | +1502 | ~2.91 | CHANGELOG.md:1311-1313 (cumulative P2.1c → P2.7) |
+
+Ratio: 1502 / 4225 ≈ 35.6% → **-64.4% vs Full** at 4096² h_body=256.
+
+The estimator (`pipeline::estimate_gpu_memory_bytes_strip_pair`)
+predicts a smaller footprint (< 25% of Full per
+`mode_b_walker_parity.rs:120`); the runtime gap (~680 MiB) is
+`gauss_ref` + `gauss_alt` still full-image at shallow levels. The
+estimator models the **post-P2.7-full target**, not today's runtime
+peak.
+
+---
+
 > **Status (task #79, 2026-05-26): JOD-preserving Mode E lands in
 > phases.** Task #79 reintroduces `MemoryMode::Strip { h_body }` as a
 > mode-E variant: the reference-side state lives in dedicated full-
 > image buffers, and the dist side runs the standard pipeline against
 > them. **JOD output is bit-stable with Full mode** (within the
 > Atomic<f32> reduction-order band, ≤ 1e-4 abs JOD), unlike the
-> rolled-back capped-pyramid variant. The supported `MemoryMode` is
-> now `{ Auto, Full, Strip { h_body } }`. Phase 1+2 ships dedicated
+> rolled-back capped-pyramid variant. Phase 1+2 ships dedicated
 > ref-cache + snapshot/restore plumbing; Phase 3 (per-strip dist
 > walker that shrinks the dist working set) is multi-day follow-on
 > work — see "Phase status" below.
@@ -280,7 +337,19 @@ to be the per-strip reader once the walker is built.
 
 ### Phase 3 Approach B incremental landing (2026-05-26 follow-on)
 
-**Status: pool stage strip-aware. CSF + masking + dist weber pending.**
+> **Status superseded 2026-05-27**: this section documents the FIRST
+> chunk to land — only the per-strip pool kernel. P2.1b through P2.7
+> (CHANGELOG.md:1282-1497) have since shipped: per-strip
+> `bands_dis_strip`, `bands_ref_strip`, `DBandsTransient` t_p_*/m_*,
+> all of `WeberScratch.{l_bkg_fine, log_l_bkg, log_l_bkg_dis,
+> vscratch_*}`, plus the outer-loop inversion. Mode B at 4096²
+> h_body=256 dropped from this section's 3457 MiB nvsmi to **1502 MiB
+> (-64.4% vs Full)** per the "Current shipped state" table at the
+> top of this file. See the "P2.x LANDED" sections below for the
+> actual current details. The text below survives as
+> methodology trace for the first walker landing.
+
+**Original 2026-05-26 status: pool stage strip-aware. CSF + masking + dist weber pending.**
 
 The follow-on session shipped the first strip-aware kernel and
 walker:
@@ -324,44 +393,52 @@ memory wins are gated on the kernel-port work below.
 
 #### Next chunks (each ~1 day of focused kernel work + parity test)
 
-The chunks below port the rest of the cvvdp pipeline to strip-aware
-kernels. Each is small enough to land alone, ship a strip-aware
-parity test, and incrementally reduce the d_scratch /
-bands_dis / weber_scratch peak footprint:
+> **[SUPERSEDED 2026-05-27] All 6 chunks have landed.** The chunks
+> below were the work plan as of the 2026-05-26 pool-walker tick;
+> they have since been completed through the P2.x commit chain on
+> 2026-05-27. See CHANGELOG.md:1282-1497 for the commit-by-commit
+> history. Status per chunk:
 
-1. **Strip-aware pu_blur kernels** — add `(body_offset_y, logical_h)`
-   to `pu_blur_v_3ch_scaled_kernel` and `pu_blur_h_3ch_kernel`. The
-   horizontal kernel is trivial (no vertical halo); the vertical
-   needs the same reflection-at-logical-edge fix as the pyramid
-   downscale plan.
-2. **Strip-aware CSF apply** — `csf_apply_3ch_kernel` /
-   `csf_apply_6ch_kernel` are per-pixel; trivial offset
-   parameterisation.
-3. **Strip-aware masking chain** — `mult_mutual_3ch_*` /
-   `subtract_kernel` / etc. are per-pixel; trivial.
-4. **Per-strip d_scratch slab allocator** — sized
-   `(strip_h + 2 × halo_at_base) × width` per band, where
-   `halo_at_base = 6 × 2^min(k, K_HYBRID)` and K_HYBRID is the cut
-   level below which we still run full-image (see the deep-band
-   problem table). For `h_body = 512`, `K_HYBRID = 4` lets bands
-   0-3 run strip-aware and bands 4..n_levels run full-image.
+1. **Strip-aware pu_blur kernels** — ✓ shipped: see
+   `src/kernels/masking.rs:295` (`pu_blur_h_3ch_strip_aware_kernel`)
+   and `src/kernels/masking.rs:598`
+   (`pu_blur_v_3ch_scaled_strip_aware_kernel`). Dispatched from
+   `_run_band_masking_strip_*` at `pipeline.rs:6593, 6637`. Tests:
+   `tests/strip_kernel_parity.rs`,
+   `tests/strip_mode_b_csf_halo_parity.rs`.
+2. **Strip-aware CSF apply** — ✓ shipped (degenerate). CSF is per-
+   pixel (`src/kernels/csf.rs:126, 220`), so no separate strip kernel
+   is needed. Dispatched on strip-sized buffers via
+   `_dispatch_dist_weber_csf_strip_s_for_level` (`pipeline.rs:5750`).
+3. **Strip-aware masking chain** — ✓ shipped (degenerate). All masking
+   sub-kernels (`min_abs_3ch_kernel`, `mult_mutual_3ch_*`) are
+   per-pixel; only the PU-blur kernels needed strip-aware variants.
+   Walker: `_run_band_masking_strip_s_for_level` at
+   `pipeline.rs:6482`.
+4. **Per-strip d_scratch slab allocator** — ✓ shipped (P2.4 per
+   CHANGELOG.md:1353-1386). `DBandsTransient::new_strip(client,
+   n_strip)` allocates t_p_*/m_* at strip dims;
+   `_run_d_bands_strip_major_shallow` (`pipeline.rs:5366-5391`)
+   sizes them at `bw × R_k` where R_k is the back-projected strip
+   height from `mode_b_strip_h_at_level`.
 5. **Strip-aware downscale / upscale_v / upscale_h /
-   subtract_weber_3ch** — the four pyramid kernels. Each needs the
-   `(body_offset_y, logical_h)` reflection treatment. The downscale
-   kernel has the pycvvdp parity-bug compat delta at the right
-   column — keep using `logical_sw % 2` / `logical_sh % 2` for the
-   delta condition.
-6. **_dispatch_dist_weber_pyramid_only_strip** — walker that calls
-   the new kernels with per-strip slab views. The
-   `_run_d_bands_band_loop` already in Phase 3 is what consumes the
-   per-strip bands_dis; the loop body needs the same
-   `(body_offset, logical_h)` plumbing for the masking chain.
+   subtract_weber_3ch** — ✓ shipped: `src/kernels/pyramid.rs:290,
+   784, 1013, 1396`. The downscale kernel's pycvvdp bug-compat delta
+   carries through; tested by `tests/strip_kernel_parity_pyramid.rs`.
+6. **`_dispatch_dist_weber_pyramid_only_strip`** — ✓ shipped (split
+   across helpers): the conceptual function is realised via
+   `_dispatch_dist_weber_csf_strip_s_for_level` (Mode B fused weber+csf
+   per-strip) +  `_run_d_bands_strip_major_shallow` (the strip-major-
+   outer caller). The exact name in the chunk list doesn't exist as
+   a single symbol; the functionality lives in those two helpers.
 
-When all six chunks ship, the per-strip d_scratch + bands_dis
-footprint shrinks to `n_strips × per_strip_pixels << full_pixels`,
-hitting the original `<= 70% of Full` Phase 3 target. The
-JOD-preservation contract stays tight (each chunk's parity test
-pins bit-exact match on full-image inputs vs strip-aware path).
+**Memory result**: per-strip d_scratch + bands_dis footprint shrunk
+as planned. Measured 4096² h_body=256 Mode B nvsmi delta dropped from
+the original chunk's 3457 MiB to **1502 MiB (-64.4% vs Full 4225
+MiB)** post-P2.7-partial. The `<= 70% of Full` target was beaten.
+The remaining ~680 MiB gap (vs the estimator's ≤ 25% prediction) is
+`gauss_ref` + `gauss_alt` still full-image at shallow levels — the
+P2.7 honest-stop documented in CHANGELOG.md:1296-1308.
 
 #### Specific implementation hints for the next agent
 
