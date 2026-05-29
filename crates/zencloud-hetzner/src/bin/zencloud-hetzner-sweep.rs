@@ -24,8 +24,7 @@ use zen_cloud_salad::r2_ops::{R2OperatorImpl, short_ts};
 use zencloud_hetzner::api::{HetznerApi, load_token_from_file_or_env};
 use zencloud_hetzner::provider::{HetznerProviderConfig, HetznerProviderHandle};
 use zenfleet_orchestrator::{
-    FleetSweep, QueueJob, R2Operator, SpeculativeConfig, SweepConfig,
-    compute_provisioned_replicas,
+    FleetSweep, QueueJob, R2Operator, SpeculativeConfig, SweepConfig, compute_provisioned_replicas,
 };
 
 const DEFAULT_BUCKET: &str = "zen-tuning-ephemeral";
@@ -235,9 +234,7 @@ async fn diagnostic_watchdog(
     after_secs: u64,
     out_log: PathBuf,
 ) {
-    eprintln!(
-        "[diag] watchdog scheduled: fires in {after_secs}s (selector={label_selector})"
-    );
+    eprintln!("[diag] watchdog scheduled: fires in {after_secs}s (selector={label_selector})");
     tokio::time::sleep(Duration::from_secs(after_secs)).await;
 
     // Pick the first running replica with a public IP.
@@ -267,9 +264,7 @@ async fn diagnostic_watchdog(
             return;
         }
     };
-    eprintln!(
-        "[diag] target replica id={id} name={name} status={status} ip={ip}"
-    );
+    eprintln!("[diag] target replica id={id} name={name} status={status} ip={ip}");
 
     // Run the SSH command. Multi-line shell payload — log everything
     // useful for disambiguating the four failure modes (cloud-init
@@ -298,18 +293,29 @@ journalctl -u docker --no-pager -n 50 2>&1 || echo "(journalctl missing)"
 echo "=== done ==="
 "#;
 
-    let known_hosts = PathBuf::from("/tmp/zen-fleet-known-hosts");
+    // /dev/null known-hosts + StrictHostKeyChecking=no: every sweep
+    // tears down + reprovisions; Hetzner recycles public IPs across
+    // tenants and across our own iterations. A persistent known-hosts
+    // file produces "REMOTE HOST IDENTIFICATION HAS CHANGED!" failures
+    // on the second sweep onward (observed iter 4, sweep 2: same IP
+    // 167.233.19.242 came back assigned to a different box with a
+    // different host key, ssh exited 255 before any command ran).
+    // Since we authenticate via the launcher-injected ed25519 key —
+    // NOT against the box's host key — accepting any host fingerprint
+    // is the right tradeoff for a one-shot, freshly-booted diagnostic.
     let ssh_args = vec![
         "-i".to_string(),
         private_key.to_string_lossy().to_string(),
         "-o".to_string(),
-        "StrictHostKeyChecking=accept-new".to_string(),
+        "StrictHostKeyChecking=no".to_string(),
+        "-o".to_string(),
+        "UserKnownHostsFile=/dev/null".to_string(),
         "-o".to_string(),
         "ConnectTimeout=10".to_string(),
         "-o".to_string(),
         "BatchMode=yes".to_string(),
         "-o".to_string(),
-        format!("UserKnownHostsFile={}", known_hosts.display()),
+        "LogLevel=ERROR".to_string(),
         format!("root@{ip}"),
         remote_cmd.to_string(),
     ];
@@ -380,8 +386,7 @@ async fn main() -> Result<()> {
 
     // Load the diagnostic SSH public key (best-effort; absent file =>
     // disable SSH diagnostics, no error).
-    let ssh_pubkey = load_ssh_pubkey(args.ssh_pubkey_file.as_deref())
-        .context("load SSH pubkey")?;
+    let ssh_pubkey = load_ssh_pubkey(args.ssh_pubkey_file.as_deref()).context("load SSH pubkey")?;
     let ssh_private_key_path = args
         .ssh_private_key
         .clone()
@@ -391,20 +396,17 @@ async fn main() -> Result<()> {
             PathBuf::from(home).join(".ssh/zen-fleet")
         });
 
-    let replicas_provisioned = compute_provisioned_replicas(
-        args.replicas,
-        args.replicas_overshoot,
-        args.provider_quota,
-    );
+    let replicas_provisioned =
+        compute_provisioned_replicas(args.replicas, args.replicas_overshoot, args.provider_quota);
 
     if args.dry_run {
         // Preview: dump the synthesized POST body + cloud-init for one
         // replica + the queue-push paths.
-        let parent =
-            load_r2_parent_creds_or_env().context("load R2 parent cred (for cloud-init preview)")?;
+        let parent = load_r2_parent_creds_or_env()
+            .context("load R2 parent cred (for cloud-init preview)")?;
         let preview_env = preview_env_block(&sweep_id, &parent.account_id, &args.bucket);
-        let user_data_preview =
-            zencloud_hetzner::cloud_init::build_user_data(&zencloud_hetzner::cloud_init::WorkerBootstrap {
+        let user_data_preview = zencloud_hetzner::cloud_init::build_user_data(
+            &zencloud_hetzner::cloud_init::WorkerBootstrap {
                 image: args.image.clone(),
                 sweep_id: sweep_id.clone(),
                 r2_account_id: parent.account_id.clone(),
@@ -418,7 +420,8 @@ async fn main() -> Result<()> {
                 extra_env: preview_env,
                 chunks_queue_prefix: format!("runs/{sweep_id}/queue/"),
                 ssh_authorized_pubkey: ssh_pubkey.clone(),
-            });
+            },
+        );
         let synth_post = json!({
             "name": format!("{}-000", group_name),
             "server_type": args.server_type,
@@ -564,14 +567,10 @@ async fn main() -> Result<()> {
         let after_secs = args
             .diagnostic_after_secs
             .unwrap_or(args.chunk_ttl_secs + 60);
-        let out_log = PathBuf::from(format!(
-            "/tmp/hetzner_replica_diag_{}.log",
-            sweep_id
-        ));
+        let out_log = PathBuf::from(format!("/tmp/hetzner_replica_diag_{}.log", sweep_id));
         let pk_path = ssh_private_key_path.clone();
         Some(tokio::spawn(async move {
-            diagnostic_watchdog(api_clone, label_selector, pk_path, after_secs, out_log)
-                .await;
+            diagnostic_watchdog(api_clone, label_selector, pk_path, after_secs, out_log).await;
         }))
     } else {
         if !args.diagnostic_on_ttl {
