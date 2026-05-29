@@ -43,6 +43,34 @@ impl DashData {
         };
         Ok(Self { rows, blobs, workers })
     }
+
+    /// Load the ledger from local paths or `s3://` URIs (via s5cmd when s3://; needs `endpoint` and
+    /// AWS_* creds in env). This is how the deployed dashboard reads the live R2 ledger. blob-index
+    /// and workers stay local for now (s3 for those is a follow-up).
+    pub fn from_sources(
+        ledger: &[String],
+        endpoint: Option<&str>,
+        blob_index: Option<&Path>,
+        workers_json: Option<&Path>,
+    ) -> Result<Self, DashError> {
+        let mut rows = Vec::new();
+        for uri in ledger {
+            rows.extend(zen_ledger::read_ledger_uri(uri, endpoint)?);
+        }
+        let blobs = match blob_index {
+            Some(p) => zen_ledger::read_blob_index(p)?,
+            None => Vec::new(),
+        };
+        let workers = match workers_json {
+            Some(p) => {
+                let bytes = std::fs::read(p)
+                    .map_err(|e| DashError::Io(format!("read {}: {e}", p.display())))?;
+                serde_json::from_slice(&bytes).map_err(|e| DashError::Json(e.to_string()))?
+            }
+            None => Vec::new(),
+        };
+        Ok(Self { rows, blobs, workers })
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

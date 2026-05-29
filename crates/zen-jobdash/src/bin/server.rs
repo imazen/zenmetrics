@@ -62,13 +62,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn load() -> Result<DashData, zen_jobdash::DashError> {
-    let ledger: Vec<PathBuf> = std::env::var("ZEN_LEDGER")
-        .map(|s| s.split(',').filter(|p| !p.is_empty()).map(PathBuf::from).collect())
+    // ZEN_LEDGER entries may be local paths or s3:// URIs; ZEN_R2_ENDPOINT (+ AWS_* creds) is used
+    // for the s3:// ones. This is how the deployed dashboard reads the live R2 ledger.
+    let ledger: Vec<String> = std::env::var("ZEN_LEDGER")
+        .map(|s| s.split(',').filter(|p| !p.is_empty()).map(String::from).collect())
         .unwrap_or_default();
-    let ledger_refs: Vec<&std::path::Path> = ledger.iter().map(PathBuf::as_path).collect();
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
     let blob = std::env::var("ZEN_BLOB_INDEX").ok().map(PathBuf::from);
     let workers = std::env::var("ZEN_WORKERS_JSON").ok().map(PathBuf::from);
-    DashData::from_local(&ledger_refs, blob.as_deref(), workers.as_deref())
+    DashData::from_sources(&ledger, endpoint.as_deref(), blob.as_deref(), workers.as_deref())
 }
 
 /// Output blobs of Done rows are the referenced set (a proxy until the full reachability join over
