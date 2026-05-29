@@ -1,0 +1,19 @@
+# Railway service config for the zen-jobdash control plane.
+# Builds ONLY the dashboard crate (not the GPU/codec workspace), so deploys are fast.
+#
+# Set these env vars in the Railway dashboard:
+#   ZEN_LEDGER        comma-separated parquet ledger paths (or an R2-synced dir's files)
+#   ZEN_BLOB_INDEX    blob-index parquet path (optional)
+#   ZEN_WORKERS_JSON  worker-heartbeat JSON array path (optional)
+#   PORT              injected automatically by Railway
+#
+# The control plane reads the ledger; it never runs workers. Point ZEN_LEDGER at an R2-synced
+# location (a sidecar that `aws s3 sync`s the ledger prefix) once R2 wiring lands.
+
+[build]
+builder = "nixpacks"
+buildCommand = "cargo build --release -p zen-jobdash"
+
+[deploy]
+startCommand = "./target/release/zen-jobdash"
+restartPolicyType = "always"
