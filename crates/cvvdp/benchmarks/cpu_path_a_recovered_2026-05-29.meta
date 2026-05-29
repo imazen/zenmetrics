@@ -1,0 +1,83 @@
+project: cvvdp CPU Path A — RECOVERED + RE-MEASURED (task #127 recovery)
+date: 2026-05-29
+host: lilith (AMD Ryzen 9 7950X 16-Core, 32 threads, 128 GB RAM, water-cooled)
+os: Linux 6.6.114.1-microsoft-standard-WSL2
+
+git_commit: eb925f13ea5b94f3fabb5694c5d8a722bf93b51b
+  (recovered Path A tip 4cec7e70 = phase9zf path-a + parity-verify commit eb925f13;
+   Path A merge-base with prior master = 5979e084; 16 Path-A commits recovered onto
+   master after a push-race orphan lost them — see CHANGELOG.)
+build_commit: eb925f13ea5b94f3fabb5694c5d8a722bf93b51b
+binary: target/release/cpu-profile
+driver: benchmarks/heaptrack/drivers/cpu_profile/src/main.rs
+  run_cvvdp strip + warm_ref_strip arms construct via Cvvdp::new_strip(w,h,params,512)
+  (Path A strip-major dispatcher), NOT the pool-only score_strip that produced the
+  earlier peak==full canonical-table rows.
+
+toolchain: rustc 1.95.0 (59807616e 2026-04-14) / cargo 1.95.0 (f2d3ce0bd 2026-03-21)
+profile: workspace [profile.release] — opt-level=3, lto="thin", codegen-units=16,
+         debug="line-tables-only". NO -C target-cpu=native (runtime archmage SIMD
+         dispatch only). Global ~/.cargo only sets +simd128 (WASM, irrelevant on x86_64).
+heaptrack: 1.3.0
+
+machine_state: QUIET. Verified before the measurement run: no process > 30% CPU
+  except claude daemons (~13%); zensim v02_372feat_sweep.py (the only heavy job
+  earlier, ~29 threads) had finished; no fresh (<5 min) .workongoing markers besides
+  this agent's own. Re-checked immediately before launching the wall block.
+
+methodology:
+- HEAP: PROCESS peak via `heaptrack target/release/cpu-profile cvvdp <mode> <W> <H>`,
+  then `heaptrack_print <trace>.zst | grep "peak heap memory consumption"`.
+  This is the heaptrack process peak (the only acceptable memory evidence per the
+  global rule — NOT RSS-from-ps, NOT allocator-API bytes, NOT struct-size estimates).
+  Heaptrack ran in a separate process from the wall runs (heaptrack adds overhead).
+- WALL: score-only wall = the driver's `t_score_ms` (excludes the synth-image step),
+  median of N=7 timed release runs per (mode,size), NO heaptrack attached. Spread is
+  tight (16 MP full 4522–4664 ms; 30 MP full 8350–8582 ms), see wall_score_ms_all.
+- NO EXTRAPOLATION: every heap and wall number is a real run at the stated dims.
+  16 MP = 4096×4096, 30 MP = 6000×5000 (the canonical table's large size, exact dims).
+- The driver auto-generates deterministic ref/dist; JOD score column confirms strip
+  and full produce identical scores within each size (bit-identical, matching the
+  270-cell strip_parity to_bits() gate that passed 6/6 on this same commit).
+
+RESULTS (peak heap from heaptrack, wall = median of 7 t_score_ms runs):
+
+  size  mode            heap_GB   wall_ms   vs-baseline(heap / wall)
+  16MP  full            3.660     4610.07   baseline
+  16MP  strip           1.580     2603.53   -56.8% / -43.5%   <- lower AND faster
+  16MP  warm_ref        3.150     4476.60   baseline
+  16MP  warm_ref_strip  1.550     2621.70   -50.8% / -41.4%   <- lower AND faster
+  30MP  full            6.540     8482.17   baseline
+  30MP  strip           2.550     4550.69   -61.0% / -46.3%   <- lower AND faster
+  30MP  warm_ref        5.640     7819.37   baseline
+  30MP  warm_ref_strip  2.490     4599.24   -55.8% / -41.2%   <- lower AND faster
+
+ACCEPTANCE GATE (task #127):
+  strip peak heap < full peak heap  — MET at 16 MP (1.58 < 3.66) AND 30 MP (2.55 < 6.54)
+  strip wall <= full wall           — MET at 16 MP (2604 <= 4610) AND 30 MP (4551 <= 8482)
+  No crossover: strip wins on both axes at both sizes. (Small sizes do have per-strip
+  overhead — at 512^2 strip is slightly slower than full, ~155 vs ~109 ms — but the
+  task requires the win at 16/30 MP, which holds decisively.)
+
+NOTE vs prior #127 claim (cpu_path_a_2026-05-28.meta, now superseded for wall):
+- HEAP matches the prior claim almost exactly: strip 1.58 GB @16MP (claimed 1.58),
+  warm_ref_strip 1.55 GB @16MP (claimed 1.55). Independently reproduced.
+- WALL absolute numbers differ from the prior claim (prior: full 11.32 s, strip 6.04 s
+  @16MP; this run: full 4.61 s, strip 2.60 s). The prior numbers were "median of 3
+  runs" with no recorded machine-quiet state and likely a different timer (whole-process
+  vs t_score_ms). The RELATIVE win (strip ~-43% @16MP) is consistent with the prior
+  claim's -47%. Per the global no-extrapolation / re-measure rule, the numbers in THIS
+  file are the authoritative ones; the prior file's wall column is treated as an
+  unverified historical estimate.
+
+raw heaptrack traces: NOT committed from this run (the prior chain's
+  benchmarks/heaptrack/*.zst @16/40MP are the committed traces; this run's traces lived
+  in /tmp/patha_ht.* and were consumed for the peak figures above). The peak_heap_bytes
+  column IS the heaptrack-extracted process peak.
+
+commands:
+  cargo build --release -p cpu-profile
+  BIN=target/release/cpu-profile \
+    OUT_TSV=crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv \
+    N_WALL=7 bash crates/cvvdp/benchmarks/measure_path_a.sh
+  (harness committed at crates/cvvdp/benchmarks/measure_path_a.sh)
