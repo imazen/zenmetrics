@@ -186,6 +186,28 @@ Workspace conventions per the global rules:
   `scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py`. Drivers in
   `crates/<metric>-gpu/examples/coldstart_one.rs` (`0caf36d5`).
 
+- **CPU-vs-GPU one-shot crossover table for all 6 perceptual metrics
+  (task #141, 2026-05-29, `33962e8`).** Measured clean CPU full-mode
+  zenbench wall (7950X, release, NO `-C target-cpu=native`) for
+  ssim2/dssim/butter/iwssim/zensim (cvvdp via the same harness too) at
+  512²/1024²/2048²/4096² (16 MP) + 12 MP + 30 MP — 198 rows, every cell a
+  real interleaved zenbench run with a score sentinel. Joined with the
+  task #140 GPU cold one-shot (`cold_total_ms`) and GPU warm per-call to
+  get the size at which a single cold-process score flips from CPU-faster
+  to GPU-faster. Findings: cvvdp/ssim2/butter/zensim CPU-faster at ALL
+  measured GPU-cold sizes (even 16 MP); dssim crossover between 4.2 and
+  16.8 MP; iwssim crossover between 1.0 and 4.2 MP. Batch/warm: GPU faster
+  at every size for all 6. Data in
+  `benchmarks/cpu_wall_all_metrics_2026-05-29.{tsv,meta}` +
+  `benchmarks/cpu_gpu_crossover_2026-05-29.tsv`, human table in
+  `docs/CPU_GPU_CROSSOVER_2026-05-29.md`, synthesis in
+  `benchmarks/synth_crossover.py`. Also added a `4096` size label and a
+  `CPU_WALL_NO_GATE=1` toggle to the cpu-wall harness (`604d057a`) — the
+  default zenbench resource gate's per-round full-process scan dominated
+  wall time on this ~1000-process box (dssim@512 31 s → 4 s with the gate
+  off). NO EXTRAPOLATION: GPU cold only measured ≤16 MP, so CPU 12/30 MP
+  cells are flagged `GPU-cold unmeasured >16MP`.
+
 - **Phase 9.Z.F Path A (2026-05-28) — cvvdp CPU strip-major dispatcher
   shipped.** Lands the architectural change that drops `score_strip`
   peak heap from 3.66 GB → 1.55 GB at 16 MP (under 1.7 GB target) and
