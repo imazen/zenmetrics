@@ -1,0 +1,23 @@
+tool: scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py
+task: 140
+git_sha: 0caf36d5db3a
+host: lilith
+gpu_name: NVIDIA GeForce RTX 5070
+gpu_mem_total: 12227 MiB
+gpu_driver: 596.21
+cuda_path: /usr/local/cuda
+cuda_sdk_version: 13.2.1 (driver CUDA 13.2; runtime dlopen via cubecl)
+cubecl_version: 0.10.1 (zenforks-cubecl, imazen/zenforks-cubecl rename of tracel-ai/cubecl 0.10)
+backends_run: cuda
+sizes_run: 512,1024,4mp,16mp
+metrics_run: butteraugli-gpu,cvvdp-gpu,ssim2-gpu,dssim-gpu,iwssim-gpu,zensim-gpu
+samples_per_cell: 7
+warm_reps_per_process: 10
+disk_cache_state: warm
+started_utc: 2026-05-29T21:02:34Z
+method: fresh-process-per-cold-sample (cold = new CUDA context); MEDIAN over n_samples processes per phase; warm_per_call = median of intra-process WORKER_REPS calls. Every timed call ends in a host readback (client.read_one inside reduce), forcing GPU sync.
+exact_dims: 512=512x512, 1024=1024x1024, 4mp=2048x2048, 16mp=4096x4096
+warm_disk_cache_command: python3 scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py --metrics all --sizes 512,1024,4mp,16mp --samples 7 --reps 10 --disk-cache-state warm --out benchmarks/gpu_coldstart_2026-05-29.tsv
+disk_cache_handling: ~/.nv/ComputeCache (cubecl/NVIDIA PTX disk cache, 1.1 GiB) was WARM (prepopulated by prior runs) for all 24 warm rows -- the realistic deployed case (process N>1 after the box has run any GPU job). Cold-disk rows: the original cache was RENAMED aside (mv to .bak, never rm), one truly-first-ever process measured per metric (sample A), then the original cache RESTORED. Cold-disk rows have n_samples=1 by nature (the empty-cache state only exists once per clear). cold_disk_command per metric: mv ~/.nv/ComputeCache aside; build coldstart_one; run one WORKER_W/H process; restore cache.
+cold_disk_finding: first-ever JIT (empty PTX disk cache) inflates first_compute_ms by metric-dependent factor -- butteraugli 1024 ~4.2x (303->1288 ms, +~1050 ms one-shot), zensim 1024 ~1.3x (382->506 ms, +~175 ms). Penalty scales with kernel count/complexity, not image size. Once the cache is populated the second process onward sees the warm-disk numbers.
+command: see warm_disk_cache_command and cold_disk_command above
