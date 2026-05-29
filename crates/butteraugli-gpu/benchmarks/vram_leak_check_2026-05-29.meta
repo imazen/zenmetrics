@@ -1,0 +1,42 @@
+task: 147 — butteraugli-gpu VRAM leak check
+driver: crates/butteraugli-gpu/examples/vram_leak_check.rs
+analyzer: monotonic-floor classifier (NOISE_BAND=48 MiB; lower-envelope end-start + >=70% non-decreasing steps)
+git_change: xpynymot (commit 10b3c90e at write time; final commit on master after push)
+host: lilith
+gpu_name: NVIDIA GeForce RTX 5070
+gpu_mem_total: 12227 MiB
+gpu_driver: 596.21
+cuda_runtime: 13.2
+backend: cubecl CudaRuntime, release build (--no-default-features --features cuda,cubecl-types)
+date_utc: 2026-05-29 (rows produced 2026-05-29T23:5x .. 2026-05-30T00:16Z UTC)
+
+probe: nvidia-smi --query-gpu=memory.used (GLOBAL card MiB; --query-compute-apps
+  returns empty under WSL2). Each sample = MIN of 4-5 reads after
+  block_on(client.sync()) + 60ms settle (transient-spike-robust). Delta is
+  vs a process-start baseline (also min-of-K).
+
+grid:
+  checks: many_scores (N=100), many_new_refs (N=100), create_drop (N=30 in grid2; N=40 in 1MP clean rerun)
+  modes:  full, warm_ref, strip, warm_ref_strip
+  sizes:  1MP (1024x1024), 16MP (4096x4096)
+  body_h (strip): 256
+  cells:  22 total (4 modes x 2 sizes x 3 checks, minus many_new_refs strip which folds into warm_ref_strip)
+
+provenance of rows:
+  16MP rows: clean grid2 pass (quiet-window-gated, min-of-4). zensim GPU eval
+    ran concurrently but did NOT contaminate 16MP cells (longer duration +
+    larger working set averaged out transients; cross-checked vs the peak-VRAM
+    sweep gpu_vram_sweep_2026-05-28.tsv to within ~5%).
+  1MP rows: clean re-run (strict per-cell quiet-gate util<5 & free>7500 for 3
+    consecutive reads, min-of-5, auto-retry if delta<0 or range>80 MiB; all 11
+    cells passed on attempt 1). This replaced 2 zensim-contaminated 1MP cells
+    from the first single-sample pass (many_scores warm_ref: range 1346 ->
+    33 MiB; many_scores strip: delta -1200 -> floor 143).
+
+verdict: NO LEAK. All 22 cells plateau; lower-envelope end-start in [-33, +18] MiB
+  (below the 48 MiB noise band). Confirms #144: first set_reference allocates the
+  working set, subsequent refs/scores/instances reuse it. Regression guard:
+  crates/butteraugli-gpu/tests/vram_no_leak.rs (3 tests pass, 87.2s on RTX 5070).
+
+in-repo TSV columns (per-cell summary): check  mode  size_mp  w  h  cycles  floor_mib  delta_min_mib  delta_max_mib  range_mib  env_end_minus_start_mib  mono_pct  verdict
+full per-cycle TSV (block storage, see *_per_cycle.pointer.md): check  mode  size_mp  w  h  cycle  vram_used_mib  vram_delta_mib

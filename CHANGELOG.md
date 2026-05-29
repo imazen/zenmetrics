@@ -128,6 +128,35 @@ Workspace conventions per the global rules:
 
 ### Investigated
 
+- **butteraugli-gpu has NO VRAM leak — repeated use plateaus, confirming
+  #144's reuse claim** (task #147, 2026-05-29). Probed live VRAM
+  (`nvidia-smi --query-gpu=memory.used`, min-of-4/5 reads after
+  `client.sync()`) across three usage patterns × four modes (full /
+  warm_ref / strip / warm_ref_strip) × two sizes (1 MP, 16 MP): (1) one
+  instance, 100 scores; (2) one instance, 100 **distinct**
+  `set_reference` calls (the path #144 flagged); (3) 30–40
+  construct→score→drop cycles. All 22 cells **plateau** — lower-envelope
+  end−start in [−33, +18] MiB (below the 48 MiB nvidia-smi quantization
+  band; several negative). The headline: at 16 MP the working set is
+  ~3.8 GiB and 100 distinct references hold at 3840 MiB and return to
+  exactly 3840; 30 full reconstructions (each ~3.2 GiB) hold at ~3830 MiB
+  instead of OOMing the 12 GiB card. Source confirms why: `Butteraugli<R>`
+  holds a fixed handle set (no growing `Vec<Handle>`); whole-image
+  `set_reference` overwrites planes in place (no new alloc), and the
+  strip-mode `ref_cache_full` sibling is allocated once. This is healthy
+  CubeCL pool reuse, not a leak. WSL2 hides per-PID GPU accounting
+  (`--query-compute-apps` empty) so the global probe was used; a
+  concurrent `zensim` eval contaminated the *fast* 1 MP cells of the first
+  pass (one delta went to −1200 MiB — impossible for a leak), so those
+  were re-run under a strict quiet-window gate with auto-retry. 16 MP
+  plateaus matched the independent peak-VRAM sweep to ~5 %. Regression
+  guard added: `crates/butteraugli-gpu/tests/vram_no_leak.rs` (3
+  cuda-gated tests assert post-warmup floor growth ≤ 96 MiB; verified
+  PASS on RTX 5070, growth 0 / 33 / −33 MiB). Driver:
+  `crates/butteraugli-gpu/examples/vram_leak_check.rs`; data + provenance:
+  `crates/butteraugli-gpu/benchmarks/vram_leak_check_2026-05-29.{tsv,meta}`;
+  detail: `crates/butteraugli-gpu/docs/VRAM_LEAK_CHECK_2026-05-29.md`.
+
 - **ssim2-gpu warm_ref VRAM "regression" is a measurement artifact, not
   a real retention bug** (task #138, 2026-05-28). The
   `gpu_metrics_sweep_2026-05-28.tsv` reading that whole-image `warm_ref`
