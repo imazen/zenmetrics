@@ -149,9 +149,10 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
     // This explicit client() call IS the CUDA context init. The umbrella
     // Metric::new below calls R::client() internally and gets THIS same
     // cached client (cubecl caches per device), so the context init is
-    // paid exactly once here.
+    // paid exactly once here. We keep the handle to drain A's queue
+    // before building B (see drop(a) below).
     let t = Instant::now();
-    let _client = CudaRuntime::client(&Default::default());
+    let client = CudaRuntime::client(&Default::default());
     let client_ms = t.elapsed().as_secs_f64() * 1e3;
     emit("Q1_crossmetric", metric_a, metric_b, "client_init", client_ms, 1, "cold_context");
 
@@ -177,10 +178,24 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
     emit("Q2_kernelwarm", metric_a, "-", "A_warm", median(a_warm.clone()), a_warm.len(),
          &format!("all={}", a_warm.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
 
-    // --- B_first: build B + first score. Context is WARM (A ran). A's
-    // kernels are loaded but B's are NOT — so this measures B's alloc +
-    // B's kernel JIT only, NOT context init. Compare to B's fresh-process
-    // cold_total from #140 to quantify the context-sharing saving. ---
+    // Drop A's GPU working set before building B. This frees A's buffers
+    // back to the cubecl pool but KEEPS the CUDA context alive (the
+    // context is process-global, not owned by `a`). Two reasons:
+    //  1. Correctness/realism: the real warm worker processes one metric
+    //     at a time — it does NOT hold two metrics' full working sets
+    //     simultaneously. At 16 MP, cvvdp(~3.4 GB)+ssim2(~5.7 GB) held
+    //     together would exceed the free VRAM on a 12 GiB card shared
+    //     with the WSL2/Windows desktop.
+    //  2. The sync drains A's queue so B's first-call timer is not
+    //     polluted by A's still-in-flight work.
+    drop(a);
+    cubecl::future::block_on(client.sync()).expect("sync after dropping A");
+
+    // --- B_first: build B + first score. Context is WARM (A ran; context
+    // survived the drop). A's kernels are loaded but B's are NOT — so this
+    // measures B's alloc + B's kernel JIT only, NOT context init. Compare
+    // to B's fresh-process cold_total from #140 to quantify the
+    // context-sharing saving. ---
     let t = Instant::now();
     let mut bm = build_metric(kind_b, w, h);
     let b_new_ms = t.elapsed().as_secs_f64() * 1e3;
