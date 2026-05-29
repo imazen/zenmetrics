@@ -1,0 +1,176 @@
+metric	mode	size_label	size_w	size_h	size_mp	cold_or_warm	wall_ms	peak_heap_bytes	peak_heap_human	score	notes
+cvvdp	full	512^2	512	512	0.262	cold	51.4654	60030976	57.25M	9.457931518554688	
+cvvdp	strip	512^2	512	512	0.262	cold	56.1815	60030976	57.25M	9.457931518554688	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	warm_ref	512^2	512	512	0.262	cold	47.2956	51778682	49.38M	9.457931518554688	first call incl one-time precompute
+cvvdp	warm_ref	512^2	512	512	0.262	warm	28.2886	51778682	49.38M	9.457931518554688	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	512^2	512	512	0.262	cold	49.5289	51778682	49.38M	9.457931518554688	first call incl one-time precompute
+cvvdp	warm_ref_strip	512^2	512	512	0.262	warm	29.8324	51778682	49.38M	9.457931518554688	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	full	512^2	512	512	0.262	cold	24.8991	43526389	41.51M	81.36118652352606	
+ssim2	strip	512^2	512	512	0.262	cold	31.3320	50121932	47.80M	81.36119130803189	
+ssim2	warm_ref	512^2	512	512	0.262	cold	22.1625	40223375	38.36M	81.36118652352606	first call incl one-time precompute
+ssim2	warm_ref	512^2	512	512	0.262	warm	14.7495	40223375	38.36M	81.36118652352606	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	warm_ref_strip	512^2	512	512	0.262	cold	34.9469	53414461	50.94M	81.36119130803189	first call incl one-time precompute
+ssim2	warm_ref_strip	512^2	512	512	0.262	warm	23.3694	53414461	50.94M	81.36119130803189	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	full	512^2	512	512	0.262	cold	38.9546	53403975	50.93M	0.0009082989789719331	
+dssim	warm_ref	512^2	512	512	0.262	cold	39.4225	53403975	50.93M	0.0009082989789719331	first call incl one-time precompute
+dssim	warm_ref	512^2	512	512	0.262	warm	29.8482	53403975	50.93M	0.0009082989789719331	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	full	512^2	512	512	0.262	cold	16.4843	52449771	50.02M	4.637641906738281	
+butter	strip	512^2	512	512	0.262	cold	16.3328	51327795	48.95M	4.637641906738281	
+butter	warm_ref	512^2	512	512	0.262	cold	34.5108	54379151	51.86M	4.637641906738281	first call incl one-time precompute
+butter	warm_ref	512^2	512	512	0.262	warm	19.5373	54379151	51.86M	4.637641906738281	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	warm_ref_strip	512^2	512	512	0.262	cold	29.6174	71387054	68.08M	4.637641906738281	first call incl one-time precompute
+butter	warm_ref_strip	512^2	512	512	0.262	warm	15.8791	71387054	68.08M	4.637641906738281	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	full	512^2	512	512	0.262	cold	65.1259	40202403	38.34M	0.9988645601850352	
+iwssim	strip	512^2	512	512	0.262	cold	70.0157	41376808	39.46M	0.9988642923146356	
+iwssim	warm_ref	512^2	512	512	0.262	cold	67.1262	40202403	38.34M	0.9988645601850352	first call incl one-time precompute
+iwssim	warm_ref	512^2	512	512	0.262	warm	63.4389	40202403	38.34M	0.9988645601850352	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	warm_ref_strip	512^2	512	512	0.262	cold	62.5478	38440796	36.66M	0.9988642923146356	first call incl one-time precompute
+iwssim	warm_ref_strip	512^2	512	512	0.262	warm	39.7803	38440796	36.66M	0.9988642923146356	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	full	512^2	512	512	0.262	cold	8.3159	17731420	16.91M	80.47103767637235	
+zensim	strip	512^2	512	512	0.262	cold	7.6428	19409141	18.51M	80.47103767637235	
+zensim	warm_ref	512^2	512	512	0.262	cold	8.0014	18570280	17.71M	80.47103767637235	first call incl one-time precompute
+zensim	warm_ref	512^2	512	512	0.262	warm	6.0116	18570280	17.71M	80.47103767637235	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	warm_ref_strip	512^2	512	512	0.262	cold	7.8021	17458790	16.65M	80.47103767637235	first call incl one-time precompute
+zensim	warm_ref_strip	512^2	512	512	0.262	warm	6.2791	17458790	16.65M	80.47103767637235	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	strip	512^2	512	512	0.262	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+dssim	warm_ref_strip	512^2	512	512	0.262	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+cvvdp	full	1024^2	1024	1024	1.049	cold	213.8249	239830302	228.72M	9.458330154418945	
+cvvdp	strip	1024^2	1024	1024	1.049	cold	253.6170	239830302	228.72M	9.458330154418945	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	warm_ref	1024^2	1024	1024	1.049	cold	176.8519	206831616	197.25M	9.458330154418945	first call incl one-time precompute
+cvvdp	warm_ref	1024^2	1024	1024	1.049	warm	113.9228	206831616	197.25M	9.458330154418945	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	cold	242.9781	206831616	197.25M	9.458330154418945	first call incl one-time precompute
+cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	warm	152.9333	206831616	197.25M	9.458330154418945	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	full	1024^2	1024	1024	1.049	cold	92.3515	173822443	165.77M	82.6463630946432	
+ssim2	strip	1024^2	1024	1024	1.049	cold	112.2129	132319805	126.19M	82.67809238742598	
+ssim2	warm_ref	1024^2	1024	1024	1.049	cold	85.9057	160620871	153.18M	82.6463630946432	first call incl one-time precompute
+ssim2	warm_ref	1024^2	1024	1024	1.049	warm	56.9618	160620871	153.18M	82.6463630946432	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	warm_ref_strip	1024^2	1024	1024	1.049	cold	122.9004	156227338	148.99M	82.67809238742598	first call incl one-time precompute
+ssim2	warm_ref_strip	1024^2	1024	1024	1.049	warm	93.8721	156227338	148.99M	82.67809238742598	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	full	1024^2	1024	1024	1.049	cold	166.7268	213364244	203.48M	0.0009076181133820249	
+dssim	warm_ref	1024^2	1024	1024	1.049	cold	169.7629	213364244	203.48M	0.0009076181133820249	first call incl one-time precompute
+dssim	warm_ref	1024^2	1024	1024	1.049	warm	116.9107	213364244	203.48M	0.0009076181133820249	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	full	1024^2	1024	1024	1.049	cold	78.8964	239190671	228.11M	4.653627395629883	
+butter	strip	1024^2	1024	1024	1.049	cold	70.9218	151676518	144.65M	4.653627395629883	
+butter	warm_ref	1024^2	1024	1024	1.049	cold	135.2240	215681597	205.69M	4.653627395629883	first call incl one-time precompute
+butter	warm_ref	1024^2	1024	1024	1.049	warm	82.4614	215681597	205.69M	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	warm_ref_strip	1024^2	1024	1024	1.049	cold	131.4417	253933649	242.17M	4.653627395629883	first call incl one-time precompute
+butter	warm_ref_strip	1024^2	1024	1024	1.049	warm	69.3384	253933649	242.17M	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	full	1024^2	1024	1024	1.049	cold	342.7001	161302446	153.83M	0.9988505986968338	
+iwssim	strip	1024^2	1024	1024	1.049	cold	355.4496	115993477	110.62M	0.9988507148503634	
+iwssim	warm_ref	1024^2	1024	1024	1.049	cold	347.3639	161302446	153.83M	0.9988505986968338	first call incl one-time precompute
+iwssim	warm_ref	1024^2	1024	1024	1.049	warm	312.2026	161302446	153.83M	0.9988505986968338	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	warm_ref_strip	1024^2	1024	1024	1.049	cold	308.2224	108674416	103.64M	0.9988507148503634	first call incl one-time precompute
+iwssim	warm_ref_strip	1024^2	1024	1024	1.049	warm	199.5776	108674416	103.64M	0.9988507148503634	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	full	1024^2	1024	1024	1.049	cold	16.3799	61792583	58.93M	80.45376256741984	
+zensim	strip	1024^2	1024	1024	1.049	cold	26.4118	53435432	50.96M	80.45376256741984	
+zensim	warm_ref	1024^2	1024	1024	1.049	cold	17.6231	63260590	60.33M	80.45376256741984	first call incl one-time precompute
+zensim	warm_ref	1024^2	1024	1024	1.049	warm	13.8664	63260590	60.33M	80.45376256741984	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	warm_ref_strip	1024^2	1024	1024	1.049	cold	21.9292	53435432	50.96M	80.45376256741984	first call incl one-time precompute
+zensim	warm_ref_strip	1024^2	1024	1024	1.049	warm	23.0797	53435432	50.96M	80.45376256741984	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	strip	1024^2	1024	1024	1.049	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+dssim	warm_ref_strip	1024^2	1024	1024	1.049	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+cvvdp	full	2K	2048	2048	4.194	cold	NA	958954209	914.53M	9.458459854125977	
+cvvdp	strip	2K	2048	2048	4.194	cold	NA	958954209	914.53M	9.458459854125977	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	warm_ref	2K	2048	2048	4.194	cold	NA	826980433	788.67M	9.458459854125977	first call incl one-time precompute
+cvvdp	warm_ref	2K	2048	2048	4.194	warm	NA	826980433	788.67M	9.458459854125977	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	2K	2048	2048	4.194	cold	NA	826980433	788.67M	9.458459854125977	first call incl one-time precompute
+cvvdp	warm_ref_strip	2K	2048	2048	4.194	warm	NA	826980433	788.67M	9.458459854125977	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	full	2K	2048	2048	4.194	cold	NA	695017144	662.82M	83.65862422242438	
+ssim2	strip	2K	2048	2048	4.194	cold	NA	361874063	345.11M	83.74297914100207	
+ssim2	warm_ref	2K	2048	2048	4.194	cold	NA	642189885	612.44M	83.65862422242438	first call incl one-time precompute
+ssim2	warm_ref	2K	2048	2048	4.194	warm	NA	642189885	612.44M	83.65862422242438	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	warm_ref_strip	2K	2048	2048	4.194	cold	NA	483865395	461.45M	83.74297914100207	first call incl one-time precompute
+ssim2	warm_ref_strip	2K	2048	2048	4.194	warm	NA	483865395	461.45M	83.74297914100207	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	full	2K	2048	2048	4.194	cold	NA	853205319	813.68M	0.0009073126228487105	
+dssim	warm_ref	2K	2048	2048	4.194	cold	NA	853205319	813.68M	0.0009073126228487105	first call incl one-time precompute
+dssim	warm_ref	2K	2048	2048	4.194	warm	NA	853205319	813.68M	0.0009073126228487105	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	full	2K	2048	2048	4.194	cold	NA	854180495	814.61M	4.786835670471191	
+butter	strip	2K	2048	2048	4.194	cold	NA	395124408	376.82M	4.786835670471191	
+butter	warm_ref	2K	2048	2048	4.194	cold	NA	837833195	799.02M	4.786835670471191	first call incl one-time precompute
+butter	warm_ref	2K	2048	2048	4.194	warm	NA	837833195	799.02M	4.786835670471191	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	warm_ref_strip	2K	2048	2048	4.194	cold	NA	778798366	742.72M	4.786835670471191	first call incl one-time precompute
+butter	warm_ref_strip	2K	2048	2048	4.194	warm	NA	778798366	742.72M	4.786835670471191	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	full	2K	2048	2048	4.194	cold	NA	646426132	616.48M	0.9988102155609005	
+iwssim	strip	2K	2048	2048	4.194	cold	NA	331444387	316.09M	0.9988104640558689	
+iwssim	warm_ref	2K	2048	2048	4.194	cold	NA	646426132	616.48M	0.9988102155609005	first call incl one-time precompute
+iwssim	warm_ref	2K	2048	2048	4.194	warm	NA	646426132	616.48M	0.9988102155609005	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	warm_ref_strip	2K	2048	2048	4.194	cold	NA	336876011	321.27M	0.9988104640558689	first call incl one-time precompute
+iwssim	warm_ref_strip	2K	2048	2048	4.194	warm	NA	336876011	321.27M	0.9988104640558689	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	full	2K	2048	2048	4.194	cold	NA	276635320	263.82M	80.45332823799177	
+zensim	strip	2K	2048	2048	4.194	cold	NA	233203302	222.40M	80.45332823799177	
+zensim	warm_ref	2K	2048	2048	4.194	cold	NA	294083624	280.46M	80.45332823799177	first call incl one-time precompute
+zensim	warm_ref	2K	2048	2048	4.194	warm	NA	294083624	280.46M	80.45332823799177	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	warm_ref_strip	2K	2048	2048	4.194	cold	NA	233203302	222.40M	80.45332823799177	first call incl one-time precompute
+zensim	warm_ref_strip	2K	2048	2048	4.194	warm	NA	233203302	222.40M	80.45332823799177	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	strip	2K	2048	2048	4.194	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+dssim	warm_ref_strip	2K	2048	2048	4.194	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+cvvdp	full	12 MP	4000	3000	12.000	cold	NA	2813203578	2.62G	9.458015441894531	
+cvvdp	strip	12 MP	4000	3000	12.000	cold	NA	2813203578	2.62G	9.458015441894531	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	warm_ref	12 MP	4000	3000	12.000	cold	NA	2426656522	2.26G	9.458015441894531	first call incl one-time precompute
+cvvdp	warm_ref	12 MP	4000	3000	12.000	warm	NA	2426656522	2.26G	9.458015441894531	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	2426656522	2.26G	9.458015441894531	first call incl one-time precompute
+cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	2426656522	2.26G	9.458015441894531	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	full	12 MP	4000	3000	12.000	cold	NA	2158221066	2.01G	84.2087617173497	
+ssim2	strip	12 MP	4000	3000	12.000	cold	NA	946717327	902.86M	84.3514092873415	
+ssim2	warm_ref	12 MP	4000	3000	12.000	cold	NA	1943472701	1.81G	84.2087617173497	first call incl one-time precompute
+ssim2	warm_ref	12 MP	4000	3000	12.000	warm	NA	1943472701	1.81G	84.2087617173497	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	1299227607	1.21G	84.3514095103794	first call incl one-time precompute
+ssim2	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	1299227607	1.21G	84.3514095103794	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	full	12 MP	4000	3000	12.000	cold	NA	2791728742	2.60G	0.0009071798304431944	
+dssim	warm_ref	12 MP	4000	3000	12.000	cold	NA	2791728742	2.60G	0.0009071798304431944	first call incl one-time precompute
+dssim	warm_ref	12 MP	4000	3000	12.000	warm	NA	2791728742	2.60G	0.0009071798304431944	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	full	12 MP	4000	3000	12.000	cold	NA	2544768122	2.37G	4.653627395629883	
+butter	strip	12 MP	4000	3000	12.000	cold	NA	840066662	801.15M	4.653627395629883	
+butter	warm_ref	12 MP	4000	3000	12.000	cold	NA	2480343613	2.31G	4.653627395629883	first call incl one-time precompute
+butter	warm_ref	12 MP	4000	3000	12.000	warm	NA	2480343613	2.31G	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	2072321720	1.93G	4.653627395629883	first call incl one-time precompute
+butter	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	2072321720	1.93G	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	full	12 MP	4000	3000	12.000	cold	NA	1900523028	1.77G	0.9987970891347817	
+iwssim	strip	12 MP	4000	3000	12.000	cold	NA	735313920	701.25M	0.9987965297385378	
+iwssim	warm_ref	12 MP	4000	3000	12.000	cold	NA	1900523028	1.77G	0.9987970891347817	first call incl one-time precompute
+iwssim	warm_ref	12 MP	4000	3000	12.000	warm	NA	1900523028	1.77G	0.9987970891347817	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	964050288	919.39M	0.9987965297381421	first call incl one-time precompute
+iwssim	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	964050288	919.39M	0.9987965297381421	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	full	12 MP	4000	3000	12.000	cold	NA	779018567	742.93M	80.45300975490177	
+zensim	strip	12 MP	4000	3000	12.000	cold	NA	721409802	687.99M	80.45300975490177	
+zensim	warm_ref	12 MP	4000	3000	12.000	cold	NA	828763013	790.37M	80.45300975490177	first call incl one-time precompute
+zensim	warm_ref	12 MP	4000	3000	12.000	warm	NA	828763013	790.37M	80.45300975490177	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	721409802	687.99M	80.45300975490177	first call incl one-time precompute
+zensim	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	721409802	687.99M	80.45300975490177	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	strip	12 MP	4000	3000	12.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+dssim	warm_ref_strip	12 MP	4000	3000	12.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+cvvdp	full	30 MP	6000	5000	30.000	cold	NA	7022271528	6.54G	9.44887924194336	
+cvvdp	strip	30 MP	6000	5000	30.000	cold	NA	7022271528	6.54G	9.44887924194336	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	warm_ref	30 MP	6000	5000	30.000	cold	NA	6055903887	5.64G	9.44887924194336	first call incl one-time precompute
+cvvdp	warm_ref	30 MP	6000	5000	30.000	warm	NA	6055903887	5.64G	9.44887924194336	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	6055903887	5.64G	9.44887924194336	first call incl one-time precompute
+cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	6055903887	5.64G	9.44887924194336	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	full	30 MP	6000	5000	30.000	cold	NA	5186173009	4.83G	84.61280893684811	
+ssim2	strip	30 MP	6000	5000	30.000	cold	NA	1750199173	1.63G	84.86246866201273	
+ssim2	warm_ref	30 MP	6000	5000	30.000	cold	NA	4745938862	4.42G	84.61280893684811	first call incl one-time precompute
+ssim2	warm_ref	30 MP	6000	5000	30.000	warm	NA	4745938862	4.42G	84.61280893684811	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+ssim2	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	2813203578	2.62G	84.86246937535655	first call incl one-time precompute
+ssim2	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	2813203578	2.62G	84.86246937535655	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	full	30 MP	6000	5000	30.000	cold	NA	6463925780	6.02G	0.0009070927867318446	
+dssim	warm_ref	30 MP	6000	5000	30.000	cold	NA	6463925780	6.02G	0.0009070927867318446	first call incl one-time precompute
+dssim	warm_ref	30 MP	6000	5000	30.000	warm	NA	6463925780	6.02G	0.0009070927867318446	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	full	30 MP	6000	5000	30.000	cold	NA	6249177415	5.82G	4.653627395629883	
+butter	strip	30 MP	6000	5000	30.000	cold	NA	1610612736	1.50G	4.653627395629883	
+butter	warm_ref	30 MP	6000	5000	30.000	cold	NA	6292127088	5.86G	4.653627395629883	first call incl one-time precompute
+butter	warm_ref	30 MP	6000	5000	30.000	warm	NA	6292127088	5.86G	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+butter	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	4531190497	4.22G	4.653627395629883	first call incl one-time precompute
+butter	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	4531190497	4.22G	4.653627395629883	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	full	30 MP	6000	5000	30.000	cold	NA	4745938862	4.42G	0.9987967490407321	
+iwssim	strip	30 MP	6000	5000	30.000	cold	NA	1417339207	1.32G	0.9987980100262428	
+iwssim	warm_ref	30 MP	6000	5000	30.000	cold	NA	4745938862	4.42G	0.9987967490407321	first call incl one-time precompute
+iwssim	warm_ref	30 MP	6000	5000	30.000	warm	NA	4745938862	4.42G	0.9987967490407321	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+iwssim	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	2469606195	2.30G	0.9987980100261455	first call incl one-time precompute
+iwssim	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	2469606195	2.30G	0.9987980100261455	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	full	30 MP	6000	5000	30.000	cold	NA	1943472701	1.81G	80.45117814164556	
+zensim	strip	30 MP	6000	5000	30.000	cold	NA	2083059138	1.94G	80.45117814164556	
+zensim	warm_ref	30 MP	6000	5000	30.000	cold	NA	2072321720	1.93G	80.45117814164556	first call incl one-time precompute
+zensim	warm_ref	30 MP	6000	5000	30.000	warm	NA	2072321720	1.93G	80.45117814164556	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+zensim	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	2083059138	1.94G	80.45117814164556	first call incl one-time precompute
+zensim	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	2083059138	1.94G	80.45117814164556	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+dssim	strip	30 MP	6000	5000	30.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
+dssim	warm_ref_strip	30 MP	6000	5000	30.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
