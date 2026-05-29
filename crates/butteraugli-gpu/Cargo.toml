@@ -136,6 +136,12 @@ required-features = ["cubecl-types"]
 name = "bench_strip_vs_whole_cuda"
 required-features = ["cubecl-types", "cuda"]
 
+# task142: measure reserve_staging submit_blocking round-trip cost in
+# the production pinned-upload path (PR #1334 maintainer review).
+[[example]]
+name = "bench_staging_block"
+required-features = ["cubecl-types", "cuda"]
+
 [[test]]
 name = "reduction_parity"
 required-features = ["cubecl-types"]
