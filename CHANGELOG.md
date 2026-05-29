@@ -168,6 +168,24 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **GPU metric cold-start wall measured per metric (task #140,
+  2026-05-29, `50b1c83`).** New `coldstart_one` example per `-gpu`
+  crate times the FIRST score call in a fresh process with the timer
+  started before `Backend::client()` so CUDA-context-init is captured
+  (the warm-only `gpu_metrics_sweep_2026-05-28.tsv` did not). Found:
+  context init is a flat ~181 ms floor (size/metric-independent);
+  one-shot cold_total is ~370–570 ms at 512² rising to several seconds
+  at 16 MP (dominated by eager `new()` allocation for
+  butteraugli/ssim2/cvvdp/dssim/iwssim; zensim allocs lazily); warm
+  per-call is 1.5–50 ms. Cold PTX disk cache adds a metric-dependent
+  JIT penalty (butteraugli ~4.2× first-compute, zensim ~1.3×).
+  Implication: CPU wins one-shot small images by the full cold-start
+  margin; GPU wins warm/batch at every size. Data in
+  `benchmarks/gpu_coldstart_2026-05-29.{tsv,meta}`, findings in
+  `docs/GPU_COLDSTART_2026-05-29.md`, harness at
+  `scripts/memory_audit/sweep_gpu_coldstart_2026-05-29.py`. Drivers in
+  `crates/<metric>-gpu/examples/coldstart_one.rs` (`0caf36d5`).
+
 - **Phase 9.Z.F Path A (2026-05-28) — cvvdp CPU strip-major dispatcher
   shipped.** Lands the architectural change that drops `score_strip`
   peak heap from 3.66 GB → 1.55 GB at 16 MP (under 1.7 GB target) and
