@@ -13,10 +13,11 @@ RUN cargo build --release -p zen-jobdash --bin zen-jobdash
 
 FROM debian:bookworm-slim
 # ca-certificates for HTTPS to R2; s5cmd is the s3:// transport zen-ledger invokes.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl tar && \
+# tar is already present (essential) — do NOT install/purge it (that breaks apt's resolver).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
     curl -fsSL https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz \
       | tar -xz -C /usr/local/bin s5cmd && \
-    apt-get purge -y curl tar && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/target/release/zen-jobdash /usr/local/bin/zen-jobdash
 ENV PORT=3000
 EXPOSE 3000
