@@ -1,0 +1,6 @@
+# Keep the Railway upload to source only. The workspace's heavy data lives in scripts/ (6.6G,
+# mostly gitignored) and target/.jj. zen-jobdash builds from crates/ + the workspace manifests.
+/target
+/.jj
+/.git
+/scripts
