@@ -19,6 +19,8 @@
 use butteraugli_gpu::Butteraugli;
 use cubecl::Runtime;
 use cubecl::cuda::CudaRuntime;
+#[cfg(feature = "staging-async-probe")]
+use cubecl::prelude::ComputeClient;
 use std::time::Instant;
 
 const W: u32 = 4096;
@@ -218,4 +220,102 @@ fn main() {
     let (m, md, mx) = pct(&t_busy);
     println!("\n(E) reserve_staging() with runner-thread loaded by prior uploads:");
     println!("    round-trip: mean={m:.3}ms median={md:.3}ms max={mx:.3}ms");
+
+    #[cfg(feature = "staging-async-probe")]
+    run_async_probe(&client, &mut b, &imgs, pinned_len, pipe_wall);
+    #[cfg(not(feature = "staging-async-probe"))]
+    {
+        let _ = (&imgs, pinned_len, pipe_wall);
+        println!(
+            "\n(F)/(G) async-probe comparison: build with --features staging-async-probe \
+             + the local-fork [patch.crates-io] override to run it. Measured conclusion: \
+             the async probe regresses pipelined throughput 1.6-1.8x — see \
+             benchmarks/task142_staging_block_2026-05-29.md."
+        );
+    }
+}
+
+/// task142: (F)/(G) async-probe comparison. Gated behind the
+/// `staging-async-probe` feature because it calls the experimental,
+/// doc-hidden `create_from_slice_pinned_async_probe` method that only
+/// exists on the local fork (not the published zenforks-cubecl-runtime).
+#[cfg(feature = "staging-async-probe")]
+fn run_async_probe(
+    client: &ComputeClient<CudaRuntime>,
+    b: &mut Butteraugli<CudaRuntime>,
+    imgs: &[Vec<u8>],
+    pinned_len: usize,
+    pipe_wall: std::time::Duration,
+) {
+    // ---------------------------------------------------------------
+    // (F) "right level" async probe: reserve + pack + upload all on the
+    //     runner thread via a single non-blocking submit(). Caller never
+    //     blocks for staging. BUT the heavy ~10ms u8x3->u32 pack now runs
+    //     on the runner thread instead of the caller thread.
+    //     Compare per-call (caller-thread) AND post-sync wall vs (B).
+    // ---------------------------------------------------------------
+    fn pack_u8x3_to_u32(src: &[u8], dst: &mut [u8]) {
+        for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(src.chunks_exact(3)) {
+            chunk_out[0] = triple[0];
+            chunk_out[1] = triple[1];
+            chunk_out[2] = triple[2];
+            chunk_out[3] = 0;
+        }
+    }
+    // warmup
+    for img in imgs.iter().take(2) {
+        let _ = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+    }
+    cubecl::future::block_on(client.sync()).expect("sync");
+    let mut t_async = Vec::with_capacity(N_UPLOADS);
+    let mut handles3 = Vec::with_capacity(N_UPLOADS);
+    let t_async_total = Instant::now();
+    for img in imgs.iter() {
+        let owned = img.clone();
+        let t = Instant::now();
+        let h = client.create_from_slice_pinned_async_probe(owned, pinned_len, pack_u8x3_to_u32);
+        t_async.push(t.elapsed());
+        handles3.push(h);
+    }
+    let async_wall = t_async_total.elapsed();
+    cubecl::future::block_on(client.sync()).expect("sync");
+    let async_wall_synced = t_async_total.elapsed();
+    let (m, md, mx) = pct(&t_async);
+    println!("\n(F) create_from_slice_pinned_async_probe (reserve+pack+upload on runner, no block):");
+    println!("    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms");
+    println!("    NOTE: per-call excludes the img.clone() done before the timer");
+    println!("    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms", async_wall.as_secs_f64() * 1e3);
+    println!("    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms", async_wall_synced.as_secs_f64() * 1e3);
+    drop(handles3);
+
+    // ---------------------------------------------------------------
+    // (G) Pipelined with the async probe — directly compares against (D).
+    //     If moving the pack onto the runner thread regresses pipelined
+    //     throughput (because the pack serializes against compute
+    //     dispatch), (G) will be slower than (D).
+    // ---------------------------------------------------------------
+    let ref_owned = imgs[0].clone();
+    let ref_h2 = client.create_from_slice_pinned_async_probe(ref_owned, pinned_len, pack_u8x3_to_u32);
+    // warmup
+    for img in imgs.iter().take(2) {
+        let dh = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+        let _ = b.compute_handles(&ref_h2, &dh).expect("compute");
+    }
+    cubecl::future::block_on(client.sync()).expect("sync");
+    let t_pipe2 = Instant::now();
+    let mut last2 = 0.0f32;
+    for img in imgs.iter() {
+        let dh = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+        let res = b.compute_handles(&ref_h2, &dh).expect("compute");
+        last2 = res.score;
+    }
+    cubecl::future::block_on(client.sync()).expect("sync");
+    let pipe2_wall = t_pipe2.elapsed();
+    println!("\n(G) pipelined async-probe upload+compute_handles ({N_UPLOADS} pairs, post-sync):");
+    println!("    total wall = {:.3}ms  ({:.3}ms/pair)  last_score={last2:.4}",
+        pipe2_wall.as_secs_f64() * 1e3,
+        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64);
+    println!("\n  >>> (D) current path = {:.3}ms/pair vs (G) async-probe = {:.3}ms/pair",
+        pipe_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64,
+        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64);
 }

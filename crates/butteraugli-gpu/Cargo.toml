@@ -35,6 +35,14 @@ pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
 # Off by default — opaque `ButteraugliOpaque` is the supported
 # surface. See dssim-gpu/Cargo.toml for the full rationale.
 cubecl-types = []
+# task142: enables the (F)/(G) async-probe comparison in
+# examples/bench_staging_block.rs. Requires the local-fork
+# [patch.crates-io] override (the probe method is doc-hidden +
+# experimental, not on the published zenforks-cubecl-runtime). OFF by
+# default so the committed bench compiles against the published crate.
+# Measurement conclusion: the async probe regresses pipelined throughput
+# 1.6-1.8x; see benchmarks/task142_staging_block_2026-05-29.md.
+staging-async-probe = []
 # OFF by default since 2026-05-27 (Phase 8e.4 audit). Opt in to use
 # `Atomic<f32>::fetch_add` for the per-octave reduction. Verified
 # correct on:
