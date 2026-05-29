@@ -75,6 +75,74 @@ impl BlobStore for LocalBlobStore {
     }
 }
 
+/// An R2 (or any S3-compatible) target. Blobs land at `s3://{bucket}/{prefix}/{sha}`.
+#[derive(Debug, Clone)]
+pub struct R2Target {
+    pub endpoint: String,
+    pub bucket: String,
+    pub prefix: String,
+}
+
+/// Content-addressed blob store over R2 via the `s5cmd` CLI. Requires `s5cmd` on PATH and
+/// `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in the environment at runtime (the launcher maps the
+/// `R2_*` creds to `AWS_*`). The `blobs/<sha>` layout was verified live against R2.
+pub struct R2BlobStore {
+    target: R2Target,
+}
+
+impl R2BlobStore {
+    pub fn new(endpoint: String, bucket: String, prefix: String) -> Self {
+        Self { target: R2Target { endpoint, bucket, prefix } }
+    }
+
+    /// The full `s3://` key for a content hash.
+    pub fn key(&self, sha: &Sha256Hex) -> String {
+        format!("s3://{}/{}/{}", self.target.bucket, self.target.prefix.trim_matches('/'), sha)
+    }
+
+    fn s5cmd(&self) -> Command {
+        let mut c = Command::new("s5cmd");
+        c.arg("--endpoint-url").arg(&self.target.endpoint);
+        c
+    }
+}
+
+impl BlobStore for R2BlobStore {
+    fn put(&self, bytes: &[u8]) -> io::Result<Sha256Hex> {
+        let sha = sha256(bytes);
+        if self.exists(&sha) {
+            return Ok(sha); // content-addressed dedup — already in R2
+        }
+        let tmp = std::env::temp_dir().join(format!("zenblob_{}_{}", std::process::id(), sha.as_str()));
+        std::fs::write(&tmp, bytes)?;
+        let status = self
+            .s5cmd()
+            .arg("cp")
+            .arg(&tmp)
+            .arg(self.key(&sha))
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .status();
+        let _ = std::fs::remove_file(&tmp);
+        match status {
+            Ok(s) if s.success() => Ok(sha),
+            Ok(s) => Err(io::Error::other(format!("s5cmd cp exited {:?}", s.code()))),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn exists(&self, sha: &Sha256Hex) -> bool {
+        self.s5cmd()
+            .arg("ls")
+            .arg(self.key(sha))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+}
+
 /// Identity/time context for the rows a worker emits (who ran it, on what provider, when).
 #[derive(Clone, Copy, Debug)]
 pub struct WorkerCtx<'a> {
@@ -206,8 +274,10 @@ pub struct WorkerConfig {
     pub ledger_in: Vec<PathBuf>,
     /// Where this pass's new rows are written.
     pub ledger_out: PathBuf,
-    /// Content-addressed blob dir (local stand-in for `blobs/<sha>` on R2).
+    /// Content-addressed blob dir (used when `r2` is None).
     pub blobs: PathBuf,
+    /// If set, write content-addressed blobs to R2 instead of the local dir.
+    pub r2: Option<R2Target>,
     /// Executor program (stdin-JSON → stdout-bytes contract).
     pub exec: String,
     pub worker: String,
@@ -242,15 +312,21 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         }
     }
 
-    let store = LocalBlobStore::new(cfg.blobs.clone()).map_err(|e| WorkerRunError::Io(e.to_string()))?;
-    let out = execute_gap(
-        &desired,
-        &view,
-        RetryPolicy { max_attempts: cfg.max_attempts },
-        |job| exec_command(&cfg.exec, job),
-        &store,
-        WorkerCtx { worker: &cfg.worker, provider: &cfg.provider, now: cfg.now },
-    );
+    let policy = RetryPolicy { max_attempts: cfg.max_attempts };
+    let ctx = WorkerCtx { worker: &cfg.worker, provider: &cfg.provider, now: cfg.now };
+    // Pick the blob store: R2 if configured, else local FS. execute_gap is generic over the store,
+    // so each arm monomorphizes against the concrete type.
+    let out = match &cfg.r2 {
+        Some(t) => {
+            let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
+            execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx)
+        }
+        None => {
+            let store = LocalBlobStore::new(cfg.blobs.clone())
+                .map_err(|e| WorkerRunError::Io(e.to_string()))?;
+            execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx)
+        }
+    };
     zen_ledger::write_ledger(&cfg.ledger_out, &out.rows)
         .map_err(|e| WorkerRunError::Ledger(e.to_string()))?;
     Ok(out)
@@ -395,6 +471,7 @@ mod tests {
             ledger_in: vec![],
             ledger_out: dir.join("out.parquet"),
             blobs: dir.join("blobs"),
+            r2: None,
             exec: "cat".into(),
             worker: "w1".into(),
             provider: "local".into(),
@@ -417,5 +494,15 @@ mod tests {
         let out2 = run(&cfg2).unwrap();
         assert_eq!(out2.done, 0, "all jobs already DONE → converged, nothing re-run");
         assert!(out2.rows.is_empty());
+    }
+
+    #[test]
+    fn r2_key_derivation() {
+        let s = R2BlobStore::new("https://acct.r2.cloudflarestorage.com".into(), "zen-tuning-ephemeral".into(), "blobs".into());
+        let sha = sha256(b"hi");
+        assert_eq!(s.key(&sha), format!("s3://zen-tuning-ephemeral/blobs/{sha}"));
+        // leading/trailing slashes in the prefix don't double up
+        let s2 = R2BlobStore::new("e".into(), "b".into(), "/blobs/".into());
+        assert_eq!(s2.key(&sha), format!("s3://b/blobs/{sha}"));
     }
 }

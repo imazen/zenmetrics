@@ -24,9 +24,18 @@ struct Cli {
     /// Output ledger sidecar for this pass's rows.
     #[arg(long = "ledger-out")]
     ledger_out: PathBuf,
-    /// Content-addressed blob directory.
-    #[arg(long)]
+    /// Content-addressed blob directory (used when --blobs-r2-bucket is not given).
+    #[arg(long, default_value = "./blobs")]
     blobs: PathBuf,
+    /// Write blobs to R2 instead: the S3 bucket name (requires --r2-endpoint).
+    #[arg(long = "blobs-r2-bucket")]
+    blobs_r2_bucket: Option<String>,
+    /// Key prefix under the R2 bucket.
+    #[arg(long = "blobs-r2-prefix", default_value = "blobs")]
+    blobs_r2_prefix: String,
+    /// R2 S3 endpoint, e.g. https://<account>.r2.cloudflarestorage.com (requires AWS_* creds in env).
+    #[arg(long = "r2-endpoint")]
+    r2_endpoint: Option<String>,
     /// Executor program (reads a job JSON on stdin, emits output bytes on stdout, exit 0 = success).
     #[arg(long)]
     exec: String,
@@ -50,11 +59,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs()
     };
+    let r2 = match (c.blobs_r2_bucket, c.r2_endpoint) {
+        (Some(bucket), Some(endpoint)) => {
+            Some(zen_jobworker::R2Target { endpoint, bucket, prefix: c.blobs_r2_prefix })
+        }
+        (None, None) => None,
+        _ => return Err("--blobs-r2-bucket and --r2-endpoint must be given together".into()),
+    };
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,
         ledger_out: c.ledger_out,
         blobs: c.blobs,
+        r2,
         exec: c.exec,
         worker: c.worker,
         provider: c.provider,
