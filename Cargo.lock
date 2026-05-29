@@ -6340,6 +6340,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-jobctl"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "zen-job-core",
+ "zen-ledger",
+]
+
+[[package]]
 name = "zen-jobdash"
 version = "0.0.1"
 dependencies = [
