@@ -305,9 +305,14 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     let desired: Vec<DesiredJob> =
         serde_json::from_slice(&bytes).map_err(|e| WorkerRunError::Manifest(e.to_string()))?;
 
+    // Ledger paths may be local or s3:// — the R2 endpoint (if any) comes from the blob target.
+    let endpoint = cfg.r2.as_ref().map(|t| t.endpoint.as_str());
     let mut view = LedgerView::new();
     for p in &cfg.ledger_in {
-        for row in zen_ledger::read_ledger(p).map_err(|e| WorkerRunError::Ledger(e.to_string()))? {
+        let uri = p.to_string_lossy();
+        for row in zen_ledger::read_ledger_uri(uri.as_ref(), endpoint)
+            .map_err(|e| WorkerRunError::Ledger(e.to_string()))?
+        {
             view.apply(row);
         }
     }
@@ -327,7 +332,8 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx)
         }
     };
-    zen_ledger::write_ledger(&cfg.ledger_out, &out.rows)
+    let out_uri = cfg.ledger_out.to_string_lossy();
+    zen_ledger::write_ledger_uri(out_uri.as_ref(), &out.rows, endpoint)
         .map_err(|e| WorkerRunError::Ledger(e.to_string()))?;
     Ok(out)
 }

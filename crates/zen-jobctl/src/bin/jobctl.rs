@@ -37,6 +37,9 @@ enum Cmd {
         manifest: PathBuf,
         #[arg(long = "ledger")]
         ledger: Vec<PathBuf>,
+        /// R2 endpoint, if any --ledger path is an s3:// URI (needs AWS_* creds in env).
+        #[arg(long = "r2-endpoint")]
+        r2_endpoint: Option<String>,
     },
     /// Write the not-yet-done subset (the gap) of a manifest, given the ledger.
     Gap {
@@ -46,13 +49,17 @@ enum Cmd {
         ledger: Vec<PathBuf>,
         #[arg(long)]
         out: PathBuf,
+        /// R2 endpoint, if any --ledger path is an s3:// URI.
+        #[arg(long = "r2-endpoint")]
+        r2_endpoint: Option<String>,
     },
 }
 
-fn load_view(paths: &[PathBuf]) -> Result<LedgerView, Box<dyn std::error::Error>> {
+fn load_view(paths: &[PathBuf], endpoint: Option<&str>) -> Result<LedgerView, Box<dyn std::error::Error>> {
     let mut v = LedgerView::new();
     for p in paths {
-        for r in zen_ledger::read_ledger(p)? {
+        let uri = p.to_string_lossy();
+        for r in zen_ledger::read_ledger_uri(uri.as_ref(), endpoint)? {
             v.apply(r);
         }
     }
@@ -71,14 +78,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!("declared {} jobs -> {}", jobs.len(), out.display());
         }
-        Cmd::Catalog { manifest, ledger } => {
+        Cmd::Catalog { manifest, ledger, r2_endpoint } => {
             let jobs = read_manifest(&manifest)?;
-            let view = load_view(&ledger)?;
+            let view = load_view(&ledger, r2_endpoint.as_deref())?;
             println!("{}", serde_json::to_string_pretty(&coverage(&jobs, &view))?);
         }
-        Cmd::Gap { manifest, ledger, out } => {
+        Cmd::Gap { manifest, ledger, out, r2_endpoint } => {
             let jobs = read_manifest(&manifest)?;
-            let view = load_view(&ledger)?;
+            let view = load_view(&ledger, r2_endpoint.as_deref())?;
             let g = gap(&jobs, &view, RetryPolicy::default());
             std::fs::write(&out, serde_json::to_vec_pretty(&g)?)?;
             eprintln!("gap: {} of {} jobs remain -> {}", g.len(), jobs.len(), out.display());

@@ -16,7 +16,9 @@
 
 use std::fs::File;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use arrow_array::{Array, Int64Array, RecordBatch, StringArray, UInt32Array, UInt64Array};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
@@ -222,6 +224,61 @@ pub fn compact_ledger(inputs: &[&Path], out: &Path) -> Result<usize, LedgerError
     let rows: Vec<LedgerRow> = view.rows().cloned().collect();
     write_ledger(out, &rows)?;
     Ok(rows.len())
+}
+
+// ---- s3:// (R2) ledger I/O: same Parquet, staged through a temp file via the s5cmd CLI ----
+
+static URI_TMP_N: AtomicU64 = AtomicU64::new(0);
+
+fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
+    let st = Command::new("s5cmd")
+        .arg("--endpoint-url")
+        .arg(endpoint)
+        .arg("cp")
+        .arg(src)
+        .arg(dst)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .status()
+        .map_err(|e| LedgerError::Io(format!("s5cmd spawn: {e}")))?;
+    if st.success() {
+        Ok(())
+    } else {
+        Err(LedgerError::Io(format!("s5cmd cp {src} -> {dst} exited {:?}", st.code())))
+    }
+}
+
+/// Read a ledger from a local path **or** an `s3://` URI. For `s3://`, downloads via s5cmd (needs the
+/// R2 `endpoint` and `AWS_*` creds in the environment), then reads the Parquet.
+pub fn read_ledger_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<LedgerRow>, LedgerError> {
+    if uri.starts_with("s3://") {
+        let ep = endpoint
+            .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
+        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("zenledger_dl_{}_{}.parquet", std::process::id(), n));
+        s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
+        let rows = read_ledger(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        rows
+    } else {
+        read_ledger(Path::new(uri))
+    }
+}
+
+/// Write a ledger to a local path **or** an `s3://` URI (uploads via s5cmd for `s3://`).
+pub fn write_ledger_uri(uri: &str, rows: &[LedgerRow], endpoint: Option<&str>) -> Result<(), LedgerError> {
+    if uri.starts_with("s3://") {
+        let ep = endpoint
+            .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
+        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("zenledger_ul_{}_{}.parquet", std::process::id(), n));
+        write_ledger(&tmp, rows)?;
+        let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
+        let _ = std::fs::remove_file(&tmp);
+        r
+    } else {
+        write_ledger(Path::new(uri), rows)
+    }
 }
 
 // ---- blob index ----
