@@ -6368,6 +6368,7 @@ name = "zen-jobworker"
 version = "0.0.1"
 dependencies = [
  "clap",
+ "image",
  "serde_json",
  "thiserror",
  "zen-job-core",

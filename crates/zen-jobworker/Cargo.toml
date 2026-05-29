@@ -13,9 +13,14 @@ license = "MIT OR Apache-2.0"
 name = "zen-jobworker"
 path = "src/bin/worker.rs"
 
+[[bin]]
+name = "zen-jobexec"
+path = "src/bin/jobexec.rs"
+
 [dependencies]
 zen-job-core = { version = "0.0.1", path = "../zen-job-core" }
 zen-ledger = { version = "0.0.1", path = "../zen-ledger" }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
+image = { workspace = true }
