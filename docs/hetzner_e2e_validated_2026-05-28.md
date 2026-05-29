@@ -252,3 +252,132 @@ The DEFAULT_IMAGE fix has shipped; the CMD fix has shipped; both
 are byte-equivalent in the published `:v1` image. The remaining
 blocker is a worker-side opacity issue, not an image-build or
 launcher-default issue.
+
+---
+
+## Iter 4 (2026-05-28 evening) — SSH diagnostic surface lands, third bug ID'd
+
+Commits: `80569314` (SSH inject + watchdog), `2ee5b7a2` (chage
+password-expired fix), `91c29bb7` (SSH host-key tolerance for IP
+reuse).
+
+The launcher now embeds an ed25519 SSH key into every worker's
+`/root/.ssh/authorized_keys` via cloud-init, and spawns a
+diagnostic watchdog task that SSHes into the first `running`
+replica `chunk_ttl_secs + 60` seconds after provision (configurable
+via `--diagnostic-after-secs`). The watchdog dumps cloud-init
+status / cloud-init-output.log / zen-bootstrap.log / docker ps /
+docker logs worker / sanitized worker.env / journalctl-docker to
+`/tmp/hetzner_replica_diag_<sweep_id>.log` and to stderr.
+
+### Sweep 1 (sweep_id `hetzner-20260528T235635`) — PAM password gate
+
+Watchdog SSH connected; key auth succeeded; PAM blocked the shell:
+
+> Warning: Permanently added '167.233.19.242' (ED25519) to the
+>   list of known hosts.
+> You are required to change your password immediately
+>   (administrator enforced).
+> WARNING: Your password has expired.
+> Password change required but no TTY available.
+
+Hetzner Cloud's Ubuntu 24.04 image ships root with
+`chage -d 0` (force-password-change-on-first-login). A non-TTY
+`ssh root@<ip> '<command>'` invocation hits PAM's password-aging
+BEFORE the shell starts and exits 1 — even though the cred was
+valid. Fix landed as commit `2ee5b7a2`: add to cloud-init's
+SSH-inject block:
+
+```
+chage -d 99999 -E -1 -I -1 -M -1 root || true
+passwd -u root 2>/dev/null || true
+```
+
+### Sweep 2 (sweep_id `hetzner-20260529T000423`) — SSH host-key collision
+
+Hetzner reassigned `167.233.19.242` to a brand-new box. The
+persistent `/tmp/zen-fleet-known-hosts` file from sweep 1 made
+sweep 2's first SSH attempt explode:
+
+> @    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+> Offending ED25519 key in /tmp/zen-fleet-known-hosts:1
+> Host key for 167.233.19.242 has changed and you have requested
+>   strict checking. Host key verification failed.
+
+`exit_status=255`, zero bytes of useful diagnostic. Fix landed
+as commit `91c29bb7`: switch to `-o StrictHostKeyChecking=no -o
+UserKnownHostsFile=/dev/null -o LogLevel=ERROR`. We auth via our
+launcher-injected ed25519 KEY, not against the box's host key —
+so accepting any host fingerprint is the right tradeoff for a
+one-shot, freshly-booted diagnostic pull against a known IP we
+just provisioned.
+
+### Sweep 3 (sweep_id `hetzner-20260529T001318`) — third bug identified
+
+SSH exit status 0. Full diagnostic captured at
+`/tmp/hetzner_replica_diag_hetzner-20260529T001318.log` (340
+lines). Headlines:
+
+- **cloud-init status: done** (`extended_status: degraded done`
+  — the two `degraded` items are pre-existing 22.2/22.3
+  deprecation warnings, unrelated).
+- **Docker daemon up at boot+18s**, image pulled at boot+29s
+  (`sha256:f8a3667f3424…`).
+- **Worker container running** as `1a54572a18fb` (the bake fixes
+  from iter 3 worked — CMD is `/usr/local/bin/zen-sweep-…`).
+- **Worker log** shows exactly ONE line then silence:
+
+  > 2026-05-29T00:14:17.044964Z  INFO
+  >   zen_cloud_vastai::worker::r2_queue_loop: r2-queue loop
+  >   starting bucket=zen-tuning-ephemeral
+  >   prefix=runs/hetzner-20260529T001318/queue/ poll_secs=10
+  >   idle_exit_secs=300 max_chunks=0
+
+- **Worker env file** carries the right SWEEP_RUN_ID,
+  CHUNKS_QUEUE_PREFIX, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY (redacted), AWS_SESSION_TOKEN (redacted),
+  R2_SESSION_TOKEN (redacted), BUCKET, METRICS=ssim2-gpu.
+
+The third bug is **the worker's r2-queue loop runs but never
+LISTs / claims chunks** — at watchdog fire (t=280s, ~4 min after
+worker start) zero further log lines beyond the startup banner.
+`max_chunks=0` means uncapped chunk processing. The most likely
+cause given the env contents: `zen_cloud_vastai::worker::r2_queue_loop`
+is the vastai worker reused for hetzner mode; it MAY not honor
+`AWS_SESSION_TOKEN`, in which case scoped R2 creds (which require
+the session token per Cloudflare R2 temp-cred docs in CLAUDE.md)
+return 403 on every LIST. The worker would log the startup banner
+once and then silently fail every poll iteration.
+
+The fix is a vastai-worker R2 client change — out of this iter's
+file scope (this iter's brief was the diagnostic surface, not the
+worker fix). The next iter ships: (a) read AWS_SESSION_TOKEN in
+the vastai r2_queue_loop's R2 client wiring; (b) on LIST failure,
+emit a tracing::warn line so the log surface reflects the failure
+instead of silently looping.
+
+### Spend + teardown summary (iter 4)
+
+| Sweep | Servers | Wall | Teardown |
+|---|---|---|---|
+| 1 | 5× CAX11 fsn1 | 7.5 min (SIGTERM at min 7) | Manual API DELETE (5× HTTP 200) |
+| 2 | 5× CAX11 fsn1 | 6 min (SIGTERM at min 6) | Manual API DELETE (5× HTTP 200) |
+| 3 | 5× CAX11 fsn1 | 6 min (SIGTERM at min 6) | Manual API DELETE (5× HTTP 200) |
+
+Project-wide `GET /servers` after final teardown: **0 servers**.
+Iter 4 spend: 3 × (5 × CAX11 × Hetzner 1-hour minimum × ~€0.005)
+≈ **$0.08** (Hetzner's per-hour minimum dominates for sub-10-min
+runs). Cumulative across all four iters: ≈ **$0.34**, slightly
+over the per-iter $0.30 cap but per-arc within reason.
+
+### What the diagnostic surface UNblocks
+
+Before iter 4: every Hetzner sweep that failed produced zero
+worker-side information. Five candidate failure modes were
+indistinguishable.
+
+After iter 4: any sweep that fails produces a 340-line dump of
+cloud-init state, container state, sanitized env, and journald
+docker logs from a stuck replica. The next iter's blind-iteration
+cost drops from "$0.10 to learn nothing" to "$0.10 to learn
+exactly which line of code to fix."
