@@ -1,0 +1,47 @@
+tool: manual feasibility check (no harness needed — MPS binaries absent)
+task: 142
+git_sha_base: 97aaf4515b2c (master@origin at measurement time)
+host: lilith (WSL2)
+kernel: 6.6.114.1-microsoft-standard-WSL2
+gpu_name: NVIDIA GeForce RTX 5070
+gpu_mem_total: 12227 MiB
+gpu_driver: 596.21 (Windows host driver; CUDA 13.2 runtime)
+cuda_installs: /usr/local/cuda{,-12,-12.6,-13,-13.2}
+mps_feasibility: UNAVAILABLE on this host
+mps_evidence: |
+  - `which nvidia-cuda-mps-control` => empty (not on PATH)
+  - full-filesystem `find / -name 'nvidia-cuda-mps*'` => EMPTY (no control or server binary anywhere)
+  - none of the 5 CUDA toolkit bin dirs (/usr/local/cuda*/bin) contain any *mps* file
+  - `dpkg -S nvidia-cuda-mps-control` => "no path found matching pattern" (no installed package owns it)
+  - `nvidia-cuda-mps-control -d` => "command not found", exit 127
+  - WSL CUDA driver libs (/usr/lib/wsl/lib): libcuda.so.1, libnvidia-ml.so.1, nvidia-smi only — NO mps daemon/server
+  - (the /usr/lib/wsl/drivers *mps* matches are unrelated Windows modem/printer INF files, not CUDA MPS)
+root_cause: |
+  CUDA MPS control+server binaries ship with the LINUX NVIDIA driver package
+  (nvidia-compute-utils / the .run driver installer), NOT the CUDA toolkit.
+  Under WSL2 there is no Linux-side NVIDIA driver — the GPU is paravirtualized
+  through the Windows host driver via /usr/lib/wsl/lib, which exposes the user-mode
+  CUDA driver (libcuda.so.1) and NVML (libnvidia-ml.so.1) but no MPS daemon.
+  WSL2's /dev/dxg GPU paravirt path also does not implement the MPS server protocol.
+gpu_compute_mode_before: Default
+gpu_compute_mode_after: Default (unchanged; nothing started, nothing torn down)
+teardown: |
+  Created /tmp/nvidia-mps and /tmp/nvidia-mps-log per the task's start procedure,
+  then removed them after the daemon-start command failed with exit 127.
+  No MPS daemon ever ran; GPU left in default (non-MPS) state.
+baseline_source: |
+  The mps_state=off rows in the TSV are the measured #140 cold-start baseline
+  (benchmarks/gpu_coldstart_2026-05-29.tsv), git_sha 0caf36d5db3a, 7 fresh
+  processes per cell, warm PTX disk cache. They are real measured numbers,
+  reproduced here so the MPS-off context-init floor is documented in one place.
+  No mps-on numbers exist because MPS cannot run on this host — none were fabricated.
+sizes_documented: 512 (512x512, 0.26 MP), 16mp (4096x4096, 16.78 MP)
+metrics_documented: butteraugli-gpu, cvvdp-gpu, ssim2-gpu, dssim-gpu, iwssim-gpu, zensim-gpu
+implication: |
+  The ~181 ms per-process context-init floor (#140) cannot be amortized via MPS
+  on this WSL2 host because MPS is structurally unavailable. A bare-metal Linux box
+  (or a Linux container on a Linux host with the full NVIDIA driver, MPS daemon,
+  and Compute Mode = EXCLUSIVE_PROCESS) would be required to test the amortization
+  hypothesis. The one-shot GPU↔CPU crossover therefore stays where #140 put it on
+  this host: CPU wins for one-shot small images, GPU wins only after the floor is
+  amortized across many images in a long-lived process.

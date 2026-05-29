@@ -1,0 +1,15 @@
+metric	size	mps_state	client_init_ms	cold_total_ms	warm_per_call_ms	n_samples	notes
+# MPS feasibility on this host: UNAVAILABLE. nvidia-cuda-mps-control / nvidia-cuda-mps-server do not exist anywhere on the filesystem (full-fs find empty; dpkg -S no owning pkg). Host is WSL2 (6.6.114.1-microsoft-standard-WSL2); GPU is paravirtualized through the Windows host driver via /usr/lib/wsl/lib (libcuda.so.1, libnvidia-ml.so.1, nvidia-smi only). The MPS daemon ships with the Linux NVIDIA driver package, which WSL2 does not install. `nvidia-cuda-mps-control -d` => "command not found" (exit 127). GPU Compute Mode = Default throughout. No mps-on rows can be measured on this host; that is the answer (deployment lever absent — needs bare-metal Linux).
+# The mps_state=off rows below are the measured #140 baseline (benchmarks/gpu_coldstart_2026-05-29.tsv, 7 fresh processes per cell, warm PTX disk cache, RTX 5070, driver 596.21, cubecl 0.10.1, git=0caf36d5). They are the real per-process context-init floor MPS would have been compared against. No values are fabricated; mps-on cells are intentionally absent.
+butteraugli-gpu	512	off	166.801	498.659	1.544	7	#140 baseline; per-process CUDA context-init floor
+butteraugli-gpu	16mp	off	170.549	4923.904	50.202	7	#140 baseline
+cvvdp-gpu	512	off	172.519	504.457	4.225	7	#140 baseline
+cvvdp-gpu	16mp	off	168.182	4282.671	41.326	7	#140 baseline
+ssim2-gpu	512	off	187.052	396.225	3.956	7	#140 baseline
+ssim2-gpu	16mp	off	183.839	6740.518	47.703	7	#140 baseline
+dssim-gpu	512	off	184.974	376.076	4.144	7	#140 baseline
+dssim-gpu	16mp	off	188.538	3949.438	46.806	7	#140 baseline
+iwssim-gpu	512	off	182.468	491.365	6.533	7	#140 baseline
+iwssim-gpu	16mp	off	185.744	2512.473	39.439	7	#140 baseline
+zensim-gpu	512	off	182.197	570.253	1.664	7	#140 baseline
+zensim-gpu	16mp	off	189.901	914.246	37.803	7	#140 baseline
