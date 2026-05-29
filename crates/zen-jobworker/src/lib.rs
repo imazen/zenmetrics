@@ -13,8 +13,9 @@
 //! whole loop end-to-end with a temp dir.
 
 use std::collections::HashMap;
-use std::io;
+use std::io::{self, Write as _};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use zen_job_core::{
     reconcile, sha256, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView, RetryPolicy,
@@ -162,6 +163,99 @@ where
     out
 }
 
+/// Production handler: shell out to an executor `program`. The job descriptor is written as JSON to
+/// the program's stdin; its stdout is the output bytes (which get content-addressed). Exit 0 =
+/// success; spawn failure → transient `WorkerLost`; non-zero exit → `EncoderPanic` (deterministic).
+/// Any executor honoring this stdin-JSON → stdout-bytes contract plugs in (e.g. a future
+/// `zen-metrics jobexec` subcommand).
+pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerError> {
+    let job_json = serde_json::to_vec(job)
+        .map_err(|e| HandlerError::new(ErrorClass::Unknown, format!("serialize job: {e}")))?;
+    let mut child = Command::new(program)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("spawn {program}: {e}")))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(&job_json)
+            .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("write stdin: {e}")))?;
+        // stdin dropped here → EOF to the child
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| HandlerError::new(ErrorClass::WorkerLost, format!("wait {program}: {e}")))?;
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        let code = output.status.code().unwrap_or(-1);
+        Err(HandlerError::new(
+            ErrorClass::EncoderPanic,
+            format!("{program} exited {code}: {}", String::from_utf8_lossy(&output.stderr)),
+        ))
+    }
+}
+
+/// Configuration for one worker pass (the runnable `zen-jobworker` binary parses CLI args into this).
+#[derive(Debug, Clone)]
+pub struct WorkerConfig {
+    /// JSON file: an array of `DesiredJob`.
+    pub manifest: PathBuf,
+    /// Existing ledger sidecars to fold into the latest-wins view (the "actual" state).
+    pub ledger_in: Vec<PathBuf>,
+    /// Where this pass's new rows are written.
+    pub ledger_out: PathBuf,
+    /// Content-addressed blob dir (local stand-in for `blobs/<sha>` on R2).
+    pub blobs: PathBuf,
+    /// Executor program (stdin-JSON → stdout-bytes contract).
+    pub exec: String,
+    pub worker: String,
+    pub provider: String,
+    pub now: u64,
+    pub max_attempts: u32,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WorkerRunError {
+    #[error("io {0}")]
+    Io(String),
+    #[error("manifest {0}")]
+    Manifest(String),
+    #[error("ledger {0}")]
+    Ledger(String),
+}
+
+/// One worker pass: load the manifest + existing ledger → reconcile the gap → execute each job via
+/// `exec` → content-address outputs → write the resulting rows. Returns the outcome. Deterministic
+/// given `cfg.now` (the binary supplies the wall clock; the library stays clock-free + testable).
+pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
+    let bytes = std::fs::read(&cfg.manifest)
+        .map_err(|e| WorkerRunError::Io(format!("read manifest {}: {e}", cfg.manifest.display())))?;
+    let desired: Vec<DesiredJob> =
+        serde_json::from_slice(&bytes).map_err(|e| WorkerRunError::Manifest(e.to_string()))?;
+
+    let mut view = LedgerView::new();
+    for p in &cfg.ledger_in {
+        for row in zen_ledger::read_ledger(p).map_err(|e| WorkerRunError::Ledger(e.to_string()))? {
+            view.apply(row);
+        }
+    }
+
+    let store = LocalBlobStore::new(cfg.blobs.clone()).map_err(|e| WorkerRunError::Io(e.to_string()))?;
+    let out = execute_gap(
+        &desired,
+        &view,
+        RetryPolicy { max_attempts: cfg.max_attempts },
+        |job| exec_command(&cfg.exec, job),
+        &store,
+        WorkerCtx { worker: &cfg.worker, provider: &cfg.provider, now: cfg.now },
+    );
+    zen_ledger::write_ledger(&cfg.ledger_out, &out.rows)
+        .map_err(|e| WorkerRunError::Ledger(e.to_string()))?;
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +366,56 @@ mod tests {
         assert_eq!(out.poisoned, 1);
         assert_eq!(out.done, 0, "poisoned job is not executed");
         assert_eq!(out.rows[0].status, JobStatus::Poison);
+    }
+
+    #[test]
+    fn exec_command_captures_stdout() {
+        let d = desired("cvvdp", b"a");
+        // `cat` echoes the job JSON it receives on stdin → that's the (content-addressable) output
+        let out = exec_command("cat", &d).unwrap();
+        assert_eq!(out, serde_json::to_vec(&d).unwrap());
+    }
+
+    #[test]
+    fn exec_command_missing_program_is_transient() {
+        let d = desired("cvvdp", b"a");
+        let err = exec_command("zzz-no-such-program-12345", &d).unwrap_err();
+        assert_eq!(err.class, ErrorClass::WorkerLost, "infra failure → retryable, not poison");
+    }
+
+    #[test]
+    fn run_pass_is_end_to_end_and_converges() {
+        let dir = tmp();
+        std::fs::create_dir_all(&dir).unwrap();
+        let manifest = dir.join("jobs.json");
+        let d = vec![desired("cvvdp", b"a"), desired("ssim2", b"b")];
+        std::fs::write(&manifest, serde_json::to_vec(&d).unwrap()).unwrap();
+        let cfg = WorkerConfig {
+            manifest,
+            ledger_in: vec![],
+            ledger_out: dir.join("out.parquet"),
+            blobs: dir.join("blobs"),
+            exec: "cat".into(),
+            worker: "w1".into(),
+            provider: "local".into(),
+            now: 100,
+            max_attempts: 3,
+        };
+        let out = run(&cfg).unwrap();
+        assert_eq!(out.done, 2);
+        let rows = zen_ledger::read_ledger(&cfg.ledger_out).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.status == JobStatus::Done && r.output_sha.is_some()));
+
+        // second pass folds in the just-written ledger → gap empty → executor never invoked
+        let cfg2 = WorkerConfig {
+            ledger_in: vec![cfg.ledger_out.clone()],
+            ledger_out: dir.join("out2.parquet"),
+            exec: "false".into(), // would fail if called; it must not be
+            ..cfg.clone()
+        };
+        let out2 = run(&cfg2).unwrap();
+        assert_eq!(out2.done, 0, "all jobs already DONE → converged, nothing re-run");
+        assert!(out2.rows.is_empty());
     }
 }
