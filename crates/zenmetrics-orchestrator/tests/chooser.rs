@@ -14,8 +14,8 @@ use std::time::{Duration, SystemTime};
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
     Backend, BackendBench, BackendChoice, BackendVram, CandidateStatus, CapabilityProfile,
-    ChooserConfig, ChooserError, ConsideredCandidate, CpuCapability, GpuCapability, MetricProfile,
-    Orchestrator, OrchestratorConfig, RejectReason, TaskShape, compute_machine_hash,
+    ChooserConfig, ChooserError, ConsideredCandidate, CpuCapability, ExecContext, GpuCapability,
+    MetricProfile, Orchestrator, OrchestratorConfig, RejectReason, TaskShape, compute_machine_hash,
 };
 
 // ---------------------------------------------------------------------------
@@ -127,9 +127,18 @@ fn ssim2_profile() -> MetricProfile {
     // SSIM2 is heavier on memory than cvvdp's StripPair — 6.2 GB
     // Full at 4 K matches one of the test scenarios.
     let vram_table: &[(u64, &[(Backend, usize)])] = &[
-        (1024 * 1024, &[(Backend::GpuFull, 410), (Backend::GpuStrip, 220)]),
-        (2048 * 2048, &[(Backend::GpuFull, 1620), (Backend::GpuStrip, 800)]),
-        (4096 * 4096, &[(Backend::GpuFull, 6200), (Backend::GpuStrip, 2900)]),
+        (
+            1024 * 1024,
+            &[(Backend::GpuFull, 410), (Backend::GpuStrip, 220)],
+        ),
+        (
+            2048 * 2048,
+            &[(Backend::GpuFull, 1620), (Backend::GpuStrip, 800)],
+        ),
+        (
+            4096 * 4096,
+            &[(Backend::GpuFull, 6200), (Backend::GpuStrip, 2900)],
+        ),
     ];
     for (px, rows) in bench_table {
         m.ns_per_px_at.insert(*px, bench_row(rows));
@@ -285,9 +294,11 @@ fn returns_no_feasible_when_nothing_fits() {
         match err {
             ChooserError::NoFeasibleBackend { considered } => {
                 assert_eq!(considered.len(), 4);
-                assert!(considered
-                    .iter()
-                    .all(|c| matches!(c.status, CandidateStatus::Rejected { .. })));
+                assert!(
+                    considered
+                        .iter()
+                        .all(|c| matches!(c.status, CandidateStatus::Rejected { .. }))
+                );
                 let cpu = find(&considered, Backend::Cpu);
                 assert!(matches!(
                     cpu.status,
@@ -688,26 +699,18 @@ fn rejects_negative_extrapolated_cpu_prediction() {
     let mut m = MetricProfile::default();
     // GPU at 16M cell — real measurement, so the chooser has a non-OOM
     // GPU candidate to fall back to once CPU is rejected.
-    m.ns_per_px_at.insert(
-        16_777_216,
-        bench_row(&[(Backend::GpuStrip, 5.0_f64)]),
-    );
-    m.vram_mib_at.insert(
-        16_777_216,
-        vram_row(&[(Backend::GpuStrip, 800)]),
-    );
+    m.ns_per_px_at
+        .insert(16_777_216, bench_row(&[(Backend::GpuStrip, 5.0_f64)]));
+    m.vram_mib_at
+        .insert(16_777_216, vram_row(&[(Backend::GpuStrip, 800)]));
     // CPU at 256K + GPU at 1M co-cached (the cache stores per-size
     // backends in one BackendBench entry per pixel-key, so we set the
     // Cpu and GpuStrip values together for the size keys we want both
     // to share).
-    m.ns_per_px_at.insert(
-        262_144,
-        bench_row(&[(Backend::Cpu, 1018.74_f64)]),
-    );
-    m.vram_mib_at.insert(
-        262_144,
-        vram_row(&[(Backend::Cpu, 0)]),
-    );
+    m.ns_per_px_at
+        .insert(262_144, bench_row(&[(Backend::Cpu, 1018.74_f64)]));
+    m.vram_mib_at
+        .insert(262_144, vram_row(&[(Backend::Cpu, 0)]));
     m.ns_per_px_at.insert(
         1_048_576,
         bench_row(&[(Backend::Cpu, 629.23_f64), (Backend::GpuStrip, 6.0_f64)]),
@@ -731,14 +734,9 @@ fn rejects_negative_extrapolated_cpu_prediction() {
             predicted_ns_per_px: Some(ns),
             ..
         } => {
-            assert!(
-                ns <= 0.0,
-                "expected non-positive ns, got {ns}",
-            );
+            assert!(ns <= 0.0, "expected non-positive ns, got {ns}",);
         }
-        ref s => panic!(
-            "expected CPU NonPositivePrediction rejection, got {s:?}",
-        ),
+        ref s => panic!("expected CPU NonPositivePrediction rejection, got {s:?}",),
     }
 
     // The selected backend MUST be GpuStrip (the only positive-ns
@@ -819,14 +817,12 @@ fn oom_cascade_still_rejects_when_no_positive_measurement_at_or_above() {
     );
     // Add 1024² ns_per_px so the interpolator doesn't return
     // `NoMeasuredData` (we want to test the cascade specifically).
-    profile.ns_per_px_at.insert(
-        1024 * 1024,
-        bench_row(&[(Backend::GpuStripPair, 6.10)]),
-    );
-    profile.vram_mib_at.insert(
-        1024 * 1024,
-        vram_row(&[(Backend::GpuStripPair, 142)]),
-    );
+    profile
+        .ns_per_px_at
+        .insert(1024 * 1024, bench_row(&[(Backend::GpuStripPair, 6.10)]));
+    profile
+        .vram_mib_at
+        .insert(1024 * 1024, vram_row(&[(Backend::GpuStripPair, 142)]));
     profile.last_measured = Some(SystemTime::now());
     // GpuFull's only positive measurement is at 1024 px (32²);
     // the 256² (65 536 px) OOM cascades to anything > 65 536 px.
@@ -855,4 +851,189 @@ fn oom_cascade_still_rejects_when_no_positive_measurement_at_or_above() {
         Backend::GpuStripPair,
         "expected StripPair fallback when GpuFull cascade is valid",
     );
+}
+
+// ---------------------------------------------------------------------------
+// Task #146 — one-shot CPU/GPU crossover routing
+//
+// The chooser ranks `Batch` tasks on warm `ns_per_px` (correct when a
+// persistent warm worker amortizes the GPU's ~181 ms cold floor). For a
+// single cold call (`ExecContext::OneShot`) it consults the measured
+// crossover (`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`) and prefers
+// CPU at/below the per-metric crossover size when CPU is feasible.
+//
+// CPU is only a *feasible* (`Selected`) candidate when the matching
+// `cpu-<metric>` feature is compiled in. The CPU-picked assertions are
+// therefore gated on the relevant `cpu-*` feature; the fall-through
+// assertions (OneShot == Batch when CPU is infeasible) run in every
+// feature mix.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn batch_context_is_identical_to_choose_backend() {
+    // ExecContext::Batch must be bit-identical to the legacy
+    // `choose_backend` / `choose_backend_with_config` path — no behavior
+    // change for the warm pool / sweep callers. Holds regardless of which
+    // cpu-* features are enabled (both go through the same warm-ns/px
+    // ranking).
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, cvvdp_profile())]);
+    let legacy = orch
+        .choose_backend(MetricKind::Cvvdp, 1024, 1024, 12288)
+        .expect("legacy choose_backend");
+    let batch = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            1024,
+            1024,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::Batch,
+        )
+        .expect("batch context");
+    assert_eq!(batch.backend, legacy.backend);
+    assert_eq!(batch.predicted_ns_per_px, legacy.predicted_ns_per_px);
+    assert_eq!(batch.predicted_vram_mib, legacy.predicted_vram_mib);
+    // Batch must pick a GPU backend at 1024² cvvdp (warm-ns/px ranking).
+    assert_eq!(batch.backend, Backend::GpuFull);
+}
+
+#[test]
+fn oneshot_falls_through_to_gpu_when_cpu_infeasible() {
+    // When CPU is NOT a feasible candidate (cpu-cvvdp off), the one-shot
+    // rule cannot fire — a one-shot small cvvdp call falls through to the
+    // warm-ns/px ranking and picks GPU exactly like Batch. This protects
+    // against the one-shot path regressing to an unavailable backend.
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, cvvdp_profile())]);
+    let choice = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            1024,
+            1024,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::OneShot,
+        )
+        .expect("one-shot choose");
+    if cfg!(feature = "cpu-cvvdp") {
+        // CPU feasible → one-shot crossover routes 1 MP cvvdp to CPU.
+        assert_eq!(
+            choice.backend,
+            Backend::Cpu,
+            "1 MP cvvdp one-shot should route to CPU (cpu-cvvdp on)"
+        );
+        assert_eq!(choice.predicted_vram_mib, 0);
+    } else {
+        // CPU infeasible → fall through to GPU (same as Batch).
+        assert_eq!(
+            choice.backend,
+            Backend::GpuFull,
+            "without cpu-cvvdp, one-shot must fall through to GPU"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "cpu-cvvdp")]
+fn oneshot_routes_small_cvvdp_to_cpu_but_batch_picks_gpu() {
+    // The headline crossover behavior: same (metric, size, vram), the
+    // ONLY difference is the execution context. One-shot → CPU (cold
+    // floor not amortized), Batch → GPU (warm worker amortizes it).
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, cvvdp_profile())]);
+
+    let batch = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            512,
+            512,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::Batch,
+        )
+        .expect("batch");
+    assert_eq!(batch.backend, Backend::GpuFull, "batch 512² cvvdp → GPU");
+
+    let one_shot = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            512,
+            512,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::OneShot,
+        )
+        .expect("one-shot");
+    assert_eq!(one_shot.backend, Backend::Cpu, "one-shot 512² cvvdp → CPU");
+
+    // cvvdp CPU wins one-shot at EVERY measured size (u64::MAX boundary),
+    // so even a 4096² one-shot routes to CPU.
+    let one_shot_4k = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            4096,
+            4096,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::OneShot,
+        )
+        .expect("one-shot 4k");
+    assert_eq!(
+        one_shot_4k.backend,
+        Backend::Cpu,
+        "cvvdp one-shot routes to CPU at all measured sizes (16 MP incl.)"
+    );
+}
+
+#[test]
+#[cfg(feature = "cpu-cvvdp")]
+fn oneshot_for_task_with_context_uses_crossover() {
+    // The live-probe convenience wrapper must thread the ExecContext
+    // through. On a CI box without a GPU the probe falls back to cached
+    // total_vram_mib (12288), which is plenty for the CPU=0 route.
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, cvvdp_profile())]);
+    let shape = TaskShape {
+        metric: MetricKind::Cvvdp,
+        width: 1024,
+        height: 1024,
+    };
+    let one_shot = orch
+        .choose_backend_for_task_with_context(&shape, ExecContext::OneShot)
+        .expect("one-shot for-task");
+    assert_eq!(one_shot.backend, Backend::Cpu);
+
+    let batch = orch
+        .choose_backend_for_task_with_context(&shape, ExecContext::Batch)
+        .expect("batch for-task");
+    assert_eq!(batch.backend, Backend::GpuFull);
+    // The default for-task wrapper keeps Batch semantics.
+    let default = orch.choose_backend_for_task(&shape).expect("default");
+    assert_eq!(default.backend, batch.backend);
+}
+
+#[test]
+#[cfg(feature = "cpu-cvvdp")]
+fn oneshot_does_not_route_to_cpu_when_cpu_oom_listed() {
+    // Even one-shot, if the CPU cell is marked OOM at this size the rule
+    // must not pick CPU — it falls through to the GPU ranking. Guards the
+    // "never pick an infeasible backend" invariant.
+    let mut profile = cvvdp_profile();
+    profile
+        .cells_failed_oom
+        .push((Backend::Cpu, 1024u64 * 1024u64));
+    let orch = fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
+    let choice = orch
+        .choose_backend_with_context(
+            MetricKind::Cvvdp,
+            1024,
+            1024,
+            12288,
+            &ChooserConfig::default(),
+            ExecContext::OneShot,
+        )
+        .expect("one-shot with cpu OOM");
+    assert_ne!(
+        choice.backend,
+        Backend::Cpu,
+        "CPU is OOM-listed at 1 MP — one-shot must fall through to GPU"
+    );
+    assert_eq!(choice.backend, Backend::GpuFull);
 }

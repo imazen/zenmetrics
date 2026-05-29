@@ -61,7 +61,7 @@ use zenmetrics_api::{
 
 use crate::chooser::{BackendChoice, ChooserError, RejectReason};
 use crate::cpu_adapter::{CpuAdapter, CpuAdapterError};
-use crate::{save_profile, Backend, Orchestrator};
+use crate::{Backend, Orchestrator, save_profile};
 
 // ---------------------------------------------------------------------------
 // Task / TaskData
@@ -396,10 +396,7 @@ impl ExecMetric {
                             // see `crates/zen-metrics-cli/src/metrics/cache.rs`
                             // which emits `butteraugli_pnorm3_gpu`
                             // alongside `butteraugli_max_gpu`.
-                            extras.insert(
-                                "butteraugli_pnorm3_gpu".to_string(),
-                                pnorm3,
-                            );
+                            extras.insert("butteraugli_pnorm3_gpu".to_string(), pnorm3);
                             Ok((score, extras))
                         }
                         Err(e) => Err(classify_call_err(&e.to_string())),
@@ -633,23 +630,15 @@ fn construct_cpu(
             // Format a sentinel that the executor recognises so it can
             // surface a structured `CpuBackendUnavailable` rather than a
             // generic MetricApi.
-            ConstructOutcome::Other(format!(
-                "CpuBackendUnavailable:{}:cpu-{}",
-                k.tag(),
-                k.tag()
-            ))
+            ConstructOutcome::Other(format!("CpuBackendUnavailable:{}:cpu-{}", k.tag(), k.tag()))
         }
         Err(CpuAdapterError::Unavailable(k)) => {
             ConstructOutcome::Other(format!("CpuMetricUnavailable:{}", k.tag()))
         }
-        Err(CpuAdapterError::Failed(msg)) => {
-            ConstructOutcome::Other(format!("CpuFailed:{msg}"))
-        }
-        Err(CpuAdapterError::InvalidInputSize { expected, got }) => {
-            ConstructOutcome::Other(format!(
-                "CpuFailed:invalid input size (expected {expected}, got {got})"
-            ))
-        }
+        Err(CpuAdapterError::Failed(msg)) => ConstructOutcome::Other(format!("CpuFailed:{msg}")),
+        Err(CpuAdapterError::InvalidInputSize { expected, got }) => ConstructOutcome::Other(
+            format!("CpuFailed:invalid input size (expected {expected}, got {got})"),
+        ),
     }
 }
 
@@ -691,9 +680,7 @@ fn construct_cvvdp_strip_pair(
         }
         None => CvvdpParams::default(),
     };
-    let mode = CvvdpMode::StripPair {
-        h_body: Some(256),
-    };
+    let mode = CvvdpMode::StripPair { h_body: Some(256) };
     match CvvdpOpaque::new_with_memory_mode(
         zenmetrics_api::cvvdp::Backend::Cuda,
         width,
@@ -808,11 +795,23 @@ impl Orchestrator {
         for _iteration in 0..5 {
             // Re-ask the chooser each iteration — the previous attempt's
             // OOM observation may have updated cells_failed_oom.
-            let choice = match self.choose_backend_for_task(&crate::chooser::TaskShape {
-                metric,
-                width,
-                height,
-            }) {
+            //
+            // Task #146: `run_single` is a synchronous one-shot call that
+            // constructs a fresh metric per task (it does NOT reuse a warm
+            // pool worker), so the GPU pays its full cold floor (~181 ms
+            // context init + per-signature construct + first compute) on
+            // every invocation. Route with `ExecContext::OneShot` so the
+            // measured CPU/GPU crossover sends small/medium cold calls to
+            // CPU when CPU is faster end-to-end. The warm pool path
+            // (`pool.rs`) keeps `Batch` semantics — see `choose_backend`.
+            let choice = match self.choose_backend_for_task_with_context(
+                &crate::chooser::TaskShape {
+                    metric,
+                    width,
+                    height,
+                },
+                crate::chooser::ExecContext::OneShot,
+            ) {
                 Ok(c) => c,
                 Err(e) => {
                     // Convert NoFeasibleBackend into FullyExhausted when
@@ -841,8 +840,7 @@ impl Orchestrator {
                     match em.compute_phase4_with_extras(&ref_bytes, &dist_bytes) {
                         Ok((score, extras)) => {
                             attempts.push((backend, AttemptOutcome::Success));
-                            let output_columns =
-                                build_output_columns(metric, &score, &extras);
+                            let output_columns = build_output_columns(metric, &score, &extras);
                             return TaskResult {
                                 task_id,
                                 outcome: Ok(score),
@@ -865,8 +863,7 @@ impl Orchestrator {
                             continue;
                         }
                         Err(CallErr::Other(msg)) => {
-                            attempts
-                                .push((backend, AttemptOutcome::OtherError(msg.clone())));
+                            attempts.push((backend, AttemptOutcome::OtherError(msg.clone())));
                             // Phase 8a: a runtime cuInit / libcuda
                             // failure can also surface here (e.g.,
                             // construct succeeded by trapping a soft
@@ -970,10 +967,7 @@ impl Orchestrator {
                     // error. Surface as MetricApi — the operator
                     // probably needs to investigate.
                     if let Some(real) = msg.strip_prefix("CpuFailed:") {
-                        attempts.push((
-                            backend,
-                            AttemptOutcome::OtherError(real.to_string()),
-                        ));
+                        attempts.push((backend, AttemptOutcome::OtherError(real.to_string())));
                         return finalize_err(
                             task_id,
                             OrchestratorError::CpuFailed(real.to_string()),
@@ -1394,9 +1388,7 @@ impl ExecMetric {
     /// failed at dispatch.
     pub(crate) fn set_reference(&mut self, r: &[u8]) -> Result<(), String> {
         match self {
-            ExecMetric::Umbrella(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| e.to_string()),
+            ExecMetric::Umbrella(m) => m.set_reference_srgb_u8(r).map_err(|e| e.to_string()),
             ExecMetric::CvvdpStripPair(_) => {
                 Err("cvvdp StripPair has no separate set_reference path".into())
             }
@@ -1406,20 +1398,15 @@ impl ExecMetric {
 
     /// Score a distorted candidate against the previously-cached
     /// reference. Pre-requisite: [`Self::set_reference`] succeeded.
-    pub(crate) fn compute_with_cached_reference(
-        &mut self,
-        d: &[u8],
-    ) -> Result<Score, CallErrPub> {
+    pub(crate) fn compute_with_cached_reference(&mut self, d: &[u8]) -> Result<Score, CallErrPub> {
         match self {
-            ExecMetric::Umbrella(m) => m
-                .compute_with_cached_reference_srgb_u8(d)
-                .map_err(|e| {
-                    let msg = e.to_string();
-                    match classify_call_err(&msg) {
-                        CallErr::Oom => CallErrPub::Oom,
-                        CallErr::Other(s) => CallErrPub::Other(s),
-                    }
-                }),
+            ExecMetric::Umbrella(m) => m.compute_with_cached_reference_srgb_u8(d).map_err(|e| {
+                let msg = e.to_string();
+                match classify_call_err(&msg) {
+                    CallErr::Oom => CallErrPub::Oom,
+                    CallErr::Other(s) => CallErrPub::Other(s),
+                }
+            }),
             ExecMetric::CvvdpStripPair(_) => Err(CallErrPub::Other(
                 "cvvdp StripPair has no cached-reference path".into(),
             )),
@@ -1685,11 +1672,7 @@ mod tests {
         // Trigger the cleanup pass by recording a NEW OOM (which the
         // bench-time path would never produce — a runtime OOM at
         // GpuStripPair / 2048² for argument's sake).
-        orch.record_oom_and_persist(
-            MetricKind::Cvvdp,
-            Backend::GpuStripPair,
-            2048u64 * 2048u64,
-        );
+        orch.record_oom_and_persist(MetricKind::Cvvdp, Backend::GpuStripPair, 2048u64 * 2048u64);
 
         let oom_list = &orch
             .capability()

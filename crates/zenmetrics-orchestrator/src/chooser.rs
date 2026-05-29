@@ -35,6 +35,80 @@ use zenmetrics_api::MetricKind;
 use crate::{Backend, MetricProfile, Orchestrator};
 
 // ---------------------------------------------------------------------------
+// Execution context + one-shot CPU/GPU crossover (task #146)
+// ---------------------------------------------------------------------------
+
+/// How the task that is being routed will execute, which decides whether
+/// the GPU's per-process cold-start floor (~181 ms CUDA context init +
+/// per-signature construct + first-compute) is amortized.
+///
+/// The bench cache stores only the **warm, steady-state** `ns_per_px`
+/// (the [`crate::MetricProfile`] discards warmup iterations). Ranking on
+/// that number is correct when a persistent warm worker has already paid
+/// the cold floor — i.e. for batch / pool workloads — but it makes the
+/// GPU look unconditionally fast even for a single cold call where the
+/// floor dominates. The measured one-shot crossover
+/// (`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`) shows CPU is faster
+/// one-shot for cvvdp/ssim2/butter/zensim through 16 MP, dssim through
+/// 4 MP, and iwssim through 1 MP. This enum lets the chooser apply that
+/// table only where it is relevant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ExecContext {
+    /// The task runs in a persistent warm worker / batch where the
+    /// ~181 ms GPU context init + per-signature construct is amortized
+    /// across many tasks. Rank on warm `ns_per_px` — GPU wins for every
+    /// metric at every measured size per the `batch_winner` column. This
+    /// is the default and preserves the pre-task-#146 behavior of
+    /// [`Orchestrator::choose_backend`].
+    #[default]
+    Batch,
+    /// The task is a single cold call: no warm worker will amortize the
+    /// GPU cold floor (e.g. [`crate::Orchestrator::run_single`], or the
+    /// only task in a chunk). Apply the measured one-shot crossover —
+    /// prefer CPU at/below the per-metric crossover size when CPU is a
+    /// feasible candidate; otherwise fall through to warm-`ns_per_px`
+    /// ranking.
+    OneShot,
+}
+
+/// Largest pixel count at which CPU is still the faster *one-shot*
+/// backend for `metric`, per `benchmarks/cpu_gpu_crossover_2026-05-29.tsv`
+/// (`one_shot_winner` column, RTX 5070 / 7950X, cuda, no
+/// `target-cpu=native`). A one-shot task whose `pixels <=` this value
+/// should prefer CPU; above it, the GPU cold floor is worth paying.
+///
+/// Provenance: the TSV compares `cpu_full_ms` against the GPU
+/// `cold_total_ms` (= `client_init_ms` ~181 ms + `metric_new_ms` +
+/// `first_compute_ms`, from `gpu_coldstart_2026-05-29.tsv`). Values are
+/// the largest *measured* size where CPU still won; the GPU-cold floor
+/// was only measured at 512/1024/2048/4096, so the boundary is the
+/// measured grid point, not an interpolated crossover.
+///
+/// - cvvdp / ssim2 / butter / zensim: CPU wins through 4096² (16 MP);
+///   the GPU one-shot floor only overtakes above the measured grid.
+/// - dssim: CPU wins through 2048² (4 MP); GPU wins one-shot at 4096².
+/// - iwssim: CPU wins through 1024² (1 MP); GPU wins one-shot at 2048².
+///
+/// Returns `u64::MAX` for metrics where CPU won at every measured size,
+/// so the "prefer CPU one-shot" rule fires for any size the chooser is
+/// asked about. (The warm-`ns_per_px` fallback still applies if CPU is
+/// infeasible — feature off, OOM-listed, or no measured data.)
+pub(crate) fn cpu_wins_oneshot_max_pixels(metric: MetricKind) -> u64 {
+    match metric {
+        // CPU faster one-shot at every measured size (512²..4096²). The
+        // GPU cold floor (cold_total_ms) does not overtake cpu_full_ms
+        // until above 16 MP, which the crossover bench did not measure;
+        // u64::MAX keeps the rule conservative (prefer CPU one-shot at
+        // any size the chooser sees) rather than guessing the boundary.
+        MetricKind::Cvvdp | MetricKind::Ssim2 | MetricKind::Butter | MetricKind::Zensim => u64::MAX,
+        // CPU faster one-shot through 2048² (4 MP); GPU faster at 4096².
+        MetricKind::Dssim => 2048 * 2048,
+        // CPU faster one-shot through 1024² (1 MP); GPU faster at 2048².
+        MetricKind::Iwssim => 1024 * 1024,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
@@ -99,10 +173,7 @@ pub enum CandidateStatus {
     /// This backend was a feasible choice. Two surviving backends
     /// both carry `Selected`; the chooser picks one of them as
     /// [`BackendChoice::backend`] using `tie_break_order`.
-    Selected {
-        ns_per_px: f64,
-        vram_mib: usize,
-    },
+    Selected { ns_per_px: f64, vram_mib: usize },
     /// This backend was rejected. Predicted numbers are recorded
     /// when meaningful so the operator can compare against survivors.
     Rejected {
@@ -256,10 +327,7 @@ pub(crate) fn supported_backends(metric: MetricKind) -> &'static [Backend] {
         // zensim has a fused full-image kernel only. CPU reference: zensim.
         MetricKind::Zensim => &[Backend::GpuFull, Backend::Cpu],
         // Butter / Ssim2 / Dssim / Iwssim each have a CPU reference crate.
-        MetricKind::Butter
-        | MetricKind::Ssim2
-        | MetricKind::Dssim
-        | MetricKind::Iwssim => {
+        MetricKind::Butter | MetricKind::Ssim2 | MetricKind::Dssim | MetricKind::Iwssim => {
             &[Backend::GpuFull, Backend::GpuStrip, Backend::Cpu]
         }
     }
@@ -334,11 +402,7 @@ fn interpolate_vram_mib(
     interpolate_from_points(&points, pixels, extrapolation_pessimism).map(|v| {
         // Round half-up; bench cells already integer-MiB so this is
         // mostly cosmetic for interpolated points.
-        if v < 0.0 {
-            0
-        } else {
-            (v + 0.5) as usize
-        }
+        if v < 0.0 { 0 } else { (v + 0.5) as usize }
     })
 }
 
@@ -537,6 +601,11 @@ impl Orchestrator {
     /// Same as [`Self::choose_backend`] with a caller-provided
     /// [`ChooserConfig`]. Useful for tests + datacenter callers who
     /// want a larger VRAM safety floor or a different tie-break order.
+    ///
+    /// Uses [`ExecContext::Batch`] semantics (rank on warm `ns_per_px`),
+    /// matching the pre-task-#146 behavior. Use
+    /// [`Self::choose_backend_with_context`] to opt a one-shot call into
+    /// the measured CPU/GPU crossover.
     pub fn choose_backend_with_config(
         &self,
         metric: MetricKind,
@@ -544,6 +613,44 @@ impl Orchestrator {
         height: u32,
         vram_free_mib: usize,
         config: &ChooserConfig,
+    ) -> Result<BackendChoice, ChooserError> {
+        self.choose_backend_with_context(
+            metric,
+            width,
+            height,
+            vram_free_mib,
+            config,
+            ExecContext::Batch,
+        )
+    }
+
+    /// Choose a backend with an explicit [`ExecContext`] + config.
+    ///
+    /// `ExecContext::Batch` ranks on warm `ns_per_px` (the cached
+    /// steady-state cost) — correct when a persistent warm worker
+    /// amortizes the GPU cold floor, and bit-identical to
+    /// [`Self::choose_backend_with_config`].
+    ///
+    /// `ExecContext::OneShot` additionally applies the measured one-shot
+    /// crossover ([`cpu_wins_oneshot_max_pixels`]): when CPU is a
+    /// feasible (`Selected`) candidate for this metric AND
+    /// `pixels <= cpu_wins_oneshot_max_pixels(metric)`, the CPU backend
+    /// is selected even though its warm `ns_per_px` is higher — because
+    /// the single cold GPU call would pay the ~181 ms+ floor that makes
+    /// CPU strictly faster at that size (per
+    /// `benchmarks/cpu_gpu_crossover_2026-05-29.tsv`). If CPU is not a
+    /// feasible candidate (feature off, OOM-listed, no measured data, or
+    /// rejected for any reason), the one-shot rule does not fire and the
+    /// warm-`ns_per_px` ranking decides — so a one-shot call never
+    /// regresses to an infeasible backend.
+    pub fn choose_backend_with_context(
+        &self,
+        metric: MetricKind,
+        width: u32,
+        height: u32,
+        vram_free_mib: usize,
+        config: &ChooserConfig,
+        exec_context: ExecContext,
     ) -> Result<BackendChoice, ChooserError> {
         let profile = self
             .capability()
@@ -573,8 +680,7 @@ impl Orchestrator {
                 && matches!(
                     backend,
                     Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair
-                )
-            {
+                ) {
                 CandidateStatus::Rejected {
                     reason: RejectReason::NoGpuPresent,
                     predicted_ns_per_px: None,
@@ -593,6 +699,33 @@ impl Orchestrator {
                 )
             };
             considered.push(ConsideredCandidate { backend, status });
+        }
+
+        // Task #146 one-shot crossover: for a single cold call, the GPU
+        // cold floor (~181 ms context init + per-signature construct +
+        // first compute) is NOT amortized, so the warm `ns_per_px`
+        // ranking below would wrongly prefer GPU. When the measured
+        // crossover says CPU wins one-shot at this size AND CPU is a
+        // feasible (Selected) candidate, select CPU directly. This is
+        // skipped entirely for `ExecContext::Batch` (the warm pool /
+        // sweep path) so that behavior is bit-identical to before.
+        if exec_context == ExecContext::OneShot && pixels <= cpu_wins_oneshot_max_pixels(metric) {
+            if let Some(cpu_idx) = considered.iter().position(|c| c.backend == Backend::Cpu) {
+                if let CandidateStatus::Selected {
+                    ns_per_px,
+                    vram_mib,
+                } = considered[cpu_idx].status
+                {
+                    let safety_margin_mib = usable_vram_mib.saturating_sub(vram_mib);
+                    return Ok(BackendChoice {
+                        backend: Backend::Cpu,
+                        predicted_ns_per_px: ns_per_px,
+                        predicted_vram_mib: vram_mib,
+                        safety_margin_mib,
+                        considered,
+                    });
+                }
+            }
         }
 
         // Pick lowest ns_per_px among Selected candidates.
@@ -624,7 +757,10 @@ impl Orchestrator {
         })?;
         let chosen = &considered[chosen_idx];
         let (ns, mib) = match chosen.status {
-            CandidateStatus::Selected { ns_per_px, vram_mib } => (ns_per_px, vram_mib),
+            CandidateStatus::Selected {
+                ns_per_px,
+                vram_mib,
+            } => (ns_per_px, vram_mib),
             // Unreachable — `best_idx` only points at Selected.
             _ => unreachable!(),
         };
@@ -646,13 +782,31 @@ impl Orchestrator {
     /// back to the cached `total_vram_mib` as a best-effort upper
     /// bound. Callers that need stricter behavior should call
     /// `choose_backend` directly with their own probe.
-    pub fn choose_backend_for_task(
+    pub fn choose_backend_for_task(&self, task: &TaskShape) -> Result<BackendChoice, ChooserError> {
+        self.choose_backend_for_task_with_context(task, ExecContext::Batch)
+    }
+
+    /// Same as [`Self::choose_backend_for_task`] but with an explicit
+    /// [`ExecContext`]. One-shot callers (e.g.
+    /// [`crate::Orchestrator::run_single`]) pass [`ExecContext::OneShot`]
+    /// so the measured CPU/GPU crossover routes small cold calls to CPU
+    /// instead of paying the GPU context-init floor. The default
+    /// `choose_backend_for_task` keeps `Batch` semantics for the warm
+    /// pool path.
+    pub fn choose_backend_for_task_with_context(
         &self,
         task: &TaskShape,
+        exec_context: ExecContext,
     ) -> Result<BackendChoice, ChooserError> {
-        let vram_free_mib = probe_free_vram_mib()
-            .unwrap_or(self.capability().gpu.total_vram_mib);
-        self.choose_backend(task.metric, task.width, task.height, vram_free_mib)
+        let vram_free_mib = probe_free_vram_mib().unwrap_or(self.capability().gpu.total_vram_mib);
+        self.choose_backend_with_context(
+            task.metric,
+            task.width,
+            task.height,
+            vram_free_mib,
+            &ChooserConfig::default(),
+            exec_context,
+        )
     }
 }
 
@@ -751,17 +905,16 @@ fn evaluate_candidate(
             vram_mib: 0,
         };
     }
-    let ns =
-        match interpolate_ns_per_px(profile, backend, pixels, config.extrapolation_pessimism) {
-            Some(v) => v,
-            None => {
-                return CandidateStatus::Rejected {
-                    reason: RejectReason::NoMeasuredData,
-                    predicted_ns_per_px: None,
-                    predicted_vram_mib: None,
-                };
-            }
-        };
+    let ns = match interpolate_ns_per_px(profile, backend, pixels, config.extrapolation_pessimism) {
+        Some(v) => v,
+        None => {
+            return CandidateStatus::Rejected {
+                reason: RejectReason::NoMeasuredData,
+                predicted_ns_per_px: None,
+                predicted_vram_mib: None,
+            };
+        }
+    };
     // Phase 7.7.1: see same comment on the CPU branch above. Symmetric
     // rejection here so a GPU backend with a runaway negative
     // extrapolation can't out-rank a backend with a real measurement.
@@ -832,4 +985,38 @@ fn probe_free_vram_mib() -> Option<usize> {
 #[allow(dead_code)]
 fn _suppress_unused() -> Option<SystemTime> {
     None
+}
+
+#[cfg(test)]
+mod oneshot_crossover_tests {
+    use super::*;
+
+    /// The one-shot crossover boundaries must exactly match
+    /// `benchmarks/cpu_gpu_crossover_2026-05-29.tsv`'s `one_shot_winner`
+    /// column. cvvdp/ssim2/butter/zensim: CPU at every measured size
+    /// (encoded as u64::MAX so the rule fires at any size). dssim: CPU
+    /// through 4 MP. iwssim: CPU through 1 MP.
+    #[test]
+    fn crossover_table_matches_measured_tsv() {
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Cvvdp), u64::MAX);
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Ssim2), u64::MAX);
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Butter), u64::MAX);
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Zensim), u64::MAX);
+        // dssim: 2048² = 4 MP is the last CPU-wins size; 4096² is GPU.
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Dssim), 2048 * 2048);
+        assert!(2048u64 * 2048 <= cpu_wins_oneshot_max_pixels(MetricKind::Dssim));
+        assert!(4096u64 * 4096 > cpu_wins_oneshot_max_pixels(MetricKind::Dssim));
+        // iwssim: 1024² = 1 MP is the last CPU-wins size; 2048² is GPU.
+        assert_eq!(cpu_wins_oneshot_max_pixels(MetricKind::Iwssim), 1024 * 1024);
+        assert!(1024u64 * 1024 <= cpu_wins_oneshot_max_pixels(MetricKind::Iwssim));
+        assert!(2048u64 * 2048 > cpu_wins_oneshot_max_pixels(MetricKind::Iwssim));
+    }
+
+    #[test]
+    fn exec_context_default_is_batch() {
+        // Default must be Batch so any caller using `..Default::default()`
+        // or the existing `choose_backend*` methods keeps warm-ns/px
+        // ranking (no behavior change for the warm pool / sweep path).
+        assert_eq!(ExecContext::default(), ExecContext::Batch);
+    }
 }

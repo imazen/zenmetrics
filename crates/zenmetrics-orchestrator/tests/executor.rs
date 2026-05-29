@@ -29,9 +29,9 @@ use std::time::{Duration, SystemTime};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    compute_machine_hash, save_profile, AttemptOutcome, Backend, BackendBench, BackendVram,
-    CapabilityProfile, CpuCapability, ExecutorError, GpuCapability, MetricProfile, Orchestrator,
-    OrchestratorConfig, Task, TaskData,
+    AttemptOutcome, Backend, BackendBench, BackendVram, CapabilityProfile, CpuCapability,
+    ExecutorError, GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, Task, TaskData,
+    compute_machine_hash, save_profile,
 };
 
 // ---------------------------------------------------------------------------
@@ -83,14 +83,32 @@ fn vram_row(rows: &[(Backend, usize)]) -> BackendVram {
 fn cvvdp_profile() -> MetricProfile {
     let mut m = MetricProfile::default();
     let bench_table: &[(u64, &[(Backend, f64)])] = &[
-        (1024 * 1024, &[(Backend::GpuFull, 5.34), (Backend::GpuStripPair, 6.10)]),
-        (2048 * 2048, &[(Backend::GpuFull, 3.10), (Backend::GpuStripPair, 3.40)]),
-        (4096 * 4096, &[(Backend::GpuFull, 2.71), (Backend::GpuStripPair, 2.62)]),
+        (
+            1024 * 1024,
+            &[(Backend::GpuFull, 5.34), (Backend::GpuStripPair, 6.10)],
+        ),
+        (
+            2048 * 2048,
+            &[(Backend::GpuFull, 3.10), (Backend::GpuStripPair, 3.40)],
+        ),
+        (
+            4096 * 4096,
+            &[(Backend::GpuFull, 2.71), (Backend::GpuStripPair, 2.62)],
+        ),
     ];
     let vram_table: &[(u64, &[(Backend, usize)])] = &[
-        (1024 * 1024, &[(Backend::GpuFull, 248), (Backend::GpuStripPair, 142)]),
-        (2048 * 2048, &[(Backend::GpuFull, 992), (Backend::GpuStripPair, 568)]),
-        (4096 * 4096, &[(Backend::GpuFull, 3970), (Backend::GpuStripPair, 2272)]),
+        (
+            1024 * 1024,
+            &[(Backend::GpuFull, 248), (Backend::GpuStripPair, 142)],
+        ),
+        (
+            2048 * 2048,
+            &[(Backend::GpuFull, 992), (Backend::GpuStripPair, 568)],
+        ),
+        (
+            4096 * 4096,
+            &[(Backend::GpuFull, 3970), (Backend::GpuStripPair, 2272)],
+        ),
     ];
     for (px, rows) in bench_table {
         m.ns_per_px_at.insert(*px, bench_row(rows));
@@ -125,7 +143,9 @@ fn ssim2_profile() -> MetricProfile {
     m
 }
 
-fn fake_orch_with_metrics(metrics: &[(MetricKind, MetricProfile)]) -> (Orchestrator, tempfile::TempDir) {
+fn fake_orch_with_metrics(
+    metrics: &[(MetricKind, MetricProfile)],
+) -> (Orchestrator, tempfile::TempDir) {
     let tmpdir = tempfile::tempdir().unwrap();
     let gpu = fake_gpu();
     let cpu = fake_cpu();
@@ -164,13 +184,17 @@ fn synth_pair_64() -> (Vec<u8>, Vec<u8>) {
 // Tests
 // ---------------------------------------------------------------------------
 
-/// `happy_path_gpu_full` — requires a real CUDA device + working
-/// `nvidia-smi`. Marked `#[ignore]` because most CI lanes (WSL2 snap-
-/// docker, headless containers) can't satisfy that prerequisite. The
-/// 7950X / RTX 5070 workstation that owns this code runs it locally as
-/// the Phase 4 acceptance smoke test.
+/// `happy_path_gpu_full` — Phase 4 acceptance smoke test for
+/// `run_single`'s end-to-end construct+compute path. Requires a real
+/// CUDA device + working `nvidia-smi` (GPU-only build) — or any host
+/// when `cpu-cvvdp` is on, since task #146's one-shot crossover routes
+/// 1024² cvvdp to the CPU adapter (the measured-faster backend), which
+/// needs no GPU. Marked `#[ignore]` because the GPU-only branch can't
+/// run on most CI lanes (WSL2 snap-docker, headless containers). The
+/// 7950X / RTX 5070 workstation that owns this code runs it locally
+/// with `--ignored`.
 #[test]
-#[ignore = "requires CUDA + nvidia-smi; run with --ignored on a GPU host"]
+#[ignore = "requires CUDA + nvidia-smi (GPU branch); run with --ignored on a GPU host"]
 fn happy_path_gpu_full() {
     let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Cvvdp, cvvdp_profile())]);
     let (r, d) = zenmetrics_orchestrator::synth_pair_offset_dist(1024, 1024);
@@ -186,20 +210,48 @@ fn happy_path_gpu_full() {
     };
     let result = orch.run_single(task);
     assert_eq!(result.task_id, 1);
-    let score = result
-        .outcome
-        .as_ref()
-        .unwrap_or_else(|e| panic!("expected Ok, got Err({e:?}); attempts={:?}", result.backends_attempted));
+    let score = result.outcome.as_ref().unwrap_or_else(|e| {
+        panic!(
+            "expected Ok, got Err({e:?}); attempts={:?}",
+            result.backends_attempted
+        )
+    });
     // cvvdp returns ~3..10 (10 = identical), our offset pair lands well
     // below 10 — accept the entire range and assert metric_name.
     assert_eq!(score.metric_name, "cvvdp");
     assert!(score.value >= 0.0 && score.value <= 10.5);
-    assert_eq!(result.backend_used, Some(Backend::GpuFull));
     assert!(result.wall_us > 0);
-    assert!(result
-        .backends_attempted
-        .iter()
-        .any(|(b, o)| *b == Backend::GpuFull && *o == AttemptOutcome::Success));
+    // Task #146: `run_single` routes with `ExecContext::OneShot`, which
+    // consults the measured CPU/GPU crossover. cvvdp's one-shot crossover
+    // (`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`) makes CPU the faster
+    // backend at every measured size — 1024² cvvdp is 128 ms CPU vs 589 ms
+    // GPU cold. So with `cpu-cvvdp` compiled in the optimal one-shot
+    // backend is CPU; without it (GPU-only build) the chooser falls
+    // through to GpuFull. Both branches stay strict — this validates the
+    // end-to-end construct+compute path for whichever backend the cost
+    // model selects, not a hardcoded GPU pick.
+    let expected = if cfg!(feature = "cpu-cvvdp") {
+        Backend::Cpu
+    } else {
+        Backend::GpuFull
+    };
+    assert_eq!(
+        result.backend_used,
+        Some(expected),
+        "1024² cvvdp one-shot: expected {expected:?} per the measured crossover \
+         (cpu-cvvdp {})",
+        if cfg!(feature = "cpu-cvvdp") {
+            "on"
+        } else {
+            "off"
+        }
+    );
+    assert!(
+        result
+            .backends_attempted
+            .iter()
+            .any(|(b, o)| *b == expected && *o == AttemptOutcome::Success)
+    );
 }
 
 /// Pre-populate `cells_failed_oom` with `(GpuFull, 1024²)`. The chooser
@@ -253,8 +305,7 @@ fn fully_exhausted_when_no_backend_fits() {
     for &b in &[Backend::GpuFull, Backend::GpuStripPair, Backend::Cpu] {
         profile.cells_failed_oom.push((b, 1024 * 1024));
     }
-    let (mut orch2, _td2) =
-        fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
+    let (mut orch2, _td2) = fake_orch_with_metrics(&[(MetricKind::Cvvdp, profile)]);
 
     // Build a task; materialization is fine (small Srgb8 buffer), then
     // the chooser is asked and rejects everything → Chooser error path.
@@ -342,14 +393,18 @@ fn cache_round_trips_cells_failed_oom() {
         zenmetrics_orchestrator::load_cached_profile(&path).expect("cache file should load");
     let cvvdp = loaded.metrics.get("cvvdp").unwrap();
     assert_eq!(cvvdp.cells_failed_oom.len(), 2);
-    assert!(cvvdp
-        .cells_failed_oom
-        .iter()
-        .any(|&(b, px)| b == Backend::GpuFull && px == 2048 * 2048));
-    assert!(cvvdp
-        .cells_failed_oom
-        .iter()
-        .any(|&(b, px)| b == Backend::GpuStripPair && px == 4096u64 * 4096u64));
+    assert!(
+        cvvdp
+            .cells_failed_oom
+            .iter()
+            .any(|&(b, px)| b == Backend::GpuFull && px == 2048 * 2048)
+    );
+    assert!(
+        cvvdp
+            .cells_failed_oom
+            .iter()
+            .any(|&(b, px)| b == Backend::GpuStripPair && px == 4096u64 * 4096u64)
+    );
 }
 
 /// Dim mismatch — pass an Srgb8 buffer whose length doesn't match the
@@ -428,8 +483,12 @@ fn runtime_oom_records_and_falls_back() {
 #[test]
 fn forced_low_vram_via_oom_log_fully_exhausts() {
     let mut profile = ssim2_profile();
-    profile.cells_failed_oom.push((Backend::GpuFull, 1024 * 1024));
-    profile.cells_failed_oom.push((Backend::GpuStrip, 1024 * 1024));
+    profile
+        .cells_failed_oom
+        .push((Backend::GpuFull, 1024 * 1024));
+    profile
+        .cells_failed_oom
+        .push((Backend::GpuStrip, 1024 * 1024));
     // Phase 6: poison Cpu too — with cpu-ssim2 on, the chooser would
     // otherwise route to the CPU adapter, which then fails on the
     // mismatched buffer size (64² bytes for a 1024² task).

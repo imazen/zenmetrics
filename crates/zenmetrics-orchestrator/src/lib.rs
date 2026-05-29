@@ -42,10 +42,10 @@ mod gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 mod pool;
 
-pub use bench::{locate_bench_worker, synth_pair_offset_dist, BenchPlan, BenchReport};
+pub use bench::{BenchPlan, BenchReport, locate_bench_worker, synth_pair_offset_dist};
 #[cfg(feature = "bench")]
 pub use chooser::{
-    BackendChoice, CandidateStatus, ChooserConfig, ChooserError, ConsideredCandidate,
+    BackendChoice, CandidateStatus, ChooserConfig, ChooserError, ConsideredCandidate, ExecContext,
     RejectReason, TaskShape,
 };
 pub use cpu::{detect_cpu, detect_wsl2_host_ram_mib_hint};
@@ -56,8 +56,8 @@ pub use executor::{
 pub use gpu::detect_gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 pub use pool::{
-    reset_warm_instance_construction_count, warm_instance_construction_count, CachedRefStats,
-    PoolConfig, RunAllIter, TaskHandle, TaskRefHandle,
+    CachedRefStats, PoolConfig, RunAllIter, TaskHandle, TaskRefHandle,
+    reset_warm_instance_construction_count, warm_instance_construction_count,
 };
 
 /// Error type for orchestrator operations. Variants will be extended in
@@ -421,11 +421,7 @@ pub fn save_profile(path: &Path, profile: &CapabilityProfile) -> Result<()> {
 /// We re-run `detect_gpu()` here (cheap — one `nvidia-smi` call) but
 /// not `detect_cpu()` (the CPU doesn't change mid-session, and a CPU
 /// swap also produces a different `machine_hash` → different file).
-pub fn is_profile_stale(
-    profile: &CapabilityProfile,
-    validity: Duration,
-    now: SystemTime,
-) -> bool {
+pub fn is_profile_stale(profile: &CapabilityProfile, validity: Duration, now: SystemTime) -> bool {
     // Time check.
     if let Ok(elapsed) = now.duration_since(profile.last_validated) {
         if elapsed > validity {
@@ -628,13 +624,17 @@ impl Orchestrator {
         let now = SystemTime::now();
         let validity = self.config.cache_validity;
         let needs_bench = self.capability.metrics.is_empty()
-            || self.capability.metrics.values().any(|m| match m.last_measured {
-                Some(t) => match now.duration_since(t) {
-                    Ok(elapsed) => elapsed > validity,
-                    Err(_) => true,
-                },
-                None => true,
-            });
+            || self
+                .capability
+                .metrics
+                .values()
+                .any(|m| match m.last_measured {
+                    Some(t) => match now.duration_since(t) {
+                        Ok(elapsed) => elapsed > validity,
+                        Err(_) => true,
+                    },
+                    None => true,
+                });
         if needs_bench {
             self.bench()?;
             Ok(true)
@@ -736,10 +736,7 @@ mod systime_opt {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S: Serializer>(
-        t: &Option<SystemTime>,
-        s: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(t: &Option<SystemTime>, s: S) -> Result<S::Ok, S::Error> {
         match t {
             Some(t) => {
                 let secs = t
@@ -752,9 +749,7 @@ mod systime_opt {
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        d: D,
-    ) -> Result<Option<SystemTime>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<SystemTime>, D::Error> {
         let opt = Option::<u64>::deserialize(d)?;
         Ok(opt.map(|s| UNIX_EPOCH + Duration::from_secs(s)))
     }
@@ -841,10 +836,7 @@ mod tests {
             Path::new("/tmp/zm"),
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         );
-        assert_eq!(
-            p,
-            PathBuf::from("/tmp/zm/capability_0123456789abcdef.toml")
-        );
+        assert_eq!(p, PathBuf::from("/tmp/zm/capability_0123456789abcdef.toml"));
     }
 
     #[test]
@@ -895,7 +887,11 @@ mod tests {
     fn old_profile_is_stale_by_time() {
         let profile = fake_profile();
         let now = profile.last_validated + Duration::from_secs(8 * 86400);
-        assert!(is_profile_stale(&profile, Duration::from_secs(7 * 86400), now));
+        assert!(is_profile_stale(
+            &profile,
+            Duration::from_secs(7 * 86400),
+            now
+        ));
     }
 
     #[test]
@@ -903,7 +899,11 @@ mod tests {
         let profile = fake_profile();
         // `now` earlier than last_validated by more than validity.
         let now = profile.last_validated - Duration::from_secs(8 * 86400);
-        assert!(is_profile_stale(&profile, Duration::from_secs(7 * 86400), now));
+        assert!(is_profile_stale(
+            &profile,
+            Duration::from_secs(7 * 86400),
+            now
+        ));
     }
 
     #[test]
@@ -972,7 +972,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        assert_eq!(orch1.capability().machine_hash, orch2.capability().machine_hash);
+        assert_eq!(
+            orch1.capability().machine_hash,
+            orch2.capability().machine_hash
+        );
         assert_eq!(detected_at_1_secs, detected_at_2_secs);
     }
 
@@ -1004,11 +1007,15 @@ mod tests {
             assert!(!s.is_empty());
         }
         // Spot check: all four tags must be distinct.
-        let tags: std::collections::HashSet<_> =
-            [Backend::GpuFull, Backend::GpuStrip, Backend::GpuStripPair, Backend::Cpu]
-                .iter()
-                .map(|b| b.tag())
-                .collect();
+        let tags: std::collections::HashSet<_> = [
+            Backend::GpuFull,
+            Backend::GpuStrip,
+            Backend::GpuStripPair,
+            Backend::Cpu,
+        ]
+        .iter()
+        .map(|b| b.tag())
+        .collect();
         assert_eq!(tags.len(), 4);
     }
 

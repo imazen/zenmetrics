@@ -17,6 +17,28 @@ Workspace conventions per the global rules:
 
 (none yet)
 
+### Added
+
+- **zenmetrics-orchestrator: cost-model-aware one-shot CPU/GPU routing**
+  (task #146, 2026-05-29). The chooser previously ranked every backend
+  purely on warm steady-state `ns_per_px`, which makes the GPU look
+  unconditionally fast even for a single cold call where the ~181 ms CUDA
+  context-init + per-signature construct + first-compute floor dominates.
+  An audit (`crates/zenmetrics-orchestrator/docs/COST_MODEL_AUDIT_2026-05-29.md`)
+  found this was the one lever diverging from the measured optimum — the
+  warm pool's persistent-worker / cached-ref / cross-metric-context-sharing
+  levers were already optimal. Added a new `ExecContext` (`Batch` /
+  `OneShot`) and `choose_backend_with_context` /
+  `choose_backend_for_task_with_context` that consult the measured one-shot
+  crossover (`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`): a `OneShot`
+  call at/below the per-metric crossover size (cvvdp/ssim2/butter/zensim
+  through 16 MP, dssim 4 MP, iwssim 1 MP) routes to CPU when CPU is a
+  feasible candidate, else falls through to warm-`ns_per_px` ranking.
+  `run_single` now routes with `OneShot`; the warm pool path keeps `Batch`
+  semantics, so sweep/batch behavior is bit-identical. Additive, non-
+  breaking — existing `choose_backend` / `choose_backend_for_task` keep
+  `Batch` semantics. Audit commit `e2f9ab77`; implementation `0ba976ae`.
+
 ### Fixed
 
 - **cvvdp CPU Path A strip-major dispatcher RECOVERED after a push-race
