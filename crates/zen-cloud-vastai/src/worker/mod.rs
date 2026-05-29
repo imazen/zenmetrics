@@ -229,6 +229,15 @@ pub fn cmd_worker(args: WorkerArgs) -> Result<()> {
     // bash equivalent did this in onstart's header.
     hydrate_pid1_env();
 
+    // Defensive: write ~/.aws/credentials from env so s5cmd's `--profile`
+    // lookup succeeds even on backends whose onstart didn't write the
+    // file. vast.ai's `onstart_v3.sh` writes static creds via bash
+    // already; this is a no-op when the env vars are absent and
+    // overwrites identically when present.
+    if let Err(e) = provision_aws_credentials_file(&args.s5cmd_profile) {
+        warn!(error = %e, "provision_aws_credentials_file failed; s5cmd may 403");
+    }
+
     let worker_id = args.worker_id.clone().unwrap_or_else(default_worker_id);
     let r2 = r2::new_from_args(&args)?;
 
@@ -400,7 +409,7 @@ fn init_tracing() {
 // spins up (single-threaded). Scoped allow keeps the crate-level
 // `deny(unsafe_code)` gate active everywhere else.
 #[allow(unsafe_code)]
-fn hydrate_pid1_env() {
+pub fn hydrate_pid1_env() {
     let Ok(buf) = std::fs::read("/proc/1/environ") else {
         return;
     };
@@ -415,6 +424,14 @@ fn hydrate_pid1_env() {
             "R2_ACCOUNT_ID"
                 | "R2_ACCESS_KEY_ID"
                 | "R2_SECRET_ACCESS_KEY"
+                // Scoped R2 creds (minted per-sweep on Hetzner +
+                // anywhere else we don't trust the worker host) carry
+                // a session token. s5cmd reads it from
+                // `~/.aws/credentials` -> `provision_aws_credentials_file`
+                // writes it from these env vars. Either name is accepted
+                // because some backends inject one or the other.
+                | "AWS_SESSION_TOKEN"
+                | "R2_SESSION_TOKEN"
                 | "SWEEP_RUN_ID"
                 | "WORKER_ID"
                 | "PARALLEL"
@@ -430,6 +447,14 @@ fn hydrate_pid1_env() {
                 | "ZENSIM_FEATURES_REGIME"
                 | "JOBS"
                 | "MAX_CHUNKS_PER_PROCESS"
+                // Hetzner + any future R2-queue-poll backend reads
+                // BUCKET + CHUNKS_QUEUE_PREFIX from env; without these
+                // in the allowlist the propagation gap reappears for
+                // non-pid-1 callers.
+                | "BUCKET"
+                | "CHUNKS_QUEUE_PREFIX"
+                | "R2_QUEUE_POLL_SECS"
+                | "R2_QUEUE_IDLE_EXIT_SECS"
         ) && std::env::var_os(k).is_none()
         {
             // SAFETY: we're single-threaded at this point (called
@@ -445,6 +470,80 @@ fn hydrate_pid1_env() {
             }
         }
     }
+}
+
+/// Write the s5cmd credentials profile to `~/.aws/credentials` from
+/// env vars.
+///
+/// s5cmd is invoked with `--profile <name>` (default `r2`, see
+/// [`WorkerArgs::s5cmd_profile`]) and reads creds from the standard
+/// AWS credentials file. Backends that inject creds via container env
+/// vars only (Hetzner cloud-init's `--env-file`, scoped per-sweep R2
+/// tokens, anything not running `entrypoint_hetzner.sh` /
+/// `entrypoint_salad.sh`) leave that file unwritten — every s5cmd call
+/// then 403s silently because the named profile doesn't exist. This
+/// closes that gap: read `R2_ACCESS_KEY_ID` /
+/// `R2_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` (or `R2_SESSION_TOKEN`
+/// as fallback) from env, write the profile.
+///
+/// Idempotent — overwrites the file if present so a re-spawned worker
+/// always sees the env's view of the world (e.g. after the launcher
+/// rotates the scoped token).
+///
+/// `profile_name` matches `WorkerArgs::s5cmd_profile` (default `r2`).
+///
+/// Returns `Ok(true)` if the file was written, `Ok(false)` if there
+/// were no creds in env (vast.ai's `cmd_worker` calls this defensively
+/// — its onstart already wrote the file via bash, so a no-op return is
+/// fine), and `Err` for filesystem failures.
+pub fn provision_aws_credentials_file(profile_name: &str) -> Result<bool> {
+    let Ok(access) = std::env::var("R2_ACCESS_KEY_ID") else {
+        return Ok(false);
+    };
+    let Ok(secret) = std::env::var("R2_SECRET_ACCESS_KEY") else {
+        return Ok(false);
+    };
+    // Either env name is accepted; AWS_SESSION_TOKEN wins. The session
+    // token is REQUIRED when scoped (temporary) R2 creds are in use; it
+    // is absent for static creds.
+    let session = std::env::var("AWS_SESSION_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("R2_SESSION_TOKEN").ok());
+
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .context("HOME env not set; cannot write ~/.aws/credentials")?;
+    let aws_dir = home.join(".aws");
+    std::fs::create_dir_all(&aws_dir)
+        .with_context(|| format!("create dir {}", aws_dir.display()))?;
+    let cred_path = aws_dir.join("credentials");
+
+    let mut body = String::new();
+    body.push_str(&format!("[{profile_name}]\n"));
+    body.push_str(&format!("aws_access_key_id = {access}\n"));
+    body.push_str(&format!("aws_secret_access_key = {secret}\n"));
+    if let Some(token) = session.as_deref() {
+        body.push_str(&format!("aws_session_token = {token}\n"));
+    }
+
+    std::fs::write(&cred_path, body)
+        .with_context(|| format!("write {}", cred_path.display()))?;
+    // 0600 on Unix — credentials file shouldn't be world-readable.
+    // Best-effort; not a failure if chmod isn't available (e.g. tests on
+    // a non-Unix host, though this binary is Linux-only in practice).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        let _ = std::fs::set_permissions(&cred_path, perms);
+    }
+    info!(
+        path = %cred_path.display(),
+        profile = profile_name,
+        has_session_token = session.is_some(),
+        "wrote AWS credentials file for s5cmd"
+    );
+    Ok(true)
 }
 
 /// Derive the bucket-scoped prefix from `chunks_r2`.
@@ -537,6 +636,155 @@ async fn upload_boot_to_r2(
     match r2.upload(local, &uri).await {
         Ok(()) => info!(uri = %uri, "boot record uploaded"),
         Err(e) => warn!(uri = %uri, error = %e, "boot record upload failed (non-fatal)"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Direct unit on the file-writing logic: given a tempdir as `HOME`,
+    /// write all three env vars, expect a complete profile body.
+    ///
+    /// We can't simply spam `std::env::set_var` in unit tests because
+    /// cargo-test runs them in parallel threads sharing the process env;
+    /// two concurrent tests that twiddle `R2_*` clobber each other.
+    /// Serialize the env-mutating tests with a mutex.
+    use std::sync::Mutex;
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    fn clear_env() {
+        // Single-threaded under ENV_MUTEX; safe to set_var.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::remove_var("R2_ACCESS_KEY_ID");
+            std::env::remove_var("R2_SECRET_ACCESS_KEY");
+            std::env::remove_var("AWS_SESSION_TOKEN");
+            std::env::remove_var("R2_SESSION_TOKEN");
+        }
+    }
+
+    #[test]
+    fn provision_writes_full_profile_with_session_token() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let prev_home = std::env::var_os("HOME");
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+            std::env::set_var("R2_ACCESS_KEY_ID", "AKIAFAKE");
+            std::env::set_var("R2_SECRET_ACCESS_KEY", "SECRETFAKE");
+            std::env::set_var("AWS_SESSION_TOKEN", "SESSIONFAKE");
+        }
+        let wrote = provision_aws_credentials_file("r2").expect("provision");
+        assert!(wrote, "should report wrote=true when creds present");
+        let body =
+            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        assert!(body.contains("[r2]"), "profile header missing: {body}");
+        assert!(body.contains("aws_access_key_id = AKIAFAKE"), "akid missing: {body}");
+        assert!(body.contains("aws_secret_access_key = SECRETFAKE"), "secret missing: {body}");
+        assert!(
+            body.contains("aws_session_token = SESSIONFAKE"),
+            "session token missing — this is the iter-5 bug: {body}"
+        );
+
+        // Restore env.
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            match prev_home {
+                Some(h) => std::env::set_var("HOME", h),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn provision_accepts_r2_session_token_as_fallback() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let prev_home = std::env::var_os("HOME");
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+            std::env::set_var("R2_ACCESS_KEY_ID", "AKIAFAKE");
+            std::env::set_var("R2_SECRET_ACCESS_KEY", "SECRETFAKE");
+            // No AWS_SESSION_TOKEN; only R2_SESSION_TOKEN.
+            std::env::set_var("R2_SESSION_TOKEN", "R2SESSIONFAKE");
+        }
+        let wrote = provision_aws_credentials_file("r2").expect("provision");
+        assert!(wrote);
+        let body =
+            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        assert!(
+            body.contains("aws_session_token = R2SESSIONFAKE"),
+            "R2_SESSION_TOKEN fallback didn't land: {body}"
+        );
+
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            match prev_home {
+                Some(h) => std::env::set_var("HOME", h),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn provision_no_op_when_creds_absent() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let prev_home = std::env::var_os("HOME");
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+        }
+        let wrote = provision_aws_credentials_file("r2").expect("no-op should not error");
+        assert!(!wrote, "should report wrote=false when no creds");
+        assert!(
+            !tmp.path().join(".aws").join("credentials").exists(),
+            "no file should be written when creds absent"
+        );
+
+        #[allow(unsafe_code)]
+        unsafe {
+            match prev_home {
+                Some(h) => std::env::set_var("HOME", h),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn provision_custom_profile_name() {
+        let _g = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let prev_home = std::env::var_os("HOME");
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", tmp.path());
+            std::env::set_var("R2_ACCESS_KEY_ID", "AKIAFAKE");
+            std::env::set_var("R2_SECRET_ACCESS_KEY", "SECRETFAKE");
+        }
+        provision_aws_credentials_file("custom-profile").expect("provision");
+        let body =
+            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        assert!(body.contains("[custom-profile]"), "custom profile header missing: {body}");
+        assert!(!body.contains("aws_session_token"), "no session token expected");
+
+        clear_env();
+        #[allow(unsafe_code)]
+        unsafe {
+            match prev_home {
+                Some(h) => std::env::set_var("HOME", h),
+                None => std::env::remove_var("HOME"),
+            }
+        }
     }
 }
 

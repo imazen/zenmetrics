@@ -140,3 +140,7 @@ unified = ["inline-sweep", "source-features"]
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# For provision_aws_credentials_file unit tests — each one needs a
+# private HOME so the test doesn't clobber the developer's real
+# ~/.aws/credentials.
+tempfile = "3.27.0"

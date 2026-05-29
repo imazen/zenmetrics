@@ -602,13 +602,28 @@ mod local {
 mod hetzner {
     use anyhow::{Context, Result};
     use zen_cloud_vastai::worker::{
-        WorkerArgs,
+        WorkerArgs, hydrate_pid1_env, provision_aws_credentials_file,
         r2::new_from_args as new_r2,
         r2_queue_loop::{R2QueueLoopConfig, run_r2_queue_loop},
     };
 
     pub fn run(args: WorkerArgs) -> Result<()> {
         init_tracing();
+        // Hetzner cloud-init injects R2 creds + sweep wiring as docker
+        // env vars on the container's pid 1 (the worker binary itself).
+        // `std::env::var()` reads them directly in that case, but we
+        // still call `hydrate_pid1_env` for symmetry with vast.ai and to
+        // protect against shapes where the worker isn't pid 1 (e.g. when
+        // wrapped by `entrypoint_hetzner.sh`).
+        hydrate_pid1_env();
+        // ⚡ THE iter-5 bug fix: write `~/.aws/credentials` from the env
+        // vars BEFORE building the R2 client. The cloud-init `docker run`
+        // bypasses `entrypoint_hetzner.sh`, so without this call no
+        // credentials file exists, every `s5cmd --profile r2 ...` 403s,
+        // and the worker silently spins on an empty LIST. See
+        // `crates/zen-cloud-vastai/src/worker/mod.rs` for the helper.
+        provision_aws_credentials_file(&args.s5cmd_profile)
+            .context("write ~/.aws/credentials from env for s5cmd (hetzner backend)")?;
         let r2 = new_r2(&args).context("build R2 client for hetzner backend")?;
         let cfg = R2QueueLoopConfig::from_env()
             .context("R2QueueLoopConfig::from_env (BUCKET + CHUNKS_QUEUE_PREFIX)")?;
