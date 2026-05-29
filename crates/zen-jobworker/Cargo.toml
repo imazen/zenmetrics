@@ -1,0 +1,15 @@
+[package]
+name = "zen-jobworker"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Job worker: claims the reconciler's gap, runs a handler, content-addresses outputs to a blob store, and emits ledger rows. Bridges zen-job-core/zen-ledger to real executors."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+zen-job-core = { version = "0.0.1", path = "../zen-job-core" }
+zen-ledger = { version = "0.0.1", path = "../zen-ledger" }
+thiserror = { workspace = true }

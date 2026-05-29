@@ -19,6 +19,7 @@ members = [
     "crates/zen-job-core",
     "crates/zen-ledger",
     "crates/zen-jobdash",
+    "crates/zen-jobworker",
     "crates/zen-sweep-worker",
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",

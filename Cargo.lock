@@ -6353,6 +6353,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-jobworker"
+version = "0.0.1"
+dependencies = [
+ "thiserror",
+ "zen-job-core",
+ "zen-ledger",
+]
+
+[[package]]
 name = "zen-ledger"
 version = "0.0.1"
 dependencies = [
