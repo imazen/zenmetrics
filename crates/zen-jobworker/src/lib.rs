@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::io::{self, Write as _};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use zen_job_core::{
     reconcile, sha256, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView, RetryPolicy,
@@ -149,6 +150,8 @@ impl BlobStore for R2BlobStore {
 pub struct ClaimCfg {
     pub bucket: String,
     pub prefix: String,
+    /// A claim older than this (and not yet a terminal ledger row) is presumed dead and stealable.
+    pub ttl_secs: u64,
 }
 
 /// Atomically claim a job via R2 conditional write (`If-None-Match: *`). Returns true iff THIS worker
@@ -172,6 +175,86 @@ pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) 
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+static CLAIM_TMP_N: AtomicU64 = AtomicU64::new(0);
+
+fn aws_s3api(endpoint: &str) -> Command {
+    let mut c = Command::new("aws");
+    c.arg("--endpoint-url").arg(endpoint).arg("s3api");
+    c
+}
+
+/// Pure staleness check: a claim is stealable once its age reaches the TTL.
+fn claim_is_stale(now: u64, claim_ts: u64, ttl_secs: u64) -> bool {
+    now.saturating_sub(claim_ts) >= ttl_secs
+}
+
+/// Read a claim's `(etag, ts)` — `ts` is the first whitespace token of the body. None on any error.
+fn read_claim(endpoint: &str, bucket: &str, key: &str) -> Option<(String, u64)> {
+    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
+    let out = std::env::temp_dir().join(format!("zenclaim_rd_{}_{}", std::process::id(), n));
+    let res = aws_s3api(endpoint)
+        .arg("get-object")
+        .arg("--bucket").arg(bucket)
+        .arg("--key").arg(key)
+        .arg(&out)
+        .arg("--query").arg("ETag")
+        .arg("--output").arg("text")
+        .stderr(Stdio::null())
+        .output();
+    let etag = match res {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        _ => {
+            let _ = std::fs::remove_file(&out);
+            return None;
+        }
+    };
+    let body = std::fs::read_to_string(&out).ok();
+    let _ = std::fs::remove_file(&out);
+    let ts = body?.split_whitespace().next()?.parse::<u64>().ok()?;
+    Some((etag, ts))
+}
+
+/// Claim a job, **stealing a stale claim** if the prior owner is presumed dead (claim age ≥ `ttl_secs`).
+/// Steal is itself a CAS (`If-Match` on the claim's ETag), so two reclaimers can't both win. Returns
+/// true iff this worker now owns the claim. This is the dead-worker reclaim (goal E).
+pub fn claim_or_steal_r2(
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+    job_id: &JobId,
+    now: u64,
+    ttl_secs: u64,
+    owner: &str,
+) -> bool {
+    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
+    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
+    let body = std::env::temp_dir().join(format!("zenclaim_bd_{}_{}", std::process::id(), n));
+    if std::fs::write(&body, format!("{now} {owner}")).is_err() {
+        return false;
+    }
+    // 1. fresh claim (create-if-absent)
+    let fresh = aws_s3api(endpoint)
+        .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&key)
+        .arg("--body").arg(&body).arg("--if-none-match").arg("*")
+        .stdout(Stdio::null()).stderr(Stdio::null())
+        .status().map(|s| s.success()).unwrap_or(false);
+    if fresh {
+        let _ = std::fs::remove_file(&body);
+        return true;
+    }
+    // 2. exists — steal only if stale, via If-Match CAS on the current ETag
+    let won = match read_claim(endpoint, bucket, &key) {
+        Some((etag, prev_ts)) if claim_is_stale(now, prev_ts, ttl_secs) => aws_s3api(endpoint)
+            .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&key)
+            .arg("--body").arg(&body).arg("--if-match").arg(&etag)
+            .stdout(Stdio::null()).stderr(Stdio::null())
+            .status().map(|s| s.success()).unwrap_or(false),
+        _ => false,
+    };
+    let _ = std::fs::remove_file(&body);
+    won
 }
 
 /// Identity/time context for the rows a worker emits (who ran it, on what provider, when).
@@ -391,7 +474,7 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                     policy,
                     |job| exec_command(&cfg.exec, job),
                     &store,
-                    |id| try_claim_r2(&t.endpoint, &cc.bucket, &cc.prefix, id),
+                    |id| claim_or_steal_r2(&t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs, &cfg.worker),
                     ctx,
                 ),
                 None => execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx),
@@ -582,5 +665,13 @@ mod tests {
         // leading/trailing slashes in the prefix don't double up
         let s2 = R2BlobStore::new("e".into(), "b".into(), "/blobs/".into());
         assert_eq!(s2.key(&sha), format!("s3://b/blobs/{sha}"));
+    }
+
+    #[test]
+    fn claim_staleness_check() {
+        assert!(claim_is_stale(1000, 0, 10), "ancient claim is stealable");
+        assert!(claim_is_stale(1000, 990, 10), "exactly ttl old is stealable");
+        assert!(!claim_is_stale(1000, 995, 10), "fresh claim (5s < 10s ttl) is NOT stealable");
+        assert!(!claim_is_stale(5, 0, 10), "clock skew / before ttl elapsed: not stealable");
     }
 }

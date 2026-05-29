@@ -53,6 +53,9 @@ struct Cli {
     claims_r2_bucket: Option<String>,
     #[arg(long = "claims-prefix", default_value = "claims")]
     claims_prefix: String,
+    /// Claim is stealable once this old (presumed-dead worker) — dead-worker reclaim.
+    #[arg(long = "claim-ttl-secs", default_value_t = 600)]
+    claim_ttl_secs: u64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,7 +74,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (None, None) => None,
         _ => return Err("--blobs-r2-bucket and --r2-endpoint must be given together".into()),
     };
-    let claims = c.claims_r2_bucket.map(|bucket| zen_jobworker::ClaimCfg { bucket, prefix: c.claims_prefix });
+    let claims = c.claims_r2_bucket.map(|bucket| zen_jobworker::ClaimCfg {
+        bucket,
+        prefix: c.claims_prefix,
+        ttl_secs: c.claim_ttl_secs,
+    });
     if claims.is_some() && r2.is_none() {
         return Err("--claims-r2-bucket requires --blobs-r2-bucket + --r2-endpoint".into());
     }
