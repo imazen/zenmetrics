@@ -23,7 +23,7 @@
 //!
 //! Usage:
 //!   cpu-wall <size_label> <out_tsv>
-//!   size_label ∈ { 512 1024 2K 12MP 30MP }
+//!   size_label ∈ { 512 1024 2K 4096 12MP 30MP }
 //!
 //! Writes/appends rows to <out_tsv>:
 //!   size_label  metric  mode  cold_or_warm  w  h  mean_ns  mean_ms  n_rounds  score
@@ -82,6 +82,11 @@ fn size_dims(label: &str) -> Option<(u32, u32)> {
         "512" => Some((512, 512)),
         "1024" => Some((1024, 1024)),
         "2K" => Some((2048, 2048)),
+        // Task #141 (2026-05-29): 16 MP (4096²) added so the CPU wall join
+        // lands on the SAME sizes as the GPU cold TSV
+        // (benchmarks/gpu_coldstart_2026-05-29.tsv: 512²/1024²/2048²/4096²).
+        // Exact join → exact one-shot CPU-vs-GPU crossover, no extrapolation.
+        "4096" => Some((4096, 4096)),
         "12MP" => Some((4000, 3000)),
         "30MP" => Some((6000, 5000)),
         _ => None,
@@ -92,7 +97,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 || args.len() > 4 {
         eprintln!(
-            "usage: cpu-wall <size_label> <out_tsv> [metric_filter]\n  size_label: 512 1024 2K 12MP 30MP\n  metric_filter (optional): cvvdp ssim2 dssim butter iwssim zensim\n    — when set, only that metric's cells register (bounds peak harness RAM\n      at large sizes where holding all 6 warmed refs would be heavy).\n      Cells still interleave WITHIN the metric's modes (the comparison that\n      matters: full vs strip vs warm)."
+            "usage: cpu-wall <size_label> <out_tsv> [metric_filter]\n  size_label: 512 1024 2K 4096 12MP 30MP\n  metric_filter (optional): cvvdp ssim2 dssim butter iwssim zensim\n    — when set, only that metric's cells register (bounds peak harness RAM\n      at large sizes where holding all 6 warmed refs would be heavy).\n      Cells still interleave WITHIN the metric's modes (the comparison that\n      matters: full vs strip vs warm)."
         );
         std::process::exit(64);
     }
@@ -133,12 +138,29 @@ fn main() {
         "512" => (Duration::from_secs(600), Duration::from_secs(10), 16usize),
         "1024" => (Duration::from_secs(700), Duration::from_secs(12), 16),
         "2K" => (Duration::from_secs(900), Duration::from_secs(16), 14),
+        // 16 MP (4096²): a single cvvdp full call is ~4.6 s on the 7950X
+        // (cpu_path_a_recovered_2026-05-29.tsv), so per-cell max_time must
+        // exceed it; min_rounds floored at 10 keeps the slowest cells
+        // sampled while a 1800 s group wall bounds total runtime.
+        "4096" => (Duration::from_secs(1800), Duration::from_secs(40), 10),
         "12MP" => (Duration::from_secs(1500), Duration::from_secs(30), 12),
         "30MP" => (Duration::from_secs(2400), Duration::from_secs(60), 10),
         _ => (Duration::from_secs(600), Duration::from_secs(10), 12),
     };
 
-    let result = zenbench::run(|suite| {
+    // Task #141 (2026-05-29): the default zenbench resource gate does a full
+    // `sysinfo` process enumeration (`System::new(); refresh_processes(All)`)
+    // every round, per cell, to detect concurrent benchmark harnesses and
+    // system noise. On the 7950X workstation with ~1000 live processes (many
+    // idle `claude` sessions) that scan dominates each round's wall time —
+    // the metric thread sits in `hrtimer_nanosleep` while the scan runs, so
+    // measurement crawls (observed: 2 s CPU in 23 s wall for dssim@512).
+    // Setting CPU_WALL_NO_GATE=1 swaps in `GateConfig::disabled()` (skips the
+    // per-round scan) — the interleaved round-robin + paired stats that make
+    // zenbench better than criterion are unaffected; only the auto-pause is
+    // dropped. The CALLER guarantees a quiet machine (CLAUDE.md sweep
+    // discipline), which is the contract the gate would otherwise enforce.
+    let build = |suite: &mut zenbench::prelude::Suite| {
         suite.group(format!("cpu_wall_{label}"), |g| {
             g.config().max_wall_time(group_wall);
             g.config().max_time(per_cell_max_time);
@@ -580,7 +602,17 @@ fn main() {
                 });
             }
         });
-    });
+    };
+
+    let no_gate = std::env::var("CPU_WALL_NO_GATE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let result = if no_gate {
+        eprintln!("[cpu-wall] CPU_WALL_NO_GATE=1 — resource gate DISABLED (caller guarantees quiet machine)");
+        zenbench::run_gated(zenbench::GateConfig::disabled(), build)
+    } else {
+        zenbench::run(build)
+    };
 
     // Separately compute a representative score per metric for provenance
     // (the bench closures black_box the score but don't surface it).

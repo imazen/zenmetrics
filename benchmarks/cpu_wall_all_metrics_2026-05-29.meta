@@ -1,0 +1,87 @@
+project: zenmetrics — CPU full-mode wall for the 6 perceptual metrics (task #141)
+date: 2026-05-29
+host: lilith (AMD Ryzen 9 7950X 16-Core, 32 threads, 128 GB RAM, water-cooled)
+os: Linux 6.6.114.1-microsoft-standard-WSL2
+
+purpose:
+  Clean CPU wall-time per (metric, mode, size) for the CPU-vs-GPU crossover
+  table (task #141). Joined with the already-committed GPU cold one-shot
+  (benchmarks/gpu_coldstart_2026-05-29.tsv) and GPU warm per-call
+  (benchmarks/gpu_metrics_sweep_2026-05-28.tsv) to produce
+  benchmarks/cpu_gpu_crossover_2026-05-29.tsv + docs/CPU_GPU_CROSSOVER_2026-05-29.md.
+
+harness: benchmarks/heaptrack/drivers/cpu_profile/src/bin/cpu_wall.rs  (binary: cpu-wall)
+  zenbench 0.1.8 interleaved round-robin (NOT criterion) — kills thermal/turbo
+  bias via randomized per-round ordering + paired statistics + loop-overhead
+  compensation. One zenbench group per size; all metric/mode cells interleave
+  under identical machine conditions. Score sentinels (record_scores) confirm
+  each cell ran the REAL full-mode score, not a stub.
+
+  Task #141 added the "4096" (4096^2 = 16 MP) size label so the CPU wall join
+  lands on the SAME sizes as gpu_coldstart_2026-05-29.tsv (512/1024/2048/4096),
+  and added a CPU_WALL_NO_GATE=1 env toggle that swaps zenbench's resource gate
+  for GateConfig::disabled(). RATIONALE: the default gate does a full sysinfo
+  process enumeration every round, per cell, to detect concurrent benchmark
+  harnesses + system noise. On this box (~1000 live processes, many idle claude
+  sessions) that per-round scan dominated wall time — the metric thread sat in
+  hrtimer_nanosleep while the scan ran, so measurement crawled (observed: 2 s CPU
+  in 23 s wall for dssim@512). Disabling the gate restored full-speed measurement
+  (dssim@512: 31 s -> 4 s wall, CPU == wall). The interleaved round-robin +
+  paired stats that make zenbench better than criterion are unaffected; only the
+  auto-pause is dropped. The CALLER guaranteed a quiet machine (verified loadavg
+  ~0.18 before each run, no fresh .workongoing markers, no heavy jobs).
+
+build: cargo build --release --bin cpu-wall   (RUSTFLAGS="", NO -C target-cpu=native)
+  Runtime archmage SIMD dispatch only — what users actually get. Global ~/.cargo
+  only sets +simd128 scoped to [target.wasm32-wasip1] (irrelevant on x86_64).
+toolchain: rustc 1.95.0 (59807616e 2026-04-14)
+
+source_commit (workspace parent at measurement time): d91db20376b4
+  (docs(gpu): cold-start findings doc + CHANGELOG, task #140). Rebased onto
+  master@origin before push — CPU wall numbers do not depend on the jobctl crate.
+
+dependency_versions (Cargo.lock):
+  zenbench 0.1.8 · cvvdp 0.1.0 (path) · iwssim 0.1.0 (path) · zensim 0.3.0 (path)
+  · fast-ssim2 0.8.1 · dssim-core 3.4.0 · butteraugli 0.9.4
+
+inputs: deterministic synth (ref/dist) pair, identical pattern to the heaptrack
+  cpu_profile driver. ref = procedural RGB; dist = ref with per-channel offsets
+  (-8/-4/+12). Same shape at every size so wall scales only with pixel count.
+
+sizes:
+  512   = 512x512   (0.262 MP)   <- exact GPU-cold join
+  1024  = 1024x1024 (1.049 MP)   <- exact GPU-cold join
+  2K    = 2048x2048 (4.194 MP)   <- exact GPU-cold join (gpu cold "4mp")
+  4096  = 4096x4096 (16.777 MP)  <- exact GPU-cold join (gpu cold "16mp")
+  12MP  = 4000x3000 (12.0 MP)    <- CPU-only; GPU-cold NOT measured here
+  30MP  = 6000x5000 (30.0 MP)    <- CPU-only; GPU-cold NOT measured here
+
+modes per metric:
+  full           — new()/build + one cold score (THE crossover input column)
+  strip          — strip-walker cold (cvvdp/ssim2/butter/iwssim/zensim; dssim N/A)
+  warm_ref/cold  — build+warm ref+1 score per iter
+  warm_ref/warm  — ref warmed once outside loop, time only the per-call score
+  warm_ref_strip/{cold,warm} — same, strip-bounded dist
+  dssim has no strip walker (dssim-core 3.4) — only full + warm_ref rows.
+
+run_layout:
+  512 / 1024 / 2K : all 6 metrics in ONE interleaved group per size.
+  4096 / 12MP / 30MP : per-metric (one group per metric) to bound peak RAM at
+    30 MP, where holding 6 metrics' warmed references simultaneously would be
+    heavy. Cells still interleave WITHIN each metric's modes (full vs strip vs
+    warm — the comparison that matters).
+
+NO EXTRAPOLATION: every cell is a real zenbench run at the stated dims.
+
+columns: size_label  metric  mode  cold_or_warm  w  h  mean_ns  mean_ms  n_rounds  score
+  mean_ms = the wall median (zenbench mean per call, loop-overhead-compensated).
+  score   = full/strip score sentinel (proves a real computation ran).
+
+cvvdp methodology note: this file's cvvdp wall is the ZENBENCH measurement (same
+  methodology as the other 5 metrics). It deliberately differs from
+  crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv, which timed a
+  SINGLE score() call per run (median of 7, cpu-profile driver t_score_ms). At
+  small sizes the single-call wall bakes in per-call fixed overhead that zenbench
+  amortizes; the two converge above ~4 MP. The crossover table uses the zenbench
+  cvvdp column for an internally consistent join and shows both numbers for
+  transparency (docs/CPU_GPU_CROSSOVER_2026-05-29.md "cvvdp methodology note").
