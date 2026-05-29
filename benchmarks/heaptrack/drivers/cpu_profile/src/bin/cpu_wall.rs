@@ -90,12 +90,16 @@ fn size_dims(label: &str) -> Option<(u32, u32)> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("usage: cpu-wall <size_label> <out_tsv>\n  size_label: 512 1024 2K 12MP 30MP");
+    if args.len() < 3 || args.len() > 4 {
+        eprintln!(
+            "usage: cpu-wall <size_label> <out_tsv> [metric_filter]\n  size_label: 512 1024 2K 12MP 30MP\n  metric_filter (optional): cvvdp ssim2 dssim butter iwssim zensim\n    — when set, only that metric's cells register (bounds peak harness RAM\n      at large sizes where holding all 6 warmed refs would be heavy).\n      Cells still interleave WITHIN the metric's modes (the comparison that\n      matters: full vs strip vs warm)."
+        );
         std::process::exit(64);
     }
     let label = args[1].clone();
     let out_tsv = args[2].clone();
+    let metric_filter: Option<String> = args.get(3).cloned();
+    let want = |m: &str| metric_filter.as_deref().map(|f| f == m).unwrap_or(true);
     let (w, h) = match size_dims(&label) {
         Some(d) => d,
         None => {
@@ -141,7 +145,7 @@ fn main() {
             g.config().min_rounds(min_rounds);
 
             // ---- cvvdp ----
-            {
+            if want("cvvdp") {
                 use cvvdp::{Cvvdp, CvvdpParams};
                 let (r, d) = (r.clone(), d.clone());
                 g.bench("cvvdp__full", {
@@ -211,7 +215,7 @@ fn main() {
             }
 
             // ---- ssim2 ----
-            {
+            if want("ssim2") {
                 use fast_ssim2::Ssimulacra2Reference;
                 use imgref::ImgRef;
                 g.bench("ssim2__full", {
@@ -286,7 +290,7 @@ fn main() {
             }
 
             // ---- dssim (full + warm_ref only) ----
-            {
+            if want("dssim") {
                 use dssim_core::Dssim;
                 g.bench("dssim__full", {
                     let (r, d) = (r.clone(), d.clone());
@@ -335,7 +339,7 @@ fn main() {
             }
 
             // ---- butter ----
-            {
+            if want("butter") {
                 use butteraugli::{ButteraugliParams, ButteraugliReference};
                 use imgref::ImgRef;
                 let p = ButteraugliParams::new();
@@ -416,7 +420,7 @@ fn main() {
             }
 
             // ---- iwssim ----
-            {
+            if want("iwssim") {
                 use iwssim::{Iwssim, STRIP_BODY_DEFAULT};
                 g.bench("iwssim__full", {
                     let (r, d) = (r.clone(), d.clone());
@@ -489,7 +493,7 @@ fn main() {
             }
 
             // ---- zensim ----
-            {
+            if want("zensim") {
                 use zensim::{RgbSlice, Zensim, ZensimProfile};
                 g.bench("zensim__full", {
                     let (r, d) = (r.clone(), d.clone());
@@ -580,7 +584,7 @@ fn main() {
 
     // Separately compute a representative score per metric for provenance
     // (the bench closures black_box the score but don't surface it).
-    record_scores(&mut scores, w, h, wu, hu, &r, &d);
+    record_scores(&mut scores, w, h, wu, hu, &r, &d, metric_filter.as_deref());
 
     // Extract per-bench means from the zenbench SuiteResult and write TSV.
     write_tsv(&out_tsv, &label, w, h, &result, &scores);
@@ -588,6 +592,9 @@ fn main() {
 
 /// Compute one score per (metric, mode) to attach to the TSV as a
 /// provenance sentinel (confirms real calls, parity full vs strip).
+/// Honors the metric filter so large-size per-metric runs don't recompute
+/// the other (heavy) metrics' scores.
+#[allow(clippy::too_many_arguments)]
 fn record_scores(
     scores: &mut Vec<(String, f64)>,
     w: u32,
@@ -596,18 +603,20 @@ fn record_scores(
     hu: usize,
     r: &[u8],
     d: &[u8],
+    metric_filter: Option<&str>,
 ) {
     use imgref::ImgRef;
+    let want = |m: &str| metric_filter.map(|f| f == m).unwrap_or(true);
     let mut push = |k: &str, v: f64| scores.push((k.to_string(), v));
 
-    {
+    if want("cvvdp") {
         use cvvdp::{Cvvdp, CvvdpParams};
         let mut c = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
         push("cvvdp__full", c.score(r, d).unwrap() as f64);
         let mut c2 = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
         push("cvvdp__strip", c2.score_strip(r, d, STRIP_H).unwrap() as f64);
     }
-    {
+    if want("ssim2") {
         let ri = ImgRef::new(rgb_pix(r), wu, hu);
         let di = ImgRef::new(rgb_pix(d), wu, hu);
         push("ssim2__full", fast_ssim2::compute_ssimulacra2(ri, di).unwrap());
@@ -618,7 +627,7 @@ fn record_scores(
             fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H).unwrap(),
         );
     }
-    {
+    if want("dssim") {
         use dssim_core::Dssim;
         let dssim = Dssim::new();
         let rr: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
@@ -628,7 +637,7 @@ fn record_scores(
         let (s, _m) = dssim.compare(&ri, di);
         push("dssim__full", f64::from(s));
     }
-    {
+    if want("butter") {
         use butteraugli::{ButteraugliParams, ButteraugliReference};
         let p = ButteraugliParams::new();
         let rb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
@@ -643,7 +652,7 @@ fn record_scores(
             pre.compare_strip_srgb(di, STRIP_H).unwrap().score,
         );
     }
-    {
+    if want("iwssim") {
         use iwssim::{Iwssim, STRIP_BODY_DEFAULT};
         let mut c = Iwssim::new(w, h).unwrap();
         push("iwssim__full", c.score(r, d).unwrap().score);
@@ -653,7 +662,7 @@ fn record_scores(
             c2.score_strip(r, d, STRIP_BODY_DEFAULT).unwrap().score,
         );
     }
-    {
+    if want("zensim") {
         use zensim::{RgbSlice, Zensim, ZensimProfile};
         let z = Zensim::new(ZensimProfile::latest_preview());
         let ri = RgbSlice::new(rgb_pix(r), wu, hu);
