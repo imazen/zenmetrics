@@ -48,6 +48,11 @@ struct Cli {
     now: u64,
     #[arg(long = "max-attempts", default_value_t = 3)]
     max_attempts: u32,
+    /// Claim each gap job in R2 before executing (concurrent-safe fleet). Requires --blobs-r2-bucket.
+    #[arg(long = "claims-r2-bucket")]
+    claims_r2_bucket: Option<String>,
+    #[arg(long = "claims-prefix", default_value = "claims")]
+    claims_prefix: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,12 +71,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         (None, None) => None,
         _ => return Err("--blobs-r2-bucket and --r2-endpoint must be given together".into()),
     };
+    let claims = c.claims_r2_bucket.map(|bucket| zen_jobworker::ClaimCfg { bucket, prefix: c.claims_prefix });
+    if claims.is_some() && r2.is_none() {
+        return Err("--claims-r2-bucket requires --blobs-r2-bucket + --r2-endpoint".into());
+    }
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,
         ledger_out: c.ledger_out,
         blobs: c.blobs,
         r2,
+        claims,
         exec: c.exec,
         worker: c.worker,
         provider: c.provider,
@@ -80,8 +90,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let out = run(&cfg)?;
     eprintln!(
-        "zen-jobworker: done={} failed={} poisoned={} rows={}",
-        out.done, out.failed, out.poisoned, out.rows.len()
+        "zen-jobworker: done={} failed={} poisoned={} skipped={} rows={}",
+        out.done, out.failed, out.poisoned, out.skipped, out.rows.len()
     );
     Ok(())
 }

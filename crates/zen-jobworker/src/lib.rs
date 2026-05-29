@@ -143,6 +143,37 @@ impl BlobStore for R2BlobStore {
     }
 }
 
+/// R2 claim config: claims live at `s3://{bucket}/{prefix}/{job_id}`, created via conditional write.
+/// The endpoint comes from the R2 blob target.
+#[derive(Debug, Clone)]
+pub struct ClaimCfg {
+    pub bucket: String,
+    pub prefix: String,
+}
+
+/// Atomically claim a job via R2 conditional write (`If-None-Match: *`). Returns true iff THIS worker
+/// won (object created); false if it already existed (another worker owns it) or on error. R2 admits
+/// exactly one create per key, so concurrent workers can't both win — no double execution.
+pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
+    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
+    Command::new("aws")
+        .arg("--endpoint-url")
+        .arg(endpoint)
+        .arg("s3api")
+        .arg("put-object")
+        .arg("--bucket")
+        .arg(bucket)
+        .arg("--key")
+        .arg(&key)
+        .arg("--if-none-match")
+        .arg("*")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Identity/time context for the rows a worker emits (who ran it, on what provider, when).
 #[derive(Clone, Copy, Debug)]
 pub struct WorkerCtx<'a> {
@@ -159,11 +190,12 @@ pub struct ExecOutcome {
     pub done: usize,
     pub failed: usize,
     pub poisoned: usize,
+    /// Gap jobs another worker claimed first (concurrent-safety; not executed here).
+    pub skipped: usize,
 }
 
-/// Execute the reconciler's gap. For each job to enqueue: run `handler`, content-address its output
-/// via `store`, emit a row. Emit POISON rows the reconciler decided. `now` (unix secs) is injected —
-/// no clock here. Returns rows for the caller to persist via `zen_ledger::write_ledger`.
+/// Execute the reconciler's gap (single worker — no concurrent claiming). Thin wrapper over
+/// [`execute_gap_claimed`] with an always-win claim.
 pub fn execute_gap<H, B>(
     desired: &[DesiredJob],
     view: &LedgerView,
@@ -176,9 +208,30 @@ where
     H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError>,
     B: BlobStore,
 {
+    execute_gap_claimed(desired, view, policy, handler, store, |_| true, ctx)
+}
+
+/// Execute the gap with a per-job `claim` predicate — a job runs only if `claim(job_id)` is true.
+/// With an R2 conditional-write claim, concurrent workers win disjoint subsets → no double execution.
+/// Emit POISON rows the reconciler decided; `now` is injected; failures are rows.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_gap_claimed<H, B, C>(
+    desired: &[DesiredJob],
+    view: &LedgerView,
+    policy: RetryPolicy,
+    handler: H,
+    store: &B,
+    claim: C,
+    ctx: WorkerCtx<'_>,
+) -> ExecOutcome
+where
+    H: Fn(&DesiredJob) -> Result<Vec<u8>, HandlerError>,
+    B: BlobStore,
+    C: Fn(&JobId) -> bool,
+{
     let plan = reconcile(desired, view, policy);
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
-    let mut out = ExecOutcome { rows: Vec::new(), done: 0, failed: 0, poisoned: 0 };
+    let mut out = ExecOutcome { rows: Vec::new(), done: 0, failed: 0, poisoned: 0, skipped: 0 };
 
     let make = |d: &DesiredJob,
                 status: JobStatus,
@@ -201,6 +254,10 @@ where
 
     for id in &plan.enqueue {
         let Some(d) = by_id.get(id) else { continue };
+        if !claim(id) {
+            out.skipped += 1; // another worker claimed this job first
+            continue;
+        }
         match handler(d) {
             Ok(bytes) => match store.put(&bytes) {
                 Ok(sha) => {
@@ -278,6 +335,9 @@ pub struct WorkerConfig {
     pub blobs: PathBuf,
     /// If set, write content-addressed blobs to R2 instead of the local dir.
     pub r2: Option<R2Target>,
+    /// If set (requires `r2`), claim each gap job via R2 conditional write before executing it —
+    /// concurrent-safe fleet claiming (no two workers run the same job).
+    pub claims: Option<ClaimCfg>,
     /// Executor program (stdin-JSON → stdout-bytes contract).
     pub exec: String,
     pub worker: String,
@@ -324,7 +384,18 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     let out = match &cfg.r2 {
         Some(t) => {
             let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
-            execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx)
+            match &cfg.claims {
+                Some(cc) => execute_gap_claimed(
+                    &desired,
+                    &view,
+                    policy,
+                    |job| exec_command(&cfg.exec, job),
+                    &store,
+                    |id| try_claim_r2(&t.endpoint, &cc.bucket, &cc.prefix, id),
+                    ctx,
+                ),
+                None => execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx),
+            }
         }
         None => {
             let store = LocalBlobStore::new(cfg.blobs.clone())
@@ -478,6 +549,7 @@ mod tests {
             ledger_out: dir.join("out.parquet"),
             blobs: dir.join("blobs"),
             r2: None,
+            claims: None,
             exec: "cat".into(),
             worker: "w1".into(),
             provider: "local".into(),
