@@ -998,6 +998,7 @@ dependencies = [
  "imgref",
  "iwssim",
  "rgb",
+ "zenbench",
  "zensim",
 ]
 

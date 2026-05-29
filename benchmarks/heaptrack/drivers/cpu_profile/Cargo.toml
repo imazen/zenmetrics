@@ -9,7 +9,15 @@ description = "Phase 9x — single-call heaptrack/callgrind harness for the 6 CP
 name = "cpu-profile"
 path = "src/main.rs"
 
+# Task #139: zenbench wall-time harness. Times each (metric, mode, size)
+# per-call with zenbench's interleaved round-robin (kills thermal/turbo
+# bias) and writes a TSV of mean per-call wall + cold-first-call.
+[[bin]]
+name = "cpu-wall"
+path = "src/bin/cpu_wall.rs"
+
 [dependencies]
+zenbench     = "0.1.8"
 cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, features = ["std"] }
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }
