@@ -1,0 +1,17 @@
+# gpu_inprocess_warmth_2026-05-29.tsv provenance
+task: 144 (in-process GPU warmth transitions)
+git_change: 592ea4752602
+host: lilith
+gpu: NVIDIA GeForce RTX 5070 mem_total=12227 MiB driver=596.21
+started_utc: 2026-05-29T23:03:46Z
+finished_utc: 2026-05-29T23:11:52Z
+sizes: 512,16mp
+scenarios: q1q2,q3,q4
+samples_per_cell: 5 (median over fresh processes)
+reps_per_process: 5 (warm/per-call medians)
+build: cargo build --release -p zenmetrics-api --no-default-features --features cuda,all-metrics,cubecl-types,pixels --example inprocess_warmth
+driver: crates/zenmetrics-api/examples/inprocess_warmth.rs
+harness: scripts/memory_audit/sweep_gpu_inprocess_warmth_2026-05-29.py
+sync: every timed score readback-syncs (scalar return); every timed set_reference followed by block_on(client.sync())
+cold = fresh process per sample (new CUDA context). Q1's A->B sequence is WITHIN one process.
+compare-against: benchmarks/gpu_coldstart_2026-05-29.tsv (#140) cold_total_ms column for the fresh-process baseline.

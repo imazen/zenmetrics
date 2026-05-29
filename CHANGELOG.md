@@ -168,6 +168,32 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **In-process GPU warmth transitions measured (task #144,
+  2026-05-29, `cae53c7`).** New `inprocess_warmth` example in
+  `zenmetrics-api` + harness
+  `scripts/memory_audit/sweep_gpu_inprocess_warmth_2026-05-29.py`
+  measure the four warmth transitions a single long-lived warm worker
+  (single-warm-instance pool) pays, replacing prior architecture-inferred
+  claims with committed numbers. Every timed score readback-syncs; every
+  timed `set_reference` is followed by `block_on(client.sync())` so the
+  wall is real execution, not async submission. Findings (RTX 5070,
+  cuda, 512² + 16 MP, 5 fresh procs/cell): **Q1** a second metric in a
+  warm process pays only ~190–290 ms @512 (its own alloc + kernel JIT),
+  NOT the ~181 ms context init again — the CUDA context is paid once per
+  process, ordering-independent (`client_init` 183–193 ms in all 4
+  orderings); saving vs fresh-process cold_total is ~196–217 ms @512.
+  **Q2** kernels are per-metric, context is shared (B always pays its own
+  `first_compute` JIT). **Q3** a new warm_ref reference is NOT free for
+  5 of 6 metrics (cvvdp/ssim2/dssim/iwssim/zensim re-pay ~0.5–2.8 ms @512
+  / 14–67 ms @16 MP per new ref); **butter is the exception** — first ref
+  34 ms @512 / 3990 ms @16 MP, subsequent new ref 0.76 ms / 21.6 ms
+  (buffers reused). **Q4** full-mode different-ref-per-call costs nothing
+  beyond per-call work. Data in
+  `benchmarks/gpu_inprocess_warmth_2026-05-29.{tsv,meta}`, findings in
+  `docs/GPU_INPROCESS_WARMTH_2026-05-29.md`. One 16 MP cell
+  (ssim2→cvvdp) hit cvvdp's VRAM cap on this shared 12 GiB card and is
+  recorded as `ALL_SAMPLES_FAILED` (not projected).
+
 - **GPU metric cold-start wall measured per metric (task #140,
   2026-05-29, `50b1c83`).** New `coldstart_one` example per `-gpu`
   crate times the FIRST score call in a fresh process with the timer
