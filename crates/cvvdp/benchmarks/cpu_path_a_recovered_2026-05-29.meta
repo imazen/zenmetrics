@@ -40,24 +40,49 @@ methodology:
   and full produce identical scores within each size (bit-identical, matching the
   270-cell strip_parity to_bits() gate that passed 6/6 on this same commit).
 
-RESULTS (peak heap from heaptrack, wall = median of 7 t_score_ms runs):
+RESULTS (peak heap from heaptrack process peak, wall = median of 7 t_score_ms runs).
+Full 6-size sweep (512^2, 1024^2, 2K, 12 MP, 16 MP, 30 MP) — the 16/30 MP block ran
+first; 512^2..12 MP added 2026-05-29 same session, same quiet machine, same binary:
 
-  size  mode            heap_GB   wall_ms   vs-baseline(heap / wall)
-  16MP  full            3.660     4610.07   baseline
-  16MP  strip           1.580     2603.53   -56.8% / -43.5%   <- lower AND faster
-  16MP  warm_ref        3.150     4476.60   baseline
-  16MP  warm_ref_strip  1.550     2621.70   -50.8% / -41.4%   <- lower AND faster
-  30MP  full            6.540     8482.17   baseline
-  30MP  strip           2.550     4550.69   -61.0% / -46.3%   <- lower AND faster
-  30MP  warm_ref        5.640     7819.37   baseline
-  30MP  warm_ref_strip  2.490     4599.24   -55.8% / -41.2%   <- lower AND faster
+  size   mode            heap_GB   wall_ms   strip-vs-baseline (heap / wall)
+  512^2  full            0.0559    59.11     baseline
+  512^2  strip           0.0612    51.20     +9% / -13%   <- CROSSOVER: strip heap HIGHER
+  512^2  warm_ref        0.0482    57.95     baseline
+  512^2  warm_ref_strip  0.0607    50.99     +26% / -12%  <- CROSSOVER: strip heap HIGHER
+  1024^2 full            0.2234    233.63    baseline
+  1024^2 strip           0.1780    173.69    -20% / -26%  <- lower AND faster
+  1024^2 warm_ref        0.1926    230.00    baseline
+  1024^2 warm_ref_strip  0.1759    174.26    -9%  / -24%  <- lower AND faster
+  2K     full            0.8931    958.00    baseline
+  2K     strip           0.6047    688.22    -32% / -28%  <- lower AND faster
+  2K     warm_ref        0.7702    964.78    baseline
+  2K     warm_ref_strip  0.5965    688.98    -23% / -29%  <- lower AND faster
+  12MP   full            2.6200    3011.06   baseline
+  12MP   strip           1.3600    1840.81   -48% / -39%  <- lower AND faster
+  12MP   warm_ref        2.2600    2839.00   baseline
+  12MP   warm_ref_strip  1.3300    1838.90   -41% / -35%  <- lower AND faster
+  16MP   full            3.660     4610.07   baseline
+  16MP   strip           1.580     2603.53   -57% / -43%  <- lower AND faster
+  16MP   warm_ref        3.150     4476.60   baseline
+  16MP   warm_ref_strip  1.550     2621.70   -51% / -41%  <- lower AND faster
+  30MP   full            6.540     8482.17   baseline
+  30MP   strip           2.550     4550.69   -61% / -46%  <- lower AND faster
+  30MP   warm_ref        5.640     7819.37   baseline
+  30MP   warm_ref_strip  2.490     4599.24   -56% / -41%  <- lower AND faster
 
 ACCEPTANCE GATE (task #127):
   strip peak heap < full peak heap  — MET at 16 MP (1.58 < 3.66) AND 30 MP (2.55 < 6.54)
   strip wall <= full wall           — MET at 16 MP (2604 <= 4610) AND 30 MP (4551 <= 8482)
-  No crossover: strip wins on both axes at both sizes. (Small sizes do have per-strip
-  overhead — at 512^2 strip is slightly slower than full, ~155 vs ~109 ms — but the
-  task requires the win at 16/30 MP, which holds decisively.)
+  Gate met decisively at both required sizes.
+
+CROSSOVER (measured, not assumed):
+  At 512^2 the per-strip scratch pre-allocation (Scratch::new_strip persistent weber
+  slots + per-strip band workspaces) costs MORE heap than full's monolithic buffers
+  (strip 0.0612 GB > full 0.0559 GB; warm_ref_strip 0.0607 > warm_ref 0.0482). Strip is
+  still WALL-faster at 512^2 (-13%). The heap crossover is gone by 1024^2 (strip -20%)
+  and the advantage widens monotonically to 30 MP (-61%). So: strip is always >= as
+  fast, and lower-memory for every size at/above ~1 MP. This matches the brief's
+  expectation that "small sizes have per-strip overhead" — documented here, not hidden.
 
 NOTE vs prior #127 claim (cpu_path_a_2026-05-28.meta, now superseded for wall):
 - HEAP matches the prior claim almost exactly: strip 1.58 GB @16MP (claimed 1.58),

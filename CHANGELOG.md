@@ -19,6 +19,32 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **cvvdp CPU Path A strip-major dispatcher RECOVERED after a push-race
+  orphan, re-verified, and re-measured** (task #127 recovery, 2026-05-29).
+  The Path A work (`Cvvdp::new_strip` / `score_internal_strip` /
+  `score_internal_strip_with_warm`, tip `2f8639a8`) had been LOST: the
+  `cvvdp-path-a` jj workspace was forgotten and its 16 commits were never
+  pushed to master, so "low-memory mode faster than full" was marked done
+  on code that wasn't on the default branch. Root cause: the commits were
+  pushed via `jj git push --change @-`, which auto-generated a throwaway
+  bookmark that orphaned the chain instead of advancing `master`. Recovery
+  rebased the 16 dangling Path A commits (merge-base `5979e084`) onto
+  current master — no master commit had touched `crates/cvvdp/src` since
+  the merge-base, so the rebase was clean (`eb925f13`, `4cec7e70`). The
+  cpu_profile driver's `run_cvvdp` strip / warm_ref_strip arms construct
+  via `Cvvdp::new_strip(w, h, params, 512)` (the real low-memory
+  dispatcher), not the pool-only `score_strip` that produced the earlier
+  `peak==full` table rows; the recovery and master's task #139 driver edit
+  converged to identical content. Re-verified: 270-cell `strip_parity` big
+  grid (cold + warm) bit-identical via `.to_bits()` (6/6 tests, 1207 s),
+  `cargo test -p cvvdp` 196 passed / 0 failed. Re-measured on a quiet
+  machine (heaptrack process peak + median of 7 release wall runs, no
+  target-cpu=native): strip is BOTH lower-memory AND faster than full at
+  16 MP (1.58 GB / 2.60 s vs 3.66 GB / 4.61 s) and 30 MP (2.55 GB / 4.55 s
+  vs 6.54 GB / 8.48 s); see `crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.{tsv,meta}`
+  and the corrected cvvdp rows in `benchmarks/cpu_metrics_full_table_2026-05-28.tsv`
+  (commits `eb925f13`, `7149bf61`).
+
 - **zensim-gpu cold one-shot strip no longer builds the redundant
   full-image device ref XYB pyramid** (task #138, 2026-05-28).
   `Zensim::compute_features_vec` (the cold one-shot
@@ -166,9 +192,20 @@ Workspace conventions per the global rules:
   Subsequent `score_with_warm_ref_strip` calls build dist gauss + dist
   deep weber + strip-major dispatch (reading from cached ref gauss).
 
-  Wall time IMPROVEMENT (strip is faster than full at 16 MP):
-  - strip: 11.32 s → 6.04 s (-47%)
-  - warm_ref_strip: 10.01 s → 6.06 s (-39%)
+  Wall + heap RE-MEASURED 2026-05-29 after the recovery below (quiet
+  machine, fresh recovered binary, heaptrack process peak, wall = median
+  of 7 t_score_ms release runs, NO target-cpu=native). Strip is both
+  LOWER-MEMORY and FASTER than full at 16 MP and 30 MP:
+  - 16 MP strip:          1.58 GB / 2.60 s  vs full 3.66 GB / 4.61 s  (-57% / -43%)
+  - 16 MP warm_ref_strip: 1.55 GB / 2.62 s  vs warm 3.15 GB / 4.48 s  (-51% / -41%)
+  - 30 MP strip:          2.55 GB / 4.55 s  vs full 6.54 GB / 8.48 s  (-61% / -46%)
+  - 30 MP warm_ref_strip: 2.49 GB / 4.60 s  vs warm 5.64 GB / 7.82 s  (-56% / -41%)
+  Measured crossover: at 512^2 the per-strip scratch costs slightly MORE
+  heap than full (strip 0.061 vs full 0.056 GB) while still being wall-
+  faster; the heap win appears at 1024^2 and widens to 30 MP. Full 6-size
+  sweep + provenance in `crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.{tsv,meta}`.
+  (The earlier "11.32 s → 6.04 s" figures in this entry were an unverified
+  prior estimate; superseded by the re-measured numbers above.)
 
   Bit-identical parity: 6/6 parity tests pass including the new
   `strip_parity_default_grid_new_strip_cold` /

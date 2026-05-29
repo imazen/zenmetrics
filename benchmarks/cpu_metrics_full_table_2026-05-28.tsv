@@ -1,10 +1,10 @@
 metric	mode	size_label	size_w	size_h	size_mp	cold_or_warm	wall_ms	peak_heap_bytes	peak_heap_human	score	notes
 cvvdp	full	512^2	512	512	0.262	cold	51.4654	60030976	57.25M	9.457931518554688	
-cvvdp	strip	512^2	512	512	0.262	cold	56.1815	60030976	57.25M	9.457931518554688	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	strip	512^2	512	512	0.262	cold	51.20	65703772	62.66M	9.457931518554688	Path A new_strip dispatcher (remeasured 2026-05-29): heap +9% vs full (per-strip scratch overhead exceeds savings at 512^2 — crossover), wall -13%; bit-identical JOD
 cvvdp	warm_ref	512^2	512	512	0.262	cold	47.2956	51778682	49.38M	9.457931518554688	first call incl one-time precompute
 cvvdp	warm_ref	512^2	512	512	0.262	warm	28.2886	51778682	49.38M	9.457931518554688	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
-cvvdp	warm_ref_strip	512^2	512	512	0.262	cold	49.5289	51778682	49.38M	9.457931518554688	first call incl one-time precompute
-cvvdp	warm_ref_strip	512^2	512	512	0.262	warm	29.8324	51778682	49.38M	9.457931518554688	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	512^2	512	512	0.262	cold	50.99	65158512	62.14M	9.457931518554688	Path A new_strip warm dispatcher (remeasured 2026-05-29): heap +9% vs warm_ref (crossover at 512^2), wall -12%; bit-identical JOD
+cvvdp	warm_ref_strip	512^2	512	512	0.262	warm	29.8324	65158512	62.14M	9.457931518554688	amortized per-call (ref cached); heaptrack peak = Path A cold-path process peak (upper bound)
 ssim2	full	512^2	512	512	0.262	cold	24.8991	43526389	41.51M	81.36118652352606	
 ssim2	strip	512^2	512	512	0.262	cold	31.3320	50121932	47.80M	81.36119130803189	
 ssim2	warm_ref	512^2	512	512	0.262	cold	22.1625	40223375	38.36M	81.36118652352606	first call incl one-time precompute
@@ -35,11 +35,11 @@ zensim	warm_ref_strip	512^2	512	512	0.262	warm	6.2791	17458790	16.65M	80.4710376
 dssim	strip	512^2	512	512	0.262	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 dssim	warm_ref_strip	512^2	512	512	0.262	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 cvvdp	full	1024^2	1024	1024	1.049	cold	213.8249	239830302	228.72M	9.458330154418945	
-cvvdp	strip	1024^2	1024	1024	1.049	cold	253.6170	239830302	228.72M	9.458330154418945	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	strip	1024^2	1024	1024	1.049	cold	173.69	191102976	182.25M	9.458330154418945	Path A new_strip dispatcher (remeasured 2026-05-29): heap -20% / wall -26% vs full; bit-identical JOD
 cvvdp	warm_ref	1024^2	1024	1024	1.049	cold	176.8519	206831616	197.25M	9.458330154418945	first call incl one-time precompute
 cvvdp	warm_ref	1024^2	1024	1024	1.049	warm	113.9228	206831616	197.25M	9.458330154418945	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
-cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	cold	242.9781	206831616	197.25M	9.458330154418945	first call incl one-time precompute
-cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	warm	152.9333	206831616	197.25M	9.458330154418945	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	cold	174.26	188911452	180.16M	9.458330154418945	Path A new_strip warm dispatcher (remeasured 2026-05-29): heap -9% / wall -24% vs warm_ref; bit-identical JOD
+cvvdp	warm_ref_strip	1024^2	1024	1024	1.049	warm	152.9333	188911452	180.16M	9.458330154418945	amortized per-call (ref cached); heaptrack peak = Path A cold-path process peak (upper bound)
 ssim2	full	1024^2	1024	1024	1.049	cold	92.3515	173822443	165.77M	82.6463630946432	
 ssim2	strip	1024^2	1024	1024	1.049	cold	112.2129	132319805	126.19M	82.67809238742598	
 ssim2	warm_ref	1024^2	1024	1024	1.049	cold	85.9057	160620871	153.18M	82.6463630946432	first call incl one-time precompute
@@ -70,11 +70,11 @@ zensim	warm_ref_strip	1024^2	1024	1024	1.049	warm	23.0797	53435432	50.96M	80.453
 dssim	strip	1024^2	1024	1024	1.049	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 dssim	warm_ref_strip	1024^2	1024	1024	1.049	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 cvvdp	full	2K	2048	2048	4.194	cold	NA	958954209	914.53M	9.458459854125977	
-cvvdp	strip	2K	2048	2048	4.194	cold	NA	958954209	914.53M	9.458459854125977	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	strip	2K	2048	2048	4.194	cold	688.22	649278259	619.20M	9.458459854125977	Path A new_strip dispatcher (remeasured 2026-05-29): heap -32% / wall -28% vs full; bit-identical JOD
 cvvdp	warm_ref	2K	2048	2048	4.194	cold	NA	826980433	788.67M	9.458459854125977	first call incl one-time precompute
 cvvdp	warm_ref	2K	2048	2048	4.194	warm	NA	826980433	788.67M	9.458459854125977	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
-cvvdp	warm_ref_strip	2K	2048	2048	4.194	cold	NA	826980433	788.67M	9.458459854125977	first call incl one-time precompute
-cvvdp	warm_ref_strip	2K	2048	2048	4.194	warm	NA	826980433	788.67M	9.458459854125977	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	2K	2048	2048	4.194	cold	688.98	640491192	610.82M	9.458459854125977	Path A new_strip warm dispatcher (remeasured 2026-05-29): heap -23% / wall -29% vs warm_ref; bit-identical JOD
+cvvdp	warm_ref_strip	2K	2048	2048	4.194	warm	NA	640491192	610.82M	9.458459854125977	amortized per-call (ref cached); heaptrack peak = Path A cold-path process peak (upper bound)
 ssim2	full	2K	2048	2048	4.194	cold	NA	695017144	662.82M	83.65862422242438	
 ssim2	strip	2K	2048	2048	4.194	cold	NA	361874063	345.11M	83.74297914100207	
 ssim2	warm_ref	2K	2048	2048	4.194	cold	NA	642189885	612.44M	83.65862422242438	first call incl one-time precompute
@@ -105,11 +105,15 @@ zensim	warm_ref_strip	2K	2048	2048	4.194	warm	NA	233203302	222.40M	80.4533282379
 dssim	strip	2K	2048	2048	4.194	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 dssim	warm_ref_strip	2K	2048	2048	4.194	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 cvvdp	full	12 MP	4000	3000	12.000	cold	NA	2813203578	2.62G	9.458015441894531	
-cvvdp	strip	12 MP	4000	3000	12.000	cold	NA	2813203578	2.62G	9.458015441894531	Path A walker: only pool stage strips; peak==full (documented)
+cvvdp	strip	12 MP	4000	3000	12.000	cold	1840.81	1460288880	1.36G	9.458015441894531	Path A new_strip dispatcher (remeasured 2026-05-29): heap -48% / wall -39% vs full; bit-identical JOD
 cvvdp	warm_ref	12 MP	4000	3000	12.000	cold	NA	2426656522	2.26G	9.458015441894531	first call incl one-time precompute
 cvvdp	warm_ref	12 MP	4000	3000	12.000	warm	NA	2426656522	2.26G	9.458015441894531	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
-cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	2426656522	2.26G	9.458015441894531	first call incl one-time precompute
-cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	2426656522	2.26G	9.458015441894531	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	cold	1838.90	1428076625	1.33G	9.458015441894531	Path A new_strip warm dispatcher (remeasured 2026-05-29): heap -41% / wall -35% vs warm_ref; bit-identical JOD
+cvvdp	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	1428076625	1.33G	9.458015441894531	amortized per-call (ref cached); heaptrack peak = Path A cold-path process peak (upper bound)
+cvvdp	full	16 MP	4096	4096	16.777	cold	4610.07	3929895075	3.66G	9.458502769470215	wall=median of 7 t_score_ms runs (cpu_path_a_recovered_2026-05-29)
+cvvdp	strip	16 MP	4096	4096	16.777	cold	2603.53	1696512081	1.58G	9.458502769470215	Path A new_strip dispatcher: heap -57% / wall -43% vs full (recovered+remeasured 2026-05-29); bit-identical JOD
+cvvdp	warm_ref	16 MP	4096	4096	16.777	cold	4476.60	3382286745	3.15G	9.458502769470215	first call incl one-time precompute; wall=median of 7 t_score_ms runs (2026-05-29)
+cvvdp	warm_ref_strip	16 MP	4096	4096	16.777	cold	2621.70	1664299827	1.55G	9.458502769470215	Path A new_strip warm dispatcher: heap -51% / wall -41% vs warm_ref (recovered+remeasured 2026-05-29); bit-identical JOD
 ssim2	full	12 MP	4000	3000	12.000	cold	NA	2158221066	2.01G	84.2087617173497	
 ssim2	strip	12 MP	4000	3000	12.000	cold	NA	946717327	902.86M	84.3514092873415	
 ssim2	warm_ref	12 MP	4000	3000	12.000	cold	NA	1943472701	1.81G	84.2087617173497	first call incl one-time precompute
@@ -139,12 +143,12 @@ zensim	warm_ref_strip	12 MP	4000	3000	12.000	cold	NA	721409802	687.99M	80.453009
 zensim	warm_ref_strip	12 MP	4000	3000	12.000	warm	NA	721409802	687.99M	80.45300975490177	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
 dssim	strip	12 MP	4000	3000	12.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
 dssim	warm_ref_strip	12 MP	4000	3000	12.000	-	NOT_SUPPORTED	NOT_SUPPORTED	NOT_SUPPORTED	-	dssim-core 3.4 has no strip walker
-cvvdp	full	30 MP	6000	5000	30.000	cold	NA	7022271528	6.54G	9.44887924194336	
-cvvdp	strip	30 MP	6000	5000	30.000	cold	NA	7022271528	6.54G	9.44887924194336	Path A walker: only pool stage strips; peak==full (documented)
-cvvdp	warm_ref	30 MP	6000	5000	30.000	cold	NA	6055903887	5.64G	9.44887924194336	first call incl one-time precompute
+cvvdp	full	30 MP	6000	5000	30.000	cold	8482.17	7022271528	6.54G	9.44887924194336	wall=median of 7 t_score_ms runs (cpu_path_a_recovered_2026-05-29)
+cvvdp	strip	30 MP	6000	5000	30.000	cold	4550.69	2738041651	2.55G	9.44887924194336	Path A new_strip dispatcher: heap -61% / wall -46% vs full (recovered+remeasured 2026-05-29); bit-identical JOD
+cvvdp	warm_ref	30 MP	6000	5000	30.000	cold	7819.37	6055903887	5.64G	9.44887924194336	first call incl one-time precompute; wall=median of 7 t_score_ms runs (2026-05-29)
 cvvdp	warm_ref	30 MP	6000	5000	30.000	warm	NA	6055903887	5.64G	9.44887924194336	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
-cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	cold	NA	6055903887	5.64G	9.44887924194336	first call incl one-time precompute
-cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	6055903887	5.64G	9.44887924194336	amortized per-call (ref cached); heaptrack peak = cold-path process peak (upper bound)
+cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	cold	4599.24	2673617141	2.49G	9.44887924194336	Path A new_strip warm dispatcher: heap -56% / wall -41% vs warm_ref (recovered+remeasured 2026-05-29); bit-identical JOD
+cvvdp	warm_ref_strip	30 MP	6000	5000	30.000	warm	NA	2673617141	2.49G	9.44887924194336	amortized per-call (ref cached); heaptrack peak = Path A cold-path process peak (upper bound)
 ssim2	full	30 MP	6000	5000	30.000	cold	NA	5186173009	4.83G	84.61280893684811	
 ssim2	strip	30 MP	6000	5000	30.000	cold	NA	1750199173	1.63G	84.86246866201273	
 ssim2	warm_ref	30 MP	6000	5000	30.000	cold	NA	4745938862	4.42G	84.61280893684811	first call incl one-time precompute
