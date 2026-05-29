@@ -1,0 +1,42 @@
+# Task #141 CPU-vs-GPU one-shot crossover. CPU full-mode zenbench wall (7950X, no target-cpu=native).
+# Sources: cpu_wall_all_metrics_2026-05-29.tsv + cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv
+#          + gpu_coldstart_2026-05-29.tsv (cuda, cold_total_ms + warm_per_call_ms) + gpu_metrics_sweep_2026-05-28.tsv (cuda full warm).
+# gpu_cold_total_ms = context-init + metric_new + first_compute (the one-shot GPU floor). Only measured at 512/1024/2048/4096.
+# one_shot_winner: CPU if cpu_full_ms < gpu_cold_total_ms else GPU.   batch_winner: CPU if cpu_full_ms < gpu_warm_ms else GPU.
+metric	size_label	w	h	mp	cpu_full_ms	gpu_cold_total_ms	gpu_warm_ms	one_shot_winner	batch_winner
+cvvdp	512	512	512	0.262	32.480	504.457	4.225	CPU	GPU
+cvvdp	1024	1024	1024	1.049	128.353	589.273	5.069	CPU	GPU
+cvvdp	2048	2048	2048	4.194	607.282	1188.461	29.650	CPU	GPU
+cvvdp	4096	4096	4096	16.777	3812.256	4282.671	45.461	CPU	GPU
+cvvdp	12MP	4000	3000	12.000	2350.286	-	-	GPU-cold unmeasured >16MP	N/A
+cvvdp	30MP	6000	5000	30.000	8997.807	-	-	GPU-cold unmeasured >16MP	N/A
+ssim2	512	512	512	0.262	16.665	396.225	3.956	CPU	GPU
+ssim2	1024	1024	1024	1.049	70.049	609.998	5.968	CPU	GPU
+ssim2	2048	2048	2048	4.194	297.757	1475.153	58.263	CPU	GPU
+ssim2	4096	4096	4096	16.777	2591.026	6740.518	50.654	CPU	GPU
+ssim2	12MP	4000	3000	12.000	1675.430	-	-	GPU-cold unmeasured >16MP	N/A
+ssim2	30MP	6000	5000	30.000	4585.436	-	-	GPU-cold unmeasured >16MP	N/A
+dssim	512	512	512	0.262	30.531	376.076	4.144	CPU	GPU
+dssim	1024	1024	1024	1.049	123.476	506.134	4.776	CPU	GPU
+dssim	2048	2048	2048	4.194	546.164	1059.513	15.701	CPU	GPU
+dssim	4096	4096	4096	16.777	4114.345	3949.438	50.465	GPU	GPU
+dssim	12MP	4000	3000	12.000	2609.401	-	-	GPU-cold unmeasured >16MP	N/A
+dssim	30MP	6000	5000	30.000	7670.598	-	-	GPU-cold unmeasured >16MP	N/A
+butter	512	512	512	0.262	12.691	498.659	1.544	CPU	GPU
+butter	1024	1024	1024	1.049	62.692	653.397	3.686	CPU	GPU
+butter	2048	2048	2048	4.194	347.527	1331.167	47.293	CPU	GPU
+butter	4096	4096	4096	16.777	1690.868	4923.904	62.269	CPU	GPU
+butter	12MP	4000	3000	12.000	1138.888	-	-	GPU-cold unmeasured >16MP	N/A
+butter	30MP	6000	5000	30.000	3321.020	-	-	GPU-cold unmeasured >16MP	N/A
+iwssim	512	512	512	0.262	59.815	491.365	6.533	CPU	GPU
+iwssim	1024	1024	1024	1.049	261.885	526.678	10.119	CPU	GPU
+iwssim	2048	2048	2048	4.194	1169.064	834.892	27.937	GPU	GPU
+iwssim	4096	4096	4096	16.777	6665.177	2512.473	45.336	GPU	GPU
+iwssim	12MP	4000	3000	12.000	5621.689	-	-	GPU-cold unmeasured >16MP	N/A
+iwssim	30MP	6000	5000	30.000	12150.069	-	-	GPU-cold unmeasured >16MP	N/A
+zensim	512	512	512	0.262	6.919	570.253	1.664	CPU	GPU
+zensim	1024	1024	1024	1.049	13.921	574.101	3.264	CPU	GPU
+zensim	2048	2048	2048	4.194	78.859	635.011	9.929	CPU	GPU
+zensim	4096	4096	4096	16.777	369.664	914.246	38.136	CPU	GPU
+zensim	12MP	4000	3000	12.000	246.755	-	-	GPU-cold unmeasured >16MP	N/A
+zensim	30MP	6000	5000	30.000	707.726	-	-	GPU-cold unmeasured >16MP	N/A

@@ -216,13 +216,16 @@ def main():
             mp0, w0, l0 = seq[i]
             mp1, w1, l1 = seq[i + 1]
             if w0 == "CPU" and w1 == "GPU":
-                return (f"between {l0} ({mp0:.1f} MP, CPU wins) and "
-                        f"{l1} ({mp1:.1f} MP, GPU wins)"), (l0, l1)
+                return (f"CPU faster up to {mp0:.1f} MP ({l0}); GPU faster from "
+                        f"{mp1:.1f} MP ({l1}) up. Crossover is between {mp0:.1f} MP "
+                        f"and {mp1:.1f} MP (interpolated, not a measured point)"), (l0, l1)
         # no flip
         if all(w == "CPU" for _, w, _ in seq):
-            return f"CPU wins at ALL measured sizes (512 .. {seq[-1][2]})", None
+            return (f"CPU faster at ALL measured GPU-cold sizes "
+                    f"(512 .. {seq[-1][2]} = {seq[-1][0]:.1f} MP)"), None
         if all(w == "GPU" for _, w, _ in seq):
-            return f"GPU wins at ALL measured sizes (512 .. {seq[-1][2]})", None
+            return (f"GPU faster at ALL measured GPU-cold sizes "
+                    f"(512 .. {seq[-1][2]} = {seq[-1][0]:.1f} MP)"), None
         return "mixed (non-monotonic — see table)", None
 
     return per_metric, crossover_phrase, rows, cvvdp_rec, cpu
@@ -271,7 +274,7 @@ if __name__ == "__main__":
             batch_verdict = f"mixed — CPU wins at {', '.join(cpu_b)}" if cpu_b else "GPU faster at all measured sizes"
         else:
             batch_verdict = "no warm GPU data"
-        lines.append(f"- **{m}** — one-shot: CPU faster {phrase}. Batch/warm: {batch_verdict}.")
+        lines.append(f"- **{m}** — one-shot: {phrase}. Batch/warm: {batch_verdict}.")
     lines.append("")
     lines.append("## Full table")
     lines.append("")
