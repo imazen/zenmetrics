@@ -34,9 +34,9 @@ use tower_http::services::{ServeDir, ServeFile};
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
     catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run, kill_fleet, kill_named, list_fleet, progress, selector_for, stop_spend, storage,
-    workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox, KindProgress,
-    NotifyPayload, TierStorage, WorkerStat,
+    gc_dry_run, kill_fleet, kill_named, list_fleet, progress, run_summary, selector_for, stop_spend,
+    storage, workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox,
+    KindProgress, NotifyPayload, RunSummary, TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -84,6 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn build_router(state: AppState, web_dir: &str) -> Router {
     let api = Router::new()
         .route("/api/progress", get(api_progress))
+        .route("/api/summary", get(api_summary))
         .route("/api/failures", get(api_failures))
         .route("/api/cost", get(api_cost))
         .route("/api/storage", get(api_storage))
@@ -260,6 +261,10 @@ fn referenced(data: &DashData) -> HashSet<Sha256Hex> {
 
 async fn api_progress(State(s): State<AppState>) -> Json<Vec<KindProgress>> {
     Json(progress(&s.data.read().await.rows))
+}
+async fn api_summary(State(s): State<AppState>) -> Json<RunSummary> {
+    let d = s.data.read().await;
+    Json(run_summary(&d.rows, &d.workers))
 }
 async fn api_failures(State(s): State<AppState>) -> Json<Vec<FailureCell>> {
     Json(failures(&s.data.read().await.rows))

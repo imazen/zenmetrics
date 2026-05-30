@@ -16,6 +16,7 @@ import { usePoll } from "@/lib/usePoll"
 
 export default function App() {
   const cost = usePoll(api.cost)
+  const summary = usePoll(api.summary)
   const progress = usePoll(api.progress)
   const failures = usePoll(api.failures)
   const storage = usePoll(api.storage)
@@ -25,6 +26,7 @@ export default function App() {
 
   const refreshAll = () => {
     cost.refresh()
+    summary.refresh()
     progress.refresh()
     failures.refresh()
     storage.refresh()
@@ -62,7 +64,7 @@ export default function App() {
         </div>
       </header>
 
-      <StatCards cost={cost.data} fleet={fleet.data} />
+      <StatCards cost={cost.data} fleet={fleet.data} summary={summary.data} />
 
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>

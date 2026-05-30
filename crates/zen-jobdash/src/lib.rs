@@ -26,6 +26,6 @@ pub use fleet::{
 };
 pub use notify::{detect, format_event, NotifyEvent, NotifyPayload};
 pub use views::{
-    catalog_view, cost_view, failures, kind_label, progress, storage, workers_view, CatalogRow,
-    CostView, FailureCell, KindProgress, TierStorage, WorkerStat,
+    catalog_view, cost_view, failures, kind_label, progress, run_summary, storage, workers_view,
+    CatalogRow, CostView, FailureCell, KindProgress, RunSummary, TierStorage, WorkerStat,
 };

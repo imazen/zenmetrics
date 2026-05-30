@@ -36,6 +36,18 @@ export interface TierStorage {
   bytes: number
 }
 
+export interface RunSummary {
+  total: number
+  done: number
+  remaining: number
+  poison: number
+  fleet_jobs_per_min: number
+  eta_secs: number | null
+  spent_usd: number
+  burn_usd_per_hr: number
+  projected_total_usd: number | null
+}
+
 export interface CatalogRow {
   key: string
   codec: string
@@ -104,6 +116,7 @@ async function postControl(body: unknown): Promise<unknown> {
 
 export const api = {
   progress: () => getJSON<KindProgress[]>("/api/progress"),
+  summary: () => getJSON<RunSummary>("/api/summary"),
   failures: () => getJSON<FailureCell[]>("/api/failures"),
   cost: () => getJSON<CostView>("/api/cost"),
   storage: () => getJSON<TierStorage[]>("/api/storage"),

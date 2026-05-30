@@ -110,6 +110,59 @@ pub fn cost_view(workers: &[WorkerReport]) -> CostView {
     }
 }
 
+/// Run summary (goal B: "progress … + ETA" and "cost … projected total"). ETA is estimated from the
+/// remaining (not-done, not-poison) job count divided by the *current* fleet throughput (sum of
+/// per-worker jobs/min from heartbeats) — a snapshot estimate, null when nothing is running. The
+/// projected total adds the burn over the ETA window to what's already spent.
+#[derive(Serialize, Debug)]
+pub struct RunSummary {
+    pub total: usize,
+    pub done: usize,
+    pub remaining: usize,
+    pub poison: usize,
+    pub fleet_jobs_per_min: f64,
+    pub eta_secs: Option<u64>,
+    pub spent_usd: f64,
+    pub burn_usd_per_hr: f64,
+    pub projected_total_usd: Option<f64>,
+}
+
+pub fn run_summary(rows: &[LedgerRow], workers: &[WorkerReport]) -> RunSummary {
+    let mut total = 0usize;
+    let mut done = 0usize;
+    let mut poison = 0usize;
+    for r in rows {
+        total += 1;
+        match r.status {
+            JobStatus::Done => done += 1,
+            JobStatus::Poison => poison += 1,
+            _ => {}
+        }
+    }
+    // Remaining = work that can still complete (excludes done and poison).
+    let remaining = total.saturating_sub(done).saturating_sub(poison);
+    let fleet_jpm: f64 = workers_view(workers).iter().map(|w| w.jobs_per_min).sum();
+    let eta_secs = if fleet_jpm > 0.0 && remaining > 0 {
+        Some((remaining as f64 / (fleet_jpm / 60.0)).ceil() as u64)
+    } else {
+        None
+    };
+    let fleet = aggregate(workers);
+    let projected_total_usd =
+        eta_secs.map(|s| fleet.total_spent_usd + fleet.burn_usd_per_hr * (s as f64 / 3600.0));
+    RunSummary {
+        total,
+        done,
+        remaining,
+        poison,
+        fleet_jobs_per_min: fleet_jpm,
+        eta_secs,
+        spent_usd: fleet.total_spent_usd,
+        burn_usd_per_hr: fleet.burn_usd_per_hr,
+        projected_total_usd,
+    }
+}
+
 /// One catalog/coverage row (goal I: "canonical queryable catalog by semantic identity"). Derived
 /// from the ledger — a result *set* grouped by (codec, kind, config), with its content-addressed
 /// [`SemanticId`] key, distinct-image count (corpus-size proxy), q range, and done/total coverage.
@@ -306,6 +359,39 @@ mod tests {
         assert!((cv.total_spent_usd - 0.50).abs() < 1e-9);
         let gpu = cv.per_tier.iter().find(|t| t.tier == "Gpu").unwrap();
         assert!((gpu.cost_per_1000_jobs.unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn run_summary_eta_and_projection() {
+        let rows = vec![
+            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None),
+            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
+            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
+        ];
+        // one paid worker doing 60 jobs/min → 2 remaining = 2s ETA.
+        let workers = vec![WorkerReport {
+            worker: "w".into(),
+            provider: "hetzner".into(),
+            class: ResourceClass::CpuArm,
+            rate_usd_per_hr: 3.6, // = 0.001/sec
+            uptime_secs: 60,
+            jobs_done: 60, // 60/min
+        }];
+        let s = run_summary(&rows, &workers);
+        assert_eq!(s.remaining, 2);
+        assert!((s.fleet_jobs_per_min - 60.0).abs() < 1e-9);
+        assert_eq!(s.eta_secs, Some(2), "2 remaining / 60 per min = 2s");
+        // projected = spent (3.6*60/3600=0.06) + burn(3.6/hr)*2s = 0.06 + 0.002 = 0.062
+        let proj = s.projected_total_usd.unwrap();
+        assert!((proj - 0.062).abs() < 1e-6, "got {proj}");
+    }
+
+    #[test]
+    fn run_summary_no_fleet_no_eta() {
+        let rows = vec![row(JobKind::Metric { metric: "x".into() }, "c", JobStatus::Pending, None)];
+        let s = run_summary(&rows, &[]);
+        assert_eq!(s.eta_secs, None, "nothing running → no ETA");
+        assert_eq!(s.projected_total_usd, None);
     }
 
     #[test]
