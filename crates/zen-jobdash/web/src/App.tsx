@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CatalogPane } from "@/components/CatalogPane"
 import { ControlPane } from "@/components/ControlPane"
 import { FailuresPane } from "@/components/FailuresPane"
 import { FleetPane } from "@/components/FleetPane"
@@ -19,6 +20,7 @@ export default function App() {
   const failures = usePoll(api.failures)
   const storage = usePoll(api.storage)
   const workers = usePoll(api.workers)
+  const catalog = usePoll(api.catalog, 30000)
   const fleet = usePoll(api.fleet, 20000)
 
   const refreshAll = () => {
@@ -27,6 +29,7 @@ export default function App() {
     failures.refresh()
     storage.refresh()
     workers.refresh()
+    catalog.refresh()
     fleet.refresh()
   }
 
@@ -72,6 +75,14 @@ export default function App() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="catalog">
+            Catalog
+            {(catalog.data?.length ?? 0) > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {catalog.data?.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="failures">
             Failures
             {failCount > 0 && (
@@ -91,6 +102,10 @@ export default function App() {
         <TabsContent value="fleet" className="space-y-4">
           <FleetPane fleet={fleet.data} onChange={() => setTimeout(fleet.refresh, 1500)} />
           <WorkersPane workers={workers.data} />
+        </TabsContent>
+
+        <TabsContent value="catalog" className="space-y-4">
+          <CatalogPane rows={catalog.data} />
         </TabsContent>
 
         <TabsContent value="failures" className="space-y-4">

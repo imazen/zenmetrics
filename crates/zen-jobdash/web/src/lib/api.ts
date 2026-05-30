@@ -36,6 +36,19 @@ export interface TierStorage {
   bytes: number
 }
 
+export interface CatalogRow {
+  key: string
+  codec: string
+  kind: string
+  metric: string
+  config: string
+  images: number
+  q_min: number
+  q_max: number
+  total: number
+  done: number
+}
+
 export interface WorkerStat {
   worker: string
   provider: string
@@ -95,6 +108,7 @@ export const api = {
   cost: () => getJSON<CostView>("/api/cost"),
   storage: () => getJSON<TierStorage[]>("/api/storage"),
   workers: () => getJSON<WorkerStat[]>("/api/workers"),
+  catalog: () => getJSON<CatalogRow[]>("/api/catalog"),
   fleet: () => getJSON<FleetView>("/api/fleet"),
 
   gcDryRun: () => postControl({ action: "gc_dry_run" }),

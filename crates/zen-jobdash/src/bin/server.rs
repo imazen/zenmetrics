@@ -33,9 +33,10 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
-    cost_view, detect, failures, fleet_label_key, fleet_token, format_event, gc_dry_run, kill_fleet,
-    kill_named, list_fleet, progress, selector_for, stop_spend, storage, workers_view, ControlIntent,
-    CostView, DashData, FailureCell, FleetBox, KindProgress, NotifyPayload, TierStorage, WorkerStat,
+    catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
+    gc_dry_run, kill_fleet, kill_named, list_fleet, progress, selector_for, stop_spend, storage,
+    workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox, KindProgress,
+    NotifyPayload, TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -87,6 +88,7 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
         .route("/api/cost", get(api_cost))
         .route("/api/storage", get(api_storage))
         .route("/api/workers", get(api_workers))
+        .route("/api/catalog", get(api_catalog))
         .route("/api/fleet", get(api_fleet))
         .route("/api/control", post(api_control))
         .with_state(state);
@@ -270,6 +272,9 @@ async fn api_storage(State(s): State<AppState>) -> Json<Vec<TierStorage>> {
 }
 async fn api_workers(State(s): State<AppState>) -> Json<Vec<WorkerStat>> {
     Json(workers_view(&s.data.read().await.workers))
+}
+async fn api_catalog(State(s): State<AppState>) -> Json<Vec<CatalogRow>> {
+    Json(catalog_view(&s.data.read().await.rows))
 }
 
 /// Live fleet boxes (goal C/H visibility): the actual paid/free boxes Hetzner reports for the fleet

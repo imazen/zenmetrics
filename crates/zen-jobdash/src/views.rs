@@ -1,11 +1,14 @@
 //! Monitoring views (goal B) — pure aggregations over the ledger / blob index / worker reports into
 //! serde DTOs the dashboard renders. No I/O; fully testable offline.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::Serialize;
 
-use zen_job_core::{aggregate, cost_per_1000_by_tier, BlobIndexEntry, JobKind, JobStatus, LedgerRow, WorkerReport};
+use zen_job_core::{
+    aggregate, cost_per_1000_by_tier, BlobIndexEntry, JobKind, JobStatus, LedgerRow, SemanticId,
+    WorkerReport,
+};
 
 /// Short, stable label for a job kind, e.g. `metric:cvvdp`, `encode:zenjpeg`.
 pub fn kind_label(k: &JobKind) -> String {
@@ -105,6 +108,86 @@ pub fn cost_view(workers: &[WorkerReport]) -> CostView {
         cost_per_1000_jobs: fleet.cost_per_1000_jobs(),
         per_tier,
     }
+}
+
+/// One catalog/coverage row (goal I: "canonical queryable catalog by semantic identity"). Derived
+/// from the ledger — a result *set* grouped by (codec, kind, config), with its content-addressed
+/// [`SemanticId`] key, distinct-image count (corpus-size proxy), q range, and done/total coverage.
+/// This is the dashboard side of "find-by-description, consult coverage before enqueuing".
+#[derive(Serialize, Debug, PartialEq)]
+pub struct CatalogRow {
+    /// Content-addressed key of the semantic description (same description → same key).
+    pub key: String,
+    pub codec: String,
+    pub kind: String,
+    pub metric: String,
+    /// Config descriptor (the knob tuple).
+    pub config: String,
+    /// Distinct images covered (corpus-size proxy — the ledger names images, not a corpus).
+    pub images: usize,
+    pub q_min: i64,
+    pub q_max: i64,
+    pub total: usize,
+    pub done: usize,
+}
+
+pub fn catalog_view(rows: &[LedgerRow]) -> Vec<CatalogRow> {
+    struct Agg {
+        metric: String,
+        images: HashSet<String>,
+        q_min: i64,
+        q_max: i64,
+        total: usize,
+        done: usize,
+    }
+    let mut m: BTreeMap<(String, String, String), Agg> = BTreeMap::new();
+    for r in rows {
+        let codec = r.cell.codec.clone();
+        let kind = kind_label(&r.kind);
+        let config = r.cell.knob_tuple_json.clone();
+        let metric = match &r.kind {
+            JobKind::Metric { metric } => metric.clone(),
+            _ => String::new(),
+        };
+        let e = m.entry((codec, kind, config)).or_insert_with(|| Agg {
+            metric: metric.clone(),
+            images: HashSet::new(),
+            q_min: r.cell.q,
+            q_max: r.cell.q,
+            total: 0,
+            done: 0,
+        });
+        e.images.insert(r.cell.image_path.clone());
+        e.q_min = e.q_min.min(r.cell.q);
+        e.q_max = e.q_max.max(r.cell.q);
+        e.total += 1;
+        if r.status == JobStatus::Done {
+            e.done += 1;
+        }
+    }
+    m.into_iter()
+        .map(|((codec, kind, config), a)| {
+            let sid = SemanticId {
+                corpus: "(ledger-derived)".to_string(),
+                codec: codec.clone(),
+                q_grid: format!("{}..={}", a.q_min, a.q_max),
+                metric: a.metric.clone(),
+                config: config.clone(),
+            };
+            CatalogRow {
+                key: sid.key().to_string(),
+                codec,
+                kind,
+                metric: a.metric,
+                config,
+                images: a.images.len(),
+                q_min: a.q_min,
+                q_max: a.q_max,
+                total: a.total,
+                done: a.done,
+            }
+        })
+        .collect()
 }
 
 /// Per-worker live view (goal B: "live fleet per worker"). Derived from worker heartbeat reports —
@@ -223,6 +306,23 @@ mod tests {
         assert!((cv.total_spent_usd - 0.50).abs() < 1e-9);
         let gpu = cv.per_tier.iter().find(|t| t.tier == "Gpu").unwrap();
         assert!((gpu.cost_per_1000_jobs.unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn catalog_groups_by_semantic_identity() {
+        let rows = vec![
+            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None),
+            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
+            row(JobKind::Metric { metric: "ssim2".into() }, "zenjpeg", JobStatus::Done, None),
+        ];
+        let c = catalog_view(&rows);
+        // cvvdp×zenjpeg and ssim2×zenjpeg are distinct semantic identities → distinct keys.
+        assert_eq!(c.len(), 2);
+        let cvvdp = c.iter().find(|r| r.metric == "cvvdp").unwrap();
+        assert_eq!(cvvdp.total, 2);
+        assert_eq!(cvvdp.done, 1, "coverage = done/total");
+        let ssim2 = c.iter().find(|r| r.metric == "ssim2").unwrap();
+        assert_ne!(cvvdp.key, ssim2.key, "different description → different content-addressed key");
     }
 
     #[test]
