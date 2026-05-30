@@ -76,6 +76,63 @@ pub fn vram_cap_bytes() -> usize {
     8 * 1024 * 1024 * 1024
 }
 
+/// Reclaim pooled-but-unreferenced device memory back to the driver
+/// for `backend`.
+///
+/// cubecl pools GPU buffers: dropping a metric instance returns its
+/// `Handle`s to the pool's free list, but the underlying device pages
+/// stay resident for reuse — so a user who drops a metric does **not**
+/// immediately get VRAM back, and an orchestrator that swaps between
+/// metrics sees peak trend toward the SUM of their working sets instead
+/// of the MAX. This function issues cubecl's
+/// `ComputeClient::memory_cleanup` hint (which deallocates fully-free
+/// pool pages) followed by a `sync` (which flushes the CUDA
+/// deferred-free queue so `cuMemFree*` actually runs), returning the
+/// freed pages to the driver.
+///
+/// **Thread/stream scoped.** cubecl's CUDA memory pool is per-stream
+/// and the stream is selected by the *calling thread's* id, so this
+/// only reclaims the pool owned by the thread that calls it. Call it
+/// from the same thread that dropped the metric instance.
+///
+/// **Do NOT call between scores of the same warm metric.** Reclaiming
+/// while a live instance still references pool pages can deallocate /
+/// relocate pages that an in-flight binding points at (the cubecl
+/// allocator panics on the next dispatch), and it discards the warm
+/// working set the next score would have reused — regressing the warm
+/// per-call path. The intended call sites are: after a metric is
+/// dropped (user reclaim), and at an orchestrator metric-signature
+/// swap (after dropping the old instance, before constructing the new
+/// one) or when going idle. Best-effort: cubecl frees only what its
+/// allocator deems beneficial.
+#[allow(unused_variables)]
+pub fn reclaim_pooled_vram(backend: crate::opaque::Backend) {
+    use crate::opaque::Backend;
+    match backend {
+        #[cfg(feature = "cuda")]
+        Backend::Cuda => {
+            use cubecl::Runtime;
+            let client = cubecl::cuda::CudaRuntime::client(&Default::default());
+            client.memory_cleanup();
+            let _ = cubecl::future::block_on(client.sync());
+        }
+        #[cfg(feature = "wgpu")]
+        Backend::Wgpu => {
+            use cubecl::Runtime;
+            let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
+            client.memory_cleanup();
+            let _ = cubecl::future::block_on(client.sync());
+        }
+        #[cfg(feature = "cpu")]
+        Backend::Cpu => {
+            use cubecl::Runtime;
+            let client = cubecl::cpu::CpuRuntime::client(&Default::default());
+            client.memory_cleanup();
+            let _ = cubecl::future::block_on(client.sync());
+        }
+    }
+}
+
 /// How the GPU pipeline should partition its working set.
 ///
 /// See module-level docs for the Auto policy.

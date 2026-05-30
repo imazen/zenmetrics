@@ -964,6 +964,22 @@ impl Metric {
             Metric::Zensim(_) => false,
         }
     }
+
+    /// Drop this scorer **and** reclaim its pooled device memory back to
+    /// the driver.
+    ///
+    /// Dropping a [`Metric`] alone returns its buffers to cubecl's pool
+    /// (still resident); this convenience consumes `self`, runs the
+    /// drop, then calls [`reclaim_pooled_vram`] for `backend` so the
+    /// freed pages go back to the driver. Pass the same [`Backend`] the
+    /// scorer was constructed with.
+    ///
+    /// Call this from the thread that owns the scorer (the cubecl pool
+    /// is per-thread). Equivalent to `drop(metric); reclaim_pooled_vram(backend);`.
+    pub fn release(self, backend: Backend) {
+        drop(self);
+        reclaim_pooled_vram(backend);
+    }
 }
 
 // ---------------------------------------------------------------
@@ -1113,5 +1129,88 @@ fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
         #[cfg(feature = "cpu")]
         Backend::Cpu => Ok(zensim_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
+    }
+}
+
+// ---------------------------------------------------------------
+// VRAM pool reclaim
+// ---------------------------------------------------------------
+
+/// Return pooled-but-unreferenced GPU memory for `backend` to the
+/// driver.
+///
+/// **Why this exists.** Every metric variant holds its device buffers
+/// as cubecl `Handle`s. Dropping a [`Metric`] drops those handles, but
+/// cubecl *pools* the underlying device pages for reuse rather than
+/// freeing them immediately — so the dropped metric's VRAM stays
+/// resident (the plateau a leak-check sees as steady-state). To
+/// actually hand the memory back to the driver you must call this
+/// function **after** dropping the [`Metric`] (or any other live
+/// instance on `backend`):
+///
+/// ```no_run
+/// use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, reclaim_pooled_vram};
+/// let m = Metric::new(MetricKind::Dssim, Backend::Cuda, 256, 256,
+///     MetricParams::default_for(MetricKind::Dssim))?;
+/// // ... score with `m` ...
+/// drop(m);                       // handles → cubecl pool (still resident)
+/// reclaim_pooled_vram(Backend::Cuda); // pool free pages → driver
+/// # Ok::<(), zenmetrics_api::Error>(())
+/// ```
+///
+/// [`Metric::release`] bundles the drop + reclaim into one call.
+///
+/// **Thread/stream scoped.** cubecl's CUDA pool is per-stream and the
+/// stream is keyed on the *calling thread's* id, so this only reclaims
+/// the pool owned by the thread that calls it — call it from the same
+/// thread that dropped the metric.
+///
+/// **Do NOT call while a metric on `backend` is still alive on this
+/// thread, and never between scores of a warm metric** — reclaiming
+/// pages a live binding still references panics the cubecl allocator on
+/// the next dispatch, and it discards the warm working set the next
+/// score would have reused. Intended call sites: after a metric drops,
+/// and at orchestrator metric-swap / idle.
+///
+/// No-op when `backend`'s Cargo feature is disabled in this build.
+/// Best-effort: cubecl frees only the pages its allocator deems
+/// reclaimable.
+#[allow(unused_variables)]
+pub fn reclaim_pooled_vram(backend: Backend) {
+    // All enabled metric crates obtain the same per-(device, thread)
+    // cubecl client for a given backend, so calling any one crate's
+    // reclaim cleans this thread's stream pool for that backend. Prefer
+    // the first enabled crate in a fixed order; the conversion error
+    // (backend disabled in that crate) is swallowed — `reclaim` is a
+    // best-effort hint.
+    #[cfg(feature = "cvvdp")]
+    if let Ok(b) = cvvdp_backend(backend) {
+        cvvdp_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
+    }
+    #[cfg(feature = "butter")]
+    if let Ok(b) = butter_backend(backend) {
+        butteraugli_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
+    }
+    #[cfg(feature = "ssim2")]
+    if let Ok(b) = ssim2_backend(backend) {
+        ssim2_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
+    }
+    #[cfg(feature = "dssim")]
+    if let Ok(b) = dssim_backend(backend) {
+        dssim_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
+    }
+    #[cfg(feature = "iwssim")]
+    if let Ok(b) = iwssim_backend(backend) {
+        iwssim_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
+    }
+    #[cfg(feature = "zensim")]
+    if let Ok(b) = zensim_backend(backend) {
+        zensim_gpu::memory_mode::reclaim_pooled_vram(b);
+        return;
     }
 }

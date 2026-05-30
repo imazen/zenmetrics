@@ -19,6 +19,20 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **VRAM pool reclaim API + audit** (task #150, 2026-05-29). cubecl pools
+  GPU buffers across `Handle` drop, so dropping a `Metric` returns its
+  buffers to the pool free list but the device pages stay resident (the
+  ~3830 MiB plateau task #147 measured). Added `reclaim_pooled_vram(backend)`
+  to every `-gpu` crate's `memory_mode` module and to `zenmetrics-api`
+  (re-exported), plus `Metric::release(backend)` (drop + reclaim). It calls
+  cubecl `ComputeClient::memory_cleanup` then `sync` to flush the CUDA
+  deferred-free queue, returning pooled pages to the driver. Thread/stream
+  scoped (cubecl's CUDA pool is per-thread) — call from the thread that
+  dropped the metric; never between warm scores. Source-level audit of the
+  cubecl memory model + every crate's Drop / cached-ref lifecycle in
+  `crates/zenmetrics-api/docs/VRAM_DROP_AUDIT_2026-05-29.md`. Additive,
+  non-breaking. Audit commit `946593f9`.
+
 - **zenmetrics-orchestrator: cost-model-aware one-shot CPU/GPU routing**
   (task #146, 2026-05-29). The chooser previously ranked every backend
   purely on warm steady-state `ns_per_px`, which makes the GPU look

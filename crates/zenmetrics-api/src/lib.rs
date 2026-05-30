@@ -64,7 +64,7 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
-pub use metric::{Backend, Metric, MetricKind, MetricParams, Score};
+pub use metric::{reclaim_pooled_vram, Backend, Metric, MetricKind, MetricParams, Score};
 
 #[cfg(feature = "cubecl-types")]
 pub use context::MetricContext;
