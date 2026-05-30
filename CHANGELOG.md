@@ -29,6 +29,21 @@ Workspace conventions per the global rules:
   exit 0). Honest scope: orchestration is proven with the synthetic `/bin/cat` executor; a real
   encode/score executor is a defined contract you bake in (the `zen-metrics jobexec` reference impl is
   not yet built).
+- **cvvdp-gpu: wgpu/Metal per-stream VRAM isolation spike (task #153 / issue #17)** (2026-05-30).
+  Throwaway gated example `crates/cvvdp-gpu/examples/wgpu_isolation_spike.rs` (`required-features =
+  ["wgpu"]`) mirroring the CUDA spike (#152) on the cubecl **wgpu** backend — the load-bearing proxy
+  for Metal (no Apple GPU on this WSL2/NVIDIA host; wgpu auto-selected **Vulkan**). **POOL-LEVEL
+  ISOLATION CONFIRMED**: cubecl-wgpu pools are per-stream (`WgpuStream` owns `WgpuMemManager` with 3
+  `MemoryManagement<WgpuStorage>`; streams keyed `stream_id.value % max_streams`, default 128). A's
+  per-stream pool went 1536→0 MiB on drop+`memory_cleanup()` while B's stayed 1536 MiB, then B's went
+  1536→0; partial-page control + cross-thread reclaim both reproduced. Measured via cubecl per-stream
+  `memory_usage()` — nvidia-smi is blind to wgpu/Vulkan here (per-PID AND total, extending #133).
+  Driver-level OS return is wgpu's *lazy* decision (no `cuMemFreeAsync` flush) so not independently
+  observable; pool-level reclaim is the load-bearing, confirmed signal. **Metal hardware confirmation
+  needs a Mac — no Metal numbers fabricated.** Implication for `MetricSession`: ironclad at the pool
+  level on wgpu/Metal, no best-effort `release()` fallback needed. Raw log committed at
+  `crates/cvvdp-gpu/benchmarks/wgpu_isolation_spike_2026-05-30.txt`; verdict written into
+  `crates/zenmetrics-api/docs/VRAM_LIFECYCLE_DESIGN_2026-05-30.md` §2b. No public API changed.
 - **Job system: goal H CLOSED — ≥3 distinct physical providers proven concurrent on one queue**
   (2026-05-30, run `fleet-20260530-124834`). local (workstation) + Hetzner cpx22 (x86 cloud) + Salad
   (CPU container, distributed consumer network) all claimed+executed off ONE R2 lease-queue,

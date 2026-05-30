@@ -1,0 +1,103 @@
+# cubecl WGPU per-stream VRAM isolation spike — task #153
+#
+# Provenance:
+#   repo commit (@):  c75712aa3ad1 (task153 wgpu spike, on top of master a0dd8067)
+#   cubecl fork:      zenforks-cubecl-* 0.10.1 (crates.io), tree 970ad5b5
+#   host:             water-cooled 7950X, RTX 5070 12 GiB, WSL2 (driver 596.21)
+#   wgpu backend:     Vulkan (auto-selected by AutoGraphicsApi on this host;
+#                     printed at runtime via client.info())
+#   command:          cargo run --release -p cvvdp-gpu \
+#                         --no-default-features --features wgpu,cubecl-types \
+#                         --example wgpu_isolation_spike
+#   sampling:         PRIMARY = cubecl-wgpu per-stream pool memory_usage()
+#                     (bytes_reserved / bytes_in_use), the in-API truth of what
+#                     THAT stream's pool holds, sampled AFTER client.sync().
+#                     SECONDARY = nvidia-smi --query-gpu=memory.used (TOTAL card,
+#                     global, all PIDs), + 150ms settle. Every number measured.
+#
+# MEASUREMENT NOTE (load-bearing): nvidia-smi could NOT see the wgpu/Vulkan
+# allocations on this WSL2 host — neither per-PID (--query-compute-apps lists
+# nothing for graphics/Vulkan contexts) NOR via the TOTAL memory.used counter
+# (it moved +3 MiB while 3072 MiB of wgpu buffers were live). This extends the
+# #133 finding (nvidia-smi blind to wgpu allocations) from per-PID to the total
+# card counter under WSL2's WDDM GPU-partition path. Contrast: the CUDA spike
+# (#152) on this SAME box saw nvidia-smi track every alloc, because CUDA contexts
+# ARE enumerated. So on wgpu the per-stream POOL accounting is the authoritative
+# isolation signal — and it is unambiguous.
+#
+# CONCLUSION: per-stream VRAM POOL isolation is REAL on the cubecl wgpu backend,
+# exactly as on CUDA. Each WgpuStream (selected by stream_id.value % max_streams)
+# owns its own WgpuMemManager + 3 MemoryManagement<WgpuStorage> pools. Dropping a
+# context on its own explicit stream + memory_cleanup() returns exactly that
+# stream's pool pages (bytes_reserved -> 0), independent of and without
+# disturbing another stream's pool. Reclaim works cross-thread (explicit
+# stream_id overrides the cubecl thread-local). Sharing a pool page blocks
+# reclaim until ALL occupants drop (the partial-page control). This is the
+# same isolation mechanism #152 proved on CUDA, sharing the same backend-agnostic
+# scheduler + memory-management code in cubecl-runtime.
+#
+# CAVEAT — pool-level vs driver-level: this confirms POOL-level reclaim
+# (the cubecl-wgpu pool releases its pages on cleanup). On CUDA, #152 ALSO
+# confirmed DRIVER-level return (nvidia-smi total dropped) because CUDA does an
+# explicit cuMemFreeAsync + sync flush. On wgpu, WgpuStorage::dealloc just drops
+# the wgpu::Buffer and wgpu reclaims lazily (storage.rs flush: "We don't wait for
+# dealloc"); combined with nvidia-smi's blindness here, DRIVER-level return could
+# not be independently confirmed on this host. The pool-level evidence is strong
+# and sufficient for the MetricSession design question; driver-level return on
+# wgpu is wgpu's responsibility and not independently observable here.
+#
+# METAL: this ran on Vulkan. There is NO Apple GPU on this WSL2/NVIDIA host, so
+# Metal cannot run here. cubecl-wgpu's WgpuMemManager + SchedulerMultiStream pool
+# code is backend-agnostic WITHIN wgpu (the same code serves Metal/Vulkan/DX12),
+# so this Vulkan result is the load-bearing proxy for Metal. Metal HARDWARE
+# confirmation needs a Mac — NO Metal numbers are fabricated here.
+
+== cubecl WGPU per-stream VRAM isolation spike (task #153) ==
+   wgpu backend selected: Vulkan   runtime name: wgpu<wgsl>
+   max_streams=128, each StreamId.value maps to its own WgpuStream + pool
+   PRIMARY signal = per-stream pool memory_usage().bytes_reserved (in-API truth).
+   SECONDARY signal = nvidia-smi TOTAL card memory.used (global; may miss Vulkan per #133).
+
+  baseline nvidia-smi total used = 4635 MiB (global card)
+  per-context target ~= 1536 MiB (24 x 64 MiB)
+
+-- create context A (stream value=101), allocate --
+  [A allocated (A-pool view)         ] pool_reserved=  1536 MiB  in_use=  1536 MiB  | smi_total_Δ=+5 MiB
+-- create context B (stream value=202), allocate --
+  [A+B allocated (B-pool view)       ] pool_reserved=  1536 MiB  in_use=  1536 MiB  | smi_total_Δ=+3 MiB
+  [  (A-pool view, both alive)       ] pool_reserved=  1536 MiB  in_use=  1536 MiB  | smi_total_Δ=+3 MiB
+-- drop A's handles + A.memory_cleanup() + sync --
+  [after drop+cleanup A (A-pool)     ] pool_reserved=     0 MiB  in_use=     0 MiB  | smi_total_Δ=+2 MiB
+  [  (B-pool view, B alive)          ] pool_reserved=  1536 MiB  in_use=  1536 MiB  | smi_total_Δ=+2 MiB
+-- drop B's handles + B.memory_cleanup() + sync --
+  [after drop+cleanup B (B-pool)     ] pool_reserved=     0 MiB  in_use=     0 MiB  | smi_total_Δ=+2 MiB
+
+-- CONTROL: two small allocs may share a page, drop one --
+  [control: both small alive         ] pool_reserved=     8 MiB  in_use=     2 MiB  | smi_total_Δ=+2 MiB
+  [control: dropped 1of2 + cleanup   ] pool_reserved=     8 MiB  in_use=     1 MiB  | smi_total_Δ=+2 MiB
+  [control: dropped 2of2 + cleanup   ] pool_reserved=     0 MiB  in_use=     0 MiB  | smi_total_Δ=+2 MiB
+
+-- THREAD MOBILITY: alloc on worker thread, reclaim on main --
+  [worker-thread alloc (stream 404)  ] pool_reserved=  1536 MiB  in_use=  1536 MiB  | smi_total_Δ=-2 MiB
+  [main-thread reclaim of 404        ] pool_reserved=     0 MiB  in_use=     0 MiB  | smi_total_Δ=-2 MiB
+  cross-thread reclaim freed +1536 MiB pool-reserved (target ~1536) -> THREAD-MOBILE: explicit stream_id overrides thread-local
+
+== VERDICT (pool-level, in-API) ==
+  A-pool reserved after A alloc        +1536 MiB (target ~1536)
+  B-pool reserved after B alloc        +1536 MiB (target ~1536)
+  A-pool reserved while B alive        +1536 MiB (should ≈ A only, NOT A+B) -> per-stream accounting
+  drop+cleanup A freed (A-pool)        +1536 MiB  <- isolated reclaim of A
+  B-pool still reserved after A drop   +1536 MiB (B untouched by A.cleanup)
+  drop+cleanup B freed (B-pool)        +1536 MiB  <- isolated reclaim of B
+
+  POOL-LEVEL ISOLATION: CONFIRMED — A's pool freed independently while B's pool stayed resident, then B freed
+  DRIVER-LEVEL (nvidia-smi total): peak Δ=+3 MiB, after both freed Δ=+2 MiB
+    -> nvidia-smi total did NOT clearly track wgpu allocs (per-PID invisibility per #133 extends to total here). Pool-level signal is the load-bearing one.
+
+  CONTROL partial-page: drop-1of2 freed 0 MiB, drop-2of2 freed 8 MiB
+    (expect ~0 after dropping only 1 of 2 co-resident allocs)
+
+  METAL CAVEAT: this ran on Vulkan (NO Apple GPU on this host). cubecl-wgpu's
+  WgpuMemManager + SchedulerMultiStream pool code is backend-agnostic within wgpu, so
+  this Vulkan/DX12 result is the load-bearing proxy for Metal. Metal HARDWARE confirmation
+  needs a Mac — no Metal numbers are fabricated here.

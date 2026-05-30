@@ -115,6 +115,13 @@ required-features = ["cuda"]
 name = "vram_isolation_spike"
 required-features = ["cuda"]
 
+# THROWAWAY feasibility spike (task #153): per-stream VRAM isolation on
+# the wgpu backend (Metal/Vulkan/DX12 proxy). Not part of the public API;
+# gated behind `wgpu`.
+[[example]]
+name = "wgpu_isolation_spike"
+required-features = ["wgpu"]
+
 [[test]]
 name = "band_weights_invariants"
 required-features = ["cubecl-types"]

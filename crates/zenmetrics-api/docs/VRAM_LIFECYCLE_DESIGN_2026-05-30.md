@@ -1,11 +1,14 @@
-# VRAM lifecycle design — ironclad drop-frees-VRAM + opt-out (task #152)
+# VRAM lifecycle design — ironclad drop-frees-VRAM + opt-out (tasks #152, #153)
 
 **Status: DESIGN PROPOSAL — no public API changed. Awaits user approval
 of a concrete shape before implementation.** Builds directly on the
 source-level audit in [`VRAM_DROP_AUDIT_2026-05-29.md`](VRAM_DROP_AUDIT_2026-05-29.md)
-(task #150) and a **measured** feasibility spike
-(`crates/cvvdp-gpu/examples/vram_isolation_spike.rs`, throwaway, gated
-behind `cuda`).
+(task #150) and two **measured** feasibility spikes:
+`crates/cvvdp-gpu/examples/vram_isolation_spike.rs` (CUDA, task #152,
+gated `cuda`) and `crates/cvvdp-gpu/examples/wgpu_isolation_spike.rs`
+(wgpu/Vulkan as the Metal proxy, task #153 / issue #17, gated `wgpu`) —
+both throwaway. The wgpu spike answers issue #17's open item: per-stream
+pool isolation holds on wgpu too (§2b).
 
 The question the user posed, verbatim: *design an IRONCLAD way for
 dropping a metric to free its VRAM, with an opt-out — or amend the API
@@ -196,6 +199,158 @@ VERDICT:
    one `MemoryManagement` struct (lazy, on first use). This is *not* the
    ~181 ms device-context init (that's the process-global CUDA context +
    PTX, created once per device and shared by all streams).
+
+---
+
+## 2b. wgpu / Metal backend — does the isolation hold there too? (task #153) — MEASURED
+
+The §2 spike proved isolation on the **CUDA** backend. The open question
+for issue **imazen/zenmetrics#17** was whether `MetricSession`'s per-stream
+pool isolation is *ironclad on wgpu/Metal too*, or whether it must fall
+back to best-effort `release()` there. The wgpu spike answers it.
+
+**HARDWARE CAVEAT (stated up front, no fabrication).** This was run on the
+same WSL2 / Windows host with an **NVIDIA RTX 5070** — there is **no Apple
+GPU here**, so Metal cannot run on this box. cubecl-wgpu's memory layer
+(`WgpuMemManager` + the `SchedulerMultiStream` stream pool) is
+**backend-agnostic within wgpu** — the *same* code path serves
+Metal/Vulkan/DX12; the only thing that differs per backend is the shader
+compiler and the underlying `wgpu::Device`. So the spike runs wgpu via its
+**Vulkan** backend (auto-selected by `AutoGraphicsApi` on this host;
+recorded at runtime via `client.info()` → `wgpu::Backend::Vulkan`), and
+that Vulkan result is the **load-bearing proxy for Metal**: if isolation
+works through cubecl-wgpu's abstraction it works on Metal; if it didn't,
+Metal would be out regardless. **Metal *hardware* confirmation needs a
+Mac — no Metal numbers are fabricated.**
+
+### 2b.1 Structural model on wgpu (file:line, `zenforks-cubecl-* 0.10.1`, fork tree 970ad5b5)
+
+The wgpu backend uses the **same** backend-agnostic `ComputeClient<R>`,
+`SchedulerMultiStream`, `StreamPool`, and `MemoryManagement` as CUDA —
+only the storage and the per-stream container differ:
+
+- `ComputeClient::set_stream(StreamId)` — **same method, same crate**
+  (`cubecl-runtime/src/client.rs:97`). It is defined once on the generic
+  client, not per backend. `memory_usage`/`memory_cleanup`/`sync` likewise
+  (`client.rs:930 / 972 / 899`).
+- **Pools are PER-STREAM on wgpu too.** Each `WgpuStream` *owns* a
+  `WgpuMemManager` (`cubecl-wgpu/src/compute/stream.rs:30`), which owns
+  **three** `MemoryManagement<WgpuStorage>` pools — main / staging /
+  uniforms (`cubecl-wgpu/src/compute/mem_manager.rs:20-22`). So an isolated
+  stream → an isolated set of pools, exactly mirroring CUDA's
+  per-`Stream` `MemoryManagement`.
+- **Stream selection is identical:** the `WgpuServer` holds a
+  `SchedulerMultiStream<ScheduledWgpuBackend>` (`server.rs:48`); every op
+  routes through `self.scheduler.stream(&stream_id)` to fetch the
+  per-stream `WgpuStream`. Streams are stored in the same `StreamPool`
+  keyed by `stream_id.value % max_streams`
+  (`cubecl-runtime/src/stream/base.rs:101-103`, default `max_streams=128`,
+  `config/streaming.rs:24`). `WgpuStreamFactory::create()`
+  (`schedule.rs:80`) builds a fresh `WgpuStream` (fresh pools) per slot.
+- `memory_usage(stream_id)` → `stream.mem_manage.memory_usage()`
+  (`server.rs:428`) reports **that stream's pool** `MemoryUsage`
+  (`bytes_in_use`, `bytes_reserved`). This is the per-stream in-API truth.
+- `memory_cleanup(stream_id)` → `stream.mem_manage.memory_cleanup(true)`
+  (`server.rs:434`) → the same `sliced_pool.rs:104-128` "free fully-free
+  pages" code → `WgpuStorage::dealloc` (`storage.rs:113`), which drops the
+  backing `wgpu::Buffer`.
+
+**The one real difference from CUDA — driver-level return is lazy.** On
+CUDA, dropping a buffer enqueues `cuMemFreeAsync` and the spike `sync()`
+flushes it, so the page returns to the driver deterministically (and
+nvidia-smi sees it drop). On wgpu, `WgpuStorage::dealloc` just removes the
+`wgpu::Buffer` from its map (drop), and `WgpuStorage::flush` is a no-op
+with the comment *"We don't wait for dealloc"* (`storage.rs:117-119`) —
+wgpu reclaims the underlying allocation **lazily**, on its own schedule.
+Also note **all wgpu streams share ONE `wgpu::Device` + ONE `wgpu::Queue`**
+(cloned in `schedule.rs:84-85`), whereas CUDA streams are genuinely
+separate streams. So on wgpu the *pool bookkeeping* is per-stream, but the
+*device/queue* underneath is shared.
+
+### 2b.2 The measurement problem (and how it was solved)
+
+The #133 GPU sweep found **nvidia-smi cannot see wgpu/Vulkan allocations**
+per-PID (`--query-compute-apps` lists nothing for graphics/Vulkan
+contexts). The spike confirmed this extends to the **total** card counter
+on WSL2: with **3072 MiB** of wgpu buffers live (two 1536-MiB contexts),
+nvidia-smi `memory.used` total moved **+3 MiB**. (Contrast: the §2 CUDA
+spike on this same box saw nvidia-smi track every allocation, because CUDA
+contexts *are* enumerated.) So nvidia-smi is **not** a usable signal for
+wgpu here.
+
+The spike therefore uses cubecl-wgpu's **own per-stream
+`memory_usage().bytes_reserved`** as the primary signal — the in-API truth
+of what each stream's pool holds on the device — and reports nvidia-smi
+total only as a (negative) secondary corroboration. This is **pool-level**
+evidence (what the cubecl pool reports), which is exactly the level the
+`MetricSession` design needs; **driver-level** OS return is wgpu's job and
+could not be independently confirmed on this host (nvidia-smi blind +
+wgpu defers the free).
+
+### 2b.3 Measured result (Vulkan; raw log: `crates/cvvdp-gpu/benchmarks/wgpu_isolation_spike_2026-05-30.txt`)
+
+Per-context target = 1536 MiB (24 × 64 MiB), pool `bytes_reserved` in MiB:
+
+| step | A-pool reserved | B-pool reserved |
+|---|---|---|
+| A allocated | **1536** | — |
+| B allocated | 1536 (unchanged) | **1536** |
+| A-pool view, both alive | **1536** (A only, NOT 3072) | 1536 |
+| drop+cleanup A | **0** | **1536** (untouched) |
+| drop+cleanup B | 0 | **0** |
+
+1. **Per-stream POOL isolation is REAL on wgpu.** While both A and B were
+   live, A's pool reported **1536 MiB (A's footprint only, not 3072)** —
+   B's allocations went into B's pool, invisible to A's accounting.
+   Cleaning stream 101 dropped A's pool to **0** while stream 202's pool
+   stayed fully resident at **1536**. Then cleaning 202 dropped its pool
+   to 0. This is the exact "drop A frees A, B untouched; drop B frees B"
+   behaviour — same as CUDA, observed at the pool level.
+2. **The shared-page hazard reproduces (control).** Two 1-MiB allocs
+   co-resident on one pool page: dropping one + cleanup freed **0 MiB**
+   (page still partially occupied → retained); dropping the second freed
+   the page (8 MiB). Same page-granular hazard as CUDA.
+3. **Explicit-stream contexts are thread-mobile on wgpu too.** Buffers
+   allocated on a worker thread (stream 404) were reclaimed in full
+   (1536 MiB pool-reserved → 0) from the **main thread** by binding a
+   client to the same explicit stream. The explicit `stream_id` overrides
+   the thread-local (`stream_id.rs`), so a wgpu context that owns an
+   explicit stream is `Send`-safe / thread-mobile, identical to CUDA.
+4. **Driver-level (nvidia-smi total) was uninformative** (+3 MiB peak vs
+   1536 MiB allocated) — the #133 invisibility extends to the total
+   counter under WSL2. Pool-level is the load-bearing signal and it is
+   unambiguous.
+
+### 2b.4 Verdict for #17
+
+- **Per-stream pool isolation: CONFIRMED on wgpu (Vulkan).** Same
+  structural mechanism as CUDA — `set_stream` + per-`WgpuStream`
+  `WgpuMemManager` + `stream_id % max_streams` pool routing — proven by
+  the in-API `memory_usage()` pool accounting. **By backend-agnostic
+  construction within wgpu, this carries to Metal** (Metal shares the
+  identical `WgpuMemManager`/`SchedulerMultiStream` code; only the shader
+  compiler differs). **Metal hardware confirmation still needs a Mac.**
+- **`memory_cleanup` on wgpu reclaims at the POOL level** (releases the
+  pool's pages; `bytes_reserved → 0`), via `WgpuStorage::dealloc` dropping
+  the `wgpu::Buffer`. **Driver/OS-level return is lazy on wgpu** (no
+  `cuMemFreeAsync`-style flush; `storage.rs` "We don't wait for dealloc")
+  and was not independently observable here. This is weaker than CUDA's
+  confirmed driver-level return, but it is still the cubecl pool releasing
+  its claim — which is what `MetricSession` controls.
+
+**Implication for `MetricSession` (Option B):** the isolation design is
+**ironclad at the pool level on wgpu**, the same as on CUDA — a
+`MetricSession` that owns an explicit stream can drop+cleanup its own pool
+without disturbing a sibling session's pool, on Vulkan/DX12 and (by
+construction) Metal. The one honest asterisk is that on wgpu the final
+hand-back to the OS is wgpu's lazy decision rather than a deterministic
+flush; for VRAM-pressure purposes the cubecl pool is emptied (reusable by
+the next allocation on any stream), but a tool measuring *driver* free
+VRAM may see it return later than on CUDA. This does **not** require a
+best-effort `release()` fallback on wgpu — `memory_cleanup()` on the
+session's stream is the correct, isolated reclaim on wgpu just as on CUDA;
+the fallback would only matter if pool-level isolation had failed the
+spike, which it did **not**.
 
 ---
 
@@ -401,6 +556,19 @@ in the `release`/`reclaim_pooled_vram` rustdoc) — they're true today and
 cost nothing, and they make the back-compat free-stream path honest about
 being best-effort.
 
+**Cross-backend (task #153 / issue #17):** Option B is **ironclad at the
+pool level on wgpu too** (Vulkan measured §2b; Metal carries by
+backend-agnostic construction — needs a Mac to confirm hardware-side). The
+SAME `set_stream` + per-stream `WgpuMemManager` + `stream_id % max_streams`
+routing gives `GpuContext` isolated pool reclaim on wgpu. **No best-effort
+`release()`-only fallback is required on wgpu/Metal** — `memory_cleanup()`
+on the session's own stream is the correct isolated reclaim there as on
+CUDA. The single honest asterisk for wgpu: the final hand-back to the OS is
+wgpu's *lazy* decision (no `cuMemFreeAsync`-style flush), so the cubecl pool
+is emptied immediately (reusable by the next alloc) but a *driver*-VRAM
+probe may see the return later than on CUDA. Document this in the wgpu/Metal
+rustdoc for `GpuContext` when Option B ships.
+
 **Keep for back-compat:** the existing `Metric::new` / `*Opaque::new`
 free-stream constructors and `release()` — re-documented as best-effort.
 
@@ -507,9 +675,26 @@ impl Drop for GpuContext {
       while 202 stayed resident; then 202 freed 2336 MiB). Plus measured
       partial-page control (0 MiB freed when sharing a page) and
       cross-thread reclaim (2304 MiB freed from a foreign thread).
+- [x] **wgpu/Metal isolation feasibility (task #153 / issue #17)** — §2b
+      (file:line) + measured on **Vulkan** (no Apple GPU on this WSL2 host;
+      cubecl-wgpu's `WgpuMemManager`/`SchedulerMultiStream` is
+      backend-agnostic within wgpu, so Vulkan is the load-bearing proxy
+      for Metal). **POOL-LEVEL ISOLATION CONFIRMED**: A-pool 1536→0 on
+      cleanup while B-pool stayed 1536, then B-pool 1536→0; partial-page
+      control reproduced; cross-thread reclaim 1536 MiB. Measured via
+      cubecl per-stream `memory_usage()` (nvidia-smi is blind to wgpu/
+      Vulkan here — per-PID AND total, extending #133). Driver-level OS
+      return is wgpu's *lazy* decision (no `cuMemFreeAsync` flush) and was
+      not independently observable. **Metal HARDWARE confirmation needs a
+      Mac — no Metal numbers fabricated.** Spike:
+      `crates/cvvdp-gpu/examples/wgpu_isolation_spike.rs` (gated `wgpu`);
+      raw log: `crates/cvvdp-gpu/benchmarks/wgpu_isolation_spike_2026-05-30.txt`.
 - [x] Design doc with options A/B/C, ironclad analysis each, API sketch
       for the recommendation, "new context type?" answered (yes).
-- [x] NO public API changed; spike is throwaway/gated (`cuda` feature,
-      `examples/`).
+- [x] NO public API changed; spikes are throwaway/gated (`cuda` and `wgpu`
+      features, `examples/`).
 - [ ] Implementation — deferred to user approval of the §6 shape.
+      `MetricSession` is **ironclad at the pool level on wgpu/Metal** (no
+      `release()`-only fallback needed) per §2b; document the wgpu lazy-OS-
+      return asterisk in the `GpuContext` rustdoc when Option B ships.
 ```
