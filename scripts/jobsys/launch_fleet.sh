@@ -12,20 +12,22 @@
 #   - Env: R2 creds at ~/.config/cloudflare/r2-credentials; HCLOUD token at ~/.config/hetzner/credentials;
 #     vastai CLI authed; ssh key zen-arm-dev-20260528 on the Hetzner project.
 #
-# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_X86_BOXES] [VAST_BOXES] [HETZNER_ARM_BOXES]
-#   The ARM tier (Hetzner cax, Ampere) is a distinct CAPABILITY tier from x86 — it runs the same image
-#   only because that image is now a multi-arch manifest (amd64 + arm64). local(x86) + hetzner(x86) +
-#   hetzner-arm(arm64) = 3 concurrent tiers across 2 ISAs on one queue.
+# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_X86] [VAST] [HETZNER_ARM] [SALAD]
+#   Tiers are interchangeable + provider-agnostic; pass 0 for any you don't want. local + Hetzner cpx
+#   (x86 burst) + Hetzner cax (arm64 capability tier, needs the multi-arch image) + vast (burst) +
+#   Salad (distributed consumer-network burst, a distinct provider) — any ≥3 = a heterogeneous fleet on
+#   one R2 queue. e.g. `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers.
 set -euo pipefail
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"
-N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
+N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
+SALAD_ORG="${SALAD_ORGANIZATION:-imazen}"; SALAD_PROJECT="${SALAD_PROJECT:-zenmetrics}"
 BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 RUN="fleet-$(date -u +%Y%m%d-%H%M%S)"
-echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST"
+echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST salad=$N_SALAD"
 
 # 1. mint SCOPED temp creds (object-read-write to this run only; never the root key on remote boxes)
 body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['$RUN/']}))")
@@ -92,6 +94,48 @@ for i in $(seq 1 "$N_VAST"); do
     --env "$(envblock vast-$i | tr '\n' ' ') -e ZEN_WORKER=vast-$i" >/dev/null 2>&1 \
     && echo "vast-$i launched on offer $OFFER" || echo "vast-$i FAILED on $OFFER"
 done
+
+# 3d. Salad burst tier — a CPU-only container group on Salad's distributed consumer network (a distinct
+# provider from local/Hetzner/vast). The PUBLIC baked image needs no registry auth; the entrypoint
+# claims off the same R2 queue (we do NOT use Salad's managed queue). Group name = $RUN-salad (DNS-style).
+if [ "$N_SALAD" -gt 0 ]; then
+  SALAD_KEY=$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')
+  AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$MANIFEST" CTLKEY="$CTLKEY" \
+  IMAGE="$IMAGE" N_SALAD="$N_SALAD" SALAD_KEY="$SALAD_KEY" SALAD_ORG="$SALAD_ORG" SALAD_PROJECT="$SALAD_PROJECT" \
+  python3 - <<'PY'
+import json, os, urllib.request
+env = {
+  "AWS_ACCESS_KEY_ID": os.environ["AK"], "AWS_SECRET_ACCESS_KEY": os.environ["SK"],
+  "AWS_SESSION_TOKEN": os.environ["ST"], "AWS_REGION": "auto",
+  "ZEN_R2_ENDPOINT": os.environ["EP"], "ZEN_BUCKET": os.environ["BUCKET"], "ZEN_RUN": os.environ["RUN"],
+  "ZEN_MANIFEST_URI": os.environ["MANIFEST"], "ZEN_PROVIDER": "salad", "ZEN_EXEC": "/bin/cat",
+  "ZEN_SPEC_THRESHOLD_SECS": "20", "ZEN_CONTROL_KEY": os.environ["CTLKEY"], "ZEN_IDLE_PASSES": "8",
+  "ZEN_WORKER": "salad-1",
+}
+body = {
+  "name": os.environ["RUN"] + "-salad",
+  "container": {
+    "image": os.environ["IMAGE"],
+    "resources": {"cpu": 2, "memory": 4096},   # CPU-only: no gpu_classes
+    "environment_variables": env,
+  },
+  "replicas": int(os.environ["N_SALAD"]),
+  "restart_policy": "never",      # one-shot: come up, drain its share, exit (no thrash-restart)
+  "autostart_policy": True,
+}
+url = "https://api.salad.com/api/public/organizations/%s/projects/%s/containers" % (
+  os.environ["SALAD_ORG"], os.environ["SALAD_PROJECT"])
+req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+  headers={"Salad-Api-Key": os.environ["SALAD_KEY"], "Content-Type": "application/json"})
+try:
+  r = urllib.request.urlopen(req, timeout=30)
+  print("salad group %s-salad created (%d replica)" % (os.environ["RUN"], int(os.environ["N_SALAD"])))
+except urllib.error.HTTPError as e:
+  print("salad FAILED: HTTP %d %s" % (e.code, e.read().decode()[:200]))
+except Exception as e:
+  print("salad FAILED: %s" % e)
+PY
+fi
 
 # 4. resume — let every tier race the queue at once. Wait for boxes to boot first (Hetzner ~60s,
 # vast ~2-3min); workers idle on the pause until now, then all start claiming together.

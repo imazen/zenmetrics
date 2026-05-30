@@ -19,6 +19,13 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: Salad fleet tier (goal H, distinct provider)** (2026-05-30). `launch_fleet.sh` gains a
+  5th arg `SALAD` that creates a CPU-only Salad container group (org `imazen`/project `zenmetrics`,
+  env-overridable) running the public baked image — a distinct provider from local/Hetzner/vast on
+  Salad's distributed consumer network, claiming off the same R2 queue (not Salad's managed queue;
+  `restart_policy:never` so it drains its share and exits). `teardown_fleet.sh` DELETEs the group.
+  `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers on one queue. Salad API key live,
+  verified against `organizations/imazen/gpu-classes` (HTTP 200).
 - **Job system: multi-arch (amd64 + arm64) fleet-worker image (goal H "Oracle ARM (free)" + ARM
   capability)** (2026-05-30). The worker image was x86-only, so the named free Oracle ARM tier and a
   Hetzner cax ARM box literally could not run it. `crates/zen-jobworker/Dockerfile` now selects the
