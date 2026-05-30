@@ -98,10 +98,11 @@ done
 # 3d. Salad burst tier — a CPU-only container group on Salad's distributed consumer network (a distinct
 # provider from local/Hetzner/vast). The PUBLIC baked image needs no registry auth; the entrypoint
 # claims off the same R2 queue (we do NOT use Salad's managed queue). Group name = $RUN-salad (DNS-style).
-# NOTE (2026-05-30): Salad's API GETs pass but the create POST sits behind a Cloudflare managed challenge
-# that 403s ALL headless clients (urllib here, curl, AND reqwest) from a flagged IP — "Attention
-# Required! | Cloudflare". If this block fires, run from a clean IP / CI, or create the group in the
-# portal. `cargo run -p zen-cloud-salad --example fleet_create` is the reqwest equivalent of this POST.
+# NOTE (2026-05-30): Salad's API is behind Cloudflare. Its managed WAF 403s ("Attention Required!") any
+# request BODY containing a "/bin/…" path — a command-injection rule — which is why ZEN_EXEC is omitted
+# below (root-caused by bisection: body with ZEN_EXEC=/bin/cat -> 403, without -> 201; client/IP-agnostic
+# across urllib, curl, reqwest). `cargo run -p zen-cloud-salad --example fleet_create` is the reqwest
+# equivalent of this POST if you need to (re)create a group by hand.
 if [ "$N_SALAD" -gt 0 ]; then
   SALAD_KEY=$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')
   AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$MANIFEST" CTLKEY="$CTLKEY" \
@@ -112,9 +113,13 @@ env = {
   "AWS_ACCESS_KEY_ID": os.environ["AK"], "AWS_SECRET_ACCESS_KEY": os.environ["SK"],
   "AWS_SESSION_TOKEN": os.environ["ST"], "AWS_REGION": "auto",
   "ZEN_R2_ENDPOINT": os.environ["EP"], "ZEN_BUCKET": os.environ["BUCKET"], "ZEN_RUN": os.environ["RUN"],
-  "ZEN_MANIFEST_URI": os.environ["MANIFEST"], "ZEN_PROVIDER": "salad", "ZEN_EXEC": "/bin/cat",
+  "ZEN_MANIFEST_URI": os.environ["MANIFEST"], "ZEN_PROVIDER": "salad",
   "ZEN_SPEC_THRESHOLD_SECS": "20", "ZEN_CONTROL_KEY": os.environ["CTLKEY"], "ZEN_IDLE_PASSES": "8",
   "ZEN_WORKER": "salad-1",
+  # NB: do NOT set ZEN_EXEC here. Salad's API is behind Cloudflare, whose managed ruleset 403s any
+  # request body containing a "/bin/…" command path (command-injection rule). Confirmed 2026-05-30:
+  # body with ZEN_EXEC=/bin/cat -> 403 CF challenge; same body without it -> 201. The entrypoint
+  # defaults ZEN_EXEC to /bin/cat inside the container, so omitting it here is behavior-identical.
 }
 body = {
   "name": os.environ["RUN"] + "-salad",

@@ -26,10 +26,12 @@ Workspace conventions per the global rules:
   `restart_policy:never` so it drains its share and exits). `teardown_fleet.sh` DELETEs the group.
   `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers on one queue. Salad API key live,
   verified against `organizations/imazen/gpu-classes` (HTTP 200). Added
-  `crates/zen-cloud-salad/examples/fleet_create.rs` — the reqwest create path. **Measured blocker:**
-  Salad's create POST currently sits behind a Cloudflare managed challenge that 403s every headless
-  client (urllib, curl, reqwest) from this flagged IP ("Attention Required! | Cloudflare") while GETs
-  pass — so the live 3rd-tier proof needs a clean IP / CI / portal create; the tier code is ready.
+  `crates/zen-cloud-salad/examples/fleet_create.rs` — the reqwest create path. **WAF gotcha, root-caused
+  + fixed:** Salad's API is behind Cloudflare, whose managed ruleset 403s ("Attention Required!") any
+  request body containing a `/bin/…` command path (command-injection rule). Bisected: body with
+  `ZEN_EXEC=/bin/cat` → 403, identical body without → 201 (client/IP-agnostic across urllib/curl/
+  reqwest). Fix: omit `ZEN_EXEC` from the Salad env — the entrypoint defaults it to `/bin/cat` inside
+  the container, so it's behavior-identical and passes the WAF.
 - **Job system: multi-arch (amd64 + arm64) fleet-worker image (goal H "Oracle ARM (free)" + ARM
   capability)** (2026-05-30). The worker image was x86-only, so the named free Oracle ARM tier and a
   Hetzner cax ARM box literally could not run it. `crates/zen-jobworker/Dockerfile` now selects the
