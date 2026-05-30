@@ -281,6 +281,38 @@ pub fn write_ledger_uri(uri: &str, rows: &[LedgerRow], endpoint: Option<&str>) -
     }
 }
 
+/// Read a blob index from a local path or `s3://` URI (downloads via s5cmd for `s3://`).
+pub fn read_blob_index_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<BlobIndexEntry>, LedgerError> {
+    if uri.starts_with("s3://") {
+        let ep = endpoint
+            .ok_or_else(|| LedgerError::Io("s3:// blob index requires an R2 endpoint".into()))?;
+        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("zenledger_bi_{}_{}.parquet", std::process::id(), n));
+        s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
+        let r = read_blob_index(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        r
+    } else {
+        read_blob_index(Path::new(uri))
+    }
+}
+
+/// Read raw bytes from a local path or `s3://` URI — for small JSON sidecars (e.g. workers.json).
+pub fn read_bytes_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<u8>, LedgerError> {
+    if uri.starts_with("s3://") {
+        let ep = endpoint
+            .ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
+        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("zenledger_rb_{}_{}.bin", std::process::id(), n));
+        s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
+        let b = std::fs::read(&tmp).map_err(|e| LedgerError::Io(format!("read temp: {e}")));
+        let _ = std::fs::remove_file(&tmp);
+        b
+    } else {
+        std::fs::read(Path::new(uri)).map_err(|e| LedgerError::Io(format!("read {uri}: {e}")))
+    }
+}
+
 // ---- blob index ----
 
 fn blob_index_schema() -> SchemaRef {

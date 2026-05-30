@@ -11,7 +11,6 @@
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -68,8 +67,8 @@ fn load() -> Result<DashData, zen_jobdash::DashError> {
         .map(|s| s.split(',').filter(|p| !p.is_empty()).map(String::from).collect())
         .unwrap_or_default();
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    let blob = std::env::var("ZEN_BLOB_INDEX").ok().map(PathBuf::from);
-    let workers = std::env::var("ZEN_WORKERS_JSON").ok().map(PathBuf::from);
+    let blob = std::env::var("ZEN_BLOB_INDEX").ok();
+    let workers = std::env::var("ZEN_WORKERS_JSON").ok();
     DashData::from_sources(&ledger, endpoint.as_deref(), blob.as_deref(), workers.as_deref())
 }
 
