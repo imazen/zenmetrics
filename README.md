@@ -267,10 +267,10 @@ measured separately:
   first time it runs. On the CPU backend this term is ≈ 0 (no device
   handshake — it starts computing immediately).
 - **`per_ref`** — paid **once per distinct reference image** you cache via
-  `set_reference` / `warm_reference`: the metric's reference-side
-  precompute. For 5 of 6 metrics a new reference re-pays this cost; butter
-  is the exception (its first reference is dear, subsequent ones reuse the
-  buffers and are nearly free).
+  `set_reference_srgb_u8` (cvvdp: `warm_reference_srgb`): the metric's
+  reference-side precompute. Every new reference re-pays this cost; budget
+  one `per_ref` per distinct reference. iwssim's first ref at large sizes
+  runs ~3× a subsequent ref (a one-time warmup, not per-ref).
 - **`per_dist`** — paid **once per scored distorted image** against a warm
   cached reference: `score_with_warm_ref(dist)`, the steady-state per-call
   wall.
@@ -285,7 +285,7 @@ is paid once and shared across every metric and every pair scored in that
 process — which is exactly why
 [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) keeps one
 long-lived warm worker. The full warmth-scope analysis (which transitions
-re-pay which component, with the butter / iwssim allocation exceptions) is in
+re-pay which component, and the iwssim first-ref warmup) is in
 [`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](docs/GPU_INPROCESS_WARMTH_2026-05-29.md).
 
 All numbers below are measured medians; no value is interpolated or
@@ -322,13 +322,18 @@ N>1 after the box has run any GPU job).
 
 ### `per_ref` — cache a reference once
 
-API: `set_reference` / `warm_reference` /
-`Ssimulacra2Reference::new` / `Zensim::precompute_reference` /
-`ButteraugliReference::new`. Source:
+API (umbrella): `Metric::set_reference_srgb_u8(ref)`. Per-crate this is
+`set_reference_srgb_u8` (butter / ssim2 / dssim / iwssim / zensim) or
+`warm_reference_srgb` (cvvdp). Source:
 [`benchmarks/gpu_inprocess_warmth_2026-05-29.tsv`](benchmarks/gpu_inprocess_warmth_2026-05-29.tsv)
 Q3 rows (`setref1` = first reference on a warm instance, `setref2` = a
-*different-pixel* second reference, each followed by `block_on(client.sync())`).
-Host: RTX 5070, cuda, no `-C target-cpu=native`.
+*different-pixel* second reference, each followed by
+`block_on(client.sync())`). The butter row is refreshed from the
+clean re-measure
+[`crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv`](crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv)
+(task #148 — `setref1` on a fully warm instance, median of 8, transient
+pool-growth outliers excluded). Host: RTX 5070, cuda, no
+`-C target-cpu=native`.
 
 | Metric | first ref `setref1` 512² (ms) | new ref `setref2` 512² (ms) | first ref `setref1` 16 MP (ms) | new ref `setref2` 16 MP (ms) |
 |---|---|---|---|---|
@@ -337,14 +342,17 @@ Host: RTX 5070, cuda, no `-C target-cpu=native`.
 | `dssim-gpu` | 2.16 | 2.02 | 19.91 | 20.31 |
 | `iwssim-gpu` | 2.81 | 1.89 | 196.51 | 67.40 |
 | `zensim-gpu` | 0.58 | 0.48 | 14.73 | 13.95 |
-| `butteraugli-gpu` | **34.28** | **0.76** | **3990.41** | **21.64** |
+| `butteraugli-gpu` | 0.84 | 0.83 | 22.16 | 22.48 |
 
-For 5 of 6 metrics `setref2 ≈ setref1` — caching a new reference is **not**
-free; budget one `per_ref` per distinct reference. **butter is the
-exception**: its first reference eagerly allocates the full reference working
-set (34 ms @512², 3990 ms @16 MP), but a subsequent new reference reuses
-those buffers and costs only 0.76 ms @512² / 21.64 ms @16 MP — a 45× / 184×
-drop. iwssim shows a milder version at 16 MP (196 → 67 ms).
+For all six metrics `setref2 ≈ setref1` — caching a new reference is
+**not** free; budget one `per_ref` per distinct reference. The earlier
+profile recorded a huge butter first-ref cost (34 ms @512², 3990 ms
+@16 MP); the task #148 clean re-measure isolated that to **first-instance
+allocation + JIT** (which `process_start` already accounts for), not the
+per-reference cost — on a warm instance butter's `setref1` is 0.84 ms
+@512² / 22.16 ms @16 MP, in line with the other metrics. iwssim is the
+one remaining size-sensitive case: at 16 MP its first ref (196.5 ms)
+runs ~3× a subsequent ref (67.4 ms).
 
 ### `per_dist` — warm per-call score against a cached reference
 
