@@ -17,6 +17,7 @@ use std::io::{self, Write as _};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use zen_job_core::{
     reconcile, sha256, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView, RetryPolicy,
@@ -175,6 +176,51 @@ pub fn try_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) 
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+/// Release (delete) a claim so the job requeues immediately — used on spot preemption (goal F:
+/// "spot reclaim is a non-event") instead of waiting out the claim TTL. Best-effort: a failed delete
+/// just falls back to the slower TTL-based stale-reclaim (goal E), so correctness never depends on it.
+pub fn release_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &JobId) -> bool {
+    let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
+    aws_s3api(endpoint)
+        .arg("delete-object")
+        .arg("--bucket")
+        .arg(bucket)
+        .arg("--key")
+        .arg(&key)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Install the spot-preemption handler (goal F): on SIGTERM/SIGINT, release the in-flight claim (if
+/// any) so the job requeues immediately, then exit. Runs on a dedicated signal-hook thread (safe to
+/// spawn `aws`). No-op if signal registration fails (falls back to TTL reclaim, goal E).
+fn spawn_spot_reclaim(inflight: Arc<Mutex<Option<JobId>>>, endpoint: &str, bucket: &str, prefix: &str) {
+    let (endpoint, bucket, prefix) = (endpoint.to_string(), bucket.to_string(), prefix.to_string());
+    let Ok(mut signals) =
+        signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM, signal_hook::consts::SIGINT])
+    else {
+        return;
+    };
+    std::thread::spawn(move || {
+        if signals.forever().next().is_some() {
+            if let Some(id) = inflight.lock().ok().and_then(|g| g.clone()) {
+                let released = release_claim_r2(&endpoint, &bucket, &prefix, &id);
+                eprintln!(
+                    "zen-jobworker: spot preemption — {} claim {} for fast requeue",
+                    if released { "released" } else { "could not release" },
+                    id.as_str()
+                );
+            } else {
+                eprintln!("zen-jobworker: spot preemption — no in-flight claim to release");
+            }
+            std::process::exit(130);
+        }
+    });
 }
 
 static CLAIM_TMP_N: AtomicU64 = AtomicU64::new(0);
@@ -468,15 +514,34 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
         Some(t) => {
             let store = R2BlobStore::new(t.endpoint.clone(), t.bucket.clone(), t.prefix.clone());
             match &cfg.claims {
-                Some(cc) => execute_gap_claimed(
-                    &desired,
-                    &view,
-                    policy,
-                    |job| exec_command(&cfg.exec, job),
-                    &store,
-                    |id| claim_or_steal_r2(&t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs, &cfg.worker),
-                    ctx,
-                ),
+                Some(cc) => {
+                    // Spot-reclaim (goal F): track the in-flight claim; on SIGTERM/SIGINT (spot
+                    // preemption) release it so the job requeues immediately instead of waiting out
+                    // the TTL. The signal runs on a dedicated signal-hook thread, so spawning `aws`
+                    // to delete the claim is safe (not an async-signal handler). Best-effort — if the
+                    // release misses, TTL stale-reclaim (goal E) still requeues it.
+                    let inflight: Arc<Mutex<Option<JobId>>> = Arc::new(Mutex::new(None));
+                    spawn_spot_reclaim(inflight.clone(), &t.endpoint, &cc.bucket, &cc.prefix);
+                    execute_gap_claimed(
+                        &desired,
+                        &view,
+                        policy,
+                        |job| exec_command(&cfg.exec, job),
+                        &store,
+                        |id| {
+                            let won = claim_or_steal_r2(
+                                &t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs, &cfg.worker,
+                            );
+                            if won {
+                                if let Ok(mut g) = inflight.lock() {
+                                    *g = Some(id.clone());
+                                }
+                            }
+                            won
+                        },
+                        ctx,
+                    )
+                }
                 None => execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx),
             }
         }

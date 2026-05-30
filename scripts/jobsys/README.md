@@ -29,5 +29,25 @@ bash scripts/jobsys/demo_e2e_r2.sh        # KEEP=1 to retain the R2 prefix
 - **Foundations.** Pass 1 wrote 4 **content-addressed** blobs (`<prefix>/blobs/<sha256>`), a columnar
   **Parquet** ledger (`pass1.parquet`, 4.8 KB), and claim objects — all in R2.
 
-The dashboard side of these same guarantees (coverage/catalog, progress, cost) is live at the Railway
-deployment; see `crates/zen-jobdash`.
+## `demo_spot_reclaim_r2.sh` — goal F (spot reclaim is a non-event)
+
+Reproduces spot preemption with a local `kill -TERM` (a SIGTERM is the same whether it comes from
+vast.ai/spot or a local kill). Starts a worker on a deliberately-slow job, sends SIGTERM mid-execution,
+and shows the in-flight R2 claim is **released** (deleted) so the job requeues immediately instead of
+waiting out the claim TTL.
+
+```bash
+bash scripts/jobsys/demo_spot_reclaim_r2.sh        # KEEP=1 to retain the R2 prefix
+```
+
+### What it proves (verified run 2026-05-30)
+
+- A worker claims the job (1 claim object in R2) and begins executing.
+- `kill -TERM` → the signal-hook thread releases the claim and exits 130
+  (`zen-jobworker: spot preemption — released claim <id> for fast requeue`).
+- Claims in R2 drop to **0**; `gap` still shows the job (**requeued, not lost**); a fresh worker then
+  completes it. Best-effort: if the release misses, TTL stale-reclaim (goal E) still requeues it, so
+  correctness never depends on the signal landing.
+
+The dashboard side of these same guarantees (coverage/catalog, progress, cost, kill, stop-spend) is
+live at the Railway deployment; see `crates/zen-jobdash`.

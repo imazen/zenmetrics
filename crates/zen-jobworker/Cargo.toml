@@ -24,3 +24,6 @@ thiserror = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
 image = { workspace = true }
+# Spot-preemption (SIGTERM) handling so a reclaimed box releases its in-flight claim for fast
+# requeue instead of waiting out the claim TTL (goal F).
+signal-hook = "0.4.4"

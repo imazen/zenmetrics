@@ -19,6 +19,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **zen-jobworker: spot-preemption claim release (goal F)** (2026-05-29). On SIGTERM/SIGINT a worker
+  with R2 claims now releases its in-flight claim (`release_claim_r2`) on a dedicated signal-hook
+  thread and exits 130, so a reclaimed spot box requeues its job immediately instead of waiting out
+  the claim TTL. Best-effort — TTL stale-reclaim (goal E) remains the correctness fallback. Live demo
+  `scripts/jobsys/demo_spot_reclaim_r2.sh`; plus `scripts/jobsys/demo_e2e_r2.sh` demonstrating goals
+  A/E/I + foundations end-to-end against an isolated R2 prefix.
 - **zen-jobdash: shadcn control-plane SPA + auth + fleet actuation** (2026-05-29).
   Replaced the inline-HTML dashboard with a React + Vite + Tailwind v4 + shadcn/ui
   SPA (built in a Docker node stage, served by axum). Adds HTTP Basic Auth gated on
