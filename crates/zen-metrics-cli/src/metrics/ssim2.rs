@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! CPU SSIMULACRA2 via the `ssimulacra2` crate. The metric expects
-//! `LinearRgb`; we go through the re-exported `Rgb` so we use the same
-//! `yuvxyb` version `ssimulacra2` was built against.
+//! CPU SSIMULACRA2 via Imazen's local `fast-ssim2` crate (our SIMD SSIMULACRA2 implementation),
+//! replacing the third-party `ssimulacra2` crate so the ssim2 score builds from local source
+//! ("scores use local, crates versions banned"). `fast-ssim2`'s `imgref` feature provides the
+//! `ToLinearRgb` impl for `ImgRef<[u8;3]>`, treating the 8-bit input as sRGB — same color
+//! interpretation as the prior path (sRGB transfer, BT.709 primaries).
 
 use crate::decode::Rgb8Image;
 
@@ -10,35 +12,22 @@ pub fn score(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
-    let lin_ref = to_linear_rgb(reference)?;
-    let lin_dst = to_linear_rgb(distorted)?;
-    let s = ssimulacra2::compute_frame_ssimulacra2(lin_ref, lin_dst)
-        .map_err(|e| format!("ssimulacra2: {e:?}"))?;
+    let r = to_img(reference)?;
+    let d = to_img(distorted)?;
+    let s = fast_ssim2::compute_ssimulacra2(r.as_ref(), d.as_ref())
+        .map_err(|e| format!("fast-ssim2: {e:?}"))?;
     Ok(s)
 }
 
-fn to_linear_rgb(img: &Rgb8Image) -> Result<ssimulacra2::LinearRgb, Box<dyn std::error::Error>> {
-    if img.width == 0 || img.height == 0 {
-        return Err("ssimulacra2: image has zero dimension".into());
+/// Pack the decoder's flat RGB8 buffer into an `ImgVec<[u8; 3]>` (sRGB) that fast-ssim2 accepts.
+fn to_img(img: &Rgb8Image) -> Result<imgref::ImgVec<[u8; 3]>, Box<dyn std::error::Error>> {
+    let (w, h) = (img.width as usize, img.height as usize);
+    if w == 0 || h == 0 {
+        return Err("ssim2: image has zero dimension".into());
     }
-    let w = img.width as usize;
-    let h = img.height as usize;
-    let mut data = Vec::with_capacity(img.pixels.len() / 3);
-    for chunk in img.pixels.chunks_exact(3) {
-        data.push([
-            chunk[0] as f32 / 255.0,
-            chunk[1] as f32 / 255.0,
-            chunk[2] as f32 / 255.0,
-        ]);
+    if img.pixels.len() != w * h * 3 {
+        return Err("ssim2: pixel buffer is not packed w*h*3 RGB8".into());
     }
-    let rgb = ssimulacra2::Rgb::new(
-        data,
-        w,
-        h,
-        ssimulacra2::TransferCharacteristic::SRGB,
-        ssimulacra2::ColorPrimaries::BT709,
-    )
-    .map_err(|e| format!("ssimulacra2::Rgb::new: {e:?}"))?;
-    ssimulacra2::LinearRgb::try_from(rgb)
-        .map_err(|e| format!("ssimulacra2::LinearRgb::try_from: {e:?}").into())
+    let px: Vec<[u8; 3]> = img.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    Ok(imgref::ImgVec::new(px, w, h))
 }

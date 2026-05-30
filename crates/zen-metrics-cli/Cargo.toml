@@ -51,7 +51,7 @@ jxl = ["dep:zenjxl"]
 cpu-metrics = [
     "dep:butteraugli",
     "dep:zensim",
-    "dep:ssimulacra2",
+    "dep:fast-ssim2",
     "dep:dssim-core",
     "dep:rgb",
     "dep:imgref",
@@ -248,7 +248,9 @@ butteraugli = { version = "0.9.2", optional = true }
 # 0.3.0 adds principled per-channel H-blur activity for masked/IW features
 # (feat/principled-activity branch). 0.2.8 added `Zensim::compute_extended_features()`.
 zensim = { version = "0.3.0", optional = true }
-ssimulacra2 = { version = "0.5.1", optional = true }
+# ssim2 metric uses Imazen's local fast-ssim2 (our SIMD SSIMULACRA2), NOT the third-party crates.io
+# `ssimulacra2` ("scores use local, crates versions banned"). Local sibling, not the published 0.8.1.
+fast-ssim2 = { path = "../../../fast-ssim2/fast-ssim2", optional = true, features = ["imgref"] }
 dssim-core = { workspace = true, optional = true }
 rgb = { version = "0.8", optional = true }
 imgref = { version = "1", optional = true }
