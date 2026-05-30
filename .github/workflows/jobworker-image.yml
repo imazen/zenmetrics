@@ -1,8 +1,15 @@
 name: Job-worker fleet image
 
-# Builds the ready-to-run zen-jobworker fleet image (goal H). The Dockerfile builds the binary inside
-# from the trimmed Cargo.deploy.toml (no sibling/CUDA deps), then bakes aws-cli v2 + s5cmd + a
-# keep-alive entrypoint. A fleet box pulls this and claims work with zero boot-time installs.
+# Builds the ready-to-run zen-jobworker fleet image (goal H) as a MULTI-ARCH manifest (amd64 + arm64).
+# The Dockerfile builds the binary inside from the trimmed Cargo.deploy.toml (no sibling/CUDA deps),
+# then bakes aws-cli v2 + s5cmd + a keep-alive entrypoint. A fleet box pulls this and claims work with
+# zero boot-time installs.
+#
+# Each arch builds NATIVELY on its own runner (ubuntu-latest for amd64, ubuntu-24.04-arm for arm64 —
+# free on this public repo) and pushes by digest; a merge job stitches the two digests into one
+# manifest. Native beats QEMU here: emulated arm64 compilation of arrow/parquet (zstd-sys, lz4, cmake)
+# would run for tens of minutes. arm64 support is what lets the named Oracle ARM (free) + Hetzner cax
+# ARM tiers join the fleet — `docker run ghcr.io/imazen/zen-jobworker` now resolves per-host arch.
 #
 # Tags: ghcr.io/imazen/zen-jobworker:<sha> (every push) + :latest (master).
 
@@ -22,9 +29,19 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-image:
-    name: Build + push job-worker image
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
     permissions:
       contents: read
       packages: write
@@ -37,31 +54,80 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Compute tags
-        id: tags
-        run: |
-          SHA=$(git rev-parse --short HEAD)
-          T="${IMAGE_NAME}:${SHA}"
-          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            T="${T},${IMAGE_NAME}:latest"
-          fi
-          echo "tags=$T" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-      - name: Build + push
+      - name: Build + push by digest
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: crates/zen-jobworker/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+          platforms: ${{ matrix.platform }}
+          # Push an untagged, by-digest image per arch; the merge job assembles the tagged manifest.
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.arch }},mode=max
           provenance: false
-      - name: Verify pushed image
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge multi-arch manifest + verify
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute tags
+        id: tags
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Create manifest list
+        working-directory: /tmp/digests
         run: |
           SHA="${{ steps.tags.outputs.sha }}"
-          docker run --rm --entrypoint /usr/local/bin/zen-jobworker "${IMAGE_NAME}:${SHA}" --help | grep -q control-r2-key
-          docker run --rm --entrypoint /usr/local/bin/zen-jobgc     "${IMAGE_NAME}:${SHA}" --help | grep -q blob-index
-          docker run --rm --entrypoint /usr/local/bin/aws           "${IMAGE_NAME}:${SHA}" --version
-          docker run --rm --entrypoint /usr/local/bin/s5cmd         "${IMAGE_NAME}:${SHA}" version
-          echo "image OK: ${IMAGE_NAME}:${SHA}"
+          TAGS="-t ${IMAGE_NAME}:${SHA}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS="$TAGS -t ${IMAGE_NAME}:latest"
+          fi
+          docker buildx imagetools create $TAGS \
+            $(for d in *; do echo "${IMAGE_NAME}@sha256:$d"; done)
+      - name: Inspect manifest (assert amd64 + arm64 present)
+        run: |
+          SHA="${{ steps.tags.outputs.sha }}"
+          docker buildx imagetools inspect "${IMAGE_NAME}:${SHA}" | tee /tmp/inspect.txt
+          grep -q 'linux/amd64' /tmp/inspect.txt
+          grep -q 'linux/arm64' /tmp/inspect.txt
+          echo "multi-arch manifest OK: ${IMAGE_NAME}:${SHA}"
+      - name: Verify amd64 binaries run
+        run: |
+          SHA="${{ steps.tags.outputs.sha }}"
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zen-jobworker "${IMAGE_NAME}:${SHA}" --help | grep -q control-r2-key
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/zen-jobgc     "${IMAGE_NAME}:${SHA}" --help | grep -q blob-index
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/aws           "${IMAGE_NAME}:${SHA}" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/s5cmd         "${IMAGE_NAME}:${SHA}" version
+          echo "amd64 image OK: ${IMAGE_NAME}:${SHA}"

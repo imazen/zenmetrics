@@ -3,6 +3,11 @@
 # the entrypoint just claims work off the R2 queue. (The 2026-05-30 ad-hoc test hit two bugs this
 # image designs out: python-unzip dropping the aws exec bit, and a container with no keep-alive.)
 #
+# MULTI-ARCH (amd64 + arm64): the base images are already multi-arch and the build stage compiles
+# natively per arch; the only arch-specific bits are the s5cmd + aws-cli downloads, selected by the
+# buildx-provided TARGETARCH below. arm64 is what lets the named Oracle ARM (free) and Hetzner cax ARM
+# tiers join the fleet. The CI workflow builds each arch on its own native runner (no QEMU).
+#
 # Build context = repo root. Builds from the trimmed Cargo.deploy.toml (no sibling/CUDA deps).
 
 FROM rust:1-slim-bookworm AS build
@@ -17,10 +22,18 @@ RUN cp Cargo.deploy.toml Cargo.toml && rm -f Cargo.lock && \
 FROM debian:bookworm-slim
 # Bake the S3 tooling the worker shells out to. unzip is used ONCE here (preserving the aws exec bit —
 # the thing python-unzip got wrong) and removed; tar is essential (do not purge it).
+# TARGETARCH is set by buildx (amd64 / arm64) so the same Dockerfile produces a native image on each
+# arch of the multi-arch manifest — required for the named Oracle ARM (free) + Hetzner cax ARM tiers.
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && \
-    curl -fsSL https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_Linux-64bit.tar.gz \
+    case "$TARGETARCH" in \
+      amd64) S5_ARCH="Linux-64bit"; AWS_ARCH="x86_64" ;; \
+      arm64) S5_ARCH="Linux-arm64"; AWS_ARCH="aarch64" ;; \
+      *)     echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/peak/s5cmd/releases/download/v2.2.2/s5cmd_2.2.2_${S5_ARCH}.tar.gz" \
       | tar -xz -C /usr/local/bin s5cmd && \
-    curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/aws.zip && \
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/aws.zip && \
     unzip -q /tmp/aws.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws.zip /tmp/aws && \
     apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/target/release/zen-jobworker /usr/local/bin/zen-jobworker

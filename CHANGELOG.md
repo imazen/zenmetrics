@@ -19,6 +19,14 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: multi-arch (amd64 + arm64) fleet-worker image (goal H "Oracle ARM (free)" + ARM
+  capability)** (2026-05-30). The worker image was x86-only, so the named free Oracle ARM tier and a
+  Hetzner cax ARM box literally could not run it. `crates/zen-jobworker/Dockerfile` now selects the
+  s5cmd + aws-cli downloads by buildx `TARGETARCH` (the bases + Rust build stage were already
+  arch-native), and `jobworker-image.yml` builds each arch on its own native runner (`ubuntu-latest`
+  amd64, `ubuntu-24.04-arm` arm64 — free on this public repo, no QEMU), pushes by digest, and merges
+  one manifest asserting both `linux/amd64` + `linux/arm64`. `docker run ghcr.io/imazen/zen-jobworker`
+  now resolves per-host arch, unblocking the ARM half of the heterogeneous fleet.
 - **Job system: capability routing (goal H "capability-routed GPU/CPU/ARM")** (2026-05-30).
   `zen_job_core::worker_serves` + `ResourceClass::parse`; `zen-jobworker --capability <class>…`
   (also `ZEN_CAPABILITY` env in the fleet entrypoint) makes a worker pull only jobs whose
