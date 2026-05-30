@@ -166,7 +166,7 @@ pub fn run_group_inline(spec: InlineGroupSpec) -> Result<()> {
     // isn't Send+Sync — anyhow's Context trait won't bind to it
     // directly. Convert via the error message instead; the caller
     // doesn't need the full error chain.
-    let q_grid: Vec<u32> = parse_q_grid(&spec.q_grid)
+    let q_grid: Vec<f64> = parse_q_grid(&spec.q_grid)
         .map_err(|e| anyhow::anyhow!("parse q_grid {:?}: {e}", spec.q_grid))?;
     let knob_grid: KnobGrid = parse_knob_grid(&spec.knob_grid_json)
         .map_err(|e| anyhow::anyhow!("parse knob_grid {:?}: {e}", spec.knob_grid_json))?;
