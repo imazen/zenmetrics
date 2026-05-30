@@ -1,5 +1,9 @@
 # zen job system — live demos
 
+> **Running an actual job? Start with [`../../docs/RUNNING_JOBS.md`](../../docs/RUNNING_JOBS.md)** — the
+> thorough end-to-end guide (declare → fleet → execute → results → teardown), the **executor contract**
+> for real encode/score work, and the **Unraid basement-tier** setup (`unraid_worker.sh`).
+
 Reproducible, isolated demonstrations that the job system's guarantees hold **live** (against real
 R2), not just in unit tests.
 

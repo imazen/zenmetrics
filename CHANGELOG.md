@@ -19,6 +19,16 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: `docs/RUNNING_JOBS.md` + Unraid basement-tier setup + executor-contract template**
+  (2026-05-30). Thorough end-to-end guide (mental model, executor contract, declare, fleet, Unraid
+  basement tier, monitor, results, teardown/GC, worked example, real-job checklist). New
+  `scripts/jobsys/unraid_worker.sh` mints a 7-day prefix-scoped R2 credential on the workstation and
+  prints a ready-to-paste `docker run` / Unraid "Add Container" config for the NAT'd basement box
+  (pull-based, no inbound ports, never the root key). New `scripts/jobsys/example_executor.py`
+  documents + smoke-tests the `ZEN_EXEC` contract (stdin DesiredJob JSON → stdout output bytes →
+  exit 0). Honest scope: orchestration is proven with the synthetic `/bin/cat` executor; a real
+  encode/score executor is a defined contract you bake in (the `zen-metrics jobexec` reference impl is
+  not yet built).
 - **Job system: goal H CLOSED — ≥3 distinct physical providers proven concurrent on one queue**
   (2026-05-30, run `fleet-20260530-124834`). local (workstation) + Hetzner cpx22 (x86 cloud) + Salad
   (CPU container, distributed consumer network) all claimed+executed off ONE R2 lease-queue,
