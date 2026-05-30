@@ -9,7 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake pkg-config && \
     rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN cargo build --release -p zen-jobdash --bin zen-jobdash
+# Build against a trimmed workspace (only the 3 dashboard crates) — the full workspace has a member
+# with a path dep on the jxl-encoder sibling repo, which isn't in the deploy context.
+RUN cp Cargo.deploy.toml Cargo.toml && rm -f Cargo.lock && \
+    cargo build --release -p zen-jobdash --bin zen-jobdash
 
 FROM debian:bookworm-slim
 # ca-certificates for HTTPS to R2; s5cmd is the s3:// transport zen-ledger invokes.
