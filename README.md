@@ -392,6 +392,87 @@ criterion). Host: AMD Ryzen 9 7950X, release, no `-C target-cpu=native`
 | `iwssim` | 59.81 | 261.88 | 1169.06 | 6665.18 |
 | `zensim` | 6.92 | 13.92 | 78.86 | 369.66 |
 
+### Per-mode performance at 16 MP
+
+Each metric exposes up to four execution modes (see the
+[support matrix](#modes--metrics-support-matrix)). These tables give
+the measured **wall** and **peak working-set** of every supported
+`(metric, mode)` at a representative large size. Every cell is a
+committed-TSV value — no number is interpolated or extrapolated;
+unsupported `(metric, mode)` cells say `n/a`.
+
+The modes:
+
+- **full** — `score(ref, dist)`: whole-image working set.
+- **strip** — strip-walker, one cold `(ref, dist)` per call.
+- **warm_ref** — reference cached once (`set_reference`/`warm_reference`),
+  then `score_with_warm_ref(dist)` per distorted image (whole-image
+  ref state).
+- **warm_ref_strip** — reference cached, distorted image walked in
+  strips per call.
+
+**GPU (cuda), 16 MP = 4096².** Wall = `wall_median_ms` (per-call
+steady-state); mem = `peak_vram_human`. Source:
+[`benchmarks/gpu_metrics_sweep_2026-05-28.tsv`](benchmarks/gpu_metrics_sweep_2026-05-28.tsv)
+unless noted. Host: RTX 5070 (12 GiB), no `-C target-cpu=native`.
+
+| Metric | full (ms / VRAM) | strip (ms / VRAM) | warm_ref (ms / VRAM) | warm_ref_strip (ms / VRAM) |
+|---|---|---|---|---|
+| `cvvdp-gpu` | 45.5 / 3.88 GiB | 203.0 / 2.22 GiB † | 25.9 / 3.88 GiB | 108.9 / 3.88 GiB |
+| `butteraugli-gpu` | 62.3 / 3.91 GiB | 81.1 / **481 MiB** | 32.8 / 3.91 GiB | 150.9 / 4.19 GiB |
+| `ssim2-gpu` | 50.7 / 6.15 GiB | 205.1 / **1.19 GiB** | 44.0 / 6.19 GiB | 119.7 / 4.06 GiB |
+| `dssim-gpu` | 50.5 / 3.16 GiB | 277.8 / **897 MiB** | 52.2 / 3.16 GiB | 161.8 / 2.59 GiB |
+| `iwssim-gpu` | 45.3 / 2.16 GiB | 385.0 / **545 MiB** | 42.3 / 2.16 GiB | 99.8 / 802 MiB |
+| `zensim-gpu` | 38.1 / 1.16 GiB | 61.1 / **289 MiB** ‡ | 30.9 / 1.16 GiB | 488.3 / 1.22 GiB |
+
+† cvvdp's GPU strip mode is `StripPair` (Mode B, one-shot — ref+dist
+walk together); the row is the `strip_pair` cuda row. cvvdp has no
+`warm_ref_strip`-distinct VRAM win at 16 MP because its `warm_ref`
+keeps full-image ref state on device; the strip win for cvvdp shows up
+on the **CPU** path below.
+‡ zensim-gpu's standalone cold-strip VRAM at 16 MP is **289 MiB** (vs
+1.16 GiB Full — a 4.1× reduction) per the corrected re-measure
+[`crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv`](crates/zensim-gpu/benchmarks/zensim_strip_remeasure_2026-05-28.tsv);
+the wall (61.1 ms) is from the sweep TSV. The `strip` VRAM rows in
+`gpu_metrics_sweep` are flagged superseded (pre-fix code built a
+full-image ref pyramid). The `warm_ref_strip` column keeps a device
+ref cache, so it stays at 1.22 GiB by design.
+
+**CPU, wall at 16 MP = 4096².** Wall = warm per-call for the two
+`warm_ref*` modes, cold per-call for `full`/`strip`. Source:
+[`benchmarks/cpu_wall_all_metrics_2026-05-29.tsv`](benchmarks/cpu_wall_all_metrics_2026-05-29.tsv)
+(zenbench, 7950X). Peak heap (heaptrack) is reported at the largest
+committed heaptracked size — **16 MP (4096²) for cvvdp only**; the
+other five were heaptracked at **12 MP (4000×3000)** and are marked
+`@12MP`, since no 16 MP heaptrack is committed for them and memory does
+not extrapolate across sizes. Heap source:
+[`benchmarks/cpu_metrics_full_table_2026-05-28.tsv`](benchmarks/cpu_metrics_full_table_2026-05-28.tsv)
+(cvvdp rows corrected to the Path A `new_strip` dispatcher,
+[`crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv`](crates/cvvdp/benchmarks/cpu_path_a_recovered_2026-05-29.tsv)).
+
+| Metric | full (ms / heap) | strip (ms / heap) | warm_ref (warm ms / heap) | warm_ref_strip (warm ms / heap) |
+|---|---|---|---|---|
+| `cvvdp` | 3812 / 3.66 GB | 2605 / **1.58 GB** | 1790 / 3.15 GB | 2168 / **1.55 GB** |
+| `ssim2` | 2591 / 2.01 GB@12MP | 3032 / **0.90 GB**@12MP | 1429 / 1.81 GB@12MP | 2457 / 1.21 GB@12MP |
+| `dssim` | 4114 / 2.60 GB@12MP | n/a — dssim-core 3.4 has no strip | 2938 / 2.60 GB@12MP | n/a — no strip |
+| `butter` | 1691 / 2.37 GB@12MP | 1624 / **0.80 GB**@12MP | 1472 / 2.31 GB@12MP | 1606 / 1.93 GB@12MP |
+| `iwssim` | 6665 / 1.77 GB@12MP | 9954 / **0.70 GB**@12MP | 6203 / 1.77 GB@12MP | 4898 / 0.92 GB@12MP |
+| `zensim` | 370 / 0.74 GB@12MP | 368 / 0.69 GB@12MP | 345 / 0.79 GB@12MP | 290 / 0.69 GB@12MP |
+
+**The memory win of strip vs full** is the reason strip mode exists.
+At 16 MP on the **CPU** path cvvdp drops from **3.66 GB (full)** to
+**1.58 GB (strip)** — a 2.3× reduction — with the bit-identical JOD and
+a *faster* wall (Path A `new_strip` is −43 % wall at 16 MP). At 12 MP,
+butter (2.37 → 0.80 GB), iwssim (1.77 → 0.70 GB), and ssim2 (2.01 →
+0.90 GB) show similar 2.5–3× CPU-heap reductions. On the **GPU** the
+standalone strip win is largest for zensim-gpu (1.16 GiB → 289 MiB,
+4.1×), butteraugli-gpu (3.91 GiB → 481 MiB, 8.3×), and iwssim-gpu
+(2.16 GiB → 545 MiB, 4.1×) — at the cost of more launches, so strip
+mode is the OOM-avoidance path, not the throughput path (except butter,
+which is strip-preferred). dssim's strip win is GPU-only (3.16 GiB →
+897 MiB); the dssim **CPU** path has no strip walker
+(`dssim-core` 3.4).
+
 ### CPU vs GPU one-shot crossover
 
 The size below which a **single** image on a **cold process** is faster on
