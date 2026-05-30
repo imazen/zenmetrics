@@ -43,15 +43,19 @@ Workspace conventions per the global rules:
   handle (no lifetime ripple on the owned `Metric`) that the borrow checker forbids from outliving its
   session (compile-fail-proven). Opaque: no `cubecl-types` in the public signature — the `unsafe
   set_stream` lives in each metric crate's `#[doc(hidden)]` `session` module, so `zenmetrics-api`
-  stays `#![forbid(unsafe_code)]`. **cvvdp-gpu wired end-to-end** via the existing typed
-  `Cvvdp<R>::new(client)` seam (extracted `resolve_mode_for_construction` + `build_opaque_from_client`
-  from `opaque.rs`, no behaviour change to the default constructor); the other five metrics return a
-  clear "not yet wired" `Error::Metric` so callers fall back to `Metric::new` (honest fraction: 1 of 6
-  wired; the per-crate hook is mechanical, #17 follow-up). Tests (cuda-gated): cap/recycle/leak; cvvdp
-  score parity vs owned `Metric` within the measured `Atomic<f32>` reduction-noise band (~1e-6) on
-  one-shot + warm-ref; **VRAM isolation measured via cubecl per-stream `memory_usage()`** — two
-  sessions ~203 MiB each, drop one → its pool `bytes_reserved` 0 while the other stays resident.
-  `release()` / `reclaim_pooled_vram` / `MetricContext<R>` and all per-crate public APIs unchanged.
+  stays `#![forbid(unsafe_code)]`. **All 6 metrics wired end-to-end** (cvvdp, ssim2, butter, dssim,
+  iwssim, zensim) via each crate's existing typed `<Metric><R>::new(client)` seam — a `#[doc(hidden)]`
+  cubecl-types-gated per-crate `session` module + an `<Metric>Opaque::build_from_client<R>` helper that
+  mirrors the default-stream constructor's host-side mode/regime resolution on a stream-bound client
+  (no behaviour change to the default constructors; no new per-crate *public* API). cvvdp landed first
+  (`0053c0cc`), then ssim2 (`8b38dedc`), then butter/dssim/iwssim/zensim. Tests (cuda-gated):
+  cap/recycle/leak; cvvdp one-shot + warm-ref parity within the measured `Atomic<f32>` reduction-noise
+  band (~1e-6 — a kernel property, not the session); `session_parity_all_wired_metrics` loops every
+  enabled metric (all 6) asserting owned-vs-session agreement within each metric's abs+rel noise band;
+  **VRAM isolation measured via cubecl per-stream `memory_usage()`** — two sessions ~203 MiB each, drop
+  one → its pool `bytes_reserved` 0 while the other stays resident, then the second → 0; plus a
+  compile-fail borrow-check proof. `release()` / `reclaim_pooled_vram` / `MetricContext<R>` and all
+  per-crate public APIs unchanged.
 - **Job system: real executor `zen-metrics jobexec` (encode + score) + CPU `sweep` build fix**
   (2026-05-30). New `zen-metrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
   `DesiredJob` JSON on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd),

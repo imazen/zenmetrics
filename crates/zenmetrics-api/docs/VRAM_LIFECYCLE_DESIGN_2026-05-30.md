@@ -702,22 +702,27 @@ impl Drop for GpuContext {
       `#![forbid(unsafe_code)]`). 128-slot-per-backend allocator (recycle
       on `Drop`, hard `TooManyContexts` at the cap, never aliases);
       `Drop` = `memory_cleanup()` + `sync()` on the private stream + slot
-      recycle; `leak()` / `reclaim()` opt-out + idle hook. **cvvdp-gpu
-      wired end-to-end** via the existing typed `Cvvdp<R>::new(client)`
-      seam (the other 5 return a clear "not yet wired" error — honest 1/6
-      fraction; the per-crate hook is mechanical follow-up). Tests
-      (cuda-gated, on the RTX 5070 box): cap/recycle/leak; cvvdp score
-      parity vs owned `Metric` within the metric's measured `Atomic<f32>`
-      reduction-noise band (~1e-6) on one-shot + warm-ref; **VRAM
-      isolation MEASURED via cubecl per-stream `memory_usage()`** — two
-      sessions ~203 MiB each, dropping one drove its pool `bytes_reserved`
-      to **0** while the other stayed `212841472`, then the second to 0;
-      plus a compile-fail borrow-check proof that `SessionMetric` cannot
-      outlive its session. `release()` / `reclaim_pooled_vram` /
-      `MetricContext<R>` unchanged. The §6 sketch named the type
-      `GpuContext`; the issue-#17 review settled on **`MetricSession`** —
-      that is the shipped name. The wgpu lazy-OS-return asterisk (§2b) is
-      documented in the `MetricSession` rustdoc; wgpu/hip/cpu backends
-      reach the allocator + `MetricSession` surface but only cvvdp on cuda
-      is hardware-verified here.
+      recycle; `leak()` / `reclaim()` opt-out + idle hook. **All 6 metrics
+      wired end-to-end** (cvvdp, ssim2, butter, dssim, iwssim, zensim) via
+      each crate's existing typed `<Metric><R>::new(client)` seam — a
+      `#[doc(hidden)]` per-crate `session` module + an
+      `<Metric>Opaque::build_from_client<R>` helper mirroring the
+      default-stream constructor's host-side mode/regime resolution on a
+      stream-bound client. cvvdp landed first, then ssim2, then
+      butter/dssim/iwssim/zensim. Tests (cuda-gated, on the RTX 5070 box):
+      cap/recycle/leak; cvvdp one-shot + warm-ref parity within the
+      metric's measured `Atomic<f32>` reduction-noise band (~1e-6);
+      `session_parity_all_wired_metrics` loops every enabled metric (all
+      6) asserting owned-vs-session agreement within each metric's abs+rel
+      noise band; **VRAM isolation MEASURED via cubecl per-stream
+      `memory_usage()`** — two sessions ~203 MiB each, dropping one drove
+      its pool `bytes_reserved` to **0** while the other stayed
+      `212841472`, then the second to 0; plus a compile-fail borrow-check
+      proof that `SessionMetric` cannot outlive its session. `release()` /
+      `reclaim_pooled_vram` / `MetricContext<R>` unchanged. The §6 sketch
+      named the type `GpuContext`; the issue-#17 review settled on
+      **`MetricSession`** — that is the shipped name. The wgpu
+      lazy-OS-return asterisk (§2b) is documented in the `MetricSession`
+      rustdoc; the cuda path is hardware-verified here, wgpu/hip/cpu reach
+      the same `MetricSession` surface but aren't GPU-verified on this box.
 ```
