@@ -317,6 +317,15 @@ impl MetricSession {
     pub fn live_count(backend: Backend) -> u32 {
         ALLOCATOR.live_count(backend)
     }
+
+    /// The cubecl `StreamId.value` this session's metrics allocate on.
+    /// `#[doc(hidden)]` — exposed only so the VRAM-isolation integration
+    /// test can probe this exact session's pool (`memory_usage`) without
+    /// guessing the slot assignment. Not a supported API.
+    #[doc(hidden)]
+    pub fn __stream_value(&self) -> u64 {
+        self.stream_value
+    }
 }
 
 impl Drop for MetricSession {
@@ -349,6 +358,41 @@ impl Drop for MetricSession {
 /// resident; that is the **opt-out / warm-batch** path — keep the
 /// session (and a metric on it) alive across many `(ref, dist)` pairs
 /// to avoid per-score reclaim, then drop the session to reclaim.
+///
+/// # The borrow is compiler-enforced
+///
+/// A `SessionMetric` **cannot outlive its `MetricSession`**. If it
+/// could, the session's `Drop` would run `memory_cleanup()` on the
+/// session's stream while a live binding still pointed into it — the
+/// use-after-cleanup panic the design exists to prevent. The borrow
+/// makes that a compile error:
+///
+/// ```compile_fail
+/// use zenmetrics_api::{Backend, MetricKind, MetricParams, MetricSession};
+///
+/// let ctx = MetricSession::acquire(Backend::Cuda).unwrap();
+/// let m = ctx.metric(
+///     MetricKind::Cvvdp, 64, 64,
+///     MetricParams::default_for(MetricKind::Cvvdp),
+/// ).unwrap();
+/// drop(ctx);          // session gone...
+/// let _ = m.dims();   // ...but `m` still borrows it → E0505: cannot move out of `ctx`
+/// ```
+///
+/// Likewise a `SessionMetric` cannot be returned past the scope that
+/// owns its session:
+///
+/// ```compile_fail
+/// use zenmetrics_api::{Backend, MetricKind, MetricParams, MetricSession, SessionMetric};
+///
+/// fn escape<'a>() -> SessionMetric<'a> {
+///     let ctx = MetricSession::acquire(Backend::Cuda).unwrap();
+///     ctx.metric(
+///         MetricKind::Cvvdp, 64, 64,
+///         MetricParams::default_for(MetricKind::Cvvdp),
+///     ).unwrap() // E0515: returns a value referencing local `ctx`
+/// }
+/// ```
 pub struct SessionMetric<'ctx> {
     scorer: crate::metric::Metric,
     _session: core::marker::PhantomData<&'ctx MetricSession>,

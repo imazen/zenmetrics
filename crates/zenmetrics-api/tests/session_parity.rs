@@ -1,0 +1,154 @@
+//! `SessionMetric` (isolated-stream) must produce the **same** cvvdp
+//! JOD as the owned `Metric` (shared default stream) for the same
+//! `(ref, dist)` pair. A `MetricSession` changes only WHERE the metric
+//! allocates (its private cubecl stream), not the math — so the score
+//! must match to within the metric's own reduction noise.
+//!
+//! ## Why these compare with a tolerance, not bit-exactly
+//!
+//! cvvdp's per-band pooling sums via `Atomic<f32>`, whose accumulation
+//! ORDER is not deterministic — it shifts with kernel launch scheduling
+//! and with whatever else is dispatching on the GPU concurrently. This
+//! is a property of the cvvdp kernels, NOT of `MetricSession`. Measured
+//! on this RTX 5070 box: repeated owned-vs-owned scores of the same
+//! pair span `~1e-6` JOD on BOTH the one-shot and warm-ref paths
+//! (e.g. 6.5223283.. / 6.5223288.. / 6.5223293..) — and the spread
+//! only manifests once other GPU work interleaves (a single isolated
+//! run can land bit-identical by luck). So the session must agree with
+//! the owned metric to within that reduction-noise band — landing
+//! OUTSIDE it would mean the session changed the computation (a real
+//! bug). We bound at `1e-5` JOD: well above the ~1e-6 reduction noise,
+//! far below any difference a genuine miscomputation would produce.
+//!
+//! Gated on `cuda` (+ default `cvvdp`). Requires a working CUDA runtime
+//! + a physical GPU. On a GPU-less runner this fails loudly at the
+//! first GPU dispatch (per CLAUDE.md "NO GRACEFUL SKIPS").
+
+#![cfg(all(feature = "cuda", feature = "cvvdp"))]
+
+use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, MetricSession};
+
+/// cvvdp `Atomic<f32>` reduction-order noise band (measured ~1e-6 on
+/// this box, bounded at 1e-5 with margin). Applies to BOTH the one-shot
+/// and warm-ref paths — see the module docs.
+const CVVDP_REDUCTION_NOISE_JOD: f64 = 1e-5;
+
+const W: u32 = 256;
+const H: u32 = 256;
+
+fn make_pair() -> (Vec<u8>, Vec<u8>) {
+    let n = (W as usize) * (H as usize) * 3;
+    let mut r = Vec::with_capacity(n);
+    let mut d = Vec::with_capacity(n);
+    for y in 0..H {
+        for x in 0..W {
+            r.push((x & 0xff) as u8);
+            r.push((y & 0xff) as u8);
+            r.push(((x ^ y) & 0xff) as u8);
+            d.push(((x.wrapping_add(9)) & 0xff) as u8);
+            d.push(((y.wrapping_add(17)) & 0xff) as u8);
+            d.push(((x ^ y ^ 11) & 0xff) as u8);
+        }
+    }
+    (r, d)
+}
+
+/// One-shot score: owned `Metric` vs session `SessionMetric`, same
+/// inputs → identical JOD.
+#[test]
+fn session_score_matches_owned_cvvdp() {
+    let (r, d) = make_pair();
+
+    // Owned metric on the shared default stream.
+    let owned_score = {
+        let mut m = Metric::new(
+            MetricKind::Cvvdp,
+            Backend::Cuda,
+            W,
+            H,
+            MetricParams::default_for(MetricKind::Cvvdp),
+        )
+        .expect("owned Metric::new(Cvvdp) failed");
+        m.compute_srgb_u8(&r, &d).expect("owned score failed")
+    };
+
+    // Session metric on a private isolated stream.
+    let session_score = {
+        let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire session");
+        let mut sm = ctx
+            .metric(
+                MetricKind::Cvvdp,
+                W,
+                H,
+                MetricParams::default_for(MetricKind::Cvvdp),
+            )
+            .expect("ctx.metric(Cvvdp) failed");
+        sm.score(&r, &d).expect("session score failed")
+        // ctx drops here → cleanup on the private stream.
+    };
+
+    assert_eq!(owned_score.metric_name, "cvvdp");
+    assert_eq!(session_score.metric_name, "cvvdp");
+    assert!(
+        owned_score.value.is_finite() && session_score.value.is_finite(),
+        "both scores must be finite (owned={}, session={})",
+        owned_score.value,
+        session_score.value
+    );
+    // The session changes WHERE buffers allocate, not the kernel math.
+    // The score must agree to within cvvdp's atomic-reduction noise.
+    let delta = (owned_score.value - session_score.value).abs();
+    assert!(
+        delta <= CVVDP_REDUCTION_NOISE_JOD,
+        "session score ({}) and owned score ({}) differ by {delta:.3e} JOD, which EXCEEDS \
+         the cvvdp Atomic<f32> reduction-noise band ({CVVDP_REDUCTION_NOISE_JOD:.0e}) — the \
+         private stream changed the JOD (a real bug), not just reduction order",
+        session_score.value, owned_score.value
+    );
+}
+
+/// Warm-reference path: owned vs session must agree to within the
+/// metric's own `Atomic<f32>` reduction-order noise band (see the
+/// module docs — same rationale as the one-shot path).
+#[test]
+fn session_warm_ref_matches_owned_cvvdp() {
+    let (r, d) = make_pair();
+
+    let owned_warm = {
+        let mut m = Metric::new(
+            MetricKind::Cvvdp,
+            Backend::Cuda,
+            W,
+            H,
+            MetricParams::default_for(MetricKind::Cvvdp),
+        )
+        .expect("owned Metric::new(Cvvdp) failed");
+        m.set_reference_srgb_u8(&r).expect("owned set_reference");
+        m.compute_with_cached_reference_srgb_u8(&d)
+            .expect("owned warm score")
+    };
+
+    let session_warm = {
+        let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire session");
+        let mut sm = ctx
+            .metric(
+                MetricKind::Cvvdp,
+                W,
+                H,
+                MetricParams::default_for(MetricKind::Cvvdp),
+            )
+            .expect("ctx.metric(Cvvdp) failed");
+        sm.set_reference_srgb_u8(&r).expect("session set_reference");
+        sm.score_with_warm_ref(&d).expect("session warm score")
+    };
+
+    assert!(owned_warm.value.is_finite() && session_warm.value.is_finite());
+    let delta = (owned_warm.value - session_warm.value).abs();
+    assert!(
+        delta <= CVVDP_REDUCTION_NOISE_JOD,
+        "session warm-ref score ({}) and owned warm-ref score ({}) differ by {delta:.3e} JOD, \
+         which EXCEEDS the cvvdp Atomic<f32> reduction-noise band ({CVVDP_REDUCTION_NOISE_JOD:.0e}) — \
+         the session changed the computation (a real bug), not just reduction order",
+        session_warm.value, owned_warm.value
+    );
+}

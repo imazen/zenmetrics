@@ -116,3 +116,35 @@ cubecl = { workspace = true }
 [[test]]
 name = "compute_handles"
 required-features = ["cuda", "cubecl-types"]
+
+# MetricSession allocator cap/recycle — no GPU work (acquire builds no
+# client until .metric()), but gated cuda so cvvdp reports the backend
+# usable. Visible gate per the CI→justfile→test chain (NO GRACEFUL SKIPS).
+[[test]]
+name = "session_cap"
+required-features = ["cuda", "cvvdp"]
+
+# SessionMetric vs owned Metric score parity for cvvdp — needs a GPU.
+[[test]]
+name = "session_parity"
+required-features = ["cuda", "cvvdp"]
+
+# Per-session VRAM isolation (mirrors the #152 spike via the real API)
+# — needs a GPU; measures real per-stream memory_usage().
+[[test]]
+name = "session_vram_isolation"
+required-features = ["cuda", "cvvdp"]
+
+# These two timing examples are `#![cfg(feature = "cubecl-types")]` at
+# the crate root, so without that feature the whole file (incl. `main`)
+# compiles out and `cargo {test,build} -p zenmetrics-api` (default
+# features, no cubecl-types) errored "main function not found". Declaring
+# required-features keeps them out of the default example set. (The other
+# examples are gated on `cuda`, which is default-on, so they build.)
+[[example]]
+name = "inprocess_warmth"
+required-features = ["cubecl-types"]
+
+[[example]]
+name = "setref_all_timing"
+required-features = ["cubecl-types"]
