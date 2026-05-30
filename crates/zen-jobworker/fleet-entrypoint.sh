@@ -34,16 +34,25 @@ echo "fleet-entrypoint: $WORKER ($PROVIDER) claiming from s3://$ZEN_BUCKET/$ZEN_
 idle=0 i=0
 while [ "$idle" -lt "${ZEN_IDLE_PASSES:-5}" ]; do
   i=$((i + 1))
+  # Capture full output so we can distinguish a PAUSED/DRAINING pass (run control) from a genuinely
+  # drained one — both print done=0, but a paused worker must keep waiting, not exit.
   out=$(zen-jobworker --manifest /tmp/manifest.json \
     --ledger-out "s3://$ZEN_BUCKET/$ZEN_RUN/ledger/pass-$WORKER-$i.parquet" \
     --blobs-r2-bucket "$ZEN_BUCKET" --blobs-r2-prefix "$ZEN_RUN/blobs" \
     --claims-r2-bucket "$ZEN_BUCKET" --claims-prefix "$ZEN_RUN/claims" \
     ${ZEN_SPEC_THRESHOLD_SECS:+--spec-threshold-secs "$ZEN_SPEC_THRESHOLD_SECS"} \
     ${ZEN_CONTROL_KEY:+--control-r2-key "$ZEN_CONTROL_KEY"} \
-    --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1 | tail -1)
-  echo "$(date -u +%H:%M:%S) $out"
-  # "won nothing this pass" K times in a row ⇒ the gap is drained or fully claimed by peers ⇒ exit.
-  if echo "$out" | grep -qE 'done=0 '; then idle=$((idle + 1)); else idle=0; fi
+    --r2-endpoint "$ZEN_R2_ENDPOINT" --exec "$EXEC" --worker "$WORKER" --provider "$PROVIDER" 2>&1)
+  echo "$(date -u +%H:%M:%S) $(echo "$out" | tail -1)"
+  if echo "$out" | grep -qiE 'run control ='; then
+    # paused/draining: hold, don't count toward the drain-exit.
+    idle=0
+  elif echo "$out" | grep -qE 'done=0 '; then
+    # won nothing this pass: K in a row ⇒ gap drained / fully claimed by peers ⇒ exit.
+    idle=$((idle + 1))
+  else
+    idle=0
+  fi
   sleep "${ZEN_PASS_SLEEP:-0.2}"
 done
 echo "fleet-entrypoint: $WORKER drained (idle $idle passes) — exiting clean"

@@ -44,11 +44,20 @@ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_K
 MANIFEST="s3://$BUCKET/$RUN/manifest.json"
 echo "uploaded $N_JOBS-job manifest"
 
-# common env block the entrypoint reads (scoped creds + queue coordinates)
+# Pause-orchestration (so all tiers overlap regardless of boot time): start the run PAUSED, bring up
+# every tier (each idles on the RunControl while it boots — the entrypoint waits, doesn't exit), then
+# RESUME once all are up so they race the queue simultaneously. Workers honor it via --control-r2-key.
+CTLKEY="$RUN/control.json"
+printf '{"paused":true}' > /tmp/fleet_ctl.json
+AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
+  s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+echo "run starts PAUSED (control=$CTLKEY); will resume after boot"
+
+# common env block the entrypoint reads (scoped creds + queue coordinates + pause control)
 envblock() { cat <<EOF
 -e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto
 -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=$MANIFEST
--e ZEN_PROVIDER=$1 -e ZEN_EXEC=/bin/cat -e ZEN_SPEC_THRESHOLD_SECS=20
+-e ZEN_PROVIDER=$1 -e ZEN_EXEC=/bin/cat -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
 EOF
 }
 
@@ -73,5 +82,13 @@ for i in $(seq 1 "$N_VAST"); do
     && echo "vast-$i launched on offer $OFFER" || echo "vast-$i FAILED on $OFFER"
 done
 
-echo "### RUN=$RUN — monitor: scripts/jobsys/watch_fleet.sh $RUN ; teardown: scripts/jobsys/teardown_fleet.sh $RUN"
+# 4. resume — let every tier race the queue at once. Wait for boxes to boot first (Hetzner ~60s,
+# vast ~2-3min); workers idle on the pause until now, then all start claiming together.
+WAIT="${ZEN_BOOT_WAIT_SECS:-200}"
+echo "all tiers launched; waiting ${WAIT}s for boot, then RESUME (concurrent start)…"
+sleep "$WAIT"
+printf '{"paused":false}' > /tmp/fleet_ctl.json
+AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
+  s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
+echo "### RESUMED — RUN=$RUN — watch: scripts/jobsys/watch_fleet.sh $RUN ; teardown: scripts/jobsys/teardown_fleet.sh $RUN"
 echo "$RUN" > /tmp/fleet_run.txt
