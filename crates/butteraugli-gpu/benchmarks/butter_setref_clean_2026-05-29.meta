@@ -1,0 +1,109 @@
+# butter_setref_clean_2026-05-29.meta
+# Provenance for butter_setref_clean_2026-05-29.tsv (task #148)
+
+## What this measures
+butteraugli-gpu `Butteraugli::set_reference` per-reference cost on a
+WARM instance (CUDA context + all kernels JIT'd + cubecl memory pool
+populated via a throwaway full-mode `compute` before timing). Isolates
+the reference-side precompute (sRGB upload + opsin transform + frequency
+separation + reference-only mask pipeline). Each timed `set_reference`
+is immediately followed by `block_on(client.sync())` INSIDE the timed
+region (set_reference queues GPU work and does NOT read back, so an
+un-synced timer would measure submission, not execution — see project
+CLAUDE.md "Diagnosing Slow GPU Code").
+
+phases:
+  setref1            = FIRST set_reference on the warm instance
+  setref2/3/4        = subsequent DISTINCT-pixel references (the "reuse
+                       path" #144 flagged: cached-ref planes reused, only
+                       per-ref precompute re-runs)
+  warm_call          = compute_with_reference per-score (self-syncs via
+                       host readback) — the per-comparison cost, separate
+                       from the set_reference precompute
+Each rep within a phase uses a FRESH-pixel reference (LCG seed varies),
+so no two consecutive set_reference calls feed identical bytes (no
+identical-input GPU shortcut). ref/dist images pre-generated outside the
+timed region.
+
+## Driver
+crates/butteraugli-gpu/examples/setref_timing.rs (new, task #148)
+Uses the typed `Butteraugli<R>` API directly (NOT the zenmetrics-api
+umbrella `Metric`), so the timing is pure butteraugli-gpu with no
+umbrella dispatch layer in scope.
+
+Build:
+  cargo build --release -p butteraugli-gpu \
+    --no-default-features --features cuda --example setref_timing
+Run (per size):
+  SETREF_W=<w> SETREF_H=<h> SETREF_REPS=8 SETREF_NEWREF_PHASES=3 \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+    ./target/release/examples/setref_timing
+(1024 row used REPS=10, a confirmation re-run; medians reproduced the
+REPS=8 run within noise.)
+
+## Environment
+date            : 2026-05-29 (UTC 2026-05-30T00:4x)
+host            : lilith (water-cooled AMD Ryzen 9 7950X, 128 GB RAM)
+kernel          : Linux 6.6.114.1-microsoft-standard-WSL2 (WSL2)
+GPU             : NVIDIA GeForce RTX 5070 (12 GiB)
+driver          : 596.21
+CUDA toolkit    : 13.2 (V13.2.78) at /usr/local/cuda (runtime via cubecl dlopen)
+backend         : cubecl-cuda (--features cuda)
+target-cpu      : NOT native (runtime SIMD dispatch — per CLAUDE.md bench rule)
+
+## Source commit
+workspace @     : sspoqttu / git 2593948b5230 (task148 WIP change)
+master base (@-): losszzqr / git 0e5d600b6685
+                  "feat(jobdash): live-reload ledger + webhook notifications"
+
+## Quiet-window evidence (the whole point of this re-measure)
+Task #144's numbers were contaminated by a concurrent zensim eval on the
+GPU. Before EVERY timing run, verified:
+  - nvidia-smi --query-compute-apps : EMPTY (0 GPU compute processes) at
+    each gate check (00:39, 00:41, 00:43, 00:45, 00:47 UTC).
+  - nvidia-smi GPU util: 1% (idle desktop), memory ~3.0-3.4 GiB (WSL2/
+    Windows desktop compositor only; no metric process resident).
+  - ps: no local cargo/sweep/score/inprocess/setref/vram_leak/cubecl
+    process besides this driver. (One sibling agent was running
+    `cargo build` over SSH on a REMOTE arm-zen box — no local GPU/CPU.)
+  - Fresh sibling .workongoing markers checked: readme-overhaul (docs),
+    jobsys-deploy (R2/dashboard), zensim session-persist (parquet
+    inventory), upstream-weezl-prs (CPU bench, explicitly "going silent
+    to avoid gate trips") — none are GPU consumers; GPU stayed at 0
+    compute apps throughout.
+Robustness: 8-10 samples per cell, MEDIAN + MIN reported. Two isolated
+single-sample transient spikes (~47-49 ms) appeared in 1024 setref2/3
+across runs — a periodic WSL2/desktop transient, NOT sustained
+contention. Median and min are unaffected (the multi-sample design is
+exactly what catches what #144's n=1 sampling missed).
+
+## Result vs task #144 (gpu_inprocess_warmth_2026-05-29.tsv, Q3 butter)
+#144 measured each set_reference EXACTLY ONCE (n=1) via the umbrella
+`inprocess_warmth.rs` Q3 driver:
+  #144 512²  : setref1 = 34.2792 ms   setref2 = 0.7595 ms
+  #144 16 MP : setref1 = 3990.4124 ms setref2 = 21.6446 ms
+
+Clean re-measure (this run, n=8-10, median):
+                setref1    setref2    setref3    setref4
+  512²  (0.26 MP)  0.84 ms    0.83 ms    0.78 ms    0.78 ms
+  1024² (1.05 MP)  1.58 ms    1.57 ms    1.50 ms    1.49 ms
+  2048² (4.19 MP)  6.23 ms    5.95 ms    5.89 ms    5.74 ms
+  4096² (16.78 MP) 22.16 ms   22.48 ms   22.54 ms   22.56 ms
+
+VERDICT — #144's setref1 numbers are CORRECTED; setref2 is CONFIRMED:
+  * #144's SUBSEQUENT-new-ref number is CONFIRMED: 0.76 ms @ 512² ≈ this
+    run's 0.78-0.83 ms; 21.6 ms @ 16 MP ≈ this run's 22.5 ms. The "reuse
+    path is cheap" finding holds.
+  * #144's FIRST-ref number is a CONTAMINATION ARTIFACT, not a real
+    per-ref cost. On a properly warmed instance there is NO first-ref
+    penalty: setref1 ≈ setref2 ≈ setref3 ≈ setref4 at every size. #144's
+    34 ms @ 512² and 3990 ms @ 16 MP (180× the real value) were the
+    concurrent zensim eval stealing the GPU during that single timed
+    call — #144 had no repeated sampling to catch it (its setref1=3990 ms
+    at 16 MP is physically implausible: 88× a full warm `compute`, which
+    does strictly MORE work, at ~34 ms).
+  * THIS clean run is AUTHORITATIVE. butter set_reference is ~constant
+    per ref (no "first ref" exception); the genuine per-ref precompute
+    is ~0.8 ms @ 512², ~1.5 ms @ 1 MP, ~5.9 ms @ 4 MP, ~22 ms @ 16 MP.
+    Scaling is roughly linear in pixels above 1 MP with a sub-ms fixed
+    overhead floor.

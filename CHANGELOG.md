@@ -128,6 +128,31 @@ Workspace conventions per the global rules:
 
 ### Investigated
 
+- **butteraugli-gpu `set_reference` has NO first-ref penalty on a warm
+  instance — #144's 34 ms/3990 ms first-ref numbers were contamination,
+  corrected; the reuse-path number is confirmed** (task #148,
+  2026-05-29). #144 measured each `set_reference` exactly once (n=1) via
+  the umbrella `inprocess_warmth.rs` Q3 driver on a machine where a
+  concurrent zensim eval stole the GPU, yielding setref1 = 34.3 ms @ 512²
+  / 3990 ms @ 16 MP vs setref2 = 0.76 ms @ 512² / 21.6 ms @ 16 MP — the
+  apparent "first ref expensive, reuse free" picture. A clean re-measure
+  on a quiet machine (0 GPU compute apps, strict quiet-window gate before
+  every run, n=8–10 samples/cell, median + min) shows set_reference is
+  ~constant per ref with NO first-ref exception: setref1 ≈ setref2 ≈
+  setref3 ≈ setref4 at every size — 0.84/0.83/0.78/0.78 ms @ 512²,
+  1.58/1.57/1.50/1.49 ms @ 1 MP, 6.2/5.9/5.9/5.7 ms @ 4 MP, and
+  22.2/22.5/22.5/22.6 ms @ 16 MP. #144's *subsequent-new-ref* number is
+  confirmed (its 0.76 ms / 21.6 ms ≈ this run's steady-state 0.78 ms /
+  22.5 ms); its first-ref number was a single-sample contamination spike
+  (3990 ms @ 16 MP is 180× the real value and 88× a full warm `compute`,
+  which does strictly more work). The genuine per-ref precompute (upload
+  + opsin + frequency separation + reference-only mask, all device-side,
+  no readback — every timed call synced) scales roughly linearly in
+  pixels above 1 MP with a sub-ms fixed-overhead floor. THIS clean run is
+  authoritative. Driver: `crates/butteraugli-gpu/examples/setref_timing.rs`;
+  data + provenance:
+  `crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.{tsv,meta}`.
+
 - **butteraugli-gpu has NO VRAM leak — repeated use plateaus, confirming
   #144's reuse claim** (task #147, 2026-05-29). Probed live VRAM
   (`nvidia-smi --query-gpu=memory.used`, min-of-4/5 reads after
