@@ -34,9 +34,9 @@ use tower_http::services::{ServeDir, ServeFile};
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
     catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, run_summary, selector_for,
-    stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell,
-    FleetBox, KindProgress, NotifyPayload, RunSummary, TierStorage, WorkerStat,
+    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, results_view, run_summary,
+    selector_for, stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView, DashData,
+    FailureCell, FleetBox, KindProgress, NotifyPayload, ResultRow, RunSummary, TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -90,6 +90,8 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
         .route("/api/storage", get(api_storage))
         .route("/api/workers", get(api_workers))
         .route("/api/catalog", get(api_catalog))
+        .route("/api/results", get(api_results))
+        .route("/api/peek/{sha}", get(api_peek))
         .route("/api/fleet", get(api_fleet))
         .route("/api/control", post(api_control))
         .with_state(state);
@@ -280,6 +282,33 @@ async fn api_workers(State(s): State<AppState>) -> Json<Vec<WorkerStat>> {
 }
 async fn api_catalog(State(s): State<AppState>) -> Json<Vec<CatalogRow>> {
     Json(catalog_view(&s.data.read().await.rows))
+}
+async fn api_results(State(s): State<AppState>) -> Json<Vec<ResultRow>> {
+    Json(results_view(&s.data.read().await.rows, 200))
+}
+
+/// Peek a result blob by its content hash (goal B: "peek results in-browser"). Fetches
+/// `ZEN_BLOBS_R2/<sha>` from R2 and returns its bytes as (truncated) text + size. The blob base URI
+/// is `ZEN_BLOBS_R2` (e.g. `s3://bucket/blobs`); R2 endpoint from `ZEN_R2_ENDPOINT`.
+async fn api_peek(axum::extract::Path(sha): axum::extract::Path<String>) -> Json<serde_json::Value> {
+    // Guard: content hashes are hex — reject anything else (no path traversal into the bucket).
+    if sha.is_empty() || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Json(serde_json::json!({ "error": "sha must be hex" }));
+    }
+    let Some(base) = std::env::var("ZEN_BLOBS_R2").ok().filter(|s| !s.is_empty()) else {
+        return Json(serde_json::json!({ "error": "set ZEN_BLOBS_R2 (s3://bucket/blobs) to enable result peek" }));
+    };
+    let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
+    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref())).await {
+        Ok(Ok(bytes)) => {
+            let size = bytes.len();
+            let text: String = String::from_utf8_lossy(&bytes).chars().take(4096).collect();
+            Json(serde_json::json!({ "sha": sha, "size": size, "text": text }))
+        }
+        Ok(Err(e)) => Json(serde_json::json!({ "sha": sha, "error": e.to_string() })),
+        Err(e) => Json(serde_json::json!({ "sha": sha, "error": e.to_string() })),
+    }
 }
 
 /// Live fleet boxes (goal C/H visibility): the actual paid/free boxes Hetzner reports for the fleet

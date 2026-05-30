@@ -61,6 +61,22 @@ export interface CatalogRow {
   done: number
 }
 
+export interface ResultRow {
+  kind: string
+  codec: string
+  image_path: string
+  q: number
+  output_sha: string
+  worker: string
+}
+
+export interface PeekResult {
+  sha?: string
+  size?: number
+  text?: string
+  error?: string
+}
+
 export interface WorkerStat {
   worker: string
   provider: string
@@ -124,6 +140,8 @@ export const api = {
   storage: () => getJSON<TierStorage[]>("/api/storage"),
   workers: () => getJSON<WorkerStat[]>("/api/workers"),
   catalog: () => getJSON<CatalogRow[]>("/api/catalog"),
+  results: () => getJSON<ResultRow[]>("/api/results"),
+  peek: (sha: string) => getJSON<PeekResult>(`/api/peek/${sha}`),
   fleet: () => getJSON<FleetView>("/api/fleet"),
 
   gcDryRun: () => postControl({ action: "gc_dry_run" }),

@@ -8,6 +8,7 @@ import { ControlPane } from "@/components/ControlPane"
 import { FailuresPane } from "@/components/FailuresPane"
 import { FleetPane } from "@/components/FleetPane"
 import { ProgressPane } from "@/components/ProgressPane"
+import { ResultsPane } from "@/components/ResultsPane"
 import { StatCards } from "@/components/StatCards"
 import { StoragePane } from "@/components/StoragePane"
 import { WorkersPane } from "@/components/WorkersPane"
@@ -22,6 +23,7 @@ export default function App() {
   const storage = usePoll(api.storage)
   const workers = usePoll(api.workers)
   const catalog = usePoll(api.catalog, 30000)
+  const results = usePoll(api.results, 30000)
   const fleet = usePoll(api.fleet, 20000)
 
   const refreshAll = () => {
@@ -32,6 +34,7 @@ export default function App() {
     storage.refresh()
     workers.refresh()
     catalog.refresh()
+    results.refresh()
     fleet.refresh()
   }
 
@@ -85,6 +88,7 @@ export default function App() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
           <TabsTrigger value="failures">
             Failures
             {failCount > 0 && (
@@ -108,6 +112,10 @@ export default function App() {
 
         <TabsContent value="catalog" className="space-y-4">
           <CatalogPane rows={catalog.data} />
+        </TabsContent>
+
+        <TabsContent value="results" className="space-y-4">
+          <ResultsPane rows={results.data} />
         </TabsContent>
 
         <TabsContent value="failures" className="space-y-4">

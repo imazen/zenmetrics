@@ -19,6 +19,11 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **zen-jobdash: in-browser result peek (goal B)** (2026-05-29). `/api/results` lists recent Done rows
+  carrying an output blob; `/api/peek/{sha}` fetches that content-addressed blob from R2
+  (`ZEN_BLOBS_R2`) and returns its bytes as truncated text + size (hex-only sha guard against path
+  traversal). New dashboard Results tab with a per-row "peek" dialog. Verified live — peeked a known
+  R2 blob by hash (`cvvdp_jod=9.42`, 14 bytes).
 - **Job system: idle-box reaping (goal F) + notification mechanism proven (goal D)** (2026-05-29).
   `zen_jobdash::idle_boxes` flags running fleet boxes with no matching worker heartbeat (billing,
   doing no work); `ControlIntent::ReapIdle` + a dashboard "Reap idle (N)" button tear them down via

@@ -243,6 +243,38 @@ pub fn catalog_view(rows: &[LedgerRow]) -> Vec<CatalogRow> {
         .collect()
 }
 
+/// A completed result (goal B: "peek results in-browser"). Done rows that produced an output blob —
+/// the dashboard lists these and fetches the score blob by `output_sha` on demand.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct ResultRow {
+    pub kind: String,
+    pub codec: String,
+    pub image_path: String,
+    pub q: i64,
+    pub output_sha: String,
+    pub worker: String,
+}
+
+/// The most recent `limit` Done rows that carry an output blob, newest first.
+pub fn results_view(rows: &[LedgerRow], limit: usize) -> Vec<ResultRow> {
+    let mut done: Vec<&LedgerRow> = rows
+        .iter()
+        .filter(|r| r.status == JobStatus::Done && r.output_sha.is_some())
+        .collect();
+    done.sort_by(|a, b| b.ts.cmp(&a.ts));
+    done.into_iter()
+        .take(limit)
+        .map(|r| ResultRow {
+            kind: kind_label(&r.kind),
+            codec: r.cell.codec.clone(),
+            image_path: r.cell.image_path.clone(),
+            q: r.cell.q,
+            output_sha: r.output_sha.as_ref().map(|s| s.to_string()).unwrap_or_default(),
+            worker: r.worker.clone(),
+        })
+        .collect()
+}
+
 /// Per-worker live view (goal B: "live fleet per worker"). Derived from worker heartbeat reports —
 /// provider, tier, rate, uptime, jobs, and throughput. `jobs_per_min` is `jobs_done / uptime`.
 #[derive(Serialize, Debug, PartialEq)]
@@ -409,6 +441,23 @@ mod tests {
         assert_eq!(cvvdp.done, 1, "coverage = done/total");
         let ssim2 = c.iter().find(|r| r.metric == "ssim2").unwrap();
         assert_ne!(cvvdp.key, ssim2.key, "different description → different content-addressed key");
+    }
+
+    #[test]
+    fn results_view_lists_done_with_output_newest_first() {
+        let mut a = row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None);
+        a.output_sha = Some(sha256(b"score-a"));
+        a.ts = 100;
+        let mut b = row(JobKind::Metric { metric: "ssim2".into() }, "zenavif", JobStatus::Done, None);
+        b.output_sha = Some(sha256(b"score-b"));
+        b.ts = 200;
+        // a done row with no output blob, and a pending row — both excluded.
+        let no_out = row(JobKind::Metric { metric: "x".into() }, "c", JobStatus::Done, None);
+        let pending = row(JobKind::Metric { metric: "y".into() }, "c", JobStatus::Pending, None);
+        let r = results_view(&[a, no_out, pending, b], 10);
+        assert_eq!(r.len(), 2, "only done rows that produced an output blob");
+        assert_eq!(r[0].codec, "zenavif", "newest (ts=200) first");
+        assert_eq!(r[1].codec, "zenjpeg");
     }
 
     #[test]
