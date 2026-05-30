@@ -693,8 +693,31 @@ impl Drop for GpuContext {
       for the recommendation, "new context type?" answered (yes).
 - [x] NO public API changed; spikes are throwaway/gated (`cuda` and `wgpu`
       features, `examples/`).
-- [ ] Implementation — deferred to user approval of the §6 shape.
-      `MetricSession` is **ironclad at the pool level on wgpu/Metal** (no
-      `release()`-only fallback needed) per §2b; document the wgpu lazy-OS-
-      return asterisk in the `GpuContext` rustdoc when Option B ships.
+- [x] **FOUNDATION LANDED (task #154, 2026-05-30, commits `0053c0cc` +
+      `f7b396f4`).** Option B shipped as the opaque public types
+      `MetricSession` + `SessionMetric<'ctx>` + `MAX_SESSIONS_PER_BACKEND`
+      + `Error::TooManyContexts` in `zenmetrics-api` (no `cubecl-types` in
+      the public signature; the `unsafe set_stream` lives in each metric
+      crate's `#[doc(hidden)]` `session` module so the umbrella stays
+      `#![forbid(unsafe_code)]`). 128-slot-per-backend allocator (recycle
+      on `Drop`, hard `TooManyContexts` at the cap, never aliases);
+      `Drop` = `memory_cleanup()` + `sync()` on the private stream + slot
+      recycle; `leak()` / `reclaim()` opt-out + idle hook. **cvvdp-gpu
+      wired end-to-end** via the existing typed `Cvvdp<R>::new(client)`
+      seam (the other 5 return a clear "not yet wired" error — honest 1/6
+      fraction; the per-crate hook is mechanical follow-up). Tests
+      (cuda-gated, on the RTX 5070 box): cap/recycle/leak; cvvdp score
+      parity vs owned `Metric` within the metric's measured `Atomic<f32>`
+      reduction-noise band (~1e-6) on one-shot + warm-ref; **VRAM
+      isolation MEASURED via cubecl per-stream `memory_usage()`** — two
+      sessions ~203 MiB each, dropping one drove its pool `bytes_reserved`
+      to **0** while the other stayed `212841472`, then the second to 0;
+      plus a compile-fail borrow-check proof that `SessionMetric` cannot
+      outlive its session. `release()` / `reclaim_pooled_vram` /
+      `MetricContext<R>` unchanged. The §6 sketch named the type
+      `GpuContext`; the issue-#17 review settled on **`MetricSession`** —
+      that is the shipped name. The wgpu lazy-OS-return asterisk (§2b) is
+      documented in the `MetricSession` rustdoc; wgpu/hip/cpu backends
+      reach the allocator + `MetricSession` surface but only cvvdp on cuda
+      is hardware-verified here.
 ```
