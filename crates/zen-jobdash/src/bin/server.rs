@@ -95,7 +95,9 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
     // placeholder so the API is still reachable.
     let index = format!("{web_dir}/index.html");
     let mut app = if Path::new(&index).exists() {
-        let serve = ServeDir::new(web_dir).not_found_service(ServeFile::new(index));
+        // Serve built assets; any unmatched path (client routes, hard refreshes) falls back to
+        // index.html so the SPA always boots.
+        let serve = ServeDir::new(web_dir).fallback(ServeFile::new(index));
         api.fallback_service(serve)
     } else {
         api.fallback(placeholder)

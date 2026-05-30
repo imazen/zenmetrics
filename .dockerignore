@@ -1,5 +1,7 @@
 # Dockerfile.sweep.v26 build context — exclude bulk dirs
 target/
+**/node_modules/
+crates/zen-jobdash/web/dist/
 .git/
 .jj/
 .github/
