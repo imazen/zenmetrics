@@ -29,6 +29,9 @@ mod output;
 #[cfg(feature = "sweep")]
 mod sweep;
 
+#[cfg(feature = "sweep")]
+mod jobexec;
+
 #[cfg(feature = "orchestrator")]
 mod orchestrator_glue;
 
@@ -133,6 +136,12 @@ enum Command {
     /// `--features sweep`.
     #[cfg(feature = "sweep")]
     ScorePairs(ScorePairsArgs),
+    /// Execute ONE job from the zen job system: read a `DesiredJob` as JSON on stdin, do the
+    /// encode/score for that cell, write the output bytes (encode) or a JSON score row (metric) to
+    /// stdout. This is the `ZEN_EXEC` reference executor — point `zen-jobworker --exec` at it. Only
+    /// available with `--features sweep`. See `docs/RUNNING_JOBS.md`.
+    #[cfg(feature = "sweep")]
+    Jobexec(crate::jobexec::JobexecArgs),
     /// Assemble a training corpus by joining metric-score sidecars onto
     /// feature tables with a TYPED full-key join that makes the 2026-05-25
     /// parquet corruption (ref-only collapse + mock/human-copy leak)
@@ -542,6 +551,14 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        #[cfg(feature = "sweep")]
+        Command::Jobexec(args) => match crate::jobexec::run(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        },
         #[cfg(feature = "assemble")]
         Command::Assemble(args) => match crate::assemble::run_assemble(&args) {
             Ok(()) => ExitCode::SUCCESS,
@@ -895,7 +912,12 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             args.metric.name()
         );
     }
+    // The cvvdp batched scorer lives in the `gpu-cvvdp`-gated module. In a CPU build it doesn't exist,
+    // so cvvdp is rejected up front and the per-metric path below skips the cvvdp branch entirely —
+    // which is what lets a CPU `sweep` build (e.g. the jobexec worker image) compile.
+    #[cfg(feature = "gpu-cvvdp")]
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
+    #[cfg(feature = "gpu-cvvdp")]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
         let target = match args.display_model.as_deref() {
             Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
@@ -905,6 +927,10 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
                 .map_err(|e| format!("CvvdpBatchScorer init: {e}"))?,
         );
+    }
+    #[cfg(not(feature = "gpu-cvvdp"))]
+    if args.metric == crate::metrics::MetricKind::Cvvdp {
+        return Err("cvvdp requires a GPU build (build with --features gpu,gpu-cvvdp)".into());
     }
     // NOTE: IwssimBatchScorer used to be wired here for per-(W,H) JIT
     // caching, but the local CLI iwssim_gpu module depended on the
@@ -943,6 +969,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
         // scorer path emits a single column; everything else routes
         // through `score_one_pair` → `run_metric`, which can emit
         // multiple columns (e.g. butteraugli's max + pnorm3).
+        #[cfg(feature = "gpu-cvvdp")]
         let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> =
             if let Some(scorer) = cvvdp_scorer.as_mut() {
                 match (
@@ -955,6 +982,9 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
             } else {
                 score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime)
             };
+        #[cfg(not(feature = "gpu-cvvdp"))]
+        let pair_result: Result<Vec<f64>, Box<dyn std::error::Error>> =
+            score_one_pair(args.metric, &ref_path, &dist_path, args.gpu_runtime);
         let per_pair: Vec<f64> = match pair_result {
             Ok(v) if v.len() == metric_cols.len() => {
                 succeeded += 1;

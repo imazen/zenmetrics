@@ -19,6 +19,19 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: real executor `zen-metrics jobexec` (encode + score) + CPU `sweep` build fix**
+  (2026-05-30). New `zen-metrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
+  `DesiredJob` JSON on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd),
+  and for an `encode` job emits the encoded bytes, for a `metric` job re-encodes the cell + scores it
+  with `run_metric` and emits a JSON score row — honoring the stdin-JSON → stdout-bytes contract.
+  Reuses `sweep::encode` + the unified `run_metric` (CPU metrics ssim2/butteraugli/zensim; GPU metrics
+  return a clear "needs a GPU build" error). Proven end-to-end through the actual worker:
+  declare → claim → jobexec (real zenjpeg/zenwebp encode + ssim2 score) → content-addressed blob +
+  ledger row, blob sha256 == output_sha. `scripts/jobsys/zen-jobexec` is the single-program shim for
+  `ZEN_EXEC`. Also fixes a pre-existing break: `cmd_score_pairs` referenced the `gpu-cvvdp`-gated
+  `cvvdp_gpu` module unconditionally, so a CPU-only `sweep` build didn't compile; the cvvdp blocks are
+  now gated (`#[cfg(feature = "gpu-cvvdp")]`) with a CPU-build early error, leaving the GPU build
+  unchanged.
 - **Job system: `docs/RUNNING_JOBS.md` + Unraid basement-tier setup + executor-contract template**
   (2026-05-30). Thorough end-to-end guide (mental model, executor contract, declare, fleet, Unraid
   basement tier, monitor, results, teardown/GC, worked example, real-job checklist). New
