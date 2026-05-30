@@ -4,3 +4,6 @@
 /.jj
 /.git
 /scripts
+# Frontend build artifacts — the Docker node stage rebuilds them from package-lock.json.
+crates/zen-jobdash/web/node_modules
+crates/zen-jobdash/web/dist
