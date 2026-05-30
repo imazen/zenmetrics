@@ -19,6 +19,13 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: idle-box reaping (goal F) + notification mechanism proven (goal D)** (2026-05-29).
+  `zen_jobdash::idle_boxes` flags running fleet boxes with no matching worker heartbeat (billing,
+  doing no work); `ControlIntent::ReapIdle` + a dashboard "Reap idle (N)" button tear them down via
+  the Hetzner client, and `/api/fleet` now reports the idle set. The notification path (detect →
+  format → POST with deep link) is demonstrated live against a local receiver by
+  `scripts/jobsys/demo_notify_local.sh` (budget-crossed fired with the deep-link payload) — the only
+  thing a production channel adds is the destination URL (`ZEN_NOTIFY_WEBHOOK`).
 - **Job system: pause / resume / drain (goal C)** (2026-05-29). New `zen_job_core::RunControl`
   (`{paused,drain}`); `zen-jobworker --control-r2-key` reads it and pulls no new work when
   paused/draining (fail-open — absent = running), never touching the ledger so resume continues

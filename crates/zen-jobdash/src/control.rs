@@ -79,6 +79,8 @@ pub enum ControlIntent {
     Pause { run: String },
     Drain { run: String },
     Resume { run: String },
+    /// Tear down running fleet boxes that have no matching worker heartbeat (goal F: idle reaping).
+    ReapIdle,
 }
 
 #[cfg(test)]

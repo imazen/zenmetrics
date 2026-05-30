@@ -86,6 +86,8 @@ export interface FleetView {
   actuation: boolean
   label: string
   boxes: FleetBox[]
+  /** Names of running boxes with no matching worker heartbeat (idle reap targets, goal F). */
+  idle?: string[]
   note?: string
   error?: string
 }
@@ -132,6 +134,7 @@ export const api = {
   pause: () => postControl({ action: "pause", run: "global" }),
   drain: () => postControl({ action: "drain", run: "global" }),
   resume: () => postControl({ action: "resume", run: "global" }),
+  reapIdle: () => postControl({ action: "reap_idle" }),
 }
 
 export function fmtUsd(n: number | null | undefined): string {

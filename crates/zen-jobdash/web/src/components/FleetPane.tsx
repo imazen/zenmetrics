@@ -1,10 +1,12 @@
-import { ServerOff } from "lucide-react"
+import { useState } from "react"
+import { Recycle, ServerOff } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { KillFleetButton } from "@/components/KillFleetButton"
-import type { FleetView } from "@/lib/api"
+import { api, type FleetView } from "@/lib/api"
 
 function statusBadge(status: string) {
   if (status === "running") return <Badge variant="success">running</Badge>
@@ -15,6 +17,17 @@ function statusBadge(status: string) {
 
 export function FleetPane({ fleet, onChange }: { fleet?: FleetView; onChange?: () => void }) {
   const boxes = fleet?.boxes ?? []
+  const idle = fleet?.idle ?? []
+  const [reaping, setReaping] = useState(false)
+  async function reap() {
+    setReaping(true)
+    try {
+      await api.reapIdle()
+      onChange?.()
+    } finally {
+      setReaping(false)
+    }
+  }
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4">
@@ -22,19 +35,27 @@ export function FleetPane({ fleet, onChange }: { fleet?: FleetView; onChange?: (
           <CardTitle>Live fleet</CardTitle>
           <CardDescription>
             Boxes Hetzner reports for label <code className="font-mono">{fleet?.label ?? "group"}</code>.{" "}
+            {idle.length > 0 && <span className="text-amber-400">{idle.length} idle (no worker heartbeat).</span>}{" "}
             {fleet && !fleet.actuation && (
               <span className="text-amber-400">{fleet.note ?? "kill won't actuate (no token)"}</span>
             )}
             {fleet?.error && <span className="text-destructive">{fleet.error}</span>}
           </CardDescription>
         </div>
-        <KillFleetButton
-          boxCount={boxes.length}
-          canActuate={fleet?.actuation ?? false}
-          label={fleet?.label ?? "group"}
-          size="sm"
-          onDone={onChange}
-        />
+        <div className="flex gap-2">
+          {idle.length > 0 && (
+            <Button variant="outline" size="sm" onClick={reap} disabled={reaping}>
+              <Recycle /> Reap idle ({idle.length})
+            </Button>
+          )}
+          <KillFleetButton
+            boxCount={boxes.length}
+            canActuate={fleet?.actuation ?? false}
+            label={fleet?.label ?? "group"}
+            size="sm"
+            onDone={onChange}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         {boxes.length === 0 ? (

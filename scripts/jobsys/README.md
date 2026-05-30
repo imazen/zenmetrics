@@ -63,5 +63,19 @@ bash scripts/jobsys/demo_pause_drain_r2.sh        # KEEP=1 to retain the R2 pref
 
 Verified run 2026-05-30: PAUSED/DRAINING passes did `done=0`; RESUME did `done=1`.
 
+## `demo_notify_local.sh` — goal D (notifications)
+
+Points the dashboard's `ZEN_NOTIFY_WEBHOOK` at a local HTTP receiver and feeds it a worker fixture
+that crosses a budget cap, proving the full detect → format → POST path fires with a deep link — no
+external service or real channel needed. The only thing a production channel adds is the destination
+(set `ZEN_NOTIFY_WEBHOOK` to your Slack/Discord/ntfy URL).
+
+```bash
+bash scripts/jobsys/demo_notify_local.sh
+```
+
+Verified run 2026-05-30: received
+`{"text":"budget crossed: $0.35 >= cap $0.10 - paid tiers tearing down — https://…/#cost"}`.
+
 The dashboard side of these same guarantees (coverage/catalog, progress, cost, kill, stop-spend,
 pause/drain/resume) is live at the Railway deployment; see `crates/zen-jobdash`.

@@ -168,6 +168,18 @@ pub async fn kill_fleet(client: &reqwest::Client, token: &str, selector: &str, l
     out
 }
 
+/// Idle / orphan boxes (goal F: "idle boxes reaped"): running fleet boxes with **no matching worker
+/// heartbeat** — a box that's billing but doing no work (its worker died or never started). These are
+/// the reap targets. Matching is by name (a fleet box `arm-iter3-001` vs a `WorkerReport.worker` of
+/// the same name). A caller reaps with [`kill_named`] on the returned names.
+pub fn idle_boxes(boxes: &[FleetBox], worker_names: &std::collections::HashSet<String>) -> Vec<FleetBox> {
+    boxes
+        .iter()
+        .filter(|b| b.status == "running" && !worker_names.contains(&b.name))
+        .cloned()
+        .collect()
+}
+
 /// Kill specific boxes by name (goal C/F: stop-spend tears down named paid workers). Only deletes
 /// boxes that carry the fleet label AND whose name is in `names` — so an over-budget teardown can
 /// never touch an unlabeled box (e.g. a persistent dev box) even if a worker name happened to match.
@@ -249,6 +261,25 @@ mod tests {
     fn urlencode_preserves_selector_syntax() {
         assert_eq!(urlencode("group=arm,role=worker"), "group=arm,role=worker");
         assert_eq!(urlencode("a b"), "a%20b");
+    }
+
+    #[test]
+    fn idle_boxes_are_running_without_a_worker() {
+        let b = |name: &str, status: &str| FleetBox {
+            id: 1,
+            name: name.into(),
+            status: status.into(),
+            server_type: "cax21".into(),
+            datacenter: "fsn1".into(),
+            ipv4: None,
+            group: Some("g".into()),
+        };
+        let boxes = vec![b("w-001", "running"), b("w-002", "running"), b("w-003", "off")];
+        let workers: std::collections::HashSet<String> = ["w-001".to_string()].into_iter().collect();
+        let idle = idle_boxes(&boxes, &workers);
+        // w-002 is running but has no worker heartbeat → idle; w-001 has one; w-003 isn't running.
+        assert_eq!(idle.len(), 1);
+        assert_eq!(idle[0].name, "w-002");
     }
 
     #[test]

@@ -34,9 +34,9 @@ use tower_http::services::{ServeDir, ServeFile};
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
     catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run, kill_fleet, kill_named, list_fleet, progress, run_summary, selector_for, stop_spend,
-    storage, workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox,
-    KindProgress, NotifyPayload, RunSummary, TierStorage, WorkerStat,
+    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, run_summary, selector_for,
+    stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView, DashData, FailureCell,
+    FleetBox, KindProgress, NotifyPayload, RunSummary, TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -288,7 +288,14 @@ async fn api_fleet(State(s): State<AppState>) -> Json<serde_json::Value> {
     let label = fleet_label_key();
     match fleet_token() {
         Some(token) => match list_fleet(&s.http, &token, &label, &label).await {
-            Ok(boxes) => Json(serde_json::json!({ "actuation": true, "label": label, "boxes": boxes })),
+            Ok(boxes) => {
+                // Flag idle/orphan boxes (running, no matching worker heartbeat) — goal F reap targets.
+                let worker_names: HashSet<String> =
+                    s.data.read().await.workers.iter().map(|w| w.worker.clone()).collect();
+                let idle: Vec<String> =
+                    idle_boxes(&boxes, &worker_names).into_iter().map(|b| b.name).collect();
+                Json(serde_json::json!({ "actuation": true, "label": label, "boxes": boxes, "idle": idle }))
+            }
             Err(e) => Json(serde_json::json!({ "actuation": true, "label": label, "boxes": Vec::<FleetBox>::new(), "error": e })),
         },
         None => Json(serde_json::json!({
@@ -319,6 +326,32 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
                 "action": "kill", "actuated": false, "selector": selector,
                 "note": "no HETZNER_API_TOKEN — intent recorded, no boxes touched"
             })),
+        };
+    }
+
+    // Idle reaping (goal F): kill running fleet boxes with no matching worker heartbeat. Needs the
+    // worker list (from the ledger) + a live fleet list, so it's handled before the GC read lock.
+    if matches!(intent, ControlIntent::ReapIdle) {
+        let label = fleet_label_key();
+        return match fleet_token() {
+            Some(token) => {
+                let worker_names: HashSet<String> =
+                    s.data.read().await.workers.iter().map(|w| w.worker.clone()).collect();
+                match list_fleet(&s.http, &token, &label, &label).await {
+                    Ok(boxes) => {
+                        let idle = idle_boxes(&boxes, &worker_names);
+                        if idle.is_empty() {
+                            Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "reaped": [], "note": "no idle boxes" }))
+                        } else {
+                            let names: Vec<String> = idle.iter().map(|b| b.name.clone()).collect();
+                            let result = kill_named(&s.http, &token, &names, &label).await;
+                            Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "result": result }))
+                        }
+                    }
+                    Err(e) => Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "error": e })),
+                }
+            }
+            None => Json(serde_json::json!({ "action": "reap_idle", "actuated": false, "note": "no HETZNER_API_TOKEN" })),
         };
     }
 
