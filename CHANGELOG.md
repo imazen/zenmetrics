@@ -19,6 +19,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **zen-jobdash: shadcn control-plane SPA + auth + fleet actuation** (2026-05-29).
+  Replaced the inline-HTML dashboard with a React + Vite + Tailwind v4 + shadcn/ui
+  SPA (built in a Docker node stage, served by axum). Adds HTTP Basic Auth gated on
+  `ZEN_DASH_PASSWORD` (`79e4743f`); a minimal inlined Hetzner client that **actuates**
+  `KillFleet/Tier/Run`, scoped to a label-existence selector so unlabeled dev boxes are
+  never touched, plus `/api/fleet` live-box visibility (`79e4743f`, `00d0fe4c`);
+  per-worker monitoring `/api/workers` (provider·tier·$/hr·uptime·jobs/min·spent) and
+  **stop-spend actuation** that tears down paid workers over budget while free tiers
+  drain (`0152d11d`); and a result-catalog `/api/catalog` coverage view (semantic
+  identity · q-range · done/total, find-by-description) for goal I (`74fd7f7a`).
+  Deployed on Railway; goals B/C/F advanced and the goal-I catalog surfaced in-browser.
 - **VRAM pool reclaim API + audit** (task #150, 2026-05-29). cubecl pools
   GPU buffers across `Handle` drop, so dropping a `Metric` returns its
   buffers to the pool free list but the device pages stay resident (the
