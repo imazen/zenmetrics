@@ -60,14 +60,20 @@ the job JSON back as the "output"). It proves the whole pipeline end-to-end — 
 content-address, ledger, coverage, multi-provider concurrency — **without doing real work**. Every
 live proof in this repo (including the 3-provider run) used it.
 
-**What you supply for real work:** any program honoring the stdin-JSON → stdout-bytes contract, **baked
-into a worker image**. `scripts/jobsys/example_executor.py` is a working template — branch on
-`kind`, fetch inputs from R2 by sha, shell out to your codec/scorer, write the result bytes. A
-reference real executor (`zen-metrics jobexec`) is specified by this contract but **not yet
-implemented** — don't assume real codec/metric execution runs out of the box; you wire it.
+**The real executor now ships: `zen-metrics jobexec`.** It honors the contract: reads the `DesiredJob`
+on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd), and for an `encode`
+job emits the encoded bytes, for a `metric` job re-encodes the cell + scores it (`run_metric`) and
+emits a JSON score row. Codecs: zenpng/zenjpeg/zenwebp/zenavif/zenjxl. Metrics: CPU ssim2/butteraugli/
+zensim today (GPU metrics return a clear "needs a GPU build" error — they want a GPU build + tier).
+Proven end-to-end through the real worker (encode + score → content-addressed blob, blob sha == output_sha).
 
-> If you tell me your real job (codec/metric + where your corpus lives in R2), I'll implement the
-> matching executor and bake a real-executor image so steps 4–8 below run your actual workload.
+**It is baked into a ready image: `ghcr.io/imazen/zen-jobworker-exec:latest`** (the worker base +
+`zen-metrics` + the `zen-jobexec` shim; `ZEN_EXEC` defaults to the real executor). Set
+`ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest` on any tier to run real jobs. ⚠️ The image
+is currently **private** — make it public once (GitHub → imazen packages → `zen-jobworker-exec` →
+Package settings → Change visibility → Public, same one-click step as the base image) so fleet boxes
+pull credential-less. Rebuild it with `scripts/jobsys/build_executor_image.sh` after changing the
+executor. `scripts/jobsys/example_executor.py` remains as a template if you'd rather write your own.
 
 ---
 
@@ -230,12 +236,16 @@ bash scripts/jobsys/teardown_fleet.sh <RUN>       # tear it all down
 
 ## 11. Checklist to run YOUR real job
 
-1. **Corpus in R2** — your source images uploaded under the bucket; know their paths/shas.
-2. **Executor** — implement the contract (§2) for your codec/metric (start from
-   `scripts/jobsys/example_executor.py`); test it locally:
-   `echo '<DesiredJob json>' | ./your_executor` → bytes on stdout, exit 0.
-3. **Real-executor image** — `FROM ghcr.io/imazen/zen-jobworker`, `COPY` your executor + any codec/
-   scorer binaries in, push to a registry; set `ZEN_WORKER_IMAGE` to it and `ZEN_EXEC` to your executor.
-4. **Declare** the real spec (§4) and check coverage (`catalog`) — enqueue only the gap.
-5. **Launch** the fleet (§5) + add the Unraid basement tier (§6).
-6. **Monitor** (§7), **collect** results from the ledger/blobs (§8), **tear down + GC** (§9).
+1. **Corpus in R2** — upload your source images under the bucket; set `ZEN_CORPUS_PREFIX` so
+   `jobexec` resolves each `cell.image_path` to `s3://$ZEN_BUCKET/$ZEN_CORPUS_PREFIX/<image_path>`
+   (or use `s3://…`/local paths). `jobexec` fetches them with s5cmd.
+2. **Executor + image — already built.** `zen-metrics jobexec` does real encode+score (§2), baked into
+   `ghcr.io/imazen/zen-jobworker-exec:latest`. Just **make that ghcr package public** (one-click, §2)
+   so fleet boxes pull it. (Only write your own via `example_executor.py` + `build_executor_image.sh`
+   if you need a codec/metric `jobexec` doesn't cover.)
+3. **Declare** the real spec (§4) — `items` of `(image_path, codec, q, knob_tuple_json, encode_sha)` ×
+   `metrics` — and check coverage (`catalog`); enqueue only the gap.
+4. **Launch** with the real image: `ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest` +
+   `ZEN_CORPUS_PREFIX=<your corpus prefix>` on `launch_fleet.sh` (§5) and `unraid_worker.sh` for the
+   basement tier (§6). `ZEN_EXEC` defaults to the real executor in that image.
+5. **Monitor** (§7), **collect** scores/encodes from the ledger/blobs (§8), **tear down + GC** (§9).

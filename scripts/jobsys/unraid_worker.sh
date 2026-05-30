@@ -20,8 +20,11 @@ set -euo pipefail
 RUN="${1:?usage: unraid_worker.sh <RUN> [TTL_DAYS] [CAPABILITY]}"
 TTL_DAYS="${2:-7}"; CAP="${3:-}"
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"   # multi-arch (amd64+arm64)
+# For REAL jobs: ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest (bakes zen-metrics jobexec;
+# its ZEN_EXEC default is the real executor) + ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
-EXEC="${ZEN_EXEC:-/bin/cat}"   # /bin/cat = synthetic. For real work bake an executor + set this to it.
+EXEC="${ZEN_EXEC:-/bin/cat}"   # /bin/cat = synthetic; the exec image defaults this to the real executor.
+CORPUS="${ZEN_CORPUS_PREFIX:-}"   # R2 prefix under the bucket where source images live (real jobs)
 TTL=$(( TTL_DAYS * 86400 )); [ "$TTL" -ge 900 ] && [ "$TTL" -le 604800 ] || { echo "TTL_DAYS must be 1..7"; exit 1; }
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
@@ -62,6 +65,7 @@ docker run -d --name zen-worker-$RUN --restart no \\
   -e ZEN_PROVIDER=basement \\
   -e ZEN_WORKER=unraid \\
   -e ZEN_EXEC=$EXEC \\
+  -e ZEN_CORPUS_PREFIX=$CORPUS \\
   -e ZEN_CONTROL_KEY=$RUN/control.json \\
   -e ZEN_SPEC_THRESHOLD_SECS=20 \\
   -e ZEN_IDLE_PASSES=8 \\${CAP:+

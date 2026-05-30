@@ -18,7 +18,12 @@
 #   Salad (distributed consumer-network burst, a distinct provider) — any ≥3 = a heterogeneous fleet on
 #   one R2 queue. e.g. `… 60 1 0 0 1` = local + Hetzner-x86 + Salad = 3 distinct providers.
 set -euo pipefail
+# Default image runs the SYNTHETIC executor (/bin/cat) — for the demos/proofs. For REAL jobs set
+# ZEN_WORKER_IMAGE=ghcr.io/imazen/zen-jobworker-exec:latest (bakes zen-metrics jobexec; its image-level
+# ZEN_EXEC default is the real executor) and ZEN_CORPUS_PREFIX=<R2 prefix of your source images>.
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"
+EXEC="${ZEN_EXEC:-/bin/cat}"           # override for real work (or rely on the exec image's ZEN_EXEC default)
+CORPUS="${ZEN_CORPUS_PREFIX:-}"        # R2 prefix under the bucket where source images live (real jobs)
 N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"; N_SALAD="${5:-0}"
 SALAD_ORG="${SALAD_ORGANIZATION:-imazen}"; SALAD_PROJECT="${SALAD_PROJECT:-zenmetrics}"
 BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
@@ -77,7 +82,7 @@ json.dump(j, open("/tmp/fleet_manifest_"+w+".json","w"))'
 envblock() { cat <<EOF
 -e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto
 -e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=${2:-$MANIFEST}
--e ZEN_PROVIDER=$1 -e ZEN_EXEC=/bin/cat -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
+-e ZEN_PROVIDER=$1 -e ZEN_EXEC=$EXEC -e ZEN_CORPUS_PREFIX=$CORPUS -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
 EOF
 }
 
@@ -123,13 +128,13 @@ done
 #       reqwest client (examples/fleet_create.rs), whose TLS signature passes where urllib/curl 403.
 if [ "$N_SALAD" -gt 0 ]; then
   SALAD_MANIFEST="$(shuf_manifest salad-1)"   # per-worker shuffled claim order (see shuf_manifest)
-  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" python3 -c '
+  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" CORPUS="$CORPUS" python3 -c '
 import json,os
 print(json.dumps({"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":os.environ["SK"],
 "AWS_SESSION_TOKEN":os.environ["ST"],"AWS_REGION":"auto","ZEN_R2_ENDPOINT":os.environ["EP"],
 "ZEN_BUCKET":os.environ["BUCKET"],"ZEN_RUN":os.environ["RUN"],"ZEN_MANIFEST_URI":os.environ["MANIFEST"],
 "ZEN_PROVIDER":"salad","ZEN_SPEC_THRESHOLD_SECS":"20","ZEN_CONTROL_KEY":os.environ["CTLKEY"],
-"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}))')"
+"ZEN_CORPUS_PREFIX":os.environ.get("CORPUS",""),"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}))')"
   EX="$ROOT/target/release/examples/fleet_create"
   [ -x "$EX" ] || { cargo build --release -p zen-cloud-salad --example fleet_create >/dev/null 2>&1 || true; }
   [ -x "$EX" ] || EX="$ROOT/target/debug/examples/fleet_create"

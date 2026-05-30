@@ -19,6 +19,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: real-executor fleet image `ghcr.io/imazen/zen-jobworker-exec` + corpus plumbing**
+  (2026-05-30). `crates/zen-jobworker/Dockerfile.executor` + `scripts/jobsys/build_executor_image.sh`
+  bake the worker base + a prebuilt `zen-metrics` (with `jobexec`) + the `zen-jobexec` shim, with
+  image-level `ENV ZEN_EXEC=/usr/local/bin/zen-jobexec` so a fleet box runs REAL encode/score jobs.
+  Built + pushed (amd64; binary needs glibc ≤2.35, bookworm ships 2.36; runs in-image — verified real
+  zenjpeg encode + ssim2 score through the container). `launch_fleet.sh` + `unraid_worker.sh` now pass
+  `ZEN_CORPUS_PREFIX` (so `jobexec` resolves `cell.image_path` from R2) and an overridable `ZEN_EXEC`;
+  set `ZEN_WORKER_IMAGE=…/zen-jobworker-exec:latest` + `ZEN_CORPUS_PREFIX=<prefix>` for real jobs.
+  `docs/RUNNING_JOBS.md` updated. NOTE: the ghcr `zen-jobworker-exec` package is **private** — make it
+  public (one-click, like the base image) for credential-less fleet pulls. arm64 image pending an
+  arm64 `zen-metrics` build.
 - **Job system: real executor `zen-metrics jobexec` (encode + score) + CPU `sweep` build fix**
   (2026-05-30). New `zen-metrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
   `DesiredJob` JSON on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd),
