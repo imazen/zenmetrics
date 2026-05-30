@@ -1,0 +1,67 @@
+name: Job-worker fleet image
+
+# Builds the ready-to-run zen-jobworker fleet image (goal H). The Dockerfile builds the binary inside
+# from the trimmed Cargo.deploy.toml (no sibling/CUDA deps), then bakes aws-cli v2 + s5cmd + a
+# keep-alive entrypoint. A fleet box pulls this and claims work with zero boot-time installs.
+#
+# Tags: ghcr.io/imazen/zen-jobworker:<sha> (every push) + :latest (master).
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "crates/zen-job-core/**"
+      - "crates/zen-ledger/**"
+      - "crates/zen-jobworker/**"
+      - "Cargo.deploy.toml"
+      - ".github/workflows/jobworker-image.yml"
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/imazen/zen-jobworker
+  REGISTRY: ghcr.io
+
+jobs:
+  build-image:
+    name: Build + push job-worker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute tags
+        id: tags
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          T="${IMAGE_NAME}:${SHA}"
+          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            T="${T},${IMAGE_NAME}:latest"
+          fi
+          echo "tags=$T" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Build + push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: crates/zen-jobworker/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+          provenance: false
+      - name: Verify pushed image
+        run: |
+          SHA="${{ steps.tags.outputs.sha }}"
+          docker run --rm --entrypoint /usr/local/bin/zen-jobworker "${IMAGE_NAME}:${SHA}" --help | grep -q control-r2-key
+          docker run --rm --entrypoint /usr/local/bin/zen-jobgc     "${IMAGE_NAME}:${SHA}" --help | grep -q blob-index
+          docker run --rm --entrypoint /usr/local/bin/aws           "${IMAGE_NAME}:${SHA}" --version
+          docker run --rm --entrypoint /usr/local/bin/s5cmd         "${IMAGE_NAME}:${SHA}" version
+          echo "image OK: ${IMAGE_NAME}:${SHA}"

@@ -19,6 +19,15 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: baked fleet-worker image + launcher (goal H)** (2026-05-30).
+  `crates/zen-jobworker/Dockerfile` bakes `zen-jobworker` + `zen-jobgc` + aws-cli v2 + s5cmd + a
+  keep-alive entrypoint (`fleet-entrypoint.sh`) so a fleet box claims work with **zero boot-time
+  installs** — designing out the two bugs a 2026-05-30 ad-hoc test hit (python-unzip dropping the aws
+  exec bit; a container with no keep-alive). CI `jobworker-image.yml` builds + pushes
+  `ghcr.io/imazen/zen-jobworker:{<sha>,latest}`. `scripts/jobsys/{launch,watch,teardown}_fleet.sh`
+  bring up ≥3 interchangeable tiers (local + Hetzner + vast) on one R2 lease-queue with scoped temp
+  creds, tearing down by `group=<run>` label. (That ad-hoc test already had Hetzner do 60 real jobs on
+  the queue + the dashboard's Kill delete the live box; the image makes a clean 3-tier launch reliable.)
 - **VRAM-on-drop design proposal + isolation spike (task #152)** (2026-05-30). Measured proof
   (`crates/cvvdp-gpu/examples/vram_isolation_spike.rs`, throwaway, gated behind `cuda`) that cubecl's
   CUDA memory pools are per-stream and free independently: dropping a context on its own explicit

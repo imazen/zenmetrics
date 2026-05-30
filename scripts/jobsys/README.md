@@ -107,6 +107,24 @@ zen-jobgc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.
   --r2-endpoint "$EP" --cheap-cap-bytes 1000000   # add --execute to delete
 ```
 
+## `launch_fleet.sh` / `watch_fleet.sh` / `teardown_fleet.sh` — goal H (heterogeneous fleet)
+
+Bring up ≥3 interchangeable tiers (local + Hetzner + vast) on ONE R2 lease-queue, all running the same
+**baked** `ghcr.io/imazen/zen-jobworker` image (binary + aws-cli + s5cmd + keep-alive entrypoint —
+zero boot-time installs, per the bake-everything rule; image built by `.github/workflows/jobworker-image.yml`).
+Scoped temp R2 creds per run; teardown by `group=<run>` label (or the dashboard Kill controls).
+
+```bash
+# one-time: ensure CI pushed the image and the ghcr package is public
+bash scripts/jobsys/launch_fleet.sh 200 1 1   # 200 jobs, 1 Hetzner box, 1 vast box  (SPENDS MONEY)
+bash scripts/jobsys/watch_fleet.sh  <RUN>      # ledger DONE rows by provider — proves concurrent tiers
+bash scripts/jobsys/teardown_fleet.sh <RUN>    # delete every box for this run
+```
+
+A 2026-05-30 ad-hoc test (before this image existed) already had a Hetzner box do **60 real jobs** on
+the shared queue and tore it down via the **dashboard's Kill** — the image makes the full clean 3-tier
+launch reliable + repeatable.
+
 The dashboard side of these guarantees (coverage/catalog, progress + speculative count, cost, kill,
 stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query, GC dry-run preview) is live at
 the Railway deployment; see `crates/zen-jobdash`. Notifications go to ntfy (`ZEN_NOTIFY_WEBHOOK` +
