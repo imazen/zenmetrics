@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
-//! Railway entrypoint: serves monitoring views + control API over the Parquet ledger, **live-reloading**
-//! it on an interval (so views reflect the fleet's real runs) and **firing notifications** to a webhook.
+//! Railway entrypoint: serves the shadcn dashboard SPA + monitoring views + control API over the
+//! Parquet ledger, **live-reloading** it on an interval and **firing notifications** to a webhook.
+//! Control actions that tear down paid boxes are **actuated here** against the Hetzner fleet (goal C).
 //!
 //! Config via env (Railway dashboard):
 //!   ZEN_LEDGER, ZEN_BLOB_INDEX, ZEN_WORKERS_JSON  — local paths or s3:// URIs (R2)
@@ -9,28 +10,40 @@
 //!   ZEN_NOTIFY_WEBHOOK                            — Slack/Discord/ntfy webhook URL (optional; goal D)
 //!   ZEN_PUBLIC_URL                                — base URL for notification deep links
 //!   ZEN_BUDGET_CAP_USD (default 0=off), ZEN_POISON_THRESHOLD (default 10)
+//!   ZEN_DASH_PASSWORD                             — HTTP Basic Auth password (empty ⇒ open; logs a warning)
+//!   HETZNER_API_TOKEN / ZEN_HCLOUD_TOKEN          — fleet kill + live-fleet visibility (goal C/H)
+//!   ZEN_FLEET_LABEL (default `group`)             — label that scopes which boxes a KILL may touch
+//!   ZEN_WEB_DIR (default ./web/dist)              — built shadcn SPA assets to serve
 //!   PORT                                          — injected by Railway (default 3000)
-//!
-//! The dashboard never runs workers — it reads the ledger and emits control intents/plans.
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::response::Html;
+use axum::extract::{Request, State};
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use tokio::sync::RwLock;
+use tower_http::services::{ServeDir, ServeFile};
 
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
-    cost_view, detect, failures, format_event, gc_dry_run, progress, stop_spend, storage,
-    ControlIntent, CostView, DashData, FailureCell, KindProgress, NotifyPayload, TierStorage,
+    cost_view, detect, failures, fleet_label_key, fleet_token, format_event, gc_dry_run, kill_fleet,
+    list_fleet, progress, selector_for, stop_spend, storage, ControlIntent, CostView, DashData,
+    FailureCell, FleetBox, KindProgress, NotifyPayload, TierStorage,
 };
 
-type Shared = Arc<RwLock<DashData>>;
+/// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
+#[derive(Clone)]
+struct AppState {
+    data: Arc<RwLock<DashData>>,
+    http: reqwest::Client,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,31 +57,133 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data.blobs.len(),
         data.workers.len()
     );
-    let state: Shared = Arc::new(RwLock::new(data));
+    let state = AppState { data: Arc::new(RwLock::new(data)), http: reqwest::Client::new() };
+
+    if std::env::var("ZEN_DASH_PASSWORD").ok().filter(|p| !p.is_empty()).is_none() {
+        eprintln!("zen-jobdash: WARNING: ZEN_DASH_PASSWORD unset — dashboard is UNAUTHENTICATED.");
+    }
+    if fleet_token().is_none() {
+        eprintln!("zen-jobdash: note: no HETZNER_API_TOKEN — kill controls record intent but won't actuate.");
+    }
 
     // Background: reload the ledger on an interval (live views) + fire notifications (goal D).
-    tokio::spawn(refresh_loop(state.clone()));
+    tokio::spawn(refresh_loop(state.data.clone()));
 
-    let app = Router::new()
-        .route("/", get(index))
-        .route("/api/progress", get(api_progress))
-        .route("/api/failures", get(api_failures))
-        .route("/api/cost", get(api_cost))
-        .route("/api/storage", get(api_storage))
-        .route("/api/control", post(api_control))
-        .with_state(state);
+    let web_dir = std::env::var("ZEN_WEB_DIR").unwrap_or_else(|_| "./web/dist".to_string());
+    let app = build_router(state, &web_dir);
 
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    eprintln!("zen-jobdash listening on http://{addr}");
+    eprintln!("zen-jobdash listening on http://{addr} (web_dir={web_dir})");
     axum::serve(listener, app).await?;
     Ok(())
 }
 
+fn build_router(state: AppState, web_dir: &str) -> Router {
+    let api = Router::new()
+        .route("/api/progress", get(api_progress))
+        .route("/api/failures", get(api_failures))
+        .route("/api/cost", get(api_cost))
+        .route("/api/storage", get(api_storage))
+        .route("/api/fleet", get(api_fleet))
+        .route("/api/control", post(api_control))
+        .with_state(state);
+
+    // Serve the built shadcn SPA at the root; unknown paths fall back to index.html (client routing).
+    // If the build output is absent (e.g. running locally without `npm run build`), serve a minimal
+    // placeholder so the API is still reachable.
+    let index = format!("{web_dir}/index.html");
+    let mut app = if Path::new(&index).exists() {
+        let serve = ServeDir::new(web_dir).not_found_service(ServeFile::new(index));
+        api.fallback_service(serve)
+    } else {
+        api.fallback(placeholder)
+    };
+    // Health check is exempt from auth so Railway probes never 401.
+    app = app.route("/healthz", get(|| async { "ok" }));
+    app.layer(middleware::from_fn(require_auth))
+}
+
+/// HTTP Basic Auth gate (goal: password protection). When `ZEN_DASH_PASSWORD` is set, every request
+/// (except `/healthz`) must carry `Authorization: Basic base64("<anything>:<password>")`; on miss we
+/// return 401 + `WWW-Authenticate`, so browsers show a native login prompt and cache it for the SPA's
+/// `fetch()` calls. When unset, the gate is open (a warning is logged at startup).
+async fn require_auth(req: Request, next: Next) -> Response {
+    let password = std::env::var("ZEN_DASH_PASSWORD").unwrap_or_default();
+    if password.is_empty() || req.uri().path() == "/healthz" {
+        return next.run(req).await;
+    }
+    let ok = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Basic "))
+        .and_then(basic_password)
+        .map(|p| constant_time_eq(p.as_bytes(), password.as_bytes()))
+        .unwrap_or(false);
+    if ok {
+        next.run(req).await
+    } else {
+        let mut resp = (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+        resp.headers_mut().insert(
+            header::WWW_AUTHENTICATE,
+            HeaderValue::from_static("Basic realm=\"zen-jobdash\", charset=\"UTF-8\""),
+        );
+        resp
+    }
+}
+
+/// Decode a `Basic` credential, returning the password half of `user:password`.
+fn basic_password(b64: &str) -> Option<String> {
+    let decoded = base64_decode(b64.trim())?;
+    let s = String::from_utf8(decoded).ok()?;
+    s.split_once(':').map(|(_, pw)| pw.to_string())
+}
+
+/// Length-independent byte comparison (avoids leaking the password length via early return).
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Minimal standard-alphabet base64 decoder (no external dep). Ignores padding; rejects bad chars.
+fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    fn val(c: u8) -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    let mut acc = 0u32;
+    let mut bits = 0u32;
+    for &c in s.as_bytes() {
+        if c == b'=' {
+            break;
+        }
+        let v = val(c)? as u32;
+        acc = (acc << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    Some(out)
+}
+
 fn load() -> Result<DashData, zen_jobdash::DashError> {
-    // ZEN_LEDGER/BLOB_INDEX/WORKERS may be local paths or s3:// URIs; ZEN_R2_ENDPOINT (+ AWS_* creds)
-    // staging is used for s3://. This is how the deployed dashboard reads the live R2 ledger.
     let ledger: Vec<String> = std::env::var("ZEN_LEDGER")
         .map(|s| s.split(',').filter(|p| !p.is_empty()).map(String::from).collect())
         .unwrap_or_default();
@@ -80,7 +195,7 @@ fn load() -> Result<DashData, zen_jobdash::DashError> {
 
 /// Periodically reload the ledger so views reflect live runs, and fire newly-true notification
 /// conditions to the webhook (each fires once). No-op for notifications if ZEN_NOTIFY_WEBHOOK is unset.
-async fn refresh_loop(state: Shared) {
+async fn refresh_loop(state: Arc<RwLock<DashData>>) {
     let secs: u64 = std::env::var("ZEN_REFRESH_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
     let webhook = std::env::var("ZEN_NOTIFY_WEBHOOK").ok();
     let base_url = std::env::var("ZEN_PUBLIC_URL").unwrap_or_default();
@@ -115,8 +230,6 @@ async fn refresh_loop(state: Shared) {
     }
 }
 
-/// POST a notification to a webhook. Body is `{"text": "..."}` — accepted by Slack incoming webhooks
-/// and ntfy; Discord/email gateways take the same shape via most relays. Best-effort.
 async fn send_webhook(client: &reqwest::Client, url: &str, p: &NotifyPayload) -> Result<(), String> {
     let body = serde_json::json!({ "text": format!("{} — {}", p.text, p.link) });
     client
@@ -140,21 +253,60 @@ fn referenced(data: &DashData) -> HashSet<Sha256Hex> {
         .collect()
 }
 
-async fn api_progress(State(s): State<Shared>) -> Json<Vec<KindProgress>> {
-    Json(progress(&s.read().await.rows))
+async fn api_progress(State(s): State<AppState>) -> Json<Vec<KindProgress>> {
+    Json(progress(&s.data.read().await.rows))
 }
-async fn api_failures(State(s): State<Shared>) -> Json<Vec<FailureCell>> {
-    Json(failures(&s.read().await.rows))
+async fn api_failures(State(s): State<AppState>) -> Json<Vec<FailureCell>> {
+    Json(failures(&s.data.read().await.rows))
 }
-async fn api_cost(State(s): State<Shared>) -> Json<CostView> {
-    Json(cost_view(&s.read().await.workers))
+async fn api_cost(State(s): State<AppState>) -> Json<CostView> {
+    Json(cost_view(&s.data.read().await.workers))
 }
-async fn api_storage(State(s): State<Shared>) -> Json<Vec<TierStorage>> {
-    Json(storage(&s.read().await.blobs))
+async fn api_storage(State(s): State<AppState>) -> Json<Vec<TierStorage>> {
+    Json(storage(&s.data.read().await.blobs))
 }
 
-async fn api_control(State(s): State<Shared>, Json(intent): Json<ControlIntent>) -> Json<serde_json::Value> {
-    let guard = s.read().await;
+/// Live fleet boxes (goal C/H visibility): the actual paid/free boxes Hetzner reports for the fleet
+/// label. Returns `{boxes, actuation}` so the UI can show "kill won't actuate" when the token is absent.
+async fn api_fleet(State(s): State<AppState>) -> Json<serde_json::Value> {
+    let label = fleet_label_key();
+    match fleet_token() {
+        Some(token) => match list_fleet(&s.http, &token, &label, &label).await {
+            Ok(boxes) => Json(serde_json::json!({ "actuation": true, "label": label, "boxes": boxes })),
+            Err(e) => Json(serde_json::json!({ "actuation": true, "label": label, "boxes": Vec::<FleetBox>::new(), "error": e })),
+        },
+        None => Json(serde_json::json!({
+            "actuation": false,
+            "label": label,
+            "boxes": Vec::<FleetBox>::new(),
+            "note": "no HETZNER_API_TOKEN — kill records intent but won't actuate"
+        })),
+    }
+}
+
+/// Control surface (goal C). GC/StopSpend are pure previews; Kill* actuate against the Hetzner fleet
+/// when a token is present (else the intent is recorded with a note). Pause/Drain stay intents.
+async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent>) -> Json<serde_json::Value> {
+    // Kill paths actuate — handle before taking the read lock (no ledger data needed).
+    if matches!(
+        intent,
+        ControlIntent::KillFleet | ControlIntent::KillTier { .. } | ControlIntent::KillRun { .. }
+    ) {
+        let label = fleet_label_key();
+        let selector = selector_for(&intent, &label).unwrap_or_default();
+        return match fleet_token() {
+            Some(token) => {
+                let result = kill_fleet(&s.http, &token, &selector, &label).await;
+                Json(serde_json::json!({ "action": "kill", "actuated": true, "result": result }))
+            }
+            None => Json(serde_json::json!({
+                "action": "kill", "actuated": false, "selector": selector,
+                "note": "no HETZNER_API_TOKEN — intent recorded, no boxes touched"
+            })),
+        };
+    }
+
+    let guard = s.data.read().await;
     let d: &DashData = &guard;
     let plan = match intent {
         ControlIntent::GcDryRun => serde_json::to_value(gc_dry_run(&d.blobs, &referenced(d), &HashSet::new()))
@@ -164,46 +316,48 @@ async fn api_control(State(s): State<Shared>, Json(intent): Json<ControlIntent>)
             serde_json::to_value(stop_spend(&d.workers, spent, cap_usd))
                 .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }))
         }
-        // Kill/Pause/Drain are actuated by the fleet layer; the dashboard records the intent.
+        // Pause/Drain have no Hetzner equivalent — recorded for the worker loop to honor.
         other => serde_json::json!({ "intent": other, "status": "queued_for_fleet_actuation" }),
     };
     Json(plan)
 }
 
-async fn index() -> Html<&'static str> {
-    Html(INDEX_HTML)
+/// Served only when the SPA build output is missing (local dev without `npm run build`).
+async fn placeholder() -> Html<&'static str> {
+    Html(
+        "<!doctype html><meta charset=utf-8><title>zen-jobdash</title>\
+        <body style=\"font:14px system-ui;margin:3rem;max-width:40rem\">\
+        <h1>zen-jobdash</h1><p>API is live (<code>/api/progress</code>, <code>/api/cost</code>, \
+        <code>/api/fleet</code>, …). The shadcn SPA build output was not found — \
+        run <code>npm ci &amp;&amp; npm run build</code> in <code>crates/zen-jobdash/web</code> \
+        or set <code>ZEN_WEB_DIR</code>.</p></body>",
+    )
 }
 
-const INDEX_HTML: &str = r#"<!doctype html>
-<html><head><meta charset="utf-8"><title>zen-jobdash</title>
-<style>body{font:14px system-ui,monospace;margin:2rem;max-width:60rem}
-h1{font-size:1.2rem}table{border-collapse:collapse;margin:.5rem 0}td,th{border:1px solid #ccc;padding:.2rem .5rem}
-pre{background:#f4f4f4;padding:.5rem;overflow:auto}.t{color:#888;font-size:.8rem}</style></head>
-<body><h1>zen-jobdash</h1>
-<p>Control plane for the zen job system. Live (auto-refreshing) views below; control via <code>POST /api/control</code>.</p>
-<div class="t" id="ts"></div>
-<div id="cost"></div><div id="progress"></div><div id="failures"></div><div id="storage"></div>
-<script>
-async function j(u){return (await fetch(u)).json()}
-// escape ledger-derived values (worker/provider/path/codec) before inserting into the DOM
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function tbl(rows){if(!rows.length)return '<p>(none)</p>';const k=Object.keys(rows[0]);
- return '<table><tr>'+k.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr>'+
- rows.map(r=>'<tr>'+k.map(x=>'<td>'+esc(r[x]??'')+'</td>').join('')+'</tr>').join('')+'</table>'}
-function setHtml(id,heading,body){const el=document.getElementById(id);el.innerHTML='';
- const h=document.createElement('h2');h.textContent=heading;el.appendChild(h);
- const div=document.createElement('div');div.innerHTML=body;el.appendChild(div)}
-async function render(){
- try{
-  const c=await j('/api/cost');
-  const cd=document.getElementById('cost');cd.innerHTML='';
-  const h=document.createElement('h2');h.textContent='cost';cd.appendChild(h);
-  const pre=document.createElement('pre');pre.textContent=JSON.stringify(c,null,1);cd.appendChild(pre);
-  setHtml('progress','progress per kind',tbl(await j('/api/progress')));
-  setHtml('failures','failures',tbl(await j('/api/failures')));
-  setHtml('storage','storage per tier',tbl(await j('/api/storage')));
-  document.getElementById('ts').textContent='updated '+new Date().toLocaleTimeString();
- }catch(e){document.getElementById('ts').textContent='refresh error: '+e}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base64_roundtrip_known_vectors() {
+        assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+        assert_eq!(base64_decode("Zm9vOmJhcg==").unwrap(), b"foo:bar");
+        assert!(base64_decode("not base64!").is_none());
+    }
+
+    #[test]
+    fn basic_auth_extracts_password() {
+        // base64("admin:s3cret") = YWRtaW46czNjcmV0
+        assert_eq!(basic_password("YWRtaW46czNjcmV0").as_deref(), Some("s3cret"));
+        // password may contain colons — only the first split counts
+        // base64("u:a:b") = dTphOmI=
+        assert_eq!(basic_password("dTphOmI=").as_deref(), Some("a:b"));
+    }
+
+    #[test]
+    fn constant_time_eq_basic() {
+        assert!(constant_time_eq(b"secret", b"secret"));
+        assert!(!constant_time_eq(b"secret", b"secre"));
+        assert!(!constant_time_eq(b"secret", b"Secret"));
+    }
 }
-render(); setInterval(render, 15000);
-</script></body></html>"#;
