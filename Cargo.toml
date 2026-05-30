@@ -222,11 +222,12 @@ zensim = { path = "../zensim/zensim" }
 # in zen-metrics-cli/Cargo.toml so it's not patched here.
 zenpng       = { path = "../zenpng" }
 zenwebp      = { path = "../zenwebp" }
-# zenavif: pointed at ~/work/zen/zenavif--main, a worktree of the
-# zenavif main branch (HEAD 37a529e). The default zenavif checkout
-# at ../zenavif is on docs/speed6-tx-rdo-opt-in which removed
-# `pub mod expert` + `__expert` feature. main retains both.
-zenavif      = { path = "../zenavif--main" }
+# zenavif: the former ../zenavif--main worktree (zenavif main) was
+# removed by worktree cleanup; ../zenavif is now the source of truth —
+# checked out at zenavif main (31a9b54), which retains `pub mod expert`
+# + the `__expert` feature (Cargo.toml:149, src/lib.rs:73). The speed6
+# branch that lacked both is no longer the ../zenavif checkout.
+zenavif      = { path = "../zenavif" }
 # zenjxl: the canonical ../zenjxl checkout (now carries the
 # AnimationParams/AnimationFrame API for jxl-encoder 0.3.2). The
 # former ../zenjxl--main worktree was removed by worktree cleanup;

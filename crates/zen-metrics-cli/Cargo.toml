@@ -202,14 +202,14 @@ rayon = "1"
 # always link the in-flight local versions. User confirmed
 # 2026-05-19: "verify no cratesio codecs are used."
 #
-# zenavif points at the `--main` worktree (~/work/zen/zenavif--main)
-# because the default ../zenavif checkout is on
-# docs/speed6-tx-rdo-opt-in which removed `pub mod expert` + the
-# `__expert` feature. main keeps both.
+# zenavif: the ../../../zenavif--main worktree was removed by worktree
+# cleanup; ../../../zenavif is the source of truth — it's at zenavif
+# main (31a9b54), which keeps `pub mod expert` + the `__expert` feature
+# (the speed6 branch that lacked both is no longer the ../zenavif checkout).
 zenpng       = { path = "../../../zenpng",                                     optional = true }
 zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true, features = ["decoder"] }
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
-zenavif      = { path = "../../../zenavif--main",                              optional = true }
+zenavif      = { path = "../../../zenavif",                                    optional = true }
 zenjxl       = { path = "../../../zenjxl",                                     optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
