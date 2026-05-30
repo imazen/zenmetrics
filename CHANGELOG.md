@@ -19,6 +19,17 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **VRAM-on-drop design proposal + isolation spike (task #152)** (2026-05-30). Measured proof
+  (`crates/cvvdp-gpu/examples/vram_isolation_spike.rs`, throwaway, gated behind `cuda`) that cubecl's
+  CUDA memory pools are per-stream and free independently: dropping a context on its own explicit
+  `StreamId` + `memory_cleanup()` + `sync()` returns exactly that context's pages to the driver while
+  another context's pool stays resident (stream 101 freed 2272 MiB, 202 untouched; control: dropping
+  1-of-2 co-resident allocs freed 0 MiB; cross-thread reclaim freed 2304 MiB). Design doc
+  `crates/zenmetrics-api/docs/VRAM_LIFECYCLE_DESIGN_2026-05-30.md` recommends a new isolated-stream
+  `GpuContext` type (Option B) over a bare `impl Drop` (Option A, non-ironclad on the shared default
+  stream) and answers "do we need a new context type?" — yes. **No public API changed; implementation
+  awaits user approval of the proposed shape.** Committed spike output
+  `crates/cvvdp-gpu/benchmarks/vram_isolation_spike_2026-05-30.txt`.
 - **Job system: speculative execution (goal E) + speculative count (goal B)** (2026-05-29). A worker
   with `--spec-threshold-secs` co-runs a *live straggler* (primary claim older than the threshold but
   younger than the TTL) by taking a separate `claims/spec/<job_id>` claim — bounding the long tail; the

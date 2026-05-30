@@ -1,0 +1,55 @@
+# cubecl CUDA per-stream VRAM isolation spike — task #152
+#
+# Provenance:
+#   repo commit (@):  19bda4049f2b (task152 design branch, on top of master 36ec863d)
+#   cubecl fork:      zenforks-cubecl-* 0.10.1 (crates.io), tree 970ad5b5
+#   host:             water-cooled 7950X, RTX 3060 12 GiB, native CUDA (driver 596.21)
+#   command:          cargo run --release -p cvvdp-gpu --features cuda,cubecl-types \
+#                         --example vram_isolation_spike
+#   sampling:         nvidia-smi --query-gpu=memory.used, sampled AFTER client.sync()
+#                     (deferred-free queue drained) + 150ms settle. Every number measured.
+#   note:             baseline ~2.8 GiB is other processes on the box; total 12 GiB.
+#
+# CONCLUSION: per-stream VRAM pool isolation is REAL. Dropping a context on its
+# own explicit stream + memory_cleanup() + sync() returns exactly that context's
+# pages to the driver, independent of (and not disturbing) another context's pool.
+# Reclaim works cross-thread (explicit stream_id overrides cubecl thread-local).
+# Sharing a pool page (the default-stream case) blocks reclaim until ALL occupants
+# of the page drop — the hazard that makes a bare Drop on the shared stream
+# non-ironclad.
+
+== cubecl CUDA per-stream VRAM isolation spike (task #152) ==
+   max_streams=128, each StreamId.value maps to its own pool
+
+  baseline (no cubecl ctx)            used=  2848 MiB
+  per-context target ~= 1536 MiB (24 x 64 MiB)
+
+-- create context A (stream value=101), allocate --
+  [A allocated                       ] used=  5313 MiB  (Δbase +2465 MiB)
+-- create context B (stream value=202), allocate --
+  [A+B allocated                     ] used=  7617 MiB  (Δbase +4769 MiB)
+-- drop A's handles + A.memory_cleanup() + sync --
+  [after drop+cleanup A              ] used=  5345 MiB  (Δbase +2497 MiB)
+  [  (B client view, B alive)        ] used=  5345 MiB  (Δbase +2497 MiB)
+-- drop B's handles + B.memory_cleanup() + sync --
+  [after drop+cleanup B              ] used=  3009 MiB  (Δbase +161 MiB)
+
+-- CONTROL: two small allocs share a page, drop one --
+  [control: both small alive         ] used=  3073 MiB  (Δbase +225 MiB)
+  [control: dropped 1of2 + cleanup   ] used=  3073 MiB  (Δbase +225 MiB)
+  [control: dropped 2of2 + cleanup   ] used=  3009 MiB  (Δbase +161 MiB)
+
+-- THREAD MOBILITY: alloc on worker thread, reclaim on main --
+  [worker-thread alloc (stream 404)  ] used=  5312 MiB  (Δbase +2464 MiB)
+  [main-thread reclaim of 404        ] used=  3008 MiB  (Δbase +160 MiB)
+  cross-thread reclaim freed +2304 MiB (target ~1536) -> THREAD-MOBILE: explicit stream_id overrides thread-local
+
+== VERDICT ==
+  A alloc grew base by      +2465 MiB (target ~1536)
+  B alloc added             +2304 MiB (target ~1536)
+  drop+cleanup A freed      +2272 MiB  <- isolated reclaim of A
+  B still resident after A    +2497 MiB (B untouched; B-client view 5345 MiB)
+  drop+cleanup B freed      +2336 MiB  <- isolated reclaim of B
+  ISOLATION: CONFIRMED — A's pool freed to driver independently while B stayed resident, then B freed
+  CONTROL partial-page: drop-1of2 freed 0 MiB, drop-2of2 freed 64 MiB
+    (expect ~0 after dropping only 1 of 2 co-resident allocs)

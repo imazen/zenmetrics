@@ -109,6 +109,12 @@ required-features = ["cubecl-types"]
 name = "bench_4096_one_mode"
 required-features = ["cuda"]
 
+# THROWAWAY feasibility spike (task #152): per-stream VRAM isolation.
+# Not part of the public API; gated behind `cuda`.
+[[example]]
+name = "vram_isolation_spike"
+required-features = ["cuda"]
+
 [[test]]
 name = "band_weights_invariants"
 required-features = ["cubecl-types"]
