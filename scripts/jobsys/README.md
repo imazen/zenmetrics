@@ -91,6 +91,23 @@ bash scripts/jobsys/demo_speculative_r2.sh        # KEEP=1 to retain the R2 pref
 Verified run 2026-05-30: primary claim aged past threshold → speculator `done=1`, 1 spec claim, job
 converged (gap=0) while the slow primary was still running.
 
+## `demo_gc_r2.sh` — goal G (safe garbage collection)
+
+Runs the self-asserting `gc_live` example: a reachability GC over a synthetic blob set proving
+referenced blobs are kept, the cheap-regenerable LRU tail is evicted (with a tombstone) under a byte
+cap, the newest cheap blob is kept, and an unreferenced **irreplaceable** blob is refused (surfaced,
+never deleted). The `zen-jobgc` CLI runs the same over a real Parquet blob index + ledger (dry-run by
+default; `--execute` to delete; `verify_mirror` gates any non-regenerable delete).
+
+```bash
+bash scripts/jobsys/demo_gc_r2.sh
+# real use:
+zen-jobgc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.parquet \
+  --blobs-r2 s3://b/blobs --tombstones-r2 s3://b/jobsys/tombstones \
+  --r2-endpoint "$EP" --cheap-cap-bytes 1000000   # add --execute to delete
+```
+
 The dashboard side of these guarantees (coverage/catalog, progress + speculative count, cost, kill,
-stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query) is live at the Railway
-deployment; see `crates/zen-jobdash`.
+stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query, GC dry-run preview) is live at
+the Railway deployment; see `crates/zen-jobdash`. Notifications go to ntfy (`ZEN_NOTIFY_WEBHOOK` +
+`ZEN_NOTIFY_TOKEN`); `demo_notify_local.sh` proves the mechanism without an external channel.

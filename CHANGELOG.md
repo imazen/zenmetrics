@@ -30,6 +30,14 @@ Workspace conventions per the global rules:
   stream) and answers "do we need a new context type?" — yes. **No public API changed; implementation
   awaits user approval of the proposed shape.** Committed spike output
   `crates/cvvdp-gpu/benchmarks/vram_isolation_spike_2026-05-30.txt`.
+- **Job system: safe GC execution (goal G) + ntfy notifications (goal D)** (2026-05-30). `zen_job_core`
+  adds `lru_cap_evict` (bounded cheap-regenerable cache, evict LRU tail over a byte cap) + a `Tombstone`
+  record. `zen-jobworker::gc_execute` + the new `zen-jobgc` CLI run a reachability GC: referenced blobs
+  kept, unreferenced cheap evicted LRU-capped with a tombstone written first, unreferenced
+  **irreplaceable refused** (surfaced, never auto-deleted), `verify_mirror` gating any non-regenerable
+  delete; dry-run by default. Live `scripts/jobsys/demo_gc_r2.sh` / `examples/gc_live.rs` verifies all
+  four guarantees against R2. The dashboard webhook sender is now **ntfy-aware** (`ZEN_NOTIFY_TOKEN` →
+  message body + `Click` deep-link header + Bearer auth) alongside the Slack/Discord `{"text":…}` shape.
 - **Job system: speculative execution (goal E) + speculative count (goal B)** (2026-05-29). A worker
   with `--spec-threshold-secs` co-runs a *live straggler* (primary claim older than the threshold but
   younger than the TTL) by taking a separate `claims/spec/<job_id>` claim — bounding the long tail; the

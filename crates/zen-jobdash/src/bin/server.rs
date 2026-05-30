@@ -210,6 +210,9 @@ fn load() -> Result<DashData, zen_jobdash::DashError> {
 async fn refresh_loop(state: Arc<RwLock<DashData>>) {
     let secs: u64 = std::env::var("ZEN_REFRESH_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
     let webhook = std::env::var("ZEN_NOTIFY_WEBHOOK").ok();
+    // When set, post in ntfy style (message body + Title/Click headers + Bearer auth) instead of the
+    // Slack/Discord `{"text":...}` shape.
+    let notify_token = std::env::var("ZEN_NOTIFY_TOKEN").ok().filter(|t| !t.is_empty());
     let base_url = std::env::var("ZEN_PUBLIC_URL").unwrap_or_default();
     let cap: f64 = std::env::var("ZEN_BUDGET_CAP_USD").ok().and_then(|s| s.parse().ok()).unwrap_or(0.0);
     let poison_threshold: usize =
@@ -228,7 +231,7 @@ async fn refresh_loop(state: Arc<RwLock<DashData>>) {
                         let sig = serde_json::to_string(&ev).unwrap_or_default();
                         if fired.insert(sig) {
                             let payload = format_event(&ev, &base_url);
-                            if let Err(e) = send_webhook(&client, url, &payload).await {
+                            if let Err(e) = send_webhook(&client, url, &payload, notify_token.as_deref()).await {
                                 eprintln!("zen-jobdash: webhook send failed: {e}");
                             }
                         }
@@ -242,16 +245,26 @@ async fn refresh_loop(state: Arc<RwLock<DashData>>) {
     }
 }
 
-async fn send_webhook(client: &reqwest::Client, url: &str, p: &NotifyPayload) -> Result<(), String> {
-    let body = serde_json::json!({ "text": format!("{} — {}", p.text, p.link) });
-    client
-        .post(url)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?;
+/// POST a notification to a webhook (goal D). With `token` (ntfy mode): message in the body, deep
+/// link in the `Click` header, Bearer auth — so the push is tappable straight to the dashboard.
+/// Without a token: the Slack/Discord-style `{"text": "..."}` shape. Best-effort.
+async fn send_webhook(
+    client: &reqwest::Client,
+    url: &str,
+    p: &NotifyPayload,
+    token: Option<&str>,
+) -> Result<(), String> {
+    let req = match token {
+        Some(tok) => client
+            .post(url)
+            .header("Title", "zen-jobdash")
+            .header("Click", p.link.clone())
+            .header("Tags", "robot")
+            .bearer_auth(tok)
+            .body(p.text.clone()),
+        None => client.post(url).json(&serde_json::json!({ "text": format!("{} — {}", p.text, p.link) })),
+    };
+    req.send().await.map_err(|e| e.to_string())?.error_for_status().map_err(|e| e.to_string())?;
     Ok(())
 }
 

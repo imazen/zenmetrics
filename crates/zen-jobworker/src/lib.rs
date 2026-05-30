@@ -12,16 +12,16 @@
 //! content-addressed local FS today; an R2 impl drops in behind the trait. Pure enough to test the
 //! whole loop end-to-end with a temp dir.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write as _};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use zen_job_core::{
-    reconcile, sha256, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView, RetryPolicy,
-    RunControl, Sha256Hex,
+    gc_plan, lru_cap_evict, reconcile, sha256, BlobIndexEntry, DesiredJob, ErrorClass, JobId,
+    JobStatus, LedgerRow, LedgerView, Regenerability, RetryPolicy, RunControl, Sha256Hex, Tombstone,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -534,6 +534,105 @@ pub enum WorkerRunError {
     Manifest(String),
     #[error("ledger {0}")]
     Ledger(String),
+}
+
+// ──────────────────────────── garbage collection (goal G) ────────────────────────────
+
+/// Delete an R2 object via `s5cmd rm`.
+fn s5cmd_rm(endpoint: &str, uri: &str) -> Result<(), String> {
+    let st = Command::new("s5cmd")
+        .arg("--endpoint-url").arg(endpoint).arg("rm").arg(uri)
+        .stdout(Stdio::null()).stderr(Stdio::null())
+        .status().map_err(|e| format!("s5cmd spawn: {e}"))?;
+    if st.success() { Ok(()) } else { Err(format!("s5cmd rm {uri} exit {:?}", st.code())) }
+}
+
+/// Verify a Tower-mirror copy is present and byte-identical (goal G: "Tower-mirror-verify before any
+/// non-regenerable delete"). `mirror_dir/<sha>` is read and its hash compared to `sha`.
+pub fn verify_mirror(sha: &Sha256Hex, mirror_dir: &Path) -> bool {
+    match std::fs::read(mirror_dir.join(sha.as_str())) {
+        Ok(bytes) => sha256(&bytes).as_str() == sha.as_str(),
+        Err(_) => false,
+    }
+}
+
+/// GC execution config. Blobs live at `{blobs_base_uri}/<sha>`; tombstones (if set) at
+/// `{tombstones_base_uri}/<sha>`. `execute=false` is a dry-run (decide + report, delete nothing).
+pub struct GcExecCfg<'a> {
+    pub endpoint: &'a str,
+    pub blobs_base_uri: &'a str,
+    pub tombstones_base_uri: Option<&'a str>,
+    pub cheap_cap_bytes: u64,
+    pub now: u64,
+    pub execute: bool,
+}
+
+/// Outcome of a GC pass.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct GcReport {
+    pub kept: usize,
+    /// Cheap-regenerable blobs evicted (or, in dry-run, that *would* be evicted) by the LRU cap.
+    pub lru_evicted: Vec<String>,
+    /// Unreferenced irreplaceable blobs — NEVER auto-deleted; surfaced for a human pin/archive call.
+    pub refused: Vec<String>,
+    pub freed_bytes: u64,
+    pub tombstones_written: usize,
+    pub errors: Vec<String>,
+}
+
+/// Execute the safe-eviction half of GC (goal G): evict the unreferenced cheap-regenerable LRU tail
+/// over `cheap_cap_bytes` (lossless — rebuildable), writing a tombstone before each delete; and
+/// *refuse* to touch unreferenced irreplaceable blobs (surface them instead). Referenced/pinned blobs
+/// are never considered. Expensive-regenerable is left for an explicit under-pressure pass. Pure
+/// decision via [`gc_plan`]/[`lru_cap_evict`]; this only performs the R2 deletes + tombstones.
+pub fn gc_execute(
+    index: &[BlobIndexEntry],
+    referenced: &HashSet<Sha256Hex>,
+    roots: &HashSet<Sha256Hex>,
+    cfg: &GcExecCfg<'_>,
+) -> GcReport {
+    let plan = gc_plan(index, referenced, roots);
+    let lru = lru_cap_evict(index, referenced, roots, cfg.cheap_cap_bytes);
+    let size_of: HashMap<&Sha256Hex, u64> = index.iter().map(|e| (&e.sha, e.size)).collect();
+    let mut report = GcReport {
+        kept: plan.keep.len(),
+        refused: plan.refuse_surface.iter().map(|s| s.to_string()).collect(),
+        ..Default::default()
+    };
+    let base = cfg.blobs_base_uri.trim_end_matches('/');
+    for sha in &lru {
+        let size = size_of.get(sha).copied().unwrap_or(0);
+        if cfg.execute {
+            // Tombstone first (cheap-regenerable is mirror_verified=true: a cache miss is a lossless
+            // recompute, so no Tower copy is required). Then delete the blob.
+            if let Some(tb) = cfg.tombstones_base_uri {
+                let t = Tombstone {
+                    sha: sha.clone(),
+                    size,
+                    regenerability: Regenerability::CheapRegenerable,
+                    reason: "lru_evict".to_string(),
+                    deleted_at: cfg.now,
+                    mirror_verified: true,
+                };
+                let uri = format!("{}/{}", tb.trim_end_matches('/'), sha.as_str());
+                if zen_ledger::write_bytes_uri(&uri, &serde_json::to_vec(&t).unwrap_or_default(), Some(cfg.endpoint)).is_ok() {
+                    report.tombstones_written += 1;
+                }
+            }
+            match s5cmd_rm(cfg.endpoint, &format!("{base}/{}", sha.as_str())) {
+                Ok(()) => {
+                    report.lru_evicted.push(sha.to_string());
+                    report.freed_bytes += size;
+                }
+                Err(e) => report.errors.push(e),
+            }
+        } else {
+            // dry-run: report what *would* be freed.
+            report.lru_evicted.push(sha.to_string());
+            report.freed_bytes += size;
+        }
+    }
+    report
 }
 
 /// One worker pass: load the manifest + existing ledger → reconcile the gap → execute each job via

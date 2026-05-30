@@ -33,7 +33,7 @@ pub use catalog::{CatalogEntry, SemanticId};
 pub use content::{blob_key, sha256, BlobRef, ContentError, Sha256Hex};
 pub use control::RunControl;
 pub use cost::{aggregate, cost_per_1000_by_tier, over_budget, FleetCost, WorkerReport};
-pub use gc::{gc_plan, verdict, BlobIndexEntry, GcPlan, GcVerdict};
+pub use gc::{gc_plan, lru_cap_evict, verdict, BlobIndexEntry, GcPlan, GcVerdict, Tombstone};
 pub use ids::{CellId, JobId};
 pub use job::{GroupBy, JobKind, JobProfile, Regenerability, ResourceClass};
 pub use ledger::{DesiredJob, LedgerRow, LedgerView};
