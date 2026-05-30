@@ -227,12 +227,11 @@ zenwebp      = { path = "../zenwebp" }
 # at ../zenavif is on docs/speed6-tx-rdo-opt-in which removed
 # `pub mod expert` + `__expert` feature. main retains both.
 zenavif      = { path = "../zenavif--main" }
-# zenjxl: pointed at ~/work/zen/zenjxl--main (worktree of main,
-# HEAD 9ac0cd5). The default ../zenjxl checkout sits on
-# pr-7-review which predates the AnimationParams/AnimationFrame
-# API bump for jxl-encoder 0.3.2 — codec.rs struct literals don't
-# match the new field shape. main has the fix.
-zenjxl       = { path = "../zenjxl--main" }
+# zenjxl: the canonical ../zenjxl checkout (now carries the
+# AnimationParams/AnimationFrame API for jxl-encoder 0.3.2). The
+# former ../zenjxl--main worktree was removed by worktree cleanup;
+# ../zenjxl is the source of truth.
+zenjxl       = { path = "../zenjxl" }
 jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # butteraugli: the local sibling at ~/work/butteraugli/butteraugli is
 # version 0.9.2 but carries `compare_linear_planar_into` (the recycled-

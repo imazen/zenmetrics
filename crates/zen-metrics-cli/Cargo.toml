@@ -210,7 +210,7 @@ zenpng       = { path = "../../../zenpng",                                     o
 zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = false, optional = true, features = ["decoder"] }
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif--main",                              optional = true }
-zenjxl       = { path = "../../../zenjxl--main",                               optional = true }
+zenjxl       = { path = "../../../zenjxl",                                     optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
 # not surface. Local path (matches the workspace [patch.crates-io] entry)
