@@ -19,6 +19,11 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **zen-jobdash: thumbnails/diffmaps + ad-hoc query (goal B)** (2026-05-29). `/api/blob/{sha}` serves a
+  result blob with a sniffed image content-type (JPEG/PNG/GIF/WebP/AVIF) + immutable cache, so encode
+  and diffmap outputs render inline in the Results tab (thumbnail + full-size dialog). `/api/query`
+  (`query_view`) is a structured filter over the Parquet ledger (kind/codec/status/image substrings,
+  newest-first, capped) with a Query pane. Completes B's "peek results in-browser" except a SQL engine.
 - **zen-jobdash: in-browser result peek (goal B)** (2026-05-29). `/api/results` lists recent Done rows
   carrying an output blob; `/api/peek/{sha}` fetches that content-addressed blob from R2
   (`ZEN_BLOBS_R2`) and returns its bytes as truncated text + size (hex-only sha guard against path

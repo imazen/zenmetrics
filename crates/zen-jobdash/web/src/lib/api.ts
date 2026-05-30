@@ -77,6 +77,18 @@ export interface PeekResult {
   error?: string
 }
 
+export interface QueryRow {
+  kind: string
+  codec: string
+  image_path: string
+  q: number
+  status: string
+  error_class: string | null
+  output_sha: string | null
+  worker: string
+  ts: number
+}
+
 export interface WorkerStat {
   worker: string
   provider: string
@@ -142,6 +154,12 @@ export const api = {
   catalog: () => getJSON<CatalogRow[]>("/api/catalog"),
   results: () => getJSON<ResultRow[]>("/api/results"),
   peek: (sha: string) => getJSON<PeekResult>(`/api/peek/${sha}`),
+  query: (params: Record<string, string>) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+    return getJSON<QueryRow[]>(`/api/query${qs ? `?${qs}` : ""}`)
+  },
+  /** URL for an image result blob (thumbnails/diffmaps) — used directly as an <img> src. */
+  blobUrl: (sha: string) => `/api/blob/${sha}`,
   fleet: () => getJSON<FleetView>("/api/fleet"),
 
   gcDryRun: () => postControl({ action: "gc_dry_run" }),

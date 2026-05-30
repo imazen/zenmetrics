@@ -8,6 +8,7 @@ import { ControlPane } from "@/components/ControlPane"
 import { FailuresPane } from "@/components/FailuresPane"
 import { FleetPane } from "@/components/FleetPane"
 import { ProgressPane } from "@/components/ProgressPane"
+import { QueryPane } from "@/components/QueryPane"
 import { ResultsPane } from "@/components/ResultsPane"
 import { StatCards } from "@/components/StatCards"
 import { StoragePane } from "@/components/StoragePane"
@@ -116,6 +117,7 @@ export default function App() {
 
         <TabsContent value="results" className="space-y-4">
           <ResultsPane rows={results.data} />
+          <QueryPane />
         </TabsContent>
 
         <TabsContent value="failures" className="space-y-4">

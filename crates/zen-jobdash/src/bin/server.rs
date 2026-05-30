@@ -34,9 +34,10 @@ use tower_http::services::{ServeDir, ServeFile};
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
     catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, results_view, run_summary,
-    selector_for, stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView, DashData,
-    FailureCell, FleetBox, KindProgress, NotifyPayload, ResultRow, RunSummary, TierStorage, WorkerStat,
+    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
+    run_summary, selector_for, stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView,
+    DashData, FailureCell, FleetBox, KindProgress, NotifyPayload, QueryRow, ResultRow, RunSummary,
+    TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -91,7 +92,9 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
         .route("/api/workers", get(api_workers))
         .route("/api/catalog", get(api_catalog))
         .route("/api/results", get(api_results))
+        .route("/api/query", get(api_query))
         .route("/api/peek/{sha}", get(api_peek))
+        .route("/api/blob/{sha}", get(api_blob))
         .route("/api/fleet", get(api_fleet))
         .route("/api/control", post(api_control))
         .with_state(state);
@@ -285,6 +288,73 @@ async fn api_catalog(State(s): State<AppState>) -> Json<Vec<CatalogRow>> {
 }
 async fn api_results(State(s): State<AppState>) -> Json<Vec<ResultRow>> {
     Json(results_view(&s.data.read().await.rows, 200))
+}
+
+/// Ad-hoc query over the ledger (goal B). Optional `kind`/`codec`/`status`/`image` substring filters
+/// + `limit`; newest-first. The ledger is the Parquet table, this is a structured slice of it.
+#[derive(serde::Deserialize)]
+struct QueryParams {
+    kind: Option<String>,
+    codec: Option<String>,
+    status: Option<String>,
+    image: Option<String>,
+    limit: Option<usize>,
+}
+async fn api_query(
+    State(s): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<QueryParams>,
+) -> Json<Vec<QueryRow>> {
+    let limit = q.limit.unwrap_or(200).min(2000);
+    Json(query_view(
+        &s.data.read().await.rows,
+        q.kind.as_deref(),
+        q.codec.as_deref(),
+        q.status.as_deref(),
+        q.image.as_deref(),
+        limit,
+    ))
+}
+
+/// Sniff a content type from a blob's magic bytes — enough to let the browser render image result
+/// blobs (thumbnails / diffmaps) inline. Falls back to octet-stream.
+fn sniff_content_type(b: &[u8]) -> &'static str {
+    match b {
+        [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
+        [0x89, b'P', b'N', b'G', ..] => "image/png",
+        [b'G', b'I', b'F', b'8', ..] => "image/gif",
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => "image/webp",
+        // ISOBMFF: bytes 4..8 == "ftyp" → AVIF/HEIC family.
+        [_, _, _, _, b'f', b't', b'y', b'p', ..] => "image/avif",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Fetch a result blob by content hash and let the browser render it (goal B thumbnails/diffmaps).
+/// Same R2 source + hex guard as [`api_peek`]; returns raw bytes with a sniffed content-type and an
+/// immutable cache header (content-addressed ⇒ never changes).
+async fn api_blob(axum::extract::Path(sha): axum::extract::Path<String>) -> Response {
+    if sha.is_empty() || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return (StatusCode::BAD_REQUEST, "sha must be hex").into_response();
+    }
+    let Some(base) = std::env::var("ZEN_BLOBS_R2").ok().filter(|s| !s.is_empty()) else {
+        return (StatusCode::NOT_FOUND, "ZEN_BLOBS_R2 unset").into_response();
+    };
+    let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
+    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref())).await {
+        Ok(Ok(bytes)) => {
+            let ct = sniff_content_type(&bytes);
+            (
+                [
+                    (header::CONTENT_TYPE, ct),
+                    (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        _ => (StatusCode::NOT_FOUND, "blob not found").into_response(),
+    }
 }
 
 /// Peek a result blob by its content hash (goal B: "peek results in-browser"). Fetches

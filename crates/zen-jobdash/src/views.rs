@@ -243,6 +243,59 @@ pub fn catalog_view(rows: &[LedgerRow]) -> Vec<CatalogRow> {
         .collect()
 }
 
+/// A single ledger row, flattened for the ad-hoc query view (goal B: "ad-hoc parquet query"). The
+/// ledger *is* the Parquet table; this is a structured filter over it (kind/codec/status/image),
+/// the common slice without shipping a SQL engine.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct QueryRow {
+    pub kind: String,
+    pub codec: String,
+    pub image_path: String,
+    pub q: i64,
+    pub status: String,
+    pub error_class: Option<String>,
+    pub output_sha: Option<String>,
+    pub worker: String,
+    pub ts: u64,
+}
+
+/// Filter the ledger by optional kind/codec/status substrings + image substring, newest-first, capped.
+/// Empty filters match everything. `status` matches the `JobStatus` debug name case-insensitively.
+pub fn query_view(
+    rows: &[LedgerRow],
+    kind: Option<&str>,
+    codec: Option<&str>,
+    status: Option<&str>,
+    image: Option<&str>,
+    limit: usize,
+) -> Vec<QueryRow> {
+    let ci = |hay: &str, needle: Option<&str>| needle.is_none_or(|n| hay.to_lowercase().contains(&n.to_lowercase()));
+    let mut out: Vec<&LedgerRow> = rows
+        .iter()
+        .filter(|r| {
+            ci(&kind_label(&r.kind), kind)
+                && ci(&r.cell.codec, codec)
+                && ci(&format!("{:?}", r.status), status)
+                && ci(&r.cell.image_path, image)
+        })
+        .collect();
+    out.sort_by(|a, b| b.ts.cmp(&a.ts));
+    out.into_iter()
+        .take(limit)
+        .map(|r| QueryRow {
+            kind: kind_label(&r.kind),
+            codec: r.cell.codec.clone(),
+            image_path: r.cell.image_path.clone(),
+            q: r.cell.q,
+            status: format!("{:?}", r.status),
+            error_class: r.error_class.map(|e| format!("{e:?}")),
+            output_sha: r.output_sha.as_ref().map(|s| s.to_string()),
+            worker: r.worker.clone(),
+            ts: r.ts,
+        })
+        .collect()
+}
+
 /// A completed result (goal B: "peek results in-browser"). Done rows that produced an output blob —
 /// the dashboard lists these and fetches the score blob by `output_sha` on demand.
 #[derive(Serialize, Debug, PartialEq, Eq)]
@@ -441,6 +494,26 @@ mod tests {
         assert_eq!(cvvdp.done, 1, "coverage = done/total");
         let ssim2 = c.iter().find(|r| r.metric == "ssim2").unwrap();
         assert_ne!(cvvdp.key, ssim2.key, "different description → different content-addressed key");
+    }
+
+    #[test]
+    fn query_view_filters_and_orders() {
+        let mut done = row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None);
+        done.ts = 10;
+        let mut failed = row(JobKind::Metric { metric: "cvvdp".into() }, "zenavif", JobStatus::Failed, Some(ErrorClass::Timeout));
+        failed.ts = 20;
+        let rows = vec![done, failed];
+        // filter by status=failed → only the avif one
+        let f = query_view(&rows, None, None, Some("fail"), None, 100);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].codec, "zenavif");
+        assert_eq!(f[0].error_class.as_deref(), Some("Timeout"));
+        // no filter → both, newest (ts=20) first
+        let all = query_view(&rows, None, None, None, None, 100);
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].ts, 20);
+        // codec filter
+        assert_eq!(query_view(&rows, None, Some("jpeg"), None, None, 100).len(), 1);
     }
 
     #[test]
