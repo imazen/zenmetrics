@@ -122,7 +122,7 @@ pub struct EncodedCell {
 pub fn encode(
     codec: CodecKind,
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     match codec {
@@ -139,7 +139,7 @@ pub fn encode(
 #[cfg(all(feature = "sweep", feature = "png"))]
 fn encode_png(
     source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use enough::Unstoppable;
@@ -214,7 +214,7 @@ fn encode_png(
 #[cfg(not(all(feature = "sweep", feature = "png")))]
 fn encode_png(
     _source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenpng encode is disabled (rebuild with `--features sweep,png`)".into())
@@ -225,7 +225,7 @@ fn encode_png(
 #[cfg(all(feature = "sweep", feature = "jpeg"))]
 fn encode_jpeg(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use zencodec::encode::{EncodeJob as _, Encoder as _, EncoderConfig as _};
@@ -505,7 +505,7 @@ fn encode_jpeg(
 #[cfg(not(all(feature = "sweep", feature = "jpeg")))]
 fn encode_jpeg(
     _source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenjpeg encode is disabled (rebuild with `--features sweep,jpeg`)".into())
@@ -516,7 +516,7 @@ fn encode_jpeg(
 #[cfg(all(feature = "sweep", feature = "webp"))]
 fn encode_webp(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use zenwebp::{EncodeRequest, EncoderConfig, LossyConfig, PixelLayout};
@@ -598,7 +598,7 @@ fn encode_webp(
 #[cfg(not(all(feature = "sweep", feature = "webp")))]
 fn encode_webp(
     _source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenwebp encode is disabled (rebuild with `--features sweep`)".into())
@@ -609,7 +609,7 @@ fn encode_webp(
 #[cfg(all(feature = "sweep", feature = "avif"))]
 fn encode_avif(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use imgref::ImgRef;
@@ -677,7 +677,7 @@ fn encode_avif(
 #[cfg(not(all(feature = "sweep", feature = "avif")))]
 fn encode_avif(
     _source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenavif encode is disabled (rebuild with `--features sweep`)".into())
@@ -707,7 +707,7 @@ const JXL_EXPERT_KNOBS: &[&str] = &[
 #[cfg(all(feature = "sweep", feature = "jxl"))]
 fn encode_jxl(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     let lossless = knobs
@@ -728,7 +728,7 @@ fn encode_jxl(
 #[cfg(all(feature = "sweep", feature = "jxl"))]
 fn encode_jxl_wrapper(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
     lossless: bool,
 ) -> Result<EncodedCell, Box<dyn Error>> {
@@ -784,7 +784,7 @@ fn encode_jxl_wrapper(
 #[cfg(all(feature = "sweep", feature = "jxl"))]
 fn encode_jxl_expert(
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     use jxl_encoder::{LossyConfig, PixelLayout, ProgressiveMode};
@@ -897,7 +897,7 @@ fn encode_jxl_expert(
 #[cfg(not(all(feature = "sweep", feature = "jxl")))]
 fn encode_jxl(
     _source: &Rgb8Image,
-    _q: u32,
+    _q: f64,
     _knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
     Err("zenjxl encode is disabled (rebuild with `--features sweep`)".into())

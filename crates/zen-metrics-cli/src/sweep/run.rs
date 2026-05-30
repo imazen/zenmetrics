@@ -79,7 +79,7 @@ use crate::sweep::grid::{KnobGrid, KnobTuple};
 pub struct SweepConfig {
     pub codec: CodecKind,
     pub sources: Vec<PathBuf>,
-    pub q_grid: Vec<u32>,
+    pub q_grid: Vec<f64>,
     pub knob_grid: KnobGrid,
     pub metrics: Vec<MetricKind>,
     pub gpu_runtime: GpuRuntime,
@@ -434,7 +434,7 @@ pub fn run_sweep(
         // Cell count is bounded (≤ a few thousand per image typically),
         // so the Vec is cheap. The tuples are small (`Vec<KnobValue>`
         // owned per tuple); we don't clone the source.
-        let cells: Vec<(u32, KnobTuple)> = cfg
+        let cells: Vec<(f64, KnobTuple)> = cfg
             .q_grid
             .iter()
             .flat_map(|&q| cfg.knob_grid.iter_tuples().map(move |t| (q, t)))
@@ -587,7 +587,7 @@ enum CellOutcome {
     Ok {
         row: Vec<String>,
         /// `(image_path, codec, q, knob_json, zensim_score, features)`
-        feature: Option<(String, &'static str, u32, String, f32, Vec<f64>)>,
+        feature: Option<(String, &'static str, f64, String, f32, Vec<f64>)>,
         /// `[image_path, codec, q, knob_tuple_json, ref_path, dist_path]`
         /// — emitted when the sweep config requests a pairs TSV. The
         /// outer loop writes this row to the pairs writer.
@@ -613,7 +613,7 @@ fn compute_cell(
     cfg: &SweepConfig,
     src_path: &Path,
     source: &Rgb8Image,
-    q: u32,
+    q: f64,
     tuple: &KnobTuple,
     zensim_in_metrics: bool,
     zensim_gpu_in_metrics: bool,
@@ -946,7 +946,7 @@ fn save_distorted_png(
     dir: &Path,
     src_path: &Path,
     codec_name: &str,
-    q: u32,
+    q: f64,
     knob_json: &str,
     decoded: &Rgb8Image,
 ) -> Result<String, Box<dyn Error>> {
@@ -994,7 +994,7 @@ fn save_encoded_variant(
     dir: &Path,
     src_path: &Path,
     codec: CodecKind,
-    q: u32,
+    q: f64,
     knob_json: &str,
     bytes: &[u8],
 ) -> Result<String, Box<dyn Error>> {

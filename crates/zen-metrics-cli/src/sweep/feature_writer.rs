@@ -41,7 +41,7 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
-use arrow_array::{ArrayRef, Float32Array, RecordBatch, StringArray, UInt32Array};
+use arrow_array::{ArrayRef, Float32Array, Float64Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::{Compression, ZstdLevel};
@@ -100,7 +100,7 @@ pub struct FeatureParquetWriter {
 struct RowBuffer {
     image_path: Vec<String>,
     codec: Vec<String>,
-    q: Vec<u32>,
+    q: Vec<f64>,
     knob_tuple_json: Vec<String>,
     zensim_score: Vec<f32>,
     /// `feature_columns[i]` collects the values for `feat_i` across rows.
@@ -186,7 +186,7 @@ impl FeatureParquetWriter {
         &mut self,
         image_path: &str,
         codec: &str,
-        q: u32,
+        q: f64,
         knob_tuple_json: &str,
         zensim_score: f32,
         features: &[f64],
@@ -237,7 +237,7 @@ fn build_schema(n: usize) -> Schema {
     let mut fields: Vec<Field> = Vec::with_capacity(5 + n);
     fields.push(Field::new("image_path", DataType::Utf8, false));
     fields.push(Field::new("codec", DataType::Utf8, false));
-    fields.push(Field::new("q", DataType::UInt32, false));
+    fields.push(Field::new("q", DataType::Float64, false));
     fields.push(Field::new("knob_tuple_json", DataType::Utf8, false));
     fields.push(Field::new("zensim_score", DataType::Float32, false));
     for i in 0..n {
@@ -254,7 +254,7 @@ fn build_record_batch(
     let mut cols: Vec<ArrayRef> = Vec::with_capacity(5 + n);
     cols.push(Arc::new(StringArray::from(buf.image_path.clone())));
     cols.push(Arc::new(StringArray::from(buf.codec.clone())));
-    cols.push(Arc::new(UInt32Array::from(buf.q.clone())));
+    cols.push(Arc::new(Float64Array::from(buf.q.clone())));
     cols.push(Arc::new(StringArray::from(buf.knob_tuple_json.clone())));
     cols.push(Arc::new(Float32Array::from(buf.zensim_score.clone())));
     for col in &buf.feature_columns {

@@ -100,20 +100,25 @@ impl KnobGrid {
     }
 }
 
-/// Parse `--q-grid 5,10,15` into `[5, 10, 15]`. Whitespace around items is
-/// trimmed; empty fields are an error.
-pub fn parse_q_grid(s: &str) -> Result<Vec<u32>, Box<dyn Error>> {
+/// Parse `--q-grid 5,10,15` or `--q-grid 99,99.5,99.9` into a list of `f64`
+/// quality values. Whitespace around items is trimmed; empty fields are an
+/// error. Quality is fractional because every zen codec's quality dial is
+/// `f32`-valued (`with_generic_quality(f32)` / `with_quality(f32)` /
+/// `quality(f32)`) — only the sweep pipeline historically truncated to a
+/// `u32`, which coarsened the near-lossless dial where 0.1-quality steps
+/// matter. Integer inputs (`5,10,15`) parse exactly as before (`5.0`, …).
+pub fn parse_q_grid(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
     let mut out = Vec::new();
     for part in s.split(',') {
         let p = part.trim();
         if p.is_empty() {
             return Err(format!("--q-grid contains an empty field in {s:?}").into());
         }
-        let v: u32 = p
+        let v: f64 = p
             .parse()
             .map_err(|e| format!("invalid q value {p:?}: {e}"))?;
-        if v > 100 {
-            return Err(format!("--q-grid value {v} out of range (expected 0..=100)").into());
+        if !v.is_finite() || !(0.0..=100.0).contains(&v) {
+            return Err(format!("--q-grid value {v} out of range (expected 0.0..=100.0)").into());
         }
         out.push(v);
     }
@@ -164,7 +169,18 @@ mod tests {
 
     #[test]
     fn q_grid_parses() {
-        assert_eq!(parse_q_grid("25,50,75,90").unwrap(), vec![25, 50, 75, 90]);
+        assert_eq!(parse_q_grid("25,50,75,90").unwrap(), vec![25.0, 50.0, 75.0, 90.0]);
+    }
+
+    #[test]
+    fn q_grid_parses_fractional() {
+        // near-lossless fractional q (the reason for the f64 change)
+        assert_eq!(
+            parse_q_grid("99,99.5,99.9,100").unwrap(),
+            vec![99.0, 99.5, 99.9, 100.0]
+        );
+        // q0 boundary still valid
+        assert_eq!(parse_q_grid("0,0.25").unwrap(), vec![0.0, 0.25]);
     }
 
     #[test]
@@ -176,6 +192,9 @@ mod tests {
     #[test]
     fn q_grid_rejects_out_of_range() {
         assert!(parse_q_grid("25,200").is_err());
+        assert!(parse_q_grid("25,100.5").is_err());
+        assert!(parse_q_grid("-1,50").is_err());
+        assert!(parse_q_grid("25,nan").is_err());
     }
 
     #[test]
