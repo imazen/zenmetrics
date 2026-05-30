@@ -1,13 +1,16 @@
-# Minimal workspace for building the zen-jobdash control plane in Docker / Railway.
-# The full workspace can't build in isolation: zen-metrics-cli has a path dependency on the
-# jxl-encoder sibling repo (outside this repo), which isn't in the deploy build context. The
-# dashboard only needs these three crates, none of which reach outside the repo.
-# The Dockerfile copies this over Cargo.toml before `cargo build -p zen-jobdash`.
+# Minimal workspace for building the deployable job-system crates (Railway dashboard + fleet worker)
+# in isolation. The full workspace can't build standalone: zen-metrics-cli path-deps the jxl-encoder
+# sibling repo (outside this repo), absent from a deploy/cross/remote build context. These crates
+# reach outside the repo for nothing. Builders cp this over Cargo.toml before `cargo build -p <crate>`:
+#   - Railway: cargo build -p zen-jobdash   (the dashboard)
+#   - fleet boxes (arm-zen/Oracle/etc.): cargo build -p zen-jobworker  (worker + jobexec bins)
 [workspace]
 members = [
     "crates/zen-job-core",
     "crates/zen-ledger",
     "crates/zen-jobdash",
+    "crates/zen-jobworker",
+    "crates/zen-jobctl",
 ]
 resolver = "2"
 
@@ -22,3 +25,5 @@ rust-version = "1.93"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+clap = { version = "4", default-features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
