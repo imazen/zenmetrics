@@ -551,13 +551,42 @@ fn build_session_scorer(
             })?;
             Ok(crate::metric::Metric::Cvvdp(opaque))
         }
+        #[cfg(all(
+            feature = "ssim2",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
+        MetricKind::Ssim2 => {
+            let p = match params {
+                MetricParams::Ssim2(p) => p,
+                _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
+            };
+            let b = crate::metric::ssim2_backend(backend)?;
+            let opaque = ssim2_gpu::session::new_opaque_on_stream(
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
+            )
+            .map_err(|e| Error::Metric {
+                kind: "ssim2",
+                message: e.to_string(),
+            })?;
+            Ok(crate::metric::Metric::Ssim2(opaque))
+        }
         #[allow(unreachable_patterns)]
         other => Err(Error::Metric {
             kind: other.tag(),
             message: format!(
-                "MetricSession not yet wired for '{}' — only cvvdp is wired in the foundation \
-                 (issue #17 follow-up). Use Metric::new on the shared default stream, or wait \
-                 for the per-crate session hook.",
+                "MetricSession not yet wired for '{}' (issue #17 follow-up). Use Metric::new on \
+                 the shared default stream, or wait for the per-crate session hook.",
                 other.tag()
             ),
         }),

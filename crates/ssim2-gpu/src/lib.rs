@@ -101,6 +101,12 @@ pub mod memory_mode;
 pub mod opaque;
 pub mod pipeline;
 pub mod pipeline_batch;
+// Stream-bound session plumbing for `zenmetrics_api::MetricSession`
+// (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
+// per-crate API.
+#[cfg(feature = "cubecl-types")]
+#[doc(hidden)]
+pub mod session;
 pub mod skipmap;
 
 pub use memory_mode::{

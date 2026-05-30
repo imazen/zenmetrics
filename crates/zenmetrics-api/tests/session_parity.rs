@@ -152,3 +152,52 @@ fn session_warm_ref_matches_owned_cvvdp() {
         session_warm.value, owned_warm.value
     );
 }
+
+/// ssim2 is the second metric wired to `MetricSession`. Same property:
+/// the session (private stream) must match the owned metric (default
+/// stream) to within ssim2's own `Atomic<f32>` reduction noise. ssim2's
+/// score range is ~0..100, so the band is scaled up accordingly
+/// (1e-3 on a 0..100 scale ≈ the same relative tolerance as cvvdp's
+/// 1e-5 on a ~10 scale).
+#[test]
+fn session_score_matches_owned_ssim2() {
+    let (r, d) = make_pair();
+
+    let owned = {
+        let mut m = Metric::new(
+            MetricKind::Ssim2,
+            Backend::Cuda,
+            W,
+            H,
+            MetricParams::default_for(MetricKind::Ssim2),
+        )
+        .expect("owned Metric::new(Ssim2) failed");
+        m.compute_srgb_u8(&r, &d).expect("owned ssim2 score")
+    };
+
+    let session = {
+        let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire session");
+        let mut sm = ctx
+            .metric(
+                MetricKind::Ssim2,
+                W,
+                H,
+                MetricParams::default_for(MetricKind::Ssim2),
+            )
+            .expect("ctx.metric(Ssim2) failed");
+        sm.score(&r, &d).expect("session ssim2 score")
+    };
+
+    assert_eq!(owned.metric_name, "ssim2");
+    assert_eq!(session.metric_name, "ssim2");
+    assert!(owned.value.is_finite() && session.value.is_finite());
+    const SSIM2_REDUCTION_NOISE: f64 = 1e-3; // ~0..100 scale
+    let delta = (owned.value - session.value).abs();
+    assert!(
+        delta <= SSIM2_REDUCTION_NOISE,
+        "session ssim2 score ({}) and owned ({}) differ by {delta:.3e}, exceeding the \
+         Atomic<f32> reduction-noise band ({SSIM2_REDUCTION_NOISE:.0e}) — the session changed \
+         the computation, not just reduction order",
+        session.value, owned.value
+    );
+}

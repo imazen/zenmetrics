@@ -239,6 +239,33 @@ impl Ssim2Opaque {
         })
     }
 
+    /// Build an [`Ssim2Opaque`] from a caller-supplied cubecl client
+    /// (which may be bound to an explicit stream). Internal plumbing for
+    /// [`crate::session::new_opaque_on_stream`]; the default-stream
+    /// constructor inlines the equivalent per-backend `Ssim2::<R>::new`
+    /// call so it can pick the runtime type without a generic boundary.
+    #[cfg(feature = "cubecl-types")]
+    pub(crate) fn build_from_client<R: cubecl::Runtime>(
+        client: cubecl::prelude::ComputeClient<R>,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: Ssim2Params,
+        mode: crate::MemoryMode,
+    ) -> Result<Self>
+    where
+        Ssim2<R>: Send + 'static,
+    {
+        let s = Ssim2::<R>::new_with_memory_mode(client, width, height, mode)?;
+        #[cfg(feature = "fir")]
+        let s = s.with_blur(params.blur);
+        Ok(Self {
+            inner: Box::new(s),
+            params,
+            backend,
+        })
+    }
+
     /// Configured `(width, height)`.
     pub fn dims(&self) -> (u32, u32) {
         self.inner.dims()
