@@ -249,6 +249,69 @@ fn mixed_chunk(cfg: &Cfg, do_reclaim: bool) -> u64 {
     peak.saturating_sub(baseline)
 }
 
+/// Scenario 3: warm per-call path regression guard. One metric, one
+/// signature, N warm scores in a row — NO reclaim between scores (that
+/// is the contract: reclaim fires only on metric-swap / drop, never
+/// between same-signature scores). Reports per-call wall stats and
+/// confirms the VRAM floor is flat across the loop, so the reader can
+/// verify the #150 cleanup did not regress the warm path measured in
+/// #145.
+fn warm_loop(cfg: &Cfg, n: usize) {
+    use std::time::Instant;
+    let w = cfg.w;
+    let h = cfg.h;
+    let r = make_image(0xA5A5, w, h);
+    let kind = MetricKind::Cvvdp; // cached-ref metric, deep warm path.
+
+    let baseline = sample_mib(cfg.settle_ms, cfg.reads);
+    println!("\n== warm_loop ({}, {w}x{h}, n={n}) baseline={baseline} MiB ==", kind.tag());
+    let params = MetricParams::default_for(kind);
+    let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
+        .expect("construct");
+    // Warm the reference once (cvvdp warm-ref path).
+    let _ = m.set_reference_srgb_u8(&r);
+
+    let mut walls_us: Vec<u128> = Vec::with_capacity(n);
+    let mut vram_floor = u64::MAX;
+    let mut vram_peak = 0u64;
+    for i in 0..n {
+        let d = make_image(0x5A5A_u64.wrapping_add(i as u64), w, h);
+        let t = Instant::now();
+        // Same-signature warm score against the cached reference.
+        let _ = m
+            .compute_with_cached_reference_srgb_u8(&d)
+            .or_else(|_| m.compute_srgb_u8(&r, &d))
+            .expect("warm score");
+        walls_us.push(t.elapsed().as_micros());
+        // Sample VRAM every few iters to confirm the floor stays flat
+        // (no per-call alloc growth, no reclaim churn).
+        if i % 4 == 0 {
+            let used = sample_mib(20, 2);
+            vram_floor = vram_floor.min(used);
+            vram_peak = vram_peak.max(used);
+        }
+    }
+    drop(m);
+    reclaim_pooled_vram(Backend::Cuda);
+
+    walls_us.sort_unstable();
+    let p50 = walls_us[walls_us.len() / 2];
+    let p10 = walls_us[walls_us.len() / 10.max(1).min(walls_us.len() - 1)];
+    let p90 = walls_us[(walls_us.len() * 9 / 10).min(walls_us.len() - 1)];
+    let span = vram_peak.saturating_sub(vram_floor);
+    println!(
+        "  warm per-call wall: p10={:.2} p50={:.2} p90={:.2} ms over {n} scores",
+        p10 as f64 / 1000.0,
+        p50 as f64 / 1000.0,
+        p90 as f64 / 1000.0
+    );
+    println!(
+        "  warm VRAM floor={vram_floor} peak={vram_peak} span={span} MiB \
+         (flat span => no per-call growth, no reclaim churn)"
+    );
+    emit_tsv(cfg, "warm_loop", "vram_floor", "reclaim", vram_floor, baseline);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut w = 4096u32;
@@ -319,6 +382,10 @@ fn main() {
                 peak_no_reclaim as f64 / (peak_reclaim.max(1)) as f64
             );
         }
+    }
+    if scenario == "all" || scenario == "warm_loop" {
+        let n: usize = std::env::var("WARM_N").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
+        warm_loop(&cfg, n);
     }
     println!("\n# done{}", tsv.map(|p| format!(" — TSV at {p}")).unwrap_or_default());
 }

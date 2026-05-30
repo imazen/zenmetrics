@@ -1,0 +1,60 @@
+vram_cleanup_2026-05-29 — VRAM drop/reclaim + orchestrator swap-cleanup
+proof (task #150).
+
+commit:    b18f6d32797c (zenmetrics master; reclaim API + orchestrator swap
+           cleanup landed in this commit's ancestry)
+host:      lilith (water-cooled Ryzen 9 7950X, 128 GB RAM)
+gpu:       NVIDIA GeForce RTX 5070 (12 GiB), driver 596.21, CUDA runtime
+           13.2, WSL2
+backend:   CudaRuntime (cubecl), release build
+probe:     nvidia-smi --query-gpu=memory.used (GLOBAL card used MiB; per-PID
+           accounting hidden under WSL2). Per-step sample = min of a short
+           read window after a settle delay (filters additive transients
+           from a concurrent GPU consumer); swap_peak uses a 40 ms peak
+           poller during the child run.
+caveat:    A concurrent `claude-setref-all` GPU process (small 512²–1024²
+           setref re-measurements) ran during the window, so absolute
+           baselines drift ±300 MiB row-to-row and the swap_peak absolute
+           peaks carry some additive noise. The QUALITATIVE findings are
+           robust: drop-vs-reclaim is a 5000→157 MiB step (single process,
+           no contention possible on that magnitude); the swap_peak
+           no_reclaim 16 MP variant OOM'd 2/6 tasks while reclaim ran 6/6.
+
+drivers:
+  - crates/zenmetrics-api/examples/vram_drop_reclaim.rs
+      --scenario drop_reclaim  (single-metric drop→reclaim)
+      --scenario warm_loop      (warm per-call regression guard, WARM_N=40)
+  - crates/zenmetrics-orchestrator/examples/vram_swap_peak.rs
+      (real Orchestrator::run_all chunk, child-per-variant, peak poller)
+
+commands:
+  cargo build -p zenmetrics-api --release \
+    --features cuda,all-metrics,pixels --example vram_drop_reclaim
+  ./target/release/examples/vram_drop_reclaim --size 4096 \
+    --scenario drop_reclaim --settle-ms 100 --reads 6 --tsv /tmp/vram_dr_16mp.tsv
+  WARM_N=40 ./target/release/examples/vram_drop_reclaim --size 1024 \
+    --scenario warm_loop --settle-ms 60 --reads 4
+
+  cargo build -p zenmetrics-orchestrator --release --features cuda \
+    --example vram_swap_peak
+  ./target/release/examples/vram_swap_peak --size 2048 --tsv /tmp/vram_swap_4mp.tsv
+  ./target/release/examples/vram_swap_peak --size 4096 --tsv /tmp/vram_swap_16mp.tsv
+
+headline findings:
+  1. drop alone returns NOTHING to the driver: 16 MP butter construct+score
+     = +5000 MiB resident; after drop, STILL +5000 MiB (cubecl pool
+     plateau, exactly the #147 finding). reclaim_pooled_vram returned 4843
+     MiB to the driver → post-reclaim delta +157 MiB (≈ baseline).
+  2. orchestrator swap cleanup keeps peak ≈ MAX not SUM. 4 MP mixed chunk
+     (cvvdp→ssim2→butter): peak +2100 MiB WITH reclaim vs +2829 MiB WITHOUT
+     (1.35× lower, reclaim cut 729 MiB). swap_reclaims=2 = exactly the 2
+     signature swaps (NOT between the same-signature pairs).
+  3. at 16 MP on a 12 GiB card the WITHOUT-reclaim variant OOM'd 2/6 tasks
+     (butter could not allocate over ssim2's still-pooled pages); WITH
+     reclaim all 6/6 succeeded. The fix is correctness-relevant at the high
+     end, not just a peak-shaving optimization.
+  4. warm per-call path NOT regressed: 1 MP cvvdp warm-ref loop (40 scores)
+     p50 = 3.37 ms, VRAM floor 385 MiB (matches the documented warm_ref
+     footprint in gpu_vram_sweep_2026-05-28.tsv exactly), span 9 MiB
+     (nvidia-smi quantization). reclaim does NOT fire between same-signature
+     scores (swap_reclaims=0 across the warm loop).

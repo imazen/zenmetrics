@@ -1,0 +1,11 @@
+scenario	variant	width	height	mp	metric	baseline_mib	value_mib	delta_mib	ok	total	swap_reclaims	note
+drop_reclaim	-	4096	4096	16.78	butter	3097	3097	0	-	-	-	baseline
+drop_reclaim	-	4096	4096	16.78	butter	3097	8097	5000	-	-	-	after_construct_score
+drop_reclaim	-	4096	4096	16.78	butter	3097	8097	5000	-	-	-	after_drop_POOL_PLATEAU
+drop_reclaim	-	4096	4096	16.78	butter	3097	3254	157	-	-	-	after_reclaim_RETURNED_TO_DRIVER
+swap_peak	reclaim	2048	2048	4.19	cvvdp+ssim2+butter	3068	5168	2100	6	6	2	orchestrator_chunk_MAX
+swap_peak	no_reclaim	2048	2048	4.19	cvvdp+ssim2+butter	3058	5887	2829	6	6	0	orchestrator_chunk_SUM
+swap_peak	reclaim	4096	4096	16.78	cvvdp+ssim2+butter	3140	10979	7839	6	6	2	orchestrator_chunk_all_ok
+swap_peak	no_reclaim	4096	4096	16.78	cvvdp+ssim2+butter	3143	11551	8408	4	6	0	orchestrator_chunk_2_OOM
+warm_loop	reclaim	1024	1024	1.05	cvvdp	3114	3499	385	-	-	0	warm_ref_footprint_vram_floor
+warm_loop	reclaim	1024	1024	1.05	cvvdp	3114	3508	394	-	-	0	warm_ref_vram_peak_span9MiB

@@ -28,10 +28,22 @@ Workspace conventions per the global rules:
   cubecl `ComputeClient::memory_cleanup` then `sync` to flush the CUDA
   deferred-free queue, returning pooled pages to the driver. Thread/stream
   scoped (cubecl's CUDA pool is per-thread) — call from the thread that
-  dropped the metric; never between warm scores. Source-level audit of the
-  cubecl memory model + every crate's Drop / cached-ref lifecycle in
-  `crates/zenmetrics-api/docs/VRAM_DROP_AUDIT_2026-05-29.md`. Additive,
-  non-breaking. Audit commit `946593f9`.
+  dropped the metric; never between warm scores. The orchestrator GPU
+  worker now calls this reclaim at every metric-signature swap (after
+  dropping the old warm instance, before constructing the new one) and on
+  runtime OOM, so peak VRAM across a mixed-metric chunk stays ≈ MAX(single
+  metric) instead of trending to SUM (`ZENMETRICS_NO_SWAP_VRAM_CLEANUP=1`
+  opt-out). Source-level audit of the cubecl memory model + every crate's
+  Drop / cached-ref lifecycle in
+  `crates/zenmetrics-api/docs/VRAM_DROP_AUDIT_2026-05-29.md`. Measured proof
+  (`crates/zenmetrics-api/docs/VRAM_DROP_MEASUREMENT_2026-05-29.md` +
+  `benchmarks/vram_cleanup_2026-05-29.tsv`): 16 MP butter drop alone leaves
+  +5000 MiB pooled, reclaim returns 4843 MiB to the driver (+157 ≈
+  baseline); orchestrator 4 MP mixed chunk peak +2100 MiB with reclaim vs
+  +2829 MiB without (1.35× lower); at 16 MP the no-reclaim variant OOM'd
+  2/6 tasks while reclaim ran 6/6; warm cvvdp per-call path unchanged
+  (p50 3.37 ms, VRAM floor 385 MiB, flat). Additive, non-breaking. Audit
+  commit `946593f9`.
 
 - **zenmetrics-orchestrator: cost-model-aware one-shot CPU/GPU routing**
   (task #146, 2026-05-29). The chooser previously ranked every backend

@@ -278,3 +278,48 @@ fn enabled_metrics() -> Vec<MetricKind> {
     v.push(MetricKind::Zensim);
     v
 }
+
+/// Task #150 — `reclaim_pooled_vram` / `Metric::release` must be safe
+/// (no panic, no corruption of the cubecl pool for a subsequent metric)
+/// and must NOT change scores. Reclaim returns pooled pages to the
+/// driver; a freshly-constructed metric on the same backend must score
+/// bit-identically afterward.
+#[test]
+fn reclaim_and_release_preserve_scores() {
+    use zenmetrics_api::reclaim_pooled_vram;
+    let (r, d) = identity_inputs();
+    for kind in enabled_metrics() {
+        // Baseline score (no reclaim involved).
+        let baseline = score_identity(kind).value;
+
+        // Score → drop → reclaim → reconstruct → score. The post-reclaim
+        // score must equal the baseline (reclaim must not corrupt pool
+        // state for the next allocation).
+        {
+            let params = MetricParams::default_for(kind);
+            let mut m = Metric::new(kind, Backend::Cuda, W, H, params)
+                .unwrap_or_else(|e| panic!("Metric::new({kind:?}) failed: {e}"));
+            let _ = m
+                .compute_srgb_u8(&r, &d)
+                .unwrap_or_else(|e| panic!("compute {kind:?} failed: {e}"));
+            // Drop + reclaim via the consuming convenience.
+            m.release(Backend::Cuda);
+        }
+        // Free-function reclaim is idempotent / safe to call again.
+        reclaim_pooled_vram(Backend::Cuda);
+
+        let after = score_identity(kind).value;
+        if baseline.is_finite() {
+            assert!(
+                (baseline - after).abs() <= baseline.abs() * 1e-9 + 1e-6,
+                "{kind:?}: score changed across reclaim: baseline={baseline} after={after}"
+            );
+        } else {
+            assert_eq!(
+                baseline.is_nan(),
+                after.is_nan(),
+                "{kind:?}: NaN-ness changed across reclaim"
+            );
+        }
+    }
+}
