@@ -56,6 +56,10 @@ struct Cli {
     /// Claim is stealable once this old (presumed-dead worker) — dead-worker reclaim.
     #[arg(long = "claim-ttl-secs", default_value_t = 600)]
     claim_ttl_secs: u64,
+    /// R2 key of a RunControl object ({"paused":bool,"drain":bool}); when paused/draining this pass
+    /// claims no new work (goal C). Requires --blobs-r2-bucket + --r2-endpoint.
+    #[arg(long = "control-r2-key")]
+    control_r2_key: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,6 +86,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if claims.is_some() && r2.is_none() {
         return Err("--claims-r2-bucket requires --blobs-r2-bucket + --r2-endpoint".into());
     }
+    if c.control_r2_key.is_some() && r2.is_none() {
+        return Err("--control-r2-key requires --blobs-r2-bucket + --r2-endpoint".into());
+    }
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,
@@ -89,6 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         blobs: c.blobs,
         r2,
         claims,
+        control_key: c.control_r2_key,
         exec: c.exec,
         worker: c.worker,
         provider: c.provider,

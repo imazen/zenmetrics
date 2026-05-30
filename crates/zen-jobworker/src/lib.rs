@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 
 use zen_job_core::{
     reconcile, sha256, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView, RetryPolicy,
-    Sha256Hex,
+    RunControl, Sha256Hex,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -229,6 +229,35 @@ fn aws_s3api(endpoint: &str) -> Command {
     let mut c = Command::new("aws");
     c.arg("--endpoint-url").arg(endpoint).arg("s3api");
     c
+}
+
+/// Read the run-control object (goal C: pause/drain). Absent or unparseable → `RUNNING` — fail-open,
+/// so a missing/garbled control object can never wedge the fleet.
+pub fn fetch_control_r2(endpoint: &str, bucket: &str, key: &str) -> RunControl {
+    let n = CLAIM_TMP_N.fetch_add(1, Ordering::Relaxed);
+    let out = std::env::temp_dir().join(format!("zenctl_{}_{}", std::process::id(), n));
+    let ok = aws_s3api(endpoint)
+        .arg("get-object")
+        .arg("--bucket")
+        .arg(bucket)
+        .arg("--key")
+        .arg(key)
+        .arg(&out)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let ctl = if ok {
+        std::fs::read(&out)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<RunControl>(&b).ok())
+            .unwrap_or_default()
+    } else {
+        RunControl::default()
+    };
+    let _ = std::fs::remove_file(&out);
+    ctl
 }
 
 /// Pure staleness check: a claim is stealable once its age reaches the TTL.
@@ -467,6 +496,9 @@ pub struct WorkerConfig {
     /// If set (requires `r2`), claim each gap job via R2 conditional write before executing it —
     /// concurrent-safe fleet claiming (no two workers run the same job).
     pub claims: Option<ClaimCfg>,
+    /// If set (requires `r2`), the R2 key of a `RunControl` object checked before pulling work —
+    /// when paused/draining this pass claims nothing (goal C: pause/resume/drain).
+    pub control_key: Option<String>,
     /// Executor program (stdin-JSON → stdout-bytes contract).
     pub exec: String,
     pub worker: String,
@@ -503,6 +535,20 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
             .map_err(|e| WorkerRunError::Ledger(e.to_string()))?
         {
             view.apply(row);
+        }
+    }
+
+    // Run control (goal C): if the run is paused/draining, pull no new work this pass. Fail-open —
+    // an absent control object reads as RUNNING. The ledger is untouched, so resuming continues
+    // exactly where it left off ("without losing state").
+    if let (Some(t), Some(key)) = (&cfg.r2, &cfg.control_key) {
+        let ctl = fetch_control_r2(&t.endpoint, &t.bucket, key);
+        if ctl.claims_blocked() {
+            eprintln!(
+                "zen-jobworker: run control = {} — pulling no new work this pass",
+                if ctl.paused { "PAUSED" } else { "DRAINING" }
+            );
+            return Ok(ExecOutcome { rows: Vec::new(), done: 0, failed: 0, poisoned: 0, skipped: 0 });
         }
     }
 
@@ -698,6 +744,7 @@ mod tests {
             blobs: dir.join("blobs"),
             r2: None,
             claims: None,
+            control_key: None,
             exec: "cat".into(),
             worker: "w1".into(),
             provider: "local".into(),

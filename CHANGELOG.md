@@ -19,6 +19,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: pause / resume / drain (goal C)** (2026-05-29). New `zen_job_core::RunControl`
+  (`{paused,drain}`); `zen-jobworker --control-r2-key` reads it and pulls no new work when
+  paused/draining (fail-open — absent = running), never touching the ledger so resume continues
+  exactly where it left off. The dashboard's Pause/Drain/Resume now write this object to R2
+  (`ZEN_CONTROL_R2`, via new `zen_ledger::write_bytes_uri`) instead of only recording intent. Live
+  demo `scripts/jobsys/demo_pause_drain_r2.sh` (paused/draining → done=0, resume → done=1).
 - **zen-jobworker: spot-preemption claim release (goal F)** (2026-05-29). On SIGTERM/SIGINT a worker
   with R2 claims now releases its in-flight claim (`release_claim_r2`) on a dedicated signal-hook
   thread and exits 130, so a reclaimed spot box requeues its job immediately instead of waiting out

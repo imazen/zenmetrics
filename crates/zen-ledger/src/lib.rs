@@ -297,6 +297,23 @@ pub fn read_blob_index_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<Blob
     }
 }
 
+/// Write raw bytes to a local path or `s3://` URI (uploads via s5cmd for `s3://`) — for small JSON
+/// sidecars (e.g. a RunControl object the dashboard writes for pause/drain).
+pub fn write_bytes_uri(uri: &str, bytes: &[u8], endpoint: Option<&str>) -> Result<(), LedgerError> {
+    if uri.starts_with("s3://") {
+        let ep = endpoint
+            .ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
+        let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("zenledger_wb_{}_{}.bin", std::process::id(), n));
+        std::fs::write(&tmp, bytes).map_err(|e| LedgerError::Io(format!("write temp: {e}")))?;
+        let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
+        let _ = std::fs::remove_file(&tmp);
+        r
+    } else {
+        std::fs::write(Path::new(uri), bytes).map_err(|e| LedgerError::Io(format!("write {uri}: {e}")))
+    }
+}
+
 /// Read raw bytes from a local path or `s3://` URI — for small JSON sidecars (e.g. workers.json).
 pub fn read_bytes_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<u8>, LedgerError> {
     if uri.starts_with("s3://") {

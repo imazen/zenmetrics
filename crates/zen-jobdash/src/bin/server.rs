@@ -346,10 +346,32 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
             };
             serde_json::json!({ "decision": decision, "teardown": actuation })
         }
-        // Pause/Drain have no Hetzner equivalent — recorded for the worker loop to honor.
+        // Pause/Drain/Resume write a RunControl object to R2; workers honor it before pulling work
+        // (goal C: pause/resume/drain without losing state). Needs ZEN_CONTROL_R2 (an s3:// URI).
+        ControlIntent::Pause { .. } => write_run_control(zen_job_core::RunControl::PAUSED),
+        ControlIntent::Drain { .. } => write_run_control(zen_job_core::RunControl::DRAINING),
+        ControlIntent::Resume { .. } => write_run_control(zen_job_core::RunControl::RUNNING),
         other => serde_json::json!({ "intent": other, "status": "queued_for_fleet_actuation" }),
     };
     Json(plan)
+}
+
+/// Write a [`RunControl`](zen_job_core::RunControl) object to R2 (goal C pause/drain actuation).
+/// Target is `ZEN_CONTROL_R2` (an `s3://bucket/key` URI, or a local path for dev); R2 endpoint from
+/// `ZEN_R2_ENDPOINT`. No-op with a note when `ZEN_CONTROL_R2` is unset.
+fn write_run_control(ctl: zen_job_core::RunControl) -> serde_json::Value {
+    let Some(uri) = std::env::var("ZEN_CONTROL_R2").ok().filter(|s| !s.is_empty()) else {
+        return serde_json::json!({
+            "action": "control", "written": false,
+            "note": "set ZEN_CONTROL_R2 (s3://bucket/key) + point workers at --control-r2-key to enable pause/drain"
+        });
+    };
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
+    let body = serde_json::to_vec(&ctl).unwrap_or_default();
+    match zen_ledger::write_bytes_uri(&uri, &body, endpoint.as_deref()) {
+        Ok(()) => serde_json::json!({ "action": "control", "written": true, "control": ctl, "uri": uri }),
+        Err(e) => serde_json::json!({ "action": "control", "written": false, "error": e.to_string() }),
+    }
 }
 
 /// Served only when the SPA build output is missing (local dev without `npm run build`).

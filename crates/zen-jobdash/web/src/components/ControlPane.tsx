@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { HardDriveDownload, Loader2, ShieldHalf } from "lucide-react"
+import { HardDriveDownload, Loader2, Pause, Play, ShieldHalf, StepForward } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +28,22 @@ export function ControlPane({ fleet, onChange }: { fleet?: FleetView; onChange?:
   const [cap, setCap] = useState("10")
   const [spend, setSpend] = useState<StopSpendResp | null>(null)
   const [spendBusy, setSpendBusy] = useState(false)
+  const [ctlMsg, setCtlMsg] = useState<string | null>(null)
+  const [ctlBusy, setCtlBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+
+  async function runControl(label: string, fn: () => Promise<unknown>) {
+    setCtlBusy(label)
+    setErr(null)
+    try {
+      const r = (await fn()) as { written?: boolean; note?: string; error?: string }
+      setCtlMsg(r.error ? `error: ${r.error}` : r.written ? `${label} — control written` : r.note ?? label)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCtlBusy(null)
+    }
+  }
 
   async function runGc() {
     setGcBusy(true)
@@ -131,6 +146,30 @@ export function ControlPane({ fleet, onChange }: { fleet?: FleetView; onChange?:
           {!fleet?.actuation && (
             <p className="text-amber-400 text-xs">No Hetzner token — kill records intent only.</p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Pause / resume / drain */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Pause className="size-4" /> Run control
+          </CardTitle>
+          <CardDescription>Pause/drain the fleet without losing state — workers stop pulling new work (goal C).</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => runControl("paused", api.pause)} disabled={!!ctlBusy}>
+              {ctlBusy === "paused" ? <Loader2 className="animate-spin" /> : <Pause />} Pause
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runControl("draining", api.drain)} disabled={!!ctlBusy}>
+              {ctlBusy === "draining" ? <Loader2 className="animate-spin" /> : <StepForward />} Drain
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runControl("resumed", api.resume)} disabled={!!ctlBusy}>
+              {ctlBusy === "resumed" ? <Loader2 className="animate-spin" /> : <Play />} Resume
+            </Button>
+          </div>
+          {ctlMsg && <p className="text-muted-foreground text-sm">{ctlMsg}</p>}
         </CardContent>
       </Card>
 

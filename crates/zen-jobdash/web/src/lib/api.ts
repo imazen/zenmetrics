@@ -129,6 +129,9 @@ export const api = {
   killFleet: () => postControl({ action: "kill_fleet" }) as Promise<{ actuated: boolean; result?: KillResult; note?: string; selector?: string }>,
   killTier: (tier: string) => postControl({ action: "kill_tier", tier }),
   killRun: (run: string) => postControl({ action: "kill_run", run }),
+  pause: () => postControl({ action: "pause", run: "global" }),
+  drain: () => postControl({ action: "drain", run: "global" }),
+  resume: () => postControl({ action: "resume", run: "global" }),
 }
 
 export function fmtUsd(n: number | null | undefined): string {

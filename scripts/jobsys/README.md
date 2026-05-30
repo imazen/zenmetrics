@@ -49,5 +49,19 @@ bash scripts/jobsys/demo_spot_reclaim_r2.sh        # KEEP=1 to retain the R2 pre
   completes it. Best-effort: if the release misses, TTL stale-reclaim (goal E) still requeues it, so
   correctness never depends on the signal landing.
 
-The dashboard side of these same guarantees (coverage/catalog, progress, cost, kill, stop-spend) is
-live at the Railway deployment; see `crates/zen-jobdash`.
+## `demo_pause_drain_r2.sh` — goal C (pause / resume / drain)
+
+A `RunControl` object in R2 (`{"paused":bool,"drain":bool}`) gates whether a worker pulls new work.
+The demo sets paused → runs a pass (does 0) → sets draining → runs a pass (does 0) → clears it → runs
+a pass (completes the job). The ledger is never touched, so resume continues exactly where it left
+off. The dashboard's Pause/Drain/Resume buttons write this same object (`ZEN_CONTROL_R2`); workers
+read it via `--control-r2-key`.
+
+```bash
+bash scripts/jobsys/demo_pause_drain_r2.sh        # KEEP=1 to retain the R2 prefix
+```
+
+Verified run 2026-05-30: PAUSED/DRAINING passes did `done=0`; RESUME did `done=1`.
+
+The dashboard side of these same guarantees (coverage/catalog, progress, cost, kill, stop-spend,
+pause/drain/resume) is live at the Railway deployment; see `crates/zen-jobdash`.

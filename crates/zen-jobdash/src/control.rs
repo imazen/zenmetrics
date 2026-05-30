@@ -78,6 +78,7 @@ pub enum ControlIntent {
     GcDryRun,
     Pause { run: String },
     Drain { run: String },
+    Resume { run: String },
 }
 
 #[cfg(test)]

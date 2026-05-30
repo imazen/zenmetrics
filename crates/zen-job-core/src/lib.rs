@@ -19,6 +19,7 @@
 
 pub mod catalog;
 pub mod content;
+pub mod control;
 pub mod cost;
 pub mod gc;
 pub mod ids;
@@ -30,6 +31,7 @@ pub mod status;
 
 pub use catalog::{CatalogEntry, SemanticId};
 pub use content::{blob_key, sha256, BlobRef, ContentError, Sha256Hex};
+pub use control::RunControl;
 pub use cost::{aggregate, cost_per_1000_by_tier, over_budget, FleetCost, WorkerReport};
 pub use gc::{gc_plan, verdict, BlobIndexEntry, GcPlan, GcVerdict};
 pub use ids::{CellId, JobId};
