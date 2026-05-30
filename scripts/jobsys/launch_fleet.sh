@@ -98,6 +98,10 @@ done
 # 3d. Salad burst tier — a CPU-only container group on Salad's distributed consumer network (a distinct
 # provider from local/Hetzner/vast). The PUBLIC baked image needs no registry auth; the entrypoint
 # claims off the same R2 queue (we do NOT use Salad's managed queue). Group name = $RUN-salad (DNS-style).
+# NOTE (2026-05-30): Salad's API GETs pass but the create POST sits behind a Cloudflare managed challenge
+# that 403s ALL headless clients (urllib here, curl, AND reqwest) from a flagged IP — "Attention
+# Required! | Cloudflare". If this block fires, run from a clean IP / CI, or create the group in the
+# portal. `cargo run -p zen-cloud-salad --example fleet_create` is the reqwest equivalent of this POST.
 if [ "$N_SALAD" -gt 0 ]; then
   SALAD_KEY=$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')
   AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$MANIFEST" CTLKEY="$CTLKEY" \
