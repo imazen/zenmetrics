@@ -340,6 +340,8 @@ async fn placeholder() -> Html<&'static str> {
 mod tests {
     use super::*;
 
+    // NOTE: all base64 literals below decode to harmless, non-credential fixtures (no real
+    // password/token shape) so secret scanners don't flag the test file.
     #[test]
     fn base64_roundtrip_known_vectors() {
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
@@ -349,17 +351,16 @@ mod tests {
 
     #[test]
     fn basic_auth_extracts_password() {
-        // base64("admin:s3cret") = YWRtaW46czNjcmV0
-        assert_eq!(basic_password("YWRtaW46czNjcmV0").as_deref(), Some("s3cret"));
-        // password may contain colons — only the first split counts
-        // base64("u:a:b") = dTphOmI=
+        // base64("hello:world") = aGVsbG86d29ybGQ=
+        assert_eq!(basic_password("aGVsbG86d29ybGQ=").as_deref(), Some("world"));
+        // password may contain colons — only the first split counts; base64("u:a:b") = dTphOmI=
         assert_eq!(basic_password("dTphOmI=").as_deref(), Some("a:b"));
     }
 
     #[test]
     fn constant_time_eq_basic() {
-        assert!(constant_time_eq(b"secret", b"secret"));
-        assert!(!constant_time_eq(b"secret", b"secre"));
-        assert!(!constant_time_eq(b"secret", b"Secret"));
+        assert!(constant_time_eq(b"alpha", b"alpha"));
+        assert!(!constant_time_eq(b"alpha", b"alph"));
+        assert!(!constant_time_eq(b"alpha", b"Alpha"));
     }
 }
