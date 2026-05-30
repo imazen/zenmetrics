@@ -33,9 +33,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 #[cfg(feature = "bench")]
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-#[cfg(feature = "bench")]
 use std::sync::Arc;
+#[cfg(feature = "bench")]
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(feature = "bench")]
 use std::time::{Instant, SystemTime};
 
@@ -378,7 +378,10 @@ fn run_impl(plan: &BenchPlan) -> BenchReport {
                 };
                 let size_px = (size as u64) * (size as u64);
                 match cell {
-                    CellOutcome::Ok { ns_per_px, vram_mib } => {
+                    CellOutcome::Ok {
+                        ns_per_px,
+                        vram_mib,
+                    } => {
                         profile
                             .ns_per_px_at
                             .entry(size_px)
@@ -468,7 +471,10 @@ fn measure_cell_subprocess(
         .env("WORKER_H", size.to_string())
         .env("WORKER_WARMUP", plan.warmup_iters.to_string())
         .env("WORKER_TIMED", plan.timed_iters.to_string())
-        .env("WORKER_HOLD_MS", plan.subprocess_hold.as_millis().to_string())
+        .env(
+            "WORKER_HOLD_MS",
+            plan.subprocess_hold.as_millis().to_string(),
+        )
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
@@ -550,12 +556,7 @@ fn measure_cell_subprocess(
 /// has already released per-call scratch buffers back into the pool —
 /// the peak is invisible to post-call sampling.
 #[cfg(feature = "bench")]
-fn measure_cell(
-    kind: MetricKind,
-    backend: Backend,
-    size: u32,
-    plan: &BenchPlan,
-) -> CellOutcome {
+fn measure_cell(kind: MetricKind, backend: Backend, size: u32, plan: &BenchPlan) -> CellOutcome {
     let cell_start = Instant::now();
     let (r, d) = synth_pair_offset_dist(size, size);
 
@@ -845,15 +846,11 @@ fn construct_metric(
                 Err(e) => {
                     use crate::cpu_adapter::CpuAdapterError as E;
                     match e {
-                        E::FeatureNotEnabled(_) | E::Unavailable(_) => {
-                            ConstructOutcome::NoBackend
-                        }
+                        E::FeatureNotEnabled(_) | E::Unavailable(_) => ConstructOutcome::NoBackend,
                         E::Failed(msg) => ConstructOutcome::OtherErr(msg),
-                        E::InvalidInputSize { expected, got } => {
-                            ConstructOutcome::OtherErr(format!(
-                                "invalid input size (expected {expected}, got {got})"
-                            ))
-                        }
+                        E::InvalidInputSize { expected, got } => ConstructOutcome::OtherErr(
+                            format!("invalid input size (expected {expected}, got {got})"),
+                        ),
                     }
                 }
             }
@@ -884,9 +881,7 @@ fn cvvdp_strip_pair(width: u32, height: u32) -> ConstructOutcome {
     use zenmetrics_api::cvvdp::{CvvdpOpaque, CvvdpParams, MemoryMode as CvvdpMode};
 
     // The 256-row body matches the existing `mem_one_size` driver.
-    let mode = CvvdpMode::StripPair {
-        h_body: Some(256),
-    };
+    let mode = CvvdpMode::StripPair { h_body: Some(256) };
     match CvvdpOpaque::new_with_memory_mode(
         zenmetrics_api::cvvdp::Backend::Cuda,
         width,
@@ -1006,10 +1001,7 @@ mod tests {
             Duration::from_millis(20),
             Duration::from_millis(30),
         ];
-        assert_eq!(
-            super::median_duration(&mut v),
-            Duration::from_millis(20)
-        );
+        assert_eq!(super::median_duration(&mut v), Duration::from_millis(20));
     }
 
     #[test]
@@ -1021,10 +1013,7 @@ mod tests {
             Duration::from_millis(40),
         ];
         // (20 + 30) / 2 == 25
-        assert_eq!(
-            super::median_duration(&mut v),
-            Duration::from_millis(25)
-        );
+        assert_eq!(super::median_duration(&mut v), Duration::from_millis(25));
     }
 
     #[test]
@@ -1042,4 +1031,3 @@ mod tests {
         assert!(p.soft_timeout_per_cell >= Duration::from_secs(1));
     }
 }
-

@@ -33,7 +33,7 @@ use std::time::Instant;
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    save_profile, synth_pair_offset_dist, Backend, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Backend, Orchestrator, OrchestratorConfig, Task, TaskData, save_profile, synth_pair_offset_dist,
 };
 
 fn parse_metric(s: &str) -> Option<MetricKind> {
@@ -209,11 +209,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "backend_used:       {:?}",
         result.backend_used.map(|b| b.tag())
     );
-    println!("backends_attempted: {} attempt(s)", result.backends_attempted.len());
+    println!(
+        "backends_attempted: {} attempt(s)",
+        result.backends_attempted.len()
+    );
     for (i, (b, o)) in result.backends_attempted.iter().enumerate() {
         println!("  {i}. {} -> {:?}", b.tag(), o);
     }
-    println!("wall_us:            {} ({} ms)", result.wall_us, result.wall_us / 1000);
+    println!(
+        "wall_us:            {} ({} ms)",
+        result.wall_us,
+        result.wall_us / 1000
+    );
     println!("vram_peak_mib:      {:?}", result.vram_peak_mib);
 
     Ok(())

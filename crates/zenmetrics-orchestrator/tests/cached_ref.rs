@@ -13,12 +13,11 @@
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    synth_pair_offset_dist, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Orchestrator, OrchestratorConfig, Task, TaskData, synth_pair_offset_dist,
 };
 
 fn make_warm() -> Orchestrator {
-    let mut orch =
-        Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
+    let mut orch = Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
     if orch.capability().metrics.is_empty() {
         orch.warm().expect("warm bench");
     }

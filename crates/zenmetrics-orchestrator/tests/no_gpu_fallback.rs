@@ -57,9 +57,10 @@ use std::time::{Duration, SystemTime};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    cache_file_path, compute_machine_hash, detect_gpu, load_cached_profile, save_profile, Backend,
-    BackendBench, BackendVram, BenchPlan, CandidateStatus, CapabilityProfile, CpuCapability,
-    GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, RejectReason, Task, TaskData,
+    Backend, BackendBench, BackendVram, BenchPlan, CandidateStatus, CapabilityProfile,
+    CpuCapability, GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, RejectReason,
+    Task, TaskData, cache_file_path, compute_machine_hash, detect_gpu, load_cached_profile,
+    save_profile,
 };
 
 // Re-export of the chooser ChooserError variants — needed so tests
@@ -120,8 +121,10 @@ fn vram_row(rows: &[(Backend, usize)]) -> BackendVram {
 /// CPU-only bench produces.
 fn cpu_only_profile_at(size_px: u64) -> MetricProfile {
     let mut m = MetricProfile::default();
-    m.ns_per_px_at.insert(size_px, bench_row(&[(Backend::Cpu, 60.0)]));
-    m.vram_mib_at.insert(size_px, vram_row(&[(Backend::Cpu, 0)]));
+    m.ns_per_px_at
+        .insert(size_px, bench_row(&[(Backend::Cpu, 60.0)]));
+    m.vram_mib_at
+        .insert(size_px, vram_row(&[(Backend::Cpu, 0)]));
     m.last_measured = Some(SystemTime::now());
     m
 }
@@ -165,7 +168,9 @@ fn synth(size: u32) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn run_with_force_no_gpu<R>(f: impl FnOnce() -> R) -> R {
-    let _guard = FORCE_NO_GPU_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = FORCE_NO_GPU_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // SAFETY: edition-2024 marks set_var/remove_var unsafe because of
     // racy mutation of process env. We hold the global lock above so
     // concurrent tests in this file can't observe the variable
@@ -244,18 +249,16 @@ fn chooser_rejects_all_gpu_backends_when_gpu_absent() {
     };
     for c in &considered {
         match c.backend {
-            Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair => {
-                match c.status {
-                    CandidateStatus::Rejected {
-                        reason: RejectReason::NoGpuPresent,
-                        ..
-                    } => {}
-                    _ => panic!(
-                        "GPU backend {:?} not rejected as NoGpuPresent — got {:?}",
-                        c.backend, c.status
-                    ),
-                }
-            }
+            Backend::GpuFull | Backend::GpuStrip | Backend::GpuStripPair => match c.status {
+                CandidateStatus::Rejected {
+                    reason: RejectReason::NoGpuPresent,
+                    ..
+                } => {}
+                _ => panic!(
+                    "GPU backend {:?} not rejected as NoGpuPresent — got {:?}",
+                    c.backend, c.status
+                ),
+            },
             Backend::Cpu => {
                 // CPU is either Selected (cpu-cvvdp feature on) or
                 // Rejected as CpuMetricUnavailable / CpuNotYetWired.

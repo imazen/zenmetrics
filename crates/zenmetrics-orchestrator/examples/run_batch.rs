@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    synth_pair_offset_dist, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Orchestrator, OrchestratorConfig, Task, TaskData, synth_pair_offset_dist,
 };
 
 fn parse_metric(s: &str) -> Option<MetricKind> {
@@ -103,20 +103,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let results: Vec<_> = orch.run_all(tasks).collect();
     let total_wall = t.elapsed();
 
-    println!("--- Results: {} tasks in {:.2?} ---", results.len(), total_wall);
     println!(
-        "task_id    size      backend    wall_us     score"
+        "--- Results: {} tasks in {:.2?} ---",
+        results.len(),
+        total_wall
     );
-    println!(
-        "---------- ---- ------------- -----------  ----------"
-    );
+    println!("task_id    size      backend    wall_us     score");
+    println!("---------- ---- ------------- -----------  ----------");
     let mut ok = 0;
     for r in &results {
         let size_label = "?";
-        let backend = r
-            .backend_used
-            .map(|b| b.tag())
-            .unwrap_or("(none)");
+        let backend = r.backend_used.map(|b| b.tag()).unwrap_or("(none)");
         match &r.outcome {
             Ok(score) => {
                 ok += 1;

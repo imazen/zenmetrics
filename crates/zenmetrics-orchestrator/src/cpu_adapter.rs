@@ -232,10 +232,7 @@ pub(crate) enum CpuAdapterError {
     /// Input byte length doesn't match `width × height × 3`. Validation
     /// guard before passing the slice to the underlying crate (some
     /// of which panic on mismatch rather than returning an error).
-    InvalidInputSize {
-        expected: usize,
-        got: usize,
-    },
+    InvalidInputSize { expected: usize, got: usize },
 }
 
 impl std::fmt::Display for CpuAdapterError {
@@ -393,9 +390,7 @@ impl CpuAdapter {
             CpuAdapterState::Zensim(s) => compute_zensim(s, ref_bytes, dist_bytes),
             #[cfg(feature = "cpu-iwssim")]
             CpuAdapterState::Iwssim(c) => compute_iwssim(c, ref_bytes, dist_bytes),
-            CpuAdapterState::FeatureDisabled(k) => {
-                Err(CpuAdapterError::FeatureNotEnabled(*k))
-            }
+            CpuAdapterState::FeatureDisabled(k) => Err(CpuAdapterError::FeatureNotEnabled(*k)),
             CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
         }
     }
@@ -421,12 +416,9 @@ impl CpuAdapter {
             #[cfg(feature = "cpu-ssim2")]
             CpuAdapterState::Ssim2(s) => {
                 let img = ssim2_image_ref(ref_bytes, s.width, s.height);
-                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img)
-                    .map_err(|e| {
-                        CpuAdapterError::Failed(format!(
-                            "fast-ssim2 Ssimulacra2Reference::new: {e}"
-                        ))
-                    })?;
+                let precomputed = fast_ssim2::Ssimulacra2Reference::new(img).map_err(|e| {
+                    CpuAdapterError::Failed(format!("fast-ssim2 Ssimulacra2Reference::new: {e}"))
+                })?;
                 s.cached_ref = Some(precomputed);
                 Ok(())
             }
@@ -452,9 +444,7 @@ impl CpuAdapter {
                     s.params.clone(),
                 )
                 .map_err(|e| {
-                    CpuAdapterError::Failed(format!(
-                        "butteraugli ButteraugliReference::new: {e:?}"
-                    ))
+                    CpuAdapterError::Failed(format!("butteraugli ButteraugliReference::new: {e:?}"))
                 })?;
                 s.cached_ref = Some(pre);
                 Ok(())
@@ -473,9 +463,7 @@ impl CpuAdapter {
                 let src: &[[u8; 3]] = bytemuck::cast_slice(ref_bytes);
                 let ref_slice = zensim::RgbSlice::new(src, s.width, s.height);
                 let precomputed = s.zensim.precompute_reference(&ref_slice).map_err(|e| {
-                    CpuAdapterError::Failed(format!(
-                        "zensim precompute_reference: {e:?}"
-                    ))
+                    CpuAdapterError::Failed(format!("zensim precompute_reference: {e:?}"))
                 })?;
                 s.cached_ref = Some(precomputed);
                 Ok(())
@@ -484,9 +472,7 @@ impl CpuAdapter {
             CpuAdapterState::Iwssim(c) => c
                 .warm_reference(ref_bytes)
                 .map_err(|e| CpuAdapterError::Failed(e.to_string())),
-            CpuAdapterState::FeatureDisabled(k) => {
-                Err(CpuAdapterError::FeatureNotEnabled(*k))
-            }
+            CpuAdapterState::FeatureDisabled(k) => Err(CpuAdapterError::FeatureNotEnabled(*k)),
             CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
         }
     }
@@ -564,8 +550,8 @@ impl CpuAdapter {
                 let h = if strip_height == 0 { 256 } else { strip_height };
                 let ref_img = ssim2_image_ref(ref_bytes, s.width, s.height);
                 let dist_img = ssim2_image_ref(dist_bytes, s.width, s.height);
-                let v = fast_ssim2::compute_ssimulacra2_strip(ref_img, dist_img, h)
-                    .map_err(|e| {
+                let v =
+                    fast_ssim2::compute_ssimulacra2_strip(ref_img, dist_img, h).map_err(|e| {
                         CpuAdapterError::Failed(format!(
                             "fast-ssim2 compute_ssimulacra2_strip: {e}"
                         ))
@@ -590,10 +576,12 @@ impl CpuAdapter {
                 let ref_img = ImgRef::new(ref_rgb, s.width, s.height);
                 let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
                 let result = butteraugli::butteraugli_strip(ref_img, dist_img, &s.params, h)
-                    .map_err(|e| {
-                        CpuAdapterError::Failed(format!("butteraugli_strip: {e:?}"))
-                    })?;
-                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+                    .map_err(|e| CpuAdapterError::Failed(format!("butteraugli_strip: {e:?}")))?;
+                Ok(make_score(
+                    "butter",
+                    env!("CARGO_PKG_VERSION"),
+                    result.score,
+                ))
             }
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(s) => {
@@ -625,9 +613,7 @@ impl CpuAdapter {
                     result.score(),
                 ))
             }
-            CpuAdapterState::FeatureDisabled(k) => {
-                Err(CpuAdapterError::FeatureNotEnabled(*k))
-            }
+            CpuAdapterState::FeatureDisabled(k) => Err(CpuAdapterError::FeatureNotEnabled(*k)),
             CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
         }
     }
@@ -729,7 +715,11 @@ impl CpuAdapter {
                         "butteraugli ButteraugliReference::compare_strip: {e:?}"
                     ))
                 })?;
-                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+                Ok(make_score(
+                    "butter",
+                    env!("CARGO_PKG_VERSION"),
+                    result.score,
+                ))
             }
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(s) => {
@@ -761,12 +751,7 @@ impl CpuAdapter {
                 let dist_slice = zensim::RgbSlice::new(dst, s.width, s.height);
                 let result = s
                     .zensim
-                    .compute_with_ref_streaming_strips(
-                        precomputed,
-                        &dist_slice,
-                        inner,
-                        margin,
-                    )
+                    .compute_with_ref_streaming_strips(precomputed, &dist_slice, inner, margin)
                     .map_err(|e| {
                         CpuAdapterError::Failed(format!(
                             "zensim compute_with_ref_streaming_strips: {e:?}"
@@ -778,9 +763,7 @@ impl CpuAdapter {
                     result.score(),
                 ))
             }
-            CpuAdapterState::FeatureDisabled(k) => {
-                Err(CpuAdapterError::FeatureNotEnabled(*k))
-            }
+            CpuAdapterState::FeatureDisabled(k) => Err(CpuAdapterError::FeatureNotEnabled(*k)),
             CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
         }
     }
@@ -851,7 +834,9 @@ impl CpuAdapter {
             #[cfg(feature = "cpu-dssim")]
             CpuAdapterState::Dssim(s) => {
                 let r = s.cached_ref.as_ref().ok_or_else(|| {
-                    CpuAdapterError::Failed("dssim: no cached reference; call set_reference first".into())
+                    CpuAdapterError::Failed(
+                        "dssim: no cached reference; call set_reference first".into(),
+                    )
                 })?;
                 let dist_img = make_dssim_image(&s.dssim, dist_bytes, s.width, s.height)?;
                 let (score, _maps) = s.dssim.compare(r, dist_img);
@@ -868,10 +853,14 @@ impl CpuAdapter {
                         "butter: no cached reference; call set_reference first".into(),
                     )
                 })?;
-                let result = pre.compare(dist_bytes).map_err(|e| {
-                    CpuAdapterError::Failed(format!("butteraugli compare: {e:?}"))
-                })?;
-                Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+                let result = pre
+                    .compare(dist_bytes)
+                    .map_err(|e| CpuAdapterError::Failed(format!("butteraugli compare: {e:?}")))?;
+                Ok(make_score(
+                    "butter",
+                    env!("CARGO_PKG_VERSION"),
+                    result.score,
+                ))
             }
             #[cfg(feature = "cpu-zensim")]
             CpuAdapterState::Zensim(s) => {
@@ -894,9 +883,7 @@ impl CpuAdapter {
                     .zensim
                     .compute_with_ref(precomputed, &dist_slice)
                     .map_err(|e| {
-                        CpuAdapterError::Failed(format!(
-                            "zensim compute_with_ref: {e:?}"
-                        ))
+                        CpuAdapterError::Failed(format!("zensim compute_with_ref: {e:?}"))
                     })?;
                 Ok(make_score(
                     "zensim",
@@ -946,9 +933,7 @@ impl CpuAdapter {
                     .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
                 Ok(make_score("iwssim", iwssim_cpu_version(), result.score))
             }
-            CpuAdapterState::FeatureDisabled(k) => {
-                Err(CpuAdapterError::FeatureNotEnabled(*k))
-            }
+            CpuAdapterState::FeatureDisabled(k) => Err(CpuAdapterError::FeatureNotEnabled(*k)),
             CpuAdapterState::Unavailable(k) => Err(CpuAdapterError::Unavailable(*k)),
         }
     }
@@ -988,8 +973,8 @@ fn construct_cvvdp(
             )));
         }
     };
-    let c = cvvdp::Cvvdp::new(width, height, p)
-        .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
+    let c =
+        cvvdp::Cvvdp::new(width, height, p).map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
     Ok(CpuAdapterState::Cvvdp(Box::new(c)))
 }
 
@@ -1004,11 +989,7 @@ fn construct_cvvdp(
 }
 
 #[cfg(feature = "cpu-cvvdp")]
-fn compute_cvvdp(
-    c: &mut cvvdp::Cvvdp,
-    r: &[u8],
-    d: &[u8],
-) -> Result<Score, CpuAdapterError> {
+fn compute_cvvdp(c: &mut cvvdp::Cvvdp, r: &[u8], d: &[u8]) -> Result<Score, CpuAdapterError> {
     let v = c
         .score(r, d)
         .map_err(|e| CpuAdapterError::Failed(e.to_string()))?;
@@ -1213,7 +1194,11 @@ fn compute_butter(
     let dist_img = ImgRef::new(dist_rgb, s.width, s.height);
     let result = butteraugli::butteraugli(ref_img, dist_img, &s.params)
         .map_err(|e| CpuAdapterError::Failed(format!("butteraugli: {e:?}")))?;
-    Ok(make_score("butter", env!("CARGO_PKG_VERSION"), result.score))
+    Ok(make_score(
+        "butter",
+        env!("CARGO_PKG_VERSION"),
+        result.score,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -1372,8 +1357,10 @@ mod tests {
                     assert_eq!(adapter.metric(), MetricKind::Iwssim);
                     // iwssim does have a true warm-reference path
                     // (refs's pyramid + per-scale Cu eig hoisted).
-                    assert!(adapter.supports_cached_ref(),
-                        "iwssim should advertise cached-ref support");
+                    assert!(
+                        adapter.supports_cached_ref(),
+                        "iwssim should advertise cached-ref support"
+                    );
                 }
                 Err(e) => panic!("expected Ok(adapter) with cpu-iwssim enabled, got {e:?}"),
             }
@@ -1385,9 +1372,7 @@ mod tests {
                 Err(other) => panic!(
                     "expected FeatureNotEnabled(Iwssim) without cpu-iwssim, got error {other:?}"
                 ),
-                Ok(_) => panic!(
-                    "expected FeatureNotEnabled(Iwssim) without cpu-iwssim, got Ok"
-                ),
+                Ok(_) => panic!("expected FeatureNotEnabled(Iwssim) without cpu-iwssim, got Ok"),
             }
         }
     }

@@ -97,10 +97,7 @@ fn parse_primary_gpu_row(line: &str) -> Option<(String, usize, String)> {
 /// nonzero exit or empty output as `None`.
 fn query_compute_capability() -> Option<String> {
     let out = Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=compute_cap",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=compute_cap", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
     if !out.status.success() {

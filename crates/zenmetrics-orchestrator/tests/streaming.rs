@@ -23,14 +23,13 @@ use std::time::{Duration, Instant};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    synth_pair_offset_dist, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Orchestrator, OrchestratorConfig, Task, TaskData, synth_pair_offset_dist,
 };
 
 /// Build an orchestrator, warm the cache if it's empty, and return it.
 /// Used by every test that needs a populated capability profile.
 fn make_warm_orchestrator() -> Orchestrator {
-    let mut orch =
-        Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
+    let mut orch = Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
     // Warm if no metrics cached yet. If a prior bench populated the
     // cache the test runs against that snapshot.
     if orch.capability().metrics.is_empty() {
@@ -135,7 +134,11 @@ fn worker_pool_parallel_speedup() {
     let r = orch.run_all(singles.drain(..)).collect::<Vec<_>>();
     let single_us = t0.elapsed().as_micros() as u64;
     assert_eq!(r.len(), 1);
-    assert!(r[0].outcome.is_ok(), "single task failed: {:?}", r[0].outcome);
+    assert!(
+        r[0].outcome.is_ok(),
+        "single task failed: {:?}",
+        r[0].outcome
+    );
 
     // Ten tasks (same ref/dist so PTX is warm, signature reused on
     // worker side — measures pure dispatch latency + GPU work overlap).
@@ -151,9 +154,7 @@ fn worker_pool_parallel_speedup() {
     // A perfectly serial worker would give 1.0×; the brief expects
     // ≥1.5× from PTX/buffer reuse alone. Print numbers regardless.
     let speedup = (10.0 * single_us as f64) / ten_us as f64;
-    eprintln!(
-        "single_us={single_us}  ten_us={ten_us}  speedup={speedup:.2}× (target ≥1.5×)"
-    );
+    eprintln!("single_us={single_us}  ten_us={ten_us}  speedup={speedup:.2}× (target ≥1.5×)");
     // Don't hard-fail when single_us > 5s — that's PTX-compile noise.
     if single_us < 5_000_000 {
         assert!(

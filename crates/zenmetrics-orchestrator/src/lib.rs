@@ -41,6 +41,8 @@ mod executor;
 mod gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 mod pool;
+#[cfg(all(feature = "bench", feature = "cuda"))]
+mod session_pool;
 
 pub use bench::{BenchPlan, BenchReport, locate_bench_worker, synth_pair_offset_dist};
 #[cfg(feature = "bench")]
@@ -57,9 +59,11 @@ pub use gpu::detect_gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 pub use pool::{
     CachedRefStats, PoolConfig, RunAllIter, TaskHandle, TaskRefHandle,
-    reset_swap_vram_reclaim_count, reset_warm_instance_construction_count,
-    swap_vram_reclaim_count, warm_instance_construction_count,
+    reset_swap_vram_reclaim_count, reset_warm_instance_construction_count, swap_vram_reclaim_count,
+    warm_instance_construction_count,
 };
+#[cfg(all(feature = "bench", feature = "cuda"))]
+pub use session_pool::{MultiWarmStats, multiwarm_stats, reset_multiwarm_stats};
 
 /// Error type for orchestrator operations. Variants will be extended in
 /// later phases (benchmark failures, scheduler errors, etc.) — callers

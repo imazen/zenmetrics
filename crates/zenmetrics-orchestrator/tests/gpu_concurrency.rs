@@ -34,14 +34,13 @@ use std::time::{Duration, Instant};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    synth_pair_offset_dist, Orchestrator, OrchestratorConfig, PoolConfig, Task, TaskData,
+    Orchestrator, OrchestratorConfig, PoolConfig, Task, TaskData, synth_pair_offset_dist,
 };
 
 /// Build an orchestrator with the given lane count. Pool config is set
 /// before any work is submitted so the lane count takes effect.
 fn make_orchestrator_with_lanes(lanes: usize) -> Orchestrator {
-    let mut orch =
-        Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
+    let mut orch = Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
     let mut pool_cfg = PoolConfig::default();
     pool_cfg.max_gpu_lanes = lanes;
     orch.set_pool_config(pool_cfg)
@@ -193,8 +192,7 @@ fn adaptive_lane_count_starts_at_one_when_enabled() {
     // submitted, no scaling has happened, so active_gpu_lanes == 1
     // and adaptive_lane_tick() reports no change (watcher hasn't seen
     // enough samples to act).
-    let mut orch =
-        Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
+    let mut orch = Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
     let mut cfg = PoolConfig::default();
     cfg.max_gpu_lanes = 4;
     cfg.adaptive_gpu_lanes = true;

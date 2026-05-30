@@ -182,7 +182,9 @@ fn proc_meminfo_total_mib() -> usize {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    parse_meminfo_total_kib(&s).map(|kib| kib / 1024).unwrap_or(0)
+    parse_meminfo_total_kib(&s)
+        .map(|kib| kib / 1024)
+        .unwrap_or(0)
 }
 
 fn parse_meminfo_total_kib(text: &str) -> Option<usize> {

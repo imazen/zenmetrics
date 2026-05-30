@@ -41,15 +41,11 @@ fn env_str(key: &str) -> Option<String> {
 }
 
 fn env_u32(key: &str, default: u32) -> u32 {
-    env_str(key)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(default)
+    env_str(key).and_then(|s| s.parse().ok()).unwrap_or(default)
 }
 
 fn env_usize(key: &str, default: usize) -> usize {
-    env_str(key)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(default)
+    env_str(key).and_then(|s| s.parse().ok()).unwrap_or(default)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -132,13 +128,14 @@ impl BenchMetric {
     fn compute(&mut self, r: &[u8], d: &[u8]) -> Result<(), zenmetrics_api::Error> {
         match self {
             BenchMetric::Umbrella(m) => m.compute_srgb_u8(r, d).map(|_| ()),
-            BenchMetric::CvvdpStripPair(c) => c
-                .compute_srgb_u8(r, d)
-                .map(|_| ())
-                .map_err(|e| zenmetrics_api::Error::Metric {
-                    kind: "cvvdp",
-                    message: e.to_string(),
-                }),
+            BenchMetric::CvvdpStripPair(c) => {
+                c.compute_srgb_u8(r, d)
+                    .map(|_| ())
+                    .map_err(|e| zenmetrics_api::Error::Metric {
+                        kind: "cvvdp",
+                        message: e.to_string(),
+                    })
+            }
         }
     }
 }
@@ -156,9 +153,7 @@ fn construct_umbrella(
 
 fn construct_cvvdp_strip_pair(w: u32, h: u32) -> Result<BenchMetric, zenmetrics_api::Error> {
     use zenmetrics_api::cvvdp::{CvvdpOpaque, CvvdpParams, MemoryMode as CvvdpMode};
-    let mode = CvvdpMode::StripPair {
-        h_body: Some(256),
-    };
+    let mode = CvvdpMode::StripPair { h_body: Some(256) };
     let c = CvvdpOpaque::new_with_memory_mode(
         zenmetrics_api::cvvdp::Backend::Cuda,
         w,

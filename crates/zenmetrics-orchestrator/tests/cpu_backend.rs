@@ -35,8 +35,9 @@ use std::time::{Duration, SystemTime};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    compute_machine_hash, save_profile, Backend, BackendBench, BackendVram, CapabilityProfile,
-    CpuCapability, GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Backend, BackendBench, BackendVram, CapabilityProfile, CpuCapability, GpuCapability,
+    MetricProfile, Orchestrator, OrchestratorConfig, Task, TaskData, compute_machine_hash,
+    save_profile,
 };
 
 // Only the `cpu-iwssim`-off variant of the iwssim test pattern-matches on
@@ -532,9 +533,7 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
     // pool's cached-ref dispatch. Each pair must match.
     let (r, _) = synth(256);
     let n = 256usize * 256usize * 3;
-    let make_d = |seed: u8| -> Vec<u8> {
-        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
-    };
+    let make_d = |seed: u8| -> Vec<u8> { (0..n).map(|i| r[i].wrapping_add(seed)).collect() };
     let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
 
     let mut profile = profile_with_gpu_at(256, 256);
@@ -556,7 +555,10 @@ fn cached_ref_cvvdp_cpu_matches_one_shot() {
         };
         let result = orch.run_single(task);
         let s = result.outcome.as_ref().unwrap_or_else(|e| {
-            panic!("one-shot cvvdp cpu failed: {e:?}; attempts={:?}", result.backends_attempted)
+            panic!(
+                "one-shot cvvdp cpu failed: {e:?}; attempts={:?}",
+                result.backends_attempted
+            )
         });
         oneshot_scores.push(s.value);
     }
@@ -641,9 +643,7 @@ fn cached_ref_butter_cpu_matches_one_shot() {
     // afterwards).
     let (r, _) = synth(256);
     let n = 256usize * 256usize * 3;
-    let make_d = |seed: u8| -> Vec<u8> {
-        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
-    };
+    let make_d = |seed: u8| -> Vec<u8> { (0..n).map(|i| r[i].wrapping_add(seed)).collect() };
     let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
 
     let mut profile = profile_with_gpu_at(256, 256);
@@ -652,8 +652,7 @@ fn cached_ref_butter_cpu_matches_one_shot() {
     // One-shot scoring via run_single.
     let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
     for (i, d) in dists.iter().enumerate() {
-        let (mut orch, _td) =
-            fake_orch_with_metrics(&[(MetricKind::Butter, profile.clone())]);
+        let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Butter, profile.clone())]);
         let task = Task {
             task_id: (300 + i) as u64,
             ref_data: TaskData::Srgb8(r.clone()),
@@ -745,9 +744,7 @@ fn cached_ref_butter_cpu_matches_one_shot() {
 fn cached_ref_ssim2_cpu_matches_one_shot() {
     let (r, _) = synth(256);
     let n = 256usize * 256usize * 3;
-    let make_d = |seed: u8| -> Vec<u8> {
-        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
-    };
+    let make_d = |seed: u8| -> Vec<u8> { (0..n).map(|i| r[i].wrapping_add(seed)).collect() };
     let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
 
     let mut profile = profile_with_gpu_at(256, 256);
@@ -755,8 +752,7 @@ fn cached_ref_ssim2_cpu_matches_one_shot() {
 
     let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
     for (i, d) in dists.iter().enumerate() {
-        let (mut orch, _td) =
-            fake_orch_with_metrics(&[(MetricKind::Ssim2, profile.clone())]);
+        let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Ssim2, profile.clone())]);
         let task = Task {
             task_id: (500 + i) as u64,
             ref_data: TaskData::Srgb8(r.clone()),
@@ -826,9 +822,7 @@ fn cached_ref_ssim2_cpu_matches_one_shot() {
 fn cached_ref_dssim_cpu_matches_one_shot() {
     let (r, _) = synth(256);
     let n = 256usize * 256usize * 3;
-    let make_d = |seed: u8| -> Vec<u8> {
-        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
-    };
+    let make_d = |seed: u8| -> Vec<u8> { (0..n).map(|i| r[i].wrapping_add(seed)).collect() };
     let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
 
     let mut profile = profile_with_gpu_at(256, 256);
@@ -836,8 +830,7 @@ fn cached_ref_dssim_cpu_matches_one_shot() {
 
     let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
     for (i, d) in dists.iter().enumerate() {
-        let (mut orch, _td) =
-            fake_orch_with_metrics(&[(MetricKind::Dssim, profile.clone())]);
+        let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Dssim, profile.clone())]);
         let task = Task {
             task_id: (700 + i) as u64,
             ref_data: TaskData::Srgb8(r.clone()),
@@ -917,9 +910,7 @@ fn cached_ref_dssim_cpu_matches_one_shot() {
 fn cached_ref_zensim_cpu_matches_one_shot() {
     let (r, _) = synth(256);
     let n = 256usize * 256usize * 3;
-    let make_d = |seed: u8| -> Vec<u8> {
-        (0..n).map(|i| r[i].wrapping_add(seed)).collect()
-    };
+    let make_d = |seed: u8| -> Vec<u8> { (0..n).map(|i| r[i].wrapping_add(seed)).collect() };
     let dists: Vec<Vec<u8>> = (1..=4).map(make_d).collect();
 
     let mut profile = profile_with_gpu_at(256, 256);
@@ -928,8 +919,7 @@ fn cached_ref_zensim_cpu_matches_one_shot() {
     // One-shot scoring via run_single (cold `Zensim::compute`).
     let mut oneshot_scores: Vec<f64> = Vec::with_capacity(4);
     for (i, d) in dists.iter().enumerate() {
-        let (mut orch, _td) =
-            fake_orch_with_metrics(&[(MetricKind::Zensim, profile.clone())]);
+        let (mut orch, _td) = fake_orch_with_metrics(&[(MetricKind::Zensim, profile.clone())]);
         let task = Task {
             task_id: (900 + i) as u64,
             ref_data: TaskData::Srgb8(r.clone()),

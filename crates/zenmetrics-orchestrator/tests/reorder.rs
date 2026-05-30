@@ -40,10 +40,10 @@ use std::time::{Duration, SystemTime};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    cache_file_path, compute_machine_hash, reset_warm_instance_construction_count, save_profile,
-    synth_pair_offset_dist, warm_instance_construction_count, Backend, BackendBench, BackendVram,
-    CapabilityProfile, CpuCapability, GpuCapability, MetricProfile, Orchestrator,
-    OrchestratorConfig, Task, TaskData,
+    Backend, BackendBench, BackendVram, CapabilityProfile, CpuCapability, GpuCapability,
+    MetricProfile, Orchestrator, OrchestratorConfig, Task, TaskData, cache_file_path,
+    compute_machine_hash, reset_warm_instance_construction_count, save_profile,
+    synth_pair_offset_dist, warm_instance_construction_count,
 };
 
 // ---------------------------------------------------------------------------
@@ -281,7 +281,11 @@ fn streaming_window_buffers_then_dispatches() {
     // Explicit flush_pending dispatches everything.
     orch.flush_pending();
     assert_eq!(orch.pending_queue_len(), 0);
-    assert_eq!(orch.in_flight_len(), 8, "in_flight unchanged by flush — slots persist until result drained");
+    assert_eq!(
+        orch.in_flight_len(),
+        8,
+        "in_flight unchanged by flush — slots persist until result drained"
+    );
 }
 
 /// Spec test 5 — window count limit triggers flush.
@@ -556,9 +560,22 @@ fn warm_instance_churn_minimal_on_mixed_chunk() {
     // backend signature changes, not parallel-worker fanout.
     let mut pool_cfg = PoolConfig::default();
     pool_cfg.max_parallel_cpu = 1;
+    // This test measures the **single-warm** signature-swap churn that
+    // sorting reduces (its invariant is "sort halves churn vs FIFO").
+    // Task #155's multi-warm session pool keeps an LRU of warm entries
+    // keyed by (metric, dims, params, ref), which makes warm reuse
+    // *order-independent* — so under multi-warm BOTH the FIFO and the
+    // sorted run already achieve the minimum churn (one construction per
+    // distinct (metric, dims, backend)), and "sort halves FIFO" no
+    // longer holds because the FIFO baseline is already minimal. That
+    // order-independence is a property the dedicated `multiwarm_pool`
+    // soundness tests cover. Here we pin the single-warm path so this
+    // test keeps asserting exactly what it documents.
+    pool_cfg.multiwarm_session_pool = false;
 
     let mut orch = Orchestrator::new(OrchestratorConfig::default()).expect("Orchestrator::new");
-    orch.set_pool_config(pool_cfg.clone()).expect("set_pool_config");
+    orch.set_pool_config(pool_cfg.clone())
+        .expect("set_pool_config");
     if orch.capability().metrics.is_empty() {
         orch.warm().expect("warm bench");
     }
@@ -566,8 +583,7 @@ fn warm_instance_churn_minimal_on_mixed_chunk() {
     // Unsorted baseline — strict FIFO submit-order dispatch.
     let mut cfg_unsorted = OrchestratorConfig::default();
     cfg_unsorted.stream_reorder_window = (Duration::ZERO, 1);
-    let mut orch_unsorted =
-        Orchestrator::new(cfg_unsorted).expect("Orchestrator::new");
+    let mut orch_unsorted = Orchestrator::new(cfg_unsorted).expect("Orchestrator::new");
     orch_unsorted
         .set_pool_config(pool_cfg.clone())
         .expect("set_pool_config");
@@ -576,9 +592,7 @@ fn warm_instance_churn_minimal_on_mixed_chunk() {
     }
     reset_warm_instance_construction_count();
     let tasks_unsorted = build_mixed_chunk();
-    eprintln!(
-        "unsorted submit order (first 12 task ids + their metric/size):"
-    );
+    eprintln!("unsorted submit order (first 12 task ids + their metric/size):");
     for (i, t) in tasks_unsorted.iter().take(12).enumerate() {
         eprintln!(
             "  [{i:2}] id={} metric={:?} size={}x{}",
@@ -597,9 +611,7 @@ fn warm_instance_churn_minimal_on_mixed_chunk() {
         drained += 1;
     }
     let unsorted_churn = warm_instance_construction_count();
-    eprintln!(
-        "unsorted: submitted={unsorted_count}, drained={drained}, churn={unsorted_churn}"
-    );
+    eprintln!("unsorted: submitted={unsorted_count}, drained={drained}, churn={unsorted_churn}");
 
     // Sorted run — run_all sorts internally.
     reset_warm_instance_construction_count();
@@ -669,7 +681,10 @@ fn cached_ref_hit_rate_high_on_repeat_ref() {
     eprintln!("cached_ref on 50 same-ref tasks: miss={miss}, hit={hit}");
     assert_eq!(miss, 1, "expected 1 miss on first observe");
     assert_eq!(hit, 49, "expected 49 hits across the remaining tasks");
-    assert!(results.iter().all(|r| r.outcome.is_ok()), "every task must score");
+    assert!(
+        results.iter().all(|r| r.outcome.is_ok()),
+        "every task must score"
+    );
 }
 
 /// Spec test 3 — peak VRAM equals max single-metric footprint.
@@ -719,10 +734,7 @@ fn peak_vram_equals_max_single_metric_footprint() {
     // run. Layer 1 invariant — single warm instance at a time — means
     // the *concurrent* footprint never exceeds max(observed_per_task)
     // + transient buffers. Assert <= max + 200 MiB.
-    let peaks: Vec<usize> = results
-        .iter()
-        .filter_map(|r| r.vram_peak_mib)
-        .collect();
+    let peaks: Vec<usize> = results.iter().filter_map(|r| r.vram_peak_mib).collect();
     assert!(!peaks.is_empty(), "no VRAM observations from results");
     let max_obs = *peaks.iter().max().unwrap();
     eprintln!(

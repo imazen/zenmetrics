@@ -28,15 +28,15 @@
 
 use std::env;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    swap_vram_reclaim_count, synth_pair_offset_dist, Orchestrator, OrchestratorConfig, Task,
-    TaskData,
+    Orchestrator, OrchestratorConfig, Task, TaskData, swap_vram_reclaim_count,
+    synth_pair_offset_dist,
 };
 
 fn nvidia_smi_used_mib() -> Option<u64> {
@@ -247,7 +247,15 @@ fn main() {
             writeln!(
                 f,
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                v.variant, size, size, v.baseline_mib, v.peak_mib, v.peak_delta_mib, v.ok, v.total, v.swap_reclaims
+                v.variant,
+                size,
+                size,
+                v.baseline_mib,
+                v.peak_mib,
+                v.peak_delta_mib,
+                v.ok,
+                v.total,
+                v.swap_reclaims
             )
             .unwrap();
         }

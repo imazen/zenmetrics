@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    synth_pair_offset_dist, Orchestrator, OrchestratorConfig, Task, TaskData,
+    Orchestrator, OrchestratorConfig, Task, TaskData, synth_pair_offset_dist,
 };
 
 fn parse_metric(s: &str) -> Option<MetricKind> {

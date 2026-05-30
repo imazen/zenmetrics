@@ -21,8 +21,8 @@
 use std::time::{Duration, Instant};
 
 use zenmetrics_orchestrator::{
-    detect_wsl2_host_ram_mib_hint, locate_bench_worker, Backend, BenchPlan, Orchestrator,
-    OrchestratorConfig,
+    Backend, BenchPlan, Orchestrator, OrchestratorConfig, detect_wsl2_host_ram_mib_hint,
+    locate_bench_worker,
 };
 
 #[cfg(feature = "bench")]
@@ -60,9 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // Both flags are required for a chooser invocation, or both omitted.
     if task_size.is_some() ^ task_metric.is_some() {
-        return Err(
-            "--task-size and --metric must be used together (or both omitted)".into(),
-        );
+        return Err("--task-size and --metric must be used together (or both omitted)".into());
     }
 
     // Use the default cache_dir (~/.cache/zenmetrics/) so the example
@@ -140,7 +138,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let want_subprocess = std::env::var_os("ZENMETRICS_BENCH_SUBPROCESS")
         .map(|v| v != "0" && !v.is_empty())
         .unwrap_or(false);
-    let worker = if want_subprocess { locate_bench_worker() } else { None };
+    let worker = if want_subprocess {
+        locate_bench_worker()
+    } else {
+        None
+    };
     let mut plan = BenchPlan::default();
     plan.worker_binary = worker.clone();
     let ran = if orch.capability().metrics.is_empty() {
@@ -280,10 +282,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // back to capability.gpu.total_vram_mib.
         match orch.choose_backend_for_task(&task) {
             Ok(choice) => {
-                println!(
-                    "chosen backend for {} at {w}x{h}:",
-                    metric.tag()
-                );
+                println!("chosen backend for {} at {w}x{h}:", metric.tag());
                 println!(
                     "  selected: {} (predicted {:.2} ns/px, {} MiB, margin {} MiB)",
                     choice.backend.tag(),
@@ -304,9 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 "selectable"
                             };
-                            println!(
-                                "{marker} ({ns_per_px:.2} ns/px, {vram_mib} MiB)"
-                            );
+                            println!("{marker} ({ns_per_px:.2} ns/px, {vram_mib} MiB)");
                         }
                         CandidateStatus::Rejected {
                             reason,
@@ -354,7 +351,10 @@ fn parse_size(s: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
         return Err(format!("--task-size expects WxH (got '{s}')").into());
     }
     let w: u32 = parts[0].trim().parse().map_err(|e| format!("width: {e}"))?;
-    let h: u32 = parts[1].trim().parse().map_err(|e| format!("height: {e}"))?;
+    let h: u32 = parts[1]
+        .trim()
+        .parse()
+        .map_err(|e| format!("height: {e}"))?;
     if w == 0 || h == 0 {
         return Err("--task-size: width and height must be > 0".into());
     }

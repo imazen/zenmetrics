@@ -80,7 +80,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -88,8 +88,8 @@ use zenmetrics_api::{MetricKind, MetricParams};
 
 use crate::chooser::TaskShape;
 use crate::executor::{
-    construct_pub, AttemptOutcome, CallErrPub, ConstructOutcomePub, ExecMetric,
-    OrchestratorError, Task, TaskData, TaskResult,
+    AttemptOutcome, CallErrPub, ConstructOutcomePub, ExecMetric, OrchestratorError, Task, TaskData,
+    TaskResult, construct_pub,
 };
 use crate::{Backend, Orchestrator};
 
@@ -332,6 +332,36 @@ pub struct PoolConfig {
     /// count between `1` and `adaptive_max_gpu_lanes`. When `false`,
     /// the pool uses `max_gpu_lanes` statically. Default `false`.
     pub adaptive_gpu_lanes: bool,
+    /// Task #155 — enable the bounded **multi-warm LRU session pool** on
+    /// each GPU lane for the umbrella session metrics (cvvdp Full /
+    /// butter / ssim2 / dssim / iwssim / zensim). When `true`, a lane
+    /// keeps up to [`Self::multiwarm_max_entries`] warm
+    /// [`zenmetrics_api::OwnedSessionMetric`] entries (bounded by
+    /// [`Self::multiwarm_budget_mib`]) keyed by
+    /// `(metric, dims, params, ref)`, so an interleaved-reference
+    /// workload reuses each reference's precompute instead of
+    /// re-running `set_reference` on every ref switch. When `false`, the
+    /// lane uses the pre-#155 single-warm path (one cached signature +
+    /// one cached ref). cvvdp `GpuStripPair` and the CPU path are
+    /// unaffected either way (they have no session / no cached-ref path).
+    ///
+    /// **Default: `true`** — the multi-warm pool returns bit-identical
+    /// scores (within the metric's `Atomic<f32>` reduction noise; see
+    /// `zenmetrics-api`'s `OwnedSessionMetric` parity tests) and only
+    /// adds the perf unlock; the degenerate single-warm case (budget too
+    /// small for 2 entries) reduces to the old behaviour.
+    pub multiwarm_session_pool: bool,
+    /// Task #155 — VRAM budget (MiB) for one lane's warm session set.
+    /// Eviction keeps the resident entries' estimated footprint sum
+    /// at-or-under this. `0` means "auto": derive from the live free-VRAM
+    /// snapshot at first use (`free - vram_safety_floor_mib`, clamped).
+    /// Default `0` (auto).
+    pub multiwarm_budget_mib: usize,
+    /// Task #155 — hard cap on warm entries per lane (a backstop on the
+    /// session-slot consumption, independent of the byte budget). The
+    /// 128-slot-per-backend allocator is shared across lanes, so this is
+    /// kept modest. Default `8`.
+    pub multiwarm_max_entries: usize,
 }
 
 impl Default for PoolConfig {
@@ -349,6 +379,9 @@ impl Default for PoolConfig {
             adaptive_max_gpu_lanes: 4,
             gpu_util_sample_interval_ms: 5000,
             adaptive_gpu_lanes: false,
+            multiwarm_session_pool: true,
+            multiwarm_budget_mib: 0,
+            multiwarm_max_entries: 8,
         }
     }
 }
@@ -741,7 +774,13 @@ pub fn reset_warm_instance_construction_count() {
 }
 
 /// Internal — called by the worker once per successful construction.
-fn record_warm_instance_construction() {
+/// `pub(crate)` so the multi-warm session pool (task #155) records a
+/// construction each time it builds a fresh warm entry — a warm-entry
+/// build IS a metric-instance construction, the same observable event
+/// the single-warm path's signature-swap construct records. Keeping the
+/// counter unified means the warm-instance-churn accounting / tests
+/// stay valid regardless of which warm path served the task.
+pub(crate) fn record_warm_instance_construction() {
     WARM_INSTANCE_CONSTRUCTIONS.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -802,18 +841,44 @@ fn reclaim_swap_vram(prev_backend: Backend) {
     SWAP_VRAM_RECLAIMS.fetch_add(1, Ordering::Relaxed);
 }
 
-/// GPU worker — pulls [`WorkerTask`]s from its queue, reuses a warm
-/// [`ExecMetric`] when the signature matches, otherwise rebuilds.
+/// Configuration for a GPU lane's multi-warm session pool (task #155),
+/// passed at spawn time. See [`PoolConfig::multiwarm_session_pool`].
+#[derive(Debug, Clone, Copy)]
+struct MultiWarmConfig {
+    enabled: bool,
+    /// Byte budget in MiB; `0` = auto-derive from the live VRAM snapshot.
+    budget_mib: usize,
+    max_entries: usize,
+}
+
+/// GPU worker — pulls [`WorkerTask`]s from its queue. For the umbrella
+/// session metrics (cvvdp Full / butter / ssim2 / dssim / iwssim /
+/// zensim on a GPU backend) it dispatches through a bounded multi-warm
+/// LRU [`crate::session_pool::WarmSessionPool`] (task #155) when
+/// `mw.enabled`; cvvdp `GpuStripPair` and the single-warm fallback use
+/// the pre-#155 warm [`ExecMetric`] path (one cached signature + one
+/// cached ref).
 fn gpu_worker_main(
     rx: mpsc::Receiver<WorkerTask>,
     result_tx: mpsc::Sender<WorkerResult>,
     vram_floor_mib: usize,
     vram_stall_ms: u64,
     vram_snapshot: Arc<AtomicUsize>,
+    mw: MultiWarmConfig,
 ) {
+    use crate::session_pool::{PoolScoreErr, WarmSessionPool};
+
+    // -- single-warm fallback state (cvvdp StripPair + when the
+    //    multi-warm pool is disabled or can't serve the backend) --------
     let mut current_signature: Option<MetricSignature> = None;
     let mut current_metric: Option<ExecMetric> = None;
     let mut cached_ref_hash: Option<u64> = None;
+
+    // -- multi-warm session pool (task #155), lazily built once we see
+    //    the first session-eligible task (so the VRAM budget can read a
+    //    settled live snapshot). Owned by THIS lane thread → no entry is
+    //    ever evicted mid-score (invariant a). --------------------------
+    let mut warm_pool: Option<WarmSessionPool> = None;
 
     while let Ok(task) = rx.recv() {
         let t_start = Instant::now();
@@ -841,7 +906,121 @@ fn gpu_worker_main(
             thread::sleep(Duration::from_millis(vram_stall_ms));
         }
 
+        // -- Multi-warm session pool path (task #155) ------------------
+        // Session-eligible == the umbrella metrics on a GpuFull/GpuStrip
+        // backend (cvvdp Full / butter / ssim2 / dssim / iwssim /
+        // zensim). cvvdp GpuStripPair has no cached-ref / session path,
+        // so it falls through to the single-warm `ExecMetric` logic
+        // below (invariant b: StripPair untouched).
+        let session_eligible = matches!(task.chosen_backend, Backend::GpuFull | Backend::GpuStrip);
+        if mw.enabled && session_eligible {
+            // Lazily build the lane's warm pool, deriving the byte budget
+            // from the live VRAM snapshot when `budget_mib == 0` (auto).
+            if warm_pool.is_none() {
+                let budget = if mw.budget_mib != 0 {
+                    mw.budget_mib
+                } else {
+                    let free = vram_snapshot.load(Ordering::Acquire);
+                    // `usize::MAX` = "not yet probed" → fall back to a
+                    // generous default so we don't degenerate to single
+                    // -warm before the watcher's first sample lands.
+                    if free == usize::MAX {
+                        8192
+                    } else {
+                        free.saturating_sub(vram_floor_mib)
+                    }
+                };
+                warm_pool = Some(WarmSessionPool::new(
+                    zenmetrics_api::Backend::Cuda,
+                    budget,
+                    mw.max_entries,
+                ));
+            }
+            // Materialize ref bytes (same as the single-warm path).
+            let ref_bytes: &[u8] = match &task.ref_payload {
+                RefPayload::Bytes(b) => b.as_slice(),
+                RefPayload::PreUploaded(_, b) => b.as_slice(),
+            };
+            let pool = warm_pool.as_mut().expect("warm_pool built above");
+            let score_res = pool.score(
+                task.metric,
+                task.width,
+                task.height,
+                &task.params,
+                task.ref_hash,
+                ref_bytes,
+                &task.dist_bytes,
+            );
+            let wall_us = t_start.elapsed().as_micros() as u64;
+            match score_res {
+                Ok(score) => {
+                    let attempts = vec![(task.chosen_backend, AttemptOutcome::Success)];
+                    // Session path produces no metric-specific extras
+                    // today (same as the pre-#155 cached-ref path's
+                    // `compute_with_cached_reference_with_extras`).
+                    let extras = ::std::collections::BTreeMap::new();
+                    let output_columns =
+                        crate::executor::build_output_columns(task.metric, &score, &extras);
+                    let metric_version = Some(score.metric_version);
+                    let _ = result_tx.send(WorkerResult {
+                        handle_id,
+                        result: TaskResult {
+                            task_id,
+                            outcome: Ok(score),
+                            backend_used: Some(task.chosen_backend),
+                            backends_attempted: attempts,
+                            wall_us,
+                            vram_peak_mib: Some(task.predicted_vram_mib),
+                            output_columns,
+                            metric_version,
+                        },
+                    });
+                }
+                Err(PoolScoreErr::Oom) => {
+                    // The pool already dropped the offending entry
+                    // (reclaiming its private stream). Surface
+                    // FullyExhausted; the caller can re-submit.
+                    let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtRuntime)];
+                    let _ = result_tx.send(WorkerResult {
+                        handle_id,
+                        result: TaskResult {
+                            task_id,
+                            outcome: Err(OrchestratorError::FullyExhausted {
+                                attempts: attempts.clone(),
+                            }),
+                            backend_used: None,
+                            backends_attempted: attempts,
+                            wall_us,
+                            vram_peak_mib: Some(task.predicted_vram_mib),
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
+                        },
+                    });
+                }
+                Err(PoolScoreErr::Other(msg)) => {
+                    let attempts =
+                        vec![(task.chosen_backend, AttemptOutcome::OtherError(msg.clone()))];
+                    let _ = result_tx.send(WorkerResult {
+                        handle_id,
+                        result: TaskResult {
+                            task_id,
+                            outcome: Err(OrchestratorError::MetricApi(msg)),
+                            backend_used: None,
+                            backends_attempted: attempts,
+                            wall_us,
+                            vram_peak_mib: None,
+                            output_columns: ::std::collections::BTreeMap::new(),
+                            metric_version: None,
+                        },
+                    });
+                }
+            }
+            continue;
+        }
+
         // -- Construct metric if signature changed ---------------------
+        // (single-warm fallback path: cvvdp GpuStripPair, or any task
+        // when the multi-warm pool is disabled.)
         let sig = MetricSignature {
             metric: task.metric,
             width: task.width,
@@ -990,7 +1169,10 @@ fn gpu_worker_main(
 
         // -- Dispatch --------------------------------------------------
         let compute_result: Result<
-            (zenmetrics_api::Score, std::collections::BTreeMap<String, f64>),
+            (
+                zenmetrics_api::Score,
+                std::collections::BTreeMap<String, f64>,
+            ),
             CallErrPub,
         > = if task.use_cached_ref && m.supports_cached_ref() {
             // If the worker's cached hash doesn't match the task's, install.
@@ -1111,10 +1293,7 @@ fn gpu_worker_main(
 // the regular `compute` — the score is correct, just no speedup.
 // ---------------------------------------------------------------------------
 
-fn cpu_worker_main(
-    rx: mpsc::Receiver<WorkerTask>,
-    result_tx: mpsc::Sender<WorkerResult>,
-) {
+fn cpu_worker_main(rx: mpsc::Receiver<WorkerTask>, result_tx: mpsc::Sender<WorkerResult>) {
     let mut current_signature: Option<MetricSignature> = None;
     let mut current_metric: Option<ExecMetric> = None;
     let mut cached_ref_hash: Option<u64> = None;
@@ -1152,8 +1331,7 @@ fn cpu_worker_main(
                     // reference crate failed to allocate. Treat as
                     // OomAtConstruction so the caller can see the
                     // shape of the failure.
-                    let attempts =
-                        vec![(task.chosen_backend, AttemptOutcome::OomAtConstruction)];
+                    let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtConstruction)];
                     let _ = result_tx.send(WorkerResult {
                         handle_id,
                         result: TaskResult {
@@ -1178,8 +1356,7 @@ fn cpu_worker_main(
                     // submit time, but a synthetic test that forces
                     // Cpu still gets a clear result).
                     let outcome_err = translate_cpu_sentinel(&msg, task.metric);
-                    let attempts =
-                        vec![(task.chosen_backend, AttemptOutcome::OtherError(msg))];
+                    let attempts = vec![(task.chosen_backend, AttemptOutcome::OtherError(msg))];
                     let _ = result_tx.send(WorkerResult {
                         handle_id,
                         result: TaskResult {
@@ -1232,11 +1409,13 @@ fn cpu_worker_main(
 
         // -- Dispatch -------------------------------------------------
         let compute_result: Result<
-            (zenmetrics_api::Score, std::collections::BTreeMap<String, f64>),
+            (
+                zenmetrics_api::Score,
+                std::collections::BTreeMap<String, f64>,
+            ),
             CallErrPub,
         > = if task.use_cached_ref && m.supports_cached_ref() {
-            let need_install =
-                cached_ref_hash != Some(task.ref_hash) || signature_changed;
+            let need_install = cached_ref_hash != Some(task.ref_hash) || signature_changed;
             if need_install {
                 match m.set_reference(ref_bytes) {
                     Ok(()) => cached_ref_hash = Some(task.ref_hash),
@@ -1298,10 +1477,7 @@ fn cpu_worker_main(
                 });
             }
             Err(CallErrPub::Other(msg)) => {
-                let attempts = vec![(
-                    task.chosen_backend,
-                    AttemptOutcome::OtherError(msg.clone()),
-                )];
+                let attempts = vec![(task.chosen_backend, AttemptOutcome::OtherError(msg.clone()))];
                 let _ = result_tx.send(WorkerResult {
                     handle_id,
                     result: TaskResult {
@@ -1470,6 +1646,11 @@ impl PoolState {
         // need to spawn from the dispatcher's hot path. Surplus lanes
         // sit idle on their channel recv() until tasks arrive.
         let lane_count = config.max_gpu_lanes.clamp(1, 8);
+        let mw = MultiWarmConfig {
+            enabled: config.multiwarm_session_pool,
+            budget_mib: config.multiwarm_budget_mib,
+            max_entries: config.multiwarm_max_entries,
+        };
         let mut gpu_lanes: Vec<mpsc::Sender<WorkerTask>> = Vec::with_capacity(lane_count);
         for i in 0..lane_count {
             let (gpu_tx, gpu_rx) = mpsc::channel::<WorkerTask>();
@@ -1480,7 +1661,7 @@ impl PoolState {
             let h = thread::Builder::new()
                 .name(format!("zm-gpu-lane-{i}"))
                 .spawn(move || {
-                    gpu_worker_main(gpu_rx, gpu_result_tx, floor, stall, vram_snap);
+                    gpu_worker_main(gpu_rx, gpu_result_tx, floor, stall, vram_snap, mw);
                 })
                 .expect("zm-gpu-lane spawn");
             join_handles.push(h);
@@ -1488,7 +1669,8 @@ impl PoolState {
         }
 
         // -- CPU workers --
-        let mut cpu_txs: Vec<mpsc::Sender<WorkerTask>> = Vec::with_capacity(config.max_parallel_cpu);
+        let mut cpu_txs: Vec<mpsc::Sender<WorkerTask>> =
+            Vec::with_capacity(config.max_parallel_cpu);
         for i in 0..config.max_parallel_cpu {
             let (tx, rx) = mpsc::channel::<WorkerTask>();
             let cpu_result_tx = result_tx.clone();
@@ -1763,7 +1945,10 @@ impl Orchestrator {
         // disabled by `stream_reorder_window = (Duration::ZERO, 1)`
         // (which always trips the count check and flushes immediately).
         let (window_dur, window_cnt) = self.config.stream_reorder_window;
-        pool.pending_queue.tasks.push(PreparedTask { task: worker_task, route });
+        pool.pending_queue.tasks.push(PreparedTask {
+            task: worker_task,
+            route,
+        });
         if pool.pending_queue.window_started_at.is_none() {
             pool.pending_queue.window_started_at = Some(Instant::now());
         }
@@ -1958,7 +2143,10 @@ impl Orchestrator {
             .iter()
             .find(|(_, v)| v.is_some())
             .map(|(k, _)| *k)?;
-        let result = pool.pending.remove(&key)?.expect("Some after blocking drain");
+        let result = pool
+            .pending
+            .remove(&key)?
+            .expect("Some after blocking drain");
         Some(result)
     }
 
@@ -2149,15 +2337,7 @@ impl Orchestrator {
         // Stable sort for deterministic output when keys tie. task_id
         // is the final disambiguator so two runs with the same input
         // produce the same dispatch order.
-        tasks.sort_by_key(|t| {
-            (
-                t.metric.tag(),
-                t.width,
-                t.height,
-                t.ref_hash,
-                t.task_id,
-            )
-        });
+        tasks.sort_by_key(|t| (t.metric.tag(), t.width, t.height, t.ref_hash, t.task_id));
 
         let mut total_submitted: usize = 0;
         let mut submit_errors: Vec<TaskResult> = Vec::new();
@@ -2377,7 +2557,10 @@ mod tests {
         // hasn't explicitly opted into concurrency.
         let cfg = PoolConfig::default();
         assert_eq!(cfg.max_gpu_lanes, 1, "default max_gpu_lanes must be 1");
-        assert!(!cfg.adaptive_gpu_lanes, "default adaptive_gpu_lanes must be false");
+        assert!(
+            !cfg.adaptive_gpu_lanes,
+            "default adaptive_gpu_lanes must be false"
+        );
         assert_eq!(cfg.adaptive_max_gpu_lanes, 4);
         assert_eq!(cfg.target_gpu_utilization_pct, 80);
         assert!(cfg.gpu_util_sample_interval_ms >= 1000);
