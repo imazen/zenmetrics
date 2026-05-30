@@ -520,6 +520,67 @@ impl ZensimOpaque {
         })
     }
 
+    /// Build a [`ZensimOpaque`] from a caller-supplied cubecl client
+    /// (which may be bound to an explicit stream). Internal plumbing for
+    /// [`crate::session::new_opaque_on_stream`]. Mirrors
+    /// [`Self::new_with_memory_mode`]'s host-side mode resolution +
+    /// regime-aware Full/Strip selection, on the supplied generic client.
+    #[cfg(feature = "cubecl-types")]
+    pub(crate) fn build_from_client<R: cubecl::Runtime>(
+        client: cubecl::prelude::ComputeClient<R>,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: ZensimParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self>
+    where
+        Zensim<R>: Send + 'static,
+    {
+        use crate::MemoryMode;
+        use crate::memory_mode::{ResolvedMode, resolve_auto, vram_cap_bytes};
+
+        if matches!(mode, MemoryMode::Tile { .. }) {
+            return Err(crate::Error::ModeUnsupported("Tile"));
+        }
+        let regime = params.regime;
+        let resolved: ResolvedMode = match mode {
+            MemoryMode::Full => ResolvedMode::Full,
+            MemoryMode::Strip { h_body } => {
+                let body = h_body.unwrap_or_else(|| {
+                    let cap = vram_cap_bytes();
+                    crate::memory_mode::auto_strip_body_for(width, height, regime, cap)
+                });
+                ResolvedMode::Strip { h_body: body }
+            }
+            MemoryMode::Auto => {
+                let cap = vram_cap_bytes();
+                resolve_auto(width, height, regime, cap)?
+            }
+            MemoryMode::Tile { .. } => unreachable!("already returned above"),
+        };
+        let inner: Box<dyn ZensimInner + Send> = match resolved {
+            ResolvedMode::Full => {
+                Box::new(Zensim::<R>::new_with_regime(client, width, height, regime)?)
+            }
+            ResolvedMode::Strip { h_body } => Box::new(
+                Zensim::<R>::new_strip_with_halo_and_regime(
+                    client,
+                    width,
+                    height,
+                    h_body,
+                    crate::pipeline::STRIP_DEFAULT_HALO,
+                    regime,
+                )?,
+            ),
+        };
+        Ok(Self {
+            inner,
+            params,
+            backend,
+        })
+    }
+
     /// Configured `(width, height)`.
     pub fn dims(&self) -> (u32, u32) {
         self.inner.dims()

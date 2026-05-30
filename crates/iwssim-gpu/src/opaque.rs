@@ -289,6 +289,51 @@ impl IwssimOpaque {
         Ok(Self { inner, backend })
     }
 
+    /// Build an [`IwssimOpaque`] from a caller-supplied cubecl client
+    /// (which may be bound to an explicit stream). Internal plumbing for
+    /// [`crate::session::new_opaque_on_stream`]. Mirrors
+    /// [`Self::new_with_memory_mode`]'s host-side mode resolution +
+    /// Full(with_config)/Strip selection, on the supplied generic client.
+    #[cfg(feature = "cubecl-types")]
+    pub(crate) fn build_from_client<R: cubecl::Runtime>(
+        client: cubecl::prelude::ComputeClient<R>,
+        backend: Backend,
+        width: u32,
+        height: u32,
+        params: IwssimParams,
+        mode: crate::MemoryMode,
+    ) -> Result<Self>
+    where
+        Iwssim<R>: Send + 'static,
+    {
+        let cap = crate::memory_mode::vram_cap_bytes();
+        let resolved = match mode {
+            crate::MemoryMode::Full => crate::ResolvedMode::Full,
+            crate::MemoryMode::Strip { h_body } => crate::ResolvedMode::Strip {
+                h_body: h_body
+                    .unwrap_or_else(|| crate::memory_mode::auto_strip_body_for(width, height, cap)),
+            },
+            crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
+            crate::MemoryMode::Auto => crate::memory_mode::resolve_auto(width, height, cap)?,
+        };
+        let cfg = IwssimConfig {
+            strategy: if params.allow_small {
+                IwssimStrategy::Tile
+            } else {
+                IwssimStrategy::Reject
+            },
+        };
+        let inner: Box<dyn IwssimInner + Send> = match resolved {
+            crate::ResolvedMode::Full => {
+                Box::new(Iwssim::<R>::with_config(client, width, height, cfg)?)
+            }
+            crate::ResolvedMode::Strip { h_body } => {
+                Box::new(Iwssim::<R>::new_strip(client, width, height, h_body)?)
+            }
+        };
+        Ok(Self { inner, backend })
+    }
+
     /// Configured `(width, height)`.
     pub fn dims(&self) -> (u32, u32) {
         self.inner.dims()

@@ -201,3 +201,68 @@ fn session_score_matches_owned_ssim2() {
         session.value, owned.value
     );
 }
+
+/// All-wired-metrics one-shot parity: for every metric that is BOTH
+/// feature-enabled AND wired into `MetricSession`, the session score
+/// must match the owned-metric score to within an `abs + rel` tolerance
+/// covering that metric's `Atomic<f32>` reduction-order noise (the noise
+/// is a property of the kernels, not the session — see module docs).
+/// Metrics not yet wired are skipped at the *caller* level here: the
+/// list is built from the enabled features, and a not-wired metric would
+/// surface `ctx.metric(...)` → Err which we treat as an explicit
+/// "not wired" (asserted distinct from a compute error).
+#[test]
+fn session_parity_all_wired_metrics() {
+    let (r, d) = make_pair();
+    // (kind, abs_tol, rel_tol) — bands sized to each metric's value
+    // scale; all comfortably above ~1e-6 relative reduction noise and
+    // far below any genuine miscomputation.
+    let cases: &[(MetricKind, f64, f64)] = &[
+        #[cfg(feature = "cvvdp")]
+        (MetricKind::Cvvdp, 1e-5, 1e-5),
+        #[cfg(feature = "ssim2")]
+        (MetricKind::Ssim2, 1e-3, 1e-5),
+        #[cfg(feature = "butter")]
+        (MetricKind::Butter, 1e-3, 1e-4),
+        #[cfg(feature = "dssim")]
+        (MetricKind::Dssim, 1e-4, 1e-4),
+        #[cfg(feature = "iwssim")]
+        (MetricKind::Iwssim, 1e-4, 1e-4),
+        #[cfg(feature = "zensim")]
+        (MetricKind::Zensim, 1e-3, 1e-4),
+    ];
+
+    for &(kind, abs_tol, rel_tol) in cases {
+        let owned = {
+            let mut m = Metric::new(kind, Backend::Cuda, W, H, MetricParams::default_for(kind))
+                .unwrap_or_else(|e| panic!("owned Metric::new({kind:?}) failed: {e}"));
+            m.compute_srgb_u8(&r, &d)
+                .unwrap_or_else(|e| panic!("owned {kind:?} score failed: {e}"))
+        };
+        let session = {
+            let ctx = MetricSession::acquire(Backend::Cuda).expect("acquire session");
+            let mut sm = ctx
+                .metric(kind, W, H, MetricParams::default_for(kind))
+                .unwrap_or_else(|e| {
+                    panic!("ctx.metric({kind:?}) failed — metric is enabled but not wired into MetricSession: {e}")
+                });
+            sm.score(&r, &d)
+                .unwrap_or_else(|e| panic!("session {kind:?} score failed: {e}"))
+        };
+        assert!(
+            owned.value.is_finite() && session.value.is_finite(),
+            "{kind:?}: non-finite (owned={}, session={})",
+            owned.value,
+            session.value
+        );
+        let delta = (owned.value - session.value).abs();
+        let tol = abs_tol + rel_tol * owned.value.abs();
+        assert!(
+            delta <= tol,
+            "{kind:?}: session score ({}) and owned ({}) differ by {delta:.3e} > tol {tol:.3e} \
+             — the private stream changed the computation (a real bug), not just reduction order",
+            session.value,
+            owned.value
+        );
+    }
+}

@@ -509,6 +509,12 @@ fn backend_is_usable(backend: Backend) -> bool {
 
 /// Build a stream-bound scorer for `kind` on `backend`'s stream
 /// `stream_value`, wrapped in the umbrella [`crate::Metric`] enum.
+///
+/// The no-geometry metrics (ssim2/butter/dssim/iwssim/zensim) share the
+/// uniform `session::new_opaque_on_stream(backend, stream, w, h, params,
+/// mode)` shape; cvvdp additionally takes a `DisplayGeometry`. The arms
+/// are written out (rather than macro-generated) because `macro_rules!`
+/// cannot expand to a match arm in stable Rust.
 #[allow(unused_variables)]
 fn build_session_scorer(
     backend: Backend,
@@ -520,16 +526,7 @@ fn build_session_scorer(
     mode: MemoryMode,
 ) -> Result<crate::metric::Metric> {
     match kind {
-        #[cfg(all(
-            feature = "cvvdp",
-            any(
-                feature = "cuda",
-                feature = "wgpu",
-                feature = "hip",
-                feature = "cpu",
-                feature = "cubecl-types"
-            )
-        ))]
+        #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
         MetricKind::Cvvdp => {
             let p = match params {
                 MetricParams::Cvvdp(p) => p,
@@ -551,35 +548,82 @@ fn build_session_scorer(
             })?;
             Ok(crate::metric::Metric::Cvvdp(opaque))
         }
-        #[cfg(all(
-            feature = "ssim2",
-            any(
-                feature = "cuda",
-                feature = "wgpu",
-                feature = "hip",
-                feature = "cpu",
-                feature = "cubecl-types"
-            )
-        ))]
+        #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
         MetricKind::Ssim2 => {
             let p = match params {
                 MetricParams::Ssim2(p) => p,
                 _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
             };
             let b = crate::metric::ssim2_backend(backend)?;
-            let opaque = ssim2_gpu::session::new_opaque_on_stream(
-                b,
-                stream_value,
-                width,
-                height,
-                p,
-                mode.into(),
+            let opaque =
+                ssim2_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
+                    .map_err(|e| Error::Metric {
+                        kind: "ssim2",
+                        message: e.to_string(),
+                    })?;
+            Ok(crate::metric::Metric::Ssim2(opaque))
+        }
+        #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        MetricKind::Butter => {
+            let p = match params {
+                MetricParams::Butter(p) => p,
+                _ => panic!("MetricParams variant mismatch (expected Butter)"),
+            };
+            let b = crate::metric::butter_backend(backend)?;
+            let opaque = butteraugli_gpu::session::new_opaque_on_stream(
+                b, stream_value, width, height, p, mode.into(),
             )
             .map_err(|e| Error::Metric {
-                kind: "ssim2",
+                kind: "butter",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::Ssim2(opaque))
+            Ok(crate::metric::Metric::Butter(opaque))
+        }
+        #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        MetricKind::Dssim => {
+            let p = match params {
+                MetricParams::Dssim(p) => p,
+                _ => panic!("MetricParams variant mismatch (expected Dssim)"),
+            };
+            let b = crate::metric::dssim_backend(backend)?;
+            let opaque =
+                dssim_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
+                    .map_err(|e| Error::Metric {
+                        kind: "dssim",
+                        message: e.to_string(),
+                    })?;
+            Ok(crate::metric::Metric::Dssim(opaque))
+        }
+        #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        MetricKind::Iwssim => {
+            let p = match params {
+                MetricParams::Iwssim(p) => p,
+                _ => panic!("MetricParams variant mismatch (expected Iwssim)"),
+            };
+            let b = crate::metric::iwssim_backend(backend)?;
+            let opaque = iwssim_gpu::session::new_opaque_on_stream(
+                b, stream_value, width, height, p, mode.into(),
+            )
+            .map_err(|e| Error::Metric {
+                kind: "iwssim",
+                message: e.to_string(),
+            })?;
+            Ok(crate::metric::Metric::Iwssim(opaque))
+        }
+        #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        MetricKind::Zensim => {
+            let p = match params {
+                MetricParams::Zensim(p) => p,
+                _ => panic!("MetricParams variant mismatch (expected Zensim)"),
+            };
+            let b = crate::metric::zensim_backend(backend)?;
+            let opaque =
+                zensim_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    })?;
+            Ok(crate::metric::Metric::Zensim(opaque))
         }
         #[allow(unreachable_patterns)]
         other => Err(Error::Metric {
