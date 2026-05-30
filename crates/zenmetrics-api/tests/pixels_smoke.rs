@@ -26,10 +26,10 @@ fn run_pixels(kind: MetricKind) -> zenmetrics_api::Score {
     let d_bytes = make_image();
     let descriptor = PixelDescriptor::RGB8_SRGB;
     let row_bytes = (W as usize) * 3;
-    let r_slice = PixelSlice::new(&r_bytes, W, H, row_bytes, descriptor)
-        .expect("ref slice construction");
-    let d_slice = PixelSlice::new(&d_bytes, W, H, row_bytes, descriptor)
-        .expect("dist slice construction");
+    let r_slice =
+        PixelSlice::new(&r_bytes, W, H, row_bytes, descriptor).expect("ref slice construction");
+    let d_slice =
+        PixelSlice::new(&d_bytes, W, H, row_bytes, descriptor).expect("dist slice construction");
 
     let params = MetricParams::default_for(kind);
     let mut m = Metric::new(kind, Backend::Cuda, W, H, params)

@@ -65,13 +65,16 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
-pub use metric::{reclaim_pooled_vram, Backend, Metric, MetricKind, MetricParams, Score};
-pub use session::{MetricSession, SessionMetric, MAX_SESSIONS_PER_BACKEND};
+pub use metric::{Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram};
+pub use session::{MAX_SESSIONS_PER_BACKEND, MetricSession, OwnedSessionMetric, SessionMetric};
 
 /// Internal test/diagnostic hooks for the VRAM-isolation integration
 /// test (`tests/session_vram_isolation.rs`). Not a supported API.
 #[doc(hidden)]
-pub use session::{stream_reserved_bytes as __stream_reserved_bytes, stream_value_for_slot as __stream_value_for_slot};
+pub use session::{
+    stream_reserved_bytes as __stream_reserved_bytes,
+    stream_value_for_slot as __stream_value_for_slot,
+};
 
 #[cfg(feature = "cubecl-types")]
 pub use context::MetricContext;

@@ -1,8 +1,8 @@
 //! `Metric` enum + per-metric variant dispatch.
 
+use crate::Result;
 use crate::error::Error;
 use crate::memory_mode::MemoryMode;
-use crate::Result;
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -384,7 +384,11 @@ impl Metric {
                 };
                 let b = butter_backend(backend)?;
                 butteraugli_gpu::ButteraugliOpaque::new_with_memory_mode(
-                    b, width, height, p, mode.into(),
+                    b,
+                    width,
+                    height,
+                    p,
+                    mode.into(),
                 )
                 .map(Metric::Butter)
                 .map_err(|e| Error::Metric {
@@ -494,13 +498,14 @@ impl Metric {
     pub fn compute_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<Score> {
         match self {
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score)
-                .map_err(|e| Error::Metric {
-                    kind: "cvvdp",
-                    message: e.to_string(),
-                }),
+            Metric::Cvvdp(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score)
+                    .map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "butter")]
             Metric::Butter(m) => m
                 .compute_srgb_u8(r, d)
@@ -560,10 +565,7 @@ impl Metric {
     /// Returns [`Error::Metric`] if the underlying metric crate's
     /// dispatch fails.
     #[cfg(feature = "cubecl-types")]
-    pub fn compute_handles(
-        &mut self,
-        pair: &crate::context::PairHandles,
-    ) -> Result<Score> {
+    pub fn compute_handles(&mut self, pair: &crate::context::PairHandles) -> Result<Score> {
         let ref_h = &pair.ref_handle;
         let dis_h = &pair.dist_handle;
         match self {
@@ -644,11 +646,7 @@ impl Metric {
     /// - [`Error::Metric`] if the underlying metric crate's
     ///   dispatch fails.
     #[cfg(feature = "zensim")]
-    pub fn compute_features_srgb_u8(
-        &mut self,
-        r: &[u8],
-        d: &[u8],
-    ) -> Result<(Score, Vec<f64>)> {
+    pub fn compute_features_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<(Score, Vec<f64>)> {
         match self {
             #[cfg(feature = "zensim")]
             Metric::Zensim(m) => {
@@ -666,12 +664,13 @@ impl Metric {
                 // the value is identical to `compute_srgb_u8` for the
                 // same pair. We must score externally because the
                 // opaque shim holds the weights privately.
-                let score = m.compute_srgb_u8(r, d).map(convert_score_zensim).map_err(
-                    |e| Error::Metric {
+                let score = m
+                    .compute_srgb_u8(r, d)
+                    .map(convert_score_zensim)
+                    .map_err(|e| Error::Metric {
                         kind: "zensim",
                         message: e.to_string(),
-                    },
-                )?;
+                    })?;
                 // NB: the second call above is cheap-ish — `Zensim`
                 // re-runs the pyramid + features pass. If this becomes
                 // a hot path, refactor `ZensimOpaque` to expose a
@@ -700,11 +699,7 @@ impl Metric {
     /// inputs. Per-crate conversion semantics apply — see each
     /// metric crate's `compute_pixels` docs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         // Validate dims before dispatch — every per-crate impl does
         // this internally, but doing it here lets us surface a uniform
         // `DimensionMismatch` rather than a crate-specific error.
@@ -723,13 +718,14 @@ impl Metric {
         }
         match self {
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
-                .compute_pixels(r, d)
-                .map(convert_score)
-                .map_err(|e| Error::Metric {
-                    kind: "cvvdp",
-                    message: e.to_string(),
-                }),
+            Metric::Cvvdp(m) => {
+                m.compute_pixels(r, d)
+                    .map(convert_score)
+                    .map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "butter")]
             Metric::Butter(m) => m
                 .compute_pixels(r, d)
@@ -803,47 +799,35 @@ impl Metric {
     pub fn set_reference_srgb_u8(&mut self, r: &[u8]) -> Result<()> {
         match self {
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m
-                .warm_reference_srgb(r)
-                .map_err(|e| Error::Metric {
-                    kind: "cvvdp",
-                    message: e.to_string(),
-                }),
+            Metric::Cvvdp(m) => m.warm_reference_srgb(r).map_err(|e| Error::Metric {
+                kind: "cvvdp",
+                message: e.to_string(),
+            }),
             #[cfg(feature = "zensim")]
-            Metric::Zensim(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| Error::Metric {
-                    kind: "zensim",
-                    message: e.to_string(),
-                }),
+            Metric::Zensim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+                kind: "zensim",
+                message: e.to_string(),
+            }),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| Error::Metric {
-                    kind: "iwssim",
-                    message: e.to_string(),
-                }),
+            Metric::Iwssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+                kind: "iwssim",
+                message: e.to_string(),
+            }),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| Error::Metric {
-                    kind: "butter",
-                    message: e.to_string(),
-                }),
+            Metric::Butter(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+                kind: "butter",
+                message: e.to_string(),
+            }),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| Error::Metric {
-                    kind: "ssim2",
-                    message: e.to_string(),
-                }),
+            Metric::Ssim2(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+                kind: "ssim2",
+                message: e.to_string(),
+            }),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m
-                .set_reference_srgb_u8(r)
-                .map_err(|e| Error::Metric {
-                    kind: "dssim",
-                    message: e.to_string(),
-                }),
+            Metric::Dssim(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
+                kind: "dssim",
+                message: e.to_string(),
+            }),
         }
     }
 
@@ -854,10 +838,7 @@ impl Metric {
     /// # Errors
     ///
     /// - Per-crate `NoCachedReference` when no reference is cached.
-    pub fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        d: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_srgb_u8(&mut self, d: &[u8]) -> Result<Score> {
         match self {
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m

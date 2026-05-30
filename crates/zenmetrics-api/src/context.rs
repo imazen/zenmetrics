@@ -113,11 +113,7 @@ impl<R: Runtime> MetricContext<R> {
     ///
     /// Returns [`crate::Error::DimensionMismatch`] if either input's
     /// length doesn't match `width × height × 3`.
-    pub fn upload_pair(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<PairHandles> {
+    pub fn upload_pair(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<PairHandles> {
         let n = (self.width as usize) * (self.height as usize);
         let expected_bytes = n * 3;
         if ref_rgb.len() != expected_bytes {
@@ -154,16 +150,10 @@ impl<R: Runtime> MetricContext<R> {
 /// matching what every metric crate's internal upload produces. Uses
 /// the same pinned-staging fast path so the host write hits the
 /// pinned-memory DMA path on CUDA backends.
-fn pack_into_pinned<R: Runtime>(
-    client: &ComputeClient<R>,
-    srgb: &[u8],
-    n: usize,
-) -> Handle {
+fn pack_into_pinned<R: Runtime>(client: &ComputeClient<R>, srgb: &[u8], n: usize) -> Handle {
     let pinned_len = n * 4;
     let mut staging = client.reserve_staging(&[pinned_len]);
-    let mut bytes = staging
-        .pop()
-        .expect("reserve_staging returned no buffers");
+    let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
     {
         let dst: &mut [u8] = &mut bytes;
         debug_assert_eq!(dst.len(), pinned_len);

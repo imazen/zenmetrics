@@ -46,8 +46,8 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -206,14 +206,8 @@ fn run_child(metric_tag: &str, regime: &str, w: u32, h: u32) {
     println!("CHILD_PHASE construct");
 
     let t_ctor = Instant::now();
-    let metric_res = Metric::new_with_memory_mode(
-        kind,
-        Backend::Cuda,
-        w,
-        h,
-        params,
-        MemoryMode::Full,
-    );
+    let metric_res =
+        Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full);
     let ctor_ms = t_ctor.elapsed().as_millis();
     let mut metric = match metric_res {
         Ok(m) => m,

@@ -103,7 +103,8 @@ fn session_score_matches_owned_cvvdp() {
         "session score ({}) and owned score ({}) differ by {delta:.3e} JOD, which EXCEEDS \
          the cvvdp Atomic<f32> reduction-noise band ({CVVDP_REDUCTION_NOISE_JOD:.0e}) — the \
          private stream changed the JOD (a real bug), not just reduction order",
-        session_score.value, owned_score.value
+        session_score.value,
+        owned_score.value
     );
 }
 
@@ -149,7 +150,8 @@ fn session_warm_ref_matches_owned_cvvdp() {
         "session warm-ref score ({}) and owned warm-ref score ({}) differ by {delta:.3e} JOD, \
          which EXCEEDS the cvvdp Atomic<f32> reduction-noise band ({CVVDP_REDUCTION_NOISE_JOD:.0e}) — \
          the session changed the computation (a real bug), not just reduction order",
-        session_warm.value, owned_warm.value
+        session_warm.value,
+        owned_warm.value
     );
 }
 
@@ -198,7 +200,8 @@ fn session_score_matches_owned_ssim2() {
         "session ssim2 score ({}) and owned ({}) differ by {delta:.3e}, exceeding the \
          Atomic<f32> reduction-noise band ({SSIM2_REDUCTION_NOISE:.0e}) — the session changed \
          the computation, not just reduction order",
-        session.value, owned.value
+        session.value,
+        owned.value
     );
 }
 

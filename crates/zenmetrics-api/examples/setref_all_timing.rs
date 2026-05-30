@@ -90,7 +90,10 @@ use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
 type Rt = CudaRuntime;
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn median(t: &[f64]) -> f64 {
@@ -100,7 +103,11 @@ fn median(t: &[f64]) -> f64 {
     let mut v = t.to_vec();
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = v.len();
-    if n.is_multiple_of(2) { (v[n / 2 - 1] + v[n / 2]) / 2.0 } else { v[n / 2] }
+    if n.is_multiple_of(2) {
+        (v[n / 2 - 1] + v[n / 2]) / 2.0
+    } else {
+        v[n / 2]
+    }
 }
 
 fn min_of(t: &[f64]) -> f64 {
@@ -159,8 +166,9 @@ fn time_setref_phase(
     reps: usize,
 ) -> Vec<f64> {
     // Pre-generate refs so host-side image gen is OUT of the timed region.
-    let refs: Vec<Vec<u8>> =
-        (0..reps).map(|i| synth_srgb(w, h, seed_base.wrapping_add(i as u32 * 31 + 1))).collect();
+    let refs: Vec<Vec<u8>> = (0..reps)
+        .map(|i| synth_srgb(w, h, seed_base.wrapping_add(i as u32 * 31 + 1)))
+        .collect();
     let mut times = Vec::with_capacity(reps);
     for r in &refs {
         let t = Instant::now();
@@ -173,7 +181,11 @@ fn time_setref_phase(
 
 fn emit(metric: &str, w: u32, h: u32, phase: &str, samples: &[f64], notes: &str) {
     let mp = (w as f64 * h as f64) / 1_000_000.0;
-    let raw = samples.iter().map(|v| format!("{v:.4}")).collect::<Vec<_>>().join(",");
+    let raw = samples
+        .iter()
+        .map(|v| format!("{v:.4}"))
+        .collect::<Vec<_>>()
+        .join(",");
     println!(
         "{metric}\t{mp:.3}\t{w}\t{h}\t{phase}\t{med:.4}\t{min:.4}\t{max:.4}\t{n}\t{raw}\t{notes}",
         med = median(samples),
@@ -220,7 +232,9 @@ fn main() {
     // below isolate the per-REFERENCE precompute cost, not first-run JIT.
     let warm_r = synth_srgb(w, h, 9_001);
     let warm_d = synth_srgb(w, h, 9_002);
-    let _ = m.compute_srgb_u8(&warm_r, &warm_d).expect("warmup full compute");
+    let _ = m
+        .compute_srgb_u8(&warm_r, &warm_d)
+        .expect("warmup full compute");
     cubecl::future::block_on(client.sync()).expect("sync after warmup");
 
     // TSV header.
@@ -233,14 +247,28 @@ fn main() {
 
     // --- setref1: FIRST set_reference on the warm instance (reps×). ---
     let s1 = time_setref_phase(&mut m, &client, w, h, 0x1000_0000, reps);
-    emit(&metric_tag, w, h, "setref1", &s1, "first_ref_warm_instance synced distinct_pixels_per_rep");
+    emit(
+        &metric_tag,
+        w,
+        h,
+        "setref1",
+        &s1,
+        "first_ref_warm_instance synced distinct_pixels_per_rep",
+    );
 
     // --- setref2..setrefK: DISTINCT new references (the reuse path). ---
     for p in 0..newref_phases {
         let seed_base = 0x2000_0000u32.wrapping_add((p as u32) * 0x0010_0000);
         let s = time_setref_phase(&mut m, &client, w, h, seed_base, reps);
         let phase = format!("setref{}", p + 2);
-        emit(&metric_tag, w, h, &phase, &s, "new_ref_distinct_pixels reuse_path synced");
+        emit(
+            &metric_tag,
+            w,
+            h,
+            &phase,
+            &s,
+            "new_ref_distinct_pixels reuse_path synced",
+        );
     }
 
     // --- warm_call: warm compute_with_cached_reference against the last

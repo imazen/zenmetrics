@@ -59,7 +59,12 @@ fn two_sessions_drop_one_frees_only_its_pool() {
     let ctx_a = MetricSession::acquire(backend).expect("acquire A");
     let stream_a = ctx_a.__stream_value();
     let mut m_a = ctx_a
-        .metric(MetricKind::Cvvdp, W, H, MetricParams::default_for(MetricKind::Cvvdp))
+        .metric(
+            MetricKind::Cvvdp,
+            W,
+            H,
+            MetricParams::default_for(MetricKind::Cvvdp),
+        )
         .expect("A.metric(Cvvdp)");
     let score_a = m_a.score(&r, &d).expect("A score");
     assert!(score_a.value.is_finite(), "A score finite");
@@ -78,7 +83,12 @@ fn two_sessions_drop_one_frees_only_its_pool() {
         "two live sessions must own DISTINCT streams (no aliasing): a={stream_a} b={stream_b}"
     );
     let mut m_b = ctx_b
-        .metric(MetricKind::Cvvdp, W, H, MetricParams::default_for(MetricKind::Cvvdp))
+        .metric(
+            MetricKind::Cvvdp,
+            W,
+            H,
+            MetricParams::default_for(MetricKind::Cvvdp),
+        )
         .expect("B.metric(Cvvdp)");
     let score_b = m_b.score(&r, &d).expect("B score");
     assert!(score_b.value.is_finite(), "B score finite");

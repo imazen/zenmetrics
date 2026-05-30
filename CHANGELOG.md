@@ -56,6 +56,25 @@ Workspace conventions per the global rules:
   one → its pool `bytes_reserved` 0 while the other stays resident, then the second → 0; plus a
   compile-fail borrow-check proof. `release()` / `reclaim_pooled_vram` / `MetricContext<R>` and all
   per-crate public APIs unchanged.
+- **zenmetrics-api: `OwnedSessionMetric` — borrow-leash-free owned session metric (issue #17 / task
+  #155 Phase A)** (2026-05-30). New **opaque** public type `OwnedSessionMetric` (exported next to
+  `MetricSession`/`SessionMetric`) bundling a warm scorer with the `MetricSession` whose private cubecl
+  stream it allocates on — so a warm metric can be stored past the scope that built it (the warm-pool
+  entry shape) without the `SessionMetric<'ctx>` borrow leash. Built via the new
+  `MetricSession::into_metric(kind, w, h, params)` + `into_metric_with_memory_mode(...)` (consume the
+  session → one warm metric per isolated stream, the clean reclaim model). **Field order is the
+  soundness lever**: `scorer` is declared before `session`, so Rust's declaration-order drop returns
+  the scorer's cubecl device handles to the pool free-list *before* `MetricSession::Drop` runs
+  `memory_cleanup()` + `sync()` on the stream — no live handle during cleanup, closing the
+  use-after-cleanup hazard the borrowed `'ctx` leash guarded by construction. Forwards the same scoring
+  surface as `SessionMetric` (`kind`/`dims`/`score`/`set_reference_srgb_u8`/`score_with_warm_ref`/
+  `clear_reference`/`has_cached_reference`/`score_pixels`) via a shared private macro (no copy-paste),
+  plus `backend()` and `leak()` (skip reclaim for a short-lived process); in-place `reclaim` is
+  intentionally NOT offered (the welded live scorer makes it unsound — eviction = full drop only).
+  `zenmetrics-api` stays `#![forbid(unsafe_code)]`. Tests (cuda-gated, RTX 5070): owned-vs-borrowed-vs-
+  plain parity (cvvdp + ssim2 + warm-ref) within each metric's `Atomic<f32>` reduction-noise band;
+  per-entry VRAM isolation (two owned metrics, drop one → its pool `bytes_reserved` 0 while the other
+  stays resident, then 0); `into_metric` cap/recycle/leak. No existing public API changed.
 - **Job system: real executor `zen-metrics jobexec` (encode + score) + CPU `sweep` build fix**
   (2026-05-30). New `zen-metrics jobexec` subcommand is the `ZEN_EXEC` reference executor: reads a
   `DesiredJob` JSON on stdin, resolves the source (local / `s3://` / `$ZEN_CORPUS_PREFIX` via s5cmd),

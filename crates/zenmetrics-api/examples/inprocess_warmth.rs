@@ -78,7 +78,10 @@ use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
 // ===================================================================
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -87,7 +90,11 @@ fn median(mut t: Vec<f64>) -> f64 {
     }
     t.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = t.len();
-    if n % 2 == 0 { (t[n / 2 - 1] + t[n / 2]) / 2.0 } else { t[n / 2] }
+    if n % 2 == 0 {
+        (t[n / 2 - 1] + t[n / 2]) / 2.0
+    } else {
+        t[n / 2]
+    }
 }
 
 /// Deterministic XorShift64 image. Distinct `seed` ⇒ distinct pixel
@@ -95,7 +102,9 @@ fn median(mut t: Vec<f64>) -> f64 {
 /// accidental "same-input" GPU shortcut). Same generator shape as
 /// `mem_per_metric.rs::make_image`.
 fn make_image(seed: u64, w: u32, h: u32) -> Vec<u8> {
-    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(0x1234_5678);
+    let mut state = seed
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(0x1234_5678);
     let n = (w as usize) * (h as usize) * 3;
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
@@ -154,7 +163,15 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
     let t = Instant::now();
     let client = CudaRuntime::client(&Default::default());
     let client_ms = t.elapsed().as_secs_f64() * 1e3;
-    emit("Q1_crossmetric", metric_a, metric_b, "client_init", client_ms, 1, "cold_context");
+    emit(
+        "Q1_crossmetric",
+        metric_a,
+        metric_b,
+        "client_init",
+        client_ms,
+        1,
+        "cold_context",
+    );
 
     // --- A_first: build A + first score (context warm, A kernels cold) ---
     let t = Instant::now();
@@ -164,9 +181,33 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
     let sa = a.compute_srgb_u8(&r, &d).expect("A first compute");
     let a_first_compute_ms = t.elapsed().as_secs_f64() * 1e3;
     let a_first_ms = a_new_ms + a_first_compute_ms;
-    emit("Q2_kernelwarm", metric_a, "-", "A_new", a_new_ms, 1, "ctor_alloc");
-    emit("Q2_kernelwarm", metric_a, "-", "A_first_compute", a_first_compute_ms, 1, "kernel_jit+first_upload+compute");
-    emit("Q2_kernelwarm", metric_a, "-", "A_first", a_first_ms, 1, &format!("new+first_compute score={:.4}", sa.value));
+    emit(
+        "Q2_kernelwarm",
+        metric_a,
+        "-",
+        "A_new",
+        a_new_ms,
+        1,
+        "ctor_alloc",
+    );
+    emit(
+        "Q2_kernelwarm",
+        metric_a,
+        "-",
+        "A_first_compute",
+        a_first_compute_ms,
+        1,
+        "kernel_jit+first_upload+compute",
+    );
+    emit(
+        "Q2_kernelwarm",
+        metric_a,
+        "-",
+        "A_first",
+        a_first_ms,
+        1,
+        &format!("new+first_compute score={:.4}", sa.value),
+    );
 
     // --- A_warm ×reps ---
     let mut a_warm = Vec::with_capacity(reps);
@@ -175,8 +216,22 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
         let _ = a.compute_srgb_u8(&r, &d).expect("A warm compute");
         a_warm.push(t.elapsed().as_secs_f64() * 1e3);
     }
-    emit("Q2_kernelwarm", metric_a, "-", "A_warm", median(a_warm.clone()), a_warm.len(),
-         &format!("all={}", a_warm.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q2_kernelwarm",
+        metric_a,
+        "-",
+        "A_warm",
+        median(a_warm.clone()),
+        a_warm.len(),
+        &format!(
+            "all={}",
+            a_warm
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 
     // Drop A's GPU working set before building B. This frees A's buffers
     // back to the cubecl pool but KEEPS the CUDA context alive (the
@@ -204,11 +259,45 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
     let b_first_compute_ms = t.elapsed().as_secs_f64() * 1e3;
     let b_first_ms = b_new_ms + b_first_compute_ms;
     // Q1 row: B's same-process-first cost (the headline number).
-    emit("Q1_crossmetric", metric_a, metric_b, "B_first_same_process", b_first_ms, 1,
-         &format!("warm_context_cold_B_kernels new={b_new_ms:.3} compute={b_first_compute_ms:.3} score={:.4}", sb.value));
-    emit("Q2_kernelwarm", "-", metric_b, "B_new", b_new_ms, 1, "ctor_alloc warm_context");
-    emit("Q2_kernelwarm", "-", metric_b, "B_first_compute", b_first_compute_ms, 1, "kernel_jit+first_upload+compute");
-    emit("Q2_kernelwarm", "-", metric_b, "B_first", b_first_ms, 1, &format!("new+first_compute score={:.4}", sb.value));
+    emit(
+        "Q1_crossmetric",
+        metric_a,
+        metric_b,
+        "B_first_same_process",
+        b_first_ms,
+        1,
+        &format!(
+            "warm_context_cold_B_kernels new={b_new_ms:.3} compute={b_first_compute_ms:.3} score={:.4}",
+            sb.value
+        ),
+    );
+    emit(
+        "Q2_kernelwarm",
+        "-",
+        metric_b,
+        "B_new",
+        b_new_ms,
+        1,
+        "ctor_alloc warm_context",
+    );
+    emit(
+        "Q2_kernelwarm",
+        "-",
+        metric_b,
+        "B_first_compute",
+        b_first_compute_ms,
+        1,
+        "kernel_jit+first_upload+compute",
+    );
+    emit(
+        "Q2_kernelwarm",
+        "-",
+        metric_b,
+        "B_first",
+        b_first_ms,
+        1,
+        &format!("new+first_compute score={:.4}", sb.value),
+    );
 
     // --- B_warm ×reps ---
     let mut b_warm = Vec::with_capacity(reps);
@@ -217,8 +306,22 @@ fn run_q1q2(metric_a: &str, metric_b: &str, w: u32, h: u32, reps: usize) {
         let _ = bm.compute_srgb_u8(&r, &d).expect("B warm compute");
         b_warm.push(t.elapsed().as_secs_f64() * 1e3);
     }
-    emit("Q2_kernelwarm", "-", metric_b, "B_warm", median(b_warm.clone()), b_warm.len(),
-         &format!("all={}", b_warm.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q2_kernelwarm",
+        "-",
+        metric_b,
+        "B_warm",
+        median(b_warm.clone()),
+        b_warm.len(),
+        &format!(
+            "all={}",
+            b_warm
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 }
 
 // ===================================================================
@@ -255,19 +358,43 @@ fn run_q3(metric: &str, w: u32, h: u32, reps: usize) {
     m.set_reference_srgb_u8(&ref1).expect("set_reference(ref1)");
     cubecl::future::block_on(client.sync()).expect("sync after setref1");
     let setref1_ms = t.elapsed().as_secs_f64() * 1e3;
-    emit("Q3_newref", metric, "-", "setref1", setref1_ms, 1, "first_ref_warm_instance sync'd");
+    emit(
+        "Q3_newref",
+        metric,
+        "-",
+        "setref1",
+        setref1_ms,
+        1,
+        "first_ref_warm_instance sync'd",
+    );
 
     // --- warm_call ×reps against ref1 ---
     let mut warm1 = Vec::with_capacity(reps);
     let mut score1 = 0.0_f64;
     for _ in 0..reps {
         let t = Instant::now();
-        let s = m.compute_with_cached_reference_srgb_u8(&dist).expect("warm_call ref1");
+        let s = m
+            .compute_with_cached_reference_srgb_u8(&dist)
+            .expect("warm_call ref1");
         warm1.push(t.elapsed().as_secs_f64() * 1e3);
         score1 = s.value;
     }
-    emit("Q3_newref", metric, "-", "warm_call", median(warm1.clone()), warm1.len(),
-         &format!("ref1 score={score1:.4} all={}", warm1.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q3_newref",
+        metric,
+        "-",
+        "warm_call",
+        median(warm1.clone()),
+        warm1.len(),
+        &format!(
+            "ref1 score={score1:.4} all={}",
+            warm1
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 
     // --- setref2: NEW reference (different pixels) on same warm instance.
     // This is THE measured guess to kill: is it ≈ setref1 or ≈ free? ---
@@ -275,19 +402,43 @@ fn run_q3(metric: &str, w: u32, h: u32, reps: usize) {
     m.set_reference_srgb_u8(&ref2).expect("set_reference(ref2)");
     cubecl::future::block_on(client.sync()).expect("sync after setref2");
     let setref2_ms = t.elapsed().as_secs_f64() * 1e3;
-    emit("Q3_newref", metric, "-", "setref2", setref2_ms, 1, "NEW_ref_different_pixels sync'd");
+    emit(
+        "Q3_newref",
+        metric,
+        "-",
+        "setref2",
+        setref2_ms,
+        1,
+        "NEW_ref_different_pixels sync'd",
+    );
 
     // --- newref_call ×reps against ref2 ---
     let mut warm2 = Vec::with_capacity(reps);
     let mut score2 = 0.0_f64;
     for _ in 0..reps {
         let t = Instant::now();
-        let s = m.compute_with_cached_reference_srgb_u8(&dist).expect("newref_call ref2");
+        let s = m
+            .compute_with_cached_reference_srgb_u8(&dist)
+            .expect("newref_call ref2");
         warm2.push(t.elapsed().as_secs_f64() * 1e3);
         score2 = s.value;
     }
-    emit("Q3_newref", metric, "-", "newref_call", median(warm2.clone()), warm2.len(),
-         &format!("ref2 score={score2:.4} all={}", warm2.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q3_newref",
+        metric,
+        "-",
+        "newref_call",
+        median(warm2.clone()),
+        warm2.len(),
+        &format!(
+            "ref2 score={score2:.4} all={}",
+            warm2
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 }
 
 // ===================================================================
@@ -320,8 +471,22 @@ fn run_q4(metric: &str, w: u32, h: u32, reps: usize) {
         let _ = m.compute_srgb_u8(&r0, &d0).expect("same-pair full score");
         same_pair.push(t.elapsed().as_secs_f64() * 1e3);
     }
-    emit("Q4_fullmode_newref", metric, "-", "fullmode_same_ref", median(same_pair.clone()), same_pair.len(),
-         &format!("repeated_same_pair all={}", same_pair.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q4_fullmode_newref",
+        metric,
+        "-",
+        "fullmode_same_ref",
+        median(same_pair.clone()),
+        same_pair.len(),
+        &format!(
+            "repeated_same_pair all={}",
+            same_pair
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 
     // DIFFERENT reference (and distorted) pixels every call. Pre-generate
     // all pairs so image generation is OUT of the timed region.
@@ -340,8 +505,22 @@ fn run_q4(metric: &str, w: u32, h: u32, reps: usize) {
         diff_ref.push(t.elapsed().as_secs_f64() * 1e3);
         last_score = s.value;
     }
-    emit("Q4_fullmode_newref", metric, "-", "fullmode_diff_ref", median(diff_ref.clone()), diff_ref.len(),
-         &format!("different_ref_each_call last_score={last_score:.4} all={}", diff_ref.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")));
+    emit(
+        "Q4_fullmode_newref",
+        metric,
+        "-",
+        "fullmode_diff_ref",
+        median(diff_ref.clone()),
+        diff_ref.len(),
+        &format!(
+            "different_ref_each_call last_score={last_score:.4} all={}",
+            diff_ref
+                .iter()
+                .map(|v| format!("{v:.3}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
 }
 
 // ===================================================================

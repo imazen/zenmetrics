@@ -51,7 +51,10 @@ fn upload_once_five_metrics() {
 
     let (r, d) = make_pair();
     let pair = ctx.upload_pair(&r, &d).expect("upload_pair failed");
-    assert_eq!(pair.generation, 1, "first upload should produce generation 1");
+    assert_eq!(
+        pair.generation, 1,
+        "first upload should produce generation 1"
+    );
 
     // Drive every enabled metric through compute_handles. We exclude
     // zensim from the compute_handles loop because the umbrella
@@ -108,7 +111,9 @@ fn upload_once_five_metrics() {
             MetricParams::default_for(kind),
             mode,
         )
-        .unwrap_or_else(|e| panic!("Metric::new_with_memory_mode bytes-path({kind:?}) failed: {e}"));
+        .unwrap_or_else(|e| {
+            panic!("Metric::new_with_memory_mode bytes-path({kind:?}) failed: {e}")
+        });
         let s_bytes = m_bytes
             .compute_srgb_u8(&r, &d)
             .unwrap_or_else(|e| panic!("compute_srgb_u8({kind:?}) failed: {e}"));
@@ -129,7 +134,11 @@ fn upload_once_five_metrics() {
 
     // Generation bumps on each new upload.
     let _pair2 = ctx.upload_pair(&r, &d).expect("second upload_pair failed");
-    assert_eq!(ctx.generation(), 2, "second upload should bump generation to 2");
+    assert_eq!(
+        ctx.generation(),
+        2,
+        "second upload should bump generation to 2"
+    );
 }
 
 #[test]
@@ -141,7 +150,9 @@ fn upload_pair_validates_lengths() {
     let n = (W as usize) * (H as usize) * 3;
     let r = vec![0u8; n];
     let short = vec![0u8; n - 3];
-    let err = ctx.upload_pair(&r, &short).expect_err("short dist must error");
+    let err = ctx
+        .upload_pair(&r, &short)
+        .expect_err("short dist must error");
     let msg = err.to_string();
     assert!(
         msg.contains("dimension mismatch"),

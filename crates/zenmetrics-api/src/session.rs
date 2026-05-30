@@ -40,10 +40,10 @@
 //! working-set pool (the GiBs). See the crate-level "VRAM lifecycle"
 //! docs and `docs/VRAM_LIFECYCLE_DESIGN_2026-05-30.md` §3.
 
+use crate::Result;
 use crate::error::Error;
 use crate::memory_mode::MemoryMode;
 use crate::metric::{Backend, MetricKind, MetricParams};
-use crate::Result;
 
 use std::sync::Mutex;
 
@@ -215,9 +215,9 @@ impl MetricSession {
                 backend: backend.tag(),
             });
         }
-        let slot = ALLOCATOR
-            .claim(backend)
-            .ok_or(Error::TooManyContexts { backend: backend.tag() })?;
+        let slot = ALLOCATOR.claim(backend).ok_or(Error::TooManyContexts {
+            backend: backend.tag(),
+        })?;
         Ok(Self {
             backend,
             slot,
@@ -277,10 +277,79 @@ impl MetricSession {
         params: MetricParams,
         mode: MemoryMode,
     ) -> Result<SessionMetric<'_>> {
-        let scorer = build_session_scorer(self.backend, self.stream_value, kind, width, height, params, mode)?;
+        let scorer = build_session_scorer(
+            self.backend,
+            self.stream_value,
+            kind,
+            width,
+            height,
+            params,
+            mode,
+        )?;
         Ok(SessionMetric {
             scorer,
             _session: core::marker::PhantomData,
+        })
+    }
+
+    /// Consume this session into an **owned** [`OwnedSessionMetric`] — a
+    /// single warm metric welded to the session's private stream, with
+    /// no borrow leash. Use this (over [`Self::metric`]) when the metric
+    /// must outlive the lexical scope that built it — e.g. a warm pool
+    /// entry stored in a map. Uses [`MemoryMode::Auto`].
+    ///
+    /// One warm metric per isolated stream is the clean reclaim model:
+    /// the returned bundle owns both the scorer and the session, so
+    /// dropping it reclaims **exactly** this session's VRAM (see
+    /// [`OwnedSessionMetric`] for the drop-order soundness argument).
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::metric`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `params` does not match `kind` (same contract as
+    /// [`Self::metric`]).
+    pub fn into_metric(
+        self,
+        kind: MetricKind,
+        width: u32,
+        height: u32,
+        params: MetricParams,
+    ) -> Result<OwnedSessionMetric> {
+        self.into_metric_with_memory_mode(kind, width, height, params, MemoryMode::Auto)
+    }
+
+    /// [`MemoryMode`]-explicit variant of [`Self::into_metric`].
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::into_metric`], plus per-crate [`Error::Metric`]
+    /// when the requested mode isn't supported for that metric.
+    pub fn into_metric_with_memory_mode(
+        self,
+        kind: MetricKind,
+        width: u32,
+        height: u32,
+        params: MetricParams,
+        mode: MemoryMode,
+    ) -> Result<OwnedSessionMetric> {
+        // Build the scorer BEFORE moving `self` into the bundle so a
+        // construction failure drops the session (→ reclaim of any
+        // partial pool) without leaving a half-built owned metric.
+        let scorer = build_session_scorer(
+            self.backend,
+            self.stream_value,
+            kind,
+            width,
+            height,
+            params,
+            mode,
+        )?;
+        Ok(OwnedSessionMetric {
+            scorer,
+            session: self,
         })
     }
 
@@ -398,56 +467,152 @@ pub struct SessionMetric<'ctx> {
     _session: core::marker::PhantomData<&'ctx MetricSession>,
 }
 
-impl SessionMetric<'_> {
-    /// The [`MetricKind`] this scorer dispatches.
-    pub fn kind(&self) -> MetricKind {
-        self.scorer.kind()
+/// Generate the shared scoring-surface forwarders on a type whose
+/// `self.scorer` field is a [`crate::metric::Metric`]. Both
+/// [`SessionMetric`] and [`OwnedSessionMetric`] expose the identical
+/// surface; rather than copy-paste the bodies (an API eyesore the user
+/// dislikes), this macro emits them once per type. Each forwarder is a
+/// thin delegate to the inner [`crate::Metric`] — the scorer the type
+/// owns, built bound to a session's private stream.
+macro_rules! impl_session_scoring_surface {
+    ($ty:ty) => {
+        impl $ty {
+            /// The [`MetricKind`] this scorer dispatches.
+            pub fn kind(&self) -> MetricKind {
+                self.scorer.kind()
+            }
+
+            /// The configured `(width, height)`.
+            pub fn dims(&self) -> (u32, u32) {
+                self.scorer.dims()
+            }
+
+            /// Score one reference / distorted pair of packed sRGB
+            /// buffers. See [`crate::Metric::compute_srgb_u8`].
+            pub fn score(&mut self, r: &[u8], d: &[u8]) -> Result<crate::Score> {
+                self.scorer.compute_srgb_u8(r, d)
+            }
+
+            /// Cache the reference image's metric-side state on this
+            /// session's stream. See
+            /// [`crate::Metric::set_reference_srgb_u8`].
+            pub fn set_reference_srgb_u8(&mut self, r: &[u8]) -> Result<()> {
+                self.scorer.set_reference_srgb_u8(r)
+            }
+
+            /// Score a distorted candidate against the cached reference.
+            /// See [`crate::Metric::compute_with_cached_reference_srgb_u8`].
+            pub fn score_with_warm_ref(&mut self, d: &[u8]) -> Result<crate::Score> {
+                self.scorer.compute_with_cached_reference_srgb_u8(d)
+            }
+
+            /// Drop cached reference state. See
+            /// [`crate::Metric::clear_reference`].
+            pub fn clear_reference(&mut self) {
+                self.scorer.clear_reference();
+            }
+
+            /// Returns `true` if a cached reference is currently valid.
+            /// See [`crate::Metric::has_cached_reference`].
+            pub fn has_cached_reference(&self) -> bool {
+                self.scorer.has_cached_reference()
+            }
+
+            /// Score one reference / distorted pair from
+            /// [`zenpixels::PixelSlice`] inputs. See
+            /// [`crate::Metric::compute_pixels`].
+            #[cfg(feature = "pixels")]
+            pub fn score_pixels(
+                &mut self,
+                r: zenpixels::PixelSlice<'_>,
+                d: zenpixels::PixelSlice<'_>,
+            ) -> Result<crate::Score> {
+                self.scorer.compute_pixels(r, d)
+            }
+        }
+    };
+}
+
+impl_session_scoring_surface!(SessionMetric<'_>);
+
+/// An **owned** isolated-stream metric: bundles a warm scorer with the
+/// [`MetricSession`] whose private cubecl stream it allocates on, with
+/// no borrow leash. Built via [`MetricSession::into_metric`].
+///
+/// Unlike [`SessionMetric`] (which borrows `&'ctx MetricSession`),
+/// `OwnedSessionMetric` owns its session outright, so it can be stored
+/// past the scope that built it — e.g. as an entry in a warm session
+/// pool keyed by `(metric, dims, params, ref)`. Dropping it reclaims
+/// **exactly** this session's VRAM back to the driver, independent of
+/// every other session, from any thread (the session's `Drop` runs
+/// `memory_cleanup()` + `sync()` on its private stream).
+///
+/// # Drop order is the soundness lever
+///
+/// The fields are declared **scorer first, session second**. Rust drops
+/// struct fields in declaration order, so on drop the `scorer`'s cubecl
+/// device handles are returned to the pool's free-list *before*
+/// [`MetricSession`]'s `Drop` runs `memory_cleanup()` + `sync()` on the
+/// stream. That ordering is what makes the owned shape ironclad: at the
+/// moment cleanup runs, **no live handle points into the stream's pool**
+/// — every page is fully-free — so cleanup returns the entire pool to
+/// the driver and there is no use-after-cleanup hazard (the exact hazard
+/// the borrowed `'ctx` leash guarded against by construction). Do **not**
+/// reorder the fields, and do **not** add a manual `Drop` that moves
+/// fields out: the field-order default drop + [`MetricSession`]'s
+/// existing `Drop` is correct and sufficient.
+///
+/// # No in-place reclaim
+///
+/// [`MetricSession::reclaim`] is intentionally **not** forwarded here.
+/// Reclaiming in place would run `memory_cleanup()` on the stream while
+/// the welded scorer's handles are still live — exactly the
+/// use-after-cleanup hazard the drop ordering above avoids. For an
+/// `OwnedSessionMetric`, **eviction is a full drop** (which reclaims
+/// correctly because the scorer drops first). Use [`Self::leak`] only to
+/// *skip* reclaim for a short-lived process.
+pub struct OwnedSessionMetric {
+    // FIELD ORDER IS LOAD-BEARING — see the type docs. `scorer` MUST
+    // come before `session` so the scorer's device handles drop to the
+    // cubecl free-list before the session's Drop cleans the stream.
+    scorer: crate::metric::Metric,
+    session: MetricSession,
+}
+
+impl_session_scoring_surface!(OwnedSessionMetric);
+
+impl OwnedSessionMetric {
+    /// The [`Backend`] this metric's session is bound to.
+    pub fn backend(&self) -> Backend {
+        self.session.backend()
     }
 
-    /// The configured `(width, height)`.
-    pub fn dims(&self) -> (u32, u32) {
-        self.scorer.dims()
+    /// Consume the bundle but DO NOT reclaim — leave the session's pool
+    /// resident (a deliberate leak for a short-lived process where the
+    /// reclaim sync is pure overhead before exit). The scorer is still
+    /// dropped (its handles return to the pool free-list); only the
+    /// session's `memory_cleanup()` + `sync()` and slot recycling are
+    /// skipped. The slot keeps counting against
+    /// [`MAX_SESSIONS_PER_BACKEND`] until the process exits.
+    pub fn leak(self) {
+        // Move the scorer and session out, drop the scorer (handles →
+        // free-list), then `MetricSession::leak` consumes the session
+        // without reclaim. Destructuring is sound here: the scorer drops
+        // first (no live handle), exactly as the field-order Drop would
+        // sequence it.
+        let OwnedSessionMetric { scorer, session } = self;
+        drop(scorer);
+        session.leak();
     }
 
-    /// Score one reference / distorted pair of packed sRGB buffers.
-    /// See [`crate::Metric::compute_srgb_u8`].
-    pub fn score(&mut self, r: &[u8], d: &[u8]) -> Result<crate::Score> {
-        self.scorer.compute_srgb_u8(r, d)
-    }
-
-    /// Cache the reference image's metric-side state on this session's
-    /// stream. See [`crate::Metric::set_reference_srgb_u8`].
-    pub fn set_reference_srgb_u8(&mut self, r: &[u8]) -> Result<()> {
-        self.scorer.set_reference_srgb_u8(r)
-    }
-
-    /// Score a distorted candidate against the cached reference.
-    /// See [`crate::Metric::compute_with_cached_reference_srgb_u8`].
-    pub fn score_with_warm_ref(&mut self, d: &[u8]) -> Result<crate::Score> {
-        self.scorer.compute_with_cached_reference_srgb_u8(d)
-    }
-
-    /// Drop cached reference state. See
-    /// [`crate::Metric::clear_reference`].
-    pub fn clear_reference(&mut self) {
-        self.scorer.clear_reference();
-    }
-
-    /// Returns `true` if a cached reference is currently valid. See
-    /// [`crate::Metric::has_cached_reference`].
-    pub fn has_cached_reference(&self) -> bool {
-        self.scorer.has_cached_reference()
-    }
-
-    /// Score one reference / distorted pair from [`zenpixels::PixelSlice`]
-    /// inputs. See [`crate::Metric::compute_pixels`].
-    #[cfg(feature = "pixels")]
-    pub fn score_pixels(
-        &mut self,
-        r: zenpixels::PixelSlice<'_>,
-        d: zenpixels::PixelSlice<'_>,
-    ) -> Result<crate::Score> {
-        self.scorer.compute_pixels(r, d)
+    /// The cubecl `StreamId.value` this metric's session allocates on.
+    /// `#[doc(hidden)]` — exposed only so the pool VRAM-isolation
+    /// integration test can probe this exact session's pool
+    /// (`memory_usage`) without guessing the slot assignment. Not a
+    /// supported API.
+    #[doc(hidden)]
+    pub fn __stream_value(&self) -> u64 {
+        self.session.__stream_value()
     }
 }
 
@@ -526,7 +691,16 @@ fn build_session_scorer(
     mode: MemoryMode,
 ) -> Result<crate::metric::Metric> {
     match kind {
-        #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "cvvdp",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Cvvdp => {
             let p = match params {
                 MetricParams::Cvvdp(p) => p,
@@ -548,22 +722,46 @@ fn build_session_scorer(
             })?;
             Ok(crate::metric::Metric::Cvvdp(opaque))
         }
-        #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "ssim2",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Ssim2 => {
             let p = match params {
                 MetricParams::Ssim2(p) => p,
                 _ => panic!("MetricParams variant mismatch (expected Ssim2)"),
             };
             let b = crate::metric::ssim2_backend(backend)?;
-            let opaque =
-                ssim2_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
-                    .map_err(|e| Error::Metric {
-                        kind: "ssim2",
-                        message: e.to_string(),
-                    })?;
+            let opaque = ssim2_gpu::session::new_opaque_on_stream(
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
+            )
+            .map_err(|e| Error::Metric {
+                kind: "ssim2",
+                message: e.to_string(),
+            })?;
             Ok(crate::metric::Metric::Ssim2(opaque))
         }
-        #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "butter",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Butter => {
             let p = match params {
                 MetricParams::Butter(p) => p,
@@ -571,7 +769,12 @@ fn build_session_scorer(
             };
             let b = crate::metric::butter_backend(backend)?;
             let opaque = butteraugli_gpu::session::new_opaque_on_stream(
-                b, stream_value, width, height, p, mode.into(),
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
             )
             .map_err(|e| Error::Metric {
                 kind: "butter",
@@ -579,22 +782,46 @@ fn build_session_scorer(
             })?;
             Ok(crate::metric::Metric::Butter(opaque))
         }
-        #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "dssim",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Dssim => {
             let p = match params {
                 MetricParams::Dssim(p) => p,
                 _ => panic!("MetricParams variant mismatch (expected Dssim)"),
             };
             let b = crate::metric::dssim_backend(backend)?;
-            let opaque =
-                dssim_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
-                    .map_err(|e| Error::Metric {
-                        kind: "dssim",
-                        message: e.to_string(),
-                    })?;
+            let opaque = dssim_gpu::session::new_opaque_on_stream(
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
+            )
+            .map_err(|e| Error::Metric {
+                kind: "dssim",
+                message: e.to_string(),
+            })?;
             Ok(crate::metric::Metric::Dssim(opaque))
         }
-        #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "iwssim",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Iwssim => {
             let p = match params {
                 MetricParams::Iwssim(p) => p,
@@ -602,7 +829,12 @@ fn build_session_scorer(
             };
             let b = crate::metric::iwssim_backend(backend)?;
             let opaque = iwssim_gpu::session::new_opaque_on_stream(
-                b, stream_value, width, height, p, mode.into(),
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
             )
             .map_err(|e| Error::Metric {
                 kind: "iwssim",
@@ -610,19 +842,34 @@ fn build_session_scorer(
             })?;
             Ok(crate::metric::Metric::Iwssim(opaque))
         }
-        #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+        #[cfg(all(
+            feature = "zensim",
+            any(
+                feature = "cuda",
+                feature = "wgpu",
+                feature = "hip",
+                feature = "cpu",
+                feature = "cubecl-types"
+            )
+        ))]
         MetricKind::Zensim => {
             let p = match params {
                 MetricParams::Zensim(p) => p,
                 _ => panic!("MetricParams variant mismatch (expected Zensim)"),
             };
             let b = crate::metric::zensim_backend(backend)?;
-            let opaque =
-                zensim_gpu::session::new_opaque_on_stream(b, stream_value, width, height, p, mode.into())
-                    .map_err(|e| Error::Metric {
-                        kind: "zensim",
-                        message: e.to_string(),
-                    })?;
+            let opaque = zensim_gpu::session::new_opaque_on_stream(
+                b,
+                stream_value,
+                width,
+                height,
+                p,
+                mode.into(),
+            )
+            .map_err(|e| Error::Metric {
+                kind: "zensim",
+                message: e.to_string(),
+            })?;
             Ok(crate::metric::Metric::Zensim(opaque))
         }
         #[allow(unreachable_patterns)]

@@ -44,9 +44,7 @@
 use std::process::Command;
 use std::time::Duration;
 
-use zenmetrics_api::{
-    reclaim_pooled_vram, Backend, MemoryMode, Metric, MetricKind, MetricParams,
-};
+use zenmetrics_api::{Backend, MemoryMode, Metric, MetricKind, MetricParams, reclaim_pooled_vram};
 
 fn nvidia_smi_used_mib() -> Option<u64> {
     let out = Command::new("nvidia-smi")
@@ -163,7 +161,14 @@ fn drop_reclaim(cfg: &Cfg) {
     let baseline = sample_mib(cfg.settle_ms, cfg.reads);
     println!("\n== drop_reclaim ({}, {w}x{h}) ==", kind.tag());
     println!("  baseline                 used={baseline} MiB  (delta 0)");
-    emit_tsv(cfg, "drop_reclaim", "baseline", "reclaim", baseline, baseline);
+    emit_tsv(
+        cfg,
+        "drop_reclaim",
+        "baseline",
+        "reclaim",
+        baseline,
+        baseline,
+    );
 
     let params = MetricParams::default_for(kind);
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
@@ -174,7 +179,14 @@ fn drop_reclaim(cfg: &Cfg) {
         "  after construct+score    used={resident} MiB  (delta {:+})  score={score:.4}",
         resident as i64 - baseline as i64
     );
-    emit_tsv(cfg, "drop_reclaim", "resident", "reclaim", resident, baseline);
+    emit_tsv(
+        cfg,
+        "drop_reclaim",
+        "resident",
+        "reclaim",
+        resident,
+        baseline,
+    );
 
     drop(m);
     let after_drop = sample_mib(cfg.settle_ms, cfg.reads);
@@ -182,7 +194,14 @@ fn drop_reclaim(cfg: &Cfg) {
         "  after drop (POOL plateau) used={after_drop} MiB  (delta {:+})  <- still resident: cubecl pool",
         after_drop as i64 - baseline as i64
     );
-    emit_tsv(cfg, "drop_reclaim", "after_drop", "reclaim", after_drop, baseline);
+    emit_tsv(
+        cfg,
+        "drop_reclaim",
+        "after_drop",
+        "reclaim",
+        after_drop,
+        baseline,
+    );
 
     reclaim_pooled_vram(Backend::Cuda);
     let after_reclaim = sample_mib(cfg.settle_ms, cfg.reads);
@@ -190,7 +209,14 @@ fn drop_reclaim(cfg: &Cfg) {
         "  after reclaim_pooled_vram used={after_reclaim} MiB  (delta {:+})  <- returned to driver",
         after_reclaim as i64 - baseline as i64
     );
-    emit_tsv(cfg, "drop_reclaim", "after_reclaim", "reclaim", after_reclaim, baseline);
+    emit_tsv(
+        cfg,
+        "drop_reclaim",
+        "after_reclaim",
+        "reclaim",
+        after_reclaim,
+        baseline,
+    );
 
     let drop_delta = after_drop as i64 - baseline as i64;
     let reclaim_delta = after_reclaim as i64 - baseline as i64;
@@ -213,9 +239,7 @@ fn mixed_chunk(cfg: &Cfg, do_reclaim: bool) -> u64 {
 
     let baseline = sample_mib(cfg.settle_ms, cfg.reads);
     let variant = if do_reclaim { "reclaim" } else { "no_reclaim" };
-    println!(
-        "\n== mixed_chunk variant={variant} ({w}x{h}) baseline={baseline} MiB =="
-    );
+    println!("\n== mixed_chunk variant={variant} ({w}x{h}) baseline={baseline} MiB ==");
     emit_tsv(cfg, "mixed_chunk", "baseline", variant, baseline, baseline);
 
     let mut peak = baseline;
@@ -264,7 +288,10 @@ fn warm_loop(cfg: &Cfg, n: usize) {
     let kind = MetricKind::Cvvdp; // cached-ref metric, deep warm path.
 
     let baseline = sample_mib(cfg.settle_ms, cfg.reads);
-    println!("\n== warm_loop ({}, {w}x{h}, n={n}) baseline={baseline} MiB ==", kind.tag());
+    println!(
+        "\n== warm_loop ({}, {w}x{h}, n={n}) baseline={baseline} MiB ==",
+        kind.tag()
+    );
     let params = MetricParams::default_for(kind);
     let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params, MemoryMode::Full)
         .expect("construct");
@@ -309,7 +336,14 @@ fn warm_loop(cfg: &Cfg, n: usize) {
         "  warm VRAM floor={vram_floor} peak={vram_peak} span={span} MiB \
          (flat span => no per-call growth, no reclaim churn)"
     );
-    emit_tsv(cfg, "warm_loop", "vram_floor", "reclaim", vram_floor, baseline);
+    emit_tsv(
+        cfg,
+        "warm_loop",
+        "vram_floor",
+        "reclaim",
+        vram_floor,
+        baseline,
+    );
 }
 
 fn main() {
@@ -364,7 +398,10 @@ fn main() {
         .unwrap();
     }
 
-    println!("# vram_drop_reclaim — size {w}x{w}, GPU0 used now: {:?} MiB", nvidia_smi_used_mib());
+    println!(
+        "# vram_drop_reclaim — size {w}x{w}, GPU0 used now: {:?} MiB",
+        nvidia_smi_used_mib()
+    );
 
     if scenario == "all" || scenario == "drop_reclaim" {
         drop_reclaim(&cfg);
@@ -373,8 +410,12 @@ fn main() {
         let peak_reclaim = mixed_chunk(&cfg, true);
         let peak_no_reclaim = mixed_chunk(&cfg, false);
         println!("\n== mixed_chunk SUMMARY ({w}x{w}) ==");
-        println!("  peak delta WITH between-metric reclaim   : {peak_reclaim} MiB  (~MAX single metric)");
-        println!("  peak delta WITHOUT reclaim (pool plateau): {peak_no_reclaim} MiB  (~SUM of metrics)");
+        println!(
+            "  peak delta WITH between-metric reclaim   : {peak_reclaim} MiB  (~MAX single metric)"
+        );
+        println!(
+            "  peak delta WITHOUT reclaim (pool plateau): {peak_no_reclaim} MiB  (~SUM of metrics)"
+        );
         if peak_no_reclaim > peak_reclaim {
             println!(
                 "  => reclaim cut peak by {} MiB ({:.1}x lower)",
@@ -384,8 +425,14 @@ fn main() {
         }
     }
     if scenario == "all" || scenario == "warm_loop" {
-        let n: usize = std::env::var("WARM_N").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
+        let n: usize = std::env::var("WARM_N")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
         warm_loop(&cfg, n);
     }
-    println!("\n# done{}", tsv.map(|p| format!(" — TSV at {p}")).unwrap_or_default());
+    println!(
+        "\n# done{}",
+        tsv.map(|p| format!(" — TSV at {p}")).unwrap_or_default()
+    );
 }

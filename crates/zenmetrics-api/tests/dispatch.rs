@@ -92,7 +92,11 @@ fn score_distorted(kind: MetricKind) -> zenmetrics_api::Score {
 fn dispatch_cvvdp() {
     let s = score_identity(MetricKind::Cvvdp);
     assert_eq!(s.metric_name, "cvvdp");
-    assert!(s.value.is_finite(), "cvvdp identity score should be finite, got {}", s.value);
+    assert!(
+        s.value.is_finite(),
+        "cvvdp identity score should be finite, got {}",
+        s.value
+    );
     // Identical inputs → JOD == 10 (cvvdp's "no distortion").
     assert!(
         (s.value - 10.0).abs() < 1e-3,
@@ -106,10 +110,18 @@ fn dispatch_cvvdp() {
 fn dispatch_butter() {
     let s = score_identity(MetricKind::Butter);
     assert_eq!(s.metric_name, "butter");
-    assert!(s.value.is_finite(), "butteraugli identity score should be finite, got {}", s.value);
+    assert!(
+        s.value.is_finite(),
+        "butteraugli identity score should be finite, got {}",
+        s.value
+    );
     // Identical inputs → max-norm score ~0 (small non-zero due to f32
     // arithmetic on the bundled multiplier).
-    assert!(s.value < 1e-2, "butter identity must be ~0, got {}", s.value);
+    assert!(
+        s.value < 1e-2,
+        "butter identity must be ~0, got {}",
+        s.value
+    );
 }
 
 #[cfg(feature = "ssim2")]
@@ -117,7 +129,11 @@ fn dispatch_butter() {
 fn dispatch_ssim2() {
     let s = score_identity(MetricKind::Ssim2);
     assert_eq!(s.metric_name, "ssim2");
-    assert!(s.value.is_finite(), "ssim2 identity score should be finite, got {}", s.value);
+    assert!(
+        s.value.is_finite(),
+        "ssim2 identity score should be finite, got {}",
+        s.value
+    );
     // SSIMULACRA2 returns ~100 for identical inputs.
     assert!(
         (s.value - 100.0).abs() < 1e-1,
@@ -131,7 +147,11 @@ fn dispatch_ssim2() {
 fn dispatch_dssim() {
     let s = score_identity(MetricKind::Dssim);
     assert_eq!(s.metric_name, "dssim");
-    assert!(s.value.is_finite(), "dssim identity score should be finite, got {}", s.value);
+    assert!(
+        s.value.is_finite(),
+        "dssim identity score should be finite, got {}",
+        s.value
+    );
     // DSSIM is 0 for identical inputs.
     assert!(s.value < 1e-4, "dssim identity must be ~0, got {}", s.value);
 }
@@ -151,7 +171,11 @@ fn dispatch_iwssim() {
     // suite.
     let s = score_identity(MetricKind::Iwssim);
     assert_eq!(s.metric_name, "iwssim");
-    assert!(s.value.is_finite(), "iwssim identity score must be finite, got {}", s.value);
+    assert!(
+        s.value.is_finite(),
+        "iwssim identity score must be finite, got {}",
+        s.value
+    );
     // The per-scale ratio collapses to 1.0 exactly only when the CS
     // map is identically 1 — that requires a smooth input where the
     // pyramid stages preserve the σ₁² == σ₁σ₂ == σ₂² invariant. The
@@ -194,7 +218,9 @@ fn dispatch_iwssim() {
         MetricParams::default_for(MetricKind::Iwssim),
     )
     .expect("Metric::new(Iwssim) failed");
-    let s2 = m.compute_srgb_u8(&r, &d).expect("iwssim non-identity compute_srgb_u8");
+    let s2 = m
+        .compute_srgb_u8(&r, &d)
+        .expect("iwssim non-identity compute_srgb_u8");
     assert!(
         s2.value.is_finite() && (0.0..=1.0).contains(&s2.value),
         "iwssim non-identical score must be finite in [0,1], got {}",

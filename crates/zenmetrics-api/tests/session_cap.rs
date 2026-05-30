@@ -19,7 +19,7 @@
 
 #![cfg(all(feature = "cuda", feature = "cvvdp"))]
 
-use zenmetrics_api::{Backend, Error, MetricSession, MAX_SESSIONS_PER_BACKEND};
+use zenmetrics_api::{Backend, Error, MAX_SESSIONS_PER_BACKEND, MetricSession};
 
 #[test]
 fn cap_is_128() {

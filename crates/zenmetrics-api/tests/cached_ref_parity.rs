@@ -60,29 +60,18 @@ fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
     let (r, d) = make_pair(7919, 2147483647);
 
     // One-shot.
-    let mut m_oneshot = Metric::new_with_memory_mode(
-        kind,
-        Backend::Cuda,
-        W,
-        H,
-        params.clone(),
-        mode,
-    )
-    .unwrap_or_else(|e| panic!("one-shot Metric::new_with_memory_mode({kind:?}) failed: {e}"));
+    let mut m_oneshot =
+        Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, params.clone(), mode)
+            .unwrap_or_else(|e| {
+                panic!("one-shot Metric::new_with_memory_mode({kind:?}) failed: {e}")
+            });
     let s_oneshot = m_oneshot
         .compute_srgb_u8(&r, &d)
         .unwrap_or_else(|e| panic!("compute_srgb_u8({kind:?}) failed: {e}"));
 
     // Cached-ref.
-    let mut m_cached = Metric::new_with_memory_mode(
-        kind,
-        Backend::Cuda,
-        W,
-        H,
-        params,
-        mode,
-    )
-    .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
+    let mut m_cached = Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, params, mode)
+        .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     m_cached
         .set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("set_reference_srgb_u8({kind:?}) failed: {e}"));
@@ -143,15 +132,8 @@ fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
         .collect();
 
     // Cached-ref pass.
-    let mut m = Metric::new_with_memory_mode(
-        kind,
-        Backend::Cuda,
-        W,
-        H,
-        params.clone(),
-        mode,
-    )
-    .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
+    let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, params.clone(), mode)
+        .unwrap_or_else(|e| panic!("cached Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     m.set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("set_reference_srgb_u8({kind:?}) failed: {e}"));
     let cached_scores: Vec<f64> = dists
@@ -164,15 +146,8 @@ fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
         .collect();
 
     // One-shot pass for parity.
-    let mut m_os = Metric::new_with_memory_mode(
-        kind,
-        Backend::Cuda,
-        W,
-        H,
-        params,
-        mode,
-    )
-    .unwrap_or_else(|e| panic!("oneshot Metric::new_with_memory_mode({kind:?}) failed: {e}"));
+    let mut m_os = Metric::new_with_memory_mode(kind, Backend::Cuda, W, H, params, mode)
+        .unwrap_or_else(|e| panic!("oneshot Metric::new_with_memory_mode({kind:?}) failed: {e}"));
     let oneshot_scores: Vec<f64> = dists
         .iter()
         .map(|d| {

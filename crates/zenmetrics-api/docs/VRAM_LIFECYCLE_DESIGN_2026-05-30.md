@@ -661,6 +661,64 @@ impl Drop for GpuContext {
 4. **Keep `release()`/`reclaim_pooled_vram`** as-is (best-effort default
    stream) or deprecate once `GpuContext` lands?
 
+### 6b. Shipped owned shape — `OwnedSessionMetric` (task #155 Phase A)
+
+The §6 sketch left open question (2) — does the context *hand out*
+borrowed metrics, or *hold* them? The #154 foundation shipped the
+**borrowed** form (`SessionMetric<'ctx>`, a metric pinned to the session
+via a `PhantomData<&'ctx MetricSession>` leash). Task #155 adds the
+**owned** form for the case the borrowed leash can't serve: a warm metric
+that must be **stored past the scope that built it** — e.g. an entry in a
+multi-warm session pool keyed by `(metric, dims, params, ref)`. A
+borrowed `SessionMetric` can't live in a `HashMap` because its lifetime is
+tied to a `MetricSession` local; an owned bundle can.
+
+```rust
+// zenmetrics-api/src/session.rs (SHIPPED, default surface, opaque)
+pub struct OwnedSessionMetric {
+    // FIELD ORDER IS LOAD-BEARING — scorer MUST precede session.
+    scorer: crate::metric::Metric,   // dropped FIRST
+    session: MetricSession,          // its Drop runs cleanup SECOND
+}
+
+impl MetricSession {
+    pub fn into_metric(self, kind, w, h, params) -> Result<OwnedSessionMetric>;
+    pub fn into_metric_with_memory_mode(self, kind, w, h, params, mode) -> Result<OwnedSessionMetric>;
+}
+```
+
+**Drop-order soundness argument (THE lever).** Rust drops struct fields
+in *declaration order*. With `scorer` declared before `session`, on drop
+the `scorer`'s cubecl device handles return to the pool free-list
+**before** `MetricSession::Drop` runs `memory_cleanup()` + `sync()` on the
+private stream. So at the instant cleanup runs, **no live handle points
+into the stream's pool** — every page is fully-free (§1.4) — and cleanup
+returns the entire pool to the driver with no use-after-cleanup hazard
+(§1.5). This is the *same* guarantee the borrowed `'ctx` leash gave
+(compiler forbids the metric outliving the session, so the session's
+metrics are gone before its `Drop`), achieved here by ownership +
+field-order instead of a lifetime. No manual `Drop` is written for
+`OwnedSessionMetric` — the field-order default drop + `MetricSession`'s
+existing `Drop` is correct and sufficient; a hand-rolled `Drop` that moved
+fields out would only risk re-introducing the hazard.
+
+**One warm metric per isolated stream.** `into_metric` *consumes* the
+session (it doesn't hand out independently-droppable metrics on a shared
+session). This is the clean reclaim model the pool needs: each warm entry
+== one session == one private stream == one pool, so evicting an entry
+(dropping the `OwnedSessionMetric`) reclaims *exactly* that entry's VRAM,
+independent of every other entry — measured in `tests/session_owned.rs`
+(`owned_drop_one_frees_only_its_pool`: drop one → its `bytes_reserved` 0,
+the sibling's untouched).
+
+**Surface.** `OwnedSessionMetric` forwards the identical scoring surface
+as `SessionMetric` (via a shared private `macro_rules!` — no copy-pasted
+bodies), plus `backend()` and `leak()` (skip reclaim for a short-lived
+process). **In-place `reclaim` is intentionally NOT offered**: the welded
+live scorer means cleanup-without-drop would clean the stream under a live
+handle — unsound. For an `OwnedSessionMetric`, **eviction is a full drop**
+(which reclaims correctly precisely because the scorer drops first).
+
 ---
 
 ## 7. Acceptance-gate status (this task)
