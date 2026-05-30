@@ -556,12 +556,13 @@ criterion). Host: AMD Ryzen 9 7950X, release, no `-C target-cpu=native`
 
 ### Per-mode performance at 16 MP
 
-Each metric exposes up to four execution modes (see the
-[support matrix](#modes--metrics-support-matrix)). These tables give
-the measured **wall** and **peak working-set** of every supported
-`(metric, mode)` at a representative large size. Every cell is a
-committed-TSV value — no number is interpolated or extrapolated;
-unsupported `(metric, mode)` cells say `n/a`.
+These tables give the measured **wall** and **peak working-set** of
+the four common execution modes (full / strip / warm_ref /
+warm_ref_strip — see the
+[support matrix](#modes--metrics-support-matrix) for the full set,
+including cvvdp's StripPair / CappedPyramid) at a representative large
+size. Every cell is a committed-TSV value — no number is interpolated
+or extrapolated; unsupported `(metric, mode)` cells say `n/a`.
 
 The modes:
 
