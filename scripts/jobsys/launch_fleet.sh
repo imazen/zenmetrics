@@ -12,17 +12,20 @@
 #   - Env: R2 creds at ~/.config/cloudflare/r2-credentials; HCLOUD token at ~/.config/hetzner/credentials;
 #     vastai CLI authed; ssh key zen-arm-dev-20260528 on the Hetzner project.
 #
-# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_BOXES] [VAST_BOXES]
+# Usage: bash scripts/jobsys/launch_fleet.sh [N_JOBS] [HETZNER_X86_BOXES] [VAST_BOXES] [HETZNER_ARM_BOXES]
+#   The ARM tier (Hetzner cax, Ampere) is a distinct CAPABILITY tier from x86 — it runs the same image
+#   only because that image is now a multi-arch manifest (amd64 + arm64). local(x86) + hetzner(x86) +
+#   hetzner-arm(arm64) = 3 concurrent tiers across 2 ISAs on one queue.
 set -euo pipefail
 IMAGE="${ZEN_WORKER_IMAGE:-ghcr.io/imazen/zen-jobworker:latest}"
-N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"
+N_JOBS="${1:-200}"; N_HZ="${2:-1}"; N_VAST="${3:-1}"; N_HZ_ARM="${4:-0}"
 BUCKET="${ZEN_FLEET_BUCKET:-zen-tuning-ephemeral}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 set -a; . ~/.config/cloudflare/r2-credentials; set +a
 EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 RUN="fleet-$(date -u +%Y%m%d-%H%M%S)"
-echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner=$N_HZ vast=$N_VAST"
+echo "### launching fleet on s3://$BUCKET/$RUN/  image=$IMAGE  jobs=$N_JOBS  hetzner-x86=$N_HZ hetzner-arm=$N_HZ_ARM vast=$N_VAST"
 
 # 1. mint SCOPED temp creds (object-read-write to this run only; never the root key on remote boxes)
 body=$(python3 -c "import json,os;print(json.dumps({'bucket':'$BUCKET','parentAccessKeyId':os.environ['R2_ACCESS_KEY_ID'],'parentSecretAccessKey':os.environ['R2_SECRET_ACCESS_KEY'],'permission':'object-read-write','ttlSeconds':10800,'prefixes':['$RUN/']}))")
@@ -64,14 +67,22 @@ EOF
 # 3a. local tier (this machine) — docker run the baked image
 docker run -d --label group=$RUN --name "$RUN-local" $(envblock local) -e ZEN_WORKER=workstation "$IMAGE" >/dev/null && echo "local worker started"
 
-# 3b. Hetzner burst tier(s) — Docker-CE app image; cloud-init docker-runs the baked image
+# 3b. Hetzner burst tier(s) — Docker-CE on Ubuntu; cloud-init docker-runs the baked (multi-arch) image.
+# hcloud takes user-data ONLY from a file (--user-data-from-file; there is no --user-data-from-string),
+# so each box's cloud-init is written to a temp file first. cax* = ARM (Ampere), cpx* = x86 (AMD).
 export HCLOUD_TOKEN=$(grep -E '^api_token=' ~/.config/hetzner/credentials | head -1 | cut -d= -f2- | tr -d ' \r')
-for i in $(seq 1 "$N_HZ"); do
-  ci=$(printf '#!/bin/bash\ncurl -fsSL https://get.docker.com | sh\ndocker run -d --restart no %s -e ZEN_WORKER=hetzner-%s %s\n' "$(envblock hetzner | tr '\n' ' ')" "$i" "$IMAGE")
-  hcloud server create --name "$RUN-hetzner-$i" --type cpx22 --image ubuntu-24.04 --location fsn1 \
-    --ssh-key zen-arm-dev-20260528 --label group=$RUN --user-data-from-string "$ci" >/dev/null 2>&1 \
-    && echo "hetzner-$i launched" || echo "hetzner-$i FAILED (cpx22/fsn1 unavailable? try nbg1/hel1)"
-done
+hz_box() {  # name  server-type  provider-label  worker-id
+  local name="$1" stype="$2" provider="$3" worker="$4" cif; cif="$(mktemp)"
+  printf '#!/bin/bash\ncurl -fsSL https://get.docker.com | sh\ndocker run -d --restart no %s -e ZEN_WORKER=%s %s\n' \
+    "$(envblock "$provider" | tr '\n' ' ')" "$worker" "$IMAGE" > "$cif"
+  hcloud server create --name "$name" --type "$stype" --image ubuntu-24.04 --location fsn1 \
+    --ssh-key zen-arm-dev-20260528 --label group=$RUN --user-data-from-file "$cif" >/dev/null 2>&1 \
+    && echo "$worker launched ($stype)" || echo "$worker FAILED ($stype/fsn1 unavailable? try nbg1/hel1)"
+  rm -f "$cif"
+}
+for i in $(seq 1 "$N_HZ"); do hz_box "$RUN-hetzner-$i" cpx22 hetzner "hetzner-$i"; done
+# ARM capability tier (Ampere cax) — same image, arm64 slice of the manifest.
+for i in $(seq 1 "$N_HZ_ARM"); do hz_box "$RUN-hetzner-arm-$i" cax11 hetzner-arm "hetzner-arm-$i"; done
 
 # 3c. vast burst tier(s) — the baked image IS the instance image; entrypoint runs with env
 for i in $(seq 1 "$N_VAST"); do

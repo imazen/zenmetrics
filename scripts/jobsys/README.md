@@ -109,21 +109,28 @@ zen-jobgc --blob-index s3://b/.../blob_index.parquet --ledger s3://b/.../ledger.
 
 ## `launch_fleet.sh` / `watch_fleet.sh` / `teardown_fleet.sh` — goal H (heterogeneous fleet)
 
-Bring up ≥3 interchangeable tiers (local + Hetzner + vast) on ONE R2 lease-queue, all running the same
-**baked** `ghcr.io/imazen/zen-jobworker` image (binary + aws-cli + s5cmd + keep-alive entrypoint —
-zero boot-time installs, per the bake-everything rule; image built by `.github/workflows/jobworker-image.yml`).
-Scoped temp R2 creds per run; teardown by `group=<run>` label (or the dashboard Kill controls).
+Bring up ≥3 interchangeable tiers on ONE R2 lease-queue, all running the same **baked**
+`ghcr.io/imazen/zen-jobworker` image (binary + aws-cli + s5cmd + keep-alive entrypoint — zero boot-time
+installs, per the bake-everything rule; image built by `.github/workflows/jobworker-image.yml`). The
+image is a **multi-arch manifest (amd64 + arm64)**, so `docker run` resolves the right slice per host —
+that's what lets the named **Oracle ARM (free)** tier and a Hetzner **cax ARM** box join. Scoped temp R2
+creds per run; teardown by `group=<run>` label (or the dashboard Kill controls).
 
 ```bash
 # one-time: ensure CI pushed the image and the ghcr package is public
-bash scripts/jobsys/launch_fleet.sh 200 1 1   # 200 jobs, 1 Hetzner box, 1 vast box  (SPENDS MONEY)
+# args: N_JOBS  HETZNER_X86_BOXES  VAST_BOXES  HETZNER_ARM_BOXES                       (SPENDS MONEY)
+bash scripts/jobsys/launch_fleet.sh 200 1 0 1  # local(x86) + 1 Hetzner cpx(x86) + 1 Hetzner cax(arm64)
 bash scripts/jobsys/watch_fleet.sh  <RUN>      # ledger DONE rows by provider — proves concurrent tiers
 bash scripts/jobsys/teardown_fleet.sh <RUN>    # delete every box for this run
 ```
 
-A 2026-05-30 ad-hoc test (before this image existed) already had a Hetzner box do **60 real jobs** on
-the shared queue and tore it down via the **dashboard's Kill** — the image makes the full clean 3-tier
-launch reliable + repeatable.
+The `hetzner-arm` tier (Ampere `cax`) is a distinct **capability tier** from x86, so that one command is
+3 concurrent tiers across 2 ISAs on one queue. A 2026-05-30 ad-hoc test (before this image existed)
+already had a Hetzner box do **60 real jobs** on the shared queue and tore it down via the **dashboard's
+Kill**; later the same day local + Hetzner ran **90 jobs (73+17), exactly-once, fast-node-pulls-more**.
+The multi-arch image + the `cax` tier make a clean local+x86+arm 3-tier launch reproducible. (The
+launcher's Hetzner path also fixes a latent bug: hcloud takes user-data only via `--user-data-from-file`,
+not the previously-used `--user-data-from-string`.)
 
 ## `demo_capability_routing.sh` — goal H (capability-routed)
 

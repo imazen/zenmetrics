@@ -27,6 +27,12 @@ Workspace conventions per the global rules:
   amd64, `ubuntu-24.04-arm` arm64 — free on this public repo, no QEMU), pushes by digest, and merges
   one manifest asserting both `linux/amd64` + `linux/arm64`. `docker run ghcr.io/imazen/zen-jobworker`
   now resolves per-host arch, unblocking the ARM half of the heterogeneous fleet.
+  `scripts/jobsys/launch_fleet.sh` gains a 4th arg `HETZNER_ARM_BOXES` that brings up Ampere `cax`
+  (arm64) boxes as a distinct capability tier — `launch_fleet.sh 200 1 0 1` = local(x86) +
+  Hetzner cpx(x86) + Hetzner cax(arm64), 3 concurrent tiers across 2 ISAs on one queue. Also fixes a
+  latent launcher bug: hcloud takes user-data only via `--user-data-from-file`, not the previously-used
+  (nonexistent) `--user-data-from-string`, which would have failed every Hetzner box created via the
+  launcher.
 - **Job system: capability routing (goal H "capability-routed GPU/CPU/ARM")** (2026-05-30).
   `zen_job_core::worker_serves` + `ResourceClass::parse`; `zen-jobworker --capability <class>…`
   (also `ZEN_CAPABILITY` env in the fleet entrypoint) makes a worker pull only jobs whose
