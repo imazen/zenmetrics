@@ -56,6 +56,10 @@ struct Cli {
     /// Claim is stealable once this old (presumed-dead worker) — dead-worker reclaim.
     #[arg(long = "claim-ttl-secs", default_value_t = 600)]
     claim_ttl_secs: u64,
+    /// Speculative-execution threshold (goal E): co-run a *live* straggler whose claim is older than
+    /// this (but younger than the TTL). Bounds the long tail; off by default.
+    #[arg(long = "spec-threshold-secs")]
+    spec_threshold_secs: Option<u64>,
     /// R2 key of a RunControl object ({"paused":bool,"drain":bool}); when paused/draining this pass
     /// claims no new work (goal C). Requires --blobs-r2-bucket + --r2-endpoint.
     #[arg(long = "control-r2-key")]
@@ -82,6 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bucket,
         prefix: c.claims_prefix,
         ttl_secs: c.claim_ttl_secs,
+        spec_threshold_secs: c.spec_threshold_secs,
     });
     if claims.is_some() && r2.is_none() {
         return Err("--claims-r2-bucket requires --blobs-r2-bucket + --r2-endpoint".into());

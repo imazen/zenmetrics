@@ -77,5 +77,20 @@ bash scripts/jobsys/demo_notify_local.sh
 Verified run 2026-05-30: received
 `{"text":"budget crossed: $0.35 >= cap $0.10 - paid tiers tearing down — https://…/#cost"}`.
 
-The dashboard side of these same guarantees (coverage/catalog, progress, cost, kill, stop-spend,
-pause/drain/resume) is live at the Railway deployment; see `crates/zen-jobdash`.
+## `demo_speculative_r2.sh` — goal E (speculative execution)
+
+Worker A claims a job and runs it slowly (a straggler); worker B, with `--spec-threshold-secs`, sees
+the aged primary claim and takes a separate `claims/spec/<job_id>` claim to co-run it fast — bounding
+the long tail. The ledger's latest-wins on `job_id` makes the loser harmless. `/api/speculative`
+surfaces the active spec-claim count.
+
+```bash
+bash scripts/jobsys/demo_speculative_r2.sh        # KEEP=1 to retain the R2 prefix
+```
+
+Verified run 2026-05-30: primary claim aged past threshold → speculator `done=1`, 1 spec claim, job
+converged (gap=0) while the slow primary was still running.
+
+The dashboard side of these guarantees (coverage/catalog, progress + speculative count, cost, kill,
+stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query) is live at the Railway
+deployment; see `crates/zen-jobdash`.

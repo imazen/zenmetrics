@@ -8,6 +8,7 @@ interface Props {
   cost?: CostView
   fleet?: FleetView
   summary?: RunSummary
+  speculative?: number
 }
 
 function Stat({
@@ -39,10 +40,11 @@ function Stat({
   )
 }
 
-export function StatCards({ cost, fleet, summary }: Props) {
+export function StatCards({ cost, fleet, summary, speculative }: Props) {
   const liveBoxes = fleet?.boxes.length ?? 0
   const running = fleet?.boxes.filter((b) => b.status === "running").length ?? 0
   const eta = summary?.eta_secs != null ? `~${fmtDuration(summary.eta_secs)} ETA` : "idle (no ETA)"
+  const specNote = speculative ? ` · ${speculative} speculative` : ""
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat
@@ -71,7 +73,8 @@ export function StatCards({ cost, fleet, summary }: Props) {
         sub={
           summary
             ? `${fmtInt(summary.remaining)} remaining of ${fmtInt(summary.total)}` +
-              (summary.fleet_jobs_per_min > 0 ? ` · ${summary.fleet_jobs_per_min.toFixed(1)}/min` : "")
+              (summary.fleet_jobs_per_min > 0 ? ` · ${summary.fleet_jobs_per_min.toFixed(1)}/min` : "") +
+              specNote
             : undefined
         }
       />

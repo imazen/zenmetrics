@@ -248,6 +248,31 @@ fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
     }
 }
 
+/// List object keys under an `s3://` prefix via s5cmd (the last path segment of each match). Used to
+/// count transient state like active speculative claims. Returns `[]` on any error (best-effort).
+pub fn list_keys_uri(prefix_uri: &str, endpoint: Option<&str>) -> Vec<String> {
+    let Some(ep) = endpoint else { return Vec::new() };
+    if !prefix_uri.starts_with("s3://") {
+        return Vec::new();
+    }
+    let out = Command::new("s5cmd")
+        .arg("--endpoint-url")
+        .arg(ep)
+        .arg("ls")
+        .arg(prefix_uri)
+        .stderr(Stdio::null())
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|l| l.split_whitespace().last())
+            .filter(|k| !k.ends_with('/'))
+            .map(|k| k.rsplit('/').next().unwrap_or(k).to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Read a ledger from a local path **or** an `s3://` URI. For `s3://`, downloads via s5cmd (needs the
 /// R2 `endpoint` and `AWS_*` creds in the environment), then reads the Parquet.
 pub fn read_ledger_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<LedgerRow>, LedgerError> {

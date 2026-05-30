@@ -18,19 +18,19 @@ fn main() {
 
     // (1) stale-steal: a "ghost" worker claims at ts=0, then a live worker at ts=1000 (ttl=10) steals.
     let j1 = JobId::of(&kind, &[sha256(b"stale-job")]);
-    assert!(claim_or_steal_r2(&ep, &bucket, &prefix, &j1, 0, 10, "ghost"), "ghost makes the fresh claim");
-    let stolen = claim_or_steal_r2(&ep, &bucket, &prefix, &j1, 1000, 10, "live-worker");
+    assert!(claim_or_steal_r2(&ep, &bucket, &prefix, &j1, 0, 10, None, "ghost"), "ghost makes the fresh claim");
+    let stolen = claim_or_steal_r2(&ep, &bucket, &prefix, &j1, 1000, 10, None, "live-worker");
     println!("stale-steal      = {stolen}  (expect true: 1000-0 >= ttl 10 → reclaimed)");
 
     // (2) fresh-skip: ghost claims at ts=995, live worker at ts=1000 (ttl=10) must NOT steal (5 < 10).
     let j2 = JobId::of(&kind, &[sha256(b"fresh-job")]);
-    assert!(claim_or_steal_r2(&ep, &bucket, &prefix, &j2, 995, 10, "ghost"), "ghost makes the fresh claim");
-    let not_stolen = !claim_or_steal_r2(&ep, &bucket, &prefix, &j2, 1000, 10, "live-worker");
+    assert!(claim_or_steal_r2(&ep, &bucket, &prefix, &j2, 995, 10, None, "ghost"), "ghost makes the fresh claim");
+    let not_stolen = !claim_or_steal_r2(&ep, &bucket, &prefix, &j2, 1000, 10, None, "live-worker");
     println!("fresh-not-stolen = {not_stolen}  (expect true: 1000-995 < ttl 10 → left alone)");
 
     // (3) brand-new job is claimed outright.
     let j3 = JobId::of(&kind, &[sha256(b"new-job")]);
-    let new_claim = claim_or_steal_r2(&ep, &bucket, &prefix, &j3, 1000, 10, "live-worker");
+    let new_claim = claim_or_steal_r2(&ep, &bucket, &prefix, &j3, 1000, 10, None, "live-worker");
     println!("new-claim        = {new_claim}  (expect true)");
 
     assert!(stolen, "stale claim MUST be reclaimable");

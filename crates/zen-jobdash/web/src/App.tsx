@@ -25,6 +25,7 @@ export default function App() {
   const workers = usePoll(api.workers)
   const catalog = usePoll(api.catalog, 30000)
   const results = usePoll(api.results, 30000)
+  const speculative = usePoll(api.speculative, 20000)
   const fleet = usePoll(api.fleet, 20000)
 
   const refreshAll = () => {
@@ -68,7 +69,7 @@ export default function App() {
         </div>
       </header>
 
-      <StatCards cost={cost.data} fleet={fleet.data} summary={summary.data} />
+      <StatCards cost={cost.data} fleet={fleet.data} summary={summary.data} speculative={speculative.data?.active} />
 
       <Tabs defaultValue="overview" className="mt-6">
         <TabsList>

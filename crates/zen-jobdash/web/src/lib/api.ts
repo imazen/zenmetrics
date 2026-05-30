@@ -154,6 +154,7 @@ export const api = {
   catalog: () => getJSON<CatalogRow[]>("/api/catalog"),
   results: () => getJSON<ResultRow[]>("/api/results"),
   peek: (sha: string) => getJSON<PeekResult>(`/api/peek/${sha}`),
+  speculative: () => getJSON<{ active: number; jobs: string[]; note?: string }>("/api/speculative"),
   query: (params: Record<string, string>) => {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
     return getJSON<QueryRow[]>(`/api/query${qs ? `?${qs}` : ""}`)

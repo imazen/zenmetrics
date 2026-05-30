@@ -93,6 +93,7 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
         .route("/api/catalog", get(api_catalog))
         .route("/api/results", get(api_results))
         .route("/api/query", get(api_query))
+        .route("/api/speculative", get(api_speculative))
         .route("/api/peek/{sha}", get(api_peek))
         .route("/api/blob/{sha}", get(api_blob))
         .route("/api/fleet", get(api_fleet))
@@ -288,6 +289,20 @@ async fn api_catalog(State(s): State<AppState>) -> Json<Vec<CatalogRow>> {
 }
 async fn api_results(State(s): State<AppState>) -> Json<Vec<ResultRow>> {
     Json(results_view(&s.data.read().await.rows, 200))
+}
+
+/// Active speculative executions (goal B's "speculative" count / goal E). Lists the spec-claim objects
+/// under `ZEN_CLAIMS_R2/spec/` — each is a job a second worker is co-running to bound the tail.
+async fn api_speculative() -> Json<serde_json::Value> {
+    let Some(base) = std::env::var("ZEN_CLAIMS_R2").ok().filter(|s| !s.is_empty()) else {
+        return Json(serde_json::json!({ "active": 0, "jobs": [], "note": "set ZEN_CLAIMS_R2 (s3://bucket/claims) to surface speculative count" }));
+    };
+    let uri = format!("{}/spec/", base.trim_end_matches('/'));
+    let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
+    let jobs = tokio::task::spawn_blocking(move || zen_ledger::list_keys_uri(&uri, endpoint.as_deref()))
+        .await
+        .unwrap_or_default();
+    Json(serde_json::json!({ "active": jobs.len(), "jobs": jobs }))
 }
 
 /// Ad-hoc query over the ledger (goal B). Optional `kind`/`codec`/`status`/`image` substring filters

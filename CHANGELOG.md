@@ -19,6 +19,13 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: speculative execution (goal E) + speculative count (goal B)** (2026-05-29). A worker
+  with `--spec-threshold-secs` co-runs a *live straggler* (primary claim older than the threshold but
+  younger than the TTL) by taking a separate `claims/spec/<job_id>` claim — bounding the long tail; the
+  ledger's latest-wins on `job_id` makes the loser a harmless duplicate. `/api/speculative`
+  (`zen_ledger::list_keys_uri` over `ZEN_CLAIMS_R2/spec/`) surfaces the active count in the dashboard.
+  Live demo `scripts/jobsys/demo_speculative_r2.sh` (slow primary + fast speculator → tail bounded,
+  job converged).
 - **zen-jobdash: thumbnails/diffmaps + ad-hoc query (goal B)** (2026-05-29). `/api/blob/{sha}` serves a
   result blob with a sniffed image content-type (JPEG/PNG/GIF/WebP/AVIF) + immutable cache, so encode
   and diffmap outputs render inline in the Results tab (thumbnail + full-size dialog). `/api/query`

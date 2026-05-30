@@ -153,6 +153,10 @@ pub struct ClaimCfg {
     pub prefix: String,
     /// A claim older than this (and not yet a terminal ledger row) is presumed dead and stealable.
     pub ttl_secs: u64,
+    /// Speculative-execution threshold (goal E): a *live* primary claim older than this (but younger
+    /// than `ttl_secs`) is a straggler — a second worker may co-run it speculatively to bound the long
+    /// tail. The ledger's latest-wins on `job_id` makes the loser a harmless duplicate. `None` = off.
+    pub spec_threshold_secs: Option<u64>,
 }
 
 /// Atomically claim a job via R2 conditional write (`If-None-Match: *`). Returns true iff THIS worker
@@ -301,6 +305,7 @@ pub fn claim_or_steal_r2(
     job_id: &JobId,
     now: u64,
     ttl_secs: u64,
+    spec_threshold_secs: Option<u64>,
     owner: &str,
 ) -> bool {
     let key = format!("{}/{}", prefix.trim_matches('/'), job_id.as_str());
@@ -326,7 +331,21 @@ pub fn claim_or_steal_r2(
             .arg("--body").arg(&body).arg("--if-match").arg(&etag)
             .stdout(Stdio::null()).stderr(Stdio::null())
             .status().map(|s| s.success()).unwrap_or(false),
-        _ => false,
+        // 3. live but a straggler (age in [spec_threshold, ttl)) → speculate: take a *separate*
+        //    spec claim (create-if-absent, so at most one speculator) and co-run it. The ledger's
+        //    latest-wins on job_id makes the loser a harmless duplicate.
+        Some((_, prev_ts)) => match spec_threshold_secs {
+            Some(spec) if now.saturating_sub(prev_ts) >= spec => {
+                let spec_key = format!("{}/spec/{}", prefix.trim_matches('/'), job_id.as_str());
+                aws_s3api(endpoint)
+                    .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&spec_key)
+                    .arg("--body").arg(&body).arg("--if-none-match").arg("*")
+                    .stdout(Stdio::null()).stderr(Stdio::null())
+                    .status().map(|s| s.success()).unwrap_or(false)
+            }
+            _ => false,
+        },
+        None => false,
     };
     let _ = std::fs::remove_file(&body);
     won
@@ -576,7 +595,8 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                         &store,
                         |id| {
                             let won = claim_or_steal_r2(
-                                &t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs, &cfg.worker,
+                                &t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs,
+                                cc.spec_threshold_secs, &cfg.worker,
                             );
                             if won {
                                 if let Ok(mut g) = inflight.lock() {
