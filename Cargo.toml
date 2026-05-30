@@ -97,7 +97,9 @@ cubecl-ir      = "0.10.0"
 
 # CPU reference crates used by parity tests.
 butteraugli = { version = "0.9.4" }
-dssim-core = { version = "3.4", default-features = false }
+# local dssim-core 3.5.0 (../../dssim/dssim-core, patched below) needs `threads` to compile —
+# its no-threads path calls into_par_iter unconditionally (crates.io 3.4.0 built without it).
+dssim-core = { version = "3.5", default-features = false, features = ["threads"] }
 ssimulacra2 = { version = "0.5" }
 zensim = { version = "0.3.0" }
 
@@ -246,6 +248,9 @@ jxl-encoder  = { path = "../jxl-encoder/jxl-encoder" }
 # workspace resolves one butteraugli. Equivalent git ref when the
 # sibling checkout is gone: { git = "https://github.com/imazen/butteraugli", rev = "<commit>" }.
 butteraugli  = { path = "../../butteraugli/butteraugli" }
+# dssim-core: local sibling ~/work/dssim/dssim-core (3.5.0, semver-compatible with the 3.4 request) so
+# the dssim score uses local source, not the crates.io artifact ("scores must use local").
+dssim-core   = { path = "../../dssim/dssim-core" }
 # Phase 8f (2026-05-27): cubecl-* deps moved from [patch.crates-io] git
 # pins to [workspace.dependencies] package aliases at the top of this
 # file. The zenforks-cubecl-* crates.io publication makes the workspace-
