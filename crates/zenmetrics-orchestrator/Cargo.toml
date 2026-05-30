@@ -278,3 +278,12 @@ required-features = ["cuda"]
 name = "run_stream"
 path = "examples/run_stream.rs"
 required-features = ["cuda"]
+
+# Task #150 — orchestrator peak-VRAM measurement across a mixed-metric
+# chunk, with vs without the swap-time pool reclaim. Spawns a child per
+# variant + polls nvidia-smi. Sibling-workspace caveat applies (needs a
+# quiet GPU — the global probe is contaminated by concurrent consumers).
+[[example]]
+name = "vram_swap_peak"
+path = "examples/vram_swap_peak.rs"
+required-features = ["cuda"]
