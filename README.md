@@ -3,24 +3,55 @@
 Multi-vendor GPU implementations of the perceptual image quality
 metrics Imazen runs in production, plus a unified CLI.
 
-Built on [CubeCL](https://github.com/tracel-ai/cubecl) — a single
+Built on CubeCL via the [`zenforks-cubecl`](https://crates.io/crates/zenforks-cubecl)
+publication of [tracel-ai/cubecl](https://github.com/tracel-ai/cubecl)
+(0.10.x — carries pinned-upload + PTX-cache-widening + Metal
+`Atomic<f32>` capability patches for our use case). A single
 `#[cube]`-annotated Rust kernel source dispatches across CUDA (NVIDIA),
 WGPU (Vulkan / Metal / DX12 / WebGPU), HIP (AMD ROCm), and a
 build-time CPU fallback.
 
-## Crates
+## Metric crates
+
+The six GPU metric crates plus the two CPU reference crates that the
+orchestrator's CPU ladder dispatches to:
 
 | Crate | Metric | Range / shape | Parity reference |
 |---|---|---|---|
-| [`butteraugli-gpu`](crates/butteraugli-gpu/) | Butteraugli | distance, max-norm + 3-norm | [`butteraugli`](https://crates.io/crates/butteraugli) v0.9 |
-| [`ssim2-gpu`](crates/ssim2-gpu/) | SSIMULACRA2 | 0–100, higher better | [`ssimulacra2`](https://crates.io/crates/ssimulacra2) v0.5 |
-| [`dssim-gpu`](crates/dssim-gpu/) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) v3.4 |
-| [`zensim-gpu`](crates/zensim-gpu/) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) v0.2.8 |
-| [`cvvdp-gpu`](crates/cvvdp-gpu/) | ColorVideoVDP (still-image, GPU) | JOD 0–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
-| [`cvvdp`](crates/cvvdp/) | ColorVideoVDP (still-image, CPU, JXL buttloop) | JOD 0–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) v0.5.4 |
-| [`zen-metrics-cli`](crates/zen-metrics-cli/) | CLI front-end | — | uses the five metrics above |
-| [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | shared test images | — | (test infra) |
-| [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) | Capability-aware scheduler + persistent benchmark cache + OOM fallback ladder | — | wraps the umbrella `zenmetrics-api` |
+| [`butteraugli-gpu`](crates/butteraugli-gpu/) | Butteraugli | distance, max-norm (default) + libjxl 3-norm | [`butteraugli`](https://crates.io/crates/butteraugli) 0.9.4 |
+| [`ssim2-gpu`](crates/ssim2-gpu/) | SSIMULACRA2 | 0–100, higher better | [`ssimulacra2`](https://crates.io/crates/ssimulacra2) 0.5 |
+| [`dssim-gpu`](crates/dssim-gpu/) | DSSIM | distance, 0 = identical | [`dssim-core`](https://crates.io/crates/dssim-core) 3.4 |
+| [`iwssim-gpu`](crates/iwssim-gpu/) | IW-SSIM (Wang & Li 2011) | `[0, 1]`, 1.0 = identical | [`iwssim`](crates/iwssim/) (in-tree CPU port) |
+| [`zensim-gpu`](crates/zensim-gpu/) | zensim feature extractor | 228-feature vector + scalar score 0–100 | [`zensim`](https://github.com/imazen/zensim) 0.3.0 |
+| [`cvvdp-gpu`](crates/cvvdp-gpu/) | ColorVideoVDP (still-image, GPU) | JOD ~3–10, higher better | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
+| [`iwssim`](crates/iwssim/) | IW-SSIM (CPU reference + SIMD) | `[0, 1]`, 1.0 = identical | self (pure-Rust port) |
+| [`cvvdp`](crates/cvvdp/) | ColorVideoVDP (still-image, CPU) | JOD ~3–10 + per-pixel diffmap | [`pycvvdp`](https://github.com/gfxdisp/ColorVideoVDP) 0.5.4 |
+
+The CPU side of each metric is supplied by an external reference crate
+([`fast-ssim2`](https://crates.io/crates/fast-ssim2) 0.8.1,
+[`dssim-core`](https://crates.io/crates/dssim-core) 3.4,
+[`butteraugli`](https://crates.io/crates/butteraugli) 0.9.4,
+[`zensim`](https://github.com/imazen/zensim) 0.3.0) or an in-tree crate
+([`cvvdp`](crates/cvvdp/), [`iwssim`](crates/iwssim/)). All six metrics
+expose a CPU backend (the IW-SSIM CPU port landed in 2026-05; see the
+[Modes × metrics support matrix](#modes--metrics-support-matrix)).
+
+### Supporting crates
+
+| Crate | Role |
+|---|---|
+| [`zenmetrics-api`](crates/zenmetrics-api/) | Umbrella: one `MetricKind` enum + one `Metric` type dispatching to all six per-crate opaque scorers |
+| [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) | Capability-aware backend chooser + persistent benchmark cache + OOM fallback ladder + warm worker pool |
+| [`zen-metrics-cli`](crates/zen-metrics-cli/) | `zen-metrics` CLI front-end (score / batch / compare / sweep) |
+| [`zenmetrics-corpus`](crates/zenmetrics-corpus/) | Shared test-image corpus (test infra) |
+| [`iwssim-filter-codegen`](crates/iwssim-filter-codegen/) | Build-time generator for the IW-SSIM separable blur filters |
+| [`cvvdp-conformance`](crates/cvvdp-conformance/) | pycvvdp conformance fixtures + parity harness for the cvvdp crates |
+
+The workspace also contains the vast.ai / Hetzner / RunPod / Salad
+sweep-fleet crates (`zen-cloud-*`, `zencloud-hetzner`,
+`zenfleet-orchestrator`, `zen-job-*`, `zen-ledger`, `zen-jobdash`,
+`zen-sweep-worker`, `zenstats`) that drive the backfill pipeline; they
+are infrastructure, not part of the metric API.
 
 ## Recommended entry point: `zenmetrics-orchestrator`
 
@@ -89,73 +120,105 @@ in both paths.
 ## SRCC sanity table
 
 Spearman rank correlation coefficient against published still-image
-MOS datasets (numbers from Cloudinary's SSIMULACRA2 benchmark, sign
-normalized so higher = better):
+MOS datasets, sign-normalized so higher = better. These figures are
+**illustrative, sourced externally** (the published
+[Cloudinary SSIMULACRA2 benchmark](https://github.com/cloudinary/ssimulacra2_rs)
+table for the reference metrics) — they are not regenerated by any
+harness in this repo, so treat them as an order-of-magnitude sanity
+check on metric discrimination, not a committed measurement. The
+metric each crate computes is bit-comparable to the cited reference,
+so the reference's published SRCC transfers.
 
 | Metric | TID2013 | KADID-10k | CID22 |
 |---|---|---|---|
 | `dssim-gpu` (= DSSIM) | 0.871 | 0.856 | 0.872 |
 | `ssim2-gpu` (= SSIMULACRA2) | 0.819 | 0.785 | 0.885 |
-| `zensim-gpu` (= zensim) | (Imazen-internal benchmark) | | |
-| `cvvdp-gpu` (= ColorVideoVDP) | (pending — reference is pycvvdp v0.5.4) | | |
 | `butteraugli-gpu` (3-norm) | 0.664 | 0.543 | 0.794 |
+| `iwssim-gpu` (= IW-SSIM) | (not benchmarked here) | | |
+| `zensim-gpu` (= zensim) | (Imazen-internal benchmark) | | |
+| `cvvdp-gpu` (= ColorVideoVDP) | (pending — reference is pycvvdp 0.5.4) | | |
 
 ## Memory modes
 
-Every metric crate exposes a `MemoryMode` enum + `new_with_memory_mode`
-constructor so callers can choose how the GPU working set is laid
-out. The shape is uniform across the six metric crates:
+Every GPU metric crate exposes a `MemoryMode` enum + a
+`new_with_memory_mode` constructor so callers choose how the GPU
+working set is laid out. The umbrella ([`zenmetrics-api`](crates/zenmetrics-api/))
+re-exports a single user-facing enum and converts to each crate's own
+`MemoryMode` at the call boundary:
 
 ```rust
+// zenmetrics_api::MemoryMode — the portable subset every metric accepts.
 pub enum MemoryMode {
-    /// Pick Full or Strip based on a VRAM cap. Default.
+    /// Per-crate `resolve_auto` picks the variant that fits the cap. Default.
     Auto,
-    /// Allocate one working set for the whole image.
+    /// Whole-image working set on device.
     Full,
-    /// Allocate one working set for a strip of `h_body` body rows
-    /// plus the crate's halo per side. `h_body == None` lets the
-    /// resolver pick the largest body that fits the cap.
+    /// Vertical strips of `h_body` body rows + the crate's halo per
+    /// side. `h_body == None` lets the resolver pick the largest body
+    /// that fits the cap.
     Strip { h_body: Option<u32> },
-    /// 2-D tile mode. Reserved — returns `Error::ModeUnsupported`.
+    /// Reserved — every per-crate `From` maps `Tile` to `Auto` today.
     Tile { h: u32, w: u32 },
 }
 ```
 
-### Per-crate support matrix
+cvvdp-gpu additionally exposes two cvvdp-specific variants on its
+**typed** enum (`cvvdp_gpu::MemoryMode`) that the umbrella's portable
+subset does not carry, because they change the one-shot/cached-ref
+shape or the JOD value:
 
-| Crate | Strip available | Strip-preferred when Full fits | Auto picks Full when cap is generous |
-|---|---|---|---|
-| `butteraugli-gpu` | yes | **yes** (Strip is 1.9-4.9× faster) | no — Strip first |
-| `dssim-gpu` | yes | no (Strip is 2-5× slower) | yes |
-| `iwssim-gpu` | yes | no (Strip is ~1.7× slower; cached-ref strip path deferred) | yes |
-| `ssim2-gpu` | no — `MemoryMode::Strip` → `Error::ModeUnsupported` | n/a | yes (always Full) |
-| `zensim-gpu` | no — `MemoryMode::Strip` → `Error::ModeUnsupported` | n/a | yes (always Full) |
-| `cvvdp-gpu` | no — architecturally blocked at 24 MP square | n/a | yes (always Full) |
+- `StripPair { h_body }` — Mode B: ref and dist both walk in strips
+  together (no full-ref cache). Best for one-shot CLI callers; the
+  orchestrator surfaces it as `Backend::GpuStripPair`.
+- `CappedPyramid { levels }` — JOD-shifting safety net that truncates
+  pyramid depth to shrink the deepest-band blur halo. **Not
+  bit-identical to Full** — opt-in only; `Auto` never picks it.
 
-### Auto policy
+The full per-metric breakdown — which modes each crate exposes on CPU
+and GPU, and the exact constructor to invoke each — is in the
+[Modes × metrics support matrix](#modes--metrics-support-matrix) and
+[API surface](#api-surface-invoking-each-mode) sections below.
 
-`MemoryMode::Auto` resolves by:
+### Auto policy and the orchestrator's crossover
 
-1. Reading `ZENMETRICS_VRAM_CAP_BYTES` (decimal usize). When unset,
-   defaults to 8 GB.
+`MemoryMode::Auto` resolves per crate by:
+
+1. Reading the VRAM cap: `ZENMETRICS_VRAM_CAP_BYTES` (decimal usize)
+   when set, else a live free-VRAM probe (cubecl / `nvidia-smi`), else
+   an 8 GB default.
 2. Estimating the whole-image working-set bytes via the per-crate
-   `estimate_gpu_memory_bytes` helper.
-3. Picking Full when it fits AND the crate is not strip-preferred;
+   `estimate_gpu_memory_bytes` helper (zensim-gpu additionally reserves
+   `CUBECL_OVERHEAD_BYTES` ≈ 193 MiB for the runtime pool).
+3. Picking Full when it fits and the crate is not strip-preferred;
    else picking Strip with an auto-sized `h_body` that fits the cap.
-4. Returning `Error::TooBigForFull { needed, cap }` when neither
-   mode fits.
+4. Returning `Error::TooBigForFull { needed, cap }` when neither fits.
 
-`butteraugli-gpu` is **strip-preferred** — Auto picks Strip even when
-Full would fit, because the strip walker is the faster path on this
-crate.
+Only **butteraugli-gpu** is strip-preferred — its `resolve_auto` tries
+Strip *first* and picks it even when Full would fit, because the strip
+walker is the faster path on that crate
+([`crates/butteraugli-gpu/src/memory_mode.rs`](crates/butteraugli-gpu/src/memory_mode.rs)).
+dssim-gpu, ssim2-gpu, iwssim-gpu, zensim-gpu, and cvvdp-gpu are
+Full-preferred — `Auto` only drops to Strip when Full exceeds the cap.
+
+When the [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/)
+drives scoring it does **not** rely on per-crate `Auto` alone — it runs
+a cost-model-aware backend chooser over its persistent benchmark cache.
+A `ChooserConfig::vram_safety_margin` (default 0.15) is held back, and
+the chooser picks the fastest backend that fits. For a single cold call
+(`ExecContext::OneShot`, task #146) it additionally consults the
+measured one-shot CPU/GPU crossover
+([`benchmarks/cpu_gpu_crossover_2026-05-29.tsv`](benchmarks/cpu_gpu_crossover_2026-05-29.tsv))
+and routes small images to CPU rather than paying the GPU
+context-init floor; the warm pool / sweep path stays `Batch` and ranks
+on warm steady-state cost. See
+[API surface](#api-surface-invoking-each-mode).
 
 ### Backwards compatibility
 
-The historical `Metric::new(client, w, h, ...)` constructor is
-preserved and now delegates through `new_with_memory_mode(..,
-MemoryMode::Auto)`. Existing call sites compile and behave the same
-unless `ZENMETRICS_VRAM_CAP_BYTES` is set tight enough to force a
-mode change.
+The historical `Metric::new(backend, w, h, params)` constructor is
+preserved and delegates through `new_with_memory_mode(.., MemoryMode::Auto)`.
+Existing call sites compile and behave the same unless
+`ZENMETRICS_VRAM_CAP_BYTES` is set tight enough to force a mode change.
 
 ### Explicit override
 
