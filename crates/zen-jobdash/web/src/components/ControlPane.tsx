@@ -17,17 +17,16 @@ interface GcDryRun {
   freed_under_pressure_bytes: number
   refused_bytes: number
 }
-interface StopSpend {
-  over_budget: boolean
-  tear_down: string[]
-  keep_free: string[]
+interface StopSpendResp {
+  decision: { over_budget: boolean; tear_down: string[]; keep_free: string[] }
+  teardown: { actuated: boolean; note?: string; result?: { killed: { name: string }[]; errors: string[] } }
 }
 
 export function ControlPane({ fleet, onChange }: { fleet?: FleetView; onChange?: () => void }) {
   const [gc, setGc] = useState<GcDryRun | null>(null)
   const [gcBusy, setGcBusy] = useState(false)
   const [cap, setCap] = useState("10")
-  const [spend, setSpend] = useState<StopSpend | null>(null)
+  const [spend, setSpend] = useState<StopSpendResp | null>(null)
   const [spendBusy, setSpendBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -46,7 +45,7 @@ export function ControlPane({ fleet, onChange }: { fleet?: FleetView; onChange?:
     setSpendBusy(true)
     setErr(null)
     try {
-      setSpend((await api.stopSpend(parseFloat(cap) || 0)) as StopSpend)
+      setSpend((await api.stopSpend(parseFloat(cap) || 0)) as StopSpendResp)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -97,9 +96,17 @@ export function ControlPane({ fleet, onChange }: { fleet?: FleetView; onChange?:
           </Button>
           {spend && (
             <dl className="space-y-1 text-sm">
-              <Row k="Over budget" v={spend.over_budget ? "YES" : "no"} tone={spend.over_budget ? "warn" : undefined} />
-              <Row k="Would tear down" v={spend.tear_down.length ? spend.tear_down.join(", ") : "—"} />
-              <Row k="Keep (free tier)" v={spend.keep_free.length ? spend.keep_free.join(", ") : "—"} />
+              <Row
+                k="Over budget"
+                v={spend.decision.over_budget ? "YES" : "no"}
+                tone={spend.decision.over_budget ? "warn" : undefined}
+              />
+              <Row k="Tear down (paid)" v={spend.decision.tear_down.length ? spend.decision.tear_down.join(", ") : "—"} />
+              <Row k="Keep (free tier)" v={spend.decision.keep_free.length ? spend.decision.keep_free.join(", ") : "—"} />
+              {spend.teardown.actuated && (
+                <Row k="Actuated" v={`killed ${spend.teardown.result?.killed.length ?? 0} box(es)`} tone="warn" />
+              )}
+              {spend.teardown.note && <Row k="Note" v={spend.teardown.note} />}
             </dl>
           )}
         </CardContent>

@@ -9,6 +9,7 @@ import { FleetPane } from "@/components/FleetPane"
 import { ProgressPane } from "@/components/ProgressPane"
 import { StatCards } from "@/components/StatCards"
 import { StoragePane } from "@/components/StoragePane"
+import { WorkersPane } from "@/components/WorkersPane"
 import { api } from "@/lib/api"
 import { usePoll } from "@/lib/usePoll"
 
@@ -17,6 +18,7 @@ export default function App() {
   const progress = usePoll(api.progress)
   const failures = usePoll(api.failures)
   const storage = usePoll(api.storage)
+  const workers = usePoll(api.workers)
   const fleet = usePoll(api.fleet, 20000)
 
   const refreshAll = () => {
@@ -24,6 +26,7 @@ export default function App() {
     progress.refresh()
     failures.refresh()
     storage.refresh()
+    workers.refresh()
     fleet.refresh()
   }
 
@@ -87,6 +90,7 @@ export default function App() {
 
         <TabsContent value="fleet" className="space-y-4">
           <FleetPane fleet={fleet.data} onChange={() => setTimeout(fleet.refresh, 1500)} />
+          <WorkersPane workers={workers.data} />
         </TabsContent>
 
         <TabsContent value="failures" className="space-y-4">

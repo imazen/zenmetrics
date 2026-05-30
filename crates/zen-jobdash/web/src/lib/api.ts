@@ -36,6 +36,17 @@ export interface TierStorage {
   bytes: number
 }
 
+export interface WorkerStat {
+  worker: string
+  provider: string
+  tier: string
+  rate_usd_per_hr: number
+  uptime_secs: number
+  jobs_done: number
+  jobs_per_min: number
+  spent_usd: number
+}
+
 export interface FleetBox {
   id: number
   name: string
@@ -83,6 +94,7 @@ export const api = {
   failures: () => getJSON<FailureCell[]>("/api/failures"),
   cost: () => getJSON<CostView>("/api/cost"),
   storage: () => getJSON<TierStorage[]>("/api/storage"),
+  workers: () => getJSON<WorkerStat[]>("/api/workers"),
   fleet: () => getJSON<FleetView>("/api/fleet"),
 
   gcDryRun: () => postControl({ action: "gc_dry_run" }),
@@ -111,4 +123,11 @@ export function fmtBytes(n: number): string {
 
 export function fmtInt(n: number): string {
   return n.toLocaleString()
+}
+
+export function fmtDuration(secs: number): string {
+  if (secs < 60) return `${secs}s`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`
+  return `${Math.floor(secs / 86400)}d ${Math.floor((secs % 86400) / 3600)}h`
 }

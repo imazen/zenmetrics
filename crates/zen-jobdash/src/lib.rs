@@ -21,6 +21,11 @@ pub mod views;
 
 pub use control::{gc_dry_run, stop_spend, ControlIntent, GcDryRun, StopSpendDecision};
 pub use data::{DashData, DashError};
-pub use fleet::{fleet_label_key, fleet_token, kill_fleet, list_fleet, selector_for, FleetBox, KillResult};
+pub use fleet::{
+    fleet_label_key, fleet_token, kill_fleet, kill_named, list_fleet, selector_for, FleetBox, KillResult,
+};
 pub use notify::{detect, format_event, NotifyEvent, NotifyPayload};
-pub use views::{cost_view, failures, kind_label, progress, storage, CostView, FailureCell, KindProgress, TierStorage};
+pub use views::{
+    cost_view, failures, kind_label, progress, storage, workers_view, CostView, FailureCell,
+    KindProgress, TierStorage, WorkerStat,
+};

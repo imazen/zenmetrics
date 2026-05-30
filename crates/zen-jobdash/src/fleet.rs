@@ -168,6 +168,42 @@ pub async fn kill_fleet(client: &reqwest::Client, token: &str, selector: &str, l
     out
 }
 
+/// Kill specific boxes by name (goal C/F: stop-spend tears down named paid workers). Only deletes
+/// boxes that carry the fleet label AND whose name is in `names` — so an over-budget teardown can
+/// never touch an unlabeled box (e.g. a persistent dev box) even if a worker name happened to match.
+pub async fn kill_named(
+    client: &reqwest::Client,
+    token: &str,
+    names: &[String],
+    label_key: &str,
+) -> KillResult {
+    let mut out = KillResult { selector: format!("{label_key} ∩ names={names:?}"), ..Default::default() };
+    if names.is_empty() {
+        out.note = Some("no named workers to tear down".to_string());
+        return out;
+    }
+    let wanted: std::collections::HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+    let boxes = match list_fleet(client, token, label_key, label_key).await {
+        Ok(b) => b,
+        Err(e) => {
+            out.errors.push(format!("list: {e}"));
+            return out;
+        }
+    };
+    let targets: Vec<FleetBox> = boxes.into_iter().filter(|b| wanted.contains(b.name.as_str())).collect();
+    if targets.is_empty() {
+        out.note = Some("no labeled fleet box matched the named paid workers".to_string());
+        return out;
+    }
+    for b in targets {
+        match delete_server(client, token, b.id).await {
+            Ok(()) => out.killed.push(b),
+            Err(e) => out.errors.push(e),
+        }
+    }
+    out
+}
+
 /// Minimal URL-encoder for `label_selector` values: preserve `=` (selector separator) and `,`, encode
 /// the rest conservatively. Mirrors `zencloud-hetzner::api::urlencode`.
 fn urlencode(s: &str) -> String {

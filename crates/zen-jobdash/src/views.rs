@@ -107,6 +107,40 @@ pub fn cost_view(workers: &[WorkerReport]) -> CostView {
     }
 }
 
+/// Per-worker live view (goal B: "live fleet per worker"). Derived from worker heartbeat reports —
+/// provider, tier, rate, uptime, jobs, and throughput. `jobs_per_min` is `jobs_done / uptime`.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct WorkerStat {
+    pub worker: String,
+    pub provider: String,
+    pub tier: String,
+    pub rate_usd_per_hr: f64,
+    pub uptime_secs: u64,
+    pub jobs_done: u64,
+    pub jobs_per_min: f64,
+    pub spent_usd: f64,
+}
+
+pub fn workers_view(workers: &[WorkerReport]) -> Vec<WorkerStat> {
+    workers
+        .iter()
+        .map(|w| WorkerStat {
+            worker: w.worker.clone(),
+            provider: w.provider.clone(),
+            tier: format!("{:?}", w.class),
+            rate_usd_per_hr: w.rate_usd_per_hr,
+            uptime_secs: w.uptime_secs,
+            jobs_done: w.jobs_done,
+            jobs_per_min: if w.uptime_secs > 0 {
+                w.jobs_done as f64 / (w.uptime_secs as f64 / 60.0)
+            } else {
+                0.0
+            },
+            spent_usd: w.spent_usd(),
+        })
+        .collect()
+}
+
 /// Storage per regenerability tier (goal B: storage $/mo proxy = bytes per tier).
 #[derive(Serialize, Debug, PartialEq, Eq)]
 pub struct TierStorage {
@@ -189,6 +223,22 @@ mod tests {
         assert!((cv.total_spent_usd - 0.50).abs() < 1e-9);
         let gpu = cv.per_tier.iter().find(|t| t.tier == "Gpu").unwrap();
         assert!((gpu.cost_per_1000_jobs.unwrap() - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn workers_view_computes_throughput() {
+        let workers = vec![WorkerReport {
+            worker: "arm-iter3-001".into(),
+            provider: "hetzner".into(),
+            class: ResourceClass::CpuArm,
+            rate_usd_per_hr: 0.006,
+            uptime_secs: 600, // 10 min
+            jobs_done: 300,
+        }];
+        let w = workers_view(&workers);
+        assert_eq!(w[0].tier, "CpuArm");
+        assert!((w[0].jobs_per_min - 30.0).abs() < 1e-9, "300 jobs / 10 min = 30/min");
+        assert!((w[0].spent_usd - 0.001).abs() < 1e-6, "0.006/hr * (600/3600)");
     }
 
     #[test]

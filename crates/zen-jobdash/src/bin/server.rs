@@ -34,8 +34,8 @@ use tower_http::services::{ServeDir, ServeFile};
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
     cost_view, detect, failures, fleet_label_key, fleet_token, format_event, gc_dry_run, kill_fleet,
-    list_fleet, progress, selector_for, stop_spend, storage, ControlIntent, CostView, DashData,
-    FailureCell, FleetBox, KindProgress, NotifyPayload, TierStorage,
+    kill_named, list_fleet, progress, selector_for, stop_spend, storage, workers_view, ControlIntent,
+    CostView, DashData, FailureCell, FleetBox, KindProgress, NotifyPayload, TierStorage, WorkerStat,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -86,6 +86,7 @@ fn build_router(state: AppState, web_dir: &str) -> Router {
         .route("/api/failures", get(api_failures))
         .route("/api/cost", get(api_cost))
         .route("/api/storage", get(api_storage))
+        .route("/api/workers", get(api_workers))
         .route("/api/fleet", get(api_fleet))
         .route("/api/control", post(api_control))
         .with_state(state);
@@ -267,6 +268,9 @@ async fn api_cost(State(s): State<AppState>) -> Json<CostView> {
 async fn api_storage(State(s): State<AppState>) -> Json<Vec<TierStorage>> {
     Json(storage(&s.data.read().await.blobs))
 }
+async fn api_workers(State(s): State<AppState>) -> Json<Vec<WorkerStat>> {
+    Json(workers_view(&s.data.read().await.workers))
+}
 
 /// Live fleet boxes (goal C/H visibility): the actual paid/free boxes Hetzner reports for the fleet
 /// label. Returns `{boxes, actuation}` so the UI can show "kill won't actuate" when the token is absent.
@@ -315,8 +319,22 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
             .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() })),
         ControlIntent::StopSpend { cap_usd } => {
             let spent = cost_view(&d.workers).total_spent_usd;
-            serde_json::to_value(stop_spend(&d.workers, spent, cap_usd))
-                .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }))
+            let decision = stop_spend(&d.workers, spent, cap_usd);
+            // Goal C/F: over budget → actually tear the paid boxes down (scoped to fleet-labeled
+            // boxes whose name matches a paid worker). Free tiers keep draining.
+            let actuation = if decision.over_budget && !decision.tear_down.is_empty() {
+                match fleet_token() {
+                    Some(token) => {
+                        let label = fleet_label_key();
+                        let result = kill_named(&s.http, &token, &decision.tear_down, &label).await;
+                        serde_json::json!({ "actuated": true, "result": result })
+                    }
+                    None => serde_json::json!({ "actuated": false, "note": "over budget but no HETZNER_API_TOKEN — would tear down listed workers" }),
+                }
+            } else {
+                serde_json::json!({ "actuated": false })
+            };
+            serde_json::json!({ "decision": decision, "teardown": actuation })
         }
         // Pause/Drain have no Hetzner equivalent — recorded for the worker loop to honor.
         other => serde_json::json!({ "intent": other, "status": "queued_for_fleet_actuation" }),
