@@ -58,25 +58,40 @@ AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_K
   s5cmd --endpoint-url "$EP" cp /tmp/fleet_ctl.json "s3://$BUCKET/$CTLKEY" >/dev/null
 echo "run starts PAUSED (control=$CTLKEY); will resume after boot"
 
-# common env block the entrypoint reads (scoped creds + queue coordinates + pause control)
+# Per-worker shuffled manifest: same job set + same R2 claims namespace (ONE queue), but each worker
+# iterates the gap in a different order so they don't all hammer job 0 first. Without this the
+# lowest-latency node monopolizes every conditional-write race ({local:60, others:0}); with it, work
+# distributes and the fast node still pulls more (goal H "fast nodes pull more"). Seeded by worker name.
+shuf_manifest() {  # worker -> echoes the uploaded shuffled-manifest URI
+  local w="$1"
+  W="$w" python3 -c 'import json,random,os
+w=os.environ["W"]; j=json.load(open("/tmp/fleet_manifest.json")); random.seed(w); random.shuffle(j)
+json.dump(j, open("/tmp/fleet_manifest_"+w+".json","w"))'
+  AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_REGION=auto \
+    s5cmd --endpoint-url "$EP" cp "/tmp/fleet_manifest_$w.json" "s3://$BUCKET/$RUN/manifest-$w.json" >/dev/null 2>&1
+  echo "s3://$BUCKET/$RUN/manifest-$w.json"
+}
+
+# common env block the entrypoint reads (scoped creds + queue coordinates + pause control).
+# $1 = provider label, $2 = ZEN_MANIFEST_URI (defaults to the shared manifest if omitted).
 envblock() { cat <<EOF
 -e AWS_ACCESS_KEY_ID=$AK -e AWS_SECRET_ACCESS_KEY=$SK -e AWS_SESSION_TOKEN=$ST -e AWS_REGION=auto
--e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=$MANIFEST
+-e ZEN_R2_ENDPOINT=$EP -e ZEN_BUCKET=$BUCKET -e ZEN_RUN=$RUN -e ZEN_MANIFEST_URI=${2:-$MANIFEST}
 -e ZEN_PROVIDER=$1 -e ZEN_EXEC=/bin/cat -e ZEN_SPEC_THRESHOLD_SECS=20 -e ZEN_CONTROL_KEY=$CTLKEY -e ZEN_IDLE_PASSES=8
 EOF
 }
 
 # 3a. local tier (this machine) — docker run the baked image
-docker run -d --label group=$RUN --name "$RUN-local" $(envblock local) -e ZEN_WORKER=workstation "$IMAGE" >/dev/null && echo "local worker started"
+docker run -d --label group=$RUN --name "$RUN-local" $(envblock local "$(shuf_manifest workstation)") -e ZEN_WORKER=workstation "$IMAGE" >/dev/null && echo "local worker started"
 
 # 3b. Hetzner burst tier(s) — Docker-CE on Ubuntu; cloud-init docker-runs the baked (multi-arch) image.
 # hcloud takes user-data ONLY from a file (--user-data-from-file; there is no --user-data-from-string),
 # so each box's cloud-init is written to a temp file first. cax* = ARM (Ampere), cpx* = x86 (AMD).
 export HCLOUD_TOKEN=$(grep -E '^api_token=' ~/.config/hetzner/credentials | head -1 | cut -d= -f2- | tr -d ' \r')
 hz_box() {  # name  server-type  provider-label  worker-id
-  local name="$1" stype="$2" provider="$3" worker="$4" cif; cif="$(mktemp)"
+  local name="$1" stype="$2" provider="$3" worker="$4" cif m; cif="$(mktemp)"; m="$(shuf_manifest "$worker")"
   printf '#!/bin/bash\ncurl -fsSL https://get.docker.com | sh\ndocker run -d --restart no %s -e ZEN_WORKER=%s %s\n' \
-    "$(envblock "$provider" | tr '\n' ' ')" "$worker" "$IMAGE" > "$cif"
+    "$(envblock "$provider" "$m" | tr '\n' ' ')" "$worker" "$IMAGE" > "$cif"
   hcloud server create --name "$name" --type "$stype" --image ubuntu-24.04 --location fsn1 \
     --ssh-key zen-arm-dev-20260528 --label group=$RUN --user-data-from-file "$cif" >/dev/null 2>&1 \
     && echo "$worker launched ($stype)" || echo "$worker FAILED ($stype/fsn1 unavailable? try nbg1/hel1)"
@@ -91,59 +106,41 @@ for i in $(seq 1 "$N_VAST"); do
   OFFER=$(vastai search offers 'num_gpus=0 cpu_cores>=2 disk_space>=14 rentable=true verified=true' -o 'dph+' --raw 2>/dev/null | python3 -c 'import json,sys;o=json.load(sys.stdin);print(o[0]["id"] if o else "")')
   [ -z "$OFFER" ] && { echo "vast-$i: no offer"; continue; }
   vastai create instance "$OFFER" --image "$IMAGE" --label group=$RUN --disk 16 \
-    --env "$(envblock vast-$i | tr '\n' ' ') -e ZEN_WORKER=vast-$i" >/dev/null 2>&1 \
+    --env "$(envblock vast-$i "$(shuf_manifest vast-$i)" | tr '\n' ' ') -e ZEN_WORKER=vast-$i" >/dev/null 2>&1 \
     && echo "vast-$i launched on offer $OFFER" || echo "vast-$i FAILED on $OFFER"
 done
 
 # 3d. Salad burst tier — a CPU-only container group on Salad's distributed consumer network (a distinct
 # provider from local/Hetzner/vast). The PUBLIC baked image needs no registry auth; the entrypoint
 # claims off the same R2 queue (we do NOT use Salad's managed queue). Group name = $RUN-salad (DNS-style).
-# NOTE (2026-05-30): Salad's API is behind Cloudflare. Its managed WAF 403s ("Attention Required!") any
-# request BODY containing a "/bin/…" path — a command-injection rule — which is why ZEN_EXEC is omitted
-# below (root-caused by bisection: body with ZEN_EXEC=/bin/cat -> 403, without -> 201; client/IP-agnostic
-# across urllib, curl, reqwest). `cargo run -p zen-cloud-salad --example fleet_create` is the reqwest
-# equivalent of this POST if you need to (re)create a group by hand.
+#
+# Salad's API is behind Cloudflare, which trips TWO ways on a naive create POST — both root-caused by
+# bisection 2026-05-30 and designed out here:
+#   (1) managed WAF 403 ("Attention Required!") on any body containing a "/bin/…" command path — so
+#       ZEN_EXEC is OMITTED below (entrypoint defaults it to /bin/cat inside the container; identical
+#       behavior, body no longer trips the rule); and
+#   (2) error-1010 browser-signature ban on urllib/curl clients — so the create goes through the crate's
+#       reqwest client (examples/fleet_create.rs), whose TLS signature passes where urllib/curl 403.
 if [ "$N_SALAD" -gt 0 ]; then
-  SALAD_KEY=$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')
-  AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$MANIFEST" CTLKEY="$CTLKEY" \
-  IMAGE="$IMAGE" N_SALAD="$N_SALAD" SALAD_KEY="$SALAD_KEY" SALAD_ORG="$SALAD_ORG" SALAD_PROJECT="$SALAD_PROJECT" \
-  python3 - <<'PY'
-import json, os, urllib.request
-env = {
-  "AWS_ACCESS_KEY_ID": os.environ["AK"], "AWS_SECRET_ACCESS_KEY": os.environ["SK"],
-  "AWS_SESSION_TOKEN": os.environ["ST"], "AWS_REGION": "auto",
-  "ZEN_R2_ENDPOINT": os.environ["EP"], "ZEN_BUCKET": os.environ["BUCKET"], "ZEN_RUN": os.environ["RUN"],
-  "ZEN_MANIFEST_URI": os.environ["MANIFEST"], "ZEN_PROVIDER": "salad",
-  "ZEN_SPEC_THRESHOLD_SECS": "20", "ZEN_CONTROL_KEY": os.environ["CTLKEY"], "ZEN_IDLE_PASSES": "8",
-  "ZEN_WORKER": "salad-1",
-  # NB: do NOT set ZEN_EXEC here. Salad's API is behind Cloudflare, whose managed ruleset 403s any
-  # request body containing a "/bin/…" command path (command-injection rule). Confirmed 2026-05-30:
-  # body with ZEN_EXEC=/bin/cat -> 403 CF challenge; same body without it -> 201. The entrypoint
-  # defaults ZEN_EXEC to /bin/cat inside the container, so omitting it here is behavior-identical.
-}
-body = {
-  "name": os.environ["RUN"] + "-salad",
-  "container": {
-    "image": os.environ["IMAGE"],
-    "resources": {"cpu": 2, "memory": 4096},   # CPU-only: no gpu_classes
-    "environment_variables": env,
-  },
-  "replicas": int(os.environ["N_SALAD"]),
-  "restart_policy": "never",      # one-shot: come up, drain its share, exit (no thrash-restart)
-  "autostart_policy": True,
-}
-url = "https://api.salad.com/api/public/organizations/%s/projects/%s/containers" % (
-  os.environ["SALAD_ORG"], os.environ["SALAD_PROJECT"])
-req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-  headers={"Salad-Api-Key": os.environ["SALAD_KEY"], "Content-Type": "application/json"})
-try:
-  r = urllib.request.urlopen(req, timeout=30)
-  print("salad group %s-salad created (%d replica)" % (os.environ["RUN"], int(os.environ["N_SALAD"])))
-except urllib.error.HTTPError as e:
-  print("salad FAILED: HTTP %d %s" % (e.code, e.read().decode()[:200]))
-except Exception as e:
-  print("salad FAILED: %s" % e)
-PY
+  SALAD_MANIFEST="$(shuf_manifest salad-1)"   # per-worker shuffled claim order (see shuf_manifest)
+  SALAD_ENV_JSON="$(AK="$AK" SK="$SK" ST="$ST" EP="$EP" BUCKET="$BUCKET" RUN="$RUN" MANIFEST="$SALAD_MANIFEST" CTLKEY="$CTLKEY" python3 -c '
+import json,os
+print(json.dumps({"AWS_ACCESS_KEY_ID":os.environ["AK"],"AWS_SECRET_ACCESS_KEY":os.environ["SK"],
+"AWS_SESSION_TOKEN":os.environ["ST"],"AWS_REGION":"auto","ZEN_R2_ENDPOINT":os.environ["EP"],
+"ZEN_BUCKET":os.environ["BUCKET"],"ZEN_RUN":os.environ["RUN"],"ZEN_MANIFEST_URI":os.environ["MANIFEST"],
+"ZEN_PROVIDER":"salad","ZEN_SPEC_THRESHOLD_SECS":"20","ZEN_CONTROL_KEY":os.environ["CTLKEY"],
+"ZEN_IDLE_PASSES":"8","ZEN_WORKER":"salad-1"}))')"
+  EX="$ROOT/target/release/examples/fleet_create"
+  [ -x "$EX" ] || { cargo build --release -p zen-cloud-salad --example fleet_create >/dev/null 2>&1 || true; }
+  [ -x "$EX" ] || EX="$ROOT/target/debug/examples/fleet_create"
+  if [ -x "$EX" ]; then
+    SALAD_API_KEY="$(grep -E '^salad_' ~/.config/salad/credentials 2>/dev/null | head -1 | tr -d ' \r\n')" \
+    SALAD_ORG="$SALAD_ORG" SALAD_PROJECT="$SALAD_PROJECT" SALAD_GROUP_NAME="$RUN-salad" \
+    SALAD_IMAGE="$IMAGE" SALAD_REPLICAS="$N_SALAD" SALAD_ENV_JSON="$SALAD_ENV_JSON" \
+      "$EX" 2>&1 | head -3
+  else
+    echo "salad SKIPPED: build examples/fleet_create first (cargo build -p zen-cloud-salad --example fleet_create)"
+  fi
 fi
 
 # 4. resume — let every tier race the queue at once. Wait for boxes to boot first (Hetzner ~60s,

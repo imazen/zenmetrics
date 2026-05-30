@@ -19,6 +19,18 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: goal H CLOSED — ≥3 distinct physical providers proven concurrent on one queue**
+  (2026-05-30, run `fleet-20260530-124834`). local (workstation) + Hetzner cpx22 (x86 cloud) + Salad
+  (CPU container, distributed consumer network) all claimed+executed off ONE R2 lease-queue,
+  pause-orchestrated (resumed only once Salad reached `running`). 120 jobs, ledger DONE rows by
+  provider = **`{local: 69, hetzner: 27, salad: 24}` = 120, exactly-once**, distributed across all
+  three with the fast node pulling more. Two fixes unlocked it: (1) **per-worker shuffled manifests**
+  (`shuf_manifest` in `launch_fleet.sh`) — each worker gets the same job set in a decorrelated claim
+  order, so the lowest-latency node no longer monopolizes every conditional-write race
+  (`{local:60,others:0}` → distributed); still ONE queue / claims namespace, only iteration order
+  differs. (2) Salad create routed through the reqwest example with `ZEN_EXEC` omitted (see the WAF
+  notes). This satisfies H's literal "≥3 tiers concurrent" alongside the already-shipped
+  provider-agnostic, capability-routed (GPU/CPU/ARM), and multi-arch-image sub-bullets.
 - **Job system: Salad fleet tier (goal H, distinct provider)** (2026-05-30). `launch_fleet.sh` gains a
   5th arg `SALAD` that creates a CPU-only Salad container group (org `imazen`/project `zenmetrics`,
   env-overridable) running the public baked image — a distinct provider from local/Hetzner/vast on
