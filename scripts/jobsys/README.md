@@ -1,0 +1,33 @@
+# zen job system — live demos
+
+Reproducible, isolated demonstrations that the job system's guarantees hold **live** (against real
+R2), not just in unit tests.
+
+## `demo_e2e_r2.sh` — goals A, E, I + foundations
+
+Runs the full declare → reconcile → execute → coverage loop against an **isolated R2 prefix**
+(`jobsys-demo-<ts>/`, deleted at the end unless `KEEP=1`). Synthetic metric jobs; the executor is
+`/bin/cat`, so it needs no encoder/GPU and costs a handful of tiny R2 objects.
+
+```bash
+# needs R2_* env, aws (v1.44+), s5cmd, and built zen-jobworker + zen-jobctl
+cargo build -p zen-jobworker -p zen-jobctl
+bash scripts/jobsys/demo_e2e_r2.sh        # KEEP=1 to retain the R2 prefix
+```
+
+### What it proves (verified run 2026-05-30, prefix `jobsys-demo-20260530-025731`)
+
+- **A — declare + idempotent enqueue.** `zen-jobctl declare` expanded a 2-item × 2-metric spec into
+  4 `DesiredJob`s. `gap` before any work = **4**; `gap` after pass 1 = **0** — re-declaring done work
+  is a structural no-op (content-addressed `JobId`).
+- **E — convergence + restartable + lease.** Worker pass 1 converged the gap (`done=4`). A 2nd pass
+  folding in the R2 ledger did **0** (`skipped` all) — fully restartable, ledger is truth. The R2
+  conditional-write lease admits exactly one claim per job (a second `put-object --if-none-match '*'`
+  on a held claim returns `PreconditionFailed`).
+- **I — coverage from the ledger.** `zen-jobctl catalog` reported 4 done / 0 gap per codec×metric,
+  derived purely from the R2 Parquet ledger (same source the dashboard reads).
+- **Foundations.** Pass 1 wrote 4 **content-addressed** blobs (`<prefix>/blobs/<sha256>`), a columnar
+  **Parquet** ledger (`pass1.parquet`, 4.8 KB), and claim objects — all in R2.
+
+The dashboard side of these same guarantees (coverage/catalog, progress, cost) is live at the Railway
+deployment; see `crates/zen-jobdash`.
