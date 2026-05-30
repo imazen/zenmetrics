@@ -57,7 +57,8 @@ pub use gpu::detect_gpu;
 #[cfg(all(feature = "bench", feature = "cuda"))]
 pub use pool::{
     CachedRefStats, PoolConfig, RunAllIter, TaskHandle, TaskRefHandle,
-    reset_warm_instance_construction_count, warm_instance_construction_count,
+    reset_swap_vram_reclaim_count, reset_warm_instance_construction_count,
+    swap_vram_reclaim_count, warm_instance_construction_count,
 };
 
 /// Error type for orchestrator operations. Variants will be extended in

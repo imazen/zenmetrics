@@ -745,6 +745,63 @@ fn record_warm_instance_construction() {
     WARM_INSTANCE_CONSTRUCTIONS.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Process-wide count of swap-time VRAM reclaim calls. Test/measurement
+/// surface — lets `crates/zenmetrics-orchestrator` integration tests and
+/// the task #150 VRAM measurement confirm that the swap cleanup actually
+/// fired (and how often) without instrumenting cubecl.
+static SWAP_VRAM_RECLAIMS: AtomicUsize = AtomicUsize::new(0);
+
+/// Read the swap-time VRAM reclaim count. See [`SWAP_VRAM_RECLAIMS`].
+pub fn swap_vram_reclaim_count() -> usize {
+    SWAP_VRAM_RECLAIMS.load(Ordering::Relaxed)
+}
+
+/// Reset the swap-time VRAM reclaim counter. Test helper.
+pub fn reset_swap_vram_reclaim_count() {
+    SWAP_VRAM_RECLAIMS.store(0, Ordering::Relaxed);
+}
+
+/// Reclaim cubecl's pooled (but now-unreferenced) GPU memory back to the
+/// driver when a GPU worker swaps away from a metric signature.
+///
+/// cubecl pools device pages across `Handle` drop, so dropping the old
+/// warm metric returns its buffers to the pool free list but the pages
+/// stay resident — and the next signature's metric then allocates fresh
+/// pages, pushing peak VRAM toward the SUM of both working sets. Calling
+/// this **after** the old metric is dropped and **before** the new one
+/// is constructed returns those freed pages to the driver, keeping peak
+/// across a mixed-metric chunk at ≈ MAX(single metric) instead of SUM.
+///
+/// Safe here because: (a) the cubecl CUDA pool is per-stream and the
+/// stream is keyed on this worker thread's id, so this only touches
+/// THIS worker's pool — never another lane's live bindings; and (b) at
+/// the call site the old metric has already been dropped, so this thread
+/// holds no live bindings into the pages being reclaimed. (This is the
+/// exact invariant the 2026-05-22 `MetricCache` attempt violated — it
+/// reclaimed while a cached metric's bindings were still live, hitting
+/// the `stream.rs:101` get_cursor panic.)
+///
+/// Only fires for GPU backends (the orchestrator `Backend::Gpu*` variants
+/// all map to cubecl CUDA). `Backend::Cpu` is a no-op — the CPU adapter
+/// doesn't use the GPU pool. Set `ZENMETRICS_NO_SWAP_VRAM_CLEANUP=1` to
+/// disable (escape hatch for hosts where the cleanup misbehaves; the
+/// pool then keeps the old buffers as before this change).
+#[cfg(feature = "bench")]
+fn reclaim_swap_vram(prev_backend: Backend) {
+    // Only GPU signatures pool device memory worth reclaiming.
+    if matches!(prev_backend, Backend::Cpu) {
+        return;
+    }
+    if std::env::var_os("ZENMETRICS_NO_SWAP_VRAM_CLEANUP").is_some() {
+        return;
+    }
+    // All GPU variants (GpuFull / GpuStrip / GpuStripPair) construct
+    // against cubecl CUDA (see executor::construct), so reclaim the CUDA
+    // pool for this thread.
+    zenmetrics_api::reclaim_pooled_vram(zenmetrics_api::Backend::Cuda);
+    SWAP_VRAM_RECLAIMS.fetch_add(1, Ordering::Relaxed);
+}
+
 /// GPU worker — pulls [`WorkerTask`]s from its queue, reuses a warm
 /// [`ExecMetric`] when the signature matches, otherwise rebuilds.
 fn gpu_worker_main(
@@ -823,8 +880,23 @@ fn gpu_worker_main(
                 );
             }
             // Drop the old metric first to release device buffers.
+            // `current_metric = None` returns the old instance's cubecl
+            // handles to the pool's FREE LIST, but cubecl keeps the
+            // device pages resident for reuse — so without an explicit
+            // reclaim the next (different-signature) metric allocates
+            // fresh pages on top, pushing peak VRAM toward SUM, not MAX.
+            let prev_backend = current_signature.map(|s| s.backend);
             current_metric = None;
             cached_ref_hash = None;
+            // Reclaim the just-freed pooled pages back to the driver
+            // BEFORE constructing the new metric. Safe at this point:
+            // the old metric is dropped (this thread holds no live
+            // bindings), and the cubecl pool is per-thread so we only
+            // touch this worker's pool. Skipped on the worker's very
+            // first task (no prior signature) and for CPU→* transitions.
+            if let Some(pb) = prev_backend {
+                reclaim_swap_vram(pb);
+            }
             match construct_pub(
                 task.metric,
                 task.chosen_backend,
@@ -976,6 +1048,13 @@ fn gpu_worker_main(
                 current_metric = None;
                 current_signature = None;
                 cached_ref_hash = None;
+                // Reclaim the dropped metric's pooled pages back to the
+                // driver. After a runtime OOM the pool is saturated, so
+                // returning the just-dropped pages to the driver gives
+                // the retry (and any other lane) the best chance to fit.
+                // Best-effort — sync may fail in a post-OOM state, which
+                // `reclaim_pooled_vram` swallows.
+                reclaim_swap_vram(task.chosen_backend);
                 let attempts = vec![(task.chosen_backend, AttemptOutcome::OomAtRuntime)];
                 let _ = result_tx.send(WorkerResult {
                     handle_id,
