@@ -41,6 +41,22 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **README overhauled against current source** (task #149, 2026-05-29).
+  Audited and corrected every stale claim: the crate table was missing
+  `iwssim` / `iwssim-gpu` entirely and carried wrong versions
+  (butteraugli 0.9.4, zensim 0.3.0, fast-ssim2 0.8.1); the memory-modes
+  matrix wrongly claimed `ssim2-gpu` / `zensim-gpu` / `cvvdp-gpu` had no
+  Strip support (all three do — verified each `src/memory_mode.rs`
+  `ResolvedMode::Strip` + typed `new_strip`); the SRCC table is now
+  flagged illustrative/external rather than implying an in-tree
+  measurement; the butter `per_ref` figure was refreshed from task #148's
+  clean re-measure (warm setref1 0.84 ms @512² / 22.16 ms @16 MP, not
+  the 34/3990 ms first-instance alloc+JIT it conflated). Added a per-mode
+  performance table (full / strip / warm_ref / warm_ref_strip, wall +
+  peak working-set, CPU + GPU at 16 MP, all cells cited to committed
+  TSVs), a modes×metrics support matrix, and an API-surface section with
+  the exact calls per mode + the orchestrator's `ExecContext::OneShot`
+  crossover. The `## Performance profile` section (#145) is preserved.
 - **cvvdp CPU Path A strip-major dispatcher RECOVERED after a push-race
   orphan, re-verified, and re-measured** (task #127 recovery, 2026-05-29).
   The Path A work (`Cvvdp::new_strip` / `score_internal_strip` /

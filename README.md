@@ -220,35 +220,189 @@ preserved and delegates through `new_with_memory_mode(.., MemoryMode::Auto)`.
 Existing call sites compile and behave the same unless
 `ZENMETRICS_VRAM_CAP_BYTES` is set tight enough to force a mode change.
 
-### Explicit override
+## Modes × metrics support matrix
 
-To force a specific mode, use the per-crate
-`new_with_memory_mode` (typed) or the opaque shim's same-named
-constructor:
+Which execution modes each metric exposes, on CPU and on GPU, verified
+against each crate's public API. Legend: ✓ supported · ✗ not supported
+in this release · n/a not applicable to that metric.
+
+- **Full** — whole-image working set.
+- **Strip** — vertical strip walker, cold `(ref, dist)` per call.
+- **warm_ref** — reference cached once, `score`/`compute` per distorted
+  image against whole-image ref state.
+- **warm_ref_strip** — reference cached, distorted image walked in
+  strips. (iwssim's GPU variant uniquely walks the *ref* in strips too —
+  `CachedRefStripPolicy::BothStripped`.)
+- **StripPair** — cvvdp-only Mode B: ref + dist walk in strips together,
+  no full-ref cache (one-shot CLI path; orchestrator `Backend::GpuStripPair`).
+- **CappedPyramid** — cvvdp-only, JOD-shifting depth cap (opt-in safety
+  net; not bit-identical to Full, never picked by `Auto`).
+
+### GPU metric crates
+
+| Crate | Full | Strip | warm_ref | warm_ref_strip | StripPair | CappedPyramid |
+|---|---|---|---|---|---|---|
+| `cvvdp-gpu` | ✓ | ✓ ¹ | ✓ | ✓ | ✓ | ✓ |
+| `ssim2-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+| `butteraugli-gpu` | ✓ | ✓ ² | ✓ | ✓ | n/a | n/a |
+| `dssim-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+| `iwssim-gpu` | ✓ | ✓ | ✓ | ✓ ³ | n/a | n/a |
+| `zensim-gpu` | ✓ | ✓ | ✓ | ✓ | n/a | n/a |
+
+¹ cvvdp-gpu's `Strip` (Mode E) is the cached-ref path — `warm_reference_srgb`
++ a per-strip dist walker; the one-shot strip is `StripPair`. Verified
+[`crates/cvvdp-gpu/src/memory_mode.rs`](crates/cvvdp-gpu/src/memory_mode.rs)
+(`MemoryMode::{Full, Strip, StripPair, CappedPyramid}`) +
+[`pipeline.rs`](crates/cvvdp-gpu/src/pipeline.rs) (`Cvvdp::new`,
+`new_strip`, `new_strip_pair`, `new_capped_pyramid`).
+² butteraugli-gpu is the one **strip-preferred** crate — `Auto` picks
+Strip even when Full fits.
+³ iwssim-gpu's `warm_ref_strip` can keep the ref full or walk it in
+strips (`CachedRefStripPolicy`); the other crates keep the ref full and
+strip only the dist. Verified
+[`crates/zenmetrics-api/src/memory_mode.rs`](crates/zenmetrics-api/src/memory_mode.rs).
+
+### CPU reference crates
+
+| Metric (CPU) | Full | Strip | warm_ref | warm_ref_strip |
+|---|---|---|---|---|
+| `cvvdp` (in-tree) | ✓ | ✓ | ✓ | ✓ |
+| `ssim2` (fast-ssim2 0.8.1) | ✓ | ✓ | ✓ | ✓ |
+| `butter` (butteraugli 0.9.4) | ✓ | ✓ | ✓ | ✓ |
+| `iwssim` (in-tree) | ✓ | ✓ | ✓ | ✓ |
+| `zensim` (zensim 0.3.0) | ✓ | ✓ | ✓ | ✓ |
+| `dssim` (dssim-core 3.4) | ✓ | ✗ | ✓ | ✗ |
+
+**dssim CPU has no strip walker** — `dssim-core` 3.4 exposes no strip
+API, so `dssim` CPU is Full + warm_ref only (verified
+[`crates/zenmetrics-orchestrator/src/cpu_adapter.rs`](crates/zenmetrics-orchestrator/src/cpu_adapter.rs)
+`compute_strip` / `compute_warm_ref_strip` return an error for dssim).
+On the GPU, dssim-gpu *does* support Strip.
+
+## API surface: invoking each mode
+
+There are three layers. Pick by how many pairs you score:
+
+1. **Umbrella ([`zenmetrics-api`](crates/zenmetrics-api/)) — one cold
+   pair, no fallback.** One enum, one constructor, one score:
+
+   ```rust
+   use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams, MemoryMode};
+
+   // Auto memory mode (the default Metric::new path).
+   let mut m = Metric::new(
+       MetricKind::Cvvdp, Backend::Cuda, 1024, 1024,
+       MetricParams::default_for(MetricKind::Cvvdp),
+   )?;
+   let score = m.compute_srgb_u8(&ref_rgb, &dist_rgb)?;
+
+   // Force a specific memory mode at construction:
+   let mut m = Metric::new_with_memory_mode(
+       MetricKind::Ssim2, Backend::Cuda, 4096, 4096,
+       MetricParams::default_for(MetricKind::Ssim2),
+       MemoryMode::Strip { h_body: None },   // None → resolver auto-sizes the body
+   )?;
+
+   // Cache one reference, score many distorted images against it:
+   m.set_reference_srgb_u8(&ref_rgb)?;
+   let s1 = m.compute_with_cached_reference_srgb_u8(&dist1)?;
+   let s2 = m.compute_with_cached_reference_srgb_u8(&dist2)?;
+   # Ok::<(), zenmetrics_api::Error>(())
+   ```
+
+   The umbrella's `MemoryMode` carries the portable `{ Auto, Full,
+   Strip, Tile }` subset; it converts to each crate's own enum at the
+   boundary. cvvdp's `StripPair` / `CappedPyramid` are **not** in the
+   umbrella subset — reach for the typed crate (below) to use them.
+
+2. **Typed per-crate opaque — a mode the umbrella doesn't expose.**
+   Each crate ships `<Metric>Opaque::new` / `new_with_memory_mode` plus
+   `set_reference_srgb_u8` + `compute_with_cached_reference_srgb_u8`
+   (cvvdp-gpu names these `warm_reference_srgb` +
+   `compute_with_warm_ref_srgb`). cvvdp's extra modes:
+
+   ```rust
+   use cvvdp_gpu::{CvvdpOpaque, CvvdpParams, MemoryMode, Backend};
+
+   // Mode B one-shot strip-pair (lowest one-shot VRAM):
+   let mut s = CvvdpOpaque::new_with_memory_mode(
+       Backend::Cuda, 4096, 4096, CvvdpParams::default(),
+       MemoryMode::StripPair { h_body: Some(256) },
+   )?;
+
+   // JOD-shifting capped pyramid (opt-in; NOT bit-identical to Full):
+   let mut s = CvvdpOpaque::new_with_memory_mode(
+       Backend::Cuda, 4096, 4096, CvvdpParams::default(),
+       MemoryMode::CappedPyramid { levels: 5 },
+   )?;
+   # Ok::<(), cvvdp_gpu::Error>(())
+   ```
+
+   The typed `cvvdp_gpu::Cvvdp` pipeline also offers the matching
+   constructors directly: `Cvvdp::new`, `new_strip`, `new_strip_pair`,
+   `new_capped_pyramid`.
+
+3. **CPU strip — the in-tree `cvvdp` / `iwssim` crates.** The CPU
+   reference crates take an explicit `h_body` on the strip calls:
+
+   ```rust
+   use cvvdp::{Cvvdp, CvvdpParams};
+
+   // Strip-shape allocation up front (peak heap bounded to the strip):
+   let mut c = Cvvdp::new_strip(4096, 4096, CvvdpParams::default(), 512)?;
+   let jod = c.score_strip(&ref_rgb, &dist_rgb, 512)?;
+
+   // Or cache the reference, then strip-walk each distorted image:
+   c.warm_reference(&ref_rgb)?;
+   let jod = c.score_with_warm_ref_strip(&dist_rgb, 512)?;
+   # Ok::<(), cvvdp::Error>(())
+   ```
+
+   `h_body` must be a positive power of two — pass `512` when unsure
+   (the per-crate default). `iwssim` exposes `iwssim::STRIP_BODY_DEFAULT`
+   for the same purpose.
+
+### Orchestrator: automatic mode + backend selection
+
+For batches / sweeps, let [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/)
+choose. It owns a persistent benchmark cache and a pure decision
+function over it:
 
 ```rust
-use butteraugli_gpu::{ButteraugliOpaque, ButteraugliParams, MemoryMode};
+use zenmetrics_orchestrator::{Orchestrator, OrchestratorConfig, ExecContext, TaskShape};
+use zenmetrics_api::MetricKind;
 
-// Force whole-image even when the Auto cap would pick Strip.
-let scorer = ButteraugliOpaque::new_with_memory_mode(
-    backend,
-    width,
-    height,
-    ButteraugliParams::default(),
-    MemoryMode::Full,
-)?;
+let mut orch = Orchestrator::new(OrchestratorConfig::default())?;
+orch.warm()?;   // bench-on-demand; cache-hit if fresh
+
+let task = TaskShape { metric: MetricKind::Cvvdp, width: 4096, height: 4096 };
+
+// Batch / warm-pool ranking (ranks on warm steady-state ns/px):
+let choice = orch.choose_backend_for_task(&task)?;          // ExecContext::Batch
+
+// Single cold call — apply the measured CPU/GPU one-shot crossover:
+let choice = orch.choose_backend_for_task_with_context(&task, ExecContext::OneShot)?;
+println!("{:?} @ {:.2} ns/px", choice.backend, choice.predicted_ns_per_px);
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-For per-row body size control:
+The chooser's `Backend` enum is the resolved mode: `GpuFull`,
+`GpuStrip`, `GpuStripPair` (cvvdp only), or `Cpu`. The `ExecContext`
+controls how the cold-start floor is weighed:
 
-```rust
-use dssim_gpu::{DssimOpaque, MemoryMode};
+- **`Batch`** (default) ranks on the cache's warm `ns_per_px` — correct
+  when a persistent warm worker amortizes the GPU context-init floor.
+  GPU wins at every measured size for every metric.
+- **`OneShot`** consults the measured one-shot crossover: at/below the
+  per-metric crossover size (cvvdp / ssim2 / butter / zensim through
+  16 MP, dssim through 4 MP, iwssim through 1 MP) it routes to CPU when
+  CPU is a feasible candidate, because a single cold GPU call would pay
+  the ~181 ms context-init floor that makes CPU faster at that size.
 
-let scorer = DssimOpaque::new_with_memory_mode(
-    backend, width, height, params,
-    MemoryMode::Strip { h_body: Some(256) },
-)?;
-```
+For the full streaming + batch scoring APIs (`submit` / `poll` /
+`run_all` / `upload_reference`), the OOM fallback ladder, and cached-ref
+auto-detect, see
+[`crates/zenmetrics-orchestrator/README.md`](crates/zenmetrics-orchestrator/README.md).
 
 ## Performance profile
 
