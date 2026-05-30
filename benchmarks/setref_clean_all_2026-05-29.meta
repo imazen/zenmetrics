@@ -1,0 +1,62 @@
+# setref_clean_all_2026-05-29.meta
+# Provenance for benchmarks/setref_clean_all_2026-05-29.tsv (task #151)
+#
+# WHAT: clean per-reference set_reference() timing for all 6 umbrella
+#       GPU metrics on a WARM instance, n=8 samples/phase, distinct-pixel
+#       reference each rep, each set_reference immediately followed by
+#       block_on(client.sync()) INSIDE the timed region (so the wall is
+#       real GPU precompute, not async submission). Phases: setref1 (first
+#       set_reference on the warm instance), setref2/3/4 (distinct new refs,
+#       the reuse path), warm_call (compute_with_cached_reference).
+#
+# WHY: task #144 measured (n=1, on a GPU contaminated by a concurrent
+#      zensim eval) that iwssim's FIRST set_reference at 16 MP ran 196.5 ms
+#      vs 67.4 ms for a subsequent ref ("~3x first-ref warmup"). #148 clean
+#      re-measured BUTTER and found it FLAT — the #144 spike was n=1
+#      contamination. #151 (this run) does the clean re-measure for the
+#      OTHER FIVE metrics (cvvdp/ssim2/dssim/zensim/iwssim) and re-confirms
+#      butter, to settle whether ANY metric has a real first-ref penalty.
+#
+# DRIVER: crates/zenmetrics-api/examples/setref_all_timing.rs (commit eaff3219)
+# HARNESS: scripts/setref_quiet_run.sh (one-GPU-job-at-a-time gate);
+#          for this run the cells were driven directly in a bash loop with
+#          the same quiet-gate (nvidia-smi compute-apps check before each
+#          cell) since the GPU was verified free (#150 vram-drop finished).
+#
+# BUILD (release, cuda, NO -C target-cpu=native):
+#   cargo build --release -p zenmetrics-api \
+#     --no-default-features --features cuda,all-metrics,cubecl-types,pixels \
+#     --example setref_all_timing
+# RUN (per cell): SETREF_W=<w> SETREF_H=<h> SETREF_REPS=8 SETREF_NEWREF_PHASES=3 \
+#                 setref_all_timing <metric>
+#
+# repo_commit: ec1920c69523d26e7cd6d011c65580c51b1285fc (master@origin tip; build base for this measurement)
+# host: lilith
+# gpu: NVIDIA GeForce RTX 5070
+# nvidia_driver: 596.21
+# cuda_toolkit: Cuda compilation tools, release 13.2, V13.2.78
+# date_utc: 2026-05-30T01:26:42Z
+# sizes: 512x512 (0.262 MP), 1024x1024 (1.049 MP), 2048x2048 (4.194 MP), 4096x4096 (16.777 MP)
+# n_per_cell: 8 (median + min + max + raw, per phase)
+# metrics: butter cvvdp ssim2 dssim iwssim zensim
+# newref_phases: 3 (setref2/3/4)
+#
+# QUIET EVIDENCE: nvidia-smi --query-compute-apps reported EMPTY (no foreign
+#   GPU compute app) immediately before every cell launch; verified once at
+#   session start and re-checked per cell in the driving loop. The only other
+#   process touching the box during the run was a CPU-only weezl LZW decode
+#   bench (no GPU). #150 (vram-drop, the prior GPU holder) had finished.
+#
+# KEY FINDING: the #144 "iwssim first ref ~3x a subsequent ref (196.5 vs
+#   67.4 ms @16 MP)" claim is DEBUNKED. Clean n=8 medians:
+#     iwssim 16 MP: setref1 = 68.1 / 73.6 ms (run1/run2) -- the CHEAPEST phase;
+#                   setref2 = 120.0 / 122.4 ms; setref3 = 131.7 / 162.7;
+#                   setref4 = 136.7 / 133.9. So the first ref is FASTER than
+#                   subsequent refs, the OPPOSITE of #144's direction.
+#   The 196.5 in #144 was a single rep-1 transient: every setref1 phase here
+#   shows ONE rep-1 outlier (iwssim 248/265 ms; butter up to 4166 ms @16 MP;
+#   1203 ms @2K) that n=1 sampling mistakes for the phase cost. median/min
+#   reject it. butter/ssim2/dssim/zensim/cvvdp are FLAT (setref1 ≈ setref2 ≈
+#   setref3 ≈ setref4) at every size -- #148's butter finding generalizes.
+#   iwssim alone shows a real setref1-cheaper-than-setref>=2 gap at 16 MP
+#   (a first-ref DISCOUNT, not penalty); it is flat at 512/1024/2048.

@@ -423,8 +423,10 @@ measured separately:
 - **`per_ref`** — paid **once per distinct reference image** you cache via
   `set_reference_srgb_u8` (cvvdp: `warm_reference_srgb`): the metric's
   reference-side precompute. Every new reference re-pays this cost; budget
-  one `per_ref` per distinct reference. iwssim's first ref at large sizes
-  runs ~3× a subsequent ref (a one-time warmup, not per-ref).
+  one `per_ref` per distinct reference. For five of six metrics this cost is
+  flat across references (`setref1 ≈ setref2 ≈ …`); iwssim at 16 MP is the
+  exception, where the first reference is *cheaper* (~68 ms) than subsequent
+  distinct references (~120–160 ms) — so size the larger value at 16 MP.
 - **`per_dist`** — paid **once per scored distorted image** against a warm
   cached reference: `score_with_warm_ref(dist)`, the steady-state per-call
   wall.
@@ -439,8 +441,12 @@ is paid once and shared across every metric and every pair scored in that
 process — which is exactly why
 [`zenmetrics-orchestrator`](crates/zenmetrics-orchestrator/) keeps one
 long-lived warm worker. The full warmth-scope analysis (which transitions
-re-pay which component, and the iwssim first-ref warmup) is in
-[`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](docs/GPU_INPROCESS_WARMTH_2026-05-29.md).
+re-pay which component) is in
+[`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](docs/GPU_INPROCESS_WARMTH_2026-05-29.md);
+the clean per-reference re-measure that settled whether any metric has a
+first-ref penalty (none do — the prior iwssim "3×" claim was an n=1
+transient) is [`benchmarks/setref_clean_all_2026-05-29.tsv`](benchmarks/setref_clean_all_2026-05-29.tsv)
+(task #151).
 
 All numbers below are measured medians; no value is interpolated or
 extrapolated. Sizes are 512² (0.262 MP), 1024² (1.049 MP), 2048² / "2K"
@@ -478,35 +484,46 @@ N>1 after the box has run any GPU job).
 
 API (umbrella): `Metric::set_reference_srgb_u8(ref)`. Per-crate this is
 `set_reference_srgb_u8` (butter / ssim2 / dssim / iwssim / zensim) or
-`warm_reference_srgb` (cvvdp). Source:
-[`benchmarks/gpu_inprocess_warmth_2026-05-29.tsv`](benchmarks/gpu_inprocess_warmth_2026-05-29.tsv)
-Q3 rows (`setref1` = first reference on a warm instance, `setref2` = a
-*different-pixel* second reference, each followed by
-`block_on(client.sync())`). The butter row is refreshed from the
-clean re-measure
-[`crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv`](crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv)
-(task #148 — `setref1` on a fully warm instance, median of 8, transient
-pool-growth outliers excluded). Host: RTX 5070, cuda, no
-`-C target-cpu=native`.
+`warm_reference_srgb` (cvvdp). Source (all six metrics, clean re-measure):
+[`benchmarks/setref_clean_all_2026-05-29.tsv`](benchmarks/setref_clean_all_2026-05-29.tsv)
+(task #151 — `setref1` = first `set_reference` on a fully warm instance,
+`setref2`/`setref3`/`setref4` = distinct *different-pixel* new references
+(the reuse path), each followed by `block_on(client.sync())` **inside** the
+timed region, **n=8** samples/phase, median + min + max reported, distinct
+pixels every rep). Host: RTX 5070, cuda, no `-C target-cpu=native`. Each
+`setref1` phase shows a single rep-1 transient (a one-time first-`set_reference`
+allocation spike — iwssim 248 ms, butter up to 4166 ms @16 MP) that the
+n=8 median/min reject; that transient is exactly what an n=1 sample would
+have mistaken for the phase cost.
 
-| Metric | first ref `setref1` 512² (ms) | new ref `setref2` 512² (ms) | first ref `setref1` 16 MP (ms) | new ref `setref2` 16 MP (ms) |
+| Metric | `setref1` 512² (ms) | `setref2` 512² (ms) | `setref1` 16 MP (ms) | `setref2` 16 MP (ms) |
 |---|---|---|---|---|
-| `cvvdp-gpu` | 2.35 | 1.47 | 16.86 | 16.94 |
-| `ssim2-gpu` | 2.54 | 2.26 | 28.45 | 29.36 |
-| `dssim-gpu` | 2.16 | 2.02 | 19.91 | 20.31 |
-| `iwssim-gpu` | 2.81 | 1.89 | 196.51 | 67.40 |
-| `zensim-gpu` | 0.58 | 0.48 | 14.73 | 13.95 |
-| `butteraugli-gpu` | 0.84 | 0.83 | 22.16 | 22.48 |
+| `cvvdp-gpu` | 1.65 | 1.59 | 16.98 | 17.17 |
+| `ssim2-gpu` | 2.48 | 2.88 | 29.34 | 29.02 |
+| `dssim-gpu` | 1.43 | 1.34 | 23.15 | 23.16 |
+| `iwssim-gpu` | 2.14 | 2.04 | 68.13 | 120.04 |
+| `zensim-gpu` | 0.62 | 0.50 | 14.59 | 14.77 |
+| `butteraugli-gpu` | 0.77 | 0.74 | 23.33 | 23.65 |
 
-For all six metrics `setref2 ≈ setref1` — caching a new reference is
-**not** free; budget one `per_ref` per distinct reference. The earlier
-profile recorded a huge butter first-ref cost (34 ms @512², 3990 ms
-@16 MP); the task #148 clean re-measure isolated that to **first-instance
-allocation + JIT** (which `process_start` already accounts for), not the
-per-reference cost — on a warm instance butter's `setref1` is 0.84 ms
-@512² / 22.16 ms @16 MP, in line with the other metrics. iwssim is the
-one remaining size-sensitive case: at 16 MP its first ref (196.5 ms)
-runs ~3× a subsequent ref (67.4 ms).
+For five of six metrics (cvvdp / ssim2 / dssim / zensim / butter) the
+per-reference cost is **flat**: `setref1 ≈ setref2 ≈ setref3 ≈ setref4`
+at every size, so budget one `per_ref` per distinct reference regardless
+of which reference it is. The earlier profile recorded a huge butter
+first-ref cost (34 ms @512², 3990 ms @16 MP); the task #148 clean
+re-measure isolated that to **first-instance allocation + JIT** (which
+`process_start` already accounts for), not the per-reference cost.
+
+**iwssim is NOT 3× more expensive on its first reference — the opposite.**
+A prior table here reported iwssim @16 MP at 196.5 ms `setref1` vs 67.4 ms
+`setref2` and asserted a "~3× first-ref warmup". That row came from task
+#144's `gpu_inprocess_warmth` Q3, which was a **single sample (n=1) on a
+GPU contaminated by a concurrent zensim eval** — the 196.5 ms was a
+transient. The clean n=8 #151 re-measure (two independent 16 MP runs) finds
+iwssim's `setref1` (68.1 / 73.6 ms) is the **cheapest** phase; `setref2`–
+`setref4` land at 120–163 ms. iwssim alone shows a real first-ref *discount*
+at 16 MP (subsequent distinct references cost ~1.8× the first), and is flat
+at 512² / 1024² / 2K. Budget the larger ~120–160 ms for every reference
+after the first.
 
 ### `per_dist` — warm per-call score against a cached reference
 

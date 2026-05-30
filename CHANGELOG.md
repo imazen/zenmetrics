@@ -67,6 +67,29 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **`per_ref` README table re-measured clean for all six metrics; the
+  "iwssim first ref runs ~3× a subsequent ref" claim DEBUNKED** (task #151,
+  2026-05-29). The `### per_ref` table and surrounding prose asserted
+  iwssim @16 MP ran 196.5 ms on its first `set_reference` vs 67.4 ms on a
+  subsequent one (a "~3× first-ref warmup"). That row was task #144's
+  `gpu_inprocess_warmth` Q3 — **n=1, on a GPU contaminated by a concurrent
+  zensim eval** — so the 196.5 ms was a transient. Re-measured every metric
+  (cvvdp / ssim2 / dssim / iwssim / zensim + butter reconfirm) on a fully
+  warm CUDA instance at 512² / 1024² / 2K / 16 MP, **n=8 per phase**, distinct
+  pixels each rep, each `set_reference` synced inside the timed region
+  (`crates/zenmetrics-api/examples/setref_all_timing.rs`, commit `eaff3219`;
+  driving harness `scripts/setref_quiet_run.sh`). Finding: **five of six
+  metrics are flat** (`setref1 ≈ setref2 ≈ setref3 ≈ setref4` at every size).
+  iwssim @16 MP runs the **opposite** of the old claim — clean `setref1`
+  68–74 ms is the *cheapest* phase, `setref2`–`setref4` are 120–163 ms (a
+  first-ref *discount*, ~1.8×, not a penalty); iwssim is flat at 512²/1024²/2K.
+  Every `setref1` phase shows one rep-1 transient (iwssim 248/265 ms; butter
+  up to 4166 ms @16 MP) that n=8 median/min reject — exactly what n=1 sampling
+  mistook for the phase cost in #144. Corrected the README `per_ref` table,
+  the `per_ref` component bullet, the warmth-scope cross-reference, and added
+  a CORRECTION note to `docs/GPU_INPROCESS_WARMTH_2026-05-29.md`'s n=1 table.
+  Data: `benchmarks/setref_clean_all_2026-05-29.{tsv,meta}` (126 rows, RTX
+  5070, cuda, no `-C target-cpu=native`).
 - **README overhauled against current source** (task #149, 2026-05-29).
   Audited and corrected every stale claim: the crate table was missing
   `iwssim` / `iwssim-gpu` entirely and carried wrong versions

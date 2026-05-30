@@ -180,20 +180,43 @@ sync'd with `block_on(client.sync())`.
 | zensim | 16mp | 14.73 | **13.95** | 32.25 | 32.39 | no — re-pays |
 | **butter** | 16mp | **3990.41** | **21.64** | 45.37 | 44.48 | **YES — buffers reused** |
 
+> **CORRECTION (tasks #148 + #151).** The `setref1` column above is
+> **n=1** and was measured on a GPU contaminated by a concurrent zensim
+> eval, so its first-ref spikes (butter 34/3990 ms, iwssim 196.51 ms) are
+> **transients, not per-reference costs**. The clean n=8 re-measure
+> ([`../benchmarks/setref_clean_all_2026-05-29.tsv`](../benchmarks/setref_clean_all_2026-05-29.tsv),
+> task #151; butter alone in
+> [`../crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv`](../crates/butteraugli-gpu/benchmarks/butter_setref_clean_2026-05-29.tsv),
+> task #148) finds **`setref1 ≈ setref2 ≈ setref3 ≈ setref4` for all six
+> metrics** on a fully warm instance — the butter "45×/184× drop" was
+> first-instance allocation + JIT (the `process_start` term), not a
+> reference-reuse effect. iwssim @16 MP is the only size-sensitive case,
+> and it runs **the opposite direction** of the row above: clean `setref1`
+> = 68–74 ms is the *cheapest* phase, `setref2`–`setref4` = 120–163 ms.
+> Every `setref1` phase shows one rep-1 transient (iwssim 248 ms, butter
+> up to 4166 ms @16 MP) that the n=8 median rejects. Treat the table below
+> these two TSVs as authoritative for per-reference budgeting.
+
 **Answer.** For 5 of 6 metrics (cvvdp, ssim2, dssim, zensim at both
 sizes; iwssim at 512²) a new reference re-pays essentially the same
 `set_reference` cost as the first reference — it is **NOT free**. There
 is no machine-wide "any ref is warm" cache; each new reference re-runs
-the ref-side precompute.
+the ref-side precompute. (The first-ref *spikes* in the n=1 table above
+are contamination — see the CORRECTION note; the clean #151 re-measure
+shows `setref1 ≈ setref2` for every metric, so this "not free" conclusion
+holds on the median while the per-metric magnitudes are the #151 numbers.)
 
 **butter is the exception that the inference-based claim would have
 gotten wrong.** butter's *first* `set_reference` on a warm instance is
 expensive (34 ms @512, **3990 ms @16 MP** — it eagerly allocates its
 full reference working set on first use). A *subsequent* new reference
 reuses those buffers and costs only 0.76 ms @512 / 21.6 ms @16 MP — a
-**45×/184× drop**. iwssim shows a milder version of the same at 16 MP
-(196 → 67 ms) — the first ref pays a one-time allocation the second ref
-skips.
+**45×/184× drop**. *(Per the CORRECTION above, task #148's clean re-measure
+attributed butter's apparent first-ref spike to first-instance
+allocation + JIT — the `process_start` term — not a reference-reuse
+effect; on a fully warm instance butter's `setref1 ≈ setref2`. The iwssim
+"196 → 67 ms" reading was likewise n=1 contamination — clean #151 shows
+iwssim's first ref is the cheapest 16 MP phase, not the most expensive.)*
 
 `newref_call` ≈ `warm_call` for every metric (the per-call score against
 the new reference costs the same as against the first), and the scores
