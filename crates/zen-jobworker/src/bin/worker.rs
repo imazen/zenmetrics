@@ -64,6 +64,11 @@ struct Cli {
     /// claims no new work (goal C). Requires --blobs-r2-bucket + --r2-endpoint.
     #[arg(long = "control-r2-key")]
     control_r2_key: Option<String>,
+    /// Resource class(es) this worker's hardware serves (goal H capability routing), repeatable:
+    /// cpu_light / cpu_heavy / cpu_arm / gpu / high_ram. Omit = serve everything. A job runs only if
+    /// its kind's class is served (e.g. a gpu box pulls only metric/diffmap jobs).
+    #[arg(long = "capability")]
+    capability: Vec<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,6 +99,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if c.control_r2_key.is_some() && r2.is_none() {
         return Err("--control-r2-key requires --blobs-r2-bucket + --r2-endpoint".into());
     }
+    let mut served = Vec::new();
+    for cap in &c.capability {
+        match zen_job_core::ResourceClass::parse(cap) {
+            Some(rc) => served.push(rc),
+            None => return Err(format!("--capability '{cap}' is not a resource class (cpu_light/cpu_heavy/cpu_arm/gpu/high_ram)").into()),
+        }
+    }
     let cfg = WorkerConfig {
         manifest: c.manifest,
         ledger_in: c.ledger_in,
@@ -107,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: c.provider,
         now,
         max_attempts: c.max_attempts,
+        served,
     };
     let out = run(&cfg)?;
     eprintln!(

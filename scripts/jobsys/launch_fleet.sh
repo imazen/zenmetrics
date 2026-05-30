@@ -67,10 +67,10 @@ docker run -d --label group=$RUN --name "$RUN-local" $(envblock local) -e ZEN_WO
 # 3b. Hetzner burst tier(s) — Docker-CE app image; cloud-init docker-runs the baked image
 export HCLOUD_TOKEN=$(grep -E '^api_token=' ~/.config/hetzner/credentials | head -1 | cut -d= -f2- | tr -d ' \r')
 for i in $(seq 1 "$N_HZ"); do
-  ci=$(printf '#!/bin/bash\nfor t in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done\ndocker run -d %s -e ZEN_WORKER=hetzner-%s %s\n' "$(envblock hetzner | tr '\n' ' ')" "$i" "$IMAGE")
-  hcloud server create --name "$RUN-hetzner-$i" --type cpx22 --image docker-ce --location fsn1 \
+  ci=$(printf '#!/bin/bash\ncurl -fsSL https://get.docker.com | sh\ndocker run -d --restart no %s -e ZEN_WORKER=hetzner-%s %s\n' "$(envblock hetzner | tr '\n' ' ')" "$i" "$IMAGE")
+  hcloud server create --name "$RUN-hetzner-$i" --type cpx22 --image ubuntu-24.04 --location fsn1 \
     --ssh-key zen-arm-dev-20260528 --label group=$RUN --user-data-from-string "$ci" >/dev/null 2>&1 \
-    && echo "hetzner-$i launched" || echo "hetzner-$i FAILED (try --location nbg1/hel1 or --image ubuntu-24.04+install docker)"
+    && echo "hetzner-$i launched" || echo "hetzner-$i FAILED (cpx22/fsn1 unavailable? try nbg1/hel1)"
 done
 
 # 3c. vast burst tier(s) — the baked image IS the instance image; entrypoint runs with env

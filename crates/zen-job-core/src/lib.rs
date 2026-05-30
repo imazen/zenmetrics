@@ -35,7 +35,7 @@ pub use control::RunControl;
 pub use cost::{aggregate, cost_per_1000_by_tier, over_budget, FleetCost, WorkerReport};
 pub use gc::{gc_plan, lru_cap_evict, verdict, BlobIndexEntry, GcPlan, GcVerdict, Tombstone};
 pub use ids::{CellId, JobId};
-pub use job::{GroupBy, JobKind, JobProfile, Regenerability, ResourceClass};
+pub use job::{worker_serves, GroupBy, JobKind, JobProfile, Regenerability, ResourceClass};
 pub use ledger::{DesiredJob, LedgerRow, LedgerView};
 pub use lease::{recommended_ttl_secs, Lease};
 pub use reconcile::{reconcile, ReconcilePlan, RetryPolicy};

@@ -19,6 +19,13 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Job system: capability routing (goal H "capability-routed GPU/CPU/ARM")** (2026-05-30).
+  `zen_job_core::worker_serves` + `ResourceClass::parse`; `zen-jobworker --capability <class>…`
+  (also `ZEN_CAPABILITY` env in the fleet entrypoint) makes a worker pull only jobs whose
+  `JobKind::profile().class` it serves — empty = general worker. Live demo
+  `scripts/jobsys/demo_capability_routing.sh`: on a mixed 15-job queue a GPU-capability worker did
+  exactly the 6 metric (Gpu) jobs and a CPU-capability worker exactly the 9 encode (CpuLight/CpuHeavy)
+  jobs — routed by hardware off one queue, no overlap.
 - **Job system: baked fleet-worker image + launcher (goal H)** (2026-05-30).
   `crates/zen-jobworker/Dockerfile` bakes `zen-jobworker` + `zen-jobgc` + aws-cli v2 + s5cmd + a
   keep-alive entrypoint (`fleet-entrypoint.sh`) so a fleet box claims work with **zero boot-time

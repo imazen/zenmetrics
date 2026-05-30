@@ -125,6 +125,13 @@ A 2026-05-30 ad-hoc test (before this image existed) already had a Hetzner box d
 the shared queue and tore it down via the **dashboard's Kill** — the image makes the full clean 3-tier
 launch reliable + repeatable.
 
+## `demo_capability_routing.sh` — goal H (capability-routed)
+
+`zen-jobworker --capability <class>…` (or `ZEN_CAPABILITY` env) makes a worker pull only jobs whose
+kind's `ResourceClass` it serves. The demo runs a mixed queue (metric=Gpu, jpeg=CpuLight, avif=CpuHeavy)
+past a GPU-capability worker and a CPU-capability worker — verified: GPU did the 6 metrics, CPU did the
+9 encodes, off one queue, no overlap. Local, free, no boxes.
+
 The dashboard side of these guarantees (coverage/catalog, progress + speculative count, cost, kill,
 stop-spend, pause/drain/resume, result peek + thumbnails + ad-hoc query, GC dry-run preview) is live at
 the Railway deployment; see `crates/zen-jobdash`. Notifications go to ntfy (`ZEN_NOTIFY_WEBHOOK` +

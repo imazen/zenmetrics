@@ -28,6 +28,27 @@ impl ResourceClass {
             ResourceClass::HighRam => "highram",
         }
     }
+
+    /// Parse a worker-declared capability token (the serde snake_case name) — used by
+    /// `zen-jobworker --capability`. Accepts e.g. `cpu_light`/`cpu-light`/`gpu`/`high_ram`.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+            "cpu_light" | "cpulight" => Some(ResourceClass::CpuLight),
+            "cpu_heavy" | "cpuheavy" => Some(ResourceClass::CpuHeavy),
+            "cpu_arm" | "cpuarm" | "arm" => Some(ResourceClass::CpuArm),
+            "gpu" => Some(ResourceClass::Gpu),
+            "high_ram" | "highram" => Some(ResourceClass::HighRam),
+            _ => None,
+        }
+    }
+}
+
+/// Capability routing (goal H "capability-routed (GPU/CPU/ARM)"): a worker advertising the resource
+/// classes it serves handles a job **iff** the job's class is in that set. An empty set means "serve
+/// everything" (a general worker), preserving prior behaviour. This is what lets a GPU box pull only
+/// metric/diffmap jobs while an ARM box pulls only `cpu_arm`/`cpu_light` work — off one shared queue.
+pub fn worker_serves(served: &[ResourceClass], kind: &JobKind) -> bool {
+    served.is_empty() || served.contains(&kind.profile().class)
 }
 
 /// How items batch into a chunk — the locality lever. `SourceSha` lets the metric handler decode the
@@ -172,6 +193,32 @@ mod tests {
         uniq.sort_unstable();
         uniq.dedup();
         assert_eq!(uniq.len(), subs.len(), "every class must route to a distinct subject");
+    }
+
+    #[test]
+    fn capability_routing_matches_class() {
+        let metric = JobKind::Metric { metric: "cvvdp".into() };   // Gpu
+        let jpeg = JobKind::Encode { codec: "zenjpeg".into(), q: 80, knobs: "{}".into() }; // CpuLight
+        let avif = JobKind::Encode { codec: "zenavif".into(), q: 50, knobs: "{}".into() }; // CpuHeavy
+        let gpu = [ResourceClass::Gpu];
+        let cpu = [ResourceClass::CpuLight, ResourceClass::CpuHeavy];
+        // GPU worker serves the metric, not the encodes.
+        assert!(worker_serves(&gpu, &metric));
+        assert!(!worker_serves(&gpu, &jpeg));
+        // CPU worker serves both encodes, not the GPU metric.
+        assert!(worker_serves(&cpu, &jpeg));
+        assert!(worker_serves(&cpu, &avif));
+        assert!(!worker_serves(&cpu, &metric));
+        // empty set = general worker, serves everything.
+        assert!(worker_serves(&[], &metric) && worker_serves(&[], &jpeg));
+    }
+
+    #[test]
+    fn resource_class_parse() {
+        assert_eq!(ResourceClass::parse("cpu_light"), Some(ResourceClass::CpuLight));
+        assert_eq!(ResourceClass::parse("GPU"), Some(ResourceClass::Gpu));
+        assert_eq!(ResourceClass::parse("cpu-arm"), Some(ResourceClass::CpuArm));
+        assert_eq!(ResourceClass::parse("nonsense"), None);
     }
 
     #[test]

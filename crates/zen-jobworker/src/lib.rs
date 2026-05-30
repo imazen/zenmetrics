@@ -20,8 +20,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use zen_job_core::{
-    gc_plan, lru_cap_evict, reconcile, sha256, BlobIndexEntry, DesiredJob, ErrorClass, JobId,
-    JobStatus, LedgerRow, LedgerView, Regenerability, RetryPolicy, RunControl, Sha256Hex, Tombstone,
+    gc_plan, lru_cap_evict, reconcile, sha256, worker_serves, BlobIndexEntry, DesiredJob, ErrorClass, JobId,
+    JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, RetryPolicy, RunControl, Sha256Hex, Tombstone,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -524,6 +524,9 @@ pub struct WorkerConfig {
     pub provider: String,
     pub now: u64,
     pub max_attempts: u32,
+    /// Resource classes this worker serves (goal H capability-routing). Empty = serve everything.
+    /// A job is only claimed/run if its `JobKind::profile().class` is in this set.
+    pub served: Vec<ResourceClass>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -641,8 +644,13 @@ pub fn gc_execute(
 pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
     let bytes = std::fs::read(&cfg.manifest)
         .map_err(|e| WorkerRunError::Io(format!("read manifest {}: {e}", cfg.manifest.display())))?;
-    let desired: Vec<DesiredJob> =
+    let mut desired: Vec<DesiredJob> =
         serde_json::from_slice(&bytes).map_err(|e| WorkerRunError::Manifest(e.to_string()))?;
+    // Capability routing (goal H): drop jobs this worker's hardware doesn't serve, so an ARM/CPU/GPU
+    // box pulls only its class off the shared queue. Empty `served` = general worker (keep all).
+    if !cfg.served.is_empty() {
+        desired.retain(|d| worker_serves(&cfg.served, &d.kind));
+    }
 
     // Ledger paths may be local or s3:// — the R2 endpoint (if any) comes from the blob target.
     let endpoint = cfg.r2.as_ref().map(|t| t.endpoint.as_str());
@@ -864,6 +872,7 @@ mod tests {
             r2: None,
             claims: None,
             control_key: None,
+            served: vec![],
             exec: "cat".into(),
             worker: "w1".into(),
             provider: "local".into(),
