@@ -201,6 +201,14 @@ pub mod params;
 pub mod pipeline;
 pub mod presets;
 
+// Stream-bound session plumbing for `zenmetrics_api::MetricSession`
+// (issue #17). `#[doc(hidden)]` internal surface, gated `cubecl-types`
+// (the stream binding needs the cubecl client type). Not a supported
+// per-crate API — use `zenmetrics_api::MetricSession`.
+#[cfg(feature = "cubecl-types")]
+#[doc(hidden)]
+pub mod session;
+
 // Unified MemoryMode surface — see `memory_mode.rs`.
 pub use memory_mode::{
     MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, vram_cap_bytes,

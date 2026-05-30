@@ -322,41 +322,7 @@ impl CvvdpOpaque {
         geometry: crate::params::DisplayGeometry,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
-        // Resolve the mode host-side to surface TooBigForFull before
-        // the backend allocation runs.
-        let cap = crate::memory_mode::vram_cap_bytes();
-        match mode {
-            crate::MemoryMode::Full
-            | crate::MemoryMode::Strip { .. }
-            | crate::MemoryMode::StripPair { .. }
-            | crate::MemoryMode::CappedPyramid { .. } => {}
-            crate::MemoryMode::Auto => {
-                let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
-            }
-        }
-        // Resolve Auto host-side so the backend dispatch picks the
-        // matching constructor. Strip / Full / CappedPyramid route to
-        // dedicated constructors; only Auto routes through
-        // `resolve_auto` (which never picks CappedPyramid — that
-        // variant is opt-in).
-        let resolved_mode = match mode {
-            crate::MemoryMode::Full => crate::MemoryMode::Full,
-            crate::MemoryMode::Strip { h_body } => crate::MemoryMode::Strip { h_body },
-            crate::MemoryMode::StripPair { h_body } => crate::MemoryMode::StripPair { h_body },
-            crate::MemoryMode::CappedPyramid { levels } => {
-                crate::MemoryMode::CappedPyramid { levels }
-            }
-            crate::MemoryMode::Auto => {
-                match crate::memory_mode::resolve_auto(width, height, cap)? {
-                    crate::memory_mode::ResolvedMode::Full => crate::MemoryMode::Full,
-                    crate::memory_mode::ResolvedMode::Strip { h_body } => {
-                        crate::MemoryMode::Strip {
-                            h_body: Some(h_body),
-                        }
-                    }
-                }
-            }
-        };
+        let resolved_mode = resolve_mode_for_construction(width, height, mode)?;
         let inner: Box<dyn CvvdpInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
@@ -566,6 +532,78 @@ pub(crate) fn to_srgb_rgb8(
     convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
         got: (s.width() as usize) * (s.rows() as usize) * 3,
+    })
+}
+
+/// Host-side memory-mode resolution shared by every opaque cvvdp
+/// constructor (the default-stream
+/// [`CvvdpOpaque::new_with_geometry_and_memory_mode`] and the
+/// stream-bound [`crate::session::new_opaque_on_stream`]).
+///
+/// Surfaces [`crate::Error::TooBigForFull`] before any device
+/// allocation runs, then maps the requested [`crate::MemoryMode`] to a
+/// concrete one the backend dispatch can construct directly: `Auto`
+/// resolves to `Full` or `Strip { h_body: Some(..) }` via
+/// [`crate::memory_mode::resolve_auto`]; `Full` / `Strip` / `StripPair`
+/// / `CappedPyramid` pass through unchanged (`resolve_auto` never picks
+/// `CappedPyramid` — that variant is opt-in).
+pub(crate) fn resolve_mode_for_construction(
+    width: u32,
+    height: u32,
+    mode: crate::MemoryMode,
+) -> Result<crate::MemoryMode> {
+    let cap = crate::memory_mode::vram_cap_bytes();
+    match mode {
+        crate::MemoryMode::Full
+        | crate::MemoryMode::Strip { .. }
+        | crate::MemoryMode::StripPair { .. }
+        | crate::MemoryMode::CappedPyramid { .. } => {}
+        crate::MemoryMode::Auto => {
+            let _ = crate::memory_mode::resolve_auto(width, height, cap)?;
+        }
+    }
+    let resolved_mode = match mode {
+        crate::MemoryMode::Full => crate::MemoryMode::Full,
+        crate::MemoryMode::Strip { h_body } => crate::MemoryMode::Strip { h_body },
+        crate::MemoryMode::StripPair { h_body } => crate::MemoryMode::StripPair { h_body },
+        crate::MemoryMode::CappedPyramid { levels } => crate::MemoryMode::CappedPyramid { levels },
+        crate::MemoryMode::Auto => match crate::memory_mode::resolve_auto(width, height, cap)? {
+            crate::memory_mode::ResolvedMode::Full => crate::MemoryMode::Full,
+            crate::memory_mode::ResolvedMode::Strip { h_body } => crate::MemoryMode::Strip {
+                h_body: Some(h_body),
+            },
+        },
+    };
+    Ok(resolved_mode)
+}
+
+/// Build a [`CvvdpOpaque`] from a caller-supplied cubecl client (which
+/// may be bound to an explicit stream). Shared by
+/// [`crate::session::new_opaque_on_stream`]; the default-stream
+/// constructor inlines the equivalent per-backend `build_cvvdp_inner`
+/// call so it can pick the runtime type without a generic boundary.
+///
+/// `resolved_mode` must already be a concrete mode (see
+/// [`resolve_mode_for_construction`]).
+#[cfg(feature = "cubecl-types")]
+pub(crate) fn build_opaque_from_client<R: cubecl::Runtime>(
+    client: cubecl::prelude::ComputeClient<R>,
+    backend: Backend,
+    width: u32,
+    height: u32,
+    params: CvvdpParams,
+    geometry: crate::params::DisplayGeometry,
+    resolved_mode: crate::MemoryMode,
+) -> Result<CvvdpOpaque>
+where
+    Cvvdp<R>: Send,
+{
+    let inst = build_cvvdp_inner::<R>(client, width, height, params, geometry, resolved_mode)?;
+    Ok(CvvdpOpaque {
+        inner: Box::new(inst),
+        width,
+        height,
+        backend,
     })
 }
 

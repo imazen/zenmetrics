@@ -41,7 +41,7 @@ pub enum Backend {
 }
 
 impl Backend {
-    fn tag(self) -> &'static str {
+    pub(crate) fn tag(self) -> &'static str {
         match self {
             Backend::Cuda => "cuda",
             Backend::Wgpu => "wgpu",
@@ -1052,7 +1052,7 @@ fn convert_score_zensim(s: zensim_gpu::Score) -> Score {
 // ---------------------------------------------------------------
 
 #[cfg(feature = "cvvdp")]
-fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
+pub(crate) fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(cvvdp_gpu::Backend::Cuda),
@@ -1068,7 +1068,7 @@ fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
 }
 
 #[cfg(feature = "butter")]
-fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
+pub(crate) fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(butteraugli_gpu::Backend::Cuda),
@@ -1081,7 +1081,7 @@ fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
 }
 
 #[cfg(feature = "ssim2")]
-fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
+pub(crate) fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(ssim2_gpu::Backend::Cuda),
@@ -1094,7 +1094,7 @@ fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
 }
 
 #[cfg(feature = "dssim")]
-fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
+pub(crate) fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(dssim_gpu::Backend::Cuda),
@@ -1107,7 +1107,7 @@ fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
 }
 
 #[cfg(feature = "iwssim")]
-fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
+pub(crate) fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(iwssim_gpu::Backend::Cuda),
@@ -1120,7 +1120,7 @@ fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
 }
 
 #[cfg(feature = "zensim")]
-fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
+pub(crate) fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
     match b {
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(zensim_gpu::Backend::Cuda),

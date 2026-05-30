@@ -41,6 +41,16 @@ pub enum Error {
         /// Actual `(width, height)` from the caller's input.
         got: (u32, u32),
     },
+    /// [`crate::MetricSession::acquire`] was called when
+    /// [`crate::MAX_SESSIONS_PER_BACKEND`] sessions are already live on
+    /// the requested backend. cubecl's stream pool is a fixed-size
+    /// table; handing out a colliding slot would silently alias another
+    /// session's pool (the shared-pool reclaim hazard). Drop a live
+    /// session to free a slot, then retry.
+    TooManyContexts {
+        /// Short backend tag (`"cuda"`, `"wgpu"`, `"hip"`, `"cpu"`).
+        backend: &'static str,
+    },
 }
 
 impl fmt::Display for Error {
@@ -59,6 +69,11 @@ impl fmt::Display for Error {
                 f,
                 "dimension mismatch: scorer configured for {}x{}, got {}x{}",
                 expected.0, expected.1, got.0, got.1
+            ),
+            Error::TooManyContexts { backend } => write!(
+                f,
+                "too many live MetricSessions on backend '{backend}' (cap is 128 per backend); \
+                 drop a session to free a slot before acquiring another"
             ),
         }
     }
