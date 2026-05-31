@@ -19,6 +19,23 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **MetricSession owned API + multi-warm session pool (task #155).** `zenmetrics-api` adds
+  `OwnedSessionMetric` + `MetricSession::into_metric` — owned, long-lived, scorer-field-first
+  drop ordering for exact per-entry VRAM reclaim — alongside the borrowed `SessionMetric<'ctx>`
+  (`7d947b78`). The orchestrator adds a per-lane multi-warm LRU `WarmSessionPool` keyed on
+  `(metric, dims, params, ref_hash)`, VRAM-budget-bounded with precise per-entry eviction
+  (`4ead77ea`). Soundness gates (parity / no-OOM / reference-reuse) pass; a module lock fixes
+  parallel-test counter contamination (`734b707f`).
+
+### Changed
+
+- **`PoolConfig::multiwarm_session_pool` now defaults OFF (opt-in).** Measured
+  (`benchmarks/multiwarm_session_pool_2026-05-30`): multi-warm is +1.30–1.47× at 256² but
+  REGRESSES 2.3× (cvvdp) / 12.6× (ssim2) at 4096², where each warm entry is GiB-scale, the
+  budget holds ~1 entry, and round-robin references thrash the LRU (evict+rebuild every task
+  with full teardown vs single-warm's in-place `set_reference` reuse). Shipped opt-in until a
+  capacity/thrash guard routes oversized working sets back to single-warm.
+
 - **Job system: real-executor fleet image `ghcr.io/imazen/zen-jobworker-exec` + corpus plumbing**
   (2026-05-30). `crates/zen-jobworker/Dockerfile.executor` + `scripts/jobsys/build_executor_image.sh`
   bake the worker base + a prebuilt `zen-metrics` (with `jobexec`) + the `zen-jobexec` shim, with

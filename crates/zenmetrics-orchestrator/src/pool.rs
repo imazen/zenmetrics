@@ -379,7 +379,17 @@ impl Default for PoolConfig {
             adaptive_max_gpu_lanes: 4,
             gpu_util_sample_interval_ms: 5000,
             adaptive_gpu_lanes: false,
-            multiwarm_session_pool: true,
+            // Default OFF (opt-in). The multi-warm pool is a strict win only
+            // when the batch's distinct-reference working set fits the VRAM
+            // budget. benchmarks/multiwarm_session_pool_2026-05-30 measured
+            // +1.30-1.47x at 256^2 but a 2.3x (cvvdp) to 12.6x (ssim2)
+            // REGRESSION at 4096^2: each warm entry is GiB-scale, the budget
+            // holds ~1 entry, and round-robin references thrash the LRU
+            // (evict+rebuild every task, each paying memory_cleanup+sync+
+            // driver-realloc vs single-warm's in-place set_reference reuse).
+            // Until a capacity/thrash guard routes oversized working sets back
+            // to single-warm, ship it opt-in.
+            multiwarm_session_pool: false,
             multiwarm_budget_mib: 0,
             multiwarm_max_entries: 8,
         }

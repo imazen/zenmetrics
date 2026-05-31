@@ -1,0 +1,15 @@
+# multiwarm_session_pool perf bench — single-warm vs multi-warm (task #155)
+# date=2026-05-30  host=AMD Ryzen 9 7950X / NVIDIA RTX 5070 (12 GiB)  cuda=13.2
+# code=zenmetrics master 734b707f (+ uncommitted default-flip; bench sets the flag explicitly so unaffected)
+# harness=crates/zenmetrics-orchestrator/examples/multiwarm_bench.rs  reps=5  median wall  cold subprocess per cell
+# workload=6 distinct refs x 8 distortions = 48 tasks/rep, round-robin (FIFO submit, no sort) — forces ref switches
+# multiwarm cfg: budget=auto(free-floor), max_entries=8   single-warm: 1 cached ref, in-place set_reference reuse
+# set_ref col: multi = actual set_reference installs; single 'win_miss' = cached-ref window misses (NOT raw installs)
+# GPU was idle/uncontended for this run (0 panics). speedup = single_ms / multi_ms (>1 = multi faster)
+size_px	metric	single_ms	multi_ms	speedup	single_winmiss	multi_setref	peak_sw_mib	peak_mw_mib
+256	cvvdp	292.89	225.05	1.301	6.0	6.0	298	257
+1024	cvvdp	684.23	709.36	0.965	6.0	6.0	1425	1423
+4096	cvvdp	82388.42	193233.69	0.426	6.0	48.0	9259	11253
+256	ssim2	458.85	311.39	1.474	6.0	6.0	609	609
+1024	ssim2	718.60	1345.20	0.534	6.0	6.0	2366	2337
+4096	ssim2	25825.64	326253.69	0.079	6.0	48.0	11361	7286
