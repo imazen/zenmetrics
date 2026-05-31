@@ -203,6 +203,37 @@ fn synth_srgb(w: u32, h: u32, seed: u32) -> Vec<u8> {
     v
 }
 
+/// Structured gradient-ref + checkerboard-perturbed-dist pair — the SAME
+/// shape the per-crate `strip_parity.rs` tests use. Pure noise is
+/// pathological for strip-halo parity (the butter/ssim2 strip_parity tests
+/// deliberately "avoid pure noise so the LF and HF bands have non-trivial
+/// energy"); this gives the strip halo realistic structure so the
+/// strip-vs-full parity number is representative of real content rather
+/// than an adversarial worst case. Used only by the `MW_PARITY` mode.
+fn structured_pair(w: u32, h: u32, mag: u8) -> (Vec<u8>, Vec<u8>) {
+    let (width, height) = (w as usize, h as usize);
+    let mut a = vec![0u8; width * height * 3];
+    let mut b = vec![0u8; width * height * 3];
+    for y in 0..height {
+        for x in 0..width {
+            let r = ((x * 220 / width.max(1)) & 0xff) as u8;
+            let g = ((y * 220 / height.max(1)) & 0xff) as u8;
+            let bb = (((x + y) * 200 / (width + height).max(1)) & 0xff) as u8;
+            let i = (y * width + x) * 3;
+            a[i] = r;
+            a[i + 1] = g;
+            a[i + 2] = bb;
+            let bx = x / 8;
+            let by = y / 8;
+            let pert = if (bx ^ by) & 1 == 0 { mag as i32 } else { -(mag as i32) };
+            b[i] = (r as i32 + pert).clamp(0, 255) as u8;
+            b[i + 1] = (g as i32 + pert).clamp(0, 255) as u8;
+            b[i + 2] = (bb as i32 + pert).clamp(0, 255) as u8;
+        }
+    }
+    (a, b)
+}
+
 fn metric_kind_from_tag(s: &str) -> Option<MetricKind> {
     ALL_METRICS.iter().find(|(t, _)| *t == s).map(|(_, k)| *k)
 }
@@ -644,7 +675,80 @@ fn note_for(metric: &str, mode: &str, ctx: &str, free_start_mib: u64, peak_mib: 
     }
 }
 
+/// Structured-input parity addendum. Scores the gradient+checkerboard
+/// `structured_pair` (representative content, NOT pathological noise) with
+/// each measurable (metric, mode) on ONE size and prints a parity table:
+/// strip/strippair score vs Full score. Answers "is a mode swap
+/// score-safe?" on realistic content — the main sweep's pure-noise parity
+/// numbers are an adversarial worst case for strip halos and are not
+/// representative. In-process (scoring is cheap; we want a clean A/B on the
+/// same client).
+fn run_parity(size: u32) {
+    use cvvdp_gpu::params::CvvdpParams;
+    let (w, h) = (size, size);
+    let (r, d) = structured_pair(w, h, 12);
+    println!("# structured-input parity (gradient ref + checkerboard dist, mag=12), size {size}²");
+    println!("metric,mode,context,score,vs_full_abs");
+    for &(tag, kind) in ALL_METRICS {
+        // Full reference score (one-off compute_srgb_u8).
+        let full_score = {
+            let mut m = Metric::new_with_memory_mode(
+                kind, Backend::Cuda, w, h,
+                MetricParams::try_default_for(kind).unwrap(), MemoryMode::Full,
+            ).unwrap();
+            m.compute_srgb_u8(&r, &d).unwrap().value
+        };
+        println!("{tag},full,oneoff,{full_score:.6},0.0");
+
+        // Strip (umbrella) — for the 5 strip-capable crates, one-off
+        // compute_srgb_u8; cvvdp Strip is cached-ref-only so use warm.
+        if tag != "zensim" {
+            if tag == "cvvdp" {
+                // cvvdp Strip = Mode E (warm only).
+                if let Ok(mut m) = Metric::new_with_memory_mode(
+                    kind, Backend::Cuda, w, h,
+                    MetricParams::try_default_for(kind).unwrap(),
+                    MemoryMode::Strip { h_body: Some(STRIP_H_BODY) },
+                ) {
+                    if m.set_reference_srgb_u8(&r).is_ok() {
+                        if let Ok(s) = m.compute_with_cached_reference_srgb_u8(&d) {
+                            println!("cvvdp,strip,warm,{:.6},{:.6}", s.value, (s.value - full_score).abs());
+                        }
+                    }
+                }
+            } else {
+                let mut m = Metric::new_with_memory_mode(
+                    kind, Backend::Cuda, w, h,
+                    MetricParams::try_default_for(kind).unwrap(),
+                    MemoryMode::Strip { h_body: Some(STRIP_H_BODY) },
+                ).unwrap();
+                let s = m.compute_srgb_u8(&r, &d).unwrap().value;
+                println!("{tag},strip,oneoff,{s:.6},{:.6}", (s - full_score).abs());
+            }
+        }
+
+        // cvvdp StripPair (typed) — one-off (routes through Full compute).
+        if tag == "cvvdp" {
+            if let Ok(mut m) = cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(
+                cvvdp_gpu::Backend::Cuda, w, h, CvvdpParams::default(),
+                cvvdp_gpu::MemoryMode::StripPair { h_body: Some(STRIP_H_BODY) },
+            ) {
+                if let Ok(s) = m.compute_srgb_u8(&r, &d) {
+                    println!("cvvdp,strippair,oneoff,{:.6},{:.6}", s.value, (s.value - full_score).abs());
+                }
+            }
+        }
+    }
+}
+
 fn main() {
+    // Structured-input parity addendum (MW_PARITY=<size>).
+    if let Ok(sz) = env::var("MW_PARITY") {
+        let size: u32 = sz.parse().unwrap_or(1024);
+        run_parity(size);
+        return;
+    }
+
     // Worker entry.
     if env::var("MW_WORKER").is_ok() {
         let metric = env::var("MW_METRIC").unwrap();

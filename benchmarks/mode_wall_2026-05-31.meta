@@ -1,0 +1,113 @@
+# mode_wall sweep — 2026-05-31
+
+Companion to `benchmarks/mode_wall_2026-05-31.csv` and
+`benchmarks/mode_wall_2026-05-31.md`.
+
+## Purpose
+
+Task #157 Phase A: measure the Full-vs-Strip(-vs-StripPair) WALL-TIME +
+peak-VRAM wall across all six umbrella metrics, both contexts (one-off and
+warm/batch) and four sizes, to ground each metric's `resolve_auto` mode
+selection in real numbers. Today every per-crate `resolve_auto`
+(`crates/<metric>-gpu/src/memory_mode.rs`) is a memory-only heuristic
+("Full when it fits the cap, else Strip" — except butter, which is
+strip-preferred) resting on the UNMEASURED assumption that "Full is
+fastest when it fits"; none consider StripPair. This sweep fills the
+Full-vs-StripPair wall benchmark that `crates/cvvdp-gpu/docs/MODE_SELECTION.md`
+mandated and left unfilled. MEASURE-only — no resolver change (Phase B).
+
+## Provenance
+
+- git commit (harness): `80deaa68eae4ebc05bbcd2050d902b7e6ca1a8cb`
+  ("bench(zenmetrics): add mode_wall harness — Full/Strip/StripPair
+  wall+VRAM sweep (task #157 Phase A)") on `master`.
+- branched from `master@origin` 7fb4d8d6 ("feat(zenmetrics-api): add
+  score_pair one-shot convenience").
+- host: water-cooled AMD Ryzen 9 7950X + NVIDIA GeForce RTX 5070 (12 GB).
+- CUDA SDK 13.2.1, driver 596.21, cubecl-cuda runtime (dlopen).
+- GPU was SHARED with another process during the run (~1.5 GB resident,
+  ~10.3 GB free at every cell start — recorded per-cell in
+  `free_vram_start_mib`). No cell dropped below the 4 GB free-VRAM
+  contention threshold, so VRAM peaks are clean reads; the
+  `low_free_vram_at_start` note never fired. Timing is process-isolated
+  and synced regardless of the sharer.
+
+## Harness
+
+`crates/zenmetrics-api/examples/mode_wall.rs` (subprocess-per-cell; the
+parent enumerates the grid, spawns one child per cell, samples
+`nvidia-smi memory.used` delta during the child's post-RESULT hold
+window; the child computes synced wall percentiles and prints them).
+
+Build (release, cuda, cubecl-types — NO target-cpu=native):
+
+    PATH=/usr/local/cuda/bin:$PATH LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+    cargo build --release -p zenmetrics-api \
+      --no-default-features --features cuda,all-metrics,cubecl-types,pixels \
+      --example mode_wall
+
+Run:
+
+    MW_REPS=20 MW_SIZES=256,512,1024,4096 \
+      target/release/examples/mode_wall > benchmarks/mode_wall_2026-05-31.csv
+
+## Grid
+
+- metrics × modes:
+  - cvvdp: {Full, Strip (Mode E), StripPair (Mode B)}
+  - ssim2, butter, dssim, iwssim: {Full, Strip}
+  - zensim: {Full} (no strip path of its own)
+  - CappedPyramid excluded (not JOD-identical, opt-in only).
+- sizes: 256², 512², 1024², 4096² (tiny / small / medium / large).
+- contexts:
+  - one-off: construct a fresh metric + `compute_srgb_u8` one pair per
+    rep (construction INSIDE the timed region; mirrors `score_pair` /
+    `Metric::compute_srgb_u8`). One warmup construct+score before reps.
+  - warm: `set_reference_srgb_u8` once, then time
+    `compute_with_cached_reference_srgb_u8` per distinct dist (mirrors
+    the orchestrator's cached-ref / batch path). One warmup score.
+- n = 20 timed reps/cell; wall p25/p50/p75 reported.
+- strip body height = 256 rows (power-of-two; matches
+  `gpu_memory_audit_2026-05-27` so VRAM is comparable).
+- backend: Cuda.
+
+## How modes are forced
+
+- Full / Strip: umbrella `Metric::new_with_memory_mode(kind, Cuda, w, h,
+  params, mode)`.
+- cvvdp StripPair: the umbrella `MemoryMode` enum has NO StripPair
+  variant (it is a cvvdp-specific Mode B), so StripPair is forced via the
+  typed `cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(.., StripPair {
+  h_body })`. This is the only reachable path; recorded in the harness
+  module docs.
+
+## Columns
+
+`metric, mode, context, size, w, h, wall_ms_p25, wall_ms_p50,
+wall_ms_p75, score, n, peak_vram_mib, free_vram_start_mib, note`
+
+- `score`: the metric value for the (ref,dist) synthetic pair, carried so
+  the parity check (mode score vs Full score) runs from the CSV.
+- `peak_vram_mib`: peak `nvidia-smi memory.used` delta over the
+  pre-launch baseline, sampled across the child's compute + 400 ms hold.
+- `note`: `ok`, a SKIP/FAIL reason, or a flag
+  (`cvvdp_oneoff_routes_full`, `strippair_warm_falls_back_mode_e`,
+  `low_free_vram_at_start`).
+
+## Known SKIP / FAIL cells (by design, not measurement gaps)
+
+- `cvvdp/strip/oneoff/*` → SKIP. cvvdp Strip (Mode E) is a cached-ref-only
+  path; a one-off `compute_srgb_u8` on a Strip-constructed cvvdp hits the
+  Mode-E band loop with no `ref_full_state` cached and panics
+  (`pipeline.rs:4963`). There is no valid cvvdp one-off Strip path.
+- `cvvdp/strippair/warm/*` → FAIL ("image too small for the configured
+  pyramid"). StripPair (Mode B) is a one-shot-pair mode with no cached
+  ref of its own; warming it is a nonsensical combination and errors at
+  all sizes. Flagged, not a correctness bug in a valid path.
+
+The reference/distorted inputs are independent LCG-filled sRGB noise
+(deterministic, seed-controlled). They are MAXIMALLY dissimilar, so
+absolute metric values are at the far end of each scale (e.g. ssim2 goes
+strongly negative, butter is large) — this is expected and irrelevant to
+the wall/VRAM/parity questions (parity only requires the non-Full mode's
+score to MATCH the Full mode's score on the same pair).
