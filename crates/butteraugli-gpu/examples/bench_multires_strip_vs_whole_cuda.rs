@@ -48,7 +48,7 @@ const SIZES: &[(u32, u32, &str, bool)] = &[
 const STRIP_BODY_H: u32 = 256;
 
 /// Halo rows (matches the strip walker's HALO_ROWS constant).
-const STRIP_HALO_H: u32 = 40;
+const STRIP_HALO_H: u32 = 80;
 
 /// Plane count per `Butteraugli<R>` instance — see
 /// `bench_strip_vs_whole_cuda.rs` for the derivation. Multires adds a
@@ -118,7 +118,9 @@ fn civil_from_days(z: i64) -> (i32, u32, u32) {
 
 fn print_alloc_table() {
     println!();
-    println!("Multires GPU peak allocation per Butteraugli<R> instance (full-res + half-res sibling):");
+    println!(
+        "Multires GPU peak allocation per Butteraugli<R> instance (full-res + half-res sibling):"
+    );
     println!(
         "  {:>20}  {:>14}  {:>16}  {:>7}",
         "size", "whole", "strip(body=256)", "ratio"
@@ -151,12 +153,17 @@ fn run_zenbench_suite() {
             let client = Backend::client(&Default::default());
 
             if whole_ok {
-                let whole = Arc::new(Mutex::new(
-                    Butteraugli::<Backend>::new_multires(client.clone(), w, h),
-                ));
-                let strip = Arc::new(Mutex::new(
-                    Butteraugli::<Backend>::new_multires_strip(client, w, h, STRIP_BODY_H),
-                ));
+                let whole = Arc::new(Mutex::new(Butteraugli::<Backend>::new_multires(
+                    client.clone(),
+                    w,
+                    h,
+                )));
+                let strip = Arc::new(Mutex::new(Butteraugli::<Backend>::new_multires_strip(
+                    client,
+                    w,
+                    h,
+                    STRIP_BODY_H,
+                )));
                 let _ = whole
                     .lock()
                     .unwrap()
@@ -202,9 +209,12 @@ fn run_zenbench_suite() {
                 });
             } else {
                 // 24 MP whole-image is skipped — only run strip.
-                let strip = Arc::new(Mutex::new(
-                    Butteraugli::<Backend>::new_multires_strip(client, w, h, STRIP_BODY_H),
-                ));
+                let strip = Arc::new(Mutex::new(Butteraugli::<Backend>::new_multires_strip(
+                    client,
+                    w,
+                    h,
+                    STRIP_BODY_H,
+                )));
                 let _ = strip
                     .lock()
                     .unwrap()
@@ -301,7 +311,11 @@ fn run_zenbench_suite() {
                 let mpx_per_s = (n_pixels as f64) / (median / 1.0e9) / 1.0e6;
                 println!(
                     "  {:>20}  {:>10}  {:>9.2} ms  {:>9.1} MP/s  {:>9}",
-                    cmp.group_name, "whole", median / 1.0e6, mpx_per_s, "1.00x",
+                    cmp.group_name,
+                    "whole",
+                    median / 1.0e6,
+                    mpx_per_s,
+                    "1.00x",
                 );
                 whole_median = Some(median);
             }
@@ -316,7 +330,11 @@ fn run_zenbench_suite() {
                 };
                 println!(
                     "  {:>20}  {:>10}  {:>9.2} ms  {:>9.1} MP/s  {:>9}",
-                    cmp.group_name, "strip", median / 1.0e6, mpx_per_s, speedup,
+                    cmp.group_name,
+                    "strip",
+                    median / 1.0e6,
+                    mpx_per_s,
+                    speedup,
                 );
             }
         }

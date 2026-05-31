@@ -11,9 +11,9 @@
 //! by the opaque path. Callers that need both must use the typed
 //! API behind `cubecl-types`.
 
-use crate::pipeline::Butteraugli;
 #[cfg(feature = "pixels")]
 use crate::Error;
+use crate::pipeline::Butteraugli;
 use crate::{ButteraugliParams, Result};
 
 #[cfg(feature = "pixels")]
@@ -82,11 +82,7 @@ trait ButteraugliInner: Send {
     /// reference-side pipeline on it. Returns
     /// [`crate::Error::StripModeUnsupported`] only for the multires-
     /// strip case, which doesn't have a Mode E port yet.
-    fn set_reference_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        params: &ButteraugliParams,
-    ) -> Result<()>;
+    fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8], params: &ButteraugliParams) -> Result<()>;
     /// Score one candidate against the cached reference.
     fn compute_with_cached_reference_srgb_u8(
         &mut self,
@@ -167,11 +163,7 @@ where
         Butteraugli::pack_srgb_into_packed_u32_handle(self, srgb)
     }
 
-    fn set_reference_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        params: &ButteraugliParams,
-    ) -> Result<()> {
+    fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8], params: &ButteraugliParams) -> Result<()> {
         Butteraugli::set_reference_with_options(self, ref_rgb, params)
     }
 
@@ -224,10 +216,15 @@ impl ButteraugliOpaque {
     /// **strip-preferred** — see
     /// [`Butteraugli::new_with_memory_mode`](crate::pipeline::Butteraugli::new_with_memory_mode).
     ///
-    /// `MemoryMode::Full` and `MemoryMode::Auto` (when Auto picks
-    /// Full) engage the multi-resolution sibling; `MemoryMode::Strip`
-    /// and Auto-resolved-to-Strip drop to single-resolution since the
-    /// half-res strip walker isn't implemented yet.
+    /// ALL modes engage the multi-resolution path (full-res + half-res
+    /// supersample), matching CPU butteraugli's default. `Full`/`Auto→
+    /// Full` use `new_multires`; `Strip`/`Auto→Strip` use
+    /// `new_multires_strip` so a Strip score is score-identical to the
+    /// Full score (within the f64 reduction-noise band) on all content,
+    /// including aggressive high-frequency input. Earlier revisions
+    /// dropped Strip to single-resolution, which silently omitted the
+    /// half-res band and shifted the score several percent vs Full on
+    /// HF content (task #158).
     pub fn new_with_memory_mode(
         backend: Backend,
         width: u32,
@@ -242,9 +239,8 @@ impl ButteraugliOpaque {
         let resolved = match mode {
             crate::MemoryMode::Full => crate::ResolvedMode::Full,
             crate::MemoryMode::Strip { h_body } => crate::ResolvedMode::Strip {
-                h_body: h_body.unwrap_or_else(|| {
-                    crate::memory_mode::auto_strip_body_for(width, height, cap)
-                }),
+                h_body: h_body
+                    .unwrap_or_else(|| crate::memory_mode::auto_strip_body_for(width, height, cap)),
             },
             crate::MemoryMode::Tile { .. } => {
                 return Err(crate::Error::ModeUnsupported("Tile"));
@@ -264,9 +260,11 @@ impl ButteraugliOpaque {
             (Backend::Cuda, crate::ResolvedMode::Strip { h_body }) => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                Box::new(Butteraugli::<cubecl::cuda::CudaRuntime>::new_strip(
-                    client, width, height, h_body,
-                ))
+                Box::new(
+                    Butteraugli::<cubecl::cuda::CudaRuntime>::new_multires_strip(
+                        client, width, height, h_body,
+                    ),
+                )
             }
             #[cfg(feature = "wgpu")]
             (Backend::Wgpu, crate::ResolvedMode::Full) => {
@@ -280,9 +278,11 @@ impl ButteraugliOpaque {
             (Backend::Wgpu, crate::ResolvedMode::Strip { h_body }) => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                Box::new(Butteraugli::<cubecl::wgpu::WgpuRuntime>::new_strip(
-                    client, width, height, h_body,
-                ))
+                Box::new(
+                    Butteraugli::<cubecl::wgpu::WgpuRuntime>::new_multires_strip(
+                        client, width, height, h_body,
+                    ),
+                )
             }
             #[cfg(feature = "cpu")]
             (Backend::Cpu, crate::ResolvedMode::Full) => {
@@ -296,7 +296,7 @@ impl ButteraugliOpaque {
             (Backend::Cpu, crate::ResolvedMode::Strip { h_body }) => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                Box::new(Butteraugli::<cubecl::cpu::CpuRuntime>::new_strip(
+                Box::new(Butteraugli::<cubecl::cpu::CpuRuntime>::new_multires_strip(
                     client, width, height, h_body,
                 ))
             }
@@ -344,9 +344,9 @@ impl ButteraugliOpaque {
             crate::ResolvedMode::Full => {
                 Box::new(Butteraugli::<R>::new_multires(client, width, height))
             }
-            crate::ResolvedMode::Strip { h_body } => {
-                Box::new(Butteraugli::<R>::new_strip(client, width, height, h_body))
-            }
+            crate::ResolvedMode::Strip { h_body } => Box::new(
+                Butteraugli::<R>::new_multires_strip(client, width, height, h_body),
+            ),
         };
         Ok(Self {
             inner,
@@ -361,11 +361,7 @@ impl ButteraugliOpaque {
     }
 
     /// Score one sRGB RGB8 pair.
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb, &self.params)
     }
 
@@ -389,11 +385,7 @@ impl ButteraugliOpaque {
     /// `compute_pixels` for the fast-path / conversion-path
     /// semantics; identical here.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -416,10 +408,7 @@ impl ButteraugliOpaque {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
     }
 
@@ -445,10 +434,7 @@ impl ButteraugliOpaque {
     /// Score a distorted candidate against the cached reference set
     /// by [`Self::set_reference_srgb_u8`]. Returns
     /// [`crate::Error::NoCachedReference`] if no reference is cached.
-    pub fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         self.inner
             .compute_with_cached_reference_srgb_u8(dis_rgb, &self.params)
     }

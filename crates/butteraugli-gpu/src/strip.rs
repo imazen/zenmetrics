@@ -39,9 +39,43 @@
 //! - lin-RGB ← `srgb_to_linear` (pointwise) — u8 must be valid at
 //!   body+34.
 //!
-//! Rounded up to a safe `HALO_ROWS = 40` so any future stage adding
-//! ±4 rows of work doesn't immediately rebreak parity. Each strip
-//! plane is therefore sized `width × (body_h + 2 * HALO_ROWS)`.
+//! So the *single-resolution* strip path needs **34** real halo rows
+//! per side. `new_strip` / `run_strip_pipeline` are bit-identical to
+//! whole-image at that depth (verified on aggressive HF checkerboards,
+//! not just smooth content — see `tests/strip_hf_checkerboard.rs`).
+//!
+//! ## Why HALO_ROWS = 80 (the multires-strip requirement)
+//!
+//! The 34-row depth above is the single-resolution requirement. The
+//! **multi-resolution** strip walker ([`run_strip_pipeline_multires`])
+//! drives a half-resolution sibling whose slab is built by 2×
+//! downsampling the full-res strip's linear-RGB planes. The half-res
+//! blur cascade uses the SAME sigmas (σ=7.16 / 3.22 / 1.2 …) operating
+//! in half-res *pixel* space, so it independently needs **34 half-res
+//! halo rows** per side to be exact.
+//!
+//! The half-res strip cannot fabricate halo content out of nothing — it
+//! only sees what the full-res strip slab provides, downsampled 2×. So
+//! the half-res strip's available halo is `full_halo / 2`. For the
+//! half-res side to have its 34 rows, the full-res halo must be
+//! `2 × 34 = 68`. `HALO_ROWS = 80` clears that (40 half-res rows ≥ 34)
+//! with slack for any future stage adding ±a-few rows of work.
+//!
+//! This was measured: with `HALO_ROWS = 40` the half-res strip got only
+//! `40 / 2 = 20` real halo rows (< 34), so on an aggressive period-8
+//! ±12 checkerboard the multires-strip max-norm `score` drifted from
+//! multires-whole by up to ~7e-4 rel at 512² (the single worst
+//! boundary pixel landed on an under-haloed half-res row). At
+//! `HALO_ROWS = 80` the half-res side is fully haloed and multires-strip
+//! matches multires-whole bit-identically on the same content (max-norm
+//! 0.0e0, pnorm_3 ≤ 2e-7). See `benchmarks/butter_strip_halo_2026-05-31`.
+//!
+//! Each strip plane is sized `width × (body_h + 2 * HALO_ROWS)`. The
+//! cost of the 40→80 bump is borne only by strip mode and only as extra
+//! halo rows (e.g. body-256 slab grows 336→416 rows, +24%); the strip
+//! memory/wall wins at 4096² (≈6–10× leaner/faster than Full) retain
+//! ample margin. Correctness — Strip score == Full score — strictly
+//! dominates the small memory delta.
 //!
 //! ## Edge handling
 //!
@@ -100,7 +134,14 @@ use cubecl::prelude::*;
 /// Safe halo size above and below each strip's body in rows. See module
 /// docs for the derivation. Body + 2 × HALO_ROWS rows are allocated for
 /// every plane in the strip-mode `Butteraugli` instance.
-pub const HALO_ROWS: u32 = 40;
+///
+/// `80`, not the single-resolution requirement of `34`/`40`: the
+/// multi-resolution strip walker's half-res sibling only sees
+/// `HALO_ROWS / 2` real halo rows (it is downsampled 2× from the
+/// full-res strip slab), and the half-res blur cascade needs its own
+/// 34 rows. `80 / 2 = 40 ≥ 34` makes both resolutions exact. See the
+/// "Why HALO_ROWS = 80" section in the module docs.
+pub const HALO_ROWS: u32 = 80;
 
 /// Per-strip host-side partials (max + p3/p6/p12 sums over the body
 /// rows only — halo rows are discarded). Folded into the final score
@@ -151,7 +192,9 @@ pub(crate) fn reduce_strip_body<R: Runtime>(
     body_top: u32,
     body_h: u32,
 ) -> StripPartials {
-    let bytes = client.read_one(diffmap_handle).expect("read_one strip diffmap");
+    let bytes = client
+        .read_one(diffmap_handle)
+        .expect("read_one strip diffmap");
     let plane = f32::from_bytes(&bytes);
     let w = width as usize;
     let body_start = (body_top as usize) * w;
@@ -211,9 +254,7 @@ pub(crate) fn pack_strip_srgb_into(
         // Image row this strip row corresponds to (with edge clamp at
         // image top and bottom — matches blur edge-clamp).
         let img_row_i = (body_top_img as i64) + (sy as i64) - (halo_top as i64);
-        let img_row = img_row_i
-            .max(0)
-            .min(image_h as i64 - 1) as usize;
+        let img_row = img_row_i.max(0).min(image_h as i64 - 1) as usize;
         let src_off = img_row * w * 3;
         let dst_off = sy * w * 4;
         let src_row = &src[src_off..src_off + w * 3];

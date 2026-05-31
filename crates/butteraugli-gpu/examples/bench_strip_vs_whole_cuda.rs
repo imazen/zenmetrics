@@ -49,14 +49,14 @@ const SIZES: &[(u32, u32, &str)] = &[
 ];
 
 /// Body row count for the strip walker. 256 keeps the strip slab at
-/// `W × (256 + 80) × 50 × 4 B = 50 × W × 336 × 4 B`. For 12 MP that's
-/// ~256 MB instead of 2.4 GB — the strip path's reason to exist.
+/// `W × (256 + 2·80) × 50 × 4 B = 50 × W × 416 × 4 B`. For 12 MP that's
+/// ~320 MB instead of 2.4 GB — the strip path's reason to exist.
 const STRIP_BODY_H: u32 = 256;
 
 /// Halo rows (matches the strip walker's HALO_ROWS constant). Hard-
 /// coded here to keep the analytical tally self-contained; if the
 /// crate value changes, this constant needs an update.
-const STRIP_HALO_H: u32 = 40;
+const STRIP_HALO_H: u32 = 80;
 
 /// Plane count per `Butteraugli<R>` instance. Derived from
 /// `pipeline.rs::new`: 2 packed-u32 src buffers + 48 f32 planes
@@ -219,11 +219,7 @@ fn run_zenbench_suite() {
             // Warm both — first GPU launch triggers kernel compilation
             // (~100 ms one-off cost). Without these warmups the first
             // sample of each mode would be a wild outlier.
-            let _ = whole
-                .lock()
-                .unwrap()
-                .compute(&r, &d)
-                .expect("whole warmup");
+            let _ = whole.lock().unwrap().compute(&r, &d).expect("whole warmup");
             let _ = strip
                 .lock()
                 .unwrap()

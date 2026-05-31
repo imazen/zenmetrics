@@ -28,8 +28,7 @@ fn env_cap_bytes() -> Option<usize> {
 /// Cache for the live nvidia-smi probe result. The query takes
 /// 50-200 ms per invocation; we cache process-wide so the hot path
 /// stays sub-microsecond after first init.
-static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
-    std::sync::OnceLock::new();
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
 
 /// Probe live free-VRAM via `nvidia-smi --query-gpu=memory.free`.
 /// Returns `Some(bytes)` on success, `None` when nvidia-smi is
@@ -44,10 +43,7 @@ pub fn live_vram_probe_bytes() -> Option<usize> {
 
 fn query_nvidia_smi_memory_free() -> Option<usize> {
     let out = std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=memory.free",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -178,11 +174,7 @@ const MIN_STRIP_BODY: u32 = 64;
 /// 2. Else if Full fits the cap, pick Full.
 /// 3. Else return [`crate::Error::TooBigForFull`] with the smaller of
 ///    the two estimates so the caller knows the gap.
-pub fn resolve_auto(
-    width: u32,
-    height: u32,
-    cap: usize,
-) -> crate::Result<ResolvedMode> {
+pub fn resolve_auto(width: u32, height: u32, cap: usize) -> crate::Result<ResolvedMode> {
     let full_bytes = estimate_gpu_memory_bytes(width, height);
 
     // Strip is only worthwhile when image_h is large enough that the
@@ -221,8 +213,7 @@ pub fn resolve_auto(
 /// Never returns 0 — the strip constructor itself rejects `h_body == 0`.
 #[must_use]
 pub fn auto_strip_body_for(width: u32, height: u32, cap: usize) -> u32 {
-    auto_size_strip_body(width, height, cap)
-        .unwrap_or_else(|| MIN_STRIP_BODY.min(height).max(1))
+    auto_size_strip_body(width, height, cap).unwrap_or_else(|| MIN_STRIP_BODY.min(height).max(1))
 }
 
 /// Pick the largest h_body that fits the cap, clamped to
@@ -294,8 +285,10 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> usize {
 pub fn estimate_strip_gpu_memory_bytes(width: u32, h_body: u32) -> Option<usize> {
     #[cfg(feature = "cubecl-types")]
     let halo = crate::strip::HALO_ROWS;
+    // Keep in sync with `crate::strip::HALO_ROWS` for the
+    // `cubecl-types`-off build (the const lives behind that feature).
     #[cfg(not(feature = "cubecl-types"))]
-    let halo: u32 = 40;
+    let halo: u32 = 80;
     let strip_h = (h_body as usize).saturating_add((halo as usize).saturating_mul(2));
     let n = (width as usize).saturating_mul(strip_h);
     const PLANES: usize = 50;
