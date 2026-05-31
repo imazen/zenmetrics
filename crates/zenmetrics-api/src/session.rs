@@ -162,6 +162,20 @@ static ALLOCATOR: SlotAllocator = SlotAllocator::new();
 /// backend at once; [`Self::acquire`] returns [`Error::TooManyContexts`]
 /// beyond that rather than silently aliasing a stream.
 ///
+/// # Stream-aliasing caveat
+///
+/// A session's stream id is `STREAM_VALUE_BASE + slot`, chosen so live
+/// sessions never collide with *each other*. But cubecl indexes its stream
+/// table by `value % 128`, and we cannot reserve slots against *ambient*
+/// thread-local streams the process may already be using elsewhere — so a
+/// session's `value % 128` could in principle collide with an unrelated
+/// ambient cubecl stream in the same process. Exposure is low in practice
+/// (it scales with the count of live sessions, far below 128 at
+/// orchestrator lane scale, and the orchestrator's default path uses no
+/// sessions at all), but a consumer that holds many sessions alongside
+/// other direct cubecl usage on the same device should be aware. This is a
+/// documented caveat, not a closed hazard.
+///
 /// # Example
 ///
 /// ```no_run

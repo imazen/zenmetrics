@@ -423,10 +423,16 @@ measured separately:
 - **`per_ref`** — paid **once per distinct reference image** you cache via
   `set_reference_srgb_u8` (cvvdp: `warm_reference_srgb`): the metric's
   reference-side precompute. Every new reference re-pays this cost; budget
-  one `per_ref` per distinct reference. For five of six metrics this cost is
-  flat across references (`setref1 ≈ setref2 ≈ …`); iwssim at 16 MP is the
-  exception, where the first reference is *cheaper* (~68 ms) than subsequent
-  distinct references (~120–160 ms) — so size the larger value at 16 MP.
+  one `per_ref` per distinct reference. Measured to 16.777 MP only (40 MP is
+  unmeasured — don't extrapolate). **cvvdp / ssim2 / dssim / zensim** are
+  roughly flat across references (median `setref1 ≈ setref2 ≈ …`). Two
+  exceptions: **butteraugli** eagerly allocates its full reference working set
+  on the *first* `set_reference` of a freshly-warmed instance (~250 ms/MP —
+  ≈4 s at 16 MP — then flat for later refs), so budget a one-time first-ref
+  cost per instance on top of the flat steady state; **iwssim**'s reuse-path
+  references cost ~1.8× its first reference at 16 MP (~120–160 ms vs ~68 ms,
+  and run-to-run noisy) — its per-reference cost *rises*, so size the larger
+  value at 16 MP.
 - **`per_dist`** — paid **once per scored distorted image** against a warm
   cached reference: `score_with_warm_ref(dist)`, the steady-state per-call
   wall.
@@ -443,10 +449,15 @@ process — which is exactly why
 long-lived warm worker. The full warmth-scope analysis (which transitions
 re-pay which component) is in
 [`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](docs/GPU_INPROCESS_WARMTH_2026-05-29.md);
-the clean per-reference re-measure that settled whether any metric has a
-first-ref penalty (none do — the prior iwssim "3×" claim was an n=1
-transient) is [`benchmarks/setref_clean_all_2026-05-29.tsv`](benchmarks/setref_clean_all_2026-05-29.tsv)
-(task #151).
+the clean per-reference re-measure (task #151,
+[`benchmarks/setref_clean_all_2026-05-29.tsv`](benchmarks/setref_clean_all_2026-05-29.tsv))
+settled the per-metric first-ref behaviour: cvvdp/ssim2/dssim/zensim are flat
+across references; the prior iwssim "3×" was an n=1 transient (its real reuse
+cost is ~1.8× its first ref, not 3×); and butteraugli carries a genuine
+first-`set_reference` allocation cost (~250 ms/MP on the first call) that the
+warmed-instance median in that TSV smooths over — see the raw first-call
+samples and
+[`docs/GPU_INPROCESS_WARMTH_2026-05-29.md`](docs/GPU_INPROCESS_WARMTH_2026-05-29.md).
 
 All numbers below are measured medians; no value is interpolated or
 extrapolated. Sizes are 512² (0.262 MP), 1024² (1.049 MP), 2048² / "2K"
