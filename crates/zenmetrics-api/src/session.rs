@@ -146,12 +146,15 @@ static ALLOCATOR: SlotAllocator = SlotAllocator::new();
 /// reclaims **exactly** this session's device VRAM back to the driver,
 /// independent of every other session, from any thread.
 ///
-/// `MetricSession: Send` — it may be dropped from a thread other than
-/// the one that built its metrics (the explicit stream id overrides
-/// cubecl's thread-local stream selection; measured cross-thread in the
-/// CUDA spike). It is **not** `Sync`: a [`SessionMetric`] borrows the
-/// session mutably-by-construction-ordering and the underlying scorer
-/// is single-threaded.
+/// `MetricSession: Send + Sync` — it is plain slot/stream bookkeeping
+/// (no scorer state of its own), so it may be moved or dropped from a
+/// thread other than the one that built its metrics: the explicit stream
+/// id overrides cubecl's thread-local stream selection (measured
+/// cross-thread in the CUDA spike). The single-threaded scorer state
+/// lives in [`SessionMetric`] / [`OwnedSessionMetric`], not here. A
+/// compile-time assertion at the bottom of this module enforces the
+/// `Send + Sync` contract (and `Send` on the metric handles — `!Send`
+/// would break the orchestrator's hand-a-warm-metric-to-a-lane dispatch).
 ///
 /// # Cap
 ///
@@ -890,24 +893,47 @@ fn build_session_scorer(
 /// the backend, this is a best-effort no-op.
 #[allow(unused_variables)]
 fn cleanup_session_stream(backend: Backend, stream_value: u64) {
-    #[cfg(all(
-        feature = "cvvdp",
-        any(
-            feature = "cuda",
-            feature = "wgpu",
-            feature = "hip",
-            feature = "cpu",
-            feature = "cubecl-types"
-        )
-    ))]
-    {
-        if let Ok(b) = crate::metric::cvvdp_backend(backend) {
-            cvvdp_gpu::session::cleanup_stream(b, stream_value);
-            return;
-        }
+    // cubecl's `memory_cleanup` is keyed by `stream_id.value % max_streams`
+    // (allocator- and metric-independent), and every enabled metric crate
+    // resolves the SAME per-(device, thread) cubecl client for a backend, so
+    // ANY enabled crate's `session::cleanup_stream` cleans this session's
+    // stream pool — not just cvvdp's. Try each enabled crate in a fixed order
+    // (mirrors `metric::reclaim_pooled_vram`) so a build that compiles OUT
+    // cvvdp but IN another metric still reclaims a dropped session's VRAM
+    // instead of silently no-op'ing (the cvvdp-only routing was correct only
+    // when cvvdp happened to be in the build).
+    #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::cvvdp_backend(backend) {
+        cvvdp_gpu::session::cleanup_stream(b, stream_value);
+        return;
     }
-    // No wired crate supports this backend in this build — nothing to
-    // clean (a session that couldn't build a metric holds no pool).
+    #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::butter_backend(backend) {
+        butteraugli_gpu::session::cleanup_stream(b, stream_value);
+        return;
+    }
+    #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::ssim2_backend(backend) {
+        ssim2_gpu::session::cleanup_stream(b, stream_value);
+        return;
+    }
+    #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::dssim_backend(backend) {
+        dssim_gpu::session::cleanup_stream(b, stream_value);
+        return;
+    }
+    #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::iwssim_backend(backend) {
+        iwssim_gpu::session::cleanup_stream(b, stream_value);
+        return;
+    }
+    #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::zensim_backend(backend) {
+        zensim_gpu::session::cleanup_stream(b, stream_value);
+        return;
+    }
+    // No enabled metric crate supports this backend in this build — nothing
+    // to clean.
     let _ = (backend, stream_value);
 }
 
@@ -918,20 +944,31 @@ fn cleanup_session_stream(backend: Backend, stream_value: u64) {
 #[doc(hidden)]
 #[allow(unused_variables)]
 pub fn stream_reserved_bytes(backend: Backend, stream_value: u64) -> Option<u64> {
-    #[cfg(all(
-        feature = "cvvdp",
-        any(
-            feature = "cuda",
-            feature = "wgpu",
-            feature = "hip",
-            feature = "cpu",
-            feature = "cubecl-types"
-        )
-    ))]
-    {
-        if let Ok(b) = crate::metric::cvvdp_backend(backend) {
-            return cvvdp_gpu::session::stream_reserved_bytes(b, stream_value);
-        }
+    // Same metric-agnostic stream keying as `cleanup_session_stream` — any
+    // enabled crate reports the same pool's `bytes_reserved` for the stream.
+    #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::cvvdp_backend(backend) {
+        return cvvdp_gpu::session::stream_reserved_bytes(b, stream_value);
+    }
+    #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::butter_backend(backend) {
+        return butteraugli_gpu::session::stream_reserved_bytes(b, stream_value);
+    }
+    #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::ssim2_backend(backend) {
+        return ssim2_gpu::session::stream_reserved_bytes(b, stream_value);
+    }
+    #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::dssim_backend(backend) {
+        return dssim_gpu::session::stream_reserved_bytes(b, stream_value);
+    }
+    #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::iwssim_backend(backend) {
+        return iwssim_gpu::session::stream_reserved_bytes(b, stream_value);
+    }
+    #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    if let Ok(b) = crate::metric::zensim_backend(backend) {
+        return zensim_gpu::session::stream_reserved_bytes(b, stream_value);
     }
     let _ = (backend, stream_value);
     None
@@ -946,3 +983,19 @@ pub fn stream_reserved_bytes(backend: Backend, stream_value: u64) -> Option<u64>
 pub fn stream_value_for_slot(slot: u32) -> u64 {
     STREAM_VALUE_BASE + slot as u64
 }
+
+// Compile-time enforcement of the threading contract documented on
+// `MetricSession`: the session itself is plain slot/stream bookkeeping, so it
+// is `Send + Sync`. The metric handles stay `Send` so the orchestrator can
+// hand a warm metric to a worker lane — `!Send` would be a regression (it
+// closes strictly fewer hazards than the private-stream design already does).
+// If any of these stops holding this block fails to compile: adjust the
+// design, not the assertion.
+const _: fn() = || {
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+    assert_send::<MetricSession>();
+    assert_sync::<MetricSession>();
+    assert_send::<SessionMetric<'static>>();
+    assert_send::<OwnedSessionMetric>();
+};

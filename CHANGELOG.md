@@ -27,6 +27,19 @@ Workspace conventions per the global rules:
   (`4ead77ea`). Soundness gates (parity / no-OOM / reference-reuse) pass; a module lock fixes
   parallel-test counter contamination (`734b707f`).
 
+### Fixed
+
+- **Session VRAM reclaim now routes to all 6 metrics, not cvvdp-only.** `cleanup_session_stream`
+  / `stream_reserved_bytes` (`session.rs`) routed only to `cvvdp_gpu::session::*` with a no-op
+  fallback, so in a build with cvvdp compiled OUT but another metric IN, dropping a non-cvvdp
+  `MetricSession` reclaimed nothing — silently violating the crate's "drop frees exactly this
+  session's VRAM" guarantee. Both functions now use the 6-arm metric-agnostic fallback (mirrors
+  `metric::reclaim_pooled_vram`); cubecl's `memory_cleanup` is keyed by stream value, so any
+  enabled crate's `cleanup_stream` reclaims the session's pool. New
+  `tests/session_reclaim_non_cvvdp.rs` proves it at runtime in the `ssim2,cuda` (no-cvvdp) config.
+  Also corrected the `MetricSession` "not Sync" rustdoc (it is auto-`Send + Sync`) and added a
+  compile-time `Send`/`Sync` contract assertion.
+
 ### Changed
 
 - **`PoolConfig::multiwarm_session_pool` now defaults OFF (opt-in).** Measured
