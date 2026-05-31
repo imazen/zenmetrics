@@ -148,3 +148,11 @@ required-features = ["cubecl-types"]
 [[example]]
 name = "setref_all_timing"
 required-features = ["cubecl-types"]
+
+# mode_wall (task #157 Phase A): Full-vs-Strip(-vs-StripPair) wall-time +
+# peak-VRAM sweep across all six metrics, both contexts, four sizes. Gated
+# on cubecl-types because the worker syncs the cubecl client inside the
+# timed region (and reaches the typed cvvdp StripPair API).
+[[example]]
+name = "mode_wall"
+required-features = ["cubecl-types", "cvvdp"]
