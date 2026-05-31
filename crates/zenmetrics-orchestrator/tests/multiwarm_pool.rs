@@ -42,6 +42,17 @@ use zenmetrics_orchestrator::{
 // in `reorder.rs`.
 // ---------------------------------------------------------------------------
 
+/// The multi-warm soundness gates read PROCESS-GLOBAL counters
+/// (`MW_BUILDS` / `MW_HITS` / `MW_SET_REFERENCE_CALLS`, via
+/// `multiwarm_stats`/`reset_multiwarm_stats`). `cargo test` runs tests in
+/// parallel by default, so without serialization a sibling gate's
+/// orchestrator increments these counters inside another gate's
+/// reset->measure window (e.g. reuse's 16 tasks + parity's 12 = a bogus
+/// 28). This lock serializes every gate that drives orchestrator GPU work
+/// through the pool, so each measures only its own counts. (A plain module
+/// mutex rather than a `serial_test` dev-dep.)
+static MW_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn fake_gpu() -> GpuCapability {
     GpuCapability {
         present: true,
@@ -198,6 +209,7 @@ fn run_collect(orch: &mut Orchestrator, tasks: Vec<Task>) -> BTreeMap<u64, f64> 
 
 #[test]
 fn multiwarm_parity_with_single_warm() {
+    let _serial = MW_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     // R=4 references fit comfortably in budget at 256² so multi-warm
     // keeps all 4 warm; single-warm keeps 1. Same (ref,dist) set both ways.
     let size: u32 = 256;
@@ -248,6 +260,7 @@ fn multiwarm_parity_with_single_warm() {
 
 #[test]
 fn multiwarm_reuses_reference_precompute() {
+    let _serial = MW_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let size: u32 = 256;
     let r_refs = 4usize;
     let d_each = 4usize; // 16 tasks, round-robin over 4 refs
@@ -304,6 +317,7 @@ fn multiwarm_reuses_reference_precompute() {
 
 #[test]
 fn multiwarm_eviction_bounds_peak_vram_no_oom() {
+    let _serial = MW_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     // Many distinct references at 1024² (each cvvdp Full entry ~hundreds
     // of MiB). A tight budget forces eviction: the resident set can't
     // hold them all, so LRU entries are dropped (reclaimed) — but every

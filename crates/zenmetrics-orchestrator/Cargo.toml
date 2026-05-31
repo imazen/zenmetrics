@@ -287,3 +287,12 @@ required-features = ["cuda"]
 name = "vram_swap_peak"
 path = "examples/vram_swap_peak.rs"
 required-features = ["cuda"]
+
+# Task #155 — multi-warm session pool vs single-warm on an
+# interleaved-reference workload. Spawns a child per (size, metric, mode)
+# cell + polls nvidia-smi for peak. Measures median wall, set_reference
+# count, peak VRAM. Sibling-workspace caveat applies (needs a quiet GPU).
+[[example]]
+name = "multiwarm_bench"
+path = "examples/multiwarm_bench.rs"
+required-features = ["cuda"]
