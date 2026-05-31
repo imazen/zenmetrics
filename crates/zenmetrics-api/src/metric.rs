@@ -1195,3 +1195,45 @@ pub fn reclaim_pooled_vram(backend: Backend) {
         return;
     }
 }
+
+/// One-shot convenience: construct `kind` on `backend` at `width`×`height`
+/// with that metric's default [`MetricParams`], score a single
+/// (reference, distorted) sRGB-u8 pair, and drop the metric.
+///
+/// `reference_srgb_u8` / `distorted_srgb_u8` are tightly-packed RGB8,
+/// `width * height * 3` bytes each.
+///
+/// This re-pays metric construction on **every** call — and on a GPU backend
+/// that includes the per-process context floor (~181 ms) plus the first-kernel
+/// JIT. For more than one pair, hold a [`Metric`] and reuse it
+/// ([`Metric::compute_srgb_u8`], or [`Metric::set_reference_srgb_u8`] +
+/// [`Metric::compute_with_cached_reference_srgb_u8`] to amortize the
+/// reference-side precompute across many distorted images), or a reusable
+/// [`MetricSession`](crate::MetricSession). See the crate-level perf notes.
+///
+/// # Errors
+///
+/// Propagates construction errors from [`Metric::new`] and scoring errors
+/// from [`Metric::compute_srgb_u8`].
+///
+/// ```no_run
+/// use zenmetrics_api::{score_pair, Backend, MetricKind};
+/// let (w, h) = (64u32, 64u32);
+/// let n = (w * h * 3) as usize;
+/// let reference = vec![128u8; n];
+/// let distorted = vec![120u8; n];
+/// let s = score_pair(MetricKind::Cvvdp, Backend::Cuda, w, h, &reference, &distorted)?;
+/// println!("{} = {:.4}", s.metric_name, s.value);
+/// # Ok::<(), zenmetrics_api::Error>(())
+/// ```
+pub fn score_pair(
+    kind: MetricKind,
+    backend: Backend,
+    width: u32,
+    height: u32,
+    reference_srgb_u8: &[u8],
+    distorted_srgb_u8: &[u8],
+) -> Result<Score> {
+    let mut metric = Metric::new(kind, backend, width, height, MetricParams::default_for(kind))?;
+    metric.compute_srgb_u8(reference_srgb_u8, distorted_srgb_u8)
+}

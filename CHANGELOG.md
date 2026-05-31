@@ -19,6 +19,12 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenmetrics_api::score_pair` one-shot convenience.** `score_pair(kind, backend, w, h,
+  ref, dist) -> Result<Score>` constructs the metric with default params, scores a single
+  sRGB-u8 pair, and drops it — the "just score these two images" one-liner, without the
+  `Metric::new` + `compute_srgb_u8` dance. Doc'd that it re-pays construction per call (use a
+  held `Metric` / `MetricSession` for repeated scoring). Parity test vs manual new+compute.
+
 - **MetricSession owned API + multi-warm session pool (task #155).** `zenmetrics-api` adds
   `OwnedSessionMetric` + `MetricSession::into_metric` — owned, long-lived, scorer-field-first
   drop ordering for exact per-entry VRAM reclaim — alongside the borrowed `SessionMetric<'ctx>`
