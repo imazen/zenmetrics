@@ -169,10 +169,7 @@ fn scale_row_range(
 ) -> (u32, u32) {
     let divisor = 1u32 << (scale as u32);
     let body_offset_at_s = plan.body_offset_in_strip_at_0 / divisor;
-    let body_h_at_s = plan
-        .body_h_in_strip_at_0
-        .div_ceil(divisor)
-        .max(1);
+    let body_h_at_s = plan.body_h_in_strip_at_0.div_ceil(divisor).max(1);
     let body_end_at_s = (body_offset_at_s + body_h_at_s).min(height_at_s);
     let start_idx = body_offset_at_s * width_at_s;
     let end_idx = body_end_at_s * width_at_s;
@@ -258,7 +255,6 @@ pub struct Dssim<R: Runtime> {
     // staging buffer reserved per call (`client.reserve_staging`),
     // collapsing two host-side passes (pack to pageable + memcpy to
     // pinned) into one. Mirrors butter T_x.O (10a5b996).
-
     /// Per-scale buffer sets.
     scales: Vec<Scale>,
 
@@ -541,10 +537,7 @@ impl<R: Runtime> Dssim<R> {
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         let expected = self.n * 3;
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -554,9 +547,7 @@ impl<R: Runtime> Dssim<R> {
         }
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -749,9 +740,7 @@ impl<R: Runtime> Dssim<R> {
             {
                 let dst: &mut [u8] = &mut bytes;
                 debug_assert_eq!(dst.len(), pinned_len);
-                for (chunk_out, triple) in
-                    dst.chunks_exact_mut(4).zip(ref_srgb.chunks_exact(3))
-                {
+                for (chunk_out, triple) in dst.chunks_exact_mut(4).zip(ref_srgb.chunks_exact(3)) {
                     chunk_out[0] = triple[0];
                     chunk_out[1] = triple[1];
                     chunk_out[2] = triple[2];
@@ -1009,10 +998,7 @@ impl<R: Runtime> Dssim<R> {
     /// halo rows that affect blur reach are sliced from the full
     /// ref state and the dist side re-derives them per strip exactly
     /// as it would in whole-image mode).
-    fn compute_with_reference_stripped(
-        &mut self,
-        dist_srgb: &[u8],
-    ) -> Result<GpuDssimResult> {
+    fn compute_with_reference_stripped(&mut self, dist_srgb: &[u8]) -> Result<GpuDssimResult> {
         let cfg = self
             .strip_config
             .as_ref()
@@ -1467,8 +1453,7 @@ impl<R: Runtime> Dssim<R> {
     fn sum_ssim_body(&self, plan: &StripPlan) {
         for s in 0..self.scales.len() {
             let scale = &self.scales[s];
-            let (start_idx, end_idx) =
-                scale_row_range(plan, s, scale.width, scale.height);
+            let (start_idx, end_idx) = scale_row_range(plan, s, scale.width, scale.height);
             let slot = (s * 2) as u32; // ssim_sum slot
             reduction::launch_sum_range::<R>(
                 &self.client,
@@ -1502,8 +1487,7 @@ impl<R: Runtime> Dssim<R> {
 
     fn sum_mad_body(&self, scale: usize, plan: &StripPlan) {
         let s = &self.scales[scale];
-        let (start_idx, end_idx) =
-            scale_row_range(plan, scale, s.width, s.height);
+        let (start_idx, end_idx) = scale_row_range(plan, scale, s.width, s.height);
         let slot = (scale * 2 + 1) as u32; // mad_sum slot
         reduction::launch_sum_range::<R>(
             &self.client,
@@ -1575,9 +1559,7 @@ impl<R: Runtime> Dssim<R> {
         // packing.
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);

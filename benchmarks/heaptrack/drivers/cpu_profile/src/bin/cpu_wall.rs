@@ -204,9 +204,7 @@ fn main() {
                     let d = d.clone();
                     let mut c = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
                     c.warm_reference(&r).unwrap();
-                    move |b| {
-                        b.iter(|| zenbench::black_box(c.score_with_warm_ref(&d).unwrap()))
-                    }
+                    move |b| b.iter(|| zenbench::black_box(c.score_with_warm_ref(&d).unwrap()))
                 });
                 // warm_ref_strip cold
                 g.bench("cvvdp__warm_ref_strip__cold", {
@@ -215,9 +213,7 @@ fn main() {
                         b.iter(|| {
                             let mut c = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
                             c.warm_reference(&r).unwrap();
-                            zenbench::black_box(
-                                c.score_with_warm_ref_strip(&d, STRIP_H).unwrap(),
-                            )
+                            zenbench::black_box(c.score_with_warm_ref_strip(&d, STRIP_H).unwrap())
                         })
                     }
                 });
@@ -228,9 +224,7 @@ fn main() {
                     c.warm_reference(&r).unwrap();
                     move |b| {
                         b.iter(|| {
-                            zenbench::black_box(
-                                c.score_with_warm_ref_strip(&d, STRIP_H).unwrap(),
-                            )
+                            zenbench::black_box(c.score_with_warm_ref_strip(&d, STRIP_H).unwrap())
                         })
                     }
                 });
@@ -246,9 +240,7 @@ fn main() {
                         b.iter(|| {
                             let ri = ImgRef::new(rgb_pix(&r), wu, hu);
                             let di = ImgRef::new(rgb_pix(&d), wu, hu);
-                            zenbench::black_box(
-                                fast_ssim2::compute_ssimulacra2(ri, di).unwrap(),
-                            )
+                            zenbench::black_box(fast_ssim2::compute_ssimulacra2(ri, di).unwrap())
                         })
                     }
                 });
@@ -259,8 +251,7 @@ fn main() {
                             let ri = ImgRef::new(rgb_pix(&r), wu, hu);
                             let di = ImgRef::new(rgb_pix(&d), wu, hu);
                             zenbench::black_box(
-                                fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H)
-                                    .unwrap(),
+                                fast_ssim2::compute_ssimulacra2_strip(ri, di, STRIP_H).unwrap(),
                             )
                         })
                     }
@@ -373,9 +364,7 @@ fn main() {
                             let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(&d);
                             let ri = ImgRef::new(rb, wu, hu);
                             let di = ImgRef::new(db, wu, hu);
-                            zenbench::black_box(
-                                butteraugli::butteraugli(ri, di, &p).unwrap().score,
-                            )
+                            zenbench::black_box(butteraugli::butteraugli(ri, di, &p).unwrap().score)
                         })
                     }
                 });
@@ -399,8 +388,7 @@ fn main() {
                     let (r, d, p) = (r.clone(), d.clone(), p.clone());
                     move |b| {
                         b.iter(|| {
-                            let pre =
-                                ButteraugliReference::new(&r, wu, hu, p.clone()).unwrap();
+                            let pre = ButteraugliReference::new(&r, wu, hu, p.clone()).unwrap();
                             zenbench::black_box(pre.compare(&d).unwrap().score)
                         })
                     }
@@ -408,21 +396,16 @@ fn main() {
                 g.bench("butter__warm_ref__warm", {
                     let (r, d, p) = (r.clone(), d.clone(), p.clone());
                     let pre = ButteraugliReference::new(&r, wu, hu, p).unwrap();
-                    move |b| {
-                        b.iter(|| zenbench::black_box(pre.compare(&d).unwrap().score))
-                    }
+                    move |b| b.iter(|| zenbench::black_box(pre.compare(&d).unwrap().score))
                 });
                 g.bench("butter__warm_ref_strip__cold", {
                     let (r, d, p) = (r.clone(), d.clone(), p.clone());
                     move |b| {
                         b.iter(|| {
-                            let pre =
-                                ButteraugliReference::new(&r, wu, hu, p.clone()).unwrap();
+                            let pre = ButteraugliReference::new(&r, wu, hu, p.clone()).unwrap();
                             let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(&d);
                             let di = ImgRef::new(db, wu, hu);
-                            zenbench::black_box(
-                                pre.compare_strip_srgb(di, STRIP_H).unwrap().score,
-                            )
+                            zenbench::black_box(pre.compare_strip_srgb(di, STRIP_H).unwrap().score)
                         })
                     }
                 });
@@ -433,9 +416,7 @@ fn main() {
                         b.iter(|| {
                             let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(&d);
                             let di = ImgRef::new(db, wu, hu);
-                            zenbench::black_box(
-                                pre.compare_strip_srgb(di, STRIP_H).unwrap().score,
-                            )
+                            zenbench::black_box(pre.compare_strip_srgb(di, STRIP_H).unwrap().score)
                         })
                     }
                 });
@@ -479,9 +460,7 @@ fn main() {
                     let mut c = Iwssim::new(w, h).unwrap();
                     c.warm_reference(&r).unwrap();
                     move |b| {
-                        b.iter(|| {
-                            zenbench::black_box(c.score_with_warm_ref(&d).unwrap().score)
-                        })
+                        b.iter(|| zenbench::black_box(c.score_with_warm_ref(&d).unwrap().score))
                     }
                 });
                 g.bench("iwssim__warm_ref_strip__cold", {
@@ -608,7 +587,9 @@ fn main() {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
     let result = if no_gate {
-        eprintln!("[cpu-wall] CPU_WALL_NO_GATE=1 — resource gate DISABLED (caller guarantees quiet machine)");
+        eprintln!(
+            "[cpu-wall] CPU_WALL_NO_GATE=1 — resource gate DISABLED (caller guarantees quiet machine)"
+        );
         zenbench::run_gated(zenbench::GateConfig::disabled(), build)
     } else {
         zenbench::run(build)
@@ -646,12 +627,18 @@ fn record_scores(
         let mut c = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
         push("cvvdp__full", c.score(r, d).unwrap() as f64);
         let mut c2 = Cvvdp::new(w, h, CvvdpParams::default()).unwrap();
-        push("cvvdp__strip", c2.score_strip(r, d, STRIP_H).unwrap() as f64);
+        push(
+            "cvvdp__strip",
+            c2.score_strip(r, d, STRIP_H).unwrap() as f64,
+        );
     }
     if want("ssim2") {
         let ri = ImgRef::new(rgb_pix(r), wu, hu);
         let di = ImgRef::new(rgb_pix(d), wu, hu);
-        push("ssim2__full", fast_ssim2::compute_ssimulacra2(ri, di).unwrap());
+        push(
+            "ssim2__full",
+            fast_ssim2::compute_ssimulacra2(ri, di).unwrap(),
+        );
         let ri = ImgRef::new(rgb_pix(r), wu, hu);
         let di = ImgRef::new(rgb_pix(d), wu, hu);
         push(
@@ -676,7 +663,10 @@ fn record_scores(
         let db: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
         let ri = ImgRef::new(rb, wu, hu);
         let di = ImgRef::new(db, wu, hu);
-        push("butter__full", butteraugli::butteraugli(ri, di, &p).unwrap().score);
+        push(
+            "butter__full",
+            butteraugli::butteraugli(ri, di, &p).unwrap().score,
+        );
         let pre = ButteraugliReference::new(r, wu, hu, p.clone()).unwrap();
         let di = ImgRef::new(db, wu, hu);
         push(
@@ -750,7 +740,7 @@ fn write_tsv(
             let parts: Vec<&str> = bm.name.split("__").collect();
             let metric = parts.first().copied().unwrap_or("?");
             let (mode, cw) = match parts.len() {
-                2 => (parts[1], "cold"), // full / strip → cold per-call
+                2 => (parts[1], "cold"),   // full / strip → cold per-call
                 3 => (parts[1], parts[2]), // warm_ref / warm_ref_strip + cold/warm
                 _ => (bm.name.as_str(), "?"),
             };

@@ -33,7 +33,9 @@ fn make_image(w: usize, h: usize, seed: u32) -> Vec<u8> {
 }
 
 fn main() {
-    let mode = std::env::args().nth(1).unwrap_or_else(|| "strip".to_string());
+    let mode = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "strip".to_string());
     // 12 MP at 3464×3464 (close to a square 12 MP image — matches the
     // bench grid).
     let (w, h, h_body) = (3464_u32, 3464_u32, 256_u32);

@@ -26,14 +26,8 @@ fn synth_pair(w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mode = args.get(1).map(String::as_str).unwrap_or("full");
-    let size: u32 = args
-        .get(2)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(4096);
-    let iters: usize = args
-        .get(3)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(5);
+    let size: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(4096);
+    let iters: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(5);
 
     let geom = DisplayGeometry::STANDARD_4K;
     let ppd = geom.pixels_per_degree();

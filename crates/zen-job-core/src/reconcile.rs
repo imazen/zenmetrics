@@ -85,7 +85,9 @@ mod tests {
 
     fn desired(metric: &str, enc: &[u8]) -> DesiredJob {
         DesiredJob {
-            kind: JobKind::Metric { metric: metric.into() },
+            kind: JobKind::Metric {
+                metric: metric.into(),
+            },
             inputs: vec![sha256(enc)],
             cell: CellId {
                 image_path: "x.png".into(),
@@ -99,7 +101,9 @@ mod tests {
     fn row(id: JobId, status: JobStatus, err: Option<ErrorClass>, attempts: u32) -> LedgerRow {
         LedgerRow {
             job_id: id,
-            kind: JobKind::Metric { metric: "cvvdp".into() },
+            kind: JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
             cell: CellId {
                 image_path: "x.png".into(),
                 codec: "zenjpeg".into(),
@@ -142,7 +146,11 @@ mod tests {
             Some(ErrorClass::Timeout),
             1,
         )]);
-        let plan = reconcile(std::slice::from_ref(&d), &view, RetryPolicy { max_attempts: 3 });
+        let plan = reconcile(
+            std::slice::from_ref(&d),
+            &view,
+            RetryPolicy { max_attempts: 3 },
+        );
         assert_eq!(plan.enqueue, vec![d.job_id()]);
         assert!(plan.poison.is_empty());
     }
@@ -156,7 +164,11 @@ mod tests {
             Some(ErrorClass::Timeout),
             3,
         )]);
-        let plan = reconcile(std::slice::from_ref(&d), &view, RetryPolicy { max_attempts: 3 });
+        let plan = reconcile(
+            std::slice::from_ref(&d),
+            &view,
+            RetryPolicy { max_attempts: 3 },
+        );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());
     }
@@ -170,7 +182,11 @@ mod tests {
             Some(ErrorClass::DecodeError),
             1, // well under cap, but deterministic → no point retrying
         )]);
-        let plan = reconcile(std::slice::from_ref(&d), &view, RetryPolicy { max_attempts: 3 });
+        let plan = reconcile(
+            std::slice::from_ref(&d),
+            &view,
+            RetryPolicy { max_attempts: 3 },
+        );
         assert_eq!(plan.poison, vec![d.job_id()]);
         assert!(plan.enqueue.is_empty());
     }
@@ -187,7 +203,15 @@ mod tests {
     #[test]
     fn duplicate_desired_enqueues_once() {
         let d = desired("cvvdp", b"a");
-        let plan = reconcile(&[d.clone(), d.clone(), d], &LedgerView::new(), RetryPolicy::default());
-        assert_eq!(plan.enqueue.len(), 1, "content-addressed dedup: same work declared thrice = one enqueue");
+        let plan = reconcile(
+            &[d.clone(), d.clone(), d],
+            &LedgerView::new(),
+            RetryPolicy::default(),
+        );
+        assert_eq!(
+            plan.enqueue.len(),
+            1,
+            "content-addressed dedup: same work declared thrice = one enqueue"
+        );
     }
 }

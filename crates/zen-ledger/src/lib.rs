@@ -49,26 +49,39 @@ pub enum LedgerError {
 fn enum_str<T: serde::Serialize>(v: &T) -> String {
     match serde_json::to_value(v) {
         Ok(serde_json::Value::String(s)) => s,
-        other => unreachable!("snake_case unit enum must serialize to a JSON string, got {other:?}"),
+        other => {
+            unreachable!("snake_case unit enum must serialize to a JSON string, got {other:?}")
+        }
     }
 }
 
-fn enum_parse<T: serde::de::DeserializeOwned>(s: &str, col: &'static str) -> Result<T, LedgerError> {
-    serde_json::from_value(serde_json::Value::String(s.to_string()))
-        .map_err(|e| LedgerError::Decode { col, msg: format!("bad value {s:?}: {e}") })
+fn enum_parse<T: serde::de::DeserializeOwned>(
+    s: &str,
+    col: &'static str,
+) -> Result<T, LedgerError> {
+    serde_json::from_value(serde_json::Value::String(s.to_string())).map_err(|e| {
+        LedgerError::Decode {
+            col,
+            msg: format!("bad value {s:?}: {e}"),
+        }
+    })
 }
 
 fn props() -> WriterProperties {
     WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(3).expect("zstd level 3 is valid")))
+        .set_compression(Compression::ZSTD(
+            ZstdLevel::try_new(3).expect("zstd level 3 is valid"),
+        ))
         .build()
 }
 
 fn write_batch(path: &Path, schema: SchemaRef, batch: RecordBatch) -> Result<(), LedgerError> {
-    let file = File::create(path).map_err(|e| LedgerError::Io(format!("create {}: {e}", path.display())))?;
+    let file = File::create(path)
+        .map_err(|e| LedgerError::Io(format!("create {}: {e}", path.display())))?;
     let mut w = ArrowWriter::try_new(file, schema, Some(props()))
         .map_err(|e| LedgerError::Parquet(e.to_string()))?;
-    w.write(&batch).map_err(|e| LedgerError::Parquet(e.to_string()))?;
+    w.write(&batch)
+        .map_err(|e| LedgerError::Parquet(e.to_string()))?;
     w.close().map_err(|e| LedgerError::Parquet(e.to_string()))?;
     Ok(())
 }
@@ -102,17 +115,22 @@ pub fn write_ledger(path: &Path, rows: &[LedgerRow]) -> Result<(), LedgerError> 
     let q = Int64Array::from_iter_values(rows.iter().map(|r| r.cell.q));
     let knobs = StringArray::from_iter_values(rows.iter().map(|r| r.cell.knob_tuple_json.as_str()));
     // nullable → collect via FromIterator<Option<Ptr>>
-    let output_sha: StringArray =
-        rows.iter().map(|r| r.output_sha.as_ref().map(Sha256Hex::as_str)).collect();
+    let output_sha: StringArray = rows
+        .iter()
+        .map(|r| r.output_sha.as_ref().map(Sha256Hex::as_str))
+        .collect();
     let status = StringArray::from_iter_values(rows.iter().map(|r| enum_str(&r.status)));
-    let error_class: StringArray =
-        rows.iter().map(|r| r.error_class.map(|e| enum_str(&e))).collect();
+    let error_class: StringArray = rows
+        .iter()
+        .map(|r| r.error_class.map(|e| enum_str(&e)))
+        .collect();
     let attempts = UInt32Array::from_iter_values(rows.iter().map(|r| r.attempts));
     let ts = UInt64Array::from_iter_values(rows.iter().map(|r| r.ts));
     let worker = StringArray::from_iter_values(rows.iter().map(|r| r.worker.as_str()));
     let provider = StringArray::from_iter_values(rows.iter().map(|r| r.provider.as_str()));
     let kind_json = StringArray::from_iter_values(
-        rows.iter().map(|r| serde_json::to_string(&r.kind).expect("JobKind is serializable")),
+        rows.iter()
+            .map(|r| serde_json::to_string(&r.kind).expect("JobKind is serializable")),
     );
 
     let batch = RecordBatch::try_new(
@@ -137,16 +155,24 @@ pub fn write_ledger(path: &Path, rows: &[LedgerRow]) -> Result<(), LedgerError> 
     write_batch(path, schema, batch)
 }
 
-fn col_str<'a>(b: &'a RecordBatch, idx: usize, name: &'static str) -> Result<&'a StringArray, LedgerError> {
+fn col_str<'a>(
+    b: &'a RecordBatch,
+    idx: usize,
+    name: &'static str,
+) -> Result<&'a StringArray, LedgerError> {
     b.column(idx)
         .as_any()
         .downcast_ref::<StringArray>()
-        .ok_or(LedgerError::Decode { col: name, msg: "not Utf8".into() })
+        .ok_or(LedgerError::Decode {
+            col: name,
+            msg: "not Utf8".into(),
+        })
 }
 
 /// Read ledger rows back from a parquet sidecar.
 pub fn read_ledger(path: &Path) -> Result<Vec<LedgerRow>, LedgerError> {
-    let file = File::open(path).map_err(|e| LedgerError::Io(format!("open {}: {e}", path.display())))?;
+    let file =
+        File::open(path).map_err(|e| LedgerError::Io(format!("open {}: {e}", path.display())))?;
     let reader = ParquetRecordBatchReaderBuilder::try_new(file)
         .map_err(|e| LedgerError::Parquet(e.to_string()))?
         .build()
@@ -158,28 +184,51 @@ pub fn read_ledger(path: &Path) -> Result<Vec<LedgerRow>, LedgerError> {
         let job_id = col_str(&b, 0, "job_id")?;
         let image_path = col_str(&b, 1, "image_path")?;
         let codec = col_str(&b, 2, "codec")?;
-        let q = b.column(3).as_any().downcast_ref::<Int64Array>()
-            .ok_or(LedgerError::Decode { col: "q", msg: "not Int64".into() })?;
+        let q = b
+            .column(3)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .ok_or(LedgerError::Decode {
+                col: "q",
+                msg: "not Int64".into(),
+            })?;
         let knobs = col_str(&b, 4, "knob_tuple_json")?;
         let output_sha = col_str(&b, 5, "output_sha")?;
         let status = col_str(&b, 6, "status")?;
         let error_class = col_str(&b, 7, "error_class")?;
-        let attempts = b.column(8).as_any().downcast_ref::<UInt32Array>()
-            .ok_or(LedgerError::Decode { col: "attempts", msg: "not UInt32".into() })?;
-        let ts = b.column(9).as_any().downcast_ref::<UInt64Array>()
-            .ok_or(LedgerError::Decode { col: "ts", msg: "not UInt64".into() })?;
+        let attempts =
+            b.column(8)
+                .as_any()
+                .downcast_ref::<UInt32Array>()
+                .ok_or(LedgerError::Decode {
+                    col: "attempts",
+                    msg: "not UInt32".into(),
+                })?;
+        let ts = b
+            .column(9)
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .ok_or(LedgerError::Decode {
+                col: "ts",
+                msg: "not UInt64".into(),
+            })?;
         let worker = col_str(&b, 10, "worker")?;
         let provider = col_str(&b, 11, "provider")?;
         let kind_json = col_str(&b, 12, "kind_json")?;
 
         for i in 0..b.num_rows() {
             out.push(LedgerRow {
-                job_id: JobId(Sha256Hex::parse(job_id.value(i)).map_err(|e| LedgerError::Decode {
-                    col: "job_id",
-                    msg: e.to_string(),
+                job_id: JobId(Sha256Hex::parse(job_id.value(i)).map_err(|e| {
+                    LedgerError::Decode {
+                        col: "job_id",
+                        msg: e.to_string(),
+                    }
                 })?),
                 kind: serde_json::from_str::<JobKind>(kind_json.value(i)).map_err(|e| {
-                    LedgerError::Decode { col: "kind_json", msg: e.to_string() }
+                    LedgerError::Decode {
+                        col: "kind_json",
+                        msg: e.to_string(),
+                    }
                 })?,
                 cell: CellId {
                     image_path: image_path.value(i).to_string(),
@@ -190,16 +239,21 @@ pub fn read_ledger(path: &Path) -> Result<Vec<LedgerRow>, LedgerError> {
                 output_sha: if output_sha.is_null(i) {
                     None
                 } else {
-                    Some(Sha256Hex::parse(output_sha.value(i)).map_err(|e| LedgerError::Decode {
-                        col: "output_sha",
-                        msg: e.to_string(),
+                    Some(Sha256Hex::parse(output_sha.value(i)).map_err(|e| {
+                        LedgerError::Decode {
+                            col: "output_sha",
+                            msg: e.to_string(),
+                        }
                     })?)
                 },
                 status: enum_parse::<JobStatus>(status.value(i), "status")?,
                 error_class: if error_class.is_null(i) {
                     None
                 } else {
-                    Some(enum_parse::<ErrorClass>(error_class.value(i), "error_class")?)
+                    Some(enum_parse::<ErrorClass>(
+                        error_class.value(i),
+                        "error_class",
+                    )?)
                 },
                 attempts: attempts.value(i),
                 ts: ts.value(i),
@@ -244,14 +298,19 @@ fn s5cmd_cp(endpoint: &str, src: &str, dst: &str) -> Result<(), LedgerError> {
     if st.success() {
         Ok(())
     } else {
-        Err(LedgerError::Io(format!("s5cmd cp {src} -> {dst} exited {:?}", st.code())))
+        Err(LedgerError::Io(format!(
+            "s5cmd cp {src} -> {dst} exited {:?}",
+            st.code()
+        )))
     }
 }
 
 /// List object keys under an `s3://` prefix via s5cmd (the last path segment of each match). Used to
 /// count transient state like active speculative claims. Returns `[]` on any error (best-effort).
 pub fn list_keys_uri(prefix_uri: &str, endpoint: Option<&str>) -> Vec<String> {
-    let Some(ep) = endpoint else { return Vec::new() };
+    let Some(ep) = endpoint else {
+        return Vec::new();
+    };
     if !prefix_uri.starts_with("s3://") {
         return Vec::new();
     }
@@ -280,7 +339,8 @@ pub fn read_ledger_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<LedgerRo
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
         let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("zenledger_dl_{}_{}.parquet", std::process::id(), n));
+        let tmp =
+            std::env::temp_dir().join(format!("zenledger_dl_{}_{}.parquet", std::process::id(), n));
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let rows = read_ledger(&tmp);
         let _ = std::fs::remove_file(&tmp);
@@ -291,12 +351,17 @@ pub fn read_ledger_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<LedgerRo
 }
 
 /// Write a ledger to a local path **or** an `s3://` URI (uploads via s5cmd for `s3://`).
-pub fn write_ledger_uri(uri: &str, rows: &[LedgerRow], endpoint: Option<&str>) -> Result<(), LedgerError> {
+pub fn write_ledger_uri(
+    uri: &str,
+    rows: &[LedgerRow],
+    endpoint: Option<&str>,
+) -> Result<(), LedgerError> {
     if uri.starts_with("s3://") {
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// ledger requires an R2 endpoint".into()))?;
         let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("zenledger_ul_{}_{}.parquet", std::process::id(), n));
+        let tmp =
+            std::env::temp_dir().join(format!("zenledger_ul_{}_{}.parquet", std::process::id(), n));
         write_ledger(&tmp, rows)?;
         let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
         let _ = std::fs::remove_file(&tmp);
@@ -307,12 +372,16 @@ pub fn write_ledger_uri(uri: &str, rows: &[LedgerRow], endpoint: Option<&str>) -
 }
 
 /// Read a blob index from a local path or `s3://` URI (downloads via s5cmd for `s3://`).
-pub fn read_blob_index_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<BlobIndexEntry>, LedgerError> {
+pub fn read_blob_index_uri(
+    uri: &str,
+    endpoint: Option<&str>,
+) -> Result<Vec<BlobIndexEntry>, LedgerError> {
     if uri.starts_with("s3://") {
         let ep = endpoint
             .ok_or_else(|| LedgerError::Io("s3:// blob index requires an R2 endpoint".into()))?;
         let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("zenledger_bi_{}_{}.parquet", std::process::id(), n));
+        let tmp =
+            std::env::temp_dir().join(format!("zenledger_bi_{}_{}.parquet", std::process::id(), n));
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let r = read_blob_index(&tmp);
         let _ = std::fs::remove_file(&tmp);
@@ -326,26 +395,29 @@ pub fn read_blob_index_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<Blob
 /// sidecars (e.g. a RunControl object the dashboard writes for pause/drain).
 pub fn write_bytes_uri(uri: &str, bytes: &[u8], endpoint: Option<&str>) -> Result<(), LedgerError> {
     if uri.starts_with("s3://") {
-        let ep = endpoint
-            .ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
+        let ep =
+            endpoint.ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
         let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("zenledger_wb_{}_{}.bin", std::process::id(), n));
+        let tmp =
+            std::env::temp_dir().join(format!("zenledger_wb_{}_{}.bin", std::process::id(), n));
         std::fs::write(&tmp, bytes).map_err(|e| LedgerError::Io(format!("write temp: {e}")))?;
         let r = s5cmd_cp(ep, &tmp.to_string_lossy(), uri);
         let _ = std::fs::remove_file(&tmp);
         r
     } else {
-        std::fs::write(Path::new(uri), bytes).map_err(|e| LedgerError::Io(format!("write {uri}: {e}")))
+        std::fs::write(Path::new(uri), bytes)
+            .map_err(|e| LedgerError::Io(format!("write {uri}: {e}")))
     }
 }
 
 /// Read raw bytes from a local path or `s3://` URI — for small JSON sidecars (e.g. workers.json).
 pub fn read_bytes_uri(uri: &str, endpoint: Option<&str>) -> Result<Vec<u8>, LedgerError> {
     if uri.starts_with("s3://") {
-        let ep = endpoint
-            .ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
+        let ep =
+            endpoint.ok_or_else(|| LedgerError::Io("s3:// path requires an R2 endpoint".into()))?;
         let n = URI_TMP_N.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("zenledger_rb_{}_{}.bin", std::process::id(), n));
+        let tmp =
+            std::env::temp_dir().join(format!("zenledger_rb_{}_{}.bin", std::process::id(), n));
         s5cmd_cp(ep, uri, &tmp.to_string_lossy())?;
         let b = std::fs::read(&tmp).map_err(|e| LedgerError::Io(format!("read temp: {e}")));
         let _ = std::fs::remove_file(&tmp);
@@ -374,14 +446,20 @@ pub fn write_blob_index(path: &Path, entries: &[BlobIndexEntry]) -> Result<(), L
     let last_ref = UInt64Array::from_iter_values(entries.iter().map(|e| e.last_ref_secs));
     let batch = RecordBatch::try_new(
         schema.clone(),
-        vec![Arc::new(sha), Arc::new(size), Arc::new(regen), Arc::new(last_ref)],
+        vec![
+            Arc::new(sha),
+            Arc::new(size),
+            Arc::new(regen),
+            Arc::new(last_ref),
+        ],
     )
     .map_err(|e| LedgerError::Arrow(e.to_string()))?;
     write_batch(path, schema, batch)
 }
 
 pub fn read_blob_index(path: &Path) -> Result<Vec<BlobIndexEntry>, LedgerError> {
-    let file = File::open(path).map_err(|e| LedgerError::Io(format!("open {}: {e}", path.display())))?;
+    let file =
+        File::open(path).map_err(|e| LedgerError::Io(format!("open {}: {e}", path.display())))?;
     let reader = ParquetRecordBatchReaderBuilder::try_new(file)
         .map_err(|e| LedgerError::Parquet(e.to_string()))?
         .build()
@@ -390,11 +468,23 @@ pub fn read_blob_index(path: &Path) -> Result<Vec<BlobIndexEntry>, LedgerError> 
     for batch in reader {
         let b = batch.map_err(|e| LedgerError::Arrow(e.to_string()))?;
         let sha = col_str(&b, 0, "sha")?;
-        let size = b.column(1).as_any().downcast_ref::<UInt64Array>()
-            .ok_or(LedgerError::Decode { col: "size", msg: "not UInt64".into() })?;
+        let size =
+            b.column(1)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .ok_or(LedgerError::Decode {
+                    col: "size",
+                    msg: "not UInt64".into(),
+                })?;
         let regen = col_str(&b, 2, "regenerability")?;
-        let last_ref = b.column(3).as_any().downcast_ref::<UInt64Array>()
-            .ok_or(LedgerError::Decode { col: "last_ref_secs", msg: "not UInt64".into() })?;
+        let last_ref =
+            b.column(3)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .ok_or(LedgerError::Decode {
+                    col: "last_ref_secs",
+                    msg: "not UInt64".into(),
+                })?;
         for i in 0..b.num_rows() {
             out.push(BlobIndexEntry {
                 sha: Sha256Hex::parse(sha.value(i)).map_err(|e| LedgerError::Decode {
@@ -420,11 +510,23 @@ mod tests {
 
     fn tmp(tag: &str) -> std::path::PathBuf {
         let n = N.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!("zenledger_{}_{}_{tag}.parquet", std::process::id(), n))
+        std::env::temp_dir().join(format!(
+            "zenledger_{}_{}_{tag}.parquet",
+            std::process::id(),
+            n
+        ))
     }
 
-    fn row(metric: &str, enc: &[u8], status: JobStatus, ts: u64, err: Option<ErrorClass>) -> LedgerRow {
-        let kind = zen_job_core::JobKind::Metric { metric: metric.into() };
+    fn row(
+        metric: &str,
+        enc: &[u8],
+        status: JobStatus,
+        ts: u64,
+        err: Option<ErrorClass>,
+    ) -> LedgerRow {
+        let kind = zen_job_core::JobKind::Metric {
+            metric: metric.into(),
+        };
         let input = sha256(enc);
         LedgerRow {
             job_id: JobId::of(&kind, std::slice::from_ref(&input)),
@@ -435,7 +537,11 @@ mod tests {
                 q: 80,
                 knob_tuple_json: "{}".into(),
             },
-            output_sha: if status == JobStatus::Done { Some(sha256(b"score")) } else { None },
+            output_sha: if status == JobStatus::Done {
+                Some(sha256(b"score"))
+            } else {
+                None
+            },
             status,
             error_class: err,
             attempts: 1,
@@ -450,7 +556,13 @@ mod tests {
         let p = tmp("ledger");
         let rows = vec![
             row("cvvdp", b"a", JobStatus::Done, 100, None),
-            row("ssim2", b"a", JobStatus::Failed, 100, Some(ErrorClass::Timeout)),
+            row(
+                "ssim2",
+                b"a",
+                JobStatus::Failed,
+                100,
+                Some(ErrorClass::Timeout),
+            ),
         ];
         write_ledger(&p, &rows).unwrap();
         let back = read_ledger(&p).unwrap();
@@ -464,9 +576,24 @@ mod tests {
     fn blob_index_round_trips() {
         let p = tmp("blobidx");
         let entries = vec![
-            BlobIndexEntry { sha: sha256(b"jpeg"), size: 123, regenerability: Regenerability::CheapRegenerable, last_ref_secs: 10 },
-            BlobIndexEntry { sha: sha256(b"avif"), size: 999_999, regenerability: Regenerability::ExpensiveRegenerable, last_ref_secs: 20 },
-            BlobIndexEntry { sha: sha256(b"src"), size: 50_000_000, regenerability: Regenerability::NotRegenerable, last_ref_secs: 30 },
+            BlobIndexEntry {
+                sha: sha256(b"jpeg"),
+                size: 123,
+                regenerability: Regenerability::CheapRegenerable,
+                last_ref_secs: 10,
+            },
+            BlobIndexEntry {
+                sha: sha256(b"avif"),
+                size: 999_999,
+                regenerability: Regenerability::ExpensiveRegenerable,
+                last_ref_secs: 20,
+            },
+            BlobIndexEntry {
+                sha: sha256(b"src"),
+                size: 50_000_000,
+                regenerability: Regenerability::NotRegenerable,
+                last_ref_secs: 30,
+            },
         ];
         write_blob_index(&p, &entries).unwrap();
         let back = read_blob_index(&p).unwrap();
@@ -480,7 +607,17 @@ mod tests {
         let p1 = tmp("c1");
         let p2 = tmp("c2");
         let out = tmp("compacted");
-        write_ledger(&p1, &[row("cvvdp", b"a", JobStatus::Failed, 100, Some(ErrorClass::Oom))]).unwrap();
+        write_ledger(
+            &p1,
+            &[row(
+                "cvvdp",
+                b"a",
+                JobStatus::Failed,
+                100,
+                Some(ErrorClass::Oom),
+            )],
+        )
+        .unwrap();
         write_ledger(&p2, &[row("cvvdp", b"a", JobStatus::Done, 200, None)]).unwrap();
         let n = compact_ledger(&[&p1, &p2], &out).unwrap();
         assert_eq!(n, 1, "same job_id collapses to one row");

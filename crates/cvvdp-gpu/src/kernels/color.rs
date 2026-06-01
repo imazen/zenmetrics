@@ -42,8 +42,8 @@ use cubecl::prelude::*;
 // `srgb_byte_to_dkl_scalar`, `eotf_tag::*`, etc.) keep working via
 // these re-exports.
 pub use cvvdp::kernels::color::{
-    SRGB8_TO_LINEAR_LUT, display_byte_to_dkl_scalar, display_linear_rgb_to_dkl_scalar,
-    eotf_tag, eotf_tag_and_gamma, srgb_byte_to_dkl_scalar,
+    SRGB8_TO_LINEAR_LUT, display_byte_to_dkl_scalar, display_linear_rgb_to_dkl_scalar, eotf_tag,
+    eotf_tag_and_gamma, srgb_byte_to_dkl_scalar,
 };
 
 /// In-kernel EOTF apply. Branches on `eotf_tag` to mirror the host
@@ -102,7 +102,11 @@ fn apply_eotf_branch(
         let lin = l_max * f32::powf(num / den, f32::new(1.0) / m1);
         let floor_val = f32::new(0.005);
         let clamped_lo = if lin < floor_val { floor_val } else { lin };
-        let clamped = if clamped_lo > y_peak { y_peak } else { clamped_lo };
+        let clamped = if clamped_lo > y_peak {
+            y_peak
+        } else {
+            clamped_lo
+        };
         clamped + bias
     } else if eotf_tag == 2u32 {
         // HLG inverse OETF. OOTF applied by caller (depends on Y_s).
@@ -120,9 +124,17 @@ fn apply_eotf_branch(
         // then add y_refl (NOT bias — Linear's path doesn't re-add
         // y_black, per pycvvdp's branch).
         let floor_val = f32::new(0.005);
-        let floor_eff = if y_black > floor_val { y_black } else { floor_val };
+        let floor_eff = if y_black > floor_val {
+            y_black
+        } else {
+            floor_val
+        };
         let clamped_lo = if v < floor_eff { floor_eff } else { v };
-        let clamped = if clamped_lo > y_peak { y_peak } else { clamped_lo };
+        let clamped = if clamped_lo > y_peak {
+            y_peak
+        } else {
+            clamped_lo
+        };
         clamped + y_refl
     } else if eotf_tag == 4u32 {
         // BT.1886 — gamma 2.4 with black-level lift. L = a · (V + b)^γ.

@@ -147,9 +147,16 @@ fn main() {
                     h,
                 )));
                 let strip = Arc::new(Mutex::new(Butteraugli::<Backend>::new_multires_strip(
-                    client, w, h, STRIP_BODY_H,
+                    client,
+                    w,
+                    h,
+                    STRIP_BODY_H,
                 )));
-                let _ = whole.lock().unwrap().compute(&r, &d).expect("warm full warmup");
+                let _ = whole
+                    .lock()
+                    .unwrap()
+                    .compute(&r, &d)
+                    .expect("warm full warmup");
                 let _ = strip
                     .lock()
                     .unwrap()
@@ -198,9 +205,12 @@ fn main() {
 
     // Emit CSV + a console summary with the strip/full ratio per cell.
     let date = iso_date();
-    let csv_path: PathBuf = ["benchmarks", &format!("butter_strip_wall_task158_{date}.csv")]
-        .iter()
-        .collect();
+    let csv_path: PathBuf = [
+        "benchmarks",
+        &format!("butter_strip_wall_task158_{date}.csv"),
+    ]
+    .iter()
+    .collect();
     if let Some(parent) = csv_path.parent() {
         let _ = fs::create_dir_all(parent);
     }

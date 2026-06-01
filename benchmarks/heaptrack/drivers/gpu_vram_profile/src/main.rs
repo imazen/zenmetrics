@@ -73,9 +73,7 @@ type Backend = cubecl::cuda::CudaRuntime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 type Backend = cubecl::wgpu::WgpuRuntime;
 #[cfg(not(any(feature = "cuda", feature = "wgpu")))]
-compile_error!(
-    "gpu-vram-profile requires either --features cuda or --features wgpu at build time"
-);
+compile_error!("gpu-vram-profile requires either --features cuda or --features wgpu at build time");
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -166,8 +164,8 @@ fn run_worker_cvvdp(mode: &str, w: u32, h: u32) -> Result<(f32, f64, Option<u64>
     use cubecl::Runtime;
     use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
     use cvvdp_gpu::{
-        estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped,
-        estimate_gpu_memory_bytes_strip_pair, Cvvdp,
+        Cvvdp, estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped,
+        estimate_gpu_memory_bytes_strip_pair,
     };
 
     let geom = DisplayGeometry::STANDARD_4K;
@@ -194,14 +192,9 @@ fn run_worker_cvvdp(mode: &str, w: u32, h: u32) -> Result<(f32, f64, Option<u64>
             // construct + warm_ref + score path so the cached-ref buffers
             // are allocated and visible to nvidia-smi.
             let est = None; // No public estimator for Mode E yet.
-            let mut c = Cvvdp::<Backend>::new_strip(
-                client,
-                w,
-                h,
-                STRIP_H_BODY,
-                CvvdpParams::PLACEHOLDER,
-            )
-            .map_err(|e| format!("Cvvdp::new_strip: {e:?}"))?;
+            let mut c =
+                Cvvdp::<Backend>::new_strip(client, w, h, STRIP_H_BODY, CvvdpParams::PLACEHOLDER)
+                    .map_err(|e| format!("Cvvdp::new_strip: {e:?}"))?;
             // For Mode E peak measurement we run the warm_reference + score
             // path that the production batch caller hits.
             c.warm_reference(&r)

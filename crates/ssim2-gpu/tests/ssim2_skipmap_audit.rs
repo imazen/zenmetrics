@@ -84,8 +84,16 @@ fn modes_agree_on_jpeg_corpus() {
         let dl = (lossless - full).abs();
         let dfa = (fast - full).abs();
         let dfx = (faster - full).abs();
-        let rel_f = if full.abs() > 1e-3 { dfa / full.abs() } else { 0.0 };
-        let rel_x = if full.abs() > 1e-3 { dfx / full.abs() } else { 0.0 };
+        let rel_f = if full.abs() > 1e-3 {
+            dfa / full.abs()
+        } else {
+            0.0
+        };
+        let rel_x = if full.abs() > 1e-3 {
+            dfx / full.abs()
+        } else {
+            0.0
+        };
         eprintln!(
             "{q:>4} {:>14.6} {:>14.6} {:>14.6} {:>14.6}   {:>10.3e}   {:>10.3e}   {:>10.3e}",
             full, lossless, fast, faster, dl, rel_f, rel_x

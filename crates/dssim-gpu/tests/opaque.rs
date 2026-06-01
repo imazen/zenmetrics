@@ -53,8 +53,7 @@ fn opaque_srgb_u8_matches_typed() {
     let typed_score = typed.compute(&ref_buf, &dis_buf).expect("typed compute");
 
     // Opaque path.
-    let mut opaque = DssimOpaque::new(BACKEND_E, w, h, DssimParams::DEFAULT)
-        .expect("opaque new");
+    let mut opaque = DssimOpaque::new(BACKEND_E, w, h, DssimParams::DEFAULT).expect("opaque new");
     let opaque_score = opaque
         .compute_srgb_u8(&ref_buf, &dis_buf)
         .expect("opaque compute_srgb_u8");
@@ -62,8 +61,7 @@ fn opaque_srgb_u8_matches_typed() {
     // Match within tight tolerance — same kernel, same input bytes,
     // but two separate clients / GPU buffer allocations so atomic-add
     // reduction order may differ by a few ULPs.
-    let rel = (opaque_score.value - typed_score.score).abs()
-        / typed_score.score.abs().max(1e-12);
+    let rel = (opaque_score.value - typed_score.score).abs() / typed_score.score.abs().max(1e-12);
     assert!(
         rel < 1e-5,
         "opaque {} vs typed {} differ by rel {}",
@@ -103,23 +101,21 @@ fn opaque_pixels_handles_stride() {
             .copy_from_slice(&dist_tight[y * row_bytes..(y + 1) * row_bytes]);
     }
 
-    let mut opaque = DssimOpaque::new(BACKEND_E, w, h, DssimParams::DEFAULT)
-        .expect("opaque new");
+    let mut opaque = DssimOpaque::new(BACKEND_E, w, h, DssimParams::DEFAULT).expect("opaque new");
 
     // Tight slice path.
-    let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor)
-        .expect("tight ref slice");
-    let d_tight = PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor)
-        .expect("tight dist slice");
+    let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref slice");
+    let d_tight =
+        PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist slice");
     let tight_score = opaque
         .compute_pixels(r_tight, d_tight)
         .expect("tight compute_pixels");
 
     // Strided slice path.
-    let r_padded = PixelSlice::new(&padded_ref, w, h, stride, descriptor)
-        .expect("padded ref slice");
-    let d_padded = PixelSlice::new(&padded_dis, w, h, stride, descriptor)
-        .expect("padded dist slice");
+    let r_padded =
+        PixelSlice::new(&padded_ref, w, h, stride, descriptor).expect("padded ref slice");
+    let d_padded =
+        PixelSlice::new(&padded_dis, w, h, stride, descriptor).expect("padded dist slice");
     let padded_score = opaque
         .compute_pixels(r_padded, d_padded)
         .expect("padded compute_pixels");
@@ -129,8 +125,7 @@ fn opaque_pixels_handles_stride() {
     // bytes can differ at the few-ULP level. Verify the strided path
     // produces the same pixels as the tight path within a tight
     // tolerance.
-    let rel = (tight_score.value - padded_score.value).abs()
-        / tight_score.value.abs().max(1e-12);
+    let rel = (tight_score.value - padded_score.value).abs() / tight_score.value.abs().max(1e-12);
     assert!(
         rel < 1e-5,
         "strided {} vs tight {} differ by rel {}",

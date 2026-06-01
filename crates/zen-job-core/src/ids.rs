@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::content::{sha256, Sha256Hex};
+use crate::content::{Sha256Hex, sha256};
 use crate::job::JobKind;
 
 /// The existing per-cell identity tuple. Retained as the human/training key alongside content
@@ -61,7 +61,9 @@ mod tests {
 
     #[test]
     fn jobid_is_idempotent() {
-        let k = JobKind::Metric { metric: "ssim2".into() };
+        let k = JobKind::Metric {
+            metric: "ssim2".into(),
+        };
         let a = sha256(b"encodeA");
         assert_eq!(
             JobId::of(&k, std::slice::from_ref(&a)),
@@ -72,7 +74,9 @@ mod tests {
 
     #[test]
     fn jobid_is_input_order_independent() {
-        let k = JobKind::Bake { view: "train".into() };
+        let k = JobKind::Bake {
+            view: "train".into(),
+        };
         let a = sha256(b"a");
         let b = sha256(b"b");
         assert_eq!(
@@ -84,8 +88,12 @@ mod tests {
     #[test]
     fn jobid_differs_on_kind_and_inputs() {
         let a = sha256(b"a");
-        let cvvdp = JobKind::Metric { metric: "cvvdp".into() };
-        let ssim2 = JobKind::Metric { metric: "ssim2".into() };
+        let cvvdp = JobKind::Metric {
+            metric: "cvvdp".into(),
+        };
+        let ssim2 = JobKind::Metric {
+            metric: "ssim2".into(),
+        };
         assert_ne!(
             JobId::of(&cvvdp, std::slice::from_ref(&a)),
             JobId::of(&ssim2, std::slice::from_ref(&a))

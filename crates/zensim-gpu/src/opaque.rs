@@ -563,16 +563,16 @@ impl ZensimOpaque {
             ResolvedMode::Full => {
                 Box::new(Zensim::<R>::new_with_regime(client, width, height, regime)?)
             }
-            ResolvedMode::Strip { h_body } => Box::new(
-                Zensim::<R>::new_strip_with_halo_and_regime(
+            ResolvedMode::Strip { h_body } => {
+                Box::new(Zensim::<R>::new_strip_with_halo_and_regime(
                     client,
                     width,
                     height,
                     h_body,
                     crate::pipeline::STRIP_DEFAULT_HALO,
                     regime,
-                )?,
-            ),
+                )?)
+            }
         };
         Ok(Self {
             inner,

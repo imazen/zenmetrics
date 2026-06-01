@@ -13,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 use zen_job_core::{
-    reconcile, CellId, DesiredJob, JobKind, JobStatus, LedgerView, RetryPolicy, Sha256Hex,
+    CellId, DesiredJob, JobKind, JobStatus, LedgerView, RetryPolicy, Sha256Hex, reconcile,
 };
 
 fn empty_knobs() -> String {
@@ -90,14 +90,16 @@ pub fn coverage(desired: &[DesiredJob], view: &LedgerView) -> Vec<CoverageRow> {
     for d in desired {
         let codec = d.cell.codec.clone();
         let metric = metric_label(&d.kind);
-        let row = m.entry((codec.clone(), metric.clone())).or_insert(CoverageRow {
-            codec,
-            metric,
-            total: 0,
-            done: 0,
-            poison: 0,
-            gap: 0,
-        });
+        let row = m
+            .entry((codec.clone(), metric.clone()))
+            .or_insert(CoverageRow {
+                codec,
+                metric,
+                total: 0,
+                done: 0,
+                poison: 0,
+                gap: 0,
+            });
         row.total += 1;
         match view.get(&d.job_id()).map(|r| r.status) {
             Some(JobStatus::Done) => row.done += 1,
@@ -114,19 +116,35 @@ pub fn gap(desired: &[DesiredJob], view: &LedgerView, policy: RetryPolicy) -> Ve
     use std::collections::HashSet;
     let plan = reconcile(desired, view, policy);
     let enq: HashSet<_> = plan.enqueue.into_iter().collect();
-    desired.iter().filter(|d| enq.contains(&d.job_id())).cloned().collect()
+    desired
+        .iter()
+        .filter(|d| enq.contains(&d.job_id()))
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zen_job_core::{sha256, LedgerRow};
+    use zen_job_core::{LedgerRow, sha256};
 
     fn spec() -> DeclareSpec {
         DeclareSpec {
             items: vec![
-                DeclareItem { image_path: "a.png".into(), codec: "zenjpeg".into(), q: 80, knob_tuple_json: "{}".into(), encode_sha: sha256(b"enc-a").as_str().into() },
-                DeclareItem { image_path: "b.png".into(), codec: "zenavif".into(), q: 50, knob_tuple_json: "{}".into(), encode_sha: sha256(b"enc-b").as_str().into() },
+                DeclareItem {
+                    image_path: "a.png".into(),
+                    codec: "zenjpeg".into(),
+                    q: 80,
+                    knob_tuple_json: "{}".into(),
+                    encode_sha: sha256(b"enc-a").as_str().into(),
+                },
+                DeclareItem {
+                    image_path: "b.png".into(),
+                    codec: "zenavif".into(),
+                    q: 50,
+                    knob_tuple_json: "{}".into(),
+                    encode_sha: sha256(b"enc-b").as_str().into(),
+                },
             ],
             metrics: vec!["cvvdp".into(), "ssim2".into()],
         }
@@ -176,12 +194,25 @@ mod tests {
     fn re_declaring_done_work_is_empty_gap() {
         let d = declare(&spec()).unwrap();
         // mark ALL done
-        let rows: Vec<LedgerRow> = d.iter().map(|j| LedgerRow {
-            job_id: j.job_id(), kind: j.kind.clone(), cell: j.cell.clone(),
-            output_sha: Some(sha256(b"s")), status: JobStatus::Done, error_class: None,
-            attempts: 1, ts: 1, worker: "w".into(), provider: "local".into(),
-        }).collect();
+        let rows: Vec<LedgerRow> = d
+            .iter()
+            .map(|j| LedgerRow {
+                job_id: j.job_id(),
+                kind: j.kind.clone(),
+                cell: j.cell.clone(),
+                output_sha: Some(sha256(b"s")),
+                status: JobStatus::Done,
+                error_class: None,
+                attempts: 1,
+                ts: 1,
+                worker: "w".into(),
+                provider: "local".into(),
+            })
+            .collect();
         let view = LedgerView::from_rows(rows);
-        assert!(gap(&d, &view, RetryPolicy::default()).is_empty(), "fully-done declaration → no-op");
+        assert!(
+            gap(&d, &view, RetryPolicy::default()).is_empty(),
+            "fully-done declaration → no-op"
+        );
     }
 }

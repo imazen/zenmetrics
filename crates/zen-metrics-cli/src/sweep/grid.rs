@@ -169,7 +169,10 @@ mod tests {
 
     #[test]
     fn q_grid_parses() {
-        assert_eq!(parse_q_grid("25,50,75,90").unwrap(), vec![25.0, 50.0, 75.0, 90.0]);
+        assert_eq!(
+            parse_q_grid("25,50,75,90").unwrap(),
+            vec![25.0, 50.0, 75.0, 90.0]
+        );
     }
 
     #[test]

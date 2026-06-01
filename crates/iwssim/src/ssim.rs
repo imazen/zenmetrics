@@ -16,7 +16,9 @@
 use alloc::vec::Vec;
 
 use crate::filters::SSIM_WIN_LEN;
-use crate::simd_kernels::{cs_combine_into, mul_into, square_into, ssim_gauss_h_pass, ssim_gauss_v_pass};
+use crate::simd_kernels::{
+    cs_combine_into, mul_into, square_into, ssim_gauss_h_pass, ssim_gauss_v_pass,
+};
 
 const SSIM_L: f32 = 255.0;
 const SSIM_K1: f32 = 0.01;
@@ -102,7 +104,15 @@ pub(crate) fn compute_cs(
 
     // σ² and σ₁₂ from raw moments + luminance (top scale).
     let mut cs = alloc::vec![0.0_f32; n_cs];
-    cs_combine_into(&mu1, &mu2, &sigma1_sq, &sigma2_sq, &sigma12, &mut cs, with_luminance);
+    cs_combine_into(
+        &mu1,
+        &mu2,
+        &sigma1_sq,
+        &sigma2_sq,
+        &sigma12,
+        &mut cs,
+        with_luminance,
+    );
 
     CsStats {
         cs_w,

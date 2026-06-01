@@ -35,9 +35,9 @@
 //!   what that stream's pool holds on the device. Used by the umbrella's
 //!   VRAM-isolation test to assert a dropped session's pool went to 0.
 
+use crate::Result;
 use crate::opaque::{Backend, CvvdpOpaque};
 use crate::params::{CvvdpParams, DisplayGeometry};
-use crate::Result;
 
 /// Bind a CLONE of the cached per-device client for `backend` to the
 /// explicit cubecl stream `stream_value`, so every allocation /
@@ -50,35 +50,53 @@ use crate::Result;
 /// reintroduce the shared-pool partial-page reclaim hazard the session
 /// design exists to eliminate.
 #[cfg(feature = "cuda")]
-fn cuda_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::cuda::CudaRuntime> {
+fn cuda_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::cuda::CudaRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cuda::CudaRuntime::client(&Default::default());
     // SAFETY: stream_value is unique-per-live-session and < 128 by the
     // umbrella allocator's contract (see module docs).
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 
 /// wgpu counterpart of [`cuda_client_on_stream`].
 #[cfg(feature = "wgpu")]
-fn wgpu_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::wgpu::WgpuRuntime> {
+fn wgpu_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::wgpu::WgpuRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::wgpu::WgpuRuntime::client(&Default::default());
     // SAFETY: see cuda_client_on_stream.
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 
 /// cpu counterpart of [`cuda_client_on_stream`].
 #[cfg(feature = "cpu")]
-fn cpu_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::cpu::CpuRuntime> {
+fn cpu_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::cpu::CpuRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cpu::CpuRuntime::client(&Default::default());
     // SAFETY: see cuda_client_on_stream.
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 

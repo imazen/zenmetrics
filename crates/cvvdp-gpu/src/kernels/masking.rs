@@ -54,22 +54,9 @@ use cubecl::prelude::*;
 // cube-macro name-resolution interaction.
 pub use cvvdp::kernels::masking::{
     CH_GAIN, D_MAX, MASK_C, MASK_P, MASK_Q, PU_BLUR_KERNEL_1D, PU_PADSIZE, XCM_3X3,
-    clamp_diff_soft, gaussian_blur_sigma3, mask_pool_pixel, mult_mutual_band,
-    mult_mutual_pixel, phase_uncertainty_band, phase_uncertainty_no_blur, safe_pow,
+    clamp_diff_soft, gaussian_blur_sigma3, mask_pool_pixel, mult_mutual_band, mult_mutual_pixel,
+    phase_uncertainty_band, phase_uncertainty_no_blur, safe_pow,
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /// Horizontal pass of the σ=3 separable Gaussian blur, with reflect
 /// padding. Per-output-pixel thread. Input `src` is `w × h`
@@ -721,11 +708,6 @@ fn reflect_pu_idx(i: i32, n: i32) -> usize {
     }
     j as usize
 }
-
-
-
-
-
 
 /// Per-pixel `M_mm_raw[c] = min(|T_p[c]|, |R_p[c]|)` for all 3
 /// channels. First step of cvvdp's `mult-mutual` masking — the raw

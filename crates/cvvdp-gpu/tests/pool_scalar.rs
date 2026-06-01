@@ -51,9 +51,18 @@ const _: () = {
         "JOD_EXP drifted from cvvdp v0.5.4 jod_exp=0.930_204_27 (met2jod power-law exponent)",
     );
     // Tick 558: PER_CH_W — still-image 3-channel weights, all 1.0.
-    assert!(PER_CH_W[0].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[A] drifted from 1.0");
-    assert!(PER_CH_W[1].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[Rg] drifted from 1.0");
-    assert!(PER_CH_W[2].to_bits() == 1.0_f32.to_bits(), "PER_CH_W[Vy] drifted from 1.0");
+    assert!(
+        PER_CH_W[0].to_bits() == 1.0_f32.to_bits(),
+        "PER_CH_W[A] drifted from 1.0"
+    );
+    assert!(
+        PER_CH_W[1].to_bits() == 1.0_f32.to_bits(),
+        "PER_CH_W[Rg] drifted from 1.0"
+    );
+    assert!(
+        PER_CH_W[2].to_bits() == 1.0_f32.to_bits(),
+        "PER_CH_W[Vy] drifted from 1.0"
+    );
     // Tick 558: BASEBAND_W — per-channel baseband weights.
     assert!(
         BASEBAND_W[0].to_bits() == 0.003_633_448_6_f32.to_bits(),

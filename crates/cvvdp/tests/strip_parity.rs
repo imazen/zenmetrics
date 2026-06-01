@@ -264,7 +264,10 @@ fn strip_walker_dispatches_n_strips_at_default_size() {
     let count = s.strip_dispatch_counter();
     // Level 0: 512/128 = 4 strips × 3 ch = 12. Plus deeper levels
     // contributing more. Minimum guaranteed: 12.
-    assert!(count >= 12, "expected >= 12 dispatches at 512² h_body=128; got {count}");
+    assert!(
+        count >= 12,
+        "expected >= 12 dispatches at 512² h_body=128; got {count}"
+    );
 }
 
 /// All 5 h_body values must yield identical Full-vs-strip JOD at the

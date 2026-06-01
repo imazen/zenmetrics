@@ -19,15 +19,15 @@ pub mod fleet;
 pub mod notify;
 pub mod views;
 
-pub use control::{gc_dry_run, stop_spend, ControlIntent, GcDryRun, StopSpendDecision};
+pub use control::{ControlIntent, GcDryRun, StopSpendDecision, gc_dry_run, stop_spend};
 pub use data::{DashData, DashError};
 pub use fleet::{
-    fleet_label_key, fleet_token, idle_boxes, kill_fleet, kill_named, list_fleet, selector_for,
-    FleetBox, KillResult,
+    FleetBox, KillResult, fleet_label_key, fleet_token, idle_boxes, kill_fleet, kill_named,
+    list_fleet, selector_for,
 };
-pub use notify::{detect, format_event, NotifyEvent, NotifyPayload};
+pub use notify::{NotifyEvent, NotifyPayload, detect, format_event};
 pub use views::{
-    catalog_view, cost_view, failures, kind_label, progress, query_view, results_view, run_summary,
-    storage, workers_view, CatalogRow, CostView, FailureCell, KindProgress, QueryRow, ResultRow,
-    RunSummary, TierStorage, WorkerStat,
+    CatalogRow, CostView, FailureCell, KindProgress, QueryRow, ResultRow, RunSummary, TierStorage,
+    WorkerStat, catalog_view, cost_view, failures, kind_label, progress, query_view, results_view,
+    run_summary, storage, workers_view,
 };

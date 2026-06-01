@@ -87,13 +87,7 @@ fn strip_compute(w: u32, h: u32, h_body: u32, ref_rgb: &[u8], dist_rgb: &[u8]) -
 }
 
 /// Strip path via the explicit `compute_stripped` entry point.
-fn strip_compute_explicit(
-    w: u32,
-    h: u32,
-    h_body: u32,
-    ref_rgb: &[u8],
-    dist_rgb: &[u8],
-) -> f64 {
+fn strip_compute_explicit(w: u32, h: u32, h_body: u32, ref_rgb: &[u8], dist_rgb: &[u8]) -> f64 {
     let mut d = Dssim::<Backend>::new_strip(make_client!(), w, h, h_body).unwrap();
     d.compute_stripped(ref_rgb, dist_rgb).unwrap().score
 }
@@ -102,7 +96,10 @@ const REL_TOL: f64 = 1e-4;
 
 fn check_rel(label: &str, whole: f64, strip: f64) {
     let rel = (strip - whole).abs() / whole.max(1e-6);
-    eprintln!("{label}: whole={whole:.8}, strip={strip:.8}, rel={:.4}%", rel * 100.0);
+    eprintln!(
+        "{label}: whole={whole:.8}, strip={strip:.8}, rel={:.4}%",
+        rel * 100.0
+    );
     assert!(
         rel < REL_TOL,
         "{label}: strip drifted from whole by {rel:.6} rel (whole={whole}, strip={strip})"
@@ -358,7 +355,10 @@ fn cross_strip_size_parity() {
     let sa = a.compute(&r, &dist).unwrap().score;
     let sb = b.compute(&r, &dist).unwrap().score;
     let rel = (sa - sb).abs() / sa.max(1e-6);
-    eprintln!("strip h_body=128 vs 256: a={sa:.8}, b={sb:.8}, rel={:.4} %", rel * 100.0);
+    eprintln!(
+        "strip h_body=128 vs 256: a={sa:.8}, b={sb:.8}, rel={:.4} %",
+        rel * 100.0
+    );
     // Tightened 2026-05-22 from 1e-3 to 1e-4 (measured 9e-6 on this
     // fixture; 1e-4 leaves 10× margin while still catching real
     // strip-orchestration bugs).

@@ -22,9 +22,9 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use cubecl::Runtime;
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
-use cubecl::Runtime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
 use iwssim_gpu::Iwssim;
@@ -144,7 +144,10 @@ fn bench_strip(w: u32, h: u32, h_body: u32, n_warmup: usize, n_measure: usize) -
     let t = Instant::now();
     for _ in 0..n_measure {
         let t_iter = Instant::now();
-        last_score = iw.compute_gray_stripped(&ref_gray, &dis_gray).unwrap().score;
+        last_score = iw
+            .compute_gray_stripped(&ref_gray, &dis_gray)
+            .unwrap()
+            .score;
         cubecl::future::block_on(client.sync()).expect("client.sync");
         let dt_iter = t_iter.elapsed().as_secs_f64();
         if dt_iter < min_ms {
@@ -175,9 +178,18 @@ fn fmt_row(r: &Row) -> String {
         Some((alloc, body)) => format!("strip(body={body},alloc={alloc})"),
     };
     let mp = (r.w as f64 * r.h as f64) / 1e6;
-    let mean = r.mean_ms.map(|v| format!("{v:.3}")).unwrap_or_else(|| "SKIP_OOM".into());
-    let min = r.min_ms.map(|v| format!("{v:.3}")).unwrap_or_else(|| "SKIP_OOM".into());
-    let score = r.score.map(|v| format!("{v:.6}")).unwrap_or_else(|| "n/a".into());
+    let mean = r
+        .mean_ms
+        .map(|v| format!("{v:.3}"))
+        .unwrap_or_else(|| "SKIP_OOM".into());
+    let min = r
+        .min_ms
+        .map(|v| format!("{v:.3}"))
+        .unwrap_or_else(|| "SKIP_OOM".into());
+    let score = r
+        .score
+        .map(|v| format!("{v:.6}"))
+        .unwrap_or_else(|| "n/a".into());
     format!(
         "{w}x{h},{mp:.2},{mode},{mean},{min},{score},{ws:.1}",
         w = r.w,
@@ -202,10 +214,10 @@ fn main() {
     // 4MP and 12MP are the focus — 1MP is a baseline (single-strip
     // degenerate when body=1024) and 24MP is the OOM target.
     let sizes: &[(u32, u32)] = &[
-        (1024, 1024),  // 1 MP, single-strip degenerate
-        (2048, 2048),  // 4 MP, 2 body strips at body=1024
-        (4000, 3000),  // 12 MP, 3 body strips at body=1024
-        (6000, 4000),  // 24 MP, 4 body strips at body=1024
+        (1024, 1024), // 1 MP, single-strip degenerate
+        (2048, 2048), // 4 MP, 2 body strips at body=1024
+        (4000, 3000), // 12 MP, 3 body strips at body=1024
+        (6000, 4000), // 24 MP, 4 body strips at body=1024
     ];
 
     let mut rows: Vec<Row> = Vec::new();

@@ -62,7 +62,13 @@ pub(crate) fn reflect1(i: i32, n: i32) -> i32 {
 /// `corr_dn` along the horizontal axis: correlate with `binom5`, then
 /// decimate by 2. Input `(h, in_w)` → output `(h, out_w)` with
 /// `out_w = ceil(in_w / 2)`.
-pub(crate) fn corr_dn_horizontal(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f32]) {
+pub(crate) fn corr_dn_horizontal(
+    src: &[f32],
+    h: usize,
+    in_w: usize,
+    out_w: usize,
+    dst: &mut [f32],
+) {
     debug_assert_eq!(src.len(), h * in_w);
     debug_assert_eq!(dst.len(), h * out_w);
     let r = BINOM5_RADIUS;
@@ -137,7 +143,13 @@ fn reflect_expanded(i: i32, in_axis: i32) -> (bool, usize) {
 /// `up_conv` along horizontal: zero-insert × 2, then correlate with
 /// `binom5`. Output `(h, out_w)` where `out_w` is typically `2*in_w`
 /// or `2*in_w - 1`.
-pub(crate) fn up_conv_horizontal(src: &[f32], h: usize, in_w: usize, out_w: usize, dst: &mut [f32]) {
+pub(crate) fn up_conv_horizontal(
+    src: &[f32],
+    h: usize,
+    in_w: usize,
+    out_w: usize,
+    dst: &mut [f32],
+) {
     debug_assert_eq!(src.len(), h * in_w);
     debug_assert_eq!(dst.len(), h * out_w);
     let r = BINOM5_RADIUS;
@@ -160,13 +172,7 @@ pub(crate) fn up_conv_horizontal(src: &[f32], h: usize, in_w: usize, out_w: usiz
 }
 
 /// `up_conv` along vertical: zero-insert × 2 then correlate.
-pub(crate) fn up_conv_vertical(
-    src: &[f32],
-    in_h: usize,
-    w: usize,
-    out_h: usize,
-    dst: &mut [f32],
-) {
+pub(crate) fn up_conv_vertical(src: &[f32], in_h: usize, w: usize, out_h: usize, dst: &mut [f32]) {
     debug_assert_eq!(src.len(), in_h * w);
     debug_assert_eq!(dst.len(), out_h * w);
     let r = BINOM5_RADIUS;
@@ -326,8 +332,7 @@ pub(crate) fn imenlarge2(
     // Linear extrap cols.
     for y in 0..t2_h {
         t2[y * t2_w + 0] = 2.0 * t2[y * t2_w + 1] - t2[y * t2_w + 2];
-        t2[y * t2_w + (t2_w - 1)] =
-            2.0 * t2[y * t2_w + (t2_w - 2)] - t2[y * t2_w + (t2_w - 3)];
+        t2[y * t2_w + (t2_w - 1)] = 2.0 * t2[y * t2_w + (t2_w - 2)] - t2[y * t2_w + (t2_w - 3)];
     }
 
     // Stage 3: take `::2, ::2` slice of t2 → shape (ceil(t2_h/2), ceil(t2_w/2)).
@@ -364,13 +369,7 @@ pub(crate) fn imenlarge2(
 /// `align_corners=True` (the default in older PyTorch versions, which
 /// is what the reference uses). With `align_corners=True`, sample
 /// positions are mapped via `x_src = x_dst * (W_src - 1) / (W_dst - 1)`.
-fn bilinear_upsample(
-    src: &[f32],
-    sw: usize,
-    sh: usize,
-    dw: usize,
-    dh: usize,
-) -> Vec<f32> {
+fn bilinear_upsample(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
     let mut out = alloc::vec![0.0_f32; dh * dw];
     let sx_scale = (sw - 1) as f32 / (dw - 1) as f32;
     let sy_scale = (sh - 1) as f32 / (dh - 1) as f32;
@@ -403,10 +402,16 @@ mod tests {
     #[test]
     fn pyramid_dims_5_level() {
         let dims = pyramid_dims(256, 256, 5);
-        assert_eq!(dims, alloc::vec![(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)]);
+        assert_eq!(
+            dims,
+            alloc::vec![(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)]
+        );
         // Odd input: 257 → 129 → 65 → 33 → 17.
         let dims = pyramid_dims(257, 257, 5);
-        assert_eq!(dims, alloc::vec![(257, 257), (129, 129), (65, 65), (33, 33), (17, 17)]);
+        assert_eq!(
+            dims,
+            alloc::vec![(257, 257), (129, 129), (65, 65), (33, 33), (17, 17)]
+        );
     }
 
     #[test]

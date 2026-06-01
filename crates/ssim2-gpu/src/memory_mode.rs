@@ -35,8 +35,7 @@ fn env_cap_bytes() -> Option<usize> {
 
 /// Cache for the live nvidia-smi probe result. Process-wide so the
 /// hot path stays sub-microsecond after first init.
-static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
-    std::sync::OnceLock::new();
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
 
 /// Probe live free-VRAM via `nvidia-smi --query-gpu=memory.free`.
 /// Mirrors `iwssim_gpu::memory_mode::live_vram_probe_bytes`; see that
@@ -47,10 +46,7 @@ pub fn live_vram_probe_bytes() -> Option<usize> {
 
 fn query_nvidia_smi_memory_free() -> Option<usize> {
     let out = std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=memory.free",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -145,7 +141,9 @@ pub enum ResolvedMode {
     /// cap. `h_body + 2 * STRIP_HALO_ROWS` is the per-strip allocation
     /// height; the constructor uses `min(h_body, image_h)` so for tiny
     /// images it degenerates to a single-strip computation.
-    Strip { h_body: u32 },
+    Strip {
+        h_body: u32,
+    },
 }
 
 /// Auto policy. Picks Full when it fits the cap; otherwise tries Strip
@@ -159,11 +157,7 @@ pub enum ResolvedMode {
 /// `butteraugli_gpu::memory_mode::resolve_auto`: when the default body
 /// doesn't fit, walk down to the largest aligned body that does. This
 /// is the 2-pass-fallback the unified MemoryMode API promises.
-pub fn resolve_auto(
-    width: u32,
-    height: u32,
-    cap: usize,
-) -> crate::Result<ResolvedMode> {
+pub fn resolve_auto(width: u32, height: u32, cap: usize) -> crate::Result<ResolvedMode> {
     let full_bytes = estimate_gpu_memory_bytes(width, height);
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);

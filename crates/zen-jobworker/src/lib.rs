@@ -20,8 +20,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use zen_job_core::{
-    gc_plan, lru_cap_evict, reconcile, sha256, worker_serves, BlobIndexEntry, DesiredJob, ErrorClass, JobId,
-    JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, RetryPolicy, RunControl, Sha256Hex, Tombstone,
+    BlobIndexEntry, DesiredJob, ErrorClass, JobId, JobStatus, LedgerRow, LedgerView,
+    Regenerability, ResourceClass, RetryPolicy, RunControl, Sha256Hex, Tombstone, gc_plan,
+    lru_cap_evict, reconcile, sha256, worker_serves,
 };
 
 /// A classified execution failure — becomes a FAILED ledger row carrying this `error_class`, which
@@ -34,7 +35,10 @@ pub struct HandlerError {
 
 impl HandlerError {
     pub fn new(class: ErrorClass, msg: impl Into<String>) -> Self {
-        Self { class, msg: msg.into() }
+        Self {
+            class,
+            msg: msg.into(),
+        }
     }
 }
 
@@ -94,12 +98,23 @@ pub struct R2BlobStore {
 
 impl R2BlobStore {
     pub fn new(endpoint: String, bucket: String, prefix: String) -> Self {
-        Self { target: R2Target { endpoint, bucket, prefix } }
+        Self {
+            target: R2Target {
+                endpoint,
+                bucket,
+                prefix,
+            },
+        }
     }
 
     /// The full `s3://` key for a content hash.
     pub fn key(&self, sha: &Sha256Hex) -> String {
-        format!("s3://{}/{}/{}", self.target.bucket, self.target.prefix.trim_matches('/'), sha)
+        format!(
+            "s3://{}/{}/{}",
+            self.target.bucket,
+            self.target.prefix.trim_matches('/'),
+            sha
+        )
     }
 
     fn s5cmd(&self) -> Command {
@@ -115,7 +130,8 @@ impl BlobStore for R2BlobStore {
         if self.exists(&sha) {
             return Ok(sha); // content-addressed dedup — already in R2
         }
-        let tmp = std::env::temp_dir().join(format!("zenblob_{}_{}", std::process::id(), sha.as_str()));
+        let tmp =
+            std::env::temp_dir().join(format!("zenblob_{}_{}", std::process::id(), sha.as_str()));
         std::fs::write(&tmp, bytes)?;
         let status = self
             .s5cmd()
@@ -203,11 +219,17 @@ pub fn release_claim_r2(endpoint: &str, bucket: &str, prefix: &str, job_id: &Job
 /// Install the spot-preemption handler (goal F): on SIGTERM/SIGINT, release the in-flight claim (if
 /// any) so the job requeues immediately, then exit. Runs on a dedicated signal-hook thread (safe to
 /// spawn `aws`). No-op if signal registration fails (falls back to TTL reclaim, goal E).
-fn spawn_spot_reclaim(inflight: Arc<Mutex<Option<JobId>>>, endpoint: &str, bucket: &str, prefix: &str) {
+fn spawn_spot_reclaim(
+    inflight: Arc<Mutex<Option<JobId>>>,
+    endpoint: &str,
+    bucket: &str,
+    prefix: &str,
+) {
     let (endpoint, bucket, prefix) = (endpoint.to_string(), bucket.to_string(), prefix.to_string());
-    let Ok(mut signals) =
-        signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM, signal_hook::consts::SIGINT])
-    else {
+    let Ok(mut signals) = signal_hook::iterator::Signals::new([
+        signal_hook::consts::SIGTERM,
+        signal_hook::consts::SIGINT,
+    ]) else {
         return;
     };
     std::thread::spawn(move || {
@@ -216,7 +238,11 @@ fn spawn_spot_reclaim(inflight: Arc<Mutex<Option<JobId>>>, endpoint: &str, bucke
                 let released = release_claim_r2(&endpoint, &bucket, &prefix, &id);
                 eprintln!(
                     "zen-jobworker: spot preemption — {} claim {} for fast requeue",
-                    if released { "released" } else { "could not release" },
+                    if released {
+                        "released"
+                    } else {
+                        "could not release"
+                    },
                     id.as_str()
                 );
             } else {
@@ -275,11 +301,15 @@ fn read_claim(endpoint: &str, bucket: &str, key: &str) -> Option<(String, u64)> 
     let out = std::env::temp_dir().join(format!("zenclaim_rd_{}_{}", std::process::id(), n));
     let res = aws_s3api(endpoint)
         .arg("get-object")
-        .arg("--bucket").arg(bucket)
-        .arg("--key").arg(key)
+        .arg("--bucket")
+        .arg(bucket)
+        .arg("--key")
+        .arg(key)
         .arg(&out)
-        .arg("--query").arg("ETag")
-        .arg("--output").arg("text")
+        .arg("--query")
+        .arg("ETag")
+        .arg("--output")
+        .arg("text")
         .stderr(Stdio::null())
         .output();
     let etag = match res {
@@ -316,10 +346,20 @@ pub fn claim_or_steal_r2(
     }
     // 1. fresh claim (create-if-absent)
     let fresh = aws_s3api(endpoint)
-        .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&key)
-        .arg("--body").arg(&body).arg("--if-none-match").arg("*")
-        .stdout(Stdio::null()).stderr(Stdio::null())
-        .status().map(|s| s.success()).unwrap_or(false);
+        .arg("put-object")
+        .arg("--bucket")
+        .arg(bucket)
+        .arg("--key")
+        .arg(&key)
+        .arg("--body")
+        .arg(&body)
+        .arg("--if-none-match")
+        .arg("*")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
     if fresh {
         let _ = std::fs::remove_file(&body);
         return true;
@@ -327,10 +367,20 @@ pub fn claim_or_steal_r2(
     // 2. exists — steal only if stale, via If-Match CAS on the current ETag
     let won = match read_claim(endpoint, bucket, &key) {
         Some((etag, prev_ts)) if claim_is_stale(now, prev_ts, ttl_secs) => aws_s3api(endpoint)
-            .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&key)
-            .arg("--body").arg(&body).arg("--if-match").arg(&etag)
-            .stdout(Stdio::null()).stderr(Stdio::null())
-            .status().map(|s| s.success()).unwrap_or(false),
+            .arg("put-object")
+            .arg("--bucket")
+            .arg(bucket)
+            .arg("--key")
+            .arg(&key)
+            .arg("--body")
+            .arg(&body)
+            .arg("--if-match")
+            .arg(&etag)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false),
         // 3. live but a straggler (age in [spec_threshold, ttl)) → speculate: take a *separate*
         //    spec claim (create-if-absent, so at most one speculator) and co-run it. The ledger's
         //    latest-wins on job_id makes the loser a harmless duplicate.
@@ -338,10 +388,20 @@ pub fn claim_or_steal_r2(
             Some(spec) if now.saturating_sub(prev_ts) >= spec => {
                 let spec_key = format!("{}/spec/{}", prefix.trim_matches('/'), job_id.as_str());
                 aws_s3api(endpoint)
-                    .arg("put-object").arg("--bucket").arg(bucket).arg("--key").arg(&spec_key)
-                    .arg("--body").arg(&body).arg("--if-none-match").arg("*")
-                    .stdout(Stdio::null()).stderr(Stdio::null())
-                    .status().map(|s| s.success()).unwrap_or(false)
+                    .arg("put-object")
+                    .arg("--bucket")
+                    .arg(bucket)
+                    .arg("--key")
+                    .arg(&spec_key)
+                    .arg("--body")
+                    .arg(&body)
+                    .arg("--if-none-match")
+                    .arg("*")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
             }
             _ => false,
         },
@@ -408,7 +468,13 @@ where
 {
     let plan = reconcile(desired, view, policy);
     let by_id: HashMap<JobId, &DesiredJob> = desired.iter().map(|d| (d.job_id(), d)).collect();
-    let mut out = ExecOutcome { rows: Vec::new(), done: 0, failed: 0, poisoned: 0, skipped: 0 };
+    let mut out = ExecOutcome {
+        rows: Vec::new(),
+        done: 0,
+        failed: 0,
+        poisoned: 0,
+        skipped: 0,
+    };
 
     let make = |d: &DesiredJob,
                 status: JobStatus,
@@ -443,12 +509,18 @@ where
                 }
                 Err(_) => {
                     // the encode/score succeeded but persistence failed → transient, retry next pass
-                    out.rows.push(make(d, JobStatus::Failed, None, Some(ErrorClass::UploadFail)));
+                    out.rows.push(make(
+                        d,
+                        JobStatus::Failed,
+                        None,
+                        Some(ErrorClass::UploadFail),
+                    ));
                     out.failed += 1;
                 }
             },
             Err(he) => {
-                out.rows.push(make(d, JobStatus::Failed, None, Some(he.class)));
+                out.rows
+                    .push(make(d, JobStatus::Failed, None, Some(he.class)));
                 out.failed += 1;
             }
         }
@@ -494,7 +566,10 @@ pub fn exec_command(program: &str, job: &DesiredJob) -> Result<Vec<u8>, HandlerE
         let code = output.status.code().unwrap_or(-1);
         Err(HandlerError::new(
             ErrorClass::EncoderPanic,
-            format!("{program} exited {code}: {}", String::from_utf8_lossy(&output.stderr)),
+            format!(
+                "{program} exited {code}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
         ))
     }
 }
@@ -544,10 +619,19 @@ pub enum WorkerRunError {
 /// Delete an R2 object via `s5cmd rm`.
 fn s5cmd_rm(endpoint: &str, uri: &str) -> Result<(), String> {
     let st = Command::new("s5cmd")
-        .arg("--endpoint-url").arg(endpoint).arg("rm").arg(uri)
-        .stdout(Stdio::null()).stderr(Stdio::null())
-        .status().map_err(|e| format!("s5cmd spawn: {e}"))?;
-    if st.success() { Ok(()) } else { Err(format!("s5cmd rm {uri} exit {:?}", st.code())) }
+        .arg("--endpoint-url")
+        .arg(endpoint)
+        .arg("rm")
+        .arg(uri)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| format!("s5cmd spawn: {e}"))?;
+    if st.success() {
+        Ok(())
+    } else {
+        Err(format!("s5cmd rm {uri} exit {:?}", st.code()))
+    }
 }
 
 /// Verify a Tower-mirror copy is present and byte-identical (goal G: "Tower-mirror-verify before any
@@ -618,7 +702,13 @@ pub fn gc_execute(
                     mirror_verified: true,
                 };
                 let uri = format!("{}/{}", tb.trim_end_matches('/'), sha.as_str());
-                if zen_ledger::write_bytes_uri(&uri, &serde_json::to_vec(&t).unwrap_or_default(), Some(cfg.endpoint)).is_ok() {
+                if zen_ledger::write_bytes_uri(
+                    &uri,
+                    &serde_json::to_vec(&t).unwrap_or_default(),
+                    Some(cfg.endpoint),
+                )
+                .is_ok()
+                {
                     report.tombstones_written += 1;
                 }
             }
@@ -642,8 +732,9 @@ pub fn gc_execute(
 /// `exec` → content-address outputs → write the resulting rows. Returns the outcome. Deterministic
 /// given `cfg.now` (the binary supplies the wall clock; the library stays clock-free + testable).
 pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
-    let bytes = std::fs::read(&cfg.manifest)
-        .map_err(|e| WorkerRunError::Io(format!("read manifest {}: {e}", cfg.manifest.display())))?;
+    let bytes = std::fs::read(&cfg.manifest).map_err(|e| {
+        WorkerRunError::Io(format!("read manifest {}: {e}", cfg.manifest.display()))
+    })?;
     let mut desired: Vec<DesiredJob> =
         serde_json::from_slice(&bytes).map_err(|e| WorkerRunError::Manifest(e.to_string()))?;
     // Capability routing (goal H): drop jobs this worker's hardware doesn't serve, so an ARM/CPU/GPU
@@ -674,12 +765,24 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                 "zen-jobworker: run control = {} — pulling no new work this pass",
                 if ctl.paused { "PAUSED" } else { "DRAINING" }
             );
-            return Ok(ExecOutcome { rows: Vec::new(), done: 0, failed: 0, poisoned: 0, skipped: 0 });
+            return Ok(ExecOutcome {
+                rows: Vec::new(),
+                done: 0,
+                failed: 0,
+                poisoned: 0,
+                skipped: 0,
+            });
         }
     }
 
-    let policy = RetryPolicy { max_attempts: cfg.max_attempts };
-    let ctx = WorkerCtx { worker: &cfg.worker, provider: &cfg.provider, now: cfg.now };
+    let policy = RetryPolicy {
+        max_attempts: cfg.max_attempts,
+    };
+    let ctx = WorkerCtx {
+        worker: &cfg.worker,
+        provider: &cfg.provider,
+        now: cfg.now,
+    };
     // Pick the blob store: R2 if configured, else local FS. execute_gap is generic over the store,
     // so each arm monomorphizes against the concrete type.
     let out = match &cfg.r2 {
@@ -702,8 +805,14 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                         &store,
                         |id| {
                             let won = claim_or_steal_r2(
-                                &t.endpoint, &cc.bucket, &cc.prefix, id, cfg.now, cc.ttl_secs,
-                                cc.spec_threshold_secs, &cfg.worker,
+                                &t.endpoint,
+                                &cc.bucket,
+                                &cc.prefix,
+                                id,
+                                cfg.now,
+                                cc.ttl_secs,
+                                cc.spec_threshold_secs,
+                                &cfg.worker,
                             );
                             if won {
                                 if let Ok(mut g) = inflight.lock() {
@@ -715,13 +824,27 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                         ctx,
                     )
                 }
-                None => execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx),
+                None => execute_gap(
+                    &desired,
+                    &view,
+                    policy,
+                    |job| exec_command(&cfg.exec, job),
+                    &store,
+                    ctx,
+                ),
             }
         }
         None => {
             let store = LocalBlobStore::new(cfg.blobs.clone())
                 .map_err(|e| WorkerRunError::Io(e.to_string()))?;
-            execute_gap(&desired, &view, policy, |job| exec_command(&cfg.exec, job), &store, ctx)
+            execute_gap(
+                &desired,
+                &view,
+                policy,
+                |job| exec_command(&cfg.exec, job),
+                &store,
+                ctx,
+            )
         }
     };
     let out_uri = cfg.ledger_out.to_string_lossy();
@@ -743,9 +866,16 @@ mod tests {
     }
     fn desired(metric: &str, enc: &[u8]) -> DesiredJob {
         DesiredJob {
-            kind: JobKind::Metric { metric: metric.into() },
+            kind: JobKind::Metric {
+                metric: metric.into(),
+            },
             inputs: vec![sha256(enc)],
-            cell: CellId { image_path: "x".into(), codec: "zenjpeg".into(), q: 80, knob_tuple_json: "{}".into() },
+            cell: CellId {
+                image_path: "x".into(),
+                codec: "zenjpeg".into(),
+                q: 80,
+                knob_tuple_json: "{}".into(),
+            },
         }
     }
 
@@ -759,14 +889,21 @@ mod tests {
             RetryPolicy::default(),
             |job| Ok(format!("score:{}", job.job_id().as_str()).into_bytes()),
             &store,
-            WorkerCtx { worker: "w1", provider: "local", now: 100 },
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 100,
+            },
         );
         assert_eq!(out.done, 2);
         assert_eq!(out.rows.len(), 2);
         for r in &out.rows {
             assert_eq!(r.status, JobStatus::Done);
             let sha = r.output_sha.clone().unwrap();
-            assert!(store.exists(&sha), "output blob is written content-addressed");
+            assert!(
+                store.exists(&sha),
+                "output blob is written content-addressed"
+            );
         }
     }
 
@@ -780,7 +917,11 @@ mod tests {
             RetryPolicy::default(),
             |job| Ok(job.job_id().as_str().as_bytes().to_vec()),
             &store,
-            WorkerCtx { worker: "w1", provider: "local", now: 100 },
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 100,
+            },
         );
         let view = LedgerView::from_rows(out1.rows);
         let out2 = execute_gap(
@@ -789,7 +930,11 @@ mod tests {
             RetryPolicy::default(),
             |_| panic!("handler must NOT run for an already-done job"),
             &store,
-            WorkerCtx { worker: "w1", provider: "local", now: 200 },
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 200,
+            },
         );
         assert_eq!(out2.done, 0);
         assert!(out2.rows.is_empty(), "converged — nothing left in the gap");
@@ -805,7 +950,11 @@ mod tests {
             RetryPolicy::default(),
             |_| Err(HandlerError::new(ErrorClass::DecodeError, "bad input")),
             &store,
-            WorkerCtx { worker: "w1", provider: "local", now: 100 },
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 100,
+            },
         );
         assert_eq!(out.failed, 1);
         assert_eq!(out.rows[0].status, JobStatus::Failed);
@@ -835,7 +984,11 @@ mod tests {
             RetryPolicy { max_attempts: 3 },
             |_| Ok(vec![1, 2, 3]),
             &store,
-            WorkerCtx { worker: "w1", provider: "local", now: 200 },
+            WorkerCtx {
+                worker: "w1",
+                provider: "local",
+                now: 200,
+            },
         );
         assert_eq!(out.poisoned, 1);
         assert_eq!(out.done, 0, "poisoned job is not executed");
@@ -854,7 +1007,11 @@ mod tests {
     fn exec_command_missing_program_is_transient() {
         let d = desired("cvvdp", b"a");
         let err = exec_command("zzz-no-such-program-12345", &d).unwrap_err();
-        assert_eq!(err.class, ErrorClass::WorkerLost, "infra failure → retryable, not poison");
+        assert_eq!(
+            err.class,
+            ErrorClass::WorkerLost,
+            "infra failure → retryable, not poison"
+        );
     }
 
     #[test]
@@ -883,7 +1040,10 @@ mod tests {
         assert_eq!(out.done, 2);
         let rows = zen_ledger::read_ledger(&cfg.ledger_out).unwrap();
         assert_eq!(rows.len(), 2);
-        assert!(rows.iter().all(|r| r.status == JobStatus::Done && r.output_sha.is_some()));
+        assert!(
+            rows.iter()
+                .all(|r| r.status == JobStatus::Done && r.output_sha.is_some())
+        );
 
         // second pass folds in the just-written ledger → gap empty → executor never invoked
         let cfg2 = WorkerConfig {
@@ -893,15 +1053,25 @@ mod tests {
             ..cfg.clone()
         };
         let out2 = run(&cfg2).unwrap();
-        assert_eq!(out2.done, 0, "all jobs already DONE → converged, nothing re-run");
+        assert_eq!(
+            out2.done, 0,
+            "all jobs already DONE → converged, nothing re-run"
+        );
         assert!(out2.rows.is_empty());
     }
 
     #[test]
     fn r2_key_derivation() {
-        let s = R2BlobStore::new("https://acct.r2.cloudflarestorage.com".into(), "zen-tuning-ephemeral".into(), "blobs".into());
+        let s = R2BlobStore::new(
+            "https://acct.r2.cloudflarestorage.com".into(),
+            "zen-tuning-ephemeral".into(),
+            "blobs".into(),
+        );
         let sha = sha256(b"hi");
-        assert_eq!(s.key(&sha), format!("s3://zen-tuning-ephemeral/blobs/{sha}"));
+        assert_eq!(
+            s.key(&sha),
+            format!("s3://zen-tuning-ephemeral/blobs/{sha}")
+        );
         // leading/trailing slashes in the prefix don't double up
         let s2 = R2BlobStore::new("e".into(), "b".into(), "/blobs/".into());
         assert_eq!(s2.key(&sha), format!("s3://b/blobs/{sha}"));
@@ -910,8 +1080,17 @@ mod tests {
     #[test]
     fn claim_staleness_check() {
         assert!(claim_is_stale(1000, 0, 10), "ancient claim is stealable");
-        assert!(claim_is_stale(1000, 990, 10), "exactly ttl old is stealable");
-        assert!(!claim_is_stale(1000, 995, 10), "fresh claim (5s < 10s ttl) is NOT stealable");
-        assert!(!claim_is_stale(5, 0, 10), "clock skew / before ttl elapsed: not stealable");
+        assert!(
+            claim_is_stale(1000, 990, 10),
+            "exactly ttl old is stealable"
+        );
+        assert!(
+            !claim_is_stale(1000, 995, 10),
+            "fresh claim (5s < 10s ttl) is NOT stealable"
+        );
+        assert!(
+            !claim_is_stale(5, 0, 10),
+            "clock skew / before ttl elapsed: not stealable"
+        );
     }
 }

@@ -384,7 +384,10 @@ fn host_pool_textured_vs_flat_detects_detail_loss() {
         .compute_dkl_jod_host_pool(&ref_textured, &dist_flat, ppd)
         .expect("host_pool textured-vs-flat");
     eprintln!("host_pool textured-ref-vs-flat-dist: jod = {jod:.4}");
-    assert!(jod.is_finite(), "host_pool blur JOD must be finite, got {jod}");
+    assert!(
+        jod.is_finite(),
+        "host_pool blur JOD must be finite, got {jod}"
+    );
     assert!(
         jod < 9.0,
         "host_pool textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
@@ -415,7 +418,11 @@ fn host_pool_monotonically_decreases_with_noise_amplitude() {
         src.iter()
             .enumerate()
             .map(|(i, &b)| {
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })
@@ -465,7 +472,9 @@ fn host_pool_warm_ref_flat_vs_flat_yields_max_jod() {
 
     let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
     let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
-    cvvdp.warm_reference(&ref_black).expect("warm_reference black");
+    cvvdp
+        .warm_reference(&ref_black)
+        .expect("warm_reference black");
     let jod_bw = cvvdp
         .compute_dkl_jod_host_pool_with_warm_ref(&dist_white, ppd)
         .expect("host_pool_warm_ref black-vs-white");
@@ -477,7 +486,9 @@ fn host_pool_warm_ref_flat_vs_flat_yields_max_jod() {
 
     let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
     let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
-    cvvdp.warm_reference(&ref_gray).expect("warm_reference gray");
+    cvvdp
+        .warm_reference(&ref_gray)
+        .expect("warm_reference gray");
     let jod_gg = cvvdp
         .compute_dkl_jod_host_pool_with_warm_ref(&dist_gray, ppd)
         .expect("host_pool_warm_ref gray-vs-gray");
@@ -507,7 +518,10 @@ fn host_pool_warm_ref_textured_vs_flat_detects_detail_loss() {
         .compute_dkl_jod_host_pool_with_warm_ref(&dist_flat, ppd)
         .expect("host_pool_warm_ref textured-vs-flat");
     eprintln!("host_pool warm-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
-    assert!(jod.is_finite(), "host_pool warm-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod.is_finite(),
+        "host_pool warm-ref blur JOD must be finite, got {jod}"
+    );
     assert!(
         jod < 9.0,
         "host_pool warm-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
@@ -537,7 +551,11 @@ fn host_pool_warm_ref_monotonically_decreases_with_noise_amplitude() {
         src.iter()
             .enumerate()
             .map(|(i, &b)| {
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })
@@ -712,7 +730,9 @@ fn diag_host_pool_vs_host_scalar_at_73x91_odd() {
         eprintln!(
             "[diag] CONFIRMED: cpu-backend host_pool diverges from host_scalar at 73×91 by {diff:.6} JOD."
         );
-        eprintln!("[diag] Bug is in cubecl-cpu codegen of one of the GPU kernels in the host_pool dispatch chain.");
+        eprintln!(
+            "[diag] Bug is in cubecl-cpu codegen of one of the GPU kernels in the host_pool dispatch chain."
+        );
     }
     // Don't assert — this is diagnostic. Just print.
 }
@@ -762,14 +782,50 @@ fn scalar_d_bands(
 
     let n_levels_query = band_frequencies(ppd, width, height).len();
     let ref_weber = [
-        weber_contrast_pyr_dec_scalar(&ref_planes[0], &ref_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&ref_planes[1], &ref_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&ref_planes[2], &ref_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[0],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[1],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &ref_planes[2],
+            &ref_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
     ];
     let dis_weber = [
-        weber_contrast_pyr_dec_scalar(&dis_planes[0], &dis_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&dis_planes[1], &dis_planes[0], width, height, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&dis_planes[2], &dis_planes[0], width, height, n_levels_query),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[0],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[1],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &dis_planes[2],
+            &dis_planes[0],
+            width,
+            height,
+            n_levels_query,
+        ),
     ];
     let n_levels = ref_weber[0].bands.len();
     let freqs = band_frequencies(ppd, width, height);
@@ -783,7 +839,11 @@ fn scalar_d_bands(
         let bw = ref_weber[0].bands[k].w;
         let bh = ref_weber[0].bands[k].h;
         let n_px = bw * bh;
-        let rho = if is_baseband { CSF_BASEBAND_RHO } else { freqs[k] };
+        let rho = if is_baseband {
+            CSF_BASEBAND_RHO
+        } else {
+            freqs[k]
+        };
         let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
 
         let mut t_p_per_ch: [Vec<f32>; 3] = [vec![0.0; n_px], vec![0.0; n_px], vec![0.0; n_px]];
@@ -853,7 +913,11 @@ fn diag_d_bands_per_band_at_73x91_odd() {
             let s = &cpu_d[k][c];
             assert_eq!(g.len(), s.len(), "band {k} channel {c} len mismatch");
 
-            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let max_err = g
+                .iter()
+                .zip(s)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
             let mean_g = g.iter().sum::<f32>() / g.len() as f32;
             let mean_s = s.iter().sum::<f32>() / s.len() as f32;
 
@@ -889,19 +953,24 @@ fn diag_dkl_planes_at_73x91_odd() {
         .expect("Cvvdp::new on cubecl-cpu");
 
     let (ref_b, _dist_b) = synth_pair(w, h);
-    let gpu_planes = cvvdp.compute_dkl_planes(&ref_b).expect("compute_dkl_planes");
+    let gpu_planes = cvvdp
+        .compute_dkl_planes(&ref_b)
+        .expect("compute_dkl_planes");
     let n = (w * h) as usize;
     let mut scl_planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     for i in 0..n {
-        let (a, rg, vy) = display_byte_to_dkl_scalar(
-            ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display,
-        );
+        let (a, rg, vy) =
+            display_byte_to_dkl_scalar(ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display);
         scl_planes[0][i] = a;
         scl_planes[1][i] = rg;
         scl_planes[2][i] = vy;
     }
     for c in 0..3 {
-        let max_err = gpu_planes[c].iter().zip(&scl_planes[c]).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+        let max_err = gpu_planes[c]
+            .iter()
+            .zip(&scl_planes[c])
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
         eprintln!("[diag] dkl plane ch={c}: max_err={max_err:.6}");
     }
 }
@@ -932,20 +1001,44 @@ fn diag_weber_pyramid_at_73x91_odd() {
     let n = (w as usize) * (h as usize);
     let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     for i in 0..n {
-        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        let (a, rg, vy) =
+            display_byte_to_dkl_scalar(ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display);
         planes[0][i] = a;
         planes[1][i] = rg;
         planes[2][i] = vy;
     }
-    let n_levels_query = cvvdp::kernels::pyramid::band_frequencies(ppd, w as usize, h as usize).len();
+    let n_levels_query =
+        cvvdp::kernels::pyramid::band_frequencies(ppd, w as usize, h as usize).len();
     let scl_weber: [_; 3] = [
-        weber_contrast_pyr_dec_scalar(&planes[0], &planes[0], w as usize, h as usize, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&planes[1], &planes[0], w as usize, h as usize, n_levels_query),
-        weber_contrast_pyr_dec_scalar(&planes[2], &planes[0], w as usize, h as usize, n_levels_query),
+        weber_contrast_pyr_dec_scalar(
+            &planes[0],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &planes[1],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels_query,
+        ),
+        weber_contrast_pyr_dec_scalar(
+            &planes[2],
+            &planes[0],
+            w as usize,
+            h as usize,
+            n_levels_query,
+        ),
     ];
 
     let (gpu_bands, gpu_logl) = gpu_weber;
-    eprintln!("[diag] n_levels: gpu={} scl={}", gpu_bands.len(), scl_weber[0].bands.len());
+    eprintln!(
+        "[diag] n_levels: gpu={} scl={}",
+        gpu_bands.len(),
+        scl_weber[0].bands.len()
+    );
     let n_levels = gpu_bands.len().min(scl_weber[0].bands.len());
     for k in 0..n_levels {
         for c in 0..3 {
@@ -953,9 +1046,19 @@ fn diag_weber_pyramid_at_73x91_odd() {
             let s = &scl_weber[c].bands[k].data;
             let bw = scl_weber[c].bands[k].w;
             let bh = scl_weber[c].bands[k].h;
-            assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch (gpu {} vs scl {})", g.len(), s.len());
+            assert_eq!(
+                g.len(),
+                s.len(),
+                "band {k} ch {c} len mismatch (gpu {} vs scl {})",
+                g.len(),
+                s.len()
+            );
 
-            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let max_err = g
+                .iter()
+                .zip(s)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
             let mean_g = g.iter().sum::<f32>() / g.len() as f32;
             let mean_s = s.iter().sum::<f32>() / s.len() as f32;
             eprintln!(
@@ -966,7 +1069,11 @@ fn diag_weber_pyramid_at_73x91_odd() {
         // also log_l_bkg comparison
         let g_logl = &gpu_logl[k];
         let s_logl = &scl_weber[0].log_l_bkg[k];
-        let max_err = g_logl.iter().zip(s_logl).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+        let max_err = g_logl
+            .iter()
+            .zip(s_logl)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
         eprintln!("[diag] weber band k={k} log_l_bkg: max_err={max_err:.6}");
     }
 }
@@ -993,7 +1100,8 @@ fn diag_gauss_pyramid_at_73x91_odd() {
     let n = (w as usize) * (h as usize);
     let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     for i in 0..n {
-        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        let (a, rg, vy) =
+            display_byte_to_dkl_scalar(ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display);
         planes[0][i] = a;
         planes[1][i] = rg;
         planes[2][i] = vy;
@@ -1023,10 +1131,17 @@ fn diag_gauss_pyramid_at_73x91_odd() {
             let g = &gpu_gauss[k][c];
             let (s, sw, sh) = &scl_per_ch[c][k];
             assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch");
-            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let max_err = g
+                .iter()
+                .zip(s)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
             let mean_g = g.iter().sum::<f32>() / g.len() as f32;
             let mean_s = s.iter().sum::<f32>() / s.len() as f32;
-            eprintln!("[diag] gauss k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}", sw, sh);
+            eprintln!(
+                "[diag] gauss k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}",
+                sw, sh
+            );
         }
     }
 }
@@ -1048,12 +1163,15 @@ fn diag_laplacian_pyramid_at_73x91_odd() {
 
     let (ref_b, _dist_b) = synth_pair(w, h);
 
-    let gpu_lap = cvvdp.compute_dkl_laplacian_pyramid(&ref_b).expect("gpu lap");
+    let gpu_lap = cvvdp
+        .compute_dkl_laplacian_pyramid(&ref_b)
+        .expect("gpu lap");
 
     let n = (w as usize) * (h as usize);
     let mut planes: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     for i in 0..n {
-        let (a, rg, vy) = display_byte_to_dkl_scalar(ref_b[i*3], ref_b[i*3+1], ref_b[i*3+2], display);
+        let (a, rg, vy) =
+            display_byte_to_dkl_scalar(ref_b[i * 3], ref_b[i * 3 + 1], ref_b[i * 3 + 2], display);
         planes[0][i] = a;
         planes[1][i] = rg;
         planes[2][i] = vy;
@@ -1061,8 +1179,10 @@ fn diag_laplacian_pyramid_at_73x91_odd() {
 
     let n_levels_query = cvvdp::kernels::pyramid::band_frequencies(
         DisplayGeometry::STANDARD_4K.pixels_per_degree(),
-        w as usize, h as usize,
-    ).len();
+        w as usize,
+        h as usize,
+    )
+    .len();
 
     let scl_lap: [_; 3] = [
         laplacian_pyramid_dec_scalar(&planes[0], w as usize, h as usize, n_levels_query),
@@ -1070,7 +1190,11 @@ fn diag_laplacian_pyramid_at_73x91_odd() {
         laplacian_pyramid_dec_scalar(&planes[2], w as usize, h as usize, n_levels_query),
     ];
 
-    eprintln!("[diag] lap gpu n_levels={} scl n_levels={}", gpu_lap.len(), scl_lap[0].len());
+    eprintln!(
+        "[diag] lap gpu n_levels={} scl n_levels={}",
+        gpu_lap.len(),
+        scl_lap[0].len()
+    );
 
     let n_levels = gpu_lap.len().min(scl_lap[0].len());
     for k in 0..n_levels {
@@ -1080,10 +1204,17 @@ fn diag_laplacian_pyramid_at_73x91_odd() {
             let sw = scl_lap[c][k].w;
             let sh = scl_lap[c][k].h;
             assert_eq!(g.len(), s.len(), "band {k} ch {c} len mismatch");
-            let max_err = g.iter().zip(s).map(|(a, b)| (a - b).abs()).fold(0.0_f32, f32::max);
+            let max_err = g
+                .iter()
+                .zip(s)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0_f32, f32::max);
             let mean_g = g.iter().sum::<f32>() / g.len() as f32;
             let mean_s = s.iter().sum::<f32>() / s.len() as f32;
-            eprintln!("[diag] lap k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}", sw, sh);
+            eprintln!(
+                "[diag] lap k={k} ch={c} {}x{}: max_err={max_err:.6} mean_g={mean_g:.6} mean_s={mean_s:.6}",
+                sw, sh
+            );
         }
     }
 }
@@ -1156,19 +1287,19 @@ fn diag_downscale_tiled_cpu_sweep_sizes() {
     // Sweep across sizes to find the threshold where the tiled
     // kernel starts diverging on cpu backend.
     let sizes = [
-        (32u32, 32u32),   // 1×1 workgroups for dst 16×16
+        (32u32, 32u32), // 1×1 workgroups for dst 16×16
         (33, 33),
-        (34, 34),         // mixed-parity reduce starts at non-pow-2
-        (40, 40),         // dst 20x20: 2x2 workgroups
-        (48, 48),         // dst 24x24: 2x2 workgroups
+        (34, 34), // mixed-parity reduce starts at non-pow-2
+        (40, 40), // dst 20x20: 2x2 workgroups
+        (48, 48), // dst 24x24: 2x2 workgroups
         (56, 56),
-        (64, 64),         // dst 32x32: 2x2 workgroups
-        (65, 65),         // odd-W odd-H
+        (64, 64), // dst 32x32: 2x2 workgroups
+        (65, 65), // odd-W odd-H
         (66, 66),
         (72, 72),
         (73, 73),
         (73, 91),
-        (74, 92),         // both even — multiple workgroups
+        (74, 92), // both even — multiple workgroups
     ];
     for (w, h) in sizes {
         let (_g, _c, e) = diag_downscale_tiled_on_cpu(w, h);
@@ -1215,9 +1346,16 @@ fn diag_downscale_cpu_at_46x37_mixed_parity() {
     // mixed-parity case (sw even, sh odd). This is the exact level
     // where pycvvdp's bug-compat delta fires in the 73×91 chain.
     let (gpu, cpu, e) = diag_downscale_on_cpu(46, 37);
-    eprintln!("diag 46×37: max-abs = {e:.6}\ngpu_last_col={:?}\ncpu_last_col={:?}",
-        (0..(46u32.div_ceil(2)) as usize).step_by(46usize.div_ceil(2).saturating_sub(1).max(1)).take(3).collect::<Vec<_>>(),
-        (0..(46u32.div_ceil(2)) as usize).step_by(46usize.div_ceil(2).saturating_sub(1).max(1)).take(3).collect::<Vec<_>>(),
+    eprintln!(
+        "diag 46×37: max-abs = {e:.6}\ngpu_last_col={:?}\ncpu_last_col={:?}",
+        (0..(46u32.div_ceil(2)) as usize)
+            .step_by(46usize.div_ceil(2).saturating_sub(1).max(1))
+            .take(3)
+            .collect::<Vec<_>>(),
+        (0..(46u32.div_ceil(2)) as usize)
+            .step_by(46usize.div_ceil(2).saturating_sub(1).max(1))
+            .take(3)
+            .collect::<Vec<_>>(),
     );
     // Extract right column for easier diff inspection
     let dw = 46u32.div_ceil(2);

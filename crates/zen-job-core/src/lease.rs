@@ -81,7 +81,10 @@ mod tests {
     fn renew_keeps_long_job_alive() {
         let mut l = Lease::new("w1", 1000, 120);
         l.renew(1100); // heartbeat before expiry
-        assert!(!l.is_expired(1200), "renewed lease survives past the original ttl window");
+        assert!(
+            !l.is_expired(1200),
+            "renewed lease survives past the original ttl window"
+        );
         assert!(l.is_expired(1221)); // now stale relative to the renewal
     }
 

@@ -190,12 +190,7 @@ impl Cvvdp {
     /// the constructor so peak heap during `score_strip` is bounded by
     /// the strip-shape allocator's footprint (~1.7 GB target at 16 MP,
     /// down from 3.66 GB).
-    pub fn new_strip(
-        width: u32,
-        height: u32,
-        params: CvvdpParams,
-        h_body: u32,
-    ) -> Result<Self> {
+    pub fn new_strip(width: u32, height: u32, params: CvvdpParams, h_body: u32) -> Result<Self> {
         if !crate::strip::is_valid_strip_h_body(h_body) {
             return Err(Error::InvalidImageSize {
                 width: h_body,
@@ -379,7 +374,10 @@ impl Cvvdp {
             // 5. Drop the gauss-reduce scratches.
             for c in 0..3 {
                 self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
-                self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+                self.scratch.weber_cache_ref[c]
+                    .scratch
+                    .vscratch
+                    .shrink_to_fit();
                 self.scratch.weber_cache_ref[c].scratch.z_v.clear();
                 self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
                 self.scratch.weber_cache_ref[c].scratch.z_h.clear();
@@ -450,9 +448,7 @@ impl Cvvdp {
             weber_ref,
             ..
         } = &mut self.scratch;
-        build_one_side_warm_ref_into(
-            ref_a, ref_rg, ref_vy, w, h, n_levels, weber_ref,
-        );
+        build_one_side_warm_ref_into(ref_a, ref_rg, ref_vy, w, h, n_levels, weber_ref);
         // 3. Mark warm cached. The cache lives entirely in scratch:
         //    DKL planes in scratch.ref_*, weber pyramid in scratch.weber_ref.
         self.warm_active = true;
@@ -659,19 +655,37 @@ impl Cvvdp {
             self.scratch.weber_cache_dist[c].gauss_img.clear();
             self.scratch.weber_cache_dist[c].gauss_l.clear();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.expanded.clear();
-            self.scratch.weber_cache_dist[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .expanded
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .gauss_tmp
+                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].gauss_img.clear();
             self.scratch.weber_cache_ref[c].gauss_l.clear();
             self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_ref[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.expanded.clear();
-            self.scratch.weber_cache_ref[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_ref[c]
+                .scratch
+                .expanded
+                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_ref[c].scratch.gauss_tmp.shrink_to_fit();
+            self.scratch.weber_cache_ref[c]
+                .scratch
+                .gauss_tmp
+                .shrink_to_fit();
         }
 
         // Now consume the scratch slots immutably to fold bands. We
@@ -860,13 +874,19 @@ impl Cvvdp {
         // needed by the deep-level `build_full_weber_band_at_k` calls.
         for c in 0..3 {
             self.scratch.weber_cache_ref[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_ref[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_ref[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.z_v.clear();
             self.scratch.weber_cache_ref[c].scratch.z_v.shrink_to_fit();
             self.scratch.weber_cache_ref[c].scratch.z_h.clear();
             self.scratch.weber_cache_ref[c].scratch.z_h.shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.z_v.clear();
             self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.z_h.clear();
@@ -1054,14 +1074,8 @@ impl Cvvdp {
                     WeberPyramid::empty(),
                 ],
             );
-            let q_deep = self.fold_bands_deep_only(
-                &ref_weber,
-                &dist_weber,
-                n_levels,
-                w,
-                h,
-                k_split,
-            );
+            let q_deep =
+                self.fold_bands_deep_only(&ref_weber, &dist_weber, n_levels, w, h, k_split);
             // Stash back.
             self.scratch.weber_ref = ref_weber;
             self.scratch.weber_dist = dist_weber;
@@ -1152,7 +1166,10 @@ impl Cvvdp {
         // is no longer needed; expand buffers stay since deep weber will use them).
         for c in 0..3 {
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.z_v.clear();
             self.scratch.weber_cache_dist[c].scratch.z_v.shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.z_h.clear();
@@ -1265,14 +1282,8 @@ impl Cvvdp {
                     WeberPyramid::empty(),
                 ],
             );
-            let q_deep = self.fold_bands_deep_only(
-                &ref_weber,
-                &dist_weber,
-                n_levels,
-                w,
-                h,
-                k_split,
-            );
+            let q_deep =
+                self.fold_bands_deep_only(&ref_weber, &dist_weber, n_levels, w, h, k_split);
             self.scratch.weber_ref = ref_weber;
             self.scratch.weber_dist = dist_weber;
             q_deep
@@ -1455,11 +1466,20 @@ impl Cvvdp {
             self.scratch.weber_cache_dist[c].gauss_img.clear();
             self.scratch.weber_cache_dist[c].gauss_l.clear();
             self.scratch.weber_cache_dist[c].scratch.vscratch.clear();
-            self.scratch.weber_cache_dist[c].scratch.vscratch.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .vscratch
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.expanded.clear();
-            self.scratch.weber_cache_dist[c].scratch.expanded.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .expanded
+                .shrink_to_fit();
             self.scratch.weber_cache_dist[c].scratch.gauss_tmp.clear();
-            self.scratch.weber_cache_dist[c].scratch.gauss_tmp.shrink_to_fit();
+            self.scratch.weber_cache_dist[c]
+                .scratch
+                .gauss_tmp
+                .shrink_to_fit();
         }
 
         // Pull weber slots out of scratch via mem::replace so we can
@@ -1483,8 +1503,7 @@ impl Cvvdp {
                 WeberPyramid::empty(),
             ],
         );
-        let (jod, diffmap) =
-            self.fold_bands(&ref_weber, &dist_weber, n_levels, w, h, want_diffmap);
+        let (jod, diffmap) = self.fold_bands(&ref_weber, &dist_weber, n_levels, w, h, want_diffmap);
         self.scratch.weber_ref = ref_weber;
         self.scratch.weber_dist = dist_weber;
         Ok((jod, diffmap))
@@ -1955,8 +1974,7 @@ impl Cvvdp {
 
             let band_accum = if want_diffmap {
                 let mut acc = DiffmapAccum::new(w, h);
-                let d_per_ch: [Vec<f32>; 3] =
-                    [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
+                let d_per_ch: [Vec<f32>; 3] = [ws.d_a.clone(), ws.d_rg.clone(), ws.d_vy.clone()];
                 accumulate_band_diffmap(&mut acc, &d_per_ch, bw, bh, is_baseband, n_levels);
                 Some(acc)
             } else {
@@ -1974,7 +1992,10 @@ impl Cvvdp {
             // Shallow strip bands are never the baseband (k_split's
             // design table caps it at log2(h_body / 12) + 1, well
             // below n_levels - 1 for realistic h_body).
-            debug_assert!(k != n_levels - 1, "k_split should never include the baseband");
+            debug_assert!(
+                k != n_levels - 1,
+                "k_split should never include the baseband"
+            );
             let is_first = k == 0;
             let rho = ppd_freqs[k];
             let bw = ref_weber[0].bands[k].w;
@@ -1988,8 +2009,7 @@ impl Cvvdp {
             let dis_vy_band = &dist_weber[2].bands[k].data;
             let log_l_bkg_band = &ref_weber[0].log_l_bkg[k];
 
-            let h_body =
-                strip_h_body.expect("strip mode active when processing shallow band");
+            let h_body = strip_h_body.expect("strip mode active when processing shallow band");
 
             // For diffmap, allocate the full-band d_* in the BandWorkspace
             // so accumulate_band_diffmap can read them. Pass references
@@ -2179,7 +2199,9 @@ impl Cvvdp {
         let (ra, rrg, rvy, da, drg, dvy) = scratch_dkl_planes(&mut self.scratch);
         srgb_to_dkl_planar(ref_srgb, self.width, self.height, display, ra, rrg, rvy);
         srgb_to_dkl_planar(dist_srgb, self.width, self.height, display, da, drg, dvy);
-        let result = self.score_internal_strip(false, strip_h_body).map(|(j, _)| j);
+        let result = self
+            .score_internal_strip(false, strip_h_body)
+            .map(|(j, _)| j);
         self.strip_h_body.set(None);
         result
     }
@@ -2447,10 +2469,7 @@ fn pool_band_3ch(
         // channel-fold count.
         strips_dispatched = strips_dispatched.saturating_add(3);
     }
-    strip_counter.fetch_add(
-        strips_dispatched,
-        core::sync::atomic::Ordering::Relaxed,
-    );
+    strip_counter.fetch_add(strips_dispatched, core::sync::atomic::Ordering::Relaxed);
     [
         acc_a.finalize(BETA_SPATIAL),
         acc_rg.finalize(BETA_SPATIAL),
@@ -2817,10 +2836,7 @@ fn process_shallow_strip_band(
         }
     }
 
-    strip_counter.fetch_add(
-        strips_dispatched,
-        core::sync::atomic::Ordering::Relaxed,
-    );
+    strip_counter.fetch_add(strips_dispatched, core::sync::atomic::Ordering::Relaxed);
 
     [
         acc_a.finalize(BETA_SPATIAL),
@@ -3697,8 +3713,7 @@ fn process_strip_step_at_s_k(
     // Step 5 (optional): copy strip body of d_* into full-band diffmap output.
     if let Some((d_a_full, d_rg_full, d_vy_full)) = diffmap_d_out {
         let full_off = body_off * bw;
-        d_a_full[full_off..full_off + body_h * bw]
-            .copy_from_slice(&sws.d_a[body_start..body_end]);
+        d_a_full[full_off..full_off + body_h * bw].copy_from_slice(&sws.d_a[body_start..body_end]);
         d_rg_full[full_off..full_off + body_h * bw]
             .copy_from_slice(&sws.d_rg[body_start..body_end]);
         d_vy_full[full_off..full_off + body_h * bw]

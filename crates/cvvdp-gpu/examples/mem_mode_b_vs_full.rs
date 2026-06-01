@@ -43,10 +43,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use cubecl::Runtime;
-use cvvdp_gpu::{
-    estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_strip_pair, Cvvdp,
-};
 use cvvdp_gpu::params::{CvvdpParams, DisplayGeometry};
+use cvvdp_gpu::{Cvvdp, estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_strip_pair};
 
 /// Replica of the PRE-PATH-B-CHUNK-1 `estimate_gpu_memory_bytes`
 /// formula, used here for delta accounting. The committed
@@ -184,14 +182,10 @@ fn run_worker(mode: &str, w: u32, h: u32) {
     let mut cvvdp = match mode {
         "full" => Cvvdp::<Backend>::new(client, w, h, CvvdpParams::PLACEHOLDER)
             .expect("Cvvdp::new (Full)"),
-        "mode_b" => Cvvdp::<Backend>::new_strip_pair(
-            client,
-            w,
-            h,
-            STRIP_H_BODY,
-            CvvdpParams::PLACEHOLDER,
-        )
-        .expect("Cvvdp::new_strip_pair (Mode B)"),
+        "mode_b" => {
+            Cvvdp::<Backend>::new_strip_pair(client, w, h, STRIP_H_BODY, CvvdpParams::PLACEHOLDER)
+                .expect("Cvvdp::new_strip_pair (Mode B)")
+        }
         other => panic!("unknown WORKER_MODE: {other}"),
     };
 
@@ -209,12 +203,7 @@ fn run_worker(mode: &str, w: u32, h: u32) {
 /// Run one child measurement, returning (baseline_mib, peak_mib,
 /// delta_mib, jod). The parent reads child stdout until READY then
 /// samples nvidia-smi memory.used for CHILD_HOLD_MS.
-fn measure_one(
-    child_bin: &str,
-    mode: &str,
-    w: u32,
-    h: u32,
-) -> (u64, u64, i64, f32) {
+fn measure_one(child_bin: &str, mode: &str, w: u32, h: u32) -> (u64, u64, i64, f32) {
     std::thread::sleep(Duration::from_millis(300));
     let baseline_mib = nvidia_smi_memory_used_mib().expect("nvidia-smi baseline");
 
@@ -312,15 +301,13 @@ fn main() {
     for &(w, h, label) in SIZES {
         let est_master_mib =
             estimate_gpu_memory_bytes_pre_chunk1(w, h).expect("estimate master") / (1 << 20);
-        let est_full_head =
-            estimate_gpu_memory_bytes(w, h).expect("estimate full") / (1 << 20);
-        let est_mode_b_head =
-            estimate_gpu_memory_bytes_strip_pair(w, h, STRIP_H_BODY).expect("estimate mode_b")
-                / (1 << 20);
+        let est_full_head = estimate_gpu_memory_bytes(w, h).expect("estimate full") / (1 << 20);
+        let est_mode_b_head = estimate_gpu_memory_bytes_strip_pair(w, h, STRIP_H_BODY)
+            .expect("estimate mode_b")
+            / (1 << 20);
 
         let t0 = Instant::now();
-        let (_full_base, _full_peak, full_delta, full_jod) =
-            measure_one(&child_bin, "full", w, h);
+        let (_full_base, _full_peak, full_delta, full_jod) = measure_one(&child_bin, "full", w, h);
         let full_dur = t0.elapsed();
         println!("{label},full,{est_master_mib},{est_full_head},{full_delta},{full_jod:.4}");
         eprintln!(
@@ -329,8 +316,7 @@ fn main() {
         );
 
         let t1 = Instant::now();
-        let (_mb_base, _mb_peak, mb_delta, mb_jod) =
-            measure_one(&child_bin, "mode_b", w, h);
+        let (_mb_base, _mb_peak, mb_delta, mb_jod) = measure_one(&child_bin, "mode_b", w, h);
         let mb_dur = t1.elapsed();
         println!("{label},mode_b,{est_master_mib},{est_mode_b_head},{mb_delta},{mb_jod:.4}");
         eprintln!(

@@ -216,7 +216,11 @@ pub fn error_maps_strip_from_full_ref_kernel(
     // when out of body so the kernel never indexes past the cached
     // full-image buffers.
     let safe_full_idx = (full_in * outer) + inner_full;
-    let ref_idx = if in_body { safe_full_idx } else { 0usize.into() };
+    let ref_idx = if in_body {
+        safe_full_idx
+    } else {
+        0usize.into()
+    };
 
     let m1 = mu1_full[ref_idx];
     let m2 = mu2_strip[idx];

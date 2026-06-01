@@ -104,7 +104,9 @@ mod tests {
     fn row(id: JobId, status: JobStatus, ts: u64) -> LedgerRow {
         LedgerRow {
             job_id: id,
-            kind: JobKind::Metric { metric: "cvvdp".into() },
+            kind: JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
             cell: CellId {
                 image_path: "x.png".into(),
                 codec: "zenjpeg".into(),
@@ -123,7 +125,12 @@ mod tests {
 
     #[test]
     fn latest_ts_wins() {
-        let id = JobId::of(&JobKind::Metric { metric: "cvvdp".into() }, &[sha256(b"e")]);
+        let id = JobId::of(
+            &JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            &[sha256(b"e")],
+        );
         let mut v = LedgerView::new();
         v.apply(row(id.clone(), JobStatus::Failed, 100));
         v.apply(row(id.clone(), JobStatus::Done, 200)); // newer wins
@@ -134,7 +141,12 @@ mod tests {
 
     #[test]
     fn same_ts_terminal_wins() {
-        let id = JobId::of(&JobKind::Metric { metric: "ssim2".into() }, &[sha256(b"e")]);
+        let id = JobId::of(
+            &JobKind::Metric {
+                metric: "ssim2".into(),
+            },
+            &[sha256(b"e")],
+        );
         let mut v = LedgerView::new();
         v.apply(row(id.clone(), JobStatus::Claimed, 100));
         v.apply(row(id.clone(), JobStatus::Done, 100)); // same ts, higher rank wins
@@ -144,7 +156,9 @@ mod tests {
     #[test]
     fn desired_job_id_is_content_addressed() {
         let d = DesiredJob {
-            kind: JobKind::Metric { metric: "cvvdp".into() },
+            kind: JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
             inputs: vec![sha256(b"enc")],
             cell: CellId {
                 image_path: "x".into(),

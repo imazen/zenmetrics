@@ -60,8 +60,8 @@ fn auto_picks_strip_when_whole_well_under_cap_butter_only() {
     // with a generous cap: both fit, expect Strip.
     with_cap(Some("17179869184"), || {
         // 16 GB
-        let resolved = memory_mode::resolve_auto(1024, 1024, memory_mode::vram_cap_bytes())
-            .expect("resolve");
+        let resolved =
+            memory_mode::resolve_auto(1024, 1024, memory_mode::vram_cap_bytes()).expect("resolve");
         assert!(
             matches!(resolved, ResolvedMode::Strip { .. }),
             "butter must prefer strip when both fit; got {resolved:?}"
@@ -76,8 +76,8 @@ fn auto_picks_strip_when_over_cap_with_h_body_fit() {
     // with a positive h_body.
     let small_cap_bytes = estimate_strip_gpu_memory_bytes(4096, 128).unwrap();
     with_cap(Some(&small_cap_bytes.to_string()), || {
-        let resolved = memory_mode::resolve_auto(4096, 4096, memory_mode::vram_cap_bytes())
-            .expect("resolve");
+        let resolved =
+            memory_mode::resolve_auto(4096, 4096, memory_mode::vram_cap_bytes()).expect("resolve");
         match resolved {
             ResolvedMode::Strip { h_body } => {
                 assert!(h_body > 0, "h_body must be > 0");

@@ -57,19 +57,59 @@ fn interp1(stops: &[ColorStop], v: f32) -> [f32; 3] {
 
 fn threshold_stops() -> [ColorStop; 5] {
     [
-        ColorStop { position: 0.000, r: 0.2, g: 0.2, b: 1.0 },
-        ColorStop { position: 0.025, r: 0.2, g: 1.0, b: 1.0 },
-        ColorStop { position: 0.050, r: 0.2, g: 1.0, b: 0.2 },
-        ColorStop { position: 0.075, r: 1.0, g: 1.0, b: 0.2 },
-        ColorStop { position: 0.100, r: 1.0, g: 0.2, b: 0.2 },
+        ColorStop {
+            position: 0.000,
+            r: 0.2,
+            g: 0.2,
+            b: 1.0,
+        },
+        ColorStop {
+            position: 0.025,
+            r: 0.2,
+            g: 1.0,
+            b: 1.0,
+        },
+        ColorStop {
+            position: 0.050,
+            r: 0.2,
+            g: 1.0,
+            b: 0.2,
+        },
+        ColorStop {
+            position: 0.075,
+            r: 1.0,
+            g: 1.0,
+            b: 0.2,
+        },
+        ColorStop {
+            position: 0.100,
+            r: 1.0,
+            g: 0.2,
+            b: 0.2,
+        },
     ]
 }
 
 fn supra_threshold_stops() -> [ColorStop; 3] {
     [
-        ColorStop { position: 0.00, r: 0.2, g: 1.0, b: 1.0 },
-        ColorStop { position: 0.15, r: 1.0, g: 1.0, b: 1.0 },
-        ColorStop { position: 0.30, r: 1.0, g: 1.0, b: 0.2 },
+        ColorStop {
+            position: 0.00,
+            r: 0.2,
+            g: 1.0,
+            b: 1.0,
+        },
+        ColorStop {
+            position: 0.15,
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+        },
+        ColorStop {
+            position: 0.30,
+            r: 1.0,
+            g: 1.0,
+            b: 0.2,
+        },
     ]
 }
 

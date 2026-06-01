@@ -59,9 +59,7 @@ fn make_gray(w: u32, h: u32, seed: u32) -> Vec<f32> {
         for x in 0..w {
             let lf = ((x as f32 / w as f32) * 200.0) + ((y as f32 / h as f32) * 50.0);
             let hf = (((x.wrapping_mul(7).wrapping_add(seed)) & 0x1f) as f32) * 1.5
-                + (((y.wrapping_mul(11).wrapping_add(seed.wrapping_mul(3))) & 0x1f)
-                    as f32)
-                    * 1.5;
+                + (((y.wrapping_mul(11).wrapping_add(seed.wrapping_mul(3))) & 0x1f) as f32) * 1.5;
             let v = (lf + hf).clamp(0.0, 255.0);
             out.push(v);
         }
@@ -94,9 +92,7 @@ fn run_pair(w: u32, h: u32, seed_a: u32, seed_b: u32, body: u32) -> (f64, f64) {
     let s_whole = whole.compute_gray(&r, &d).expect("whole compute");
 
     let mut strip = Iwssim::<BackendT>::new_strip(client, w, h, body).expect("strip new");
-    let s_strip = strip
-        .compute_gray_stripped(&r, &d)
-        .expect("strip compute");
+    let s_strip = strip.compute_gray_stripped(&r, &d).expect("strip compute");
 
     (s_whole.score, s_strip.score)
 }
@@ -225,10 +221,16 @@ fn strip_mode_cross_tile_size_parity_1024_square() {
     let client = BackendT::client(&Default::default());
 
     let mut s256 = Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("s256");
-    let v256 = s256.compute_gray_stripped(&r, &d).expect("s256 compute").score;
+    let v256 = s256
+        .compute_gray_stripped(&r, &d)
+        .expect("s256 compute")
+        .score;
 
     let mut s512 = Iwssim::<BackendT>::new_strip(client.clone(), w, h, 512).expect("s512");
-    let v512 = s512.compute_gray_stripped(&r, &d).expect("s512 compute").score;
+    let v512 = s512
+        .compute_gray_stripped(&r, &d)
+        .expect("s512 compute")
+        .score;
 
     let rel = ((v256 - v512) / v512).abs();
     assert!(
@@ -250,7 +252,10 @@ fn strip_mode_self_identity_is_one() {
 
     let client = BackendT::client(&Default::default());
     let mut strip = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip new");
-    let s = strip.compute_gray_stripped(&r, &r).expect("strip compute").score;
+    let s = strip
+        .compute_gray_stripped(&r, &r)
+        .expect("strip compute")
+        .score;
     assert!((s - 1.0).abs() < 1e-5, "strip self-identity {s} ≠ 1");
 }
 
@@ -265,11 +270,11 @@ fn strip_mode_self_identity_multi_strip_uneven() {
 
     let client = BackendT::client(&Default::default());
     let mut strip = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip new");
-    let s = strip.compute_gray_stripped(&r, &r).expect("strip compute").score;
-    assert!(
-        (s - 1.0).abs() < 1e-5,
-        "uneven-strip self-identity {s} ≠ 1"
-    );
+    let s = strip
+        .compute_gray_stripped(&r, &r)
+        .expect("strip compute")
+        .score;
+    assert!((s - 1.0).abs() < 1e-5, "uneven-strip self-identity {s} ≠ 1");
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -314,7 +319,9 @@ fn strip_mode_set_reference_errors_with_typed_variant() {
     let r = make_gray(w, h, 0);
     let client = BackendT::client(&Default::default());
     let mut iw = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip new");
-    let err = iw.set_reference(&r).expect_err("set_reference must error in strip mode");
+    let err = iw
+        .set_reference(&r)
+        .expect_err("set_reference must error in strip mode");
     assert!(
         matches!(err, Error::CachedRefNotSupportedInStripMode),
         "expected CachedRefNotSupportedInStripMode, got {err:?}"

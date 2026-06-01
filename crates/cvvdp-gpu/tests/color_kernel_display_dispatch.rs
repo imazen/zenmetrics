@@ -192,7 +192,11 @@ fn gpu_dispatch_pq_bt2020_matches_host_scalar() {
 fn gpu_dispatch_pq_3000_nit_matches_host_scalar() {
     // 3000-nit peak — proportionally larger absolute bound. 0.1 abs
     // on 3000 cd/m² is 33 ppm, same relative band as the 1500-nit case.
-    assert_kernel_matches_scalar(DisplayModel::LG_OLED_2026_HDR_PQ, 1e-1, "PQ+Bt2020 (3000nit)");
+    assert_kernel_matches_scalar(
+        DisplayModel::LG_OLED_2026_HDR_PQ,
+        1e-1,
+        "PQ+Bt2020 (3000nit)",
+    );
 }
 
 #[test]
@@ -256,9 +260,5 @@ fn gpu_dispatch_iphone_14_pro_matches_host_scalar() {
 fn gpu_dispatch_iphone_14_pro_hdr_matches_host_scalar() {
     // iPhone 14 Pro HDR — 1590 cd/m² HLG + BT.2020. The HLG OOTF
     // chain widens tolerance to the PQ band.
-    assert_kernel_matches_scalar(
-        DisplayModel::IPHONE_14_PRO_HDR,
-        5e-2,
-        "iphone_14_pro_hdr",
-    );
+    assert_kernel_matches_scalar(DisplayModel::IPHONE_14_PRO_HDR, 5e-2, "iphone_14_pro_hdr");
 }

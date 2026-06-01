@@ -61,9 +61,9 @@
 pub mod panel;
 
 pub use panel::{
-    bootstrap_ci_delta, compute_light_panel, compute_panel, decisive, kendall_tau, mrr_h,
-    outlier_ratio, outlier_ratio_per_sample, pearson, phi, polarity_factor,
-    pwrc_proxy_weighted_rank, pwrc_sa_st_auc, ranks, rescale_logistic, sa_st_curve, spearman,
-    two_sided_p, z_rmse, z_rmse_per_sample, Decision, DecisiveOutcome, LightPanel, PanelStats,
-    ValAggregate,
+    Decision, DecisiveOutcome, LightPanel, PanelStats, ValAggregate, bootstrap_ci_delta,
+    compute_light_panel, compute_panel, decisive, kendall_tau, mrr_h, outlier_ratio,
+    outlier_ratio_per_sample, pearson, phi, polarity_factor, pwrc_proxy_weighted_rank,
+    pwrc_sa_st_auc, ranks, rescale_logistic, sa_st_curve, spearman, two_sided_p, z_rmse,
+    z_rmse_per_sample,
 };

@@ -124,10 +124,11 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             // Scratch::new_strip pre-allocation. Persistent weber pyramid
             // + cache slots shrink to strip shape (`bw * R_k`) at shallow
             // levels, dropping 16 MP peak from 3.66 GB → ~1.7 GB target.
-            let mut c =
-                Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
-                    .map_err(|e| e.to_string())?;
-            let v = c.score_strip(r, d, STRIP_H_BODY).map_err(|e| e.to_string())?;
+            let mut c = Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
+                .map_err(|e| e.to_string())?;
+            let v = c
+                .score_strip(r, d, STRIP_H_BODY)
+                .map_err(|e| e.to_string())?;
             Ok(v as f64)
         }
         "warm_ref_strip" => {
@@ -142,9 +143,8 @@ fn run_cvvdp(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             // The Scratch::new_strip pre-allocation still saves the upfront
             // 1.07 GB Scratch::new peak that the original full-image path
             // paid.
-            let mut c =
-                Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
-                    .map_err(|e| e.to_string())?;
+            let mut c = Cvvdp::new_strip(w, h, CvvdpParams::default(), STRIP_H_BODY)
+                .map_err(|e| e.to_string())?;
             c.warm_reference(r).map_err(|e| e.to_string())?;
             let v = c
                 .score_with_warm_ref_strip(d, STRIP_H_BODY)
@@ -168,8 +168,7 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
         "full" => {
             let ri = ImgRef::new(rgb_pix(r), wu, hu);
             let di = ImgRef::new(rgb_pix(d), wu, hu);
-            let v = fast_ssim2::compute_ssimulacra2(ri, di)
-                .map_err(|e| format!("{e:?}"))?;
+            let v = fast_ssim2::compute_ssimulacra2(ri, di).map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         "warm_ref" => {
@@ -195,7 +194,9 @@ fn run_ssim2(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Stri
             let ri = ImgRef::new(rgb_pix(r), wu, hu);
             let di = ImgRef::new(rgb_pix(d), wu, hu);
             let pre = Ssimulacra2Reference::new(ri).map_err(|e| format!("{e:?}"))?;
-            let v = pre.compare_strip(di, STRIP_H).map_err(|e| format!("{e:?}"))?;
+            let v = pre
+                .compare_strip(di, STRIP_H)
+                .map_err(|e| format!("{e:?}"))?;
             Ok(v)
         }
         _ => Err(format!("bad-mode:{mode}")),
@@ -363,9 +364,7 @@ fn run_zensim(mode: &str, w: u32, h: u32, r: &[u8], d: &[u8]) -> Result<f64, Str
             }
             let loop_ms = t_loop.elapsed().as_secs_f64() * 1000.0;
             let mean_ms = loop_ms / (n as f64);
-            eprintln!(
-                "FULL_N_TOTAL n={n} t_loop_ms={loop_ms:.2} t_per_call_mean_ms={mean_ms:.2}"
-            );
+            eprintln!("FULL_N_TOTAL n={n} t_loop_ms={loop_ms:.2} t_per_call_mean_ms={mean_ms:.2}");
             Ok(last_score)
         }
         // Task #134 (2026-05-28): wire the real `precompute_reference` +

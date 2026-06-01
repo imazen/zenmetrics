@@ -666,21 +666,14 @@ fn compute_cell(
     // identity tuple alone. Failure to write demotes the encoded_filename
     // column to empty — the score columns are still valid.
     let encoded_filename = match &cfg.encoded_out_dir {
-        Some(dir) => save_encoded_variant(
-            dir,
-            src_path,
-            cfg.codec,
-            q,
-            &knob_json,
-            &cell.bytes,
-        )
-        .unwrap_or_else(|e| {
-            eprintln!(
-                "[sweep] save encoded variant failed: {} q={q}: {e}",
-                src_path.display(),
-            );
-            String::new()
-        }),
+        Some(dir) => save_encoded_variant(dir, src_path, cfg.codec, q, &knob_json, &cell.bytes)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "[sweep] save encoded variant failed: {} q={q}: {e}",
+                    src_path.display(),
+                );
+                String::new()
+            }),
         None => String::new(),
     };
     row.push(encoded_filename);
@@ -734,11 +727,9 @@ fn compute_cell(
     // emits 300, so collecting features from both at once would
     // require two distinct sidecar widths (we don't support that;
     // ship one).
-    let want_features_gpu =
-        cfg.feature_output.is_some() && zensim_gpu_in_metrics;
-    let want_features_cpu = cfg.feature_output.is_some()
-        && zensim_in_metrics
-        && !zensim_gpu_in_metrics;
+    let want_features_gpu = cfg.feature_output.is_some() && zensim_gpu_in_metrics;
+    let want_features_cpu =
+        cfg.feature_output.is_some() && zensim_in_metrics && !zensim_gpu_in_metrics;
     let mut zensim_features: Option<(f32, Vec<f64>)> = None;
 
     // Phase 7.5 routing: when an orchestrator handle is provided,
@@ -756,111 +747,106 @@ fn compute_cell(
     let use_orch_for_cell = false;
 
     for &metric in &cfg.metrics {
-        let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> =
-            if metric == MetricKind::Zensim && want_features_cpu {
-                // CPU zensim — does not pressure the cubecl pool;
-                // keep the uncached per-call path.
-                match run_zensim_with_features(source, &decoded) {
+        let result: Result<Vec<(&'static str, f64)>, Box<dyn Error>> = if metric
+            == MetricKind::Zensim
+            && want_features_cpu
+        {
+            // CPU zensim — does not pressure the cubecl pool;
+            // keep the uncached per-call path.
+            match run_zensim_with_features(source, &decoded) {
+                Ok((score, features)) => {
+                    zensim_features = Some((score as f32, features));
+                    Ok(vec![("zensim", score)])
+                }
+                Err(e) => Err(e),
+            }
+        } else if use_orch_for_cell && !(metric == MetricKind::ZensimGpu && want_features_gpu) && {
+            #[cfg(feature = "orchestrator")]
+            {
+                crate::orchestrator_runner::metric_orchestrator_eligible(metric)
+            }
+            #[cfg(not(feature = "orchestrator"))]
+            {
+                false
+            }
+        } {
+            // Phase 7.5: orchestrator-driven scoring. Skipped for
+            // ZensimGpu+want_features_gpu because the orchestrator
+            // doesn't yet expose feature emission; that branch
+            // still uses MetricCache below. Phase 7.7.1: also
+            // skipped for `Butteraugli` / `ButteraugliGpu`
+            // because the orchestrator's strip-preferred Auto
+            // resolver picks single-resolution scoring which
+            // diverges from the legacy CLI's
+            // `Butteraugli::new_multires`-always output by
+            // ~14-30 %. See
+            // `crate::orchestrator_runner::metric_orchestrator_eligible`.
+            #[cfg(feature = "orchestrator")]
+            {
+                score_via_orchestrator(
+                    orch.expect("use_orch_for_cell true => orch Some"),
+                    metric,
+                    source,
+                    &decoded,
+                )
+            }
+            #[cfg(not(feature = "orchestrator"))]
+            {
+                // Unreachable — use_orch_for_cell is `false` when
+                // the feature is off.
+                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+            }
+        } else if metric == MetricKind::ZensimGpu && want_features_gpu {
+            // GPU zensim with feature emit — go through the cache
+            // so the WithIw persist planes (~200 MB at 1080p) are
+            // allocated once per (dims, regime) instead of per
+            // cell. Without this, repeated cell-level construction
+            // saturates cubecl-cuda's pool on the 12 GB RTX 3060
+            // after ~80 cells. See `metrics::cache` module docs.
+            #[cfg(feature = "gpu-zensim")]
+            {
+                let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
+                match cache.compute_zensim_features(source, &decoded, cfg.feature_regime) {
                     Ok((score, features)) => {
                         zensim_features = Some((score as f32, features));
-                        Ok(vec![("zensim", score)])
+                        Ok(vec![("zensim_gpu", score)])
                     }
                     Err(e) => Err(e),
                 }
-            } else if use_orch_for_cell
-                && !(metric == MetricKind::ZensimGpu && want_features_gpu)
-                && {
-                    #[cfg(feature = "orchestrator")]
-                    {
-                        crate::orchestrator_runner::metric_orchestrator_eligible(metric)
-                    }
-                    #[cfg(not(feature = "orchestrator"))]
-                    {
-                        false
-                    }
-                }
+            }
+            #[cfg(not(feature = "gpu-zensim"))]
             {
-                // Phase 7.5: orchestrator-driven scoring. Skipped for
-                // ZensimGpu+want_features_gpu because the orchestrator
-                // doesn't yet expose feature emission; that branch
-                // still uses MetricCache below. Phase 7.7.1: also
-                // skipped for `Butteraugli` / `ButteraugliGpu`
-                // because the orchestrator's strip-preferred Auto
-                // resolver picks single-resolution scoring which
-                // diverges from the legacy CLI's
-                // `Butteraugli::new_multires`-always output by
-                // ~14-30 %. See
-                // `crate::orchestrator_runner::metric_orchestrator_eligible`.
-                #[cfg(feature = "orchestrator")]
-                {
-                    score_via_orchestrator(
-                        orch.expect("use_orch_for_cell true => orch Some"),
-                        metric,
-                        source,
-                        &decoded,
-                    )
-                }
-                #[cfg(not(feature = "orchestrator"))]
-                {
-                    // Unreachable — use_orch_for_cell is `false` when
-                    // the feature is off.
-                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
-                }
-            } else if metric == MetricKind::ZensimGpu && want_features_gpu {
-                // GPU zensim with feature emit — go through the cache
-                // so the WithIw persist planes (~200 MB at 1080p) are
-                // allocated once per (dims, regime) instead of per
-                // cell. Without this, repeated cell-level construction
-                // saturates cubecl-cuda's pool on the 12 GB RTX 3060
-                // after ~80 cells. See `metrics::cache` module docs.
-                #[cfg(feature = "gpu-zensim")]
-                {
-                    let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
-                    match cache.compute_zensim_features(
-                        source,
-                        &decoded,
-                        cfg.feature_regime,
-                    ) {
-                        Ok((score, features)) => {
-                            zensim_features = Some((score as f32, features));
-                            Ok(vec![("zensim_gpu", score)])
-                        }
-                        Err(e) => Err(e),
-                    }
-                }
-                #[cfg(not(feature = "gpu-zensim"))]
-                {
-                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
-                }
-            } else {
-                // All other GPU metrics route through the cache; CPU
-                // metrics (and unknown / disabled GPU metrics) fall
-                // through to the uncached `run_metric` path inside
-                // `run_metric_cached`.
-                #[cfg(any(
-                    feature = "gpu-butteraugli",
-                    feature = "gpu-ssim2",
-                    feature = "gpu-dssim",
-                    feature = "gpu-iwssim",
-                    feature = "gpu-zensim",
-                    feature = "gpu-cvvdp"
-                ))]
-                {
-                    let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
-                    cache.run_metric_cached(metric, source, &decoded)
-                }
-                #[cfg(not(any(
-                    feature = "gpu-butteraugli",
-                    feature = "gpu-ssim2",
-                    feature = "gpu-dssim",
-                    feature = "gpu-iwssim",
-                    feature = "gpu-zensim",
-                    feature = "gpu-cvvdp"
-                )))]
-                {
-                    run_metric(metric, source, &decoded, cfg.gpu_runtime)
-                }
-            };
+                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+            }
+        } else {
+            // All other GPU metrics route through the cache; CPU
+            // metrics (and unknown / disabled GPU metrics) fall
+            // through to the uncached `run_metric` path inside
+            // `run_metric_cached`.
+            #[cfg(any(
+                feature = "gpu-butteraugli",
+                feature = "gpu-ssim2",
+                feature = "gpu-dssim",
+                feature = "gpu-iwssim",
+                feature = "gpu-zensim",
+                feature = "gpu-cvvdp"
+            ))]
+            {
+                let mut cache = MetricCache::lock_global(gpu_runtime_for_cache);
+                cache.run_metric_cached(metric, source, &decoded)
+            }
+            #[cfg(not(any(
+                feature = "gpu-butteraugli",
+                feature = "gpu-ssim2",
+                feature = "gpu-dssim",
+                feature = "gpu-iwssim",
+                feature = "gpu-zensim",
+                feature = "gpu-cvvdp"
+            )))]
+            {
+                run_metric(metric, source, &decoded, cfg.gpu_runtime)
+            }
+        };
         match result {
             Ok(values) => {
                 for (_, v) in &values {

@@ -93,12 +93,7 @@ impl WeberPyramid {
     ///
     /// **Phase 9.Z.F chunk 6 of the CPU K_SPLIT walker port.**
     #[allow(dead_code)]
-    pub(crate) fn with_capacity_strip(
-        sw: usize,
-        sh: usize,
-        n_levels: usize,
-        h_body: u32,
-    ) -> Self {
+    pub(crate) fn with_capacity_strip(sw: usize, sh: usize, n_levels: usize, h_body: u32) -> Self {
         let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32);
         let mut bands = Vec::with_capacity(n_levels);
         let mut log_l_bkg = Vec::with_capacity(n_levels);
@@ -378,12 +373,7 @@ impl WeberPyramidCache {
     ///
     /// **Phase 9.Z.F chunk 6 of the CPU K_SPLIT walker port.**
     #[allow(dead_code)]
-    pub(crate) fn with_capacity_strip(
-        sw: usize,
-        sh: usize,
-        n_levels: usize,
-        h_body: u32,
-    ) -> Self {
+    pub(crate) fn with_capacity_strip(sw: usize, sh: usize, n_levels: usize, h_body: u32) -> Self {
         let k_split = crate::strip::mode_b_k_split(h_body, n_levels as u32);
         let mut gauss_img = Vec::with_capacity(n_levels);
         let mut gauss_l = Vec::with_capacity(n_levels);

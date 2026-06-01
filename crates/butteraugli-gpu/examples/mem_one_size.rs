@@ -68,7 +68,10 @@ fn parse_u32(name: &str, default: u32) -> u32 {
 }
 
 fn fmt_ms_csv(t: &[f64]) -> String {
-    t.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")
+    t.iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn median(mut t: Vec<f64>) -> f64 {

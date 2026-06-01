@@ -89,7 +89,13 @@ mod tests {
 
     #[test]
     fn status_serializes_snake_case() {
-        assert_eq!(serde_json::to_string(&JobStatus::Poison).unwrap(), "\"poison\"");
-        assert_eq!(serde_json::to_string(&ErrorClass::DecodeError).unwrap(), "\"decode_error\"");
+        assert_eq!(
+            serde_json::to_string(&JobStatus::Poison).unwrap(),
+            "\"poison\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ErrorClass::DecodeError).unwrap(),
+            "\"decode_error\""
+        );
     }
 }

@@ -134,70 +134,69 @@ pub const NUM_SCALES: usize = 6;
 #[cfg(feature = "fir")]
 mod blur_mode {
 
-/// Blur-kernel implementation selector — **gated behind the `fir`
-/// Cargo feature**.
-///
-/// SSIMULACRA2's per-scale Gaussian blur (σ = 1.5) admits multiple
-/// algorithmic realisations that produce different per-pixel responses.
-/// This enum picks which one a given `Ssim2` / `Ssim2Batch` instance
-/// uses. The choice is INVISIBLE to the score's interpretation only if
-/// the chosen kernel matches the canonical libjxl recursive Gaussian
-/// — i.e. `Iir`. Other modes (currently `Fir`) produce scores on a
-/// **different scale** and should be tagged distinctly downstream (see
-/// `column_name_for_blur`).
-///
-/// Default is `Iir`, which matches the published CPU `ssimulacra2`
-/// crate's behaviour bit-identically modulo f32 rounding (the
-/// pre-T_y.B opt-in baseline). Without the `fir` feature, the IIR
-/// blur is the only available path and `Ssim2` / `Ssim2Batch` have no
-/// `with_blur` / `set_blur` / `blur()` knobs at all.
-///
-/// ```no_run
-/// use cubecl::Runtime;
-/// use cubecl::wgpu::WgpuRuntime;
-/// use ssim2_gpu::{Ssim2, Ssim2Blur};
-///
-/// let client = WgpuRuntime::client(&Default::default());
-/// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
-///     .with_blur(Ssim2Blur::default()); // == Iir
-/// # Ok::<(), ssim2_gpu::Error>(())
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub enum Ssim2Blur {
-    /// Charalampidis 2016 truncated-cosine recursive IIR Gaussian.
+    /// Blur-kernel implementation selector — **gated behind the `fir`
+    /// Cargo feature**.
     ///
-    /// The canonical libjxl SSIMULACRA2 blur, ported to GPU verbatim
-    /// from `ssimulacra2-cuda`. Produces scores that match the
-    /// published CPU `ssimulacra2` crate to f32-reduction noise
-    /// (≤ 0.06 % relative on JPEG q5..q90; see
-    /// `tests/parity_lock.rs::parity_jpeg_corpus`).
+    /// SSIMULACRA2's per-scale Gaussian blur (σ = 1.5) admits multiple
+    /// algorithmic realisations that produce different per-pixel responses.
+    /// This enum picks which one a given `Ssim2` / `Ssim2Batch` instance
+    /// uses. The choice is INVISIBLE to the score's interpretation only if
+    /// the chosen kernel matches the canonical libjxl recursive Gaussian
+    /// — i.e. `Iir`. Other modes (currently `Fir`) produce scores on a
+    /// **different scale** and should be tagged distinctly downstream (see
+    /// `column_name_for_blur`).
     ///
-    /// Default. Use this unless you have a specific reason to opt in
-    /// to a different blur metric.
-    #[default]
-    Iir,
-    /// Separable 5-tap (D = 5) truncated Gaussian FIR at σ = 1.5,
-    /// per Kanetaka et al. "Fast Implementation of SSIMULACRA2 for
-    /// Image Quality Assessment", IWAIT 2026 (DOI 10.1117/12.3100969).
+    /// Default is `Iir`, which matches the published CPU `ssimulacra2`
+    /// crate's behaviour bit-identically modulo f32 rounding (the
+    /// pre-T_y.B opt-in baseline). Without the `fir` feature, the IIR
+    /// blur is the only available path and `Ssim2` / `Ssim2Batch` have no
+    /// `with_blur` / `set_blur` / `blur()` knobs at all.
     ///
-    /// **This is a distinct metric.** Per-image scores diverge from
-    /// `Iir` because the FIR's effective impulse-response support is
-    /// narrower than the IIR's (~2 vs ~5 effective radius). The paper
-    /// reports SROCC vs MOS on CID22 of 0.890387 for D=5 — slightly
-    /// higher than the libjxl IIR baseline's 0.889297 — but the
-    /// per-image score values are NOT the same scale. Downstream
-    /// pipelines must tag this implementation distinctly (see
-    /// `column_name_for_blur(Ssim2Blur::Fir)`).
+    /// ```no_run
+    /// use cubecl::Runtime;
+    /// use cubecl::wgpu::WgpuRuntime;
+    /// use ssim2_gpu::{Ssim2, Ssim2Blur};
     ///
-    /// Implementation: a single horizontal 5-tap FIR kernel is used
-    /// for both passes — the second pass runs on a transposed
-    /// intermediate, so its horizontal walk is a vertical walk in the
-    /// original frame. Same `pass → transpose → pass` structure as the
-    /// IIR path; same `*_full` output orientation; just a different
-    /// per-pass kernel. See `kernels::blur::blur_h_fir5_kernel`.
-    Fir,
-}
-
+    /// let client = WgpuRuntime::client(&Default::default());
+    /// let s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?
+    ///     .with_blur(Ssim2Blur::default()); // == Iir
+    /// # Ok::<(), ssim2_gpu::Error>(())
+    /// ```
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+    pub enum Ssim2Blur {
+        /// Charalampidis 2016 truncated-cosine recursive IIR Gaussian.
+        ///
+        /// The canonical libjxl SSIMULACRA2 blur, ported to GPU verbatim
+        /// from `ssimulacra2-cuda`. Produces scores that match the
+        /// published CPU `ssimulacra2` crate to f32-reduction noise
+        /// (≤ 0.06 % relative on JPEG q5..q90; see
+        /// `tests/parity_lock.rs::parity_jpeg_corpus`).
+        ///
+        /// Default. Use this unless you have a specific reason to opt in
+        /// to a different blur metric.
+        #[default]
+        Iir,
+        /// Separable 5-tap (D = 5) truncated Gaussian FIR at σ = 1.5,
+        /// per Kanetaka et al. "Fast Implementation of SSIMULACRA2 for
+        /// Image Quality Assessment", IWAIT 2026 (DOI 10.1117/12.3100969).
+        ///
+        /// **This is a distinct metric.** Per-image scores diverge from
+        /// `Iir` because the FIR's effective impulse-response support is
+        /// narrower than the IIR's (~2 vs ~5 effective radius). The paper
+        /// reports SROCC vs MOS on CID22 of 0.890387 for D=5 — slightly
+        /// higher than the libjxl IIR baseline's 0.889297 — but the
+        /// per-image score values are NOT the same scale. Downstream
+        /// pipelines must tag this implementation distinctly (see
+        /// `column_name_for_blur(Ssim2Blur::Fir)`).
+        ///
+        /// Implementation: a single horizontal 5-tap FIR kernel is used
+        /// for both passes — the second pass runs on a transposed
+        /// intermediate, so its horizontal walk is a vertical walk in the
+        /// original frame. Same `pass → transpose → pass` structure as the
+        /// IIR path; same `*_full` output orientation; just a different
+        /// per-pass kernel. See `kernels::blur::blur_h_fir5_kernel`.
+        Fir,
+    }
 } // end mod blur_mode (cfg fir)
 
 /// Stable column-name identifier for the IIR (default) blur path.

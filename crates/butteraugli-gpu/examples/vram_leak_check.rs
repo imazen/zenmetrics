@@ -70,7 +70,10 @@ fn synth_srgb(w: u32, h: u32, seed: u32) -> Vec<u8> {
 }
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 /// Global card used-memory in MiB via nvidia-smi. Returns None if the
@@ -161,7 +164,9 @@ fn check_many_scores(client: &ComputeClient<Backend>, ctx: &Ctx, n: usize) {
             b.set_reference(&r).expect("set_reference");
             for i in 0..n {
                 let d = synth_srgb(ctx.w, ctx.h, 1000 + i as u32);
-                let _ = b.compute_with_reference(&d).expect("compute_with_reference");
+                let _ = b
+                    .compute_with_reference(&d)
+                    .expect("compute_with_reference");
                 ctx.emit("many_scores", i, ctx.sample(client));
             }
         }
@@ -233,7 +238,9 @@ fn check_create_drop(client: &ComputeClient<Backend>, ctx: &Ctx, n: usize) {
                 let mut b = Butteraugli::<Backend>::new(client.clone(), ctx.w, ctx.h);
                 if warm {
                     b.set_reference(&r).expect("set_reference");
-                    let _ = b.compute_with_reference(&d).expect("compute_with_reference");
+                    let _ = b
+                        .compute_with_reference(&d)
+                        .expect("compute_with_reference");
                 } else {
                     let _ = b.compute(&r, &d).expect("compute");
                 }
@@ -270,7 +277,15 @@ fn main() {
         }
     }
 
-    let ctx = Ctx { mode: mode.clone(), w, h, body, settle_ms, samples, baseline_mib };
+    let ctx = Ctx {
+        mode: mode.clone(),
+        w,
+        h,
+        body,
+        settle_ms,
+        samples,
+        baseline_mib,
+    };
 
     // TSV header (only when running a single check; `all` emits one header
     // total). check\tmode\tsize_mp\tw\th\tcycle\tvram_used_mib\tvram_delta_mib

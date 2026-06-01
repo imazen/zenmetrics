@@ -22,9 +22,9 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use cubecl::Runtime;
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
-use cubecl::Runtime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
 use ssim2_gpu::{Ssim2, memory_mode};

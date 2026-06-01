@@ -16,10 +16,13 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use zen_job_core::{JobStatus, LedgerView, Sha256Hex};
-use zen_jobworker::{gc_execute, GcExecCfg};
+use zen_jobworker::{GcExecCfg, gc_execute};
 
 #[derive(Parser)]
-#[command(name = "zen-jobgc", about = "Safe reachability GC: LRU-cap cheap blobs, refuse irreplaceable, tombstone every delete")]
+#[command(
+    name = "zen-jobgc",
+    about = "Safe reachability GC: LRU-cap cheap blobs, refuse irreplaceable, tombstone every delete"
+)]
 struct Cli {
     /// Blob index (Parquet) — local path or s3:// URI.
     #[arg(long = "blob-index")]
@@ -56,7 +59,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let now = if c.now != 0 {
         c.now
     } else {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs()
     };
 
     // Referenced = output blobs of Done rows (latest-wins view).
@@ -71,8 +76,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|r| r.status == JobStatus::Done)
         .filter_map(|r| r.output_sha.clone())
         .collect();
-    let roots: HashSet<Sha256Hex> =
-        c.pin.iter().filter_map(|s| Sha256Hex::parse(s.clone()).ok()).collect();
+    let roots: HashSet<Sha256Hex> = c
+        .pin
+        .iter()
+        .filter_map(|s| Sha256Hex::parse(s.clone()).ok())
+        .collect();
 
     let index = zen_ledger::read_blob_index_uri(&c.blob_index, ep)?;
     let endpoint = ep.unwrap_or("");

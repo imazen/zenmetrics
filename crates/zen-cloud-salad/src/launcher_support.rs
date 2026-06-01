@@ -163,20 +163,32 @@ pub async fn apply_class_filter(
     min_productive_chunks: f32,
 ) -> ClassFilterApplied {
     let Some(path) = prior_path_or_uri else {
-        return ClassFilterApplied { names, ids, dropped: Vec::new() };
+        return ClassFilterApplied {
+            names,
+            ids,
+            dropped: Vec::new(),
+        };
     };
     let bytes = match load_prior_fleet_summary_bytes(r2, path).await {
         Ok(b) => b,
         Err(e) => {
             eprintln!("[class-filter] WARN failed to load prior fleet_summary: {e:#}");
-            return ClassFilterApplied { names, ids, dropped: Vec::new() };
+            return ClassFilterApplied {
+                names,
+                ids,
+                dropped: Vec::new(),
+            };
         }
     };
     let observed = match parse_prior_class_stats(&bytes) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("[class-filter] WARN failed to parse prior fleet_summary: {e:#}");
-            return ClassFilterApplied { names, ids, dropped: Vec::new() };
+            return ClassFilterApplied {
+                names,
+                ids,
+                dropped: Vec::new(),
+            };
         }
     };
     let cfg = zenfleet_orchestrator::SweepConfig {
@@ -186,7 +198,11 @@ pub async fn apply_class_filter(
     };
     let outcome = zenfleet_orchestrator::filter_classes(&names, &observed, &cfg);
     if outcome.keep.is_empty() {
-        return ClassFilterApplied { names, ids, dropped: Vec::new() };
+        return ClassFilterApplied {
+            names,
+            ids,
+            dropped: Vec::new(),
+        };
     }
     let kept_ids: Vec<String> = outcome
         .keep
@@ -303,7 +319,10 @@ pub fn load_r2_parent_creds_or_env() -> Result<R2ParentCreds> {
         .context("CF_API_TOKEN/R2_API_TOKEN missing from creds file")?;
     Ok(R2ParentCreds {
         cf_api_token: token,
-        account_id: map.get("R2_ACCOUNT_ID").cloned().context("R2_ACCOUNT_ID missing")?,
+        account_id: map
+            .get("R2_ACCOUNT_ID")
+            .cloned()
+            .context("R2_ACCOUNT_ID missing")?,
         parent_access_key_id: map
             .get("R2_ACCESS_KEY_ID")
             .cloned()

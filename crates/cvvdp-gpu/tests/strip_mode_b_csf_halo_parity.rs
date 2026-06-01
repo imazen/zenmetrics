@@ -39,7 +39,7 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{synth_pair_with_offset_dist, Backend};
+use common::{Backend, synth_pair_with_offset_dist};
 
 use cubecl::Runtime;
 use cvvdp_gpu::{Cvvdp, CvvdpParams};

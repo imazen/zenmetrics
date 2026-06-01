@@ -252,11 +252,7 @@ impl SpeculativeState {
         if self.completed_set.contains(chunk_id) {
             return None;
         }
-        let already = self
-            .speculative_count
-            .get(chunk_id)
-            .copied()
-            .unwrap_or(0);
+        let already = self.speculative_count.get(chunk_id).copied().unwrap_or(0);
         if already >= cfg.speculation_cap_per_chunk {
             return None;
         }
@@ -361,10 +357,7 @@ pub fn filter_classes(
                 } else {
                     let reason = format!(
                         "median_warmup={:?} mean_chunks={:.2} (warmup_ok={} prod_ok={})",
-                        stats.median_warmup_secs,
-                        stats.mean_chunks_processed,
-                        warmup_ok,
-                        prod_ok,
+                        stats.median_warmup_secs, stats.mean_chunks_processed, warmup_ok, prod_ok,
                     );
                     out.dropped.push((name.clone(), reason));
                 }

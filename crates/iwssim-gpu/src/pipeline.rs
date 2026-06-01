@@ -33,7 +33,9 @@ use crate::filters;
 use crate::kernels::{
     box3, cov, gauss11, imenlarge2, infow, lap_pyramid, reduction, rgb2gray, ssim_combine,
 };
-use crate::{Error, GpuIwssimResult, IwssimConfig, IwssimStrategy, MIN_NATIVE_DIM, NUM_SCALES, Result};
+use crate::{
+    Error, GpuIwssimResult, IwssimConfig, IwssimStrategy, MIN_NATIVE_DIM, NUM_SCALES, Result,
+};
 
 /// Reflect-pad index map (`reflect1` boundary convention, matching
 /// pyrtools): index `i` outside `[0, n)` is folded back via mirror
@@ -66,13 +68,7 @@ pub(crate) fn reflect_index(i: isize, n: usize) -> usize {
 /// length `dw * dh`. The native image lives in the top-left corner
 /// `[0..sh, 0..sw]`; the trailing rows/columns are filled with the
 /// reflect1 mapping.
-pub(crate) fn reflect_pad_f32(
-    src: &[f32],
-    sw: usize,
-    sh: usize,
-    dw: usize,
-    dh: usize,
-) -> Vec<f32> {
+pub(crate) fn reflect_pad_f32(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
     debug_assert_eq!(src.len(), sw * sh);
     debug_assert!(dw >= sw && dh >= sh);
     let mut out = vec![0.0_f32; dw * dh];
@@ -105,13 +101,7 @@ pub(crate) fn reflect_pad_f32(
 /// Empirically the best small-image strategy on the validation corpus
 /// (`benchmarks/iwssim_smallimg/README.md`): the pyramid sees a
 /// periodic signal whose boundary statistics match the interior.
-pub(crate) fn tile_pad_f32(
-    src: &[f32],
-    sw: usize,
-    sh: usize,
-    dw: usize,
-    dh: usize,
-) -> Vec<f32> {
+pub(crate) fn tile_pad_f32(src: &[f32], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<f32> {
     debug_assert_eq!(src.len(), sw * sh);
     debug_assert!(dw >= sw && dh >= sh);
     let mut out = vec![0.0_f32; dw * dh];
@@ -135,13 +125,7 @@ pub(crate) fn tile_pad_f32(
 
 /// Tile a tightly-packed `sw × sh × 3` u8 RGB image to `dw × dh × 3`.
 /// Same boundary convention as [`tile_pad_f32`].
-pub(crate) fn tile_pad_rgb_u8(
-    src: &[u8],
-    sw: usize,
-    sh: usize,
-    dw: usize,
-    dh: usize,
-) -> Vec<u8> {
+pub(crate) fn tile_pad_rgb_u8(src: &[u8], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<u8> {
     debug_assert_eq!(src.len(), sw * sh * 3);
     debug_assert!(dw >= sw && dh >= sh);
     let mut out = vec![0_u8; dw * dh * 3];
@@ -222,12 +206,7 @@ const BOUND1: u32 = BOUND - BLK_HALF; // = 4
 /// Row mapping at scale `s`:
 ///   LP row `y_s = y_0 / 2^s`        (integer division)
 ///   cs row = LP row − 5             (11×11 valid blur, 5-row crop)
-fn body_cs_range(
-    body_lp_top: i64,
-    body_lp_bot: i64,
-    scale: usize,
-    cs_h_s: u32,
-) -> (u32, u32) {
+fn body_cs_range(body_lp_top: i64, body_lp_bot: i64, scale: usize, cs_h_s: u32) -> (u32, u32) {
     let denom: i64 = 1 << (scale as u32);
     // Use round-half-up division: body_top contributes from the first
     // LP row that exceeds the body's start, body_bot from the last
@@ -247,12 +226,7 @@ fn body_cs_range(
 /// `(h_s − 2, w_s − 2)`; cov_accum / iw_sum read iw rows starting
 /// at LP row 1 (box3 crops 1 row from each side). So iw row
 /// `y_iw = y_LP − 1`.
-fn body_iw_range(
-    body_lp_top: i64,
-    body_lp_bot: i64,
-    scale: usize,
-    iw_h_s: u32,
-) -> (u32, u32) {
+fn body_iw_range(body_lp_top: i64, body_lp_bot: i64, scale: usize, iw_h_s: u32) -> (u32, u32) {
     let denom: i64 = 1 << (scale as u32);
     let lp_top_s: i64 = body_lp_top.div_euclid(denom);
     let lp_bot_s: i64 = body_lp_bot.div_euclid(denom);
@@ -534,7 +508,6 @@ pub struct Iwssim<R: Runtime> {
     // staging buffer reserved per call (`client.reserve_staging`),
     // collapsing two host-side passes (pack to pageable + memcpy to
     // pinned) into one. Mirrors butter T_x.O (10a5b996).
-
     /// One Scale per pyramid level. `scales.len() == NUM_SCALES` for
     /// validly-sized inputs.
     scales: Vec<Scale>,
@@ -662,10 +635,8 @@ impl<R: Runtime> Iwssim<R> {
         // (R | G<<8 | B<<16). Length = n_pixels, not n_pixels × 3.
         // Cuts per-call host→device upload from 12 B/pixel to 4 B/pixel.
         let n_pixels_usize = (pad_width * pad_height) as usize;
-        let src_u32_a =
-            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
-        let src_u32_b =
-            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
+        let src_u32_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
+        let src_u32_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_usize]));
 
         let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
@@ -830,10 +801,8 @@ impl<R: Runtime> Iwssim<R> {
             .map(|&(h, w)| Scale::new(&client, h, w))
             .collect();
         let n_pixels_alloc = (strip_alloc_h * image_w) as usize;
-        let src_u32_a =
-            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
-        let src_u32_b =
-            client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
+        let src_u32_a = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
+        let src_u32_b = client.create_from_slice(u32::as_bytes(&vec![0_u32; n_pixels_alloc]));
 
         let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
         let partials = client.create_from_slice(f32::as_bytes(&vec![0.0_f32; partials_len]));
@@ -1130,10 +1099,7 @@ impl<R: Runtime> Iwssim<R> {
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         let expected = (self.width * self.height * 3) as usize;
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -1341,8 +1307,7 @@ impl<R: Runtime> Iwssim<R> {
             let body_lp_bot = (body_hi - up_lo) as i64;
             for s in 0..n_scales_iw {
                 let iw_h = self.scales[s].iw_h;
-                let (py_lo, py_hi) =
-                    body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
+                let (py_lo, py_hi) = body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
                 if py_hi <= py_lo {
                     // Strip's body contributes no iw rows at this
                     // scale — skip cov accum to preserve sc.cu from
@@ -1365,8 +1330,7 @@ impl<R: Runtime> Iwssim<R> {
                         acc_cu[s][i * 10 + j] += cu_raw[i * device_stride + j];
                     }
                 }
-                let strip_nexp = (py_hi - py_lo) as u64
-                    * (self.scales[s].iw_w as u64);
+                let strip_nexp = (py_hi - py_lo) as u64 * (self.scales[s].iw_w as u64);
                 total_nexp[s] += strip_nexp;
             }
         }
@@ -1383,12 +1347,7 @@ impl<R: Runtime> Iwssim<R> {
                 for i in 0..n_dim {
                     cu_f64[i * n_dim + i] = 1.0;
                 }
-                self.eig_and_upload(
-                    s,
-                    &cu_f64,
-                    n_dim,
-                    s < self.scales.len() - 2,
-                );
+                self.eig_and_upload(s, &cu_f64, n_dim, s < self.scales.len() - 2);
                 continue;
             }
             let n_dim = n_dim_per_scale[s];
@@ -1412,8 +1371,7 @@ impl<R: Runtime> Iwssim<R> {
         let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
         let mut acc_csl: f64 = 0.0;
         let mut top_pool_count: u64 = 0;
-        let partials_len =
-            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
         for &(body_lo, body_hi, up_lo, up_hi) in strips.iter() {
             let actual_strip_h = up_hi - up_lo;
@@ -1436,8 +1394,7 @@ impl<R: Runtime> Iwssim<R> {
                 let sc = &self.scales[s];
                 let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
                 let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
-                let (cs_y_start, cs_y_end) =
-                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                let (cs_y_start, cs_y_end) = body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
                 if cs_y_end <= cs_y_start {
                     self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
                     self.zero_partial_slot(SLOT_IW_BASE + s as u32);
@@ -1493,8 +1450,7 @@ impl<R: Runtime> Iwssim<R> {
                     top_y_start,
                     top_y_end,
                 );
-                top_pool_count +=
-                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+                top_pool_count += (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
             } else {
                 self.zero_partial_slot(SLOT_CSL);
             }
@@ -1508,8 +1464,7 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes =
-                self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -1627,8 +1582,7 @@ impl<R: Runtime> Iwssim<R> {
         // relative to the whole-image working set we're already paying
         // for, and amortized across many `compute_with_reference_stripped`
         // calls in the RD-search hot loop.
-        let mut lp_ref_cache: Vec<Vec<cubecl::server::Handle>> =
-            Vec::with_capacity(n_strips);
+        let mut lp_ref_cache: Vec<Vec<cubecl::server::Handle>> = Vec::with_capacity(n_strips);
 
         // Per-scale raw Σ Yᵀ Y accumulator and total iw row count.
         // These follow `compute_gray_stripped`'s pass-1 logic exactly
@@ -1648,8 +1602,7 @@ impl<R: Runtime> Iwssim<R> {
             let row_stride = self.width as usize;
             let ref_strip: &[f32] =
                 &ref_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
-            self.scales[0].g_ref =
-                self.client.create_from_slice(f32::as_bytes(ref_strip));
+            self.scales[0].g_ref = self.client.create_from_slice(f32::as_bytes(ref_strip));
             self.build_laplacian_pyramid(true);
 
             // Snapshot each scale's lp_ref handle into the cache. The
@@ -1682,8 +1635,7 @@ impl<R: Runtime> Iwssim<R> {
             // is a few MB per strip; the readback + reupload happens
             // once per `set_reference_stripped` call, NOT per
             // `compute_with_reference_stripped`, so it's amortized.
-            let mut strip_lp: Vec<cubecl::server::Handle> =
-                Vec::with_capacity(self.scales.len());
+            let mut strip_lp: Vec<cubecl::server::Handle> = Vec::with_capacity(self.scales.len());
             for s in 0..self.scales.len() {
                 let sc = &self.scales[s];
                 let n = (sc.h as usize) * (sc.w as usize);
@@ -1706,8 +1658,7 @@ impl<R: Runtime> Iwssim<R> {
             let body_lp_bot = (body_hi - up_lo) as i64;
             for s in 0..n_scales_iw {
                 let iw_h = self.scales[s].iw_h;
-                let (py_lo, py_hi) =
-                    body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
+                let (py_lo, py_hi) = body_iw_range(body_lp_top, body_lp_bot, s, iw_h);
                 if py_hi <= py_lo {
                     continue;
                 }
@@ -1723,8 +1674,7 @@ impl<R: Runtime> Iwssim<R> {
                         acc_cu[s][i * 10 + j] += cu_raw[i * device_stride + j];
                     }
                 }
-                let strip_nexp = (py_hi - py_lo) as u64
-                    * (self.scales[s].iw_w as u64);
+                let strip_nexp = (py_hi - py_lo) as u64 * (self.scales[s].iw_w as u64);
                 total_nexp[s] += strip_nexp;
             }
         }
@@ -1766,10 +1716,8 @@ impl<R: Runtime> Iwssim<R> {
         // / `scales[s].lambda_dev` slots — no per-call HtoD for these
         // constants. Same "deterministic given the cached reference"
         // pattern that `lp_ref_cache` above already uses.
-        let mut cu_inv_dev_per_scale: Vec<cubecl::server::Handle> =
-            Vec::with_capacity(n_scales_iw);
-        let mut lambda_dev_per_scale: Vec<cubecl::server::Handle> =
-            Vec::with_capacity(n_scales_iw);
+        let mut cu_inv_dev_per_scale: Vec<cubecl::server::Handle> = Vec::with_capacity(n_scales_iw);
+        let mut lambda_dev_per_scale: Vec<cubecl::server::Handle> = Vec::with_capacity(n_scales_iw);
         for s in 0..n_scales_iw {
             cu_inv_dev_per_scale.push(
                 self.client
@@ -1815,10 +1763,7 @@ impl<R: Runtime> Iwssim<R> {
     /// ~1e-5 rel. The cached-ref path adds no additional drift: it's
     /// numerically identical to running `compute_gray_stripped` on
     /// the same `(ref, dis)` pair.
-    pub fn compute_with_reference_stripped(
-        &mut self,
-        dis_gray: &[f32],
-    ) -> Result<GpuIwssimResult> {
+    pub fn compute_with_reference_stripped(&mut self, dis_gray: &[f32]) -> Result<GpuIwssimResult> {
         let strip_state = match self.strip {
             Some(s) => s,
             None => return Err(Error::NotStripMode),
@@ -1866,21 +1811,17 @@ impl<R: Runtime> Iwssim<R> {
         let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
         let mut acc_csl: f64 = 0.0;
         let mut top_pool_count: u64 = 0;
-        let partials_len =
-            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
-        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in
-            strips.iter().enumerate()
-        {
+        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in strips.iter().enumerate() {
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
 
             // Upload dis strip + build ONLY the dis-side LP pyramid.
             let row_stride = self.width as usize;
-            let dis_strip: &[f32] = &dis_gray
-                [(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
-            self.scales[0].g_dis =
-                self.client.create_from_slice(f32::as_bytes(dis_strip));
+            let dis_strip: &[f32] =
+                &dis_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
+            self.scales[0].g_dis = self.client.create_from_slice(f32::as_bytes(dis_strip));
             self.build_laplacian_pyramid(false);
 
             // Restore cached ref-side LP handles for this strip. After
@@ -1910,8 +1851,7 @@ impl<R: Runtime> Iwssim<R> {
                 let sc = &self.scales[s];
                 let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
                 let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
-                let (cs_y_start, cs_y_end) =
-                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                let (cs_y_start, cs_y_end) = body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
                 if cs_y_end <= cs_y_start {
                     self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
                     self.zero_partial_slot(SLOT_IW_BASE + s as u32);
@@ -1967,8 +1907,7 @@ impl<R: Runtime> Iwssim<R> {
                     top_y_start,
                     top_y_end,
                 );
-                top_pool_count +=
-                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+                top_pool_count += (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
             } else {
                 self.zero_partial_slot(SLOT_CSL);
             }
@@ -1982,8 +1921,7 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes =
-                self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -2185,21 +2123,18 @@ impl<R: Runtime> Iwssim<R> {
         let mut acc_iw = [0.0_f64; NUM_SCALES - 1];
         let mut acc_csl: f64 = 0.0;
         let mut top_pool_count: u64 = 0;
-        let partials_len =
-            (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
+        let partials_len = (NUM_SLOTS * reduction::NUM_BLOCKS * reduction::BLOCK_SIZE) as usize;
 
         let rgb_row_stride = image_w as usize * 3;
 
-        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in
-            strips.iter().enumerate()
-        {
+        for (strip_idx, &(body_lo, body_hi, up_lo, up_hi)) in strips.iter().enumerate() {
             let actual_strip_h = up_hi - up_lo;
             self.set_scale_dims_for_strip(actual_strip_h, image_w);
 
             // ===== Native-RGB strip upload =====
             // 1. Slice the dist RGB strip.
-            let dis_strip_rgb: &[u8] = &dis_rgb[(up_lo as usize) * rgb_row_stride
-                ..(up_hi as usize) * rgb_row_stride];
+            let dis_strip_rgb: &[u8] =
+                &dis_rgb[(up_lo as usize) * rgb_row_stride..(up_hi as usize) * rgb_row_stride];
             // 2. Pack to pinned packed-u32 (3 B → 4 B, no FP math).
             let strip_pack = Self::pack_into_pinned(&self.client, dis_strip_rgb);
             // 3. Allocate a strip-sized gray-f32 device buffer for the
@@ -2248,8 +2183,7 @@ impl<R: Runtime> Iwssim<R> {
                 let sc = &self.scales[s];
                 let cs_n = (sc.cs_h as usize) * (sc.cs_w as usize);
                 let iw_n = (sc.iw_h as usize) * (sc.iw_w as usize);
-                let (cs_y_start, cs_y_end) =
-                    body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
+                let (cs_y_start, cs_y_end) = body_cs_range(body_lp_top, body_lp_bot, s, sc.cs_h);
                 if cs_y_end <= cs_y_start {
                     self.zero_partial_slot(SLOT_CSIW_BASE + s as u32);
                     self.zero_partial_slot(SLOT_IW_BASE + s as u32);
@@ -2305,8 +2239,7 @@ impl<R: Runtime> Iwssim<R> {
                     top_y_start,
                     top_y_end,
                 );
-                top_pool_count +=
-                    (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
+                top_pool_count += (top_y_end - top_y_start) as u64 * sc_top.cs_w as u64;
             } else {
                 self.zero_partial_slot(SLOT_CSL);
             }
@@ -2320,8 +2253,7 @@ impl<R: Runtime> Iwssim<R> {
                 NUM_SLOTS,
             );
 
-            let bytes =
-                self.client.read_one(self.sums.clone()).expect("read sums");
+            let bytes = self.client.read_one(self.sums.clone()).expect("read sums");
             let sums = f32::from_bytes(&bytes);
             debug_assert_eq!(sums.len(), NUM_SLOTS as usize);
             for s in 0..n_scales_iw {
@@ -2384,22 +2316,14 @@ impl<R: Runtime> Iwssim<R> {
     /// Upload one strip's slice of the input gray buffers into
     /// scale-0 `g_ref` / `g_dis`. Internal helper for
     /// `compute_gray_stripped`'s two passes.
-    fn upload_strip_gray(
-        &mut self,
-        ref_gray: &[f32],
-        dis_gray: &[f32],
-        up_lo: u32,
-        up_hi: u32,
-    ) {
+    fn upload_strip_gray(&mut self, ref_gray: &[f32], dis_gray: &[f32], up_lo: u32, up_hi: u32) {
         let row_stride = self.width as usize;
         let ref_strip: &[f32] =
             &ref_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
         let dis_strip: &[f32] =
             &dis_gray[(up_lo as usize) * row_stride..(up_hi as usize) * row_stride];
-        self.scales[0].g_ref =
-            self.client.create_from_slice(f32::as_bytes(ref_strip));
-        self.scales[0].g_dis =
-            self.client.create_from_slice(f32::as_bytes(dis_strip));
+        self.scales[0].g_ref = self.client.create_from_slice(f32::as_bytes(ref_strip));
+        self.scales[0].g_dis = self.client.create_from_slice(f32::as_bytes(dis_strip));
     }
 
     /// Mutate every Scale's dimension fields (`h`, `w`, `cs_h`,
@@ -2480,9 +2404,7 @@ impl<R: Runtime> Iwssim<R> {
         let n_pixels = src.len() / 3;
         let pinned_len = n_pixels * 4;
         let mut staging = client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -3187,13 +3109,7 @@ impl<R: Runtime> Iwssim<R> {
     /// both the whole-image path (one C_u per scale per call) and the
     /// strip path (one global C_u per scale after summing per-strip
     /// raw contributions).
-    fn eig_and_upload(
-        &mut self,
-        s: usize,
-        cu_f64: &[f64],
-        n_dim: usize,
-        has_parent: bool,
-    ) {
+    fn eig_and_upload(&mut self, s: usize, cu_f64: &[f64], n_dim: usize, has_parent: bool) {
         let _ = has_parent;
         let eig_result = eig::decompose_and_invert(cu_f64, n_dim);
         let lambda_slice = &eig_result.lambda[..n_dim];
@@ -3248,7 +3164,6 @@ impl<R: Runtime> Iwssim<R> {
             }
         }
     }
-
 }
 
 /// Divide the raw Σ Yᵀ Y matrix by `nexp` and pack into a `n_dim × n_dim`
@@ -3385,10 +3300,7 @@ mod reflect_pad_tests {
         let out = reflect_pad_rgb_u8(&src, 2, 1, 4, 1);
         // Width 2 → period 2, reflect(2,2)=0, reflect(3,2)=1.
         // Row 0: (10,20,30) (40,50,60) | (10,20,30) (40,50,60)
-        assert_eq!(
-            out,
-            vec![10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60]
-        );
+        assert_eq!(out, vec![10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60]);
     }
 
     #[test]
@@ -3447,7 +3359,8 @@ mod reflect_pad_tests {
         let mut expected = Vec::with_capacity(25);
         for dy in 0..5 {
             for dx in 0..5 {
-                let sy = dy % 2; let sx = dx % 2;
+                let sy = dy % 2;
+                let sx = dx % 2;
                 expected.push(src[sy * 2 + sx]);
             }
         }
@@ -3462,9 +3375,7 @@ mod reflect_pad_tests {
         // Cols 0..5: (10,20,30) (40,50,60) (10,20,30) (40,50,60) (10,20,30)
         assert_eq!(
             out,
-            vec![
-                10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60, 10, 20, 30
-            ]
+            vec![10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 50, 60, 10, 20, 30]
         );
     }
 }

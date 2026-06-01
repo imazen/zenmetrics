@@ -491,7 +491,11 @@ fn jod_monotonically_decreases_with_noise_amplitude() {
             .enumerate()
             .map(|(i, &b)| {
                 // deterministic ± noise: sign by hash parity, magnitude by amplitude
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })

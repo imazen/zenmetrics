@@ -53,7 +53,10 @@ fn parse_u32(name: &str, default: u32) -> u32 {
 }
 
 fn fmt_ms_csv(t: &[f64]) -> String {
-    t.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")
+    t.iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -116,9 +119,11 @@ fn main() {
             feat[0]
         }
         "strip" => {
-            let mut z =
-                Zensim::<Backend>::new_strip(client.clone(), w, h, body).expect("Zensim::new_strip");
-            let feat = z.compute_features(&r, &d).expect("compute_features (strip)");
+            let mut z = Zensim::<Backend>::new_strip(client.clone(), w, h, body)
+                .expect("Zensim::new_strip");
+            let feat = z
+                .compute_features(&r, &d)
+                .expect("compute_features (strip)");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
             for _ in 0..reps {
@@ -131,8 +136,8 @@ fn main() {
             feat[0]
         }
         "warm_ref_strip" => {
-            let mut z =
-                Zensim::<Backend>::new_strip(client.clone(), w, h, body).expect("Zensim::new_strip");
+            let mut z = Zensim::<Backend>::new_strip(client.clone(), w, h, body)
+                .expect("Zensim::new_strip");
             z.set_reference(&r).expect("set_reference (strip)");
             let feat = z
                 .compute_with_reference(&d)

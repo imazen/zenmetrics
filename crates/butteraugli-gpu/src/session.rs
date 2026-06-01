@@ -8,29 +8,47 @@ use crate::opaque::{Backend, ButteraugliOpaque};
 use crate::{ButteraugliParams, Result};
 
 #[cfg(feature = "cuda")]
-fn cuda_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::cuda::CudaRuntime> {
+fn cuda_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::cuda::CudaRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cuda::CudaRuntime::client(&Default::default());
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 
 #[cfg(feature = "wgpu")]
-fn wgpu_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::wgpu::WgpuRuntime> {
+fn wgpu_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::wgpu::WgpuRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 
 #[cfg(feature = "cpu")]
-fn cpu_client_on_stream(stream_value: u64) -> cubecl::prelude::ComputeClient<cubecl::cpu::CpuRuntime> {
+fn cpu_client_on_stream(
+    stream_value: u64,
+) -> cubecl::prelude::ComputeClient<cubecl::cpu::CpuRuntime> {
     use cubecl::Runtime;
     use cubecl::stream_id::StreamId;
     let mut c = cubecl::cpu::CpuRuntime::client(&Default::default());
-    unsafe { c.set_stream(StreamId { value: stream_value }) };
+    unsafe {
+        c.set_stream(StreamId {
+            value: stream_value,
+        })
+    };
     c
 }
 

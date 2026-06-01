@@ -14,16 +14,14 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{synth_pair_with_offset_dist, Backend};
+use common::{Backend, synth_pair_with_offset_dist};
 
 use cubecl::Runtime;
-use cvvdp_gpu::{memory_mode::STRIP_H_BODY_DEFAULT, Cvvdp, CvvdpParams, MemoryMode};
+use cvvdp_gpu::{Cvvdp, CvvdpParams, MemoryMode, memory_mode::STRIP_H_BODY_DEFAULT};
 
 const PARITY_TOL_JOD: f32 = 1e-4;
 
-fn cvvdp_64x64_strip_pair(
-    client: &cubecl::prelude::ComputeClient<Backend>,
-) -> Cvvdp<Backend> {
+fn cvvdp_64x64_strip_pair(client: &cubecl::prelude::ComputeClient<Backend>) -> Cvvdp<Backend> {
     Cvvdp::<Backend>::new_strip_pair(
         client.clone(),
         64,
@@ -96,8 +94,7 @@ fn mode_b_rejects_invalid_h_body() {
         Cvvdp::<Backend>::new_strip_pair(client.clone(), 64, 64, 0, CvvdpParams::PLACEHOLDER);
     assert!(zero.is_err());
     // h_body not aligned to STRIP_ALIGN
-    let bad =
-        Cvvdp::<Backend>::new_strip_pair(client, 64, 64, 100, CvvdpParams::PLACEHOLDER);
+    let bad = Cvvdp::<Backend>::new_strip_pair(client, 64, 64, 100, CvvdpParams::PLACEHOLDER);
     assert!(bad.is_err());
 }
 

@@ -2712,7 +2712,9 @@ fn cvvdp_score_flat_vs_flat_yields_max_jod() {
 
     let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
     let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
-    let jod_bw = cvvdp.score(&ref_black, &dist_white).expect("score black-vs-white");
+    let jod_bw = cvvdp
+        .score(&ref_black, &dist_white)
+        .expect("score black-vs-white");
     eprintln!("GPU flat-vs-flat (black vs white): jod = {jod_bw:.4}");
     assert!(
         (jod_bw - 10.0).abs() < 1e-2,
@@ -2721,7 +2723,9 @@ fn cvvdp_score_flat_vs_flat_yields_max_jod() {
 
     let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
     let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
-    let jod_gg = cvvdp.score(&ref_gray, &dist_gray).expect("score gray-vs-gray");
+    let jod_gg = cvvdp
+        .score(&ref_gray, &dist_gray)
+        .expect("score gray-vs-gray");
     assert!(
         (jod_gg - 10.0).abs() < 1e-2,
         "GPU flat 128 vs flat 64 should give JOD ≈ 10 (same reason); got {jod_gg}",
@@ -2748,7 +2752,9 @@ fn cvvdp_score_textured_vs_flat_detects_detail_loss() {
     let n = (w * h * 3) as usize;
     let ref_textured: Vec<u8> = (0..n).map(|i| (i % 256) as u8).collect();
     let dist_flat: Vec<u8> = vec![128u8; n];
-    let jod = cvvdp.score(&ref_textured, &dist_flat).expect("score textured-vs-flat");
+    let jod = cvvdp
+        .score(&ref_textured, &dist_flat)
+        .expect("score textured-vs-flat");
     eprintln!("GPU textured-ref-vs-flat-dist: jod = {jod:.4}");
     assert!(jod.is_finite(), "GPU blur JOD must be finite, got {jod}");
     assert!(
@@ -2783,17 +2789,29 @@ fn cvvdp_score_monotonically_decreases_with_noise_amplitude() {
         src.iter()
             .enumerate()
             .map(|(i, &b)| {
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })
             .collect()
     }
 
-    let jod_a2 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 2)).expect("score a=2");
-    let jod_a8 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 8)).expect("score a=8");
-    let jod_a32 = cvvdp.score(&ref_, &add_alt_noise(&ref_, 32)).expect("score a=32");
-    eprintln!("GPU noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}");
+    let jod_a2 = cvvdp
+        .score(&ref_, &add_alt_noise(&ref_, 2))
+        .expect("score a=2");
+    let jod_a8 = cvvdp
+        .score(&ref_, &add_alt_noise(&ref_, 8))
+        .expect("score a=8");
+    let jod_a32 = cvvdp
+        .score(&ref_, &add_alt_noise(&ref_, 32))
+        .expect("score a=32");
+    eprintln!(
+        "GPU noise amplitude sweep: a=2 → {jod_a2:.4}, a=8 → {jod_a8:.4}, a=32 → {jod_a32:.4}"
+    );
 
     assert!(
         jod_a2.is_finite() && jod_a8.is_finite() && jod_a32.is_finite(),
@@ -2835,7 +2853,9 @@ fn score_with_reference_flat_vs_flat_yields_max_jod() {
 
     let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
     let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
-    cvvdp.set_reference(&ref_black).expect("set_reference black");
+    cvvdp
+        .set_reference(&ref_black)
+        .expect("set_reference black");
     let jod_bw = cvvdp
         .score_with_reference(&dist_white)
         .expect("score_with_reference black-vs-white");
@@ -2878,7 +2898,10 @@ fn score_with_reference_textured_vs_flat_detects_detail_loss() {
         .score_with_reference(&dist_flat)
         .expect("score_with_reference textured-vs-flat");
     eprintln!("cached-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
-    assert!(jod.is_finite(), "cached-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod.is_finite(),
+        "cached-ref blur JOD must be finite, got {jod}"
+    );
     assert!(
         jod < 9.0,
         "cached-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
@@ -2912,7 +2935,11 @@ fn score_with_reference_monotonically_decreases_with_noise_amplitude() {
         src.iter()
             .enumerate()
             .map(|(i, &b)| {
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })
@@ -2973,7 +3000,9 @@ fn warm_ref_flat_vs_flat_yields_max_jod() {
 
     let ref_black: Vec<u8> = vec![0u8; (w * h * 3) as usize];
     let dist_white: Vec<u8> = vec![255u8; (w * h * 3) as usize];
-    cvvdp.warm_reference(&ref_black).expect("warm_reference black");
+    cvvdp
+        .warm_reference(&ref_black)
+        .expect("warm_reference black");
     let jod_bw = cvvdp
         .compute_dkl_jod_with_warm_ref(&dist_white, ppd)
         .expect("warm-ref black-vs-white");
@@ -2985,7 +3014,9 @@ fn warm_ref_flat_vs_flat_yields_max_jod() {
 
     let ref_gray: Vec<u8> = vec![128u8; (w * h * 3) as usize];
     let dist_gray: Vec<u8> = vec![64u8; (w * h * 3) as usize];
-    cvvdp.warm_reference(&ref_gray).expect("warm_reference gray");
+    cvvdp
+        .warm_reference(&ref_gray)
+        .expect("warm_reference gray");
     let jod_gg = cvvdp
         .compute_dkl_jod_with_warm_ref(&dist_gray, ppd)
         .expect("warm-ref gray-vs-gray");
@@ -3018,7 +3049,10 @@ fn warm_ref_textured_vs_flat_detects_detail_loss() {
         .compute_dkl_jod_with_warm_ref(&dist_flat, ppd)
         .expect("warm-ref textured-vs-flat");
     eprintln!("warm-ref textured-ref-vs-flat-dist: jod = {jod:.4}");
-    assert!(jod.is_finite(), "warm-ref blur JOD must be finite, got {jod}");
+    assert!(
+        jod.is_finite(),
+        "warm-ref blur JOD must be finite, got {jod}"
+    );
     assert!(
         jod < 9.0,
         "warm-ref textured-vs-flat (catastrophic blur) should give JOD ≪ 10, got {jod}",
@@ -3052,7 +3086,11 @@ fn warm_ref_monotonically_decreases_with_noise_amplitude() {
         src.iter()
             .enumerate()
             .map(|(i, &b)| {
-                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 { 1 } else { -1 };
+                let sign: i16 = if ((i * 31).wrapping_add(17)) % 2 == 0 {
+                    1
+                } else {
+                    -1
+                };
                 let delta = sign * amplitude as i16;
                 (b as i16 + delta).clamp(0, 255) as u8
             })

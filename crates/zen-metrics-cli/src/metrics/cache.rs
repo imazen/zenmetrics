@@ -57,7 +57,7 @@ use std::collections::HashMap;
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
-use std::sync::{Mutex, OnceLock};
+use std::error::Error;
 #[cfg(any(
     feature = "gpu-butteraugli",
     feature = "gpu-ssim2",
@@ -66,7 +66,7 @@ use std::sync::{Mutex, OnceLock};
     feature = "gpu-zensim",
     feature = "gpu-cvvdp"
 ))]
-use std::error::Error;
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(any(
     feature = "gpu-butteraugli",
@@ -382,10 +382,10 @@ impl MetricCache {
             reference.height,
             Some(regime),
         )?;
-        match slot.metric.compute_features_srgb_u8(
-            &reference.pixels,
-            &distorted.pixels,
-        ) {
+        match slot
+            .metric
+            .compute_features_srgb_u8(&reference.pixels, &distorted.pixels)
+        {
             Ok((score, features)) => {
                 if !score.value.is_finite() {
                     return Err(format!(
@@ -406,11 +406,7 @@ impl MetricCache {
                 }
                 Ok((score.value, features))
             }
-            Err(e) => Err(format!(
-                "zensim-gpu ({}): {e}",
-                backend_label(slot.backend)
-            )
-            .into()),
+            Err(e) => Err(format!("zensim-gpu ({}): {e}", backend_label(slot.backend)).into()),
         }
     }
 
@@ -433,12 +429,8 @@ impl MetricCache {
             .into());
         }
         let ref_fingerprint = (reference.pixels.as_ptr() as usize, reference.pixels.len());
-        let slot = self.get_or_build_umbrella(
-            umbrella_kind,
-            reference.width,
-            reference.height,
-            regime,
-        )?;
+        let slot =
+            self.get_or_build_umbrella(umbrella_kind, reference.width, reference.height, regime)?;
 
         // Cached-ref fast path (Phase 2C). When the reference's
         // (pointer, len) fingerprint matches the slot's last
@@ -535,13 +527,8 @@ impl MetricCache {
             // releases its handles, and cubecl's allocator reuses
             // freed pages from its own internal book-keeping without
             // any external prodding.
-            let (metric, backend) = construct_umbrella(
-                kind,
-                width,
-                height,
-                regime,
-                self.gpu_runtime,
-            )?;
+            let (metric, backend) =
+                construct_umbrella(kind, width, height, regime, self.gpu_runtime)?;
             self.umbrella.insert(
                 kind,
                 UmbrellaSlot {
@@ -655,8 +642,8 @@ fn build_params(
     {
         if matches!(kind, zenmetrics_api::MetricKind::Zensim) {
             if let Some(r) = regime {
-                let zp = zenmetrics_api::zensim::ZensimParams::default_weights()
-                    .with_regime(r.into());
+                let zp =
+                    zenmetrics_api::zensim::ZensimParams::default_weights().with_regime(r.into());
                 return Ok(zenmetrics_api::MetricParams::Zensim(zp));
             }
         }
@@ -832,14 +819,10 @@ mod butter {
         let max = result.score as f64;
         let pnorm3 = result.pnorm_3 as f64;
         if !max.is_finite() {
-            return Err(
-                format!("butteraugli-gpu produced non-finite max-norm: {max}").into(),
-            );
+            return Err(format!("butteraugli-gpu produced non-finite max-norm: {max}").into());
         }
         if !pnorm3.is_finite() {
-            return Err(
-                format!("butteraugli-gpu produced non-finite pnorm_3: {pnorm3}").into(),
-            );
+            return Err(format!("butteraugli-gpu produced non-finite pnorm_3: {pnorm3}").into());
         }
         Ok((max, pnorm3))
     }

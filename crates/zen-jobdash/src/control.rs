@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use zen_job_core::{gc_plan, over_budget, BlobIndexEntry, Sha256Hex, WorkerReport};
+use zen_job_core::{BlobIndexEntry, Sha256Hex, WorkerReport, gc_plan, over_budget};
 
 /// GC dry-run preview (goal C "clean with dry-run preview"): how many blobs and how many bytes each
 /// verdict bucket covers, *before* anything is deleted.
@@ -28,7 +28,11 @@ pub fn gc_dry_run(
     let plan = gc_plan(index, referenced, roots);
     let bytes_of = |shas: &[Sha256Hex]| -> u64 {
         let set: HashSet<&Sha256Hex> = shas.iter().collect();
-        index.iter().filter(|e| set.contains(&e.sha)).map(|e| e.size).sum()
+        index
+            .iter()
+            .filter(|e| set.contains(&e.sha))
+            .map(|e| e.size)
+            .sum()
     };
     GcDryRun {
         kept: plan.keep.len(),
@@ -63,7 +67,11 @@ pub fn stop_spend(workers: &[WorkerReport], spent_usd: f64, cap_usd: f64) -> Sto
             keep_free.push(w.worker.clone());
         }
     }
-    StopSpendDecision { over_budget: over, tear_down, keep_free }
+    StopSpendDecision {
+        over_budget: over,
+        tear_down,
+        keep_free,
+    }
 }
 
 /// The control surface the dashboard exposes (goal C). The fleet layer consumes these to actuate;
@@ -72,13 +80,25 @@ pub fn stop_spend(workers: &[WorkerReport], spent_usd: f64, cap_usd: f64) -> Sto
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ControlIntent {
     KillFleet,
-    KillTier { tier: String },
-    KillRun { run: String },
-    StopSpend { cap_usd: f64 },
+    KillTier {
+        tier: String,
+    },
+    KillRun {
+        run: String,
+    },
+    StopSpend {
+        cap_usd: f64,
+    },
     GcDryRun,
-    Pause { run: String },
-    Drain { run: String },
-    Resume { run: String },
+    Pause {
+        run: String,
+    },
+    Drain {
+        run: String,
+    },
+    Resume {
+        run: String,
+    },
     /// Tear down running fleet boxes that have no matching worker heartbeat (goal F: idle reaping).
     ReapIdle,
 }
@@ -86,10 +106,15 @@ pub enum ControlIntent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zen_job_core::{sha256, Regenerability, ResourceClass};
+    use zen_job_core::{Regenerability, ResourceClass, sha256};
 
     fn blob(b: &[u8], size: u64, regen: Regenerability) -> BlobIndexEntry {
-        BlobIndexEntry { sha: sha256(b), size, regenerability: regen, last_ref_secs: 0 }
+        BlobIndexEntry {
+            sha: sha256(b),
+            size,
+            regenerability: regen,
+            last_ref_secs: 0,
+        }
     }
 
     #[test]
@@ -103,16 +128,36 @@ mod tests {
         ];
         let dr = gc_dry_run(&index, &referenced, &HashSet::new());
         assert_eq!(dr.kept, 1);
-        assert_eq!(dr.freed_cheap_bytes, 500, "only the orphan jpeg is freely evictable");
+        assert_eq!(
+            dr.freed_cheap_bytes, 500,
+            "only the orphan jpeg is freely evictable"
+        );
         assert_eq!(dr.freed_under_pressure_bytes, 9000);
-        assert_eq!(dr.refused_bytes, 1_000_000, "irreplaceable orphan is surfaced, not freed");
+        assert_eq!(
+            dr.refused_bytes, 1_000_000,
+            "irreplaceable orphan is surfaced, not freed"
+        );
     }
 
     #[test]
     fn stop_spend_tears_down_paid_keeps_free() {
         let workers = vec![
-            WorkerReport { worker: "vast1".into(), provider: "vast".into(), class: ResourceClass::Gpu, rate_usd_per_hr: 0.4, uptime_secs: 3600, jobs_done: 10 },
-            WorkerReport { worker: "oracle1".into(), provider: "oracle".into(), class: ResourceClass::CpuArm, rate_usd_per_hr: 0.0, uptime_secs: 3600, jobs_done: 5 },
+            WorkerReport {
+                worker: "vast1".into(),
+                provider: "vast".into(),
+                class: ResourceClass::Gpu,
+                rate_usd_per_hr: 0.4,
+                uptime_secs: 3600,
+                jobs_done: 10,
+            },
+            WorkerReport {
+                worker: "oracle1".into(),
+                provider: "oracle".into(),
+                class: ResourceClass::CpuArm,
+                rate_usd_per_hr: 0.0,
+                uptime_secs: 3600,
+                jobs_done: 5,
+            },
         ];
         let over = stop_spend(&workers, 10.0, 5.0);
         assert!(over.over_budget);
@@ -121,7 +166,10 @@ mod tests {
 
         let under = stop_spend(&workers, 1.0, 5.0);
         assert!(!under.over_budget);
-        assert!(under.tear_down.is_empty(), "under budget → tear down nothing");
+        assert!(
+            under.tear_down.is_empty(),
+            "under budget → tear down nothing"
+        );
         assert_eq!(under.keep_free, vec!["oracle1".to_string()]);
     }
 

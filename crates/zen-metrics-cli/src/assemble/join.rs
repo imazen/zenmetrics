@@ -81,7 +81,9 @@ pub fn safe_join(
     PairKey::require_columns(&format!("safe_join({metric_col:?}) metric"), metric)?;
 
     let metric_values = metric.column(metric_col).ok_or_else(|| {
-        AssembleError::Schema(format!("safe_join: metric table lacks column {metric_col:?}"))
+        AssembleError::Schema(format!(
+            "safe_join: metric table lacks column {metric_col:?}"
+        ))
     })?;
 
     // (2) Build the metric-side index, REFUSING duplicate keys. Averaging

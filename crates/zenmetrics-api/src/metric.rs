@@ -1313,6 +1313,12 @@ pub fn score_pair(
     reference_srgb_u8: &[u8],
     distorted_srgb_u8: &[u8],
 ) -> Result<Score> {
-    let mut metric = Metric::new(kind, backend, width, height, MetricParams::default_for(kind))?;
+    let mut metric = Metric::new(
+        kind,
+        backend,
+        width,
+        height,
+        MetricParams::default_for(kind),
+    )?;
     metric.compute_srgb_u8(reference_srgb_u8, distorted_srgb_u8)
 }

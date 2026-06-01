@@ -2,11 +2,11 @@
 //!
 //! See `dssim-gpu/src/opaque.rs` for the full design rationale.
 
-use crate::pipeline::Ssim2;
-use crate::skipmap::Ssim2Mode;
 #[cfg(feature = "pixels")]
 use crate::Error;
 use crate::Result;
+use crate::pipeline::Ssim2;
+use crate::skipmap::Ssim2Mode;
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -64,12 +64,8 @@ impl Ssim2Params {
 }
 
 trait Ssim2Inner: Send {
-    fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-        mode: Ssim2Mode,
-    ) -> Result<Score>;
+    fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8], mode: Ssim2Mode)
+    -> Result<Score>;
     fn dims(&self) -> (u32, u32);
     #[cfg(feature = "cubecl-types")]
     fn compute_handles(
@@ -85,10 +81,7 @@ trait Ssim2Inner: Send {
     /// ref-side multi-scale Gaussian + XYB-pyramid build.
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score one distorted candidate against the cached reference.
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score>;
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
@@ -142,10 +135,7 @@ where
         Ssim2::set_reference(self, ref_rgb)
     }
 
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let r = Ssim2::compute_with_reference(self, dis_rgb)?;
         Ok(Score {
             value: r.score,
@@ -174,12 +164,7 @@ pub struct Ssim2Opaque {
 impl Ssim2Opaque {
     /// Construct an opaque SSIMULACRA2 scorer. Equivalent to
     /// `new_with_memory_mode(.., MemoryMode::Auto)`.
-    pub fn new(
-        backend: Backend,
-        width: u32,
-        height: u32,
-        params: Ssim2Params,
-    ) -> Result<Self> {
+    pub fn new(backend: Backend, width: u32, height: u32, params: Ssim2Params) -> Result<Self> {
         Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
     }
 
@@ -199,10 +184,9 @@ impl Ssim2Opaque {
             Backend::Cuda => {
                 use cubecl::Runtime;
                 let client = cubecl::cuda::CudaRuntime::client(&Default::default());
-                let s =
-                    Ssim2::<cubecl::cuda::CudaRuntime>::new_with_memory_mode(
-                        client, width, height, mode,
-                    )?;
+                let s = Ssim2::<cubecl::cuda::CudaRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
@@ -211,10 +195,9 @@ impl Ssim2Opaque {
             Backend::Wgpu => {
                 use cubecl::Runtime;
                 let client = cubecl::wgpu::WgpuRuntime::client(&Default::default());
-                let s =
-                    Ssim2::<cubecl::wgpu::WgpuRuntime>::new_with_memory_mode(
-                        client, width, height, mode,
-                    )?;
+                let s = Ssim2::<cubecl::wgpu::WgpuRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
@@ -223,10 +206,9 @@ impl Ssim2Opaque {
             Backend::Cpu => {
                 use cubecl::Runtime;
                 let client = cubecl::cpu::CpuRuntime::client(&Default::default());
-                let s =
-                    Ssim2::<cubecl::cpu::CpuRuntime>::new_with_memory_mode(
-                        client, width, height, mode,
-                    )?;
+                let s = Ssim2::<cubecl::cpu::CpuRuntime>::new_with_memory_mode(
+                    client, width, height, mode,
+                )?;
                 #[cfg(feature = "fir")]
                 let s = s.with_blur(params.blur);
                 Box::new(s)
@@ -272,21 +254,14 @@ impl Ssim2Opaque {
     }
 
     /// Score one sRGB RGB8 pair.
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
-        self.inner.compute_srgb_u8(ref_rgb, dis_rgb, self.params.mode)
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
+        self.inner
+            .compute_srgb_u8(ref_rgb, dis_rgb, self.params.mode)
     }
 
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -316,10 +291,7 @@ impl Ssim2Opaque {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
     }
 
@@ -334,10 +306,7 @@ impl Ssim2Opaque {
     /// Score a distorted candidate against the cached reference set
     /// by [`Self::set_reference_srgb_u8`]. Returns
     /// [`crate::Error::NoCachedReference`] if no reference is cached.
-    pub fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
     }
 

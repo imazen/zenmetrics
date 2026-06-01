@@ -2,9 +2,9 @@
 //!
 //! See `dssim-gpu/src/opaque.rs` for the full design rationale.
 
-use crate::pipeline::Iwssim;
 #[cfg(feature = "pixels")]
 use crate::Error;
+use crate::pipeline::Iwssim;
 use crate::{IwssimConfig, IwssimStrategy, NUM_SCALES, Result};
 
 #[cfg(feature = "pixels")]
@@ -77,10 +77,7 @@ trait IwssimInner: Send {
     /// stripped or whole-image typed pipeline based on strip mode.
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score a candidate against the cached reference (Phase 2A).
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score>;
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
     /// Drop the cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached and is ready to score against.
@@ -136,10 +133,7 @@ where
         }
     }
 
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let result = if Iwssim::is_strip_mode(self) {
             Iwssim::compute_rgb_with_reference_stripped(self, dis_rgb)?
         } else {
@@ -189,12 +183,7 @@ impl IwssimOpaque {
     /// image strategy (changed from reflect-pad in this revision per
     /// `benchmarks/iwssim_smallimg/`; see
     /// [`IwssimConfig::allow_small`] for the back-compat contract).
-    pub fn new(
-        backend: Backend,
-        width: u32,
-        height: u32,
-        params: IwssimParams,
-    ) -> Result<Self> {
+    pub fn new(backend: Backend, width: u32, height: u32, params: IwssimParams) -> Result<Self> {
         Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
     }
 
@@ -220,9 +209,8 @@ impl IwssimOpaque {
         let resolved = match mode {
             crate::MemoryMode::Full => crate::ResolvedMode::Full,
             crate::MemoryMode::Strip { h_body } => crate::ResolvedMode::Strip {
-                h_body: h_body.unwrap_or_else(|| {
-                    crate::memory_mode::auto_strip_body_for(width, height, cap)
-                }),
+                h_body: h_body
+                    .unwrap_or_else(|| crate::memory_mode::auto_strip_body_for(width, height, cap)),
             },
             crate::MemoryMode::Tile { .. } => return Err(crate::Error::ModeUnsupported("Tile")),
             crate::MemoryMode::Auto => crate::memory_mode::resolve_auto(width, height, cap)?,
@@ -346,21 +334,13 @@ impl IwssimOpaque {
 
     /// Score one reference / distorted pair, both packed sRGB
     /// `width × height × 3`.
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
     }
 
     /// Score from [`PixelSlice`] inputs.
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -399,10 +379,7 @@ impl IwssimOpaque {
     /// [`Self::set_reference_srgb_u8`]. Returns
     /// [`crate::Error::NoCachedReference`] if no reference has been
     /// cached.
-    pub fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
     }
 
@@ -423,10 +400,7 @@ impl IwssimOpaque {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
     }
 }

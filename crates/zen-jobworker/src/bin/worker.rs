@@ -10,10 +10,13 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use zen_jobworker::{run, WorkerConfig};
+use zen_jobworker::{WorkerConfig, run};
 
 #[derive(Parser)]
-#[command(name = "zen-jobworker", about = "Execute the reconciler's gap: run jobs, content-address outputs, write ledger rows")]
+#[command(
+    name = "zen-jobworker",
+    about = "Execute the reconciler's gap: run jobs, content-address outputs, write ledger rows"
+)]
 struct Cli {
     /// JSON file: array of DesiredJob (the desired artifacts).
     #[arg(long)]
@@ -81,9 +84,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_secs()
     };
     let r2 = match (c.blobs_r2_bucket, c.r2_endpoint) {
-        (Some(bucket), Some(endpoint)) => {
-            Some(zen_jobworker::R2Target { endpoint, bucket, prefix: c.blobs_r2_prefix })
-        }
+        (Some(bucket), Some(endpoint)) => Some(zen_jobworker::R2Target {
+            endpoint,
+            bucket,
+            prefix: c.blobs_r2_prefix,
+        }),
         (None, None) => None,
         _ => return Err("--blobs-r2-bucket and --r2-endpoint must be given together".into()),
     };
@@ -124,7 +129,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out = run(&cfg)?;
     eprintln!(
         "zen-jobworker: done={} failed={} poisoned={} skipped={} rows={}",
-        out.done, out.failed, out.poisoned, out.skipped, out.rows.len()
+        out.done,
+        out.failed,
+        out.poisoned,
+        out.skipped,
+        out.rows.len()
     );
     Ok(())
 }

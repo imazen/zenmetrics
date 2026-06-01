@@ -20,10 +20,10 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{synth_pair_ref, synth_pair_with_offset_dist, Backend};
+use common::{Backend, synth_pair_ref, synth_pair_with_offset_dist};
 
 use cubecl::Runtime;
-use cvvdp_gpu::{memory_mode::STRIP_H_BODY_DEFAULT, Cvvdp, CvvdpParams, MemoryMode};
+use cvvdp_gpu::{Cvvdp, CvvdpParams, MemoryMode, memory_mode::STRIP_H_BODY_DEFAULT};
 
 const PARITY_TOL_JOD: f32 = 1e-4;
 
@@ -207,20 +207,14 @@ fn mode_e_strip_h_body_explicit_override() {
 fn mode_e_rejects_misaligned_h_body() {
     let client = Backend::client(&Default::default());
     let r = Cvvdp::<Backend>::new_strip(client, 64, 64, 100, CvvdpParams::PLACEHOLDER);
-    assert!(matches!(
-        r,
-        Err(cvvdp_gpu::Error::ModeUnsupported(_))
-    ));
+    assert!(matches!(r, Err(cvvdp_gpu::Error::ModeUnsupported(_))));
 }
 
 #[test]
 fn mode_e_rejects_zero_h_body() {
     let client = Backend::client(&Default::default());
     let r = Cvvdp::<Backend>::new_strip(client, 64, 64, 0, CvvdpParams::PLACEHOLDER);
-    assert!(matches!(
-        r,
-        Err(cvvdp_gpu::Error::ModeUnsupported(_))
-    ));
+    assert!(matches!(r, Err(cvvdp_gpu::Error::ModeUnsupported(_))));
 }
 
 #[test]

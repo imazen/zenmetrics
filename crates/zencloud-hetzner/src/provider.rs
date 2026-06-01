@@ -285,10 +285,7 @@ impl ProviderHandle for HetznerProviderHandle {
         Ok(GroupId(self.cfg.group_name.clone()))
     }
 
-    async fn poll_instances(
-        &self,
-        _group: &GroupId,
-    ) -> Result<(GroupStatus, Vec<InstanceStatus>)> {
+    async fn poll_instances(&self, _group: &GroupId) -> Result<(GroupStatus, Vec<InstanceStatus>)> {
         let servers = self
             .api
             .list_servers_by_label(&self.label_selector())
@@ -406,9 +403,8 @@ impl ProviderHandle for HetznerProviderHandle {
         for j in jobs {
             let key = format!("{sweep_prefix}{}.json", j.chunk_id);
             // The payload IS the chunk JSON; the worker reads it raw.
-            let body = serde_json::to_vec(&j.payload).with_context(|| {
-                format!("serialize chunk payload for {}", j.chunk_id)
-            })?;
+            let body = serde_json::to_vec(&j.payload)
+                .with_context(|| format!("serialize chunk payload for {}", j.chunk_id))?;
             self.cfg
                 .r2
                 .upload(&self.cfg.r2_bucket, &key, &body)
@@ -456,20 +452,22 @@ mod tests {
         let extra: std::collections::BTreeMap<String, String> = spec
             .env
             .iter()
-            .filter(|(k, _)| !matches!(
-                k.as_str(),
-                "SWEEP_RUN_ID"
-                    | "R2_ACCESS_KEY_ID"
-                    | "R2_SECRET_ACCESS_KEY"
-                    | "AWS_SESSION_TOKEN"
-                    | "R2_SESSION_TOKEN"
-                    | "R2_ACCOUNT_ID"
-                    | "BUCKET"
-                    | "CHUNKS_R2"
-                    | "CHUNKS_QUEUE_PREFIX"
-                    | "WORKER_BACKEND"
-                    | "RUST_LOG"
-            ))
+            .filter(|(k, _)| {
+                !matches!(
+                    k.as_str(),
+                    "SWEEP_RUN_ID"
+                        | "R2_ACCESS_KEY_ID"
+                        | "R2_SECRET_ACCESS_KEY"
+                        | "AWS_SESSION_TOKEN"
+                        | "R2_SESSION_TOKEN"
+                        | "R2_ACCOUNT_ID"
+                        | "BUCKET"
+                        | "CHUNKS_R2"
+                        | "CHUNKS_QUEUE_PREFIX"
+                        | "WORKER_BACKEND"
+                        | "RUST_LOG"
+                )
+            })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         assert_eq!(sweep_id, "sweep-test");

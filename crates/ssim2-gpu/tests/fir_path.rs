@@ -184,11 +184,7 @@ fn fir_score_decreases_with_distortion() {
     // sense is broken.
     for w in scores.windows(2) {
         let (lo, hi) = (w[0], w[1]);
-        assert!(
-            hi >= lo,
-            "FIR score not monotone in q: {:?}",
-            scores
-        );
+        assert!(hi >= lo, "FIR score not monotone in q: {:?}", scores);
     }
 }
 
@@ -237,8 +233,14 @@ fn fir_vs_iir_drift_table_real_jpeg() {
     for q in [1u32, 5, 20, 45, 70, 90] {
         let path = dir.join(format!("q{q}.jpg"));
         let (dis_bytes, _, _) = load_rgb8(&path);
-        let iir = s_iir.compute(&src_bytes, &dis_bytes).expect("iir compute").score;
-        let fir = s_fir.compute(&src_bytes, &dis_bytes).expect("fir compute").score;
+        let iir = s_iir
+            .compute(&src_bytes, &dis_bytes)
+            .expect("iir compute")
+            .score;
+        let fir = s_fir
+            .compute(&src_bytes, &dis_bytes)
+            .expect("fir compute")
+            .score;
         let d = (iir - fir).abs();
         let rel = if iir.abs() > 1e-3 {
             d / iir.abs() * 100.0
@@ -254,7 +256,10 @@ fn fir_vs_iir_drift_table_real_jpeg() {
             "q{q}: FIR and IIR produce identical scores — dispatch must be broken"
         );
         // Both must be finite and within a sane range.
-        assert!(iir.is_finite() && fir.is_finite(), "non-finite score at q{q}");
+        assert!(
+            iir.is_finite() && fir.is_finite(),
+            "non-finite score at q{q}"
+        );
         assert!(
             (-200.0..=150.0).contains(&fir),
             "FIR score at q{q} out of sane range: {fir}"

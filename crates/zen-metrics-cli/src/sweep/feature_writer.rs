@@ -151,10 +151,7 @@ impl FeatureParquetWriter {
     /// the v26+ default, `num_features::EXTENDED` (300) for the legacy
     /// CPU zensim block, or `num_features::BASIC` (228) for the
     /// no-extended-block fast path. Overwrites if the file exists.
-    pub fn create_with_n(
-        path: &Path,
-        n: usize,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn create_with_n(path: &Path, n: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let schema = Arc::new(build_schema(n));
         let file = File::create(path)?;
         let props = WriterProperties::builder()

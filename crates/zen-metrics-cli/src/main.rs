@@ -437,22 +437,21 @@ fn main() -> ExitCode {
         }
     }
     #[cfg(feature = "orchestrator")]
-    let orchestrator_opts = match orchestrator_runner::bench_on_start_from_flag(
-        Some(cli.bench_on_start.as_str()),
-    )
-    .and_then(|bos| {
-        orchestrator_runner::runtime_opts_from_cli(
-            cli.orchestrator_cache.clone(),
-            bos,
-            cli.cpu_features.as_str(),
-        )
-    }) {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
+    let orchestrator_opts =
+        match orchestrator_runner::bench_on_start_from_flag(Some(cli.bench_on_start.as_str()))
+            .and_then(|bos| {
+                orchestrator_runner::runtime_opts_from_cli(
+                    cli.orchestrator_cache.clone(),
+                    bos,
+                    cli.cpu_features.as_str(),
+                )
+            }) {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
     #[cfg(feature = "orchestrator")]
     if use_orchestrator {
         eprintln!(
@@ -749,14 +748,13 @@ fn metric_range_bounds(metric: crate::metrics::MetricKind) -> Option<(f64, f64, 
 /// All checks are tolerant of unknown / experimental metrics: if
 /// `metric_range_bounds` returns `None`, checks #2 and #4 are skipped.
 #[cfg(feature = "sweep")]
-fn bogus_check(
-    metric: crate::metrics::MetricKind,
-    scores: &[f64],
-    out_parquet: &Path,
-) -> bool {
+fn bogus_check(metric: crate::metrics::MetricKind, scores: &[f64], out_parquet: &Path) -> bool {
     let n_total = scores.len();
     if n_total == 0 {
-        eprintln!("[fail-on-bogus] FAIL: empty score column in {}", out_parquet.display());
+        eprintln!(
+            "[fail-on-bogus] FAIL: empty score column in {}",
+            out_parquet.display()
+        );
         return false;
     }
 
@@ -1053,10 +1051,7 @@ fn cmd_score_pairs(args: ScorePairsArgs) -> Result<ScorePairsOutcome, Box<dyn st
     // current metric. Cheap (one Vec<f64> clone) and keeps the sanity
     // check in-process — important on workers that may not have R2
     // set up.
-    let scores_snapshot: Vec<f64> = score_columns
-        .first()
-        .cloned()
-        .unwrap_or_default();
+    let scores_snapshot: Vec<f64> = score_columns.first().cloned().unwrap_or_default();
     let mut arrays: Vec<ArrayRef> = vec![
         Arc::new(StringArray::from(image_paths)),
         Arc::new(StringArray::from(codecs)),

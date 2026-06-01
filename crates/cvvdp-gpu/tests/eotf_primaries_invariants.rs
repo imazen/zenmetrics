@@ -107,7 +107,10 @@ fn hlg_system_gamma_matches_bt2100_for_sub_1000_nit_peak() {
 fn hlg_system_gamma_lifts_for_hdr_peak() {
     // 4000 cd/m^2 peak at 5 lux ambient: gamma > 1.2 per WHP369.
     let g = hlg_system_gamma(4000.0, 5.0);
-    assert!(g > 1.2, "HLG system gamma at 4000 nit should exceed 1.2; got {g}");
+    assert!(
+        g > 1.2,
+        "HLG system gamma at 4000 nit should exceed 1.2; got {g}"
+    );
     assert!(g < 2.0, "HLG system gamma should be bounded; got {g}");
 }
 
@@ -315,8 +318,7 @@ fn display_byte_dkl_under_standard_4k_matches_srgb_path_bit_for_bit() {
         (32, 200, 128),
     ];
     for (r, g, b) in pixels {
-        let (a1, rg1, vy1) =
-            srgb_byte_to_dkl_scalar(r, g, b, d.y_peak, d.y_black, d.y_refl);
+        let (a1, rg1, vy1) = srgb_byte_to_dkl_scalar(r, g, b, d.y_peak, d.y_black, d.y_refl);
         let (a2, rg2, vy2) = display_byte_to_dkl_scalar(r, g, b, d);
         assert_eq!(a1.to_bits(), a2.to_bits(), "A drift at ({r}, {g}, {b})");
         assert_eq!(rg1.to_bits(), rg2.to_bits(), "RG drift at ({r}, {g}, {b})");

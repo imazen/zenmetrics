@@ -150,7 +150,9 @@ fn auto_searches_smaller_body_when_default_does_not_fit() {
     );
     // Cap is small enough that the default body won't fit, but at
     // least the 64-row body must.
-    let cap_bytes = small_body_bytes.saturating_mul(2).min(default_body_bytes - 1);
+    let cap_bytes = small_body_bytes
+        .saturating_mul(2)
+        .min(default_body_bytes - 1);
     with_cap(Some(&cap_bytes.to_string()), || {
         let cap = memory_mode::vram_cap_bytes();
         let r = memory_mode::resolve_auto(6000, 4000, cap).expect("resolve");

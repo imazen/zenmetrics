@@ -48,8 +48,8 @@ fn main() {
     let client = CudaRuntime::client(&Default::default());
 
     let mut score = |name: &str| -> f64 {
-        let display = DisplayModel::by_name(name)
-            .unwrap_or_else(|| panic!("unknown display preset {name}"));
+        let display =
+            DisplayModel::by_name(name).unwrap_or_else(|| panic!("unknown display preset {name}"));
         let geom = DisplayGeometry::by_name(name)
             .unwrap_or_else(|| panic!("no geometry for preset {name}"));
         let params = CvvdpParams {

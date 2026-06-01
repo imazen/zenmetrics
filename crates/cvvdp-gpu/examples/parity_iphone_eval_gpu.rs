@@ -146,8 +146,7 @@ fn main() {
     let root = Path::new(EVAL_ROOT);
     let refs_dir = root.join("refs");
     let dists_dir = root.join("dists");
-    let pairs_json =
-        fs::read_to_string(root.join("pairs.json")).expect("read pairs.json");
+    let pairs_json = fs::read_to_string(root.join("pairs.json")).expect("read pairs.json");
     let pairs = parse_pairs(&pairs_json, &refs_dir, &dists_dir);
     eprintln!("loaded {} pairs", pairs.len());
 
@@ -164,7 +163,10 @@ fn main() {
             continue;
         };
         if (rw, rh) != (dw, dh) {
-            eprintln!("  skip {} (size mismatch {}x{} vs {}x{})", p.name, rw, rh, dw, dh);
+            eprintln!(
+                "  skip {} (size mismatch {}x{} vs {}x{})",
+                p.name, rw, rh, dw, dh
+            );
             continue;
         }
         loaded.push((p.clone(), r, d, rw, rh));
@@ -185,8 +187,16 @@ fn main() {
     }
 
     let displays: &[(&str, DisplayModel, DisplayGeometry)] = &[
-        ("standard_4k", DisplayModel::STANDARD_4K, DisplayGeometry::STANDARD_4K),
-        ("iphone_14_pro", DisplayModel::IPHONE_14_PRO, DisplayGeometry::IPHONE_14_PRO),
+        (
+            "standard_4k",
+            DisplayModel::STANDARD_4K,
+            DisplayGeometry::STANDARD_4K,
+        ),
+        (
+            "iphone_14_pro",
+            DisplayModel::IPHONE_14_PRO,
+            DisplayGeometry::IPHONE_14_PRO,
+        ),
     ];
 
     let client = CudaRuntime::client(&Default::default());
@@ -198,14 +208,9 @@ fn main() {
             display: *display,
             ..CvvdpParams::PLACEHOLDER
         };
-        let mut cvvdp = Cvvdp::<CudaRuntime>::new_with_geometry(
-            client.clone(),
-            w,
-            h,
-            params,
-            *geom,
-        )
-        .expect("Cvvdp::new_with_geometry");
+        let mut cvvdp =
+            Cvvdp::<CudaRuntime>::new_with_geometry(client.clone(), w, h, params, *geom)
+                .expect("Cvvdp::new_with_geometry");
 
         for (p, ref_bytes, dist_bytes, _, _) in &loaded {
             let jod = match cvvdp.score(ref_bytes, dist_bytes) {
@@ -225,13 +230,7 @@ fn main() {
                 _ => f64::NAN,
             };
             let diff = (jod - pyc).abs();
-            all_rows.push((
-                p.name.clone(),
-                display_name.to_string(),
-                pyc,
-                jod,
-                diff,
-            ));
+            all_rows.push((p.name.clone(), display_name.to_string(), pyc, jod, diff));
         }
     }
 

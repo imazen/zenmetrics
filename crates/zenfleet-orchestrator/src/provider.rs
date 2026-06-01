@@ -123,10 +123,8 @@ pub trait ProviderHandle: Send {
 
     /// Tear down the group. Implementations should retry internally
     /// (the driver only calls this once at the end). Idempotent.
-    fn teardown(
-        &mut self,
-        group: &GroupId,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
+    fn teardown(&mut self, group: &GroupId)
+    -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Push N jobs onto the provider's queue. The driver calls this
     /// once for the initial dispatch and again per chunk for

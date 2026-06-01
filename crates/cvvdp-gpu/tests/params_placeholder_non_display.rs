@@ -31,21 +31,57 @@ use cvvdp_gpu::CvvdpParams;
 const _: () = {
     let p = CvvdpParams::PLACEHOLDER;
     // csf sub-bundle (all 0.0 in scaffolding)
-    assert!(p.csf.a_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.a_peak drifted from 0.0");
-    assert!(p.csf.rg_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.rg_peak drifted from 0.0");
-    assert!(p.csf.vy_peak.to_bits() == 0.0_f32.to_bits(), "PLACEHOLDER.csf.vy_peak drifted from 0.0");
+    assert!(
+        p.csf.a_peak.to_bits() == 0.0_f32.to_bits(),
+        "PLACEHOLDER.csf.a_peak drifted from 0.0"
+    );
+    assert!(
+        p.csf.rg_peak.to_bits() == 0.0_f32.to_bits(),
+        "PLACEHOLDER.csf.rg_peak drifted from 0.0"
+    );
+    assert!(
+        p.csf.vy_peak.to_bits() == 0.0_f32.to_bits(),
+        "PLACEHOLDER.csf.vy_peak drifted from 0.0"
+    );
     // masking sub-bundle (scaffolding values 2.4 / 2.2 / 0.04)
-    assert!(p.masking.p.to_bits() == 2.4_f32.to_bits(), "PLACEHOLDER.masking.p drifted from 2.4");
-    assert!(p.masking.q.to_bits() == 2.2_f32.to_bits(), "PLACEHOLDER.masking.q drifted from 2.2");
-    assert!(p.masking.k.to_bits() == 0.04_f32.to_bits(), "PLACEHOLDER.masking.k drifted from 0.04");
+    assert!(
+        p.masking.p.to_bits() == 2.4_f32.to_bits(),
+        "PLACEHOLDER.masking.p drifted from 2.4"
+    );
+    assert!(
+        p.masking.q.to_bits() == 2.2_f32.to_bits(),
+        "PLACEHOLDER.masking.q drifted from 2.2"
+    );
+    assert!(
+        p.masking.k.to_bits() == 0.04_f32.to_bits(),
+        "PLACEHOLDER.masking.k drifted from 0.04"
+    );
     // pooling sub-bundle (uniform 4.0 in scaffolding)
-    assert!(p.pooling.beta_spatial.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_spatial drifted from 4.0");
-    assert!(p.pooling.beta_band.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_band drifted from 4.0");
-    assert!(p.pooling.beta_channel.to_bits() == 4.0_f32.to_bits(), "PLACEHOLDER.pooling.beta_channel drifted from 4.0");
+    assert!(
+        p.pooling.beta_spatial.to_bits() == 4.0_f32.to_bits(),
+        "PLACEHOLDER.pooling.beta_spatial drifted from 4.0"
+    );
+    assert!(
+        p.pooling.beta_band.to_bits() == 4.0_f32.to_bits(),
+        "PLACEHOLDER.pooling.beta_band drifted from 4.0"
+    );
+    assert!(
+        p.pooling.beta_channel.to_bits() == 4.0_f32.to_bits(),
+        "PLACEHOLDER.pooling.beta_channel drifted from 4.0"
+    );
     // jod sub-bundle (scaffolding values 10.0 / 1.0 / 0.30)
-    assert!(p.jod.jod_a.to_bits() == 10.0_f32.to_bits(), "PLACEHOLDER.jod.jod_a drifted from 10.0");
-    assert!(p.jod.jod_b.to_bits() == 1.0_f32.to_bits(), "PLACEHOLDER.jod.jod_b drifted from 1.0");
-    assert!(p.jod.jod_c.to_bits() == 0.30_f32.to_bits(), "PLACEHOLDER.jod.jod_c drifted from 0.30");
+    assert!(
+        p.jod.jod_a.to_bits() == 10.0_f32.to_bits(),
+        "PLACEHOLDER.jod.jod_a drifted from 10.0"
+    );
+    assert!(
+        p.jod.jod_b.to_bits() == 1.0_f32.to_bits(),
+        "PLACEHOLDER.jod.jod_b drifted from 1.0"
+    );
+    assert!(
+        p.jod.jod_c.to_bits() == 0.30_f32.to_bits(),
+        "PLACEHOLDER.jod.jod_c drifted from 0.30"
+    );
 };
 
 // Tick 575: cross-bundle pin — PLACEHOLDER.display must equal
@@ -61,12 +97,18 @@ const _: () = {
     use cvvdp_gpu::params::DisplayModel;
     let p = CvvdpParams::PLACEHOLDER.display;
     let s = DisplayModel::STANDARD_4K;
-    assert!(p.y_peak.to_bits() == s.y_peak.to_bits(),
-        "PLACEHOLDER.display.y_peak must equal STANDARD_4K.y_peak (PLACEHOLDER inherits STANDARD_4K)");
-    assert!(p.y_black.to_bits() == s.y_black.to_bits(),
-        "PLACEHOLDER.display.y_black must equal STANDARD_4K.y_black");
-    assert!(p.y_refl.to_bits() == s.y_refl.to_bits(),
-        "PLACEHOLDER.display.y_refl must equal STANDARD_4K.y_refl");
+    assert!(
+        p.y_peak.to_bits() == s.y_peak.to_bits(),
+        "PLACEHOLDER.display.y_peak must equal STANDARD_4K.y_peak (PLACEHOLDER inherits STANDARD_4K)"
+    );
+    assert!(
+        p.y_black.to_bits() == s.y_black.to_bits(),
+        "PLACEHOLDER.display.y_black must equal STANDARD_4K.y_black"
+    );
+    assert!(
+        p.y_refl.to_bits() == s.y_refl.to_bits(),
+        "PLACEHOLDER.display.y_refl must equal STANDARD_4K.y_refl"
+    );
 };
 
 // Tick 575: scaffolding-field positivity invariants. Even though
@@ -79,15 +121,42 @@ const _: () = {
 // 0.0 anyway in IEEE 754, but they're not load-bearing yet).
 const _: () = {
     let p = CvvdpParams::PLACEHOLDER;
-    assert!(p.masking.p.is_sign_positive(), "PLACEHOLDER.masking.p must be positive (transducer exponent)");
-    assert!(p.masking.q.is_sign_positive(), "PLACEHOLDER.masking.q must be positive (transducer exponent)");
-    assert!(p.masking.k.is_sign_positive(), "PLACEHOLDER.masking.k must be positive (gain)");
-    assert!(p.pooling.beta_spatial.is_sign_positive(), "PLACEHOLDER.pooling.beta_spatial must be positive");
-    assert!(p.pooling.beta_band.is_sign_positive(), "PLACEHOLDER.pooling.beta_band must be positive");
-    assert!(p.pooling.beta_channel.is_sign_positive(), "PLACEHOLDER.pooling.beta_channel must be positive");
-    assert!(p.jod.jod_a.is_sign_positive(), "PLACEHOLDER.jod.jod_a must be positive");
-    assert!(p.jod.jod_b.is_sign_positive(), "PLACEHOLDER.jod.jod_b must be positive");
-    assert!(p.jod.jod_c.is_sign_positive(), "PLACEHOLDER.jod.jod_c must be positive");
+    assert!(
+        p.masking.p.is_sign_positive(),
+        "PLACEHOLDER.masking.p must be positive (transducer exponent)"
+    );
+    assert!(
+        p.masking.q.is_sign_positive(),
+        "PLACEHOLDER.masking.q must be positive (transducer exponent)"
+    );
+    assert!(
+        p.masking.k.is_sign_positive(),
+        "PLACEHOLDER.masking.k must be positive (gain)"
+    );
+    assert!(
+        p.pooling.beta_spatial.is_sign_positive(),
+        "PLACEHOLDER.pooling.beta_spatial must be positive"
+    );
+    assert!(
+        p.pooling.beta_band.is_sign_positive(),
+        "PLACEHOLDER.pooling.beta_band must be positive"
+    );
+    assert!(
+        p.pooling.beta_channel.is_sign_positive(),
+        "PLACEHOLDER.pooling.beta_channel must be positive"
+    );
+    assert!(
+        p.jod.jod_a.is_sign_positive(),
+        "PLACEHOLDER.jod.jod_a must be positive"
+    );
+    assert!(
+        p.jod.jod_b.is_sign_positive(),
+        "PLACEHOLDER.jod.jod_b must be positive"
+    );
+    assert!(
+        p.jod.jod_c.is_sign_positive(),
+        "PLACEHOLDER.jod.jod_c must be positive"
+    );
 };
 
 #[test]

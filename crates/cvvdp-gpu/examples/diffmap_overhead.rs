@@ -25,8 +25,8 @@
 use std::time::Instant;
 
 use cubecl::Runtime;
-use cvvdp_gpu::params::CvvdpParams;
 use cvvdp_gpu::Cvvdp;
+use cvvdp_gpu::params::CvvdpParams;
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;

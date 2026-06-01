@@ -67,7 +67,8 @@ fn small_input_default_rejects_allow_small_accepts() {
 fn stock_size_input_allow_small_does_not_pad() {
     let client = BackendT::client(&Default::default());
     let cfg = IwssimConfig::allow_small(true);
-    let i = Iwssim::<BackendT>::with_config(client, 256, 256, cfg).unwrap_or_else(|e| panic!("stock new: {e:?}"));
+    let i = Iwssim::<BackendT>::with_config(client, 256, 256, cfg)
+        .unwrap_or_else(|e| panic!("stock new: {e:?}"));
     assert_eq!(i.dimensions(), (256, 256));
     assert_eq!(i.padded_dimensions(), (256, 256));
     assert!(!i.is_padded());
@@ -103,7 +104,10 @@ fn deterministic_gray(w: u32, h: u32, seed: u32) -> Vec<f32> {
         for x in 0..w {
             // Mix in a per-position factor so the LP pyramid sees real
             // structure (constant fields collapse cs/iw degeneracies).
-            let v = ((x.wrapping_mul(37).wrapping_add(y.wrapping_mul(91)).wrapping_add(seed))
+            let v = ((x
+                .wrapping_mul(37)
+                .wrapping_add(y.wrapping_mul(91))
+                .wrapping_add(seed))
                 & 0xff) as f32;
             out.push(v);
         }
@@ -274,26 +278,20 @@ fn compute_gray_adaptive_path() {
 #[test]
 fn allow_small_now_uses_tile_strategy() {
     let client = BackendT::client(&Default::default());
-    let i = Iwssim::<BackendT>::with_config(
-        client.clone(),
-        100, 100,
-        IwssimConfig::allow_small(true),
-    ).expect("allow_small must accept");
+    let i =
+        Iwssim::<BackendT>::with_config(client.clone(), 100, 100, IwssimConfig::allow_small(true))
+            .expect("allow_small must accept");
     assert_eq!(i.strategy(), IwssimStrategy::Tile);
 
     // The explicit reflect_pad() builder still produces ReflectPad,
     // for callers who need the iwssim-gpu 0.0.1 behaviour.
-    let i2 = Iwssim::<BackendT>::with_config(
-        client.clone(),
-        100, 100,
-        IwssimConfig::reflect_pad(),
-    ).expect("reflect_pad must accept");
+    let i2 = Iwssim::<BackendT>::with_config(client.clone(), 100, 100, IwssimConfig::reflect_pad())
+        .expect("reflect_pad must accept");
     assert_eq!(i2.strategy(), IwssimStrategy::ReflectPad);
 
     // adaptive() == Tile (the empirically-best strategy).
-    let i3 = Iwssim::<BackendT>::with_config(
-        client, 100, 100, IwssimConfig::adaptive(),
-    ).expect("adaptive must accept");
+    let i3 = Iwssim::<BackendT>::with_config(client, 100, 100, IwssimConfig::adaptive())
+        .expect("adaptive must accept");
     assert_eq!(i3.strategy(), IwssimStrategy::Tile);
 }
 

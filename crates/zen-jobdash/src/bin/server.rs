@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::{Request, State};
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
@@ -33,11 +33,11 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use zen_job_core::{JobStatus, Sha256Hex};
 use zen_jobdash::{
-    catalog_view, cost_view, detect, failures, fleet_label_key, fleet_token, format_event,
-    gc_dry_run, idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
-    run_summary, selector_for, stop_spend, storage, workers_view, CatalogRow, ControlIntent, CostView,
-    DashData, FailureCell, FleetBox, KindProgress, NotifyPayload, QueryRow, ResultRow, RunSummary,
-    TierStorage, WorkerStat,
+    CatalogRow, ControlIntent, CostView, DashData, FailureCell, FleetBox, KindProgress,
+    NotifyPayload, QueryRow, ResultRow, RunSummary, TierStorage, WorkerStat, catalog_view,
+    cost_view, detect, failures, fleet_label_key, fleet_token, format_event, gc_dry_run,
+    idle_boxes, kill_fleet, kill_named, list_fleet, progress, query_view, results_view,
+    run_summary, selector_for, stop_spend, storage, workers_view,
 };
 
 /// Shared app state: the live ledger snapshot + a pooled HTTP client for fleet actuation.
@@ -49,23 +49,34 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let data = tokio::task::spawn_blocking(load).await?.unwrap_or_else(|e| {
-        eprintln!("zen-jobdash: warning: initial load failed ({e}); serving empty views");
-        DashData::default()
-    });
+    let data = tokio::task::spawn_blocking(load)
+        .await?
+        .unwrap_or_else(|e| {
+            eprintln!("zen-jobdash: warning: initial load failed ({e}); serving empty views");
+            DashData::default()
+        });
     eprintln!(
         "zen-jobdash: loaded {} rows, {} blobs, {} workers",
         data.rows.len(),
         data.blobs.len(),
         data.workers.len()
     );
-    let state = AppState { data: Arc::new(RwLock::new(data)), http: reqwest::Client::new() };
+    let state = AppState {
+        data: Arc::new(RwLock::new(data)),
+        http: reqwest::Client::new(),
+    };
 
-    if std::env::var("ZEN_DASH_PASSWORD").ok().filter(|p| !p.is_empty()).is_none() {
+    if std::env::var("ZEN_DASH_PASSWORD")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .is_none()
+    {
         eprintln!("zen-jobdash: WARNING: ZEN_DASH_PASSWORD unset — dashboard is UNAUTHENTICATED.");
     }
     if fleet_token().is_none() {
-        eprintln!("zen-jobdash: note: no HETZNER_API_TOKEN — kill controls record intent but won't actuate.");
+        eprintln!(
+            "zen-jobdash: note: no HETZNER_API_TOKEN — kill controls record intent but won't actuate."
+        );
     }
 
     // Background: reload the ledger on an interval (live views) + fire notifications (goal D).
@@ -74,7 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let web_dir = std::env::var("ZEN_WEB_DIR").unwrap_or_else(|_| "./web/dist".to_string());
     let app = build_router(state, &web_dir);
 
-    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     eprintln!("zen-jobdash listening on http://{addr} (web_dir={web_dir})");
@@ -197,26 +211,46 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
 
 fn load() -> Result<DashData, zen_jobdash::DashError> {
     let ledger: Vec<String> = std::env::var("ZEN_LEDGER")
-        .map(|s| s.split(',').filter(|p| !p.is_empty()).map(String::from).collect())
+        .map(|s| {
+            s.split(',')
+                .filter(|p| !p.is_empty())
+                .map(String::from)
+                .collect()
+        })
         .unwrap_or_default();
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
     let blob = std::env::var("ZEN_BLOB_INDEX").ok();
     let workers = std::env::var("ZEN_WORKERS_JSON").ok();
-    DashData::from_sources(&ledger, endpoint.as_deref(), blob.as_deref(), workers.as_deref())
+    DashData::from_sources(
+        &ledger,
+        endpoint.as_deref(),
+        blob.as_deref(),
+        workers.as_deref(),
+    )
 }
 
 /// Periodically reload the ledger so views reflect live runs, and fire newly-true notification
 /// conditions to the webhook (each fires once). No-op for notifications if ZEN_NOTIFY_WEBHOOK is unset.
 async fn refresh_loop(state: Arc<RwLock<DashData>>) {
-    let secs: u64 = std::env::var("ZEN_REFRESH_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(30);
+    let secs: u64 = std::env::var("ZEN_REFRESH_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
     let webhook = std::env::var("ZEN_NOTIFY_WEBHOOK").ok();
     // When set, post in ntfy style (message body + Title/Click headers + Bearer auth) instead of the
     // Slack/Discord `{"text":...}` shape.
-    let notify_token = std::env::var("ZEN_NOTIFY_TOKEN").ok().filter(|t| !t.is_empty());
+    let notify_token = std::env::var("ZEN_NOTIFY_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty());
     let base_url = std::env::var("ZEN_PUBLIC_URL").unwrap_or_default();
-    let cap: f64 = std::env::var("ZEN_BUDGET_CAP_USD").ok().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let poison_threshold: usize =
-        std::env::var("ZEN_POISON_THRESHOLD").ok().and_then(|s| s.parse().ok()).unwrap_or(10);
+    let cap: f64 = std::env::var("ZEN_BUDGET_CAP_USD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    let poison_threshold: usize = std::env::var("ZEN_POISON_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
     let client = reqwest::Client::new();
     let mut fired: HashSet<String> = HashSet::new();
 
@@ -231,7 +265,9 @@ async fn refresh_loop(state: Arc<RwLock<DashData>>) {
                         let sig = serde_json::to_string(&ev).unwrap_or_default();
                         if fired.insert(sig) {
                             let payload = format_event(&ev, &base_url);
-                            if let Err(e) = send_webhook(&client, url, &payload, notify_token.as_deref()).await {
+                            if let Err(e) =
+                                send_webhook(&client, url, &payload, notify_token.as_deref()).await
+                            {
                                 eprintln!("zen-jobdash: webhook send failed: {e}");
                             }
                         }
@@ -262,9 +298,15 @@ async fn send_webhook(
             .header("Tags", "robot")
             .bearer_auth(tok)
             .body(p.text.clone()),
-        None => client.post(url).json(&serde_json::json!({ "text": format!("{} — {}", p.text, p.link) })),
+        None => client
+            .post(url)
+            .json(&serde_json::json!({ "text": format!("{} — {}", p.text, p.link) })),
     };
-    req.send().await.map_err(|e| e.to_string())?.error_for_status().map_err(|e| e.to_string())?;
+    req.send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -307,14 +349,20 @@ async fn api_results(State(s): State<AppState>) -> Json<Vec<ResultRow>> {
 /// Active speculative executions (goal B's "speculative" count / goal E). Lists the spec-claim objects
 /// under `ZEN_CLAIMS_R2/spec/` — each is a job a second worker is co-running to bound the tail.
 async fn api_speculative() -> Json<serde_json::Value> {
-    let Some(base) = std::env::var("ZEN_CLAIMS_R2").ok().filter(|s| !s.is_empty()) else {
-        return Json(serde_json::json!({ "active": 0, "jobs": [], "note": "set ZEN_CLAIMS_R2 (s3://bucket/claims) to surface speculative count" }));
+    let Some(base) = std::env::var("ZEN_CLAIMS_R2")
+        .ok()
+        .filter(|s| !s.is_empty())
+    else {
+        return Json(
+            serde_json::json!({ "active": 0, "jobs": [], "note": "set ZEN_CLAIMS_R2 (s3://bucket/claims) to surface speculative count" }),
+        );
     };
     let uri = format!("{}/spec/", base.trim_end_matches('/'));
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    let jobs = tokio::task::spawn_blocking(move || zen_ledger::list_keys_uri(&uri, endpoint.as_deref()))
-        .await
-        .unwrap_or_default();
+    let jobs =
+        tokio::task::spawn_blocking(move || zen_ledger::list_keys_uri(&uri, endpoint.as_deref()))
+            .await
+            .unwrap_or_default();
     Json(serde_json::json!({ "active": jobs.len(), "jobs": jobs }))
 }
 
@@ -350,7 +398,21 @@ fn sniff_content_type(b: &[u8]) -> &'static str {
         [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
         [0x89, b'P', b'N', b'G', ..] => "image/png",
         [b'G', b'I', b'F', b'8', ..] => "image/gif",
-        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => "image/webp",
+        [
+            b'R',
+            b'I',
+            b'F',
+            b'F',
+            _,
+            _,
+            _,
+            _,
+            b'W',
+            b'E',
+            b'B',
+            b'P',
+            ..,
+        ] => "image/webp",
         // ISOBMFF: bytes 4..8 == "ftyp" → AVIF/HEIC family.
         [_, _, _, _, b'f', b't', b'y', b'p', ..] => "image/avif",
         _ => "application/octet-stream",
@@ -369,7 +431,9 @@ async fn api_blob(axum::extract::Path(sha): axum::extract::Path<String>) -> Resp
     };
     let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref())).await {
+    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref()))
+        .await
+    {
         Ok(Ok(bytes)) => {
             let ct = sniff_content_type(&bytes);
             (
@@ -388,17 +452,23 @@ async fn api_blob(axum::extract::Path(sha): axum::extract::Path<String>) -> Resp
 /// Peek a result blob by its content hash (goal B: "peek results in-browser"). Fetches
 /// `ZEN_BLOBS_R2/<sha>` from R2 and returns its bytes as (truncated) text + size. The blob base URI
 /// is `ZEN_BLOBS_R2` (e.g. `s3://bucket/blobs`); R2 endpoint from `ZEN_R2_ENDPOINT`.
-async fn api_peek(axum::extract::Path(sha): axum::extract::Path<String>) -> Json<serde_json::Value> {
+async fn api_peek(
+    axum::extract::Path(sha): axum::extract::Path<String>,
+) -> Json<serde_json::Value> {
     // Guard: content hashes are hex — reject anything else (no path traversal into the bucket).
     if sha.is_empty() || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Json(serde_json::json!({ "error": "sha must be hex" }));
     }
     let Some(base) = std::env::var("ZEN_BLOBS_R2").ok().filter(|s| !s.is_empty()) else {
-        return Json(serde_json::json!({ "error": "set ZEN_BLOBS_R2 (s3://bucket/blobs) to enable result peek" }));
+        return Json(
+            serde_json::json!({ "error": "set ZEN_BLOBS_R2 (s3://bucket/blobs) to enable result peek" }),
+        );
     };
     let uri = format!("{}/{}", base.trim_end_matches('/'), sha);
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
-    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref())).await {
+    match tokio::task::spawn_blocking(move || zen_ledger::read_bytes_uri(&uri, endpoint.as_deref()))
+        .await
+    {
         Ok(Ok(bytes)) => {
             let size = bytes.len();
             let text: String = String::from_utf8_lossy(&bytes).chars().take(4096).collect();
@@ -417,13 +487,25 @@ async fn api_fleet(State(s): State<AppState>) -> Json<serde_json::Value> {
         Some(token) => match list_fleet(&s.http, &token, &label, &label).await {
             Ok(boxes) => {
                 // Flag idle/orphan boxes (running, no matching worker heartbeat) — goal F reap targets.
-                let worker_names: HashSet<String> =
-                    s.data.read().await.workers.iter().map(|w| w.worker.clone()).collect();
-                let idle: Vec<String> =
-                    idle_boxes(&boxes, &worker_names).into_iter().map(|b| b.name).collect();
-                Json(serde_json::json!({ "actuation": true, "label": label, "boxes": boxes, "idle": idle }))
+                let worker_names: HashSet<String> = s
+                    .data
+                    .read()
+                    .await
+                    .workers
+                    .iter()
+                    .map(|w| w.worker.clone())
+                    .collect();
+                let idle: Vec<String> = idle_boxes(&boxes, &worker_names)
+                    .into_iter()
+                    .map(|b| b.name)
+                    .collect();
+                Json(
+                    serde_json::json!({ "actuation": true, "label": label, "boxes": boxes, "idle": idle }),
+                )
             }
-            Err(e) => Json(serde_json::json!({ "actuation": true, "label": label, "boxes": Vec::<FleetBox>::new(), "error": e })),
+            Err(e) => Json(
+                serde_json::json!({ "actuation": true, "label": label, "boxes": Vec::<FleetBox>::new(), "error": e }),
+            ),
         },
         None => Json(serde_json::json!({
             "actuation": false,
@@ -436,7 +518,10 @@ async fn api_fleet(State(s): State<AppState>) -> Json<serde_json::Value> {
 
 /// Control surface (goal C). GC/StopSpend are pure previews; Kill* actuate against the Hetzner fleet
 /// when a token is present (else the intent is recorded with a note). Pause/Drain stay intents.
-async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent>) -> Json<serde_json::Value> {
+async fn api_control(
+    State(s): State<AppState>,
+    Json(intent): Json<ControlIntent>,
+) -> Json<serde_json::Value> {
     // Kill paths actuate — handle before taking the read lock (no ledger data needed).
     if matches!(
         intent,
@@ -462,31 +547,47 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
         let label = fleet_label_key();
         return match fleet_token() {
             Some(token) => {
-                let worker_names: HashSet<String> =
-                    s.data.read().await.workers.iter().map(|w| w.worker.clone()).collect();
+                let worker_names: HashSet<String> = s
+                    .data
+                    .read()
+                    .await
+                    .workers
+                    .iter()
+                    .map(|w| w.worker.clone())
+                    .collect();
                 match list_fleet(&s.http, &token, &label, &label).await {
                     Ok(boxes) => {
                         let idle = idle_boxes(&boxes, &worker_names);
                         if idle.is_empty() {
-                            Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "reaped": [], "note": "no idle boxes" }))
+                            Json(
+                                serde_json::json!({ "action": "reap_idle", "actuated": true, "reaped": [], "note": "no idle boxes" }),
+                            )
                         } else {
                             let names: Vec<String> = idle.iter().map(|b| b.name.clone()).collect();
                             let result = kill_named(&s.http, &token, &names, &label).await;
-                            Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "result": result }))
+                            Json(
+                                serde_json::json!({ "action": "reap_idle", "actuated": true, "result": result }),
+                            )
                         }
                     }
-                    Err(e) => Json(serde_json::json!({ "action": "reap_idle", "actuated": true, "error": e })),
+                    Err(e) => Json(
+                        serde_json::json!({ "action": "reap_idle", "actuated": true, "error": e }),
+                    ),
                 }
             }
-            None => Json(serde_json::json!({ "action": "reap_idle", "actuated": false, "note": "no HETZNER_API_TOKEN" })),
+            None => Json(
+                serde_json::json!({ "action": "reap_idle", "actuated": false, "note": "no HETZNER_API_TOKEN" }),
+            ),
         };
     }
 
     let guard = s.data.read().await;
     let d: &DashData = &guard;
     let plan = match intent {
-        ControlIntent::GcDryRun => serde_json::to_value(gc_dry_run(&d.blobs, &referenced(d), &HashSet::new()))
-            .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() })),
+        ControlIntent::GcDryRun => {
+            serde_json::to_value(gc_dry_run(&d.blobs, &referenced(d), &HashSet::new()))
+                .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }))
+        }
         ControlIntent::StopSpend { cap_usd } => {
             let spent = cost_view(&d.workers).total_spent_usd;
             let decision = stop_spend(&d.workers, spent, cap_usd);
@@ -499,7 +600,9 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
                         let result = kill_named(&s.http, &token, &decision.tear_down, &label).await;
                         serde_json::json!({ "actuated": true, "result": result })
                     }
-                    None => serde_json::json!({ "actuated": false, "note": "over budget but no HETZNER_API_TOKEN — would tear down listed workers" }),
+                    None => {
+                        serde_json::json!({ "actuated": false, "note": "over budget but no HETZNER_API_TOKEN — would tear down listed workers" })
+                    }
                 }
             } else {
                 serde_json::json!({ "actuated": false })
@@ -520,7 +623,10 @@ async fn api_control(State(s): State<AppState>, Json(intent): Json<ControlIntent
 /// Target is `ZEN_CONTROL_R2` (an `s3://bucket/key` URI, or a local path for dev); R2 endpoint from
 /// `ZEN_R2_ENDPOINT`. No-op with a note when `ZEN_CONTROL_R2` is unset.
 fn write_run_control(ctl: zen_job_core::RunControl) -> serde_json::Value {
-    let Some(uri) = std::env::var("ZEN_CONTROL_R2").ok().filter(|s| !s.is_empty()) else {
+    let Some(uri) = std::env::var("ZEN_CONTROL_R2")
+        .ok()
+        .filter(|s| !s.is_empty())
+    else {
         return serde_json::json!({
             "action": "control", "written": false,
             "note": "set ZEN_CONTROL_R2 (s3://bucket/key) + point workers at --control-r2-key to enable pause/drain"
@@ -529,8 +635,12 @@ fn write_run_control(ctl: zen_job_core::RunControl) -> serde_json::Value {
     let endpoint = std::env::var("ZEN_R2_ENDPOINT").ok();
     let body = serde_json::to_vec(&ctl).unwrap_or_default();
     match zen_ledger::write_bytes_uri(&uri, &body, endpoint.as_deref()) {
-        Ok(()) => serde_json::json!({ "action": "control", "written": true, "control": ctl, "uri": uri }),
-        Err(e) => serde_json::json!({ "action": "control", "written": false, "error": e.to_string() }),
+        Ok(()) => {
+            serde_json::json!({ "action": "control", "written": true, "control": ctl, "uri": uri })
+        }
+        Err(e) => {
+            serde_json::json!({ "action": "control", "written": false, "error": e.to_string() })
+        }
     }
 }
 

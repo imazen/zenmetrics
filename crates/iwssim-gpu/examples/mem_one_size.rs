@@ -70,7 +70,10 @@ fn parse_u32(name: &str, default: u32) -> u32 {
 }
 
 fn fmt_ms_csv(t: &[f64]) -> String {
-    t.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")
+    t.iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -125,7 +128,9 @@ fn main() {
             let d2 = synth_gray(w, h, 9001);
             let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, body)
                 .expect("Iwssim::new_strip");
-            let res = iw.compute_gray_stripped(&r, &d).expect("compute_gray_stripped");
+            let res = iw
+                .compute_gray_stripped(&r, &d)
+                .expect("compute_gray_stripped");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
             for _ in 0..reps {

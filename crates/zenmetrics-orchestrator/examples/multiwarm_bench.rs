@@ -34,16 +34,17 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use zenmetrics_api::MetricKind;
 use zenmetrics_orchestrator::{
-    cache_file_path, compute_machine_hash, multiwarm_stats, reset_multiwarm_stats, save_profile,
-    synth_pair_offset_dist, Backend, BackendBench, BackendVram, CapabilityProfile, CpuCapability,
-    GpuCapability, MetricProfile, Orchestrator, OrchestratorConfig, PoolConfig, Task, TaskData,
+    Backend, BackendBench, BackendVram, CapabilityProfile, CpuCapability, GpuCapability,
+    MetricProfile, Orchestrator, OrchestratorConfig, PoolConfig, Task, TaskData, cache_file_path,
+    compute_machine_hash, multiwarm_stats, reset_multiwarm_stats, save_profile,
+    synth_pair_offset_dist,
 };
 
 // --- synthetic profile so the chooser deterministically picks GpuFull --
@@ -297,7 +298,13 @@ fn nvidia_used_mib() -> Option<u64> {
         .ok()
 }
 
-fn run_cell(self_exe: &std::path::Path, size: u32, metric: MetricKind, mw: bool, reps: usize) -> Cell {
+fn run_cell(
+    self_exe: &std::path::Path,
+    size: u32,
+    metric: MetricKind,
+    mw: bool,
+    reps: usize,
+) -> Cell {
     thread::sleep(Duration::from_millis(400));
     let baseline = nvidia_used_mib().unwrap_or(0);
     let stop = Arc::new(AtomicBool::new(false));
@@ -453,9 +460,17 @@ fn main() {
         d_each(),
         r_refs() * d_each()
     );
-    println!("# host={host} commit={commit} gpu={:?} MiB used now", nvidia_used_mib());
-    println!("# sizes={sizes:?} metrics={:?}", metrics.iter().map(|m| m.tag()).collect::<Vec<_>>());
-    println!("# NOTE: single 'win_miss' col = cached-ref WINDOW misses (NOT the worker's actual set_reference installs, which the single-warm worker re-runs on every ref switch); wall time is the load-bearing signal.");
+    println!(
+        "# host={host} commit={commit} gpu={:?} MiB used now",
+        nvidia_used_mib()
+    );
+    println!(
+        "# sizes={sizes:?} metrics={:?}",
+        metrics.iter().map(|m| m.tag()).collect::<Vec<_>>()
+    );
+    println!(
+        "# NOTE: single 'win_miss' col = cached-ref WINDOW misses (NOT the worker's actual set_reference installs, which the single-warm worker re-runs on every ref switch); wall time is the load-bearing signal."
+    );
 
     let mut cells: Vec<Cell> = Vec::new();
     for &metric in &metrics {

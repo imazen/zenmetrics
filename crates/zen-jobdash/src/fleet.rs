@@ -49,7 +49,10 @@ pub fn fleet_token() -> Option<String> {
 
 /// The label key that marks fleet-managed boxes (default `group`). Override with `ZEN_FLEET_LABEL`.
 pub fn fleet_label_key() -> String {
-    std::env::var("ZEN_FLEET_LABEL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "group".to_string())
+    std::env::var("ZEN_FLEET_LABEL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "group".to_string())
 }
 
 /// Map a kill intent to a Hetzner `label_selector`. `KillFleet` ⇒ existence selector on the fleet
@@ -120,21 +123,38 @@ pub async fn list_fleet(
     selector: &str,
     label_key: &str,
 ) -> Result<Vec<FleetBox>, String> {
-    let url = format!("{HETZNER_API_BASE}/servers?label_selector={}&per_page=50", urlencode(selector));
-    let resp = client.get(&url).bearer_auth(token).send().await.map_err(|e| e.to_string())?;
+    let url = format!(
+        "{HETZNER_API_BASE}/servers?label_selector={}&per_page=50",
+        urlencode(selector)
+    );
+    let resp = client
+        .get(&url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
         return Err(format!("GET /servers {status}: {text}"));
     }
     let parsed: ServersResp = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    Ok(parsed.servers.into_iter().map(|s| s.into_box(label_key)).collect())
+    Ok(parsed
+        .servers
+        .into_iter()
+        .map(|s| s.into_box(label_key))
+        .collect())
 }
 
 /// `DELETE /servers/{id}`.
 async fn delete_server(client: &reqwest::Client, token: &str, id: i64) -> Result<(), String> {
     let url = format!("{HETZNER_API_BASE}/servers/{id}");
-    let resp = client.delete(&url).bearer_auth(token).send().await.map_err(|e| e.to_string())?;
+    let resp = client
+        .delete(&url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     let status = resp.status();
     if status.is_success() {
         Ok(())
@@ -146,8 +166,16 @@ async fn delete_server(client: &reqwest::Client, token: &str, id: i64) -> Result
 
 /// List boxes matching `selector`, then DELETE each. Best-effort: per-server errors are collected so
 /// one failure doesn't abort the rest. Returns the boxes actually deleted.
-pub async fn kill_fleet(client: &reqwest::Client, token: &str, selector: &str, label_key: &str) -> KillResult {
-    let mut out = KillResult { selector: selector.to_string(), ..Default::default() };
+pub async fn kill_fleet(
+    client: &reqwest::Client,
+    token: &str,
+    selector: &str,
+    label_key: &str,
+) -> KillResult {
+    let mut out = KillResult {
+        selector: selector.to_string(),
+        ..Default::default()
+    };
     let boxes = match list_fleet(client, token, selector, label_key).await {
         Ok(b) => b,
         Err(e) => {
@@ -172,7 +200,10 @@ pub async fn kill_fleet(client: &reqwest::Client, token: &str, selector: &str, l
 /// heartbeat** — a box that's billing but doing no work (its worker died or never started). These are
 /// the reap targets. Matching is by name (a fleet box `arm-iter3-001` vs a `WorkerReport.worker` of
 /// the same name). A caller reaps with [`kill_named`] on the returned names.
-pub fn idle_boxes(boxes: &[FleetBox], worker_names: &std::collections::HashSet<String>) -> Vec<FleetBox> {
+pub fn idle_boxes(
+    boxes: &[FleetBox],
+    worker_names: &std::collections::HashSet<String>,
+) -> Vec<FleetBox> {
     boxes
         .iter()
         .filter(|b| b.status == "running" && !worker_names.contains(&b.name))
@@ -189,7 +220,10 @@ pub async fn kill_named(
     names: &[String],
     label_key: &str,
 ) -> KillResult {
-    let mut out = KillResult { selector: format!("{label_key} ∩ names={names:?}"), ..Default::default() };
+    let mut out = KillResult {
+        selector: format!("{label_key} ∩ names={names:?}"),
+        ..Default::default()
+    };
     if names.is_empty() {
         out.note = Some("no named workers to tear down".to_string());
         return out;
@@ -202,7 +236,10 @@ pub async fn kill_named(
             return out;
         }
     };
-    let targets: Vec<FleetBox> = boxes.into_iter().filter(|b| wanted.contains(b.name.as_str())).collect();
+    let targets: Vec<FleetBox> = boxes
+        .into_iter()
+        .filter(|b| wanted.contains(b.name.as_str()))
+        .collect();
     if targets.is_empty() {
         out.note = Some("no labeled fleet box matched the named paid workers".to_string());
         return out;
@@ -237,13 +274,28 @@ mod tests {
 
     #[test]
     fn selector_maps_intents() {
-        assert_eq!(selector_for(&ControlIntent::KillFleet, "group").as_deref(), Some("group"));
         assert_eq!(
-            selector_for(&ControlIntent::KillTier { tier: "arm-iter3".into() }, "group").as_deref(),
+            selector_for(&ControlIntent::KillFleet, "group").as_deref(),
+            Some("group")
+        );
+        assert_eq!(
+            selector_for(
+                &ControlIntent::KillTier {
+                    tier: "arm-iter3".into()
+                },
+                "group"
+            )
+            .as_deref(),
             Some("group=arm-iter3")
         );
         assert_eq!(
-            selector_for(&ControlIntent::KillRun { run: "sweep-42".into() }, "group").as_deref(),
+            selector_for(
+                &ControlIntent::KillRun {
+                    run: "sweep-42".into()
+                },
+                "group"
+            )
+            .as_deref(),
             Some("group=sweep-42")
         );
         assert!(selector_for(&ControlIntent::GcDryRun, "group").is_none());
@@ -274,8 +326,13 @@ mod tests {
             ipv4: None,
             group: Some("g".into()),
         };
-        let boxes = vec![b("w-001", "running"), b("w-002", "running"), b("w-003", "off")];
-        let workers: std::collections::HashSet<String> = ["w-001".to_string()].into_iter().collect();
+        let boxes = vec![
+            b("w-001", "running"),
+            b("w-002", "running"),
+            b("w-003", "off"),
+        ];
+        let workers: std::collections::HashSet<String> =
+            ["w-001".to_string()].into_iter().collect();
         let idle = idle_boxes(&boxes, &workers);
         // w-002 is running but has no worker heartbeat → idle; w-001 has one; w-003 isn't running.
         assert_eq!(idle.len(), 1);

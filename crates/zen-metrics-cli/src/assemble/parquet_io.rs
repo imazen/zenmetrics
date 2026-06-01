@@ -41,9 +41,11 @@ use super::table::{AssembleError, Column, Table};
 ///   appears when a metric went null for an entire chunk — same widening the
 ///   union step performs)
 pub fn read_parquet(path: &Path) -> Result<Table, AssembleError> {
-    let file = File::open(path).map_err(|e| AssembleError::Io(format!("open {}: {e}", path.display())))?;
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
-        .map_err(|e| AssembleError::Io(format!("parquet reader builder {}: {e}", path.display())))?;
+    let file =
+        File::open(path).map_err(|e| AssembleError::Io(format!("open {}: {e}", path.display())))?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| {
+        AssembleError::Io(format!("parquet reader builder {}: {e}", path.display()))
+    })?;
     let schema = builder.schema().clone();
     let reader = builder
         .build()
@@ -85,17 +87,27 @@ pub fn read_parquet(path: &Path) -> Result<Table, AssembleError> {
     }
 
     for batch in reader {
-        let batch = batch
-            .map_err(|e| AssembleError::Io(format!("read batch {}: {e}", path.display())))?;
+        let batch =
+            batch.map_err(|e| AssembleError::Io(format!("read batch {}: {e}", path.display())))?;
         for (ci, field) in schema.fields().iter().enumerate() {
             let arr = batch.column(ci);
             let n = batch.num_rows();
-            append_arrow_column(field.data_type(), arr, n, ci, &mut str_cols, &mut i64_cols, &mut f64_cols)
-                .map_err(|e| AssembleError::Schema(format!(
+            append_arrow_column(
+                field.data_type(),
+                arr,
+                n,
+                ci,
+                &mut str_cols,
+                &mut i64_cols,
+                &mut f64_cols,
+            )
+            .map_err(|e| {
+                AssembleError::Schema(format!(
                     "{}: column {:?}: {e}",
                     path.display(),
                     field.name()
-                )))?;
+                ))
+            })?;
         }
     }
 
@@ -128,14 +140,22 @@ fn append_arrow_column(
             let a = arr.as_string::<i32>();
             let dst = str_cols[ci].as_mut().unwrap();
             for i in 0..n {
-                dst.push(if a.is_null(i) { None } else { Some(a.value(i).to_string()) });
+                dst.push(if a.is_null(i) {
+                    None
+                } else {
+                    Some(a.value(i).to_string())
+                });
             }
         }
         DataType::LargeUtf8 => {
             let a = arr.as_string::<i64>();
             let dst = str_cols[ci].as_mut().unwrap();
             for i in 0..n {
-                dst.push(if a.is_null(i) { None } else { Some(a.value(i).to_string()) });
+                dst.push(if a.is_null(i) {
+                    None
+                } else {
+                    Some(a.value(i).to_string())
+                });
             }
         }
         DataType::Int64 => {
@@ -163,7 +183,11 @@ fn append_arrow_column(
             let a = arr.as_primitive::<Float32Type>();
             let dst = f64_cols[ci].as_mut().unwrap();
             for i in 0..n {
-                dst.push(if a.is_null(i) { f64::NAN } else { a.value(i) as f64 });
+                dst.push(if a.is_null(i) {
+                    f64::NAN
+                } else {
+                    a.value(i) as f64
+                });
             }
         }
         DataType::Null => {
@@ -214,7 +238,8 @@ pub fn write_parquet(table: &Table, path: &Path) -> Result<(), AssembleError> {
     let batch = RecordBatch::try_new(schema.clone(), arrays)
         .map_err(|e| AssembleError::Io(format!("build record batch: {e}")))?;
 
-    let file = File::create(path).map_err(|e| AssembleError::Io(format!("create {}: {e}", path.display())))?;
+    let file = File::create(path)
+        .map_err(|e| AssembleError::Io(format!("create {}: {e}", path.display())))?;
     let props = WriterProperties::builder()
         .set_compression(Compression::ZSTD(
             ZstdLevel::try_new(3).map_err(|e| AssembleError::Io(format!("zstd level: {e}")))?,

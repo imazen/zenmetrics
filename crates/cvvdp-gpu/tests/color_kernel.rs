@@ -65,8 +65,7 @@ fn srgb_to_dkl_kernel_matches_host_scalar() {
     let cube_count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
 
     let (eotf_tag, gamma_exp) = eotf_tag_and_gamma(display.eotf);
-    let hlg_gamma =
-        cvvdp_gpu::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
+    let hlg_gamma = cvvdp_gpu::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
     let m = display.primaries.linear_rgb_to_dkl();
     unsafe {
         srgb_to_dkl_kernel::launch::<Backend>(

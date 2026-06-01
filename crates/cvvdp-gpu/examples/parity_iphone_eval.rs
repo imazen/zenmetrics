@@ -201,8 +201,16 @@ fn main() {
     eprintln!("loaded {} pycvvdp rows", pycvvdp.len());
 
     let displays: &[(&str, DisplayModel, DisplayGeometry)] = &[
-        ("standard_4k", DisplayModel::STANDARD_4K, DisplayGeometry::STANDARD_4K),
-        ("iphone_14_pro", DisplayModel::IPHONE_14_PRO, DisplayGeometry::IPHONE_14_PRO),
+        (
+            "standard_4k",
+            DisplayModel::STANDARD_4K,
+            DisplayGeometry::STANDARD_4K,
+        ),
+        (
+            "iphone_14_pro",
+            DisplayModel::IPHONE_14_PRO,
+            DisplayGeometry::IPHONE_14_PRO,
+        ),
     ];
 
     let mut all_rows: Vec<(String, String, f64, f64, f64)> = Vec::new();
@@ -238,7 +246,10 @@ fn main() {
     let mut out = String::new();
     out.push_str("pair_name\tdisplay\tjod_pycvvdp\tjod_imazen\tabs_diff\n");
     for r in &all_rows {
-        out.push_str(&format!("{}\t{}\t{:.6}\t{:.6}\t{:.6}\n", r.0, r.1, r.2, r.3, r.4));
+        out.push_str(&format!(
+            "{}\t{}\t{:.6}\t{:.6}\t{:.6}\n",
+            r.0, r.1, r.2, r.3, r.4
+        ));
     }
     fs::write(&out_path, &out).expect("write parity_v2_scalar.tsv");
     eprintln!("wrote {}", out_path.display());
@@ -247,11 +258,7 @@ fn main() {
     println!("\nParity summary (host_scalar vs pycvvdp v0.5.4)");
     println!("display          |   n | mean abs_diff | median | max");
     for (name, _, _) in displays {
-        let rows: Vec<_> = all_rows
-            .iter()
-            .cloned()
-            .filter(|r| &r.1 == name)
-            .collect();
+        let rows: Vec<_> = all_rows.iter().cloned().filter(|r| &r.1 == name).collect();
         let (mean, median, max) = summarise(&rows);
         let n = rows.len();
         let gate_mean = if mean < 0.10 { "OK" } else { "FAIL" };

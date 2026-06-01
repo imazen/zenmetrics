@@ -35,8 +35,8 @@ fn make_src_32x32() -> Vec<f32> {
         for x in 0..w {
             // Mix a ramp with a deterministic high-frequency
             // component so the expand exercises all 5 taps.
-            let v = (x as f32) * 0.03125 + (y as f32) * 0.01
-                + ((x * 7 + y * 11) as f32).sin() * 0.25;
+            let v =
+                (x as f32) * 0.03125 + (y as f32) * 0.01 + ((x * 7 + y * 11) as f32).sin() * 0.25;
             out.push(v);
         }
     }
@@ -95,11 +95,11 @@ fn upscale_v_strip_aware_matches_full_at_32x32_to_64x64() {
             ArrayArg::from_raw_parts(src_h.clone(), n_src),
             ArrayArg::from_raw_parts(strip_h.clone(), n_strip),
             sw,
-            sh,        // logical_src_h
-            dst_h,     // logical_dst_h
+            sh,    // logical_src_h
+            dst_h, // logical_dst_h
             body_offset_y,
             body_h,
-            0,         // src_strip_offset: source is FULL coarse
+            0, // src_strip_offset: source is FULL coarse
         );
     }
 
@@ -202,7 +202,7 @@ fn upscale_h_strip_aware_matches_full_at_32x32_to_64x64() {
             dh,
             body_offset_y,
             body_h,
-            0,              // src_strip_offset: source is FULL coarse
+            0, // src_strip_offset: source is FULL coarse
         );
         upscale_h_strip_kernel::launch::<Backend>(
             &client,
@@ -212,9 +212,9 @@ fn upscale_h_strip_aware_matches_full_at_32x32_to_64x64() {
             ArrayArg::from_raw_parts(strip_h_out.clone(), n_dst_strip),
             sw,
             dw,
-            body_h,         // in_h = body height (rows actually populated)
-            dh,             // logical_dst_h (documentary, ignored inside)
-            body_offset_y,  // documentary, ignored inside
+            body_h,        // in_h = body height (rows actually populated)
+            dh,            // logical_dst_h (documentary, ignored inside)
+            body_offset_y, // documentary, ignored inside
         );
     }
 
@@ -313,8 +313,8 @@ fn upscale_v_strip_with_src_offset_matches_full_interior_body() {
             ArrayArg::from_raw_parts(strip_src_h_handle, (sw * strip_src_h) as usize),
             ArrayArg::from_raw_parts(strip_dst_h.clone(), n_strip_dst),
             sw,
-            sh,          // logical_src_h (FULL image height)
-            dst_h,       // logical_dst_h
+            sh,    // logical_src_h (FULL image height)
+            dst_h, // logical_dst_h
             body_offset_y,
             body_h,
             src_strip_offset,

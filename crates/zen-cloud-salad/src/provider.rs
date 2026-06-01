@@ -116,8 +116,11 @@ impl ProviderHandle for SaladProviderHandle {
             .context("ensure_queue_exists")?;
 
         // Map BTreeMap → HashMap for the request type.
-        let env: std::collections::HashMap<String, String> =
-            spec.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let env: std::collections::HashMap<String, String> = spec
+            .env
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         let req = CreateContainerGroupRequest {
             name: self.cfg.group_name.clone(),
@@ -155,10 +158,7 @@ impl ProviderHandle for SaladProviderHandle {
         Ok(GroupId(self.cfg.group_name.clone()))
     }
 
-    async fn poll_instances(
-        &self,
-        group: &GroupId,
-    ) -> Result<(GroupStatus, Vec<InstanceStatus>)> {
+    async fn poll_instances(&self, group: &GroupId) -> Result<(GroupStatus, Vec<InstanceStatus>)> {
         let cg = self.api.get_container_group(&group.0).await.ok();
         let state = cg
             .as_ref()
@@ -173,17 +173,14 @@ impl ProviderHandle for SaladProviderHandle {
             .and_then(|s| s.get("instance_status_counts"))
             .cloned()
             .unwrap_or_else(|| JsonValue::Object(Default::default()));
-        let instances_val = self
-            .api
-            .list_container_group_instances(&group.0)
-            .await
-            .ok();
+        let instances_val = self.api.list_container_group_instances(&group.0).await.ok();
 
         let mut instances: Vec<InstanceStatus> = Vec::new();
         if let Some(v) = instances_val {
-            let arr = v.as_array().cloned().or_else(|| {
-                v.get("instances").and_then(|x| x.as_array().cloned())
-            });
+            let arr = v
+                .as_array()
+                .cloned()
+                .or_else(|| v.get("instances").and_then(|x| x.as_array().cloned()));
             if let Some(arr) = arr {
                 for inst in arr {
                     let machine_id = inst
@@ -242,4 +239,3 @@ impl ProviderHandle for SaladProviderHandle {
         Ok(())
     }
 }
-

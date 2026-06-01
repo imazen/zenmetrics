@@ -15,9 +15,9 @@
 //! A `metric` job is self-contained: it re-encodes the cell (deterministic) and scores
 //! (reference=source, distorted=encode). CPU metrics only (ssim2/butteraugli/zensim) — GPU metrics
 //! need a GPU build/tier. This keeps the basement + CPU burst tiers fully useful.
-use crate::decode::{decode_image_to_rgb8, Rgb8Image};
-use crate::metrics::{run_metric, GpuRuntime, MetricKind};
-use crate::sweep::encode::{encode, CodecKind};
+use crate::decode::{Rgb8Image, decode_image_to_rgb8};
+use crate::metrics::{GpuRuntime, MetricKind, run_metric};
+use crate::sweep::encode::{CodecKind, encode};
 use clap::{Parser, ValueEnum};
 use serde_json::{Map, Value};
 use std::error::Error;
@@ -59,20 +59,29 @@ fn ext_for(name: &str) -> &'static str {
 /// cvvdp, …), tolerating the `ssimulacra2` alias. Then `run_metric` dispatches to the right backend —
 /// CPU metrics work in a default build; GPU metrics return a clear "needs a GPU build" error there.
 fn metric_kind(metric: &str) -> Result<MetricKind, Box<dyn Error>> {
-    let canon = if metric == "ssimulacra2" { "ssim2" } else { metric };
+    let canon = if metric == "ssimulacra2" {
+        "ssim2"
+    } else {
+        metric
+    };
     MetricKind::from_str(canon, true).map_err(|e| format!("unknown metric {metric:?}: {e}").into())
 }
 
 /// Score `(reference, distorted)` with `metric`, returning all `(column, value)` pairs run_metric
 /// yields (butteraugli yields max-norm + 3-norm; most yield one).
-fn score(metric: &str, reference: &Rgb8Image, distorted: &Rgb8Image)
-    -> Result<Vec<(&'static str, f64)>, Box<dyn Error>>
-{
+fn score(
+    metric: &str,
+    reference: &Rgb8Image,
+    distorted: &Rgb8Image,
+) -> Result<Vec<(&'static str, f64)>, Box<dyn Error>> {
     run_metric(metric_kind(metric)?, reference, distorted, GpuRuntime::Auto)
 }
 
 /// Resolve `cell.image_path` to a readable local file, fetching from R2 if needed.
-fn resolve_source(image_path: &str, corpus_prefix: Option<&str>) -> Result<PathBuf, Box<dyn Error>> {
+fn resolve_source(
+    image_path: &str,
+    corpus_prefix: Option<&str>,
+) -> Result<PathBuf, Box<dyn Error>> {
     let local = PathBuf::from(image_path);
     if corpus_prefix.is_none() && !image_path.starts_with("s3://") && local.exists() {
         return Ok(local);
@@ -84,7 +93,9 @@ fn resolve_source(image_path: &str, corpus_prefix: Option<&str>) -> Result<PathB
     } else {
         let bucket = std::env::var("ZEN_BUCKET").map_err(|_| "ZEN_BUCKET unset")?;
         match corpus_prefix {
-            Some(p) if !p.is_empty() => format!("s3://{bucket}/{}/{image_path}", p.trim_end_matches('/')),
+            Some(p) if !p.is_empty() => {
+                format!("s3://{bucket}/{}/{image_path}", p.trim_end_matches('/'))
+            }
             _ => format!("s3://{bucket}/{image_path}"),
         }
     };
@@ -112,9 +123,13 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
     std::io::stdin().read_to_string(&mut buf)?;
     let job: Value = serde_json::from_str(&buf).map_err(|e| format!("parse DesiredJob: {e}"))?;
 
-    let kind = job["kind"]["kind"].as_str().ok_or("job.kind.kind missing")?;
+    let kind = job["kind"]["kind"]
+        .as_str()
+        .ok_or("job.kind.kind missing")?;
     let cell = &job["cell"];
-    let image_path = cell["image_path"].as_str().ok_or("cell.image_path missing")?;
+    let image_path = cell["image_path"]
+        .as_str()
+        .ok_or("cell.image_path missing")?;
     let codec_name = cell["codec"].as_str().ok_or("cell.codec missing")?;
     let q = cell["q"].as_i64().ok_or("cell.q missing")? as f64;
     let knob_json = cell["knob_tuple_json"].as_str().unwrap_or("{}");
@@ -137,7 +152,9 @@ pub fn run(args: JobexecArgs) -> Result<(), Box<dyn Error>> {
             out.write_all(&encoded.bytes)?;
         }
         "metric" => {
-            let metric = job["kind"]["metric"].as_str().ok_or("metric job missing kind.metric")?;
+            let metric = job["kind"]["metric"]
+                .as_str()
+                .ok_or("metric job missing kind.metric")?;
             let dist_path = std::env::temp_dir().join(format!(
                 "jobexec_dist_{}.{}",
                 std::process::id(),

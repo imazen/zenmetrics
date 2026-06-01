@@ -171,7 +171,8 @@ impl Eotf {
                 let gamma = 2.4_f32;
                 let v = v.clamp(0.0, 1.0);
                 let lift_a = (y_peak.powf(1.0 / gamma) - y_black.powf(1.0 / gamma)).powf(gamma);
-                let lift_b = y_black.powf(1.0 / gamma) / (y_peak.powf(1.0 / gamma) - y_black.powf(1.0 / gamma));
+                let lift_b = y_black.powf(1.0 / gamma)
+                    / (y_peak.powf(1.0 / gamma) - y_black.powf(1.0 / gamma));
                 let l = lift_a * (v + lift_b).max(0.0).powf(gamma);
                 l + y_refl
             }
@@ -246,7 +247,11 @@ pub fn hlg_system_gamma(y_peak: f32, e_ambient_lux: f32) -> f32 {
         // E=0; pycvvdp guards by branching only when peak > 1000,
         // implicitly assuming a non-zero ambient when an HDR peak
         // is set. Match its arithmetic.
-        let amb = if e_ambient_lux > 0.0 { e_ambient_lux } else { 5.0 };
+        let amb = if e_ambient_lux > 0.0 {
+            e_ambient_lux
+        } else {
+            5.0
+        };
         1.2 + 0.42 * (y_peak / 1000.0).log10() - 0.076_23 * (amb / 5.0).log10()
     }
 }
@@ -950,7 +955,12 @@ impl DisplayGeometry {
     /// struct-update syntax — provided for symmetry with the
     /// `with_*` builder family.
     #[must_use]
-    pub fn new(resolution_w: u32, resolution_h: u32, distance_m: f32, diagonal_inches: f32) -> Self {
+    pub fn new(
+        resolution_w: u32,
+        resolution_h: u32,
+        distance_m: f32,
+        diagonal_inches: f32,
+    ) -> Self {
         Self {
             resolution_w,
             resolution_h,

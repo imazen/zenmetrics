@@ -230,7 +230,6 @@ fn pixel_slice_to_rgb8(
     })
 }
 
-
 // zenpng wants `&dyn enough::Stop`. The crate exports `Unstoppable` but we
 // only pull it in via zenpng's transitive dep, so we re-spell it here in
 // the cheapest possible way.

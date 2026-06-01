@@ -76,10 +76,10 @@ fn strip_total_mb(w: u32, _full_image_h: u32, h_body: u32) -> f64 {
 fn main() {
     // 1 / 4 / 12 / 24 MP image sizes.
     let sizes: &[(u32, u32)] = &[
-        (1024, 1024),  // 1 MP
-        (2048, 2048),  // 4 MP
-        (4000, 3000),  // 12 MP
-        (6000, 4000),  // 24 MP
+        (1024, 1024), // 1 MP
+        (2048, 2048), // 4 MP
+        (4000, 3000), // 12 MP
+        (6000, 4000), // 24 MP
     ];
     // The default sweep configuration uses body=1024. h_body=512 is
     // included for sensitivity to the strip-size knob.
@@ -98,7 +98,10 @@ fn main() {
 
     eprintln!();
     eprintln!("Summary (working_set_mb, whole vs strip_body=1024):");
-    eprintln!("{:>10}  {:>8}  {:>10}  {:>10}  {:>8}", "size", "MP", "whole", "strip", "ratio");
+    eprintln!(
+        "{:>10}  {:>8}  {:>10}  {:>10}  {:>8}",
+        "size", "MP", "whole", "strip", "ratio"
+    );
     eprintln!("{}", "-".repeat(56));
     for &(w, h) in sizes {
         let mp = (w as f64 * h as f64) / 1e6;

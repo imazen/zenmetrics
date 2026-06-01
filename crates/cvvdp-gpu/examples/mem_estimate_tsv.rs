@@ -22,8 +22,8 @@
 //! Full whenever it fits, which is the common case at these sizes).
 
 use cvvdp_gpu::{
-    estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped,
-    estimate_gpu_memory_bytes_strip, estimate_gpu_memory_bytes_strip_pair,
+    estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped, estimate_gpu_memory_bytes_strip,
+    estimate_gpu_memory_bytes_strip_pair,
 };
 
 /// Default strip body the memory-audit harness uses, matching the
@@ -42,12 +42,7 @@ fn emit(mode: &str, w: u32, h: u32, bytes: Option<usize>) {
 
 fn main() {
     // Canonical sweep sizes (must match `SIZES` in the join script).
-    let sizes: &[(u32, u32)] = &[
-        (1024, 1024),
-        (2048, 2048),
-        (4096, 4096),
-        (7680, 5184),
-    ];
+    let sizes: &[(u32, u32)] = &[(1024, 1024), (2048, 2048), (4096, 4096), (7680, 5184)];
 
     println!("mode\tsize_w\tsize_h\testimate_bytes");
     for &(w, h) in sizes {

@@ -11,7 +11,10 @@
 //! single on-device fused reduce) so the parity test allows ~1e-4 rel
 //! error — well within numerical noise.
 
-#![cfg(all(feature = "cubecl-types", any(feature = "cpu", feature = "cuda", feature = "wgpu")))]
+#![cfg(all(
+    feature = "cubecl-types",
+    any(feature = "cpu", feature = "cuda", feature = "wgpu")
+))]
 
 use butteraugli_gpu::{Butteraugli, ButteraugliParams, Error};
 use cubecl::Runtime;
@@ -199,7 +202,12 @@ fn strip_vs_whole_with_options() {
         .expect("strip compute_strip_with_options");
 
     assert_rel_eq("score(options)", whole_res.score, strip_res.score, 1e-4);
-    assert_rel_eq("pnorm_3(options)", whole_res.pnorm_3, strip_res.pnorm_3, 1e-4);
+    assert_rel_eq(
+        "pnorm_3(options)",
+        whole_res.pnorm_3,
+        strip_res.pnorm_3,
+        1e-4,
+    );
 }
 
 #[test]
@@ -309,7 +317,9 @@ fn multires_strip_set_reference_still_returns_clear_error() {
         Err(Error::StripModeUnsupported(api)) => {
             assert_eq!(api, "set_reference");
         }
-        other => panic!("expected multires-strip StripModeUnsupported(set_reference), got {other:?}"),
+        other => {
+            panic!("expected multires-strip StripModeUnsupported(set_reference), got {other:?}")
+        }
     }
 }
 
@@ -333,7 +343,9 @@ fn multires_whole_path_still_works_after_strip_landing() {
     let client = BackendT::client(&Default::default());
 
     let mut single = Butteraugli::<BackendT>::new(client.clone(), w, h);
-    let single_res = single.compute(&ref_buf, &dis_buf).expect("single-res compute");
+    let single_res = single
+        .compute(&ref_buf, &dis_buf)
+        .expect("single-res compute");
 
     let mut multires = Butteraugli::<BackendT>::new_multires(client, w, h);
     let multires_res = multires
@@ -343,11 +355,13 @@ fn multires_whole_path_still_works_after_strip_landing() {
     // Multi-res score should be finite + non-negative.
     assert!(
         multires_res.score.is_finite() && multires_res.score >= 0.0,
-        "multires score non-finite: {}", multires_res.score
+        "multires score non-finite: {}",
+        multires_res.score
     );
     assert!(
         multires_res.pnorm_3.is_finite() && multires_res.pnorm_3 >= 0.0,
-        "multires pnorm_3 non-finite: {}", multires_res.pnorm_3
+        "multires pnorm_3 non-finite: {}",
+        multires_res.pnorm_3
     );
     // Multi-res adds the half-res supersample to the diffmap, so
     // the max-norm `score` is >= single-res. (Loose lower bound:
@@ -355,7 +369,8 @@ fn multires_whole_path_still_works_after_strip_landing() {
     assert!(
         multires_res.score >= single_res.score - 1e-5,
         "multires.score ({}) < single-res.score ({}) — supersample-add should raise the max",
-        multires_res.score, single_res.score
+        multires_res.score,
+        single_res.score
     );
 }
 
@@ -375,9 +390,7 @@ fn compute_strip_on_whole_image_instance_returns_clear_error() {
                 "expected message to mention compute_strip, got `{api}`"
             );
         }
-        other => panic!(
-            "expected StripModeUnsupported(compute_strip*), got {other:?}"
-        ),
+        other => panic!("expected StripModeUnsupported(compute_strip*), got {other:?}"),
     }
 }
 

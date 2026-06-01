@@ -20,11 +20,20 @@ pub struct RunControl {
 
 impl RunControl {
     /// Running normally — pull and execute new work.
-    pub const RUNNING: RunControl = RunControl { paused: false, drain: false };
+    pub const RUNNING: RunControl = RunControl {
+        paused: false,
+        drain: false,
+    };
     /// Hard stop — claim nothing until resumed.
-    pub const PAUSED: RunControl = RunControl { paused: true, drain: false };
+    pub const PAUSED: RunControl = RunControl {
+        paused: true,
+        drain: false,
+    };
     /// Claim no new work; let in-flight jobs finish.
-    pub const DRAINING: RunControl = RunControl { paused: false, drain: true };
+    pub const DRAINING: RunControl = RunControl {
+        paused: false,
+        drain: true,
+    };
 
     /// A worker should claim no new jobs when paused or draining.
     pub fn claims_blocked(&self) -> bool {

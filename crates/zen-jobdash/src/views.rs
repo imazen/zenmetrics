@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, HashSet};
 use serde::Serialize;
 
 use zen_job_core::{
-    aggregate, cost_per_1000_by_tier, BlobIndexEntry, JobKind, JobStatus, LedgerRow, SemanticId,
-    WorkerReport,
+    BlobIndexEntry, JobKind, JobStatus, LedgerRow, SemanticId, WorkerReport, aggregate,
+    cost_per_1000_by_tier,
 };
 
 /// Short, stable label for a job kind, e.g. `metric:cvvdp`, `encode:zenjpeg`.
@@ -75,7 +75,12 @@ pub fn failures(rows: &[LedgerRow]) -> Vec<FailureCell> {
         }
     }
     m.into_iter()
-        .map(|((error_class, codec, kind), count)| FailureCell { error_class, codec, kind, count })
+        .map(|((error_class, codec, kind), count)| FailureCell {
+            error_class,
+            codec,
+            kind,
+            count,
+        })
         .collect()
 }
 
@@ -99,7 +104,10 @@ pub fn cost_view(workers: &[WorkerReport]) -> CostView {
     let fleet = aggregate(workers);
     let per_tier = cost_per_1000_by_tier(workers)
         .into_iter()
-        .map(|(t, c)| TierCost { tier: format!("{t:?}"), cost_per_1000_jobs: c })
+        .map(|(t, c)| TierCost {
+            tier: format!("{t:?}"),
+            cost_per_1000_jobs: c,
+        })
         .collect();
     CostView {
         total_spent_usd: fleet.total_spent_usd,
@@ -269,7 +277,9 @@ pub fn query_view(
     image: Option<&str>,
     limit: usize,
 ) -> Vec<QueryRow> {
-    let ci = |hay: &str, needle: Option<&str>| needle.is_none_or(|n| hay.to_lowercase().contains(&n.to_lowercase()));
+    let ci = |hay: &str, needle: Option<&str>| {
+        needle.is_none_or(|n| hay.to_lowercase().contains(&n.to_lowercase()))
+    };
     let mut out: Vec<&LedgerRow> = rows
         .iter()
         .filter(|r| {
@@ -322,7 +332,11 @@ pub fn results_view(rows: &[LedgerRow], limit: usize) -> Vec<ResultRow> {
             codec: r.cell.codec.clone(),
             image_path: r.cell.image_path.clone(),
             q: r.cell.q,
-            output_sha: r.output_sha.as_ref().map(|s| s.to_string()).unwrap_or_default(),
+            output_sha: r
+                .output_sha
+                .as_ref()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
             worker: r.worker.clone(),
         })
         .collect()
@@ -377,20 +391,31 @@ pub fn storage(blobs: &[BlobIndexEntry]) -> Vec<TierStorage> {
         e.0 += 1;
         e.1 += b.size;
     }
-    m.into_iter().map(|(tier, (n, bytes))| TierStorage { tier, blobs: n, bytes }).collect()
+    m.into_iter()
+        .map(|(tier, (n, bytes))| TierStorage {
+            tier,
+            blobs: n,
+            bytes,
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zen_job_core::{sha256, CellId, ErrorClass, JobId, Regenerability, ResourceClass};
+    use zen_job_core::{CellId, ErrorClass, JobId, Regenerability, ResourceClass, sha256};
 
     fn row(kind: JobKind, codec: &str, status: JobStatus, err: Option<ErrorClass>) -> LedgerRow {
         let input = sha256(codec.as_bytes());
         LedgerRow {
             job_id: JobId::of(&kind, std::slice::from_ref(&input)),
             kind,
-            cell: CellId { image_path: "x".into(), codec: codec.into(), q: 80, knob_tuple_json: "{}".into() },
+            cell: CellId {
+                image_path: "x".into(),
+                codec: codec.into(),
+                q: 80,
+                knob_tuple_json: "{}".into(),
+            },
             output_sha: None,
             status,
             error_class: err,
@@ -404,9 +429,32 @@ mod tests {
     #[test]
     fn progress_groups_by_kind() {
         let rows = vec![
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None),
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenavif", JobStatus::Failed, Some(ErrorClass::Timeout)),
-            row(JobKind::Encode { codec: "zenjpeg".into(), q: 80, knobs: "{}".into() }, "zenjpeg", JobStatus::Done, None),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenavif",
+                JobStatus::Failed,
+                Some(ErrorClass::Timeout),
+            ),
+            row(
+                JobKind::Encode {
+                    codec: "zenjpeg".into(),
+                    q: 80,
+                    knobs: "{}".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
         ];
         let p = progress(&rows);
         let cvvdp = p.iter().find(|k| k.kind == "metric:cvvdp").unwrap();
@@ -419,12 +467,37 @@ mod tests {
     #[test]
     fn failures_drill_down() {
         let rows = vec![
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenavif", JobStatus::Failed, Some(ErrorClass::Timeout)),
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenavif", JobStatus::Failed, Some(ErrorClass::Timeout)),
-            row(JobKind::Metric { metric: "ssim2".into() }, "zenjpeg", JobStatus::Done, None),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenavif",
+                JobStatus::Failed,
+                Some(ErrorClass::Timeout),
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenavif",
+                JobStatus::Failed,
+                Some(ErrorClass::Timeout),
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "ssim2".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
         ];
         let f = failures(&rows);
-        assert_eq!(f.len(), 1, "only the two matching failures aggregate; the Done row has no error");
+        assert_eq!(
+            f.len(),
+            1,
+            "only the two matching failures aggregate; the Done row has no error"
+        );
         assert_eq!(f[0].count, 2);
         assert_eq!(f[0].error_class, "Timeout");
         assert_eq!(f[0].codec, "zenavif");
@@ -449,9 +522,30 @@ mod tests {
     #[test]
     fn run_summary_eta_and_projection() {
         let rows = vec![
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None),
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Pending,
+                None,
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Pending,
+                None,
+            ),
         ];
         // one paid worker doing 60 jobs/min → 2 remaining = 2s ETA.
         let workers = vec![WorkerReport {
@@ -473,7 +567,12 @@ mod tests {
 
     #[test]
     fn run_summary_no_fleet_no_eta() {
-        let rows = vec![row(JobKind::Metric { metric: "x".into() }, "c", JobStatus::Pending, None)];
+        let rows = vec![row(
+            JobKind::Metric { metric: "x".into() },
+            "c",
+            JobStatus::Pending,
+            None,
+        )];
         let s = run_summary(&rows, &[]);
         assert_eq!(s.eta_secs, None, "nothing running → no ETA");
         assert_eq!(s.projected_total_usd, None);
@@ -482,9 +581,30 @@ mod tests {
     #[test]
     fn catalog_groups_by_semantic_identity() {
         let rows = vec![
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None),
-            row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Pending, None),
-            row(JobKind::Metric { metric: "ssim2".into() }, "zenjpeg", JobStatus::Done, None),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "cvvdp".into(),
+                },
+                "zenjpeg",
+                JobStatus::Pending,
+                None,
+            ),
+            row(
+                JobKind::Metric {
+                    metric: "ssim2".into(),
+                },
+                "zenjpeg",
+                JobStatus::Done,
+                None,
+            ),
         ];
         let c = catalog_view(&rows);
         // cvvdp×zenjpeg and ssim2×zenjpeg are distinct semantic identities → distinct keys.
@@ -493,14 +613,31 @@ mod tests {
         assert_eq!(cvvdp.total, 2);
         assert_eq!(cvvdp.done, 1, "coverage = done/total");
         let ssim2 = c.iter().find(|r| r.metric == "ssim2").unwrap();
-        assert_ne!(cvvdp.key, ssim2.key, "different description → different content-addressed key");
+        assert_ne!(
+            cvvdp.key, ssim2.key,
+            "different description → different content-addressed key"
+        );
     }
 
     #[test]
     fn query_view_filters_and_orders() {
-        let mut done = row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None);
+        let mut done = row(
+            JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            "zenjpeg",
+            JobStatus::Done,
+            None,
+        );
         done.ts = 10;
-        let mut failed = row(JobKind::Metric { metric: "cvvdp".into() }, "zenavif", JobStatus::Failed, Some(ErrorClass::Timeout));
+        let mut failed = row(
+            JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            "zenavif",
+            JobStatus::Failed,
+            Some(ErrorClass::Timeout),
+        );
         failed.ts = 20;
         let rows = vec![done, failed];
         // filter by status=failed → only the avif one
@@ -513,20 +650,47 @@ mod tests {
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].ts, 20);
         // codec filter
-        assert_eq!(query_view(&rows, None, Some("jpeg"), None, None, 100).len(), 1);
+        assert_eq!(
+            query_view(&rows, None, Some("jpeg"), None, None, 100).len(),
+            1
+        );
     }
 
     #[test]
     fn results_view_lists_done_with_output_newest_first() {
-        let mut a = row(JobKind::Metric { metric: "cvvdp".into() }, "zenjpeg", JobStatus::Done, None);
+        let mut a = row(
+            JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
+            "zenjpeg",
+            JobStatus::Done,
+            None,
+        );
         a.output_sha = Some(sha256(b"score-a"));
         a.ts = 100;
-        let mut b = row(JobKind::Metric { metric: "ssim2".into() }, "zenavif", JobStatus::Done, None);
+        let mut b = row(
+            JobKind::Metric {
+                metric: "ssim2".into(),
+            },
+            "zenavif",
+            JobStatus::Done,
+            None,
+        );
         b.output_sha = Some(sha256(b"score-b"));
         b.ts = 200;
         // a done row with no output blob, and a pending row — both excluded.
-        let no_out = row(JobKind::Metric { metric: "x".into() }, "c", JobStatus::Done, None);
-        let pending = row(JobKind::Metric { metric: "y".into() }, "c", JobStatus::Pending, None);
+        let no_out = row(
+            JobKind::Metric { metric: "x".into() },
+            "c",
+            JobStatus::Done,
+            None,
+        );
+        let pending = row(
+            JobKind::Metric { metric: "y".into() },
+            "c",
+            JobStatus::Pending,
+            None,
+        );
         let r = results_view(&[a, no_out, pending, b], 10);
         assert_eq!(r.len(), 2, "only done rows that produced an output blob");
         assert_eq!(r[0].codec, "zenavif", "newest (ts=200) first");
@@ -545,16 +709,37 @@ mod tests {
         }];
         let w = workers_view(&workers);
         assert_eq!(w[0].tier, "CpuArm");
-        assert!((w[0].jobs_per_min - 30.0).abs() < 1e-9, "300 jobs / 10 min = 30/min");
-        assert!((w[0].spent_usd - 0.001).abs() < 1e-6, "0.006/hr * (600/3600)");
+        assert!(
+            (w[0].jobs_per_min - 30.0).abs() < 1e-9,
+            "300 jobs / 10 min = 30/min"
+        );
+        assert!(
+            (w[0].spent_usd - 0.001).abs() < 1e-6,
+            "0.006/hr * (600/3600)"
+        );
     }
 
     #[test]
     fn storage_per_tier() {
         let blobs = vec![
-            BlobIndexEntry { sha: sha256(b"a"), size: 100, regenerability: Regenerability::CheapRegenerable, last_ref_secs: 0 },
-            BlobIndexEntry { sha: sha256(b"b"), size: 200, regenerability: Regenerability::CheapRegenerable, last_ref_secs: 0 },
-            BlobIndexEntry { sha: sha256(b"c"), size: 9000, regenerability: Regenerability::NotRegenerable, last_ref_secs: 0 },
+            BlobIndexEntry {
+                sha: sha256(b"a"),
+                size: 100,
+                regenerability: Regenerability::CheapRegenerable,
+                last_ref_secs: 0,
+            },
+            BlobIndexEntry {
+                sha: sha256(b"b"),
+                size: 200,
+                regenerability: Regenerability::CheapRegenerable,
+                last_ref_secs: 0,
+            },
+            BlobIndexEntry {
+                sha: sha256(b"c"),
+                size: 9000,
+                regenerability: Regenerability::NotRegenerable,
+                last_ref_secs: 0,
+            },
         ];
         let s = storage(&blobs);
         let cheap = s.iter().find(|t| t.tier == "CheapRegenerable").unwrap();

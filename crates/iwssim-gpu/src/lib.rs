@@ -128,14 +128,18 @@ impl IwssimConfig {
     /// empirically best of the three on the validation corpus.
     /// Equivalent to `IwssimConfig { strategy: IwssimStrategy::Tile }`.
     pub const fn adaptive() -> Self {
-        Self { strategy: IwssimStrategy::Tile }
+        Self {
+            strategy: IwssimStrategy::Tile,
+        }
     }
 
     /// Use the reflect-pad small-image strategy — kept for callers
     /// that depend on the iwssim-gpu 0.0.1 behaviour. [`adaptive()`]
     /// is recommended for new code.
     pub const fn reflect_pad() -> Self {
-        Self { strategy: IwssimStrategy::ReflectPad }
+        Self {
+            strategy: IwssimStrategy::ReflectPad,
+        }
     }
 
     /// Compatibility shim: `allow_small(true) → IwssimStrategy::Tile`,

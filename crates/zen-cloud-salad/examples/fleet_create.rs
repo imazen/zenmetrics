@@ -16,7 +16,9 @@ async fn main() -> anyhow::Result<()> {
     let project = std::env::var("SALAD_PROJECT").unwrap_or_else(|_| "zenmetrics".into());
     let name = std::env::var("SALAD_GROUP_NAME")?;
     let image = std::env::var("SALAD_IMAGE")?;
-    let replicas: u32 = std::env::var("SALAD_REPLICAS").unwrap_or_else(|_| "1".into()).parse()?;
+    let replicas: u32 = std::env::var("SALAD_REPLICAS")
+        .unwrap_or_else(|_| "1".into())
+        .parse()?;
     let environment_variables: HashMap<String, String> =
         serde_json::from_str(&std::env::var("SALAD_ENV_JSON")?)?;
     let key = std::env::var("SALAD_API_KEY").ok();
@@ -27,7 +29,11 @@ async fn main() -> anyhow::Result<()> {
         display_name: None,
         container: ContainerConfig {
             image,
-            resources: ResourceRequirements { cpu: 2, memory: 4096, gpu_classes: vec![] },
+            resources: ResourceRequirements {
+                cpu: 2,
+                memory: 4096,
+                gpu_classes: vec![],
+            },
             command: None,
             environment_variables,
             registry_authentication: None,

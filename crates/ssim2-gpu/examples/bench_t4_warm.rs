@@ -1,7 +1,7 @@
-use std::time::Instant;
 use cubecl::Runtime;
 use cubecl::cuda::CudaRuntime;
 use ssim2_gpu::Ssim2;
+use std::time::Instant;
 
 fn main() {
     let w: u32 = 4000;
@@ -13,7 +13,9 @@ fn main() {
     let mut s = Ssim2::<CudaRuntime>::new(client, w, h).expect("new");
     s.set_reference(&r).expect("ref");
     // warmup
-    for _ in 0..2 { let _ = s.compute(&r, &d).expect("warmup"); }
+    for _ in 0..2 {
+        let _ = s.compute(&r, &d).expect("warmup");
+    }
     eprintln!("ssim2 12 MP timing:");
     for i in 0..5 {
         let t = Instant::now();

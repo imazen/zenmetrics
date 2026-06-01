@@ -97,34 +97,34 @@
 
 use cubecl::prelude::*;
 
-use crate::kernels::color::{srgb_to_dkl_kernel, SRGB8_TO_LINEAR_LUT};
+use crate::kernels::color::{SRGB8_TO_LINEAR_LUT, srgb_to_dkl_kernel};
 use crate::kernels::csf::{
-    csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights, precompute_logs_row,
-    precomputed_band_weights, weight_band_kernel, CsfChannel,
+    CsfChannel, csf_apply_3ch_kernel, csf_apply_6ch_kernel, flatten_band_weights,
+    precompute_logs_row, precomputed_band_weights, weight_band_kernel,
 };
 use crate::kernels::diffmap::{
     diffmap_band_accumulate_kernel, diffmap_channel_pool_kernel, diffmap_zero_kernel,
     linear_rgb_planes_to_dkl_kernel,
 };
 use crate::kernels::masking::{
-    diff_abs_3ch_kernel, min_abs_3ch_kernel, mult_mutual_3ch_no_blur_kernel,
-    mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel, pu_blur_h_3ch_strip_aware_kernel,
-    pu_blur_v_3ch_scaled_kernel, pu_blur_v_3ch_scaled_strip_aware_kernel, CH_GAIN, MASK_C,
-    PU_PADSIZE,
+    CH_GAIN, MASK_C, PU_PADSIZE, diff_abs_3ch_kernel, min_abs_3ch_kernel,
+    mult_mutual_3ch_no_blur_kernel, mult_mutual_3ch_with_blurred_kernel, pu_blur_h_3ch_kernel,
+    pu_blur_h_3ch_strip_aware_kernel, pu_blur_v_3ch_scaled_kernel,
+    pu_blur_v_3ch_scaled_strip_aware_kernel,
 };
 use crate::kernels::pool::{
-    copy_f32_kernel, do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean,
-    pool_band_3ch_kernel, pool_band_3ch_lds_kernel, pool_band_3ch_offset_kernel,
-    pool_band_finalize, BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM,
+    BASEBAND_W, BETA_CH, BETA_SPATIAL, PER_CH_W, POOL_LDS_BLOCK_DIM, copy_f32_kernel,
+    do_pooling_and_jod_still_3ch, fill_f32_kernel, lp_norm_mean, pool_band_3ch_kernel,
+    pool_band_3ch_lds_kernel, pool_band_3ch_offset_kernel, pool_band_finalize,
 };
 use crate::kernels::pyramid::{
-    band_frequencies, baseband_divide_3ch_kernel, downscale_strip_kernel,
-    downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel,
+    DOWNSCALE_TILED_BLOCK_DIM, band_frequencies, baseband_divide_3ch_kernel,
+    downscale_strip_kernel, downscale_tiled_kernel, subtract_kernel, subtract_weber_3ch_kernel,
     subtract_weber_3ch_strip_kernel, upscale_h_kernel, upscale_h_strip_kernel, upscale_v_kernel,
-    upscale_v_strip_kernel, DOWNSCALE_TILED_BLOCK_DIM,
+    upscale_v_strip_kernel,
 };
 use crate::params::CvvdpParams;
-use crate::{Error, Result, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM};
+use crate::{Error, MAX_LEVELS, N_CHANNELS, PYRAMID_MIN_DIM, Result};
 
 /// Return shape of [`Cvvdp::compute_dkl_weber_pyramid`].
 ///
@@ -422,7 +422,6 @@ struct WeberScratch {
     bands_ref_strip: Option<[cubecl::server::Handle; N_CHANNELS]>,
 }
 
-
 /// GPU scratch for the per-pixel diffmap pipeline. Allocated lazily on
 /// the first `score_with_diffmap` / `score_from_linear_planes_with_diffmap`
 /// call — callers that never request a diffmap pay zero memory.
@@ -601,10 +600,7 @@ fn build_weber_scratch<R: Runtime>(
         let p26_shallow = strip_h_at_k.is_some() && (k as u32) < k_split;
         let (n_fine_alloc, n_v_alloc) = if p26_shallow {
             let h_strip = strip_h_at_k.unwrap() as usize;
-            (
-                (fine_w as usize) * h_strip,
-                (coarse_w as usize) * h_strip,
-            )
+            ((fine_w as usize) * h_strip, (coarse_w as usize) * h_strip)
         } else {
             (n_fine, n_v)
         };
@@ -1248,11 +1244,7 @@ pub fn estimate_gpu_memory_bytes(width: u32, height: u32) -> Option<usize> {
 /// **Not JOD-bit-identical** to Full mode; the capped pyramid drops
 /// the deepest bands. See [`crate::MemoryMode::CappedPyramid`].
 #[must_use]
-pub fn estimate_gpu_memory_bytes_capped(
-    width: u32,
-    height: u32,
-    levels: u32,
-) -> Option<usize> {
+pub fn estimate_gpu_memory_bytes_capped(width: u32, height: u32, levels: u32) -> Option<usize> {
     if levels == 0 {
         return None;
     }
@@ -1373,10 +1365,10 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
     }
     let ref_full_bands_bytes = crate::N_CHANNELS * sum_level_pixels * 4;
     let ref_full_log_l_bkg_bytes = log_l_bkg_pixels * 4;
-    let ref_full_baseband_gauss_bytes =
-        crate::N_CHANNELS * width.div_ceil(1 << (n_levels - 1)) as usize
-            * height.div_ceil(1 << (n_levels - 1)) as usize
-            * 4;
+    let ref_full_baseband_gauss_bytes = crate::N_CHANNELS
+        * width.div_ceil(1 << (n_levels - 1)) as usize
+        * height.div_ceil(1 << (n_levels - 1)) as usize
+        * 4;
     let ref_full_bytes =
         ref_full_bands_bytes + ref_full_log_l_bkg_bytes + ref_full_baseband_gauss_bytes;
 
@@ -1436,11 +1428,7 @@ pub fn estimate_gpu_memory_bytes_strip(width: u32, height: u32, h_body: u32) -> 
 /// For precise live-VRAM budgets prefer `nvidia-smi`-based measurement
 /// via `examples/mem_mode_b_vs_full.rs`.
 #[must_use]
-pub fn estimate_gpu_memory_bytes_strip_pair(
-    width: u32,
-    height: u32,
-    h_body: u32,
-) -> Option<usize> {
+pub fn estimate_gpu_memory_bytes_strip_pair(width: u32, height: u32, h_body: u32) -> Option<usize> {
     if !is_valid_strip_h_body(h_body) {
         return None;
     }
@@ -1576,30 +1564,31 @@ pub fn estimate_gpu_memory_bytes_strip_pair(
     // the full-image `upscaled_c` an Option that's None in Mode B, so
     // the "3 upscaled_c" line above refers to `upscaled_c_strip`, which
     // is strip-sized and already accounted for in `sum_level_pixels`.
-    let weber_fine: usize = 6 * sum_level_pixels.saturating_sub(
-        // Subtract the deepest level's contribution since weber_scratch
-        // doesn't carry the baseband.
-        {
-            let mut last_pixels = 0usize;
-            let mut bw = width;
-            let mut bh = height;
-            for k in 0..n_levels {
-                let n_lvl = if k < k_split {
-                    let strip_h =
-                        mode_b_strip_h_at_level(k as u32, h_body, k_split as u32).min(bh);
-                    (bw as usize) * (strip_h as usize)
-                } else {
-                    (bw as usize) * (bh as usize)
-                };
-                if k == n_levels - 1 {
-                    last_pixels = n_lvl;
+    let weber_fine: usize =
+        6 * sum_level_pixels.saturating_sub(
+            // Subtract the deepest level's contribution since weber_scratch
+            // doesn't carry the baseband.
+            {
+                let mut last_pixels = 0usize;
+                let mut bw = width;
+                let mut bh = height;
+                for k in 0..n_levels {
+                    let n_lvl = if k < k_split {
+                        let strip_h =
+                            mode_b_strip_h_at_level(k as u32, h_body, k_split as u32).min(bh);
+                        (bw as usize) * (strip_h as usize)
+                    } else {
+                        (bw as usize) * (bh as usize)
+                    };
+                    if k == n_levels - 1 {
+                        last_pixels = n_lvl;
+                    }
+                    bw = bw.div_ceil(2);
+                    bh = bh.div_ceil(2);
                 }
-                bw = bw.div_ceil(2);
-                bh = bh.div_ceil(2);
-            }
-            last_pixels
-        },
-    ) * 4;
+                last_pixels
+            },
+        ) * 4;
     let weber_vscratch: usize = 4 * sum_level_pixels_v * 4;
     let weber_bytes: usize = weber_fine + weber_vscratch;
 
@@ -1935,8 +1924,10 @@ impl<R: Runtime> Cvvdp<R> {
         params: CvvdpParams,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
-        use crate::memory_mode::{resolve_auto, vram_cap_bytes, ResolvedMode, STRIP_H_BODY_DEFAULT};
         use crate::MemoryMode;
+        use crate::memory_mode::{
+            ResolvedMode, STRIP_H_BODY_DEFAULT, resolve_auto, vram_cap_bytes,
+        };
         match mode {
             MemoryMode::Full => Self::new(client, width, height, params),
             MemoryMode::Strip { h_body } => {
@@ -2299,13 +2290,8 @@ impl<R: Runtime> Cvvdp<R> {
         } else {
             build_pyramid(&client)
         };
-        let d_scratch = build_d_bands_scratch(
-            &client,
-            n_levels as usize,
-            width,
-            height,
-            strip_pair_h_body,
-        );
+        let d_scratch =
+            build_d_bands_scratch(&client, n_levels as usize, width, height, strip_pair_h_body);
         // Path B unfix (2026-05-27): one persistent DBandsTransient
         // sized to base-level n0 (= width * height) replaces the
         // per-band DBandsTransient::new() that 5407c9cc moved into
@@ -2530,7 +2516,13 @@ impl<R: Runtime> Cvvdp<R> {
         // post-construction below so existing call sites that check
         // `strip_config` for Mode B dispatch behave identically.
         let mut this = Self::new_with_geometry_inner(
-            client, width, height, params, geometry, None, Some(h_body),
+            client,
+            width,
+            height,
+            params,
+            geometry,
+            None,
+            Some(h_body),
         )?;
         this.strip_config = Some(StripConfig {
             h_body,
@@ -2807,10 +2799,8 @@ impl<R: Runtime> Cvvdp<R> {
     /// reads so per-strip dispatch is always safe.
     fn _launch_srgb_to_dkl_from_src_ref(&self) {
         let display = self.params.display;
-        let (eotf_tag, gamma_exp) =
-            crate::kernels::color::eotf_tag_and_gamma(display.eotf);
-        let hlg_gamma =
-            crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
+        let (eotf_tag, gamma_exp) = crate::kernels::color::eotf_tag_and_gamma(display.eotf);
+        let hlg_gamma = crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
         let m = display.primaries.linear_rgb_to_dkl();
         let cube_dim = CubeDim::new_1d(64);
 
@@ -2820,7 +2810,10 @@ impl<R: Runtime> Cvvdp<R> {
         // a single iteration covering the whole image (body_offset_y=0,
         // body_h=height).
         let strip_h_body = match self.strip_config {
-            Some(StripConfig { mode: StripMode::Pair, h_body }) => h_body.min(self.height),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                h_body,
+            }) => h_body.min(self.height),
             _ => self.height,
         };
         let n_strips = self.height.div_ceil(strip_h_body);
@@ -2876,7 +2869,10 @@ impl<R: Runtime> Cvvdp<R> {
             // but strip_config is None so we still skip the increment).
             if matches!(
                 self.strip_config,
-                Some(StripConfig { mode: StripMode::Pair, .. }),
+                Some(StripConfig {
+                    mode: StripMode::Pair,
+                    ..
+                }),
             ) {
                 self.strip_dispatch_counter
                     .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
@@ -3234,7 +3230,10 @@ impl<R: Runtime> Cvvdp<R> {
     fn _maybe_swap_gauss_alt_post_ref(&mut self) {
         let mode_b = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
         if !mode_b {
             return;
@@ -3259,7 +3258,10 @@ impl<R: Runtime> Cvvdp<R> {
     fn _reduce_gauss_pyramid_from_level0(&self) {
         let mode_b = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
         if mode_b {
             self._reduce_gauss_pyramid_strip_walker();
@@ -3353,9 +3355,9 @@ impl<R: Runtime> Cvvdp<R> {
                             curr_w,
                             body_h,
                             body_offset_y,
-                            0,         // src_strip_offset: src is FULL prev-level buffer
-                            prev_h,    // logical_src_h
-                            curr_h,    // logical_dst_h
+                            0,      // src_strip_offset: src is FULL prev-level buffer
+                            prev_h, // logical_src_h
+                            curr_h, // logical_dst_h
                         );
                     }
                     self.strip_dispatch_counter
@@ -3483,10 +3485,8 @@ impl<R: Runtime> Cvvdp<R> {
                 // body. The A plane drives the per-pixel L_bkg used by
                 // every channel's Weber-contrast division below.
                 let coarse_a = self.gauss_ref[k + 1].planes[0].clone();
-                let vscratch_a_strip =
-                    scratch.vscratch_a.clone().offset_start(byte_off_v);
-                let l_bkg_fine_strip =
-                    scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
+                let vscratch_a_strip = scratch.vscratch_a.clone().offset_start(byte_off_v);
+                let l_bkg_fine_strip = scratch.l_bkg_fine.clone().offset_start(byte_off_fine);
                 unsafe {
                     upscale_v_strip_kernel::launch::<R>(
                         &self.client,
@@ -3495,11 +3495,11 @@ impl<R: Runtime> Cvvdp<R> {
                         ArrayArg::from_raw_parts(coarse_a, n_coarse),
                         ArrayArg::from_raw_parts(vscratch_a_strip.clone(), n_strip_v),
                         coarse_w,
-                        coarse_h,        // logical_src_h
-                        fine_h,          // logical_dst_h
-                        body_offset_y,   // body_offset_y in dst rows
-                        body_h,          // body_h in dst rows
-                        0,               // src_strip_offset: source is FULL coarse
+                        coarse_h,      // logical_src_h
+                        fine_h,        // logical_dst_h
+                        body_offset_y, // body_offset_y in dst rows
+                        body_h,        // body_h in dst rows
+                        0,             // src_strip_offset: source is FULL coarse
                     );
                     upscale_h_strip_kernel::launch::<R>(
                         &self.client,
@@ -3509,9 +3509,9 @@ impl<R: Runtime> Cvvdp<R> {
                         ArrayArg::from_raw_parts(l_bkg_fine_strip, n_strip_fine),
                         coarse_w,
                         fine_w,
-                        body_h,          // in_h = strip body height
-                        fine_h,          // logical_dst_h (unused by H-pass)
-                        body_offset_y,   // body_offset_y (unused by H-pass)
+                        body_h,        // in_h = strip body height
+                        fine_h,        // logical_dst_h (unused by H-pass)
+                        body_offset_y, // body_offset_y (unused by H-pass)
                     );
                 }
                 self.strip_dispatch_counter
@@ -3535,51 +3535,46 @@ impl<R: Runtime> Cvvdp<R> {
                 let use_phase1b_upsc = scratch.upscaled_c_strip.is_some();
                 for c in 0..N_CHANNELS {
                     let coarse = self.gauss_ref[k + 1].planes[c].clone();
-                    let vscratch_c_strip =
-                        scratch.vscratch_c[c].clone().offset_start(byte_off_v);
-                    let (upscaled_c_strip_h, upscaled_c_strip_n) = if let Some(strips) =
-                        scratch.upscaled_c_strip.as_ref()
-                    {
-                        // Phase 1b: per-strip buffer sized
-                        // `fine_w * strip_h_at_k`. The kernel writes
-                        // strip-local rows [0..body_h) of this buffer;
-                        // rows [body_h..strip_h_at_k) (if any, on the
-                        // last strip of an unaligned fine_h) keep
-                        // their prior contents but subtract_weber's
-                        // launch geometry (`count_fine_strip`) ensures
-                        // we only iterate `body_h` rows so stale
-                        // contents above body_h are never read.
-                        let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
-                        (strips[c].clone(), n_strip_buf)
-                    } else {
-                        // Legacy / Full path: slice the full-image
-                        // `upscaled_c` at the strip's byte offset so
-                        // the kernel writes to the body row block of
-                        // the full buffer (identical to pre-Phase-1b
-                        // behaviour). Path A Phase 1c (2026-05-26)
-                        // makes `upscaled_c` an `Option` that's `None`
-                        // in StripMode::Pair. The strip walker only
-                        // dispatches in Mode B (verified by the
-                        // `_finalize_weber_pyramid_after_gauss` and
-                        // `_reduce_gauss_pyramid_from_level0` branches),
-                        // so `upscaled_c` here would have to be
-                        // `Some(...)` to mean Mode B's strip alloc was
-                        // disabled — a config we don't support. Treat
-                        // it as a hard invariant; `expect` so a future
-                        // misconfiguration surfaces loudly rather than
-                        // silently writing to a stale buffer.
-                        let upscaled_full = scratch
-                            .upscaled_c
-                            .as_ref()
-                            .expect(
+                    let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v);
+                    let (upscaled_c_strip_h, upscaled_c_strip_n) =
+                        if let Some(strips) = scratch.upscaled_c_strip.as_ref() {
+                            // Phase 1b: per-strip buffer sized
+                            // `fine_w * strip_h_at_k`. The kernel writes
+                            // strip-local rows [0..body_h) of this buffer;
+                            // rows [body_h..strip_h_at_k) (if any, on the
+                            // last strip of an unaligned fine_h) keep
+                            // their prior contents but subtract_weber's
+                            // launch geometry (`count_fine_strip`) ensures
+                            // we only iterate `body_h` rows so stale
+                            // contents above body_h are never read.
+                            let n_strip_buf = (fine_w as usize) * (strip_h_at_k as usize);
+                            (strips[c].clone(), n_strip_buf)
+                        } else {
+                            // Legacy / Full path: slice the full-image
+                            // `upscaled_c` at the strip's byte offset so
+                            // the kernel writes to the body row block of
+                            // the full buffer (identical to pre-Phase-1b
+                            // behaviour). Path A Phase 1c (2026-05-26)
+                            // makes `upscaled_c` an `Option` that's `None`
+                            // in StripMode::Pair. The strip walker only
+                            // dispatches in Mode B (verified by the
+                            // `_finalize_weber_pyramid_after_gauss` and
+                            // `_reduce_gauss_pyramid_from_level0` branches),
+                            // so `upscaled_c` here would have to be
+                            // `Some(...)` to mean Mode B's strip alloc was
+                            // disabled — a config we don't support. Treat
+                            // it as a hard invariant; `expect` so a future
+                            // misconfiguration surfaces loudly rather than
+                            // silently writing to a stale buffer.
+                            let upscaled_full = scratch.upscaled_c.as_ref().expect(
                                 "upscaled_c full buffer is None in strip-walker legacy fallback; \
                                  StripMode::Pair must allocate upscaled_c_strip instead",
                             );
-                        (
-                            upscaled_full[c].clone().offset_start(byte_off_fine),
-                            n_strip_fine,
-                        )
-                    };
+                            (
+                                upscaled_full[c].clone().offset_start(byte_off_fine),
+                                n_strip_fine,
+                            )
+                        };
                     unsafe {
                         upscale_v_strip_kernel::launch::<R>(
                             &self.client,
@@ -3592,7 +3587,7 @@ impl<R: Runtime> Cvvdp<R> {
                             fine_h,
                             body_offset_y,
                             body_h,
-                            0,               // src_strip_offset: source is FULL coarse
+                            0, // src_strip_offset: source is FULL coarse
                         );
                         upscale_h_strip_kernel::launch::<R>(
                             &self.client,
@@ -3695,13 +3690,10 @@ impl<R: Runtime> Cvvdp<R> {
                     // StripMode::Pair (which is the only mode that
                     // dispatches the strip walker), so a `None` here
                     // signals a config that was rejected upstream.
-                    let upscaled_full = scratch
-                        .upscaled_c
-                        .as_ref()
-                        .expect(
-                            "upscaled_c full buffer is None in strip-walker subtract-weber legacy \
+                    let upscaled_full = scratch.upscaled_c.as_ref().expect(
+                        "upscaled_c full buffer is None in strip-walker subtract-weber legacy \
                              fallback; StripMode::Pair must allocate upscaled_c_strip instead",
-                        );
+                    );
                     (
                         fine_a_full,
                         fine_rg_full,
@@ -4514,7 +4506,10 @@ impl<R: Runtime> Cvvdp<R> {
         // csf_apply_6ch reference inputs.
         let mode_b = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
         if mode_b && !dest_is_dis {
             self._finalize_weber_pyramid_strip_walker(log_l_bkg_dest, dest_is_dis);
@@ -4570,13 +4565,10 @@ impl<R: Runtime> Cvvdp<R> {
                 // other construction path keeps the full alloc, so
                 // `expect` documents the invariant and panics loudly if
                 // a future refactor breaks it.
-                let upscaled_c_full = scratch
-                    .upscaled_c
-                    .as_ref()
-                    .expect(
-                        "upscaled_c is None in Full / CachedRef Weber finalize path; \
+                let upscaled_c_full = scratch.upscaled_c.as_ref().expect(
+                    "upscaled_c is None in Full / CachedRef Weber finalize path; \
                          StripMode::Pair should have routed through the strip walker",
-                    );
+                );
                 for c in 0..N_CHANNELS {
                     let coarse = self.gauss_ref[k + 1].planes[c].clone();
                     let vscratch_c = scratch.vscratch_c[c].clone();
@@ -4827,7 +4819,10 @@ impl<R: Runtime> Cvvdp<R> {
         // `_pool_and_finalize_jod*` per their own dispatches.
         let mode_b_outer = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
         if mode_b_outer {
             let n_partials = n_levels * N_CHANNELS;
@@ -4853,7 +4848,10 @@ impl<R: Runtime> Cvvdp<R> {
         // bool so the band loop body stays uniform.
         let mode_e = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::CachedRef, .. }),
+            Some(StripConfig {
+                mode: StripMode::CachedRef,
+                ..
+            }),
         );
         // **Path A bands_dis shrink (2026-05-26):** Mode B
         // (StripPair) defers non-baseband DIST Weber finalize to this
@@ -4867,7 +4865,10 @@ impl<R: Runtime> Cvvdp<R> {
         // / baseband) goes through the standard csf_apply_6ch path.
         let mode_b_pair = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
 
         // P2.1c outer-loop inversion (2026-05-27): in Mode B
@@ -5113,7 +5114,10 @@ impl<R: Runtime> Cvvdp<R> {
             // closure keeps the rest of the band loop body uniform.
             let mode_b = matches!(
                 self.strip_config,
-                Some(StripConfig { mode: StripMode::Pair, .. }),
+                Some(StripConfig {
+                    mode: StripMode::Pair,
+                    ..
+                }),
             );
             if is_baseband {
                 // Baseband: cvvdp's `|T_p_dis - T_p_ref|` bypass. Tick
@@ -5126,11 +5130,8 @@ impl<R: Runtime> Cvvdp<R> {
                 let d_full = scratch_d.d.as_ref().expect(
                     "DBandsScratch.d must be Some at baseband (allocated by build_d_bands_scratch)",
                 );
-                let d_h: [cubecl::server::Handle; 3] = [
-                    d_full[0].clone(),
-                    d_full[1].clone(),
-                    d_full[2].clone(),
-                ];
+                let d_h: [cubecl::server::Handle; 3] =
+                    [d_full[0].clone(), d_full[1].clone(), d_full[2].clone()];
                 unsafe {
                     diff_abs_3ch_kernel::launch::<R>(
                         &self.client,
@@ -5209,17 +5210,8 @@ impl<R: Runtime> Cvvdp<R> {
                             transient.m_blur[2].clone(),
                         ];
                         self._run_band_masking_strip_walker(
-                            k,
-                            bw,
-                            bh,
-                            n_px,
-                            pu_scale,
-                            &t_p_ref_h,
-                            &t_p_dis_h,
-                            &m_raw_h,
-                            &m_mid_h,
-                            &m_blur_h,
-                            &d_h,
+                            k, bw, bh, n_px, pu_scale, &t_p_ref_h, &t_p_dis_h, &m_raw_h, &m_mid_h,
+                            &m_blur_h, &d_h,
                         );
                     } else if use_blur {
                         // min_abs → pu_blur_h → pu_blur_v → mult_mutual_3ch_with_blurred.
@@ -5518,8 +5510,7 @@ impl<R: Runtime> Cvvdp<R> {
             bw: usize,
             bh: usize,
         }
-        let mut per_level_inputs: Vec<ShallowLevelInputs> =
-            Vec::with_capacity(k_split_us);
+        let mut per_level_inputs: Vec<ShallowLevelInputs> = Vec::with_capacity(k_split_us);
         for k in 0..k_split_us {
             let (bw, bh, _n_px) = self.level_dims(k);
             // band_mul = 1.0 at k=0, else 2.0 (shallow levels never
@@ -5607,11 +5598,8 @@ impl<R: Runtime> Cvvdp<R> {
                 let d_strip = scratch_d.d_strip.as_ref().expect(
                     "DBandsScratch.d_strip must be Some at non-baseband levels in StripMode::Pair",
                 );
-                let d_h: [cubecl::server::Handle; 3] = [
-                    d_strip[0].clone(),
-                    d_strip[1].clone(),
-                    d_strip[2].clone(),
-                ];
+                let d_h: [cubecl::server::Handle; 3] =
+                    [d_strip[0].clone(), d_strip[1].clone(), d_strip[2].clone()];
 
                 // Masking transients for this level.
                 let m_raw_h: [cubecl::server::Handle; 3] = [
@@ -5640,18 +5628,8 @@ impl<R: Runtime> Cvvdp<R> {
                 let use_blur = *bw > PU_PADSIZE && *bh > PU_PADSIZE;
                 if use_blur {
                     self._run_band_masking_strip_s_for_level(
-                        s as usize,
-                        k,
-                        *bw,
-                        *bh,
-                        pu_scale,
-                        &t_p_ref_h,
-                        &t_p_dis_h,
-                        &m_raw_h,
-                        &m_mid_h,
-                        &m_blur_h,
-                        &d_h,
-                        true, // P2.4: transients are strip-local
+                        s as usize, k, *bw, *bh, pu_scale, &t_p_ref_h, &t_p_dis_h, &m_raw_h,
+                        &m_mid_h, &m_blur_h, &d_h, true, // P2.4: transients are strip-local
                     );
                 } else {
                     // Small shallow level (shouldn't happen at
@@ -5665,17 +5643,8 @@ impl<R: Runtime> Cvvdp<R> {
                     // == 0) to avoid double-counting.
                     if s == 0 {
                         self._run_band_masking_strip_s_for_level(
-                            s as usize,
-                            k,
-                            *bw,
-                            *bh,
-                            pu_scale,
-                            &t_p_ref_h,
-                            &t_p_dis_h,
-                            &m_raw_h,
-                            &m_mid_h,
-                            &m_blur_h,
-                            &d_h,
+                            s as usize, k, *bw, *bh, pu_scale, &t_p_ref_h, &t_p_dis_h, &m_raw_h,
+                            &m_mid_h, &m_blur_h, &d_h,
                             true, // P2.4: transients are strip-local
                         );
                     }
@@ -5894,21 +5863,15 @@ impl<R: Runtime> Cvvdp<R> {
         let scratch = &self.weber_scratch[k];
         let log_l_bkg_dis_dest = scratch.log_l_bkg_dis.clone();
 
-        let bands_dis_strip = scratch
-            .bands_dis_strip
-            .as_ref()
-            .expect(
-                "bands_dis_strip is None in Mode B fused walker; \
+        let bands_dis_strip = scratch.bands_dis_strip.as_ref().expect(
+            "bands_dis_strip is None in Mode B fused walker; \
                  build_weber_scratch must allocate it under StripMode::Pair",
-            );
+        );
 
-        let upscaled_c_strip = scratch
-            .upscaled_c_strip
-            .as_ref()
-            .expect(
-                "upscaled_c_strip is None in Mode B fused walker; \
+        let upscaled_c_strip = scratch.upscaled_c_strip.as_ref().expect(
+            "upscaled_c_strip is None in Mode B fused walker; \
                  build_weber_scratch must allocate it under StripMode::Pair",
-            );
+        );
 
         let body_offset_y = s * strip_h_at_k;
         let body_h = (fine_h - body_offset_y).min(strip_h_at_k);
@@ -6023,7 +5986,9 @@ impl<R: Runtime> Cvvdp<R> {
         // vscratch_c (also strip-local).
         for c in 0..N_CHANNELS {
             let coarse = self.gauss_ref[k + 1].planes[c].clone();
-            let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v_window);
+            let vscratch_c_strip = scratch.vscratch_c[c]
+                .clone()
+                .offset_start(byte_off_v_window);
             unsafe {
                 upscale_v_strip_kernel::launch::<R>(
                     &self.client,
@@ -6145,8 +6110,14 @@ impl<R: Runtime> Cvvdp<R> {
         // writes land in — strip-local row 0 = top_global maps the
         // writes to the correct band+halo region of the strip buffer.
         // The masking helper then reads from those same rows.
-        let (t_p_ref_a_strip, t_p_ref_rg_strip, t_p_ref_vy_strip,
-             t_p_dis_a_strip, t_p_dis_rg_strip, t_p_dis_vy_strip) = if band_ref_strip_local {
+        let (
+            t_p_ref_a_strip,
+            t_p_ref_rg_strip,
+            t_p_ref_vy_strip,
+            t_p_dis_a_strip,
+            t_p_dis_rg_strip,
+            t_p_dis_vy_strip,
+        ) = if band_ref_strip_local {
             (
                 t_p_ref_h[0].clone(),
                 t_p_ref_h[1].clone(),
@@ -6363,7 +6334,9 @@ impl<R: Runtime> Cvvdp<R> {
         // body+halo (R_k rows). Strip-local; row 0 = top_global.
         for c in 0..N_CHANNELS {
             let coarse = gauss_alt[k + 1].planes[c].clone();
-            let vscratch_c_strip = scratch.vscratch_c[c].clone().offset_start(byte_off_v_window);
+            let vscratch_c_strip = scratch.vscratch_c[c]
+                .clone()
+                .offset_start(byte_off_v_window);
             unsafe {
                 upscale_v_strip_kernel::launch::<R>(
                     &self.client,
@@ -6530,17 +6503,7 @@ impl<R: Runtime> Cvvdp<R> {
 
         for s in 0..n_strips {
             self._run_band_masking_strip_s_for_level(
-                s,
-                k,
-                bw,
-                bh,
-                pu_scale,
-                t_p_ref_h,
-                t_p_dis_h,
-                m_raw_h,
-                m_mid_h,
-                m_blur_h,
-                d_h,
+                s, k, bw, bh, pu_scale, t_p_ref_h, t_p_dis_h, m_raw_h, m_mid_h, m_blur_h, d_h,
                 false, // legacy caller: full-image transients
             );
         }
@@ -6632,14 +6595,12 @@ impl<R: Runtime> Cvvdp<R> {
         let strip_window_h = bot_global - top_global;
         let n_strip_window = bw * strip_window_h;
         let byte_off_window: u64 = (top_global as u64) * (bw as u64) * 4;
-        let count_window =
-            CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
+        let count_window = CubeCount::Static((n_strip_window as u32).div_ceil(64), 1, 1);
 
         // mult_mutual processes ONLY body rows (no halo).
         let n_strip_body = bw * body_h;
         let byte_off_body: u64 = (body_offset_y as u64) * (bw as u64) * 4;
-        let count_body =
-            CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
+        let count_body = CubeCount::Static((n_strip_body as u32).div_ceil(64), 1, 1);
 
         // P2.4 (2026-05-27): when transients are strip-local
         // (`bw × R_k`), the buffer's row 0 IS top_global at this
@@ -6778,7 +6739,10 @@ impl<R: Runtime> Cvvdp<R> {
         // image d plane and writes at `byte_off_body`.
         let mode_b = matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         );
         let d_byte_off: u64 = if mode_b { 0 } else { byte_off_body };
         let t_p_dis_a_b = t_p_dis_h[0].clone().offset_start(tp_m_off_body);
@@ -6926,7 +6890,10 @@ impl<R: Runtime> Cvvdp<R> {
         // returning truncated buffers.
         if matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         ) {
             return Err(Error::InvalidImageSize);
         }
@@ -7352,7 +7319,10 @@ impl<R: Runtime> Cvvdp<R> {
         // sums correctly via the inline pool.
         if matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         ) {
             return Err(Error::InvalidImageSize);
         }
@@ -7539,10 +7509,7 @@ impl<R: Runtime> Cvvdp<R> {
         let cube_dim = CubeDim::new_1d(64);
         let mut w = self.width;
         let mut h = self.height;
-        let state = self
-            .ref_full_state
-            .as_mut()
-            .expect("ensured above");
+        let state = self.ref_full_state.as_mut().expect("ensured above");
         for k in 0..n_levels {
             let n = (w as usize) * (h as usize);
             let count = CubeCount::Static((n as u32).div_ceil(64), 1, 1);
@@ -8060,7 +8027,10 @@ impl<R: Runtime> Cvvdp<R> {
         // path has never been wired through the strip walker).
         if matches!(
             self.strip_config,
-            Some(StripConfig { mode: StripMode::Pair, .. }),
+            Some(StripConfig {
+                mode: StripMode::Pair,
+                ..
+            }),
         ) {
             return Err(Error::InvalidImageSize);
         }

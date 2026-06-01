@@ -926,32 +926,86 @@ fn cleanup_session_stream(backend: Backend, stream_value: u64) {
     // cvvdp but IN another metric still reclaims a dropped session's VRAM
     // instead of silently no-op'ing (the cvvdp-only routing was correct only
     // when cvvdp happened to be in the build).
-    #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "cvvdp",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::cvvdp_backend(backend) {
         cvvdp_gpu::session::cleanup_stream(b, stream_value);
         return;
     }
-    #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "butter",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::butter_backend(backend) {
         butteraugli_gpu::session::cleanup_stream(b, stream_value);
         return;
     }
-    #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "ssim2",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::ssim2_backend(backend) {
         ssim2_gpu::session::cleanup_stream(b, stream_value);
         return;
     }
-    #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "dssim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::dssim_backend(backend) {
         dssim_gpu::session::cleanup_stream(b, stream_value);
         return;
     }
-    #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "iwssim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::iwssim_backend(backend) {
         iwssim_gpu::session::cleanup_stream(b, stream_value);
         return;
     }
-    #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "zensim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::zensim_backend(backend) {
         zensim_gpu::session::cleanup_stream(b, stream_value);
         return;
@@ -970,27 +1024,81 @@ fn cleanup_session_stream(backend: Backend, stream_value: u64) {
 pub fn stream_reserved_bytes(backend: Backend, stream_value: u64) -> Option<u64> {
     // Same metric-agnostic stream keying as `cleanup_session_stream` — any
     // enabled crate reports the same pool's `bytes_reserved` for the stream.
-    #[cfg(all(feature = "cvvdp", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "cvvdp",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::cvvdp_backend(backend) {
         return cvvdp_gpu::session::stream_reserved_bytes(b, stream_value);
     }
-    #[cfg(all(feature = "butter", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "butter",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::butter_backend(backend) {
         return butteraugli_gpu::session::stream_reserved_bytes(b, stream_value);
     }
-    #[cfg(all(feature = "ssim2", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "ssim2",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::ssim2_backend(backend) {
         return ssim2_gpu::session::stream_reserved_bytes(b, stream_value);
     }
-    #[cfg(all(feature = "dssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "dssim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::dssim_backend(backend) {
         return dssim_gpu::session::stream_reserved_bytes(b, stream_value);
     }
-    #[cfg(all(feature = "iwssim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "iwssim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::iwssim_backend(backend) {
         return iwssim_gpu::session::stream_reserved_bytes(b, stream_value);
     }
-    #[cfg(all(feature = "zensim", any(feature = "cuda", feature = "wgpu", feature = "hip", feature = "cpu", feature = "cubecl-types")))]
+    #[cfg(all(
+        feature = "zensim",
+        any(
+            feature = "cuda",
+            feature = "wgpu",
+            feature = "hip",
+            feature = "cpu",
+            feature = "cubecl-types"
+        )
+    ))]
     if let Ok(b) = crate::metric::zensim_backend(backend) {
         return zensim_gpu::session::stream_reserved_bytes(b, stream_value);
     }

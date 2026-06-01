@@ -25,7 +25,12 @@ fn main() {
     let ref_bytes: Vec<u8> = (0..n).map(|i| ((i * 17 + 5) & 0xff) as u8).collect();
     let dist_bytes: Vec<u8> = (0..n).map(|i| ((i * 23 + 11) & 0xff) as u8).collect();
 
-    eprintln!("warming reference ({}x{}, {:.2} MP) ...", w, h, (w as f64 * h as f64) / 1e6);
+    eprintln!(
+        "warming reference ({}x{}, {:.2} MP) ...",
+        w,
+        h,
+        (w as f64 * h as f64) / 1e6
+    );
     cvvdp.warm_reference(&ref_bytes).expect("warm_reference");
 
     // 2 warmup iters not counted

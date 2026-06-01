@@ -709,15 +709,9 @@ impl ZensimFeatureRegime {
 impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
     fn from(r: ZensimFeatureRegime) -> Self {
         match r {
-            ZensimFeatureRegime::Basic => {
-                zenmetrics_api::zensim::ZensimFeatureRegime::Basic
-            }
-            ZensimFeatureRegime::Extended => {
-                zenmetrics_api::zensim::ZensimFeatureRegime::Extended
-            }
-            ZensimFeatureRegime::WithIw => {
-                zenmetrics_api::zensim::ZensimFeatureRegime::WithIw
-            }
+            ZensimFeatureRegime::Basic => zenmetrics_api::zensim::ZensimFeatureRegime::Basic,
+            ZensimFeatureRegime::Extended => zenmetrics_api::zensim::ZensimFeatureRegime::Extended,
+            ZensimFeatureRegime::WithIw => zenmetrics_api::zensim::ZensimFeatureRegime::WithIw,
         }
     }
 }
@@ -733,7 +727,7 @@ impl From<ZensimFeatureRegime> for zenmetrics_api::zensim::ZensimFeatureRegime {
 #[cfg(feature = "sweep")]
 #[cfg(feature = "gpu-zensim")]
 #[allow(dead_code)] // superseded by `metrics::cache::MetricCache::compute_zensim_features`
-                    // for the sweep path; retained as a library entry point.
+// for the sweep path; retained as a library entry point.
 pub fn run_zensim_gpu_with_features(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
@@ -763,8 +757,7 @@ pub fn run_zensim_gpu_with_features(
         // Construct ZensimParams with the requested regime + the
         // canonical default weights (so the basic-block score matches
         // `run_gpu_via_umbrella(MetricKind::Zensim, ...)` exactly).
-        let zp = zenmetrics_api::zensim::ZensimParams::default_weights()
-            .with_regime(regime.into());
+        let zp = zenmetrics_api::zensim::ZensimParams::default_weights().with_regime(regime.into());
         let params = zenmetrics_api::MetricParams::Zensim(zp);
         let metric = zenmetrics_api::Metric::new(
             zenmetrics_api::MetricKind::Zensim,

@@ -43,7 +43,15 @@ fn main() {
 
     println!(
         "{:>10}  {:>9}  {:>5}  {:>11}  {:>11}  {:>11}  {:>11}  {:>9}  {:>9}",
-        "w", "h", "body", "whole_score", "strip_score", "whole_p3", "strip_p3", "rel_score", "rel_p3"
+        "w",
+        "h",
+        "body",
+        "whole_score",
+        "strip_score",
+        "whole_p3",
+        "strip_p3",
+        "rel_score",
+        "rel_p3"
     );
 
     for &(w, h, body) in cases {
@@ -57,9 +65,7 @@ fn main() {
             .expect("whole");
 
         let mut strip = Butteraugli::<Backend>::new_strip(client, w, h, body);
-        let sr = strip
-            .compute_strip(&ref_buf, &dis_buf)
-            .expect("strip");
+        let sr = strip.compute_strip(&ref_buf, &dis_buf).expect("strip");
 
         println!(
             "{:>10}  {:>9}  {:>5}  {:>11.6}  {:>11.6}  {:>11.6}  {:>11.6}  {:>9.2e}  {:>9.2e}",

@@ -101,8 +101,8 @@ fn load_goldens() -> GoldenFile {
     let path: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("goldens")
         .join("python_iwssim_2026-05-27.json");
-    let s = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let s =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let file: GoldenFile =
         serde_json::from_str(&s).unwrap_or_else(|e| panic!("parse goldens: {e}"));
     assert_eq!(file.schema_version, 1, "unexpected schema version");
@@ -217,10 +217,7 @@ fn parity_python_goldens() {
         }
     }
 
-    println!(
-        "\nmax |diff| = {:.6e} @ {}",
-        max_diff, max_diff_name
-    );
+    println!("\nmax |diff| = {:.6e} @ {}", max_diff, max_diff_name);
     assert!(
         failures.is_empty(),
         "{} parity failures:\n{}",

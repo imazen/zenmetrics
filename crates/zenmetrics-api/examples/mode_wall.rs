@@ -166,7 +166,10 @@ const CHILD_HOLD_MS: u64 = 400;
 // --------------------------------------------------------------------
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
@@ -225,7 +228,11 @@ fn structured_pair(w: u32, h: u32, mag: u8) -> (Vec<u8>, Vec<u8>) {
             a[i + 2] = bb;
             let bx = x / 8;
             let by = y / 8;
-            let pert = if (bx ^ by) & 1 == 0 { mag as i32 } else { -(mag as i32) };
+            let pert = if (bx ^ by) & 1 == 0 {
+                mag as i32
+            } else {
+                -(mag as i32)
+            };
             b[i] = (r as i32 + pert).clamp(0, 255) as u8;
             b[i + 1] = (g as i32 + pert).clamp(0, 255) as u8;
             b[i + 2] = (bb as i32 + pert).clamp(0, 255) as u8;
@@ -241,7 +248,9 @@ fn metric_kind_from_tag(s: &str) -> Option<MetricKind> {
 fn umbrella_mode(mode: &str) -> Option<MemoryMode> {
     match mode {
         "full" => Some(MemoryMode::Full),
-        "strip" => Some(MemoryMode::Strip { h_body: Some(STRIP_H_BODY) }),
+        "strip" => Some(MemoryMode::Strip {
+            h_body: Some(STRIP_H_BODY),
+        }),
         // strippair handled separately (cvvdp typed API)
         _ => None,
     }
@@ -293,9 +302,8 @@ fn time_oneoff_umbrella(
     let mut score = f64::NAN;
     for _ in 0..reps {
         let t = Instant::now();
-        let mut m =
-            Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params.clone(), mode)
-                .expect("construct");
+        let mut m = Metric::new_with_memory_mode(kind, Backend::Cuda, w, h, params.clone(), mode)
+            .expect("construct");
         let s = m.compute_srgb_u8(&r, &d).expect("score");
         cubecl::future::block_on(client.sync()).expect("sync");
         times.push(t.elapsed().as_secs_f64() * 1e3);
@@ -362,7 +370,9 @@ fn time_oneoff_cvvdp_strippair(
             w,
             h,
             CvvdpParams::default(),
-            cvvdp_gpu::MemoryMode::StripPair { h_body: Some(STRIP_H_BODY) },
+            cvvdp_gpu::MemoryMode::StripPair {
+                h_body: Some(STRIP_H_BODY),
+            },
         )
         .expect("construct StripPair")
     };
@@ -406,10 +416,13 @@ fn time_warm_cvvdp_strippair(
         w,
         h,
         CvvdpParams::default(),
-        cvvdp_gpu::MemoryMode::StripPair { h_body: Some(STRIP_H_BODY) },
+        cvvdp_gpu::MemoryMode::StripPair {
+            h_body: Some(STRIP_H_BODY),
+        },
     )
     .map_err(|e| format!("construct StripPair: {e}"))?;
-    m.warm_reference_srgb(&r).map_err(|e| format!("warm_reference: {e}"))?;
+    m.warm_reference_srgb(&r)
+        .map_err(|e| format!("warm_reference: {e}"))?;
     let warm_d = synth_srgb(w, h, 0x0B22_9999);
     let _ = m
         .compute_with_warm_ref_srgb(&warm_d, None)
@@ -488,7 +501,10 @@ fn run_worker(metric_tag: &str, mode: &str, ctx: &str, w: u32, h: u32, reps: usi
     let p75 = percentile(&sorted, 75.0);
 
     // RESULT <p25> <p50> <p75> <score> <n>
-    println!("RESULT {p25:.5} {p50:.5} {p75:.5} {score:.6} {}", times.len());
+    println!(
+        "RESULT {p25:.5} {p50:.5} {p75:.5} {score:.6} {}",
+        times.len()
+    );
     std::io::stdout().flush().expect("flush");
 
     // Hold so the parent samples nvidia-smi at quiescent steady state.
@@ -609,40 +625,80 @@ fn measure_cell(
 
     match result_line {
         Some(l) if l.starts_with("RESULT_FAIL") => {
-            let msg = l.strip_prefix("RESULT_FAIL ").unwrap_or("unknown").to_string();
+            let msg = l
+                .strip_prefix("RESULT_FAIL ")
+                .unwrap_or("unknown")
+                .to_string();
             CellResult {
-                p25: f64::NAN, p50: f64::NAN, p75: f64::NAN, score: f64::NAN,
-                n: 0, peak_vram_mib, free_vram_start_mib: free_start,
+                p25: f64::NAN,
+                p50: f64::NAN,
+                p75: f64::NAN,
+                score: f64::NAN,
+                n: 0,
+                peak_vram_mib,
+                free_vram_start_mib: free_start,
                 fail: Some(msg),
             }
         }
         Some(l) => {
             // RESULT <p25> <p50> <p75> <score> <n>
             let parts: Vec<&str> = l.split_whitespace().collect();
-            let p25 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(f64::NAN);
-            let p50 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(f64::NAN);
-            let p75 = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(f64::NAN);
-            let score = parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(f64::NAN);
+            let p25 = parts
+                .get(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(f64::NAN);
+            let p50 = parts
+                .get(2)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(f64::NAN);
+            let p75 = parts
+                .get(3)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(f64::NAN);
+            let score = parts
+                .get(4)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(f64::NAN);
             let n = parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0);
             if !out.status.success() {
                 CellResult {
-                    p25, p50, p75, score, n, peak_vram_mib,
+                    p25,
+                    p50,
+                    p75,
+                    score,
+                    n,
+                    peak_vram_mib,
                     free_vram_start_mib: free_start,
-                    fail: Some(format!("child-nonzero-exit: {}", stderr.lines().last().unwrap_or(""))),
+                    fail: Some(format!(
+                        "child-nonzero-exit: {}",
+                        stderr.lines().last().unwrap_or("")
+                    )),
                 }
             } else {
                 CellResult {
-                    p25, p50, p75, score, n, peak_vram_mib,
-                    free_vram_start_mib: free_start, fail: None,
+                    p25,
+                    p50,
+                    p75,
+                    score,
+                    n,
+                    peak_vram_mib,
+                    free_vram_start_mib: free_start,
+                    fail: None,
                 }
             }
         }
         None => CellResult {
-            p25: f64::NAN, p50: f64::NAN, p75: f64::NAN, score: f64::NAN,
-            n: 0, peak_vram_mib, free_vram_start_mib: free_start,
+            p25: f64::NAN,
+            p50: f64::NAN,
+            p75: f64::NAN,
+            score: f64::NAN,
+            n: 0,
+            peak_vram_mib,
+            free_vram_start_mib: free_start,
             fail: Some(format!(
                 "no-RESULT-line; exit={:?}; stderr-tail={}",
-                out.status, stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ")
+                out.status,
+                stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ")
             )),
         },
     }
@@ -693,9 +749,14 @@ fn run_parity(size: u32) {
         // Full reference score (one-off compute_srgb_u8).
         let full_score = {
             let mut m = Metric::new_with_memory_mode(
-                kind, Backend::Cuda, w, h,
-                MetricParams::try_default_for(kind).unwrap(), MemoryMode::Full,
-            ).unwrap();
+                kind,
+                Backend::Cuda,
+                w,
+                h,
+                MetricParams::try_default_for(kind).unwrap(),
+                MemoryMode::Full,
+            )
+            .unwrap();
             m.compute_srgb_u8(&r, &d).unwrap().value
         };
         println!("{tag},full,oneoff,{full_score:.6},0.0");
@@ -706,22 +767,37 @@ fn run_parity(size: u32) {
             if tag == "cvvdp" {
                 // cvvdp Strip = Mode E (warm only).
                 if let Ok(mut m) = Metric::new_with_memory_mode(
-                    kind, Backend::Cuda, w, h,
+                    kind,
+                    Backend::Cuda,
+                    w,
+                    h,
                     MetricParams::try_default_for(kind).unwrap(),
-                    MemoryMode::Strip { h_body: Some(STRIP_H_BODY) },
+                    MemoryMode::Strip {
+                        h_body: Some(STRIP_H_BODY),
+                    },
                 ) {
                     if m.set_reference_srgb_u8(&r).is_ok() {
                         if let Ok(s) = m.compute_with_cached_reference_srgb_u8(&d) {
-                            println!("cvvdp,strip,warm,{:.6},{:.6}", s.value, (s.value - full_score).abs());
+                            println!(
+                                "cvvdp,strip,warm,{:.6},{:.6}",
+                                s.value,
+                                (s.value - full_score).abs()
+                            );
                         }
                     }
                 }
             } else {
                 let mut m = Metric::new_with_memory_mode(
-                    kind, Backend::Cuda, w, h,
+                    kind,
+                    Backend::Cuda,
+                    w,
+                    h,
                     MetricParams::try_default_for(kind).unwrap(),
-                    MemoryMode::Strip { h_body: Some(STRIP_H_BODY) },
-                ).unwrap();
+                    MemoryMode::Strip {
+                        h_body: Some(STRIP_H_BODY),
+                    },
+                )
+                .unwrap();
                 let s = m.compute_srgb_u8(&r, &d).unwrap().value;
                 println!("{tag},strip,oneoff,{s:.6},{:.6}", (s - full_score).abs());
             }
@@ -730,11 +806,20 @@ fn run_parity(size: u32) {
         // cvvdp StripPair (typed) — one-off (routes through Full compute).
         if tag == "cvvdp" {
             if let Ok(mut m) = cvvdp_gpu::CvvdpOpaque::new_with_memory_mode(
-                cvvdp_gpu::Backend::Cuda, w, h, CvvdpParams::default(),
-                cvvdp_gpu::MemoryMode::StripPair { h_body: Some(STRIP_H_BODY) },
+                cvvdp_gpu::Backend::Cuda,
+                w,
+                h,
+                CvvdpParams::default(),
+                cvvdp_gpu::MemoryMode::StripPair {
+                    h_body: Some(STRIP_H_BODY),
+                },
             ) {
                 if let Ok(s) = m.compute_srgb_u8(&r, &d) {
-                    println!("cvvdp,strippair,oneoff,{:.6},{:.6}", s.value, (s.value - full_score).abs());
+                    println!(
+                        "cvvdp,strippair,oneoff,{:.6},{:.6}",
+                        s.value,
+                        (s.value - full_score).abs()
+                    );
                 }
             }
         }
@@ -809,15 +894,35 @@ fn main() {
                     eprint!("# cell {metric_tag}/{mode}/{ctx}/{size}² ... ");
                     std::io::stderr().flush().ok();
                     let r = measure_cell(
-                        &child_bin, metric_tag, mode, ctx, w, h, reps, sample_interval,
+                        &child_bin,
+                        metric_tag,
+                        mode,
+                        ctx,
+                        w,
+                        h,
+                        reps,
+                        sample_interval,
                     );
                     let note = match &r.fail {
                         Some(msg) => format!("FAIL:{}", msg.replace(',', ";")),
-                        None => note_for(metric_tag, mode, ctx, r.free_vram_start_mib, r.peak_vram_mib),
+                        None => note_for(
+                            metric_tag,
+                            mode,
+                            ctx,
+                            r.free_vram_start_mib,
+                            r.peak_vram_mib,
+                        ),
                     };
                     println!(
                         "{metric_tag},{mode},{ctx},{size},{w},{h},{:.5},{:.5},{:.5},{:.6},{},{},{},{}",
-                        r.p25, r.p50, r.p75, r.score, r.n, r.peak_vram_mib, r.free_vram_start_mib, note
+                        r.p25,
+                        r.p50,
+                        r.p75,
+                        r.score,
+                        r.n,
+                        r.peak_vram_mib,
+                        r.free_vram_start_mib,
+                        note
                     );
                     std::io::stdout().flush().ok();
                     eprintln!(

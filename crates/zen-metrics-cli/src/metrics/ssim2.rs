@@ -28,6 +28,10 @@ fn to_img(img: &Rgb8Image) -> Result<imgref::ImgVec<[u8; 3]>, Box<dyn std::error
     if img.pixels.len() != w * h * 3 {
         return Err("ssim2: pixel buffer is not packed w*h*3 RGB8".into());
     }
-    let px: Vec<[u8; 3]> = img.pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let px: Vec<[u8; 3]> = img
+        .pixels
+        .chunks_exact(3)
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
     Ok(imgref::ImgVec::new(px, w, h))
 }

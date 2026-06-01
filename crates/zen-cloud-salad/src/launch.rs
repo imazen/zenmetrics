@@ -292,7 +292,9 @@ impl SaladApi {
         priority: &str,
     ) -> Result<Vec<GpuClass>> {
         let mut items = self.list_gpu_classes().await?;
-        items.retain(|c| c.price_for(priority).is_finite() && c.price_for(priority) <= max_price_per_hour);
+        items.retain(|c| {
+            c.price_for(priority).is_finite() && c.price_for(priority) <= max_price_per_hour
+        });
         items.sort_by(|a, b| {
             a.price_for(priority)
                 .partial_cmp(&b.price_for(priority))
@@ -340,10 +342,7 @@ impl SaladApi {
     /// we return the raw JSON Value so the caller can extract whatever
     /// fields are present (machine_id, state, started_at, version_hash,
     /// etc.) without coupling the launcher to a precise schema.
-    pub async fn list_container_group_instances(
-        &self,
-        name: &str,
-    ) -> Result<serde_json::Value> {
+    pub async fn list_container_group_instances(&self, name: &str) -> Result<serde_json::Value> {
         let url = self.proj_url(&format!("/containers/{name}/instances"));
         self.get_json(&url).await
     }

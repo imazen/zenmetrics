@@ -50,17 +50,14 @@ fn median(mut xs: Vec<Duration>) -> Duration {
 }
 
 fn main() {
-    println!(
-        "size  first_call_ms  steady_p50_ms  steady_min_ms  score"
-    );
+    println!("size  first_call_ms  steady_p50_ms  steady_min_ms  score");
     for &sz in SIZES {
         let w = sz;
         let h = sz;
         let r = synth_srgb(w, h, 42);
         let d = synth_srgb(w, h, 137);
         let client = Backend::client(&Default::default());
-        let mut s =
-            Ssim2::<Backend>::new(client, w, h).expect("Ssim2::new");
+        let mut s = Ssim2::<Backend>::new(client, w, h).expect("Ssim2::new");
         s.set_reference(&r).expect("set_reference");
 
         // First call — includes PTX compile.

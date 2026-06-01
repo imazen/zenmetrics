@@ -909,10 +909,7 @@ impl LightPanel {
                 let c = self.pwrc.max(1e-12);
                 3.0 / (1.0 / a + 1.0 / b + 1.0 / c)
             }
-            ValAggregate::MinSPP => self
-                .srocc
-                .min(self.plcc)
-                .min(self.pwrc),
+            ValAggregate::MinSPP => self.srocc.min(self.plcc).min(self.pwrc),
         }
     }
 }
@@ -1668,8 +1665,12 @@ mod tests {
 
     #[test]
     fn light_panel_srocc_matches_full_panel() {
-        let scores: Vec<f64> = (0..200).map(|i| (i as f64 * 0.37).sin() * 40.0 + 50.0).collect();
-        let humans: Vec<f64> = (0..200).map(|i| (i as f64 * 0.37).sin() * 38.0 + 52.0).collect();
+        let scores: Vec<f64> = (0..200)
+            .map(|i| (i as f64 * 0.37).sin() * 40.0 + 50.0)
+            .collect();
+        let humans: Vec<f64> = (0..200)
+            .map(|i| (i as f64 * 0.37).sin() * 38.0 + 52.0)
+            .collect();
         let full = compute_panel(&scores, &humans);
         let light = compute_light_panel(&scores, &humans);
         assert!(
@@ -1694,8 +1695,18 @@ mod tests {
 
     #[test]
     fn val_aggregate_geomean_penalizes_collapse() {
-        let good = LightPanel { srocc: 0.9, plcc: 0.9, pwrc: 0.9, n: 100 };
-        let collapse = LightPanel { srocc: 0.9, plcc: 0.3, pwrc: 0.9, n: 100 };
+        let good = LightPanel {
+            srocc: 0.9,
+            plcc: 0.9,
+            pwrc: 0.9,
+            n: 100,
+        };
+        let collapse = LightPanel {
+            srocc: 0.9,
+            plcc: 0.3,
+            pwrc: 0.9,
+            n: 100,
+        };
         let g = good.aggregate(ValAggregate::GeomeanSPP);
         let c = collapse.aggregate(ValAggregate::GeomeanSPP);
         assert!(g > 0.89 && g < 0.91, "good geomean should be ~0.9, got {g}");
@@ -1704,7 +1715,12 @@ mod tests {
 
     #[test]
     fn val_aggregate_srocc_ignores_plcc_pwrc() {
-        let p = LightPanel { srocc: 0.95, plcc: 0.1, pwrc: 0.1, n: 100 };
+        let p = LightPanel {
+            srocc: 0.95,
+            plcc: 0.1,
+            pwrc: 0.1,
+            n: 100,
+        };
         let s = p.aggregate(ValAggregate::Srocc);
         assert!((s - 0.95).abs() < 1e-12);
     }
@@ -1727,8 +1743,14 @@ mod tests {
         let sigma_loose = vec![10.0, 10.0];
         let z_tight = z_rmse_per_sample(&predicted, &target, &sigma_tight);
         let z_loose = z_rmse_per_sample(&predicted, &target, &sigma_loose);
-        assert!(z_tight > 10.0, "tight σ should produce large Z-RMSE: {z_tight}");
-        assert!(z_loose < 1.0, "loose σ should produce small Z-RMSE: {z_loose}");
+        assert!(
+            z_tight > 10.0,
+            "tight σ should produce large Z-RMSE: {z_tight}"
+        );
+        assert!(
+            z_loose < 1.0,
+            "loose σ should produce small Z-RMSE: {z_loose}"
+        );
     }
 
     #[test]
@@ -1738,7 +1760,10 @@ mod tests {
         let sigma = vec![0.1, f64::NAN, 0.0];
         let z = z_rmse_per_sample(&predicted, &target, &sigma);
         // Only row 0 contributes (σ=0.1, error=0). Z-RMSE should be 0.
-        assert!(z.is_finite() && z < 1e-12, "expected ~0 for perfect match: {z}");
+        assert!(
+            z.is_finite() && z < 1e-12,
+            "expected ~0 for perfect match: {z}"
+        );
     }
 
     #[test]
@@ -1748,8 +1773,8 @@ mod tests {
         let global = z_rmse(&predicted, &target);
         // Uniform σ = global σ of target → per-sample should match global.
         let mean_t: f64 = target.iter().sum::<f64>() / target.len() as f64;
-        let var_t: f64 = target.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>()
-            / target.len() as f64;
+        let var_t: f64 =
+            target.iter().map(|x| (x - mean_t).powi(2)).sum::<f64>() / target.len() as f64;
         let sigma_global = var_t.sqrt();
         let sigma_uniform = vec![sigma_global; 50];
         let per_sample = z_rmse_per_sample(&predicted, &target, &sigma_uniform);

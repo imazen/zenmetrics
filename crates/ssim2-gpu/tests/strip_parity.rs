@@ -68,9 +68,11 @@ fn whole_and_strip(width: u32, height: u32, h_body: u32, mag: u8) -> (f64, f64) 
     let mut whole = Ssim2::<Backend>::new(client.clone(), width, height).expect("new");
     let whole_score = whole.compute(&a, &b).expect("compute whole").score;
 
-    let mut strip =
-        Ssim2::<Backend>::new_strip(client, width, height, h_body).expect("new_strip");
-    let strip_score = strip.compute_stripped(&a, &b).expect("compute_stripped").score;
+    let mut strip = Ssim2::<Backend>::new_strip(client, width, height, h_body).expect("new_strip");
+    let strip_score = strip
+        .compute_stripped(&a, &b)
+        .expect("compute_stripped")
+        .score;
 
     (whole_score, strip_score)
 }
@@ -187,7 +189,12 @@ fn strip_parity_uneven_last_strip_3500h() {
 fn strip_parity_single_strip_degenerate() {
     // h_body large enough that the whole image fits in one strip.
     let (whole, strip) = whole_and_strip(1024, 1024, 4096, 4);
-    assert_close("1024² h_body=4096 (degenerate)", whole, strip, STRIP_REL_TOL);
+    assert_close(
+        "1024² h_body=4096 (degenerate)",
+        whole,
+        strip,
+        STRIP_REL_TOL,
+    );
 }
 
 // ───────────────────────── error-path tests ─────────────────────────
@@ -201,7 +208,8 @@ fn strip_set_reference_succeeds_mode_e() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new_strip(client, 256, 256, 128).expect("new_strip");
     let r = vec![0u8; 256 * 256 * 3];
-    s.set_reference(&r).expect("strip-mode set_reference (mode E)");
+    s.set_reference(&r)
+        .expect("strip-mode set_reference (mode E)");
     assert!(s.has_cached_reference());
     let d = vec![0u8; 256 * 256 * 3];
     let _ = s
@@ -224,14 +232,26 @@ fn strip_mode_e_parity_1024_single_strip() {
 
     let mut w = Ssim2::<Backend>::new(client.clone(), 1024, 1024).expect("new");
     w.set_reference(&r_img).expect("whole set_reference");
-    let whole_score = w.compute_with_reference(&d_img).expect("whole compute_with_reference").score;
+    let whole_score = w
+        .compute_with_reference(&d_img)
+        .expect("whole compute_with_reference")
+        .score;
 
     // h_body=1500 > image_h=1024 → single-strip degenerate case.
     let mut s = Ssim2::<Backend>::new_strip(client, 1024, 1024, 1500).expect("new_strip");
-    s.set_reference(&r_img).expect("strip set_reference single-strip (mode E)");
-    let strip_score = s.compute_with_reference(&d_img).expect("strip compute_with_reference single-strip (mode E)").score;
+    s.set_reference(&r_img)
+        .expect("strip set_reference single-strip (mode E)");
+    let strip_score = s
+        .compute_with_reference(&d_img)
+        .expect("strip compute_with_reference single-strip (mode E)")
+        .score;
 
-    assert_close("mode_e_single_strip_vs_whole_cached", whole_score, strip_score, 5e-5);
+    assert_close(
+        "mode_e_single_strip_vs_whole_cached",
+        whole_score,
+        strip_score,
+        5e-5,
+    );
 }
 
 /// Mode E parity at 1024² body=256: cached-ref strip vs cached-ref
@@ -254,12 +274,19 @@ fn strip_mode_e_parity_1024() {
     // Whole-image cached-ref.
     let mut w = Ssim2::<Backend>::new(client.clone(), 1024, 1024).expect("new");
     w.set_reference(&r_img).expect("whole set_reference");
-    let whole_score = w.compute_with_reference(&d_img).expect("whole compute_with_reference").score;
+    let whole_score = w
+        .compute_with_reference(&d_img)
+        .expect("whole compute_with_reference")
+        .score;
 
     // Strip-mode mode E.
     let mut s = Ssim2::<Backend>::new_strip(client, 1024, 1024, 256).expect("new_strip");
-    s.set_reference(&r_img).expect("strip set_reference (mode E)");
-    let strip_score = s.compute_with_reference(&d_img).expect("strip compute_with_reference (mode E)").score;
+    s.set_reference(&r_img)
+        .expect("strip set_reference (mode E)");
+    let strip_score = s
+        .compute_with_reference(&d_img)
+        .expect("strip compute_with_reference (mode E)")
+        .score;
 
     eprintln!("mag=1: whole={whole_score} strip={strip_score}");
     assert_close("mode_e_1024", whole_score, strip_score, 5e-5);
@@ -272,7 +299,8 @@ fn strip_mode_e_cross_tile_size_1024() {
     let (r_img, d_img) = synthetic_pair(1024, 1024, 4);
     let client = Backend::client(&Default::default());
 
-    let mut s1 = Ssim2::<Backend>::new_strip(client.clone(), 1024, 1024, 256).expect("new_strip 256");
+    let mut s1 =
+        Ssim2::<Backend>::new_strip(client.clone(), 1024, 1024, 256).expect("new_strip 256");
     s1.set_reference(&r_img).expect("set_reference s1");
     let score_1 = s1.compute_with_reference(&d_img).expect("compute s1").score;
 
@@ -361,8 +389,7 @@ fn strip_cross_tile_size_2048() {
         Ssim2::<Backend>::new_strip(client.clone(), 2048, 2048, 512).expect("new_strip 512");
     let s1_score = s1.compute_stripped(&a, &b).expect("compute s1").score;
 
-    let mut s2 =
-        Ssim2::<Backend>::new_strip(client, 2048, 2048, 1024).expect("new_strip 1024");
+    let mut s2 = Ssim2::<Backend>::new_strip(client, 2048, 2048, 1024).expect("new_strip 1024");
     let s2_score = s2.compute_stripped(&a, &b).expect("compute s2").score;
 
     let abs = (s1_score - s2_score).abs();
@@ -385,8 +412,7 @@ fn strip_cross_tile_size_4096() {
         Ssim2::<Backend>::new_strip(client.clone(), 4096, 4096, 1024).expect("new_strip 1024");
     let s1_score = s1.compute_stripped(&a, &b).expect("compute s1").score;
 
-    let mut s2 =
-        Ssim2::<Backend>::new_strip(client, 4096, 4096, 2048).expect("new_strip 2048");
+    let mut s2 = Ssim2::<Backend>::new_strip(client, 4096, 4096, 2048).expect("new_strip 2048");
     let s2_score = s2.compute_stripped(&a, &b).expect("compute s2").score;
 
     let abs = (s1_score - s2_score).abs();
@@ -418,7 +444,12 @@ fn strip_with_mode_full_matches_default() {
         .compute_stripped_with_mode(Ssim2Mode::Full, &a, &b)
         .expect("Full")
         .score;
-    assert_close("Full mode matches default", default_score, full_score, STRIP_REL_TOL);
+    assert_close(
+        "Full mode matches default",
+        default_score,
+        full_score,
+        STRIP_REL_TOL,
+    );
 }
 
 #[test]

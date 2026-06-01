@@ -95,7 +95,10 @@ const _PORT_STATUS: &str = include_str!("../docs/PORT_STATUS.md");
 const _: () = {
     use common::const_str;
     assert!(
-        const_str::contains(_PORT_STATUS.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        const_str::contains(
+            _PORT_STATUS.as_bytes(),
+            PYCVVDP_REFERENCE_VERSION.as_bytes()
+        ),
         "docs/PORT_STATUS.md must contain PYCVVDP_REFERENCE_VERSION (Reference version pin section)",
     );
 };
@@ -125,7 +128,10 @@ const _SIDECAR_SCHEMA: &str = include_str!("../docs/CVVDP_SIDECAR_SCHEMA.md");
 const _: () = {
     use common::const_str;
     assert!(
-        const_str::contains(_SIDECAR_SCHEMA.as_bytes(), PYCVVDP_REFERENCE_VERSION.as_bytes()),
+        const_str::contains(
+            _SIDECAR_SCHEMA.as_bytes(),
+            PYCVVDP_REFERENCE_VERSION.as_bytes()
+        ),
         "docs/CVVDP_SIDECAR_SCHEMA.md must contain PYCVVDP_REFERENCE_VERSION (reserved column-name tags)",
     );
 };

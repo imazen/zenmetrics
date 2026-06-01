@@ -50,13 +50,22 @@ struct Args {
     chunks: u32,
     #[arg(long, default_value_t = 12)]
     cells_per_chunk: u32,
-    #[arg(long, default_value = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/input/smoke.parquet")]
+    #[arg(
+        long,
+        default_value = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/input/smoke.parquet"
+    )]
     input_parquet_r2: String,
-    #[arg(long, default_value = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/sources")]
+    #[arg(
+        long,
+        default_value = "s3://zen-tuning-ephemeral/salad-smoke-2026-05-28-24cell/sources"
+    )]
     source_dir_r2: String,
     #[arg(long, default_value = "graph.png")]
     image_basename: String,
-    #[arg(long, default_value = "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b")]
+    #[arg(
+        long,
+        default_value = "ghcr.io/imazen/zen-metrics-sweep-salad:v6-visibility-b"
+    )]
     docker_image: String,
     /// Wall cap for the poll loop (seconds).
     #[arg(long, default_value_t = 1080)]
@@ -170,7 +179,8 @@ async fn main() -> Result<()> {
     env.insert("WORKER_BACKEND".into(), "hetzner".into());
     env.insert("RUST_LOG".into(), "info".into());
     env.insert("METRICS".into(), "ssim2-gpu".into());
-    let mut env_h: HashMap<String, String> = env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut env_h: HashMap<String, String> =
+        env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     inject_r2_cred_into_env(&mut env_h, &scoped);
     let env: std::collections::BTreeMap<String, String> = env_h.into_iter().collect();
 
@@ -223,7 +233,10 @@ async fn main() -> Result<()> {
         return Err(e.context("push_jobs"));
     }
     let t_push_jobs_secs = t_push.elapsed().as_secs_f64();
-    eprintln!("[smoke] push_jobs OK in {t_push_jobs_secs:.1}s (uploaded {} queue files)", queue_jobs.len());
+    eprintln!(
+        "[smoke] push_jobs OK in {t_push_jobs_secs:.1}s (uploaded {} queue files)",
+        queue_jobs.len()
+    );
 
     // Verify queue files landed.
     let queue_prefix = format!("runs/{sweep_id}/queue/");
@@ -323,10 +336,7 @@ async fn main() -> Result<()> {
 
     // Verify zero remaining.
     let label = format!("group={group_name}");
-    let remaining = api
-        .list_servers_by_label(&label)
-        .await
-        .unwrap_or_default();
+    let remaining = api.list_servers_by_label(&label).await.unwrap_or_default();
     let servers_alive_after_teardown = remaining.len() as u32;
     if servers_alive_after_teardown > 0 {
         eprintln!(

@@ -1121,8 +1121,7 @@ fn use_orchestrator_emits_deprecation_warning() {
         "use-orchestrator score failed: stderr={stderr}",
     );
     assert!(
-        stderr.contains("--use-orchestrator")
-            && stderr.contains("deprecated"),
+        stderr.contains("--use-orchestrator") && stderr.contains("deprecated"),
         "expected deprecation warning mentioning --use-orchestrator; got: {stderr}",
     );
 }

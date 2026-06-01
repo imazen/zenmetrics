@@ -85,12 +85,28 @@ pub struct JobProfile {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum JobKind {
-    Encode { codec: String, q: i64, knobs: String },
-    Metric { metric: String },
-    Feature { regime: String },
-    Diffmap { metric: String },
-    Resample { kernel: String, w: u32, h: u32 },
-    Bake { view: String },
+    Encode {
+        codec: String,
+        q: i64,
+        knobs: String,
+    },
+    Metric {
+        metric: String,
+    },
+    Feature {
+        regime: String,
+    },
+    Diffmap {
+        metric: String,
+    },
+    Resample {
+        kernel: String,
+        w: u32,
+        h: u32,
+    },
+    Bake {
+        view: String,
+    },
 }
 
 impl JobKind {
@@ -146,7 +162,10 @@ fn encode_cost(codec: &str) -> (ResourceClass, Regenerability) {
         (ResourceClass::CpuLight, Regenerability::CheapRegenerable)
     } else {
         // webp / jxl / avif / unknown
-        (ResourceClass::CpuHeavy, Regenerability::ExpensiveRegenerable)
+        (
+            ResourceClass::CpuHeavy,
+            Regenerability::ExpensiveRegenerable,
+        )
     }
 }
 
@@ -162,19 +181,35 @@ mod tests {
 
     #[test]
     fn encode_cost_asymmetry() {
-        let jpeg = JobKind::Encode { codec: "zenjpeg".into(), q: 80, knobs: "{}".into() }.profile();
-        let avif = JobKind::Encode { codec: "zenavif".into(), q: 50, knobs: "{}".into() }.profile();
+        let jpeg = JobKind::Encode {
+            codec: "zenjpeg".into(),
+            q: 80,
+            knobs: "{}".into(),
+        }
+        .profile();
+        let avif = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: "{}".into(),
+        }
+        .profile();
         // JPEG: cheap to regenerate, light CPU.
         assert_eq!(jpeg.output_regenerability, Regenerability::CheapRegenerable);
         assert_eq!(jpeg.class, ResourceClass::CpuLight);
         // AVIF: expensive — must persist, heavy CPU.
-        assert_eq!(avif.output_regenerability, Regenerability::ExpensiveRegenerable);
+        assert_eq!(
+            avif.output_regenerability,
+            Regenerability::ExpensiveRegenerable
+        );
         assert_eq!(avif.class, ResourceClass::CpuHeavy);
     }
 
     #[test]
     fn metric_groups_by_source_on_gpu() {
-        let p = JobKind::Metric { metric: "cvvdp".into() }.profile();
+        let p = JobKind::Metric {
+            metric: "cvvdp".into(),
+        }
+        .profile();
         assert_eq!(p.group_by, GroupBy::SourceSha);
         assert_eq!(p.class, ResourceClass::Gpu);
     }
@@ -192,14 +227,28 @@ mod tests {
         let mut uniq = subs.to_vec();
         uniq.sort_unstable();
         uniq.dedup();
-        assert_eq!(uniq.len(), subs.len(), "every class must route to a distinct subject");
+        assert_eq!(
+            uniq.len(),
+            subs.len(),
+            "every class must route to a distinct subject"
+        );
     }
 
     #[test]
     fn capability_routing_matches_class() {
-        let metric = JobKind::Metric { metric: "cvvdp".into() };   // Gpu
-        let jpeg = JobKind::Encode { codec: "zenjpeg".into(), q: 80, knobs: "{}".into() }; // CpuLight
-        let avif = JobKind::Encode { codec: "zenavif".into(), q: 50, knobs: "{}".into() }; // CpuHeavy
+        let metric = JobKind::Metric {
+            metric: "cvvdp".into(),
+        }; // Gpu
+        let jpeg = JobKind::Encode {
+            codec: "zenjpeg".into(),
+            q: 80,
+            knobs: "{}".into(),
+        }; // CpuLight
+        let avif = JobKind::Encode {
+            codec: "zenavif".into(),
+            q: 50,
+            knobs: "{}".into(),
+        }; // CpuHeavy
         let gpu = [ResourceClass::Gpu];
         let cpu = [ResourceClass::CpuLight, ResourceClass::CpuHeavy];
         // GPU worker serves the metric, not the encodes.
@@ -215,7 +264,10 @@ mod tests {
 
     #[test]
     fn resource_class_parse() {
-        assert_eq!(ResourceClass::parse("cpu_light"), Some(ResourceClass::CpuLight));
+        assert_eq!(
+            ResourceClass::parse("cpu_light"),
+            Some(ResourceClass::CpuLight)
+        );
         assert_eq!(ResourceClass::parse("GPU"), Some(ResourceClass::Gpu));
         assert_eq!(ResourceClass::parse("cpu-arm"), Some(ResourceClass::CpuArm));
         assert_eq!(ResourceClass::parse("nonsense"), None);
@@ -223,7 +275,11 @@ mod tests {
 
     #[test]
     fn jobkind_serde_roundtrip() {
-        let k = JobKind::Encode { codec: "zenjxl".into(), q: 90, knobs: "{\"effort\":7}".into() };
+        let k = JobKind::Encode {
+            codec: "zenjxl".into(),
+            q: 90,
+            knobs: "{\"effort\":7}".into(),
+        };
         let j = serde_json::to_string(&k).unwrap();
         assert_eq!(serde_json::from_str::<JobKind>(&j).unwrap(), k);
     }

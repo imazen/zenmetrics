@@ -22,14 +22,9 @@
 //!      strip and whole opaque entries converge to within the
 //!      cross-path numerical tolerance.
 
-#![cfg(all(
-    feature = "cubecl-types",
-    any(feature = "cuda", feature = "wgpu")
-))]
+#![cfg(all(feature = "cubecl-types", any(feature = "cuda", feature = "wgpu")))]
 
-use butteraugli_gpu::{
-    Backend, Butteraugli, ButteraugliOpaque, ButteraugliParams, MemoryMode,
-};
+use butteraugli_gpu::{Backend, Butteraugli, ButteraugliOpaque, ButteraugliParams, MemoryMode};
 use cubecl::Runtime;
 
 #[cfg(feature = "cuda")]
@@ -176,7 +171,10 @@ fn opaque_strip_vs_typed_strip_1024_body_256() {
 fn typed_whole_singleres_score(w: u32, h: u32, ref_buf: &[u8], dis_buf: &[u8]) -> f64 {
     let client = BackendT::client(&Default::default());
     let mut whole = Butteraugli::<BackendT>::new(client, w, h);
-    whole.compute(ref_buf, dis_buf).expect("whole compute").score as f64
+    whole
+        .compute(ref_buf, dis_buf)
+        .expect("whole compute")
+        .score as f64
 }
 
 #[test]
@@ -244,7 +242,9 @@ fn opaque_strip_with_options_matches_typed_strip_with_options() {
         w,
         h,
         params,
-        MemoryMode::Strip { h_body: Some(body_h) },
+        MemoryMode::Strip {
+            h_body: Some(body_h),
+        },
     )
     .expect("opaque strip new with options");
     let opaque_value = opaque
@@ -261,7 +261,12 @@ fn opaque_strip_with_options_matches_typed_strip_with_options() {
         .expect("typed multires-strip compute with options")
         .score as f64;
 
-    assert_rel_eq("opaque-strip-options-vs-typed", typed_score, opaque_value, 1e-7);
+    assert_rel_eq(
+        "opaque-strip-options-vs-typed",
+        typed_score,
+        opaque_value,
+        1e-7,
+    );
 }
 
 #[test]

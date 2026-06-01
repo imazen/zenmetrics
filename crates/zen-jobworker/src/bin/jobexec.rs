@@ -35,8 +35,14 @@ fn score(job: &DesiredJob, metric: &str) -> Result<Vec<u8>, Box<dyn std::error::
     let dist_sha = job.inputs.first().ok_or("Metric job has no input encode")?;
     let dist_path = std::path::Path::new(&blobs).join(dist_sha.as_str());
 
-    let reference = image::ImageReader::open(&job.cell.image_path)?.with_guessed_format()?.decode()?.to_rgb8();
-    let distorted = image::ImageReader::open(&dist_path)?.with_guessed_format()?.decode()?.to_rgb8();
+    let reference = image::ImageReader::open(&job.cell.image_path)?
+        .with_guessed_format()?
+        .decode()?
+        .to_rgb8();
+    let distorted = image::ImageReader::open(&dist_path)?
+        .with_guessed_format()?
+        .decode()?
+        .to_rgb8();
     if reference.dimensions() != distorted.dimensions() {
         return Err(format!(
             "ref {:?} vs dist {:?} dimension mismatch",
@@ -67,7 +73,9 @@ fn psnr_db(a: &image::RgbImage, b: &image::RgbImage) -> f64 {
 }
 
 fn encode(path: &str, codec: &str, q: i64) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let img = image::ImageReader::open(path)?.with_guessed_format()?.decode()?;
+    let img = image::ImageReader::open(path)?
+        .with_guessed_format()?
+        .decode()?;
     let c = codec.to_ascii_lowercase();
     let mut out = Vec::new();
     if c.contains("jpeg") || c.contains("jpg") {
@@ -77,7 +85,9 @@ fn encode(path: &str, codec: &str, q: i64) -> Result<Vec<u8>, Box<dyn std::error
     } else if c.contains("png") {
         img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)?;
     } else {
-        return Err(format!("codec {codec:?} unsupported by this light executor (jpeg/png only)").into());
+        return Err(
+            format!("codec {codec:?} unsupported by this light executor (jpeg/png only)").into(),
+        );
     }
     Ok(out)
 }

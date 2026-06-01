@@ -218,8 +218,14 @@ pub fn rekey_orchestrator_columns(
         CliMetricKind::Dssim => vec![("dssim_gpu".to_string(), "dssim".to_string())],
         CliMetricKind::Zensim => vec![("zensim_gpu".to_string(), "zensim".to_string())],
         CliMetricKind::Butteraugli => vec![
-            ("butteraugli_max_gpu".to_string(), "butteraugli_max".to_string()),
-            ("butteraugli_pnorm3_gpu".to_string(), "butteraugli_pnorm3".to_string()),
+            (
+                "butteraugli_max_gpu".to_string(),
+                "butteraugli_max".to_string(),
+            ),
+            (
+                "butteraugli_pnorm3_gpu".to_string(),
+                "butteraugli_pnorm3".to_string(),
+            ),
         ],
         // Iwssim-GPU: the legacy CLI's `IwssimGpu` arm emits the
         // unversioned `iwssim_gpu` column (see
@@ -297,7 +303,9 @@ pub fn metric_orchestrator_eligible(kind: CliMetricKind) -> bool {
 /// Build the orchestrator at the start of a CLI command. Wraps the
 /// glue helper with a uniform error type so subcommand handlers don't
 /// need to import the glue module directly.
-pub fn build_orchestrator(opts: &OrchestratorRuntimeOpts) -> Result<Orchestrator, Box<dyn std::error::Error>> {
+pub fn build_orchestrator(
+    opts: &OrchestratorRuntimeOpts,
+) -> Result<Orchestrator, Box<dyn std::error::Error>> {
     opts.build().map_err(|e: OrchestratorBuildError| {
         let msg: Box<dyn std::error::Error> = format!("{e}").into();
         msg

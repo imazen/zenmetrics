@@ -142,9 +142,15 @@ pub fn display_byte_to_dkl_scalar(
         let vg = (g as f32) * (1.0 / 255.0);
         let vb = (b as f32) * (1.0 / 255.0);
         (
-            display.eotf.forward(vr, display.y_peak, display.y_black, display.y_refl),
-            display.eotf.forward(vg, display.y_peak, display.y_black, display.y_refl),
-            display.eotf.forward(vb, display.y_peak, display.y_black, display.y_refl),
+            display
+                .eotf
+                .forward(vr, display.y_peak, display.y_black, display.y_refl),
+            display
+                .eotf
+                .forward(vg, display.y_peak, display.y_black, display.y_refl),
+            display
+                .eotf
+                .forward(vb, display.y_peak, display.y_black, display.y_refl),
         )
     };
 
@@ -156,7 +162,11 @@ pub fn display_byte_to_dkl_scalar(
         let inv_b = if s > 0.0 { (lb - bias) / s } else { 0.0 };
         let y_s = 0.262_7 * inv_r + 0.678_0 * inv_g + 0.059_3 * inv_b;
         let gamma = crate::params::hlg_system_gamma(display.y_peak, display.e_ambient_lux);
-        let factor = if y_s > 0.0 { y_s.powf(gamma - 1.0) } else { 0.0 };
+        let factor = if y_s > 0.0 {
+            y_s.powf(gamma - 1.0)
+        } else {
+            0.0
+        };
         lr = s * (inv_r * factor) + bias;
         lg = s * (inv_g * factor) + bias;
         lb = s * (inv_b * factor) + bias;

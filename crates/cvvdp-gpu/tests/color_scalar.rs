@@ -61,17 +61,44 @@ const _: () = assert!(
 const _: () = {
     use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
     // Row 0 (A) = +++
-    assert!(M[0][0].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][0] (A.R) must be positive");
-    assert!(M[0][1].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][1] (A.G) must be positive");
-    assert!(M[0][2].is_sign_positive(), "SRGB_LINEAR_TO_DKL[0][2] (A.B) must be positive");
+    assert!(
+        M[0][0].is_sign_positive(),
+        "SRGB_LINEAR_TO_DKL[0][0] (A.R) must be positive"
+    );
+    assert!(
+        M[0][1].is_sign_positive(),
+        "SRGB_LINEAR_TO_DKL[0][1] (A.G) must be positive"
+    );
+    assert!(
+        M[0][2].is_sign_positive(),
+        "SRGB_LINEAR_TO_DKL[0][2] (A.B) must be positive"
+    );
     // Row 1 (Rg) = +--
-    assert!(M[1][0].is_sign_positive(), "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) must be positive");
-    assert!(M[1][1].is_sign_negative(), "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) must be negative");
-    assert!(M[1][2].is_sign_negative(), "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) must be negative");
+    assert!(
+        M[1][0].is_sign_positive(),
+        "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) must be positive"
+    );
+    assert!(
+        M[1][1].is_sign_negative(),
+        "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) must be negative"
+    );
+    assert!(
+        M[1][2].is_sign_negative(),
+        "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) must be negative"
+    );
     // Row 2 (Vy) = --+
-    assert!(M[2][0].is_sign_negative(), "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) must be negative");
-    assert!(M[2][1].is_sign_negative(), "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) must be negative");
-    assert!(M[2][2].is_sign_positive(), "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) must be positive");
+    assert!(
+        M[2][0].is_sign_negative(),
+        "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) must be negative"
+    );
+    assert!(
+        M[2][1].is_sign_negative(),
+        "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) must be negative"
+    );
+    assert!(
+        M[2][2].is_sign_positive(),
+        "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) must be positive"
+    );
 };
 
 // Tick 604: compile-time bit-pin promotion of the 9
@@ -93,17 +120,44 @@ const _: () = {
 const _: () = {
     use cvvdp_gpu::params::SRGB_LINEAR_TO_DKL as M;
     // Row 0 — achromatic (A) channel.
-    assert!(M[0][0].to_bits() == 0.233_201_21_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][0] (A.R) drifted from pycvvdp v0.5.4");
-    assert!(M[0][1].to_bits() == 0.728_830_8_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][1] (A.G) drifted from pycvvdp v0.5.4");
-    assert!(M[0][2].to_bits() == 0.088_995_87_f32.to_bits(), "SRGB_LINEAR_TO_DKL[0][2] (A.B) drifted from pycvvdp v0.5.4");
+    assert!(
+        M[0][0].to_bits() == 0.233_201_21_f32.to_bits(),
+        "SRGB_LINEAR_TO_DKL[0][0] (A.R) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[0][1].to_bits() == 0.728_830_8_f32.to_bits(),
+        "SRGB_LINEAR_TO_DKL[0][1] (A.G) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[0][2].to_bits() == 0.088_995_87_f32.to_bits(),
+        "SRGB_LINEAR_TO_DKL[0][2] (A.B) drifted from pycvvdp v0.5.4"
+    );
     // Row 1 — red-green (Rg) chroma.
-    assert!(M[1][0].to_bits() == 0.127_620_77_f32.to_bits(), "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) drifted from pycvvdp v0.5.4");
-    assert!(M[1][1].to_bits() == (-0.087_068_09_f32).to_bits(), "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) drifted from pycvvdp v0.5.4");
-    assert!(M[1][2].to_bits() == (-0.036_777_39_f32).to_bits(), "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) drifted from pycvvdp v0.5.4");
+    assert!(
+        M[1][0].to_bits() == 0.127_620_77_f32.to_bits(),
+        "SRGB_LINEAR_TO_DKL[1][0] (Rg.R) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[1][1].to_bits() == (-0.087_068_09_f32).to_bits(),
+        "SRGB_LINEAR_TO_DKL[1][1] (Rg.G) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[1][2].to_bits() == (-0.036_777_39_f32).to_bits(),
+        "SRGB_LINEAR_TO_DKL[1][2] (Rg.B) drifted from pycvvdp v0.5.4"
+    );
     // Row 2 — violet-yellow (Vy) chroma.
-    assert!(M[2][0].to_bits() == (-0.214_822_5_f32).to_bits(), "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) drifted from pycvvdp v0.5.4");
-    assert!(M[2][1].to_bits() == (-0.626_253_7_f32).to_bits(), "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) drifted from pycvvdp v0.5.4");
-    assert!(M[2][2].to_bits() == 0.851_403_3_f32.to_bits(), "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) drifted from pycvvdp v0.5.4");
+    assert!(
+        M[2][0].to_bits() == (-0.214_822_5_f32).to_bits(),
+        "SRGB_LINEAR_TO_DKL[2][0] (Vy.R) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[2][1].to_bits() == (-0.626_253_7_f32).to_bits(),
+        "SRGB_LINEAR_TO_DKL[2][1] (Vy.G) drifted from pycvvdp v0.5.4"
+    );
+    assert!(
+        M[2][2].to_bits() == 0.851_403_3_f32.to_bits(),
+        "SRGB_LINEAR_TO_DKL[2][2] (Vy.B) drifted from pycvvdp v0.5.4"
+    );
 };
 
 /// (r_byte, g_byte, b_byte, expected_A, expected_RG, expected_VY).

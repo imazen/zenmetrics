@@ -103,7 +103,9 @@ fn bench_cached(w: u32, h: u32, ref_b: &[u8], dis_b: &[u8]) -> Duration {
     let mut samples = Vec::with_capacity(ITERS);
     for _ in 0..ITERS {
         let t = Instant::now();
-        let _ = s.compute_with_reference(dis_b).expect("compute_with_reference");
+        let _ = s
+            .compute_with_reference(dis_b)
+            .expect("compute_with_reference");
         samples.push(t.elapsed());
     }
     median(samples)

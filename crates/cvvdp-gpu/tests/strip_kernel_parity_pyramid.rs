@@ -42,9 +42,8 @@ fn make_src(w: usize, h: usize) -> Vec<f32> {
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h {
         for x in 0..w {
-            let v = (x as f32) * 0.03125
-                + (y as f32) * 0.01
-                + ((x * 7 + y * 11) as f32).sin() * 0.25;
+            let v =
+                (x as f32) * 0.03125 + (y as f32) * 0.01 + ((x * 7 + y * 11) as f32).sin() * 0.25;
             out.push(v);
         }
     }
@@ -114,9 +113,9 @@ fn downscale_strip_aware_matches_full_at_64x64() {
             dw,
             body_h, // dst_h = body height
             body_offset_y,
-            0,      // src_strip_offset = 0 (src is the full image)
-            sh,     // logical_src_h
-            dh,     // logical_dst_h
+            0,  // src_strip_offset = 0 (src is the full image)
+            sh, // logical_src_h
+            dh, // logical_dst_h
         );
     }
     let strip_bytes = client.read_one(strip_dst).expect("read strip");
@@ -224,9 +223,8 @@ fn downscale_strip_aware_matches_full_with_haloed_src() {
     let strip_src_h = (strip_src_logical_end - strip_src_logical_start) as u32;
     let n_strip_src = (sw as usize) * (strip_src_h as usize);
 
-    let src_strip: Vec<f32> = src[strip_src_logical_start * sw as usize
-        ..strip_src_logical_end * sw as usize]
-        .to_vec();
+    let src_strip: Vec<f32> =
+        src[strip_src_logical_start * sw as usize..strip_src_logical_end * sw as usize].to_vec();
     assert_eq!(src_strip.len(), n_strip_src);
     let src_strip_h = client.create_from_slice(f32::as_bytes(&src_strip));
 
@@ -338,7 +336,7 @@ fn downscale_pycvvdp_parity_delta_uses_logical_dims() {
             dw,
             body_h,
             body_offset_y,
-            0, // src_strip_offset = 0 (full src)
+            0,  // src_strip_offset = 0 (full src)
             sh, // logical_src_h = 91 (ODD)
             dh, // logical_dst_h
         );
@@ -415,11 +413,7 @@ fn subtract_weber_strip_aware_matches_full_at_64x64() {
         .map(|i| {
             let v = (i as f32 * 0.013).sin() * 1.2 + 0.7;
             // Sprinkle a few near-zero lbkg pixels.
-            if i % 17 == 0 {
-                0.0005_f32
-            } else {
-                v
-            }
+            if i % 17 == 0 { 0.0005_f32 } else { v }
         })
         .collect();
 
@@ -600,11 +594,7 @@ fn subtract_weber_3ch_strip_with_src_offset_matches_full_at_32x32() {
     let lbkg: Vec<f32> = (0..n)
         .map(|i| {
             let v = (i as f32 * 0.013).sin() * 1.2 + 0.7;
-            if i % 17 == 0 {
-                0.0005_f32
-            } else {
-                v
-            }
+            if i % 17 == 0 { 0.0005_f32 } else { v }
         })
         .collect();
 

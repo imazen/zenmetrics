@@ -16,8 +16,7 @@ fn env_cap_bytes() -> Option<usize> {
 }
 
 /// Cache for the live nvidia-smi probe result. Process-wide.
-static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> =
-    std::sync::OnceLock::new();
+static LIVE_PROBE_CACHE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
 
 /// Probe live free-VRAM. See `iwssim_gpu::memory_mode::live_vram_probe_bytes`.
 pub fn live_vram_probe_bytes() -> Option<usize> {
@@ -26,10 +25,7 @@ pub fn live_vram_probe_bytes() -> Option<usize> {
 
 fn query_nvidia_smi_memory_free() -> Option<usize> {
     let out = std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=memory.free",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -134,11 +130,7 @@ const MIN_STRIP_BODY: u32 = PYRAMID_ALIGN * 4; // 64 rows
 /// Auto policy: prefer Full. dssim's strip walker is 2-5× slower than
 /// whole-image, so we only switch to Strip when Full would exceed the
 /// cap.
-pub fn resolve_auto(
-    width: u32,
-    height: u32,
-    cap: usize,
-) -> crate::Result<ResolvedMode> {
+pub fn resolve_auto(width: u32, height: u32, cap: usize) -> crate::Result<ResolvedMode> {
     let full_bytes = estimate_gpu_memory_bytes(width, height);
     if full_bytes <= cap {
         return Ok(ResolvedMode::Full);
@@ -157,8 +149,11 @@ pub fn resolve_auto(
 /// pyramid-aligned body.
 #[must_use]
 pub fn auto_strip_body_for(width: u32, height: u32, cap: usize) -> u32 {
-    auto_size_strip_body(width, height, cap)
-        .unwrap_or_else(|| MIN_STRIP_BODY.min(round_up_align(height)).max(PYRAMID_ALIGN))
+    auto_size_strip_body(width, height, cap).unwrap_or_else(|| {
+        MIN_STRIP_BODY
+            .min(round_up_align(height))
+            .max(PYRAMID_ALIGN)
+    })
 }
 
 fn round_up_align(h: u32) -> u32 {

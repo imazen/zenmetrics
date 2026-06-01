@@ -33,7 +33,7 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{synth_pair_with_offset_dist, Backend};
+use common::{Backend, synth_pair_with_offset_dist};
 
 use cubecl::Runtime;
 use cvvdp_gpu::pipeline::{
@@ -61,9 +61,8 @@ fn mode_b_estimator_at_1024_over_predicts_measured() {
         .expect("StripPair(256) estimate at 1024²");
     let full = estimate_gpu_memory_bytes(1024, 1024).expect("Full estimate at 1024²");
 
-    let pct_vs_measured = (pair256 as f64 - MEASURED_STRIP_PAIR_1024)
-        / MEASURED_STRIP_PAIR_1024
-        * 100.0;
+    let pct_vs_measured =
+        (pair256 as f64 - MEASURED_STRIP_PAIR_1024) / MEASURED_STRIP_PAIR_1024 * 100.0;
     eprintln!(
         "1024² Mode B: est={:.1} MB, measured={:.1} MB ({:+.1}%), Full est={:.1} MB",
         pair256 as f64 / 1e6,
@@ -106,9 +105,8 @@ fn mode_b_estimator_at_4096_over_predicts_measured() {
         .expect("StripPair(256) estimate at 4096²");
     let full = estimate_gpu_memory_bytes(4096, 4096).expect("Full estimate at 4096²");
 
-    let pct_vs_measured = (pair256 as f64 - MEASURED_STRIP_PAIR_4096)
-        / MEASURED_STRIP_PAIR_4096
-        * 100.0;
+    let pct_vs_measured =
+        (pair256 as f64 - MEASURED_STRIP_PAIR_4096) / MEASURED_STRIP_PAIR_4096 * 100.0;
     let ratio_vs_full = pair256 as f64 / full as f64;
     eprintln!(
         "4096² Mode B: est={:.2} GB, measured={:.2} GB ({:+.1}%), {:.1}% of Full est",
@@ -184,11 +182,11 @@ fn mode_b_estimator_off_calibration_bodies_are_sane() {
 #[test]
 fn mode_b_walker_jod_matches_full_at_1024() {
     let client = Backend::client(&Default::default());
-    let mut full =
-        Cvvdp::<Backend>::new(client.clone(), 1024, 1024, CvvdpParams::PLACEHOLDER)
-            .expect("Cvvdp::new full");
-    let mut pair = Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
-        .expect("Cvvdp::new_strip_pair");
+    let mut full = Cvvdp::<Backend>::new(client.clone(), 1024, 1024, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new full");
+    let mut pair =
+        Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new_strip_pair");
 
     let (r, d) = synth_pair_with_offset_dist(1024, 1024);
 
@@ -211,20 +209,18 @@ fn mode_b_walker_jod_matches_full_at_1024() {
 #[test]
 fn mode_b_walker_jod_matches_full_at_1024_h_body_256() {
     let client = Backend::client(&Default::default());
-    let mut full =
-        Cvvdp::<Backend>::new(client.clone(), 1024, 1024, CvvdpParams::PLACEHOLDER)
-            .expect("Cvvdp::new full");
-    let mut pair = Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
-        .expect("Cvvdp::new_strip_pair");
+    let mut full = Cvvdp::<Backend>::new(client.clone(), 1024, 1024, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new full");
+    let mut pair =
+        Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new_strip_pair");
 
     let (r, d) = synth_pair_with_offset_dist(1024, 1024);
 
     let jod_full = full.score(&r, &d).expect("Full score");
     let jod_pair = pair.score(&r, &d).expect("Mode B score");
     let diff = (jod_full - jod_pair).abs();
-    eprintln!(
-        "1024² h_body=256 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",
-    );
+    eprintln!("1024² h_body=256 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",);
     assert!(
         diff < PARITY_TOL_JOD as f64,
         "Mode B JOD={jod_pair} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
@@ -256,9 +252,8 @@ fn mode_b_walker_jod_matches_full_at_1024_h_body_256() {
 #[ignore = "Allocates two 4096² Cvvdp instances (~10 GB GPU); run with --ignored on a ≥ 16 GB GPU"]
 fn mode_b_walker_jod_matches_full_at_4096_h_body_512() {
     let client = Backend::client(&Default::default());
-    let mut full =
-        Cvvdp::<Backend>::new(client.clone(), 4096, 4096, CvvdpParams::PLACEHOLDER)
-            .expect("Cvvdp::new full");
+    let mut full = Cvvdp::<Backend>::new(client.clone(), 4096, 4096, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new full");
     let mut pair =
         Cvvdp::<Backend>::new_strip_pair(client, 4096, 4096, 512, CvvdpParams::PLACEHOLDER)
             .expect("Cvvdp::new_strip_pair");
@@ -268,9 +263,7 @@ fn mode_b_walker_jod_matches_full_at_4096_h_body_512() {
     let jod_full = full.score(&r, &d).expect("Full score");
     let jod_pair = pair.score(&r, &d).expect("Mode B score");
     let diff = (jod_full - jod_pair).abs();
-    eprintln!(
-        "4096² h_body=512 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",
-    );
+    eprintln!("4096² h_body=512 JOD: Full={jod_full}, StripPair={jod_pair}, |diff|={diff}",);
     assert!(
         diff < PARITY_TOL_JOD as f64,
         "Mode B JOD={jod_pair} drifts from Full JOD={jod_full} by {diff} > {PARITY_TOL_JOD}",
@@ -284,23 +277,16 @@ fn mode_b_walker_jod_matches_full_at_4096_h_body_512() {
 #[test]
 fn mode_b_walker_dispatches_n_strips_at_1024() {
     let client = Backend::client(&Default::default());
-    let mut pair = Cvvdp::<Backend>::new_strip_pair(
-        client,
-        1024,
-        1024,
-        256,
-        CvvdpParams::PLACEHOLDER,
-    )
-    .expect("Cvvdp::new_strip_pair");
+    let mut pair =
+        Cvvdp::<Backend>::new_strip_pair(client, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
+            .expect("Cvvdp::new_strip_pair");
 
     pair.reset_strip_dispatch_counter();
     let (r, d) = synth_pair_with_offset_dist(1024, 1024);
     let _jod = pair.score(&r, &d).expect("Mode B score");
 
     let n_dispatches = pair.strip_dispatch_counter();
-    eprintln!(
-        "1024² Mode B (h_body=256): {n_dispatches} strip pool dispatches",
-    );
+    eprintln!("1024² Mode B (h_body=256): {n_dispatches} strip pool dispatches",);
     assert!(
         n_dispatches >= 4,
         "Expected ≥ 4 strip dispatches at L0; got {n_dispatches}",
@@ -348,14 +334,8 @@ fn mode_b_walker_jod_matches_full_at_128() {
     let client = Backend::client(&Default::default());
     let mut full = Cvvdp::<Backend>::new(client.clone(), 128, 128, CvvdpParams::PLACEHOLDER)
         .expect("Cvvdp::new full");
-    let mut pair = Cvvdp::<Backend>::new_strip_pair(
-        client,
-        128,
-        128,
-        32,
-        CvvdpParams::PLACEHOLDER,
-    )
-    .expect("Cvvdp::new_strip_pair");
+    let mut pair = Cvvdp::<Backend>::new_strip_pair(client, 128, 128, 32, CvvdpParams::PLACEHOLDER)
+        .expect("Cvvdp::new_strip_pair");
 
     pair.reset_strip_dispatch_counter();
     let (r, d) = synth_pair_with_offset_dist(128, 128);

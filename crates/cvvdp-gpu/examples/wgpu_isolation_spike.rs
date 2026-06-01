@@ -173,9 +173,7 @@ fn main() {
     let name = WgpuRuntime::name(&probe);
     println!("   wgpu backend selected: {backend:?}   runtime name: {name}");
     println!("   max_streams=128, each StreamId.value maps to its own WgpuStream + pool");
-    println!(
-        "   PRIMARY signal = per-stream pool memory_usage().bytes_reserved (in-API truth)."
-    );
+    println!("   PRIMARY signal = per-stream pool memory_usage().bytes_reserved (in-API truth).");
     println!(
         "   SECONDARY signal = nvidia-smi TOTAL card memory.used (global; may miss Vulkan per #133).\n"
     );

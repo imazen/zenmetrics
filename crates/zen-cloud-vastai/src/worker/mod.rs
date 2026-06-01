@@ -526,8 +526,7 @@ pub fn provision_aws_credentials_file(profile_name: &str) -> Result<bool> {
         body.push_str(&format!("aws_session_token = {token}\n"));
     }
 
-    std::fs::write(&cred_path, body)
-        .with_context(|| format!("write {}", cred_path.display()))?;
+    std::fs::write(&cred_path, body).with_context(|| format!("write {}", cred_path.display()))?;
     // 0600 on Unix — credentials file shouldn't be world-readable.
     // Best-effort; not a failure if chmod isn't available (e.g. tests on
     // a non-Unix host, though this binary is Linux-only in practice).
@@ -580,8 +579,8 @@ pub async fn fire_boot_upload(args: &WorkerArgs, worker_id: &str, r2: &r2::R2Cli
 async fn upload_boot_record(args: &WorkerArgs, worker_id: &str, r2: &r2::R2Client) {
     // 1. Find the local boot file (env wins; default to the path
     //    the entrypoint writes).
-    let local_path = std::env::var("ZEN_BOOT_INFO_FILE")
-        .unwrap_or_else(|_| "/var/run/zen-boot.txt".to_string());
+    let local_path =
+        std::env::var("ZEN_BOOT_INFO_FILE").unwrap_or_else(|_| "/var/run/zen-boot.txt".to_string());
     let local = std::path::PathBuf::from(&local_path);
     if !local.exists() {
         // Not Salad (no entrypoint wrote it) — synthesize a minimal
@@ -630,7 +629,13 @@ async fn upload_boot_to_r2(
     // Sanitize worker_id for an object key (hostnames can have ':' etc.).
     let safe: String = worker_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let uri = format!("s3://{bucket}/{prefix}boot/{safe}.txt");
     match r2.upload(local, &uri).await {
@@ -679,11 +684,16 @@ mod tests {
         }
         let wrote = provision_aws_credentials_file("r2").expect("provision");
         assert!(wrote, "should report wrote=true when creds present");
-        let body =
-            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        let body = std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
         assert!(body.contains("[r2]"), "profile header missing: {body}");
-        assert!(body.contains("aws_access_key_id = AKIAFAKE"), "akid missing: {body}");
-        assert!(body.contains("aws_secret_access_key = SECRETFAKE"), "secret missing: {body}");
+        assert!(
+            body.contains("aws_access_key_id = AKIAFAKE"),
+            "akid missing: {body}"
+        );
+        assert!(
+            body.contains("aws_secret_access_key = SECRETFAKE"),
+            "secret missing: {body}"
+        );
         assert!(
             body.contains("aws_session_token = SESSIONFAKE"),
             "session token missing — this is the iter-5 bug: {body}"
@@ -716,8 +726,7 @@ mod tests {
         }
         let wrote = provision_aws_credentials_file("r2").expect("provision");
         assert!(wrote);
-        let body =
-            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        let body = std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
         assert!(
             body.contains("aws_session_token = R2SESSIONFAKE"),
             "R2_SESSION_TOKEN fallback didn't land: {body}"
@@ -772,10 +781,15 @@ mod tests {
             std::env::set_var("R2_SECRET_ACCESS_KEY", "SECRETFAKE");
         }
         provision_aws_credentials_file("custom-profile").expect("provision");
-        let body =
-            std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
-        assert!(body.contains("[custom-profile]"), "custom profile header missing: {body}");
-        assert!(!body.contains("aws_session_token"), "no session token expected");
+        let body = std::fs::read_to_string(tmp.path().join(".aws").join("credentials")).unwrap();
+        assert!(
+            body.contains("[custom-profile]"),
+            "custom profile header missing: {body}"
+        );
+        assert!(
+            !body.contains("aws_session_token"),
+            "no session token expected"
+        );
 
         clear_env();
         #[allow(unsafe_code)]
@@ -787,4 +801,3 @@ mod tests {
         }
     }
 }
-

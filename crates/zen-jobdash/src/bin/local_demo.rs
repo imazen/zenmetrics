@@ -13,27 +13,41 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use zen_job_core::{
-    blob_key, gc_plan, reconcile, sha256, BlobIndexEntry, CellId, DesiredJob, ErrorClass, JobKind,
-    JobStatus, LedgerRow, LedgerView, Regenerability, ResourceClass, RetryPolicy, Sha256Hex,
-    WorkerReport,
+    BlobIndexEntry, CellId, DesiredJob, ErrorClass, JobKind, JobStatus, LedgerRow, LedgerView,
+    Regenerability, ResourceClass, RetryPolicy, Sha256Hex, WorkerReport, blob_key, gc_plan,
+    reconcile, sha256,
 };
 use zen_ledger::{compact_ledger, read_ledger, write_blob_index, write_ledger};
 
 fn cell(i: usize) -> CellId {
-    CellId { image_path: format!("img/{i}.png"), codec: "zenjpeg".into(), q: 80, knob_tuple_json: "{}".into() }
+    CellId {
+        image_path: format!("img/{i}.png"),
+        codec: "zenjpeg".into(),
+        q: 80,
+        knob_tuple_json: "{}".into(),
+    }
 }
 
 fn desired_set() -> Vec<DesiredJob> {
     (0..5)
         .map(|i| DesiredJob {
-            kind: JobKind::Metric { metric: "cvvdp".into() },
+            kind: JobKind::Metric {
+                metric: "cvvdp".into(),
+            },
             inputs: vec![sha256(format!("encode-{i}").as_bytes())],
             cell: cell(i),
         })
         .collect()
 }
 
-fn row(d: &DesiredJob, status: JobStatus, err: Option<ErrorClass>, attempts: u32, ts: u64, out: Option<Sha256Hex>) -> LedgerRow {
+fn row(
+    d: &DesiredJob,
+    status: JobStatus,
+    err: Option<ErrorClass>,
+    attempts: u32,
+    ts: u64,
+    out: Option<Sha256Hex>,
+) -> LedgerRow {
     LedgerRow {
         job_id: d.job_id(),
         kind: d.kind.clone(),
@@ -56,7 +70,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let desired = desired_set();
     let policy = RetryPolicy::default();
-    println!("== local single-node run ({} jobs) in {} ==", desired.len(), dir.display());
+    println!(
+        "== local single-node run ({} jobs) in {} ==",
+        desired.len(),
+        dir.display()
+    );
 
     // Round 1 — empty ledger: the whole set is the gap.
     let p0 = reconcile(&desired, &LedgerView::new(), policy);
@@ -67,8 +85,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rows = Vec::new();
     for (i, d) in desired.iter().enumerate() {
         match i {
-            3 => rows.push(row(d, JobStatus::Failed, Some(ErrorClass::DecodeError), 1, 100, None)),
-            4 => rows.push(row(d, JobStatus::Failed, Some(ErrorClass::Timeout), 1, 100, None)),
+            3 => rows.push(row(
+                d,
+                JobStatus::Failed,
+                Some(ErrorClass::DecodeError),
+                1,
+                100,
+                None,
+            )),
+            4 => rows.push(row(
+                d,
+                JobStatus::Failed,
+                Some(ErrorClass::Timeout),
+                1,
+                100,
+                None,
+            )),
             _ => {
                 let bytes = format!("score-blob-{i}").into_bytes();
                 let sha = sha256(&bytes);
@@ -80,12 +112,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let sc1 = dir.join("ledger-chunk1.parquet");
     write_ledger(&sc1, &rows)?;
-    println!("executed: wrote {} real blobs to {}", written.len(), blobs_dir.display());
+    println!(
+        "executed: wrote {} real blobs to {}",
+        written.len(),
+        blobs_dir.display()
+    );
 
     // Round 2 — read the persisted ledger back: done=3, transient retried, deterministic poisoned.
     let v1 = LedgerView::from_rows(read_ledger(&sc1)?);
     let p1 = reconcile(&desired, &v1, policy);
-    println!("round2: done={} retry={} poison={}", p1.done, p1.enqueue.len(), p1.poison.len());
+    println!(
+        "round2: done={} retry={} poison={}",
+        p1.done,
+        p1.enqueue.len(),
+        p1.poison.len()
+    );
 
     // Retry job4 → success (real blob); record job3 POISON.
     let bytes4 = b"score-blob-4-retry".to_vec();
@@ -94,7 +135,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     written.push((sha4.clone(), Regenerability::CheapRegenerable));
     let rows2 = vec![
         row(&desired[4], JobStatus::Done, None, 2, 200, Some(sha4)),
-        row(&desired[3], JobStatus::Poison, Some(ErrorClass::DecodeError), 1, 200, None),
+        row(
+            &desired[3],
+            JobStatus::Poison,
+            Some(ErrorClass::DecodeError),
+            1,
+            200,
+            None,
+        ),
     ];
     let sc2 = dir.join("ledger-chunk2.parquet");
     write_ledger(&sc2, &rows2)?;
@@ -128,7 +176,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut index = Vec::new();
     for (sha, regen) in &written {
         let size = std::fs::metadata(blob_path(sha))?.len();
-        index.push(BlobIndexEntry { sha: sha.clone(), size, regenerability: *regen, last_ref_secs: 0 });
+        index.push(BlobIndexEntry {
+            sha: sha.clone(),
+            size,
+            regenerability: *regen,
+            last_ref_secs: 0,
+        });
     }
     // Referenced = output blobs of Done rows in the compacted ledger.
     let referenced: HashSet<Sha256Hex> = read_ledger(&ledger)?
@@ -144,7 +197,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::remove_file(blob_path(sha))?; // REAL delete
         tombstones.push(serde_json::json!({ "sha": sha.as_str(), "reason": "gc_evict_cheap", "regenerable": true }));
     }
-    std::fs::write(dir.join("tombstones.json"), serde_json::to_vec_pretty(&tombstones)?)?;
+    std::fs::write(
+        dir.join("tombstones.json"),
+        serde_json::to_vec_pretty(&tombstones)?,
+    )?;
 
     println!(
         "gc: kept={} evicted_cheap={} (REAL deletes) refused_surface={} (kept, escalated)",
@@ -153,23 +209,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         plan.refuse_surface.len()
     );
     // Prove it: referenced + refused blobs still exist; cheap orphan is gone.
-    assert!(blob_path(&src_orphan).exists(), "irreplaceable orphan must NOT be deleted");
-    assert!(!blob_path(&cheap_orphan).exists(), "cheap orphan must be deleted");
+    assert!(
+        blob_path(&src_orphan).exists(),
+        "irreplaceable orphan must NOT be deleted"
+    );
+    assert!(
+        !blob_path(&cheap_orphan).exists(),
+        "cheap orphan must be deleted"
+    );
     for sha in &referenced {
         assert!(blob_path(sha).exists(), "referenced blob must survive GC");
     }
-    println!("verified on disk: referenced + irreplaceable survive; cheap orphan deleted; tombstone written");
+    println!(
+        "verified on disk: referenced + irreplaceable survive; cheap orphan deleted; tombstone written"
+    );
 
     // Materialize the dashboard's other inputs so B's storage/cost panes + C's GC dry-run show real
     // numbers over HTTP: a blob index of the survivors + a sample worker-heartbeat file.
-    let survivors: Vec<BlobIndexEntry> =
-        index.iter().filter(|e| blob_path(&e.sha).exists()).cloned().collect();
+    let survivors: Vec<BlobIndexEntry> = index
+        .iter()
+        .filter(|e| blob_path(&e.sha).exists())
+        .cloned()
+        .collect();
     let blob_index = dir.join("blob_index.parquet");
     write_blob_index(&blob_index, &survivors)?;
 
     let workers = vec![
-        WorkerReport { worker: "oracle-arm-1".into(), provider: "oracle".into(), class: ResourceClass::CpuArm, rate_usd_per_hr: 0.0, uptime_secs: 3600, jobs_done: 2 },
-        WorkerReport { worker: "vast-gpu-1".into(), provider: "vast".into(), class: ResourceClass::Gpu, rate_usd_per_hr: 0.35, uptime_secs: 1800, jobs_done: 2 },
+        WorkerReport {
+            worker: "oracle-arm-1".into(),
+            provider: "oracle".into(),
+            class: ResourceClass::CpuArm,
+            rate_usd_per_hr: 0.0,
+            uptime_secs: 3600,
+            jobs_done: 2,
+        },
+        WorkerReport {
+            worker: "vast-gpu-1".into(),
+            provider: "vast".into(),
+            class: ResourceClass::Gpu,
+            rate_usd_per_hr: 0.35,
+            uptime_secs: 1800,
+            jobs_done: 2,
+        },
     ];
     let workers_json = dir.join("workers.json");
     std::fs::write(&workers_json, serde_json::to_vec_pretty(&workers)?)?;
@@ -180,7 +261,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wp: PathBuf = std::fs::canonicalize(&workers_json)?;
     println!(
         "  ZEN_LEDGER={} ZEN_BLOB_INDEX={} ZEN_WORKERS_JSON={} PORT=3137 cargo run -p zen-jobdash",
-        lp.display(), bp.display(), wp.display()
+        lp.display(),
+        bp.display(),
+        wp.display()
     );
     // machine-readable lines for scripting
     println!("LEDGER_PATH={}", lp.display());

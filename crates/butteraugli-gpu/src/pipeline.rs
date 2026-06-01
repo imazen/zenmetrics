@@ -209,13 +209,7 @@ pub struct Butteraugli<R: Runtime> {
 /// Fixed sigmas referenced by the LUT blur tables, indexed via
 /// [`BlurKind`]. Stored as `f32` so the tables match the kernels'
 /// `f32::exp(-0.5*(d/s)^2)` exactly.
-const BLUR_SIGMAS: [f32; 5] = [
-    SIGMA_OPSIN,
-    SIGMA_LF,
-    SIGMA_HF,
-    SIGMA_UHF,
-    MASK_RADIUS,
-];
+const BLUR_SIGMAS: [f32; 5] = [SIGMA_OPSIN, SIGMA_LF, SIGMA_HF, SIGMA_UHF, MASK_RADIUS];
 
 /// Index into [`BLUR_SIGMAS`] / [`Butteraugli::blur_tables`].
 #[derive(Clone, Copy)]
@@ -372,8 +366,7 @@ impl<R: Runtime> Butteraugli<R> {
         // Pre-compute and upload one Gaussian LUT per fixed sigma. Each
         // table is small (≤ 67 floats for σ=7.16, the largest), so the
         // five allocs are negligible. Reused across every blur call.
-        let mut blur_tables: [Option<cubecl::server::Handle>; 5] =
-            [None, None, None, None, None];
+        let mut blur_tables: [Option<cubecl::server::Handle>; 5] = [None, None, None, None, None];
         let mut blur_radii = [0_u32; 5];
         let mut blur_table_lens = [0_usize; 5];
         for (i, &sigma) in BLUR_SIGMAS.iter().enumerate() {
@@ -624,7 +617,10 @@ impl<R: Runtime> Butteraugli<R> {
             // and have the same radii on the half-res image).
             let body_h_half = (body_h_full / 2).max(1);
             full.half_res = Some(Box::new(Self::new_strip(
-                client, half_w, half_h, body_h_half,
+                client,
+                half_w,
+                half_h,
+                body_h_half,
             )));
         }
         full
@@ -767,10 +763,7 @@ impl<R: Runtime> Butteraugli<R> {
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         let expected = self.n * 3;
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -780,9 +773,7 @@ impl<R: Runtime> Butteraugli<R> {
         }
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -1330,9 +1321,7 @@ impl<R: Runtime> Butteraugli<R> {
 
         let pinned_len = (image_w as usize) * (strip_h_total as usize) * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -1609,10 +1598,7 @@ impl<R: Runtime> Butteraugli<R> {
     /// planes are blitted in from the cache by
     /// [`Self::blit_ref_slab_from_cache`]). Runs the distorted-side
     /// pipeline + the diff/mask combine.
-    pub(crate) fn run_strip_pipeline_compute_dist_only(
-        &mut self,
-        strip_h_total: u32,
-    ) {
+    pub(crate) fn run_strip_pipeline_compute_dist_only(&mut self, strip_h_total: u32) {
         let saved_height = self.height;
         let saved_n = self.n;
         self.height = strip_h_total;
@@ -1655,9 +1641,7 @@ impl<R: Runtime> Butteraugli<R> {
         // packing T4.L put in place.
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);

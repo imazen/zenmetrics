@@ -170,25 +170,53 @@ fn run_per_codec(args: &AssembleArgs) -> Result<(), AssembleError> {
     };
 
     // === STEP A+B: sync + load + union-by-name per kind ===
-    eprintln!("=== assemble per-codec: load sidecars ({} runs) ===", args.runs.len());
+    eprintln!(
+        "=== assemble per-codec: load sidecars ({} runs) ===",
+        args.runs.len()
+    );
     let omni = load_kind(args, sync.as_ref(), "omni")?;
-    eprintln!("  omni: {} rows × {} cols", omni.num_rows(), omni.num_columns());
+    eprintln!(
+        "  omni: {} rows × {} cols",
+        omni.num_rows(),
+        omni.num_columns()
+    );
     let mut zsm = load_kind(args, sync.as_ref(), "zensim_features")?;
-    eprintln!("  zsm:  {} rows × {} cols", zsm.num_rows(), zsm.num_columns());
+    eprintln!(
+        "  zsm:  {} rows × {} cols",
+        zsm.num_rows(),
+        zsm.num_columns()
+    );
     let mut src = load_kind(args, sync.as_ref(), "source_features")?;
-    eprintln!("  src:  {} rows × {} cols", src.num_rows(), src.num_columns());
+    eprintln!(
+        "  src:  {} rows × {} cols",
+        src.num_rows(),
+        src.num_columns()
+    );
 
     // === STEP C: namespace feat_<N> collisions ===
     // zensim features → zsm_feat_<N> (keep join keys + zensim_score).
     zsm.prefix_columns_where(
         "zsm_",
-        &[CELL_JOIN_KEYS[0], CELL_JOIN_KEYS[1], CELL_JOIN_KEYS[2], CELL_JOIN_KEYS[3], "zensim_score"],
+        &[
+            CELL_JOIN_KEYS[0],
+            CELL_JOIN_KEYS[1],
+            CELL_JOIN_KEYS[2],
+            CELL_JOIN_KEYS[3],
+            "zensim_score",
+        ],
         |n| n.starts_with("feat_"),
     );
     // source features → src_feat_<N> (keep join keys + identity cols).
     src.prefix_columns_where(
         "src_",
-        &["image_basename", "width", "height", "chunk_id", "run_id", "image_path"],
+        &[
+            "image_basename",
+            "width",
+            "height",
+            "chunk_id",
+            "run_id",
+            "image_path",
+        ],
         |n| n.starts_with("feat_"),
     );
 
@@ -197,7 +225,11 @@ fn run_per_codec(args: &AssembleArgs) -> Result<(), AssembleError> {
     //     the join that Mode B corrupted; here it goes through the typed
     //     PairKey so a ref-only collapse is impossible.
     let cell = inner_join_on_pair_key(&omni, &zsm)?;
-    eprintln!("  joined_cell: {} rows × {} cols", cell.num_rows(), cell.num_columns());
+    eprintln!(
+        "  joined_cell: {} rows × {} cols",
+        cell.num_rows(),
+        cell.num_columns()
+    );
 
     // (b) per-source inner join × src on (run_id, image_basename). First add
     //     image_basename to the cell table from image_path. src is deduped to
@@ -206,7 +238,11 @@ fn run_per_codec(args: &AssembleArgs) -> Result<(), AssembleError> {
     let src_dedup = dedupe_by(&src, &["run_id", "image_basename"])?;
     eprintln!("  src_dedupe: {} rows", src_dedup.num_rows());
     let joined = inner_join_on_keys(&cell, &src_dedup, &["run_id", "image_basename"])?;
-    eprintln!("  final joined: {} rows × {} cols", joined.num_rows(), joined.num_columns());
+    eprintln!(
+        "  final joined: {} rows × {} cols",
+        joined.num_rows(),
+        joined.num_columns()
+    );
 
     // === STEP E: split per codec + write (with integrity guards) ===
     std::fs::create_dir_all(&args.out_dir)
@@ -431,7 +467,10 @@ fn add_basename(mut t: Table, src_col: &str, dst_col: &str) -> Result<Table, Ass
     };
     let basenames: Vec<Option<String>> = paths
         .iter()
-        .map(|p| p.as_deref().map(|s| s.rsplit('/').next().unwrap_or(s).to_string()))
+        .map(|p| {
+            p.as_deref()
+                .map(|s| s.rsplit('/').next().unwrap_or(s).to_string())
+        })
         .collect();
     t.set_column(dst_col, Column::Str(basenames))?;
     Ok(t)

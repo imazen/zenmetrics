@@ -133,10 +133,7 @@ fn probe_value_includes_safety_factor() {
     // function already returned Some, so this is purely a
     // verification, not a hard requirement.
     let out = match std::process::Command::new("nvidia-smi")
-        .args([
-            "--query-gpu=memory.free",
-            "--format=csv,noheader,nounits",
-        ])
+        .args(["--query-gpu=memory.free", "--format=csv,noheader,nounits"])
         .output()
     {
         Ok(o) if o.status.success() => o,
@@ -153,10 +150,7 @@ fn probe_value_includes_safety_factor() {
     // also shift between the cached probe and this re-query, so we
     // just check `probed < raw_bytes` and `probed > raw_bytes / 2`
     // (probed shouldn't have lost more than half the memory).
-    assert!(
-        probed < raw_bytes,
-        "probed {probed} not < raw {raw_bytes}"
-    );
+    assert!(probed < raw_bytes, "probed {probed} not < raw {raw_bytes}");
     assert!(
         probed > raw_bytes / 2,
         "probed {probed} too far below raw {raw_bytes}"

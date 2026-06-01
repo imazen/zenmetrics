@@ -138,15 +138,42 @@ const _: () = assert!(
 // rule. `f32::is_sign_positive` is const fn since Rust 1.83.
 const _: () = {
     let m = XCM_3X3;
-    assert!(m[0][0].is_sign_positive(), "XCM_3X3[0][0] must be positive (= 2^x)");
-    assert!(m[0][1].is_sign_positive(), "XCM_3X3[0][1] must be positive (= 2^x)");
-    assert!(m[0][2].is_sign_positive(), "XCM_3X3[0][2] must be positive (= 2^x)");
-    assert!(m[1][0].is_sign_positive(), "XCM_3X3[1][0] must be positive (= 2^x)");
-    assert!(m[1][1].is_sign_positive(), "XCM_3X3[1][1] must be positive (= 2^x)");
-    assert!(m[1][2].is_sign_positive(), "XCM_3X3[1][2] must be positive (= 2^x)");
-    assert!(m[2][0].is_sign_positive(), "XCM_3X3[2][0] must be positive (= 2^x)");
-    assert!(m[2][1].is_sign_positive(), "XCM_3X3[2][1] must be positive (= 2^x)");
-    assert!(m[2][2].is_sign_positive(), "XCM_3X3[2][2] must be positive (= 2^x)");
+    assert!(
+        m[0][0].is_sign_positive(),
+        "XCM_3X3[0][0] must be positive (= 2^x)"
+    );
+    assert!(
+        m[0][1].is_sign_positive(),
+        "XCM_3X3[0][1] must be positive (= 2^x)"
+    );
+    assert!(
+        m[0][2].is_sign_positive(),
+        "XCM_3X3[0][2] must be positive (= 2^x)"
+    );
+    assert!(
+        m[1][0].is_sign_positive(),
+        "XCM_3X3[1][0] must be positive (= 2^x)"
+    );
+    assert!(
+        m[1][1].is_sign_positive(),
+        "XCM_3X3[1][1] must be positive (= 2^x)"
+    );
+    assert!(
+        m[1][2].is_sign_positive(),
+        "XCM_3X3[1][2] must be positive (= 2^x)"
+    );
+    assert!(
+        m[2][0].is_sign_positive(),
+        "XCM_3X3[2][0] must be positive (= 2^x)"
+    );
+    assert!(
+        m[2][1].is_sign_positive(),
+        "XCM_3X3[2][1] must be positive (= 2^x)"
+    );
+    assert!(
+        m[2][2].is_sign_positive(),
+        "XCM_3X3[2][2] must be positive (= 2^x)"
+    );
 };
 
 // Tick 559: compile-time bit-pins for the XCM_3X3 cross-channel
@@ -277,13 +304,34 @@ const _: () = {
     // some per-entry values if a typo aligned them. Pinning
     // positivity directly captures the Gaussian construction
     // contract. Exploit palindrome: 7 unique-tap pins cover all 13.
-    assert!(PU_BLUR_KERNEL_1D[0].is_sign_positive(), "PU_BLUR_KERNEL_1D[0] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[1].is_sign_positive(), "PU_BLUR_KERNEL_1D[1] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[2].is_sign_positive(), "PU_BLUR_KERNEL_1D[2] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[3].is_sign_positive(), "PU_BLUR_KERNEL_1D[3] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[4].is_sign_positive(), "PU_BLUR_KERNEL_1D[4] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[5].is_sign_positive(), "PU_BLUR_KERNEL_1D[5] must be positive (Gaussian tap)");
-    assert!(PU_BLUR_KERNEL_1D[6].is_sign_positive(), "PU_BLUR_KERNEL_1D[6] must be positive (Gaussian centre tap)");
+    assert!(
+        PU_BLUR_KERNEL_1D[0].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[0] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[1].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[1] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[2].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[2] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[3].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[3] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[4].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[4] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[5].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[5] must be positive (Gaussian tap)"
+    );
+    assert!(
+        PU_BLUR_KERNEL_1D[6].is_sign_positive(),
+        "PU_BLUR_KERNEL_1D[6] must be positive (Gaussian centre tap)"
+    );
 };
 
 #[test]

@@ -89,7 +89,10 @@ fn synth_srgb(w: u32, h: u32, seed: u32) -> Vec<u8> {
 }
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn median(t: &[f64]) -> f64 {
@@ -99,7 +102,11 @@ fn median(t: &[f64]) -> f64 {
     let mut v = t.to_vec();
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = v.len();
-    if n.is_multiple_of(2) { (v[n / 2 - 1] + v[n / 2]) / 2.0 } else { v[n / 2] }
+    if n.is_multiple_of(2) {
+        (v[n / 2 - 1] + v[n / 2]) / 2.0
+    } else {
+        v[n / 2]
+    }
 }
 
 fn min_of(t: &[f64]) -> f64 {
@@ -121,8 +128,9 @@ fn time_setref_phase(
     reps: usize,
 ) -> Vec<f64> {
     // Pre-generate refs so host-side image gen is OUT of the timed region.
-    let refs: Vec<Vec<u8>> =
-        (0..reps).map(|i| synth_srgb(w, h, seed_base.wrapping_add(i as u32 * 31 + 1))).collect();
+    let refs: Vec<Vec<u8>> = (0..reps)
+        .map(|i| synth_srgb(w, h, seed_base.wrapping_add(i as u32 * 31 + 1)))
+        .collect();
     let mut times = Vec::with_capacity(reps);
     for r in &refs {
         let t = Instant::now();
@@ -135,7 +143,11 @@ fn time_setref_phase(
 
 fn emit(w: u32, h: u32, phase: &str, samples: &[f64], notes: &str) {
     let mp = (w as f64 * h as f64) / 1_000_000.0;
-    let raw = samples.iter().map(|v| format!("{v:.4}")).collect::<Vec<_>>().join(",");
+    let raw = samples
+        .iter()
+        .map(|v| format!("{v:.4}"))
+        .collect::<Vec<_>>()
+        .join(",");
     println!(
         "{mp:.3}\t{w}\t{h}\t{phase}\t{med:.4}\t{min:.4}\t{max:.4}\t{n}\t{raw}\t{notes}",
         med = median(samples),
@@ -177,14 +189,26 @@ fn main() {
 
     // --- setref1: FIRST set_reference on the warm instance (reps×). ---
     let s1 = time_setref_phase(&mut b, &client, w, h, 0x1000_0000, reps);
-    emit(w, h, "setref1", &s1, "first_ref_warm_instance synced distinct_pixels_per_rep");
+    emit(
+        w,
+        h,
+        "setref1",
+        &s1,
+        "first_ref_warm_instance synced distinct_pixels_per_rep",
+    );
 
     // --- setref2..setrefK: DISTINCT new references (the reuse path). ---
     for p in 0..newref_phases {
         let seed_base = 0x2000_0000u32.wrapping_add((p as u32) * 0x0010_0000);
         let s = time_setref_phase(&mut b, &client, w, h, seed_base, reps);
         let phase = format!("setref{}", p + 2);
-        emit(w, h, &phase, &s, "new_ref_distinct_pixels reuse_path synced");
+        emit(
+            w,
+            h,
+            &phase,
+            &s,
+            "new_ref_distinct_pixels reuse_path synced",
+        );
     }
 
     // --- warm_call: warm compute_with_reference against the last cached
@@ -194,14 +218,22 @@ fn main() {
     for i in 0..reps {
         let d = synth_srgb(w, h, 0x3000_0000u32.wrapping_add(i as u32 * 13 + 1));
         let t = Instant::now();
-        let s = b.compute_with_reference(&d).expect("warm compute_with_reference");
+        let s = b
+            .compute_with_reference(&d)
+            .expect("warm compute_with_reference");
         // Defensive: ensure the queue is drained even though the readback
         // inside compute_with_reference already syncs.
         cubecl::future::block_on(client.sync()).expect("sync after warm_call");
         warm.push(t.elapsed().as_secs_f64() * 1e3);
         last_score = s.score as f64;
     }
-    emit(w, h, "warm_call", &warm, &format!("compute_with_reference last_score={last_score:.4}"));
+    emit(
+        w,
+        h,
+        "warm_call",
+        &warm,
+        &format!("compute_with_reference last_score={last_score:.4}"),
+    );
 
     eprintln!("# done");
 }

@@ -63,8 +63,8 @@ impl HetznerApi {
             .context("missing `server_types` array")?;
         let mut out = Vec::with_capacity(arr.len());
         for item in arr {
-            let st: HetznerServerType = serde_json::from_value(item.clone())
-                .context("parse one server_type entry")?;
+            let st: HetznerServerType =
+                serde_json::from_value(item.clone()).context("parse one server_type entry")?;
             out.push(st);
         }
         Ok(out)
@@ -145,8 +145,8 @@ impl HetznerApi {
             .context("missing `servers` array")?;
         let mut out = Vec::with_capacity(arr.len());
         for item in arr {
-            let s: HetznerServer = serde_json::from_value(item.clone())
-                .context("parse one server entry")?;
+            let s: HetznerServer =
+                serde_json::from_value(item.clone()).context("parse one server entry")?;
             out.push(s);
         }
         Ok(out)
@@ -332,12 +332,8 @@ pub fn load_token_from_file_or_env() -> Result<String> {
     }
     let home = std::env::var("HOME").context("HOME not set")?;
     let path = PathBuf::from(home).join(".config/hetzner/credentials");
-    let contents = std::fs::read_to_string(&path).with_context(|| {
-        format!(
-            "read {} (or set $HETZNER_API_TOKEN)",
-            path.display()
-        )
-    })?;
+    let contents = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {} (or set $HETZNER_API_TOKEN)", path.display()))?;
     for line in contents.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -404,10 +400,7 @@ mod tests {
             HetznerServerStatus::Running.as_orchestrator_state(),
             "running"
         );
-        assert_eq!(
-            HetznerServerStatus::Off.as_orchestrator_state(),
-            "stopping"
-        );
+        assert_eq!(HetznerServerStatus::Off.as_orchestrator_state(), "stopping");
         assert_eq!(
             HetznerServerStatus::Unknown.as_orchestrator_state(),
             "unknown"

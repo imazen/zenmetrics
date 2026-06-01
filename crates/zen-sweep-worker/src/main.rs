@@ -214,9 +214,7 @@ mod salad {
                 .ok();
             if let Some(rt) = rt {
                 rt.block_on(zen_cloud_vastai::worker::fire_boot_upload(
-                    &args,
-                    &worker_id,
-                    &r2,
+                    &args, &worker_id, &r2,
                 ));
             }
         }
@@ -639,10 +637,9 @@ mod hetzner {
     fn init_tracing() {
         use tracing_subscriber::EnvFilter;
         let _ = tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,zen_cloud_vastai=info,zencloud_hetzner=info")),
-            )
+            .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::new("info,zen_cloud_vastai=info,zencloud_hetzner=info")
+            }))
             .try_init();
     }
 }

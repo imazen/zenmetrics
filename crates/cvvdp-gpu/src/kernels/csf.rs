@@ -47,9 +47,9 @@ use cubecl::prelude::*;
 // rows via kernel arguments. No cube-macro name-resolution
 // interaction.
 pub use cvvdp::kernels::csf::{
-    CSF_BASEBAND_RHO, CsfChannel, GE_SIGMA, LOG_L_BKG_AXIS, LOG_RHO_AXIS, LOG_S_O0_C1,
-    LOG_S_O0_C2, LOG_S_O0_C3, N_L_BKG, N_RHO, SENSITIVITY_CORRECTION_DB,
-    csf_lut_v0_5_4, precompute_logs_row, sensitivity_corrected_scalar, sensitivity_scalar,
+    CSF_BASEBAND_RHO, CsfChannel, GE_SIGMA, LOG_L_BKG_AXIS, LOG_RHO_AXIS, LOG_S_O0_C1, LOG_S_O0_C2,
+    LOG_S_O0_C3, N_L_BKG, N_RHO, SENSITIVITY_CORRECTION_DB, csf_lut_v0_5_4, precompute_logs_row,
+    sensitivity_corrected_scalar, sensitivity_scalar,
 };
 #[cube(launch)]
 pub fn csf_apply_per_pixel_kernel(
@@ -396,4 +396,3 @@ pub fn flatten_band_weights(weights: &[[f32; 3]]) -> Vec<f32> {
     }
     out
 }
-

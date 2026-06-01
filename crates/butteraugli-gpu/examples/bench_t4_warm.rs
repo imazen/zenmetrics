@@ -1,7 +1,7 @@
-use std::time::Instant;
+use butteraugli_gpu::Butteraugli;
 use cubecl::Runtime;
 use cubecl::cuda::CudaRuntime;
-use butteraugli_gpu::Butteraugli;
+use std::time::Instant;
 
 fn main() {
     let w: u32 = 4000;
@@ -13,11 +13,18 @@ fn main() {
     let mut b = Butteraugli::<CudaRuntime>::new(client, w, h);
     b.set_reference(&r).expect("ref");
     // warmup
-    for _ in 0..2 { let _ = b.compute(&r, &d).expect("warmup"); }
+    for _ in 0..2 {
+        let _ = b.compute(&r, &d).expect("warmup");
+    }
     eprintln!("butter 12 MP timing:");
     for i in 0..5 {
         let t = Instant::now();
         let res = b.compute(&r, &d).expect("compute");
-        eprintln!("  iter {i}: {:?}  score={:.6} pnorm3={:.6}", t.elapsed(), res.score, res.pnorm_3);
+        eprintln!(
+            "  iter {i}: {:?}  score={:.6} pnorm3={:.6}",
+            t.elapsed(),
+            res.score,
+            res.pnorm_3
+        );
     }
 }

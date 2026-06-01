@@ -24,9 +24,9 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use cubecl::Runtime;
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
-use cubecl::Runtime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
 use iwssim_gpu::Iwssim;
@@ -64,7 +64,9 @@ struct Row {
 
 fn bench_cached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -> Row {
     let ref_gray = make_gray(w, h, 42);
-    let dists: Vec<Vec<f32>> = (0..n_dist).map(|i| make_gray(w, h, 137 + i as u32)).collect();
+    let dists: Vec<Vec<f32>> = (0..n_dist)
+        .map(|i| make_gray(w, h, 137 + i as u32))
+        .collect();
 
     let client = Backend::client(&Default::default());
     let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body).unwrap();
@@ -104,7 +106,9 @@ fn bench_cached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -> 
 
 fn bench_uncached(w: u32, h: u32, h_body: u32, n_dist: usize, n_warmup: usize) -> Row {
     let ref_gray = make_gray(w, h, 42);
-    let dists: Vec<Vec<f32>> = (0..n_dist).map(|i| make_gray(w, h, 137 + i as u32)).collect();
+    let dists: Vec<Vec<f32>> = (0..n_dist)
+        .map(|i| make_gray(w, h, 137 + i as u32))
+        .collect();
 
     let client = Backend::client(&Default::default());
     let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body).unwrap();

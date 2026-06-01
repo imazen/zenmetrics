@@ -64,10 +64,7 @@ fn test1_three_way_join_golden_per_cell() {
                     .collect(),
             ),
         ),
-        (
-            "codec".into(),
-            Column::Str(vec![Some("jpeg".into()); 4]),
-        ),
+        ("codec".into(), Column::Str(vec![Some("jpeg".into()); 4])),
         ("q".into(), Column::I64(vec![50, 60, 50, 60])),
         (
             "knob_tuple_json".into(),
@@ -161,7 +158,10 @@ fn test2_ref_only_target_is_rejected() {
     // Must name the missing per-pair keys + the Mode-B bug, never silently
     // collapse.
     assert!(msg.contains("per-pair"), "msg: {msg}");
-    assert!(msg.contains("ref-misjoin") || msg.contains("ref-only"), "msg: {msg}");
+    assert!(
+        msg.contains("ref-misjoin") || msg.contains("ref-only"),
+        "msg: {msg}"
+    );
     // And it must mention ref_basename (what the table DOES carry).
     assert!(msg.contains("ref_basename"), "msg: {msg}");
 
@@ -204,7 +204,10 @@ fn test3_duplicate_metric_keys_error_not_average() {
 fn test4a_mock_column_rejected() {
     let n = 150usize; // > 100 so the human-score comparison would engage
     let t = Table::from_columns(vec![
-        ("human_score".into(), Column::F64((0..n).map(|i| i as f64).collect())),
+        (
+            "human_score".into(),
+            Column::F64((0..n).map(|i| i as f64).collect()),
+        ),
         (
             "iwssim_mock".into(),
             Column::F64((0..n).map(|i| (i as f64) * 0.5).collect()),
@@ -281,10 +284,9 @@ fn test4c_constant_per_ref_detector() {
     ])
     .unwrap();
     // mean group size = 3.0 > 1.5 → the gate engages and the broadcast fires.
-    let err = assert_not_constant_per_ref_tuned(
-        "kadid", "ref_basename", "ssim2_gpu", &broadcast, 5, 1.5,
-    )
-    .unwrap_err();
+    let err =
+        assert_not_constant_per_ref_tuned("kadid", "ref_basename", "ssim2_gpu", &broadcast, 5, 1.5)
+            .unwrap_err();
     assert!(err.to_string().contains("constant within every"), "{err}");
 
     // Per-pair sidecar shape: each ref appears once → mean group size 1.0 ≤
@@ -295,7 +297,10 @@ fn test4c_constant_per_ref_detector() {
             "ref_basename".into(),
             Column::Str((0..6).map(|r| Some(format!("ref{r}"))).collect()),
         ),
-        ("ssim2_gpu".into(), Column::F64((0..6).map(|i| 50.0 + i as f64).collect())),
+        (
+            "ssim2_gpu".into(),
+            Column::F64((0..6).map(|i| 50.0 + i as f64).collect()),
+        ),
     ])
     .unwrap();
     assert!(

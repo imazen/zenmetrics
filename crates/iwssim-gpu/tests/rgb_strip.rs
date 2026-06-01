@@ -55,7 +55,10 @@ fn make_color_rgb(w: u32, h: u32, seed: u32) -> Vec<u8> {
         for x in 0..w {
             let r = ((x.wrapping_mul(3).wrapping_add(seed)) & 0xff) as u8;
             let g = ((y.wrapping_mul(5).wrapping_add(seed.wrapping_mul(7))) & 0xff) as u8;
-            let b = ((x.wrapping_add(y).wrapping_mul(11).wrapping_add(seed.wrapping_mul(13)))
+            let b = ((x
+                .wrapping_add(y)
+                .wrapping_mul(11)
+                .wrapping_add(seed.wrapping_mul(13)))
                 & 0xff) as u8;
             out.push(r);
             out.push(g);
@@ -163,9 +166,7 @@ fn rgb_strip_errors_on_whole_image_instance() {
     let d = make_color_rgb(w, h, 7);
     let client = BackendT::client(&Default::default());
     let mut whole = Iwssim::<BackendT>::new(client, w, h).expect("whole new");
-    let err = whole
-        .compute_rgb_stripped(&r, &d)
-        .expect_err("must error");
+    let err = whole.compute_rgb_stripped(&r, &d).expect_err("must error");
     assert!(matches!(err, Error::NotStripMode));
 }
 

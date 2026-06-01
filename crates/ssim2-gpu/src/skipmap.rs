@@ -300,7 +300,10 @@ mod tests {
     #[test]
     fn skip_counts_match_audit_doc() {
         assert_eq!(count_skipped_reductions(Ssim2Mode::Full, NUM_SCALES), 0);
-        assert_eq!(count_skipped_reductions(Ssim2Mode::Lossless, NUM_SCALES), 17);
+        assert_eq!(
+            count_skipped_reductions(Ssim2Mode::Lossless, NUM_SCALES),
+            17
+        );
         assert_eq!(count_skipped_reductions(Ssim2Mode::Fast, NUM_SCALES), 30);
         assert_eq!(count_skipped_reductions(Ssim2Mode::Faster, NUM_SCALES), 34);
 
@@ -323,12 +326,24 @@ mod tests {
         let mut cnt_faster = 0;
         for &w in WEIGHTS.iter() {
             let aw = w.abs();
-            if aw == 0.0 { cnt_lossless += 1; }
-            if aw < FAST_THRESHOLD { cnt_fast += 1; }
-            if aw < FASTER_THRESHOLD { cnt_faster += 1; }
+            if aw == 0.0 {
+                cnt_lossless += 1;
+            }
+            if aw < FAST_THRESHOLD {
+                cnt_fast += 1;
+            }
+            if aw < FASTER_THRESHOLD {
+                cnt_faster += 1;
+            }
         }
         assert_eq!(cnt_lossless, 56, "Lossless cell-skip count");
-        assert_eq!(cnt_fast, 76, "Fast cell-skip count (cumulative incl. lossless)");
-        assert_eq!(cnt_faster, 83, "Faster cell-skip count (cumulative incl. fast + lossless)");
+        assert_eq!(
+            cnt_fast, 76,
+            "Fast cell-skip count (cumulative incl. lossless)"
+        );
+        assert_eq!(
+            cnt_faster, 83,
+            "Faster cell-skip count (cumulative incl. fast + lossless)"
+        );
     }
 }

@@ -35,10 +35,10 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{apply_offset_dist, synth_pair_ref, Backend};
+use common::{Backend, apply_offset_dist, synth_pair_ref};
 
 use cubecl::Runtime;
-use cvvdp_gpu::{memory_mode::STRIP_H_BODY_DEFAULT, Cvvdp, CvvdpParams};
+use cvvdp_gpu::{Cvvdp, CvvdpParams, memory_mode::STRIP_H_BODY_DEFAULT};
 
 /// Per-call JOD ordering noise band for atomic-add reductions on CUDA.
 /// Matches `strip_mode_e_parity.rs::PARITY_TOL_JOD`.
@@ -55,7 +55,10 @@ fn phase3_pool_strip_matches_full_at_64x64() {
     // the band heights start at 64, every band falls through to
     // single-strip dispatch — this is the "Phase 3 is a no-op partition
     // at small sizes" baseline.
-    let (r, d) = (synth_pair_ref(64, 64), apply_offset_dist(&synth_pair_ref(64, 64)));
+    let (r, d) = (
+        synth_pair_ref(64, 64),
+        apply_offset_dist(&synth_pair_ref(64, 64)),
+    );
 
     let client_full = Backend::client(&Default::default());
     let mut full =
@@ -100,8 +103,8 @@ fn phase3_pool_strip_matches_full_at_1024x1024() {
     );
 
     let client_full = Backend::client(&Default::default());
-    let mut full = Cvvdp::<Backend>::new(client_full, 1024, 1024, CvvdpParams::PLACEHOLDER)
-        .expect("full new");
+    let mut full =
+        Cvvdp::<Backend>::new(client_full, 1024, 1024, CvvdpParams::PLACEHOLDER).expect("full new");
     full.warm_reference(&r).expect("full warm");
     let jod_full = full
         .compute_dkl_jod_with_warm_ref(&d, ppd())
@@ -213,7 +216,10 @@ fn phase3_full_mode_counter_stays_zero() {
     // The strip dispatch counter must only increment in Mode E. A
     // Full-mode Cvvdp must show counter == 0 after a warm-ref call
     // (it never invokes _pool_and_finalize_jod_strip).
-    let (r, d) = (synth_pair_ref(64, 64), apply_offset_dist(&synth_pair_ref(64, 64)));
+    let (r, d) = (
+        synth_pair_ref(64, 64),
+        apply_offset_dist(&synth_pair_ref(64, 64)),
+    );
 
     let client = Backend::client(&Default::default());
     let mut full =
@@ -250,22 +256,17 @@ fn mode_e_walker_jod_matches_full_at_1024() {
     );
 
     let client_full = Backend::client(&Default::default());
-    let mut full = Cvvdp::<Backend>::new(client_full, 1024, 1024, CvvdpParams::PLACEHOLDER)
-        .expect("full new");
+    let mut full =
+        Cvvdp::<Backend>::new(client_full, 1024, 1024, CvvdpParams::PLACEHOLDER).expect("full new");
     full.warm_reference(&r).expect("full warm");
     let jod_full = full
         .compute_dkl_jod_with_warm_ref(&d, ppd())
         .expect("full warm-ref jod");
 
     let client_strip = Backend::client(&Default::default());
-    let mut strip = Cvvdp::<Backend>::new_strip(
-        client_strip,
-        1024,
-        1024,
-        256,
-        CvvdpParams::PLACEHOLDER,
-    )
-    .expect("strip new");
+    let mut strip =
+        Cvvdp::<Backend>::new_strip(client_strip, 1024, 1024, 256, CvvdpParams::PLACEHOLDER)
+            .expect("strip new");
     strip.warm_reference(&r).expect("strip warm");
     strip.reset_strip_dispatch_counter();
     let jod_strip = strip

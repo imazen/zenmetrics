@@ -37,11 +37,7 @@ pub struct R2Sync {
 
 impl R2Sync {
     /// Resolve endpoint + profile from explicit args / env.
-    pub fn new(
-        endpoint: Option<&str>,
-        profile: &str,
-        bin: &str,
-    ) -> Result<Self, AssembleError> {
+    pub fn new(endpoint: Option<&str>, profile: &str, bin: &str) -> Result<Self, AssembleError> {
         let endpoint = if let Some(ep) = endpoint {
             ep.to_string()
         } else if let Ok(ep) = std::env::var("R2_ENDPOINT") {
@@ -88,7 +84,11 @@ impl R2Sync {
         let text = String::from_utf8_lossy(&out.stdout);
         let mut names = Vec::new();
         for line in text.lines() {
-            if let Some(tok) = line.split_whitespace().last().filter(|t| t.ends_with(".parquet")) {
+            if let Some(tok) = line
+                .split_whitespace()
+                .last()
+                .filter(|t| t.ends_with(".parquet"))
+            {
                 names.push(tok.to_string());
             }
         }

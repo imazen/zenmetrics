@@ -8,9 +8,9 @@
 //! algorithm — investigate which stage drifted (color / pyramid /
 //! csf / masking / pool).
 
-use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp::host_scalar::predict_jod_still_3ch;
 use cvvdp::params::DisplayModel;
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 
 fn score_via_host_scalar(ref_srgb: &[u8], dist_srgb: &[u8], w: usize, h: usize) -> f32 {
     let display = DisplayModel::STANDARD_4K;

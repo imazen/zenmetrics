@@ -306,7 +306,17 @@ fn sigv4_auth_header(
     now: &AmzDate,
 ) -> String {
     sigv4_auth_header_with_query(
-        parent, method, bucket, key, url, headers, body, region, service, now, &[],
+        parent,
+        method,
+        bucket,
+        key,
+        url,
+        headers,
+        body,
+        region,
+        service,
+        now,
+        &[],
     )
 }
 

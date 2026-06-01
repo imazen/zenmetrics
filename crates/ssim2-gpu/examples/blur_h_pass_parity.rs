@@ -22,11 +22,7 @@ use ssim2_gpu::kernels::{blur, transpose};
 
 type Backend = cubecl::cuda::CudaRuntime;
 
-fn run_pair(
-    width: u32,
-    height: u32,
-    src: &[f32],
-) -> (Vec<f32>, Vec<f32>) {
+fn run_pair(width: u32, height: u32, src: &[f32]) -> (Vec<f32>, Vec<f32>) {
     let n = (width as usize) * (height as usize);
     assert_eq!(src.len(), n);
 

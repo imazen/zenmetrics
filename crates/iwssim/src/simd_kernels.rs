@@ -58,7 +58,11 @@ fn mul_inplace_inner(token: Token, a: &[f32], b: &[f32], dst: &mut [f32]) {
     let (a_chunks, a_tail) = f32x8::partition_slice(token, a);
     let (b_chunks, b_tail) = f32x8::partition_slice(token, b);
     let (dst_chunks, dst_tail) = f32x8::partition_slice_mut(token, dst);
-    for ((ac, bc), dc) in a_chunks.iter().zip(b_chunks.iter()).zip(dst_chunks.iter_mut()) {
+    for ((ac, bc), dc) in a_chunks
+        .iter()
+        .zip(b_chunks.iter())
+        .zip(dst_chunks.iter_mut())
+    {
         let va = f32x8::load(token, ac);
         let vb = f32x8::load(token, bc);
         (va * vb).store(dc);
@@ -155,7 +159,15 @@ pub(crate) fn cs_combine_into(
     with_luminance: bool,
 ) {
     archmage::incant!(
-        cs_combine_inner(mu1, mu2, s1sq_raw, s2sq_raw, s12_raw, cs_out, with_luminance),
+        cs_combine_inner(
+            mu1,
+            mu2,
+            s1sq_raw,
+            s2sq_raw,
+            s12_raw,
+            cs_out,
+            with_luminance
+        ),
         [v4x, v4, v3, neon, wasm128, scalar]
     );
 }
@@ -207,7 +219,14 @@ pub(crate) fn weighted_sum_pair(cs: &[f32], iw: &[f32]) -> (f64, f64) {
 // ---------------------------------------------------------------------
 
 #[archmage::magetypes(define(f32x8), +v4, +v4x, +v3, +neon, +wasm128, +scalar)]
-fn ssim_gauss_h_inner(token: Token, src: &[f32], h: usize, w: usize, dst_w: usize, dst: &mut [f32]) {
+fn ssim_gauss_h_inner(
+    token: Token,
+    src: &[f32],
+    h: usize,
+    w: usize,
+    dst_w: usize,
+    dst: &mut [f32],
+) {
     debug_assert_eq!(src.len(), h * w);
     debug_assert_eq!(dst.len(), h * dst_w);
     // Splat each tap.

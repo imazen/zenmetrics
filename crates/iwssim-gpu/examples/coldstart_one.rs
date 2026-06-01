@@ -44,7 +44,10 @@ fn synth_gray(w: u32, h: u32, seed: u32) -> Vec<f32> {
 }
 
 fn parse_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -53,7 +56,11 @@ fn median(mut t: Vec<f64>) -> f64 {
     }
     t.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = t.len();
-    if n % 2 == 0 { (t[n / 2 - 1] + t[n / 2]) / 2.0 } else { t[n / 2] }
+    if n % 2 == 0 {
+        (t[n / 2 - 1] + t[n / 2]) / 2.0
+    } else {
+        t[n / 2]
+    }
 }
 
 fn main() {
@@ -75,7 +82,9 @@ fn main() {
 
     let t = Instant::now();
     iw.set_reference(&r).expect("set_reference (cold)");
-    let res = iw.compute_with_reference(&d).expect("compute_with_reference (cold)");
+    let res = iw
+        .compute_with_reference(&d)
+        .expect("compute_with_reference (cold)");
     let first_compute_ms = t.elapsed().as_secs_f64() * 1e3;
     let score = res.score;
 
@@ -84,11 +93,17 @@ fn main() {
     let mut warm: Vec<f64> = Vec::with_capacity(reps);
     for _ in 0..reps {
         let t = Instant::now();
-        let _ = iw.compute_with_reference(&d2).expect("compute_with_reference (warm)");
+        let _ = iw
+            .compute_with_reference(&d2)
+            .expect("compute_with_reference (warm)");
         warm.push(t.elapsed().as_secs_f64() * 1e3);
     }
     let warm_median_ms = median(warm.clone());
-    let warm_csv = warm.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",");
+    let warm_csv = warm
+        .iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",");
 
     println!(
         "READY {score:.6} client_ms={client_ms:.3} new_ms={new_ms:.3} \

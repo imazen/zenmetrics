@@ -47,9 +47,7 @@ fn make_gray(w: u32, h: u32, seed: u32) -> Vec<f32> {
         for x in 0..w {
             let lf = ((x as f32 / w as f32) * 200.0) + ((y as f32 / h as f32) * 50.0);
             let hf = (((x.wrapping_mul(7).wrapping_add(seed)) & 0x1f) as f32) * 1.5
-                + (((y.wrapping_mul(11).wrapping_add(seed.wrapping_mul(3))) & 0x1f)
-                    as f32)
-                    * 1.5;
+                + (((y.wrapping_mul(11).wrapping_add(seed.wrapping_mul(3))) & 0x1f) as f32) * 1.5;
             let v = (lf + hf).clamp(0.0, 255.0);
             out.push(v);
         }
@@ -91,7 +89,9 @@ fn cached_ref_strip_matches_pair_256_body_256() {
         .expect("uncached compute")
         .score;
 
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
     assert!(strip.has_cached_reference_stripped());
     let s_cached = strip
         .compute_with_reference_stripped(&d)
@@ -121,7 +121,9 @@ fn cached_ref_strip_matches_pair_512_body_256() {
         .compute_gray_stripped(&r, &d)
         .expect("uncached compute")
         .score;
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
     let s_cached = strip
         .compute_with_reference_stripped(&d)
         .expect("cached compute")
@@ -148,7 +150,9 @@ fn cached_ref_strip_matches_pair_1024_body_256() {
         .compute_gray_stripped(&r, &d)
         .expect("uncached compute")
         .score;
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
     let s_cached = strip
         .compute_with_reference_stripped(&d)
         .expect("cached compute")
@@ -174,7 +178,9 @@ fn cached_ref_strip_matches_pair_1024_body_512() {
         .compute_gray_stripped(&r, &d)
         .expect("uncached compute")
         .score;
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
     let s_cached = strip
         .compute_with_reference_stripped(&d)
         .expect("cached compute")
@@ -203,7 +209,9 @@ fn cached_ref_strip_matches_pair_uneven_896_body_256() {
         .compute_gray_stripped(&r, &d)
         .expect("uncached compute")
         .score;
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
     let s_cached = strip
         .compute_with_reference_stripped(&d)
         .expect("cached compute")
@@ -233,7 +241,9 @@ fn cached_ref_strip_state_survives_multiple_compute_calls() {
 
     let client = BackendT::client(&Default::default());
     let mut strip = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip new");
-    strip.set_reference_stripped(&r).expect("set_reference_stripped");
+    strip
+        .set_reference_stripped(&r)
+        .expect("set_reference_stripped");
 
     let s_a1 = strip
         .compute_with_reference_stripped(&d_a)
@@ -343,11 +353,16 @@ fn cached_ref_strip_set_reference_overwrites_previous_cache() {
 
     // First cache r1 as reference.
     strip.set_reference_stripped(&r1).expect("set ref1");
-    let _ = strip.compute_with_reference_stripped(&d).expect("call ref1");
+    let _ = strip
+        .compute_with_reference_stripped(&d)
+        .expect("call ref1");
 
     // Now overwrite with r2.
     strip.set_reference_stripped(&r2).expect("set ref2");
-    let s_cached_r2 = strip.compute_with_reference_stripped(&d).expect("call ref2").score;
+    let s_cached_r2 = strip
+        .compute_with_reference_stripped(&d)
+        .expect("call ref2")
+        .score;
 
     let rel = ((s_cached_r2 - s_pair_r2) / s_pair_r2).abs();
     assert!(
@@ -509,7 +524,9 @@ fn cached_ref_strip_rgb_matches_gray_pair() {
         .compute_rgb_stripped(&r_rgb, &d_rgb)
         .expect("compute_rgb_stripped uncached")
         .score;
-    strip.set_rgb_reference_stripped(&r_rgb).expect("set rgb ref");
+    strip
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set rgb ref");
     let s_cached = strip
         .compute_rgb_with_reference_stripped(&d_rgb)
         .expect("compute_rgb_with_ref")
@@ -539,10 +556,7 @@ fn cached_ref_strip_self_identity() {
         .compute_with_reference_stripped(&r)
         .expect("compute")
         .score;
-    assert!(
-        (s - 1.0).abs() < 1e-5,
-        "cached-ref self-identity {s} ≠ 1"
-    );
+    assert!((s - 1.0).abs() < 1e-5, "cached-ref self-identity {s} ≠ 1");
 }
 
 #[test]

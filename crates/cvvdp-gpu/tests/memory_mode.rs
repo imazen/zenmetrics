@@ -2,9 +2,7 @@
 //! GPU integration is covered by `tests/pipeline_score.rs` and
 //! friends.
 
-use cvvdp_gpu::{
-    Error, MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, memory_mode,
-};
+use cvvdp_gpu::{Error, MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, memory_mode};
 use std::sync::{Mutex, OnceLock};
 
 const VRAM_CAP_VAR: &str = "ZENMETRICS_VRAM_CAP_BYTES";
@@ -96,11 +94,8 @@ fn enum_variants_match_task79_contract() {
 fn strip_pair_estimator_aligned_validation() {
     use cvvdp_gpu::memory_mode::estimate_gpu_memory_bytes_for_mode;
     // Unaligned h_body yields usize::MAX (estimator-level "invalid").
-    let bad = estimate_gpu_memory_bytes_for_mode(
-        1024,
-        1024,
-        MemoryMode::StripPair { h_body: Some(100) },
-    );
+    let bad =
+        estimate_gpu_memory_bytes_for_mode(1024, 1024, MemoryMode::StripPair { h_body: Some(100) });
     assert_eq!(bad, usize::MAX);
     // Aligned h_body yields a real estimate.
     let ok = estimate_gpu_memory_bytes_for_mode(
@@ -145,17 +140,14 @@ fn strip_pair_uses_less_vram_than_strip_mode_measured() {
     // value at an aligned body — the dispatch still works post-recal.
     use cvvdp_gpu::memory_mode::estimate_gpu_memory_bytes_for_mode;
     let body = Some(memory_mode::STRIP_H_BODY_DEFAULT);
-    let pair = estimate_gpu_memory_bytes_for_mode(
-        2048,
-        2048,
-        MemoryMode::StripPair { h_body: body },
+    let pair =
+        estimate_gpu_memory_bytes_for_mode(2048, 2048, MemoryMode::StripPair { h_body: body });
+    let cached_ref =
+        estimate_gpu_memory_bytes_for_mode(2048, 2048, MemoryMode::Strip { h_body: body });
+    assert!(
+        pair > 0 && pair < usize::MAX,
+        "Mode B estimate sane: {pair}"
     );
-    let cached_ref = estimate_gpu_memory_bytes_for_mode(
-        2048,
-        2048,
-        MemoryMode::Strip { h_body: body },
-    );
-    assert!(pair > 0 && pair < usize::MAX, "Mode B estimate sane: {pair}");
     assert!(
         cached_ref > 0 && cached_ref < usize::MAX,
         "Mode E estimate sane: {cached_ref}"

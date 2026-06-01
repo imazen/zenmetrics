@@ -39,8 +39,8 @@ fn opaque_srgb_u8_matches_typed() {
     let mut typed = Butteraugli::<BackendT>::new_multires(client, w, h);
     let typed_score = typed.compute(&ref_buf, &dis_buf).expect("typed compute");
 
-    let mut opaque = ButteraugliOpaque::new(BACKEND_E, w, h, ButteraugliParams::default())
-        .expect("opaque new");
+    let mut opaque =
+        ButteraugliOpaque::new(BACKEND_E, w, h, ButteraugliParams::default()).expect("opaque new");
     let opaque_score = opaque
         .compute_srgb_u8(&ref_buf, &dis_buf)
         .expect("opaque compute_srgb_u8");
@@ -85,8 +85,8 @@ fn opaque_pixels_handles_stride() {
             .copy_from_slice(&dist_tight[y * row_bytes..(y + 1) * row_bytes]);
     }
 
-    let mut opaque = ButteraugliOpaque::new(BACKEND_E, w, h, ButteraugliParams::default())
-        .expect("opaque new");
+    let mut opaque =
+        ButteraugliOpaque::new(BACKEND_E, w, h, ButteraugliParams::default()).expect("opaque new");
 
     let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
     let d_tight = PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
@@ -100,8 +100,7 @@ fn opaque_pixels_handles_stride() {
         .compute_pixels(r_padded, d_padded)
         .expect("padded compute_pixels");
 
-    let rel = (tight_score.value - padded_score.value).abs()
-        / tight_score.value.abs().max(1e-12);
+    let rel = (tight_score.value - padded_score.value).abs() / tight_score.value.abs().max(1e-12);
     assert!(
         rel < 1e-5,
         "strided {} vs tight {} differ by rel {}",

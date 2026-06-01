@@ -37,7 +37,11 @@ fn srgb_byte_to_linear(v: u8) -> f32 {
 
 /// Unpack an interleaved sRGB-u8 buffer (`width*height*3` bytes,
 /// `[R,G,B,R,G,B,...]`) into three tight planar f32 linear-RGB buffers.
-fn srgb_to_linear_planes(srgb: &[u8], width: usize, height: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+fn srgb_to_linear_planes(
+    srgb: &[u8],
+    width: usize,
+    height: usize,
+) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let n = width * height;
     assert_eq!(srgb.len(), n * 3);
     let mut r = vec![0.0_f32; n];
@@ -84,7 +88,10 @@ fn perturb(src: &[u8], width: usize, height: usize) -> Vec<u8> {
     out
 }
 
-fn upload_plane(client: &cubecl::prelude::ComputeClient<Backend>, plane: &[f32]) -> cubecl::server::Handle {
+fn upload_plane(
+    client: &cubecl::prelude::ComputeClient<Backend>,
+    plane: &[f32],
+) -> cubecl::server::Handle {
     client.create_from_slice(f32::as_bytes(plane))
 }
 
@@ -99,7 +106,9 @@ fn run_parity(width: u32, height: u32) {
 
     // Path 1: legacy set_reference(srgb_u8) → compute_with_reference(srgb_u8)
     let mut legacy = Butteraugli::<Backend>::new_multires(client.clone(), width, height);
-    legacy.set_reference(&ref_srgb).expect("legacy set_reference");
+    legacy
+        .set_reference(&ref_srgb)
+        .expect("legacy set_reference");
     let r_legacy = legacy
         .compute_with_reference(&dist_srgb)
         .expect("legacy compute");
@@ -120,11 +129,20 @@ fn run_parity(width: u32, height: u32) {
     // Tolerance: 0.01% relative on score and pnorm_3. The only difference
     // between paths is where the srgb→linear conversion happens (host vs
     // GPU); both use the bit-identical IEC 61966-2-1 formula.
-    let rel_score = (r_lin.score as f64 - r_legacy.score as f64).abs() / r_legacy.score.max(1e-12) as f64;
-    let rel_pnorm = (r_lin.pnorm_3 as f64 - r_legacy.pnorm_3 as f64).abs() / r_legacy.pnorm_3.max(1e-12) as f64;
+    let rel_score =
+        (r_lin.score as f64 - r_legacy.score as f64).abs() / r_legacy.score.max(1e-12) as f64;
+    let rel_pnorm =
+        (r_lin.pnorm_3 as f64 - r_legacy.pnorm_3 as f64).abs() / r_legacy.pnorm_3.max(1e-12) as f64;
     println!(
         "{}×{} legacy: score={:.6} pnorm3={:.6} | lin: score={:.6} pnorm3={:.6} | rel: score={:.2e} pnorm3={:.2e}",
-        width, height, r_legacy.score, r_legacy.pnorm_3, r_lin.score, r_lin.pnorm_3, rel_score, rel_pnorm,
+        width,
+        height,
+        r_legacy.score,
+        r_legacy.pnorm_3,
+        r_lin.score,
+        r_lin.pnorm_3,
+        rel_score,
+        rel_pnorm,
     );
     assert!(
         rel_score < 1e-4,

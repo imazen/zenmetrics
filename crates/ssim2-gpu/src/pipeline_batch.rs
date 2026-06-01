@@ -24,12 +24,12 @@
 
 use cubecl::prelude::*;
 
+#[cfg(feature = "fir")]
+use crate::Ssim2Blur;
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::pipeline::{Ssim2, score_from_stats};
 use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
-#[cfg(feature = "fir")]
-use crate::Ssim2Blur;
 
 /// Per-scale batched buffer set. Each plane is `batch_size · n_pixels`
 /// f32, stored as `batch_size` contiguous planes (stride =
@@ -336,9 +336,7 @@ impl<R: Runtime> Ssim2Batch<R> {
         // one u32 per pixel for `n_total_full` pixels.
         let pinned_len = n_total_full * 4;
         let mut staging = client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -674,15 +672,7 @@ impl<R: Runtime> Ssim2Batch<R> {
                 plane_stride,
             );
             // 3. pass-1 on transposed: width swapped with height.
-            self.blur_batched_pass(
-                client,
-                t,
-                dst,
-                bs.height,
-                bs.width,
-                plane_stride,
-                n_total,
-            );
+            self.blur_batched_pass(client, t, dst, bs.height, bs.width, plane_stride, n_total);
         }
     }
 

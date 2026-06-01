@@ -17,7 +17,9 @@ fn synth_pair(size: u32) -> (Vec<u8>, Vec<u8>) {
     let mut rng_state: u64 = 0xC0FFEE;
     let mut ref_bytes = vec![0u8; n];
     for b in ref_bytes.iter_mut() {
-        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        rng_state = rng_state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         *b = ((rng_state >> 33) & 0xFF) as u8;
     }
     let w = size as usize;
@@ -43,8 +45,7 @@ fn main() {
 
     let (ref_bytes, dist_bytes) = synth_pair(size);
 
-    let mut cvvdp = Cvvdp::new(size, size, CvvdpParams::PLACEHOLDER)
-        .expect("Cvvdp::new");
+    let mut cvvdp = Cvvdp::new(size, size, CvvdpParams::PLACEHOLDER).expect("Cvvdp::new");
 
     // Warm-up (first call pays kernel-cache fills, allocation, etc.).
     let _ = cvvdp.score(&ref_bytes, &dist_bytes).expect("warm-up");

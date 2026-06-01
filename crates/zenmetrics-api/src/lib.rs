@@ -66,7 +66,9 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
-pub use metric::{Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram, score_pair};
+pub use metric::{
+    Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram, score_pair,
+};
 pub use session::{MAX_SESSIONS_PER_BACKEND, MetricSession, OwnedSessionMetric, SessionMetric};
 
 /// Internal test/diagnostic hooks for the VRAM-isolation integration

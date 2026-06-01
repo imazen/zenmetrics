@@ -342,7 +342,11 @@ impl Table {
             }
             target_variant.insert(
                 name.clone(),
-                if widen { "F64" } else { variant.unwrap_or("F64") },
+                if widen {
+                    "F64"
+                } else {
+                    variant.unwrap_or("F64")
+                },
             );
         }
 
@@ -444,7 +448,8 @@ mod tests {
             ("only_a".into(), Column::F64(vec![1.0])),
         ])
         .unwrap();
-        let b = Table::from_columns(vec![("k".into(), Column::Str(vec![Some("y".into())]))]).unwrap();
+        let b =
+            Table::from_columns(vec![("k".into(), Column::Str(vec![Some("y".into())]))]).unwrap();
         let u = Table::union_by_name(vec![a, b]).unwrap();
         assert_eq!(u.num_rows(), 2);
         assert!(u.column("only_a").unwrap().f64_at(1).is_nan());

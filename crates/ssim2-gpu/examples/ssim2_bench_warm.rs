@@ -24,12 +24,12 @@
 //! Drop the first iteration (transient kernel-compile / cache settle);
 //! report the median of the remaining iterations.
 
-use std::time::{Duration, Instant};
 use cubecl::Runtime;
 use cubecl::cuda::CudaRuntime;
-use ssim2_gpu::{Ssim2, Ssim2Mode};
 #[cfg(feature = "fir")]
 use ssim2_gpu::Ssim2Blur;
+use ssim2_gpu::{Ssim2, Ssim2Mode};
+use std::time::{Duration, Instant};
 
 const W: u32 = 4000;
 const H: u32 = 3000;
@@ -56,8 +56,7 @@ fn bench_warm(
     d: &[u8],
 ) -> (Duration, Duration, f64) {
     let client = CudaRuntime::client(&Default::default());
-    let mut s = Ssim2::<CudaRuntime>::new(client, W, H)
-        .expect("Ssim2::new");
+    let mut s = Ssim2::<CudaRuntime>::new(client, W, H).expect("Ssim2::new");
     #[cfg(feature = "fir")]
     {
         s = s.with_blur(blur);
@@ -66,9 +65,7 @@ fn bench_warm(
 
     let mut last_score = 0.0_f64;
     for _ in 0..WARMUP {
-        let res = s
-            .compute_with_reference_with_mode(mode, d)
-            .expect("warmup");
+        let res = s.compute_with_reference_with_mode(mode, d).expect("warmup");
         last_score = res.score;
     }
     let mut samples = Vec::with_capacity(ITERS);
@@ -93,8 +90,7 @@ fn bench_cold(
     d: &[u8],
 ) -> (Duration, f64) {
     let client = CudaRuntime::client(&Default::default());
-    let mut s = Ssim2::<CudaRuntime>::new(client, W, H)
-        .expect("Ssim2::new");
+    let mut s = Ssim2::<CudaRuntime>::new(client, W, H).expect("Ssim2::new");
     #[cfg(feature = "fir")]
     {
         s = s.with_blur(blur);
@@ -177,7 +173,10 @@ fn main() {
         "ssim2 {W}x{H} ({:.1} MP) — cold (compute_with_mode):",
         (n as f64 / 3.0) / 1e6
     );
-    eprintln!("{:>6}  {:>10}  {:>11}  {:>14}", "blur", "mode", "median (ms)", "score");
+    eprintln!(
+        "{:>6}  {:>10}  {:>11}  {:>14}",
+        "blur", "mode", "median (ms)", "score"
+    );
     let mut cold_med_ms = vec![vec![0.0_f64; modes.len()]; n_blurs];
     for bi in 0..n_blurs {
         for (mi, &mode) in modes.iter().enumerate() {

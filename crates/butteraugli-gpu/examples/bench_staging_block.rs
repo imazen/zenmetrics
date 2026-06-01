@@ -50,7 +50,10 @@ fn main() {
         "task142 staging-block bench: {W}x{H} = {} MP, N={N_UPLOADS} uploads",
         n_pixels / 1_000_000
     );
-    println!("pinned staging buffer per upload = {} bytes (u32-packed)", n_pixels * 4);
+    println!(
+        "pinned staging buffer per upload = {} bytes (u32-packed)",
+        n_pixels * 4
+    );
 
     let client = CudaRuntime::client(&Default::default());
 
@@ -104,12 +107,18 @@ fn main() {
     cubecl::future::block_on(client.sync()).expect("sync"); // ensure all uploads landed
     let pack_wall_synced = t_pack_total.elapsed();
     let (m, md, mx) = pct(&t_pack);
+    println!("\n(B) pack_srgb_into_packed_u32_handle (reserve_staging block + pack + create):");
     println!(
-        "\n(B) pack_srgb_into_packed_u32_handle (reserve_staging block + pack + create):"
+        "    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms"
     );
-    println!("    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms");
-    println!("    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms", pack_wall.as_secs_f64() * 1e3);
-    println!("    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms", pack_wall_synced.as_secs_f64() * 1e3);
+    println!(
+        "    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms",
+        pack_wall.as_secs_f64() * 1e3
+    );
+    println!(
+        "    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms",
+        pack_wall_synced.as_secs_f64() * 1e3
+    );
     drop(handles);
 
     // ---------------------------------------------------------------
@@ -149,9 +158,17 @@ fn main() {
     let slice_wall_synced = t_slice_total.elapsed();
     let (m, md, mx) = pct(&t_slice);
     println!("\n(C) client.create_from_slice (pageable->pinned internal staging block + create):");
-    println!("    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms");
-    println!("    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms", slice_wall.as_secs_f64() * 1e3);
-    println!("    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms", slice_wall_synced.as_secs_f64() * 1e3);
+    println!(
+        "    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms"
+    );
+    println!(
+        "    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms",
+        slice_wall.as_secs_f64() * 1e3
+    );
+    println!(
+        "    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms",
+        slice_wall_synced.as_secs_f64() * 1e3
+    );
     drop(handles2);
 
     // ---------------------------------------------------------------
@@ -178,9 +195,11 @@ fn main() {
     cubecl::future::block_on(client.sync()).expect("sync");
     let pipe_wall = t_pipe.elapsed();
     println!("\n(D) pipelined upload+compute_handles ({N_UPLOADS} pairs, post-sync):");
-    println!("    total wall = {:.3}ms  ({:.3}ms/pair)  last_score={last:.4}",
+    println!(
+        "    total wall = {:.3}ms  ({:.3}ms/pair)  last_score={last:.4}",
         pipe_wall.as_secs_f64() * 1e3,
-        pipe_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64);
+        pipe_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64
+    );
 
     // ---------------------------------------------------------------
     // (E) Runner-busy probe — the maintainer's real worst case.
@@ -264,7 +283,8 @@ fn run_async_probe(
     }
     // warmup
     for img in imgs.iter().take(2) {
-        let _ = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+        let _ =
+            client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
     }
     cubecl::future::block_on(client.sync()).expect("sync");
     let mut t_async = Vec::with_capacity(N_UPLOADS);
@@ -281,11 +301,21 @@ fn run_async_probe(
     cubecl::future::block_on(client.sync()).expect("sync");
     let async_wall_synced = t_async_total.elapsed();
     let (m, md, mx) = pct(&t_async);
-    println!("\n(F) create_from_slice_pinned_async_probe (reserve+pack+upload on runner, no block):");
-    println!("    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms");
+    println!(
+        "\n(F) create_from_slice_pinned_async_probe (reserve+pack+upload on runner, no block):"
+    );
+    println!(
+        "    per-call (caller-thread, pre-sync): mean={m:.3}ms median={md:.3}ms max={mx:.3}ms"
+    );
     println!("    NOTE: per-call excludes the img.clone() done before the timer");
-    println!("    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms", async_wall.as_secs_f64() * 1e3);
-    println!("    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms", async_wall_synced.as_secs_f64() * 1e3);
+    println!(
+        "    {N_UPLOADS} uploads wall (pre-sync) = {:.3}ms",
+        async_wall.as_secs_f64() * 1e3
+    );
+    println!(
+        "    {N_UPLOADS} uploads wall (post-sync)= {:.3}ms",
+        async_wall_synced.as_secs_f64() * 1e3
+    );
     drop(handles3);
 
     // ---------------------------------------------------------------
@@ -295,27 +325,34 @@ fn run_async_probe(
     //     dispatch), (G) will be slower than (D).
     // ---------------------------------------------------------------
     let ref_owned = imgs[0].clone();
-    let ref_h2 = client.create_from_slice_pinned_async_probe(ref_owned, pinned_len, pack_u8x3_to_u32);
+    let ref_h2 =
+        client.create_from_slice_pinned_async_probe(ref_owned, pinned_len, pack_u8x3_to_u32);
     // warmup
     for img in imgs.iter().take(2) {
-        let dh = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+        let dh =
+            client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
         let _ = b.compute_handles(&ref_h2, &dh).expect("compute");
     }
     cubecl::future::block_on(client.sync()).expect("sync");
     let t_pipe2 = Instant::now();
     let mut last2 = 0.0f32;
     for img in imgs.iter() {
-        let dh = client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
+        let dh =
+            client.create_from_slice_pinned_async_probe(img.clone(), pinned_len, pack_u8x3_to_u32);
         let res = b.compute_handles(&ref_h2, &dh).expect("compute");
         last2 = res.score;
     }
     cubecl::future::block_on(client.sync()).expect("sync");
     let pipe2_wall = t_pipe2.elapsed();
     println!("\n(G) pipelined async-probe upload+compute_handles ({N_UPLOADS} pairs, post-sync):");
-    println!("    total wall = {:.3}ms  ({:.3}ms/pair)  last_score={last2:.4}",
+    println!(
+        "    total wall = {:.3}ms  ({:.3}ms/pair)  last_score={last2:.4}",
         pipe2_wall.as_secs_f64() * 1e3,
-        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64);
-    println!("\n  >>> (D) current path = {:.3}ms/pair vs (G) async-probe = {:.3}ms/pair",
+        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64
+    );
+    println!(
+        "\n  >>> (D) current path = {:.3}ms/pair vs (G) async-probe = {:.3}ms/pair",
         pipe_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64,
-        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64);
+        pipe2_wall.as_secs_f64() * 1e3 / N_UPLOADS as f64
+    );
 }

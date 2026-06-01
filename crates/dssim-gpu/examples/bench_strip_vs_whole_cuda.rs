@@ -64,8 +64,7 @@ impl Row {
         } else {
             0.0
         };
-        let rel = (self.strip_score - self.whole_score).abs()
-            / self.whole_score.max(1e-6);
+        let rel = (self.strip_score - self.whole_score).abs() / self.whole_score.max(1e-6);
         format!(
             "{},{},{:.6},{},{:.3},{:.3},{:.2},{:.8},{:.8},{:.6}\n",
             self.width,
@@ -136,9 +135,7 @@ fn main() {
     fs::create_dir_all(&out_dir).ok();
     let out_path = out_dir.join(format!("dssim_strip_vs_whole_{date}.csv"));
 
-    eprintln!(
-        "dssim-gpu strip-vs-whole benchmark (RTX 5070 + Ryzen 9 7950X)"
-    );
+    eprintln!("dssim-gpu strip-vs-whole benchmark (RTX 5070 + Ryzen 9 7950X)");
     eprintln!("writing: {}", out_path.display());
 
     // (w, h, h_body) — h_body=256 is the default sweep value; we
@@ -171,8 +168,7 @@ fn main() {
         } else {
             0.0
         };
-        let rel = (row.strip_score - row.whole_score).abs()
-            / row.whole_score.max(1e-6);
+        let rel = (row.strip_score - row.whole_score).abs() / row.whole_score.max(1e-6);
         println!(
             "{:>5}x{:<4}  {:>5}  {:>10.3}  {:>10.3}  {:>9.2}%  {:>16.6e}",
             w, h, h_body, row.whole_ms, row.strip_ms, overhead, rel

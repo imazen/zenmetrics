@@ -64,7 +64,6 @@
 
 use cubecl::prelude::*;
 
-
 // Phase 8c.1-C: scalar items (KERNEL_A + GAUSS5 constants, the Band
 // + WeberPyramid structs, band_frequencies + gausspyr_reduce_scalar +
 // gausspyr_expand_scalar + laplacian_pyramid_dec_scalar +
@@ -91,7 +90,6 @@ pub use cvvdp::kernels::pyramid::{
     Band, GAUSS5, KERNEL_A, WeberPyramid, band_frequencies, gausspyr_expand_scalar,
     gausspyr_reduce_scalar, laplacian_pyramid_dec_scalar, weber_contrast_pyr_dec_scalar,
 };
-
 
 /// 2× downscale with the cvvdp 5-tap Gaussian. Per-output-pixel
 /// thread; each thread reads 25 source pixels (5 × 5 reflected
@@ -443,8 +441,7 @@ const DOWNSCALE_TILED_TILE_LEN_USIZE: usize =
     DOWNSCALE_TILED_TILE_DIM_USIZE * DOWNSCALE_TILED_TILE_DIM_USIZE;
 const DOWNSCALE_TILED_TILE_LEN_U32: u32 =
     DOWNSCALE_TILED_TILE_DIM_U32 * DOWNSCALE_TILED_TILE_DIM_U32;
-const DOWNSCALE_TILED_BLOCK_LIN_U32: u32 =
-    DOWNSCALE_TILED_BLOCK_DIM * DOWNSCALE_TILED_BLOCK_DIM;
+const DOWNSCALE_TILED_BLOCK_LIN_U32: u32 = DOWNSCALE_TILED_BLOCK_DIM * DOWNSCALE_TILED_BLOCK_DIM;
 /// Loads per thread to cover the full tile (256 threads × 6 = 1536 ≥ 1296).
 const DOWNSCALE_TILED_LOAD_ITERS: u32 =
     DOWNSCALE_TILED_TILE_LEN_U32.div_ceil(DOWNSCALE_TILED_BLOCK_LIN_U32);
@@ -1517,4 +1514,3 @@ pub fn baseband_divide_3ch_kernel(
     band_rg[idx] = gauss_rg[idx] * inv_l_bkg_mean;
     band_vy[idx] = gauss_vy[idx] * inv_l_bkg_mean;
 }
-

@@ -813,9 +813,7 @@ mod tests {
         // Defensive: deeper prefix like `runs/<sweep>/<sub>/omni/...` —
         // confirm we strip the LAST `/omni/<chunk>.parquet`, not an
         // earlier one.
-        let rec = rec_with_sidecar(Some(
-            "s3://b/runs/x/omni-subdir/omni/c.parquet",
-        ));
+        let rec = rec_with_sidecar(Some("s3://b/runs/x/omni-subdir/omni/c.parquet"));
         assert_eq!(
             error_sidecar_uri(&rec, "x"),
             "s3://b/runs/x/omni-subdir/errors/salad-smoke-001.txt"

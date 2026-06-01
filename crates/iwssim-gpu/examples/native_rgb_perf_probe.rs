@@ -41,11 +41,11 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use cubecl::Runtime;
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
-use cubecl::Runtime;
 
 use iwssim_gpu::Iwssim;
 
@@ -137,8 +137,8 @@ fn bench_host_conv(w: u32, h: u32, n_iter: usize, n_warmup: usize) -> Row {
 
     let client = Backend::client(&Default::default());
     let h_body = pick_body(w, h);
-    let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body)
-        .expect("Iwssim::new_strip");
+    let mut iw =
+        Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body).expect("Iwssim::new_strip");
     iw.set_reference_stripped(&ref_gray)
         .expect("set_reference_stripped");
 
@@ -146,7 +146,9 @@ fn bench_host_conv(w: u32, h: u32, n_iter: usize, n_warmup: usize) -> Row {
     // priming doesn't bias the first timed iteration.
     for d in dists.iter().take(n_warmup.min(dists.len())) {
         let dg = host_rgb_u8_to_gray_bt601(d);
-        let _ = iw.compute_with_reference_stripped(&dg).expect("compute warmup");
+        let _ = iw
+            .compute_with_reference_stripped(&dg)
+            .expect("compute warmup");
     }
     cubecl::future::block_on(client.sync()).expect("warmup sync");
 
@@ -206,13 +208,15 @@ fn bench_gray_baseline(w: u32, h: u32, n_iter: usize, n_warmup: usize) -> Row {
 
     let client = Backend::client(&Default::default());
     let h_body = pick_body(w, h);
-    let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body)
-        .expect("Iwssim::new_strip");
+    let mut iw =
+        Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body).expect("Iwssim::new_strip");
     iw.set_reference_stripped(&ref_gray)
         .expect("set_reference_stripped");
 
     for d in dists.iter().take(n_warmup.min(dists.len())) {
-        let _ = iw.compute_with_reference_stripped(d).expect("compute warmup");
+        let _ = iw
+            .compute_with_reference_stripped(d)
+            .expect("compute warmup");
     }
     cubecl::future::block_on(client.sync()).expect("warmup sync");
 
@@ -221,9 +225,7 @@ fn bench_gray_baseline(w: u32, h: u32, n_iter: usize, n_warmup: usize) -> Row {
 
     for d in &dists {
         let t0 = Instant::now();
-        let score = iw
-            .compute_with_reference_stripped(d)
-            .expect("compute");
+        let score = iw.compute_with_reference_stripped(d).expect("compute");
         cubecl::future::block_on(client.sync()).expect("client.sync");
         let t1 = Instant::now();
 
@@ -257,8 +259,8 @@ fn bench_native(w: u32, h: u32, n_iter: usize, n_warmup: usize) -> Row {
 
     let client = Backend::client(&Default::default());
     let h_body = pick_body(w, h);
-    let mut iw = Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body)
-        .expect("Iwssim::new_strip");
+    let mut iw =
+        Iwssim::<Backend>::new_strip(client.clone(), w, h, h_body).expect("Iwssim::new_strip");
     // Reference setup goes through the host-conversion path today —
     // amortised across all dist calls, matches production usage.
     iw.set_rgb_reference_stripped(&ref_rgb)
@@ -319,12 +321,7 @@ fn main() {
     let n_warmup = 3;
     let n_iter = 20;
 
-    let configs: &[(u32, u32)] = &[
-        (256, 256),
-        (1024, 1024),
-        (2048, 2048),
-        (4096, 4096),
-    ];
+    let configs: &[(u32, u32)] = &[(256, 256), (1024, 1024), (2048, 2048), (4096, 4096)];
 
     let mut rows: Vec<Row> = Vec::new();
     for &(w, h) in configs {
@@ -342,9 +339,7 @@ fn main() {
     }
 
     println!();
-    println!(
-        "# Decision summary (host_conv_share = host-side rgb→gray fraction of total wall):"
-    );
+    println!("# Decision summary (host_conv_share = host-side rgb→gray fraction of total wall):");
     let mut max_share = 0.0_f64;
     for chunk in rows.chunks(3) {
         if let [host, gray, native] = chunk {

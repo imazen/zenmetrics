@@ -71,7 +71,9 @@ pub fn cost_per_1000_by_tier(reports: &[WorkerReport]) -> Vec<(ResourceClass, Op
         let (spent, jobs) = reports
             .iter()
             .filter(|r| r.class == t)
-            .fold((0.0_f64, 0u64), |(s, j), r| (s + r.spent_usd(), j + r.jobs_done));
+            .fold((0.0_f64, 0u64), |(s, j), r| {
+                (s + r.spent_usd(), j + r.jobs_done)
+            });
         let per_k = (jobs > 0).then(|| spent / jobs as f64 * 1000.0);
         (t, per_k)
     })
@@ -105,14 +107,19 @@ mod tests {
         assert!((rep(ResourceClass::Gpu, 0.30, 3600, 0).spent_usd() - 0.30).abs() < EPS);
         assert!((rep(ResourceClass::Gpu, 0.30, 1800, 0).spent_usd() - 0.15).abs() < EPS);
         // free tier costs nothing regardless of uptime
-        assert!(rep(ResourceClass::CpuArm, 0.0, 999_999, 0).spent_usd().abs() < EPS);
+        assert!(
+            rep(ResourceClass::CpuArm, 0.0, 999_999, 0)
+                .spent_usd()
+                .abs()
+                < EPS
+        );
     }
 
     #[test]
     fn aggregate_sums() {
         let reports = [
-            rep(ResourceClass::Gpu, 0.40, 3600, 100),    // $0.40, 100 jobs
-            rep(ResourceClass::CpuArm, 0.0, 3600, 50),   // free Oracle, 50 jobs
+            rep(ResourceClass::Gpu, 0.40, 3600, 100),  // $0.40, 100 jobs
+            rep(ResourceClass::CpuArm, 0.0, 3600, 50), // free Oracle, 50 jobs
         ];
         let c = aggregate(&reports);
         assert!((c.total_spent_usd - 0.40).abs() < EPS);
@@ -130,16 +137,31 @@ mod tests {
     #[test]
     fn per_tier_isolates_classes() {
         let reports = [
-            rep(ResourceClass::Gpu, 0.50, 3600, 100),     // GPU: $0.50/100 → $5/1000
-            rep(ResourceClass::CpuArm, 0.0, 3600, 100),   // free ARM: $0/1000
+            rep(ResourceClass::Gpu, 0.50, 3600, 100), // GPU: $0.50/100 → $5/1000
+            rep(ResourceClass::CpuArm, 0.0, 3600, 100), // free ARM: $0/1000
         ];
         let by_tier = cost_per_1000_by_tier(&reports);
-        let gpu = by_tier.iter().find(|(t, _)| *t == ResourceClass::Gpu).unwrap().1;
-        let arm = by_tier.iter().find(|(t, _)| *t == ResourceClass::CpuArm).unwrap().1;
-        let light = by_tier.iter().find(|(t, _)| *t == ResourceClass::CpuLight).unwrap().1;
+        let gpu = by_tier
+            .iter()
+            .find(|(t, _)| *t == ResourceClass::Gpu)
+            .unwrap()
+            .1;
+        let arm = by_tier
+            .iter()
+            .find(|(t, _)| *t == ResourceClass::CpuArm)
+            .unwrap()
+            .1;
+        let light = by_tier
+            .iter()
+            .find(|(t, _)| *t == ResourceClass::CpuLight)
+            .unwrap()
+            .1;
         assert!((gpu.unwrap() - 5.0).abs() < EPS);
         assert!(arm.unwrap().abs() < EPS); // free tier is cheapest
-        assert!(light.is_none(), "a tier with no workers has no cost-per-1000");
+        assert!(
+            light.is_none(),
+            "a tier with no workers has no cost-per-1000"
+        );
     }
 
     #[test]

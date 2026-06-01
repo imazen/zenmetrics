@@ -18,9 +18,9 @@
 
 use std::env;
 
+use cubecl::Runtime;
 #[cfg(feature = "cuda")]
 use cubecl::cuda::CudaRuntime as Backend;
-use cubecl::Runtime;
 #[cfg(all(feature = "wgpu", not(feature = "cuda")))]
 use cubecl::wgpu::WgpuRuntime as Backend;
 use iwssim_gpu::Iwssim;

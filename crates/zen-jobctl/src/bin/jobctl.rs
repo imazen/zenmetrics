@@ -13,10 +13,13 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use zen_job_core::{DesiredJob, LedgerView, RetryPolicy};
-use zen_jobctl::{coverage, declare, gap, DeclareSpec};
+use zen_jobctl::{DeclareSpec, coverage, declare, gap};
 
 #[derive(Parser)]
-#[command(name = "zen-jobctl", about = "Declare desired jobs and query coverage/gap from the ledger")]
+#[command(
+    name = "zen-jobctl",
+    about = "Declare desired jobs and query coverage/gap from the ledger"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -55,7 +58,10 @@ enum Cmd {
     },
 }
 
-fn load_view(paths: &[PathBuf], endpoint: Option<&str>) -> Result<LedgerView, Box<dyn std::error::Error>> {
+fn load_view(
+    paths: &[PathBuf],
+    endpoint: Option<&str>,
+) -> Result<LedgerView, Box<dyn std::error::Error>> {
     let mut v = LedgerView::new();
     for p in paths {
         let uri = p.to_string_lossy();
@@ -78,17 +84,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::write(&out, serde_json::to_vec_pretty(&jobs)?)?;
             eprintln!("declared {} jobs -> {}", jobs.len(), out.display());
         }
-        Cmd::Catalog { manifest, ledger, r2_endpoint } => {
+        Cmd::Catalog {
+            manifest,
+            ledger,
+            r2_endpoint,
+        } => {
             let jobs = read_manifest(&manifest)?;
             let view = load_view(&ledger, r2_endpoint.as_deref())?;
             println!("{}", serde_json::to_string_pretty(&coverage(&jobs, &view))?);
         }
-        Cmd::Gap { manifest, ledger, out, r2_endpoint } => {
+        Cmd::Gap {
+            manifest,
+            ledger,
+            out,
+            r2_endpoint,
+        } => {
             let jobs = read_manifest(&manifest)?;
             let view = load_view(&ledger, r2_endpoint.as_deref())?;
             let g = gap(&jobs, &view, RetryPolicy::default());
             std::fs::write(&out, serde_json::to_vec_pretty(&g)?)?;
-            eprintln!("gap: {} of {} jobs remain -> {}", g.len(), jobs.len(), out.display());
+            eprintln!(
+                "gap: {} of {} jobs remain -> {}",
+                g.len(),
+                jobs.len(),
+                out.display()
+            );
         }
     }
     Ok(())

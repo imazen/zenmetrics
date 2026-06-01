@@ -8,7 +8,9 @@ use cvvdp_gpu::kernels::pool;
 const UPSTREAM_JSON: &str = include_str!("../data/cvvdp_parameters.json");
 
 fn json_f32(obj: &serde_json::Value, key: &str) -> f32 {
-    obj[key].as_f64().unwrap_or_else(|| panic!("missing key: {key}")) as f32
+    obj[key]
+        .as_f64()
+        .unwrap_or_else(|| panic!("missing key: {key}")) as f32
 }
 
 fn json_f32_arr(obj: &serde_json::Value, key: &str) -> Vec<f32> {

@@ -10,9 +10,9 @@
 //! See the crate root for the typed-generic alternative
 //! (gated behind the `cubecl-types` feature).
 
-use crate::pipeline::Dssim;
 #[cfg(feature = "pixels")]
 use crate::Error;
+use crate::pipeline::Dssim;
 use crate::{NUM_SCALES, Result};
 
 #[cfg(feature = "pixels")]
@@ -83,10 +83,7 @@ trait DssimInner: Send {
     /// Cache the reference image's linear-RGB pyramid.
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score one candidate against the cached reference.
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score>;
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
@@ -134,10 +131,7 @@ where
         Dssim::set_reference(self, ref_rgb)
     }
 
-    fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let r = Dssim::compute_with_reference(self, dis_rgb)?;
         Ok(Score {
             value: r.score,
@@ -186,12 +180,7 @@ impl DssimOpaque {
     /// Returns the underlying [`Error`] if the GPU allocation fails or
     /// the image is smaller than the minimum 8×8 size required for the
     /// 5-scale pyramid.
-    pub fn new(
-        backend: Backend,
-        width: u32,
-        height: u32,
-        params: DssimParams,
-    ) -> Result<Self> {
+    pub fn new(backend: Backend, width: u32, height: u32, params: DssimParams) -> Result<Self> {
         Self::new_with_memory_mode(backend, width, height, params, crate::MemoryMode::Auto)
     }
 
@@ -250,8 +239,9 @@ impl DssimOpaque {
     where
         Dssim<R>: Send + 'static,
     {
-        let inner: Box<dyn DssimInner + Send> =
-            Box::new(Dssim::<R>::new_with_memory_mode(client, width, height, mode)?);
+        let inner: Box<dyn DssimInner + Send> = Box::new(Dssim::<R>::new_with_memory_mode(
+            client, width, height, mode,
+        )?);
         Ok(Self { inner, backend })
     }
 
@@ -273,11 +263,7 @@ impl DssimOpaque {
     ///
     /// Returns [`Error::DimensionMismatch`] if either buffer's length
     /// differs from `width × height × 3`.
-    pub fn compute_srgb_u8(
-        &mut self,
-        ref_rgb: &[u8],
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
     }
 
@@ -306,11 +292,7 @@ impl DssimOpaque {
     /// conversion path to sRGB RGB8 (rare — most non-CMYK formats
     /// convert).
     #[cfg(feature = "pixels")]
-    pub fn compute_pixels(
-        &mut self,
-        r: PixelSlice<'_>,
-        d: PixelSlice<'_>,
-    ) -> Result<Score> {
+    pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let (w, h) = self.inner.dims();
         let ref_buf = to_srgb_rgb8(&r, w, h)?;
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
@@ -338,10 +320,7 @@ impl DssimOpaque {
     /// Pack a `width × height × 3` sRGB-u8 buffer into the packed-u32
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         self.inner.pack_srgb(srgb)
     }
 
@@ -355,10 +334,7 @@ impl DssimOpaque {
     /// Score a distorted candidate against the cached reference.
     /// Returns [`crate::Error::NoCachedReference`] if no reference
     /// is cached.
-    pub fn compute_with_cached_reference_srgb_u8(
-        &mut self,
-        dis_rgb: &[u8],
-    ) -> Result<Score> {
+    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
     }
 

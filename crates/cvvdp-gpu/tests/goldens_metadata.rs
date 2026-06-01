@@ -18,7 +18,9 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use common::{CACHE_DIR_SUBDIR, GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir, const_str};
+use common::{
+    CACHE_DIR_SUBDIR, GOLDEN_VERSION, MANIFEST_SHA256, MANIFEST_URL, cache_dir, const_str,
+};
 
 // Tick 578 (refactored tick 584): compile-time pins for the goldens-
 // metadata structural invariants. The const-byte-loop primitives are
@@ -47,7 +49,10 @@ const _: () = {
         MANIFEST_SHA256.len() == 64,
         "MANIFEST_SHA256 must be 64 hex chars (a typo that truncates one char silently breaks fetch validation)",
     );
-    assert!(!GOLDEN_VERSION.is_empty(), "GOLDEN_VERSION must not be empty");
+    assert!(
+        !GOLDEN_VERSION.is_empty(),
+        "GOLDEN_VERSION must not be empty"
+    );
     let gv = GOLDEN_VERSION.as_bytes();
     assert!(
         gv[0] == b'v',
@@ -116,7 +121,10 @@ const _: () = {
 //     with this one)
 //   - all-ASCII alphanumerics or hyphen (filesystem-portable)
 const _: () = {
-    assert!(!CACHE_DIR_SUBDIR.is_empty(), "CACHE_DIR_SUBDIR must not be empty");
+    assert!(
+        !CACHE_DIR_SUBDIR.is_empty(),
+        "CACHE_DIR_SUBDIR must not be empty"
+    );
     assert!(
         const_str::contains(CACHE_DIR_SUBDIR.as_bytes(), b"cvvdp"),
         "CACHE_DIR_SUBDIR must contain 'cvvdp' to disambiguate from sibling crates",

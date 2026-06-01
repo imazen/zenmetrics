@@ -123,11 +123,11 @@
 
 use alloc::vec::Vec;
 
-use crate::eig::{cov_from_neighborhood, decompose_and_invert, EigResult};
+use crate::eig::{EigResult, cov_from_neighborhood, decompose_and_invert};
 use crate::params::IwssimParams;
 use crate::pipeline::WarmState;
-use crate::pyramid::{build_laplacian_pyramid, imenlarge2, pyramid_dims, PyrLevel};
-use crate::ssim::{compute_cs, CsStats};
+use crate::pyramid::{PyrLevel, build_laplacian_pyramid, imenlarge2, pyramid_dims};
+use crate::ssim::{CsStats, compute_cs};
 use crate::{Error, IwssimScore, NUM_SCALES, Result};
 
 /// Conservative halo per side, in scale-0 rows. Computed in §"Halo
@@ -292,12 +292,20 @@ fn build_y_matrix_body(
     // valid region. Body rows must be at strip rows >= ly AND
     // < strip_h - ly to allow the neighborhood read.
     let (body_start_s, body_end_s) = body_in_strip;
-    debug_assert!(body_start_s >= ly,
+    debug_assert!(
+        body_start_s >= ly,
         "strip halo at scale s ({} top_halo at scale s) too small for ly={} (body_start_s={})",
-        body_start_s, ly, body_start_s);
-    debug_assert!(body_end_s + ly <= strip_h_at_s,
+        body_start_s,
+        ly,
+        body_start_s
+    );
+    debug_assert!(
+        body_end_s + ly <= strip_h_at_s,
         "strip bottom halo at scale s too small for ly={} (body_end_s={}, strip_h_at_s={})",
-        ly, body_end_s, strip_h_at_s);
+        ly,
+        body_end_s,
+        strip_h_at_s
+    );
 
     // Rows produced in output Y: each "row" of Y corresponds to one
     // output pixel in the body's valid region.
@@ -426,8 +434,10 @@ fn fold_iw_for_strip_scale(
     // the iw map shape (nblv, nblh).
     let lx = (block_w - 1) / 2;
     let body_h_s = body_end_s - body_start_s;
-    debug_assert_eq!(body_h_s, nblv,
-        "box stats body rows ({body_h_s}) must equal Y nblv ({nblv})");
+    debug_assert_eq!(
+        body_h_s, nblv,
+        "box stats body rows ({body_h_s}) must equal Y nblv ({nblv})"
+    );
     let mut g_c = alloc::vec![0.0_f32; nblv * nblh];
     let mut vv_c = alloc::vec![0.0_f32; nblv * nblh];
     for r in 0..nblv {
@@ -468,17 +478,22 @@ fn fold_iw_for_strip_scale(
     // The cs slab passed is bound1-cropped (already trimmed top/bot)
     // and matches iw_crop's shape on rows. Columns are bound1-cropped
     // inside this fn so iw/cs align.
-    debug_assert_eq!(nblv, cs_h + 2 * bound1,
-        "nblv must equal cs_h + 2*bound1 (nblv={nblv}, cs_h={cs_h}, bound1={bound1})");
-    debug_assert_eq!(nblh, cs_w + 2 * bound1,
-        "nblh must equal cs_w + 2*bound1 (nblh={nblh}, cs_w={cs_w}, bound1={bound1})");
+    debug_assert_eq!(
+        nblv,
+        cs_h + 2 * bound1,
+        "nblv must equal cs_h + 2*bound1 (nblv={nblv}, cs_h={cs_h}, bound1={bound1})"
+    );
+    debug_assert_eq!(
+        nblh,
+        cs_w + 2 * bound1,
+        "nblh must equal cs_w + 2*bound1 (nblh={nblh}, cs_w={cs_w}, bound1={bound1})"
+    );
 
     // Accumulate sum_csiw, sum_iw over (cs_h, cs_w).
     let mut sum_csiw = 0.0_f64;
     let mut sum_iw = 0.0_f64;
     for r in 0..cs_h {
-        let iw_row =
-            &infow[(r + bound1) * nblh + bound1..(r + bound1) * nblh + bound1 + cs_w];
+        let iw_row = &infow[(r + bound1) * nblh + bound1..(r + bound1) * nblh + bound1 + cs_w];
         let cs_row = &cs[r * cs_w..(r + 1) * cs_w];
         for c in 0..cs_w {
             let iw = iw_row[c];
@@ -779,12 +794,23 @@ pub(crate) fn score_strip_internal(
                 // first row is at least ly; for bottom-of-image
                 // strips the trim ensures body's last row + ly
                 // fits in the strip (which goes to image_h_at_s).
-                debug_assert!(body_in_strip_s.0 >= ly,
+                debug_assert!(
+                    body_in_strip_s.0 >= ly,
                     "body_in_strip_s.0 {} < ly {} (strip_start_at_s={}, body_start_image_trim={})",
-                    body_in_strip_s.0, ly, strip_start_at_s, body_start_image_trim);
-                debug_assert!(body_in_strip_s.1 + ly <= strip_h_at_s,
+                    body_in_strip_s.0,
+                    ly,
+                    strip_start_at_s,
+                    body_start_image_trim
+                );
+                debug_assert!(
+                    body_in_strip_s.1 + ly <= strip_h_at_s,
                     "body_in_strip_s.1 {} + ly {} > strip_h_at_s {} (strip_start_at_s={}, body_end_image_trim={})",
-                    body_in_strip_s.1, ly, strip_h_at_s, strip_start_at_s, body_end_image_trim);
+                    body_in_strip_s.1,
+                    ly,
+                    strip_h_at_s,
+                    strip_start_at_s,
+                    body_end_image_trim
+                );
 
                 let big_n = big_n_at(s);
                 let parent_enabled_at = parent_enabled && s < NUM_SCALES - 2;
@@ -855,11 +881,8 @@ pub(crate) fn score_strip_internal(
                 // (strip_h_at_s - 10, w_s - 10). Extract body's
                 // contribution to the top-scale mean.
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
-                let (cs_body_start, cs_body_end) = body_cs_range_at_scale(
-                    cs_full.cs_h,
-                    body_in_strip_s,
-                    strip_h_at_s,
-                );
+                let (cs_body_start, cs_body_end) =
+                    body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);
                 let cs_body_h = cs_body_end.saturating_sub(cs_body_start);
                 if cs_body_h > 0 {
                     let cs_w_at_s = cs_full.cs_w;
@@ -942,13 +965,7 @@ pub(crate) fn score_strip_internal(
                 if strip_h_at_s <= 10 {
                     continue;
                 }
-                let cs_full = compute_cs(
-                    &lp_ref_v[s],
-                    &lp_dis_v[s],
-                    strip_h_at_s,
-                    w_s,
-                    false,
-                );
+                let cs_full = compute_cs(&lp_ref_v[s], &lp_dis_v[s], strip_h_at_s, w_s, false);
 
                 let bound1 = params.bound1() as usize;
                 // body_in_strip_s is in strip-local Y-row coords, post
@@ -1032,8 +1049,7 @@ pub(crate) fn score_strip_internal(
                 //
                 // For non-clamped cases δ_top = δ_bot = 0 → no change.
                 let body_y_start_offset = (-cs_body_start_i).max(0) as usize;
-                let body_y_end_offset =
-                    ((cs_body_end_i - cs_body_end as isize).max(0)) as usize;
+                let body_y_end_offset = ((cs_body_end_i - cs_body_end as isize).max(0)) as usize;
                 let body_in_strip_s_final = (
                     body_in_strip_s.0 + body_y_start_offset,
                     body_in_strip_s.1 - body_y_end_offset,
@@ -1041,8 +1057,8 @@ pub(crate) fn score_strip_internal(
 
                 let mut cs_body = alloc::vec![0.0_f32; cs_body_h * cs_body_w];
                 for r in 0..cs_body_h {
-                    let src_row = &cs_full.cs[(cs_body_start + r) * cs_w_at_s
-                        ..(cs_body_start + r + 1) * cs_w_at_s];
+                    let src_row = &cs_full.cs
+                        [(cs_body_start + r) * cs_w_at_s..(cs_body_start + r + 1) * cs_w_at_s];
                     cs_body[r * cs_body_w..(r + 1) * cs_body_w].copy_from_slice(src_row);
                 }
                 let cs_pass2 = cs_body;
@@ -1117,19 +1133,10 @@ pub(crate) fn score_strip_internal(
                 if strip_h_at_s <= 10 {
                     continue;
                 }
-                let cs_full = compute_cs(
-                    &lp_ref_v[s],
-                    &lp_dis_v[s],
-                    strip_h_at_s,
-                    w_s,
-                    false,
-                );
+                let cs_full = compute_cs(&lp_ref_v[s], &lp_dis_v[s], strip_h_at_s, w_s, false);
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
-                let (cs_body_start, cs_body_end) = body_cs_range_at_scale(
-                    cs_full.cs_h,
-                    body_in_strip_s,
-                    strip_h_at_s,
-                );
+                let (cs_body_start, cs_body_end) =
+                    body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);
                 let cs_body_h = cs_body_end.saturating_sub(cs_body_start);
                 if cs_body_h == 0 {
                     continue;
@@ -1265,8 +1272,14 @@ pub(crate) fn score_with_warm_ref_strip_internal(
             // path produces — same `cov_from_neighborhood` input.
             // Memory cost: ~`nblv * nblh * big_n * 4` bytes ≈ 380 MB
             // at scale 0 of 40 MP; freed after this loop.
-            let (y_full, nexp, _, _) =
-                build_y_matrix_full(&warm.lp_ref[s], parent_band.as_deref(), h_s, w_s, block_h, block_w);
+            let (y_full, nexp, _, _) = build_y_matrix_full(
+                &warm.lp_ref[s],
+                parent_band.as_deref(),
+                h_s,
+                w_s,
+                block_h,
+                block_w,
+            );
             let cu = cov_from_neighborhood(&y_full, nexp, big_n);
             let eig = decompose_and_invert(&cu, big_n);
             warm.eigs[s] = Some(eig);
@@ -1348,26 +1361,17 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 let n = strip_h_at_s * w_s;
                 let mut buf = alloc::vec![0.0_f32; n];
                 let src_start = strip_start_at_s * w_s;
-                buf.copy_from_slice(
-                    &warm.lp_ref[s][src_start..src_start + n],
-                );
+                buf.copy_from_slice(&warm.lp_ref[s][src_start..src_start + n]);
                 buf
             };
 
-            let cs_full = compute_cs(
-                &ref_lp_strip_at_s,
-                &lp_dis_v[s],
-                strip_h_at_s,
-                w_s,
-                false,
-            );
+            let cs_full = compute_cs(&ref_lp_strip_at_s, &lp_dis_v[s], strip_h_at_s, w_s, false);
 
             // Body cs rows in strip-cs coords.
             let cs_body_start_i = (body_in_strip_s.0 + bound1) as isize - 5;
             let cs_body_end_i = (body_in_strip_s.1 as isize - bound1 as isize) - 5;
             let cs_body_start = cs_body_start_i.max(0) as usize;
-            let cs_body_end =
-                (cs_body_end_i.max(0) as usize).min(cs_full.cs_h);
+            let cs_body_end = (cs_body_end_i.max(0) as usize).min(cs_full.cs_h);
             if cs_body_end <= cs_body_start {
                 continue;
             }
@@ -1378,8 +1382,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 continue;
             }
             let body_y_start_offset = (-cs_body_start_i).max(0) as usize;
-            let body_y_end_offset =
-                ((cs_body_end_i - cs_body_end as isize).max(0)) as usize;
+            let body_y_end_offset = ((cs_body_end_i - cs_body_end as isize).max(0)) as usize;
             let body_in_strip_s_final = (
                 body_in_strip_s.0 + body_y_start_offset,
                 body_in_strip_s.1 - body_y_end_offset,
@@ -1387,8 +1390,8 @@ pub(crate) fn score_with_warm_ref_strip_internal(
 
             let mut cs_body = alloc::vec![0.0_f32; cs_body_h * cs_body_w];
             for r in 0..cs_body_h {
-                let src_row = &cs_full.cs[(cs_body_start + r) * cs_w_at_s
-                    ..(cs_body_start + r + 1) * cs_w_at_s];
+                let src_row = &cs_full.cs
+                    [(cs_body_start + r) * cs_w_at_s..(cs_body_start + r + 1) * cs_w_at_s];
                 cs_body[r * cs_body_w..(r + 1) * cs_body_w].copy_from_slice(src_row);
             }
 
@@ -1418,9 +1421,7 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                 let mut g_ref_strip_at_s1 = alloc::vec![0.0_f32; n];
                 let src_start = strip_start_at_s1 * w_nxt;
                 if src_start + n <= warm.g_ref[s + 1].len() {
-                    g_ref_strip_at_s1.copy_from_slice(
-                        &warm.g_ref[s + 1][src_start..src_start + n],
-                    );
+                    g_ref_strip_at_s1.copy_from_slice(&warm.g_ref[s + 1][src_start..src_start + n]);
                 } else {
                     // Strip extends past image; fall back to full
                     // image (should not happen in practice).
@@ -1473,19 +1474,10 @@ pub(crate) fn score_with_warm_ref_strip_internal(
                     }
                     buf
                 };
-                let cs_full = compute_cs(
-                    &ref_lp_strip_at_s,
-                    &lp_dis_v[s],
-                    strip_h_at_s,
-                    w_s,
-                    true,
-                );
+                let cs_full = compute_cs(&ref_lp_strip_at_s, &lp_dis_v[s], strip_h_at_s, w_s, true);
                 let body_in_strip_s = body_at_scale(body_in_strip.0, body_in_strip.1, s);
-                let (cs_body_start, cs_body_end) = body_cs_range_at_scale(
-                    cs_full.cs_h,
-                    body_in_strip_s,
-                    strip_h_at_s,
-                );
+                let (cs_body_start, cs_body_end) =
+                    body_cs_range_at_scale(cs_full.cs_h, body_in_strip_s, strip_h_at_s);
                 let cs_body_h = cs_body_end.saturating_sub(cs_body_start);
                 if cs_body_h > 0 {
                     let cs_w_at_s = cs_full.cs_w;

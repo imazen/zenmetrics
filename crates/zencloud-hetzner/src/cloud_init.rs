@@ -82,12 +82,7 @@ pub fn build_user_data(spec: &WorkerBootstrap) -> String {
     if let Some(pubkey) = &spec.ssh_authorized_pubkey {
         // One trimmed line; reject anything that looks like an attempt
         // to inject extra commands (newlines / quotes).
-        let cleaned = pubkey
-            .lines()
-            .next()
-            .unwrap_or("")
-            .trim()
-            .to_string();
+        let cleaned = pubkey.lines().next().unwrap_or("").trim().to_string();
         if !cleaned.is_empty() && !cleaned.contains('\'') {
             script.push_str("# Diagnostic SSH key (launcher-side debugger).\n");
             script.push_str("mkdir -p /root/.ssh\n");
@@ -147,11 +142,7 @@ pub fn build_user_data(spec: &WorkerBootstrap) -> String {
     script.push_str("# Write env file for the worker container (out of /proc/<pid>/cmdline).\n");
     script.push_str("mkdir -p /etc/zen\n");
     script.push_str("cat >/etc/zen/worker.env <<'ZEN_EOF'\n");
-    push_env_line(
-        &mut script,
-        "SWEEP_RUN_ID",
-        &spec.sweep_id,
-    );
+    push_env_line(&mut script, "SWEEP_RUN_ID", &spec.sweep_id);
     push_env_line(&mut script, "WORKER_BACKEND", "hetzner");
     push_env_line(&mut script, "R2_ACCOUNT_ID", &spec.r2_account_id);
     push_env_line(&mut script, "R2_ACCESS_KEY_ID", &spec.r2_access_key_id);
@@ -196,7 +187,9 @@ pub fn build_user_data(spec: &WorkerBootstrap) -> String {
         sweep_id = sh_squote(&spec.sweep_id),
         chunks_r2 = sh_squote(&chunks_r2_uri),
     ));
-    script.push_str("echo \"[$(date -u +%Y-%m-%dT%H:%M:%SZ)] zen-bootstrap done; worker container launched\"\n");
+    script.push_str(
+        "echo \"[$(date -u +%Y-%m-%dT%H:%M:%SZ)] zen-bootstrap done; worker container launched\"\n",
+    );
     script
 }
 
@@ -309,8 +302,7 @@ mod tests {
     #[test]
     fn ssh_pubkey_with_embedded_quote_is_rejected() {
         let mut spec = sample_spec();
-        spec.ssh_authorized_pubkey =
-            Some("ssh-ed25519 AAAAC3xxx 'comment'".into());
+        spec.ssh_authorized_pubkey = Some("ssh-ed25519 AAAAC3xxx 'comment'".into());
         let s = build_user_data(&spec);
         // The cleaned-line check drops the injection; nothing lands.
         assert!(!s.contains("/root/.ssh/authorized_keys"));

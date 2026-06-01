@@ -46,7 +46,10 @@ fn parse_u32(name: &str, default: u32) -> u32 {
 }
 
 fn fmt_ms_csv(t: &[f64]) -> String {
-    t.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")
+    t.iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -88,7 +91,9 @@ fn main() {
             all_runs.push(warm);
             for _ in 0..reps {
                 let t = Instant::now();
-                let _ = c.compute_dkl_jod(&r, &d2, ppd).expect("compute_dkl_jod rep");
+                let _ = c
+                    .compute_dkl_jod(&r, &d2, ppd)
+                    .expect("compute_dkl_jod rep");
                 all_runs.push(t.elapsed().as_secs_f64() * 1e3);
             }
             j
@@ -115,7 +120,9 @@ fn main() {
             let mut c =
                 Cvvdp::<Backend>::new_strip(client.clone(), w, h, body, CvvdpParams::PLACEHOLDER)
                     .expect("Cvvdp::new_strip");
-            let j = c.compute_dkl_jod(&r, &d, ppd).expect("compute_dkl_jod (strip)");
+            let j = c
+                .compute_dkl_jod(&r, &d, ppd)
+                .expect("compute_dkl_jod (strip)");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
             for _ in 0..reps {
@@ -178,7 +185,9 @@ fn main() {
                 capped_levels,
             )
             .expect("Cvvdp::new_capped_pyramid");
-            let j = c.compute_dkl_jod(&r, &d, ppd).expect("compute_dkl_jod (capped)");
+            let j = c
+                .compute_dkl_jod(&r, &d, ppd)
+                .expect("compute_dkl_jod (capped)");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
             for _ in 0..reps {
@@ -199,7 +208,9 @@ fn main() {
                 MemoryMode::Auto,
             )
             .expect("Cvvdp::new_with_memory_mode(Auto)");
-            let j = c.compute_dkl_jod(&r, &d, ppd).expect("compute_dkl_jod (auto)");
+            let j = c
+                .compute_dkl_jod(&r, &d, ppd)
+                .expect("compute_dkl_jod (auto)");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
             for _ in 0..reps {

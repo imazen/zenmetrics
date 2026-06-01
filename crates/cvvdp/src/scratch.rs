@@ -214,12 +214,7 @@ impl Scratch {
     /// dispatcher). See `crates/cvvdp/docs/CPU_KSPL_HANDOFF_chunks_4_and_6.md`
     /// for the remaining work.
     #[allow(dead_code)]
-    pub fn new_strip(
-        width: usize,
-        height: usize,
-        n_levels: usize,
-        h_body: u32,
-    ) -> Self {
+    pub fn new_strip(width: usize, height: usize, n_levels: usize, h_body: u32) -> Self {
         let n = width * height;
         Self {
             dist_a: vec![0.0; n],

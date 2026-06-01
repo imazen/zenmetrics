@@ -33,9 +33,7 @@ fn synth_rgb_pair(w: u32, h: u32, seed: u64) -> (Vec<u8>, Vec<u8>) {
 fn parity_at(w: u32, h: u32, strip_h: u32, seed: u64, tol_abs: f64) {
     let (ref_buf, dis_buf) = synth_rgb_pair(w, h, seed);
     let mut scorer_full = Iwssim::new(w, h).expect("full Iwssim");
-    let full = scorer_full
-        .score(&ref_buf, &dis_buf)
-        .expect("full score");
+    let full = scorer_full.score(&ref_buf, &dis_buf).expect("full score");
     let mut scorer_strip = Iwssim::new(w, h).expect("strip Iwssim");
     let strip = scorer_strip
         .score_strip(&ref_buf, &dis_buf, strip_h)
@@ -211,9 +209,7 @@ fn strip_with_iw_flag_off() {
         ..IwssimParams::default()
     };
     let mut scorer_full = Iwssim::with_params(512, 512, params).expect("full Iwssim");
-    let full = scorer_full
-        .score(&ref_buf, &dis_buf)
-        .expect("full score");
+    let full = scorer_full.score(&ref_buf, &dis_buf).expect("full score");
     let mut scorer_strip = Iwssim::with_params(512, 512, params).expect("strip Iwssim");
     let strip = scorer_strip
         .score_strip(&ref_buf, &dis_buf, 256)

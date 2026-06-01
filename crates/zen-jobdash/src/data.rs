@@ -14,8 +14,16 @@ pub struct DashData {
 }
 
 impl DashData {
-    pub fn new(rows: Vec<LedgerRow>, blobs: Vec<BlobIndexEntry>, workers: Vec<WorkerReport>) -> Self {
-        Self { rows, blobs, workers }
+    pub fn new(
+        rows: Vec<LedgerRow>,
+        blobs: Vec<BlobIndexEntry>,
+        workers: Vec<WorkerReport>,
+    ) -> Self {
+        Self {
+            rows,
+            blobs,
+            workers,
+        }
     }
 
     /// Load from local files: one or more ledger sidecars, an optional blob-index parquet, and an
@@ -41,7 +49,11 @@ impl DashData {
             }
             None => Vec::new(),
         };
-        Ok(Self { rows, blobs, workers })
+        Ok(Self {
+            rows,
+            blobs,
+            workers,
+        })
     }
 
     /// Load ledger, blob-index, and workers from local paths **or** `s3://` URIs (via s5cmd when
@@ -68,7 +80,11 @@ impl DashData {
             }
             None => Vec::new(),
         };
-        Ok(Self { rows, blobs, workers })
+        Ok(Self {
+            rows,
+            blobs,
+            workers,
+        })
     }
 }
 

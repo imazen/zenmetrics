@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::content::{sha256, Sha256Hex};
+use crate::content::{Sha256Hex, sha256};
 
 /// Semantic identity of a result set — the human-meaningful description of "what work this is".
 /// `q_grid`/`config` are *descriptors* (e.g. `"0..=100step5"`), not enumerated lists, so the same
@@ -82,6 +82,10 @@ mod tests {
             rows: 513_570,
             r2_path: "s3://zentrain/cvvdp-v15rc/omni/".into(),
         };
-        assert_eq!(existing.key(), wanted, "the wanted result set is discoverable by description");
+        assert_eq!(
+            existing.key(),
+            wanted,
+            "the wanted result set is discoverable by description"
+        );
     }
 }

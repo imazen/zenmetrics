@@ -237,13 +237,7 @@ fn build_y_matrix(
 ///     infow += log2(1 + ((vv + (1 + g²)·σ²)·ss·λ_k + σ²·vv) / σ⁴)
 /// infow[infow < tol] = 0
 /// ```
-fn compute_infow(
-    g: &[f32],
-    vv: &[f32],
-    ss: &[f32],
-    lambdas: &[f32],
-    sigma_nsq: f32,
-) -> Vec<f32> {
+fn compute_infow(g: &[f32], vv: &[f32], ss: &[f32], lambdas: &[f32], sigma_nsq: f32) -> Vec<f32> {
     let n = g.len();
     debug_assert_eq!(vv.len(), n);
     debug_assert_eq!(ss.len(), n);
@@ -264,7 +258,11 @@ fn compute_infow(
             acc += (1.0 + arg).log2();
         }
         // Clamp at 0 (the upstream sets `infow[infow < tol] = 0`).
-        if acc >= TOL { infow[i] = acc; } else { infow[i] = 0.0; }
+        if acc >= TOL {
+            infow[i] = acc;
+        } else {
+            infow[i] = 0.0;
+        }
     }
     infow
 }

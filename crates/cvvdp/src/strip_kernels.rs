@@ -384,8 +384,11 @@ pub(crate) fn downscale_strip_into(
                     src[buf_row * src_w + x]
                 }
             };
-            vscratch[dy_local * src_w + x] =
-                k[0] * read(-2) + k[1] * read(-1) + k[2] * read(0) + k[3] * read(1) + k[4] * read(2);
+            vscratch[dy_local * src_w + x] = k[0] * read(-2)
+                + k[1] * read(-1)
+                + k[2] * read(0)
+                + k[3] * read(1)
+                + k[4] * read(2);
         }
     }
 
@@ -463,8 +466,11 @@ pub(crate) fn downscale_strip_into(
                     vscratch[dy_local * src_w + c as usize]
                 }
             };
-            dst[dy_local * dst_w + dx] =
-                k[0] * read(-2) + k[1] * read(-1) + k[2] * read(0) + k[3] * read(1) + k[4] * read(2);
+            dst[dy_local * dst_w + dx] = k[0] * read(-2)
+                + k[1] * read(-1)
+                + k[2] * read(0)
+                + k[3] * read(1)
+                + k[4] * read(2);
         }
     }
 
@@ -640,11 +646,7 @@ pub(crate) fn upscale_h_strip_into(
                     src[y * src_w + src_w - 1]
                 } else if z >= 2 && (z & 1) == 0 {
                     let kx = (z - 2) >> 1;
-                    if kx < src_w {
-                        src[y * src_w + kx]
-                    } else {
-                        0.0
-                    }
+                    if kx < src_w { src[y * src_w + kx] } else { 0.0 }
                 } else {
                     0.0
                 };
@@ -1019,7 +1021,8 @@ mod tests {
         const CSF_L_BKG_INV_STEP: f32 = 4.919_830_6;
         const CSF_L_BKG_AXIS_MIN: f32 = -2.301_03;
         const CSF_L_BKG_MAX_IDX: f32 = 30.999_999;
-        const LOG_SENSITIVITY_CORRECTION: f32 = crate::kernels::csf::SENSITIVITY_CORRECTION_DB / 20.0;
+        const LOG_SENSITIVITY_CORRECTION: f32 =
+            crate::kernels::csf::SENSITIVITY_CORRECTION_DB / 20.0;
         let off_raw = (log_l - CSF_L_BKG_AXIS_MIN) * CSF_L_BKG_INV_STEP;
         let off_lo = off_raw.clamp(0.0, CSF_L_BKG_MAX_IDX);
         let lo_idx_f = off_lo.floor();
@@ -1402,15 +1405,7 @@ mod tests {
                 }
             }
             let mut strip_dst = vec![0.0_f32; out_w * in_h];
-            upscale_h_strip_into(
-                &vscratch,
-                sw,
-                in_h,
-                &mut strip_dst,
-                out_w,
-                0,
-                in_h as u32,
-            );
+            upscale_h_strip_into(&vscratch, sw, in_h, &mut strip_dst, out_w, 0, in_h as u32);
             for i in 0..out_w * in_h {
                 assert_eq!(
                     ref_dst[i].to_bits(),

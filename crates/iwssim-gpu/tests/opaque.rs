@@ -50,8 +50,10 @@ fn opaque_srgb_u8_matches_typed() {
         .expect("opaque compute_srgb_u8");
 
     let rel = (opaque_score.value - typed_score.score).abs() / typed_score.score.abs().max(1e-12);
-    eprintln!("opaque_srgb_u8_matches_typed: opaque={} typed={} rel={:.3e}",
-        opaque_score.value, typed_score.score, rel);
+    eprintln!(
+        "opaque_srgb_u8_matches_typed: opaque={} typed={} rel={:.3e}",
+        opaque_score.value, typed_score.score, rel
+    );
     // Post-2026-05-22 cov_finalize f64 promotion: opaque vs typed measured
     // bit-identical (rel=0.0) on CUDA. The 1e-7 gate leaves ~1 ULP@1.0
     // headroom for wgpu / cubecl-cpu where the reduction order may
@@ -92,8 +94,7 @@ fn opaque_pixels_handles_stride() {
             .copy_from_slice(&dist_tight[y * row_bytes..(y + 1) * row_bytes]);
     }
 
-    let mut opaque =
-        IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
+    let mut opaque = IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
 
     let r_tight = PixelSlice::new(&tight, w, h, row_bytes, descriptor).expect("tight ref");
     let d_tight = PixelSlice::new(&dist_tight, w, h, row_bytes, descriptor).expect("tight dist");
@@ -108,8 +109,10 @@ fn opaque_pixels_handles_stride() {
         .expect("padded compute_pixels");
 
     let rel = (tight_score.value - padded_score.value).abs() / tight_score.value.abs().max(1e-12);
-    eprintln!("opaque_pixels_stride: tight={} padded={} rel={:.3e}",
-        tight_score.value, padded_score.value, rel);
+    eprintln!(
+        "opaque_pixels_stride: tight={} padded={} rel={:.3e}",
+        tight_score.value, padded_score.value, rel
+    );
     // Two calls on the same instance with the same content (tight vs
     // strided buffer that the PixelSlice reads with a per-row gather
     // into the same internal tight buffer) should produce bit-
@@ -138,8 +141,7 @@ fn compute_on_identical_returns_1() {
     // contract has to hold for any input, not just trivial ones.
     let img = make_image(w, h, 42);
 
-    let mut opaque =
-        IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
+    let mut opaque = IwssimOpaque::new(BACKEND_E, w, h, IwssimParams::DEFAULT).expect("opaque new");
     let score = opaque
         .compute_srgb_u8(&img, &img)
         .expect("opaque compute_srgb_u8 identical");

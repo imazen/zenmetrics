@@ -175,7 +175,10 @@ mod tests {
     #[test]
     fn unreferenced_cheap_is_lru_evictable() {
         let e = entry(b"jpeg", Regenerability::CheapRegenerable);
-        assert_eq!(verdict(&e, &HashSet::new(), &HashSet::new()), GcVerdict::EvictCheap);
+        assert_eq!(
+            verdict(&e, &HashSet::new(), &HashSet::new()),
+            GcVerdict::EvictCheap
+        );
     }
 
     #[test]
@@ -226,12 +229,16 @@ mod tests {
         let referenced_blob = cheap_aged(b"hot", 10);
         let referenced: HashSet<_> = [referenced_blob.sha.clone()].into_iter().collect();
         let index = vec![
-            referenced_blob,                                       // referenced cheap — never evicted
-            entry(b"source", Regenerability::NotRegenerable),      // irreplaceable — never in cheap LRU
-            cheap_aged(b"cold", 1),                                // the only LRU candidate
+            referenced_blob,                                  // referenced cheap — never evicted
+            entry(b"source", Regenerability::NotRegenerable), // irreplaceable — never in cheap LRU
+            cheap_aged(b"cold", 1),                           // the only LRU candidate
         ];
         let evict = lru_cap_evict(&index, &referenced, &HashSet::new(), 0);
-        assert_eq!(evict, vec![sha256(b"cold")], "only unreferenced cheap blobs are LRU-evictable");
+        assert_eq!(
+            evict,
+            vec![sha256(b"cold")],
+            "only unreferenced cheap blobs are LRU-evictable"
+        );
     }
 
     #[test]

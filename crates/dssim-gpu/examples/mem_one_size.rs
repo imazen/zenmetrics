@@ -45,7 +45,10 @@ fn parse_u32(name: &str, default: u32) -> u32 {
 }
 
 fn fmt_ms_csv(t: &[f64]) -> String {
-    t.iter().map(|v| format!("{v:.3}")).collect::<Vec<_>>().join(",")
+    t.iter()
+        .map(|v| format!("{v:.3}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn median(mut t: Vec<f64>) -> f64 {
@@ -90,8 +93,8 @@ fn main() {
             res.score
         }
         "strip" => {
-            let mut dz = Dssim::<Backend>::new_strip(client.clone(), w, h, body)
-                .expect("Dssim::new_strip");
+            let mut dz =
+                Dssim::<Backend>::new_strip(client.clone(), w, h, body).expect("Dssim::new_strip");
             let res = dz.compute(&r, &d).expect("compute strip");
             let warm = t_warm0.elapsed().as_secs_f64() * 1e3;
             all_runs.push(warm);
@@ -120,8 +123,8 @@ fn main() {
             res.score
         }
         "warm_ref_strip" => {
-            let mut dz = Dssim::<Backend>::new_strip(client.clone(), w, h, body)
-                .expect("Dssim::new_strip");
+            let mut dz =
+                Dssim::<Backend>::new_strip(client.clone(), w, h, body).expect("Dssim::new_strip");
             dz.set_reference(&r).expect("set_reference (strip)");
             let res = dz
                 .compute_with_reference(&d)

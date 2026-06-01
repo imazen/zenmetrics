@@ -34,7 +34,10 @@ fn make_color_rgb(w: u32, h: u32, seed: u32) -> Vec<u8> {
         for x in 0..w {
             let r = ((x.wrapping_mul(3).wrapping_add(seed)) & 0xff) as u8;
             let g = ((y.wrapping_mul(5).wrapping_add(seed.wrapping_mul(7))) & 0xff) as u8;
-            let b = ((x.wrapping_add(y).wrapping_mul(11).wrapping_add(seed.wrapping_mul(13)))
+            let b = ((x
+                .wrapping_add(y)
+                .wrapping_mul(11)
+                .wrapping_add(seed.wrapping_mul(13)))
                 & 0xff) as u8;
             out.push(r);
             out.push(g);
@@ -53,17 +56,19 @@ fn native_strip_matches_host_strip_256() {
 
     let client = BackendT::client(&Default::default());
 
-    let mut s_host =
-        Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
-    s_host.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref host");
+    let mut s_host = Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
+    s_host
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref host");
     let v_host = s_host
         .compute_rgb_with_reference_stripped(&d_rgb)
         .expect("compute host")
         .score;
 
-    let mut s_native =
-        Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
-    s_native.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref native");
+    let mut s_native = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
+    s_native
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref native");
     let v_native = s_native
         .compute_rgb_with_reference_stripped_native(&d_rgb)
         .expect("compute native")
@@ -85,17 +90,19 @@ fn native_strip_matches_host_strip_512_body_256() {
 
     let client = BackendT::client(&Default::default());
 
-    let mut s_host =
-        Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
-    s_host.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref host");
+    let mut s_host = Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
+    s_host
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref host");
     let v_host = s_host
         .compute_rgb_with_reference_stripped(&d_rgb)
         .expect("compute host")
         .score;
 
-    let mut s_native =
-        Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
-    s_native.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref native");
+    let mut s_native = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
+    s_native
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref native");
     let v_native = s_native
         .compute_rgb_with_reference_stripped_native(&d_rgb)
         .expect("compute native")
@@ -118,17 +125,19 @@ fn native_strip_matches_host_strip_1024_body_256() {
 
     let client = BackendT::client(&Default::default());
 
-    let mut s_host =
-        Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
-    s_host.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref host");
+    let mut s_host = Iwssim::<BackendT>::new_strip(client.clone(), w, h, 256).expect("strip host");
+    s_host
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref host");
     let v_host = s_host
         .compute_rgb_with_reference_stripped(&d_rgb)
         .expect("compute host")
         .score;
 
-    let mut s_native =
-        Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
-    s_native.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref native");
+    let mut s_native = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip native");
+    s_native
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref native");
     let v_native = s_native
         .compute_rgb_with_reference_stripped_native(&d_rgb)
         .expect("compute native")
@@ -148,7 +157,9 @@ fn native_strip_self_identity_512() {
     let r_rgb = make_color_rgb(w, h, 41);
     let client = BackendT::client(&Default::default());
     let mut strip = Iwssim::<BackendT>::new_strip(client, w, h, 256).expect("strip");
-    strip.set_rgb_reference_stripped(&r_rgb).expect("set_rgb_ref");
+    strip
+        .set_rgb_reference_stripped(&r_rgb)
+        .expect("set_rgb_ref");
     let s = strip
         .compute_rgb_with_reference_stripped_native(&r_rgb)
         .expect("native compute")

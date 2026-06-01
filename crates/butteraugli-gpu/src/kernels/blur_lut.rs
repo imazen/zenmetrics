@@ -335,7 +335,6 @@ fn gamma(v: f32) -> f32 {
     19.245_014_f32 * f32::ln(v + 9.971_064) - 23.160_463
 }
 
-
 /// 3-channel fused vertical blur + MF subtract + xyb_low_freq_to_vals
 /// for the LF separation stage.
 ///

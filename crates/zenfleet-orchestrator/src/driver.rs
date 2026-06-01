@@ -214,10 +214,7 @@ impl<P: ProviderHandle, R: R2Operator> FleetSweep<P, R> {
         let error_prefix = r2_layout::errors_prefix(&self.sweep_id);
         let instances_prefix = r2_layout::instances_prefix(&self.sweep_id);
         eprintln!("[poll]   watching s3://{}/{omni_prefix}", self.bucket);
-        eprintln!(
-            "[poll]   snapshots s3://{}/{instances_prefix}",
-            self.bucket
-        );
+        eprintln!("[poll]   snapshots s3://{}/{instances_prefix}", self.bucket);
 
         let mut out = PollResult::default();
         let cap = Duration::from_secs(self.max_wall_secs);
@@ -278,9 +275,7 @@ impl<P: ProviderHandle, R: R2Operator> FleetSweep<P, R> {
                     omni[0]
                 );
             }
-            if (omni.len() as u32) >= replicas_provisioned
-                && out.t_all_n_sidecars_secs.is_none()
-            {
+            if (omni.len() as u32) >= replicas_provisioned && out.t_all_n_sidecars_secs.is_none() {
                 out.t_all_n_sidecars_secs = Some(elapsed.as_secs_f64());
                 eprintln!(
                     "[poll] all-N sidecars at t={:.1}s (n={} >= replicas_provisioned={})",
@@ -354,9 +349,7 @@ impl<P: ProviderHandle, R: R2Operator> FleetSweep<P, R> {
                                     );
                                 }
                                 Err(e) => {
-                                    eprintln!(
-                                        "[spec] re-dispatch FAILED chunk_id={cid}: {e:#}"
-                                    );
+                                    eprintln!("[spec] re-dispatch FAILED chunk_id={cid}: {e:#}");
                                 }
                             }
                         }
@@ -546,7 +539,8 @@ impl<P: ProviderHandle, R: R2Operator> FleetSweep<P, R> {
                 if entry.t_first_seen_status.is_none() && inst_state.is_some() {
                     entry.t_first_seen_status = inst_state.clone();
                 }
-                if entry.t_first_running_unix.is_none() && inst_state.as_deref() == Some("running") {
+                if entry.t_first_running_unix.is_none() && inst_state.as_deref() == Some("running")
+                {
                     entry.t_first_running_unix = Some(ts);
                 }
                 entry.last_status_seen = inst_state.or(Some(state.clone()));
@@ -627,4 +621,3 @@ fn short24(s: &str) -> String {
         out
     }
 }
-

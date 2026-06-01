@@ -28,7 +28,10 @@ const _: () = assert!(
     LOG_L_BKG_AXIS.len() == N_L_BKG,
     "LOG_L_BKG_AXIS.len() must equal N_L_BKG (CSF luminance-axis LUT size)",
 );
-const _: () = assert!(N_L_BKG == 32, "N_L_BKG drifted from canonical pycvvdp value 32");
+const _: () = assert!(
+    N_L_BKG == 32,
+    "N_L_BKG drifted from canonical pycvvdp value 32"
+);
 const _: () = assert!(
     LOG_RHO_AXIS.len() == N_RHO,
     "LOG_RHO_AXIS.len() must equal N_RHO (CSF frequency-axis LUT size)",
@@ -85,8 +88,7 @@ const _: () = {
     // channel's LUT even if the absolute length somehow stayed 1024
     // on another via unrelated additions).
     assert!(
-        LOG_S_O0_C1.len() == LOG_S_O0_C2.len()
-            && LOG_S_O0_C2.len() == LOG_S_O0_C3.len(),
+        LOG_S_O0_C1.len() == LOG_S_O0_C2.len() && LOG_S_O0_C2.len() == LOG_S_O0_C3.len(),
         "All 3 CSF sensitivity LUTs must have matching length",
     );
 };

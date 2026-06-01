@@ -68,11 +68,10 @@ impl Default for R2QueueLoopConfig {
 impl R2QueueLoopConfig {
     /// Build from the standard worker env vars.
     pub fn from_env() -> Result<Self> {
-        let bucket = std::env::var("BUCKET")
-            .context("BUCKET env not set (R2 bucket for the queue)")?;
-        let prefix = std::env::var("CHUNKS_QUEUE_PREFIX").context(
-            "CHUNKS_QUEUE_PREFIX env not set (expected `runs/<sweep_id>/queue/`)",
-        )?;
+        let bucket =
+            std::env::var("BUCKET").context("BUCKET env not set (R2 bucket for the queue)")?;
+        let prefix = std::env::var("CHUNKS_QUEUE_PREFIX")
+            .context("CHUNKS_QUEUE_PREFIX env not set (expected `runs/<sweep_id>/queue/`)")?;
         let max_chunks = std::env::var("MAX_CHUNKS_PER_PROCESS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -117,9 +116,7 @@ pub async fn run_r2_queue_loop(
     let poll_uri_prefix = format!("s3://{}/{}", cfg.bucket, cfg.prefix);
 
     loop {
-        if cfg.max_chunks_per_process > 0
-            && (processed as usize) >= cfg.max_chunks_per_process
-        {
+        if cfg.max_chunks_per_process > 0 && (processed as usize) >= cfg.max_chunks_per_process {
             info!(processed, "max_chunks_per_process reached; exiting loop");
             break;
         }

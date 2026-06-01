@@ -7,9 +7,9 @@
 //! goldens test that doesn't require fetching the pycvvdp R2
 //! manifest.
 
-use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp::host_scalar::predict_jod_still_3ch;
 use cvvdp::params::DisplayModel;
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 
 fn load_rgb8(path: &std::path::Path, w: u32, h: u32) -> Vec<u8> {
     let img = image::open(path).unwrap_or_else(|e| panic!("load {path:?}: {e}"));

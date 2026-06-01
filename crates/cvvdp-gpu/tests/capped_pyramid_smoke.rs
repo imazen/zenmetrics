@@ -20,19 +20,18 @@
 #![cfg(feature = "cubecl-types")]
 
 mod common;
-use common::{apply_offset_dist, synth_pair_ref, Backend};
+use common::{Backend, apply_offset_dist, synth_pair_ref};
 
 use cubecl::Runtime;
 use cvvdp_gpu::{
-    estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped, Cvvdp, CvvdpParams, MemoryMode,
+    Cvvdp, CvvdpParams, MemoryMode, estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped,
 };
 
 #[test]
 fn capped_pyramid_constructor_succeeds_at_256_squared_levels_5() {
     let client = Backend::client(&Default::default());
-    let cvvdp =
-        Cvvdp::<Backend>::new_capped_pyramid(client, 256, 256, CvvdpParams::PLACEHOLDER, 5)
-            .expect("new_capped_pyramid");
+    let cvvdp = Cvvdp::<Backend>::new_capped_pyramid(client, 256, 256, CvvdpParams::PLACEHOLDER, 5)
+        .expect("new_capped_pyramid");
     let (w, h) = cvvdp.dimensions();
     assert_eq!((w, h), (256, 256));
     // is_strip_mode should be false — CappedPyramid is independent

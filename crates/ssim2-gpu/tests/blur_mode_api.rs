@@ -80,7 +80,11 @@ fn ssim2_fir_compute_returns_ok() {
         .with_blur(Ssim2Blur::Fir);
     let buf = vec![0_u8; 64 * 64 * 3];
     let r = s.compute(&buf, &buf).expect("FIR compute should succeed");
-    assert!(r.score.is_finite(), "FIR score must be finite, got {}", r.score);
+    assert!(
+        r.score.is_finite(),
+        "FIR score must be finite, got {}",
+        r.score
+    );
 }
 
 #[test]
@@ -90,7 +94,8 @@ fn ssim2_fir_set_reference_returns_ok() {
         .expect("Ssim2::new")
         .with_blur(Ssim2Blur::Fir);
     let buf = vec![0_u8; 64 * 64 * 3];
-    s.set_reference(&buf).expect("FIR set_reference should succeed");
+    s.set_reference(&buf)
+        .expect("FIR set_reference should succeed");
     assert!(s.has_cached_reference());
 }
 

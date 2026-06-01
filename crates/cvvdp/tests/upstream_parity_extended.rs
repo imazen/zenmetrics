@@ -16,8 +16,8 @@
 //! This file lives alongside `parity_against_host_scalar.rs` and does
 //! NOT widen the 1e-4 JOD tolerance the historical tests pinned.
 
-use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 use cvvdp::params::{DisplayModel, Eotf, Primaries};
+use cvvdp::{Cvvdp, CvvdpParams, DisplayGeometry};
 
 /// PPD that upstream computes for a `(W, H, distance_m, diag_inches)`
 /// tuple. Algebra in `vvdp_display_geometry.get_ppd()` —

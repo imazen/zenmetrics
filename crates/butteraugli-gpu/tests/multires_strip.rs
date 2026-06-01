@@ -176,7 +176,12 @@ fn multires_strip_with_options() {
         .expect("multires-strip compute_strip_with_options");
 
     assert_rel_eq("score(options)", whole_res.score, strip_res.score, 1e-4);
-    assert_rel_eq("pnorm_3(options)", whole_res.pnorm_3, strip_res.pnorm_3, 1e-4);
+    assert_rel_eq(
+        "pnorm_3(options)",
+        whole_res.pnorm_3,
+        strip_res.pnorm_3,
+        1e-4,
+    );
 }
 
 #[test]

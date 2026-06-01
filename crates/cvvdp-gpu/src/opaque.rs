@@ -2,11 +2,11 @@
 //!
 //! See `dssim-gpu/src/opaque.rs` for the full design rationale.
 
-use crate::params::CvvdpParams;
-use crate::pipeline::Cvvdp;
 #[cfg(feature = "pixels")]
 use crate::Error;
 use crate::Result;
+use crate::params::CvvdpParams;
+use crate::pipeline::Cvvdp;
 
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
@@ -628,9 +628,7 @@ fn build_cvvdp_inner<R: cubecl::Runtime>(
         }
         crate::MemoryMode::StripPair { h_body } => {
             let body = h_body.unwrap_or(STRIP_H_BODY_DEFAULT);
-            Cvvdp::<R>::new_strip_pair_with_geometry(
-                client, width, height, body, params, geometry,
-            )
+            Cvvdp::<R>::new_strip_pair_with_geometry(client, width, height, body, params, geometry)
         }
         crate::MemoryMode::CappedPyramid { levels } => {
             Cvvdp::<R>::new_capped_pyramid_with_geometry(
@@ -645,7 +643,7 @@ fn convert_to_srgb_rgb8(
     s: &PixelSlice<'_>,
     target: zenpixels::PixelDescriptor,
 ) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{convert_row, ConvertPlan};
+    use zenpixels_convert::{ConvertPlan, convert_row};
     let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
     let w = s.width();
     let h = s.rows();

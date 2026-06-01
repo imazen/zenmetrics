@@ -11,7 +11,7 @@
 use std::collections::HashSet;
 
 use zen_job_core::{BlobIndexEntry, Regenerability, Sha256Hex};
-use zen_jobworker::{gc_execute, BlobStore, GcExecCfg, R2BlobStore};
+use zen_jobworker::{BlobStore, GcExecCfg, R2BlobStore, gc_execute};
 
 fn main() {
     let acct = std::env::var("R2_ACCOUNT_ID").expect("R2_ACCOUNT_ID");
@@ -53,22 +53,45 @@ fn main() {
 
     // dry-run
     let dry = gc_execute(&index, &refset, &roots, &cfg);
-    println!("[dry-run] kept={} would_evict={:?} refused={}", dry.kept, dry.lru_evicted, dry.refused.len());
-    assert_eq!(dry.lru_evicted, vec![cheap_old.to_string()], "dry-run: only the LRU tail");
-    assert_eq!(dry.refused.len(), 1, "dry-run: irreplaceable orphan surfaced");
+    println!(
+        "[dry-run] kept={} would_evict={:?} refused={}",
+        dry.kept,
+        dry.lru_evicted,
+        dry.refused.len()
+    );
+    assert_eq!(
+        dry.lru_evicted,
+        vec![cheap_old.to_string()],
+        "dry-run: only the LRU tail"
+    );
+    assert_eq!(
+        dry.refused.len(),
+        1,
+        "dry-run: irreplaceable orphan surfaced"
+    );
 
     // execute
     cfg.execute = true;
     let cleanup = |store: &R2BlobStore, bucket: &str, ep: &str, pfx: &str| {
         let _ = std::process::Command::new("s5cmd")
-            .args(["--endpoint-url", ep, "rm", &format!("s3://{bucket}/{pfx}/*")])
+            .args([
+                "--endpoint-url",
+                ep,
+                "rm",
+                &format!("s3://{bucket}/{pfx}/*"),
+            ])
             .status();
         let _ = store; // (store kept for type)
     };
     let rep = gc_execute(&index, &refset, &roots, &cfg);
     println!(
         "[execute] kept={} evicted={:?} freed={}B tombstones={} refused={} errors={:?}",
-        rep.kept, rep.lru_evicted, rep.freed_bytes, rep.tombstones_written, rep.refused.len(), rep.errors
+        rep.kept,
+        rep.lru_evicted,
+        rep.freed_bytes,
+        rep.tombstones_written,
+        rep.refused.len(),
+        rep.errors
     );
 
     // verify R2 state
@@ -76,9 +99,14 @@ fn main() {
     let new_kept = store.exists(&cheap_new);
     let ref_kept = store.exists(&referenced);
     let irr_kept = store.exists(&irreplaceable);
-    println!("verify: old_evicted={old_gone} new_kept={new_kept} referenced_kept={ref_kept} irreplaceable_refused={irr_kept}");
+    println!(
+        "verify: old_evicted={old_gone} new_kept={new_kept} referenced_kept={ref_kept} irreplaceable_refused={irr_kept}"
+    );
 
-    let ok = old_gone && new_kept && ref_kept && irr_kept
+    let ok = old_gone
+        && new_kept
+        && ref_kept
+        && irr_kept
         && rep.lru_evicted == vec![cheap_old.to_string()]
         && rep.tombstones_written == 1
         && rep.errors.is_empty();

@@ -74,15 +74,16 @@ const COLOR_SPACES_JSON: &str = include_str!("../data/color_spaces.json");
 #[must_use]
 pub fn list_presets() -> &'static [&'static str] {
     PRESET_NAMES.get_or_init(|| {
-        let mut names: Vec<&'static str> =
-            registry().display.keys().map(|s| s.as_str()).collect();
+        let mut names: Vec<&'static str> = registry().display.keys().map(|s| s.as_str()).collect();
         // Leak the strings to get 'static — the JSON itself is
         // 'static so the keys outlive any normal program lifetime,
         // but the BTreeMap's owned String keys aren't &'static.
         // Allocate one Vec<&'static str> by leaking the names so
         // we hand back stable slices.
-        let leaked: Vec<&'static str> =
-            names.drain(..).map(|s| Box::leak(s.to_string().into_boxed_str()) as &'static str).collect();
+        let leaked: Vec<&'static str> = names
+            .drain(..)
+            .map(|s| Box::leak(s.to_string().into_boxed_str()) as &'static str)
+            .collect();
         leaked.into_boxed_slice()
     })
 }
@@ -192,7 +193,11 @@ fn load_registry() -> Registry {
     Registry { display: out }
 }
 
-fn parse_preset(name: &str, value: &serde_json::Value, colors: &serde_json::Value) -> Result<Preset, String> {
+fn parse_preset(
+    name: &str,
+    value: &serde_json::Value,
+    colors: &serde_json::Value,
+) -> Result<Preset, String> {
     let obj = value
         .as_object()
         .ok_or_else(|| format!("preset {name} is not an object"))?;
@@ -200,19 +205,20 @@ fn parse_preset(name: &str, value: &serde_json::Value, colors: &serde_json::Valu
     let y_peak = num_field(obj, "max_luminance")?;
     let (eotf, primaries) = resolve_colorspace(obj.get("colorspace"), colors)?;
 
-    let contrast = if let Some(min_lum) = obj.get("min_luminance").and_then(serde_json::Value::as_f64) {
-        if min_lum > 0.0 {
-            (y_peak as f64 / min_lum) as f32
+    let contrast =
+        if let Some(min_lum) = obj.get("min_luminance").and_then(serde_json::Value::as_f64) {
+            if min_lum > 0.0 {
+                (y_peak as f64 / min_lum) as f32
+            } else {
+                500.0
+            }
+        } else if let Some(c) = obj.get("contrast").and_then(serde_json::Value::as_f64) {
+            c as f32
         } else {
+            // Matches pycvvdp default for displays that omit both
+            // min_luminance and contrast (e.g. some legacy entries).
             500.0
-        }
-    } else if let Some(c) = obj.get("contrast").and_then(serde_json::Value::as_f64) {
-        c as f32
-    } else {
-        // Matches pycvvdp default for displays that omit both
-        // min_luminance and contrast (e.g. some legacy entries).
-        500.0
-    };
+        };
 
     let e_ambient_lux = obj
         .get("E_ambient")
@@ -269,9 +275,7 @@ fn parse_geometry(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Di
     } else {
         obj.get("fov_diagonal")
             .and_then(serde_json::Value::as_f64)
-            .map(|fov_diag| {
-                DisplayGeometry::from_fov_diagonal(w, h, distance_m, fov_diag as f32)
-            })
+            .map(|fov_diag| DisplayGeometry::from_fov_diagonal(w, h, distance_m, fov_diag as f32))
     }
 }
 
@@ -450,8 +454,8 @@ mod tests {
 
     #[test]
     fn modern_oled_phone_indoor_models_auto_brightness_setpoint() {
-        let d = DisplayModel::by_name("modern_oled_phone_indoor")
-            .expect("imazen preset should load");
+        let d =
+            DisplayModel::by_name("modern_oled_phone_indoor").expect("imazen preset should load");
         // SDR auto-brightness setpoint, not the panel HDR peak.
         assert_eq!(d.y_peak, 400.0);
         assert_eq!(d.eotf, Eotf::Srgb);

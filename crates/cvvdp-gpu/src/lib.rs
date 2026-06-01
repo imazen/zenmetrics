@@ -210,9 +210,7 @@ pub mod presets;
 pub mod session;
 
 // Unified MemoryMode surface — see `memory_mode.rs`.
-pub use memory_mode::{
-    MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, vram_cap_bytes,
-};
+pub use memory_mode::{MemoryMode, ResolvedMode, estimate_gpu_memory_bytes_usize, vram_cap_bytes};
 
 // CvvdpParams stays unconditionally public — it's part of the opaque
 // API surface and contains no cubecl types.
@@ -224,9 +222,8 @@ pub use opaque::{Backend, CvvdpOpaque, Score};
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]
 pub use pipeline::{
-    Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes,
-    estimate_gpu_memory_bytes_capped, estimate_gpu_memory_bytes_strip,
-    estimate_gpu_memory_bytes_strip_pair, recommend_parallel,
+    Cvvdp, PARALLEL_SAFETY_FACTOR, estimate_gpu_memory_bytes, estimate_gpu_memory_bytes_capped,
+    estimate_gpu_memory_bytes_strip, estimate_gpu_memory_bytes_strip_pair, recommend_parallel,
 };
 
 /// Number of color channels in DKL opponent space (achromatic +

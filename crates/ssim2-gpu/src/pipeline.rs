@@ -27,11 +27,11 @@
 
 use cubecl::prelude::*;
 
+#[cfg(feature = "fir")]
+use crate::Ssim2Blur;
 use crate::kernels::{blur, downscale, error_maps, reduction, srgb, transpose, xyb};
 use crate::skipmap::{Ssim2Mode, skip_error_map, skip_reduction, skip_scale};
 use crate::{Error, GpuSsim2Result, NUM_SCALES, Result};
-#[cfg(feature = "fir")]
-use crate::Ssim2Blur;
 
 /// Strip-processing metadata. See `Ssim2::strip` for full docs.
 #[derive(Debug, Clone, Copy)]
@@ -218,7 +218,6 @@ pub struct Ssim2<R: Runtime> {
     // staging buffer reserved per call (`client.reserve_staging`),
     // collapsing two host-side passes (pack to pageable + memcpy to
     // pinned) into one. Same shape as butter T_x.O (10a5b996).
-
     /// Per-scale buffer sets.
     scales: Vec<Scale>,
 
@@ -598,7 +597,6 @@ impl<R: Runtime> Ssim2<R> {
         &self.client
     }
 
-
     /// Score one image pair, both sRGB packed RGB u8 of length
     /// `width × height × 3`.
     ///
@@ -634,10 +632,7 @@ impl<R: Runtime> Ssim2<R> {
     ///
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
-    pub fn pack_srgb_into_packed_u32_handle(
-        &self,
-        srgb: &[u8],
-    ) -> Result<cubecl::server::Handle> {
+    pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
         let expected = self.n * 3;
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -647,9 +642,7 @@ impl<R: Runtime> Ssim2<R> {
         }
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -911,9 +904,7 @@ impl<R: Runtime> Ssim2<R> {
         let n0 = (meta.image_w as usize) * (meta.image_h as usize);
         let pinned_len = n0 * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -1237,11 +1228,7 @@ impl<R: Runtime> Ssim2<R> {
                 strip_h0_alloc,
             );
 
-            reduction::launch_zero_fill_f32(
-                &self.client,
-                self.partials.clone(),
-                PARTIALS_LEN,
-            );
+            reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
 
             // Build dist-side linear pyramid only.
             let last_active = (0..self.scales.len())
@@ -1257,8 +1244,7 @@ impl<R: Runtime> Ssim2<R> {
                 let s_u = s as u32;
                 let scale_strip_h = self.scales[s].height;
                 let scale_body_start = body_col_start >> s_u;
-                let scale_body_end =
-                    ((body_col_end + (1 << s_u) - 1) >> s_u).min(scale_strip_h);
+                let scale_body_end = ((body_col_end + (1 << s_u) - 1) >> s_u).min(scale_strip_h);
                 // The strip's top edge in full-image scale-s row coords.
                 // Scale-s row offset = floor(strip_top / 2^s) — same
                 // semantics as the scale-0 → scale-s downscale chain
@@ -1345,13 +1331,7 @@ impl<R: Runtime> Ssim2<R> {
         self.run_error_maps_strip_cached_ref(scale, mode, strip_top_at_s);
         // Standard strip-mode reduction over output ssim/artifact/detail
         // planes, filtered to body inner indices.
-        self.run_reductions_strip_masked(
-            scale,
-            mode,
-            scale_strip_h,
-            body_col_start,
-            body_col_end,
-        );
+        self.run_reductions_strip_masked(scale, mode, scale_strip_h, body_col_start, body_col_end);
     }
 
     /// Strip-mode mode-E: zero out the `dis_xyb` pad-row region for
@@ -1436,12 +1416,7 @@ impl<R: Runtime> Ssim2<R> {
     /// + outputs in strip-shape transposed (inner stride = `strip_h`).
     /// `strip_top_at_s` is the row offset where the strip starts in
     /// the full transposed buffer's inner-index axis.
-    fn run_error_maps_strip_cached_ref(
-        &self,
-        scale: usize,
-        mode: Ssim2Mode,
-        strip_top_at_s: u32,
-    ) {
+    fn run_error_maps_strip_cached_ref(&self, scale: usize, mode: Ssim2Mode, strip_top_at_s: u32) {
         let s = &self.scales[scale];
         let cache_s = &self
             .strip_cached_ref
@@ -1454,7 +1429,9 @@ impl<R: Runtime> Ssim2<R> {
                 continue;
             }
             unsafe {
-                crate::kernels::error_maps::error_maps_strip_from_full_ref_kernel::launch_unchecked::<R>(
+                crate::kernels::error_maps::error_maps_strip_from_full_ref_kernel::launch_unchecked::<
+                    R,
+                >(
                     &self.client,
                     Self::cube_count_1d(s.n),
                     Self::cube_dim_1d(),
@@ -1502,9 +1479,9 @@ impl<R: Runtime> Ssim2<R> {
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
-        let meta = self
-            .strip
-            .ok_or(Error::ModeUnsupported("compute_stripped requires strip-mode instance"))?;
+        let meta = self.strip.ok_or(Error::ModeUnsupported(
+            "compute_stripped requires strip-mode instance",
+        ))?;
         let expected = (meta.image_w as usize) * (meta.image_h as usize) * 3;
         if ref_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
@@ -1579,11 +1556,7 @@ impl<R: Runtime> Ssim2<R> {
             // Run the per-strip pipeline. We re-zero the partials buffer
             // each strip; per-strip results are then read back and
             // accumulated host-side into `acc_sum` / `acc_p4`.
-            reduction::launch_zero_fill_f32(
-                &self.client,
-                self.partials.clone(),
-                PARTIALS_LEN,
-            );
+            reduction::launch_zero_fill_f32(&self.client, self.partials.clone(), PARTIALS_LEN);
 
             // Build linear pyramid over the strip dimensions (which
             // match the scale buffer dims).
@@ -1656,9 +1629,7 @@ impl<R: Runtime> Ssim2<R> {
         let n_alloc = (image_w as usize) * (strip_h0_alloc as usize);
         let pinned_len = n_alloc * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -1670,8 +1641,7 @@ impl<R: Runtime> Ssim2<R> {
                 let src_row = &srgb[image_y * src_row_stride..(image_y + 1) * src_row_stride];
                 let dst_row =
                     &mut dst[sy * row_stride_bytes..sy * row_stride_bytes + row_stride_bytes];
-                for (chunk_out, triple) in
-                    dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(3))
+                for (chunk_out, triple) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(3))
                 {
                     chunk_out[0] = triple[0];
                     chunk_out[1] = triple[1];
@@ -1756,12 +1726,7 @@ impl<R: Runtime> Ssim2<R> {
     /// summed across strips and the n_pix divisor taken from `meta` (the
     /// **full image** pixel count at each scale, not the per-strip
     /// count — every strip's body sums add up to one whole-image sum).
-    fn aggregate_from_accumulators(
-        &self,
-        acc_sum: &[f64],
-        acc_p4: &[f64],
-        meta: StripMeta,
-    ) -> f64 {
+    fn aggregate_from_accumulators(&self, acc_sum: &[f64], acc_p4: &[f64], meta: StripMeta) -> f64 {
         let mut avg_ssim = vec![[0.0_f64; 6]; NUM_SCALES];
         let mut avg_edgediff = vec![[0.0_f64; 12]; NUM_SCALES];
 
@@ -1793,11 +1758,9 @@ impl<R: Runtime> Ssim2<R> {
                 avg_ssim[scale][ch * 2 + 1] = (one_per_pixels * acc_p4[s_slot]).sqrt().sqrt();
 
                 avg_edgediff[scale][ch * 4] = one_per_pixels * acc_sum[a_slot];
-                avg_edgediff[scale][ch * 4 + 1] =
-                    (one_per_pixels * acc_p4[a_slot]).sqrt().sqrt();
+                avg_edgediff[scale][ch * 4 + 1] = (one_per_pixels * acc_p4[a_slot]).sqrt().sqrt();
                 avg_edgediff[scale][ch * 4 + 2] = one_per_pixels * acc_sum[d_slot];
-                avg_edgediff[scale][ch * 4 + 3] =
-                    (one_per_pixels * acc_p4[d_slot]).sqrt().sqrt();
+                avg_edgediff[scale][ch * 4 + 3] = (one_per_pixels * acc_p4[d_slot]).sqrt().sqrt();
             }
         }
         score_from_stats(&avg_ssim, &avg_edgediff, n_scales)
@@ -1891,9 +1854,7 @@ impl<R: Runtime> Ssim2<R> {
         // packing.
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
-        let mut bytes = staging
-            .pop()
-            .expect("reserve_staging returned no buffers");
+        let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
         {
             let dst: &mut [u8] = &mut bytes;
             debug_assert_eq!(dst.len(), pinned_len);
@@ -2412,26 +2373,42 @@ impl<R: Runtime> Ssim2<R> {
         if is_a {
             for ch in 0..3 {
                 self.blur_plane_two_pass(
-                    w, h, n,
-                    &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                    w,
+                    h,
+                    n,
+                    &s.sigma11_in[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.sigma11_full[ch],
                 );
                 self.blur_plane_two_pass(
-                    w, h, n,
-                    &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                    w,
+                    h,
+                    n,
+                    &s.ref_xyb[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.mu1_full[ch],
                 );
             }
         } else {
             for ch in 0..3 {
                 self.blur_plane_two_pass(
-                    w, h, n,
-                    &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                    w,
+                    h,
+                    n,
+                    &s.sigma22_in[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.sigma22_full[ch],
                 );
                 self.blur_plane_two_pass(
-                    w, h, n,
-                    &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                    w,
+                    h,
+                    n,
+                    &s.dis_xyb[ch],
+                    &s.v_scratch[ch],
+                    &s.t_scratch[ch],
                     &s.mu2_full[ch],
                 );
             }
@@ -2574,28 +2551,48 @@ impl<R: Runtime> Ssim2<R> {
                 continue;
             }
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma11_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.sigma11_in[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.sigma11_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.ref_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.ref_xyb[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.mu1_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.sigma22_in[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.sigma22_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.dis_xyb[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.mu2_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.sigma12_in[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.sigma12_full[ch],
             );
         }
@@ -2618,18 +2615,30 @@ impl<R: Runtime> Ssim2<R> {
                 continue;
             }
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma22_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.sigma22_in[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.sigma22_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.dis_xyb[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.dis_xyb[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.mu2_full[ch],
             );
             self.blur_plane_two_pass(
-                w, h, n,
-                &s.sigma12_in[ch], &s.v_scratch[ch], &s.t_scratch[ch],
+                w,
+                h,
+                n,
+                &s.sigma12_in[ch],
+                &s.v_scratch[ch],
+                &s.t_scratch[ch],
                 &s.sigma12_full[ch],
             );
         }
