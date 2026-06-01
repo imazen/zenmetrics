@@ -304,7 +304,12 @@ pub enum Metric {
         feature = "cpu-zensim",
         feature = "cpu-iwssim"
     ))]
-    Cpu(Box<crate::cpu_dispatch::CpuMetricState>),
+    // Second field is the cached reference (packed sRGB8) for the warm
+    // path: `set_reference` stores it, `compute_with_cached_reference`
+    // replays the one-shot compute on it — score-identical to one-off
+    // (task #159 phase 4b buffer-replay; uniform with the GPU variants'
+    // `set_reference`/`compute_with_cached_reference`).
+    Cpu(Box<crate::cpu_dispatch::CpuMetricState>, Option<Vec<u8>>),
 }
 
 impl Metric {
@@ -347,7 +352,7 @@ impl Metric {
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
-                .map(|s| Metric::Cpu(Box::new(s)));
+                .map(|s| Metric::Cpu(Box::new(s), None));
         }
         match kind {
             #[cfg(feature = "cvvdp")]
@@ -485,7 +490,7 @@ impl Metric {
         ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
-                .map(|s| Metric::Cpu(Box::new(s)));
+                .map(|s| Metric::Cpu(Box::new(s), None));
         }
         match kind {
             #[cfg(feature = "cvvdp")]
@@ -594,7 +599,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s) => s.kind(),
+            Metric::Cpu(s, _) => s.kind(),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(_) => MetricKind::Cvvdp,
             #[cfg(feature = "butter")]
@@ -621,7 +626,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s) => s.dims(),
+            Metric::Cpu(s, _) => s.dims(),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m.dims(),
             #[cfg(feature = "butter")]
@@ -649,7 +654,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s) => s.compute_srgb_u8(r, d),
+            Metric::Cpu(s, _) => s.compute_srgb_u8(r, d),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => {
                 m.compute_srgb_u8(r, d)
@@ -809,7 +814,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => Err(Error::Metric {
+            Metric::Cpu(..) => Err(Error::Metric {
                 kind: "cpu",
                 message: "compute_features_srgb_u8 (feature export) is not implemented for \
                           Backend::Cpu"
@@ -892,7 +897,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(s) => {
+            Metric::Cpu(s, _) => {
                 // Optimized-CPU path (task #159 phase 3): convert both
                 // PixelSlices to packed sRGB8 (strided-correct, one-line via
                 // zenpixels-convert) then score on the native crate. HDR is
@@ -991,10 +996,25 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => Err(Error::Metric {
-                kind: "cpu",
-                message: "warm / cached-reference for Backend::Cpu lands in #159 phase 4".into(),
-            }),
+            Metric::Cpu(s, cached_ref) => {
+                // Buffer-replay warm path (task #159 phase 4b): stash the
+                // reference sRGB bytes; compute_with_cached_reference replays
+                // the one-shot compute on them — score-identical to one-off.
+                let (w, h) = s.dims();
+                let expected = (w as usize) * (h as usize) * 3;
+                if r.len() != expected {
+                    return Err(Error::Metric {
+                        kind: "cpu",
+                        message: format!(
+                            "set_reference: expected {expected} packed sRGB bytes ({w}×{h}×3), \
+                             got {}",
+                            r.len()
+                        ),
+                    });
+                }
+                *cached_ref = Some(r.to_vec());
+                Ok(())
+            }
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m.warm_reference_srgb(r).map_err(|e| Error::Metric {
                 kind: "cvvdp",
@@ -1045,10 +1065,17 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => Err(Error::Metric {
-                kind: "cpu",
-                message: "warm / cached-reference for Backend::Cpu lands in #159 phase 4".into(),
-            }),
+            Metric::Cpu(s, cached_ref) => {
+                let rref = cached_ref.as_deref().ok_or(Error::Metric {
+                    kind: "cpu",
+                    message: "compute_with_cached_reference: no reference set — call \
+                              set_reference first"
+                        .into(),
+                })?;
+                // Replay the one-shot compute on the cached reference —
+                // score-identical to compute_srgb_u8(reference, distorted).
+                s.compute_srgb_u8(rref, d)
+            }
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m
                 .compute_with_warm_ref_srgb(d, None)
@@ -1113,7 +1140,9 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => {}
+            Metric::Cpu(_, cached_ref) => {
+                *cached_ref = None;
+            }
             // cvvdp's warm_reference_srgb overwrites prior state — no
             // explicit clear API on opaque (see pipeline.rs:4234).
             #[cfg(feature = "cvvdp")]
@@ -1151,7 +1180,7 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => false,
+            Metric::Cpu(_, cached_ref) => cached_ref.is_some(),
             #[cfg(feature = "iwssim")]
             Metric::Iwssim(m) => m.has_cached_reference(),
             #[cfg(feature = "butter")]
@@ -1199,17 +1228,7 @@ impl Metric {
 // their `-gpu` crate instead, so this only compiles for the CPU path.
 // ---------------------------------------------------------------
 
-#[cfg(all(
-    feature = "pixels",
-    any(
-        feature = "cpu-ssim2",
-        feature = "cpu-cvvdp",
-        feature = "cpu-iwssim",
-        feature = "cpu-zensim",
-        feature = "cpu-dssim",
-        feature = "cpu-butter"
-    )
-))]
+#[cfg(feature = "pixels")]
 fn to_srgb_rgb8(s: &PixelSlice<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
     if s.width() != expected_w || s.rows() != expected_h {
         return Err(Error::DimensionMismatch {
@@ -1227,17 +1246,7 @@ fn to_srgb_rgb8(s: &PixelSlice<'_>, expected_w: u32, expected_h: u32) -> Result<
     })
 }
 
-#[cfg(all(
-    feature = "pixels",
-    any(
-        feature = "cpu-ssim2",
-        feature = "cpu-cvvdp",
-        feature = "cpu-iwssim",
-        feature = "cpu-zensim",
-        feature = "cpu-dssim",
-        feature = "cpu-butter"
-    )
-))]
+#[cfg(feature = "pixels")]
 fn convert_to_srgb_rgb8(
     s: &PixelSlice<'_>,
     target: zenpixels::PixelDescriptor,
@@ -1578,4 +1587,54 @@ pub fn score(
     let (w, h) = (reference.width(), reference.rows());
     let mut metric = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))?;
     metric.compute_pixels(reference, distorted)
+}
+
+/// A warmed scorer — one reference, many distorted (task #159 phase 4). The
+/// reference is installed once; each [`Warm::score`] reuses it. Built by
+/// [`warm_reference`]. **Backend-agnostic:** GPU backends use device-side
+/// cached-reference, `Backend::Cpu` uses score-safe buffer-replay — either
+/// way `score` returns the same value a fresh one-off would. Dims are fixed
+/// at the reference.
+#[cfg(feature = "pixels")]
+pub struct Warm {
+    metric: Metric,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(feature = "pixels")]
+impl Warm {
+    /// Score `distorted` against the warmed reference (must match the
+    /// reference's dimensions).
+    pub fn score(&mut self, distorted: PixelSlice<'_>) -> Result<Score> {
+        let dist = to_srgb_rgb8(&distorted, self.width, self.height)?;
+        self.metric.compute_with_cached_reference_srgb_u8(&dist)
+    }
+
+    /// The metric and dims this warm scorer was built for.
+    pub fn kind(&self) -> MetricKind {
+        self.metric.kind()
+    }
+}
+
+/// Warm a `(kind, backend)` scorer with `reference` for repeated scoring
+/// against many distorted images (task #159 phase 4) — the reuse-implied
+/// front door, amortizing the reference work across calls. Identical API
+/// for every backend; `Backend::Auto` resolves (GPU else optimized `Cpu`)
+/// without changing the score.
+#[cfg(feature = "pixels")]
+pub fn warm_reference(
+    kind: MetricKind,
+    backend: Backend,
+    reference: PixelSlice<'_>,
+) -> Result<Warm> {
+    let (w, h) = (reference.width(), reference.rows());
+    let mut metric = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))?;
+    let ref_bytes = to_srgb_rgb8(&reference, w, h)?;
+    metric.set_reference_srgb_u8(&ref_bytes)?;
+    Ok(Warm {
+        metric,
+        width: w,
+        height: h,
+    })
 }

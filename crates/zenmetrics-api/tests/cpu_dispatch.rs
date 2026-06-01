@@ -186,6 +186,78 @@ fn score_front_door_cpu() {
     );
 }
 
+/// `warm_reference` (task #159 phase 4b) on `Backend::Cpu`: one reference,
+/// many distorted. The buffer-replay warm path must be **score-identical** to
+/// the one-shot `score()` (no drift) and still discriminate between distinct
+/// distorted images.
+#[cfg(feature = "pixels")]
+#[test]
+fn warm_reference_cpu_matches_one_shot() {
+    use zenmetrics_api::{score, warm_reference};
+    use zenpixels::{PixelDescriptor, PixelSlice};
+    let (w, h) = (64u32, 64u32);
+    let ref_bytes = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let dist_a = img(w, h, |x, y| {
+        [x.wrapping_mul(4) as u8, y.wrapping_mul(2) as u8, 32]
+    });
+    let dist_b = img(w, h, |x, y| {
+        [
+            255 - x.wrapping_mul(4) as u8,
+            255 - y.wrapping_mul(4) as u8,
+            200,
+        ]
+    });
+    let row = (w as usize) * 3;
+    let desc = PixelDescriptor::RGB8_SRGB;
+
+    let mut warm = warm_reference(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice"),
+    )
+    .expect("warm_reference");
+    assert_eq!(warm.kind(), MetricKind::Ssim2);
+
+    let wa = warm
+        .score(PixelSlice::new(&dist_a, w, h, row, desc).expect("dist a"))
+        .expect("warm score a");
+    let wb = warm
+        .score(PixelSlice::new(&dist_b, w, h, row, desc).expect("dist b"))
+        .expect("warm score b");
+
+    let oa = score(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref"),
+        PixelSlice::new(&dist_a, w, h, row, desc).expect("dist a2"),
+    )
+    .expect("one-shot a");
+    let ob = score(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref"),
+        PixelSlice::new(&dist_b, w, h, row, desc).expect("dist b2"),
+    )
+    .expect("one-shot b");
+
+    // Buffer-replay warm == one-shot, exactly (no drift).
+    assert_eq!(wa.value, oa.value, "warm score A must equal one-shot A");
+    assert_eq!(wb.value, ob.value, "warm score B must equal one-shot B");
+    // Reusing the reference still discriminates distinct distorted images.
+    assert!(
+        wa.value != wb.value,
+        "warm must discriminate distinct distorted ({} vs {})",
+        wa.value,
+        wb.value
+    );
+}
+
 #[test]
 fn dssim_cpu_is_finite_and_discriminates() {
     let (w, h) = (64u32, 64u32);

@@ -76,12 +76,13 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
-/// One-shot PixelSlice score front door (task #159 phase 4); requires `pixels`.
-#[cfg(feature = "pixels")]
-pub use metric::score;
 pub use metric::{
     Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram, score_pair,
 };
+/// PixelSlice score front doors (task #159 phase 4): one-shot [`score`] and
+/// warm [`warm_reference`] → [`Warm`]. Require the `pixels` feature.
+#[cfg(feature = "pixels")]
+pub use metric::{Warm, score, warm_reference};
 pub use session::{MAX_SESSIONS_PER_BACKEND, MetricSession, OwnedSessionMetric, SessionMetric};
 
 /// Internal test/diagnostic hooks for the VRAM-isolation integration
