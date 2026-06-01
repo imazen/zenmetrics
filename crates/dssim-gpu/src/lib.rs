@@ -71,11 +71,11 @@
 // butteraugli-gpu, which keep unsafe local to the launch-orchestration
 // layer. No raw pointer / transmute / get_unchecked is used.
 
-pub mod kernels;
+pub(crate) mod kernels;
 pub mod memory_mode;
-pub mod opaque;
-pub mod pipeline;
-pub mod pipeline_batch;
+pub(crate) mod opaque;
+pub(crate) mod pipeline;
+pub(crate) mod pipeline_batch;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
 // per-crate API.
@@ -95,9 +95,9 @@ pub use memory_mode::{
 pub use opaque::{Backend, DssimOpaque, DssimParams, Score};
 
 // Typed-generic API (gated behind `cubecl-types` for advanced callers
-// that want to control the cubecl runtime explicitly). The same types
-// are still reachable as `dssim_gpu::pipeline::Dssim` for in-tree
-// callers regardless of the feature.
+// that want to control the cubecl runtime explicitly). The `pipeline`
+// module is `pub(crate)`; these `pub use` re-exports are the only
+// public handle to the typed types.
 #[cfg(feature = "cubecl-types")]
 pub use pipeline::Dssim;
 #[cfg(feature = "cubecl-types")]
