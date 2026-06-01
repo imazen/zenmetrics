@@ -52,6 +52,15 @@ pub enum Backend {
     Wgpu,
     /// HIP backend (AMD ROCm, requires the `hip` umbrella feature).
     Hip,
+    /// **Optimized native-CPU** backend (task #159 phase 2): the fast
+    /// hand-written / SIMD CPU crates — `fast-ssim2`, `dssim-core`,
+    /// `butteraugli`, `zensim`, and the in-tree `cvvdp` / `iwssim` —
+    /// **not** the cubecl-cpu runtime. This is the CPU path users want:
+    /// it is the fast one. Requires the matching `cpu-<metric>` feature;
+    /// a metric built without its `cpu-*` feature returns
+    /// [`Error::BackendNotEnabled`] for this backend. Contrast
+    /// [`Backend::CubeclCpu`] (slow, parity/debug only).
+    Cpu,
     /// cubecl-cpu reference backend: the GPU metric kernels executed on
     /// CPU via the cubecl-cpu runtime (requires the `cpu` umbrella
     /// feature). This is slow and exists for parity/debug only — it is
@@ -72,6 +81,7 @@ impl Backend {
             Backend::Cuda => "cuda",
             Backend::Wgpu => "wgpu",
             Backend::Hip => "hip",
+            Backend::Cpu => "cpu",
             Backend::CubeclCpu => "cubecl_cpu",
         }
     }

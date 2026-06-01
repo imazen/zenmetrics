@@ -84,7 +84,11 @@ struct SlotAllocator {
     cuda: Mutex<u128>,
     wgpu: Mutex<u128>,
     hip: Mutex<u128>,
+    /// cubecl-cpu reference backend (`Backend::CubeclCpu`).
     cpu: Mutex<u128>,
+    /// optimized native-CPU backend (`Backend::Cpu`, task #159 phase 2).
+    /// Separate slot space from `cpu` — they are distinct backends.
+    cpu_native: Mutex<u128>,
 }
 
 impl SlotAllocator {
@@ -94,6 +98,7 @@ impl SlotAllocator {
             wgpu: Mutex::new(0),
             hip: Mutex::new(0),
             cpu: Mutex::new(0),
+            cpu_native: Mutex::new(0),
         }
     }
 
@@ -107,6 +112,7 @@ impl SlotAllocator {
             Backend::Cuda => &self.cuda,
             Backend::Wgpu => &self.wgpu,
             Backend::Hip => &self.hip,
+            Backend::Cpu => &self.cpu_native,
             Backend::CubeclCpu => &self.cpu,
         }
     }
