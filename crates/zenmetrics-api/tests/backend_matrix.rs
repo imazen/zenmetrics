@@ -120,8 +120,10 @@ fn cpu_matrix_all_metrics_all_sizes() {
 }
 
 /// Layer 2: `Backend::Auto` must resolve to the optimized native
-/// `Backend::Cpu` when no GPU is available, and score byte-identically to
-/// an explicit `Backend::Cpu` for every metric.
+/// `Backend::Cpu` when no GPU is available (deterministic backend-identity
+/// invariant), and score the same as an explicit `Backend::Cpu` for every
+/// metric — within float-reduction jitter, since some CPU metrics
+/// (dssim-core) sum via rayon in a non-deterministic order.
 ///
 /// All `ZENMETRICS_FORCE_NO_GPU` mutation lives in this single `#[test]`
 /// fn (set → assert → restore) so the process-global env var can't race a
@@ -151,9 +153,17 @@ fn auto_force_no_gpu_resolves_to_cpu_and_matches() {
     for kind in all_kinds() {
         let via_auto = score_pair(kind, Backend::Auto, w, h, &r, &d);
         let via_cpu = score_pair(kind, Backend::Cpu, w, h, &r, &d);
-        assert_eq!(
-            via_auto, via_cpu,
-            "{kind:?}: Auto (→Cpu) must score identically to explicit Cpu"
+        // Auto resolved to Cpu (asserted above) ⇒ identical compute path, so
+        // any difference is the metric's own run-to-run float jitter, NOT a
+        // backend change. dssim-core (and other rayon-parallel CPU metrics)
+        // sum in a non-deterministic reduction order, so two calls vary in the
+        // last 1–2 ULPs (measured ~5e-16 rel on dssim). A 1e-9 relative band
+        // proves "Auto didn't change the backend/score" while tolerating that
+        // float-reduction jitter; exact equality would be flaky here.
+        let tol = 1e-9 * via_cpu.abs().max(1.0);
+        assert!(
+            (via_auto - via_cpu).abs() <= tol,
+            "{kind:?}: Auto (→Cpu) score {via_auto} must match explicit Cpu {via_cpu} within {tol}"
         );
     }
 
