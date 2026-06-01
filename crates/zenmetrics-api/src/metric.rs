@@ -1638,3 +1638,40 @@ pub fn warm_reference(
         height: h,
     })
 }
+
+/// One-shot score of an **encoded** `(reference, distorted)` pair — PNG/JPEG
+/// file bytes decoded internally to RGB8, then scored (task #159 phase 4c).
+/// Both images must decode to the same dimensions. `backend` accepts
+/// [`Backend::Auto`]. Requires the `encoded` feature (default-on); for
+/// already-decoded pixels use [`score`].
+#[cfg(feature = "encoded")]
+pub fn score_encoded(
+    kind: MetricKind,
+    backend: Backend,
+    reference: &[u8],
+    distorted: &[u8],
+) -> Result<Score> {
+    let (rw, rh, ref_bytes) = decode_rgb8(reference, "reference")?;
+    let (dw, dh, dist_bytes) = decode_rgb8(distorted, "distorted")?;
+    if (rw, rh) != (dw, dh) {
+        return Err(Error::DimensionMismatch {
+            expected: (rw, rh),
+            got: (dw, dh),
+        });
+    }
+    let mut metric = Metric::new(kind, backend, rw, rh, MetricParams::default_for(kind))?;
+    metric.compute_srgb_u8(&ref_bytes, &dist_bytes)
+}
+
+/// Decode encoded image `bytes` (PNG / JPEG) to packed sRGB8 `(w, h, bytes)`
+/// via the `image` crate. `which` labels the side in error messages.
+#[cfg(feature = "encoded")]
+fn decode_rgb8(bytes: &[u8], which: &'static str) -> Result<(u32, u32, Vec<u8>)> {
+    let img = image::load_from_memory(bytes).map_err(|e| Error::Metric {
+        kind: "encoded",
+        message: format!("decode {which} image: {e}"),
+    })?;
+    let rgb = img.to_rgb8();
+    let (w, h) = rgb.dimensions();
+    Ok((w, h, rgb.into_raw()))
+}

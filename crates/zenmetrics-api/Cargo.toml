@@ -15,7 +15,7 @@ publish = false
 # surface stays cubecl-version-agnostic (no cubecl types leak through
 # the API). Add the `cubecl-types` feature to opt into the typed surface
 # of every enabled metric crate.
-default = ["all-metrics", "cuda", "pixels"]
+default = ["all-metrics", "cuda", "pixels", "encoded"]
 
 # Per-metric switches — let downstream consumers compile out the
 # metrics they don't need. `all-metrics` is the umbrella.
@@ -79,6 +79,11 @@ cpu-iwssim = ["dep:iwssim"]
 # Umbrella: every optimized native-CPU metric (parallels `all-metrics`).
 cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
+# Encoded-file front door (`score_encoded`): decode PNG/JPEG `&[u8]` to RGB8
+# internally (task #159 phase 4c). Default-on so the front door is always
+# present; depend with `--no-default-features` to drop the `image` decoder.
+encoded = ["dep:image"]
+
 # zenpixels integration on the umbrella API. Forwards `pixels` to every
 # enabled metric crate so `Metric::compute_pixels` works.
 pixels = [
@@ -132,6 +137,8 @@ zenpixels = { version = "0.2.11", default-features = false, features = ["std"], 
 # PixelSlice -> sRGB8 conversion for the optimized-CPU `compute_pixels` path
 # (task #159 phase 3); the GPU arms convert inside each `-gpu` crate.
 zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# Decoder for the `score_encoded` front door (task #159 phase 4c).
+image = { workspace = true, optional = true }
 
 # Typed-surface escape hatch (only pulled in when `cubecl-types` is on).
 cubecl = { workspace = true, optional = true }

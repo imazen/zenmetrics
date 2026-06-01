@@ -6938,6 +6938,7 @@ dependencies = [
  "dssim-core",
  "dssim-gpu",
  "fast-ssim2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "image",
  "imgref",
  "iwssim",
  "iwssim-gpu",

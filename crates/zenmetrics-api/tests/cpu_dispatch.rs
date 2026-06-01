@@ -258,6 +258,58 @@ fn warm_reference_cpu_matches_one_shot() {
     );
 }
 
+/// Encode packed RGB8 to a lossless PNG (test helper).
+#[cfg(feature = "encoded")]
+fn encode_png(rgb: &[u8], w: u32, h: u32) -> Vec<u8> {
+    use image::{ImageFormat, RgbImage};
+    let img = RgbImage::from_raw(w, h, rgb.to_vec()).expect("rgb image");
+    let mut buf = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(img)
+        .write_to(&mut buf, ImageFormat::Png)
+        .expect("encode png");
+    buf.into_inner()
+}
+
+/// `score_encoded` (task #159 phase 4c) decodes PNG/JPEG `&[u8]` internally.
+/// PNG is lossless, so scoring the encoded pair must equal scoring the
+/// original RGB8 bytes directly — no decode-path drift.
+#[cfg(all(feature = "encoded", feature = "cpu-ssim2"))]
+#[test]
+fn score_encoded_cpu_matches_direct() {
+    use zenmetrics_api::score_encoded;
+    let (w, h) = (64u32, 64u32);
+    let ref_rgb = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let dist_rgb = img(w, h, |x, y| {
+        [255 - x.wrapping_mul(4) as u8, y.wrapping_mul(3) as u8, 96]
+    });
+    let ref_png = encode_png(&ref_rgb, w, h);
+    let dist_png = encode_png(&dist_rgb, w, h);
+
+    let se =
+        score_encoded(MetricKind::Ssim2, Backend::Cpu, &ref_png, &dist_png).expect("score_encoded");
+    assert_eq!(se.metric_name, "ssim2");
+    assert!(
+        se.value.is_finite(),
+        "score_encoded not finite: {}",
+        se.value
+    );
+
+    let mut m = ssim2_cpu(w, h);
+    let direct = m
+        .compute_srgb_u8(&ref_rgb, &dist_rgb)
+        .expect("direct compute");
+    assert_eq!(
+        se.value, direct.value,
+        "score_encoded (lossless PNG round-trip) must equal direct RGB8 score"
+    );
+}
+
 #[test]
 fn dssim_cpu_is_finite_and_discriminates() {
     let (w, h) = (64u32, 64u32);

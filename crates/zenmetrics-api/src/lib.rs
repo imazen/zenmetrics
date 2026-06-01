@@ -76,6 +76,9 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
+/// Encoded-file (PNG/JPEG) score front door (task #159 phase 4c); requires `encoded`.
+#[cfg(feature = "encoded")]
+pub use metric::score_encoded;
 pub use metric::{
     Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram, score_pair,
 };
