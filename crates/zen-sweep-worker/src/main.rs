@@ -87,6 +87,9 @@ enum Cmd {
     Worker(zen_cloud_vastai::worker::WorkerArgs),
 }
 
+// Without a backend feature the `Cmd` enum is empty, so `cli`/the match arm
+// look unused/unreachable; the real builds always enable a backend.
+#[allow(unused_variables, unreachable_code, unreachable_patterns)]
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {

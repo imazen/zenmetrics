@@ -129,6 +129,10 @@ impl ZensimParams {
     ///
     /// This is what the umbrella's `MetricParams::default_for(Zensim)`
     /// returns so the metric is usable out of the box.
+    // `ZensimProfile::latest()` is deprecated in favor of `latest_preview()`;
+    // kept verbatim so the default profile (and thus every score) is provably
+    // unchanged. Migrating the call is a separate score-verified change.
+    #[allow(deprecated)]
     pub fn default_weights() -> Self {
         Self {
             profile: Some(zensim::ZensimProfile::latest()),

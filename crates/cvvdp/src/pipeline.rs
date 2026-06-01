@@ -16,7 +16,7 @@ use crate::pool::{
     do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_contrast_pyr_into};
-use crate::scratch::{BandWorkspace, Scratch, StripBandWorkspace};
+use crate::scratch::{Scratch, StripBandWorkspace};
 use crate::strip::{LpNormAccumulator, mode_b_halo_at_level};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 

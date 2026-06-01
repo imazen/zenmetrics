@@ -289,7 +289,7 @@ pub fn query_view(
                 && ci(&r.cell.image_path, image)
         })
         .collect();
-    out.sort_by(|a, b| b.ts.cmp(&a.ts));
+    out.sort_by_key(|x| std::cmp::Reverse(x.ts));
     out.into_iter()
         .take(limit)
         .map(|r| QueryRow {
@@ -324,7 +324,7 @@ pub fn results_view(rows: &[LedgerRow], limit: usize) -> Vec<ResultRow> {
         .iter()
         .filter(|r| r.status == JobStatus::Done && r.output_sha.is_some())
         .collect();
-    done.sort_by(|a, b| b.ts.cmp(&a.ts));
+    done.sort_by_key(|x| std::cmp::Reverse(x.ts));
     done.into_iter()
         .take(limit)
         .map(|r| ResultRow {

@@ -259,6 +259,9 @@ pub enum HetznerServerStatus {
 impl HetznerServerStatus {
     /// Parse from the Hetzner JSON status string. Unknown values map
     /// to `Unknown` so we never blow up on forward-compat changes.
+    // Intentionally an infallible inherent `from_str(&str) -> Self` (unknown →
+    // Unknown), not the fallible `FromStr` trait (which returns Result).
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "initializing" => Self::Initializing,
@@ -325,10 +328,10 @@ impl HetznerLocation {
 /// File format: lines `key=value`, comments start with `#`. The token
 /// key is `api_token=...` (matching the file the user provisioned).
 pub fn load_token_from_file_or_env() -> Result<String> {
-    if let Ok(t) = std::env::var("HETZNER_API_TOKEN") {
-        if !t.trim().is_empty() {
-            return Ok(t.trim().to_string());
-        }
+    if let Ok(t) = std::env::var("HETZNER_API_TOKEN")
+        && !t.trim().is_empty()
+    {
+        return Ok(t.trim().to_string());
     }
     let home = std::env::var("HOME").context("HOME not set")?;
     let path = PathBuf::from(home).join(".config/hetzner/credentials");

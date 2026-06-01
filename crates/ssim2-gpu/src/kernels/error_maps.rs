@@ -216,6 +216,9 @@ pub fn error_maps_strip_from_full_ref_kernel(
     // when out of body so the kernel never indexes past the cached
     // full-image buffers.
     let safe_full_idx = (full_in * outer) + inner_full;
+    // clippy::useless_conversion is a false positive here: `.into()` lifts
+    // usize -> cubecl `NativeExpand<usize>` (the kernel-expansion type).
+    #[allow(clippy::useless_conversion)]
     let ref_idx = if in_body {
         safe_full_idx
     } else {

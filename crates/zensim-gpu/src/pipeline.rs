@@ -2693,6 +2693,10 @@ impl<R: Runtime> Zensim<R> {
     /// Callers needing a non-default profile should construct via the
     /// `ZensimOpaque::with_profile` path (Phase 1b will surface a
     /// `Zensim::with_diffmap_profile` setter if needed).
+    // `PreviewV0_3` is a deprecated alias of `ZensimProfile::A` (identical
+    // profile); kept verbatim so the diffmap profile is provably unchanged.
+    // Migrating the token to `A` is a separate score-verified change.
+    #[allow(deprecated)]
     fn ensure_diffmap_state(&mut self) {
         if self.diffmap_state.is_none() {
             self.diffmap_state = Some(DiffmapState::new(ZensimProfile::PreviewV0_3));

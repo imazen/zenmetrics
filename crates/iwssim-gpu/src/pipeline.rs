@@ -771,10 +771,10 @@ impl<R: Runtime> Iwssim<R> {
         // Halo must respect the pyramid downsampling factor so it
         // shrinks to an integer row count at every scale.
         let pyr_factor: u32 = 1 << (NUM_SCALES - 1); // 16
-        if halo == 0 || halo % pyr_factor != 0 {
+        if halo == 0 || !halo.is_multiple_of(pyr_factor) {
             return Err(Error::InvalidImageSize);
         }
-        if h_body == 0 || h_body % pyr_factor != 0 {
+        if h_body == 0 || !h_body.is_multiple_of(pyr_factor) {
             return Err(Error::InvalidImageSize);
         }
         let strip_alloc_h = h_body + 2 * halo;
@@ -2385,7 +2385,7 @@ impl<R: Runtime> Iwssim<R> {
 
     fn cube_count_1d(n: usize) -> CubeCount {
         const TPB: u32 = 256;
-        let cubes = ((n as u32) + TPB - 1) / TPB;
+        let cubes = (n as u32).div_ceil(TPB);
         CubeCount::Static(cubes.max(1), 1, 1)
     }
     fn cube_dim_1d() -> CubeDim {

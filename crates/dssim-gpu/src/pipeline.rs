@@ -422,7 +422,7 @@ impl<R: Runtime> Dssim<R> {
         }
         // Pyramid alignment: halve 4 times = factor 16.
         const PYRAMID_ALIGN: u32 = 1 << (NUM_SCALES as u32 - 1);
-        if h_body == 0 || (h_body % PYRAMID_ALIGN) != 0 {
+        if h_body == 0 || !h_body.is_multiple_of(PYRAMID_ALIGN) {
             return Err(Error::InvalidImageSize);
         }
         const HALO: u32 = 256;

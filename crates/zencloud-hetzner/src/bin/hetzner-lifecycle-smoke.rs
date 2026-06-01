@@ -294,8 +294,10 @@ async fn main() -> Result<()> {
                     eprintln!("[smoke] all running; stopping poll loop");
                     break;
                 }
-                if args.stop_at_first_running && t_first_running.is_some() {
-                    let since_first = elapsed - t_first_running.unwrap();
+                if args.stop_at_first_running
+                    && let Some(t_first) = t_first_running
+                {
+                    let since_first = elapsed - t_first;
                     if since_first >= 60.0 {
                         eprintln!(
                             "[smoke] stop_at_first_running + 60s grace elapsed; stopping poll loop"

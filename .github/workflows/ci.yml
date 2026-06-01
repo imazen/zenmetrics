@@ -519,4 +519,17 @@ jobs:
         # workspace's members (matches the `just fmt-check` recipe).
         run: cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
       - name: Clippy (-D warnings, workspace-wide)
-        run: cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings
+        # Intentional/precision/cosmetic lints are allowed. Two mechanisms:
+        # command-line -A here covers the many non-`warn(clippy::all)` crates;
+        # the warn-all metric crates (cvvdp, iwssim) additionally carry
+        # crate-level `#![allow(...)]` (a group warn overrides command-line -A).
+        # excessive_precision/approx_constant = exact metric coefficients
+        # (rounding would shift scores); erasing_op/identity_op = index clarity;
+        # too_many_arguments = kernel signatures; doc_lazy_continuation/
+        # if_same_then_else = cosmetic.
+        run: >
+          cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings
+          -A clippy::excessive_precision -A clippy::approx_constant
+          -A clippy::erasing_op -A clippy::identity_op -A clippy::too_many_arguments
+          -A clippy::doc_lazy_continuation -A clippy::if_same_then_else
+          -A clippy::doc_overindented_list_items

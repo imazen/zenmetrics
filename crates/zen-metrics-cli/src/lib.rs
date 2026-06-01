@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(clippy::doc_lazy_continuation)]
 
 //! Library facade for the `zen-metrics` binary.
 //!

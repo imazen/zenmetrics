@@ -50,9 +50,9 @@ fn init_recursive_gaussian(out_path: &str) -> io::Result<()> {
     let mut fir = [0.0_f64; FIR_TAPS];
     if fir_enabled {
         let inv_two_sigma2 = 1.0 / (2.0 * SIGMA * SIGMA);
-        for i in 0..FIR_TAPS {
+        for (i, f) in fir.iter_mut().enumerate() {
             let x = (i as f64) - (FIR_RADIUS as f64);
-            fir[i] = (-x * x * inv_two_sigma2).exp();
+            *f = (-x * x * inv_two_sigma2).exp();
         }
         let fir_sum: f64 = fir.iter().sum();
         for f in &mut fir {

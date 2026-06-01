@@ -98,15 +98,15 @@ pub async fn try_claim(
     // 2. Existing claim probe.
     let existing = r2.cat_string(claim_uri).await;
     let now = epoch_secs();
-    if !existing.is_empty() {
-        if let Some((_token, ep, owner)) = parse_claim(&existing) {
-            let age = now.saturating_sub(ep);
-            if age < cfg.stale_secs && owner != worker_id {
-                debug!(chunk_id, age, owner, "held by peer");
-                return Ok(ClaimOutcome::HeldByPeer);
-            }
-            // Stale or self-owned -> fall through and overwrite.
+    if !existing.is_empty()
+        && let Some((_token, ep, owner)) = parse_claim(&existing)
+    {
+        let age = now.saturating_sub(ep);
+        if age < cfg.stale_secs && owner != worker_id {
+            debug!(chunk_id, age, owner, "held by peer");
+            return Ok(ClaimOutcome::HeldByPeer);
         }
+        // Stale or self-owned -> fall through and overwrite.
     }
 
     // 3. Write our claim.

@@ -87,7 +87,7 @@ pub const SLOTS_PER_COL: usize = 12;
 /// Mirrors `streaming::process_scale_bands`'s `total_strips`.
 #[inline]
 pub const fn cpu_strip_count(height: u32) -> u32 {
-    (height + STRIP_INNER - 1) / STRIP_INNER
+    height.div_ceil(STRIP_INNER)
 }
 
 /// Strip-local masked + IW pooling kernel with principled per-channel

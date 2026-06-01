@@ -39,6 +39,7 @@
 // values are mathematically identical to truncated forms). Allow the
 // literal forms so we don't drift from the upstream JSON.
 #![allow(clippy::excessive_precision)]
+#![allow(clippy::too_many_arguments)]
 
 extern crate alloc;
 

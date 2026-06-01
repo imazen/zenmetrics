@@ -34,9 +34,10 @@
 ///   pipeline — reserved for future work.
 ///
 /// Callers default to [`Self::Auto`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MemoryMode {
     /// Per-crate `resolve_auto` picks the variant that fits the cap.
+    #[default]
     Auto,
     /// Whole-image working set on device.
     Full,
@@ -53,12 +54,6 @@ pub enum MemoryMode {
         /// Tile width in columns.
         w: u32,
     },
-}
-
-impl Default for MemoryMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Cached-reference strip-mode policy passed through [`crate::MetricParams`].
@@ -83,21 +78,16 @@ impl Default for MemoryMode {
 /// implementations may surface [`crate::Error::Metric`] indicating
 /// fall-back to one-shot when they don't yet support
 /// [`Self::BothStripped`] under [`MemoryMode::Strip`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CachedRefStripPolicy {
     /// VRAM-aware default — picks `RefFull` when `ref_full + one_strip
     /// fits`, else `BothStripped`.
+    #[default]
     Auto,
     /// Hold whole-image ref-side state on device; dist strips per-call.
     RefFull,
     /// Per-strip ref cache + per-strip dist (iwssim's pattern).
     BothStripped,
-}
-
-impl Default for CachedRefStripPolicy {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 // ---------------------------------------------------------------

@@ -814,10 +814,8 @@ pub fn run(cfg: &WorkerConfig) -> Result<ExecOutcome, WorkerRunError> {
                                 cc.spec_threshold_secs,
                                 &cfg.worker,
                             );
-                            if won {
-                                if let Ok(mut g) = inflight.lock() {
-                                    *g = Some(id.clone());
-                                }
+                            if won && let Ok(mut g) = inflight.lock() {
+                                *g = Some(id.clone());
                             }
                             won
                         },

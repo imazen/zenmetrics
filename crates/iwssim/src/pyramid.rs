@@ -326,20 +326,20 @@ pub(crate) fn imenlarge2(
         if x == 0 || x == t2_w - 1 {
             continue;
         }
-        t2[0 * t2_w + x] = 2.0 * t2[1 * t2_w + x] - t2[2 * t2_w + x];
+        t2[0 * t2_w + x] = 2.0 * t2[t2_w + x] - t2[2 * t2_w + x];
         t2[(t2_h - 1) * t2_w + x] = 2.0 * t2[(t2_h - 2) * t2_w + x] - t2[(t2_h - 3) * t2_w + x];
     }
     // Linear extrap cols.
     for y in 0..t2_h {
-        t2[y * t2_w + 0] = 2.0 * t2[y * t2_w + 1] - t2[y * t2_w + 2];
+        t2[y * t2_w] = 2.0 * t2[y * t2_w + 1] - t2[y * t2_w + 2];
         t2[y * t2_w + (t2_w - 1)] = 2.0 * t2[y * t2_w + (t2_w - 2)] - t2[y * t2_w + (t2_w - 3)];
     }
 
     // Stage 3: take `::2, ::2` slice of t2 → shape (ceil(t2_h/2), ceil(t2_w/2)).
     // The Python `t2[:, :, ::2, ::2]` keeps indices 0, 2, 4, ... up to t2_h-1.
     // Numpy ceil-div: `(t2_h + 1) / 2`.
-    let imu_h = (t2_h + 1) / 2;
-    let imu_w = (t2_w + 1) / 2;
+    let imu_h = t2_h.div_ceil(2);
+    let imu_w = t2_w.div_ceil(2);
     let mut imu = alloc::vec![0.0_f32; imu_h * imu_w];
     for y in 0..imu_h {
         for x in 0..imu_w {

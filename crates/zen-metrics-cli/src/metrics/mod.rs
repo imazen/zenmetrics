@@ -316,12 +316,14 @@ pub(crate) fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::B
 /// reflect-pad mode at metric construction. Defaults to false; tests
 /// never set it. Using `AtomicBool` so we can flip-then-spawn-threads
 /// without a `&mut`.
+#[allow(dead_code)] // used by the --allow-small-images CLI path (feature-gated build configs)
 static ALLOW_SMALL_IMAGES: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 /// Set the process-wide allow-small-images flag. Called once from
 /// `cmd_score_pairs` when `--allow-small-images` is on the CLI. Safe
 /// to call from non-main if scoping changes.
+#[allow(dead_code)]
 pub fn set_allow_small_images() {
     ALLOW_SMALL_IMAGES.store(true, std::sync::atomic::Ordering::Relaxed);
 }
@@ -696,6 +698,7 @@ pub enum ZensimFeatureRegime {
 
 impl ZensimFeatureRegime {
     /// Feature-vector length (228 / 300 / 372).
+    #[allow(dead_code)]
     pub fn total_features(self) -> usize {
         match self {
             ZensimFeatureRegime::Basic => 228,

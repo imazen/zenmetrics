@@ -183,7 +183,7 @@ fn weighted_sum_pair_inner(token: Token, cs: &[f32], iw: &[f32]) -> (f64, f64) {
         let c_v = f32x8::load(token, cc);
         let i_v = f32x8::load(token, ic);
         acc_csiw = c_v.mul_add(i_v, acc_csiw);
-        acc_iw = acc_iw + i_v;
+        acc_iw += i_v;
     }
     let mut sum_csiw = 0.0_f64;
     let mut sum_iw = 0.0_f64;

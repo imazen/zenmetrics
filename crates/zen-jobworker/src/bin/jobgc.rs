@@ -12,7 +12,6 @@
 //!     --r2-endpoint https://<acct>.r2.cloudflarestorage.com --cheap-cap-bytes 1000000 [--execute]
 
 use std::collections::HashSet;
-use std::path::PathBuf;
 
 use clap::Parser;
 use zen_job_core::{JobStatus, LedgerView, Sha256Hex};

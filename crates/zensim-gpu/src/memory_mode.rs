@@ -212,7 +212,6 @@ pub fn auto_strip_body_for(
 /// Returns the largest `h_body` that fits the cap, or None if even
 /// the minimum body doesn't fit. Always a multiple of
 /// [`crate::pipeline::STRIP_ALIGN`].
-
 fn round_align(h: u32) -> u32 {
     let align = crate::pipeline::STRIP_ALIGN;
     h.div_ceil(align) * align

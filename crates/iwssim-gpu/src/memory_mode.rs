@@ -189,10 +189,11 @@ pub fn resolve_auto(width: u32, height: u32, cap: usize) -> crate::Result<Resolv
     // 2-pass-iwssim auto-fallback: `Iwssim::new_strip` works whenever
     // both axes are ≥ MIN_NATIVE_DIM and an aligned body fits, and
     // it's the only way to score images that don't fit Full.
-    if width >= MIN_NATIVE_DIM && height >= MIN_NATIVE_DIM {
-        if let Some(h_body) = auto_size_strip_body(width, height, cap) {
-            return Ok(ResolvedMode::Strip { h_body });
-        }
+    if width >= MIN_NATIVE_DIM
+        && height >= MIN_NATIVE_DIM
+        && let Some(h_body) = auto_size_strip_body(width, height, cap)
+    {
+        return Ok(ResolvedMode::Strip { h_body });
     }
     Err(crate::Error::TooBigForFull {
         needed: full_bytes,

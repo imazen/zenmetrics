@@ -48,6 +48,12 @@
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
+// excessive_precision/approx_constant: exact metric-kernel coefficients
+// (rounding would shift scores); erasing_op/identity_op: index clarity.
+#![allow(clippy::excessive_precision)]
+#![allow(clippy::approx_constant)]
+#![allow(clippy::erasing_op)]
+#![allow(clippy::identity_op)]
 
 pub mod eig;
 pub mod filters;

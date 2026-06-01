@@ -1507,7 +1507,6 @@ pub fn reclaim_pooled_vram(backend: Backend) {
     #[cfg(feature = "zensim")]
     if let Ok(b) = zensim_backend(backend) {
         zensim_gpu::memory_mode::reclaim_pooled_vram(b);
-        return;
     }
 }
 

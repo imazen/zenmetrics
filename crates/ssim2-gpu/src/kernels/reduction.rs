@@ -625,7 +625,7 @@ pub fn launch_zero_fill_f32<R: Runtime>(
     len: usize,
 ) {
     const TPB: u32 = 256;
-    let cubes = ((len as u32) + TPB - 1) / TPB;
+    let cubes = (len as u32).div_ceil(TPB);
     unsafe {
         zero_fill_f32_kernel::launch_unchecked::<R>(
             client,

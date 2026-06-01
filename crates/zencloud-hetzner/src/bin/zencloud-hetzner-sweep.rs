@@ -183,10 +183,10 @@ fn expand_tilde(p: &std::path::Path) -> PathBuf {
         if let Ok(home) = std::env::var("HOME") {
             return PathBuf::from(home).join(rest);
         }
-    } else if s == "~" {
-        if let Ok(home) = std::env::var("HOME") {
-            return PathBuf::from(home);
-        }
+    } else if s == "~"
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return PathBuf::from(home);
     }
     p.to_path_buf()
 }

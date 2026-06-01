@@ -55,6 +55,12 @@
 #![warn(clippy::all)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
+// erasing_op/identity_op: explicit `0*w + x` / `+ 0` index arithmetic kept
+// for row/col clarity; if_same_then_else: parallel branches kept distinct
+// for readability. None are bugs (audited 2026-06-01).
+#![allow(clippy::erasing_op)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::if_same_then_else)]
 #![allow(clippy::excessive_precision)]
 
 extern crate alloc;

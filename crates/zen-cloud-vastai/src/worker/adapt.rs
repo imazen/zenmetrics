@@ -141,7 +141,7 @@ pub async fn sample_gpu_util_avg() -> u32 {
         .lines()
         .filter_map(|l| l.trim().parse::<u32>().ok())
         .fold((0u32, 0u32), |(s, n), v| (s + v, n + 1));
-    if n == 0 { 0 } else { sum / n }
+    sum.checked_div(n).unwrap_or(0)
 }
 
 /// Controller that owns the Semaphore's capacity. The dispatcher

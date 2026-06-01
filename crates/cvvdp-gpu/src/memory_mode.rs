@@ -30,8 +30,8 @@
 //!   Opt-in only — never picked by `Auto`. Use when memory pressure
 //!   forces a metric-value tradeoff (e.g. cvvdp on 6 GB VRAM at
 //!   >16 MP). See the [`Self::CappedPyramid`] variant docstring for
-//!   historical bench (≤0.005 JOD at k=8, archived) and current
-//!   memory savings (estimator-based; runtime nvsmi not pinned).
+//!   > historical bench (≤0.005 JOD at k=8, archived) and current
+//!   > memory savings (estimator-based; runtime nvsmi not pinned).
 //!
 //! The earlier capped-pyramid Strip variant that lived here before
 //! task #77 was rolled back because **capping the pyramid depth

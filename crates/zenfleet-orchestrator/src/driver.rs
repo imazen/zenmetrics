@@ -333,24 +333,23 @@ impl<P: ProviderHandle, R: R2Operator> FleetSweep<P, R> {
                 for cid in &chunk_ids {
                     if let Some(spec_elapsed) =
                         spec_state.decide_speculative(cid, elapsed_secs, &spec_cfg)
+                        && let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid)
                     {
-                        if let Some(chunk) = chunks.iter().find(|c| &c.chunk_id == cid) {
-                            let one = [chunk.clone()];
-                            match self.provider.push_jobs(group, &one).await {
-                                Ok(_) => {
-                                    spec_state.record_speculative_dispatched(cid);
-                                    out.chunks_speculatively_dispatched += 1;
-                                    eprintln!(
-                                        "[spec] re-dispatch: chunk_id={} elapsed={:.1}s p95={:.1}s factor={:.2}",
-                                        cid,
-                                        spec_elapsed,
-                                        p95.unwrap_or(0.0),
-                                        spec_cfg.straggler_factor,
-                                    );
-                                }
-                                Err(e) => {
-                                    eprintln!("[spec] re-dispatch FAILED chunk_id={cid}: {e:#}");
-                                }
+                        let one = [chunk.clone()];
+                        match self.provider.push_jobs(group, &one).await {
+                            Ok(_) => {
+                                spec_state.record_speculative_dispatched(cid);
+                                out.chunks_speculatively_dispatched += 1;
+                                eprintln!(
+                                    "[spec] re-dispatch: chunk_id={} elapsed={:.1}s p95={:.1}s factor={:.2}",
+                                    cid,
+                                    spec_elapsed,
+                                    p95.unwrap_or(0.0),
+                                    spec_cfg.straggler_factor,
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("[spec] re-dispatch FAILED chunk_id={cid}: {e:#}");
                             }
                         }
                     }
