@@ -33,6 +33,21 @@ pub(crate) enum CpuMetricState {
         width: u32,
         height: u32,
     },
+    /// in-tree `iwssim` — stateful (dims baked in at `new`, min side 176).
+    #[cfg(feature = "cpu-iwssim")]
+    Iwssim {
+        inner: Box<iwssim::Iwssim>,
+        width: u32,
+        height: u32,
+    },
+    /// `zensim` — stateful scorer built from a profile; dims live on the
+    /// per-call `RgbSlice`, so stash them here.
+    #[cfg(feature = "cpu-zensim")]
+    Zensim {
+        inner: Box<zensim::Zensim>,
+        width: u32,
+        height: u32,
+    },
     /// `kind`'s `cpu-*` feature is not built — optimized-CPU scoring for
     /// it is unavailable in this configuration.
     FeatureDisabled(MetricKind),
@@ -40,10 +55,10 @@ pub(crate) enum CpuMetricState {
 
 impl CpuMetricState {
     /// Build the optimized-CPU scorer for `kind` at `width × height`.
-    /// Cheap for stateless metrics; for stateful ones (cvvdp) this builds
-    /// the native instance. Returns [`CpuMetricState::FeatureDisabled`]
-    /// for metrics whose `cpu-*` feature is off rather than failing, so
-    /// the error surfaces at score time with a clear backend message.
+    /// Cheap for stateless metrics; for stateful ones this builds the
+    /// native instance. Returns [`CpuMetricState::FeatureDisabled`] for
+    /// metrics whose `cpu-*` feature is off rather than failing, so the
+    /// error surfaces at score time with a clear backend message.
     pub(crate) fn new(
         kind: MetricKind,
         width: u32,
@@ -80,6 +95,33 @@ impl CpuMetricState {
                     height,
                 })
             }
+            #[cfg(feature = "cpu-iwssim")]
+            MetricKind::Iwssim => {
+                // No umbrella IwssimParams variant — the CPU port uses crate
+                // defaults (mirrors cpu_adapter::construct_iwssim). `new`
+                // rejects sub-176 sides (allow_small = false).
+                let inner = iwssim::Iwssim::new(width, height).map_err(|e| Error::Metric {
+                    kind: "iwssim",
+                    message: format!("iwssim::Iwssim::new: {e}"),
+                })?;
+                Ok(CpuMetricState::Iwssim {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                })
+            }
+            #[cfg(feature = "cpu-zensim")]
+            MetricKind::Zensim => {
+                // zensim exposes the same default profile the GPU crate
+                // wraps; `latest_preview()` matches production sweep workers
+                // (mirrors cpu_adapter::construct_zensim).
+                let inner = zensim::Zensim::new(zensim::ZensimProfile::latest_preview());
+                Ok(CpuMetricState::Zensim {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                })
+            }
             other => Ok(CpuMetricState::FeatureDisabled(other)),
         }
     }
@@ -91,6 +133,10 @@ impl CpuMetricState {
             CpuMetricState::Ssim2 { .. } => MetricKind::Ssim2,
             #[cfg(feature = "cpu-cvvdp")]
             CpuMetricState::Cvvdp { .. } => MetricKind::Cvvdp,
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { .. } => MetricKind::Iwssim,
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim { .. } => MetricKind::Zensim,
             CpuMetricState::FeatureDisabled(k) => *k,
         }
     }
@@ -103,6 +149,10 @@ impl CpuMetricState {
             CpuMetricState::Ssim2 { width, height } => (*width, *height),
             #[cfg(feature = "cpu-cvvdp")]
             CpuMetricState::Cvvdp { width, height, .. } => (*width, *height),
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim { width, height, .. } => (*width, *height),
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim { width, height, .. } => (*width, *height),
             CpuMetricState::FeatureDisabled(_) => (0, 0),
         }
     }
@@ -119,13 +169,30 @@ impl CpuMetricState {
                 width,
                 height,
             } => compute_cvvdp(inner, *width, *height, r, d),
+            #[cfg(feature = "cpu-iwssim")]
+            CpuMetricState::Iwssim {
+                inner,
+                width,
+                height,
+            } => compute_iwssim(inner, *width, *height, r, d),
+            #[cfg(feature = "cpu-zensim")]
+            CpuMetricState::Zensim {
+                inner,
+                width,
+                height,
+            } => compute_zensim(inner, *width, *height, r, d),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
 }
 
 /// Validate that both sides are exactly `width × height × 3` packed bytes.
-#[cfg(any(feature = "cpu-ssim2", feature = "cpu-cvvdp"))]
+#[cfg(any(
+    feature = "cpu-ssim2",
+    feature = "cpu-cvvdp",
+    feature = "cpu-iwssim",
+    feature = "cpu-zensim"
+))]
 fn check_srgb_len(kind: &'static str, width: u32, height: u32, r: &[u8], d: &[u8]) -> Result<()> {
     let expected = (width as usize) * (height as usize) * 3;
     if r.len() != expected || d.len() != expected {
@@ -190,6 +257,62 @@ fn compute_cvvdp(
     Ok(Score {
         value: v as f64,
         metric_name: "cvvdp",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// iwssim wiring — mirrors cpu_adapter::compute_iwssim.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-iwssim")]
+fn compute_iwssim(
+    c: &mut iwssim::Iwssim,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<Score> {
+    check_srgb_len("iwssim", width, height, r, d)?;
+    let result = c.score(r, d).map_err(|e| Error::Metric {
+        kind: "iwssim",
+        message: format!("iwssim score: {e}"),
+    })?;
+    Ok(Score {
+        value: result.score,
+        metric_name: "iwssim",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// zensim wiring — mirrors cpu_adapter::compute_zensim.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-zensim")]
+fn compute_zensim(
+    z: &mut zensim::Zensim,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<Score> {
+    check_srgb_len("zensim", width, height, r, d)?;
+    // RgbSlice expects `&[[u8; 3]]`; `[u8; 3]` is `bytemuck::Pod`, so we
+    // reinterpret the interleaved bytes in place (no copy, no `unsafe`).
+    let src: &[[u8; 3]] = bytemuck::cast_slice(r);
+    let dst: &[[u8; 3]] = bytemuck::cast_slice(d);
+    let ref_slice = zensim::RgbSlice::new(src, width as usize, height as usize);
+    let dist_slice = zensim::RgbSlice::new(dst, width as usize, height as usize);
+    let result = z
+        .compute(&ref_slice, &dist_slice)
+        .map_err(|e| Error::Metric {
+            kind: "zensim",
+            message: format!("zensim compute: {e:?}"),
+        })?;
+    Ok(Score {
+        value: result.score(),
+        metric_name: "zensim",
         metric_version: env!("CARGO_PKG_VERSION"),
     })
 }
