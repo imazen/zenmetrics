@@ -53,8 +53,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -63,12 +63,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
@@ -150,8 +151,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -160,12 +161,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
@@ -251,8 +253,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -261,12 +263,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
@@ -348,8 +351,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -358,12 +361,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
@@ -424,8 +428,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -434,12 +438,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
@@ -497,8 +502,8 @@ jobs:
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
           git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
           # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif--main,
-          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # for every codec we ship (zenpng, zenwebp, zenavif,
+          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
           # every patch manifest even when the patched crate isn't
           # active in the build, so CI must clone them all to satisfy
           # workspace metadata resolution. Pinned to stable revs to
@@ -507,12 +512,13 @@ jobs:
           git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
           git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
-          # zenavif is patched as `../zenavif--main` — clone with that
-          # exact suffix so the path resolves on CI.
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
-          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
-          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
+          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
+          # clone dirs matching the workspace [patch] paths).
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
+          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
+          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
           git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
           # butteraugli's local layout is a Cargo workspace at
