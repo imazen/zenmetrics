@@ -71,11 +71,18 @@ cpu = [
 # per chunk); a metric without its `cpu-*` feature returns
 # `Error::BackendNotEnabled` for `Backend::Cpu`.
 cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
-cpu-cvvdp = ["dep:cvvdp"]
+# `cvvdp`/`iwssim` are workspace deps with `default-features = false`, and
+# both are no_std+alloc crates with an explicit `std` feature. The umbrella
+# uses `std` (process probes, format!, Vec) so the optimized-CPU path needs
+# it. Enabling it here is additive — the default build already gets it via
+# the GPU crates' feature unification — but it makes the standalone
+# `--no-default-features --features cpu-metrics` build (CI cpu job, phase 5)
+# self-sufficient instead of accidentally relying on a GPU crate being on.
+cpu-cvvdp = ["dep:cvvdp", "cvvdp/std"]
 cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
 cpu-zensim = ["dep:zensim", "dep:bytemuck"]
-cpu-iwssim = ["dep:iwssim"]
+cpu-iwssim = ["dep:iwssim", "iwssim/std"]
 # Umbrella: every optimized native-CPU metric (parallels `all-metrics`).
 cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
@@ -188,6 +195,19 @@ required-features = [
     "cpu-dssim",
     "cpu-butter",
 ]
+
+# Brute-force backend × metric × size matrix (task #159 phase 5). CPU
+# breadth + Auto→Cpu always run (CI cpu-metrics job); the CPU-vs-CUDA
+# parity layer compiles in only when `cuda` is also on (real-GPU host).
+# Needs `cpu-metrics` (Backend::Cpu dispatch for all six) AND `all-metrics`
+# — the shared `MetricParams`/`Score` types are defined per the GPU metric
+# features, so every metric kind needs its `<metric>` feature present even
+# when scoring on Backend::Cpu. Run with a backend (cuda default locally;
+# `wgpu` in CI so the -gpu crates build without the CUDA SDK). Visible gate
+# per the CI→test chain (NO graceful skips).
+[[test]]
+name = "backend_matrix"
+required-features = ["cpu-metrics", "all-metrics"]
 
 # These two timing examples are `#![cfg(feature = "cubecl-types")]` at
 # the crate root, so without that feature the whole file (incl. `main`)
