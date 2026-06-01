@@ -155,14 +155,14 @@ impl ZensimParams {
     /// frozen recovery-trail variant).
     ///
     /// Defaults regime to the profile's natural input width:
-    /// [`ZensimFeatureRegime::Basic`] (228) for V0_1 / V0_2;
+    /// [`ZensimFeatureRegime::Basic`] (228) for V0_2;
     /// [`ZensimFeatureRegime::WithIw`] (372) for every V0_3+ MLP
     /// ship. Override via [`Self::with_regime`] if the bake only
     /// consumes a prefix.
     pub fn with_profile(mut self, profile: zensim::ZensimProfile) -> Self {
         use zensim::ZensimProfile::*;
         self.regime = match profile {
-            PreviewV0_1 | PreviewV0_2 => ZensimFeatureRegime::Basic,
+            PreviewV0_2 => ZensimFeatureRegime::Basic,
             _ => ZensimFeatureRegime::WithIw,
         };
         self.profile = Some(profile);
