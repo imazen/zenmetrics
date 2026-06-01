@@ -42,9 +42,10 @@ const SIZES: &[(u32, u32, &str, bool)] = &[
     (6144, 4096, "24MP_6144x4096", false), // whole-image skipped
 ];
 
-/// Body row count for the strip walker. 256 keeps the strip slab at
-/// `W × (256 + 80) × 50 × 4 B` (the multires walker still uses the
-/// same body for the full-res strip; the half-res strip uses body/2).
+/// Body row count for the strip walker. 256 keeps the full-res strip
+/// slab at `W × (256 + 2·80) × 50 × 4 B` (the multires walker uses the
+/// same body for the full-res strip; the half-res strip uses body/2 and
+/// the same halo).
 const STRIP_BODY_H: u32 = 256;
 
 /// Halo rows (matches the strip walker's HALO_ROWS constant).

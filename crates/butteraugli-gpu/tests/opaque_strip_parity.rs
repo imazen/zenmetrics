@@ -97,10 +97,19 @@ fn opaque_strip_score(w: u32, h: u32, h_body: u32, ref_buf: &[u8], dis_buf: &[u8
 
 fn typed_strip_score(w: u32, h: u32, h_body: u32, ref_buf: &[u8], dis_buf: &[u8]) -> f64 {
     let client = BackendT::client(&Default::default());
-    let mut strip = Butteraugli::<BackendT>::new_strip(client, w, h, h_body);
+    // Mirror the opaque shim's `MemoryMode::Strip` routing EXACTLY. The shim
+    // builds `new_multires_strip` (the HF-safe multi-resolution strip walker,
+    // HALO_ROWS=80) and computes via `compute_strip_with_options` — see
+    // `opaque.rs` `is_strip_mode()`. Before the multires-strip fix the shim
+    // used single-res `new_strip`; this typed reference must track the shim's
+    // ACTUAL path, which is now multires. (Comparing the multires shim against
+    // single-res `new_strip` is what diverged ~14.6% on HF content — the bug
+    // this parity gate exists to catch is shim-vs-typed *routing* drift, and
+    // both sides must be the same algorithm for a 1e-7 byte-exact assertion.)
+    let mut strip = Butteraugli::<BackendT>::new_multires_strip(client, w, h, h_body);
     strip
         .compute_strip(ref_buf, dis_buf)
-        .expect("typed strip compute")
+        .expect("typed multires-strip compute")
         .score as f64
 }
 
@@ -155,21 +164,14 @@ fn opaque_strip_vs_typed_strip_1024_body_256() {
     assert_rel_eq("opaque-vs-typed-strip-1024-256", typed, opaque, 1e-7);
 }
 
-// ─── opaque-strip vs opaque-whole parity ───
+// ─── opaque-strip vs opaque-Full (both multires) ───
 //
-// Whole-image opaque is the multi-resolution path (the shim's `Full`
-// branch routes to `new_multires`), while strip mode is single-
-// resolution. They are NOT expected to match because the half-res
-// supersample-add raises the diffmap's max-norm by a small but
-// nonzero amount on most inputs.
-//
-// To compare on equal footing, we instead compare opaque-strip
-// against opaque-Full WHEN the half-res sibling is skipped — that
-// happens for w<16 or h<16 (see `Butteraugli::new_multires`'s
-// MIN_SIZE_FOR_SUBSAMPLE), which is too small to be a useful test,
-// so we use the typed single-res path as the apples-to-apples
-// reference instead and verify that the opaque-Full result is
-// consistent with the typed multi-res result.
+// Both whole-image opaque (`Full` → `new_multires`) AND strip
+// (`Strip` → `new_multires_strip`) are now the multi-resolution path,
+// so opaque-strip == opaque-Full within the multires reduction-order +
+// halo drift. `typed_whole_singleres_score` below is retained only for
+// the `opaque_full_uses_multires` contract check (multires Full must be
+// >= the single-res whole, proving the half-res supersample-add fires).
 
 fn typed_whole_singleres_score(w: u32, h: u32, ref_buf: &[u8], dis_buf: &[u8]) -> f64 {
     let client = BackendT::client(&Default::default());
@@ -178,24 +180,26 @@ fn typed_whole_singleres_score(w: u32, h: u32, ref_buf: &[u8], dis_buf: &[u8]) -
 }
 
 #[test]
-fn opaque_strip_matches_typed_single_res_whole_512() {
-    // Strip mode is single-resolution by design (see
-    // `new_multires_with_memory_mode` returning StripModeUnsupported
-    // for the half-res strip walker). So a strip-mode opaque result
-    // must equal the single-resolution typed-whole result up to the
-    // f64 reduction-order tolerance documented in `strip_parity.rs`
-    // (1e-4 rel).
+fn opaque_strip_matches_full_multires_512() {
+    // The strip path is now the MULTI-RESOLUTION walker (HALO_ROWS=80), so a
+    // strip-mode score equals the multires Full score. That equality
+    // (strip == Full) is exactly the HF-safety property the multires-strip
+    // fix established — it is what lets `Auto` pick Strip on butter without a
+    // score shift. Tolerance is the multires-strip-vs-multires-whole
+    // reduction-order + halo drift documented in strip.rs (~7e-4 rel at
+    // 512²); 1e-3 covers it. (Pre-fix this test asserted strip == single-res
+    // whole, which was the HF-unsafe behaviour the fix replaced.)
     let w = 512;
     let h = 512;
     let ref_buf = make_image(w, h, 0);
     let dis_buf = make_image(w, h, 7);
     let opaque_strip = opaque_strip_score(w, h, 64, &ref_buf, &dis_buf);
-    let typed_single = typed_whole_singleres_score(w, h, &ref_buf, &dis_buf);
+    let full_multires = opaque_full_score(w, h, &ref_buf, &dis_buf);
     assert_rel_eq(
-        "opaque-strip-vs-typed-singleres-512",
-        typed_single,
+        "opaque-strip-vs-full-multires-512",
+        full_multires,
         opaque_strip,
-        1e-4,
+        1e-3,
     );
 }
 
@@ -248,12 +252,13 @@ fn opaque_strip_with_options_matches_typed_strip_with_options() {
         .expect("opaque strip compute")
         .value;
 
-    // Typed path with the same params.
+    // Typed path with the same params — mirror the shim's multires-strip
+    // routing (new_multires_strip + compute_strip_with_options).
     let client = BackendT::client(&Default::default());
-    let mut typed = Butteraugli::<BackendT>::new_strip(client, w, h, body_h);
+    let mut typed = Butteraugli::<BackendT>::new_multires_strip(client, w, h, body_h);
     let typed_score = typed
         .compute_strip_with_options(&ref_buf, &dis_buf, &params)
-        .expect("typed strip compute with options")
+        .expect("typed multires-strip compute with options")
         .score as f64;
 
     assert_rel_eq("opaque-strip-options-vs-typed", typed_score, opaque_value, 1e-7);

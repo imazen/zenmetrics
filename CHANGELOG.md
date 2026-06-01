@@ -35,6 +35,23 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **butteraugli-gpu Strip is now score-safe on all content (task #158).** The mode_wall sweep
+  (`benchmarks/mode_wall_2026-05-31`) found butter's Strip score ~8% off Full on an aggressive
+  high-frequency checkerboard. Root cause was NOT a halo bug: the umbrella `ButteraugliOpaque`
+  routed `MemoryMode::Full` through the multi-resolution path (`new_multires`, full-res +
+  half-res supersample) but `MemoryMode::Strip` through single-resolution (`new_strip`), silently
+  dropping the half-res band — an apples-to-oranges comparison (single-res Strip == single-res
+  Full bit-identically on the same checkerboard). `ButteraugliOpaque` now routes Strip/Auto→Strip
+  through `new_multires_strip` (cuda/wgpu/cpu + `build_from_client`) so a Strip score matches the
+  Full score on all content (`77020757`). Also bumped `HALO_ROWS` 40→80: the multires-strip
+  half-res sibling is built by 2× downsampling the full-res strip slab, so it only saw `HALO_ROWS/2`
+  real halo rows while the half-res blur cascade independently needs 34 — at 40 this drifted the
+  max-norm ~7e-4 at 512² on the checkerboard; at 80 the half-res side is fully haloed and
+  multires-strip == multires-whole bit-identically. New `tests/strip_hf_checkerboard.rs` gates both
+  fixes on the exact divergent content (negative-controlled: reverts reproduce 8.0e-2 / 7e-4). Wall
+  (`benchmarks/butter_strip_wall_task158_2026-05-31`): the corrected one-off Strip stays 2.5–13×
+  faster than Full at 1024²/4096². `strip_parity` (21/21) + `multires_strip` (11/11) stay green.
+
 - **Session VRAM reclaim now routes to all 6 metrics, not cvvdp-only.** `cleanup_session_stream`
   / `stream_reserved_bytes` (`session.rs`) routed only to `cvvdp_gpu::session::*` with a no-op
   fallback, so in a build with cvvdp compiled OUT but another metric IN, dropping a non-cvvdp
