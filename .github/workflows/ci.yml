@@ -547,6 +547,10 @@ jobs:
         with:
           shared-key: zenmetrics-lint
       - name: Format check
-        run: cargo fmt --all -- --check
+        # Scope to in-repo workspace members only — `cargo fmt --all` reaches
+        # into the patched sibling repos (../zenavif, …) we don't own and fails
+        # on THEIR formatting. `cargo metadata --no-deps` lists exactly this
+        # workspace's members (matches the `just fmt-check` recipe).
+        run: cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
       - name: Clippy (-D warnings, workspace-wide)
         run: cargo clippy --workspace --no-default-features --features wgpu -- -D warnings
