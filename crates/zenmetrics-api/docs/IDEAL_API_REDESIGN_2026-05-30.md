@@ -21,21 +21,33 @@ pub enum Backend {
     Auto,          // pick the best AVAILABLE backend: a working GPU device else Cpu
     Cuda, Wgpu, Hip,
     Cpu,           // the OPTIMIZED native CPU crates (fast-ssim2, butteraugli 0.9.4,
-                   // dssim-core, zensim, in-tree cvvdp/iwssim) — the fast path
-    CpuReference,  // the cubecl-cpu path (runs GPU kernels on CPU; slow; parity/debug
-                   // only — this is what `Backend::Cpu` WRONGLY meant before this redesign)
+                   // dssim-core, zensim, in-tree cvvdp/iwssim) — the fast path.
+                   // PHASE 2 (does not exist yet after phase 1).
+    CubeclCpu,     // the cubecl-cpu path (runs GPU kernels on CPU; slow; parity/debug
+                   // only — this is what `Backend::Cpu` meant before this redesign)
 }
 ```
 
+> **User-locked naming (task #159).** The cubecl-cpu reference variant is named
+> **`CubeclCpu`** (not `CpuReference`); `Backend::Cpu` is reserved for the optimized
+> native crates. **Phase 1 lands only** `Auto` + the `Cpu`→`CubeclCpu` rename + the
+> availability detector + `resolve_auto()` — the optimized `Cpu` variant and its
+> dispatch are **phase 2**. So immediately after phase 1 the enum is:
+> `Auto, Cuda, Wgpu, Hip, CubeclCpu` (no `Cpu` yet), and `Auto` falls back to
+> `CubeclCpu` on GPU-less hosts until phase 2 repoints it to `Cpu`.
+
 - **`Backend::Cpu` flips meaning** to the optimized native crates (what users want).
-  The current cubecl-cpu reference becomes `Backend::CpuReference`. The umbrella gains an
+  The current cubecl-cpu reference becomes `Backend::CubeclCpu`. The umbrella gains an
   optimized-CPU dispatch mirroring `zenmetrics-orchestrator`'s `cpu_adapter` (it already
   wires fast-ssim2/dssim-core/butteraugli/zensim/iwssim/cvvdp behind `cpu-*` features).
+  *(phase 2)*
 - **`Backend::Auto`** needs capability detection. `detect_gpu()`/`detect_cpu()` already
-  exist in `zenmetrics-orchestrator/src/{gpu,cpu}.rs` — hoist the minimal availability
-  probe into a shared spot (a small `zenmetrics-capability` module/crate, or the umbrella
-  behind a feature) so both the api and the orchestrator use one detector. Auto resolves
-  to a working CUDA/Wgpu device if present, else `Cpu`. Resolution is observable
+  exist in `zenmetrics-orchestrator/src/{gpu,cpu}.rs`. Phase 1 implements a minimal,
+  dependency-light availability probe in the umbrella (`zenmetrics-api/src/capability.rs`)
+  that mirrors the orchestrator's `nvidia-smi` detection and honors the same
+  `ZENMETRICS_FORCE_NO_GPU=1` override, rather than pulling the orchestrator's full
+  capability stack into the api. Auto resolves to a working CUDA/Wgpu/Hip device if
+  present, else `CubeclCpu` (phase 2: else `Cpu`). Resolution is observable
   (`Backend::resolve_auto() -> Backend`) so it is never a black box.
 
 ## Inputs (zenpixels, not u8)
@@ -88,19 +100,22 @@ asserting:
 2. **CPU vs GPU agree within each metric's documented cross-backend tolerance**
    (per-metric; some are tight, some looser — record the measured band, no graceful skips).
 3. `Backend::Auto` resolves to the expected backend per availability (GPU present → GPU;
-   forced no-GPU → Cpu) and never to `CpuReference`.
+   forced no-GPU → `CubeclCpu` in phase 1, `Cpu` after phase 2) and never silently to a
+   slow path the caller didn't ask for.
 4. `Backend::Cpu` runs the OPTIMIZED crate, not cubecl-cpu (assert via a perf/identity
-   marker or the routed crate's signature).
+   marker or the routed crate's signature). *(phase 2 — the `Cpu` variant only exists then.)*
 
 ## Implementation phases (each lands + verifies on master)
 
-1. Backend model: add `Auto` + `CpuReference`, flip `Cpu` → optimized; hoist a shared
-   availability detector; `resolve_auto()`.
+1. **[DONE — phase 1]** Backend model: add `Auto` + rename the old cubecl-cpu `Cpu` →
+   `CubeclCpu`; hoist a minimal availability detector (`capability.rs`); `resolve_auto()`.
+   (The optimized `Cpu` variant is NOT added here — that's phase 2.)
 2. Optimized-CPU dispatch in the umbrella (the 6 CPU crates, mirroring `cpu_adapter`).
 3. zenpixels inputs across the scoring surface + the `*_encoded` decode path.
 4. Entry points (`score` / `warm_reference` / `score_encoded`) + `Priority` + the
    data-grounded resolver (#157 Phase B); reshape `score_pair` into `score`.
 5. Brute-force cross-backend tests.
 
-Open: confirm the `Cpu`/`CpuReference` naming flip with the user before landing phase 1
-(it changes the meaning of the existing `Backend::Cpu`).
+Resolved: the user confirmed the naming flip (task #159) — the cubecl-cpu reference
+variant is **`CubeclCpu`**, and `Backend::Cpu` is reserved for the optimized native path
+(phase 2). Phase 1 (the rename + `Auto` + detector + `resolve_auto`) is landed.
