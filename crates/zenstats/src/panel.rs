@@ -271,42 +271,76 @@ pub fn sa_st_curve(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64,
     if n < 2 || n_points < 2 {
         return Vec::new();
     }
-    let mut pairs: Vec<(f64, bool)> = Vec::with_capacity(n.saturating_mul(n) / 2);
+    // Memory-bounded two-pass form. The previous body materialised a
+    // `Vec<(f64, bool)>` of all `n·(n−1)/2` pairs (O(n²) MEMORY): at
+    // n ≈ 59k — e.g. a picker held-out panel of val_rows × n_cells —
+    // that vector is ~27 GB and OOM-kills the caller. This computes the
+    // IDENTICAL `(ST, SA)` curve in O(n_points) memory via a
+    // difference array over the thresholds: each pair is "active" at
+    // every threshold `k` with `ST_k < gap` (a prefix, since
+    // `ST_k = (k/(n_points−1))·st_max` is monotone in `k`), so a single
+    // `[+1 at 0, −1 at kmax]` range-update per pair plus a prefix sum
+    // reproduces the per-threshold active/correct counts bit-for-bit.
+    // Time is still O(n² · log n_points); memory drops to O(n_points).
+
+    // Pass 1: st_max = max subjective gap over direction-bearing pairs.
+    let mut st_max = 0.0_f64;
+    let mut any_pair = false;
     for i in 0..n {
+        let (hi, si) = (humans[i], scores[i]);
         for j in (i + 1)..n {
-            let dh = humans[j] - humans[i];
-            let ds = scores[j] - scores[i];
+            let dh = humans[j] - hi;
+            let ds = scores[j] - si;
             if !dh.is_finite() || !ds.is_finite() || dh == 0.0 || ds == 0.0 {
                 continue;
             }
-            let correct = dh.signum() == ds.signum();
-            pairs.push((dh.abs(), correct));
+            any_pair = true;
+            let g = dh.abs();
+            if g > st_max {
+                st_max = g;
+            }
         }
     }
-    if pairs.is_empty() {
+    if !any_pair || st_max <= 0.0 {
         return Vec::new();
     }
-    let st_max = pairs.iter().map(|(g, _)| *g).fold(0.0_f64, f64::max);
-    if st_max <= 0.0 {
-        return Vec::new();
-    }
-    let mut out: Vec<(f64, f64)> = Vec::with_capacity(n_points);
-    for k in 0..n_points {
-        let frac = k as f64 / (n_points - 1) as f64;
-        let st = frac * st_max;
-        // Count pairs whose subjective-gap STRICTLY exceeds ST. At
-        // ST=0 every gap-bearing pair counts; at ST=st_max the
-        // count is empty (no gap can exceed its own max).
-        let mut active = 0usize;
-        let mut correct = 0usize;
-        for (gap, ok) in &pairs {
-            if *gap > st {
-                active += 1;
-                if *ok {
-                    correct += 1;
+
+    // Pass 2: range-update the difference arrays over the thresholds.
+    let mut active_diff = vec![0i64; n_points + 1];
+    let mut correct_diff = vec![0i64; n_points + 1];
+    for i in 0..n {
+        let (hi, si) = (humans[i], scores[i]);
+        for j in (i + 1)..n {
+            let dh = humans[j] - hi;
+            let ds = scores[j] - si;
+            if !dh.is_finite() || !ds.is_finite() || dh == 0.0 || ds == 0.0 {
+                continue;
+            }
+            let gap = dh.abs();
+            let kmax = st_active_threshold_count(n_points, st_max, gap);
+            if kmax > 0 {
+                active_diff[0] += 1;
+                active_diff[kmax] -= 1;
+                if dh.signum() == ds.signum() {
+                    correct_diff[0] += 1;
+                    correct_diff[kmax] -= 1;
                 }
             }
         }
+    }
+
+    // Prefix-sum to per-threshold counts and rebuild the (ST, SA) curve
+    // EXACTLY as the all-pairs sweep did (same ST expression, same
+    // STRICT `gap > ST` activation via `kmax`, same "propagate last
+    // finite SA" tail when no pair is active).
+    let mut out: Vec<(f64, f64)> = Vec::with_capacity(n_points);
+    let mut active = 0i64;
+    let mut correct = 0i64;
+    for k in 0..n_points {
+        active += active_diff[k];
+        correct += correct_diff[k];
+        let frac = k as f64 / (n_points - 1) as f64;
+        let st = frac * st_max;
         let sa = if active == 0 {
             out.last().map(|&(_, s)| s).unwrap_or(0.0)
         } else {
@@ -315,6 +349,32 @@ pub fn sa_st_curve(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64,
         out.push((st, sa));
     }
     out
+}
+
+/// Number of thresholds `k ∈ 0..n_points` at which a pair with
+/// subjective-gap `gap` is active in [`sa_st_curve`] — i.e. the count of
+/// `k` with `ST_k < gap` where `ST_k = (k/(n_points−1))·st_max`.
+///
+/// `ST_k` is monotone non-decreasing in `k`, so `{k : ST_k < gap}` is the
+/// prefix `0..kmax`; this binary-searches `kmax` using the IDENTICAL float
+/// expression the all-pairs sweep evaluated (`(k/(n_points−1))·st_max`
+/// compared against `gap`), so the per-threshold counts — and thus every
+/// curve point — are bit-for-bit unchanged. Assumes `n_points ≥ 2` and
+/// `st_max > 0` (guaranteed by the caller).
+fn st_active_threshold_count(n_points: usize, st_max: f64, gap: f64) -> usize {
+    // First k with ST_k >= gap (i.e. NOT ST_k < gap); everything below is active.
+    let mut lo = 0usize;
+    let mut hi = n_points;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let st = (mid as f64 / (n_points - 1) as f64) * st_max;
+        if st < gap {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
 }
 
 /// **Proxy PWRC** — the pre-2026-05-26 panel.rs `pwrc()` body,
@@ -1584,6 +1644,95 @@ mod tests {
         // First ST is 0, last is max subjective gap (= 5.0 here).
         assert!((curve[0].0 - 0.0).abs() < 1e-12);
         assert!((curve[15].0 - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn sa_st_curve_matches_allpairs_reference_bit_for_bit() {
+        // The memory-bounded difference-array `sa_st_curve` must
+        // reproduce the previous all-pairs O(n²)-memory body EXACTLY
+        // (f64::to_bits) — it is a memory-only refactor. This reference
+        // IS that previous body, kept here as the regression oracle.
+        fn reference(scores: &[f64], humans: &[f64], n_points: usize) -> Vec<(f64, f64)> {
+            let n = scores.len().min(humans.len());
+            if n < 2 || n_points < 2 {
+                return Vec::new();
+            }
+            let mut pairs: Vec<(f64, bool)> = Vec::new();
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let dh = humans[j] - humans[i];
+                    let ds = scores[j] - scores[i];
+                    if !dh.is_finite() || !ds.is_finite() || dh == 0.0 || ds == 0.0 {
+                        continue;
+                    }
+                    pairs.push((dh.abs(), dh.signum() == ds.signum()));
+                }
+            }
+            if pairs.is_empty() {
+                return Vec::new();
+            }
+            let st_max = pairs.iter().map(|(g, _)| *g).fold(0.0_f64, f64::max);
+            if st_max <= 0.0 {
+                return Vec::new();
+            }
+            let mut out: Vec<(f64, f64)> = Vec::with_capacity(n_points);
+            for k in 0..n_points {
+                let st = (k as f64 / (n_points - 1) as f64) * st_max;
+                let mut active = 0usize;
+                let mut correct = 0usize;
+                for (gap, ok) in &pairs {
+                    if *gap > st {
+                        active += 1;
+                        if *ok {
+                            correct += 1;
+                        }
+                    }
+                }
+                let sa = if active == 0 {
+                    out.last().map(|&(_, s)| s).unwrap_or(0.0)
+                } else {
+                    correct as f64 / active as f64
+                };
+                out.push((st, sa));
+            }
+            out
+        }
+        fn assert_bit_equal(a: &[(f64, f64)], b: &[(f64, f64)], tag: &str) {
+            assert_eq!(a.len(), b.len(), "{tag}: curve length differs");
+            for (k, (pa, pb)) in a.iter().zip(b.iter()).enumerate() {
+                assert_eq!(pa.0.to_bits(), pb.0.to_bits(), "{tag} k={k}: ST {} vs {}", pa.0, pb.0);
+                assert_eq!(pa.1.to_bits(), pb.1.to_bits(), "{tag} k={k}: SA {} vs {}", pa.1, pb.1);
+            }
+        }
+        // Deterministic xorshift; cover random + ties (gaps that land on
+        // threshold boundaries) + anti-correlation + a no-direction case.
+        let mut s = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        for &n in &[2usize, 3, 5, 17, 64, 200, 777] {
+            for &np in &[2usize, 8, 128] {
+                let humans: Vec<f64> = (0..n).map(|_| (next() % 1000) as f64 / 7.0).collect();
+                let scores: Vec<f64> = (0..n).map(|_| (next() % 1000) as f64 / 11.0).collect();
+                assert_bit_equal(
+                    &reference(&scores, &humans, np),
+                    &sa_st_curve(&scores, &humans, np),
+                    "random",
+                );
+                let h2: Vec<f64> = (0..n).map(|i| (i % 4) as f64).collect();
+                let s2: Vec<f64> = (0..n).map(|i| (i % 3) as f64).collect();
+                assert_bit_equal(&reference(&s2, &h2, np), &sa_st_curve(&s2, &h2, np), "ties");
+                let h3: Vec<f64> = (0..n).map(|i| i as f64).collect();
+                let s3: Vec<f64> = (0..n).map(|i| -(i as f64)).collect();
+                assert_bit_equal(&reference(&s3, &h3, np), &sa_st_curve(&s3, &h3, np), "anti");
+                // All-equal humans → no direction-bearing pairs → empty curve.
+                let flat = vec![1.0_f64; n];
+                assert_bit_equal(&reference(&scores, &flat, np), &sa_st_curve(&scores, &flat, np), "flat");
+            }
+        }
     }
 
     // ----- Proxy still callable + named correctly -----

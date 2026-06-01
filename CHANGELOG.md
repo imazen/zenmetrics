@@ -53,6 +53,18 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **zenstats `sa_st_curve` / PWRC no longer O(n²) MEMORY (OOM fix) (`a4c1324a`).**
+  The PWRC SA-ST AUC built a `Vec<(f64, bool)>` of all `n·(n−1)/2` pairs, so a
+  panel over large `n` allocated `n²/2 × 16 B` — at `n ≈ 59k` (a codec-picker
+  held-out panel of `val_rows × n_cells`) that is ~27 GB and OOM-killed the
+  caller (observed 23 GB VmHWM, re-hit per hyperparameter-search candidate).
+  `sa_st_curve` now computes the IDENTICAL `(ST, SA)` curve with a two-pass
+  difference-array over the thresholds — O(n_points) memory, same O(n²) time,
+  **bit-for-bit unchanged output** (new `sa_st_curve_matches_allpairs_reference_bit_for_bit`
+  test asserts `f64::to_bits` equality vs the old all-pairs body across
+  sizes/ties/anti-correlation/no-direction cases). Every `compute_panel` /
+  `pwrc_sa_st_auc` caller benefits; no metric values change. Peak RSS on the
+  triggering picker eval: 23 GB → 0.62 GB.
 - **butteraugli-gpu Strip is now score-safe on all content (task #158).** The mode_wall sweep
   (`benchmarks/mode_wall_2026-05-31`) found butter's Strip score ~8% off Full on an aggressive
   high-frequency checkerboard. Root cause was NOT a halo bug: the umbrella `ButteraugliOpaque`
