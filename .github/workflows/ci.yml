@@ -43,15 +43,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -60,18 +60,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -81,7 +81,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
@@ -141,15 +141,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -158,18 +158,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -179,7 +179,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
@@ -243,15 +243,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -260,18 +260,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -281,7 +281,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
@@ -341,15 +341,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -358,18 +358,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -379,7 +379,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
@@ -418,15 +418,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -435,18 +435,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -456,7 +456,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
@@ -492,15 +492,15 @@ jobs:
         # Pin to known-good origin HEAD commits for reproducibility.
         run: |
           git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
           git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
           # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
           git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -509,18 +509,18 @@ jobs:
           # workspace metadata resolution. Pinned to stable revs to
           # make CI reproducible.
           git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
           git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
           # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
           # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
           # clone dirs matching the workspace [patch] paths).
           git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
           git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
           git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
           # butteraugli's local layout is a Cargo workspace at
           # ~/work/butteraugli/ with the package at
           # ~/work/butteraugli/butteraugli/. The workspace's
@@ -530,7 +530,7 @@ jobs:
           # ../../butteraugli so that ../../butteraugli/butteraugli/
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
           # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
           # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
           # are loaded by `cargo metadata` for the whole workspace, so they must
