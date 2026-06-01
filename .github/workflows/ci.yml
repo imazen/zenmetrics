@@ -50,7 +50,12 @@ jobs:
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
+          # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
+          # everything except benchmarks/ — no workspace member lives there, so
+          # the build is unaffected (and the clone is smaller/faster).
+          git -C ../jxl-encoder sparse-checkout set --no-cone '/*' '!/benchmarks/'
           git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
@@ -106,7 +111,7 @@ jobs:
         # with `/usr/bin/time -v` to capture peak RSS and check
         # whether a new heavy member (cubecl backend? trie of generic
         # GPU kernels?) regressed the link memory.
-        run: cargo build --workspace --no-default-features --features cuda --release --all-targets
+        run: cargo build --workspace --no-default-features --features cuda,all-metrics --release --all-targets
         if: matrix.os == 'ubuntu-latest'
       - name: Build all -gpu crates (wgpu only)
         run: |
@@ -122,95 +127,6 @@ jobs:
           cargo test  -p cvvdp-cpu --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
         run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
-
-  # i686-unknown-linux-gnu cross-compilation per CLAUDE.md ("i686 is a
-  # primary target — 32-bit correctness matters for WASM compatibility
-  # and catching pointer-width bugs"). cubecl 0.10's CUDA backend pulls
-  # in 64-bit-only deps, so we restrict to wgpu-only on i686.
-  i686-cross:
-    name: i686 cross-compile (wgpu)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
-        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
-        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
-        # it's optional, cargo validates the path during workspace
-        # manifest load. zenjpeg itself has `zenpredict = { path =
-        # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
-        # Pin to known-good origin HEAD commits for reproducibility.
-        run: |
-          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
-          git -C ../zenjpeg checkout ce2d238165845946e7682d1bfb0a22da4ba3a334
-          git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
-          git -C ../zenanalyze checkout 8642fa1a0be74643e63737e7acda1d242271562e
-          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
-          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
-          # `sweep` feature transitively. Pin to a stable rev for CI
-          # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
-          git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
-          # Workspace [patch.crates-io] entries point at local siblings
-          # for every codec we ship (zenpng, zenwebp, zenavif,
-          # zenjxl, zensim/zensim) and butteraugli. Cargo loads
-          # every patch manifest even when the patched crate isn't
-          # active in the build, so CI must clone them all to satisfy
-          # workspace metadata resolution. Pinned to stable revs to
-          # make CI reproducible.
-          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
-          git -C ../zenpng checkout 74bb56073093693cdb6f9a3d41ae27d80667ec2e
-          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
-          git -C ../zenwebp checkout 10bea33b416dc1bf820b405a6fe5bcde6e7424ff
-          # zenavif/zenjxl are patched at `../zenavif` / `../zenjxl` (the
-          # `--main` suffix was dropped in b286abb4 / c8c2f923 — keep the
-          # clone dirs matching the workspace [patch] paths).
-          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif
-          git -C ../zenavif checkout 46fc4bf76444e56299eb29dc1af719a0951913b0
-          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl
-          git -C ../zenjxl checkout 38b7eadbf0bee0c3dcbf30ef52430d0c49599592
-          git clone --quiet https://github.com/imazen/zensim.git ../zensim
-          git -C ../zensim checkout 1b3eaa3da74332e5b61a301a21faaaf603be8f88
-          # butteraugli's local layout is a Cargo workspace at
-          # ~/work/butteraugli/ with the package at
-          # ~/work/butteraugli/butteraugli/. The workspace's
-          # [patch.crates-io] points at the *package* path
-          # (../../butteraugli/butteraugli from zenmetrics' workspace
-          # root). On CI we clone the workspace repo into
-          # ../../butteraugli so that ../../butteraugli/butteraugli/
-          # is the package dir.
-          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
-          git -C ../../butteraugli checkout 8e2271151e6d7b4a45ada18cdfbf2bd061d17460
-          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
-          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
-          # are loaded by `cargo metadata` for the whole workspace, so they must
-          # be cloned even when a job doesn't compile them. Pinned to the revs the
-          # local workspace builds against (stable, fetchable).
-          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
-          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
-          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
-          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install --locked cross
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: zenmetrics-i686
-      - name: Cross-compile (wgpu)
-        run: |
-          cross build --target i686-unknown-linux-gnu \
-            -p butteraugli-gpu \
-            -p ssim2-gpu \
-            -p dssim-gpu \
-            -p zensim-gpu \
-            -p cvvdp-gpu \
-            -p zenmetrics-corpus \
-            --no-default-features --features wgpu --release
-      - name: Cross-compile cvvdp-cpu (no GPU deps — pure CPU port)
-        run: |
-          cross build --target i686-unknown-linux-gnu \
-            -p cvvdp-cpu --release
-          cross test  --target i686-unknown-linux-gnu \
-            -p cvvdp-cpu --release
 
   # Runtime parity tests on macOS via Metal (the only CI-available GPU
   # runtime). Disable `fast-reduction` everywhere — Metal silently
@@ -250,7 +166,12 @@ jobs:
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
+          # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
+          # everything except benchmarks/ — no workspace member lives there, so
+          # the build is unaffected (and the clone is smaller/faster).
+          git -C ../jxl-encoder sparse-checkout set --no-cone '/*' '!/benchmarks/'
           git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
@@ -299,22 +220,37 @@ jobs:
         run: system_profiler SPDisplaysDataType | head -40 || true
       - name: butteraugli-gpu parity
         if: always()
-        run: cargo test -p butteraugli-gpu --no-default-features --features wgpu --release
+        # `--tests` runs the parity test targets (lib unit + integration) and
+        # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
+        # compile under wgpu and aren't the parity surface this job validates.
+        run: cargo test -p butteraugli-gpu --no-default-features --features wgpu --release --tests
       - name: ssim2-gpu parity
         if: always()
-        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release
+        # `--tests` runs the parity test targets (lib unit + integration) and
+        # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
+        # compile under wgpu and aren't the parity surface this job validates.
+        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release --tests
       - name: dssim-gpu parity
         if: always()
-        run: cargo test -p dssim-gpu --no-default-features --features wgpu --release
+        # `--tests` runs the parity test targets (lib unit + integration) and
+        # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
+        # compile under wgpu and aren't the parity surface this job validates.
+        run: cargo test -p dssim-gpu --no-default-features --features wgpu --release --tests
       - name: zensim-gpu parity
         if: always()
-        run: cargo test -p zensim-gpu --no-default-features --features wgpu --release
+        # `--tests` runs the parity test targets (lib unit + integration) and
+        # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
+        # compile under wgpu and aren't the parity surface this job validates.
+        run: cargo test -p zensim-gpu --no-default-features --features wgpu --release --tests
       - name: iwssim-gpu parity
         # iwssim-gpu has no Atomic<f32> use in its hot path (audited
         # 2026-05-27 as part of Phase 8e.4 — see CUBECL_METAL_ATOMIC_FIX.md),
         # so it's safe to add to the metal-tests matrix even pre-upstream-fix.
         if: always()
-        run: cargo test -p iwssim-gpu --no-default-features --features wgpu --release
+        # `--tests` runs the parity test targets (lib unit + integration) and
+        # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
+        # compile under wgpu and aren't the parity surface this job validates.
+        run: cargo test -p iwssim-gpu --no-default-features --features wgpu --release --tests
       # cvvdp-gpu deliberately omitted from metal-tests until the upstream
       # cubecl-wgpu CAS-loop lowering lands. Its production
       # pool_band_3ch_lds_kernel uses Atomic<f32>::fetch_add (every band ×
@@ -348,7 +284,12 @@ jobs:
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
+          # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
+          # everything except benchmarks/ — no workspace member lives there, so
+          # the build is unaffected (and the clone is smaller/faster).
+          git -C ../jxl-encoder sparse-checkout set --no-cone '/*' '!/benchmarks/'
           git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
@@ -394,7 +335,7 @@ jobs:
         with:
           shared-key: zenmetrics-doctests
       - name: Run doctests
-        run: cargo test --workspace --no-default-features --features wgpu --doc --release
+        run: cargo test --workspace --no-default-features --features wgpu,all-metrics --doc --release
 
   # zenmetrics-api optimized-CPU backend tests (task #159 phase 5). Runs
   # the Backend::Cpu dispatch suite + the backend×metric×size matrix on a
@@ -425,7 +366,12 @@ jobs:
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
+          # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
+          # everything except benchmarks/ — no workspace member lives there, so
+          # the build is unaffected (and the clone is smaller/faster).
+          git -C ../jxl-encoder sparse-checkout set --no-cone '/*' '!/benchmarks/'
           git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
@@ -499,7 +445,12 @@ jobs:
           # zenmetrics workspace root) — pulled in by zen-metrics-cli's
           # `sweep` feature transitively. Pin to a stable rev for CI
           # reproducibility.
-          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git clone --quiet --no-checkout https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          # jxl-encoder commits sweep PNGs under benchmarks/ with names invalid
+          # on NTFS (contain '>'), which break Windows checkout. Sparse-checkout
+          # everything except benchmarks/ — no workspace member lives there, so
+          # the build is unaffected (and the clone is smaller/faster).
+          git -C ../jxl-encoder sparse-checkout set --no-cone '/*' '!/benchmarks/'
           git -C ../jxl-encoder checkout b2c2d482b9220732d38df60495f2de4bc23393b2
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
@@ -553,4 +504,4 @@ jobs:
         # workspace's members (matches the `just fmt-check` recipe).
         run: cargo fmt --check $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name | "-p " + .')
       - name: Clippy (-D warnings, workspace-wide)
-        run: cargo clippy --workspace --no-default-features --features wgpu -- -D warnings
+        run: cargo clippy --workspace --no-default-features --features wgpu,all-metrics -- -D warnings

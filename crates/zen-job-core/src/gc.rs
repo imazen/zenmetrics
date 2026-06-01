@@ -98,7 +98,7 @@ pub fn lru_cap_evict(
         return Vec::new();
     }
     // Newest-first: keep MRU until the cap is reached; everything after is evicted (the LRU tail).
-    cheap.sort_by(|a, b| b.last_ref_secs.cmp(&a.last_ref_secs));
+    cheap.sort_by_key(|e| core::cmp::Reverse(e.last_ref_secs));
     let mut kept = 0u64;
     let mut evict = Vec::new();
     for e in cheap {

@@ -447,8 +447,8 @@ fn solve_4x4_gauss(aug: &mut [[f64; 5]; 4]) -> Option<[f64; 4]> {
     for i in 0..4 {
         let mut max_row = i;
         let mut max_val = aug[i][i].abs();
-        for k in (i + 1)..4 {
-            let v = aug[k][i].abs();
+        for (k, row) in aug.iter().enumerate().skip(i + 1) {
+            let v = row[i].abs();
             if v > max_val {
                 max_val = v;
                 max_row = k;
@@ -462,6 +462,9 @@ fn solve_4x4_gauss(aug: &mut [[f64; 5]; 4]) -> Option<[f64; 4]> {
         }
         for k in (i + 1)..4 {
             let factor = aug[k][i] / aug[i][i];
+            // Row-elimination updates row k from pivot row i; the column index
+            // addresses both rows, so the range loop is the clear form here.
+            #[allow(clippy::needless_range_loop)]
             for c in i..5 {
                 aug[k][c] -= factor * aug[i][c];
             }
@@ -762,11 +765,11 @@ pub fn rescale_logistic(predicted: &[f64], target: &[f64]) -> Vec<f64> {
     let mut best_b: Option<[f64; 4]> = None;
     let mut best_cost = f64::INFINITY;
     for start in &starts {
-        if let Some((b_fit, cost_fit)) = run_lm(predicted, target, n, *start) {
-            if cost_fit < best_cost {
-                best_cost = cost_fit;
-                best_b = Some(b_fit);
-            }
+        if let Some((b_fit, cost_fit)) = run_lm(predicted, target, n, *start)
+            && cost_fit < best_cost
+        {
+            best_cost = cost_fit;
+            best_b = Some(b_fit);
         }
     }
     let b: [f64; 4] = match best_b {
@@ -998,7 +1001,7 @@ pub fn two_sided_p(h: f64) -> f64 {
     }
     let z = h.abs().min(8.0);
     let p = 2.0 * (1.0 - phi(z));
-    p.max(0.0).min(1.0)
+    p.clamp(0.0, 1.0)
 }
 
 /// MRR h-statistic for two correlations (A vs MOS, B vs MOS) when

@@ -53,8 +53,8 @@ pub fn binom5_taps() -> [f64; 5] {
 ///
 /// `fspecial` also zeros entries below `eps * max`, then normalises.
 /// For `sigma=1.5 / len=11` nothing is below `f32::EPSILON * max`
-/// — verified analytically: smallest tap = `exp(-25/4.5) ≈ 3.87e-3`
-/// >> `1.19e-7`. The trim step is skipped; that matches reference
+/// — verified analytically: smallest tap = `exp(-25/4.5) ≈ 3.87e-3`,
+/// far above `1.19e-7`. The trim step is skipped; that matches reference
 /// output bit-for-bit.
 pub fn gaussian_1d(len: usize, sigma: f64) -> Vec<f64> {
     let half = (len as i64) / 2;

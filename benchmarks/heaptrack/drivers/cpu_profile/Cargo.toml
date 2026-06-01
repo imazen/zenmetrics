@@ -22,7 +22,10 @@ cvvdp        = { path = "../../../../crates/cvvdp", default-features = false, fe
 iwssim       = { path = "../../../../crates/iwssim", default-features = false, features = ["std"] }
 zensim       = { path = "../../../../../zensim/zensim" }
 fast-ssim2   = { version = "0.8.1", features = ["imgref"] }
-dssim-core   = { version = "3.4", default-features = false }
+# Inherit the workspace spec (3.5 + `threads`). The local dssim-core pin's
+# no-`threads` path doesn't compile (its zero-dep rayon fallback is a WIP
+# stub), and dssim-core's parallelism is what we profile anyway.
+dssim-core   = { workspace = true }
 butteraugli  = { path = "../../../../../../butteraugli/butteraugli" }
 imgref       = "1"
 rgb          = "0.8"
