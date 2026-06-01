@@ -53,7 +53,7 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
-- **zenstats `sa_st_curve` / PWRC no longer O(n²) MEMORY (OOM fix) (`a4c1324a`).**
+- **zenstats `sa_st_curve` / PWRC no longer O(n²) MEMORY (OOM fix) (`b56d8ed2`).**
   The PWRC SA-ST AUC built a `Vec<(f64, bool)>` of all `n·(n−1)/2` pairs, so a
   panel over large `n` allocated `n²/2 × 16 B` — at `n ≈ 59k` (a codec-picker
   held-out panel of `val_rows × n_cells`) that is ~27 GB and OOM-killed the
