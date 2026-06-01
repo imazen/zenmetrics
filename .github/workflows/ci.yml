@@ -81,6 +81,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -169,6 +178,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cross
         run: cargo install --locked cross
@@ -261,6 +279,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -349,6 +376,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -416,6 +452,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -480,6 +525,15 @@ jobs:
           # is the package dir.
           git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
           git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+          # fast-ssim2 (zen-metrics-cli path dep `../../../fast-ssim2/fast-ssim2`)
+          # and dssim (root [patch.crates-io] dssim-core = `../../dssim/dssim-core`)
+          # are loaded by `cargo metadata` for the whole workspace, so they must
+          # be cloned even when a job doesn't compile them. Pinned to the revs the
+          # local workspace builds against (stable, fetchable).
+          git clone --quiet https://github.com/imazen/fast-ssim2.git ../fast-ssim2
+          git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
+          git clone --quiet https://github.com/lilith/dssim.git ../../dssim
+          git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
