@@ -675,10 +675,16 @@ fn build_params(
 ))]
 fn backend_label(b: zenmetrics_api::Backend) -> &'static str {
     match b {
+        // `Auto` is resolved by the umbrella before a metric is built;
+        // it should not reach here, but the match must stay exhaustive.
+        zenmetrics_api::Backend::Auto => "auto",
         zenmetrics_api::Backend::Cuda => "cuda",
         zenmetrics_api::Backend::Wgpu => "wgpu",
         zenmetrics_api::Backend::Hip => "hip",
-        zenmetrics_api::Backend::Cpu => "cpu",
+        // The umbrella renamed its old `Cpu` (cubecl-cpu reference path)
+        // to `CubeclCpu`; the CLI's `GpuRuntime::Cpu` still maps onto it
+        // and keeps the historical "cpu" label.
+        zenmetrics_api::Backend::CubeclCpu => "cpu",
     }
 }
 

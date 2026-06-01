@@ -99,10 +99,15 @@ impl SlotAllocator {
 
     fn mask_for(&self, backend: Backend) -> &Mutex<u128> {
         match backend {
+            // `MetricSession::acquire` resolves `Auto` before any slot
+            // work, so this arm is normally unreachable — resolve again
+            // defensively rather than panic, since `resolve` never
+            // returns `Auto`.
+            Backend::Auto => self.mask_for(backend.resolve()),
             Backend::Cuda => &self.cuda,
             Backend::Wgpu => &self.wgpu,
             Backend::Hip => &self.hip,
-            Backend::Cpu => &self.cpu,
+            Backend::CubeclCpu => &self.cpu,
         }
     }
 
@@ -223,6 +228,11 @@ impl MetricSession {
     ///   sessions are already live on `backend` (refusing avoids silent
     ///   stream aliasing → the shared-pool reclaim hazard).
     pub fn acquire(backend: Backend) -> Result<Self> {
+        // Resolve `Backend::Auto` to a concrete backend up front so the
+        // session's whole lifecycle (slot allocation, error tags, stream
+        // cleanup) operates on a real backend rather than the `Auto`
+        // request. Non-`Auto` backends pass through unchanged.
+        let backend = backend.resolve();
         // Surface a disabled backend before touching the allocator so
         // the slot isn't consumed by a session that can't build a
         // metric anyway. We probe via the per-metric backend mapping —

@@ -53,6 +53,7 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
+mod capability;
 mod error;
 mod memory_mode;
 mod metric;

@@ -304,7 +304,10 @@ pub(crate) fn gpu_runtime_to_backend(rt: GpuRuntime) -> Result<zenmetrics_api::B
         GpuRuntime::Cuda => Ok(zenmetrics_api::Backend::Cuda),
         GpuRuntime::Wgpu => Ok(zenmetrics_api::Backend::Wgpu),
         GpuRuntime::Hip => Ok(zenmetrics_api::Backend::Hip),
-        GpuRuntime::Cpu => Ok(zenmetrics_api::Backend::Cpu),
+        // The umbrella's old `Backend::Cpu` (cubecl-cpu reference path)
+        // is now `Backend::CubeclCpu`; the CLI's `GpuRuntime::Cpu` keeps
+        // meaning "run the kernels on CPU via cubecl-cpu".
+        GpuRuntime::Cpu => Ok(zenmetrics_api::Backend::CubeclCpu),
     }
 }
 

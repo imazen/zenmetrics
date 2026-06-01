@@ -11,42 +11,109 @@ use zenpixels::PixelSlice;
 // Backend
 // ---------------------------------------------------------------
 
-/// Selects the cubecl runtime that the underlying metric crate
-/// dispatches against. Each variant corresponds to a Cargo feature on
-/// the umbrella; variants for disabled features still surface a
+/// Selects the compute backend the underlying metric crate dispatches
+/// against. Each concrete variant corresponds to a Cargo feature on the
+/// umbrella; variants for disabled features still surface a
 /// [`Error::BackendNotEnabled`] at construction time so a single
 /// `Backend::Cuda` constant in caller code keeps compiling regardless
 /// of which backends are enabled in a given build.
 ///
-/// This enum is **always exhaustive** (every cubecl backend has a
-/// variant regardless of feature flags). The cfg-gating happens inside
+/// This enum is **always exhaustive** (every backend has a variant
+/// regardless of feature flags). The cfg-gating happens inside
 /// `Metric::new` — disabled backends return `Err(BackendNotEnabled)`
 /// at runtime. This keeps the consumer's match arms stable across
 /// builds with different backend feature sets.
+///
+/// ## Phase 1 of the ideal-API redesign (task #159)
+///
+/// This redesign reserves `Backend::Cpu` for the **optimized native
+/// CPU crates** (fast-ssim2, butteraugli, dssim-core, zensim, in-tree
+/// cvvdp/iwssim — the fast path). That dispatch lands in **phase 2**, so
+/// the `Cpu` variant does not exist yet. Until then the cubecl-cpu
+/// reference path (GPU kernels executed on CPU) is reachable as
+/// [`Backend::CubeclCpu`], and the new [`Backend::Auto`] resolves only
+/// over the backends available today (`Cuda` / `Wgpu` / `Hip` else
+/// `CubeclCpu`). After phase 2, `Auto` will prefer the optimized `Cpu`
+/// path over `CubeclCpu` on GPU-less machines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
+    /// Pick the best **available** backend, resolved by
+    /// [`Backend::resolve_auto`]. Today: a working GPU device
+    /// (`Cuda` / `Wgpu` / `Hip`, in that preference order, gated on the
+    /// backends compiled in) if one is detected, otherwise
+    /// [`Backend::CubeclCpu`]. `Auto` never selects a score-shifting
+    /// mode — only a backend. Resolution is observable: call
+    /// [`Backend::resolve_auto`] to see what it would pick. Phase 2 will
+    /// repoint the GPU-less fallback to the optimized `Cpu` path.
+    Auto,
     /// CUDA backend (NVIDIA, requires the `cuda` umbrella feature).
     Cuda,
     /// WGPU backend (cross-vendor, requires the `wgpu` umbrella feature).
     Wgpu,
     /// HIP backend (AMD ROCm, requires the `hip` umbrella feature).
     Hip,
-    /// CPU reference backend via cubecl-cpu (requires the `cpu`
-    /// umbrella feature). Note that several metric crates rely on
-    /// `Atomic<f32>` operations that cubecl-cpu does not support —
-    /// kernels may panic at first dispatch even when this variant is
-    /// accepted by the constructor. See each metric crate's
-    /// `Backend::Cpu` doc.
-    Cpu,
+    /// cubecl-cpu reference backend: the GPU metric kernels executed on
+    /// CPU via the cubecl-cpu runtime (requires the `cpu` umbrella
+    /// feature). This is slow and exists for parity/debug only — it is
+    /// **not** the optimized native-CPU path (that becomes `Backend::Cpu`
+    /// in phase 2 of the redesign; see the type-level docs). Note that
+    /// several metric crates rely on `Atomic<f32>` operations that
+    /// cubecl-cpu does not support — kernels may panic at first dispatch
+    /// even when this variant is accepted by the constructor. See each
+    /// metric crate's `Backend::Cpu` doc (the per-crate enums keep the
+    /// historical `Cpu` name for their cubecl-cpu variant).
+    CubeclCpu,
 }
 
 impl Backend {
     pub(crate) fn tag(self) -> &'static str {
         match self {
+            Backend::Auto => "auto",
             Backend::Cuda => "cuda",
             Backend::Wgpu => "wgpu",
             Backend::Hip => "hip",
-            Backend::Cpu => "cpu",
+            Backend::CubeclCpu => "cubecl_cpu",
+        }
+    }
+
+    /// Resolve [`Backend::Auto`] to a concrete backend by probing for an
+    /// available GPU device. **Observable** (public): callers can see
+    /// exactly what `Auto` would pick rather than have it chosen behind
+    /// their back.
+    ///
+    /// Resolution order (phase 1):
+    /// 1. If the `cuda` feature is compiled in **and** a CUDA device is
+    ///    detected → [`Backend::Cuda`].
+    /// 2. else if the `wgpu` feature is compiled in **and** a GPU adapter
+    ///    is detected → [`Backend::Wgpu`].
+    /// 3. else if the `hip` feature is compiled in **and** a ROCm device
+    ///    is detected → [`Backend::Hip`].
+    /// 4. else → [`Backend::CubeclCpu`] (the only CPU-side backend that
+    ///    exists pre-phase-2; phase 2 repoints this to the optimized
+    ///    `Cpu` path).
+    ///
+    /// Calling this on a non-`Auto` variant returns that variant
+    /// unchanged. It **never** returns [`Backend::Auto`] and never
+    /// panics.
+    ///
+    /// The GPU presence check is intentionally lightweight (an
+    /// `nvidia-smi` query for CUDA), matching
+    /// `zenmetrics-orchestrator`'s detection and honoring the same
+    /// `ZENMETRICS_FORCE_NO_GPU=1` override so tests/CI can force the
+    /// no-GPU path. It detects that a device is *present*, not that the
+    /// full cubecl client initializes — construction still surfaces
+    /// [`Error::BackendNotEnabled`] for a backend whose feature is off.
+    pub fn resolve_auto() -> Backend {
+        Backend::Auto.resolve()
+    }
+
+    /// Resolve `self` to a concrete backend. `Auto` probes for hardware
+    /// (see [`Backend::resolve_auto`]); every other variant is returned
+    /// unchanged. Guaranteed never to return [`Backend::Auto`].
+    pub fn resolve(self) -> Backend {
+        match self {
+            Backend::Auto => crate::capability::resolve_auto_backend(),
+            other => other,
         }
     }
 }
@@ -1030,17 +1097,24 @@ fn convert_score_zensim(s: zensim_gpu::Score) -> Score {
 // not exist; we surface a `BackendNotEnabled` error when the caller
 // requests a backend that this build of the metric crate doesn't
 // support.
+//
+// `Backend::Auto` resolves first (`b.resolve()`, which probes hardware)
+// and re-enters the conversion with the concrete backend, so callers can
+// hand `Auto` straight through. The per-crate enums keep the historical
+// `Cpu` name for their cubecl-cpu variant, so the umbrella's renamed
+// `Backend::CubeclCpu` maps onto `<crate>::Backend::Cpu`.
 // ---------------------------------------------------------------
 
 #[cfg(feature = "cvvdp")]
 pub(crate) fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
     match b {
+        Backend::Auto => cvvdp_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(cvvdp_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(cvvdp_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(cvvdp_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(cvvdp_gpu::Backend::Cpu),
         // hip isn't surfaced as a variant on the per-crate Backend
         // even when `cubecl/hip` is enabled — cvvdp-gpu's opaque
         // shim only exposes cuda/wgpu/cpu. Surface as BackendNotEnabled.
@@ -1051,12 +1125,13 @@ pub(crate) fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
 #[cfg(feature = "butter")]
 pub(crate) fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
     match b {
+        Backend::Auto => butter_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(butteraugli_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(butteraugli_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(butteraugli_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(butteraugli_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
 }
@@ -1064,12 +1139,13 @@ pub(crate) fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
 #[cfg(feature = "ssim2")]
 pub(crate) fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
     match b {
+        Backend::Auto => ssim2_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(ssim2_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(ssim2_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(ssim2_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(ssim2_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
 }
@@ -1077,12 +1153,13 @@ pub(crate) fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
 #[cfg(feature = "dssim")]
 pub(crate) fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
     match b {
+        Backend::Auto => dssim_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(dssim_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(dssim_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(dssim_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(dssim_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
 }
@@ -1090,12 +1167,13 @@ pub(crate) fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
 #[cfg(feature = "iwssim")]
 pub(crate) fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
     match b {
+        Backend::Auto => iwssim_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(iwssim_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(iwssim_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(iwssim_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(iwssim_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
 }
@@ -1103,12 +1181,13 @@ pub(crate) fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
 #[cfg(feature = "zensim")]
 pub(crate) fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
     match b {
+        Backend::Auto => zensim_backend(b.resolve()),
         #[cfg(feature = "cuda")]
         Backend::Cuda => Ok(zensim_gpu::Backend::Cuda),
         #[cfg(feature = "wgpu")]
         Backend::Wgpu => Ok(zensim_gpu::Backend::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::Cpu => Ok(zensim_gpu::Backend::Cpu),
+        Backend::CubeclCpu => Ok(zensim_gpu::Backend::Cpu),
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
 }
