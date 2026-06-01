@@ -27,11 +27,19 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 
+// `kernels` is reached by-path from this crate's own GPU parity
+// examples (blur/colors harnesses; they need a GPU runtime and are
+// built via `--all-targets`, not run as CI unit tests). `#[doc(hidden)]`:
+// reachable for them, not a supported per-crate API.
+#[doc(hidden)]
 pub mod kernels;
 pub mod memory_mode;
-pub mod opaque;
+pub(crate) mod opaque;
+// `pipeline` is reached by-path cross-crate (zen-metrics-cli's
+// orchestrator_runner) — `#[doc(hidden)]`, like `session`.
+#[doc(hidden)]
 pub mod pipeline;
-pub mod pipeline_batch;
+pub(crate) mod pipeline_batch;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
 // per-crate API.
@@ -39,7 +47,7 @@ pub mod pipeline_batch;
 #[doc(hidden)]
 pub mod session;
 #[cfg(feature = "cubecl-types")]
-pub mod strip;
+pub(crate) mod strip;
 
 // Uniform opaque API (Phase 2 of API uniformity refactor). See
 // `opaque.rs` and the matching shim in `dssim-gpu`.

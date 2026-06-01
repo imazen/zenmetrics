@@ -96,18 +96,22 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 
+// `kernels` is reached by-path from this crate's own GPU parity
+// examples (blur/srgb/xyb harnesses; need a GPU runtime, built via
+// `--all-targets`) — `#[doc(hidden)]`, not a supported per-crate API.
+#[doc(hidden)]
 pub mod kernels;
 pub mod memory_mode;
-pub mod opaque;
-pub mod pipeline;
-pub mod pipeline_batch;
+pub(crate) mod opaque;
+pub(crate) mod pipeline;
+pub(crate) mod pipeline_batch;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
 // per-crate API.
 #[cfg(feature = "cubecl-types")]
 #[doc(hidden)]
 pub mod session;
-pub mod skipmap;
+pub(crate) mod skipmap;
 
 pub use memory_mode::{
     MemoryMode, ResolvedMode, STRIP_H_BODY_DEFAULT, STRIP_HALO_ROWS, estimate_gpu_memory_bytes,

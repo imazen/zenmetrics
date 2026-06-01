@@ -68,17 +68,20 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::doc_lazy_continuation)]
 
+// `kernels` is reached by-path cross-crate (cvvdp-gpu/src/kernels/color.rs
+// shares the scalar reference) — not a supported per-crate API.
+#[doc(hidden)]
 pub mod kernels;
 pub mod memory_mode;
-pub mod opaque;
-pub mod pipeline;
+pub(crate) mod opaque;
+pub(crate) mod pipeline;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
 // per-crate API.
 #[cfg(feature = "cubecl-types")]
 #[doc(hidden)]
 pub mod session;
-pub mod weights;
+pub(crate) mod weights;
 
 pub use memory_mode::{
     MemoryMode, ResolvedMode, estimate_gpu_memory_bytes, estimate_strip_gpu_memory_bytes,
@@ -95,6 +98,12 @@ pub use opaque::{Backend, Score, ZensimOpaque, ZensimParams};
 // Typed-generic API (gated behind `cubecl-types`).
 #[cfg(feature = "cubecl-types")]
 pub use pipeline::Zensim;
+
+// `STRIP_ALIGN` is asserted against by zensim-gpu's own `memory_mode`
+// integration test; re-exported `#[doc(hidden)]` so the test keeps a
+// handle without `pipeline` being a public module path.
+#[doc(hidden)]
+pub use pipeline::STRIP_ALIGN;
 
 /// Number of pyramid scales — matches CPU zensim's `WEIGHTS_PREVIEW_V0_2`.
 pub const SCALES: usize = 4;

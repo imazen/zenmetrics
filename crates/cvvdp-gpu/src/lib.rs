@@ -192,14 +192,24 @@
 // (their own non-kernel pub items remain documented).
 #![warn(missing_docs)]
 
-pub mod heatmap;
+pub(crate) mod heatmap;
+// `host_scalar` (the CPU scalar reference) and `kernels` are reached
+// by-path from this crate's own parity benches/examples/tests and, for
+// `kernels`, cross-crate (the cvvdp CPU crate re-exports the scalar
+// kernels; cvvdp-conformance asserts against them). `#[doc(hidden)]`:
+// reachable for those harnesses, but not a supported per-crate API.
+#[doc(hidden)]
 pub mod host_scalar;
+#[doc(hidden)]
 pub mod kernels;
 pub mod memory_mode;
-pub mod opaque;
+pub(crate) mod opaque;
 pub mod params;
+// `pipeline` is reached by-path cross-crate (the cvvdp CPU crate's
+// strip walker) — `#[doc(hidden)]`, like `session`.
+#[doc(hidden)]
 pub mod pipeline;
-pub mod presets;
+pub(crate) mod presets;
 
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]` internal surface, gated `cubecl-types`

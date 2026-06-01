@@ -189,7 +189,7 @@ fn auto_falls_back_to_strip_when_full_exceeds_cap() {
         match r {
             Ok(ResolvedMode::Strip { h_body }) => {
                 assert!(
-                    h_body > 0 && h_body.is_multiple_of(zensim_gpu::pipeline::STRIP_ALIGN),
+                    h_body > 0 && h_body.is_multiple_of(zensim_gpu::STRIP_ALIGN),
                     "h_body must be a multiple of STRIP_ALIGN; got {h_body}"
                 );
             }

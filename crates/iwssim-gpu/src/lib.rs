@@ -55,11 +55,15 @@
 #![allow(clippy::erasing_op)]
 #![allow(clippy::identity_op)]
 
-pub mod eig;
-pub mod filters;
-pub mod kernels;
+pub(crate) mod eig;
+pub(crate) mod filters;
+pub(crate) mod kernels;
 pub mod memory_mode;
-pub mod opaque;
+pub(crate) mod opaque;
+// `pipeline` is reached by-path cross-crate (zenmetrics-api dispatch
+// test + native_rgb_perf_probe example) but is not a supported
+// per-crate API — `#[doc(hidden)]`, like `session`.
+#[doc(hidden)]
 pub mod pipeline;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
