@@ -291,7 +291,14 @@ pub enum Metric {
     /// dispatched to the fast native crates via
     /// [`crate::cpu_dispatch::CpuMetricState`] rather than a `-gpu` opaque
     /// shim. Holds no GPU device handles.
-    #[cfg(feature = "cpu-ssim2")]
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-dssim",
+        feature = "cpu-butter",
+        feature = "cpu-zensim",
+        feature = "cpu-iwssim"
+    ))]
     Cpu(Box<crate::cpu_dispatch::CpuMetricState>),
 }
 
@@ -325,7 +332,14 @@ impl Metric {
         // fast native crates, not the per-crate `-gpu` opaque shims — so
         // intercept it before the GPU backend conversion below. `resolve()`
         // keeps this correct once `Auto` learns to pick `Cpu` (phase 4).
-        #[cfg(feature = "cpu-ssim2")]
+        #[cfg(any(
+            feature = "cpu-ssim2",
+            feature = "cpu-cvvdp",
+            feature = "cpu-dssim",
+            feature = "cpu-butter",
+            feature = "cpu-zensim",
+            feature = "cpu-iwssim"
+        ))]
         if backend.resolve() == Backend::Cpu {
             return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
                 .map(|s| Metric::Cpu(Box::new(s)));
@@ -453,6 +467,21 @@ impl Metric {
         params: MetricParams,
         mode: MemoryMode,
     ) -> Result<Self> {
+        // Backend::Cpu (optimized native, task #159 phase 2): MemoryMode is a
+        // GPU concern, so `mode` is ignored and we route to the native CPU
+        // dispatch. `resolve()` keeps this correct once Auto can pick Cpu.
+        #[cfg(any(
+            feature = "cpu-ssim2",
+            feature = "cpu-cvvdp",
+            feature = "cpu-dssim",
+            feature = "cpu-butter",
+            feature = "cpu-zensim",
+            feature = "cpu-iwssim"
+        ))]
+        if backend.resolve() == Backend::Cpu {
+            return crate::cpu_dispatch::CpuMetricState::new(kind, width, height, &params)
+                .map(|s| Metric::Cpu(Box::new(s)));
+        }
         match kind {
             #[cfg(feature = "cvvdp")]
             MetricKind::Cvvdp => {
@@ -552,7 +581,14 @@ impl Metric {
     /// The [`MetricKind`] this scorer dispatches.
     pub fn kind(&self) -> MetricKind {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(s) => s.kind(),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(_) => MetricKind::Cvvdp,
@@ -572,7 +608,14 @@ impl Metric {
     /// The configured `(width, height)`.
     pub fn dims(&self) -> (u32, u32) {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(s) => s.dims(),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m.dims(),
@@ -593,7 +636,14 @@ impl Metric {
     /// R, G, B, …` buffers (length `width × height × 3`).
     pub fn compute_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<Score> {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(s) => s.compute_srgb_u8(r, d),
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => {
@@ -746,7 +796,14 @@ impl Metric {
     #[cfg(feature = "zensim")]
     pub fn compute_features_srgb_u8(&mut self, r: &[u8], d: &[u8]) -> Result<(Score, Vec<f64>)> {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => Err(Error::Metric {
                 kind: "cpu",
                 message: "compute_features_srgb_u8 (feature export) is not implemented for \
@@ -822,7 +879,14 @@ impl Metric {
             });
         }
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => Err(Error::Metric {
                 kind: "cpu",
                 message: "compute_pixels for Backend::Cpu lands in #159 phase 3 (zenpixels \
@@ -910,7 +974,14 @@ impl Metric {
     ///   pending Phase 2B), or when the per-crate dispatch fails.
     pub fn set_reference_srgb_u8(&mut self, r: &[u8]) -> Result<()> {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => Err(Error::Metric {
                 kind: "cpu",
                 message: "warm / cached-reference for Backend::Cpu lands in #159 phase 4".into(),
@@ -957,7 +1028,14 @@ impl Metric {
     /// - Per-crate `NoCachedReference` when no reference is cached.
     pub fn compute_with_cached_reference_srgb_u8(&mut self, d: &[u8]) -> Result<Score> {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => Err(Error::Metric {
                 kind: "cpu",
                 message: "warm / cached-reference for Backend::Cpu lands in #159 phase 4".into(),
@@ -1018,7 +1096,14 @@ impl Metric {
     /// they implicitly overwrite on the next `set_reference_srgb_u8`.
     pub fn clear_reference(&mut self) {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => {}
             // cvvdp's warm_reference_srgb overwrites prior state — no
             // explicit clear API on opaque (see pipeline.rs:4234).
@@ -1049,7 +1134,14 @@ impl Metric {
     /// [`Self::compute_with_cached_reference_srgb_u8`].
     pub fn has_cached_reference(&self) -> bool {
         match self {
-            #[cfg(feature = "cpu-ssim2")]
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
             Metric::Cpu(_) => false,
             #[cfg(feature = "iwssim")]
             Metric::Iwssim(m) => m.has_cached_reference(),

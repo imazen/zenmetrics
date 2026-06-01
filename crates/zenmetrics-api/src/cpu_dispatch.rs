@@ -19,11 +19,20 @@ use crate::{Error, MetricKind, MetricParams, Result, Score};
 /// Per-metric optimized-CPU scorer state. Feature-gated exactly like
 /// `cpu_adapter::CpuAdapterState`; one wired variant per metric whose
 /// `cpu-*` feature is on, plus [`CpuMetricState::FeatureDisabled`] for
-/// the rest.
+/// the rest. Each variant carries the `(width, height)` it was built for
+/// so [`CpuMetricState::dims`] is uniform.
 pub(crate) enum CpuMetricState {
-    /// `fast-ssim2` (Imazen, SIMD) — sRGB→linear→XYB is internal.
+    /// `fast-ssim2` (Imazen, SIMD) — sRGB→linear→XYB is internal; the
+    /// scorer is stateless so we only stash the dims.
     #[cfg(feature = "cpu-ssim2")]
-    Ssim2 { width: usize, height: usize },
+    Ssim2 { width: u32, height: u32 },
+    /// in-tree `cvvdp` — stateful (internal scratch), so hold the instance.
+    #[cfg(feature = "cpu-cvvdp")]
+    Cvvdp {
+        inner: Box<cvvdp::Cvvdp>,
+        width: u32,
+        height: u32,
+    },
     /// `kind`'s `cpu-*` feature is not built — optimized-CPU scoring for
     /// it is unavailable in this configuration.
     FeatureDisabled(MetricKind),
@@ -31,22 +40,46 @@ pub(crate) enum CpuMetricState {
 
 impl CpuMetricState {
     /// Build the optimized-CPU scorer for `kind` at `width × height`.
-    /// Cheap (no device init); returns [`CpuMetricState::FeatureDisabled`]
+    /// Cheap for stateless metrics; for stateful ones (cvvdp) this builds
+    /// the native instance. Returns [`CpuMetricState::FeatureDisabled`]
     /// for metrics whose `cpu-*` feature is off rather than failing, so
     /// the error surfaces at score time with a clear backend message.
     pub(crate) fn new(
         kind: MetricKind,
         width: u32,
         height: u32,
-        _params: &MetricParams,
+        params: &MetricParams,
     ) -> Result<Self> {
-        let _ = (width, height);
+        // Borrow everything so unused-arg lints stay quiet in any single
+        // `cpu-*` feature configuration (different arms use different args).
+        let _ = (width, height, &params);
         match kind {
             #[cfg(feature = "cpu-ssim2")]
-            MetricKind::Ssim2 => Ok(CpuMetricState::Ssim2 {
-                width: width as usize,
-                height: height as usize,
-            }),
+            MetricKind::Ssim2 => Ok(CpuMetricState::Ssim2 { width, height }),
+            #[cfg(feature = "cpu-cvvdp")]
+            MetricKind::Cvvdp => {
+                // cvvdp re-exports cvvdp-gpu's `CvvdpParams`, the same
+                // struct the umbrella wraps in `MetricParams::Cvvdp` — no
+                // translation needed (see cpu_adapter::construct_cvvdp).
+                let p = match params {
+                    MetricParams::Cvvdp(p) => p.clone(),
+                    _ => {
+                        return Err(Error::Metric {
+                            kind: "cvvdp",
+                            message: "expected MetricParams::Cvvdp for Backend::Cpu cvvdp".into(),
+                        });
+                    }
+                };
+                let inner = cvvdp::Cvvdp::new(width, height, p).map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: format!("cvvdp::Cvvdp::new: {e}"),
+                })?;
+                Ok(CpuMetricState::Cvvdp {
+                    inner: Box::new(inner),
+                    width,
+                    height,
+                })
+            }
             other => Ok(CpuMetricState::FeatureDisabled(other)),
         }
     }
@@ -56,6 +89,8 @@ impl CpuMetricState {
         match self {
             #[cfg(feature = "cpu-ssim2")]
             CpuMetricState::Ssim2 { .. } => MetricKind::Ssim2,
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { .. } => MetricKind::Cvvdp,
             CpuMetricState::FeatureDisabled(k) => *k,
         }
     }
@@ -65,7 +100,9 @@ impl CpuMetricState {
     pub(crate) fn dims(&self) -> (u32, u32) {
         match self {
             #[cfg(feature = "cpu-ssim2")]
-            CpuMetricState::Ssim2 { width, height } => (*width as u32, *height as u32),
+            CpuMetricState::Ssim2 { width, height } => (*width, *height),
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp { width, height, .. } => (*width, *height),
             CpuMetricState::FeatureDisabled(_) => (0, 0),
         }
     }
@@ -76,9 +113,33 @@ impl CpuMetricState {
         match self {
             #[cfg(feature = "cpu-ssim2")]
             CpuMetricState::Ssim2 { width, height } => compute_ssim2(*width, *height, r, d),
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp {
+                inner,
+                width,
+                height,
+            } => compute_cvvdp(inner, *width, *height, r, d),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
+}
+
+/// Validate that both sides are exactly `width × height × 3` packed bytes.
+#[cfg(any(feature = "cpu-ssim2", feature = "cpu-cvvdp"))]
+fn check_srgb_len(kind: &'static str, width: u32, height: u32, r: &[u8], d: &[u8]) -> Result<()> {
+    let expected = (width as usize) * (height as usize) * 3;
+    if r.len() != expected || d.len() != expected {
+        return Err(Error::Metric {
+            kind,
+            message: format!(
+                "cpu {kind}: expected {expected} packed sRGB bytes per side ({width}×{height}×3), \
+                 got ref={} dist={}",
+                r.len(),
+                d.len()
+            ),
+        });
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -87,8 +148,6 @@ impl CpuMetricState {
 
 /// Borrow an interleaved sRGB-u8 buffer as `ImgRef<'_, [u8; 3]>`.
 /// `[u8; 3]` is `bytemuck::Pod`, so this reinterprets in place — no copy.
-/// fast-ssim2's `ToLinearRgb for ImgRef<'_, [u8; 3]>` reads the triplets
-/// directly and handles sRGB→linear→XYB internally.
 #[cfg(feature = "cpu-ssim2")]
 fn ssim2_image_ref<'a>(bytes: &'a [u8], w: usize, h: usize) -> imgref::ImgRef<'a, [u8; 3]> {
     let pixels: &[[u8; 3]] = bytemuck::cast_slice(bytes);
@@ -96,21 +155,10 @@ fn ssim2_image_ref<'a>(bytes: &'a [u8], w: usize, h: usize) -> imgref::ImgRef<'a
 }
 
 #[cfg(feature = "cpu-ssim2")]
-fn compute_ssim2(width: usize, height: usize, r: &[u8], d: &[u8]) -> Result<Score> {
-    let expected = width * height * 3;
-    if r.len() != expected || d.len() != expected {
-        return Err(Error::Metric {
-            kind: "ssim2",
-            message: format!(
-                "cpu ssim2: expected {expected} packed sRGB bytes per side ({width}×{height}×3), \
-                 got ref={} dist={}",
-                r.len(),
-                d.len()
-            ),
-        });
-    }
-    let ref_img = ssim2_image_ref(r, width, height);
-    let dist_img = ssim2_image_ref(d, width, height);
+fn compute_ssim2(width: u32, height: u32, r: &[u8], d: &[u8]) -> Result<Score> {
+    check_srgb_len("ssim2", width, height, r, d)?;
+    let ref_img = ssim2_image_ref(r, width as usize, height as usize);
+    let dist_img = ssim2_image_ref(d, width as usize, height as usize);
     let v = fast_ssim2::compute_ssimulacra2(ref_img, dist_img).map_err(|e| Error::Metric {
         kind: "ssim2",
         message: format!("fast-ssim2 compute_ssimulacra2: {e}"),
@@ -118,6 +166,30 @@ fn compute_ssim2(width: usize, height: usize, r: &[u8], d: &[u8]) -> Result<Scor
     Ok(Score {
         value: v,
         metric_name: "ssim2",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// cvvdp wiring — mirrors cpu_adapter::compute_cvvdp.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-cvvdp")]
+fn compute_cvvdp(
+    c: &mut cvvdp::Cvvdp,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<Score> {
+    check_srgb_len("cvvdp", width, height, r, d)?;
+    let v = c.score(r, d).map_err(|e| Error::Metric {
+        kind: "cvvdp",
+        message: format!("cvvdp score: {e}"),
+    })?;
+    Ok(Score {
+        value: v as f64,
+        metric_name: "cvvdp",
         metric_version: env!("CARGO_PKG_VERSION"),
     })
 }

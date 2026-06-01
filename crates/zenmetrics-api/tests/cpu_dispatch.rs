@@ -1,9 +1,10 @@
 //! `Backend::Cpu` (optimized native-CPU) dispatch — task #159 phase 2.
 //!
 //! Proves the umbrella routes `Backend::Cpu` to the optimized native crate
-//! (here `fast-ssim2` for ssim2), produces a finite, in-range, *discriminating*
-//! score (not a constant), and reports kind/dims correctly. Gated on
-//! `cpu-ssim2` via the Cargo.toml `[[test]] required-features` entry — the
+//! (`fast-ssim2` for ssim2, in-tree `cvvdp` for cvvdp), produces a finite,
+//! in-range, *discriminating* score (not a constant), and reports kind/dims
+//! correctly. Gated on the wired `cpu-*` features via the Cargo.toml
+//! `[[test]] required-features` entry (grows as metrics are wired) — the
 //! skip decision lives in the CI→justfile→test chain, not in the test body
 //! (NO graceful skips).
 
@@ -30,6 +31,74 @@ fn ssim2_cpu(w: u32, h: u32) -> Metric {
         MetricParams::default_for(MetricKind::Ssim2),
     )
     .expect("Backend::Cpu ssim2 must construct when cpu-ssim2 is built")
+}
+
+/// A cvvdp scorer on the optimized native-CPU backend.
+fn cvvdp_cpu(w: u32, h: u32) -> Metric {
+    Metric::new(
+        MetricKind::Cvvdp,
+        Backend::Cpu,
+        w,
+        h,
+        MetricParams::default_for(MetricKind::Cvvdp),
+    )
+    .expect("Backend::Cpu cvvdp must construct when cpu-cvvdp is built")
+}
+
+#[test]
+fn cvvdp_cpu_is_finite_and_discriminates() {
+    let (w, h) = (64u32, 64u32);
+    let reference = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let mut m = cvvdp_cpu(w, h);
+    let identical = m
+        .compute_srgb_u8(&reference, &reference)
+        .expect("identical-pair cvvdp score");
+    assert!(
+        identical.value.is_finite(),
+        "identical cvvdp score not finite: {}",
+        identical.value
+    );
+    assert_eq!(identical.metric_name, "cvvdp");
+    // CVVDP JOD: 10 = identical (no perceived difference).
+    assert!(
+        identical.value > 9.0,
+        "identical pair should score ~10 JOD, got {}",
+        identical.value
+    );
+
+    let distorted = img(w, h, |x, y| {
+        [255 - x.wrapping_mul(4) as u8, 255 - y.wrapping_mul(4) as u8, 128]
+    });
+    let mut m2 = cvvdp_cpu(w, h);
+    let bad = m2
+        .compute_srgb_u8(&reference, &distorted)
+        .expect("distorted-pair cvvdp score");
+    assert!(
+        bad.value.is_finite(),
+        "distorted cvvdp score not finite: {}",
+        bad.value
+    );
+    // A real distortion must drop the JOD materially below the identical max.
+    assert!(
+        identical.value - bad.value > 0.5,
+        "expected distorted ({}) materially below identical ({})",
+        bad.value,
+        identical.value
+    );
+}
+
+#[test]
+fn cvvdp_cpu_reports_kind_and_dims() {
+    let (w, h) = (80u32, 48u32);
+    let m = cvvdp_cpu(w, h);
+    assert_eq!(m.kind(), MetricKind::Cvvdp);
+    assert_eq!(m.dims(), (w, h));
 }
 
 #[test]

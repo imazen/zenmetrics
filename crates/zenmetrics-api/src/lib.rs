@@ -54,15 +54,22 @@
 #![forbid(unsafe_code)]
 
 mod capability;
+/// Optimized native-CPU dispatch backing `Backend::Cpu` (task #159 phase 2).
+#[cfg(any(
+    feature = "cpu-ssim2",
+    feature = "cpu-cvvdp",
+    feature = "cpu-dssim",
+    feature = "cpu-butter",
+    feature = "cpu-zensim",
+    feature = "cpu-iwssim"
+))]
+mod cpu_dispatch;
 mod error;
 mod memory_mode;
 mod metric;
 #[cfg(feature = "pixels")]
 mod pixels;
 mod session;
-/// Optimized native-CPU dispatch backing `Backend::Cpu` (task #159 phase 2).
-#[cfg(feature = "cpu-ssim2")]
-mod cpu_dispatch;
 
 #[cfg(feature = "cubecl-types")]
 pub mod context;

@@ -71,6 +71,13 @@ cpu = [
 # per chunk); a metric without its `cpu-*` feature returns
 # `Error::BackendNotEnabled` for `Backend::Cpu`.
 cpu-ssim2 = ["dep:fast-ssim2", "dep:imgref", "dep:bytemuck"]
+cpu-cvvdp = ["dep:cvvdp"]
+cpu-dssim = ["dep:dssim-core", "dep:imgref", "dep:rgb", "dep:bytemuck"]
+cpu-butter = ["dep:butteraugli", "dep:imgref", "dep:rgb", "dep:bytemuck"]
+cpu-zensim = ["dep:zensim", "dep:bytemuck"]
+cpu-iwssim = ["dep:iwssim"]
+# Umbrella: every optimized native-CPU metric (parallels `all-metrics`).
+cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim", "cpu-iwssim"]
 
 # zenpixels integration on the umbrella API. Forwards `pixels` to every
 # enabled metric crate so `Metric::compute_pixels` works.
@@ -109,9 +116,15 @@ zensim-gpu      = { workspace = true, optional = true }
 # Optimized native-CPU metric crates backing `Backend::Cpu` (task #159
 # phase 2). Pulled only by the `cpu-*` features above; pins match the ones
 # zenmetrics-orchestrator's cpu_adapter uses (workspace consistency).
-fast-ssim2 = { version = "0.8.1", optional = true, features = ["imgref"] }
-imgref     = { workspace = true, optional = true }
-bytemuck   = { workspace = true, optional = true }
+fast-ssim2  = { version = "0.8.1", optional = true, features = ["imgref"] }
+cvvdp       = { workspace = true, optional = true }
+dssim-core  = { workspace = true, optional = true }
+butteraugli = { workspace = true, optional = true }
+zensim      = { workspace = true, optional = true }
+iwssim      = { workspace = true, optional = true }
+imgref      = { workspace = true, optional = true }
+rgb         = { workspace = true, optional = true }
+bytemuck    = { workspace = true, optional = true }
 
 # Re-exported pixel slice for the umbrella `compute_pixels` path.
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
@@ -156,7 +169,7 @@ required-features = ["cuda", "cvvdp"]
 # in the CI→justfile→test chain (NO graceful skips).
 [[test]]
 name = "cpu_dispatch"
-required-features = ["cpu-ssim2"]
+required-features = ["cpu-ssim2", "cpu-cvvdp"]
 
 # These two timing examples are `#![cfg(feature = "cubecl-types")]` at
 # the crate root, so without that feature the whole file (incl. `main`)
