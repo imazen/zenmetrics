@@ -48,6 +48,22 @@ pub(crate) enum CpuMetricState {
         width: u32,
         height: u32,
     },
+    /// `dssim-core` — holds the `Dssim` config object; images are built
+    /// per call. Lower is better (0 = identical).
+    #[cfg(feature = "cpu-dssim")]
+    Dssim {
+        inner: Box<dssim_core::Dssim>,
+        width: u32,
+        height: u32,
+    },
+    /// `butteraugli` — free-function scorer; hold the params. Lower is
+    /// better (0 = identical).
+    #[cfg(feature = "cpu-butter")]
+    Butter {
+        params: butteraugli::ButteraugliParams,
+        width: u32,
+        height: u32,
+    },
     /// `kind`'s `cpu-*` feature is not built — optimized-CPU scoring for
     /// it is unavailable in this configuration.
     FeatureDisabled(MetricKind),
@@ -122,6 +138,28 @@ impl CpuMetricState {
                     height,
                 })
             }
+            #[cfg(feature = "cpu-dssim")]
+            MetricKind::Dssim => {
+                // dssim-core uses crate defaults; the umbrella's
+                // MetricParams::Dssim wraps dssim-gpu params we don't lift
+                // (mirrors cpu_adapter::construct_dssim).
+                Ok(CpuMetricState::Dssim {
+                    inner: Box::new(dssim_core::Dssim::new()),
+                    width,
+                    height,
+                })
+            }
+            #[cfg(feature = "cpu-butter")]
+            MetricKind::Butter => {
+                // butteraugli CPU defaults; the umbrella's MetricParams::Butter
+                // wraps butteraugli-gpu's params (different type — not lifted).
+                // Mirrors cpu_adapter::construct_butter.
+                Ok(CpuMetricState::Butter {
+                    params: butteraugli::ButteraugliParams::new(),
+                    width,
+                    height,
+                })
+            }
             other => Ok(CpuMetricState::FeatureDisabled(other)),
         }
     }
@@ -137,6 +175,10 @@ impl CpuMetricState {
             CpuMetricState::Iwssim { .. } => MetricKind::Iwssim,
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim { .. } => MetricKind::Zensim,
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim { .. } => MetricKind::Dssim,
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { .. } => MetricKind::Butter,
             CpuMetricState::FeatureDisabled(k) => *k,
         }
     }
@@ -153,6 +195,10 @@ impl CpuMetricState {
             CpuMetricState::Iwssim { width, height, .. } => (*width, *height),
             #[cfg(feature = "cpu-zensim")]
             CpuMetricState::Zensim { width, height, .. } => (*width, *height),
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim { width, height, .. } => (*width, *height),
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter { width, height, .. } => (*width, *height),
             CpuMetricState::FeatureDisabled(_) => (0, 0),
         }
     }
@@ -181,6 +227,18 @@ impl CpuMetricState {
                 width,
                 height,
             } => compute_zensim(inner, *width, *height, r, d),
+            #[cfg(feature = "cpu-dssim")]
+            CpuMetricState::Dssim {
+                inner,
+                width,
+                height,
+            } => compute_dssim(inner, *width, *height, r, d),
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter {
+                params,
+                width,
+                height,
+            } => compute_butter(params, *width, *height, r, d),
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
@@ -191,7 +249,9 @@ impl CpuMetricState {
     feature = "cpu-ssim2",
     feature = "cpu-cvvdp",
     feature = "cpu-iwssim",
-    feature = "cpu-zensim"
+    feature = "cpu-zensim",
+    feature = "cpu-dssim",
+    feature = "cpu-butter"
 ))]
 fn check_srgb_len(kind: &'static str, width: u32, height: u32, r: &[u8], d: &[u8]) -> Result<()> {
     let expected = (width as usize) * (height as usize) * 3;
@@ -313,6 +373,78 @@ fn compute_zensim(
     Ok(Score {
         value: result.score(),
         metric_name: "zensim",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// dssim wiring — mirrors cpu_adapter::{make_dssim_image, compute_dssim}.
+// ---------------------------------------------------------------------------
+
+/// Reinterpret interleaved sRGB-u8 bytes as `&[rgb::RGB<u8>]` (Pod, no copy)
+/// and build the dssim-core multi-scale image.
+#[cfg(feature = "cpu-dssim")]
+fn make_dssim_image(
+    dssim: &dssim_core::Dssim,
+    bytes: &[u8],
+    w: usize,
+    h: usize,
+) -> Result<dssim_core::DssimImage<f32>> {
+    let rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(bytes);
+    dssim
+        .create_image_rgb(rgb, w, h)
+        .ok_or_else(|| Error::Metric {
+            kind: "dssim",
+            message: "dssim_core create_image_rgb returned None".into(),
+        })
+}
+
+#[cfg(feature = "cpu-dssim")]
+fn compute_dssim(
+    dssim: &dssim_core::Dssim,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<Score> {
+    check_srgb_len("dssim", width, height, r, d)?;
+    let ref_img = make_dssim_image(dssim, r, width as usize, height as usize)?;
+    let dist_img = make_dssim_image(dssim, d, width as usize, height as usize)?;
+    let (score, _maps) = dssim.compare(&ref_img, dist_img);
+    Ok(Score {
+        value: f64::from(score),
+        metric_name: "dssim",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// butteraugli wiring — mirrors cpu_adapter::compute_butter.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "cpu-butter")]
+fn compute_butter(
+    params: &butteraugli::ButteraugliParams,
+    width: u32,
+    height: u32,
+    r: &[u8],
+    d: &[u8],
+) -> Result<Score> {
+    check_srgb_len("butter", width, height, r, d)?;
+    // `rgb::RGB<u8>` is `bytemuck::Pod` (rgb's default `as-bytes` feature),
+    // so reinterpret the interleaved bytes in place — no copy.
+    let ref_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(r);
+    let dist_rgb: &[rgb::RGB<u8>] = bytemuck::cast_slice(d);
+    let ref_img = imgref::ImgRef::new(ref_rgb, width as usize, height as usize);
+    let dist_img = imgref::ImgRef::new(dist_rgb, width as usize, height as usize);
+    let result =
+        butteraugli::butteraugli(ref_img, dist_img, params).map_err(|e| Error::Metric {
+            kind: "butter",
+            message: format!("butteraugli: {e:?}"),
+        })?;
+    Ok(Score {
+        value: result.score,
+        metric_name: "butter",
         metric_version: env!("CARGO_PKG_VERSION"),
     })
 }

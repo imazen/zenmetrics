@@ -69,6 +69,139 @@ fn zensim_cpu(w: u32, h: u32) -> Metric {
     .expect("Backend::Cpu zensim must construct when cpu-zensim is built")
 }
 
+/// A dssim scorer on the optimized native-CPU backend.
+fn dssim_cpu(w: u32, h: u32) -> Metric {
+    Metric::new(
+        MetricKind::Dssim,
+        Backend::Cpu,
+        w,
+        h,
+        MetricParams::default_for(MetricKind::Dssim),
+    )
+    .expect("Backend::Cpu dssim must construct when cpu-dssim is built")
+}
+
+/// A butteraugli scorer on the optimized native-CPU backend.
+fn butter_cpu(w: u32, h: u32) -> Metric {
+    Metric::new(
+        MetricKind::Butter,
+        Backend::Cpu,
+        w,
+        h,
+        MetricParams::default_for(MetricKind::Butter),
+    )
+    .expect("Backend::Cpu butter must construct when cpu-butter is built")
+}
+
+#[test]
+fn dssim_cpu_is_finite_and_discriminates() {
+    let (w, h) = (64u32, 64u32);
+    let reference = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let mut m = dssim_cpu(w, h);
+    let identical = m
+        .compute_srgb_u8(&reference, &reference)
+        .expect("identical-pair dssim score");
+    assert!(
+        identical.value.is_finite(),
+        "identical dssim not finite: {}",
+        identical.value
+    );
+    assert_eq!(identical.metric_name, "dssim");
+    // DSSIM: 0 = identical, higher = worse.
+    assert!(
+        identical.value < 0.05,
+        "identical pair should score ~0, got {}",
+        identical.value
+    );
+    let distorted = img(w, h, |x, y| {
+        [
+            255 - x.wrapping_mul(4) as u8,
+            255 - y.wrapping_mul(4) as u8,
+            128,
+        ]
+    });
+    let mut m2 = dssim_cpu(w, h);
+    let bad = m2
+        .compute_srgb_u8(&reference, &distorted)
+        .expect("distorted-pair dssim score");
+    assert!(
+        bad.value.is_finite(),
+        "distorted dssim not finite: {}",
+        bad.value
+    );
+    assert!(
+        bad.value - identical.value > 0.01,
+        "expected distorted ({}) materially worse than identical ({})",
+        bad.value,
+        identical.value
+    );
+}
+
+#[test]
+fn butter_cpu_is_finite_and_discriminates() {
+    let (w, h) = (64u32, 64u32);
+    let reference = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let mut m = butter_cpu(w, h);
+    let identical = m
+        .compute_srgb_u8(&reference, &reference)
+        .expect("identical-pair butter score");
+    assert!(
+        identical.value.is_finite(),
+        "identical butter not finite: {}",
+        identical.value
+    );
+    assert_eq!(identical.metric_name, "butter");
+    // Butteraugli: 0 = identical, higher = worse.
+    assert!(
+        identical.value < 0.5,
+        "identical pair should score ~0, got {}",
+        identical.value
+    );
+    let distorted = img(w, h, |x, y| {
+        [
+            255 - x.wrapping_mul(4) as u8,
+            255 - y.wrapping_mul(4) as u8,
+            128,
+        ]
+    });
+    let mut m2 = butter_cpu(w, h);
+    let bad = m2
+        .compute_srgb_u8(&reference, &distorted)
+        .expect("distorted-pair butter score");
+    assert!(
+        bad.value.is_finite(),
+        "distorted butter not finite: {}",
+        bad.value
+    );
+    assert!(
+        bad.value - identical.value > 0.1,
+        "expected distorted ({}) materially worse than identical ({})",
+        bad.value,
+        identical.value
+    );
+}
+
+#[test]
+fn dssim_butter_cpu_report_kind_and_dims() {
+    let (w, h) = (64u32, 96u32);
+    assert_eq!(dssim_cpu(w, h).kind(), MetricKind::Dssim);
+    assert_eq!(dssim_cpu(w, h).dims(), (w, h));
+    assert_eq!(butter_cpu(w, h).kind(), MetricKind::Butter);
+    assert_eq!(butter_cpu(w, h).dims(), (w, h));
+}
+
 #[test]
 fn iwssim_cpu_is_finite_and_discriminates() {
     // IW-SSIM requires side >= 176; use 256.

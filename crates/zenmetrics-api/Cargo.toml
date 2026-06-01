@@ -169,7 +169,14 @@ required-features = ["cuda", "cvvdp"]
 # in the CI→justfile→test chain (NO graceful skips).
 [[test]]
 name = "cpu_dispatch"
-required-features = ["cpu-ssim2", "cpu-cvvdp", "cpu-iwssim", "cpu-zensim"]
+required-features = [
+    "cpu-ssim2",
+    "cpu-cvvdp",
+    "cpu-iwssim",
+    "cpu-zensim",
+    "cpu-dssim",
+    "cpu-butter",
+]
 
 # These two timing examples are `#![cfg(feature = "cubecl-types")]` at
 # the crate root, so without that feature the whole file (incl. `main`)
