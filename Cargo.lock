@@ -6931,8 +6931,11 @@ name = "zenmetrics-api"
 version = "0.0.1"
 dependencies = [
  "butteraugli-gpu",
+ "bytemuck",
  "cvvdp-gpu",
  "dssim-gpu",
+ "fast-ssim2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "imgref",
  "iwssim-gpu",
  "ssim2-gpu",
  "thiserror",

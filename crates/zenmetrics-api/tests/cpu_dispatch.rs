@@ -1,0 +1,107 @@
+//! `Backend::Cpu` (optimized native-CPU) dispatch — task #159 phase 2.
+//!
+//! Proves the umbrella routes `Backend::Cpu` to the optimized native crate
+//! (here `fast-ssim2` for ssim2), produces a finite, in-range, *discriminating*
+//! score (not a constant), and reports kind/dims correctly. Gated on
+//! `cpu-ssim2` via the Cargo.toml `[[test]] required-features` entry — the
+//! skip decision lives in the CI→justfile→test chain, not in the test body
+//! (NO graceful skips).
+
+use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+
+/// Deterministic `w×h` packed sRGB (`R, G, B, …`) image.
+fn img(w: u32, h: u32, f: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
+    let mut v = Vec::with_capacity((w as usize) * (h as usize) * 3);
+    for y in 0..h {
+        for x in 0..w {
+            v.extend_from_slice(&f(x, y));
+        }
+    }
+    v
+}
+
+/// An ssim2 scorer on the optimized native-CPU backend.
+fn ssim2_cpu(w: u32, h: u32) -> Metric {
+    Metric::new(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        w,
+        h,
+        MetricParams::default_for(MetricKind::Ssim2),
+    )
+    .expect("Backend::Cpu ssim2 must construct when cpu-ssim2 is built")
+}
+
+#[test]
+fn ssim2_cpu_is_finite_and_discriminates() {
+    let (w, h) = (64u32, 64u32);
+    let reference = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+
+    // Identical pair → SSIMULACRA2 max (100).
+    let mut m = ssim2_cpu(w, h);
+    let identical = m
+        .compute_srgb_u8(&reference, &reference)
+        .expect("identical-pair score");
+    assert!(
+        identical.value.is_finite(),
+        "identical score not finite: {}",
+        identical.value
+    );
+    assert_eq!(identical.metric_name, "ssim2");
+    assert!(
+        identical.value > 90.0,
+        "identical pair should score ~100, got {}",
+        identical.value
+    );
+
+    // Heavily distorted (channel-inverted) → materially lower. A real
+    // distortion scoring far below the max proves the CPU path actually
+    // ran the metric rather than returning a constant.
+    let distorted = img(w, h, |x, y| {
+        [
+            255 - x.wrapping_mul(4) as u8,
+            255 - y.wrapping_mul(4) as u8,
+            128,
+        ]
+    });
+    let mut m2 = ssim2_cpu(w, h);
+    let bad = m2
+        .compute_srgb_u8(&reference, &distorted)
+        .expect("distorted-pair score");
+    assert!(
+        bad.value.is_finite(),
+        "distorted score not finite: {}",
+        bad.value
+    );
+    assert!(
+        identical.value - bad.value > 10.0,
+        "expected distorted ({}) materially below identical ({})",
+        bad.value,
+        identical.value
+    );
+}
+
+#[test]
+fn ssim2_cpu_reports_kind_and_dims() {
+    let (w, h) = (96u32, 48u32);
+    let m = ssim2_cpu(w, h);
+    assert_eq!(m.kind(), MetricKind::Ssim2);
+    assert_eq!(m.dims(), (w, h));
+}
+
+#[test]
+fn ssim2_cpu_rejects_wrong_input_size() {
+    let mut m = ssim2_cpu(64, 64);
+    // Buffers far too short for 64×64×3 → clean Err, never a panic.
+    let short = vec![0u8; 12];
+    assert!(
+        m.compute_srgb_u8(&short, &short).is_err(),
+        "wrong-size input must return Err, not panic"
+    );
+}
