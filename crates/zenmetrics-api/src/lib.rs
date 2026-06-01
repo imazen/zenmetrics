@@ -76,6 +76,9 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
+/// One-shot PixelSlice score front door (task #159 phase 4); requires `pixels`.
+#[cfg(feature = "pixels")]
+pub use metric::score;
 pub use metric::{
     Backend, Metric, MetricKind, MetricParams, Score, reclaim_pooled_vram, score_pair,
 };

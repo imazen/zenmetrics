@@ -133,6 +133,59 @@ fn cpu_compute_pixels_matches_srgb_u8_rgb8() {
     }
 }
 
+/// The `score(...)` one-shot front door (task #159 phase 4) constructs +
+/// scores in one call on `Backend::Cpu`, taking move-only PixelSlices.
+#[cfg(feature = "pixels")]
+#[test]
+fn score_front_door_cpu() {
+    use zenmetrics_api::score;
+    use zenpixels::{PixelDescriptor, PixelSlice};
+    let (w, h) = (64u32, 64u32);
+    let ref_bytes = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let dist_bytes = img(w, h, |x, y| {
+        [
+            255 - x.wrapping_mul(4) as u8,
+            255 - y.wrapping_mul(4) as u8,
+            128,
+        ]
+    });
+    let row = (w as usize) * 3;
+    let desc = PixelDescriptor::RGB8_SRGB;
+    let s_id = score(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice"),
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice 2"),
+    )
+    .expect("front-door score (identical)");
+    assert!(
+        s_id.value.is_finite() && s_id.value > 90.0,
+        "identical front-door score should be ~100, got {}",
+        s_id.value
+    );
+    assert_eq!(s_id.metric_name, "ssim2");
+
+    let s_d = score(
+        MetricKind::Ssim2,
+        Backend::Cpu,
+        PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice 3"),
+        PixelSlice::new(&dist_bytes, w, h, row, desc).expect("dist slice"),
+    )
+    .expect("front-door score (distorted)");
+    assert!(
+        s_d.value.is_finite() && s_id.value - s_d.value > 10.0,
+        "front door must discriminate: identical {} vs distorted {}",
+        s_id.value,
+        s_d.value
+    );
+}
+
 #[test]
 fn dssim_cpu_is_finite_and_discriminates() {
     let (w, h) = (64u32, 64u32);

@@ -268,6 +268,11 @@ impl MetricParams {
 /// destructure — the [`Self::compute_srgb_u8`] / [`Self::compute_pixels`]
 /// methods forward to the right variant.
 #[non_exhaustive]
+// `Metric::Cpu` wraps the crate-internal `cpu_dispatch::CpuMetricState`,
+// exposed only through this `#[non_exhaustive]` variant (external code can
+// neither construct nor destructure it) — an intentional opaque, not a
+// leaked public type, so the private-interface lint is expected here.
+#[allow(private_interfaces)]
 pub enum Metric {
     /// [`cvvdp_gpu::CvvdpOpaque`] variant.
     #[cfg(feature = "cvvdp")]
@@ -1543,4 +1548,34 @@ pub fn score_pair(
         MetricParams::default_for(kind),
     )?;
     metric.compute_srgb_u8(reference_srgb_u8, distorted_srgb_u8)
+}
+
+/// One-shot score of a decoded `(reference, distorted)` pair on `backend`
+/// (task #159 phase 4) — the 90%-case front door: construct + score in a
+/// single call, using the metric's Auto-safe optimal one-off mode.
+///
+/// Inputs are zenpixels [`PixelSlice`]s carrying their own format + dims, so
+/// there is no `(w, h, &[u8])` mismatch footgun; strided and non-sRGB inputs
+/// are converted per-call (HDR is handled later via the cvvdp approach). The
+/// dims come from `reference`. For **encoded file bytes** use `score_encoded`
+/// (phase 4); for **one reference, many distorted** use `warm_reference`
+/// (phase 4); for a memory-priority or explicit [`MemoryMode`], construct via
+/// [`Metric::new_with_memory_mode`].
+///
+/// `backend` accepts [`Backend::Auto`] (resolves to a GPU device if present,
+/// else the optimized [`Backend::Cpu`] path); resolution never changes the
+/// score.
+#[cfg(feature = "pixels")]
+pub fn score(
+    kind: MetricKind,
+    backend: Backend,
+    reference: PixelSlice<'_>,
+    distorted: PixelSlice<'_>,
+) -> Result<Score> {
+    // `PixelSlice` is a move-only borrow-wrapper (the pixel bytes live in the
+    // caller's buffer, not here), so the front door takes it by value and
+    // hands it straight to `compute_pixels` — no pixel copy.
+    let (w, h) = (reference.width(), reference.rows());
+    let mut metric = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))?;
+    metric.compute_pixels(reference, distorted)
 }
