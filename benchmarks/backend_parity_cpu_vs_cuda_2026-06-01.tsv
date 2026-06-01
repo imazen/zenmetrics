@@ -1,0 +1,27 @@
+# CPU vs CUDA parity — zenmetrics-api backend_matrix (#159 phase 5c)
+# date: 2026-06-01
+# host_gpu: NVIDIA GeForce RTX 5070
+# parent_commit: 9c66efbb
+# command: cargo test -p zenmetrics-api --features cpu-metrics --test backend_matrix cpu_vs_cuda_parity -- --nocapture
+# fixtures: ref=gradient+xor, dist=channel-inverted (deterministic, in backend_matrix.rs)
+# Backend::Cpu = optimized native crates; Backend::Cuda = cubecl -gpu kernels (independent impls).
+#
+metric	size	cpu_ident	cpu_dist	gpu_ident	gpu_dist	abs_d_ident	abs_d_dist
+Ssim2	256	100.0000	-5005.9091	99.9919	-5005.8553	0.0081	0.0539
+Ssim2	512	100.0000	-6530.8072	99.9920	-6530.7310	0.0080	0.0762
+Ssim2	1024	100.0000	-7400.0169	99.9920	-7399.9471	0.0080	0.0698
+Cvvdp	256	10.0000	4.1528	10.0000	4.1519	0.0000	0.0009
+Cvvdp	512	10.0000	4.0524	10.0000	4.0514	0.0000	0.0010
+Cvvdp	1024	10.0000	4.1088	10.0000	4.1077	0.0000	0.0011
+Dssim	256	0.0000	1.0995	0.0000	1.0995	0.0000	0.0000
+Dssim	512	0.0000	1.1993	0.0000	1.1993	0.0000	0.0000
+Dssim	1024	0.0000	1.2533	0.0000	1.2533	0.0000	0.0000
+Butter	256	0.0000	201.1003	0.0000	198.0972	0.0000	3.0031
+Butter	512	0.0000	201.1003	0.0000	198.0972	0.0000	3.0031
+Butter	1024	0.0000	201.1003	0.0000	198.0972	0.0000	3.0031
+Iwssim	256	1.0000	0.5444	1.0000	0.5910	0.0000	0.0466
+Iwssim	512	1.0000	0.5939	1.0000	0.6201	0.0000	0.0261
+Iwssim	1024	1.0000	0.6125	1.0000	0.6293	0.0000	0.0168
+Zensim	256	100.0000	-85.8535	100.0000	-85.8547	0.0000	0.0012
+Zensim	512	100.0000	-90.5329	100.0000	-90.5342	0.0000	0.0013
+Zensim	1024	100.0000	-89.2106	100.0000	-89.2120	0.0000	0.0014

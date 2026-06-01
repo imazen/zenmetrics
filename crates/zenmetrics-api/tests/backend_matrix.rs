@@ -162,3 +162,99 @@ fn auto_force_no_gpu_resolves_to_cpu_and_matches() {
         std::env::remove_var("ZENMETRICS_FORCE_NO_GPU");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Layer 3: CPU vs CUDA parity (real-GPU host only — compiles in only with the
+// `cuda` feature, mirroring `session_parity`'s gate). The CPU crates and the
+// `-gpu` cubecl kernels are INDEPENDENT implementations of each metric, so the
+// cross-backend deltas are measured (not assumed) and documented as the
+// per-metric tolerance below.
+// ---------------------------------------------------------------------------
+
+/// CPU-vs-CUDA parity: every metric, every size, both backends produce a
+/// finite, *discriminating* score AND agree within a per-metric tolerance.
+///
+/// The CPU crates and the cubecl `-gpu` kernels are INDEPENDENT
+/// implementations, so the tolerances are MEASURED, not assumed. Measured
+/// `max|Δ|` on an RTX 5070 over the fixed fixtures below
+/// (`benchmarks/backend_parity_cpu_vs_cuda_2026-06-01.tsv`), identical and
+/// distorted pairs:
+///
+/// | metric | max\|Δident\| | max\|Δdist\| | tolerance |
+/// |--------|--------------|-------------|-----------|
+/// | ssim2  | 0.0081       | 0.0762      | 0.5       |
+/// | cvvdp  | 0.0000       | 0.0011      | 0.05      |
+/// | dssim  | 0.0000       | 0.0000      | 0.01      |
+/// | butter | 0.0000       | 3.0031      | 4.0       |
+/// | iwssim | 0.0000       | 0.0466      | 0.15      |
+/// | zensim | 0.0000       | 0.0014      | 0.05      |
+///
+/// butteraugli's larger delta is a *stable* cross-impl offset (CPU
+/// `butteraugli` vs `butteraugli-gpu` settle on slightly different max-norm
+/// for the channel-inverted, norm-saturating fixture — ~1.5% of the ~200
+/// magnitude, byte-identical across all three sizes), not run-to-run noise.
+/// Each tolerance guards against *regression* past the established cross-impl
+/// delta — not bit-equality the independent impls never had.
+#[cfg(feature = "cuda")]
+#[test]
+fn cpu_vs_cuda_parity() {
+    // Per-metric CPU-vs-CUDA tolerance: measured max|Δ| (see table above) with
+    // a safety margin so legitimate float-order variance never flakes while a
+    // real backend regression still trips it.
+    fn tolerance(kind: MetricKind) -> f64 {
+        match kind {
+            MetricKind::Ssim2 => 0.5,
+            MetricKind::Cvvdp => 0.05,
+            MetricKind::Dssim => 0.01,
+            MetricKind::Butter => 4.0,
+            MetricKind::Iwssim => 0.15,
+            MetricKind::Zensim => 0.05,
+        }
+    }
+    eprintln!("METRIC      SIZE     cpu_ident  cpu_dist   gpu_ident  gpu_dist   |Δident|  |Δdist|");
+    for kind in all_kinds() {
+        let tol = tolerance(kind);
+        for &s in &SIZES {
+            let r = ref_img(s, s);
+            let d = dist_img(s, s);
+            let cpu_id = score_pair(kind, Backend::Cpu, s, s, &r, &r);
+            let cpu_di = score_pair(kind, Backend::Cpu, s, s, &r, &d);
+            let gpu_id = score_pair(kind, Backend::Cuda, s, s, &r, &r);
+            let gpu_di = score_pair(kind, Backend::Cuda, s, s, &r, &d);
+            // Both backends must run the metric (finite + discriminating).
+            for (be, id, di) in [("cpu", cpu_id, cpu_di), ("gpu", gpu_id, gpu_di)] {
+                assert!(
+                    id.is_finite() && di.is_finite(),
+                    "{kind:?} @ {s}x{s} {be}: non-finite (ident={id}, dist={di})"
+                );
+                assert!(
+                    (id - di).abs() >= discrimination_floor(kind),
+                    "{kind:?} @ {s}x{s} {be}: gap {} below floor {}",
+                    (id - di).abs(),
+                    discrimination_floor(kind)
+                );
+            }
+            let d_id = (cpu_id - gpu_id).abs();
+            let d_di = (cpu_di - gpu_di).abs();
+            eprintln!(
+                "{:<11} {:>4}   {:>9.4} {:>9.4}   {:>9.4} {:>9.4}   {:>8.4} {:>8.4}",
+                format!("{kind:?}"),
+                s,
+                cpu_id,
+                cpu_di,
+                gpu_id,
+                gpu_di,
+                d_id,
+                d_di,
+            );
+            assert!(
+                d_id <= tol,
+                "{kind:?} @ {s}x{s}: identical-pair CPU {cpu_id} vs CUDA {gpu_id} differ by {d_id} > tol {tol}"
+            );
+            assert!(
+                d_di <= tol,
+                "{kind:?} @ {s}x{s}: distorted-pair CPU {cpu_di} vs CUDA {gpu_di} differ by {d_di} > tol {tol}"
+            );
+        }
+    }
+}
