@@ -1700,8 +1700,20 @@ mod tests {
         fn assert_bit_equal(a: &[(f64, f64)], b: &[(f64, f64)], tag: &str) {
             assert_eq!(a.len(), b.len(), "{tag}: curve length differs");
             for (k, (pa, pb)) in a.iter().zip(b.iter()).enumerate() {
-                assert_eq!(pa.0.to_bits(), pb.0.to_bits(), "{tag} k={k}: ST {} vs {}", pa.0, pb.0);
-                assert_eq!(pa.1.to_bits(), pb.1.to_bits(), "{tag} k={k}: SA {} vs {}", pa.1, pb.1);
+                assert_eq!(
+                    pa.0.to_bits(),
+                    pb.0.to_bits(),
+                    "{tag} k={k}: ST {} vs {}",
+                    pa.0,
+                    pb.0
+                );
+                assert_eq!(
+                    pa.1.to_bits(),
+                    pb.1.to_bits(),
+                    "{tag} k={k}: SA {} vs {}",
+                    pa.1,
+                    pb.1
+                );
             }
         }
         // Deterministic xorshift; cover random + ties (gaps that land on
@@ -1730,7 +1742,11 @@ mod tests {
                 assert_bit_equal(&reference(&s3, &h3, np), &sa_st_curve(&s3, &h3, np), "anti");
                 // All-equal humans → no direction-bearing pairs → empty curve.
                 let flat = vec![1.0_f64; n];
-                assert_bit_equal(&reference(&scores, &flat, np), &sa_st_curve(&scores, &flat, np), "flat");
+                assert_bit_equal(
+                    &reference(&scores, &flat, np),
+                    &sa_st_curve(&scores, &flat, np),
+                    "flat",
+                );
             }
         }
     }
