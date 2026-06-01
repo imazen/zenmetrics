@@ -123,11 +123,11 @@ jobs:
           cargo build -p dssim-gpu       --no-default-features --features wgpu --release
           cargo build -p zensim-gpu      --no-default-features --features wgpu --release
           cargo build -p cvvdp-gpu       --no-default-features --features wgpu --release
-      - name: Build + test cvvdp-cpu (pure CPU, no GPU runtime required)
+      - name: Build + test cvvdp pure-CPU (renamed from cvvdp-cpu; no GPU runtime)
         run: |
-          cargo build -p cvvdp-cpu --release
-          cargo build -p cvvdp-cpu --no-default-features --features "alloc parallel" --release
-          cargo test  -p cvvdp-cpu --release
+          cargo build -p cvvdp --release
+          cargo build -p cvvdp --no-default-features --features "alloc parallel" --release
+          cargo test  -p cvvdp --release
       - name: Build CLI (CPU metrics only — no GPU runtime needed at compile time)
         run: cargo build -p zen-metrics-cli --no-default-features --features cpu-metrics --release
 

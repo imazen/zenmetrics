@@ -6378,7 +6378,7 @@ dependencies = [
  "zen-cloud-core",
  "zen-cloud-s3",
  "zen-metrics-cli",
- "zenanalyze 0.1.0",
+ "zenanalyze 0.2.0",
 ]
 
 [[package]]
@@ -6499,6 +6499,8 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9711cf1c3363003dd436f5b5dc113f7881f9b377613eecbf41f91b6b85626442"
 dependencies = [
  "archmage",
  "garb",
@@ -6510,9 +6512,7 @@ dependencies = [
 
 [[package]]
 name = "zenanalyze"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9711cf1c3363003dd436f5b5dc113f7881f9b377613eecbf41f91b6b85626442"
+version = "0.2.0"
 dependencies = [
  "archmage",
  "garb",
@@ -6861,7 +6861,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zenanalyze 0.1.0",
  "zencodec",
  "zenpixels",
  "zenyuv 0.1.3",

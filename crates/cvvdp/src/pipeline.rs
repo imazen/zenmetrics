@@ -16,7 +16,11 @@ use crate::pool::{
     do_pooling_and_jod_still_3ch, lp_norm_mean,
 };
 use crate::pyramid::{WeberPyramid, WeberPyramidCache, band_frequencies, weber_contrast_pyr_into};
-use crate::scratch::{Scratch, StripBandWorkspace};
+// BandWorkspace is used by the strip-walk closures below (pipeline.rs ~1849,
+// ~1989) which are compiled under some feature configs but not others, so the
+// import is conditionally unused — keep it and allow the per-config dead import.
+#[allow(unused_imports)]
+use crate::scratch::{BandWorkspace, Scratch, StripBandWorkspace};
 use crate::strip::{LpNormAccumulator, mode_b_halo_at_level};
 use crate::{CvvdpParams, DisplayGeometry, Error, Result};
 
