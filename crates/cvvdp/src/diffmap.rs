@@ -57,7 +57,7 @@ pub(crate) struct DiffmapAccum {
 }
 
 impl DiffmapAccum {
-    pub fn new(w: usize, h: usize) -> Self {
+    pub(crate) fn new(w: usize, h: usize) -> Self {
         Self {
             w,
             h,

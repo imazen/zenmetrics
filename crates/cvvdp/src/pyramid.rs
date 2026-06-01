@@ -29,7 +29,7 @@ pub(crate) struct Band {
 }
 
 /// Weber-contrast pyramid output (per channel).
-pub struct WeberPyramid {
+pub(crate) struct WeberPyramid {
     /// Per-band contrast values (finest = bands[0]).
     pub(crate) bands: Vec<Band>,
     /// `log10(L_bkg)` per band (per-pixel for non-baseband,

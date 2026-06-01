@@ -661,7 +661,7 @@ mod u64_keyed_map_bench {
 
     use crate::BackendBench;
 
-    pub fn serialize<S: Serializer>(
+    pub(crate) fn serialize<S: Serializer>(
         m: &BTreeMap<u64, BackendBench>,
         s: S,
     ) -> Result<S::Ok, S::Error> {
@@ -670,7 +670,7 @@ mod u64_keyed_map_bench {
         stringified.serialize(s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
         d: D,
     ) -> Result<BTreeMap<u64, BackendBench>, D::Error> {
         let stringified: BTreeMap<String, BackendBench> = BTreeMap::deserialize(d)?;
@@ -690,7 +690,7 @@ mod u64_keyed_map_vram {
 
     use crate::BackendVram;
 
-    pub fn serialize<S: Serializer>(
+    pub(crate) fn serialize<S: Serializer>(
         m: &BTreeMap<u64, BackendVram>,
         s: S,
     ) -> Result<S::Ok, S::Error> {
@@ -699,7 +699,7 @@ mod u64_keyed_map_vram {
         stringified.serialize(s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
         d: D,
     ) -> Result<BTreeMap<u64, BackendVram>, D::Error> {
         let stringified: BTreeMap<String, BackendVram> = BTreeMap::deserialize(d)?;
@@ -722,7 +722,7 @@ mod systime {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S: Serializer>(t: &SystemTime, s: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(t: &SystemTime, s: S) -> Result<S::Ok, S::Error> {
         let secs = t
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -730,7 +730,7 @@ mod systime {
         secs.serialize(s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<SystemTime, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<SystemTime, D::Error> {
         let secs = u64::deserialize(d)?;
         Ok(UNIX_EPOCH + Duration::from_secs(secs))
     }
@@ -741,7 +741,7 @@ mod systime_opt {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S: Serializer>(t: &Option<SystemTime>, s: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(t: &Option<SystemTime>, s: S) -> Result<S::Ok, S::Error> {
         match t {
             Some(t) => {
                 let secs = t
@@ -754,7 +754,7 @@ mod systime_opt {
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<SystemTime>, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<SystemTime>, D::Error> {
         let opt = Option::<u64>::deserialize(d)?;
         Ok(opt.map(|s| UNIX_EPOCH + Duration::from_secs(s)))
     }

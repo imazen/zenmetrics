@@ -307,7 +307,7 @@ const CPU_BENCH_TIMED: usize = 2;
 /// [`BenchReport`]. Phase 2 always exercises every metric crate the
 /// build enables; metrics whose `bench` feature is gated out are
 /// skipped silently (their entry in `report.metrics` is absent).
-pub fn run(plan: &BenchPlan) -> BenchReport {
+pub(crate) fn run(plan: &BenchPlan) -> BenchReport {
     #[cfg(not(feature = "bench"))]
     {
         let _ = plan;

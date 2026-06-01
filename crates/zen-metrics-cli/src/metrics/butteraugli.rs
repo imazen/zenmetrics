@@ -15,7 +15,7 @@
 use crate::decode::Rgb8Image;
 
 /// Compute butteraugli once and return `(max_norm, pnorm_3)`.
-pub fn score_both(
+pub(crate) fn score_both(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<(f64, f64), Box<dyn std::error::Error>> {

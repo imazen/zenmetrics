@@ -55,7 +55,7 @@ const MODE_B_DEEP_THRESHOLD: u32 = 12;
 
 /// Default strip body height. Matches the GPU's
 /// `cvvdp_gpu::memory_mode::STRIP_H_BODY_DEFAULT = 512`.
-pub const STRIP_H_BODY_DEFAULT: u32 = 512;
+pub(crate) const STRIP_H_BODY_DEFAULT: u32 = 512;
 
 /// Validate a user-supplied `h_body` value.
 ///
@@ -65,7 +65,7 @@ pub const STRIP_H_BODY_DEFAULT: u32 = 512;
 /// an integer ≥ 1 for k < log2(h_body), with the `.max(1)` clamp in
 /// the walker handling deeper levels).
 #[must_use]
-pub fn is_valid_strip_h_body(h_body: u32) -> bool {
+pub(crate) fn is_valid_strip_h_body(h_body: u32) -> bool {
     h_body > 0 && h_body.is_power_of_two()
 }
 
@@ -109,7 +109,7 @@ impl LpNormAccumulator {
     /// the whole array (single-strip dispatch) or one strip of a
     /// partitioned dispatch.
     #[inline]
-    pub fn accumulate_slab(&mut self, slab: &[f32], p: f32) {
+    pub(crate) fn accumulate_slab(&mut self, slab: &[f32], p: f32) {
         // Sum `safe_pow_lp(v, p)` over slab. Replicates the inner-loop
         // body of `cvvdp::kernels::pool::lp_norm_mean` exactly, so
         // strip + full accumulators produce bit-identical sums when
@@ -128,7 +128,7 @@ impl LpNormAccumulator {
     /// `(Σ safe_pow_lp, n)`.
     #[inline]
     #[must_use]
-    pub fn finalize(self, p: f32) -> f32 {
+    pub(crate) fn finalize(self, p: f32) -> f32 {
         if self.n == 0 {
             return 0.0;
         }
@@ -167,7 +167,7 @@ pub(crate) fn strip_h_at_band(h_body: u32, k: u32) -> u32 {
 /// [`mode_b_strip_h_at_level`].
 #[doc(hidden)]
 #[must_use]
-pub fn mode_b_halo_at_level(k: u32, k_split: u32) -> u32 {
+pub(crate) fn mode_b_halo_at_level(k: u32, k_split: u32) -> u32 {
     if k >= k_split {
         0 // deep levels use full-image storage, no halo padding
     } else {
@@ -189,7 +189,7 @@ pub fn mode_b_halo_at_level(k: u32, k_split: u32) -> u32 {
 /// and CPU walkers always agree on which levels are shallow vs deep.
 #[doc(hidden)]
 #[must_use]
-pub fn mode_b_k_split(h_body: u32, n_levels: u32) -> u32 {
+pub(crate) fn mode_b_k_split(h_body: u32, n_levels: u32) -> u32 {
     let mut k_split = 0;
     while k_split < n_levels && (h_body >> k_split) >= MODE_B_DEEP_THRESHOLD {
         k_split += 1;
@@ -232,7 +232,7 @@ pub fn mode_b_k_split(h_body: u32, n_levels: u32) -> u32 {
 /// Bit-identical to `cvvdp_gpu::pipeline::mode_b_strip_h_at_level`.
 #[doc(hidden)]
 #[must_use]
-pub fn mode_b_strip_h_at_level(k: u32, h_body: u32, k_split: u32) -> u32 {
+pub(crate) fn mode_b_strip_h_at_level(k: u32, h_body: u32, k_split: u32) -> u32 {
     if k >= k_split {
         return 0; // caller uses full-image dim instead
     }

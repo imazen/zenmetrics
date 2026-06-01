@@ -31,12 +31,12 @@ pub(crate) struct EigResult {
 
 impl EigResult {
     /// Iterator over the active eigenvalues (length `n`).
-    pub fn lambdas(&self) -> &[f32] {
+    pub(crate) fn lambdas(&self) -> &[f32] {
         &self.lambda[..self.n]
     }
 
     /// `c_u_inv` view as a flat slice of length `n*n`.
-    pub fn c_u_inv_slice(&self) -> &[f32] {
+    pub(crate) fn c_u_inv_slice(&self) -> &[f32] {
         &self.c_u_inv[..self.n * self.n]
     }
 }

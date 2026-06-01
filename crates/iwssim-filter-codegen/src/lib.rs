@@ -71,14 +71,15 @@ pub fn gaussian_1d(len: usize, sigma: f64) -> Vec<f64> {
 /// Write the full `filters.rs` body to `out`. Called from each
 /// crate's `build.rs` after creating an `OUT_DIR/filters.rs` file.
 ///
-/// Emits:
-/// - `pub const BINOM5_LEN: usize = 5;`
-/// - `pub const BINOM5_RADIUS: i32 = 2;`
-/// - `pub const BINOM5: [f32; 5] = [...];`
-/// - `pub const SSIM_WIN_LEN: usize = 11;`
-/// - `pub const SSIM_WIN_RADIUS: i32 = 5;`
-/// - `pub const SSIM_WIN_1D: [f32; 11] = [...];`
-/// - `pub const SCALE_WEIGHTS: [f32; 5] = [...];`
+/// Emits (each `pub(crate)` — consumer crates `include!` into a private
+/// module and re-export crate-internally; never public API):
+/// - `pub(crate) const BINOM5_LEN: usize = 5;`
+/// - `pub(crate) const BINOM5_RADIUS: i32 = 2;`
+/// - `pub(crate) const BINOM5: [f32; 5] = [...];`
+/// - `pub(crate) const SSIM_WIN_LEN: usize = 11;`
+/// - `pub(crate) const SSIM_WIN_RADIUS: i32 = 5;`
+/// - `pub(crate) const SSIM_WIN_1D: [f32; 11] = [...];`
+/// - `pub(crate) const SCALE_WEIGHTS: [f32; 5] = [...];`
 pub fn emit_filters_rs<W: Write>(out: &mut W) -> io::Result<()> {
     writeln!(
         out,
@@ -87,10 +88,14 @@ pub fn emit_filters_rs<W: Write>(out: &mut W) -> io::Result<()> {
     writeln!(out)?;
 
     // BINOM5 (separable 5-tap; same taps for both axes).
+    // Emitted `pub(crate)`: each consumer crate (iwssim, iwssim-gpu)
+    // `include!`s this file into a private module and re-exports the
+    // taps crate-internally — they are never part of either crate's
+    // public API, so `pub(crate)` keeps `unreachable_pub` quiet.
     let b = binom5_taps();
-    writeln!(out, "pub const BINOM5_LEN: usize = 5;")?;
-    writeln!(out, "pub const BINOM5_RADIUS: i32 = 2;")?;
-    write!(out, "pub const BINOM5: [f32; 5] = [")?;
+    writeln!(out, "pub(crate) const BINOM5_LEN: usize = 5;")?;
+    writeln!(out, "pub(crate) const BINOM5_RADIUS: i32 = 2;")?;
+    write!(out, "pub(crate) const BINOM5: [f32; 5] = [")?;
     for v in b.iter() {
         write!(out, "{:.20e}_f32, ", v)?;
     }
@@ -99,9 +104,9 @@ pub fn emit_filters_rs<W: Write>(out: &mut W) -> io::Result<()> {
 
     // SSIM 11×11 Gaussian, σ=1.5 — applied separably as 1D 11-tap.
     let g = gaussian_1d(11, 1.5);
-    writeln!(out, "pub const SSIM_WIN_LEN: usize = 11;")?;
-    writeln!(out, "pub const SSIM_WIN_RADIUS: i32 = 5;")?;
-    write!(out, "pub const SSIM_WIN_1D: [f32; 11] = [")?;
+    writeln!(out, "pub(crate) const SSIM_WIN_LEN: usize = 11;")?;
+    writeln!(out, "pub(crate) const SSIM_WIN_RADIUS: i32 = 5;")?;
+    write!(out, "pub(crate) const SSIM_WIN_1D: [f32; 11] = [")?;
     for v in g.iter() {
         write!(out, "{:.20e}_f32, ", v)?;
     }
@@ -112,7 +117,7 @@ pub fn emit_filters_rs<W: Write>(out: &mut W) -> io::Result<()> {
     // 2011) — verbatim from `iwssim.m` / `IW_SSIM_PyTorch.py`.
     writeln!(
         out,
-        "pub const SCALE_WEIGHTS: [f32; 5] = [\n    \
+        "pub(crate) const SCALE_WEIGHTS: [f32; 5] = [\n    \
          4.48e-2_f32, 2.856e-1_f32, 3.001e-1_f32, 2.363e-1_f32, 1.333e-1_f32,\n];"
     )?;
 

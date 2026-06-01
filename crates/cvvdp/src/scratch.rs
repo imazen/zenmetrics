@@ -214,7 +214,7 @@ impl Scratch {
     /// dispatcher). See `crates/cvvdp/docs/CPU_KSPL_HANDOFF_chunks_4_and_6.md`
     /// for the remaining work.
     #[allow(dead_code)]
-    pub fn new_strip(width: usize, height: usize, n_levels: usize, h_body: u32) -> Self {
+    pub(crate) fn new_strip(width: usize, height: usize, n_levels: usize, h_body: u32) -> Self {
         let n = width * height;
         Self {
             dist_a: vec![0.0; n],
@@ -265,7 +265,7 @@ impl Scratch {
     /// outputs combined) but the alternative was paying it inside the
     /// first per-call build path. Both `score()` cold path and
     /// `warm_reference` cold-path callers benefit.
-    pub fn new(width: usize, height: usize, n_levels: usize) -> Self {
+    pub(crate) fn new(width: usize, height: usize, n_levels: usize) -> Self {
         let n = width * height;
         Self {
             dist_a: vec![0.0; n],
@@ -317,7 +317,7 @@ impl Scratch {
 
     /// Grow the per-band workspace slot vector to at least `n_levels`
     /// entries. Called by the band loop before parallel dispatch.
-    pub fn ensure_band_ws(&mut self, n_levels: usize) {
+    pub(crate) fn ensure_band_ws(&mut self, n_levels: usize) {
         while self.band_ws.len() < n_levels {
             self.band_ws.push(BandWorkspace::default());
         }
@@ -332,7 +332,7 @@ impl Scratch {
     /// Chunk 4 of the CPU K_SPLIT walker port; populated lazily so
     /// the Full-mode path's `Scratch::new` doesn't pay the strip
     /// allocator's cost.
-    pub fn ensure_strip_band_ws(&mut self, k_split: usize) {
+    pub(crate) fn ensure_strip_band_ws(&mut self, k_split: usize) {
         if self.strip_band_ws.is_none() {
             self.strip_band_ws = Some(Vec::new());
         }

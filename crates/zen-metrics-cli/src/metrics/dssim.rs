@@ -9,7 +9,7 @@
 
 use crate::decode::Rgb8Image;
 
-pub fn score(
+pub(crate) fn score(
     reference: &Rgb8Image,
     distorted: &Rgb8Image,
 ) -> Result<f64, Box<dyn std::error::Error>> {
