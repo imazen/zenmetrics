@@ -76,12 +76,14 @@ trait ButteraugliInner: Send {
     ) -> Result<Score>;
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
-    /// Cache the reference image's opsin pyramid + blur cascade.
-    /// Strip-mode instances allocate a whole-image cache sibling on
-    /// first call (Mode E — task #45 / issue #15) and run the
-    /// reference-side pipeline on it. Returns
-    /// [`crate::Error::StripModeUnsupported`] only for the multires-
-    /// strip case, which doesn't have a Mode E port yet.
+    /// Cache the reference image's opsin pyramid + blur cascade on a
+    /// whole-image instance. The opaque wrapper only routes here for
+    /// whole-image instances; strip-mode instances use the wrapper-held
+    /// buffer-replay path (task #160) and never call this. On a
+    /// single-res strip instance this still runs the Mode-E
+    /// (`ref_cache_full`) path; on a multires-strip instance it returns
+    /// [`crate::Error::StripModeUnsupported`] (the wrapper never reaches
+    /// it for strip instances).
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8], params: &ButteraugliParams) -> Result<()>;
     /// Score one candidate against the cached reference.
     fn compute_with_cached_reference_srgb_u8(
@@ -93,6 +95,11 @@ trait ButteraugliInner: Send {
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
     fn has_cached_reference(&self) -> bool;
+    /// True iff the underlying instance was constructed in strip mode
+    /// (`new_strip` / `new_multires_strip` / Auto-resolved-to-Strip).
+    /// The opaque wrapper uses this to drive the buffer-replay
+    /// cached-reference path for strip instances (task #160).
+    fn is_strip_mode(&self) -> bool;
 }
 
 impl<R> ButteraugliInner for Butteraugli<R>
@@ -187,6 +194,10 @@ where
     fn has_cached_reference(&self) -> bool {
         Butteraugli::has_cached_reference(self)
     }
+
+    fn is_strip_mode(&self) -> bool {
+        Butteraugli::is_strip_mode(self)
+    }
 }
 
 /// Opaque butteraugli scorer.
@@ -195,6 +206,20 @@ pub struct ButteraugliOpaque {
     params: ButteraugliParams,
     #[allow(dead_code)]
     backend: Backend,
+    /// Held reference sRGB buffer for the strip-mode cached-reference
+    /// path (task #160). Strip-mode instances (single-res or multires)
+    /// don't carry a cached-ref *state* on device the way whole-image
+    /// instances do; instead this wrapper holds an owned copy of the
+    /// reference bytes after `set_reference_srgb_u8` and replays the
+    /// pair-strip compute on `(held_ref, dist)` in
+    /// `compute_with_cached_reference_srgb_u8`. Because that is exactly
+    /// the one-shot `compute_srgb_u8(ref, dist)` with the reference
+    /// held, the cached-ref score is **identical** to the one-shot
+    /// score — no parity / score-shift risk. `None` until
+    /// `set_reference_srgb_u8` is called on a strip-mode instance, and
+    /// always `None` on whole-image instances (which use the on-device
+    /// cached-ref path in `inner`).
+    cached_ref_strip: Option<Vec<u8>>,
 }
 
 impl ButteraugliOpaque {
@@ -310,6 +335,7 @@ impl ButteraugliOpaque {
             inner,
             params,
             backend,
+            cached_ref_strip: None,
         })
     }
 
@@ -352,6 +378,7 @@ impl ButteraugliOpaque {
             inner,
             params,
             backend,
+            cached_ref_strip: None,
         })
     }
 
@@ -412,40 +439,85 @@ impl ButteraugliOpaque {
         self.inner.pack_srgb(srgb)
     }
 
-    /// Cache the reference image's opsin / blur / masking state on
-    /// device. Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
-    /// calls skip the ref-side pyramid build.
+    /// Cache the reference image so subsequent
+    /// [`Self::compute_with_cached_reference_srgb_u8`] calls can score
+    /// many distorted candidates against the same reference.
     ///
-    /// Strip-mode instances allocate a whole-image cache sibling on
-    /// first call (Mode E — task #45 / issue #15) and run the
-    /// reference-side pipeline on it; subsequent
-    /// `compute_with_cached_reference_srgb_u8` calls walk dist strips
-    /// while blitting cached ref planes per strip.
+    /// - **Whole-image instances** cache the reference's opsin / blur /
+    ///   masking state on device (subsequent cached-ref calls skip the
+    ///   ref-side pyramid build).
+    /// - **Strip-mode instances** (single-res or multires, including the
+    ///   Auto-resolved-to-Strip case the umbrella builds) hold an owned
+    ///   copy of the reference bytes (task #160) and replay the
+    ///   pair-strip compute on `(held_ref, dist)` per cached-ref call.
+    ///   That replay is exactly the one-shot `compute_srgb_u8(ref,
+    ///   dist)` with the reference held, so the cached-ref score is
+    ///   **identical** to the one-shot score. This makes
+    ///   `set_reference` universally supported regardless of the
+    ///   resolved memory mode.
     ///
     /// # Errors
     ///
-    /// - [`crate::Error::StripModeUnsupported`] when invoked on a
-    ///   multires-strip instance — the half-res strip cached-ref
-    ///   path is not yet implemented.
+    /// - [`crate::Error::DimensionMismatch`] if `ref_rgb.len()` doesn't
+    ///   match the configured `width × height × 3`.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
+        if self.inner.is_strip_mode() {
+            // Strip-mode cached reference (task #160): hold the reference
+            // bytes and replay the pair-strip compute later. Validate the
+            // dimensions up front so a wrong-sized reference fails here
+            // (same contract as the whole-image on-device path) rather
+            // than on the first compute call.
+            let (w, h) = self.inner.dims();
+            let expected = (w as usize) * (h as usize) * 3;
+            if ref_rgb.len() != expected {
+                return Err(crate::Error::DimensionMismatch {
+                    expected,
+                    got: ref_rgb.len(),
+                });
+            }
+            self.cached_ref_strip = Some(ref_rgb.to_vec());
+            return Ok(());
+        }
         self.inner.set_reference_srgb_u8(ref_rgb, &self.params)
     }
 
     /// Score a distorted candidate against the cached reference set
     /// by [`Self::set_reference_srgb_u8`]. Returns
     /// [`crate::Error::NoCachedReference`] if no reference is cached.
+    ///
+    /// For strip-mode instances this replays the pair-strip compute on
+    /// the held reference and `dis_rgb` (task #160), producing a score
+    /// **identical** to the one-shot `compute_srgb_u8` path.
     pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+        if self.inner.is_strip_mode() {
+            // Replay the pair-strip compute on the held reference. We
+            // clone the held buffer out of `self` so the `&mut self`
+            // borrow needed by `compute_srgb_u8` doesn't conflict with
+            // the immutable borrow of `cached_ref_strip` (cubecl `Handle`
+            // re-upload is the dominant cost; the host Vec clone is
+            // negligible beside it).
+            let held = match self.cached_ref_strip.as_ref() {
+                Some(buf) => buf.clone(),
+                None => return Err(crate::Error::NoCachedReference),
+            };
+            return self.inner.compute_srgb_u8(&held, dis_rgb, &self.params);
+        }
         self.inner
             .compute_with_cached_reference_srgb_u8(dis_rgb, &self.params)
     }
 
-    /// Drop cached reference state.
+    /// Drop cached reference state (both the strip-mode held buffer and
+    /// any whole-image on-device cache).
     pub fn clear_reference(&mut self) {
-        self.inner.clear_reference()
+        self.cached_ref_strip = None;
+        self.inner.clear_reference();
     }
 
     /// `true` if a reference has been cached.
     pub fn has_cached_reference(&self) -> bool {
+        if self.inner.is_strip_mode() {
+            return self.cached_ref_strip.is_some();
+        }
         self.inner.has_cached_reference()
     }
 }
