@@ -356,6 +356,77 @@ jobs:
       - name: Run doctests
         run: cargo test --workspace --no-default-features --features wgpu --doc --release
 
+  # zenmetrics-api optimized-CPU backend tests (task #159 phase 5). Runs
+  # the Backend::Cpu dispatch suite + the backend×metric×size matrix on a
+  # GPU-less runner. Built with `wgpu` (so the -gpu crates compile without
+  # the CUDA SDK) but `cuda` OFF, so the matrix's CPU-vs-CUDA parity layer
+  # (`#[cfg(feature = "cuda")]`) compiles out — a visible feature gate, not
+  # a runtime graceful skip. The Backend::Cpu path uses the optimized
+  # native crates (fast-ssim2, in-tree cvvdp/iwssim, dssim-core,
+  # butteraugli, zensim) and needs no GPU at runtime.
+  cpu-metrics-tests:
+    name: CPU-metrics tests (zenmetrics-api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
+        # zen-metrics-cli's Cargo.toml has `zenjpeg = { path =
+        # "../../../zenjpeg/zenjpeg", optional = true }`. Even though
+        # it's optional, cargo validates the path during workspace
+        # manifest load. zenjpeg itself has `zenpredict = { path =
+        # "../../zenanalyze/zenpredict" }` so we need zenanalyze too.
+        # Pin to known-good origin HEAD commits for reproducibility.
+        run: |
+          git clone --quiet https://github.com/imazen/zenjpeg.git ../zenjpeg
+          git -C ../zenjpeg checkout 582bf0efe3d2804617a5b007567463fcc9d1b433
+          git clone --quiet https://github.com/imazen/zenanalyze.git ../zenanalyze
+          git -C ../zenanalyze checkout 8cae13b962fc1edbef0dc02e7c0cb6775351638f
+          # jxl-encoder path dep on `../jxl-encoder/jxl-encoder` (from
+          # zenmetrics workspace root) — pulled in by zen-metrics-cli's
+          # `sweep` feature transitively. Pin to a stable rev for CI
+          # reproducibility.
+          git clone --quiet https://github.com/imazen/jxl-encoder.git ../jxl-encoder
+          git -C ../jxl-encoder checkout 3d879dd71844681e62652e20ac393b8c54230ba2
+          # Workspace [patch.crates-io] entries point at local siblings
+          # for every codec we ship (zenpng, zenwebp, zenavif--main,
+          # zenjxl--main, zensim/zensim) and butteraugli. Cargo loads
+          # every patch manifest even when the patched crate isn't
+          # active in the build, so CI must clone them all to satisfy
+          # workspace metadata resolution. Pinned to stable revs to
+          # make CI reproducible.
+          git clone --quiet https://github.com/imazen/zenpng.git ../zenpng
+          git -C ../zenpng checkout 0192498697bc89eddb86727e41694a7f6a45e99a
+          git clone --quiet https://github.com/imazen/zenwebp.git ../zenwebp
+          git -C ../zenwebp checkout 2c29047793c31a929cb543b71ce82878a2a4bd0e
+          # zenavif is patched as `../zenavif--main` — clone with that
+          # exact suffix so the path resolves on CI.
+          git clone --quiet https://github.com/imazen/zenavif.git ../zenavif--main
+          git -C ../zenavif--main checkout eb984f85a372dc7f77938b23170cba87b3647308
+          git clone --quiet https://github.com/imazen/zenjxl.git ../zenjxl--main
+          git -C ../zenjxl--main checkout 7596fe18fb910bcbfa1ed4b10dcb7f33a524becf
+          git clone --quiet https://github.com/imazen/zensim.git ../zensim
+          git -C ../zensim checkout 009d3b2d1f2950f7c391ee99e2cab768714dee99
+          # butteraugli's local layout is a Cargo workspace at
+          # ~/work/butteraugli/ with the package at
+          # ~/work/butteraugli/butteraugli/. The workspace's
+          # [patch.crates-io] points at the *package* path
+          # (../../butteraugli/butteraugli from zenmetrics' workspace
+          # root). On CI we clone the workspace repo into
+          # ../../butteraugli so that ../../butteraugli/butteraugli/
+          # is the package dir.
+          git clone --quiet https://github.com/imazen/butteraugli.git ../../butteraugli
+          git -C ../../butteraugli checkout dd12b90fe8891efb4ae00689294997fd584a6d7d
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: zenmetrics-cpu-metrics
+      - name: Backend::Cpu dispatch + backend×metric×size matrix
+        run: |
+          cargo test -p zenmetrics-api \
+            --no-default-features \
+            --features all-metrics,cpu-metrics,wgpu,pixels,encoded \
+            --test backend_matrix --test cpu_dispatch
+
   # Linting + formatting.
   lint:
     name: Lint (clippy + fmt)
