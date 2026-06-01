@@ -19,6 +19,24 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenmetrics-api` ideal public surface — PixelSlice front doors + intent hint (task #159 phases 4–5).**
+  `score(kind, backend, ref, dist)` (one-shot, takes `zenpixels::PixelSlice`, `6b3f51f1`),
+  `warm_reference(kind, backend, ref) -> Warm` (one reference, many distorted via score-identical
+  buffer-replay, uniform across CPU/GPU, `f2dbc9de`), and `score_encoded(kind, backend, &[u8], &[u8])`
+  (decode PNG/JPEG internally, `17371d9d`). `Priority {Speed, Memory}` + `Reuse {OneOff, Warm}` +
+  observable `resolve_memory_mode(...)` map `(metric, size, reuse, priority)` to a score-safe
+  `MemoryMode`, now driving the front doors' Auto choice (`18bca0b5`). `Backend::Auto` resolves to the
+  optimized native `Backend::Cpu` when no GPU is present. New `tests/backend_matrix.rs` exercises every
+  metric × backend × {256,512,1024}: CPU breadth + Auto→Cpu equivalence (`4985e69f`) and a measured,
+  documented CPU-vs-CUDA parity layer (`fe9921a8`, baseline
+  `benchmarks/backend_parity_cpu_vs_cuda_2026-06-01.tsv`). CI `cpu-metrics-tests` job + root `justfile`
+  run the optimized-CPU suite GPU-less (`f5cd1f40`).
+- **CI: workspace metadata + resolution unblocked (all jobs were red).** Cloned the two missing
+  path/patch siblings `fast-ssim2` + `dssim` (`9c66efbb`), fixed the stale `../zenavif--main` /
+  `../zenjxl--main` clone dirs to match the `--main`-dropped `[patch]` paths (`a07ea47e`), and
+  re-pinned every cloned sibling to its current build-compatible `origin/main` HEAD (butteraugli
+  0.9.2→0.9.4, etc.; `51559fda`).
+
 - **`zenmetrics_api::score_pair` one-shot convenience.** `score_pair(kind, backend, w, h,
   ref, dist) -> Result<Score>` constructs the metric with default params, scores a single
   sRGB-u8 pair, and drops it — the "just score these two images" one-liner, without the
