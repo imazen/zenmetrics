@@ -1559,6 +1559,65 @@ pub fn score_pair(
     metric.compute_srgb_u8(reference_srgb_u8, distorted_srgb_u8)
 }
 
+/// Caller optimization priority for the score front doors / [`resolve_memory_mode`]
+/// (task #159 phase 4). Default [`Priority::Speed`]. Only ever selects between
+/// **score-safe** modes — priority never changes the score, only perf/memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Priority {
+    /// Fastest score-safe mode that fits (default).
+    #[default]
+    Speed,
+    /// Lowest-peak-memory score-safe mode (prefers strip on large images).
+    Memory,
+}
+
+/// Whether a reference is scored once or reused across many distorted images
+/// — the dominant axis in `benchmarks/mode_wall_2026-05-31.csv`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reuse {
+    /// Single `(reference, distorted)` pair ([`score`] / [`score_encoded`]).
+    OneOff,
+    /// One reference, many distorted ([`warm_reference`]).
+    Warm,
+}
+
+/// Resolve the Auto-safe optimal [`MemoryMode`] for `(kind, width, height,
+/// reuse, priority)` (task #159 phase 4d) — **observable**, like
+/// [`Backend::resolve_auto`], so callers can see what Auto picks.
+///
+/// Coarse rules seeded from `benchmarks/mode_wall_2026-05-31.csv` (#157): warm
+/// reuse makes [`MemoryMode::Full`] fastest; one-off **large** images favor
+/// [`MemoryMode::Strip`] (fastest one-off AND lowest peak); one-off **small**
+/// images stay [`MemoryMode::Full`] (strip overhead isn't worth it);
+/// [`Priority::Memory`] prefers strip on large warm images too. Only ever
+/// returns **score-safe** modes (never the JOD-shifting cvvdp capped-pyramid);
+/// metrics that can't strip a given input fall back to Full at their own
+/// boundary, so the score is unchanged. The dense per-(metric, size) data fit
+/// is #157 Phase B; this is the rule-based resolver.
+pub fn resolve_memory_mode(
+    kind: MetricKind,
+    width: u32,
+    height: u32,
+    reuse: Reuse,
+    priority: Priority,
+) -> MemoryMode {
+    // Per-metric refinement (some metrics strip-win at smaller sizes than
+    // others) is #157 Phase B; the coarse size threshold is metric-agnostic.
+    let _ = kind;
+    let pixels = (width as u64) * (height as u64);
+    /// One-off images at or below this stay Full (strip overhead > benefit).
+    const SMALL_PX: u64 = 512 * 512;
+    match reuse {
+        Reuse::Warm => match priority {
+            Priority::Speed => MemoryMode::Full,
+            Priority::Memory if pixels > SMALL_PX => MemoryMode::Strip { h_body: None },
+            Priority::Memory => MemoryMode::Full,
+        },
+        Reuse::OneOff if pixels <= SMALL_PX => MemoryMode::Full,
+        Reuse::OneOff => MemoryMode::Strip { h_body: None },
+    }
+}
+
 /// One-shot score of a decoded `(reference, distorted)` pair on `backend`
 /// (task #159 phase 4) — the 90%-case front door: construct + score in a
 /// single call, using the metric's Auto-safe optimal one-off mode.
@@ -1585,7 +1644,9 @@ pub fn score(
     // caller's buffer, not here), so the front door takes it by value and
     // hands it straight to `compute_pixels` — no pixel copy.
     let (w, h) = (reference.width(), reference.rows());
-    let mut metric = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))?;
+    let mode = resolve_memory_mode(kind, w, h, Reuse::OneOff, Priority::Speed);
+    let mut metric =
+        Metric::new_with_memory_mode(kind, backend, w, h, MetricParams::default_for(kind), mode)?;
     metric.compute_pixels(reference, distorted)
 }
 
@@ -1629,7 +1690,9 @@ pub fn warm_reference(
     reference: PixelSlice<'_>,
 ) -> Result<Warm> {
     let (w, h) = (reference.width(), reference.rows());
-    let mut metric = Metric::new(kind, backend, w, h, MetricParams::default_for(kind))?;
+    let mode = resolve_memory_mode(kind, w, h, Reuse::Warm, Priority::Speed);
+    let mut metric =
+        Metric::new_with_memory_mode(kind, backend, w, h, MetricParams::default_for(kind), mode)?;
     let ref_bytes = to_srgb_rgb8(&reference, w, h)?;
     metric.set_reference_srgb_u8(&ref_bytes)?;
     Ok(Warm {
@@ -1659,7 +1722,9 @@ pub fn score_encoded(
             got: (dw, dh),
         });
     }
-    let mut metric = Metric::new(kind, backend, rw, rh, MetricParams::default_for(kind))?;
+    let mode = resolve_memory_mode(kind, rw, rh, Reuse::OneOff, Priority::Speed);
+    let mut metric =
+        Metric::new_with_memory_mode(kind, backend, rw, rh, MetricParams::default_for(kind), mode)?;
     metric.compute_srgb_u8(&ref_bytes, &dist_bytes)
 }
 
@@ -1674,4 +1739,109 @@ fn decode_rgb8(bytes: &[u8], which: &'static str) -> Result<(u32, u32, Vec<u8>)>
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     Ok((w, h, rgb.into_raw()))
+}
+
+#[cfg(test)]
+mod tests {
+    //! Pure-logic coverage for [`resolve_memory_mode`] (task #159 phase 4d).
+    //! No backend/feature needed — exercises the coarse rule table directly.
+    use super::*;
+
+    // 512×512 is the one-off Full/Strip threshold (inclusive Full).
+    const SMALL: (u32, u32) = (512, 512);
+    const BIG: (u32, u32) = (4096, 4096);
+
+    #[test]
+    fn warm_speed_is_always_full() {
+        for &(w, h) in &[(64, 64), SMALL, BIG] {
+            assert_eq!(
+                resolve_memory_mode(MetricKind::Dssim, w, h, Reuse::Warm, Priority::Speed),
+                MemoryMode::Full,
+                "warm+Speed must stay Full at {w}x{h}"
+            );
+        }
+    }
+
+    #[test]
+    fn warm_memory_strips_only_large() {
+        // Small warm: Full already fits, strip overhead unwarranted.
+        assert_eq!(
+            resolve_memory_mode(
+                MetricKind::Ssim2,
+                SMALL.0,
+                SMALL.1,
+                Reuse::Warm,
+                Priority::Memory
+            ),
+            MemoryMode::Full,
+        );
+        // Large warm + Memory: prefer the lower-peak strip.
+        assert_eq!(
+            resolve_memory_mode(
+                MetricKind::Ssim2,
+                BIG.0,
+                BIG.1,
+                Reuse::Warm,
+                Priority::Memory
+            ),
+            MemoryMode::Strip { h_body: None },
+        );
+    }
+
+    #[test]
+    fn oneoff_small_is_full_either_priority() {
+        for p in [Priority::Speed, Priority::Memory] {
+            assert_eq!(
+                resolve_memory_mode(MetricKind::Cvvdp, SMALL.0, SMALL.1, Reuse::OneOff, p),
+                MemoryMode::Full,
+                "one-off ≤512² must be Full ({p:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn oneoff_large_strips_either_priority() {
+        for p in [Priority::Speed, Priority::Memory] {
+            assert_eq!(
+                resolve_memory_mode(MetricKind::Cvvdp, BIG.0, BIG.1, Reuse::OneOff, p),
+                MemoryMode::Strip { h_body: None },
+                "one-off large must strip ({p:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn oneoff_threshold_is_inclusive_full() {
+        // Exactly 512×512 (== SMALL_PX) stays Full; one pixel over strips.
+        assert_eq!(
+            resolve_memory_mode(MetricKind::Iwssim, 512, 512, Reuse::OneOff, Priority::Speed),
+            MemoryMode::Full,
+        );
+        assert_eq!(
+            resolve_memory_mode(MetricKind::Iwssim, 512, 513, Reuse::OneOff, Priority::Speed),
+            MemoryMode::Strip { h_body: None },
+        );
+    }
+
+    #[test]
+    fn resolver_never_returns_auto_or_tile() {
+        // Every cell of the (reuse × priority × size) grid must land on a
+        // concrete, score-safe mode — never Auto (unresolved) or Tile.
+        for &(w, h) in &[(1, 1), (64, 64), SMALL, (513, 512), BIG, (8192, 8192)] {
+            for reuse in [Reuse::OneOff, Reuse::Warm] {
+                for prio in [Priority::Speed, Priority::Memory] {
+                    let m = resolve_memory_mode(MetricKind::Zensim, w, h, reuse, prio);
+                    assert!(
+                        matches!(m, MemoryMode::Full | MemoryMode::Strip { .. }),
+                        "{w}x{h} {reuse:?} {prio:?} resolved to {m:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn priority_default_is_speed() {
+        assert_eq!(Priority::default(), Priority::Speed);
+    }
 }

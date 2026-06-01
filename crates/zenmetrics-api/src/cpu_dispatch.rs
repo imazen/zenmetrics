@@ -160,6 +160,10 @@ impl CpuMetricState {
                     height,
                 })
             }
+            // Load-bearing for partial-feature builds (a metric whose
+            // `cpu-*` feature is off lands here); unreachable only when all
+            // six arms compile in, hence the localized allow.
+            #[allow(unreachable_patterns)]
             other => Ok(CpuMetricState::FeatureDisabled(other)),
         }
     }
