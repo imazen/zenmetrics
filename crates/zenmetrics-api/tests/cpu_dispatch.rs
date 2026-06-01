@@ -93,6 +93,46 @@ fn butter_cpu(w: u32, h: u32) -> Metric {
     .expect("Backend::Cpu butter must construct when cpu-butter is built")
 }
 
+/// `compute_pixels` (zenpixels input, task #159 phase 3) must route the
+/// `Backend::Cpu` path correctly. For an `RGB8_SRGB` slice the conversion is
+/// a no-op fast path, so `compute_pixels` feeds byte-identical input to
+/// `compute_srgb_u8` — the scores must match exactly (no pixels-path drift).
+#[cfg(feature = "pixels")]
+#[test]
+fn cpu_compute_pixels_matches_srgb_u8_rgb8() {
+    use zenpixels::{PixelDescriptor, PixelSlice};
+    let (w, h) = (64u32, 64u32);
+    let ref_bytes = img(w, h, |x, y| {
+        [
+            x.wrapping_mul(4) as u8,
+            y.wrapping_mul(4) as u8,
+            (x ^ y).wrapping_mul(3) as u8,
+        ]
+    });
+    let dist_bytes = img(w, h, |x, y| {
+        [x.wrapping_mul(4) as u8, 255 - y.wrapping_mul(4) as u8, 64]
+    });
+    let row = (w as usize) * 3;
+    let desc = PixelDescriptor::RGB8_SRGB;
+    for kind in [MetricKind::Ssim2, MetricKind::Cvvdp] {
+        let r = PixelSlice::new(&ref_bytes, w, h, row, desc).expect("ref slice");
+        let d = PixelSlice::new(&dist_bytes, w, h, row, desc).expect("dist slice");
+        let mut mp = Metric::new(kind, Backend::Cpu, w, h, MetricParams::default_for(kind))
+            .expect("Backend::Cpu metric");
+        let via_pixels = mp.compute_pixels(r, d).expect("compute_pixels");
+        let mut mb = Metric::new(kind, Backend::Cpu, w, h, MetricParams::default_for(kind))
+            .expect("Backend::Cpu metric");
+        let via_bytes = mb
+            .compute_srgb_u8(&ref_bytes, &dist_bytes)
+            .expect("compute_srgb_u8");
+        assert_eq!(
+            via_pixels.value, via_bytes.value,
+            "{kind:?}: compute_pixels must match compute_srgb_u8 on RGB8_SRGB input"
+        );
+        assert_eq!(via_pixels.metric_name, via_bytes.metric_name);
+    }
+}
+
 #[test]
 fn dssim_cpu_is_finite_and_discriminates() {
     let (w, h) = (64u32, 64u32);

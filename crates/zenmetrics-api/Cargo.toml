@@ -83,6 +83,7 @@ cpu-metrics = ["cpu-cvvdp", "cpu-ssim2", "cpu-dssim", "cpu-butter", "cpu-zensim"
 # enabled metric crate so `Metric::compute_pixels` works.
 pixels = [
     "dep:zenpixels",
+    "dep:zenpixels-convert",
     "cvvdp-gpu?/pixels",
     "butteraugli-gpu?/pixels",
     "ssim2-gpu?/pixels",
@@ -128,6 +129,9 @@ bytemuck    = { workspace = true, optional = true }
 
 # Re-exported pixel slice for the umbrella `compute_pixels` path.
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+# PixelSlice -> sRGB8 conversion for the optimized-CPU `compute_pixels` path
+# (task #159 phase 3); the GPU arms convert inside each `-gpu` crate.
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 # Typed-surface escape hatch (only pulled in when `cubecl-types` is on).
 cubecl = { workspace = true, optional = true }

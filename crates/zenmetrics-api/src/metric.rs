@@ -887,12 +887,16 @@ impl Metric {
                 feature = "cpu-zensim",
                 feature = "cpu-iwssim"
             ))]
-            Metric::Cpu(_) => Err(Error::Metric {
-                kind: "cpu",
-                message: "compute_pixels for Backend::Cpu lands in #159 phase 3 (zenpixels \
-                          inputs); use compute_srgb_u8 for now"
-                    .into(),
-            }),
+            Metric::Cpu(s) => {
+                // Optimized-CPU path (task #159 phase 3): convert both
+                // PixelSlices to packed sRGB8 (strided-correct, one-line via
+                // zenpixels-convert) then score on the native crate. HDR is
+                // handled later via the cvvdp approach.
+                let (w, h) = s.dims();
+                let ref_buf = to_srgb_rgb8(&r, w, h)?;
+                let dis_buf = to_srgb_rgb8(&d, w, h)?;
+                s.compute_srgb_u8(&ref_buf, &dis_buf)
+            }
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => {
                 m.compute_pixels(r, d)
@@ -1179,6 +1183,73 @@ impl Metric {
         drop(self);
         reclaim_pooled_vram(backend);
     }
+}
+
+// ---------------------------------------------------------------
+// PixelSlice -> packed sRGB8 conversion for the optimized-CPU
+// `compute_pixels` path (task #159 phase 3). Mirrors the per-crate
+// `to_srgb_rgb8` helpers (e.g. `ssim2_gpu::opaque`): validate dims,
+// fast-path an already-RGB8_SRGB slice, else convert per-row
+// (strided-correct) via zenpixels-convert. The GPU arms convert inside
+// their `-gpu` crate instead, so this only compiles for the CPU path.
+// ---------------------------------------------------------------
+
+#[cfg(all(
+    feature = "pixels",
+    any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    )
+))]
+fn to_srgb_rgb8(s: &PixelSlice<'_>, expected_w: u32, expected_h: u32) -> Result<Vec<u8>> {
+    if s.width() != expected_w || s.rows() != expected_h {
+        return Err(Error::DimensionMismatch {
+            expected: (expected_w, expected_h),
+            got: (s.width(), s.rows()),
+        });
+    }
+    let target = zenpixels::PixelDescriptor::RGB8_SRGB;
+    if s.descriptor() == target {
+        return Ok(s.contiguous_bytes().into_owned());
+    }
+    convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
+        expected: (expected_w, expected_h),
+        got: (s.width(), s.rows()),
+    })
+}
+
+#[cfg(all(
+    feature = "pixels",
+    any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    )
+))]
+fn convert_to_srgb_rgb8(
+    s: &PixelSlice<'_>,
+    target: zenpixels::PixelDescriptor,
+) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
+    use zenpixels_convert::{ConvertPlan, convert_row};
+    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    let w = s.width();
+    let h = s.rows();
+    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let mut out = vec![0u8; row_bytes * (h as usize)];
+    for y in 0..h {
+        let src_row = s.row(y);
+        let start = (y as usize) * row_bytes;
+        let dst_row = &mut out[start..start + row_bytes];
+        convert_row(&plan, src_row, dst_row, w);
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------

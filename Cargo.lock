@@ -6946,6 +6946,7 @@ dependencies = [
  "thiserror",
  "zenforks-cubecl",
  "zenpixels",
+ "zenpixels-convert",
  "zensim",
  "zensim-gpu",
 ]
