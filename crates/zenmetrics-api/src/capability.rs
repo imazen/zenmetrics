@@ -77,11 +77,14 @@ pub(crate) fn hip_device_present() -> bool {
     rocm_smi_lists_a_gpu()
 }
 
-/// Resolve [`Backend::Auto`] to a concrete backend per the phase-1 order
-/// (CUDA → WGPU → HIP → CubeclCpu). Each GPU arm is gated on both its
-/// Cargo feature (via the `*_device_present` helpers) and live detection,
-/// so a build without `cuda` never resolves to `Cuda`. Guaranteed to
-/// return a non-`Auto` variant; never panics.
+/// Resolve [`Backend::Auto`] to a concrete backend in preference order
+/// CUDA → WGPU → HIP → optimized native [`Backend::Cpu`] → cubecl-cpu
+/// [`Backend::CubeclCpu`]. Each GPU arm is gated on both its Cargo feature
+/// (via the `*_device_present` helpers) and live detection, so a build
+/// without `cuda` never resolves to `Cuda`. With no GPU present it resolves
+/// to the optimized native `Cpu` path when any `cpu-*` metric is compiled in
+/// (task #159 phase 2), else to `CubeclCpu` so `Auto` always lands on a
+/// runnable backend. Guaranteed to return a non-`Auto` variant; never panics.
 pub(crate) fn resolve_auto_backend() -> Backend {
     if cuda_device_present() {
         Backend::Cuda
@@ -90,8 +93,40 @@ pub(crate) fn resolve_auto_backend() -> Backend {
     } else if hip_device_present() {
         Backend::Hip
     } else {
-        // The only CPU-side backend that exists in phase 1. Phase 2
-        // repoints this to the optimized native `Cpu` path.
+        cpu_fallback_backend()
+    }
+}
+
+/// The GPU-less fallback backend (pure; no device probing). Prefers the
+/// optimized native [`Backend::Cpu`] path when any `cpu-*` metric is built —
+/// it is the fast CPU path and, unlike cubecl-cpu, never panics on
+/// `atomic<f32>`. Falls back to [`Backend::CubeclCpu`] only when no
+/// optimized-CPU metric is compiled in, so `Auto` always resolves to a
+/// runnable backend. `Auto` resolving here never changes the score: it only
+/// selects a backend, and per-metric construction still surfaces
+/// [`crate::Error::BackendNotEnabled`] if the *chosen* metric lacks its
+/// `cpu-*` feature.
+fn cpu_fallback_backend() -> Backend {
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    ))]
+    {
+        Backend::Cpu
+    }
+    #[cfg(not(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    )))]
+    {
         Backend::CubeclCpu
     }
 }
@@ -157,5 +192,35 @@ mod tests {
         if !cfg!(feature = "hip") {
             assert!(!hip_device_present());
         }
+    }
+
+    // GPU-less fallback (task #159 phase 2): with an optimized-CPU metric
+    // built, `Auto` must prefer the fast native `Cpu` path, not cubecl-cpu.
+    #[cfg(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    ))]
+    #[test]
+    fn cpu_fallback_prefers_optimized_cpu_when_built() {
+        assert_eq!(cpu_fallback_backend(), Backend::Cpu);
+    }
+
+    // Without any optimized-CPU metric, the GPU-less fallback stays
+    // cubecl-cpu so `Auto` still resolves to a runnable backend.
+    #[cfg(not(any(
+        feature = "cpu-ssim2",
+        feature = "cpu-cvvdp",
+        feature = "cpu-iwssim",
+        feature = "cpu-zensim",
+        feature = "cpu-dssim",
+        feature = "cpu-butter"
+    )))]
+    #[test]
+    fn cpu_fallback_is_cubecl_cpu_without_optimized_metric() {
+        assert_eq!(cpu_fallback_backend(), Backend::CubeclCpu);
     }
 }
