@@ -672,6 +672,10 @@ fn backend_label(b: zenmetrics_api::Backend) -> &'static str {
         // to `CubeclCpu`; the CLI's `GpuRuntime::Cpu` still maps onto it
         // and keeps the historical "cpu" label.
         zenmetrics_api::Backend::CubeclCpu => "cpu",
+        // The fast native-CPU backend (task #159 phase 2: fast-ssim2 / zensim /
+        // butteraugli / dssim / in-tree cvvdp+iwssim). Distinct label so error
+        // and status lines don't conflate it with the slow cubecl-cpu path.
+        zenmetrics_api::Backend::Cpu => "cpu-native",
     }
 }
 
