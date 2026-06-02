@@ -729,7 +729,10 @@ impl ZensimOpaque {
     /// [`PixelSlice`] distortion (zensim-specific). See
     /// [`Self::compute_features_with_reference_srgb_u8`] for semantics.
     #[cfg(feature = "pixels")]
-    pub fn compute_features_with_reference_pixels(&mut self, d: PixelSlice<'_>) -> Result<Vec<f64>> {
+    pub fn compute_features_with_reference_pixels(
+        &mut self,
+        d: PixelSlice<'_>,
+    ) -> Result<Vec<f64>> {
         let (w, h) = self.inner.dims();
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_with_reference_vec(&dis_buf)

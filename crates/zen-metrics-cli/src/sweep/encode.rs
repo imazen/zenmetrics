@@ -125,7 +125,12 @@ pub struct EncodedCell {
 // encoder quietly drops the unknown key and emits the YCbCr default writes
 // thousands of mislabelled rows into the training parquet that look correct.
 // When you add a `knobs.get("foo")` to an `encode_*`, add `"foo"` here.
-const PNG_KNOBS: &[&str] = &["compression", "near_lossless_bits", "parallel", "max_threads"];
+const PNG_KNOBS: &[&str] = &[
+    "compression",
+    "near_lossless_bits",
+    "parallel",
+    "max_threads",
+];
 const JPEG_KNOBS: &[&str] = &[
     // public builders
     "subsampling",
@@ -162,7 +167,13 @@ const WEBP_KNOBS: &[&str] = &[
     "smooth_segment_map",
     "sharp_yuv",
 ];
-const AVIF_KNOBS: &[&str] = &["speed", "lossless", "partition_range", "lrf", "fast_deblock"];
+const AVIF_KNOBS: &[&str] = &[
+    "speed",
+    "lossless",
+    "partition_range",
+    "lrf",
+    "fast_deblock",
+];
 const JXL_KNOBS: &[&str] = &[
     "distance",
     "noise",

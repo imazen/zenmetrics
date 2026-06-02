@@ -131,7 +131,9 @@ fn compute_with_reference_before_set_returns_error() {
     let dis_buf = make_image(w, h, 7);
 
     let mut z = ZensimOpaque::new(BACKEND_E, w, h, ZensimParams::new()).expect("opaque new");
-    let err = z.compute_features_with_reference_srgb_u8(&dis_buf).unwrap_err();
+    let err = z
+        .compute_features_with_reference_srgb_u8(&dis_buf)
+        .unwrap_err();
     match err {
         Error::NoCachedReference => {}
         other => panic!("expected NoCachedReference, got {:?}", other),

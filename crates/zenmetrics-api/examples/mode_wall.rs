@@ -340,9 +340,7 @@ fn time_warm_umbrella(
     for i in 0..reps {
         let d = synth_srgb(w, h, 0x0B22_0100u32.wrapping_add(i as u32 * 13 + 1));
         let t = Instant::now();
-        let s = m
-            .compute_with_reference_srgb_u8(&d)
-            .expect("cached score");
+        let s = m.compute_with_reference_srgb_u8(&d).expect("cached score");
         cubecl::future::block_on(client.sync()).expect("sync");
         times.push(t.elapsed().as_secs_f64() * 1e3);
         score = s.value;

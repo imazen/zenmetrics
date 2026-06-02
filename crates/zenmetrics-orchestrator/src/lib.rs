@@ -741,7 +741,10 @@ mod systime_opt {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub(crate) fn serialize<S: Serializer>(t: &Option<SystemTime>, s: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(
+        t: &Option<SystemTime>,
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
         match t {
             Some(t) => {
                 let secs = t
@@ -754,7 +757,9 @@ mod systime_opt {
         }
     }
 
-    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<SystemTime>, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Option<SystemTime>, D::Error> {
         let opt = Option::<u64>::deserialize(d)?;
         Ok(opt.map(|s| UNIX_EPOCH + Duration::from_secs(s)))
     }
