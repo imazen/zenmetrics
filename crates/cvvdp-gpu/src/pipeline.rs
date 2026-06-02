@@ -2566,10 +2566,10 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`RefFullState`] buffers — which survive intervening
     /// dispatches because the shared scratch (which gets clobbered)
     /// isn't where strip-mode's cached state lives. So strip-mode
-    /// `has_warm_reference()` stays `true` as long as
+    /// `has_reference()` stays `true` as long as
     /// [`Self::warm_reference`] was called at least once on this
     /// instance.
-    pub fn has_warm_reference(&self) -> bool {
+    pub fn has_reference(&self) -> bool {
         if self.strip_config.is_some() {
             self.ref_full_state.is_some()
         } else {

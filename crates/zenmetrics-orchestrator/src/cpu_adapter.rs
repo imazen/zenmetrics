@@ -660,7 +660,7 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-iwssim")]
             CpuAdapterState::Iwssim(c) => {
-                if !c.has_warm_reference() {
+                if !c.has_reference() {
                     return Err(CpuAdapterError::Failed(
                         "iwssim: no cached reference; call set_reference first".into(),
                     ));
@@ -893,7 +893,7 @@ impl CpuAdapter {
             }
             #[cfg(feature = "cpu-iwssim")]
             CpuAdapterState::Iwssim(c) => {
-                if !c.has_warm_reference() {
+                if !c.has_reference() {
                     return Err(CpuAdapterError::Failed(
                         "iwssim: no cached reference; call set_reference first".into(),
                     ));

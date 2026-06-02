@@ -74,7 +74,10 @@
 pub mod kernels;
 pub mod memory_mode;
 pub(crate) mod opaque;
-pub(crate) mod pipeline;
+// `pipeline` is reached by-path from this crate's own `strip_memory_demo`
+// example — `#[doc(hidden)]`, like `session`. Not a supported per-crate API.
+#[doc(hidden)]
+pub mod pipeline;
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]`, gated `cubecl-types`. Not a supported
 // per-crate API.

@@ -534,9 +534,9 @@ macro_rules! impl_session_scoring_surface {
             }
 
             /// Score a distorted candidate against the cached reference.
-            /// See [`crate::Metric::compute_with_cached_reference_srgb_u8`].
+            /// See [`crate::Metric::compute_with_reference_srgb_u8`].
             pub fn score_with_warm_ref(&mut self, d: &[u8]) -> Result<crate::Score> {
-                self.scorer.compute_with_cached_reference_srgb_u8(d)
+                self.scorer.compute_with_reference_srgb_u8(d)
             }
 
             /// Drop cached reference state. See
@@ -546,9 +546,9 @@ macro_rules! impl_session_scoring_surface {
             }
 
             /// Returns `true` if a cached reference is currently valid.
-            /// See [`crate::Metric::has_cached_reference`].
-            pub fn has_cached_reference(&self) -> bool {
-                self.scorer.has_cached_reference()
+            /// See [`crate::Metric::has_reference`].
+            pub fn has_reference(&self) -> bool {
+                self.scorer.has_reference()
             }
 
             /// Score one reference / distorted pair from

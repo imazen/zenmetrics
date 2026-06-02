@@ -232,7 +232,7 @@ pub struct Ssim2<R: Runtime> {
     ///   - map_type: 0=ssim, 1=artifact, 2=detail
     sums: cubecl::server::Handle,
 
-    has_cached_reference: bool,
+    has_reference: bool,
 
     /// Whether the cached reference's blur outputs are in untransposed
     /// orientation (IIR fast path, default) or transposed orientation
@@ -379,7 +379,7 @@ impl<R: Runtime> Ssim2<R> {
             scales,
             partials,
             sums,
-            has_cached_reference: false,
+            has_reference: false,
             cached_ref_is_untransposed: true,
             strip: None,
             strip_cached_ref: None,
@@ -486,7 +486,7 @@ impl<R: Runtime> Ssim2<R> {
             scales,
             partials,
             sums,
-            has_cached_reference: false,
+            has_reference: false,
             cached_ref_is_untransposed: true,
             strip: Some(StripMeta {
                 image_w,
@@ -548,7 +548,7 @@ impl<R: Runtime> Ssim2<R> {
     #[cfg(feature = "fir")]
     pub fn set_blur(&mut self, blur: Ssim2Blur) {
         if blur != self.blur {
-            self.has_cached_reference = false;
+            self.has_reference = false;
         }
         self.blur = blur;
     }
@@ -798,7 +798,7 @@ impl<R: Runtime> Ssim2<R> {
     /// let mut s = Ssim2::<WgpuRuntime>::new(client, 256, 256)?;
     /// let r = vec![0_u8; 256 * 256 * 3];
     /// s.set_reference(&r)?;
-    /// assert!(s.has_cached_reference());
+    /// assert!(s.has_reference());
     /// # Ok::<(), ssim2_gpu::Error>(())
     /// ```
     pub fn set_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
@@ -827,7 +827,7 @@ impl<R: Runtime> Ssim2<R> {
             self.run_transpose_raw_xyb_pair(s, true, false);
         }
         self.cached_ref_is_untransposed = blur_untransposed;
-        self.has_cached_reference = true;
+        self.has_reference = true;
         Ok(())
     }
 
@@ -1076,13 +1076,13 @@ impl<R: Runtime> Ssim2<R> {
             // when building scale s).
         }
 
-        self.has_cached_reference = true;
+        self.has_reference = true;
         Ok(())
     }
 
     /// Drop any cached reference state.
     pub fn clear_reference(&mut self) {
-        self.has_cached_reference = false;
+        self.has_reference = false;
         // For strip mode, also release the cached ref buffers. For
         // whole-image mode the per-scale buffers stay live (they're
         // pre-allocated as part of the instance) and just the flag
@@ -1090,8 +1090,8 @@ impl<R: Runtime> Ssim2<R> {
         self.strip_cached_ref = None;
     }
 
-    pub fn has_cached_reference(&self) -> bool {
-        self.has_cached_reference
+    pub fn has_reference(&self) -> bool {
+        self.has_reference
     }
 
     /// Compute against the cached reference. Returns
@@ -1131,7 +1131,7 @@ impl<R: Runtime> Ssim2<R> {
         if self.strip.is_some() {
             return self.compute_with_reference_strip_with_mode(mode, dist_srgb);
         }
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
@@ -1185,7 +1185,7 @@ impl<R: Runtime> Ssim2<R> {
         mode: Ssim2Mode,
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
-        if !self.has_cached_reference || self.strip_cached_ref.is_none() {
+        if !self.has_reference || self.strip_cached_ref.is_none() {
             return Err(Error::NoCachedReference);
         }
         let meta = self.strip.expect("strip-mode required");

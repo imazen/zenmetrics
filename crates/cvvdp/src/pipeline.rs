@@ -2138,7 +2138,7 @@ impl Cvvdp {
     }
 
     /// Whether a warm reference is currently cached.
-    pub fn has_warm_reference(&self) -> bool {
+    pub fn has_reference(&self) -> bool {
         self.warm_active
     }
 

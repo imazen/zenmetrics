@@ -86,7 +86,7 @@ trait ButteraugliInner: Send {
     /// it for strip instances).
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8], params: &ButteraugliParams) -> Result<()>;
     /// Score one candidate against the cached reference.
-    fn compute_with_cached_reference_srgb_u8(
+    fn compute_with_reference_srgb_u8(
         &mut self,
         dis_rgb: &[u8],
         params: &ButteraugliParams,
@@ -94,7 +94,7 @@ trait ButteraugliInner: Send {
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
-    fn has_cached_reference(&self) -> bool;
+    fn has_reference(&self) -> bool;
     /// True iff the underlying instance was constructed in strip mode
     /// (`new_strip` / `new_multires_strip` / Auto-resolved-to-Strip).
     /// The opaque wrapper uses this to drive the buffer-replay
@@ -174,7 +174,7 @@ where
         Butteraugli::set_reference_with_options(self, ref_rgb, params)
     }
 
-    fn compute_with_cached_reference_srgb_u8(
+    fn compute_with_reference_srgb_u8(
         &mut self,
         dis_rgb: &[u8],
         _params: &ButteraugliParams,
@@ -191,8 +191,8 @@ where
         Butteraugli::clear_reference(self)
     }
 
-    fn has_cached_reference(&self) -> bool {
-        Butteraugli::has_cached_reference(self)
+    fn has_reference(&self) -> bool {
+        Butteraugli::has_reference(self)
     }
 
     fn is_strip_mode(&self) -> bool {
@@ -212,7 +212,7 @@ pub struct ButteraugliOpaque {
     /// instances do; instead this wrapper holds an owned copy of the
     /// reference bytes after `set_reference_srgb_u8` and replays the
     /// pair-strip compute on `(held_ref, dist)` in
-    /// `compute_with_cached_reference_srgb_u8`. Because that is exactly
+    /// `compute_with_reference_srgb_u8`. Because that is exactly
     /// the one-shot `compute_srgb_u8(ref, dist)` with the reference
     /// held, the cached-ref score is **identical** to the one-shot
     /// score — no parity / score-shift risk. `None` until
@@ -440,7 +440,7 @@ impl ButteraugliOpaque {
     }
 
     /// Cache the reference image so subsequent
-    /// [`Self::compute_with_cached_reference_srgb_u8`] calls can score
+    /// [`Self::compute_with_reference_srgb_u8`] calls can score
     /// many distorted candidates against the same reference.
     ///
     /// - **Whole-image instances** cache the reference's opsin / blur /
@@ -488,7 +488,7 @@ impl ButteraugliOpaque {
     /// For strip-mode instances this replays the pair-strip compute on
     /// the held reference and `dis_rgb` (task #160), producing a score
     /// **identical** to the one-shot `compute_srgb_u8` path.
-    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         if self.inner.is_strip_mode() {
             // Replay the pair-strip compute on the held reference. We
             // clone the held buffer out of `self` so the `&mut self`
@@ -503,7 +503,7 @@ impl ButteraugliOpaque {
             return self.inner.compute_srgb_u8(&held, dis_rgb, &self.params);
         }
         self.inner
-            .compute_with_cached_reference_srgb_u8(dis_rgb, &self.params)
+            .compute_with_reference_srgb_u8(dis_rgb, &self.params)
     }
 
     /// Drop cached reference state (both the strip-mode held buffer and
@@ -514,11 +514,11 @@ impl ButteraugliOpaque {
     }
 
     /// `true` if a reference has been cached.
-    pub fn has_cached_reference(&self) -> bool {
+    pub fn has_reference(&self) -> bool {
         if self.inner.is_strip_mode() {
             return self.cached_ref_strip.is_some();
         }
-        self.inner.has_cached_reference()
+        self.inner.has_reference()
     }
 }
 

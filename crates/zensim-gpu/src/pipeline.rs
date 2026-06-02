@@ -344,7 +344,7 @@ pub struct Zensim<R: Runtime> {
     finals_f64: cubecl::server::Handle,
     finals_max: cubecl::server::Handle,
 
-    has_cached_reference: bool,
+    has_reference: bool,
 
     // ───────── Diffmap + linear-planes API (Phase 1) ─────────
     /// Lazy CPU diffmap state. Allocated on first call to a diffmap or
@@ -783,7 +783,7 @@ impl<R: Runtime> Zensim<R> {
             partials_max_len: partials_max_total,
             finals_f64,
             finals_max,
-            has_cached_reference: false,
+            has_reference: false,
             diffmap_state: None,
             regime,
             persist_planes_ref,
@@ -931,11 +931,11 @@ impl<R: Runtime> Zensim<R> {
             // here so the strip walker takes the device-cache code path.
             self.cached_ref_strip_srgb.clear();
             self.build_full_ref_xyb_pyramid(ref_srgb)?;
-            self.has_cached_reference = true;
+            self.has_reference = true;
         } else {
             self.upload_u8(true, ref_srgb);
             self.run_xyb_pyramid(true);
-            self.has_cached_reference = true;
+            self.has_reference = true;
         }
 
         // Mirror the reference into the diffmap state's warm cache so
@@ -964,13 +964,13 @@ impl<R: Runtime> Zensim<R> {
         // the lazy rewarm in `score_with_warm_ref_diffmap` keeps the
         // scalar-only fast path free of the GPU diffmap cost.)
         if let Some(g) = self.gpu_diffmap_scratch.as_mut() {
-            g.inner.has_cached_reference = false;
+            g.inner.has_reference = false;
         }
         Ok(())
     }
 
     pub fn clear_reference(&mut self) {
-        self.has_cached_reference = false;
+        self.has_reference = false;
         self.cached_ref_strip_srgb.clear();
         // Drop device-cached ref XYB planes — handles get refcount-
         // decremented; cubecl's memory pool reclaims when the last
@@ -982,7 +982,7 @@ impl<R: Runtime> Zensim<R> {
             state.warm_ref = None;
         }
         if let Some(g) = self.gpu_diffmap_scratch.as_mut() {
-            g.inner.has_cached_reference = false;
+            g.inner.has_reference = false;
         }
     }
 
@@ -1007,11 +1007,11 @@ impl<R: Runtime> Zensim<R> {
             self.ref_full_xyb = None;
             self.cached_ref_strip_srgb.clear();
             self.cached_ref_strip_srgb.extend_from_slice(ref_srgb);
-            self.has_cached_reference = true;
+            self.has_reference = true;
         } else {
             self.upload_u8(true, ref_srgb);
             self.run_xyb_pyramid(true);
-            self.has_cached_reference = true;
+            self.has_reference = true;
         }
 
         // Mirror to diffmap state (same as set_reference).
@@ -1034,8 +1034,8 @@ impl<R: Runtime> Zensim<R> {
         Ok(())
     }
 
-    pub fn has_cached_reference(&self) -> bool {
-        self.has_cached_reference
+    pub fn has_reference(&self) -> bool {
+        self.has_reference
     }
 
     /// Compute the 228-feature vector for one distorted image against
@@ -1052,7 +1052,7 @@ impl<R: Runtime> Zensim<R> {
     /// [`Error::NoCachedReference`] if [`Zensim::set_reference`] hasn't
     /// been called.
     pub fn compute_with_reference_vec(&mut self, dist_srgb: &[u8]) -> Result<Vec<f64>> {
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
@@ -2405,7 +2405,7 @@ impl<R: Runtime> Zensim<R> {
         let gpu_ref_warmed = self
             .gpu_diffmap_scratch
             .as_ref()
-            .map(|s| s.inner.has_cached_reference)
+            .map(|s| s.inner.has_reference)
             .unwrap_or(false);
         if !gpu_ref_warmed {
             let rp = {
@@ -2678,7 +2678,7 @@ impl<R: Runtime> Zensim<R> {
         let gpu_ref_warmed = self
             .gpu_diffmap_scratch
             .as_ref()
-            .map(|s| s.inner.has_cached_reference)
+            .map(|s| s.inner.has_reference)
             .unwrap_or(false);
         if !gpu_ref_warmed {
             return Err(Error::NoCachedReference);
@@ -3150,7 +3150,7 @@ impl<R: Runtime> Zensim<R> {
             scratch
                 .inner
                 .run_xyb_pyramid_linear(true, rp[0], rp[1], rp[2]);
-            scratch.inner.has_cached_reference = true;
+            scratch.inner.has_reference = true;
             // CPU reference for the score path.
             let pre = match scratch.cpu_scorer.precompute_reference_linear_planar(
                 [rp[0], rp[1], rp[2]],
@@ -3165,7 +3165,7 @@ impl<R: Runtime> Zensim<R> {
                 }
             };
             scratch.cpu_ref = Some(pre);
-        } else if !scratch.inner.has_cached_reference || scratch.cpu_ref.is_none() {
+        } else if !scratch.inner.has_reference || scratch.cpu_ref.is_none() {
             self.gpu_diffmap_scratch = Some(scratch);
             return Err(Error::NoCachedReference);
         }
@@ -3236,7 +3236,7 @@ impl<R: Runtime> Zensim<R> {
         let (w, h) = (self.width as usize, self.height as usize);
         let mut scratch = self.gpu_diffmap_scratch.take().expect("ensured");
         scratch.inner.run_xyb_pyramid_linear(true, r, g, b);
-        scratch.inner.has_cached_reference = true;
+        scratch.inner.has_reference = true;
         let pre = match scratch
             .cpu_scorer
             .precompute_reference_linear_planar([r, g, b], w, h, w)

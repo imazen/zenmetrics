@@ -27,7 +27,7 @@
 //!      `Metric::new_with_memory_mode`.
 //!   2. Run ONE `compute_srgb_u8(ref, dist)` — "one-shot" footprint.
 //!   3. `set_reference_srgb_u8(ref)` — caches ref-side state.
-//!   4. `compute_with_cached_reference_srgb_u8(dist)` twice — steady
+//!   4. `compute_with_reference_srgb_u8(dist)` twice — steady
 //!      per-dist working set.
 //!
 //! The driver records the *peak* `nvidia-smi memory.used` delta
@@ -237,10 +237,10 @@ fn run_child(metric_tag: &str, regime: &str, w: u32, h: u32) {
 
     if cached_ok {
         println!("CHILD_PHASE cached_dist_1");
-        let _ = metric.compute_with_cached_reference_srgb_u8(&dist_buf);
+        let _ = metric.compute_with_reference_srgb_u8(&dist_buf);
         println!("CHILD_PHASE cached_dist_2");
         let dist2 = make_image(0xDEAD_BEEF, w, h);
-        let _ = metric.compute_with_cached_reference_srgb_u8(&dist2);
+        let _ = metric.compute_with_reference_srgb_u8(&dist2);
     }
 
     let host_rss_kib_final = proc_self_vmrss_kib().unwrap_or(0);

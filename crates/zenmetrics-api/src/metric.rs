@@ -965,7 +965,7 @@ impl Metric {
     // For RD-search workloads where the same reference is scored
     // against many distortions, set_reference_srgb_u8 uploads the
     // ref once and pre-computes ref-side state. Subsequent
-    // compute_with_cached_reference_srgb_u8 calls skip the
+    // compute_with_reference_srgb_u8 calls skip the
     // ref-side pyramid build / blur cascade / IW weight maps.
     //
     // butter / ssim2 / dssim opaque shims don't yet expose the
@@ -977,7 +977,7 @@ impl Metric {
     // -----------------------------------------------------------
 
     /// Cache the reference image's metric-side state on device.
-    /// Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
+    /// Subsequent [`Self::compute_with_reference_srgb_u8`]
     /// calls skip the reference's per-call upload + ref-side
     /// pre-processing.
     ///
@@ -1016,7 +1016,7 @@ impl Metric {
                 Ok(())
             }
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m.warm_reference_srgb(r).map_err(|e| Error::Metric {
+            Metric::Cvvdp(m) => m.set_reference_srgb_u8(r).map_err(|e| Error::Metric {
                 kind: "cvvdp",
                 message: e.to_string(),
             }),
@@ -1050,12 +1050,12 @@ impl Metric {
 
     /// Score a distorted candidate against the cached reference.
     /// Pre-requisite: [`Self::set_reference_srgb_u8`] must have
-    /// been called (or [`Self::has_cached_reference`] returns true).
+    /// been called (or [`Self::has_reference`] returns true).
     ///
     /// # Errors
     ///
     /// - Per-crate `NoCachedReference` when no reference is cached.
-    pub fn compute_with_cached_reference_srgb_u8(&mut self, d: &[u8]) -> Result<Score> {
+    pub fn compute_with_reference_srgb_u8(&mut self, d: &[u8]) -> Result<Score> {
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1078,7 +1078,7 @@ impl Metric {
             }
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(m) => m
-                .compute_with_warm_ref_srgb(d, None)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score)
                 .map_err(|e| Error::Metric {
                     kind: "cvvdp",
@@ -1086,7 +1086,7 @@ impl Metric {
                 }),
             #[cfg(feature = "zensim")]
             Metric::Zensim(m) => m
-                .compute_with_cached_reference_score_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score_zensim)
                 .map_err(|e| Error::Metric {
                     kind: "zensim",
@@ -1094,7 +1094,7 @@ impl Metric {
                 }),
             #[cfg(feature = "iwssim")]
             Metric::Iwssim(m) => m
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score_iwssim)
                 .map_err(|e| Error::Metric {
                     kind: "iwssim",
@@ -1102,7 +1102,7 @@ impl Metric {
                 }),
             #[cfg(feature = "butter")]
             Metric::Butter(m) => m
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score_butter)
                 .map_err(|e| Error::Metric {
                     kind: "butter",
@@ -1110,7 +1110,7 @@ impl Metric {
                 }),
             #[cfg(feature = "ssim2")]
             Metric::Ssim2(m) => m
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score_ssim2)
                 .map_err(|e| Error::Metric {
                     kind: "ssim2",
@@ -1118,7 +1118,7 @@ impl Metric {
                 }),
             #[cfg(feature = "dssim")]
             Metric::Dssim(m) => m
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .map(convert_score_dssim)
                 .map_err(|e| Error::Metric {
                     kind: "dssim",
@@ -1143,7 +1143,7 @@ impl Metric {
             Metric::Cpu(_, cached_ref) => {
                 *cached_ref = None;
             }
-            // cvvdp's warm_reference_srgb overwrites prior state — no
+            // cvvdp's set_reference_srgb_u8 overwrites prior state — no
             // explicit clear API on opaque (see pipeline.rs:4234).
             #[cfg(feature = "cvvdp")]
             Metric::Cvvdp(_) => {}
@@ -1169,8 +1169,8 @@ impl Metric {
     /// accessor (Phase 2C). The umbrella treats `false`
     /// conservatively: callers that branch on this should also
     /// handle the `NoCachedReference` error from
-    /// [`Self::compute_with_cached_reference_srgb_u8`].
-    pub fn has_cached_reference(&self) -> bool {
+    /// [`Self::compute_with_reference_srgb_u8`].
+    pub fn has_reference(&self) -> bool {
         match self {
             #[cfg(any(
                 feature = "cpu-ssim2",
@@ -1182,21 +1182,21 @@ impl Metric {
             ))]
             Metric::Cpu(_, cached_ref) => cached_ref.is_some(),
             #[cfg(feature = "iwssim")]
-            Metric::Iwssim(m) => m.has_cached_reference(),
+            Metric::Iwssim(m) => m.has_reference(),
             #[cfg(feature = "butter")]
-            Metric::Butter(m) => m.has_cached_reference(),
+            Metric::Butter(m) => m.has_reference(),
             #[cfg(feature = "ssim2")]
-            Metric::Ssim2(m) => m.has_cached_reference(),
+            Metric::Ssim2(m) => m.has_reference(),
             #[cfg(feature = "dssim")]
-            Metric::Dssim(m) => m.has_cached_reference(),
-            // cvvdp gained `has_warm_reference` in task #79 (Mode E).
+            Metric::Dssim(m) => m.has_reference(),
+            // cvvdp gained `has_reference` in task #79 (Mode E).
             // The strip-mode cache survives intervening dispatches
             // because it lives in dedicated buffers; the Full-mode
             // cache invalidates per `Cvvdp::warm_reference`'s
             // contract. Either way the accessor reflects the
             // currently-cached state.
             #[cfg(feature = "cvvdp")]
-            Metric::Cvvdp(m) => m.has_warm_reference(),
+            Metric::Cvvdp(m) => m.has_reference(),
             #[cfg(feature = "zensim")]
             Metric::Zensim(_) => false,
         }
@@ -1521,7 +1521,7 @@ pub fn reclaim_pooled_vram(backend: Backend) {
 /// that includes the per-process context floor (~181 ms) plus the first-kernel
 /// JIT. For more than one pair, hold a [`Metric`] and reuse it
 /// ([`Metric::compute_srgb_u8`], or [`Metric::set_reference_srgb_u8`] +
-/// [`Metric::compute_with_cached_reference_srgb_u8`] to amortize the
+/// [`Metric::compute_with_reference_srgb_u8`] to amortize the
 /// reference-side precompute across many distorted images), or a reusable
 /// [`MetricSession`](crate::MetricSession). See the crate-level perf notes.
 ///
@@ -1668,7 +1668,7 @@ impl Warm {
     /// reference's dimensions).
     pub fn score(&mut self, distorted: PixelSlice<'_>) -> Result<Score> {
         let dist = to_srgb_rgb8(&distorted, self.width, self.height)?;
-        self.metric.compute_with_cached_reference_srgb_u8(&dist)
+        self.metric.compute_with_reference_srgb_u8(&dist)
     }
 
     /// The metric and dims this warm scorer was built for.

@@ -202,9 +202,9 @@ fn clear_reference_drops_cache() {
     let mut d = Dssim::<Backend>::new(make_client!(), 32, 32).unwrap();
     let r = vec![128_u8; 32 * 32 * 3];
     d.set_reference(&r).unwrap();
-    assert!(d.has_cached_reference());
+    assert!(d.has_reference());
     d.clear_reference();
-    assert!(!d.has_cached_reference());
+    assert!(!d.has_reference());
 }
 
 // ───────────────────────── corpus parity ─────────────────────────

@@ -3,10 +3,10 @@
 //! For each metric that wires cached-ref through the umbrella in
 //! Phase 2A (cvvdp, zensim, iwssim), verify that:
 //!
-//! 1. `set_reference_srgb_u8` + `compute_with_cached_reference_srgb_u8`
+//! 1. `set_reference_srgb_u8` + `compute_with_reference_srgb_u8`
 //!    produces the same `Score` as the one-shot
 //!    `compute_srgb_u8(ref, dist)`.
-//! 2. `compute_with_cached_reference_srgb_u8` works against multiple
+//! 2. `compute_with_reference_srgb_u8` works against multiple
 //!    distortions after a single `set_reference_srgb_u8` call (the
 //!    sweep workload shape).
 //! 3. butter / ssim2 / dssim surface a clear "Phase 2B pending"
@@ -76,8 +76,8 @@ fn assert_cached_ref_matches_one_shot(kind: MetricKind, tol: f64) {
         .set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("set_reference_srgb_u8({kind:?}) failed: {e}"));
     let s_cached = m_cached
-        .compute_with_cached_reference_srgb_u8(&d)
-        .unwrap_or_else(|e| panic!("compute_with_cached_reference_srgb_u8({kind:?}) failed: {e}"));
+        .compute_with_reference_srgb_u8(&d)
+        .unwrap_or_else(|e| panic!("compute_with_reference_srgb_u8({kind:?}) failed: {e}"));
 
     assert_eq!(
         s_oneshot.metric_name, s_cached.metric_name,
@@ -139,7 +139,7 @@ fn assert_cached_ref_n_distortions(kind: MetricKind, n: usize, tol: f64) {
     let cached_scores: Vec<f64> = dists
         .iter()
         .map(|d| {
-            m.compute_with_cached_reference_srgb_u8(d)
+            m.compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("cached compute({kind:?}) failed: {e}"))
                 .value
         })
@@ -207,7 +207,7 @@ fn cached_ref_cvvdp_n_distortions() {
 ///
 /// Forces cvvdp into Strip mode via `MemoryMode::Strip { h_body: None }`
 /// (resolves to the crate-default `STRIP_H_BODY_DEFAULT = 512`).
-/// Confirms the umbrella's `has_cached_reference()` returns `true`
+/// Confirms the umbrella's `has_reference()` returns `true`
 /// post-set-reference in strip mode (task #79 acceptance gate #6).
 #[cfg(feature = "cvvdp")]
 #[test]
@@ -232,22 +232,22 @@ fn cached_ref_cvvdp_strip_n_distortions() {
     )
     .unwrap_or_else(|e| panic!("strip Metric::new_with_memory_mode failed: {e}"));
 
-    // Acceptance gate #6: has_cached_reference must return true after
+    // Acceptance gate #6: has_reference must return true after
     // set_reference in strip mode (pre-task-#79 cvvdp hard-coded false).
-    assert!(!m_strip.has_cached_reference(), "fresh: should be false");
+    assert!(!m_strip.has_reference(), "fresh: should be false");
     m_strip
         .set_reference_srgb_u8(&r)
         .unwrap_or_else(|e| panic!("strip set_reference_srgb_u8 failed: {e}"));
     assert!(
-        m_strip.has_cached_reference(),
-        "cvvdp strip set_reference_srgb_u8 should flip has_cached_reference to true"
+        m_strip.has_reference(),
+        "cvvdp strip set_reference_srgb_u8 should flip has_reference to true"
     );
 
     let strip_scores: Vec<f64> = dists
         .iter()
         .map(|d| {
             m_strip
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("strip compute failed: {e}"))
                 .value
         })
@@ -269,7 +269,7 @@ fn cached_ref_cvvdp_strip_n_distortions() {
         .iter()
         .map(|d| {
             m_full
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("full compute failed: {e}"))
                 .value
         })
@@ -343,7 +343,7 @@ fn cached_ref_zensim_strip_n_distortions() {
         .iter()
         .map(|d| {
             m_strip
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("strip compute failed: {e}"))
                 .value
         })
@@ -365,7 +365,7 @@ fn cached_ref_zensim_strip_n_distortions() {
         .iter()
         .map(|d| {
             m_full
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("full compute failed: {e}"))
                 .value
         })
@@ -404,12 +404,12 @@ fn cached_ref_iwssim_n_distortions() {
 fn cached_ref_iwssim_has_cached_reference_roundtrip() {
     let params = MetricParams::default_for(MetricKind::Iwssim);
     let mut m = Metric::new(MetricKind::Iwssim, Backend::Cuda, W, H, params).unwrap();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
     m.set_reference_srgb_u8(&r).unwrap();
-    assert!(m.has_cached_reference());
+    assert!(m.has_reference());
     m.clear_reference();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
 }
 
 #[cfg(feature = "butter")]
@@ -462,12 +462,12 @@ fn cached_ref_butter_has_cached_reference_roundtrip() {
     // whole-image cache sibling — the umbrella roundtrip works
     // through both modes.
     let mut m = Metric::new(MetricKind::Butter, Backend::Cuda, W, H, params).unwrap();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
     m.set_reference_srgb_u8(&r).unwrap();
-    assert!(m.has_cached_reference());
+    assert!(m.has_reference());
     m.clear_reference();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
 }
 
 #[cfg(feature = "ssim2")]
@@ -475,12 +475,12 @@ fn cached_ref_butter_has_cached_reference_roundtrip() {
 fn cached_ref_ssim2_has_cached_reference_roundtrip() {
     let params = MetricParams::default_for(MetricKind::Ssim2);
     let mut m = Metric::new(MetricKind::Ssim2, Backend::Cuda, W, H, params).unwrap();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
     m.set_reference_srgb_u8(&r).unwrap();
-    assert!(m.has_cached_reference());
+    assert!(m.has_reference());
     m.clear_reference();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
 }
 
 #[cfg(feature = "dssim")]
@@ -488,12 +488,12 @@ fn cached_ref_ssim2_has_cached_reference_roundtrip() {
 fn cached_ref_dssim_has_cached_reference_roundtrip() {
     let params = MetricParams::default_for(MetricKind::Dssim);
     let mut m = Metric::new(MetricKind::Dssim, Backend::Cuda, W, H, params).unwrap();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
     let (r, _) = make_pair(7919, 2147483647);
     m.set_reference_srgb_u8(&r).unwrap();
-    assert!(m.has_cached_reference());
+    assert!(m.has_reference());
     m.clear_reference();
-    assert!(!m.has_cached_reference());
+    assert!(!m.has_reference());
 }
 // ─── Mode-E (ref-full + dist-strip cached) tests, task #46 ───
 //
@@ -628,7 +628,7 @@ fn zz_cached_ref_ssim2_strip_n_distortions_24mp() {
     let cached_scores: Vec<f64> = dists
         .iter()
         .map(|d| {
-            m.compute_with_cached_reference_srgb_u8(d)
+            m.compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("strip cached compute failed: {e}"))
                 .value
         })
@@ -729,7 +729,7 @@ fn cached_ref_dssim_strip_n_distortions_24mp() {
         .iter()
         .map(|d| {
             m_strip
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("strip compute failed: {e}"))
                 .value
         })
@@ -752,7 +752,7 @@ fn cached_ref_dssim_strip_n_distortions_24mp() {
         .iter()
         .map(|d| {
             m_full
-                .compute_with_cached_reference_srgb_u8(d)
+                .compute_with_reference_srgb_u8(d)
                 .unwrap_or_else(|e| panic!("full compute failed: {e}"))
                 .value
         })
@@ -822,7 +822,7 @@ fn cached_ref_butter_strip_n_distortions_1mp() {
     let cached: Vec<f64> = dists
         .iter()
         .map(|d| {
-            m.compute_with_cached_reference_srgb_u8(d)
+            m.compute_with_reference_srgb_u8(d)
                 .expect("butter cached compute")
                 .value
         })

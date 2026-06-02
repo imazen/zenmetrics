@@ -210,13 +210,13 @@ fn strip_set_reference_succeeds_mode_e() {
     let r = vec![0u8; 256 * 256 * 3];
     s.set_reference(&r)
         .expect("strip-mode set_reference (mode E)");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
     let d = vec![0u8; 256 * 256 * 3];
     let _ = s
         .compute_with_reference(&d)
         .expect("strip-mode compute_with_reference (mode E)");
     s.clear_reference();
-    assert!(!s.has_cached_reference());
+    assert!(!s.has_reference());
 }
 
 /// Mode E parity at 1024² body=1500: single-strip degenerate case.

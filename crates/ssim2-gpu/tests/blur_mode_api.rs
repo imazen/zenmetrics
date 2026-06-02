@@ -96,7 +96,7 @@ fn ssim2_fir_set_reference_returns_ok() {
     let buf = vec![0_u8; 64 * 64 * 3];
     s.set_reference(&buf)
         .expect("FIR set_reference should succeed");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
 }
 
 #[test]
@@ -107,9 +107,9 @@ fn ssim2_fir_compute_with_reference_returns_ok() {
     // Cache a reference in IIR mode first so we observe the
     // mode-switch cache invalidation.
     s.set_reference(&buf).expect("iir set_reference");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
     s.set_blur(Ssim2Blur::Fir);
-    assert!(!s.has_cached_reference(), "switching modes must invalidate");
+    assert!(!s.has_reference(), "switching modes must invalidate");
     // Re-arm under FIR.
     s.set_reference(&buf).expect("fir set_reference");
     let r = s
@@ -124,13 +124,13 @@ fn ssim2_switching_blur_invalidates_cache() {
     let mut s = Ssim2::<Backend>::new(client, 64, 64).expect("Ssim2::new");
     let buf = vec![0_u8; 64 * 64 * 3];
     s.set_reference(&buf).expect("set_reference iir");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
     // Same-mode set is a no-op for the cache.
     s.set_blur(Ssim2Blur::Iir);
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
     // Switching to a different mode invalidates.
     s.set_blur(Ssim2Blur::Fir);
-    assert!(!s.has_cached_reference());
+    assert!(!s.has_reference());
 }
 
 #[test]

@@ -187,7 +187,7 @@ pub struct Butteraugli<R: Runtime> {
     ///
     /// In strip mode this flag means `ref_cache_full` is populated and
     /// holds a valid whole-image reference cache.
-    has_cached_reference: bool,
+    has_reference: bool,
 
     /// Active comparison parameters. Overwritten by
     /// `compute_with_options` and `set_reference_with_options`; the
@@ -406,7 +406,7 @@ impl<R: Runtime> Butteraugli<R> {
             temp2,
             half_res: None,
             ref_cache_full: None,
-            has_cached_reference: false,
+            has_reference: false,
             // T_x.O (2026-05-17): pack_scratch is gone — packing now
             // writes directly into the pinned staging buffer reserved
             // each upload, saving one host-side R/W roundtrip per call.
@@ -881,12 +881,12 @@ impl<R: Runtime> Butteraugli<R> {
         self.apply_opsin(true);
         self.separate_frequencies(true);
         self.compute_mask_pipeline_reference_only();
-        self.has_cached_reference = true;
+        self.has_reference = true;
         if let Some(half) = self.half_res.as_mut() {
             half.apply_opsin(true);
             half.separate_frequencies(true);
             half.compute_mask_pipeline_reference_only();
-            half.has_cached_reference = true;
+            half.has_reference = true;
         }
         Ok(())
     }
@@ -930,7 +930,7 @@ impl<R: Runtime> Butteraugli<R> {
             .as_mut()
             .expect("ref_cache_full just allocated");
         cache.set_reference_with_options(ref_srgb, params)?;
-        self.has_cached_reference = true;
+        self.has_reference = true;
         Ok(())
     }
 
@@ -941,9 +941,9 @@ impl<R: Runtime> Butteraugli<R> {
     /// `set_reference` reuses the buffers. Drop the whole instance to
     /// free the cache buffers.
     pub fn clear_reference(&mut self) {
-        self.has_cached_reference = false;
+        self.has_reference = false;
         if let Some(half) = self.half_res.as_mut() {
-            half.has_cached_reference = false;
+            half.has_reference = false;
         }
         if let Some(cache) = self.ref_cache_full.as_mut() {
             cache.clear_reference();
@@ -1028,12 +1028,12 @@ impl<R: Runtime> Butteraugli<R> {
         self.apply_opsin(true);
         self.separate_frequencies(true);
         self.compute_mask_pipeline_reference_only();
-        self.has_cached_reference = true;
+        self.has_reference = true;
         if let Some(half) = self.half_res.as_mut() {
             half.apply_opsin(true);
             half.separate_frequencies(true);
             half.compute_mask_pipeline_reference_only();
-            half.has_cached_reference = true;
+            half.has_reference = true;
         }
         Ok(())
     }
@@ -1095,7 +1095,7 @@ impl<R: Runtime> Butteraugli<R> {
         dist_g: cubecl::server::Handle,
         dist_b: cubecl::server::Handle,
     ) -> Result<GpuButteraugliResult> {
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         // Replace the distorted-side linear-RGB plane handles. The
@@ -1120,7 +1120,7 @@ impl<R: Runtime> Butteraugli<R> {
             // Mode E (strip-mode instance with cached ref).
             return self.compute_with_reference_strip_mode(dist_srgb);
         }
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         self.check_dims(dist_srgb)?;
@@ -1142,7 +1142,7 @@ impl<R: Runtime> Butteraugli<R> {
         &mut self,
         dist_srgb: &[u8],
     ) -> Result<GpuButteraugliResult> {
-        if !self.has_cached_reference || self.ref_cache_full.is_none() {
+        if !self.has_reference || self.ref_cache_full.is_none() {
             return Err(Error::NoCachedReference);
         }
         let expected = (self.width as usize) * (self.image_h as usize) * 3;
@@ -2410,8 +2410,8 @@ impl<R: Runtime> Butteraugli<R> {
 
     /// True iff [`set_reference`] has been called and the reference-side
     /// state is valid.
-    pub fn has_cached_reference(&self) -> bool {
-        self.has_cached_reference
+    pub fn has_reference(&self) -> bool {
+        self.has_reference
     }
 
     /// The active comparison parameters (last set via

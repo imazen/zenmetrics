@@ -203,3 +203,40 @@ shrink the *count* further is reducing the number of public types
 (which would proportionally drop the 130 auto/derive impls) — e.g.
 folding `ResolvedMode` into `MemoryMode` — but those are real types with
 real consumers, so they stay.
+
+## Cross-metric API alignment (2026-06-01)
+
+The reduction exposed that the six metric `-gpu` crates shared only a
+partial core; the reference-reuse API in particular used three different
+vocabularies (`cached_reference` / `warm_ref` / a zensim mix). Unified on
+one neutral **"reference"** vocabulary. Every `<M>Opaque` now exposes the
+identical core:
+
+| method | signature | all 6? |
+|---|---|---|
+| `new` | `(Backend, w, h, <M>Params) -> Result<Self>` | ✓ |
+| `new_with_memory_mode` | `(Backend, w, h, <M>Params, MemoryMode) -> Result<Self>` | ✓ |
+| `compute_srgb_u8` | `(&mut, ref, dis) -> Result<Score>` | ✓ |
+| `compute_pixels` | `(&mut, PixelSlice, PixelSlice) -> Result<Score>` | ✓ |
+| `dims` | `(&self) -> (u32, u32)` | ✓ |
+| `set_reference_srgb_u8` | `(&mut, ref) -> Result<()>` | ✓ |
+| `compute_with_reference_srgb_u8` | `(&mut, dis) -> Result<Score>` | ✓ |
+| `has_reference` | `(&self) -> bool` | ✓ |
+| `clear_reference` | `(&mut)` | 5/6 (cvvdp omits — its warm cache is overwrite-on-set, no separate clear) |
+
+Renames applied (workspace-wide, callers + tests + umbrella adapters):
+- `has_cached_reference` / `has_warm_reference` → `has_reference`
+- `compute_with_cached_reference_srgb_u8` → `compute_with_reference_srgb_u8`
+- cvvdp `warm_reference_srgb` → `set_reference_srgb_u8`; `compute_with_warm_ref_srgb(dis, None)` → `compute_with_reference_srgb_u8(dis)` (diffmap kept as `compute_with_reference_srgb_u8_with_diffmap`)
+- zensim: `compute_with_cached_reference_score_srgb_u8` → `compute_with_reference_srgb_u8` (Score); the feature-returning `compute_with_reference_srgb_u8 -> Vec<f64>` → `compute_features_with_reference_srgb_u8`; `ZensimInner` extended with `has_reference`/`clear_reference`.
+
+Legitimately **not** uniformized (domain-specific, kept):
+- cvvdp: `*_with_diffmap`, `new_with_geometry*` + `DisplayGeometry`, `*_from_linear_planes`
+- zensim: `compute_features_*` (learned-metric feature output), `*_from_linear_planes`, `ZensimFeatureRegime`
+- batch types (`<M>Batch`), `Gpu<M>Result`, the typed `<M>` pipeline, ssim2 `Ssim2Mode`, iwssim `<M>Config`/`<M>Strategy`, and the strip-mode reference variants (`*_stripped`) — these vary by metric capability.
+
+Also fixed a reduction miss: `zensim_gpu::pipeline` was demoted to
+`pub(crate)` but the crate's own `strip_memory_demo` example reaches it
+by path; restored to `#[doc(hidden)] pub` (own-example consumer, like
+`kernels`). This had been failing the `--all-targets` Compile job since
+the reduction landed.

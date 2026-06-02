@@ -554,7 +554,7 @@ pub(crate) fn run_strip_pipeline_multires<R: Runtime>(
 ///
 /// The constructor invariant: `state` is a strip-mode instance
 /// (`halo_h > 0`) WITHOUT a half-res sibling. `state.ref_cache_full`
-/// MUST be `Some` and have `has_cached_reference == true` (the strip-
+/// MUST be `Some` and have `has_reference == true` (the strip-
 /// mode `set_reference_with_options` populates this).
 ///
 /// Per-strip pipeline:

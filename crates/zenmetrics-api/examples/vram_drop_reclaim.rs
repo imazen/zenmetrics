@@ -306,7 +306,7 @@ fn warm_loop(cfg: &Cfg, n: usize) {
         let t = Instant::now();
         // Same-signature warm score against the cached reference.
         let _ = m
-            .compute_with_cached_reference_srgb_u8(&d)
+            .compute_with_reference_srgb_u8(&d)
             .or_else(|_| m.compute_srgb_u8(&r, &d))
             .expect("warm score");
         walls_us.push(t.elapsed().as_micros());

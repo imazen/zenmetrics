@@ -40,7 +40,7 @@ fn strip_mode_is_strip_mode_reports_true_after_new_strip() {
     .expect("new_strip");
     assert!(cvvdp.is_strip_mode());
     assert_eq!(cvvdp.strip_h_body(), Some(STRIP_H_BODY_DEFAULT));
-    assert!(!cvvdp.has_warm_reference()); // fresh state
+    assert!(!cvvdp.has_reference()); // fresh state
 }
 
 #[test]
@@ -55,16 +55,16 @@ fn full_mode_is_strip_mode_reports_false() {
 fn strip_mode_warm_ref_then_clear_reset_round_trip() {
     let client = Backend::client(&Default::default());
     let mut cvvdp = cvvdp_64x64_strip(&client);
-    assert!(!cvvdp.has_warm_reference());
+    assert!(!cvvdp.has_reference());
 
     let r = synth_pair_ref(64, 64);
     cvvdp.warm_reference(&r).expect("warm_reference");
-    assert!(cvvdp.has_warm_reference());
+    assert!(cvvdp.has_reference());
 
     // Re-arming with a different ref overwrites the prior cache.
     let r2: Vec<u8> = r.iter().map(|b| b.wrapping_add(17)).collect();
     cvvdp.warm_reference(&r2).expect("re-warm");
-    assert!(cvvdp.has_warm_reference());
+    assert!(cvvdp.has_reference());
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn mode_e_survives_intervening_one_shot_dispatch() {
 
     // In strip mode the cached state should still be valid AND
     // produce the same JOD as before.
-    assert!(strip.has_warm_reference());
+    assert!(strip.has_reference());
     let jod_after = strip
         .compute_dkl_jod_with_warm_ref(&d, ppd)
         .expect("warm jod after intervening one-shot");

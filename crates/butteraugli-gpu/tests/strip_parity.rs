@@ -242,8 +242,8 @@ fn strip_set_reference_succeeds_mode_e() {
         .set_reference(&ref_buf)
         .expect("single-res strip mode set_reference (Mode E) must succeed");
     assert!(
-        strip.has_cached_reference(),
-        "has_cached_reference must be true after set_reference"
+        strip.has_reference(),
+        "has_reference must be true after set_reference"
     );
 }
 
@@ -298,7 +298,7 @@ fn strip_set_reference_then_compute_with_reference_mode_e() {
     assert!(r.pnorm_3.is_finite(), "pnorm_3 must be finite");
     // After clear_reference, compute_with_reference should error again.
     strip.clear_reference();
-    assert!(!strip.has_cached_reference());
+    assert!(!strip.has_reference());
     match strip.compute_with_reference(&dis_buf) {
         Err(Error::NoCachedReference) => {}
         other => panic!("expected NoCachedReference after clear_reference, got {other:?}"),

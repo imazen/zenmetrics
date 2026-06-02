@@ -219,7 +219,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
 
     /// Whether the reference cache is populated.
     pub fn has_reference(&self) -> bool {
-        self.inner.has_cached_reference()
+        self.inner.has_reference()
     }
 
     /// Active comparison params (last set via
@@ -282,7 +282,7 @@ impl<R: Runtime> ButteraugliBatch<R> {
             n * bytes_per_image,
             "batch length mismatch"
         );
-        assert!(self.inner.has_cached_reference(), "set_reference first");
+        assert!(self.inner.has_reference(), "set_reference first");
         // Widen each byte into the persistent `pack_scratch` instead of
         // allocating a fresh `Vec<u32>` per upload (WGSL has no u8
         // storage type, so the widening can't be skipped).

@@ -52,7 +52,7 @@ fn main() {
     bu.set_reference(&r).unwrap();
     let s1 = bu.compute_with_reference(&d).unwrap().score;
     bu.clear_reference();
-    assert!(!bu.has_cached_reference());
+    assert!(!bu.has_reference());
     let err = bu.compute_with_reference(&d).unwrap_err();
     assert!(matches!(err, Error::NoCachedReference));
     println!("  cleared, then compute_with_reference → {:?} ✓", err);

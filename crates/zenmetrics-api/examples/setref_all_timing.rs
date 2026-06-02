@@ -37,7 +37,7 @@
 //!   content, the reuse path (the #144 headline). Each phase is ≥`REPS`
 //!   distinct refs, individually timed + synced. ≥3 distinct new-ref phases
 //!   (setref2/3/4) confirm any first-ref penalty is one-off, not per-ref.
-//! - `warm_call` — `compute_with_cached_reference_srgb_u8(dist)` warm score
+//! - `warm_call` — `compute_with_reference_srgb_u8(dist)` warm score
 //!   against the last cached reference, ≥`REPS` reps. Sanity check that the
 //!   warm-call wall is the per-score cost, separate from the per-ref
 //!   precompute. Self-syncs via the host readback inside the call.
@@ -280,7 +280,7 @@ fn main() {
         let d = synth_srgb(w, h, 0x3000_0000u32.wrapping_add(i as u32 * 13 + 1));
         let t = Instant::now();
         let s = m
-            .compute_with_cached_reference_srgb_u8(&d)
+            .compute_with_reference_srgb_u8(&d)
             .expect("warm compute_with_cached_reference");
         cubecl::future::block_on(client.sync()).expect("sync after warm_call");
         warm.push(t.elapsed().as_secs_f64() * 1e3);

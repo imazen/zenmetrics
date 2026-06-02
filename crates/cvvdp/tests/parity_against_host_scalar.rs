@@ -101,7 +101,7 @@ fn warm_ref_matches_cold_path() {
     cv_warm.warm_reference(&r).unwrap();
     let warm_a = cv_warm.score_with_warm_ref(&d_a).unwrap();
     let warm_b = cv_warm.score_with_warm_ref(&d_b).unwrap();
-    assert!(cv_warm.has_warm_reference());
+    assert!(cv_warm.has_reference());
 
     let diff_a = (cold_a - warm_a).abs();
     let diff_b = (cold_b - warm_b).abs();

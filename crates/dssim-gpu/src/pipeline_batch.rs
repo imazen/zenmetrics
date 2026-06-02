@@ -71,8 +71,8 @@ impl<R: Runtime> DssimBatch<R> {
         self.inner.clear_reference()
     }
 
-    pub fn has_cached_reference(&self) -> bool {
-        self.inner.has_cached_reference()
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
     }
 
     /// Score one distorted candidate against the cached reference.
@@ -90,7 +90,7 @@ impl<R: Runtime> DssimBatch<R> {
     /// still launches the full distorted-side pipeline. The savings
     /// come entirely from skipping the reference-side work.
     pub fn compute_batch(&mut self, distorted: &[&[u8]]) -> Result<Vec<GpuDssimResult>> {
-        if !self.inner.has_cached_reference() {
+        if !self.inner.has_reference() {
             return Err(Error::NoCachedReference);
         }
         let mut out = Vec::with_capacity(distorted.len());

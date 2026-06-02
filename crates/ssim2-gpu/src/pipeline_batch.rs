@@ -247,8 +247,8 @@ impl<R: Runtime> Ssim2Batch<R> {
         self.inner.clear_reference();
     }
 
-    pub fn has_cached_reference(&self) -> bool {
-        self.inner.has_cached_reference()
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
     }
 
     /// Score up to `batch_size` distorted images in one batched
@@ -293,7 +293,7 @@ impl<R: Runtime> Ssim2Batch<R> {
         mode: Ssim2Mode,
         dis: &[Vec<u8>],
     ) -> Result<Vec<GpuSsim2Result>> {
-        if !self.inner.has_cached_reference() {
+        if !self.inner.has_reference() {
             return Err(Error::NoCachedReference);
         }
         let n_in = dis.len();

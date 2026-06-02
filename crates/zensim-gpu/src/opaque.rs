@@ -213,6 +213,8 @@ trait ZensimInner: Send {
     /// was never called.
     fn compute_with_reference_vec(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>>;
     fn dims(&self) -> (u32, u32);
+    fn has_reference(&self) -> bool;
+    fn clear_reference(&mut self);
 
     // ─── Phase 1 diffmap + linear-planes entry-points ───
     fn score_with_diffmap(
@@ -294,6 +296,14 @@ where
 
     fn dims(&self) -> (u32, u32) {
         Zensim::dimensions(self)
+    }
+
+    fn has_reference(&self) -> bool {
+        Zensim::has_reference(self)
+    }
+
+    fn clear_reference(&mut self) {
+        Zensim::clear_reference(self)
     }
 
     fn score_with_diffmap(
@@ -666,19 +676,22 @@ impl ZensimOpaque {
         self.inner.set_reference(ref_rgb)
     }
 
-    /// Compute features against the cached reference. Returns
+    /// Compute the raw feature vector against the cached reference
+    /// (zensim-specific — zensim is a learned metric). Returns
     /// `Vec<f64>` of length `params.regime.total_features()` (228 /
     /// 300 / 372). Returns [`crate::Error::NoCachedReference`] if
-    /// [`Self::set_reference_srgb_u8`] was never called.
-    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
+    /// [`Self::set_reference_srgb_u8`] was never called. For the uniform
+    /// [`Score`], use [`Self::compute_with_reference_srgb_u8`].
+    pub fn compute_features_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
         self.inner.compute_with_reference_vec(dis_rgb)
     }
 
-    /// Cached-reference variant of [`Self::compute_srgb_u8`] — returns
-    /// a uniform [`Score`] (with weights / profile already applied)
-    /// against the cached reference. Pre-requisite:
+    /// Score a DIST candidate against the cached reference — the uniform
+    /// [`Score`] (with weights / profile already applied). Pre-requisite:
     /// [`Self::set_reference_srgb_u8`] (or `set_reference_pixels`)
-    /// must have been called.
+    /// must have been called. Uniform across every `*-gpu` opaque metric;
+    /// for the raw feature vector use
+    /// [`Self::compute_features_with_reference_srgb_u8`].
     ///
     /// Profile-mode only — when [`ZensimParams::profile`] is `None`
     /// the legacy 228-feature linear-weights path is used, which
@@ -688,7 +701,7 @@ impl ZensimOpaque {
     /// — those should use the one-shot [`Self::compute_srgb_u8`]
     /// instead. The umbrella `zenmetrics-api` cached-ref API
     /// dispatches through this method for the profile-mode default.
-    pub fn compute_with_cached_reference_score_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         if self.params.profile.is_some() {
             let features = self.inner.compute_with_reference_vec(dis_rgb)?;
             let (w, h) = self.inner.dims();
@@ -712,14 +725,26 @@ impl ZensimOpaque {
         self.inner.set_reference(&ref_buf)
     }
 
-    /// Compute features against the cached reference from a
-    /// [`PixelSlice`] distortion. See
-    /// [`Self::compute_with_reference_srgb_u8`] for semantics.
+    /// Compute the raw feature vector against the cached reference from a
+    /// [`PixelSlice`] distortion (zensim-specific). See
+    /// [`Self::compute_features_with_reference_srgb_u8`] for semantics.
     #[cfg(feature = "pixels")]
-    pub fn compute_with_reference_pixels(&mut self, d: PixelSlice<'_>) -> Result<Vec<f64>> {
+    pub fn compute_features_with_reference_pixels(&mut self, d: PixelSlice<'_>) -> Result<Vec<f64>> {
         let (w, h) = self.inner.dims();
         let dis_buf = to_srgb_rgb8(&d, w, h)?;
         self.inner.compute_with_reference_vec(&dis_buf)
+    }
+
+    /// `true` if a reference is currently cached (uniform across every
+    /// `*-gpu` opaque metric).
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
+    }
+
+    /// Drop the cached reference state (uniform across every `*-gpu`
+    /// opaque metric).
+    pub fn clear_reference(&mut self) {
+        self.inner.clear_reference()
     }
 
     /// Compute the uniform [`Score`] from packed sRGB. Routes through

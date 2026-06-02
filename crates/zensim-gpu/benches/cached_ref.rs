@@ -1,7 +1,7 @@
 //! Cached-reference vs. pair-mode benchmark for zensim-gpu.
 //!
 //! Compares the throughput of `ZensimOpaque::set_reference_srgb_u8` +
-//! `compute_with_reference_srgb_u8` (cached path) against
+//! `compute_features_with_reference_srgb_u8` (cached path) against
 //! `compute_features_vec_srgb_u8` (pair path) for a sweep workload:
 //! 10 distortions scored against 1 reference. The cached path skips
 //! N-1 ref uploads + N-1 ref-pyramid kernel launches.
@@ -75,7 +75,7 @@ fn bench_pair_mode(c: &mut Criterion) {
             let mut acc: f64 = 0.0;
             for d in &dists {
                 let v = z
-                    .compute_with_reference_srgb_u8(d)
+                    .compute_features_with_reference_srgb_u8(d)
                     .expect("compute_with_reference");
                 acc += v[0];
             }

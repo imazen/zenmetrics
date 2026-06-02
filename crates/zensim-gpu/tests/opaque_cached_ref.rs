@@ -1,11 +1,11 @@
 //! Opaque-API cached-reference tests for `zensim-gpu`.
 //!
-//! Verifies the `set_reference_srgb_u8` + `compute_with_reference_srgb_u8`
+//! Verifies the `set_reference_srgb_u8` + `compute_features_with_reference_srgb_u8`
 //! pair through the opaque shim:
 //!
 //! - Cached result matches the pair-mode result bit-for-bit (same dist).
 //! - Multiple distortions against one cached reference work.
-//! - Error path: calling `compute_with_reference_srgb_u8` before
+//! - Error path: calling `compute_features_with_reference_srgb_u8` before
 //!   `set_reference_srgb_u8` returns `NoCachedReference`.
 //! - Dimension-mismatch errors on the wrong-size buffer.
 //! - Regime is respected on the cached path (Vec length matches).
@@ -59,7 +59,7 @@ fn cached_ref_matches_pair_mode_basic() {
         .set_reference_srgb_u8(&ref_buf)
         .expect("set_reference");
     let cached_v = z_cached
-        .compute_with_reference_srgb_u8(&dis_buf)
+        .compute_features_with_reference_srgb_u8(&dis_buf)
         .expect("compute_with_reference");
     assert_eq!(cached_v.len(), 228);
 
@@ -102,7 +102,7 @@ fn cached_ref_multiple_distortions() {
         .iter()
         .map(|d| {
             z_cached
-                .compute_with_reference_srgb_u8(d)
+                .compute_features_with_reference_srgb_u8(d)
                 .expect("compute_with_reference")
         })
         .collect();
@@ -131,7 +131,7 @@ fn compute_with_reference_before_set_returns_error() {
     let dis_buf = make_image(w, h, 7);
 
     let mut z = ZensimOpaque::new(BACKEND_E, w, h, ZensimParams::new()).expect("opaque new");
-    let err = z.compute_with_reference_srgb_u8(&dis_buf).unwrap_err();
+    let err = z.compute_features_with_reference_srgb_u8(&dis_buf).unwrap_err();
     match err {
         Error::NoCachedReference => {}
         other => panic!("expected NoCachedReference, got {:?}", other),
@@ -169,7 +169,7 @@ fn cached_ref_with_iw_returns_372() {
     .expect("opaque new with_iw");
     z.set_reference_srgb_u8(&ref_buf).expect("set_reference");
     let v = z
-        .compute_with_reference_srgb_u8(&dis_buf)
+        .compute_features_with_reference_srgb_u8(&dis_buf)
         .expect("compute_with_reference");
     assert_eq!(v.len(), 372, "WithIw cached path returns 372 features");
 }
@@ -193,12 +193,12 @@ fn set_reference_overwrites_previous() {
     z.set_reference_srgb_u8(&ref_a).expect("set_reference a");
     // Sanity: cached result with ref_a is different from pair_b
     let cached_a = z
-        .compute_with_reference_srgb_u8(&dis_buf)
+        .compute_features_with_reference_srgb_u8(&dis_buf)
         .expect("compute_with_reference a");
     // Swap to ref_b.
     z.set_reference_srgb_u8(&ref_b).expect("set_reference b");
     let cached_b = z
-        .compute_with_reference_srgb_u8(&dis_buf)
+        .compute_features_with_reference_srgb_u8(&dis_buf)
         .expect("compute_with_reference b");
 
     // cached_b should match pair_b

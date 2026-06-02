@@ -330,7 +330,7 @@ fn strip_mode_set_reference_errors_with_typed_variant() {
     let msg = format!("{err}");
     assert!(msg.contains("strip mode"), "Display message: {msg}");
     // Cached state must not have been flipped.
-    assert!(!iw.has_cached_reference());
+    assert!(!iw.has_reference());
 }
 
 #[test]
@@ -419,7 +419,7 @@ fn whole_image_cached_ref_path_unchanged_by_strip_addition() {
     let client = BackendT::client(&Default::default());
     let mut iw = Iwssim::<BackendT>::new(client, w, h).expect("new");
     iw.set_reference(&r).expect("set_reference");
-    assert!(iw.has_cached_reference());
+    assert!(iw.has_reference());
     let s = iw.compute_with_reference(&d).expect("cwr").score;
     assert!(s.is_finite() && s > 0.0 && s <= 1.0);
     // Compare against the pair-mode score on the same content — they

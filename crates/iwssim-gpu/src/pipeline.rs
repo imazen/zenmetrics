@@ -530,7 +530,7 @@ pub struct Iwssim<R: Runtime> {
     /// `set_reference` populates `scales[s].lp_ref` for every scale
     /// and flips this flag. Subsequent `compute_with_reference` calls
     /// skip the ref-side LP pyramid build.
-    has_cached_reference: bool,
+    has_reference: bool,
 
     /// Strip-mode state. `Some(_)` when the pipeline was built via
     /// [`Iwssim::new_strip`] — `compute_gray_stripped` walks the
@@ -664,7 +664,7 @@ impl<R: Runtime> Iwssim<R> {
             partials,
             sums,
             cov_partials,
-            has_cached_reference: false,
+            has_reference: false,
             strip: None,
             cached_strip_ref: None,
         })
@@ -825,7 +825,7 @@ impl<R: Runtime> Iwssim<R> {
             partials,
             sums,
             cov_partials,
-            has_cached_reference: false,
+            has_reference: false,
             strip: Some(StripState {
                 image_h,
                 h_body,
@@ -843,7 +843,7 @@ impl<R: Runtime> Iwssim<R> {
 
     /// True if [`Self::set_reference_stripped`] has populated the
     /// per-strip cached-reference state. Strip mode only; whole-image
-    /// callers should use [`Self::has_cached_reference`] instead.
+    /// callers should use [`Self::has_reference`] instead.
     pub fn has_cached_reference_stripped(&self) -> bool {
         self.cached_strip_ref.is_some()
     }
@@ -911,15 +911,15 @@ impl<R: Runtime> Iwssim<R> {
     pub fn n_scales(&self) -> usize {
         self.scales.len()
     }
-    pub fn has_cached_reference(&self) -> bool {
-        self.has_cached_reference
+    pub fn has_reference(&self) -> bool {
+        self.has_reference
     }
     /// Drop any cached reference state. `compute_with_reference` will
     /// fail with `NoCachedReference` until a fresh `set_reference` is
     /// run. Also clears any cached strip-mode state (so re-uploading
     /// a new reference is a single call regardless of mode).
     pub fn clear_reference(&mut self) {
-        self.has_cached_reference = false;
+        self.has_reference = false;
         self.cached_strip_ref = None;
     }
 
@@ -962,7 +962,7 @@ impl<R: Runtime> Iwssim<R> {
         // Build only the ref-side pyramid; the dis-side will be built
         // in `compute_with_reference`.
         self.build_laplacian_pyramid(true);
-        self.has_cached_reference = true;
+        self.has_reference = true;
         Ok(())
     }
 
@@ -976,7 +976,7 @@ impl<R: Runtime> Iwssim<R> {
         if self.strip.is_some() {
             return Err(Error::CachedRefNotSupportedInStripMode);
         }
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         let expected = (self.width * self.height) as usize;

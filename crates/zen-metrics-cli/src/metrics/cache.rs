@@ -459,7 +459,7 @@ impl MetricCache {
             }
             if slot.ref_fingerprint == Some(ref_fingerprint) {
                 slot.metric
-                    .compute_with_cached_reference_srgb_u8(&distorted.pixels)
+                    .compute_with_reference_srgb_u8(&distorted.pixels)
             } else {
                 slot.metric
                     .compute_srgb_u8(&reference.pixels, &distorted.pixels)

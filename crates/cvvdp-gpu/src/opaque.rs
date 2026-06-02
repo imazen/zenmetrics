@@ -65,7 +65,7 @@ trait CvvdpInner: Send {
         dis_rgb: &[u8],
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score>;
-    fn has_warm_reference(&self) -> bool;
+    fn has_reference(&self) -> bool;
     fn is_strip_mode(&self) -> bool;
     #[allow(clippy::too_many_arguments)]
     fn compute_from_linear_planes(
@@ -148,8 +148,8 @@ where
         Cvvdp::warm_reference(self, ref_rgb)
     }
 
-    fn has_warm_reference(&self) -> bool {
-        Cvvdp::has_warm_reference(self)
+    fn has_reference(&self) -> bool {
+        Cvvdp::has_reference(self)
     }
 
     fn is_strip_mode(&self) -> bool {
@@ -432,10 +432,12 @@ impl CvvdpOpaque {
             .compute_srgb_u8_with_diffmap(ref_rgb, dis_rgb, diffmap_out)
     }
 
-    /// Warm the REF side for repeated `compute_with_warm_ref_*` calls.
+    /// Cache the REF side for repeated `compute_with_reference_*` calls.
     /// Subsequent scores against the cached REF skip the REF half of
     /// the pipeline. See [`crate::pipeline::Cvvdp::warm_reference`].
-    pub fn warm_reference_srgb(&mut self, ref_rgb: &[u8]) -> Result<()> {
+    ///
+    /// Uniform across every `*-gpu` opaque metric.
+    pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
         self.inner.warm_reference_srgb(ref_rgb)
     }
 
@@ -445,8 +447,8 @@ impl CvvdpOpaque {
     /// dispatching method (see
     /// [`crate::pipeline::Cvvdp::warm_reference`] for the
     /// invalidation contract).
-    pub fn has_warm_reference(&self) -> bool {
-        self.inner.has_warm_reference()
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
     }
 
     /// `true` if this scorer was built with
@@ -457,9 +459,17 @@ impl CvvdpOpaque {
         self.inner.is_strip_mode()
     }
 
-    /// Score a DIST candidate against the warm REF state. Pass
-    /// `Some(&mut Vec<f32>)` to also fill a per-pixel diffmap.
-    pub fn compute_with_warm_ref_srgb(
+    /// Score a DIST candidate against the cached REF state.
+    ///
+    /// Uniform across every `*-gpu` opaque metric. For the diffmap, use
+    /// [`Self::compute_with_reference_srgb_u8_with_diffmap`].
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+        self.inner.compute_with_warm_ref_srgb(dis_rgb, None)
+    }
+
+    /// Score a DIST candidate against the cached REF state, also filling
+    /// a per-pixel diffmap (cvvdp-specific extension).
+    pub fn compute_with_reference_srgb_u8_with_diffmap(
         &mut self,
         dis_rgb: &[u8],
         diffmap_out: Option<&mut Vec<f32>>,
@@ -487,7 +497,9 @@ impl CvvdpOpaque {
             .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, diffmap_out)
     }
 
-    /// Warm the REF side from three planar linear-RGB f32 buffers.
+    /// Cache the REF side from three planar linear-RGB f32 buffers
+    /// (cvvdp/zensim-specific linear-planes extension of
+    /// [`Self::set_reference_srgb_u8`]).
     /// See [`crate::pipeline::Cvvdp::warm_reference_from_linear_planes`].
     pub fn warm_reference_from_linear_planes(
         &mut self,
@@ -499,9 +511,9 @@ impl CvvdpOpaque {
             .warm_reference_from_linear_planes(ref_r, ref_g, ref_b)
     }
 
-    /// Score a DIST candidate (linear-RGB f32 planes) against the warm
+    /// Score a DIST candidate (linear-RGB f32 planes) against the cached
     /// REF state. Pass `Some(&mut Vec<f32>)` to also fill a per-pixel
-    /// diffmap.
+    /// diffmap (cvvdp/zensim-specific linear-planes extension).
     pub fn compute_with_warm_ref_from_linear_planes(
         &mut self,
         dis_r: &[f32],

@@ -77,15 +77,15 @@ trait Ssim2Inner: Send {
     #[cfg(feature = "cubecl-types")]
     fn pack_srgb(&self, srgb: &[u8]) -> Result<cubecl::server::Handle>;
     /// Cache the reference image. Subsequent
-    /// `compute_with_cached_reference_srgb_u8` calls skip the
+    /// `compute_with_reference_srgb_u8` calls skip the
     /// ref-side multi-scale Gaussian + XYB-pyramid build.
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score one distorted candidate against the cached reference.
-    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
+    fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
-    fn has_cached_reference(&self) -> bool;
+    fn has_reference(&self) -> bool;
 }
 
 impl<R> Ssim2Inner for Ssim2<R>
@@ -135,7 +135,7 @@ where
         Ssim2::set_reference(self, ref_rgb)
     }
 
-    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+    fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let r = Ssim2::compute_with_reference(self, dis_rgb)?;
         Ok(Score {
             value: r.score,
@@ -148,8 +148,8 @@ where
         Ssim2::clear_reference(self)
     }
 
-    fn has_cached_reference(&self) -> bool {
-        Ssim2::has_cached_reference(self)
+    fn has_reference(&self) -> bool {
+        Ssim2::has_reference(self)
     }
 }
 
@@ -296,7 +296,7 @@ impl Ssim2Opaque {
     }
 
     /// Cache the reference image's SSIMULACRA2 state on device.
-    /// Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
+    /// Subsequent [`Self::compute_with_reference_srgb_u8`]
     /// calls skip the ref-side multi-scale Gaussian + XYB pyramid
     /// build.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
@@ -306,8 +306,8 @@ impl Ssim2Opaque {
     /// Score a distorted candidate against the cached reference set
     /// by [`Self::set_reference_srgb_u8`]. Returns
     /// [`crate::Error::NoCachedReference`] if no reference is cached.
-    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+        self.inner.compute_with_reference_srgb_u8(dis_rgb)
     }
 
     /// Drop cached reference state.
@@ -316,8 +316,8 @@ impl Ssim2Opaque {
     }
 
     /// `true` if a reference has been cached.
-    pub fn has_cached_reference(&self) -> bool {
-        self.inner.has_cached_reference()
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
     }
 }
 

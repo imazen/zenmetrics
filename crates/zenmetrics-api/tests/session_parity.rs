@@ -125,7 +125,7 @@ fn session_warm_ref_matches_owned_cvvdp() {
         )
         .expect("owned Metric::new(Cvvdp) failed");
         m.set_reference_srgb_u8(&r).expect("owned set_reference");
-        m.compute_with_cached_reference_srgb_u8(&d)
+        m.compute_with_reference_srgb_u8(&d)
             .expect("owned warm score")
     };
 

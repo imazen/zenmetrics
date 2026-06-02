@@ -39,7 +39,7 @@
 //! same value as a recent entry (sliding window of
 //! [`CACHED_REF_WINDOW_SIZE`] = 32 entries), the GPU worker dispatches
 //! through [`zenmetrics_api::Metric::set_reference_srgb_u8`] +
-//! [`zenmetrics_api::Metric::compute_with_cached_reference_srgb_u8`]
+//! [`zenmetrics_api::Metric::compute_with_reference_srgb_u8`]
 //! instead of the regular [`zenmetrics_api::Metric::compute_srgb_u8`].
 //!
 //! Hash: xxhash3_64 (`xxhash_rust::xxh3::xxh3_64`), ~5-15 GB/s on a

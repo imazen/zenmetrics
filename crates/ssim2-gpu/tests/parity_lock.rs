@@ -325,7 +325,7 @@ fn err_dim_mismatch_set_reference() {
     let too_small = vec![0_u8; 16 * 16 * 3 - 1];
     let r = s.set_reference(&too_small);
     assert!(matches!(r, Err(Error::DimensionMismatch { .. })));
-    assert!(!s.has_cached_reference());
+    assert!(!s.has_reference());
 }
 
 #[test]
@@ -385,17 +385,17 @@ fn clear_reference_then_set_again() {
     let client = Backend::client(&Default::default());
     let mut s = Ssim2::<Backend>::new(client, w, h).expect("Ssim2::new");
     s.set_reference(&src_bytes).expect("first set");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
 
     s.clear_reference();
-    assert!(!s.has_cached_reference());
+    assert!(!s.has_reference());
     let dis = load_rgb8(&dir.join("q45.jpg")).0;
     let r = s.compute_with_reference(&dis);
     assert!(matches!(r, Err(Error::NoCachedReference)));
 
     // Re-arm.
     s.set_reference(&src_bytes).expect("second set");
-    assert!(s.has_cached_reference());
+    assert!(s.has_reference());
     let r = s
         .compute_with_reference(&dis)
         .expect("compute after re-set");

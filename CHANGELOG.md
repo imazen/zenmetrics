@@ -95,6 +95,23 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Cross-metric `<M>Opaque` API alignment (internal -gpu crates).** The six
+  metric `-gpu` crates now expose an identical reference-reuse core after the
+  surface reduction exposed three divergent vocabularies (`cached_reference` /
+  `warm_ref` / a zensim mix). Unified on a neutral "reference" vocabulary:
+  every `<M>Opaque` has `set_reference_srgb_u8` / `compute_with_reference_srgb_u8`
+  (→ `Score`) / `has_reference` (all 6) + `clear_reference` (5/6; cvvdp's warm
+  cache is overwrite-on-set). Renames: `has_{cached,warm}_reference` →
+  `has_reference`; `compute_with_cached_reference_srgb_u8` →
+  `compute_with_reference_srgb_u8`; cvvdp `warm_reference_srgb` →
+  `set_reference_srgb_u8` (diffmap kept as `compute_with_reference_srgb_u8_with_diffmap`);
+  zensim's Score cached-ref → `compute_with_reference_srgb_u8`, its
+  feature-vector variant → `compute_features_with_reference_srgb_u8`. Behavior is
+  unchanged (pure renames; `ZensimInner` gained `has_reference`/`clear_reference`
+  delegating to the pipeline). Also restored `zensim_gpu::pipeline` to
+  `#[doc(hidden)] pub` (its own `strip_memory_demo` example reaches it; the
+  reduction had wrongly made it `pub(crate)`, breaking the `--all-targets` build).
+  Audit/alignment record in `docs/API_SURFACE_AUDIT_2026-06-01.md`.
 - **Public API surface reduction across the workspace (internal crates).** The
   six metric `-gpu` crates exposed ~8,500 `pub` items (mostly cube-macro kernel
   machinery and internal pipeline modules) while their sole product consumer

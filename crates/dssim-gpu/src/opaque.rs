@@ -83,11 +83,11 @@ trait DssimInner: Send {
     /// Cache the reference image's linear-RGB pyramid.
     fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()>;
     /// Score one candidate against the cached reference.
-    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
+    fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score>;
     /// Drop cached reference state.
     fn clear_reference(&mut self);
     /// Whether a reference has been cached.
-    fn has_cached_reference(&self) -> bool;
+    fn has_reference(&self) -> bool;
 }
 
 impl<R> DssimInner for Dssim<R>
@@ -131,7 +131,7 @@ where
         Dssim::set_reference(self, ref_rgb)
     }
 
-    fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+    fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         let r = Dssim::compute_with_reference(self, dis_rgb)?;
         Ok(Score {
             value: r.score,
@@ -144,8 +144,8 @@ where
         Dssim::clear_reference(self)
     }
 
-    fn has_cached_reference(&self) -> bool {
-        Dssim::has_cached_reference(self)
+    fn has_reference(&self) -> bool {
+        Dssim::has_reference(self)
     }
 }
 
@@ -330,7 +330,7 @@ impl DssimOpaque {
     }
 
     /// Cache the reference image's linear-RGB pyramid on device.
-    /// Subsequent [`Self::compute_with_cached_reference_srgb_u8`]
+    /// Subsequent [`Self::compute_with_reference_srgb_u8`]
     /// calls skip the ref-side pyramid build.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
         self.inner.set_reference_srgb_u8(ref_rgb)
@@ -339,8 +339,8 @@ impl DssimOpaque {
     /// Score a distorted candidate against the cached reference.
     /// Returns [`crate::Error::NoCachedReference`] if no reference
     /// is cached.
-    pub fn compute_with_cached_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_with_cached_reference_srgb_u8(dis_rgb)
+    pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
+        self.inner.compute_with_reference_srgb_u8(dis_rgb)
     }
 
     /// Drop cached reference state.
@@ -349,8 +349,8 @@ impl DssimOpaque {
     }
 
     /// `true` if a reference has been cached.
-    pub fn has_cached_reference(&self) -> bool {
-        self.inner.has_cached_reference()
+    pub fn has_reference(&self) -> bool {
+        self.inner.has_reference()
     }
 }
 

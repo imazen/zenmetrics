@@ -128,7 +128,7 @@ fn owned_warm_ref_matches_plain_cvvdp() {
         let mut m = Metric::new(kind, Backend::Cuda, W, H, MetricParams::default_for(kind))
             .expect("plain Metric::new(Cvvdp)");
         m.set_reference_srgb_u8(&r).expect("plain set_reference");
-        m.compute_with_cached_reference_srgb_u8(&d)
+        m.compute_with_reference_srgb_u8(&d)
             .expect("plain warm score")
     };
     let owned = {
@@ -137,7 +137,7 @@ fn owned_warm_ref_matches_plain_cvvdp() {
             .into_metric(kind, W, H, MetricParams::default_for(kind))
             .expect("into_metric(Cvvdp)");
         om.set_reference_srgb_u8(&r).expect("owned set_reference");
-        assert!(om.has_cached_reference(), "owned must report cached ref");
+        assert!(om.has_reference(), "owned must report cached ref");
         let s = om.score_with_warm_ref(&d).expect("owned warm score");
         om.clear_reference();
         s

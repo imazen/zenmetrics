@@ -120,7 +120,7 @@ impl Iwssim {
     }
 
     /// `true` if a warm reference is cached.
-    pub fn has_warm_reference(&self) -> bool {
+    pub fn has_reference(&self) -> bool {
         self.warm.is_some()
     }
 

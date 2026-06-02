@@ -265,7 +265,7 @@ pub struct Dssim<R: Runtime> {
     /// Final per-slot scalars folded by the finalizer kernel.
     sums: cubecl::server::Handle,
 
-    has_cached_reference: bool,
+    has_reference: bool,
 
     /// Full-image cached reference state (mode E). Populated only by
     /// [`Dssim::set_reference`] when in strip mode; `None` for
@@ -341,7 +341,7 @@ impl<R: Runtime> Dssim<R> {
             scales,
             partials,
             sums,
-            has_cached_reference: false,
+            has_reference: false,
             ref_full: None,
             strip_config: None,
             strip_data_h: Vec::new(),
@@ -486,7 +486,7 @@ impl<R: Runtime> Dssim<R> {
             scales,
             partials,
             sums,
-            has_cached_reference: false,
+            has_reference: false,
             ref_full: None,
             strip_config: Some(StripConfig {
                 image_w,
@@ -679,7 +679,7 @@ impl<R: Runtime> Dssim<R> {
             self.run_chroma_preblur(s, true);
             self.run_blur_stats(s, true);
         }
-        self.has_cached_reference = true;
+        self.has_reference = true;
         Ok(())
     }
 
@@ -862,7 +862,7 @@ impl<R: Runtime> Dssim<R> {
             ref_mu,
             ref_sq_blur,
         });
-        self.has_cached_reference = true;
+        self.has_reference = true;
         // ref_lin, temp1_full, temp2_full drop here.
         Ok(())
     }
@@ -911,12 +911,12 @@ impl<R: Runtime> Dssim<R> {
 
     /// Drop any cached reference state.
     pub fn clear_reference(&mut self) {
-        self.has_cached_reference = false;
+        self.has_reference = false;
         self.ref_full = None;
     }
 
-    pub fn has_cached_reference(&self) -> bool {
-        self.has_cached_reference
+    pub fn has_reference(&self) -> bool {
+        self.has_reference
     }
 
     /// Compute against the cached reference. Returns
@@ -927,7 +927,7 @@ impl<R: Runtime> Dssim<R> {
     /// ref state lives in [`Self::ref_full`] and is sliced per-strip
     /// while the dist side walks in strip-sized buffers.
     pub fn compute_with_reference(&mut self, dist_srgb: &[u8]) -> Result<GpuDssimResult> {
-        if !self.has_cached_reference {
+        if !self.has_reference {
             return Err(Error::NoCachedReference);
         }
         if self.strip_config.is_some() {

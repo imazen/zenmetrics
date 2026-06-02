@@ -14,7 +14,7 @@
 //! - `rgb_full`           — RGB whole-image + cached-ref (`compute_rgb` is
 //!                          one-shot only; cached-RGB hot path is via
 //!                          `set_reference_srgb_u8` +
-//!                          `compute_with_cached_reference_srgb_u8`).
+//!                          `compute_with_reference_srgb_u8`).
 //! - `rgb_strip`          — `Iwssim::new_strip` + `compute_rgb_stripped`
 //!                          (cold-ref native RGB strip — #57 path).
 //! - `rgb_warm_ref_strip` — Strip + `set_rgb_reference_stripped` +

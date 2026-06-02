@@ -1400,7 +1400,7 @@ impl ExecMetric {
     /// reference. Pre-requisite: [`Self::set_reference`] succeeded.
     pub(crate) fn compute_with_cached_reference(&mut self, d: &[u8]) -> Result<Score, CallErrPub> {
         match self {
-            ExecMetric::Umbrella(m) => m.compute_with_cached_reference_srgb_u8(d).map_err(|e| {
+            ExecMetric::Umbrella(m) => m.compute_with_reference_srgb_u8(d).map_err(|e| {
                 let msg = e.to_string();
                 match classify_call_err(&msg) {
                     CallErr::Oom => CallErrPub::Oom,

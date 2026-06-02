@@ -374,7 +374,7 @@ fn run_q3(metric: &str, w: u32, h: u32, reps: usize) {
     for _ in 0..reps {
         let t = Instant::now();
         let s = m
-            .compute_with_cached_reference_srgb_u8(&dist)
+            .compute_with_reference_srgb_u8(&dist)
             .expect("warm_call ref1");
         warm1.push(t.elapsed().as_secs_f64() * 1e3);
         score1 = s.value;
@@ -418,7 +418,7 @@ fn run_q3(metric: &str, w: u32, h: u32, reps: usize) {
     for _ in 0..reps {
         let t = Instant::now();
         let s = m
-            .compute_with_cached_reference_srgb_u8(&dist)
+            .compute_with_reference_srgb_u8(&dist)
             .expect("newref_call ref2");
         warm2.push(t.elapsed().as_secs_f64() * 1e3);
         score2 = s.value;

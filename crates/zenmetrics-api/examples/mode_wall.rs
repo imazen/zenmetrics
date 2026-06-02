@@ -42,7 +42,7 @@
 //!   ONCE before the timed reps so the per-rep wall is steady-state JIT-hot
 //!   construction+compute, not first-call kernel-compile.
 //! - **warm** — `set_reference_srgb_u8` once, then time
-//!   `compute_with_cached_reference_srgb_u8` per dist over many dists
+//!   `compute_with_reference_srgb_u8` per dist over many dists
 //!   (mirrors the orchestrator's cached-ref path). A warmup score runs
 //!   before the timed reps.
 //!
@@ -331,7 +331,7 @@ fn time_warm_umbrella(
     // Warmup score against ref (JIT + pool), synced.
     let warm_d = synth_srgb(w, h, 0x0B22_9999);
     let _ = m
-        .compute_with_cached_reference_srgb_u8(&warm_d)
+        .compute_with_reference_srgb_u8(&warm_d)
         .expect("warmup cached score");
     cubecl::future::block_on(client.sync()).expect("warm warmup sync");
 
@@ -341,7 +341,7 @@ fn time_warm_umbrella(
         let d = synth_srgb(w, h, 0x0B22_0100u32.wrapping_add(i as u32 * 13 + 1));
         let t = Instant::now();
         let s = m
-            .compute_with_cached_reference_srgb_u8(&d)
+            .compute_with_reference_srgb_u8(&d)
             .expect("cached score");
         cubecl::future::block_on(client.sync()).expect("sync");
         times.push(t.elapsed().as_secs_f64() * 1e3);
@@ -421,11 +421,11 @@ fn time_warm_cvvdp_strippair(
         },
     )
     .map_err(|e| format!("construct StripPair: {e}"))?;
-    m.warm_reference_srgb(&r)
+    m.set_reference_srgb_u8(&r)
         .map_err(|e| format!("warm_reference: {e}"))?;
     let warm_d = synth_srgb(w, h, 0x0B22_9999);
     let _ = m
-        .compute_with_warm_ref_srgb(&warm_d, None)
+        .compute_with_reference_srgb_u8(&warm_d)
         .map_err(|e| format!("warmup cached score: {e}"))?;
     cubecl::future::block_on(client.sync()).map_err(|e| format!("sync: {e}"))?;
 
@@ -435,7 +435,7 @@ fn time_warm_cvvdp_strippair(
         let d = synth_srgb(w, h, 0x0B22_0100u32.wrapping_add(i as u32 * 13 + 1));
         let t = Instant::now();
         let s = m
-            .compute_with_warm_ref_srgb(&d, None)
+            .compute_with_reference_srgb_u8(&d)
             .map_err(|e| format!("cached score: {e}"))?;
         cubecl::future::block_on(client.sync()).map_err(|e| format!("sync: {e}"))?;
         times.push(t.elapsed().as_secs_f64() * 1e3);
@@ -777,7 +777,7 @@ fn run_parity(size: u32) {
                     },
                 ) {
                     if m.set_reference_srgb_u8(&r).is_ok() {
-                        if let Ok(s) = m.compute_with_cached_reference_srgb_u8(&d) {
+                        if let Ok(s) = m.compute_with_reference_srgb_u8(&d) {
                             println!(
                                 "cvvdp,strip,warm,{:.6},{:.6}",
                                 s.value,
