@@ -293,12 +293,14 @@ pub fn run_sweep(
     // prefer the GPU regime (matches the v26+ schema) and CPU zensim's
     // extra emit (if any) is ignored — only one variant is allowed to
     // write per cell to keep the sidecar's `feat_*` count consistent.
-    let feature_n: usize = if zensim_gpu_in_metrics {
-        cfg.feature_regime.total_features()
-    } else {
-        // CPU zensim path — fixed at 300.
-        crate::sweep::feature_writer::num_features::EXTENDED
-    };
+    // CPU zensim's `score_with_features` runs `ZensimProfile::latest()`,
+    // whose extended-feature block now carries the IW features (372), not
+    // the legacy 300. Size the writer from the active regime for BOTH the
+    // CPU and GPU paths (default WithIw = 372). If a future profile's CPU
+    // emit ever diverges from the regime count, the per-cell push errors
+    // loudly rather than silently writing a mis-shaped sidecar.
+    let _ = zensim_gpu_in_metrics;
+    let feature_n: usize = cfg.feature_regime.total_features();
     let feature_writer_inner = match &cfg.feature_output {
         Some(path) => Some(FeatureParquetWriter::create_with_n(path, feature_n)?),
         None => None,
