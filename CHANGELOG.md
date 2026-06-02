@@ -95,6 +95,20 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **Public API surface reduction across the workspace (internal crates).** The
+  six metric `-gpu` crates exposed ~8,500 `pub` items (mostly cube-macro kernel
+  machinery and internal pipeline modules) while their sole product consumer
+  uses ~18 each. Demoted `ext_refs=0` modules to `pub(crate)` and marked
+  cross-crate / own-harness internals `#[doc(hidden)] pub` (matching the
+  existing `session` convention); the clean product API
+  (`Backend`/`<Metric>Opaque`/`<Metric>Params`/`Score`/`MemoryMode` +
+  `memory_mode` + `session`) is byte-identical. Per-crate `cargo public-api`:
+  butteraugli-gpu 2525→244, cvvdp-gpu 1847→209, iwssim-gpu 1330→268,
+  ssim2-gpu 1093→296, zensim-gpu 980→304, dssim-gpu 750→257 (`f0dc9bb8`,
+  `d4a3e2fa`). Tier 0 also demoted 28 compiler-flagged `unreachable_pub` items
+  to `pub(crate)` (cvvdp/orchestrator/cli/iwssim) and made `iwssim-filter-codegen`
+  emit `pub(crate)` filter consts (`2944fbb1`). Audit + `#[doc(hidden)]`
+  inventory: `docs/API_SURFACE_AUDIT_2026-06-01.md`.
 - **`PoolConfig::multiwarm_session_pool` now defaults OFF (opt-in).** Measured
   (`benchmarks/multiwarm_session_pool_2026-05-30`): multi-warm is +1.30–1.47× at 256² but
   REGRESSES 2.3× (cvvdp) / 12.6× (ssim2) at 4096², where each warm entry is GiB-scale, the

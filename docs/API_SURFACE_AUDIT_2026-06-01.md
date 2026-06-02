@@ -96,3 +96,71 @@ zen-ledger, zen-jobctl are `publish`-able. zenstats is already minimal
 (`unreachable_pub` = 0). zen-job-core's 1460-item surface is the largest
 *publishable* over-exposure and worth a dedicated pass (separate from the
 metric-crate work).
+
+## What landed (2026-06-01)
+
+| commit | change | surface |
+|---|---|---|
+| `2944fbb1` | Tier 0: 28 `unreachable_pub` → `pub(crate)` (cvvdp 13, orchestrator 9, cli 4, iwssim 2) + `iwssim-filter-codegen` emits `pub(crate)` consts (clears 7 generated) | — |
+| `f0dc9bb8` | dssim-gpu: kernels/opaque/pipeline/pipeline_batch → `pub(crate)` | 750 → 257 |
+| `d4a3e2fa` | iwssim/zensim/cvvdp/butteraugli/ssim2-gpu Tier 1+2 | see below |
+
+Per-crate `cargo public-api --simplified --features cuda` line counts:
+
+| crate | before | after |
+|---|---:|---:|
+| butteraugli-gpu | 2525 | 244 |
+| cvvdp-gpu | 1847 | 209 |
+| iwssim-gpu | 1330 | 268 |
+| ssim2-gpu | 1093 | 296 |
+| zensim-gpu | 980 | 304 |
+| dssim-gpu | 750 | 257 |
+
+The clean product API is byte-identical — only module *paths* and
+unreachable items were demoted; every crate-root re-export
+(`Backend` / `<Metric>Opaque` / `<Metric>Params` / `Score` /
+`MemoryMode` + `memory_mode` + `session`) is unchanged.
+
+## `#[doc(hidden)] pub` inventory — reachable internals that are NOT public API
+
+These items stay `pub` (so a separate compilation unit — another crate,
+or this crate's own integration tests / examples / benches — can reach
+them by path) but are marked `#[doc(hidden)]`: they are workspace-internal
+machinery, not a supported per-crate API. Use `zenmetrics_api` for the
+supported surface.
+
+### Added by this work
+
+| item | kind | why it must stay reachable |
+|---|---|---|
+| `cvvdp_gpu::kernels` | cross-crate | the cvvdp **CPU** crate re-exports the scalar kernels (`crates/cvvdp/src/kernels/mod.rs`); `cvvdp-conformance` asserts against `csf`/`masking`/`color`/`pool`/`pyramid` constants |
+| `cvvdp_gpu::pipeline` | cross-crate | the cvvdp CPU crate's strip walker (`crates/cvvdp/src/strip.rs`) calls into it |
+| `cvvdp_gpu::host_scalar` | own harness | cvvdp-gpu's own parity benches/examples/tests (the CPU scalar reference) — no external crate |
+| `zensim_gpu::kernels` | cross-crate | `cvvdp-gpu/src/kernels/color.rs` shares the scalar color reference |
+| `zensim_gpu::STRIP_ALIGN` | own test (re-export) | `zensim-gpu/tests/memory_mode.rs` asserts `h_body` is a multiple of it (added `#[doc(hidden)] pub use pipeline::STRIP_ALIGN` so `pipeline` could go `pub(crate)`) |
+| `iwssim_gpu::pipeline` | cross-crate | `zenmetrics-api/tests/dispatch.rs` (umbrella dispatch test) + iwssim-gpu's own `native_rgb_perf_probe` example |
+| `butteraugli_gpu::pipeline` | cross-crate | `zen-metrics-cli/src/orchestrator_runner.rs` |
+| `butteraugli_gpu::kernels` | own GPU parity examples | `examples/{blur,colors}_parity.rs` — execute kernels via a GPU runtime (built under `--all-targets`); not convertible to CI unit tests without a GPU-availability gate |
+| `ssim2_gpu::kernels` | own GPU parity examples | `examples/{blur,blur_h_pass,srgb,xyb}_parity.rs` — same GPU-runtime reason |
+
+### Pre-existing (unchanged by this work — listed for completeness)
+
+| item | why |
+|---|---|
+| `{butteraugli,ssim2,dssim,zensim,cvvdp,iwssim}_gpu::session` | stream-bound `MetricSession` plumbing (issue #17), gated `cubecl-types`; reached by `zenmetrics-api`'s session layer |
+
+### Kept fully `pub` (genuine per-crate API, not hidden)
+
+`memory_mode` (holds `MemoryMode` + `reclaim_pooled_vram`, path-accessed
+by the umbrella) in all six; `cvvdp_gpu::params` (holds `CvvdpParams` +
+`DisplayGeometry`, the latter path-accessed by `zenmetrics-api`).
+
+### Not done — deliberately
+
+butteraugli/ssim2 `kernels` were left `#[doc(hidden)] pub` rather than
+`pub(crate)` + example→unit-test conversion: their parity examples
+*execute* GPU kernels and have never run under wgpu/Metal in CI, so
+converting them to CI unit tests would introduce never-validated parity
+tolerances (a real flaky-red-CI risk). `#[doc(hidden)]` removes them from
+the documented API with zero risk. zen-job-core (1460-item publishable
+surface) is a separate future pass.
