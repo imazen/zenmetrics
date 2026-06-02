@@ -17,4 +17,10 @@
 //! name-resolvable inside a `#[cube]` body — the cube codegen captures
 //! `crate`-relative paths and re-emits them on the device side.
 
+// The generated consts are now `pub(crate)` (the `filters` module is
+// `pub(crate)`); a few companion scalars (`BINOM5_LEN`, `SSIM_WIN_LEN`,
+// `SSIM_WIN_RADIUS`) are part of the emitted set but read only by some
+// kernels, so allow dead_code for the generated block.
+#![allow(dead_code)]
+
 include!(concat!(env!("OUT_DIR"), "/filters.rs"));

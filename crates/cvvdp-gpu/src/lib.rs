@@ -192,7 +192,10 @@
 // (their own non-kernel pub items remain documented).
 #![warn(missing_docs)]
 
-pub(crate) mod heatmap;
+// `heatmap` is a diffmap-visualization feature with no in-tree consumer
+// yet; kept reachable (external viz tools) but `#[doc(hidden)]`.
+#[doc(hidden)]
+pub mod heatmap;
 // `host_scalar` (the CPU scalar reference) and `kernels` are reached
 // by-path from this crate's own parity benches/examples/tests and, for
 // `kernels`, cross-crate (the cvvdp CPU crate re-exports the scalar
@@ -209,7 +212,11 @@ pub mod params;
 // strip walker) — `#[doc(hidden)]`, like `session`.
 #[doc(hidden)]
 pub mod pipeline;
-pub(crate) mod presets;
+// `presets` re-exports the cvvdp CPU crate's display registry so
+// `cvvdp_gpu::presets::*` callsites resolve; `#[doc(hidden)]` (the
+// canonical owner is `cvvdp::presets`).
+#[doc(hidden)]
+pub mod presets;
 
 // Stream-bound session plumbing for `zenmetrics_api::MetricSession`
 // (issue #17). `#[doc(hidden)]` internal surface, gated `cubecl-types`

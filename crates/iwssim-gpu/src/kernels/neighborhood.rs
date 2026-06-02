@@ -31,7 +31,9 @@
 //! Index 9 (when `parent = true`): reads `parent_band[py + 1, px + 1]`.
 
 /// Spatial offsets (dy, dx) for the 9 neighborhood positions.
-/// Crate-private constant — kernels expand the table inline.
+/// Crate-private constant — kernels expand the table inline (so the
+/// constant itself is a documentation/reference companion).
+#[allow(dead_code)]
 pub const OFFS: [(i32, i32); 9] = [
     (2, 2),
     (2, 1),
@@ -45,4 +47,5 @@ pub const OFFS: [(i32, i32); 9] = [
 ];
 
 /// Maximum neighborhood size including parent.
+#[allow(dead_code)]
 pub const MAX_N: usize = 10;

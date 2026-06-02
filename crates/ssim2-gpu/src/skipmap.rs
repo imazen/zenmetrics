@@ -234,6 +234,10 @@ pub fn skip_scale(mode: Ssim2Mode, scale: usize) -> bool {
 
 /// Number of `launch_sum_p4` calls saved per `compute()` at this mode.
 /// Used by tests and bench reports.
+// `skipmap` is `pub(crate)`; these counters are reached only by this
+// crate's own tests/benches (separate compile units) so the lib build
+// sees them unused.
+#[allow(dead_code)]
 pub fn count_skipped_reductions(mode: Ssim2Mode, n_scales: usize) -> usize {
     let mut n = 0;
     for s in 0..n_scales {
@@ -250,6 +254,7 @@ pub fn count_skipped_reductions(mode: Ssim2Mode, n_scales: usize) -> usize {
 
 /// Number of `error_maps_kernel` launches saved per `compute()` at
 /// this mode.
+#[allow(dead_code)]
 pub fn count_skipped_error_maps(mode: Ssim2Mode, n_scales: usize) -> usize {
     let mut n = 0;
     for s in 0..n_scales {
@@ -263,6 +268,7 @@ pub fn count_skipped_error_maps(mode: Ssim2Mode, n_scales: usize) -> usize {
 }
 
 /// Number of scales fully skippable at this mode.
+#[allow(dead_code)]
 pub fn count_skipped_scales(mode: Ssim2Mode, n_scales: usize) -> usize {
     (0..n_scales).filter(|&s| skip_scale(mode, s)).count()
 }

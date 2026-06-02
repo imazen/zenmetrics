@@ -33,7 +33,9 @@ pub struct EigResult {
     pub lambda: [f32; 10],
     /// `N²` inverse of the PSD-cleaned `C_u`, row-major.
     pub c_u_inv: [f32; 100],
-    /// Active dimension. `1..=10`.
+    /// Active dimension. `1..=10`. Carried for callers / parity checks;
+    /// the GPU upload path reads the fixed-size arrays directly.
+    #[allow(dead_code)]
     pub n: usize,
 }
 
