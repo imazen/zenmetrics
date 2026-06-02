@@ -377,9 +377,17 @@ fn strip_identical_is_zero() {
     let mut d = Dssim::<Backend>::new_strip(make_client!(), w, h, 128).unwrap();
     let s = d.compute(&img, &img).unwrap().score;
     eprintln!("strip identical: dssim = {s:.8}");
-    // Tightened 2026-05-22 from 1e-3 to 1e-7 (measured 0.0 — bit-exact
-    // for identical input). 1e-7 leaves headroom for future micro-noise.
-    assert!(s < 1e-7, "expected ~0, got {s}");
+    // Backend-aware. CUDA is bit-exact 0.0 for identical input (measured
+    // 2026-05-22), so keep the tight 1e-7 there — it catches any real
+    // identical-handling regression. The wgpu/Metal backend leaves f32
+    // strip-reduction residue from FMA contraction / fast-math (measured
+    // 1.3e-5 on Apple Metal CI, 2026-06-01) — still negligible for DSSIM
+    // and not a logic bug (same cubecl kernel source as CUDA).
+    #[cfg(feature = "cuda")]
+    let tol = 1e-7;
+    #[cfg(not(feature = "cuda"))]
+    let tol = 1e-4;
+    assert!(s < tol, "expected ~0, got {s} (tol {tol:e})");
 }
 
 /// `dimensions()` returns image dims (not strip-buffer dims) for

@@ -157,7 +157,12 @@ where
 /// ```no_run
 /// use dssim_gpu::{DssimOpaque, Backend, DssimParams};
 ///
-/// let mut d = DssimOpaque::new(Backend::Cuda, 256, 256, DssimParams::DEFAULT)?;
+/// // `Backend` variants are feature-gated; pick whichever this build has
+/// // (the CI doctest job runs under `wgpu`, not `cuda`).
+/// # #[cfg(feature = "cuda")] let backend = Backend::Cuda;
+/// # #[cfg(all(feature = "wgpu", not(feature = "cuda")))] let backend = Backend::Wgpu;
+/// # #[cfg(all(feature = "cpu", not(any(feature = "cuda", feature = "wgpu"))))] let backend = Backend::Cpu;
+/// let mut d = DssimOpaque::new(backend, 256, 256, DssimParams::DEFAULT)?;
 /// let ref_buf = vec![128u8; 256 * 256 * 3];
 /// let dis_buf = vec![100u8; 256 * 256 * 3];
 /// let score = d.compute_srgb_u8(&ref_buf, &dis_buf)?;

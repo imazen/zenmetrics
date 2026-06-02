@@ -2688,18 +2688,21 @@ impl<R: Runtime> Zensim<R> {
 
     // ─────────────────────── private helpers ───────────────────────
 
-    /// Allocate `diffmap_state` lazily on first use. Default profile
-    /// is `PreviewV0_3` per `RFC_ZENSIM_BUTTLOOP_AUDIT.md` §5.
+    /// Allocate `diffmap_state` lazily on first use. Default profile is
+    /// `ZensimProfile::A` per `RFC_ZENSIM_BUTTLOOP_AUDIT.md` §5.
     /// Callers needing a non-default profile should construct via the
     /// `ZensimOpaque::with_profile` path (Phase 1b will surface a
     /// `Zensim::with_diffmap_profile` setter if needed).
-    // `PreviewV0_3` is a deprecated alias of `ZensimProfile::A` (identical
-    // profile); kept verbatim so the diffmap profile is provably unchanged.
-    // Migrating the token to `A` is a separate score-verified change.
-    #[allow(deprecated)]
+    //
+    // Migrated from the `PreviewV0_3` deprecated alias to the canonical
+    // `ZensimProfile::A`. Provably score-neutral: in zensim
+    // `Self::A | Self::PreviewV0_3 => &PROFILE_A` — both resolve to the
+    // identical `PROFILE_A` params (only the profile *name* string
+    // differs). Upstream dropped the `PreviewV0_3` alias, so `A` is also
+    // the only form that compiles against current zensim.
     fn ensure_diffmap_state(&mut self) {
         if self.diffmap_state.is_none() {
-            self.diffmap_state = Some(DiffmapState::new(ZensimProfile::PreviewV0_3));
+            self.diffmap_state = Some(DiffmapState::new(ZensimProfile::A));
         }
     }
 

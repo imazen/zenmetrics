@@ -164,3 +164,42 @@ converting them to CI unit tests would introduce never-validated parity
 tolerances (a real flaky-red-CI risk). `#[doc(hidden)]` removes them from
 the documented API with zero risk. zen-job-core (1460-item publishable
 surface) is a separate future pass.
+
+## Justification of the remaining public API
+
+After the reduction the metric `-gpu` crates still report 244–304
+`cargo public-api` items. That count is **not** maintained surface — it
+is dominated by compiler-generated impls. Breakdown of dssim-gpu's 257
+(representative; the other five have the same shape):
+
+| category | count | maintained? |
+|---|---:|---|
+| auto-trait impls (`Send`/`Sync`/`Unpin`/`Freeze`/`UnwindSafe`/`RefUnwindSafe`) | 84 | no — compiler-emitted, 6 per pub type |
+| derive impls (`Clone`/`Debug`/`PartialEq`/`Eq`/`Default`/…) | 46 | no — `#[derive]`, scale with type count |
+| `pub fn` (methods + module fns) | 69 | **yes** |
+| `pub struct` / `pub enum` | 12 | **yes** |
+| `pub const` / `pub mod` | 5 | **yes** |
+
+So ~51% (130/257) is auto-trait + derive enumeration that costs nothing
+to maintain and shrinks only if the *number of public types* shrinks.
+The genuinely-maintained surface is the **~12 types + their methods +
+the `memory_mode`/`session` module fns**, every one of which is load-bearing:
+
+| kept-`pub` item | why it cannot be hidden |
+|---|---|
+| `Backend` {`Cpu`,`Cuda`,`Wgpu`} | the caller picks the compute backend; `zenmetrics-api` maps its own `Backend` onto this per crate. Removing it removes backend selection. |
+| `<Metric>Opaque` + `new` / `new_with_memory_mode` / `compute_srgb_u8` / `*_cached_ref` / `dims` / `set_reference` … | THE scorer. The whole point of the `Opaque` shim is to hide the cubecl `Runtime` generic so consumers don't pin a cubecl version through their public types — it must stay public to do that job. Used by `zenmetrics-api` for every metric. |
+| `<Metric>Params` (+ `default`/`DEFAULT`, public fields) | scoring configuration the caller tunes; passed into `new`. |
+| `Score` (+ `value` / `metric_name` / `metric_version`) | the return type of `compute_*`. |
+| `MemoryMode` {`Auto`,`Full`,`Strip`,…} + `ResolvedMode` | memory-vs-speed selector; `zenmetrics-api`'s `resolve_memory_mode` produces these and feeds them to `new_with_memory_mode`. |
+| `memory_mode::{reclaim_pooled_vram, estimate_gpu_memory_bytes*, vram_cap_bytes}` | path-accessed by the umbrella's VRAM accounting + proactive pool reclaim. Not reachable via a crate-root re-export, so the module stays `pub`. |
+| `session::{new_opaque_on_stream, cleanup_stream, stream_reserved_bytes}` | `#[doc(hidden)]` already — `MetricSession` stream plumbing (issue #17). |
+| cvvdp-gpu `params::DisplayGeometry` (+ `STANDARD_4K`) | cvvdp needs display geometry; `zenmetrics-api` sets it by path. |
+
+Nothing in the kept set is gratuitous: each is consumed either by
+`zenmetrics-api` (the product umbrella) or is the irreducible
+type/method a direct caller of the crate must name. The only lever to
+shrink the *count* further is reducing the number of public types
+(which would proportionally drop the 130 auto/derive impls) — e.g.
+folding `ResolvedMode` into `MemoryMode` — but those are real types with
+real consumers, so they stay.
