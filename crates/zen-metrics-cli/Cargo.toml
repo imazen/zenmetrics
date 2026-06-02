@@ -45,7 +45,11 @@ png = ["dep:zenpng"]
 jpeg = ["dep:zenjpeg", "zenjpeg/zencodec"]
 webp = ["dep:zenwebp"]
 avif = ["dep:zenavif"]
-jxl = ["dep:zenjxl"]
+# jxl pulls the direct `jxl-encoder` dep too: the sweep encode path configures
+# expert LossyConfig knobs the zenjxl wrapper doesn't expose. Kept here (not in
+# `sweep`) so a non-jxl sweep (`--features sweep,jpeg`) need not compile
+# jxl-encoder / zenjxl at all — important while zenjxl is mid zencodec migration.
+jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 
 # CPU metric feature flags
 cpu-metrics = [
@@ -100,10 +104,15 @@ gpu-cpu = ["zenmetrics-api?/cpu", "cubecl?/cpu"]
 # - zenjpeg 0.8.4 (path dep on the sibling repo) ships `__expert`, so the
 #   sweep driver pulls it in alongside the other codecs.
 sweep = [
+    # jpeg/webp/avif are pulled for convenience (a bare `--features sweep`
+    # builds them). `jxl` is intentionally NOT force-pulled: enable it
+    # explicitly (`--features sweep,jxl`) when you need it. This lets a
+    # jpeg/webp/avif sweep build while zenjxl is mid zencodec migration.
+    # The `zenjxl?/__expert` / `zenjxl?/zencodec` activations below stay
+    # conditional and only fire when `jxl` is separately enabled.
     "jpeg",
     "webp",
     "avif",
-    "jxl",
     "zenjpeg?/__expert",
     "zenjpeg?/trellis",
     # `__test-utils` re-exposes the otherwise-`pub(crate)` `zenjpeg::encode`
@@ -126,14 +135,8 @@ sweep = [
     "dep:imgref",
     "dep:zencodec",
     "dep:almost-enough",
-    # Direct jxl-encoder dep (in addition to zenjxl wrapper) so the JXL
-    # sweep path can configure expert LossyConfig knobs the wrapper
-    # doesn't expose: with_butteraugli_iters, with_zensim_iters,
-    # with_ssim2_iters, with_pixel_domain_loss, with_patches,
-    # with_gaborish, with_force_strategy, with_progressive,
-    # with_error_diffusion, with_lf_frame, with_denoise. Same version
-    # zenjxl 0.2.1 pins (0.3.1) so no duplicate compilation.
-    "dep:jxl-encoder",
+    # `jxl-encoder` moved to the `jxl` feature (it's only needed by the JXL
+    # encode path) so a non-jxl sweep doesn't compile it.
     # `--feature-output <path.parquet>` writes a per-cell sidecar of zensim's
     # 300-feature extended vector. Pulled into the sweep feature so the dep
     # cost is opt-in: a build without `--features sweep` doesn't ship the

@@ -116,6 +116,108 @@ pub struct EncodedCell {
     pub encode_ms: f64,
 }
 
+// ── Recognized knob names per codec ──────────────────────────────────────
+//
+// Every name a codec's `encode_*` reads MUST appear in its list, and any
+// knob NOT in the list is a hard `encode()` error (see
+// [`reject_unknown_knobs`]). A silently-ignored knob is the worst failure
+// mode for a source-informing sweep: a cell labelled `{"xyb":true}` whose
+// encoder quietly drops the unknown key and emits the YCbCr default writes
+// thousands of mislabelled rows into the training parquet that look correct.
+// When you add a `knobs.get("foo")` to an `encode_*`, add `"foo"` here.
+const PNG_KNOBS: &[&str] = &["compression", "near_lossless_bits", "parallel", "max_threads"];
+const JPEG_KNOBS: &[&str] = &[
+    // public builders
+    "subsampling",
+    "progressive",
+    "sharp_yuv",
+    "effort",
+    // XYB color-mode axes (EncoderConfig::xyb)
+    "xyb",
+    "xyb_subsampling",
+    // expert / InternalParams
+    "optimize_huffman",
+    "aq_enabled",
+    "deringing",
+    "auto_optimize",
+    "chroma_distance_scale",
+    "pre_blur",
+    "quant_source",
+    "progressive_mode",
+    "huffman",
+    "tiny_file_mode",
+    "downsampling_method",
+    "restart_mcu_rows",
+    "chroma_quality",
+    "optimization",
+    "hybrid",
+];
+const WEBP_KNOBS: &[&str] = &[
+    "method",
+    "segments",
+    "sns_strength",
+    "filter_strength",
+    "partition_limit",
+    "multi_pass_stats",
+    "smooth_segment_map",
+    "sharp_yuv",
+];
+const AVIF_KNOBS: &[&str] = &["speed", "lossless", "partition_range", "lrf", "fast_deblock"];
+const JXL_KNOBS: &[&str] = &[
+    "distance",
+    "noise",
+    "effort",
+    "denoise",
+    "gaborish",
+    "patches",
+    "pixel_domain_loss",
+    "error_diffusion",
+    "lf_frame",
+    "lz77",
+    "butteraugli_iters",
+    "zensim_iters",
+    "ssim2_iters",
+    "force_strategy",
+    "max_strategy_size",
+    "progressive",
+];
+
+impl CodecKind {
+    /// The set of knob names this codec recognizes.
+    fn recognized_knobs(self) -> &'static [&'static str] {
+        match self {
+            CodecKind::Zenpng => PNG_KNOBS,
+            CodecKind::Zenjpeg => JPEG_KNOBS,
+            CodecKind::Zenwebp => WEBP_KNOBS,
+            CodecKind::Zenavif => AVIF_KNOBS,
+            CodecKind::Zenjxl => JXL_KNOBS,
+        }
+    }
+}
+
+/// Reject any knob the codec does not recognize. An unknown knob is a hard
+/// error rather than a silent no-op so a typo or an unsupported axis can
+/// never masquerade as the encoder default in the output parquet.
+fn reject_unknown_knobs(
+    codec: CodecKind,
+    knobs: &Map<String, Value>,
+) -> Result<(), Box<dyn Error>> {
+    let allowed = codec.recognized_knobs();
+    for key in knobs.keys() {
+        if !allowed.contains(&key.as_str()) {
+            let mut names: Vec<&str> = allowed.to_vec();
+            names.sort_unstable();
+            return Err(format!(
+                "unknown {} knob {key:?}; recognized knobs: {}",
+                codec.name(),
+                names.join(", ")
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 /// Encode `source` with `codec`, quality `q`, and knob assignment `knobs`.
 /// Errors propagate as `Box<dyn Error>` so the sweep runner can record a
 /// per-cell failure without halting the rest of the grid.
@@ -125,6 +227,7 @@ pub fn encode(
     q: f64,
     knobs: &Map<String, Value>,
 ) -> Result<EncodedCell, Box<dyn Error>> {
+    reject_unknown_knobs(codec, knobs)?;
     match codec {
         CodecKind::Zenpng => encode_png(source, q, knobs),
         CodecKind::Zenjpeg => encode_jpeg(source, q, knobs),
@@ -232,9 +335,9 @@ fn encode_jpeg(
     use zenjpeg::JpegEncoderConfig;
     use zenjpeg::encode::encoder_types::QuantTableSource;
     use zenjpeg::encoder::{
-        ChromaSubsampling, DownsamplingMethod, EncoderConfig as ZenEncoderConfig, HuffmanStrategy,
-        InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout, ProgressiveScanMode,
-        TinyFileMode,
+        ChromaSubsampling, ColorMode, DownsamplingMethod, EncoderConfig as ZenEncoderConfig,
+        HuffmanStrategy, InternalParams, OptimizationPreset, PixelLayout as ZenPixelLayout,
+        ProgressiveScanMode, TinyFileMode, XybSubsampling,
     };
     use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -447,6 +550,51 @@ fn encode_jpeg(
         // `EncoderConfig::hybrid_config` calls if needed later.
         params.hybrid = Some(zenjpeg::encode::trellis::HybridConfig::default());
         any_internal = true;
+    }
+
+    // ── XYB color mode ──────────────────────────────────────────────────
+    // XYB is a distinct color path. We do NOT flip a flag on a fresh config:
+    // we reuse `cfg` (which already carries the wrapper's generic-quality
+    // mapping — the SAME `Quality::ApproxJpegli(calibrated_jpeg_quality(q))`
+    // / `Quality::Zq(q)` the YCbCr cells get — plus progressive / sharp_yuv /
+    // effort) and switch only the color mode to XYB via the public builder.
+    // That keeps an XYB cell on the exact same quality scale as the YCbCr
+    // cells in this sweep. `allow_16bit_quant_tables(false)` matches
+    // `EncoderConfig::xyb`'s default (XYB forces SOF1 separately for the DC
+    // categories; 16-bit DQT buys nothing). The luma `subsampling` knob does
+    // not apply — XYB subsampling is the B-channel `xyb_subsampling` — and
+    // `effort` is already folded into `cfg` by the wrapper builder above.
+    if knobs.get("xyb").and_then(Value::as_bool) == Some(true) {
+        let b_sub = match knobs.get("xyb_subsampling").and_then(Value::as_str) {
+            None | Some("bquarter") | Some("b_quarter") | Some("quarter") => {
+                XybSubsampling::BQuarter
+            }
+            Some("full") => XybSubsampling::Full,
+            Some(other) => {
+                return Err(format!(
+                    "zenjpeg xyb_subsampling must be bquarter|full; got {other:?}"
+                )
+                .into());
+            }
+        };
+        let mut inner: ZenEncoderConfig = cfg.inner().clone();
+        inner = inner
+            .color_mode(ColorMode::Xyb { subsampling: b_sub })
+            .allow_16bit_quant_tables(false);
+        if any_internal {
+            inner = inner.with_internal_params(params);
+        }
+        let start = Instant::now();
+        let bytes = inner
+            .encode_bytes(
+                &source.pixels,
+                source.width,
+                source.height,
+                ZenPixelLayout::Rgb8Srgb,
+            )
+            .map_err(|e| format!("zenjpeg xyb encode failed: {e}"))?;
+        let encode_ms = start.elapsed().as_secs_f64() * 1000.0;
+        return Ok(EncodedCell { bytes, encode_ms });
     }
 
     if any_internal {
