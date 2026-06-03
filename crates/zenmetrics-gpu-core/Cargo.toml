@@ -1,0 +1,31 @@
+[package]
+name = "zenmetrics-gpu-core"
+version = "0.0.1"
+description = "Shared backend/score/sRGB/stream plumbing for the zenmetrics *-gpu metric crates (CubeCL)"
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"
+rust-version.workspace = true
+publish = false
+
+[features]
+default = []
+# Runtime backends. Each implies `cubecl-types` so the stream-plumbing
+# helpers (which name concrete cubecl runtimes) compile when any backend
+# is enabled — same convention as the *-gpu crates.
+cuda = ["cubecl/cuda", "cubecl-types"]
+wgpu = ["cubecl/wgpu", "cubecl-types"]
+hip  = ["cubecl/hip",  "cubecl-types"]
+cpu  = ["cubecl/cpu",  "cubecl-types"]
+# Exposes the cubecl-typed stream plumbing (client-on-stream + pool
+# cleanup/usage). Off by default.
+cubecl-types = []
+# zenpixels sRGB conversion helper.
+pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+
+[dependencies]
+cubecl = { workspace = true }
+zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
+zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }

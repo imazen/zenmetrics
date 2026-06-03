@@ -1513,6 +1513,7 @@ dependencies = [
  "rgb",
  "zenforks-cubecl",
  "zenmetrics-corpus",
+ "zenmetrics-gpu-core",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -6954,6 +6955,15 @@ dependencies = [
 [[package]]
 name = "zenmetrics-corpus"
 version = "0.1.0"
+
+[[package]]
+name = "zenmetrics-gpu-core"
+version = "0.0.1"
+dependencies = [
+ "zenforks-cubecl",
+ "zenpixels",
+ "zenpixels-convert",
+]
 
 [[package]]
 name = "zenmetrics-orchestrator"

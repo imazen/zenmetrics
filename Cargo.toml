@@ -25,6 +25,7 @@ members = [
     "crates/zen-metrics-cli",
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
+    "crates/zenmetrics-gpu-core",
     "crates/zenfleet-orchestrator",
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",
