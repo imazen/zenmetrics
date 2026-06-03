@@ -147,6 +147,13 @@ jobs:
   metal-tests:
     name: Metal tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Fail-fast safety net: GitHub's Intel-Mac runners expose only a 64 MB
+    # "Apple Paravirtualized Graphics Device", on which cubecl-wgpu stalls
+    # allocating our multi-scale pyramids — the job otherwise rides the
+    # default 360-min ceiling (observed 6h05m timeouts on macos-15/26-intel,
+    # 2026-06-03). 40 min covers a cold release build + the (fast, when the
+    # GPU works) parity tests; a hung GPU dies promptly instead. See #20.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
