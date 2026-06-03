@@ -11,35 +11,11 @@ use crate::skipmap::Ssim2Mode;
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
 
-/// Selects the GPU/CPU backend the opaque shim dispatches to.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Backend {
-    /// CUDA backend (NVIDIA, requires the `cuda` Cargo feature).
-    #[cfg(feature = "cuda")]
-    Cuda,
-    /// WGPU backend (cross-vendor, requires the `wgpu` Cargo feature).
-    #[cfg(feature = "wgpu")]
-    Wgpu,
-    /// CPU reference backend (requires the `cpu` Cargo feature). The
-    /// ssim2-gpu reduction uses `Atomic<f32>` which the cubecl-cpu
-    /// backend does not support — `Cpu` is accepted for API uniformity
-    /// but kernels will panic at first dispatch.
-    #[cfg(feature = "cpu")]
-    Cpu,
-}
-
-/// Uniform metric score value returned by every opaque shim.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Score {
-    /// SSIMULACRA2 score (0..~100; higher = better, 100 = identical).
-    pub value: f64,
-    /// Short metric identifier (`"ssim2"`).
-    pub metric_name: &'static str,
-    /// Implementation version tag.
-    pub metric_version: &'static str,
-}
+/// The backend selector and uniform score type are shared verbatim
+/// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
+/// Re-exported here so `crate::Backend` / `crate::opaque::Score` keep
+/// resolving.
+pub use zenmetrics_gpu_core::{Backend, Score};
 
 /// Configuration for [`Ssim2Opaque`].
 #[non_exhaustive]
@@ -336,28 +312,8 @@ pub(crate) fn to_srgb_rgb8(
     if s.descriptor() == target {
         return Ok(s.contiguous_bytes().into_owned());
     }
-    convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
+    zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
         got: (s.width() as usize) * (s.rows() as usize) * 3,
     })
-}
-
-#[cfg(feature = "pixels")]
-fn convert_to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
-) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
-    let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
-    let mut out = vec![0u8; row_bytes * (h as usize)];
-    for y in 0..h {
-        let src_row = s.row(y);
-        let start = (y as usize) * row_bytes;
-        let dst_row = &mut out[start..start + row_bytes];
-        convert_row(&plan, src_row, dst_row, w);
-    }
-    Ok(out)
 }

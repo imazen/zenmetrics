@@ -728,8 +728,8 @@ dependencies = [
  "zenbench",
  "zenforks-cubecl",
  "zenmetrics-corpus",
+ "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
@@ -1309,6 +1309,7 @@ dependencies = [
  "zenbench",
  "zenforks-cubecl",
  "zenmetrics-corpus",
+ "zenmetrics-gpu-core",
  "zenpixels",
  "zenpixels-convert",
 ]
@@ -1515,7 +1516,6 @@ dependencies = [
  "zenmetrics-corpus",
  "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
@@ -2523,8 +2523,8 @@ dependencies = [
  "iwssim",
  "iwssim-filter-codegen",
  "zenforks-cubecl",
+ "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
@@ -4602,8 +4602,8 @@ dependencies = [
  "yuvxyb 0.5.0",
  "zenforks-cubecl",
  "zenmetrics-corpus",
+ "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
 ]
 
 [[package]]
@@ -7143,8 +7143,8 @@ dependencies = [
  "zenbench",
  "zenforks-cubecl",
  "zenmetrics-corpus",
+ "zenmetrics-gpu-core",
  "zenpixels",
- "zenpixels-convert",
  "zensim",
 ]
 

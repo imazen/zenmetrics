@@ -20,14 +20,14 @@ default = ["cuda", "wgpu", "cpu", "pixels"]
 # Runtime features imply `cubecl-types` so example / bench drivers
 # (e.g. `examples/bench_pair_vs_cached_cuda.rs`) that import `Ssim2<R>`
 # directly compile when any backend feature is enabled.
-cuda = ["cubecl/cuda", "cubecl-types"]
-wgpu = ["cubecl/wgpu", "cubecl-types"]
-hip = ["cubecl/hip", "cubecl-types"]
-cpu = ["cubecl/cpu", "cubecl-types"]
+cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
+wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
+hip = ["cubecl/hip", "cubecl-types", "zenmetrics-gpu-core/hip"]
+cpu = ["cubecl/cpu", "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed Ssim2<R> / Ssim2Batch<R>. Off by default.
-cubecl-types = []
+cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 # OFF by default since 2026-05-26 (task #52). Opt in to use
 # `Atomic<f32>::fetch_add` for the per-octave reduction. Verified
 # correct on:
@@ -72,8 +72,8 @@ cudarse-parity = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [build-dependencies]
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }

@@ -35,7 +35,7 @@ cpu  = ["cubecl/cpu",  "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # PixelSlice)` to `DssimOpaque`. On by default — the conversion path
 # is per-call (only allocates when format mismatches), the fast path
 # is zero-copy.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert", "zenmetrics-gpu-core/pixels"]
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed `Dssim<R: Runtime>` API publicly. Off by
 # default — opaque `DssimOpaque` is the supported surface. Advanced
 # users who want to construct against a specific cubecl runtime
@@ -61,7 +61,6 @@ fast-reduction = []
 cubecl = { workspace = true }
 zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 dssim-core = { workspace = true }

@@ -25,16 +25,16 @@ default = ["cuda", "wgpu", "cpu", "pixels"]
 # `pipeline.rs` reference `crate::strip::*` unconditionally; without
 # this implication `cargo check -p butteraugli-gpu --features cuda`
 # fails with E0433 "cannot find `strip` in the crate root".
-cuda = ["cubecl/cuda", "cubecl-types"]
-wgpu = ["cubecl/wgpu", "cubecl-types"]
-hip = ["cubecl/hip", "cubecl-types"]
-cpu = ["cubecl/cpu", "cubecl-types"]
+cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
+wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
+hip = ["cubecl/hip", "cubecl-types", "zenmetrics-gpu-core/hip"]
+cpu = ["cubecl/cpu", "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed `Butteraugli<R: Runtime>` API publicly.
 # Off by default — opaque `ButteraugliOpaque` is the supported
 # surface. See dssim-gpu/Cargo.toml for the full rationale.
-cubecl-types = []
+cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 # task142: enables the (F)/(G) async-probe comparison in
 # examples/bench_staging_block.rs. Requires the local-fork
 # [patch.crates-io] override (the probe method is doc-hidden +
@@ -73,8 +73,8 @@ internals = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 butteraugli = { workspace = true }

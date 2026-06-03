@@ -15,14 +15,14 @@ default = ["cuda", "wgpu", "cpu", "fast-reduction", "pixels"]
 # Runtime features imply `cubecl-types` so examples / tests that
 # import `Zensim<R>` directly compile when any backend feature is
 # enabled.
-cuda = ["cubecl/cuda", "cubecl-types"]
-wgpu = ["cubecl/wgpu", "cubecl-types"]
-hip  = ["cubecl/hip",  "cubecl-types"]
-cpu  = ["cubecl/cpu",  "cubecl-types"]
+cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
+wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
+hip  = ["cubecl/hip",  "cubecl-types", "zenmetrics-gpu-core/hip"]
+cpu  = ["cubecl/cpu",  "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed Zensim<R>. Off by default.
-cubecl-types = []
+cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 # Use Atomic<u32>::fetch_max + per-block partials for the per-column
 # accumulators. Same backend reality as dssim-gpu / ssim2-gpu: works on
 # CUDA / DX12 / HIP; Metal silently no-ops Atomic<f32>::fetch_add. The
@@ -33,6 +33,7 @@ fast-reduction = []
 
 [dependencies]
 cubecl = { workspace = true }
+zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 # `zensim` is needed in non-dev so the opaque `ZensimOpaque::compute_*`
 # scoring path can call the canonical CPU `score_features_with_profile`
 # entry — that's how this crate produces bit-exact CPU-equivalent
@@ -41,7 +42,6 @@ cubecl = { workspace = true }
 # `zensim` crate's bake-eval path).
 zensim = { workspace = true }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 zensim = { workspace = true }

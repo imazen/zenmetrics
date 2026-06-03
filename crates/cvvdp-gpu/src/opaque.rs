@@ -11,36 +11,12 @@ use crate::pipeline::Cvvdp;
 #[cfg(feature = "pixels")]
 use zenpixels::PixelSlice;
 
-/// Selects the GPU/CPU backend the opaque shim dispatches to.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Backend {
-    /// CUDA backend.
-    #[cfg(feature = "cuda")]
-    Cuda,
-    /// WGPU backend (note: cvvdp-gpu's `score` path is not currently
-    /// supported on wgpu — see `Cvvdp::score`'s "Backend support"
-    /// section. Use `Cuda` for production scoring).
-    #[cfg(feature = "wgpu")]
-    Wgpu,
-    /// CPU reference backend (use `compute_dkl_jod_host_pool` only —
-    /// the GPU `score` path doesn't run on cubecl-cpu).
-    #[cfg(feature = "cpu")]
-    Cpu,
-}
-
-/// Uniform metric score value returned by every opaque shim.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Score {
-    /// ColorVideoVDP JOD score (10 = identical, lower = worse;
-    /// useful range typically 3..10 for SDR content).
-    pub value: f64,
-    /// Short metric identifier (`"cvvdp"`).
-    pub metric_name: &'static str,
-    /// Implementation version tag.
-    pub metric_version: &'static str,
-}
+/// The backend selector and uniform score type are shared verbatim
+/// across all six `*-gpu` metric crates — see [`zenmetrics_gpu_core`].
+/// Re-exported here so `crate::Backend` / `crate::opaque::Score` keep
+/// resolving. (For cvvdp the `Score::value` is the ColorVideoVDP JOD
+/// score: 10 = identical, lower = worse, useful range ~3..10 for SDR.)
+pub use zenmetrics_gpu_core::{Backend, Score};
 
 trait CvvdpInner: Send {
     fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score>;
@@ -541,7 +517,7 @@ pub(crate) fn to_srgb_rgb8(
     if s.descriptor() == target {
         return Ok(s.contiguous_bytes().into_owned());
     }
-    convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
+    zenmetrics_gpu_core::convert_to_srgb_rgb8(s, target).map_err(|_| Error::DimensionMismatch {
         expected: (expected_w as usize) * (expected_h as usize) * 3,
         got: (s.width() as usize) * (s.rows() as usize) * 3,
     })
@@ -648,24 +624,4 @@ fn build_cvvdp_inner<R: cubecl::Runtime>(
             )
         }
     }
-}
-
-#[cfg(feature = "pixels")]
-fn convert_to_srgb_rgb8(
-    s: &PixelSlice<'_>,
-    target: zenpixels::PixelDescriptor,
-) -> core::result::Result<Vec<u8>, zenpixels_convert::ConvertError> {
-    use zenpixels_convert::{ConvertPlan, convert_row};
-    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
-    let w = s.width();
-    let h = s.rows();
-    let row_bytes = (w as usize) * target.bytes_per_pixel();
-    let mut out = vec![0u8; row_bytes * (h as usize)];
-    for y in 0..h {
-        let src_row = s.row(y);
-        let start = (y as usize) * row_bytes;
-        let dst_row = &mut out[start..start + row_bytes];
-        convert_row(&plan, src_row, dst_row, w);
-    }
-    Ok(out)
 }

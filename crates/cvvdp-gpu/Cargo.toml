@@ -14,22 +14,23 @@ publish = false
 default = ["cuda", "wgpu", "cpu", "pixels"]
 # Consistency with sibling metric crates: runtime features imply
 # `cubecl-types`.
-cuda = ["cubecl/cuda", "cubecl-types"]
-wgpu = ["cubecl/wgpu", "cubecl-types"]
-hip  = ["cubecl/hip",  "cubecl-types"]
-cpu  = ["cubecl/cpu",  "cubecl-types"]
+cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
+wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
+hip  = ["cubecl/hip",  "cubecl-types", "zenmetrics-gpu-core/hip"]
+cpu  = ["cubecl/cpu",  "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # Enables integration tests that fetch the pycvvdp v0.5.4 goldens
 # from R2 and check Rust output against them. Off by default so
 # `cargo test` stays offline. The skip-via-feature is what avoids
 # the "silent runtime skip" anti-pattern: when this feature isn't
 # enabled, the parity tests aren't compiled in at all.
 parity-goldens = []
-# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+# Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml. The
+# sRGB conversion itself lives in zenmetrics-gpu-core.
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed Cvvdp<R> + helpers (estimate_gpu_memory_bytes,
 # recommend_parallel, PARALLEL_SAFETY_FACTOR). Off by default — opaque
 # CvvdpOpaque is the supported surface.
-cubecl-types = []
+cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 
 [dependencies]
 # CPU-side scalar reference + shared params/presets/Score types. Phase
@@ -37,6 +38,7 @@ cubecl-types = []
 # crate (the canonical "no GPU" reference now lives in cvvdp).
 cvvdp = { workspace = true, default-features = false, features = ["std"] }
 cubecl = { workspace = true }
+zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 # JSON parsing for the vendored display_models.json / color_spaces.json
 # preset registry (re-exported from cvvdp::presets, but cvvdp-gpu's own
 # tests still parse JSON directly). Workspace serde_json is 1.x.

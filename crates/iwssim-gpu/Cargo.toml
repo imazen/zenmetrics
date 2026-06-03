@@ -17,23 +17,23 @@ default = ["cuda", "wgpu", "cpu", "pixels"]
 # rather than a separate strip module, so cuda-only already
 # compiled — but uniformity matters for umbrella + downstream
 # consumers.
-cuda = ["cubecl/cuda", "cubecl-types"]
-wgpu = ["cubecl/wgpu", "cubecl-types"]
-hip = ["cubecl/hip", "cubecl-types"]
-cpu = ["cubecl/cpu", "cubecl-types"]
+cuda = ["cubecl/cuda", "cubecl-types", "zenmetrics-gpu-core/cuda"]
+wgpu = ["cubecl/wgpu", "cubecl-types", "zenmetrics-gpu-core/wgpu"]
+hip = ["cubecl/hip", "cubecl-types", "zenmetrics-gpu-core/hip"]
+cpu = ["cubecl/cpu", "cubecl-types", "zenmetrics-gpu-core/cpu"]
 # Opaque-API zenpixels integration — see dssim-gpu/Cargo.toml.
-pixels = ["dep:zenpixels", "dep:zenpixels-convert"]
+pixels = ["dep:zenpixels", "zenmetrics-gpu-core/pixels"]
 # Exposes the generic typed Iwssim<R>. Off by default.
-cubecl-types = []
+cubecl-types = ["zenmetrics-gpu-core/cubecl-types"]
 
 [dependencies]
 cubecl = { workspace = true }
+zenmetrics-gpu-core = { path = "../zenmetrics-gpu-core", default-features = false }
 # Phase 8g.1 — canonical scalar reference + shared algorithm constants
 # (NUM_SCALES, MIN_NATIVE_DIM) live in `iwssim`. gpu→cpu direction
 # matches the cvvdp-gpu/cvvdp split (Phase 8c.1-B).
 iwssim = { workspace = true, default-features = false, features = ["std"] }
 zenpixels = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
-zenpixels-convert = { version = "0.2.11", default-features = false, features = ["std"], optional = true }
 
 [build-dependencies]
 # Gaussian / binomial coefficient generation at build time. The shared
