@@ -1341,91 +1341,63 @@ fn convert_score_zensim(s: zensim_gpu::Score) -> Score {
 // `Backend::CubeclCpu` maps onto `<crate>::Backend::Cpu`.
 // ---------------------------------------------------------------
 
-#[cfg(feature = "cvvdp")]
-pub(crate) fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
+/// Map the umbrella [`Backend`] (which carries `Auto` + `CubeclCpu`) to the
+/// shared [`zenmetrics_gpu_core::Backend`] every `*-gpu` opaque shim accepts.
+/// Single source of truth; the six per-metric `*_backend` fns below are thin
+/// re-typing delegators kept so their 40+ call sites stay put.
+#[cfg(any(
+    feature = "cvvdp",
+    feature = "butter",
+    feature = "ssim2",
+    feature = "dssim",
+    feature = "iwssim",
+    feature = "zensim"
+))]
+pub(crate) fn gpu_backend(b: Backend) -> Result<zenmetrics_gpu_core::Backend> {
+    use zenmetrics_gpu_core::Backend as Gpu;
     match b {
-        Backend::Auto => cvvdp_backend(b.resolve()),
+        Backend::Auto => gpu_backend(b.resolve()),
         #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(cvvdp_gpu::Backend::Cuda),
+        Backend::Cuda => Ok(Gpu::Cuda),
         #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(cvvdp_gpu::Backend::Wgpu),
+        Backend::Wgpu => Ok(Gpu::Wgpu),
         #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(cvvdp_gpu::Backend::Cpu),
-        // hip isn't surfaced as a variant on the per-crate Backend
-        // even when `cubecl/hip` is enabled — cvvdp-gpu's opaque
-        // shim only exposes cuda/wgpu/cpu. Surface as BackendNotEnabled.
+        Backend::CubeclCpu => Ok(Gpu::Cpu),
+        // hip isn't surfaced as a per-crate Backend variant even when
+        // `cubecl/hip` is enabled — the opaque shims only expose
+        // cuda/wgpu/cpu. Surface as BackendNotEnabled.
         _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
     }
+}
+
+#[cfg(feature = "cvvdp")]
+pub(crate) fn cvvdp_backend(b: Backend) -> Result<cvvdp_gpu::Backend> {
+    gpu_backend(b)
 }
 
 #[cfg(feature = "butter")]
 pub(crate) fn butter_backend(b: Backend) -> Result<butteraugli_gpu::Backend> {
-    match b {
-        Backend::Auto => butter_backend(b.resolve()),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(butteraugli_gpu::Backend::Cuda),
-        #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(butteraugli_gpu::Backend::Wgpu),
-        #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(butteraugli_gpu::Backend::Cpu),
-        _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
-    }
+    gpu_backend(b)
 }
 
 #[cfg(feature = "ssim2")]
 pub(crate) fn ssim2_backend(b: Backend) -> Result<ssim2_gpu::Backend> {
-    match b {
-        Backend::Auto => ssim2_backend(b.resolve()),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(ssim2_gpu::Backend::Cuda),
-        #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(ssim2_gpu::Backend::Wgpu),
-        #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(ssim2_gpu::Backend::Cpu),
-        _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
-    }
+    gpu_backend(b)
 }
 
 #[cfg(feature = "dssim")]
 pub(crate) fn dssim_backend(b: Backend) -> Result<dssim_gpu::Backend> {
-    match b {
-        Backend::Auto => dssim_backend(b.resolve()),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(dssim_gpu::Backend::Cuda),
-        #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(dssim_gpu::Backend::Wgpu),
-        #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(dssim_gpu::Backend::Cpu),
-        _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
-    }
+    gpu_backend(b)
 }
 
 #[cfg(feature = "iwssim")]
 pub(crate) fn iwssim_backend(b: Backend) -> Result<iwssim_gpu::Backend> {
-    match b {
-        Backend::Auto => iwssim_backend(b.resolve()),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(iwssim_gpu::Backend::Cuda),
-        #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(iwssim_gpu::Backend::Wgpu),
-        #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(iwssim_gpu::Backend::Cpu),
-        _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
-    }
+    gpu_backend(b)
 }
 
 #[cfg(feature = "zensim")]
 pub(crate) fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
-    match b {
-        Backend::Auto => zensim_backend(b.resolve()),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => Ok(zensim_gpu::Backend::Cuda),
-        #[cfg(feature = "wgpu")]
-        Backend::Wgpu => Ok(zensim_gpu::Backend::Wgpu),
-        #[cfg(feature = "cpu")]
-        Backend::CubeclCpu => Ok(zensim_gpu::Backend::Cpu),
-        _ => Err(Error::BackendNotEnabled { backend: b.tag() }),
-    }
+    gpu_backend(b)
 }
 
 // ---------------------------------------------------------------

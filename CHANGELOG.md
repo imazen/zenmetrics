@@ -35,9 +35,11 @@ Workspace conventions per the global rules:
   errors; clippy lib+bins (CI scope) = 0; dssim-gpu opaque tests pass on CUDA
   (`opaque_srgb_u8_matches_typed`, `opaque_pixels_handles_stride`); umbrella consumers
   (zen-metrics-cli, zenmetrics-orchestrator) compile clean (`45edc7f1`, `c8e84adb`).
-  Follow-up (not yet done): the umbrella's six near-identical `*_backend()` adapter
-  fns are now collapsible to one — deferred because a clean collapse needs core's
-  `cubecl` dep made optional first, to avoid pulling cubecl into CPU-only umbrella builds.
+  The umbrella's six near-identical `*_backend()` adapter fns then collapsed onto one
+  `gpu_backend()` (six one-line delegators kept so their 40+ call sites stay put);
+  `zenmetrics-gpu-core` is an **optional** umbrella dep pulled only by GPU metric
+  features, so CPU-only (`cpu-metrics`) builds don't link it — verified by dep-tree
+  diff that cubecl presence in the CPU-only build is unchanged before/after.
 
 - **`zenmetrics-api` ideal public surface — PixelSlice front doors + intent hint (task #159 phases 4–5).**
   `score(kind, backend, ref, dist)` (one-shot, takes `zenpixels::PixelSlice`, `6b3f51f1`),
