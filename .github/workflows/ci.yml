@@ -137,27 +137,26 @@ jobs:
   # reduction is what actually works. Root cause + fix tracked in
   # `crates/zenmetrics-api/docs/CUBECL_METAL_ATOMIC_FIX.md` (Phase 8e.4).
   #
-  # Matrix includes:
-  #   - macos-latest    — Apple Silicon (arm64)
-  #   - macos-26-intel  — Intel x86_64 (newer image)
-  #   - macos-15-intel  — Intel x86_64 (older image, per CLAUDE.md
-  #                       "Every crate MUST also test on a macOS Intel
-  #                       runner"); kept alongside macos-26-intel to
-  #                       cover both Intel image generations
+  # Runs on macos-latest (Apple Silicon) only — the sole GitHub runner with a
+  # real Metal GPU. The Intel-Mac runners (macos-15/26-intel) expose only a
+  # 64 MB "Apple Paravirtualized Graphics Device" (per the job's own GPU-info
+  # step) on which cubecl-wgpu stalls allocating our multi-scale pyramids —
+  # both Intel legs ran 6h05m and hit the default 360-min job ceiling on every
+  # push (premium macOS minutes), so they were dropped from this matrix on
+  # 2026-06-03 (#20). Intel-Mac coverage is retained by the Compile job, which
+  # builds `--all-targets` on macos-15-intel + macos-26-intel.
   metal-tests:
     name: Metal tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Fail-fast safety net: GitHub's Intel-Mac runners expose only a 64 MB
-    # "Apple Paravirtualized Graphics Device", on which cubecl-wgpu stalls
-    # allocating our multi-scale pyramids — the job otherwise rides the
-    # default 360-min ceiling (observed 6h05m timeouts on macos-15/26-intel,
-    # 2026-06-03). 40 min covers a cold release build + the (fast, when the
-    # GPU works) parity tests; a hung GPU dies promptly instead. See #20.
+    # Fail-fast safety net (belt-and-suspenders now that Intel is dropped): a
+    # future GPU-init regression on macos-latest dies at 40 min instead of
+    # riding the default 360-min ceiling. 40 min covers a cold release build
+    # plus the parity tests (fast when the GPU works).
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-26-intel, macos-15-intel]
+        os: [macos-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Clone sibling-repo path-dep targets (zenjpeg, zenanalyze)
