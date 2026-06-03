@@ -6946,6 +6946,7 @@ dependencies = [
  "ssim2-gpu",
  "thiserror",
  "zenforks-cubecl",
+ "zenmetrics-gpu-core",
  "zenpixels",
  "zenpixels-convert",
  "zensim",

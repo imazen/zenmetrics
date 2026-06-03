@@ -232,6 +232,13 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
 
     let mut max_dm_err_overall = 0.0f32;
     let mut max_score_err_overall = 0.0f32;
+    // Soft-assert the per-pixel diffmap bound: collect every fixture's
+    // divergence report, then assert ONCE after the loop. The tight 1e-3 gate
+    // would otherwise abort at fixture 0 (64×64) and hide the larger 96×80
+    // (1.098) case from a single (scarce) Metal CI run. The score + finite
+    // invariants below stay hard inline (they hold on every backend).
+    let mut diffmap_fail_cells = 0usize;
+    let mut worst_fail: (usize, u32, u32, i32, f32) = (0, 0, 0, 0, 0.0); // fi,w,h,delta,err
 
     for (fi, &(w, h)) in cases.iter().enumerate() {
         let wu = w as usize;
@@ -304,17 +311,16 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
 
             // On failure, localize the divergence to stderr so the Metal-only
             // bug (#20) can be characterized from CI logs without Metal
-            // hardware. Source-level inspection (2026-06-03) RULED OUT the
-            // obvious structural causes: both the passing (64×64) and failing
-            // (96×80) fixtures build clean 4-scale power-of-two pyramids with
-            // NO odd intermediate dims, both have `base_padded_w == width`
-            // (direct-read, no trim kernel), the upsample stride assumption
-            // `sc.padded_w == base_padded_w>>s` holds, and `cube_count_1d`
-            // div_ceils so the zero-fill covers every slot. A 1.098 absolute
-            // error at a few pixels (the aggregate score stays within tol) is
-            // a garbage/uninitialized value on Metal, not fast-math drift. The
-            // report below shows WHERE those pixels land (edge? scattered?
-            // specific rows/cols?) to pin the cubecl-wgpu/Metal root cause.
+            // hardware. Measured on Metal CI 2026-06-03: fixture 0 (64×64) at
+            // delta=8 diverges at ~49% of pixels but only up to 7e-3 — every
+            // worst pixel is `gpu=0` vs `cpu=tiny-positive` (the `sd = max(0,·)`
+            // clamp: Metal's contracted FMAs push `sd_raw` just negative → 0
+            // where CPU keeps it just positive), edge-amplified (the whole last
+            // row/col diverges). That small 64×64 case IS f32-clamp behaviour.
+            // The large 96×80 → 1.098 case is separate and not yet localized;
+            // the loop now SOFT-asserts (collect every fixture's report, assert
+            // once after the loop) so one Metal run shows fixture 1's pattern
+            // too instead of aborting here at fixture 0.
             if max_dm_err > DIFFMAP_ABS_TOL {
                 let report = localize_diffmap_divergence(&gpu_dm, &cpu_dm, wu, hu, DIFFMAP_ABS_TOL);
                 eprintln!(
@@ -326,16 +332,17 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
                     gpu_dm[argmax_i],
                     cpu_dm[argmax_i],
                 );
+                diffmap_fail_cells += 1;
+                if max_dm_err > worst_fail.4 {
+                    worst_fail = (fi, w, h, delta, max_dm_err);
+                }
             }
 
             let score_err = (gpu_score - cpu_score).abs();
             max_score_err_overall = max_score_err_overall.max(score_err);
 
-            assert!(
-                max_dm_err <= DIFFMAP_ABS_TOL,
-                "fixture {fi} {w}x{h} d={delta}: max pointwise diffmap err {max_dm_err} \
-                 exceeds {DIFFMAP_ABS_TOL} (gpu vs cpu canonical)"
-            );
+            // Diffmap bound is soft-asserted after the loop (see above) so all
+            // fixtures' reports land in one CI run. Score parity stays hard.
             assert!(
                 score_err <= SCORE_ABS_TOL,
                 "fixture {fi} {w}x{h} d={delta}: score err {score_err} exceeds {SCORE_ABS_TOL} \
@@ -347,6 +354,19 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
     eprintln!(
         "cpu_gpu_diffmap_parity: max pointwise diffmap err = {max_dm_err_overall:.6} \
          (tol {DIFFMAP_ABS_TOL}), max score err = {max_score_err_overall:.6} (tol {SCORE_ABS_TOL})"
+    );
+
+    // Soft-asserted diffmap bound — fires once, after every fixture's
+    // DIFFMAP DIVERGENCE report has been printed above (see #20).
+    assert!(
+        diffmap_fail_cells == 0,
+        "diffmap diverged on {diffmap_fail_cells} (fixture,delta) cell(s); worst: fixture {} \
+         {}x{} d={} err {} > tol {DIFFMAP_ABS_TOL}. See the per-cell DIFFMAP DIVERGENCE reports above.",
+        worst_fail.0,
+        worst_fail.1,
+        worst_fail.2,
+        worst_fail.3,
+        worst_fail.4,
     );
 }
 
