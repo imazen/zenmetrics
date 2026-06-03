@@ -2123,10 +2123,10 @@ impl Orchestrator {
         // submit() -> poll_any_blocking() with stream_reorder_window
         // count > 1: the window won't fill, but a blocking poll
         // implies the caller wants results NOW).
-        if let Some(p) = self.pool.as_ref() {
-            if !p.pending_queue.tasks.is_empty() {
-                self.flush_pending_internal();
-            }
+        if let Some(p) = self.pool.as_ref()
+            && !p.pending_queue.tasks.is_empty()
+        {
+            self.flush_pending_internal();
         }
         let pool = self.pool.as_mut()?;
         if pool.pending.is_empty() {

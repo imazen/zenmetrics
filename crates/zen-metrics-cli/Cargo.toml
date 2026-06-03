@@ -51,6 +51,12 @@ avif = ["dep:zenavif"]
 # jxl-encoder / zenjxl at all — important while zenjxl is mid zencodec migration.
 jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 
+# HDR scoring: decode HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC) to
+# absolute-luminance, then prep per metric — PU21 for the SDR metrics,
+# normalized-nits + a peak display model for cvvdp. Pulls the HDR decoders
+# (ultrahdr-rs / heic) + an EXR reader (image). Off by default.
+hdr = ["dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic", "dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr"]
+
 # CPU metric feature flags
 cpu-metrics = [
     "dep:butteraugli",
@@ -80,7 +86,7 @@ gpu = ["gpu-butteraugli", "gpu-ssim2", "gpu-dssim", "gpu-cvvdp", "gpu-iwssim", "
 # Both go through `zenmetrics-api/cubecl-types` to keep a single
 # umbrella dep line; the CLI does not depend on `cubecl`, `cvvdp-gpu`,
 # or `butteraugli-gpu` directly.
-gpu-butteraugli = ["dep:zenmetrics-api", "zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl"]
+gpu-butteraugli = ["dep:zenmetrics-api", "zenmetrics-api/butter", "zenmetrics-api/cubecl-types", "dep:cubecl", "dep:butteraugli-gpu"]
 gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
 gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
 gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
@@ -217,6 +223,13 @@ zenjpeg      = { path = "../../../zenjpeg/zenjpeg",        default-features = fa
 zenwebp      = { path = "../../../zenwebp",                                    optional = true }
 zenavif      = { path = "../../../zenavif",                                    optional = true }
 zenjxl       = { path = "../../../zenjxl",                                     optional = true }
+# HDR decoders (gated by the `hdr` feature): Ultra HDR JPEG + gain-map HEIC →
+# absolute-luminance; image provides the EXR reader.
+ultrahdr-rs  = { path = "../../../ultrahdr/ultrahdr-rs",                       optional = true }
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core",                    optional = true }
+heic         = { path = "../../../heic",          optional = true, features = ["backend-rust"] }
+image        = { version = "0.25",                optional = true, default-features = false, features = ["exr"] }
+bytemuck     = { workspace = true,                optional = true }
 
 # Direct jxl-encoder dep with the loop features that the zenjxl wrapper does
 # not surface. Local path (matches the workspace [patch.crates-io] entry)
@@ -282,6 +295,14 @@ imgref = { version = "1", optional = true }
 # cubecl dependency entirely.
 zenmetrics-api = { workspace = true, optional = true, default-features = false }
 cubecl = { workspace = true, optional = true }
+
+# Direct butteraugli-gpu dep ONLY to turn on its `internals` feature (the
+# linear-planes API: set_reference_from_linear_planes /
+# compute_with_reference_from_linear_planes) for the faithful HDR butteraugli
+# path. cargo feature-unifies this with zenmetrics-api's butteraugli-gpu, so
+# the re-exported `zenmetrics_api::butter::Butteraugli` gains the internals
+# methods. Pulled by gpu-butteraugli — additive, no effect on the u8 path.
+butteraugli-gpu = { workspace = true, optional = true, features = ["internals"] }
 
 # tempfile is used by the `sweep` runner to round-trip encoded bytes
 # through the path-based decoder. It is also used in the test suite,

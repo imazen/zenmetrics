@@ -894,6 +894,38 @@ impl ZensimOpaque {
         }
     }
 
+    /// Like [`Self::compute_srgb_u8`] but ALSO returns the
+    /// regime-appropriate feature vector (228 / 300 / 372) extracted in
+    /// the **same pass** — zensim is a feature extractor, so the features
+    /// are produced anyway en route to the scalar score. This lets the
+    /// `zenmetrics-api` umbrella expose features alongside the score
+    /// without a second GPU extraction. Mirrors butteraugli's
+    /// `compute_srgb_u8_with_pnorm3` two-output entry point.
+    ///
+    /// The returned `Vec<f64>` has the active [`ZensimFeatureRegime`]'s
+    /// length ([`Self::regime`]). The profile scoring path (the shipped
+    /// configuration) is single-pass; the legacy `weights`-only path
+    /// re-scores via [`Self::compute_srgb_u8`] (a second extraction, only
+    /// on that uncommon path).
+    pub fn compute_srgb_u8_with_features(
+        &mut self,
+        ref_rgb: &[u8],
+        dis_rgb: &[u8],
+    ) -> Result<(Score, Vec<f64>)> {
+        let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
+        let score = if let Some(s) = identity_short_circuit(ref_rgb, dis_rgb) {
+            s
+        } else if self.params.profile.is_some() {
+            let (w, h) = self.inner.dims();
+            self.score_from_profile_vec(&features, w, h, None)
+        } else {
+            // Legacy weights path scores the 228-truncation via a
+            // different feature shape; reuse the canonical entry point.
+            self.compute_srgb_u8(ref_rgb, dis_rgb)?
+        };
+        Ok((score, features))
+    }
+
     /// Same as [`Self::compute_srgb_u8`] but accepts an optional codec
     /// hint that drives the per-codec post-spline affine calibration
     /// (EXP-CROSS-CODEC-V11-E). Has no effect when the configured
@@ -1040,6 +1072,31 @@ impl ZensimOpaque {
         let db = self.pad_plane(dist_b)?;
         self.inner
             .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+    }
+
+    /// Non-planar (interleaved) variant of [`Self::score_from_linear_planes`]:
+    /// two interleaved linear-RGB f32 buffers (`[R,G,B, R,G,B, …]`, each
+    /// `width·height·3`) instead of six planar slices, deinterleaved on the
+    /// host. Errors with [`crate::Error::DimensionMismatch`] if a buffer's
+    /// length isn't a multiple of 3.
+    pub fn score_from_linear_interleaved(
+        &mut self,
+        ref_rgb: &[f32],
+        dis_rgb: &[f32],
+    ) -> Result<f32> {
+        let (rr, rg, rb) = zenmetrics_gpu_core::deinterleave_rgb_f32(ref_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: ref_rgb.len() / 3 * 3,
+                got: ref_rgb.len(),
+            },
+        )?;
+        let (dr, dg, db) = zenmetrics_gpu_core::deinterleave_rgb_f32(dis_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: dis_rgb.len() / 3 * 3,
+                got: dis_rgb.len(),
+            },
+        )?;
+        self.score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_diffmap`].

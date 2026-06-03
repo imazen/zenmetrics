@@ -229,8 +229,13 @@ pub struct CvvdpOpaque {
     /// Caller-requested logical width. The inner pipeline is built for
     /// `max(width, MIN_DIM)`; sub-8px compute inputs are reflect-padded
     /// up to that. Equals the inner width at ≥8px.
+    // Read only by some feature configs (e.g. the `compute_handles` validation
+    // path); dead under others. `allow` keeps the construction record without
+    // a config-dependent dead-code error — same treatment as `backend`.
+    #[allow(dead_code)]
     width: u32,
     /// Caller-requested logical height (see [`Self::width`]).
+    #[allow(dead_code)]
     height: u32,
     #[allow(dead_code)]
     backend: Backend,
@@ -601,6 +606,32 @@ impl CvvdpOpaque {
                 .inner
                 .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, None),
         }
+    }
+
+    /// Non-planar (interleaved) variant of [`Self::compute_from_linear_planes`]:
+    /// two interleaved linear-RGB f32 buffers (`[R,G,B, R,G,B, …]`, each
+    /// `width·height·3`) instead of six planar slices, deinterleaved on the
+    /// host. Errors with [`crate::Error::DimensionMismatch`] if a buffer's
+    /// length isn't a multiple of 3.
+    pub fn compute_from_linear_interleaved(
+        &mut self,
+        ref_rgb: &[f32],
+        dis_rgb: &[f32],
+        diffmap_out: Option<&mut Vec<f32>>,
+    ) -> Result<Score> {
+        let (rr, rg, rb) = zenmetrics_gpu_core::deinterleave_rgb_f32(ref_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: ref_rgb.len() / 3 * 3,
+                got: ref_rgb.len(),
+            },
+        )?;
+        let (dr, dg, db) = zenmetrics_gpu_core::deinterleave_rgb_f32(dis_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: dis_rgb.len() / 3 * 3,
+                got: dis_rgb.len(),
+            },
+        )?;
+        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, diffmap_out)
     }
 
     /// Cache the REF side from three planar linear-RGB f32 buffers

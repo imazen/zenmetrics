@@ -13,6 +13,11 @@
 //! reaches into the umbrella's `zenmetrics_api::butter` re-export to
 //! drive the typed path directly. Same backend dispatch / `auto`
 //! fall-through semantics as [`crate::metrics::run_gpu_via_umbrella`].
+//!
+//! The faithful HDR linear-planes path lived here too, but `--hdr` scoring
+//! now routes through `zenmetrics_api::hdr::HdrScorer` (see
+//! `crate::hdr::score_via_hdr_scorer`), so only the sRGB-u8 two-column emit
+//! remains.
 
 use cubecl::Runtime;
 use zenmetrics_api::butter;

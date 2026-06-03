@@ -49,7 +49,7 @@ pub(crate) mod ssim2;
 pub(crate) mod zensim;
 
 #[cfg(feature = "gpu-butteraugli")]
-mod butter_pnorm3;
+pub mod butter_pnorm3;
 #[cfg(any(
     feature = "gpu-butteraugli",
     feature = "gpu-ssim2",

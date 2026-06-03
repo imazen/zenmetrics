@@ -99,6 +99,19 @@ jobs:
           git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
+          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # and `../../../heic`). OFF in every CI build below, but cargo
+          # validates optional path-dep paths during workspace manifest load,
+          # so they must exist. ultrahdr-core has an optional `zentone`
+          # path-dep (`../../zentone`); clone it too. ultrahdr's workspace
+          # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
+          # pinned to the ISO 21496-1 tmap-preference fix.
+          git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
+          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git clone --quiet https://github.com/imazen/heic.git ../heic
+          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git clone --quiet https://github.com/imazen/zentone.git ../zentone
+          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -224,6 +237,19 @@ jobs:
           git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
+          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # and `../../../heic`). OFF in every CI build below, but cargo
+          # validates optional path-dep paths during workspace manifest load,
+          # so they must exist. ultrahdr-core has an optional `zentone`
+          # path-dep (`../../zentone`); clone it too. ultrahdr's workspace
+          # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
+          # pinned to the ISO 21496-1 tmap-preference fix.
+          git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
+          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git clone --quiet https://github.com/imazen/heic.git ../heic
+          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git clone --quiet https://github.com/imazen/zentone.git ../zentone
+          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -345,6 +371,19 @@ jobs:
           git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
+          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # and `../../../heic`). OFF in every CI build below, but cargo
+          # validates optional path-dep paths during workspace manifest load,
+          # so they must exist. ultrahdr-core has an optional `zentone`
+          # path-dep (`../../zentone`); clone it too. ultrahdr's workspace
+          # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
+          # pinned to the ISO 21496-1 tmap-preference fix.
+          git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
+          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git clone --quiet https://github.com/imazen/heic.git ../heic
+          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git clone --quiet https://github.com/imazen/zentone.git ../zentone
+          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -430,6 +469,19 @@ jobs:
           git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
+          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # and `../../../heic`). OFF in every CI build below, but cargo
+          # validates optional path-dep paths during workspace manifest load,
+          # so they must exist. ultrahdr-core has an optional `zentone`
+          # path-dep (`../../zentone`); clone it too. ultrahdr's workspace
+          # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
+          # pinned to the ISO 21496-1 tmap-preference fix.
+          git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
+          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git clone --quiet https://github.com/imazen/heic.git ../heic
+          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git clone --quiet https://github.com/imazen/zentone.git ../zentone
+          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -512,6 +564,19 @@ jobs:
           git -C ../fast-ssim2 checkout de207338c706ab7099176c39ef258afaa4796846
           git clone --quiet https://github.com/lilith/dssim.git ../../dssim
           git -C ../../dssim checkout eec33f556d7ee991c4b906198c3a1b74f6f6063d
+          # zen-metrics-cli's `hdr` feature path-deps (`../../../ultrahdr/...`
+          # and `../../../heic`). OFF in every CI build below, but cargo
+          # validates optional path-dep paths during workspace manifest load,
+          # so they must exist. ultrahdr-core has an optional `zentone`
+          # path-dep (`../../zentone`); clone it too. ultrahdr's workspace
+          # root pulls `../zenjpeg/zenjpeg` (already cloned above). heic is
+          # pinned to the ISO 21496-1 tmap-preference fix.
+          git clone --quiet https://github.com/imazen/ultrahdr.git ../ultrahdr
+          git -C ../ultrahdr checkout a45314867a8220ce43a1b716f5a1aa35fe2ae882
+          git clone --quiet https://github.com/imazen/heic.git ../heic
+          git -C ../heic checkout 738f177e8cfe90aa992661f8c381e2f07c446c8d
+          git clone --quiet https://github.com/imazen/zentone.git ../zentone
+          git -C ../zentone checkout f9f50e49e79561be9b0826407b637da50fa5070f
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

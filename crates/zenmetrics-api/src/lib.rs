@@ -65,6 +65,11 @@ mod capability;
 ))]
 mod cpu_dispatch;
 mod error;
+/// HDR front-end (transfer functions + display model + PU21) for scoring HDR
+/// pairs with the SDR metrics. Gated behind the non-default `hdr` feature.
+/// See the module docs and zensim `docs/HDR_PLAN.md`.
+#[cfg(feature = "hdr")]
+pub mod hdr;
 mod memory_mode;
 mod metric;
 #[cfg(feature = "pixels")]
@@ -80,8 +85,8 @@ pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
 #[cfg(feature = "encoded")]
 pub use metric::score_encoded;
 pub use metric::{
-    Backend, Metric, MetricKind, MetricParams, Priority, Reuse, Score, reclaim_pooled_vram,
-    resolve_memory_mode, score_pair,
+    Backend, Metric, MetricKind, MetricParams, NamedScore, Priority, Reuse, Score, Scores,
+    reclaim_pooled_vram, resolve_memory_mode, score_pair,
 };
 /// PixelSlice score front doors (task #159 phase 4): one-shot [`score`] and
 /// warm [`warm_reference`] → [`Warm`]. Require the `pixels` feature.

@@ -16,6 +16,10 @@ publish = false
 # the API). Add the `cubecl-types` feature to opt into the typed surface
 # of every enabled metric crate.
 default = ["all-metrics", "cuda", "pixels", "encoded"]
+## HDR front-end: transfer functions + display model + PU21 perceptually-uniform
+## encoding (`hdr` module), so the SDR metrics can score HDR pairs. Pure math,
+## no GPU/codec deps. Off by default.
+hdr = []
 
 # Per-metric switches — let downstream consumers compile out the
 # metrics they don't need. `all-metrics` is the umbrella.
@@ -24,7 +28,12 @@ all-metrics = ["cvvdp", "butter", "ssim2", "dssim", "iwssim", "zensim"]
 # there) — so a CPU-only build (`cpu-metrics`, no GPU metric) never links it
 # (or its cubecl dep).
 cvvdp  = ["dep:cvvdp-gpu", "dep:zenmetrics-gpu-core"]
-butter = ["dep:butteraugli-gpu", "dep:zenmetrics-gpu-core"]
+# `butteraugli-gpu/internals` exposes the opaque's faithful HDR
+# linear-planes path (`ButteraugliOpaque::compute_from_linear_planes`),
+# which `Metric::compute_from_linear_planes` dispatches to. It's an
+# empty visibility-gate feature (no extra deps), so enabling it
+# unconditionally with `butter` is free.
+butter = ["dep:butteraugli-gpu", "dep:zenmetrics-gpu-core", "butteraugli-gpu/internals"]
 ssim2  = ["dep:ssim2-gpu", "dep:zenmetrics-gpu-core"]
 dssim  = ["dep:dssim-gpu", "dep:zenmetrics-gpu-core"]
 iwssim = ["dep:iwssim-gpu", "dep:zenmetrics-gpu-core"]
@@ -174,6 +183,22 @@ cubecl = { workspace = true }
 [[test]]
 name = "compute_handles"
 required-features = ["cuda", "cubecl-types"]
+
+# compute_srgb_u8_multi: butter max+pnorm_3 + zensim score+features through
+# the umbrella (the lossless multi-output path). GPU; NO GRACEFUL SKIPS.
+[[test]]
+name = "compute_multi"
+required-features = ["cuda", "butter", "zensim"]
+
+# cvvdp HDR display model threads through MetricParams::cvvdp_with_display.
+[[test]]
+name = "cvvdp_display"
+required-features = ["cuda", "cvvdp"]
+
+# HdrScorer: HDR-aware multi-score over the umbrella (auto per-metric feeding).
+[[test]]
+name = "hdr_scorer"
+required-features = ["cuda", "hdr", "butter", "ssim2", "zensim"]
 
 # MetricSession allocator cap/recycle — no GPU work (acquire builds no
 # client until .metric()), but gated cuda so cvvdp reports the backend

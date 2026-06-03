@@ -19,6 +19,46 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **HDR image-quality scoring — `score --hdr` / `batch --hdr` + a validated, auditable
+  per-metric feeding recipe.** Decode EXR / gain-map HEIC (ISO 21496-1 `tmap`) / Google
+  UltraHDR JPEG → absolute luminance (cd/m²), then score with any metric. The feeding is
+  validated against real HDR MOS (UPIQ, 380 compression pairs): **pu-rescale** is the best
+  SDR feeding (ssim2 0.65 / dssim 0.66 SRCC) and the old PU→u8 **clamp** was the worst
+  (0.55) — a real highlight-collapse bug, fixed. New `zenmetrics_api::hdr` (gated behind the
+  `hdr` feature) is the single source of truth: `HdrTransfer` (`PuClamp`/`Pq`/`PuRescale`,
+  default `PuRescale`), `to_sdr_u8`, PU21/PQ/HLG transfer fns, `DisplayModel`, and
+  `hdr_feeding(MetricKind)` (cvvdp/butter → native linear planes; SSIM-family → pu-rescale
+  u8). Faithful linear-planes paths for cvvdp (UPIQ 0.758, our best) + butteraugli-gpu.
+  Smoke harnesses under `scripts/hdr/`; validation docs under `benchmarks/hdr_*.md`. New
+  `crates/zenhdr-corpus` (publish=false) decode/synth tooling. heic-crate `tmap` fix is on
+  `imazen/heic@738f177e` (`2bf91c7d`).
+- **Umbrella lossless multi-output + faithful linear-planes + non-planar entry points.**
+  `zenmetrics_api::{NamedScore, Scores}` + `Metric::compute_srgb_u8_multi` /
+  `compute_from_linear_planes` / `compute_from_linear_planes_multi` /
+  `compute_from_linear_interleaved` / `compute_from_linear_interleaved_multi`: callers reach
+  a metric's extra outputs through the umbrella instead of a parallel per-crate instance —
+  **butter** returns max-norm + libjxl `pnorm_3`, **zensim** returns its scalar + the
+  regime-length feature vector (228/300/372, one extraction via
+  `ZensimOpaque::compute_srgb_u8_with_features`). `MetricParams::cvvdp_with_display` threads
+  an HDR `DisplayModel` (peak luminance) through cvvdp construction. Per-crate
+  `*Opaque::compute_from_linear_interleaved` (butter/cvvdp) + `score_from_linear_interleaved`
+  (zensim) + `zenmetrics_gpu_core::deinterleave_rgb_f32`. butteraugli's linear-planes path
+  now rejects strip-mode instances (`StripModeUnsupported`) instead of returning garbage —
+  it requires `MemoryMode::Full`. All additive (minor-compatible); GPU-tested in
+  `tests/compute_multi.rs` + `tests/cvvdp_display.rs` (`2bf91c7d`).
+- **`zenmetrics_api::hdr::HdrScorer` — HDR-aware multi-score by default.** The umbrella entry
+  point for HDR: construct with a display peak (cvvdp `DisplayModel` peak / butter
+  `intensity_target` + whole-image mode baked in), then `compute_multi(ref_nits, dis_nits)`
+  takes **absolute-luminance linear-RGB (cd/m²)** and auto-applies the validated per-metric
+  feeding (`hdr_feeding`: SSIM-family → pu-rescale u8; cvvdp/butter → display-relative linear
+  planes), returning lossless `Scores` — no hand-wired feeding. This is the consumer that the
+  multi-output + non-planar entry points were built for. GPU-tested in `tests/hdr_scorer.rs`.
+  **The CLI's `score --hdr` and `batch --hdr` (butteraugli) now route through `HdrScorer`**
+  (display-peak clamp preserves the validated display-referred behaviour; identical scores +
+  unchanged column schema, verified by the HDR smoke harnesses), retiring `butter_pnorm3`'s
+  ad-hoc HDR-linear scorer. cvvdp `batch --hdr` keeps its cached scorer (per-pair reuse — a
+  per-pair `HdrScorer` would re-alloc cvvdp's ~200 MB pipeline each row).
+
 - **`zenmetrics-gpu-core` — shared plumbing crate for the six `*-gpu` metric crates.**
   New `crates/zenmetrics-gpu-core` is the single source of truth for the code the
   six GPU metric crates were each carrying byte-identical copies of: the `Backend`

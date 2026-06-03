@@ -42,6 +42,25 @@ trait ButteraugliInner: Send {
         dis_rgb: &[u8],
         params: &ButteraugliParams,
     ) -> Result<(Score, f64)>;
+    /// Score from display-relative `[0,1]` linear-RGB f32 planes (the HDR
+    /// "faithful" path — no sRGB→linear LUT, no u8 quantization). Uploads
+    /// the six planes onto the inner instance's own client and drives the
+    /// `internals` linear-planes typed API. `params.intensity_target` sets
+    /// the cd/m² that maps to plane-value `1.0` (so the HDR highlight range
+    /// survives). Returns `(max-norm Score, pnorm_3)` like
+    /// [`compute_srgb_u8_with_pnorm3`].
+    #[cfg(feature = "internals")]
+    #[allow(clippy::too_many_arguments)]
+    fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        params: &ButteraugliParams,
+    ) -> Result<(Score, f64)>;
     fn dims(&self) -> (u32, u32);
     #[cfg(feature = "cubecl-types")]
     fn compute_handles(
@@ -114,6 +133,65 @@ where
         } else {
             Butteraugli::compute_with_options(self, ref_rgb, dis_rgb, params)?
         };
+        let score = Score {
+            value: r.score as f64,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        };
+        Ok((score, r.pnorm_3 as f64))
+    }
+
+    #[cfg(feature = "internals")]
+    fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+        params: &ButteraugliParams,
+    ) -> Result<(Score, f64)> {
+        use cubecl::prelude::CubeElement;
+        // The typed linear-planes API populates the whole-image `lin_a`/`lin_b`
+        // buffers — it assumes a whole-image instance. On a strip-mode instance
+        // (which `MemoryMode::Auto` resolves to, since butteraugli is
+        // strip-preferred) those buffers have a different layout, so feeding
+        // linear planes produces garbage (huge / non-finite scores). Refuse it
+        // loudly; the linear-planes path requires `MemoryMode::Full`.
+        if Butteraugli::is_strip_mode(self) {
+            return Err(crate::Error::StripModeUnsupported(
+                "compute_from_linear_planes (construct with MemoryMode::Full)",
+            ));
+        }
+        let (w, h) = Butteraugli::dimensions(self);
+        let n = (w as usize) * (h as usize);
+        for p in [ref_r, ref_g, ref_b, dist_r, dist_g, dist_b] {
+            if p.len() != n {
+                return Err(crate::Error::DimensionMismatch {
+                    expected: n,
+                    got: p.len(),
+                });
+            }
+        }
+        // Clone the inner client (Arc-backed, cheap) up front so the upload
+        // closure doesn't hold a borrow of `self` across the `&mut self`
+        // typed-API calls below.
+        let client = Butteraugli::client_ref(self).clone();
+        let up = |p: &[f32]| client.create_from_slice(f32::as_bytes(p));
+        Butteraugli::set_reference_from_linear_planes_with_options(
+            self,
+            up(ref_r),
+            up(ref_g),
+            up(ref_b),
+            params,
+        )?;
+        let r = Butteraugli::compute_with_reference_from_linear_planes(
+            self,
+            up(dist_r),
+            up(dist_g),
+            up(dist_b),
+        )?;
         let score = Score {
             value: r.score as f64,
             metric_name: "butter",
@@ -382,6 +460,66 @@ impl ButteraugliOpaque {
     ) -> Result<(Score, f64)> {
         self.inner
             .compute_srgb_u8_with_pnorm3(ref_rgb, dis_rgb, &self.params)
+    }
+
+    /// Score one pair from display-relative `[0,1]` linear-RGB f32 planes
+    /// (`nits / intensity_target` per channel) — the faithful HDR path that
+    /// bypasses the sRGB→linear LUT and u8 quantization, so the full HDR
+    /// highlight range survives. The six planes are each `width × height`
+    /// f32 in row-major order (tight stride). The cd/m² that maps to
+    /// plane-value `1.0` is `self.params.intensity_target` — set it at
+    /// construction via [`ButteraugliParams::with_intensity_target`].
+    ///
+    /// Returns `(max-norm Score, pnorm_3)` like
+    /// [`Self::compute_srgb_u8_with_pnorm3`]. Gated behind the `internals`
+    /// cargo feature (mirrors the typed pipeline's linear-planes API).
+    #[cfg(feature = "internals")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dist_r: &[f32],
+        dist_g: &[f32],
+        dist_b: &[f32],
+    ) -> Result<(Score, f64)> {
+        self.inner.compute_from_linear_planes(
+            ref_r,
+            ref_g,
+            ref_b,
+            dist_r,
+            dist_g,
+            dist_b,
+            &self.params,
+        )
+    }
+
+    /// Non-planar (interleaved) variant of [`Self::compute_from_linear_planes`]:
+    /// two interleaved linear-RGB f32 buffers (`[R,G,B, R,G,B, …]`, each
+    /// `width·height·3`) instead of six planar slices, deinterleaved on the
+    /// host. Same whole-image (`MemoryMode::Full`) requirement. Errors with
+    /// [`crate::Error::DimensionMismatch`] if a buffer's length isn't a
+    /// multiple of 3.
+    #[cfg(feature = "internals")]
+    pub fn compute_from_linear_interleaved(
+        &mut self,
+        ref_rgb: &[f32],
+        dis_rgb: &[f32],
+    ) -> Result<(Score, f64)> {
+        let (rr, rg, rb) = zenmetrics_gpu_core::deinterleave_rgb_f32(ref_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: ref_rgb.len() / 3 * 3,
+                got: ref_rgb.len(),
+            },
+        )?;
+        let (dr, dg, db) = zenmetrics_gpu_core::deinterleave_rgb_f32(dis_rgb).ok_or(
+            crate::Error::DimensionMismatch {
+                expected: dis_rgb.len() / 3 * 3,
+                got: dis_rgb.len(),
+            },
+        )?;
+        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
     }
 
     /// Score from [`PixelSlice`] inputs. See `dssim-gpu`'s

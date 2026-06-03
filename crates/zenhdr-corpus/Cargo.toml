@@ -1,0 +1,18 @@
+[package]
+name = "zenhdr-corpus"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Decode HDR sources (Ultra HDR JPEG / Apple HEIC / DNG) to absolute-luminance EXR for the zensim HDR training corpus."
+
+[[bin]]
+name = "hdr-decode"
+path = "src/main.rs"
+
+[dependencies]
+ultrahdr-rs = { path = "../../../ultrahdr/ultrahdr-rs" }
+ultrahdr-core = { path = "../../../ultrahdr/ultrahdr-core" }
+heic = { path = "../../../heic", features = ["backend-rust"] }
+enough = "0.4.2"
+bytemuck = "1"
+image = { version = "0.25", features = ["exr"] }

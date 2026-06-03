@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/butteraugli-gpu",
+    "crates/zenhdr-corpus",
     "crates/cvvdp",
     "crates/cvvdp-conformance",
     "crates/cvvdp-gpu",
