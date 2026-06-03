@@ -19,6 +19,26 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **`zenmetrics-gpu-core` — shared plumbing crate for the six `*-gpu` metric crates.**
+  New `crates/zenmetrics-gpu-core` is the single source of truth for the code the
+  six GPU metric crates were each carrying byte-identical copies of: the `Backend`
+  enum, the uniform `Score` struct, the `convert_to_srgb_rgb8` zenpixels helper,
+  and the stream-bound session plumbing (`cuda`/`wgpu`/`cpu`_client_on_stream +
+  `cleanup_stream` + `stream_reserved_bytes`) backing `zenmetrics_api::MetricSession`.
+  Each crate now re-exports `Backend`/`Score` (so `crate::Backend` keeps resolving),
+  calls `core::convert_to_srgb_rgb8`, and re-exports the pool helpers; metric-specific
+  types (`*Params`, `*Opaque`, per-crate `Error`, `new_opaque_on_stream`) stay put.
+  Collapses six identical copies → one; also dropped the now-dead `zenpixels-convert`
+  dep from all six crates. The core types drop `#[non_exhaustive]` (publish=false
+  internal plumbing — the umbrella `Backend`/`Score`/`MemoryMode` remain the stability
+  surface). Verified: `cargo check --all-targets` across all 6 + core + umbrella = 0
+  errors; clippy lib+bins (CI scope) = 0; dssim-gpu opaque tests pass on CUDA
+  (`opaque_srgb_u8_matches_typed`, `opaque_pixels_handles_stride`); umbrella consumers
+  (zen-metrics-cli, zenmetrics-orchestrator) compile clean (`45edc7f1`, `c8e84adb`).
+  Follow-up (not yet done): the umbrella's six near-identical `*_backend()` adapter
+  fns are now collapsible to one — deferred because a clean collapse needs core's
+  `cubecl` dep made optional first, to avoid pulling cubecl into CPU-only umbrella builds.
+
 - **`zenmetrics-api` ideal public surface — PixelSlice front doors + intent hint (task #159 phases 4–5).**
   `score(kind, backend, ref, dist)` (one-shot, takes `zenpixels::PixelSlice`, `6b3f51f1`),
   `warm_reference(kind, backend, ref) -> Warm` (one reference, many distorted via score-identical
