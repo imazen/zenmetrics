@@ -312,8 +312,7 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
             // report below shows WHERE those pixels land (edge? scattered?
             // specific rows/cols?) to pin the cubecl-wgpu/Metal root cause.
             if max_dm_err > DIFFMAP_ABS_TOL {
-                let report =
-                    localize_diffmap_divergence(&gpu_dm, &cpu_dm, wu, hu, DIFFMAP_ABS_TOL);
+                let report = localize_diffmap_divergence(&gpu_dm, &cpu_dm, wu, hu, DIFFMAP_ABS_TOL);
                 eprintln!(
                     "DIFFMAP DIVERGENCE fixture {fi} {w}x{h} d={delta}: \
                      {n_div}/{n} px exceed tol {DIFFMAP_ABS_TOL}; argmax (x={}, y={}) \
