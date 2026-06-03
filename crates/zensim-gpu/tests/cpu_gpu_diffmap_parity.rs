@@ -300,12 +300,17 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
 
             // On failure, localize the divergence to stderr so the Metal-only
             // bug (#20) can be characterized from CI logs without Metal
-            // hardware. Working hypothesis: an odd-intermediate-dimension
-            // defect in the cubecl-wgpu/Metal diffmap pyramid — 64×64 (all
-            // power-of-two scales) passes; 96×80 (downscales through 5 and 3)
-            // fails at 1.098. The report below shows whether the bad pixels
-            // cluster at scale-boundary rows/columns (→ confirms odd-dim) or
-            // scatter (→ refutes it).
+            // hardware. Source-level inspection (2026-06-03) RULED OUT the
+            // obvious structural causes: both the passing (64×64) and failing
+            // (96×80) fixtures build clean 4-scale power-of-two pyramids with
+            // NO odd intermediate dims, both have `base_padded_w == width`
+            // (direct-read, no trim kernel), the upsample stride assumption
+            // `sc.padded_w == base_padded_w>>s` holds, and `cube_count_1d`
+            // div_ceils so the zero-fill covers every slot. A 1.098 absolute
+            // error at a few pixels (the aggregate score stays within tol) is
+            // a garbage/uninitialized value on Metal, not fast-math drift. The
+            // report below shows WHERE those pixels land (edge? scattered?
+            // specific rows/cols?) to pin the cubecl-wgpu/Metal root cause.
             if max_dm_err > DIFFMAP_ABS_TOL {
                 let report =
                     localize_diffmap_divergence(&gpu_dm, &cpu_dm, wu, hu, DIFFMAP_ABS_TOL);
