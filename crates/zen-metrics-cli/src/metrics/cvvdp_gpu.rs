@@ -99,6 +99,24 @@ impl DisplayTarget {
         Ok(Self { display, geometry })
     }
 
+    /// An HDR display target for the faithful linear-planes HDR path: a
+    /// `peak_nits` cd/m² display with a linear EOTF (the linear-planes entry
+    /// skips the EOTF — input is already linear-light) and BT.709 primaries
+    /// (the same color treatment as the sRGB SDR path, so the HDR win is
+    /// isolated to luminance range; wide-gamut primaries are a follow-up).
+    /// Geometry is `STANDARD_4K`, matching the default viewing conditions.
+    /// Pair with `crate::hdr::to_cvvdp_linear_planes` (which normalizes nits to
+    /// `peak_nits`). `peak_nits` should equal `crate::hdr::HDR_DISPLAY_PEAK_NITS`.
+    pub fn hdr(peak_nits: f32) -> Self {
+        Self {
+            display: cvvdp::params::DisplayModel {
+                y_peak: peak_nits,
+                ..cvvdp::params::DisplayModel::STANDARD_HDR_LINEAR
+            },
+            geometry: cvvdp::params::DisplayGeometry::STANDARD_4K,
+        }
+    }
+
     /// The `CvvdpParams` for this target: `PLACEHOLDER` with the
     /// photometric `display` field swapped in. The other scaffolding
     /// sub-bundles are unused by the production kernels (see
@@ -295,6 +313,58 @@ impl CvvdpBatchScorer {
             }
         }
     }
+
+    /// Faithful HDR scoring from display-relative `[0,1]` linear planes
+    /// (see `crate::hdr::to_cvvdp_linear_planes`). Routes through cvvdp's
+    /// native `score_from_linear_planes` — no sRGB8 round-trip, full HDR
+    /// highlight precision. The scorer's `DisplayTarget` (typically
+    /// `DisplayTarget::hdr(..)`) supplies the HDR peak + primaries. Tightly
+    /// packed planes (`padded_width == width`). Requires a GPU runtime — the
+    /// cubecl-cpu backend lacks the atomic-f32 pool kernel this path uses.
+    #[allow(clippy::too_many_arguments)]
+    pub fn score_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+        width: u32,
+        height: u32,
+    ) -> Result<f64, Box<dyn std::error::Error>> {
+        match self {
+            #[cfg(feature = "gpu-cuda")]
+            Self::Cuda(state) => score_pair_cached_linear_planes_gpu(
+                state, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, width, height,
+            ),
+            #[cfg(feature = "gpu-wgpu")]
+            Self::Wgpu(state) => score_pair_cached_linear_planes_gpu(
+                state, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, width, height,
+            ),
+            #[cfg(feature = "gpu-hip")]
+            Self::Hip(state) => score_pair_cached_linear_planes_gpu(
+                state, ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, width, height,
+            ),
+            #[cfg(feature = "gpu-cpu")]
+            Self::Cpu(_) => Err("faithful HDR cvvdp (linear planes) requires a GPU \
+                 runtime; the cubecl-cpu backend lacks the atomic-f32 pool kernel"
+                .into()),
+            #[cfg(not(any(
+                feature = "gpu-cuda",
+                feature = "gpu-wgpu",
+                feature = "gpu-hip",
+                feature = "gpu-cpu",
+            )))]
+            _ => {
+                let _ = (ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, width, height);
+                Err("no CubeCL runtime feature enabled at build time \
+                     (rebuild with at least one of `gpu-cuda`, `gpu-wgpu`, \
+                     `gpu-hip`, `gpu-cpu`)"
+                    .into())
+            }
+        }
+    }
 }
 
 /// Cached-instance scoring on a GPU runtime — routes through
@@ -336,6 +406,60 @@ fn score_pair_cached_gpu<R: Runtime>(
     let jod = c
         .score(&reference.pixels, &distorted.pixels)
         .map_err(|e| format!("Cvvdp::score: {e}"))?;
+    if !jod.is_finite() {
+        return Err(format!("cvvdp produced non-finite JOD: {jod}").into());
+    }
+    Ok(jod)
+}
+
+/// Faithful HDR linear-planes scoring on a GPU runtime — mirrors
+/// [`score_pair_cached_gpu`] but feeds cvvdp's `score_from_linear_planes`
+/// (display-relative `[0,1]` f32 planes) instead of sRGB8 bytes. Same
+/// dim-keyed instance cache.
+#[allow(clippy::too_many_arguments)]
+fn score_pair_cached_linear_planes_gpu<R: Runtime>(
+    state: &mut CvvdpBatchScorerState<R>,
+    ref_r: &[f32],
+    ref_g: &[f32],
+    ref_b: &[f32],
+    dis_r: &[f32],
+    dis_g: &[f32],
+    dis_b: &[f32],
+    w: u32,
+    h: u32,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    let n = (w as usize) * (h as usize);
+    for (name, p) in [
+        ("ref_r", ref_r),
+        ("ref_g", ref_g),
+        ("ref_b", ref_b),
+        ("dis_r", dis_r),
+        ("dis_g", dis_g),
+        ("dis_b", dis_b),
+    ] {
+        if p.len() != n {
+            return Err(format!("plane {name} len {} != {w}x{h}={n}", p.len()).into());
+        }
+    }
+    let needs_rebuild = !matches!(state.cached, Some((cw, ch, _)) if cw == w && ch == h);
+    if needs_rebuild {
+        state.cached = None;
+        let c = cvvdp::Cvvdp::<R>::new_with_geometry(
+            state.client.clone(),
+            w,
+            h,
+            state.target.params(),
+            state.target.geometry,
+        )
+        .map_err(|e| format!("Cvvdp::new_with_geometry ({w}x{h}): {e}"))?;
+        state.cached = Some((w, h, c));
+    }
+    let c = &mut state.cached.as_mut().expect("just populated").2;
+    // cvvdp-gpu's typed scorer assumes tight W×H planes (no padded_width arg);
+    // the explicit length check above guarantees that.
+    let jod = c
+        .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+        .map_err(|e| format!("Cvvdp::score_from_linear_planes: {e}"))? as f64;
     if !jod.is_finite() {
         return Err(format!("cvvdp produced non-finite JOD: {jod}").into());
     }

@@ -23,6 +23,8 @@
 mod assemble;
 mod compare;
 mod decode;
+#[cfg(feature = "hdr")]
+mod hdr;
 mod metrics;
 mod output;
 #[cfg(feature = "cpu-metrics")]
@@ -180,6 +182,22 @@ struct ScoreArgs {
     /// Output format. Defaults to plain text on stdout.
     #[arg(long, value_enum, default_value = "plain")]
     output: OutputFormat,
+    /// Treat the inputs as HDR sources (EXR / Ultra HDR JPEG / gain-map HEIC).
+    /// Decodes to absolute luminance (cd/m²), then PU21-encodes for the SDR
+    /// metrics (cvvdp gets a peak-normalized sRGB path). Requires the `hdr`
+    /// build feature. See zensim `docs/HDR_PLAN.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long)]
+    hdr: bool,
+    /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
+    /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
+    /// 0.65 / dssim 0.66 SRCC), `pq` (close second, simplest), or `pu-clamp`
+    /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
+    /// their native linear-planes path and ignore this. See
+    /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long, value_enum, default_value = "pu-rescale")]
+    hdr_transfer: crate::hdr::HdrTransfer,
 }
 
 #[derive(Parser, Debug)]
@@ -211,6 +229,23 @@ struct BatchArgs {
     /// through one CubeCL stream.
     #[arg(long, default_value = "1")]
     jobs: usize,
+    /// Treat each row's ref/dist as HDR sources (EXR / Ultra HDR JPEG /
+    /// gain-map HEIC). Each pair decodes to absolute luminance (cd/m²),
+    /// then PU21-encodes for the SDR metrics (cvvdp gets a peak-normalized
+    /// sRGB path) — the fleet-worker HDR ingest. Requires the `hdr` build
+    /// feature. See zensim `docs/HDR_PLAN.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long)]
+    hdr: bool,
+    /// HDR→u8 transfer for the SDR-metric path: `pu-rescale` (default — PU21
+    /// rescaled to fit u8 with no highlight clamp; best vs HDR MOS — ssim2
+    /// 0.65 / dssim 0.66 SRCC), `pq` (close second, simplest), or `pu-clamp`
+    /// (legacy, degrades highlights — ssim2 0.55). cvvdp + butteraugli-gpu use
+    /// their native linear-planes path and ignore this. See
+    /// `benchmarks/hdr_feeding_validation_2026-06-03.md`.
+    #[cfg(feature = "hdr")]
+    #[arg(long, value_enum, default_value = "pu-rescale")]
+    hdr_transfer: crate::hdr::HdrTransfer,
 }
 
 #[derive(Parser, Debug)]
@@ -1151,6 +1186,47 @@ fn cmd_score(
     #[cfg(feature = "orchestrator")] use_orchestrator: bool,
     #[cfg(feature = "orchestrator")] orchestrator_opts: &orchestrator_glue::OrchestratorRuntimeOpts,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // HDR path: decode to absolute luminance, then prep per metric. cvvdp gets
+    // the faithful native linear-planes path (no u8 clamp); the SDR kernels get
+    // PU21→sRGB8. Short-circuits the SDR decode + orchestrator routing — both
+    // assume sRGB8 inputs.
+    #[cfg(feature = "hdr")]
+    if args.hdr {
+        let r = hdr::decode_to_nits(&args.reference)?;
+        let d = hdr::decode_to_nits(&args.distorted)?;
+        if r.width != d.width || r.height != d.height {
+            return Err(format!(
+                "dimension mismatch: reference is {}x{}, distorted is {}x{}",
+                r.width, r.height, d.width, d.height
+            )
+            .into());
+        }
+        // Umbrella HDR-aware path: HdrScorer applies the validated per-metric
+        // feeding automatically (cvvdp/butter → faithful linear planes with the
+        // HDR display peak; SSIM-family → pu-rescale u8) and returns lossless
+        // Scores (butter keeps max + pnorm_3). Falls back below for metrics with
+        // no umbrella GPU mapping (CPU metrics) or the hip runtime.
+        if let Some(result) =
+            hdr::score_via_hdr_scorer(args.metric, &r, &d, args.hdr_transfer, args.gpu_runtime)
+        {
+            let rows = result?;
+            print_score(args.output, args.metric, &rows);
+            return Ok(());
+        }
+        // Fallback (CPU metrics / hip): u8 path. cvvdp without a GPU gets its
+        // peak-normalized sRGB; the rest go through the chosen `--hdr-transfer`.
+        let (rr, dd) = if args.metric == metrics::MetricKind::Cvvdp {
+            (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
+        } else {
+            (
+                hdr::to_sdr_rgb8(&r, args.hdr_transfer),
+                hdr::to_sdr_rgb8(&d, args.hdr_transfer),
+            )
+        };
+        let scores = run_metric(args.metric, &rr, &dd, args.gpu_runtime)?;
+        print_score(args.output, args.metric, &scores);
+        return Ok(());
+    }
     let reference = decode::decode_image_to_rgb8(&args.reference)?;
     let distorted = decode::decode_image_to_rgb8(&args.distorted)?;
     if reference.width != distorted.width || reference.height != distorted.height {
@@ -1253,9 +1329,26 @@ fn cmd_batch(
     let mut cvvdp_scorer: Option<crate::metrics::cvvdp_gpu::CvvdpBatchScorer> = None;
     #[cfg(feature = "gpu-cvvdp")]
     if args.metric == crate::metrics::MetricKind::Cvvdp {
-        let target = match args.display_model.as_deref() {
-            Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
-            None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+        // --hdr swaps in the HDR display target (peak + linear EOTF) so the
+        // faithful linear-planes path in the loop reconstructs absolute nits.
+        #[cfg(feature = "hdr")]
+        let hdr_target = args.hdr;
+        #[cfg(not(feature = "hdr"))]
+        let hdr_target = false;
+        let target = if hdr_target {
+            #[cfg(feature = "hdr")]
+            {
+                crate::metrics::cvvdp_gpu::DisplayTarget::hdr(hdr::HDR_DISPLAY_PEAK_NITS)
+            }
+            #[cfg(not(feature = "hdr"))]
+            {
+                unreachable!()
+            }
+        } else {
+            match args.display_model.as_deref() {
+                Some(name) => crate::metrics::cvvdp_gpu::DisplayTarget::by_name(name)?,
+                None => crate::metrics::cvvdp_gpu::DisplayTarget::default(),
+            }
         };
         cvvdp_scorer = Some(
             crate::metrics::cvvdp_gpu::CvvdpBatchScorer::new_with_target(args.gpu_runtime, target)
@@ -1267,8 +1360,99 @@ fn cmd_batch(
         let record = record?;
         let ref_path = PathBuf::from(record.get(ref_idx).ok_or("missing ref_path")?);
         let dist_path = PathBuf::from(record.get(dist_idx).ok_or("missing dist_path")?);
-        let reference = decode::decode_image_to_rgb8(&ref_path)?;
-        let distorted = decode::decode_image_to_rgb8(&dist_path)?;
+        // HDR rows decode to absolute luminance, then prep per metric (PU21
+        // for the SDR kernels, peak-normalized sRGB for cvvdp). Falls through
+        // to the sRGB8 image decode when --hdr is off / the feature is absent.
+        #[cfg(feature = "hdr")]
+        let hdr_mode = args.hdr;
+        #[cfg(not(feature = "hdr"))]
+        let hdr_mode = false;
+        // Faithful HDR cvvdp: decode to nits → display-relative planes →
+        // cvvdp's native linear-planes scorer (no u8 clamp). Bypasses the
+        // Rgb8Image path entirely for this row.
+        #[cfg(all(feature = "hdr", feature = "gpu-cvvdp"))]
+        if hdr_mode && args.metric == crate::metrics::MetricKind::Cvvdp {
+            if let Some(scorer) = cvvdp_scorer.as_mut() {
+                let r = hdr::decode_to_nits(&ref_path)?;
+                let d = hdr::decode_to_nits(&dist_path)?;
+                if r.width != d.width || r.height != d.height {
+                    return Err(format!(
+                        "dimension mismatch on row: {} ({}x{}) vs {} ({}x{})",
+                        ref_path.display(),
+                        r.width,
+                        r.height,
+                        dist_path.display(),
+                        d.width,
+                        d.height
+                    )
+                    .into());
+                }
+                let (rr, rg, rb) = hdr::to_cvvdp_linear_planes(&r);
+                let (dr, dg, db) = hdr::to_cvvdp_linear_planes(&d);
+                let jod = scorer
+                    .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, r.width, r.height)?;
+                let mut row: Vec<String> = record.iter().map(String::from).collect();
+                row.push(format!("{jod:.6}"));
+                wtr.write_record(&row)?;
+                continue;
+            }
+        }
+        // Faithful HDR butteraugli-gpu: same display-relative planes →
+        // butteraugli's native linear-planes path (intensity_target = HDR peak).
+        #[cfg(all(feature = "hdr", feature = "gpu-butteraugli"))]
+        if hdr_mode && args.metric == crate::metrics::MetricKind::ButteraugliGpu {
+            let r = hdr::decode_to_nits(&ref_path)?;
+            let d = hdr::decode_to_nits(&dist_path)?;
+            if r.width != d.width || r.height != d.height {
+                return Err(format!(
+                    "dimension mismatch on row: {} ({}x{}) vs {} ({}x{})",
+                    ref_path.display(),
+                    r.width,
+                    r.height,
+                    dist_path.display(),
+                    d.width,
+                    d.height
+                )
+                .into());
+            }
+            // Through the umbrella's HDR-aware HdrScorer (same per-pair cost as
+            // the old typed path — butter isn't scorer-cached in batch — so no
+            // regression, and it retires the ad-hoc linear scorer). hip falls
+            // through to the u8 path below (the umbrella opaque is cuda/wgpu/cpu).
+            if let Some(result) =
+                hdr::score_via_hdr_scorer(args.metric, &r, &d, args.hdr_transfer, args.gpu_runtime)
+            {
+                let rows = result?;
+                let mut row: Vec<String> = record.iter().map(String::from).collect();
+                for (_, v) in &rows {
+                    row.push(format!("{v:.6}"));
+                }
+                wtr.write_record(&row)?;
+                continue;
+            }
+        }
+        let (reference, distorted) = if hdr_mode {
+            #[cfg(feature = "hdr")]
+            {
+                let r = hdr::decode_to_nits(&ref_path)?;
+                let d = hdr::decode_to_nits(&dist_path)?;
+                if args.metric == crate::metrics::MetricKind::Cvvdp {
+                    (hdr::to_cvvdp_rgb8(&r).0, hdr::to_cvvdp_rgb8(&d).0)
+                } else {
+                    (
+                        hdr::to_sdr_rgb8(&r, args.hdr_transfer),
+                        hdr::to_sdr_rgb8(&d, args.hdr_transfer),
+                    )
+                }
+            }
+            #[cfg(not(feature = "hdr"))]
+            unreachable!()
+        } else {
+            (
+                decode::decode_image_to_rgb8(&ref_path)?,
+                decode::decode_image_to_rgb8(&dist_path)?,
+            )
+        };
         if reference.width != distorted.width || reference.height != distorted.height {
             return Err(format!(
                 "dimension mismatch on row: {} ({}x{}) vs {} ({}x{})",

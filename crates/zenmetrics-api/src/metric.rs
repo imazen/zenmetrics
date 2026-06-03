@@ -189,6 +189,81 @@ pub struct Score {
     pub metric_version: &'static str,
 }
 
+/// One named scalar output of a metric. A metric's primary score plus any
+/// secondary scalars (butteraugli's `pnorm_3`, future cvvdp subscores) are
+/// each a `NamedScore`; `name` identifies which one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NamedScore {
+    /// Label for this scalar (e.g. `"max"`, `"pnorm_3"`, the metric name).
+    pub name: &'static str,
+    /// The value (interpretation per `name`).
+    pub value: f64,
+}
+
+/// The **full** result of scoring one pair: the primary scalar, any
+/// secondary scalars, and — for feature-extractor metrics like zensim —
+/// the per-pair feature vector. This is the umbrella's lossless return:
+/// where [`Metric::compute_srgb_u8`] collapses to a single [`Score`],
+/// [`Metric::compute_srgb_u8_multi`] returns everything the metric
+/// produced, so callers don't have to bypass the umbrella to reach a
+/// metric crate's typed API (butter's `pnorm_3`, zensim's features).
+///
+/// `scores` always has ≥ 1 entry; `scores[0]` is the primary (the value
+/// [`Score::value`] carries). `features` is empty for pure scalar metrics
+/// and carries the regime-length vector (228 / 300 / 372) for zensim.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Scores {
+    /// Short metric identifier (matches [`Score::metric_name`]).
+    pub metric_name: &'static str,
+    /// Implementation version tag (matches [`Score::metric_version`]).
+    pub metric_version: &'static str,
+    /// Named scalar outputs, ≥ 1. `scores[0]` is the primary score.
+    pub scores: Vec<NamedScore>,
+    /// Per-pair feature vector for feature-extractor metrics (zensim);
+    /// empty for metrics that emit only scalar scores.
+    pub features: Vec<f64>,
+}
+
+impl Scores {
+    /// The primary scalar (`scores[0].value`), or `NaN` if somehow empty.
+    pub fn primary(&self) -> f64 {
+        self.scores.first().map_or(f64::NAN, |s| s.value)
+    }
+
+    /// Look up a named scalar by label (e.g. `"pnorm_3"`).
+    pub fn get(&self, name: &str) -> Option<f64> {
+        self.scores.iter().find(|s| s.name == name).map(|s| s.value)
+    }
+
+    /// Collapse to the single-value [`Score`] (the primary), for callers
+    /// that only need the scalar.
+    pub fn primary_score(&self) -> Score {
+        Score {
+            value: self.primary(),
+            metric_name: self.metric_name,
+            metric_version: self.metric_version,
+        }
+    }
+
+    /// Build a single-score (no features) `Scores` from a [`Score`] —
+    /// the shape every scalar-only metric returns. `allow(dead_code)`
+    /// because it's used by the scalar-metric match arms
+    /// (cvvdp/ssim2/dssim/iwssim/CPU), which are all cfg'd out in a
+    /// `butter`+`zensim`-only build.
+    #[allow(dead_code)]
+    fn single(s: Score) -> Self {
+        Scores {
+            metric_name: s.metric_name,
+            metric_version: s.metric_version,
+            scores: vec![NamedScore {
+                name: s.metric_name,
+                value: s.value,
+            }],
+            features: Vec::new(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------
 // MetricParams
 // ---------------------------------------------------------------
@@ -228,6 +303,32 @@ impl MetricParams {
     /// `try_default_for` instead.
     pub fn default_for(kind: MetricKind) -> Self {
         Self::try_default_for(kind).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// cvvdp params with a custom photometric display
+    /// ([`cvvdp::params::DisplayModel`](crate::cvvdp::params::DisplayModel))
+    /// — e.g. an HDR display peak. cvvdp is **display-aware** (a different
+    /// peak luminance yields a different JOD), so this is how you target an
+    /// HDR display *through the umbrella* without dropping to a per-crate
+    /// scorer:
+    ///
+    /// ```ignore
+    /// use zenmetrics_api::{Backend, Metric, MetricKind, MetricParams};
+    /// use zenmetrics_api::cvvdp::params::DisplayModel;
+    /// let hdr = DisplayModel { y_peak: 1000.0, ..DisplayModel::STANDARD_HDR_LINEAR };
+    /// let m = Metric::new(MetricKind::Cvvdp, Backend::Cuda, w, h,
+    ///                     MetricParams::cvvdp_with_display(hdr))?;
+    /// ```
+    ///
+    /// (Only the photometry is set here; the viewing geometry stays the
+    /// `STANDARD_4K` default — use [`Metric::new`] with a geometry-bearing
+    /// path if you also need a non-standard PPD.)
+    #[cfg(feature = "cvvdp")]
+    pub fn cvvdp_with_display(display: cvvdp_gpu::params::DisplayModel) -> Self {
+        Self::Cvvdp(cvvdp_gpu::CvvdpParams {
+            display,
+            ..Default::default()
+        })
     }
 
     /// Fallible counterpart of [`Self::default_for`] — returns
@@ -705,6 +806,286 @@ impl Metric {
                     message: e.to_string(),
                 }),
         }
+    }
+
+    /// Score one sRGB pair and return **everything the metric produced** —
+    /// the primary scalar plus any secondary scalars and feature vector —
+    /// as [`Scores`]. This is the lossless counterpart to
+    /// [`Self::compute_srgb_u8`] (which keeps only the primary):
+    ///
+    /// - **butter** → `scores = [max, pnorm_3]` (the libjxl 3-norm the
+    ///   single-value path drops), from one fused reduction kernel.
+    /// - **zensim** → `scores = [zensim]` + `features` = the regime-length
+    ///   feature vector (228 / 300 / 372), extracted in the same pass.
+    /// - **cvvdp / ssim2 / dssim / iwssim / CPU** → a single scalar.
+    ///
+    /// Callers that need a metric's extra outputs can stay on the umbrella
+    /// instead of constructing a parallel per-crate instance.
+    pub fn compute_srgb_u8_multi(&mut self, r: &[u8], d: &[u8]) -> Result<Scores> {
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            Metric::Cpu(s, _) => s.compute_srgb_u8(r, d).map(Scores::single),
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            #[cfg(feature = "butter")]
+            Metric::Butter(m) => m
+                .compute_srgb_u8_with_pnorm3(r, d)
+                .map(|(s, pnorm3)| Scores {
+                    metric_name: "butter",
+                    metric_version: s.metric_version,
+                    scores: vec![
+                        NamedScore {
+                            name: "max",
+                            value: s.value,
+                        },
+                        NamedScore {
+                            name: "pnorm_3",
+                            value: pnorm3,
+                        },
+                    ],
+                    features: Vec::new(),
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(_) => self.compute_srgb_u8(r, d).map(Scores::single),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => m
+                .compute_srgb_u8_with_features(r, d)
+                .map(|(s, features)| Scores {
+                    metric_name: "zensim",
+                    metric_version: s.metric_version,
+                    scores: vec![NamedScore {
+                        name: "zensim",
+                        value: s.value,
+                    }],
+                    features,
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
+        }
+    }
+
+    /// Faithful HDR scoring from display-relative `[0,1]` linear-RGB f32
+    /// planes — six tight `width × height` planes (ref R/G/B, dist R/G/B,
+    /// each `nits / intensity_target`). This is the
+    /// `hdr::HdrFeeding::LinearPlanes` path: the luminance-aware metrics
+    /// (`cvvdp`, `butter`) score the HDR signal natively — no sRGB→linear
+    /// LUT, no u8 quantization — so the full highlight range survives.
+    /// `zensim` also has a linear path. (The `hdr` module is feature-gated,
+    /// so those names are written here as plain text, not doc links.)
+    ///
+    /// The SSIM-family metrics (`ssim2`, `dssim`, `iwssim`) and the CPU
+    /// backend have **no** absolute-luminance linear path. They return
+    /// [`Error::Metric`] here (rather than silently mis-scoring) so a
+    /// caller that ignored `hdr::hdr_feeding` fails loudly; feed those via
+    /// [`Self::compute_srgb_u8`] over `hdr::to_sdr_u8` (the
+    /// `hdr::HdrFeeding::SdrU8` path).
+    ///
+    /// For `butter` the libjxl `pnorm_3` aggregation is dropped here (same
+    /// as [`Self::compute_srgb_u8`]); use [`Self::compute_from_linear_planes_multi`]
+    /// if you need both the max-norm and 3-norm.
+    ///
+    /// **`butter` requires whole-image construction**: butteraugli's
+    /// [`MemoryMode::Auto`] is strip-preferred, but the linear-planes path is
+    /// whole-image only and rejects a strip instance with
+    /// [`Error`]`::Metric` (`StripModeUnsupported`). Build the `Metric` with
+    /// [`Self::new_with_memory_mode`] + [`MemoryMode::Full`] for the faithful
+    /// `butter` HDR path. (`cvvdp`/`zensim` are unaffected — cvvdp is
+    /// Full-only and zensim's linear path is whole-image.)
+    #[allow(clippy::too_many_arguments)]
+    pub fn compute_from_linear_planes(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+    ) -> Result<Score> {
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            Metric::Cpu(..) => Err(Error::Metric {
+                kind: "cpu",
+                message: "CPU backend has no linear-planes HDR path; feed via \
+                          compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
+                    .to_string(),
+            }),
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(m) => m
+                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
+                .map(convert_score)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "butter")]
+            Metric::Butter(m) => m
+                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .map(|(s, _pnorm3)| convert_score_butter(s))
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => Err(no_linear_planes_path("dssim")),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => m
+                .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .map(|v| Score {
+                    value: v as f64,
+                    metric_name: "zensim",
+                    metric_version: env!("CARGO_PKG_VERSION"),
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
+        }
+    }
+
+    /// Lossless multi-output counterpart to
+    /// [`Self::compute_from_linear_planes`] — the faithful HDR path that
+    /// also returns butter's `pnorm_3`. Same per-metric feeding rules:
+    /// `cvvdp`/`butter`/`zensim` score natively from the linear planes;
+    /// the SSIM-family + CPU return [`Error::Metric`] (no linear path).
+    /// `butter` → `scores = [max, pnorm_3]`; the others → one scalar.
+    ///
+    /// Like [`Self::compute_from_linear_planes`], the `butter` linear path
+    /// requires a whole-image instance — construct via
+    /// [`Self::new_with_memory_mode`] + [`MemoryMode::Full`] (butter's `Auto`
+    /// is strip-preferred and the linear path rejects strip).
+    #[allow(clippy::too_many_arguments)]
+    pub fn compute_from_linear_planes_multi(
+        &mut self,
+        ref_r: &[f32],
+        ref_g: &[f32],
+        ref_b: &[f32],
+        dis_r: &[f32],
+        dis_g: &[f32],
+        dis_b: &[f32],
+    ) -> Result<Scores> {
+        match self {
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            Metric::Cpu(..) => Err(Error::Metric {
+                kind: "cpu",
+                message: "CPU backend has no linear-planes HDR path; feed via \
+                          compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
+                    .to_string(),
+            }),
+            #[cfg(feature = "cvvdp")]
+            Metric::Cvvdp(m) => m
+                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, None)
+                .map(convert_score)
+                .map(Scores::single)
+                .map_err(|e| Error::Metric {
+                    kind: "cvvdp",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "butter")]
+            Metric::Butter(m) => m
+                .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .map(|(s, pnorm3)| Scores {
+                    metric_name: "butter",
+                    metric_version: s.metric_version,
+                    scores: vec![
+                        NamedScore {
+                            name: "max",
+                            value: s.value,
+                        },
+                        NamedScore {
+                            name: "pnorm_3",
+                            value: pnorm3,
+                        },
+                    ],
+                    features: Vec::new(),
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "butter",
+                    message: e.to_string(),
+                }),
+            #[cfg(feature = "ssim2")]
+            Metric::Ssim2(_) => Err(no_linear_planes_path("ssim2")),
+            #[cfg(feature = "dssim")]
+            Metric::Dssim(_) => Err(no_linear_planes_path("dssim")),
+            #[cfg(feature = "iwssim")]
+            Metric::Iwssim(_) => Err(no_linear_planes_path("iwssim")),
+            #[cfg(feature = "zensim")]
+            Metric::Zensim(m) => m
+                .score_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b)
+                .map(|v| {
+                    Scores::single(Score {
+                        value: v as f64,
+                        metric_name: "zensim",
+                        metric_version: env!("CARGO_PKG_VERSION"),
+                    })
+                })
+                .map_err(|e| Error::Metric {
+                    kind: "zensim",
+                    message: e.to_string(),
+                }),
+        }
+    }
+
+    /// Non-planar convenience for [`Self::compute_from_linear_planes`]: takes
+    /// two **interleaved** linear-RGB f32 buffers (`[R,G,B, R,G,B, …]`, each
+    /// length `width·height·3`) instead of six planar slices, deinterleaving
+    /// on the host before dispatch. Same per-metric feeding rules — and the
+    /// same Full-mode requirement for `butter` — as the planar method.
+    pub fn compute_from_linear_interleaved(
+        &mut self,
+        ref_rgb: &[f32],
+        dis_rgb: &[f32],
+    ) -> Result<Score> {
+        let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
+        let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
+        self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
+    }
+
+    /// Multi-output non-planar counterpart of
+    /// [`Self::compute_from_linear_interleaved`] — see
+    /// [`Self::compute_from_linear_planes_multi`] (butter → `[max, pnorm_3]`).
+    pub fn compute_from_linear_interleaved_multi(
+        &mut self,
+        ref_rgb: &[f32],
+        dis_rgb: &[f32],
+    ) -> Result<Scores> {
+        let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
+        let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
+        self.compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
     }
 
     /// Score against pre-uploaded packed-u32 device handles —
@@ -1326,6 +1707,47 @@ fn convert_score_zensim(s: zensim_gpu::Score) -> Score {
     }
 }
 
+/// Split an interleaved linear-RGB f32 buffer (`[R,G,B, …]`, length `3·n`)
+/// into three planar buffers for the planar linear-planes dispatch. Inlined
+/// (rather than via `zenmetrics_gpu_core::deinterleave_rgb_f32`) so the
+/// non-planar entry points compile in a CPU-only build with no GPU-metric
+/// dependency on gpu-core. `which` labels the buffer in the error.
+fn deinterleave_rgb(rgb: &[f32], which: &'static str) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+    if !rgb.len().is_multiple_of(3) {
+        return Err(Error::Metric {
+            kind: "interleaved",
+            message: format!(
+                "{which} interleaved RGB length {} is not a multiple of 3",
+                rgb.len()
+            ),
+        });
+    }
+    let n = rgb.len() / 3;
+    let (mut r, mut g, mut b) = (
+        Vec::with_capacity(n),
+        Vec::with_capacity(n),
+        Vec::with_capacity(n),
+    );
+    for px in rgb.chunks_exact(3) {
+        r.push(px[0]);
+        g.push(px[1]);
+        b.push(px[2]);
+    }
+    Ok((r, g, b))
+}
+
+/// Error for the SSIM-family metrics' missing linear-planes HDR path —
+/// see [`Metric::compute_from_linear_planes`].
+#[cfg(any(feature = "ssim2", feature = "dssim", feature = "iwssim"))]
+fn no_linear_planes_path(kind: &'static str) -> Error {
+    Error::Metric {
+        kind,
+        message: "SSIM-family metric has no absolute-luminance linear-planes path; \
+                  feed HDR via compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()"
+            .to_string(),
+    }
+}
+
 // ---------------------------------------------------------------
 // Per-crate Backend conversion. Each crate has its own non_exhaustive
 // Backend enum cfg-gated on the same `cuda`/`wgpu`/`cpu` features.
@@ -1444,6 +1866,10 @@ pub(crate) fn zensim_backend(b: Backend) -> Result<zensim_gpu::Backend> {
 /// Best-effort: cubecl frees only the pages its allocator deems
 /// reclaimable.
 #[allow(unused_variables)]
+// Intentional early-return cascade (reclaim once on the first enabled crate —
+// they share the client). Which block is "last" varies by metric feature combo,
+// so the needless_return false-positives under some combos (e.g. cvvdp+butter).
+#[allow(clippy::needless_return)]
 pub fn reclaim_pooled_vram(backend: Backend) {
     // All enabled metric crates obtain the same per-(device, thread)
     // cubecl client for a given backend, so calling any one crate's
@@ -1717,6 +2143,45 @@ mod tests {
     //! Pure-logic coverage for [`resolve_memory_mode`] (task #159 phase 4d).
     //! No backend/feature needed — exercises the coarse rule table directly.
     use super::*;
+
+    #[test]
+    fn scores_single_and_accessors() {
+        // `single` wraps a scalar Score as a one-entry Scores, no features.
+        let s = Score {
+            value: 87.5,
+            metric_name: "ssim2",
+            metric_version: "9.9.9",
+        };
+        let one = Scores::single(s);
+        assert_eq!(one.scores.len(), 1);
+        assert_eq!(one.scores[0].name, "ssim2");
+        assert_eq!(one.primary(), 87.5);
+        assert!(one.features.is_empty());
+        assert_eq!(one.primary_score(), s);
+
+        // Multi-scalar (butter-shaped): primary is scores[0]; get() by name.
+        let multi = Scores {
+            metric_name: "butter",
+            metric_version: "1.2.3",
+            scores: vec![
+                NamedScore {
+                    name: "max",
+                    value: 4.0,
+                },
+                NamedScore {
+                    name: "pnorm_3",
+                    value: 1.5,
+                },
+            ],
+            features: vec![],
+        };
+        assert_eq!(multi.primary(), 4.0);
+        assert_eq!(multi.get("pnorm_3"), Some(1.5));
+        assert_eq!(multi.get("max"), Some(4.0));
+        assert_eq!(multi.get("nope"), None);
+        assert_eq!(multi.primary_score().value, 4.0);
+        assert_eq!(multi.primary_score().metric_name, "butter");
+    }
 
     // 512×512 is the one-off Full/Strip threshold (inclusive Full).
     const SMALL: (u32, u32) = (512, 512);

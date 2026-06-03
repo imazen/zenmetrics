@@ -504,7 +504,7 @@ impl CpuAdapter {
         &mut self,
         ref_bytes: &[u8],
         dist_bytes: &[u8],
-        strip_height: u32,
+        _strip_height: u32,
     ) -> Result<Score, CpuAdapterError> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if ref_bytes.len() != expected {
@@ -640,7 +640,7 @@ impl CpuAdapter {
     pub fn compute_with_cached_reference_strip(
         &mut self,
         dist_bytes: &[u8],
-        strip_height: u32,
+        _strip_height: u32,
     ) -> Result<Score, CpuAdapterError> {
         let expected = (self.width as usize) * (self.height as usize) * 3;
         if dist_bytes.len() != expected {

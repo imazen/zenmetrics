@@ -709,23 +709,22 @@ impl Orchestrator {
         // feasible (Selected) candidate, select CPU directly. This is
         // skipped entirely for `ExecContext::Batch` (the warm pool /
         // sweep path) so that behavior is bit-identical to before.
-        if exec_context == ExecContext::OneShot && pixels <= cpu_wins_oneshot_max_pixels(metric) {
-            if let Some(cpu_idx) = considered.iter().position(|c| c.backend == Backend::Cpu) {
-                if let CandidateStatus::Selected {
-                    ns_per_px,
-                    vram_mib,
-                } = considered[cpu_idx].status
-                {
-                    let safety_margin_mib = usable_vram_mib.saturating_sub(vram_mib);
-                    return Ok(BackendChoice {
-                        backend: Backend::Cpu,
-                        predicted_ns_per_px: ns_per_px,
-                        predicted_vram_mib: vram_mib,
-                        safety_margin_mib,
-                        considered,
-                    });
-                }
-            }
+        if exec_context == ExecContext::OneShot
+            && pixels <= cpu_wins_oneshot_max_pixels(metric)
+            && let Some(cpu_idx) = considered.iter().position(|c| c.backend == Backend::Cpu)
+            && let CandidateStatus::Selected {
+                ns_per_px,
+                vram_mib,
+            } = considered[cpu_idx].status
+        {
+            let safety_margin_mib = usable_vram_mib.saturating_sub(vram_mib);
+            return Ok(BackendChoice {
+                backend: Backend::Cpu,
+                predicted_ns_per_px: ns_per_px,
+                predicted_vram_mib: vram_mib,
+                safety_margin_mib,
+                considered,
+            });
         }
 
         // Pick lowest ns_per_px among Selected candidates.
@@ -877,7 +876,7 @@ fn evaluate_candidate(
         // estimate so the OOM ladder can still route here when GPU has
         // failed.
         let ns = interpolate_ns_per_px(profile, backend, pixels, config.extrapolation_pessimism)
-            .unwrap_or_else(|| {
+            .unwrap_or({
                 // Heuristic fallback: 200 ns/px is roughly cvvdp
                 // single-thread at 1024² on a 7950X. Conservative
                 // (some CPU metrics are faster, butteraugli is slower)

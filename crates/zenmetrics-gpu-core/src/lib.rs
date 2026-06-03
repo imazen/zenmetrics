@@ -151,6 +151,44 @@ pub fn reflect_pad<T: Copy>(
     out
 }
 
+/// Split an interleaved RGB `f32` buffer (`[R,G,B, R,G,B, …]`, length `3·n`)
+/// into three planar `f32` buffers (`R…`, `G…`, `B…`, each length `n`). Backs
+/// the metrics' non-planar linear-RGB entry points (`*_from_linear_interleaved`),
+/// whose planar kernels want one tight plane per channel.
+///
+/// Returns `None` if `rgb.len()` isn't a multiple of 3.
+pub fn deinterleave_rgb_f32(rgb: &[f32]) -> Option<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+    if !rgb.len().is_multiple_of(3) {
+        return None;
+    }
+    let n = rgb.len() / 3;
+    let mut r = Vec::with_capacity(n);
+    let mut g = Vec::with_capacity(n);
+    let mut b = Vec::with_capacity(n);
+    for px in rgb.chunks_exact(3) {
+        r.push(px[0]);
+        g.push(px[1]);
+        b.push(px[2]);
+    }
+    Some((r, g, b))
+}
+
+#[cfg(test)]
+mod deinterleave_tests {
+    use super::deinterleave_rgb_f32;
+
+    #[test]
+    fn splits_rgb_and_rejects_non_multiple_of_3() {
+        let rgb = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let (r, g, b) = deinterleave_rgb_f32(&rgb).expect("len 6 is 2 px");
+        assert_eq!(r, [1.0, 4.0]);
+        assert_eq!(g, [2.0, 5.0]);
+        assert_eq!(b, [3.0, 6.0]);
+        assert!(deinterleave_rgb_f32(&[1.0, 2.0]).is_none());
+        assert_eq!(deinterleave_rgb_f32(&[]), Some((vec![], vec![], vec![])));
+    }
+}
+
 // ───────────────────────── stream-bound session plumbing ─────────────────────
 //
 // Backs the umbrella `zenmetrics_api::MetricSession` (issue #17). Each helper
