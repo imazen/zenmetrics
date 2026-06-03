@@ -52,24 +52,24 @@ compile_error!(
 /// land time: `2.08e-4` (CUDA, RTX 5070). The `1e-3` tolerance carries
 /// a ~5× safety margin — see `docs/DIFFMAP_DIVERGENCES.md` §11.
 ///
-/// Backend-aware: cubecl emits the **same** kernel source for every
-/// backend, and CUDA matches the CPU canonical to `2.08e-4`. Apple
-/// Metal's shader compiler contracts FMAs / applies fast-math, so the
-/// **per-pixel** GPU-vs-CPU-canonical diffmap diverges more there, and
-/// the divergence grows with distortion magnitude (larger diffmap
-/// values → larger absolute f32 error): measured on Metal CI
-/// `7.07e-3` at `delta=8`, `2.72e-2` at `delta=16` (2026-06-01/02);
-/// `delta=30` is heavier still. This is f32 evaluation, not a logic bug
-/// — CUDA (identical kernel source) stays tight, and the **aggregate**
-/// `SCORE_ABS_TOL` parity below (the user-facing value) holds on Metal.
-/// So keep CUDA at the regression-catching `1e-3`, and give wgpu/Metal a
-/// pointwise tolerance that covers the fast-math envelope across all
-/// four distortion levels (`[3, 8, 16, 30]`). The score invariant — not
-/// this per-pixel bound — is what guards Metal output correctness.
-#[cfg(feature = "cuda")]
+/// Tight `1e-3` for **all** backends. cubecl emits the same kernel
+/// source everywhere; CUDA matches the CPU canonical to `2.08e-4`, so
+/// `1e-3` is a genuine regression gate there.
+///
+/// **Known Metal bug — NOT f32 fast-math.** On Apple Metal this test
+/// fails with a max pointwise diffmap error of **`1.098`** at fixture 1
+/// (96×80) under the *lightest* distortion (`delta=3`) — measured on
+/// Metal CI 2026-06-02/03. A >1.0 per-pixel divergence at the lightest
+/// delta is far outside any fast-math envelope (CUDA, identical kernel
+/// source, stays at `2e-4`). It is size-dependent — 64×64 stays small,
+/// 96×80 blows up — which points at a cubecl-wgpu/Metal codegen or
+/// boundary-handling defect at non-64-aligned sizes: a real correctness
+/// bug, not floating-point noise. An earlier revision widened the wgpu
+/// tolerance to `1.5e-1` on the mistaken assumption this was fast-math;
+/// that masked the bug and has been reverted. The test is left RED on
+/// Metal so the bug stays visible. Tracked for cubecl-wgpu/Metal
+/// investigation (needs Metal hardware to debug).
 const DIFFMAP_ABS_TOL: f32 = 1e-3;
-#[cfg(not(feature = "cuda"))]
-const DIFFMAP_ABS_TOL: f32 = 1.5e-1;
 
 /// Scalar score absolute tolerance (butteraugli-direction, 0..100
 /// scale). The GPU score is the CPU V0_3 MLP evaluated on GPU-extracted

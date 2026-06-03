@@ -53,6 +53,20 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
+- **zensim-gpu Metal diffmap tolerance un-masked — it was hiding a real bug.**
+  An earlier change widened the wgpu/Metal pointwise diffmap tolerance
+  `1e-3 → 1.5e-1` on the assumption the GPU-vs-CPU-canonical divergence was
+  f32 fast-math. Metal CI (run `26818679703`) disproved that: at the widened
+  tolerance the test reaches fixture 1 (96×80) and fails at the *lightest*
+  distortion (`delta=3`) with a max pointwise error of **`1.098`** — three
+  orders of magnitude past any fast-math envelope, while CUDA (identical
+  kernel source) stays at `2e-4`. The divergence is size-dependent (64×64
+  small, 96×80 blows up), pointing at a **real** cubecl-wgpu/Metal codegen
+  or boundary-handling defect at non-64-aligned sizes — not floating-point
+  noise. Reverted to a tight `1e-3` for all backends so the test stays RED
+  on Metal and the bug remains visible; doc-comment rewritten to record the
+  measured failure. Tracked for Metal-hardware investigation.
+
 - **zenstats `sa_st_curve` / PWRC no longer O(n²) MEMORY (OOM fix) (`b56d8ed2`).**
   The PWRC SA-ST AUC built a `Vec<(f64, bool)>` of all `n·(n−1)/2` pairs, so a
   panel over large `n` allocated `n²/2 × 16 B` — at `n ≈ 59k` (a codec-picker
