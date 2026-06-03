@@ -56,19 +56,23 @@ compile_error!(
 /// source everywhere; CUDA matches the CPU canonical to `2.08e-4`, so
 /// `1e-3` is a genuine regression gate there.
 ///
-/// **Known Metal bug — NOT f32 fast-math.** On Apple Metal this test
-/// fails with a max pointwise diffmap error of **`1.098`** at fixture 1
-/// (96×80) under the *lightest* distortion (`delta=3`) — measured on
-/// Metal CI 2026-06-02/03. A >1.0 per-pixel divergence at the lightest
-/// delta is far outside any fast-math envelope (CUDA, identical kernel
-/// source, stays at `2e-4`). It is size-dependent — 64×64 stays small,
-/// 96×80 blows up — which points at a cubecl-wgpu/Metal codegen or
-/// boundary-handling defect at non-64-aligned sizes: a real correctness
-/// bug, not floating-point noise. An earlier revision widened the wgpu
-/// tolerance to `1.5e-1` on the mistaken assumption this was fast-math;
-/// that masked the bug and has been reverted. The test is left RED on
-/// Metal so the bug stays visible. Tracked for cubecl-wgpu/Metal
-/// investigation (needs Metal hardware to debug).
+/// **Known Metal bug — NOT f32 fast-math, NOT our kernel.** On Apple
+/// Metal this test fails with a max pointwise diffmap error of **`1.098`**
+/// at fixture 1 (96×80) under the *lightest* distortion (`delta=3`) —
+/// measured on Metal CI 2026-06-02/03. A >1.0 per-pixel divergence at the
+/// lightest delta is far outside any fast-math envelope. The backend
+/// matrix isolates it precisely (all on RTX 5070 except Metal CI):
+///   • CUDA (cubecl-cuda):                       ✅ 2.08e-4
+///   • Vulkan (cubecl-wgpu → naga → SPIR-V):     ✅ 2.2e-4  (local)
+///   • Metal  (cubecl-wgpu → naga → MSL):        ❌ 1.098
+/// Vulkan runs the *identical* cubecl-wgpu WGSL through naga and is
+/// correct, so the defect is NOT in our kernel logic and NOT in cubecl's
+/// WGSL generation — it lives in the WGSL→MSL (naga) translation or
+/// Apple's Metal shader compiler. An earlier revision widened the wgpu
+/// tolerance to `1.5e-1` assuming fast-math; that masked the bug and has
+/// been reverted. The test is left RED on Metal so the bug stays visible.
+/// Tracked in #20 (needs Metal hardware to debug; likely a naga/wgpu
+/// upstream report once the per-pixel pattern is captured).
 const DIFFMAP_ABS_TOL: f32 = 1e-3;
 
 /// Scalar score absolute tolerance (butteraugli-direction, 0..100
