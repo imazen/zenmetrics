@@ -2978,26 +2978,6 @@ impl<R: Runtime> Zensim<R> {
             let planes = &self.persist_planes_ref[s];
             let w = per_scale_w.get(s).copied().unwrap_or([1.0 / 3.0; 3]);
 
-            // Defensive zero-fill of scale_dm[s] before the per-scale kernel
-            // writes it (#20). The score path (which shares the persist planes)
-            // is correct on Metal, so the Metal-only diffmap garbage is
-            // introduced in this diffmap-specific scratch — a subset of pixels
-            // come back holding a fixed, distortion-independent value (~1.098 at
-            // sizes >= 96), consistent with reads of slots the per-scale kernel
-            // left unwritten under Metal's MSL codegen. Zeroing first turns any
-            // such slot into 0 (matching the CPU canonical's ~0) instead of
-            // stale memory. On CUDA/Vulkan the per-scale kernel writes every
-            // slot, so this is a redundant no-op there (verified score-neutral).
-            unsafe {
-                diffmap::diffmap_zero_kernel::launch_unchecked::<R>(
-                    &self.client,
-                    Self::cube_count_1d(pad_total),
-                    Self::cube_dim_1d(),
-                    ArrayArg::from_raw_parts(scale_dm[s].clone(), pad_total),
-                    pad_total as u32,
-                );
-            }
-
             // Per-scale weighted SSIM error → scale_dm[s].
             unsafe {
                 diffmap::per_scale_weighted_ssim_kernel::launch_unchecked::<R>(
