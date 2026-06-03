@@ -150,6 +150,74 @@ fn force_gpu_diffmap() {
     }
 }
 
+/// Build a human-readable spatial report of where a GPU diffmap diverges
+/// from the CPU canonical, for CI-log diagnosis of the Metal-only #20 bug
+/// without Metal hardware. Reports the divergent-pixel bounding box, edge
+/// clustering, the rows/columns that contain ANY divergence (so a
+/// scale-boundary pattern is obvious), and the worst 12 pixels.
+fn localize_diffmap_divergence(
+    gpu_dm: &[f32],
+    cpu_dm: &[f32],
+    w: usize,
+    h: usize,
+    tol: f32,
+) -> String {
+    use std::fmt::Write as _;
+    let mut div: Vec<(usize, usize, f32, f32, f32)> = Vec::new(); // x,y,gpu,cpu,err
+    let mut rows = vec![0u32; h];
+    let mut cols = vec![0u32; w];
+    for (i, (&g, &c)) in gpu_dm.iter().zip(cpu_dm.iter()).enumerate() {
+        let e = (g - c).abs();
+        if e > tol {
+            let x = i % w;
+            let y = i / w;
+            div.push((x, y, g, c, e));
+            rows[y] += 1;
+            cols[x] += 1;
+        }
+    }
+    if div.is_empty() {
+        return "  (no pixels exceed tol)".to_string();
+    }
+    let xmin = div.iter().map(|d| d.0).min().unwrap();
+    let xmax = div.iter().map(|d| d.0).max().unwrap();
+    let ymin = div.iter().map(|d| d.1).min().unwrap();
+    let ymax = div.iter().map(|d| d.1).max().unwrap();
+    let on_last_col = div.iter().filter(|d| d.0 == w - 1).count();
+    let on_last_row = div.iter().filter(|d| d.1 == h - 1).count();
+    let on_first_col = div.iter().filter(|d| d.0 == 0).count();
+    let on_first_row = div.iter().filter(|d| d.1 == 0).count();
+
+    let mut s = String::new();
+    let _ = writeln!(
+        s,
+        "  bbox x[{xmin}..={xmax}] y[{ymin}..={ymax}] of {w}x{h}; \
+         edges: x0={on_first_col} x{}={on_last_col} y0={on_first_row} y{}={on_last_row}",
+        w - 1,
+        h - 1
+    );
+    // Rows / columns touched (concise if few; capped list otherwise) — a
+    // scale-boundary defect concentrates divergence on a small set.
+    let touched_rows: Vec<usize> = (0..h).filter(|&y| rows[y] > 0).collect();
+    let touched_cols: Vec<usize> = (0..w).filter(|&x| cols[x] > 0).collect();
+    let fmt_set = |v: &[usize]| -> String {
+        if v.len() <= 24 {
+            format!("{v:?}")
+        } else {
+            format!("{} distinct (first 24: {:?})", v.len(), &v[..24])
+        }
+    };
+    let _ = writeln!(s, "  rows touched: {}", fmt_set(&touched_rows));
+    let _ = writeln!(s, "  cols touched: {}", fmt_set(&touched_cols));
+    // Worst 12 pixels by error.
+    div.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap());
+    let _ = writeln!(s, "  worst {} px (x,y gpu cpu err):", div.len().min(12));
+    for &(x, y, g, c, e) in div.iter().take(12) {
+        let _ = writeln!(s, "    ({x},{y}) {g:.5} {c:.5} {e:.5}");
+    }
+    s
+}
+
 #[test]
 fn gpu_diffmap_matches_cpu_canonical_pointwise() {
     force_gpu_diffmap();
@@ -212,17 +280,45 @@ fn gpu_diffmap_matches_cpu_canonical_pointwise() {
             assert_eq!(cpu_dm.len(), n, "cpu diffmap len mismatch");
 
             let mut max_dm_err = 0.0f32;
+            let mut argmax_i = 0usize;
+            let mut n_div = 0usize;
             for (i, (&g, &c)) in gpu_dm.iter().zip(cpu_dm.iter()).enumerate() {
                 assert!(
                     g.is_finite(),
                     "fixture {fi} {w}x{h} d={delta}: gpu diffmap[{i}] not finite ({g})"
                 );
                 let e = (g - c).abs();
+                if e > DIFFMAP_ABS_TOL {
+                    n_div += 1;
+                }
                 if e > max_dm_err {
                     max_dm_err = e;
+                    argmax_i = i;
                 }
             }
             max_dm_err_overall = max_dm_err_overall.max(max_dm_err);
+
+            // On failure, localize the divergence to stderr so the Metal-only
+            // bug (#20) can be characterized from CI logs without Metal
+            // hardware. Working hypothesis: an odd-intermediate-dimension
+            // defect in the cubecl-wgpu/Metal diffmap pyramid — 64×64 (all
+            // power-of-two scales) passes; 96×80 (downscales through 5 and 3)
+            // fails at 1.098. The report below shows whether the bad pixels
+            // cluster at scale-boundary rows/columns (→ confirms odd-dim) or
+            // scatter (→ refutes it).
+            if max_dm_err > DIFFMAP_ABS_TOL {
+                let report =
+                    localize_diffmap_divergence(&gpu_dm, &cpu_dm, wu, hu, DIFFMAP_ABS_TOL);
+                eprintln!(
+                    "DIFFMAP DIVERGENCE fixture {fi} {w}x{h} d={delta}: \
+                     {n_div}/{n} px exceed tol {DIFFMAP_ABS_TOL}; argmax (x={}, y={}) \
+                     gpu={} cpu={}\n{report}",
+                    argmax_i % wu,
+                    argmax_i / wu,
+                    gpu_dm[argmax_i],
+                    cpu_dm[argmax_i],
+                );
+            }
 
             let score_err = (gpu_score - cpu_score).abs();
             max_score_err_overall = max_score_err_overall.max(score_err);
