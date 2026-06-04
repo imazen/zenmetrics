@@ -328,22 +328,36 @@ impl MetricCache {
                 )
                 .map(|v| vec![(zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME, v)]),
             #[cfg(feature = "gpu-zensim")]
-            MetricKind::ZensimGpu => self
-                .compute_umbrella(
-                    zenmetrics_api::MetricKind::Zensim,
-                    reference,
-                    distorted,
-                    // Score-only path — the runner will request features
-                    // separately via `compute_zensim_features` when it
-                    // wants the regime-appropriate vector. Use Basic
-                    // here for the cheapest persist planes that still
-                    // produce the correct umbrella score (zensim's
-                    // basic-block score is regime-independent — the
-                    // extended / iw features feed picker training, not
-                    // the scalar score).
-                    Some(ZensimFeatureRegime::Basic),
-                )
-                .map(|v| vec![("zensim_gpu", v)]),
+            MetricKind::ZensimGpu => {
+                // Images with min dimension < 64 can't form the GPU's 4-scale
+                // pyramid (each level floors at 8px: 64→32→16→8), so the GPU
+                // bake would see fewer features than it declares and fail
+                // (`bake declares more input features than the caller
+                // supplied`). Route them to the CPU zensim, which scores any
+                // size by repeating the coarsest scale. The GPU is a throughput
+                // optimization for large images; tiny images are cheap on CPU.
+                // Column stays "zensim_gpu" so the output schema is unchanged.
+                if reference.width.min(reference.height) < 64 {
+                    crate::metrics::zensim::score(reference, distorted)
+                        .map(|v| vec![("zensim_gpu", v)])
+                } else {
+                    self.compute_umbrella(
+                        zenmetrics_api::MetricKind::Zensim,
+                        reference,
+                        distorted,
+                        // Score-only path — the runner will request features
+                        // separately via `compute_zensim_features` when it
+                        // wants the regime-appropriate vector. Use Basic
+                        // here for the cheapest persist planes that still
+                        // produce the correct umbrella score (zensim's
+                        // basic-block score is regime-independent — the
+                        // extended / iw features feed picker training, not
+                        // the scalar score).
+                        Some(ZensimFeatureRegime::Basic),
+                    )
+                    .map(|v| vec![("zensim_gpu", v)])
+                }
+            }
             #[cfg(feature = "gpu-butteraugli")]
             MetricKind::ButteraugliGpu => {
                 let (max, pnorm3) = self.compute_butter(reference, distorted)?;

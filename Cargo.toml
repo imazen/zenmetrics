@@ -26,6 +26,7 @@ members = [
     "crates/zenmetrics-api",
     "crates/zenmetrics-corpus",
     "crates/zenmetrics-gpu-core",
+    "crates/metal-diffmap-repro",
     "crates/zenfleet-orchestrator",
     "crates/zenmetrics-orchestrator",
     "crates/zensim-gpu",

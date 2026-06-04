@@ -85,7 +85,10 @@ gpu-ssim2 = ["dep:zenmetrics-api", "zenmetrics-api/ssim2"]
 gpu-dssim = ["dep:zenmetrics-api", "zenmetrics-api/dssim"]
 gpu-cvvdp = ["dep:zenmetrics-api", "zenmetrics-api/cvvdp", "zenmetrics-api/cubecl-types", "dep:cubecl"]
 gpu-iwssim = ["dep:zenmetrics-api", "zenmetrics-api/iwssim"]
-gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim"]
+# `cpu-metrics` is pulled so the dispatcher can route min_dim<64 images (which
+# can't form the GPU 4-scale pyramid) to the CPU zensim — see the ZensimGpu arm
+# in metrics/cache.rs. Cheap: it only adds the CPU zensim scorer to the build.
+gpu-zensim = ["dep:zenmetrics-api", "zenmetrics-api/zensim", "cpu-metrics"]
 # Pick CubeCL backends. Forward through the umbrella so every enabled
 # per-crate gets the right backend feature.
 gpu-cuda = ["zenmetrics-api?/cuda", "cubecl?/cuda"]

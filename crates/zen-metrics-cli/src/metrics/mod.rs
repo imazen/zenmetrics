@@ -608,15 +608,25 @@ pub fn run_metric(
         MetricKind::Zensim => Err(disabled_msg("zensim", "cpu-metrics")),
 
         #[cfg(feature = "gpu-zensim")]
-        MetricKind::ZensimGpu => Ok(vec![(
-            "zensim_gpu",
-            run_gpu_via_umbrella(
-                zenmetrics_api::MetricKind::Zensim,
-                reference,
-                distorted,
-                gpu_runtime,
-            )?,
-        )]),
+        MetricKind::ZensimGpu => {
+            // min_dim<64 can't form the GPU 4-scale pyramid (floors at 8px),
+            // so the GPU bake sees too few features. Route tiny images to the
+            // CPU zensim (handles any size). gpu-zensim pulls cpu-metrics so
+            // `zensim::score` is available. Mirrors the cached path in cache.rs.
+            if reference.width.min(reference.height) < 64 {
+                Ok(vec![("zensim_gpu", zensim::score(reference, distorted)?)])
+            } else {
+                Ok(vec![(
+                    "zensim_gpu",
+                    run_gpu_via_umbrella(
+                        zenmetrics_api::MetricKind::Zensim,
+                        reference,
+                        distorted,
+                        gpu_runtime,
+                    )?,
+                )])
+            }
+        }
         #[cfg(not(feature = "gpu-zensim"))]
         MetricKind::ZensimGpu => Err(disabled_msg("zensim-gpu", "gpu-zensim")),
 

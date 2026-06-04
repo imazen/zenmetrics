@@ -1,0 +1,22 @@
+[package]
+# Standalone, dependency-minimal reproduction of the Metal-only zensim-gpu
+# diffmap divergence (imazen/zenmetrics#20). Depends on cubecl ONLY — no
+# zensim / sibling-repo path deps — so a wgpu/naga maintainer can clone +
+# `cargo run` it. See src/main.rs header for the full story.
+name = "metal-diffmap-repro"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[features]
+default = ["wgpu"]
+cuda = ["cubecl/cuda"]
+wgpu = ["cubecl/wgpu"]
+cpu  = ["cubecl/cpu"]
+
+[dependencies]
+cubecl = { workspace = true }
+
+[[bin]]
+name = "metal-diffmap-repro"
+path = "src/main.rs"
