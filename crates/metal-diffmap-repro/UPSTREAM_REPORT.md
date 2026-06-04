@@ -108,6 +108,11 @@ Metal, suspect that channel-offset read next.)
 - Not our algorithm / not WGSL logic: identical WGSL is correct on Vulkan + CUDA.
 - Not f32 precision: the wrong value is a *fixed* number, byte-identical across
   inputs that should change it — it's a wrong *read*, not arithmetic drift.
+- **Not uninitialized memory** — confirmed empirically. We zero-filled the
+  intermediate buffer before the producing kernel writes it and re-ran on Metal
+  CI: **zero difference** (same fixed `1.098`, same affected elements). So the
+  producing kernel writes every slot; the wrong value is *computed/read* from
+  in-bounds-but-wrong data, not stale memory.
 - Size-dependent (64 ok, ≥96 fails) and the bad outputs are NN-replications of a
   small number of coarse-buffer reads → consistent with one mistranslated
   dynamic `storage` index, not a global corruption.
