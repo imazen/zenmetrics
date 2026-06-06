@@ -7139,6 +7139,7 @@ dependencies = [
  "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
+ "zenpixels-convert",
  "zenyuv 0.1.3",
 ]
 

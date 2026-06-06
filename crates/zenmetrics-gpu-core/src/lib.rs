@@ -242,6 +242,38 @@ impl PadPlan {
     }
 }
 
+/// Convert a [`PixelSlice`](zenpixels::PixelSlice) of **any** descriptor (sRGB8,
+/// PQ, HLG, linear-f32, …) to interleaved **linear-light RGB f32**, letting the
+/// descriptor's transfer + primaries drive the conversion via zenpixels-convert.
+///
+/// This is the descriptor-driven front-end that lets a single metric entry
+/// handle SDR and HDR alike: an `RGB8_SRGB` slice decodes to relative linear
+/// `[0,1]`; a PQ/HLG/linear HDR slice decodes to its linear light. The caller
+/// then maps to display-relative values (e.g. `÷ peak` for absolute transfers)
+/// — see the `butteraugli-gpu` `compute_pixels_display` prototype. Returns
+/// interleaved `[R,G,B, …]` of length `width·height·3`.
+#[cfg(feature = "pixels")]
+pub fn convert_to_linear_f32(
+    s: &zenpixels::PixelSlice<'_>,
+) -> core::result::Result<Vec<f32>, zenpixels_convert::ConvertError> {
+    use zenpixels_convert::{ConvertPlan, convert_row};
+    let target = zenpixels::PixelDescriptor::RGBF32_LINEAR;
+    let plan = ConvertPlan::new(s.descriptor(), target).map_err(|e| e.decompose().0)?;
+    let w = s.width();
+    let h = s.rows();
+    let row_bytes = (w as usize) * target.bytes_per_pixel();
+    let mut out = vec![0u8; row_bytes * (h as usize)];
+    for y in 0..h {
+        let src_row = s.row(y);
+        let start = (y as usize) * row_bytes;
+        convert_row(&plan, src_row, &mut out[start..start + row_bytes], w);
+    }
+    // Reinterpret the f32 bytes without an alignment assumption.
+    Ok(out
+        .chunks_exact(4)
+        .map(|b| f32::from_ne_bytes([b[0], b[1], b[2], b[3]]))
+        .collect())
+}
 /// Split an interleaved RGB `f32` buffer (`[R,G,B, R,G,B, …]`, length `3·n`)
 /// into three planar `f32` buffers (`R…`, `G…`, `B…`, each length `n`). Backs
 /// the metrics' non-planar linear-RGB entry points (`*_from_linear_interleaved`),

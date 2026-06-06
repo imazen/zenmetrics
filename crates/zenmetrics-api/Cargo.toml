@@ -112,6 +112,7 @@ encoded = ["dep:image"]
 pixels = [
     "dep:zenpixels",
     "dep:zenpixels-convert",
+    "zenmetrics-gpu-core?/pixels",
     "cvvdp-gpu?/pixels",
     "butteraugli-gpu?/pixels",
     "ssim2-gpu?/pixels",
@@ -266,3 +267,18 @@ required-features = ["cubecl-types"]
 [[example]]
 name = "mode_wall"
 required-features = ["cubecl-types", "cvvdp"]
+
+# Unified descriptor-driven entry: sRGB8 slice == native; HDR linear == nits path.
+[[test]]
+name = "unified_pixels"
+required-features = ["cuda", "hdr", "pixels", "butter", "ssim2"]
+
+# Native CPU butter HDR via faithful linear-light path (vs GPU). No cubeclcpu.
+[[test]]
+name = "cpu_butter_linear"
+required-features = ["cuda", "cpu-butter", "butter", "pixels"]
+
+# Native CPU cvvdp HDR via faithful linear-light path (vs GPU). No cubeclcpu.
+[[test]]
+name = "cpu_cvvdp_linear"
+required-features = ["cuda", "cpu-cvvdp", "cvvdp"]

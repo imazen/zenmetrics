@@ -68,13 +68,19 @@ assert "butter-gpu highlight crush (DETECTS)" "$(last "$(score butteraugli-gpu "
 # The validated DEFAULT SDR feeding (pu-rescale, no clamp) ALSO sees it —
 # that IS the bug fix: the highlight range survives the u8 encode, so the
 # SSIM-family kernels are no longer blind. (UPIQ: pu-rescale 0.65 > clamp 0.55.)
-assert "ssim2 highlight crush (pu-rescale DETECTS)"      "$(last "$(score ssim2 "$HI_REF" "$HI_DIST")")"       "<"  95
-assert "butter highlight crush (pu-rescale DETECTS, u8)" "$(last "$(score butteraugli "$HI_REF" "$HI_DIST")")" ">"  1
+assert "ssim2 highlight crush (pu-rescale DETECTS)"  "$(last "$(score ssim2 "$HI_REF" "$HI_DIST")")"       "<"  95
+# CPU butter now routes through the umbrella's faithful LINEAR feeding (native
+# butteraugli_linear, intensity_target = display peak) — the luminance-aware
+# metrics never take a u8 transfer, so butter detects the crush on its own.
+assert "butter highlight crush (faithful DETECTS)"  "$(last "$(score butteraugli "$HI_REF" "$HI_DIST")")" ">"  1
 # The legacy pu-CLAMP feeding (the bug) collapses everything above ~100 cd/m²
-# to u8 255 → ref and dist become byte-identical → the SDR kernels go BLIND
-# (ssim2 stays ~100, u8 butter ~0). This is the regression the fix removed.
-assert "ssim2 highlight crush (pu-clamp BLIND)"      "$(last "$(score ssim2 "$HI_REF" "$HI_DIST" --hdr-transfer pu-clamp)")"      ">=" 99.9
-assert "butter highlight crush (pu-clamp BLIND, u8)" "$(last "$(score butteraugli "$HI_REF" "$HI_DIST" --hdr-transfer pu-clamp)")" "<=" 0.0001
+# to u8 255 → ref and dist become byte-identical → the SSIM-FAMILY kernels go
+# BLIND (ssim2 stays ~100). This is the regression the fix removed.
+assert "ssim2 highlight crush (pu-clamp BLIND)"     "$(last "$(score ssim2 "$HI_REF" "$HI_DIST" --hdr-transfer pu-clamp)")"      ">=" 99.9
+# butter is luminance-aware → it uses faithful linear regardless of
+# --hdr-transfer (the u8 transfer applies only to the SSIM-family), so the
+# pu-clamp bug can't blind it. It still DETECTS the crush.
+assert "butter highlight crush (transfer-agnostic, DETECTS)" "$(last "$(score butteraugli "$HI_REF" "$HI_DIST" --hdr-transfer pu-clamp)")" ">" 1
 
 echo
 if [[ $fails -eq 0 ]]; then echo "ALL FAITHFUL HDR-METRIC ASSERTIONS PASSED"; else echo "$fails ASSERTION(S) FAILED"; fi

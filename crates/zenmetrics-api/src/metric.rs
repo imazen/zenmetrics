@@ -1070,6 +1070,23 @@ impl Metric {
         ref_rgb: &[f32],
         dis_rgb: &[f32],
     ) -> Result<Score> {
+        // Native CPU butter/cvvdp take interleaved linear directly (no
+        // deinterleave→re-interleave round-trip; their native crates want
+        // interleaved `RGB<f32>`). GPU metrics deinterleave to their planar
+        // kernels below. Never `Backend::CubeclCpu`.
+        #[cfg(any(
+            feature = "cpu-ssim2",
+            feature = "cpu-cvvdp",
+            feature = "cpu-dssim",
+            feature = "cpu-butter",
+            feature = "cpu-zensim",
+            feature = "cpu-iwssim"
+        ))]
+        if let Metric::Cpu(s, _) = self {
+            return s
+                .compute_from_linear_interleaved(ref_rgb, dis_rgb)
+                .map(|(s, _)| s);
+        }
         let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
         let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
         self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
@@ -1083,6 +1100,40 @@ impl Metric {
         ref_rgb: &[f32],
         dis_rgb: &[f32],
     ) -> Result<Scores> {
+        // Native CPU fast-path (interleaved, no deinterleave). butter keeps its
+        // `[max, pnorm_3]` pair — `butteraugli_linear` returns pnorm_3 too — so
+        // the CPU multi-output matches the GPU butter arm.
+        #[cfg(any(
+            feature = "cpu-ssim2",
+            feature = "cpu-cvvdp",
+            feature = "cpu-dssim",
+            feature = "cpu-butter",
+            feature = "cpu-zensim",
+            feature = "cpu-iwssim"
+        ))]
+        if let Metric::Cpu(s, _) = self {
+            let (score, pnorm3) = s.compute_from_linear_interleaved(ref_rgb, dis_rgb)?;
+            return Ok(match pnorm3 {
+                // Only butter yields a pnorm_3 — same `[max, pnorm_3]` shape as
+                // the GPU butter arm in `compute_from_linear_planes_multi`.
+                Some(p) => Scores {
+                    metric_name: score.metric_name,
+                    metric_version: score.metric_version,
+                    scores: vec![
+                        NamedScore {
+                            name: "max",
+                            value: score.value,
+                        },
+                        NamedScore {
+                            name: "pnorm_3",
+                            value: p,
+                        },
+                    ],
+                    features: Vec::new(),
+                },
+                None => Scores::single(score),
+            });
+        }
         let (rr, rg, rb) = deinterleave_rgb(ref_rgb, "reference")?;
         let (dr, dg, db) = deinterleave_rgb(dis_rgb, "distorted")?;
         self.compute_from_linear_planes_multi(&rr, &rg, &rb, &dr, &dg, &db)
@@ -1160,6 +1211,24 @@ impl Metric {
                     message: "compute_handles not wired for zensim-gpu (Phase 4 deferred — see umbrella commit)".into(),
                 })
             }
+            // The optimized native-CPU backend has no GPU device handles —
+            // upload-once is a GPU-only concept. Surface a clear error rather
+            // than silently routing elsewhere.
+            #[cfg(any(
+                feature = "cpu-ssim2",
+                feature = "cpu-cvvdp",
+                feature = "cpu-dssim",
+                feature = "cpu-butter",
+                feature = "cpu-zensim",
+                feature = "cpu-iwssim"
+            ))]
+            Metric::Cpu(..) => Err(Error::Metric {
+                kind: "cpu",
+                message:
+                    "compute_handles is a GPU upload-once path; Backend::Cpu has no device handles \
+                          (use compute_srgb_u8 / compute_pixels)"
+                        .into(),
+            }),
         }
     }
 

@@ -9,8 +9,11 @@
 #   - different EXR content scores far from identity
 #   - the HEIC decode path reproduces the EXR pixel-for-pixel (butteraugli=0)
 #
-# Local-corpus harness, not CI: needs the HDR corpus on /mnt/v. Build first:
-#   cargo build --release -p zen-metrics-cli --features hdr
+# Local-corpus harness, not CI: needs the HDR corpus on /mnt/v. Build first
+# (`hdr` needs a metric backend so the umbrella has variants to dispatch — the
+# bare `--features hdr` build does not compile on its own):
+#   cargo build --release -p zen-metrics-cli \
+#     --features "png,jpeg,cpu-metrics,gpu-cvvdp,gpu-butteraugli,gpu-cuda,hdr"
 #   cargo build --release -p zenhdr-corpus --example make_distorted
 #
 # Override paths via env (BIN, MK_DISTORTED, UHDR_JPEG, HEIC_SM, HEIC_X,

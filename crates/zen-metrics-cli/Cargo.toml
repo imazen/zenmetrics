@@ -55,7 +55,7 @@ jxl = ["dep:zenjxl", "dep:jxl-encoder"]
 # absolute-luminance, then prep per metric — PU21 for the SDR metrics,
 # normalized-nits + a peak display model for cvvdp. Pulls the HDR decoders
 # (ultrahdr-rs / heic) + an EXR reader (image). Off by default.
-hdr = ["dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic", "dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr"]
+hdr = ["dep:ultrahdr-rs", "dep:ultrahdr-core", "dep:heic", "dep:image", "dep:bytemuck", "dep:zenmetrics-api", "zenmetrics-api/hdr", "zenmetrics-api/cpu-metrics"]
 
 # CPU metric feature flags
 cpu-metrics = [

@@ -308,6 +308,17 @@ fn to_umbrella_kind(m: crate::metrics::MetricKind) -> Option<zenmetrics_api::Met
     use zenmetrics_api::MetricKind as U;
     #[allow(unreachable_patterns)]
     match m {
+        // CPU metric variants → the umbrella's native CPU path (Backend::Cpu,
+        // selected in `score_via_hdr_scorer`). The `hdr` feature forwards
+        // `zenmetrics-api/cpu-metrics`, so the umbrella can always run these on
+        // CPU — and they get the SAME validated feeding (butter/cvvdp linear,
+        // SSIM-family pu-rescale) as the GPU path, retiring the hand-rolled
+        // CPU u8 conversion. Never `Backend::CubeclCpu`.
+        C::Ssim2 => Some(U::Ssim2),
+        C::Butteraugli => Some(U::Butter),
+        C::Dssim => Some(U::Dssim),
+        C::Zensim => Some(U::Zensim),
+        // GPU metric variants → the umbrella GPU path (gated on the gpu-* feature).
         #[cfg(feature = "gpu-cvvdp")]
         C::Cvvdp => Some(U::Cvvdp),
         #[cfg(feature = "gpu-butteraugli")]
@@ -346,9 +357,41 @@ pub fn score_via_hdr_scorer(
     runtime: crate::metrics::GpuRuntime,
 ) -> Option<Result<Vec<(&'static str, f64)>, Box<dyn std::error::Error>>> {
     let kind = to_umbrella_kind(metric)?;
-    let backend = match crate::metrics::gpu_runtime_to_backend(runtime) {
-        Ok(b) if !matches!(b, zenmetrics_api::Backend::Hip) => b,
-        _ => return None,
+    let backend = if metric.requires_gpu() {
+        // GPU metric variant → the runtime's backend, but only cuda/wgpu: the
+        // umbrella opaque can't express hip or cubecl-cpu (and we never want
+        // CubeclCpu), so those have no umbrella HDR path and fall back.
+        #[cfg(any(
+            feature = "gpu-butteraugli",
+            feature = "gpu-ssim2",
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
+        ))]
+        {
+            match crate::metrics::gpu_runtime_to_backend(runtime) {
+                Ok(b @ (zenmetrics_api::Backend::Cuda | zenmetrics_api::Backend::Wgpu)) => b,
+                _ => return None,
+            }
+        }
+        #[cfg(not(any(
+            feature = "gpu-butteraugli",
+            feature = "gpu-ssim2",
+            feature = "gpu-dssim",
+            feature = "gpu-iwssim",
+            feature = "gpu-zensim",
+            feature = "gpu-cvvdp"
+        )))]
+        {
+            let _ = runtime;
+            return None;
+        }
+    } else {
+        // CPU metric variant → the umbrella's native CPU backend (the `hdr`
+        // feature forwards `zenmetrics-api/cpu-metrics`). Never CubeclCpu.
+        let _ = runtime;
+        zenmetrics_api::Backend::Cpu
     };
     Some(score_via_hdr_scorer_inner(
         metric, kind, backend, r, d, transfer,

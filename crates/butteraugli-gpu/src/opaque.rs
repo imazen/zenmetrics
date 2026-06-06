@@ -522,6 +522,52 @@ impl ButteraugliOpaque {
         self.compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
     }
 
+    /// **PROTOTYPE — unified SDR/HDR entry.** Score two [`PixelSlice`]s + a
+    /// display peak. Unlike [`Self::compute_pixels`] (which forces sRGB8, so it
+    /// can only carry SDR), this lets the **descriptor** drive the conversion:
+    /// `zenmetrics_gpu_core::convert_to_linear_f32` decodes any transfer
+    /// (sRGB / PQ / HLG / linear) to linear-light planes via zenpixels-convert,
+    /// and `peak_nits` sets butteraugli's `intensity_target`. So **SDR** is an
+    /// `RGB8_SRGB` slice + an ~80–200 nit peak, and **HDR** is a PQ / linear
+    /// slice + a 1000 nit peak — *the same call*. This is the proof that the
+    /// HDR/SDR API split (the separate `hdr` front-end + `HdrScorer`) can
+    /// collapse into one descriptor-driven entry; `HdrScorer` then reduces to
+    /// "construct a `Metric`, hand it a PQ `PixelSlice`".
+    ///
+    /// Requires whole-image [`MemoryMode::Full`](crate::MemoryMode) (the
+    /// linear-planes path is whole-image only). Returns `(max-norm, pnorm_3)`.
+    ///
+    /// (For an *absolute* transfer like PQ, display-relative values are
+    /// `nits ÷ peak`; the prototype treats `RGBF32_LINEAR` as already
+    /// display-relative and applies that step in the caller — see the test.)
+    #[cfg(all(feature = "pixels", feature = "internals"))]
+    pub fn compute_pixels_display(
+        &mut self,
+        ref_px: PixelSlice<'_>,
+        dis_px: PixelSlice<'_>,
+        peak_nits: f32,
+    ) -> Result<(Score, f64)> {
+        let (w, h) = self.inner.dims();
+        let n = (w as usize) * (h as usize);
+        let to_planes = |s: &PixelSlice<'_>| -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+            let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|_| {
+                Error::DimensionMismatch {
+                    expected: n * 3,
+                    got: 0,
+                }
+            })?;
+            zenmetrics_gpu_core::deinterleave_rgb_f32(&lin).ok_or(Error::DimensionMismatch {
+                expected: n * 3,
+                got: lin.len(),
+            })
+        };
+        let (rr, rg, rb) = to_planes(&ref_px)?;
+        let (dr, dg, db) = to_planes(&dis_px)?;
+        let params = self.params.with_intensity_target(peak_nits);
+        self.inner
+            .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, &params)
+    }
+
     /// Score from [`PixelSlice`] inputs. See `dssim-gpu`'s
     /// `compute_pixels` for the fast-path / conversion-path
     /// semantics; identical here.
