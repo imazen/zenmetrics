@@ -40,13 +40,13 @@ use clap::ValueEnum;
 use crate::decode::Rgb8Image;
 
 #[cfg(feature = "cpu-metrics")]
-mod butteraugli;
+pub(crate) mod butteraugli;
 #[cfg(feature = "cpu-metrics")]
 mod dssim;
 #[cfg(feature = "cpu-metrics")]
-mod ssim2;
+pub(crate) mod ssim2;
 #[cfg(feature = "cpu-metrics")]
-mod zensim;
+pub(crate) mod zensim;
 
 #[cfg(feature = "gpu-butteraugli")]
 mod butter_pnorm3;

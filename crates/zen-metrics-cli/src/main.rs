@@ -25,6 +25,8 @@ mod compare;
 mod decode;
 mod metrics;
 mod output;
+#[cfg(feature = "cpu-metrics")]
+mod size_invariance;
 
 #[cfg(feature = "sweep")]
 mod sweep;
@@ -151,6 +153,10 @@ enum Command {
     /// (the lean arrow/parquet-only feature; `sweep` enables it too).
     #[cfg(feature = "assemble")]
     Assemble(crate::assemble::AssembleArgs),
+    /// Validate score size-invariance across metrics × pad strategies over
+    /// the pre-encoded corpus (downsample-rescore must not fluctuate).
+    #[cfg(feature = "cpu-metrics")]
+    SizeInvariance(size_invariance::SizeInvarianceArgs),
     /// Print available metrics and which require a GPU.
     ListMetrics,
     /// Print supported input formats.
@@ -574,6 +580,14 @@ fn main() -> ExitCode {
             print_format_list();
             ExitCode::SUCCESS
         }
+        #[cfg(feature = "cpu-metrics")]
+        Command::SizeInvariance(args) => match crate::size_invariance::run(&args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("size-invariance: {e}");
+                ExitCode::FAILURE
+            }
+        },
     }
 }
 

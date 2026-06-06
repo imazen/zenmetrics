@@ -6519,7 +6519,7 @@ dependencies = [
 [[package]]
 name = "zenanalyze"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenanalyze?rev=7fb46b99af6f#7fb46b99af6f236dce26cacc93b26a785dfb5c4a"
+source = "git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e#13d40c3be60ecfc3e482476ef068ff773b2c5b8d"
 dependencies = [
  "archmage",
  "garb",
@@ -6868,7 +6868,7 @@ dependencies = [
  "tinyvec",
  "ultrahdr-core",
  "whereat",
- "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=7fb46b99af6f)",
+ "zenanalyze 0.2.0 (git+https://github.com/imazen/zenanalyze?rev=13d40c3be60e)",
  "zencodec",
  "zenpixels",
  "zenyuv 0.1.3",
