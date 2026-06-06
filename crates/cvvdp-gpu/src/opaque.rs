@@ -414,7 +414,12 @@ impl CvvdpOpaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 3,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            3,
         )))
     }
 
@@ -433,7 +438,12 @@ impl CvvdpOpaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 1,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            1,
         )))
     }
 
@@ -596,9 +606,15 @@ impl CvvdpOpaque {
         let db = self.pad_plane(dis_b)?;
         match diffmap_out {
             Some(out) => {
-                let s = self
-                    .inner
-                    .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, Some(out))?;
+                let s = self.inner.compute_from_linear_planes(
+                    &rr,
+                    &rg,
+                    &rb,
+                    &dr,
+                    &dg,
+                    &db,
+                    Some(out),
+                )?;
                 self.crop_diffmap(out);
                 Ok(s)
             }
@@ -647,8 +663,7 @@ impl CvvdpOpaque {
         let rr = self.pad_plane(ref_r)?;
         let rg = self.pad_plane(ref_g)?;
         let rb = self.pad_plane(ref_b)?;
-        self.inner
-            .warm_reference_from_linear_planes(&rr, &rg, &rb)
+        self.inner.warm_reference_from_linear_planes(&rr, &rg, &rb)
     }
 
     /// Score a DIST candidate (linear-RGB f32 planes) against the cached
@@ -666,9 +681,12 @@ impl CvvdpOpaque {
         let db = self.pad_plane(dis_b)?;
         match diffmap_out {
             Some(out) => {
-                let s = self
-                    .inner
-                    .compute_with_warm_ref_from_linear_planes(&dr, &dg, &db, Some(out))?;
+                let s = self.inner.compute_with_warm_ref_from_linear_planes(
+                    &dr,
+                    &dg,
+                    &db,
+                    Some(out),
+                )?;
                 self.crop_diffmap(out);
                 Ok(s)
             }

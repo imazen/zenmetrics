@@ -436,6 +436,143 @@ impl HdrScorer {
         self.compute_multi(ref_nits, dis_nits)
             .map(|s| s.primary_score())
     }
+
+    /// **Descriptor-driven unified entry** — score a pair of
+    /// [`PixelSlice`](zenpixels::PixelSlice)s. The pixel **descriptor** decides
+    /// the path, so SDR and HDR are one call:
+    ///
+    /// - An `RGB8_SRGB` slice → the metric's **native SDR** path (the same u8
+    ///   the metric kernels take — bit-identical to [`crate::Metric::compute_srgb_u8`],
+    ///   so validated SDR scores are preserved exactly).
+    /// - Any other descriptor (linear / PQ / HLG HDR) → the **faithful HDR**
+    ///   feeding at this scorer's [`peak_nits`](Self::peak_nits): luminance-aware
+    ///   metrics get display-relative linear planes; the SSIM-family get the
+    ///   pu-rescale u8. zenpixels-convert applies the transfer.
+    ///
+    /// This is the collapse of the HDR/SDR API split: one descriptor-driven call
+    /// over the same warm metric instance. `HdrScorer` is then "a `Metric` + a
+    /// display, taking `PixelSlice`s".
+    #[cfg(feature = "pixels")]
+    pub fn compute_pixels_multi(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> crate::Result<crate::Scores> {
+        let both_srgb8 = r.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB
+            && d.descriptor() == zenpixels::PixelDescriptor::RGB8_SRGB;
+        if both_srgb8 {
+            // SDR native path — feed the sRGB8 bytes the kernels already take.
+            let (w, h) = self.metric.dims();
+            let rb = slice_to_srgb8(&r, w, h)?;
+            let db = slice_to_srgb8(&d, w, h)?;
+            return self.metric.compute_srgb_u8_multi(&rb, &db);
+        }
+        match self.feeding {
+            HdrFeeding::LinearPlanes => {
+                // Interleaved, not planar: native CPU butter/cvvdp take it
+                // zero-copy (their crates want interleaved RGB<f32>); GPU metrics
+                // deinterleave to their planar kernels inside the interleaved
+                // entry — same work, one transport. Backend (Cpu vs native GPU)
+                // is decided by the metric instance, never CubeclCpu.
+                let rr = slice_to_display_relative_linear_interleaved(&r, self.peak_nits)?;
+                let dd = slice_to_display_relative_linear_interleaved(&d, self.peak_nits)?;
+                self.metric.compute_from_linear_interleaved_multi(&rr, &dd)
+            }
+            HdrFeeding::SdrU8(transfer) => {
+                let rb = slice_to_pu_rescaled_u8(&r, transfer, self.peak_nits)?;
+                let db = slice_to_pu_rescaled_u8(&d, transfer, self.peak_nits)?;
+                self.metric.compute_srgb_u8_multi(&rb, &db)
+            }
+        }
+    }
+
+    /// Single-score variant of [`Self::compute_pixels_multi`].
+    #[cfg(feature = "pixels")]
+    pub fn compute_pixels(
+        &mut self,
+        r: zenpixels::PixelSlice<'_>,
+        d: zenpixels::PixelSlice<'_>,
+    ) -> crate::Result<crate::Score> {
+        self.compute_pixels_multi(r, d).map(|s| s.primary_score())
+    }
+}
+
+/// Convert a slice to packed sRGB8 (validating dims) for the native SDR path.
+#[cfg(feature = "pixels")]
+fn slice_to_srgb8(s: &zenpixels::PixelSlice<'_>, w: u32, h: u32) -> crate::Result<Vec<u8>> {
+    if s.width() != w || s.rows() != h {
+        return Err(crate::Error::Metric {
+            kind: "pixels",
+            message: format!("slice {}x{} != metric {}x{}", s.width(), s.rows(), w, h),
+        });
+    }
+    zenmetrics_gpu_core::convert_to_srgb_rgb8(s, zenpixels::PixelDescriptor::RGB8_SRGB).map_err(
+        |e| crate::Error::Metric {
+            kind: "pixels",
+            message: format!("sRGB8 conversion failed: {e:?}"),
+        },
+    )
+}
+
+/// The multiplier turning [`zenmetrics_gpu_core::convert_to_linear_f32`] output
+/// into **absolute display luminance (cd/m²)** — the one place the
+/// descriptor-vs-nits scale convention is encoded.
+///
+/// `convert_to_linear_f32` decodes each descriptor to *its own* linear scale:
+/// - **PQ** (ST.2084, absolute): `[0,1]` where **1.0 = 10000 cd/m²** (libjxl
+///   normalization), so the scale to nits is a fixed `10000`.
+/// - **everything relative/scene-referred** (sRGB, BT.709, linear, HLG;
+///   `reference_white_nits == 1.0`): `[0,1]` display-relative, so `1.0` is the
+///   display's `peak_nits` — the scale is `peak_nits`.
+///
+/// HLG is treated as relative here (no OOTF) — consistent with its `1.0`
+/// reference white; faithful HLG display-light would need the peak-dependent
+/// OOTF, which no current input path exercises (planar HDR comes from
+/// jxl-encoder as relative linear, per the HDR design).
+#[cfg(feature = "pixels")]
+fn linear_to_nits_scale(transfer: zenpixels::TransferFunction, peak_nits: f32) -> f32 {
+    match transfer {
+        zenpixels::TransferFunction::Pq => 10_000.0,
+        _ => peak_nits,
+    }
+}
+
+/// Convert a slice to **interleaved** display-relative `[0,1]` linear
+/// (`[R,G,B, …]`) at `peak_nits` — zenpixels-convert applies the descriptor's
+/// transfer, then `linear_to_nits_scale` maps to absolute nits and `÷ peak`
+/// brings it display-relative (content above the display peak clips, matching
+/// [`HdrScorer::compute_multi`]'s LinearPlanes clamp). Interleaved is the
+/// canonical linear transport: native CPU takes it as-is, GPU deinterleaves
+/// inside the interleaved entry.
+#[cfg(feature = "pixels")]
+fn slice_to_display_relative_linear_interleaved(
+    s: &zenpixels::PixelSlice<'_>,
+    peak_nits: f32,
+) -> crate::Result<Vec<f32>> {
+    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+        kind: "pixels",
+        message: format!("linear conversion failed: {e:?}"),
+    })?;
+    let rel = peak_nits.recip() * linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    Ok(lin.iter().map(|&v| (v * rel).clamp(0.0, 1.0)).collect())
+}
+
+/// Convert a slice to the SSIM-family pu-rescale u8 feeding: decode to linear,
+/// scale to absolute nits via [`linear_to_nits_scale`], then [`to_sdr_u8`].
+/// (Relative descriptors scale by `peak`; PQ by its fixed `10000`.)
+#[cfg(feature = "pixels")]
+fn slice_to_pu_rescaled_u8(
+    s: &zenpixels::PixelSlice<'_>,
+    transfer: HdrTransfer,
+    peak_nits: f32,
+) -> crate::Result<Vec<u8>> {
+    let lin = zenmetrics_gpu_core::convert_to_linear_f32(s).map_err(|e| crate::Error::Metric {
+        kind: "pixels",
+        message: format!("linear conversion failed: {e:?}"),
+    })?;
+    let scale = linear_to_nits_scale(s.descriptor().transfer(), peak_nits);
+    let nits: Vec<f32> = lin.iter().map(|&v| v * scale).collect();
+    Ok(to_sdr_u8(&nits, transfer, peak_nits))
 }
 
 /// Construct a [`Metric`](crate::Metric) configured for HDR scoring at
@@ -602,6 +739,33 @@ mod tests {
         assert_eq!(hdr_feeding(M::Butter), LinearPlanes);
         for m in [M::Ssim2, M::Dssim, M::Iwssim, M::Zensim] {
             assert_eq!(hdr_feeding(m), SdrU8(HdrTransfer::PuRescale));
+        }
+    }
+
+    /// The descriptor→nits scale convention behind the unified `compute_pixels`
+    /// helpers: PQ decodes to `[0,1]`=10000 cd/m² (fixed 10000 scale); every
+    /// relative/scene-referred transfer decodes to display-relative `[0,1]`
+    /// (scale = the display peak). Relative collapsing to `peak` is what makes
+    /// the `LinearPlanes` `÷peak` a pass-through (the GPU tests' baseline).
+    #[cfg(feature = "pixels")]
+    #[test]
+    fn linear_to_nits_scale_pq_is_absolute_rest_relative() {
+        use zenpixels::TransferFunction as TF;
+        let peak = 600.0;
+        assert_eq!(linear_to_nits_scale(TF::Pq, peak), 10_000.0);
+        for tf in [
+            TF::Srgb,
+            TF::Bt709,
+            TF::Linear,
+            TF::Hlg,
+            TF::Gamma22,
+            TF::Unknown,
+        ] {
+            assert_eq!(
+                linear_to_nits_scale(tf, peak),
+                peak,
+                "{tf:?} is relative — scale must be the display peak"
+            );
         }
     }
 }

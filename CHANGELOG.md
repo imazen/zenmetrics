@@ -19,6 +19,20 @@ Workspace conventions per the global rules:
 
 ### Added
 
+- **Unified descriptor-driven `compute_pixels` — SDR and HDR are one call.**
+  `HdrScorer::compute_pixels_multi` / `compute_pixels` (gated `hdr` + `pixels`) read the
+  zenpixels `PixelDescriptor` and route per descriptor over one warm metric instance:
+  `RGB8_SRGB` operands take the native `compute_srgb_u8_multi` path (SDR scores
+  bit-identical to the non-HDR path), anything else takes the faithful HDR feeding for the
+  metric (`LinearPlanes` for cvvdp/butter, pu-rescale u8 for the SSIM-family). Transfer-aware
+  scaling (`linear_to_nits_scale`) makes it correct across descriptors — PQ (ST.2084,
+  absolute) decodes `[0,1]`=10000 cd/m² (fixed 10000 scale), every relative/scene-referred
+  transfer decodes display-relative `[0,1]` (scale = the display peak), so the relative path
+  is the verified-baseline pass-through and PQ is correct by construction. Tests:
+  `hdr::tests::linear_to_nits_scale_*` (convention, no GPU) + `tests/unified_pixels.rs`
+  (CUDA: butter sRGB8==native, butter HDR-linear==`compute_multi(nits)`, ssim2 both). Also
+  gate-fixes `zenmetrics-gpu-core::convert_to_linear_f32` (was missing `#[cfg(feature =
+  "pixels")]`, breaking the metrics-without-pixels CLI HDR build) (`60df6e26`).
 - **HDR image-quality scoring — `score --hdr` / `batch --hdr` + a validated, auditable
   per-metric feeding recipe.** Decode EXR / gain-map HEIC (ISO 21496-1 `tmap`) / Google
   UltraHDR JPEG → absolute luminance (cd/m²), then score with any metric. The feeding is

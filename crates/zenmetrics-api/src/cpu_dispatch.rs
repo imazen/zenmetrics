@@ -151,11 +151,21 @@ impl CpuMetricState {
             }
             #[cfg(feature = "cpu-butter")]
             MetricKind::Butter => {
-                // butteraugli CPU defaults; the umbrella's MetricParams::Butter
-                // wraps butteraugli-gpu's params (different type — not lifted).
-                // Mirrors cpu_adapter::construct_butter.
+                // butteraugli CPU defaults, but lift `intensity_target` from the
+                // umbrella's `MetricParams::Butter` (butteraugli-gpu params) so the
+                // native linear HDR path scores at the same display peak as the GPU
+                // path (HdrScorer sets it via `with_intensity_target(peak_nits)`).
+                // The lift is `butter`-gated: `MetricParams::Butter` only exists when
+                // the GPU `butter` feature is on, and an HDR butter scorer can only be
+                // constructed in that case anyway (build_hdr_metric needs it). In a
+                // pure `cpu-butter` build the native `new()` default (80 cd/m²) stands.
+                let mut native = butteraugli::ButteraugliParams::new();
+                #[cfg(feature = "butter")]
+                if let MetricParams::Butter(gpu) = params {
+                    native = native.with_intensity_target(gpu.intensity_target);
+                }
                 Ok(CpuMetricState::Butter {
-                    params: butteraugli::ButteraugliParams::new(),
+                    params: native,
                     width,
                     height,
                 })
@@ -246,6 +256,46 @@ impl CpuMetricState {
             CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
         }
     }
+
+    /// One-shot score of an **interleaved linear-light** `R, G, B, …` f32 pair
+    /// (`width × height × 3` f32 per side) — the native HDR feeding for the
+    /// luminance-aware metrics (butter/cvvdp), no u8 round-trip and no
+    /// `Backend::CubeclCpu`. Values are display-relative `[0,1]` where `1.0`
+    /// is the metric's `intensity_target` (the display peak baked in at
+    /// construction). Metrics with no native linear model (the SSIM-family,
+    /// fed via `compute_srgb_u8` after pu-rescale) return a clear error.
+    pub(crate) fn compute_from_linear_interleaved(
+        &mut self,
+        r: &[f32],
+        d: &[f32],
+    ) -> Result<(Score, Option<f64>)> {
+        match self {
+            #[cfg(feature = "cpu-butter")]
+            CpuMetricState::Butter {
+                params,
+                width,
+                height,
+            } => compute_butter_linear(params, *width, *height, r, d).map(|(s, p)| (s, Some(p))),
+            #[cfg(feature = "cpu-cvvdp")]
+            CpuMetricState::Cvvdp {
+                inner,
+                width,
+                height,
+            } => compute_cvvdp_linear(inner, *width, *height, r, d).map(|s| (s, None)),
+            CpuMetricState::FeatureDisabled(_) => Err(Error::BackendNotEnabled { backend: "cpu" }),
+            // SSIM-family: no native absolute-luminance model — fed via
+            // compute_srgb_u8 after pu-rescale, never the linear path.
+            #[allow(unreachable_patterns)]
+            other => Err(Error::Metric {
+                kind: "cpu",
+                message: format!(
+                    "CPU {:?} has no linear-light feeding; feed via \
+                     compute_srgb_u8(to_sdr_u8(..)) per hdr_feeding()",
+                    other.kind()
+                ),
+            }),
+        }
+    }
 }
 
 /// Validate that both sides are exactly `width × height × 3` packed bytes.
@@ -318,6 +368,52 @@ fn compute_cvvdp(
         kind: "cvvdp",
         message: format!("cvvdp score: {e}"),
     })?;
+    Ok(Score {
+        value: v as f64,
+        metric_name: "cvvdp",
+        metric_version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+/// Split interleaved `[R,G,B, …]` f32 into tight planar `(R…, G…, B…)`.
+/// cvvdp's native scorer is planar; butter's is interleaved, so this is
+/// cvvdp-only (butter takes the interleaved buffer zero-copy).
+#[cfg(feature = "cpu-cvvdp")]
+fn deinterleave_f32(rgb: &[f32]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+    let n = rgb.len() / 3;
+    let mut r = Vec::with_capacity(n);
+    let mut g = Vec::with_capacity(n);
+    let mut b = Vec::with_capacity(n);
+    for px in rgb.chunks_exact(3) {
+        r.push(px[0]);
+        g.push(px[1]);
+        b.push(px[2]);
+    }
+    (r, g, b)
+}
+
+/// Faithful native cvvdp on interleaved display-relative `[0,1]` linear via
+/// [`cvvdp::Cvvdp::score_from_linear_planes`] — pure-Rust SIMD (archmage), no
+/// cubecl. The DisplayModel (peak/black/refl) comes from the params the scorer
+/// was built with (`MetricParams::Cvvdp`, threaded by `cpu_dispatch::new`), so
+/// `1.0` maps to the same display peak as the GPU cvvdp linear path.
+#[cfg(feature = "cpu-cvvdp")]
+fn compute_cvvdp_linear(
+    c: &mut cvvdp::Cvvdp,
+    width: u32,
+    height: u32,
+    r: &[f32],
+    d: &[f32],
+) -> Result<Score> {
+    check_linear_len("cvvdp", width, height, r, d)?;
+    let (rr, rg, rb) = deinterleave_f32(r);
+    let (dr, dg, db) = deinterleave_f32(d);
+    let v = c
+        .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, width as usize)
+        .map_err(|e| Error::Metric {
+            kind: "cvvdp",
+            message: format!("cvvdp score_from_linear_planes: {e}"),
+        })?;
     Ok(Score {
         value: v as f64,
         metric_name: "cvvdp",
@@ -451,4 +547,63 @@ fn compute_butter(
         metric_name: "butter",
         metric_version: env!("CARGO_PKG_VERSION"),
     })
+}
+
+/// Validate that both sides are exactly `width × height × 3` interleaved f32.
+#[cfg(any(feature = "cpu-butter", feature = "cpu-cvvdp"))]
+fn check_linear_len(
+    kind: &'static str,
+    width: u32,
+    height: u32,
+    r: &[f32],
+    d: &[f32],
+) -> Result<()> {
+    let expected = (width as usize) * (height as usize) * 3;
+    if r.len() != expected || d.len() != expected {
+        return Err(Error::Metric {
+            kind,
+            message: format!(
+                "cpu {kind}: expected {expected} interleaved linear f32 per side \
+                 ({width}×{height}×3), got ref={} dist={}",
+                r.len(),
+                d.len()
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Faithful native butteraugli on interleaved linear-light f32 via
+/// [`butteraugli::butteraugli_linear`]. `params.intensity_target` (set at
+/// construction from the display peak) defines the absolute scale that
+/// linear `1.0` maps to — matching the GPU `compute_from_linear_planes`
+/// convention (plane-value `1.0` == `intensity_target`).
+#[cfg(feature = "cpu-butter")]
+fn compute_butter_linear(
+    params: &butteraugli::ButteraugliParams,
+    width: u32,
+    height: u32,
+    r: &[f32],
+    d: &[f32],
+) -> Result<(Score, f64)> {
+    check_linear_len("butter", width, height, r, d)?;
+    // `rgb::RGB<f32>` is `bytemuck::Pod`, so reinterpret interleaved f32 in
+    // place — no copy (same pattern as the sRGB-u8 path's `RGB<u8>`).
+    let ref_rgb: &[rgb::RGB<f32>] = bytemuck::cast_slice(r);
+    let dist_rgb: &[rgb::RGB<f32>] = bytemuck::cast_slice(d);
+    let ref_img = imgref::ImgRef::new(ref_rgb, width as usize, height as usize);
+    let dist_img = imgref::ImgRef::new(dist_rgb, width as usize, height as usize);
+    let result =
+        butteraugli::butteraugli_linear(ref_img, dist_img, params).map_err(|e| Error::Metric {
+            kind: "butter",
+            message: format!("butteraugli_linear: {e:?}"),
+        })?;
+    Ok((
+        Score {
+            value: result.score,
+            metric_name: "butter",
+            metric_version: env!("CARGO_PKG_VERSION"),
+        },
+        result.pnorm_3,
+    ))
 }
