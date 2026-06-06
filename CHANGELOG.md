@@ -129,19 +129,21 @@ Workspace conventions per the global rules:
 
 ### Fixed
 
-- **zensim-gpu Metal diffmap tolerance un-masked — it was hiding a real bug.**
-  An earlier change widened the wgpu/Metal pointwise diffmap tolerance
-  `1e-3 → 1.5e-1` on the assumption the GPU-vs-CPU-canonical divergence was
-  f32 fast-math. Metal CI (run `26818679703`) disproved that: at the widened
-  tolerance the test reaches fixture 1 (96×80) and fails at the *lightest*
-  distortion (`delta=3`) with a max pointwise error of **`1.098`** — three
-  orders of magnitude past any fast-math envelope, while CUDA (identical
-  kernel source) stays at `2e-4`. The divergence is size-dependent (64×64
-  small, 96×80 blows up), pointing at a **real** cubecl-wgpu/Metal codegen
-  or boundary-handling defect at non-64-aligned sizes — not floating-point
-  noise. Reverted to a tight `1e-3` for all backends so the test stays RED
-  on Metal and the bug remains visible; doc-comment rewritten to record the
-  measured failure. Tracked for Metal-hardware investigation.
+- **zensim-gpu Metal diffmap garbage — FIXED: it was `f64` feature-kernel partials (#20).**
+  The wgpu/Metal pointwise diffmap diverged from the CPU canonical by a max
+  **`1.098`** (CUDA stayed `2e-4`), size-dependent (64×64 fine, 96×80 blew up) —
+  three orders past any f32 fast-math envelope, so an earlier tolerance widen
+  (`1e-3 → 1.5e-1`) was reverted to keep the test RED and the bug visible.
+  **Root cause:** the fused / masked-iw feature kernels accumulated partials in
+  `f64`; wgpu/WGSL (Metal) has no `f64`, so cubecl emitted broken f64 WGSL and the
+  persist planes were left uninitialized → the scattered ~1.098 garbage (CUDA's
+  real f64 hid it). **Fix (`eabc68e1`):** every GPU `#[cube]` partial / accumulator
+  / `SharedMemory` is now `f32` (no `Array<f64>` left in any kernel); the host
+  widens the f32 readback to f64 to preserve the byte-for-byte CPU-parity
+  contract. **No cubecl / zenforks changes** — it sidesteps f64-on-wgpu entirely.
+  `cpu_gpu_diffmap_parity` now passes at the tight `1e-3` on CUDA **and**
+  wgpu/llvmpipe (verified locally), closing the Metal failure the `gpu-citest`
+  link-time fix first un-masked.
 
 - **zenstats `sa_st_curve` / PWRC no longer O(n²) MEMORY (OOM fix) (`b56d8ed2`).**
   The PWRC SA-ST AUC built a `Vec<(f64, bool)>` of all `n·(n−1)/2` pairs, so a

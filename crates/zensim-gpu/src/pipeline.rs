@@ -101,9 +101,6 @@ struct Scale {
 fn alloc_empty_f32<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
     client.empty(n * core::mem::size_of::<f32>())
 }
-fn alloc_empty_f64<R: Runtime>(client: &ComputeClient<R>, n: usize) -> cubecl::server::Handle {
-    client.empty(n * core::mem::size_of::<f64>())
-}
 /// Choose a per-scale strip count to keep V-blur GPU-occupied at all
 /// resolutions. The kernel's parallelism is `padded_w × n_strips × 3
 /// channels`. RTX-5070-class GPUs want ≥ 16 K resident threads to
@@ -749,11 +746,11 @@ impl<R: Runtime> Zensim<R> {
             &crate::kernels::color::SRGB8_TO_LINEARF32_LUT,
         ));
 
-        let partials_f64 = alloc_empty_f64(&client, partials_f64_total);
+        let partials_f64 = alloc_empty_f32(&client, partials_f64_total);
         let partials_max = alloc_empty_f32(&client, partials_max_total);
         let n_finals_f64 = scales.len() * 3 * 17;
         let n_finals_max = scales.len() * 3 * 3;
-        let finals_f64 = alloc_empty_f64(&client, n_finals_f64);
+        let finals_f64 = alloc_empty_f32(&client, n_finals_f64);
         let finals_max = alloc_empty_f32(&client, n_finals_max);
 
         // Extended regime allocations — only when needed. The persist
@@ -777,15 +774,15 @@ impl<R: Runtime> Zensim<R> {
                 };
                 persist_planes_ref.push(alloc_planes());
             }
-            partials_ext_f64 = alloc_empty_f64(&client, partials_ext_total);
-            finals_ext_f64 = alloc_empty_f64(&client, scales.len() * 3 * 12);
+            partials_ext_f64 = alloc_empty_f32(&client, partials_ext_total);
+            finals_ext_f64 = alloc_empty_f32(&client, scales.len() * 3 * 12);
         } else {
             // Basic regime: tiny no-op placeholders. cubecl needs every
             // ArrayArg handle to be valid even if the kernel using it
             // is never launched; placeholders are 1-element rather
             // than 0-element to dodge any backend-side zero-len checks.
-            partials_ext_f64 = alloc_empty_f64(&client, 1);
-            finals_ext_f64 = alloc_empty_f64(&client, 1);
+            partials_ext_f64 = alloc_empty_f32(&client, 1);
+            finals_ext_f64 = alloc_empty_f32(&client, 1);
             // Empty placeholder vecs — code paths that read these check
             // `regime.needs_extended_kernel()` before indexing.
         }
@@ -1142,16 +1139,22 @@ impl<R: Runtime> Zensim<R> {
             .client
             .read_one(self.finals_max.clone())
             .expect("read finals_max");
-        let finals_f64 = f64::from_bytes(&f64_bytes);
+        // Finals are now produced in f32 on-device (GPUs without f64, e.g. Metal,
+        // can't carry f64 buffers). Widen to f64 here (lossless) so the host fold +
+        // scoring math below stays in f64 exactly as before.
+        let finals_f64_storage: Vec<f64> =
+            f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
+        let finals_f64 = finals_f64_storage.as_slice();
         let finals_max = f32::from_bytes(&max_bytes);
 
-        let ext_bytes_storage;
+        let finals_ext_storage: Vec<f64>;
         let finals_ext_f64: &[f64] = if needs_ext {
-            ext_bytes_storage = self
+            let ext_bytes = self
                 .client
                 .read_one(self.finals_ext_f64.clone())
                 .expect("read finals_ext_f64");
-            f64::from_bytes(&ext_bytes_storage)
+            finals_ext_storage = f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
+            finals_ext_storage.as_slice()
         } else {
             &[]
         };
@@ -1325,7 +1328,9 @@ impl<R: Runtime> Zensim<R> {
                 .client
                 .read_one(self.finals_max.clone())
                 .expect("read finals_max");
-            let finals_f64 = f64::from_bytes(&f64_bytes);
+            // f32 on-device finals widened to f64 (lossless) for the host accumulate.
+            let finals_f64: Vec<f64> =
+                f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
             let finals_max = f32::from_bytes(&max_bytes);
             for i in 0..acc_f64.len() {
                 acc_f64[i] += finals_f64[i];
@@ -1340,7 +1345,8 @@ impl<R: Runtime> Zensim<R> {
                     .client
                     .read_one(self.finals_ext_f64.clone())
                     .expect("read finals_ext_f64");
-                let finals_ext = f64::from_bytes(&ext_bytes);
+                let finals_ext: Vec<f64> =
+                    f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
                 for i in 0..acc_ext_f64.len() {
                     acc_ext_f64[i] += finals_ext[i];
                 }
@@ -3020,13 +3026,18 @@ impl<R: Runtime> Zensim<R> {
             .client
             .read_one(self.finals_max.clone())
             .expect("read finals_max");
-        let finals_f64 = f64::from_bytes(&f64_bytes);
+        // f32 on-device finals widened to f64 (lossless) for the host fold.
+        let finals_f64_storage: Vec<f64> =
+            f32::from_bytes(&f64_bytes).iter().map(|&x| x as f64).collect();
+        let finals_f64 = finals_f64_storage.as_slice();
         let finals_max = f32::from_bytes(&max_bytes);
         let ext_bytes = self
             .client
             .read_one(self.finals_ext_f64.clone())
             .expect("read finals_ext_f64");
-        let finals_ext_f64 = f64::from_bytes(&ext_bytes);
+        let finals_ext_storage: Vec<f64> =
+            f32::from_bytes(&ext_bytes).iter().map(|&x| x as f64).collect();
+        let finals_ext_f64 = finals_ext_storage.as_slice();
 
         let mut scale_image_h: [u32; SCALES] = [0; SCALES];
         let mut hs = self.height;

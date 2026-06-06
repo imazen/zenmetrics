@@ -1,0 +1,13 @@
+# zensim-gpu f64->f32 GPU-reduction readback A/B (zenmetrics#20)
+# host: AMD Ryzen 9 7950X + RTX 5070, backend cuda, --release
+# branch fix-zensim-f32-partials-metal (f32) vs master 697ec5f4 (f64)
+# total score_from_linear_planes_with_diffmap wall time, warm, avg over n_iter
+size	n_iter	f64_master_ms	f32_branch_ms	delta_pct
+64x64	400	1.0170	0.9918	-2.5
+128x128	300	1.7623	1.7525	-0.6
+256x256	200	3.3189	3.3182	-0.0
+512x512	100	7.0658	7.2437	+2.5
+1024x1024	40	40.0651	39.8819	-0.5
+# Conclusion: deltas within run-to-run GPU-timing noise (flip sign across sizes);
+# no measurable perf loss from the f32 readback + host f32->f64 widen. f32 actually
+# transfers half the finals bytes; the ~200-element host widen is ~ns.
