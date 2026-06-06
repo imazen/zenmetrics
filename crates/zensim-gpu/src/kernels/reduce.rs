@@ -21,9 +21,9 @@ use cubecl::prelude::*;
 
 #[cube(launch_unchecked)]
 pub fn reduce_scale_kernel(
-    partials_f64: &Array<f64>,
+    partials_f64: &Array<f32>,
     partials_max: &Array<f32>,
-    finals_f64: &mut Array<f64>,
+    finals_f64: &mut Array<f32>,
     finals_max: &mut Array<f32>,
     f64_slot_off: u32,
     max_slot_off: u32,
@@ -43,8 +43,8 @@ pub fn reduce_scale_kernel(
             (f64_slot_off as usize) + (channel as usize) * (n_partials_per_ch as usize) * 17;
         let inner = slot_kind as usize;
 
-        let mut shared = SharedMemory::<f64>::new(256usize);
-        let mut sum = 0.0_f64;
+        let mut shared = SharedMemory::<f32>::new(256usize);
+        let mut sum = 0.0_f32;
         let mut i = tid;
         while i < n_partials_per_ch {
             sum += partials_f64[f64_ch_off + (i as usize) * 17 + inner];
@@ -109,8 +109,8 @@ pub fn reduce_scale_kernel(
 /// own slot via a 256-thread tree reduction.
 #[cube(launch_unchecked)]
 pub fn reduce_ext_kernel(
-    partials_ext_f64: &Array<f64>,
-    finals_ext_f64: &mut Array<f64>,
+    partials_ext_f64: &Array<f32>,
+    finals_ext_f64: &mut Array<f32>,
     f64_slot_off: u32,
     n_partials_per_ch: u32, // = pw × n_strips
     final_f64_base: u32,    // base index into finals_ext_f64 for this scale
@@ -125,8 +125,8 @@ pub fn reduce_ext_kernel(
     let f64_ch_off =
         (f64_slot_off as usize) + (channel as usize) * (n_partials_per_ch as usize) * 12;
 
-    let mut shared = SharedMemory::<f64>::new(256usize);
-    let mut sum = 0.0_f64;
+    let mut shared = SharedMemory::<f32>::new(256usize);
+    let mut sum = 0.0_f32;
     let mut i = tid;
     while i < n_partials_per_ch {
         sum += partials_ext_f64[f64_ch_off + (i as usize) * 12 + inner];

@@ -114,7 +114,7 @@ pub fn masked_iw_kernel(
     mu2_all: &Array<f32>,
     ssq_all: &Array<f32>,
     s12_all: &Array<f32>,
-    partials_ext_f64: &mut Array<f64>,
+    partials_ext_f64: &mut Array<f32>,
     width: u32,
     height: u32,
     n_strips: u32,
@@ -156,18 +156,18 @@ pub fn masked_iw_kernel(
     let mut sum_act = 0.0_f32;
 
     // Per-thread accumulators (12 slots).
-    let mut s0 = 0.0_f64; // masked_ssim_d
-    let mut s1 = 0.0_f64; // masked_ssim_d4
-    let mut s2 = 0.0_f64; // masked_ssim_d2
-    let mut s3 = 0.0_f64; // masked_art_4
-    let mut s4 = 0.0_f64; // masked_det_4
-    let mut s5 = 0.0_f64; // masked_mse
-    let mut s6 = 0.0_f64; // iw_ssim_d
-    let mut s7 = 0.0_f64; // iw_ssim_d4
-    let mut s8 = 0.0_f64; // iw_ssim_d2
-    let mut s9 = 0.0_f64; // iw_art_4
-    let mut s10 = 0.0_f64; // iw_det_4
-    let mut s11 = 0.0_f64; // iw_mse
+    let mut s0 = 0.0_f32; // masked_ssim_d
+    let mut s1 = 0.0_f32; // masked_ssim_d4
+    let mut s2 = 0.0_f32; // masked_ssim_d2
+    let mut s3 = 0.0_f32; // masked_art_4
+    let mut s4 = 0.0_f32; // masked_det_4
+    let mut s5 = 0.0_f32; // masked_mse
+    let mut s6 = 0.0_f32; // iw_ssim_d
+    let mut s7 = 0.0_f32; // iw_ssim_d4
+    let mut s8 = 0.0_f32; // iw_ssim_d2
+    let mut s9 = 0.0_f32; // iw_art_4
+    let mut s10 = 0.0_f32; // iw_det_4
+    let mut s11 = 0.0_f32; // iw_mse
 
     // ============================ PREFIX INIT ============================
     // For each prefix row k in [0, DIAM), load src/dst/mu1 for one full
@@ -284,17 +284,17 @@ pub fn masked_iw_kernel(
             let d_m = (raw_sd * mask_w).max(f32::new(0.0));
             let d_m_sq = d_m * d_m;
             let d_m_4 = d_m_sq * d_m_sq;
-            s0 += d_m as f64;
-            s1 += d_m_4 as f64;
-            s2 += d_m_sq as f64;
+            s0 += d_m;
+            s1 += d_m_4;
+            s2 += d_m_sq;
         }
         if do_iw == 1u32 {
             let d_i = (raw_sd * iw_w).max(f32::new(0.0));
             let d_i_sq = d_i * d_i;
             let d_i_4 = d_i_sq * d_i_sq;
-            s6 += d_i as f64;
-            s7 += d_i_4 as f64;
-            s8 += d_i_sq as f64;
+            s6 += d_i;
+            s7 += d_i_4;
+            s8 += d_i_sq;
         }
 
         // Masked edge — matches `edge_diff_masked_inner`:
@@ -311,11 +311,11 @@ pub fn masked_iw_kernel(
             let det_m = (-ed_m).max(f32::new(0.0));
             let am2 = art_m * art_m;
             let dm2 = det_m * det_m;
-            s3 += (am2 * am2) as f64;
-            s4 += (dm2 * dm2) as f64;
+            s3 += am2 * am2;
+            s4 += dm2 * dm2;
 
             let p = sv - dv;
-            s5 += (p * p * mask_w) as f64;
+            s5 += p * p * mask_w;
         }
         if do_iw == 1u32 {
             let ed_i = ed_raw * iw_w;
@@ -323,11 +323,11 @@ pub fn masked_iw_kernel(
             let det_i = (-ed_i).max(f32::new(0.0));
             let ai2 = art_i * art_i;
             let di2 = det_i * det_i;
-            s9 += (ai2 * ai2) as f64;
-            s10 += (di2 * di2) as f64;
+            s9 += ai2 * ai2;
+            s10 += di2 * di2;
 
             let p = sv - dv;
-            s11 += (p * p * iw_w) as f64;
+            s11 += p * p * iw_w;
         }
 
         // Slide the activity V-window down by one row.

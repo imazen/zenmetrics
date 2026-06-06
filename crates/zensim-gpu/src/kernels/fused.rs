@@ -99,7 +99,7 @@ pub fn fused_features_kernel(
     dst_b: &Array<f32>,
     src_c: &Array<f32>,
     dst_c: &Array<f32>,
-    partials_f64: &mut Array<f64>,
+    partials_f64: &mut Array<f32>,
     partials_max: &mut Array<f32>,
     width: u32, // padded_w
     height: u32,
@@ -150,23 +150,23 @@ pub fn fused_features_kernel(
     let mut sum_sq = 0.0_f32;
     let mut sum_s12 = 0.0_f32;
 
-    let mut a0 = 0.0_f64;
-    let mut a1 = 0.0_f64;
-    let mut a2 = 0.0_f64;
-    let mut a3 = 0.0_f64;
-    let mut a4 = 0.0_f64;
-    let mut a5 = 0.0_f64;
-    let mut a6 = 0.0_f64;
-    let mut a7 = 0.0_f64;
-    let mut a8 = 0.0_f64;
-    let mut a9 = 0.0_f64;
-    let mut a10 = 0.0_f64;
-    let mut a11 = 0.0_f64;
-    let mut a12 = 0.0_f64;
-    let mut a13 = 0.0_f64;
-    let mut a14 = 0.0_f64;
-    let mut a15 = 0.0_f64;
-    let mut a16 = 0.0_f64;
+    let mut a0 = 0.0_f32;
+    let mut a1 = 0.0_f32;
+    let mut a2 = 0.0_f32;
+    let mut a3 = 0.0_f32;
+    let mut a4 = 0.0_f32;
+    let mut a5 = 0.0_f32;
+    let mut a6 = 0.0_f32;
+    let mut a7 = 0.0_f32;
+    let mut a8 = 0.0_f32;
+    let mut a9 = 0.0_f32;
+    let mut a10 = 0.0_f32;
+    let mut a11 = 0.0_f32;
+    let mut a12 = 0.0_f32;
+    let mut a13 = 0.0_f32;
+    let mut a14 = 0.0_f32;
+    let mut a15 = 0.0_f32;
+    let mut a16 = 0.0_f32;
     let mut peak0 = 0.0_f32;
     let mut peak1 = 0.0_f32;
     let mut peak2 = 0.0_f32;
@@ -309,10 +309,10 @@ pub fn fused_features_kernel(
         let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
-        a0 += sd as f64;
-        a1 += sd4 as f64;
-        a2 += sd2 as f64;
-        a14 += (sd4 * sd4) as f64;
+        a0 += sd;
+        a1 += sd4;
+        a2 += sd2;
+        a14 += sd4 * sd4;
         if sd > peak0 {
             peak0 = sd;
         }
@@ -328,14 +328,14 @@ pub fn fused_features_kernel(
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        a3 += artifact as f64;
-        a4 += a4_v as f64;
-        a5 += a2_v as f64;
-        a6 += detail_lost as f64;
-        a7 += dl4 as f64;
-        a8 += dl2 as f64;
-        a15 += (a4_v * a4_v) as f64;
-        a16 += (dl4 * dl4) as f64;
+        a3 += artifact;
+        a4 += a4_v;
+        a5 += a2_v;
+        a6 += detail_lost;
+        a7 += dl4;
+        a8 += dl2;
+        a15 += a4_v * a4_v;
+        a16 += dl4 * dl4;
         if artifact > peak1 {
             peak1 = artifact;
         }
@@ -345,13 +345,13 @@ pub fn fused_features_kernel(
 
         let vs = (sv - mu1) * mask;
         let vd = (dv - mu2) * mask;
-        a10 += (vs * vs) as f64;
-        a11 += (vd * vd) as f64;
-        a12 += (diff1 * mask) as f64;
-        a13 += (diff2 * mask) as f64;
+        a10 += vs * vs;
+        a11 += vd * vd;
+        a12 += diff1 * mask;
+        a13 += diff2 * mask;
 
         let pd = (sv - dv) * mask;
-        a9 += (pd * pd) as f64;
+        a9 += pd * pd;
 
         // Slide: subtract slot's old H-blur from sums, compute new
         // H-blur for row mirror(y + R + 1), add to sums, write to
@@ -493,7 +493,7 @@ pub fn fused_features_kernel_persist(
     dst_b: &Array<f32>,
     src_c: &Array<f32>,
     dst_c: &Array<f32>,
-    partials_f64: &mut Array<f64>,
+    partials_f64: &mut Array<f32>,
     partials_max: &mut Array<f32>,
     // Per-pixel persist planes (3 channels concatenated).
     mu1_all: &mut Array<f32>,
@@ -548,23 +548,23 @@ pub fn fused_features_kernel_persist(
     let mut sum_sq = 0.0_f32;
     let mut sum_s12 = 0.0_f32;
 
-    let mut a0 = 0.0_f64;
-    let mut a1 = 0.0_f64;
-    let mut a2 = 0.0_f64;
-    let mut a3 = 0.0_f64;
-    let mut a4 = 0.0_f64;
-    let mut a5 = 0.0_f64;
-    let mut a6 = 0.0_f64;
-    let mut a7 = 0.0_f64;
-    let mut a8 = 0.0_f64;
-    let mut a9 = 0.0_f64;
-    let mut a10 = 0.0_f64;
-    let mut a11 = 0.0_f64;
-    let mut a12 = 0.0_f64;
-    let mut a13 = 0.0_f64;
-    let mut a14 = 0.0_f64;
-    let mut a15 = 0.0_f64;
-    let mut a16 = 0.0_f64;
+    let mut a0 = 0.0_f32;
+    let mut a1 = 0.0_f32;
+    let mut a2 = 0.0_f32;
+    let mut a3 = 0.0_f32;
+    let mut a4 = 0.0_f32;
+    let mut a5 = 0.0_f32;
+    let mut a6 = 0.0_f32;
+    let mut a7 = 0.0_f32;
+    let mut a8 = 0.0_f32;
+    let mut a9 = 0.0_f32;
+    let mut a10 = 0.0_f32;
+    let mut a11 = 0.0_f32;
+    let mut a12 = 0.0_f32;
+    let mut a13 = 0.0_f32;
+    let mut a14 = 0.0_f32;
+    let mut a15 = 0.0_f32;
+    let mut a16 = 0.0_f32;
     let mut peak0 = 0.0_f32;
     let mut peak1 = 0.0_f32;
     let mut peak2 = 0.0_f32;
@@ -698,10 +698,10 @@ pub fn fused_features_kernel_persist(
         let sd = sd0 * mask;
         let sd2 = sd * sd;
         let sd4 = sd2 * sd2;
-        a0 += sd as f64;
-        a1 += sd4 as f64;
-        a2 += sd2 as f64;
-        a14 += (sd4 * sd4) as f64;
+        a0 += sd;
+        a1 += sd4;
+        a2 += sd2;
+        a14 += sd4 * sd4;
         if sd > peak0 {
             peak0 = sd;
         }
@@ -717,14 +717,14 @@ pub fn fused_features_kernel_persist(
         let dl2 = detail_lost * detail_lost;
         let a4_v = a2_v * a2_v;
         let dl4 = dl2 * dl2;
-        a3 += artifact as f64;
-        a4 += a4_v as f64;
-        a5 += a2_v as f64;
-        a6 += detail_lost as f64;
-        a7 += dl4 as f64;
-        a8 += dl2 as f64;
-        a15 += (a4_v * a4_v) as f64;
-        a16 += (dl4 * dl4) as f64;
+        a3 += artifact;
+        a4 += a4_v;
+        a5 += a2_v;
+        a6 += detail_lost;
+        a7 += dl4;
+        a8 += dl2;
+        a15 += a4_v * a4_v;
+        a16 += dl4 * dl4;
         if artifact > peak1 {
             peak1 = artifact;
         }
@@ -734,13 +734,13 @@ pub fn fused_features_kernel_persist(
 
         let vs = (sv - mu1) * mask;
         let vd = (dv - mu2) * mask;
-        a10 += (vs * vs) as f64;
-        a11 += (vd * vd) as f64;
-        a12 += (diff1 * mask) as f64;
-        a13 += (diff2 * mask) as f64;
+        a10 += vs * vs;
+        a11 += vd * vd;
+        a12 += diff1 * mask;
+        a13 += diff2 * mask;
 
         let pd = (sv - dv) * mask;
-        a9 += (pd * pd) as f64;
+        a9 += pd * pd;
 
         // Slide
         let buf_idx = (slot * TX + tx) as usize;
