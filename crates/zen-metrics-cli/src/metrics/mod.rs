@@ -39,6 +39,51 @@ use clap::ValueEnum;
 
 use crate::decode::Rgb8Image;
 
+/// Reflect(mirror)-pad a packed `RGB8` buffer up to `min` px on each
+/// axis (reflect-101 / `BORDER_REFLECT_101`) so CPU metrics with a
+/// minimum-size floor (fast-ssim2's 6-scale pyramid, butteraugli's 8×8
+/// minimum) can score tiny images down to 1×1 instead of erroring.
+///
+/// Returns `(padded_pixels, padded_w, padded_h)`; the original samples
+/// occupy the top-left `w × h` region. No-op (returns a clone at the
+/// original dims) when already ≥ `min` on both axes. Matches the GPU
+/// metrics' `zenmetrics_gpu_core::reflect_pad` rule byte-for-byte, so
+/// CPU and GPU agree on which padded image they score. Available in
+/// cpu-only builds (no `zenmetrics-gpu-core` dependency).
+#[cfg(feature = "cpu-metrics")]
+pub(crate) fn pad_rgb8_to_min(pixels: &[u8], w: u32, h: u32, min: u32) -> (Vec<u8>, u32, u32) {
+    let pw = w.max(min);
+    let ph = h.max(min);
+    if pw == w && ph == h {
+        return (pixels.to_vec(), w, h);
+    }
+    #[inline]
+    fn reflect_index(i: usize, n: usize) -> usize {
+        if n <= 1 {
+            return 0;
+        }
+        let period = 2 * (n - 1);
+        let mut k = i % period;
+        if k >= n {
+            k = period - k;
+        }
+        k
+    }
+    let (lw, lh) = (w as usize, h as usize);
+    let (pwz, phz) = (pw as usize, ph as usize);
+    let mut out = Vec::with_capacity(pwz * phz * 3);
+    for y in 0..phz {
+        let sy = reflect_index(y, lh);
+        let row = sy * lw;
+        for x in 0..pwz {
+            let sx = reflect_index(x, lw);
+            let s = (row + sx) * 3;
+            out.extend_from_slice(&pixels[s..s + 3]);
+        }
+    }
+    (out, pw, ph)
+}
+
 #[cfg(feature = "cpu-metrics")]
 pub(crate) mod butteraugli;
 #[cfg(feature = "cpu-metrics")]
