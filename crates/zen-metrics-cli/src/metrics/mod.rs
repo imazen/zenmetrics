@@ -609,10 +609,13 @@ pub fn run_metric(
 
         #[cfg(feature = "gpu-zensim")]
         MetricKind::ZensimGpu => {
-            // min_dim<64 can't form the GPU 4-scale pyramid (floors at 8px),
-            // so the GPU bake sees too few features. Route tiny images to the
-            // CPU zensim (handles any size). gpu-zensim pulls cpu-metrics so
-            // `zensim::score` is available. Mirrors the cached path in cache.rs.
+            // Sub-64px images reflect(mirror)-pad to the 64px 4-scale-pyramid
+            // floor on both the GPU (`ZensimOpaque`) and CPU `zensim` paths,
+            // using the same reflect-101 rule — they agree to f32 drift. We
+            // route sub-64px to CPU anyway: bit-exact with the GPU there AND it
+            // skips a wasteful 64×64 GPU dispatch for a few pixels. gpu-zensim
+            // pulls cpu-metrics so `zensim::score` is available. Mirrors the
+            // cached path in cache.rs.
             if reference.width.min(reference.height) < 64 {
                 Ok(vec![("zensim_gpu", zensim::score(reference, distorted)?)])
             } else {

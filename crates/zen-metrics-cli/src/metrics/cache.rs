@@ -329,14 +329,16 @@ impl MetricCache {
                 .map(|v| vec![(zenmetrics_api::cvvdp::CVVDP_COLUMN_NAME, v)]),
             #[cfg(feature = "gpu-zensim")]
             MetricKind::ZensimGpu => {
-                // Images with min dimension < 64 can't form the GPU's 4-scale
-                // pyramid (each level floors at 8px: 64→32→16→8), so the GPU
-                // bake would see fewer features than it declares and fail
-                // (`bake declares more input features than the caller
-                // supplied`). Route them to the CPU zensim, which scores any
-                // size by repeating the coarsest scale. The GPU is a throughput
-                // optimization for large images; tiny images are cheap on CPU.
-                // Column stays "zensim_gpu" so the output schema is unchanged.
+                // Sub-64px images are reflect(mirror)-padded to the 64px
+                // 4-scale-pyramid floor on BOTH paths now — the GPU crate
+                // (`ZensimOpaque`) and the CPU `zensim` use the same reflect-101
+                // rule, so they agree to within f32-kernel drift (≤0.03 score).
+                // We still route sub-64px to the CPU here: it's bit-exact with
+                // the GPU at those sizes AND skips a wasteful 64×64 GPU pipeline
+                // build + upload + 7 kernel launches for a handful of pixels.
+                // The GPU is a throughput optimization for large images; tiny
+                // images are cheaper on CPU. Column stays "zensim_gpu" so the
+                // output schema is unchanged.
                 if reference.width.min(reference.height) < 64 {
                     crate::metrics::zensim::score(reference, distorted)
                         .map(|v| vec![("zensim_gpu", v)])

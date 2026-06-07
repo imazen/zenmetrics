@@ -375,7 +375,26 @@ pub struct ZensimOpaque {
     params: ZensimParams,
     #[allow(dead_code)]
     backend: Backend,
+    /// Caller-requested logical dimensions. May be smaller than the
+    /// `inner` pipeline's dimensions when the image is sub-64px and the
+    /// inner pipeline was built for the reflect-padded size — see
+    /// [`MIN_PAD_DIM`] and [`reflect_pad`]. At ≥64px in both axes this
+    /// equals `inner.dims()` and the pad/crop helpers are no-ops.
+    logical_w: u32,
+    logical_h: u32,
 }
+
+/// Minimum per-axis dimension the GPU pyramid needs to form 4 genuine
+/// scales (`8 · 2³ = 64`). Inputs smaller than this in either axis are
+/// reflect(mirror)-padded host-side up to this floor before scoring, so
+/// every image down to 1×1 produces a real 4-scale feature vector
+/// instead of a degenerate (fewer-scale) one. This mirrors the CPU
+/// `zensim::metric` reflect-pad funnel byte-for-byte (same reflect-101
+/// indexing), so GPU and CPU agree at sub-64 sizes to within the usual
+/// f32-kernel divergence — and a constant colour difference scores
+/// the same at every size. NO-OP at ≥64px (zero overhead on the
+/// hot path).
+const MIN_PAD_DIM: u32 = 64;
 
 // NOTE (geometry-API divergence vs cvvdp-gpu, 2026-05-26):
 // `ZensimOpaque` does NOT expose `new_with_geometry` / display-config
@@ -415,6 +434,18 @@ impl ZensimOpaque {
         if matches!(mode, MemoryMode::Tile { .. }) {
             return Err(crate::Error::ModeUnsupported("Tile"));
         }
+        // Reflect-pad sub-64px requests up to the 4-scale pyramid floor.
+        // The inner pipeline is built for the padded size; the compute
+        // entry points reflect-pad their byte/plane inputs to match.
+        // `logical_*` records what the caller asked for so `dims()` stays
+        // honest and the pad/crop helpers know the real image extent.
+        if width == 0 || height == 0 {
+            return Err(crate::Error::InvalidImageSize);
+        }
+        let logical_w = width;
+        let logical_h = height;
+        let width = width.max(MIN_PAD_DIM);
+        let height = height.max(MIN_PAD_DIM);
         let regime = params.regime;
         // Resolve Auto to a concrete (Full | Strip { h_body }) so the
         // dispatch below is straightforward.
@@ -508,6 +539,8 @@ impl ZensimOpaque {
             inner,
             params,
             backend,
+            logical_w,
+            logical_h,
         })
     }
 
@@ -534,6 +567,15 @@ impl ZensimOpaque {
         if matches!(mode, MemoryMode::Tile { .. }) {
             return Err(crate::Error::ModeUnsupported("Tile"));
         }
+        // See `new_with_memory_mode` — reflect-pad sub-64px up to the
+        // 4-scale pyramid floor; the inner pipeline is built padded.
+        if width == 0 || height == 0 {
+            return Err(crate::Error::InvalidImageSize);
+        }
+        let logical_w = width;
+        let logical_h = height;
+        let width = width.max(MIN_PAD_DIM);
+        let height = height.max(MIN_PAD_DIM);
         let regime = params.regime;
         let resolved: ResolvedMode = match mode {
             MemoryMode::Full => ResolvedMode::Full,
@@ -569,12 +611,90 @@ impl ZensimOpaque {
             inner,
             params,
             backend,
+            logical_w,
+            logical_h,
         })
     }
 
-    /// Configured `(width, height)`.
+    /// Caller-requested logical `(width, height)`. For sub-64px images
+    /// this is smaller than the internal padded pipeline size
+    /// (`inner.dims()`); the compute entry points reflect-pad inputs up
+    /// to that internal size transparently. At ≥64px the two agree.
     pub fn dims(&self) -> (u32, u32) {
-        self.inner.dims()
+        (self.logical_w, self.logical_h)
+    }
+
+    /// `true` when the inner pipeline was built larger than the logical
+    /// image (i.e. the request was sub-64px in some axis and inputs need
+    /// reflect-padding). `false` (no-op fast path) at ≥64px.
+    #[inline]
+    fn is_padded(&self) -> bool {
+        let (pw, ph) = self.inner.dims();
+        pw != self.logical_w || ph != self.logical_h
+    }
+
+    /// Reflect(mirror)-pad a packed `RGB8` buffer from the logical image
+    /// extent up to the inner pipeline's padded extent. Borrows
+    /// unchanged on the ≥64px fast path. Validates the input length
+    /// against the logical extent (the inner pipeline validates the
+    /// padded length).
+    fn pad_rgb<'a>(&self, src: &'a [u8]) -> Result<std::borrow::Cow<'a, [u8]>> {
+        if !self.is_padded() {
+            return Ok(std::borrow::Cow::Borrowed(src));
+        }
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        if src.len() != lw * lh * 3 {
+            return Err(crate::Error::DimensionMismatch {
+                expected: lw * lh * 3,
+                got: src.len(),
+            });
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(std::borrow::Cow::Owned(reflect_pad(
+            src, lw, lh, pw as usize, ph as usize, 3,
+        )))
+    }
+
+    /// Reflect(mirror)-pad a single-channel `f32` plane (one of the
+    /// already-linear RGB planes) from the logical extent up to the
+    /// padded extent. Borrows unchanged at ≥64px.
+    fn pad_plane<'a>(&self, src: &'a [f32]) -> Result<std::borrow::Cow<'a, [f32]>> {
+        if !self.is_padded() {
+            return Ok(std::borrow::Cow::Borrowed(src));
+        }
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        if src.len() != lw * lh {
+            return Err(crate::Error::DimensionMismatch {
+                expected: lw * lh,
+                got: src.len(),
+            });
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(std::borrow::Cow::Owned(reflect_pad(
+            src, lw, lh, pw as usize, ph as usize, 1,
+        )))
+    }
+
+    /// Crop a padded-extent diffmap (`pw × ph`, row-major) back to the
+    /// logical extent (`lw × lh`). The reflect-pad places the original
+    /// pixels at indices `[0, lw) × [0, lh)`, so the logical diffmap is
+    /// the top-left sub-rectangle. No-op at ≥64px.
+    fn crop_diffmap(&self, buf: &mut Vec<f32>) {
+        if !self.is_padded() {
+            return;
+        }
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        let (pw, _ph) = self.inner.dims();
+        let pw = pw as usize;
+        if buf.len() < pw * lh {
+            return; // unexpected; leave as-is rather than panic
+        }
+        let mut out = Vec::with_capacity(lw * lh);
+        for y in 0..lh {
+            let row = y * pw;
+            out.extend_from_slice(&buf[row..row + lw]);
+        }
+        *buf = out;
     }
 
     /// Configured feature regime (set at construction time via
@@ -592,7 +712,9 @@ impl ZensimOpaque {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<[f64; TOTAL_FEATURES]> {
-        self.inner.compute_features(ref_rgb, dis_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_features(&r, &d)
     }
 
     /// Compute the **first 228** features from [`PixelSlice`] inputs.
@@ -603,10 +725,11 @@ impl ZensimOpaque {
         r: PixelSlice<'_>,
         d: PixelSlice<'_>,
     ) -> Result<[f64; TOTAL_FEATURES]> {
-        let (w, h) = self.inner.dims();
-        let ref_buf = to_srgb_rgb8(&r, w, h)?;
-        let dis_buf = to_srgb_rgb8(&d, w, h)?;
-        self.inner.compute_features(&ref_buf, &dis_buf)
+        let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
+        let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
+        let rp = self.pad_rgb(&ref_buf)?;
+        let dp = self.pad_rgb(&dis_buf)?;
+        self.inner.compute_features(&rp, &dp)
     }
 
     /// Compute the regime-appropriate feature vector for one pair from
@@ -625,7 +748,9 @@ impl ZensimOpaque {
         ref_rgb: &[u8],
         dis_rgb: &[u8],
     ) -> Result<Vec<f64>> {
-        self.inner.compute_features_vec(ref_rgb, dis_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_features_vec(&r, &d)
     }
 
     /// Compute the regime-appropriate feature vector from
@@ -638,10 +763,11 @@ impl ZensimOpaque {
         r: PixelSlice<'_>,
         d: PixelSlice<'_>,
     ) -> Result<Vec<f64>> {
-        let (w, h) = self.inner.dims();
-        let ref_buf = to_srgb_rgb8(&r, w, h)?;
-        let dis_buf = to_srgb_rgb8(&d, w, h)?;
-        self.inner.compute_features_vec(&ref_buf, &dis_buf)
+        let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
+        let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
+        let rp = self.pad_rgb(&ref_buf)?;
+        let dp = self.pad_rgb(&dis_buf)?;
+        self.inner.compute_features_vec(&rp, &dp)
     }
 
     /// Upload + pyramid-build the reference image ONCE, then call
@@ -650,7 +776,8 @@ impl ZensimOpaque {
     /// distortions saves N-1 ref uploads (~1 MB each at 1 MP) and
     /// N-1 ref-pyramid kernel launches.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
-        self.inner.set_reference(ref_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        self.inner.set_reference(&r)
     }
 
     /// Compute the raw feature vector against the cached reference
@@ -660,7 +787,8 @@ impl ZensimOpaque {
     /// [`Self::set_reference_srgb_u8`] was never called. For the uniform
     /// [`Score`], use [`Self::compute_with_reference_srgb_u8`].
     pub fn compute_features_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Vec<f64>> {
-        self.inner.compute_with_reference_vec(dis_rgb)
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_with_reference_vec(&d)
     }
 
     /// Score a DIST candidate against the cached reference — the uniform
@@ -680,7 +808,10 @@ impl ZensimOpaque {
     /// dispatches through this method for the profile-mode default.
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
         if self.params.profile.is_some() {
-            let features = self.inner.compute_with_reference_vec(dis_rgb)?;
+            let d = self.pad_rgb(dis_rgb)?;
+            let features = self.inner.compute_with_reference_vec(&d)?;
+            // Padded dims feed the MLP size-axes — matches the CPU
+            // canonical path, which scores the reflect-padded image.
             let (w, h) = self.inner.dims();
             Ok(self.score_from_profile_vec(&features, w, h, None))
         } else {
@@ -697,9 +828,9 @@ impl ZensimOpaque {
     /// [`Self::compute_with_reference_pixels`].
     #[cfg(feature = "pixels")]
     pub fn set_reference_pixels(&mut self, r: PixelSlice<'_>) -> Result<()> {
-        let (w, h) = self.inner.dims();
-        let ref_buf = to_srgb_rgb8(&r, w, h)?;
-        self.inner.set_reference(&ref_buf)
+        let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
+        let rp = self.pad_rgb(&ref_buf)?;
+        self.inner.set_reference(&rp)
     }
 
     /// Compute the raw feature vector against the cached reference from a
@@ -710,9 +841,9 @@ impl ZensimOpaque {
         &mut self,
         d: PixelSlice<'_>,
     ) -> Result<Vec<f64>> {
-        let (w, h) = self.inner.dims();
-        let dis_buf = to_srgb_rgb8(&d, w, h)?;
-        self.inner.compute_with_reference_vec(&dis_buf)
+        let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
+        let dp = self.pad_rgb(&dis_buf)?;
+        self.inner.compute_with_reference_vec(&dp)
     }
 
     /// `true` if a reference is currently cached (uniform across every
@@ -751,12 +882,14 @@ impl ZensimOpaque {
         // 372), not the 228 truncation that `compute_features` returns.
         // Otherwise the post-network forward pass would see the wrong
         // input shape and `score_features_with_profile` would error.
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
         if self.params.profile.is_some() {
-            let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
+            let features = self.inner.compute_features_vec(&r, &d)?;
             let (w, h) = self.inner.dims();
             Ok(self.score_from_profile_vec(&features, w, h, None))
         } else {
-            let features = self.inner.compute_features(ref_rgb, dis_rgb)?;
+            let features = self.inner.compute_features(&r, &d)?;
             Ok(self.score_from_linear(features))
         }
     }
@@ -775,12 +908,14 @@ impl ZensimOpaque {
         if let Some(score) = identity_short_circuit(ref_rgb, dis_rgb) {
             return Ok(score);
         }
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
         if self.params.profile.is_some() {
-            let features = self.inner.compute_features_vec(ref_rgb, dis_rgb)?;
+            let features = self.inner.compute_features_vec(&r, &d)?;
             let (w, h) = self.inner.dims();
             Ok(self.score_from_profile_vec(&features, w, h, codec_hint))
         } else {
-            let features = self.inner.compute_features(ref_rgb, dis_rgb)?;
+            let features = self.inner.compute_features(&r, &d)?;
             Ok(self.score_from_linear(features))
         }
     }
@@ -793,14 +928,17 @@ impl ZensimOpaque {
     /// running the GPU kernel.
     #[cfg(feature = "pixels")]
     pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
-        let (w, h) = self.inner.dims();
-        let ref_buf = to_srgb_rgb8(&r, w, h)?;
-        let dis_buf = to_srgb_rgb8(&d, w, h)?;
+        let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
+        let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
         if let Some(score) = identity_short_circuit(&ref_buf, &dis_buf) {
             return Ok(score);
         }
         if self.params.profile.is_some() {
-            let features = self.inner.compute_features_vec(&ref_buf, &dis_buf)?;
+            let rp = self.pad_rgb(&ref_buf)?;
+            let dp = self.pad_rgb(&dis_buf)?;
+            let features = self.inner.compute_features_vec(&rp, &dp)?;
+            // Padded dims feed the MLP size-axes (matches CPU).
+            let (w, h) = self.inner.dims();
             Ok(self.score_from_profile_vec(&features, w, h, None))
         } else {
             // Re-use the pixel-aware feature path that handles strided
@@ -863,7 +1001,11 @@ impl ZensimOpaque {
         dis_rgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        self.inner.score_with_diffmap(ref_rgb, dis_rgb, diffmap_out)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        let score = self.inner.score_with_diffmap(&r, &d, diffmap_out)?;
+        self.crop_diffmap(diffmap_out);
+        Ok(score)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_with_warm_ref_diffmap`].
@@ -873,7 +1015,10 @@ impl ZensimOpaque {
         dis_rgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        self.inner.score_with_warm_ref_diffmap(dis_rgb, diffmap_out)
+        let d = self.pad_rgb(dis_rgb)?;
+        let score = self.inner.score_with_warm_ref_diffmap(&d, diffmap_out)?;
+        self.crop_diffmap(diffmap_out);
+        Ok(score)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes`].
@@ -887,8 +1032,14 @@ impl ZensimOpaque {
         dist_g: &[f32],
         dist_b: &[f32],
     ) -> Result<f32> {
+        let rr = self.pad_plane(ref_r)?;
+        let rg = self.pad_plane(ref_g)?;
+        let rb = self.pad_plane(ref_b)?;
+        let dr = self.pad_plane(dist_r)?;
+        let dg = self.pad_plane(dist_g)?;
+        let db = self.pad_plane(dist_b)?;
         self.inner
-            .score_from_linear_planes(ref_r, ref_g, ref_b, dist_r, dist_g, dist_b)
+            .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_diffmap`].
@@ -904,15 +1055,23 @@ impl ZensimOpaque {
         dist_b: &[f32],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        self.inner.score_from_linear_planes_with_diffmap(
-            ref_r,
-            ref_g,
-            ref_b,
-            dist_r,
-            dist_g,
-            dist_b,
+        let rr = self.pad_plane(ref_r)?;
+        let rg = self.pad_plane(ref_g)?;
+        let rb = self.pad_plane(ref_b)?;
+        let dr = self.pad_plane(dist_r)?;
+        let dg = self.pad_plane(dist_g)?;
+        let db = self.pad_plane(dist_b)?;
+        let score = self.inner.score_from_linear_planes_with_diffmap(
+            &rr,
+            &rg,
+            &rb,
+            &dr,
+            &dg,
+            &db,
             diffmap_out,
-        )
+        )?;
+        self.crop_diffmap(diffmap_out);
+        Ok(score)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::warm_reference_from_linear_planes`].
@@ -923,8 +1082,11 @@ impl ZensimOpaque {
         ref_g: &[f32],
         ref_b: &[f32],
     ) -> Result<()> {
+        let rr = self.pad_plane(ref_r)?;
+        let rg = self.pad_plane(ref_g)?;
+        let rb = self.pad_plane(ref_b)?;
         self.inner
-            .warm_reference_from_linear_planes(ref_r, ref_g, ref_b)
+            .warm_reference_from_linear_planes(&rr, &rg, &rb)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref`].
@@ -935,8 +1097,11 @@ impl ZensimOpaque {
         dist_g: &[f32],
         dist_b: &[f32],
     ) -> Result<f32> {
+        let dr = self.pad_plane(dist_r)?;
+        let dg = self.pad_plane(dist_g)?;
+        let db = self.pad_plane(dist_b)?;
         self.inner
-            .score_from_linear_planes_with_warm_ref(dist_r, dist_g, dist_b)
+            .score_from_linear_planes_with_warm_ref(&dr, &dg, &db)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref_diffmap`].
@@ -948,13 +1113,59 @@ impl ZensimOpaque {
         dist_b: &[f32],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        self.inner.score_from_linear_planes_with_warm_ref_diffmap(
-            dist_r,
-            dist_g,
-            dist_b,
-            diffmap_out,
-        )
+        let dr = self.pad_plane(dist_r)?;
+        let dg = self.pad_plane(dist_g)?;
+        let db = self.pad_plane(dist_b)?;
+        let score = self
+            .inner
+            .score_from_linear_planes_with_warm_ref_diffmap(&dr, &dg, &db, diffmap_out)?;
+        self.crop_diffmap(diffmap_out);
+        Ok(score)
     }
+}
+
+/// Reflect-101 index map: fold an out-of-range index `i` back into
+/// `[0, n)` by mirroring at the borders without repeating the edge
+/// sample (OpenCV `BORDER_REFLECT_101`). For `i < n` this is the
+/// identity, so the original pixels land at `[0, n)` after padding.
+/// `n <= 1` collapses to 0 (a single column/row replicates).
+///
+/// Byte-for-byte identical to the CPU `zensim::metric::reflect_index`,
+/// so the reflect-padded content fed to the GPU pipeline matches the
+/// CPU's — the only residual GPU↔CPU difference is the usual f32-kernel
+/// divergence, not a different padding rule.
+#[inline]
+fn reflect_index(i: usize, n: usize) -> usize {
+    if n <= 1 {
+        return 0;
+    }
+    let period = 2 * (n - 1);
+    let mut k = i % period;
+    if k >= n {
+        k = period - k;
+    }
+    k
+}
+
+/// Reflect(mirror)-pad an interleaved buffer of `ch`-element pixels from
+/// a logical `lw × lh` extent up to a padded `pw × ph` extent. Used for
+/// `RGB8` (`ch = 3`) and single linear planes (`ch = 1`). Assumes
+/// `pw >= lw`, `ph >= lh`, and `src.len() == lw * lh * ch` (callers
+/// validate). The original samples occupy `[0, lw) × [0, lh)` of the
+/// output (see [`reflect_index`]).
+fn reflect_pad<T: Copy>(src: &[T], lw: usize, lh: usize, pw: usize, ph: usize, ch: usize) -> Vec<T> {
+    debug_assert_eq!(src.len(), lw * lh * ch);
+    let mut out = Vec::with_capacity(pw * ph * ch);
+    for y in 0..ph {
+        let sy = reflect_index(y, lh);
+        let row = sy * lw;
+        for x in 0..pw {
+            let sx = reflect_index(x, lw);
+            let s = (row + sx) * ch;
+            out.extend_from_slice(&src[s..s + ch]);
+        }
+    }
+    out
 }
 
 /// Byte-identity short-circuit for the opaque `compute_*` paths.
