@@ -140,10 +140,21 @@ where
 /// println!("{} = {:.6} (impl {})", score.metric_name, score.value, score.metric_version);
 /// # Ok::<(), dssim_gpu::Error>(())
 /// ```
+/// Minimum per-axis dimension DSSIM's 5-scale pyramid needs (the typed
+/// pipeline rejects `< 8×8`). Sub-`MIN_DIM` inputs are reflect(mirror)-
+/// padded up to this floor so the scorer returns a finite score down to
+/// 1×1 instead of `InvalidImageSize`. NO-OP at ≥8px.
+const MIN_DIM: u32 = 8;
+
 pub struct DssimOpaque {
     inner: Box<dyn DssimInner + Send>,
     #[allow(dead_code)]
     backend: Backend,
+    /// Caller-requested logical dims. Smaller than the inner pipeline's
+    /// dims when the request was sub-8px; compute entries reflect-pad
+    /// inputs up to that size. Equal at ≥8px (pad becomes a no-op borrow).
+    logical_w: u32,
+    logical_h: u32,
 }
 
 impl DssimOpaque {
@@ -171,6 +182,16 @@ impl DssimOpaque {
         _params: DssimParams,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
+        // Reflect-pad sub-8px requests up to the pyramid floor; inner is
+        // built padded, compute entries pad inputs. `logical_*` records
+        // the caller's request so `dims()` stays honest.
+        if width == 0 || height == 0 {
+            return Err(crate::Error::InvalidImageSize);
+        }
+        let logical_w = width;
+        let logical_h = height;
+        let width = width.max(MIN_DIM);
+        let height = height.max(MIN_DIM);
         let inner: Box<dyn DssimInner + Send> = match backend {
             #[cfg(feature = "cuda")]
             Backend::Cuda => {
@@ -197,7 +218,12 @@ impl DssimOpaque {
                 )?)
             }
         };
-        Ok(Self { inner, backend })
+        Ok(Self {
+            inner,
+            backend,
+            logical_w,
+            logical_h,
+        })
     }
 
     /// Build a [`DssimOpaque`] from a caller-supplied cubecl client
@@ -215,15 +241,57 @@ impl DssimOpaque {
     where
         Dssim<R>: Send + 'static,
     {
+        if width == 0 || height == 0 {
+            return Err(crate::Error::InvalidImageSize);
+        }
+        let logical_w = width;
+        let logical_h = height;
+        let width = width.max(MIN_DIM);
+        let height = height.max(MIN_DIM);
         let inner: Box<dyn DssimInner + Send> = Box::new(Dssim::<R>::new_with_memory_mode(
             client, width, height, mode,
         )?);
-        Ok(Self { inner, backend })
+        Ok(Self {
+            inner,
+            backend,
+            logical_w,
+            logical_h,
+        })
     }
 
-    /// Return the configured `(width, height)`.
+    /// Caller-requested logical `(width, height)`. For sub-8px images
+    /// this is smaller than the internal padded pipeline size; compute
+    /// entries reflect-pad inputs up to that size transparently.
     pub fn dims(&self) -> (u32, u32) {
-        self.inner.dims()
+        (self.logical_w, self.logical_h)
+    }
+
+    /// `true` when the inner pipeline was built larger than the logical
+    /// image (sub-8px request needing reflect-pad). No-op fast path at ≥8px.
+    #[inline]
+    fn is_padded(&self) -> bool {
+        let (pw, ph) = self.inner.dims();
+        pw != self.logical_w || ph != self.logical_h
+    }
+
+    /// Reflect(mirror)-pad a packed `RGB8` buffer from the logical extent
+    /// up to the inner pipeline's padded extent. Borrows unchanged at
+    /// ≥8px. Validates the input length against the logical extent.
+    fn pad_rgb<'a>(&self, src: &'a [u8]) -> Result<std::borrow::Cow<'a, [u8]>> {
+        if !self.is_padded() {
+            return Ok(std::borrow::Cow::Borrowed(src));
+        }
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        if src.len() != lw * lh * 3 {
+            return Err(crate::Error::DimensionMismatch {
+                expected: lw * lh * 3,
+                got: src.len(),
+            });
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
+            src, lw, lh, pw as usize, ph as usize, 3,
+        )))
     }
 
     /// Number of pyramid scales used internally — exposed for parity
@@ -240,7 +308,9 @@ impl DssimOpaque {
     /// Returns [`Error::DimensionMismatch`] if either buffer's length
     /// differs from `width × height × 3`.
     pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_srgb_u8(&r, &d)
     }
 
     /// Score one reference / distorted pair from [`PixelSlice`]
@@ -269,10 +339,11 @@ impl DssimOpaque {
     /// convert).
     #[cfg(feature = "pixels")]
     pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
-        let (w, h) = self.inner.dims();
-        let ref_buf = to_srgb_rgb8(&r, w, h)?;
-        let dis_buf = to_srgb_rgb8(&d, w, h)?;
-        self.inner.compute_srgb_u8(&ref_buf, &dis_buf)
+        let ref_buf = to_srgb_rgb8(&r, self.logical_w, self.logical_h)?;
+        let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
+        let rp = self.pad_rgb(&ref_buf)?;
+        let dp = self.pad_rgb(&dis_buf)?;
+        self.inner.compute_srgb_u8(&rp, &dp)
     }
 
     /// Score against pre-uploaded packed-u32 device handles —
@@ -297,21 +368,24 @@ impl DssimOpaque {
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
     pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
-        self.inner.pack_srgb(srgb)
+        let s = self.pad_rgb(srgb)?;
+        self.inner.pack_srgb(&s)
     }
 
     /// Cache the reference image's linear-RGB pyramid on device.
     /// Subsequent [`Self::compute_with_reference_srgb_u8`]
     /// calls skip the ref-side pyramid build.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
-        self.inner.set_reference_srgb_u8(ref_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        self.inner.set_reference_srgb_u8(&r)
     }
 
     /// Score a distorted candidate against the cached reference.
     /// Returns [`crate::Error::NoCachedReference`] if no reference
     /// is cached.
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_with_reference_srgb_u8(dis_rgb)
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_with_reference_srgb_u8(&d)
     }
 
     /// Drop cached reference state.

@@ -91,6 +91,66 @@ pub fn convert_to_srgb_rgb8(
     Ok(out)
 }
 
+// ───────────────────────── reflect-pad (sub-minimum images) ──────────────────
+//
+// Every `*-gpu` metric has a minimum image dimension below which its pyramid
+// can't form (8×8 for ssim2/dssim/cvvdp, 176 for iwssim, 64 for zensim's
+// 4-scale bake). Rather than reject those inputs, the opaque shims
+// reflect(mirror)-pad them up to that floor and score the padded image — so a
+// metric returns a finite score down to 1×1 instead of `InvalidImageSize`.
+// This is the single source of truth for that padding (matches the CPU
+// `zensim::metric` reflect-pad funnel byte-for-byte: same reflect-101 rule),
+// shared so the metric crates don't each carry a copy.
+
+/// Reflect-101 index map: fold an out-of-range index `i` back into `[0, n)` by
+/// mirroring at the borders **without** repeating the edge sample (OpenCV
+/// `BORDER_REFLECT_101`, the rule used by the CPU `zensim` reflect-pad). For
+/// `i < n` this is the identity, so the original pixels land at `[0, n)` after
+/// padding. `n <= 1` collapses to 0 (a single row/column replicates).
+#[inline]
+pub fn reflect_index(i: usize, n: usize) -> usize {
+    if n <= 1 {
+        return 0;
+    }
+    let period = 2 * (n - 1);
+    let mut k = i % period;
+    if k >= n {
+        k = period - k;
+    }
+    k
+}
+
+/// Reflect(mirror)-pad an interleaved buffer of `ch`-element pixels from a
+/// logical `lw × lh` extent up to a padded `pw × ph` extent, using
+/// [`reflect_index`] on each axis. Used for `RGB8` (`ch = 3`) and single
+/// linear planes (`ch = 1`). The original samples occupy `[0, lw) × [0, lh)`
+/// of the output, so a result computed on the padded buffer can be cropped
+/// back to the logical extent by taking the top-left sub-rectangle.
+///
+/// Assumes `pw >= lw`, `ph >= lh`, and `src.len() == lw * lh * ch` — callers
+/// validate the input length.
+pub fn reflect_pad<T: Copy>(
+    src: &[T],
+    lw: usize,
+    lh: usize,
+    pw: usize,
+    ph: usize,
+    ch: usize,
+) -> Vec<T> {
+    debug_assert_eq!(src.len(), lw * lh * ch);
+    let mut out = Vec::with_capacity(pw * ph * ch);
+    for y in 0..ph {
+        let sy = reflect_index(y, lh);
+        let row = sy * lw;
+        for x in 0..pw {
+            let sx = reflect_index(x, lw);
+            let s = (row + sx) * ch;
+            out.extend_from_slice(&src[s..s + ch]);
+        }
+    }
+    out
+}
+
 // ───────────────────────── stream-bound session plumbing ─────────────────────
 //
 // Backs the umbrella `zenmetrics_api::MetricSession` (issue #17). Each helper

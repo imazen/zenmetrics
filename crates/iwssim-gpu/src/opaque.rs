@@ -18,22 +18,37 @@ pub use zenmetrics_gpu_core::{Backend, Score};
 
 /// Configuration for [`IwssimOpaque`].
 ///
-/// `allow_small` mirrors [`IwssimConfig::allow_small`] on the typed
-/// API: when true, sub-176-px inputs are reflect-padded to
-/// `MIN_NATIVE_DIM` on the short axis. When false (default) the
-/// constructor returns `Err(InvalidImageSize)` for sub-176 inputs.
+/// `allow_small` controls the sub-176-px (sub-[`MIN_NATIVE_DIM`])
+/// behaviour: when true, small inputs are **tiled** up to the pyramid
+/// floor and scored ([`IwssimStrategy::Tile`] — the empirically best
+/// small-image strategy on the 980-pair CID22 validation,
+/// `benchmarks/iwssim_smallimg/`), so the scorer returns a finite score
+/// down to 1×1. When false the constructor returns
+/// `Err(InvalidImageSize)` for sub-176 inputs.
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct IwssimParams {
-    /// Forward to [`IwssimConfig::allow_small`]. Default is false
-    /// (reject sub-176 inputs, exactly as historical behaviour).
+    /// Forward to the small-image strategy: `true` → tile sub-176 inputs
+    /// up to the floor and score; `false` → reject them. Defaults to
+    /// `true` via [`IwssimParams::DEFAULT`] so the umbrella/CLI path
+    /// scores every size (the typed `IwssimConfig` default stays Reject
+    /// for crates.io back-compat).
     pub allow_small: bool,
 }
 
+impl Default for IwssimParams {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 impl IwssimParams {
-    /// Default parameter bundle — `allow_small = false`. Kept for
-    /// backwards compatibility with `IwssimParams::DEFAULT` callsites.
-    pub const DEFAULT: Self = Self { allow_small: false };
+    /// Default parameter bundle — `allow_small = true`: sub-176 inputs
+    /// are tiled up to the pyramid floor and scored (so the metric has
+    /// no minimum-size error). Changed from `false` so the opaque /
+    /// umbrella path is size-robust by default; the typed crates.io
+    /// `IwssimConfig::default()` is unaffected (still Reject).
+    pub const DEFAULT: Self = Self { allow_small: true };
 
     /// Construct with `allow_small` set explicitly.
     pub const fn allow_small(allow: bool) -> Self {

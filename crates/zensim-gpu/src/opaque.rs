@@ -650,7 +650,7 @@ impl ZensimOpaque {
             });
         }
         let (pw, ph) = self.inner.dims();
-        Ok(std::borrow::Cow::Owned(reflect_pad(
+        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
             src, lw, lh, pw as usize, ph as usize, 3,
         )))
     }
@@ -670,7 +670,7 @@ impl ZensimOpaque {
             });
         }
         let (pw, ph) = self.inner.dims();
-        Ok(std::borrow::Cow::Owned(reflect_pad(
+        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
             src, lw, lh, pw as usize, ph as usize, 1,
         )))
     }
@@ -1122,50 +1122,6 @@ impl ZensimOpaque {
         self.crop_diffmap(diffmap_out);
         Ok(score)
     }
-}
-
-/// Reflect-101 index map: fold an out-of-range index `i` back into
-/// `[0, n)` by mirroring at the borders without repeating the edge
-/// sample (OpenCV `BORDER_REFLECT_101`). For `i < n` this is the
-/// identity, so the original pixels land at `[0, n)` after padding.
-/// `n <= 1` collapses to 0 (a single column/row replicates).
-///
-/// Byte-for-byte identical to the CPU `zensim::metric::reflect_index`,
-/// so the reflect-padded content fed to the GPU pipeline matches the
-/// CPU's — the only residual GPU↔CPU difference is the usual f32-kernel
-/// divergence, not a different padding rule.
-#[inline]
-fn reflect_index(i: usize, n: usize) -> usize {
-    if n <= 1 {
-        return 0;
-    }
-    let period = 2 * (n - 1);
-    let mut k = i % period;
-    if k >= n {
-        k = period - k;
-    }
-    k
-}
-
-/// Reflect(mirror)-pad an interleaved buffer of `ch`-element pixels from
-/// a logical `lw × lh` extent up to a padded `pw × ph` extent. Used for
-/// `RGB8` (`ch = 3`) and single linear planes (`ch = 1`). Assumes
-/// `pw >= lw`, `ph >= lh`, and `src.len() == lw * lh * ch` (callers
-/// validate). The original samples occupy `[0, lw) × [0, lh)` of the
-/// output (see [`reflect_index`]).
-fn reflect_pad<T: Copy>(src: &[T], lw: usize, lh: usize, pw: usize, ph: usize, ch: usize) -> Vec<T> {
-    debug_assert_eq!(src.len(), lw * lh * ch);
-    let mut out = Vec::with_capacity(pw * ph * ch);
-    for y in 0..ph {
-        let sy = reflect_index(y, lh);
-        let row = sy * lw;
-        for x in 0..pw {
-            let sx = reflect_index(x, lw);
-            let s = (row + sx) * ch;
-            out.extend_from_slice(&src[s..s + ch]);
-        }
-    }
-    out
 }
 
 /// Byte-identity short-circuit for the opaque `compute_*` paths.

@@ -211,10 +211,26 @@ where
     }
 }
 
+/// Minimum per-axis dimension cvvdp's pyramid needs (the typed pipeline
+/// rejects below `2 × PYRAMID_MIN_DIM = 8`). Sub-`MIN_DIM` inputs are
+/// reflect(mirror)-padded up to this floor so the scorer returns a
+/// finite JOD down to 1×1 instead of `InvalidImageSize`. NO-OP at ≥8px.
+///
+/// Caveat (cvvdp is display-aware): the padded image is scored at the
+/// PPD implied by the *padded* resolution under the configured display
+/// geometry — the same modelling assumption every sub-min fallback
+/// makes. It's a deterministic score for an otherwise-unscoreable input,
+/// not a claim about a 1×1 image's true perceptual quality.
+const MIN_DIM: u32 = 8;
+
 /// Opaque ColorVideoVDP scorer.
 pub struct CvvdpOpaque {
     inner: Box<dyn CvvdpInner + Send>,
+    /// Caller-requested logical width. The inner pipeline is built for
+    /// `max(width, MIN_DIM)`; sub-8px compute inputs are reflect-padded
+    /// up to that. Equals the inner width at ≥8px.
     width: u32,
+    /// Caller-requested logical height (see [`Self::width`]).
     height: u32,
     #[allow(dead_code)]
     backend: Backend,
@@ -298,6 +314,17 @@ impl CvvdpOpaque {
         geometry: crate::params::DisplayGeometry,
         mode: crate::MemoryMode,
     ) -> Result<Self> {
+        // Reflect-pad sub-8px requests up to the pyramid floor; the inner
+        // pipeline is built for the padded size and compute entries pad
+        // their inputs. The struct's width/height keep the LOGICAL
+        // request so `dims()` and the pixel-path stay honest.
+        if width == 0 || height == 0 {
+            return Err(crate::Error::InvalidImageSize);
+        }
+        let logical_w = width;
+        let logical_h = height;
+        let width = width.max(MIN_DIM);
+        let height = height.max(MIN_DIM);
         let resolved_mode = resolve_mode_for_construction(width, height, mode)?;
         let inner: Box<dyn CvvdpInner + Send> = match backend {
             #[cfg(feature = "cuda")]
@@ -345,24 +372,93 @@ impl CvvdpOpaque {
         };
         Ok(Self {
             inner,
-            width,
-            height,
+            width: logical_w,
+            height: logical_h,
             backend,
         })
     }
 
-    /// Configured `(width, height)`.
+    /// Caller-requested logical `(width, height)`. For sub-8px images
+    /// this is smaller than the internal padded pipeline size; compute
+    /// entries reflect-pad inputs up to that size transparently.
     pub fn dims(&self) -> (u32, u32) {
-        // Stored width/height and inner.dims() are equivalent — the
-        // inner is constructed with the same w/h passed to Self::new.
-        // Prefer the inner dispatch so the trait method isn't dead
-        // code (for future inner types that compute dims dynamically).
-        self.inner.dims()
+        (self.width, self.height)
     }
 
-    /// Score one reference / distorted pair (packed sRGB RGB8).
+    /// `true` when the inner pipeline was built larger than the logical
+    /// image (sub-8px request needing reflect-pad). No-op fast path at ≥8px.
+    #[inline]
+    fn is_padded(&self) -> bool {
+        let (pw, ph) = self.inner.dims();
+        pw != self.width || ph != self.height
+    }
+
+    /// Reflect(mirror)-pad a packed `RGB8` buffer from the logical extent
+    /// up to the inner pipeline's padded extent. Borrows unchanged at
+    /// ≥8px. Validates the input length against the logical extent.
+    fn pad_rgb<'a>(&self, src: &'a [u8]) -> Result<std::borrow::Cow<'a, [u8]>> {
+        if !self.is_padded() {
+            return Ok(std::borrow::Cow::Borrowed(src));
+        }
+        let (lw, lh) = (self.width as usize, self.height as usize);
+        if src.len() != lw * lh * 3 {
+            return Err(crate::Error::DimensionMismatch {
+                expected: lw * lh * 3,
+                got: src.len(),
+            });
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
+            src, lw, lh, pw as usize, ph as usize, 3,
+        )))
+    }
+
+    /// Reflect(mirror)-pad a single-channel `f32` linear plane from the
+    /// logical extent up to the padded extent. Borrows unchanged at ≥8px.
+    fn pad_plane<'a>(&self, src: &'a [f32]) -> Result<std::borrow::Cow<'a, [f32]>> {
+        if !self.is_padded() {
+            return Ok(std::borrow::Cow::Borrowed(src));
+        }
+        let (lw, lh) = (self.width as usize, self.height as usize);
+        if src.len() != lw * lh {
+            return Err(crate::Error::DimensionMismatch {
+                expected: lw * lh,
+                got: src.len(),
+            });
+        }
+        let (pw, ph) = self.inner.dims();
+        Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
+            src, lw, lh, pw as usize, ph as usize, 1,
+        )))
+    }
+
+    /// Crop a padded-extent diffmap (`pw × ph`, row-major) back to the
+    /// logical extent (`lw × lh`) — the original pixels occupy the
+    /// top-left sub-rectangle after reflect-pad. No-op at ≥8px.
+    fn crop_diffmap(&self, buf: &mut Vec<f32>) {
+        if !self.is_padded() {
+            return;
+        }
+        let (lw, lh) = (self.width as usize, self.height as usize);
+        let (pw, _ph) = self.inner.dims();
+        let pw = pw as usize;
+        if buf.len() < pw * lh {
+            return;
+        }
+        let mut out = Vec::with_capacity(lw * lh);
+        for y in 0..lh {
+            let row = y * pw;
+            out.extend_from_slice(&buf[row..row + lw]);
+        }
+        *buf = out;
+    }
+
+    /// Score one reference / distorted pair (packed sRGB RGB8). Sub-8px
+    /// inputs are reflect-padded.
     pub fn compute_srgb_u8(&mut self, ref_rgb: &[u8], dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_srgb_u8(ref_rgb, dis_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_srgb_u8(&r, &d)
     }
 
     /// Score from [`PixelSlice`] inputs.
@@ -370,7 +466,9 @@ impl CvvdpOpaque {
     pub fn compute_pixels(&mut self, r: PixelSlice<'_>, d: PixelSlice<'_>) -> Result<Score> {
         let ref_buf = to_srgb_rgb8(&r, self.width, self.height)?;
         let dis_buf = to_srgb_rgb8(&d, self.width, self.height)?;
-        self.inner.compute_srgb_u8(&ref_buf, &dis_buf)
+        let rp = self.pad_rgb(&ref_buf)?;
+        let dp = self.pad_rgb(&dis_buf)?;
+        self.inner.compute_srgb_u8(&rp, &dp)
     }
 
     /// Score against pre-uploaded packed-u32 device handles —
@@ -390,7 +488,8 @@ impl CvvdpOpaque {
     /// device handle layout that [`Self::compute_handles`] expects.
     #[cfg(feature = "cubecl-types")]
     pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
-        self.inner.pack_srgb(srgb)
+        let s = self.pad_rgb(srgb)?;
+        self.inner.pack_srgb(&s)
     }
 
     /// Score one (reference, distorted) sRGB pair AND fill a per-pixel
@@ -404,8 +503,13 @@ impl CvvdpOpaque {
         dis_rgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<Score> {
-        self.inner
-            .compute_srgb_u8_with_diffmap(ref_rgb, dis_rgb, diffmap_out)
+        let r = self.pad_rgb(ref_rgb)?;
+        let d = self.pad_rgb(dis_rgb)?;
+        let s = self
+            .inner
+            .compute_srgb_u8_with_diffmap(&r, &d, diffmap_out)?;
+        self.crop_diffmap(diffmap_out);
+        Ok(s)
     }
 
     /// Cache the REF side for repeated `compute_with_reference_*` calls.
@@ -414,7 +518,8 @@ impl CvvdpOpaque {
     ///
     /// Uniform across every `*-gpu` opaque metric.
     pub fn set_reference_srgb_u8(&mut self, ref_rgb: &[u8]) -> Result<()> {
-        self.inner.warm_reference_srgb(ref_rgb)
+        let r = self.pad_rgb(ref_rgb)?;
+        self.inner.warm_reference_srgb(&r)
     }
 
     /// `true` if a warm reference state is currently cached. In strip
@@ -440,7 +545,8 @@ impl CvvdpOpaque {
     /// Uniform across every `*-gpu` opaque metric. For the diffmap, use
     /// [`Self::compute_with_reference_srgb_u8_with_diffmap`].
     pub fn compute_with_reference_srgb_u8(&mut self, dis_rgb: &[u8]) -> Result<Score> {
-        self.inner.compute_with_warm_ref_srgb(dis_rgb, None)
+        let d = self.pad_rgb(dis_rgb)?;
+        self.inner.compute_with_warm_ref_srgb(&d, None)
     }
 
     /// Score a DIST candidate against the cached REF state, also filling
@@ -450,7 +556,15 @@ impl CvvdpOpaque {
         dis_rgb: &[u8],
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
-        self.inner.compute_with_warm_ref_srgb(dis_rgb, diffmap_out)
+        let d = self.pad_rgb(dis_rgb)?;
+        match diffmap_out {
+            Some(out) => {
+                let s = self.inner.compute_with_warm_ref_srgb(&d, Some(out))?;
+                self.crop_diffmap(out);
+                Ok(s)
+            }
+            None => self.inner.compute_with_warm_ref_srgb(&d, None),
+        }
     }
 
     /// Score from three planar `W × H` linear-RGB f32 buffers (unit-
@@ -469,8 +583,24 @@ impl CvvdpOpaque {
         dis_b: &[f32],
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
-        self.inner
-            .compute_from_linear_planes(ref_r, ref_g, ref_b, dis_r, dis_g, dis_b, diffmap_out)
+        let rr = self.pad_plane(ref_r)?;
+        let rg = self.pad_plane(ref_g)?;
+        let rb = self.pad_plane(ref_b)?;
+        let dr = self.pad_plane(dis_r)?;
+        let dg = self.pad_plane(dis_g)?;
+        let db = self.pad_plane(dis_b)?;
+        match diffmap_out {
+            Some(out) => {
+                let s = self
+                    .inner
+                    .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, Some(out))?;
+                self.crop_diffmap(out);
+                Ok(s)
+            }
+            None => self
+                .inner
+                .compute_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db, None),
+        }
     }
 
     /// Cache the REF side from three planar linear-RGB f32 buffers
@@ -483,8 +613,11 @@ impl CvvdpOpaque {
         ref_g: &[f32],
         ref_b: &[f32],
     ) -> Result<()> {
+        let rr = self.pad_plane(ref_r)?;
+        let rg = self.pad_plane(ref_g)?;
+        let rb = self.pad_plane(ref_b)?;
         self.inner
-            .warm_reference_from_linear_planes(ref_r, ref_g, ref_b)
+            .warm_reference_from_linear_planes(&rr, &rg, &rb)
     }
 
     /// Score a DIST candidate (linear-RGB f32 planes) against the cached
@@ -497,8 +630,21 @@ impl CvvdpOpaque {
         dis_b: &[f32],
         diffmap_out: Option<&mut Vec<f32>>,
     ) -> Result<Score> {
-        self.inner
-            .compute_with_warm_ref_from_linear_planes(dis_r, dis_g, dis_b, diffmap_out)
+        let dr = self.pad_plane(dis_r)?;
+        let dg = self.pad_plane(dis_g)?;
+        let db = self.pad_plane(dis_b)?;
+        match diffmap_out {
+            Some(out) => {
+                let s = self
+                    .inner
+                    .compute_with_warm_ref_from_linear_planes(&dr, &dg, &db, Some(out))?;
+                self.crop_diffmap(out);
+                Ok(s)
+            }
+            None => self
+                .inner
+                .compute_with_warm_ref_from_linear_planes(&dr, &dg, &db, None),
+        }
     }
 }
 
@@ -586,11 +732,21 @@ pub(crate) fn build_opaque_from_client<R: cubecl::Runtime>(
 where
     Cvvdp<R>: Send,
 {
+    // Reflect-pad sub-8px requests up to the pyramid floor (see
+    // `new_with_geometry_and_memory_mode`). For sub-8px the resolved mode
+    // is always Full, so the padded build honours `resolved_mode`.
+    if width == 0 || height == 0 {
+        return Err(crate::Error::InvalidImageSize);
+    }
+    let logical_w = width;
+    let logical_h = height;
+    let width = width.max(MIN_DIM);
+    let height = height.max(MIN_DIM);
     let inst = build_cvvdp_inner::<R>(client, width, height, params, geometry, resolved_mode)?;
     Ok(CvvdpOpaque {
         inner: Box::new(inst),
-        width,
-        height,
+        width: logical_w,
+        height: logical_h,
         backend,
     })
 }
