@@ -21,9 +21,8 @@ pub(crate) fn score(
 
 /// Pack the decoder's flat RGB8 buffer into an `ImgVec<[u8; 3]>` (sRGB) that fast-ssim2 accepts.
 ///
-/// Sub-8px images are reflect(mirror)-padded up to fast-ssim2's 8px
-/// pyramid floor (same reflect-101 rule as the GPU metrics), so the CPU
-/// path scores down to 1×1 instead of `InvalidImageSize`.
+/// Sub-8px images are handled by `fast-ssim2` itself (it reflect-pads up
+/// to its 8px pyramid floor), so this wrapper just packs the buffer.
 fn to_img(img: &Rgb8Image) -> Result<imgref::ImgVec<[u8; 3]>, Box<dyn std::error::Error>> {
     let (w, h) = (img.width as usize, img.height as usize);
     if w == 0 || h == 0 {
@@ -32,7 +31,10 @@ fn to_img(img: &Rgb8Image) -> Result<imgref::ImgVec<[u8; 3]>, Box<dyn std::error
     if img.pixels.len() != w * h * 3 {
         return Err("ssim2: pixel buffer is not packed w*h*3 RGB8".into());
     }
-    let (buf, pw, ph) = crate::metrics::pad_rgb8_to_min(&img.pixels, img.width, img.height, 8);
-    let px: Vec<[u8; 3]> = buf.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
-    Ok(imgref::ImgVec::new(px, pw as usize, ph as usize))
+    let px: Vec<[u8; 3]> = img
+        .pixels
+        .chunks_exact(3)
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
+    Ok(imgref::ImgVec::new(px, w, h))
 }
