@@ -175,9 +175,15 @@ fn dimension_mismatch_is_reported() {
 }
 
 #[test]
-fn invalid_image_size_rejected() {
-    let r = Zensim::<Backend>::new(make_client!(), 4, 4);
-    assert!(r.is_err(), "expected InvalidImageSize for 4x4");
+fn sub_min_image_pads_and_scores() {
+    // Sub-MIN_PAD_DIM images are reflect(mirror)-padded up to the pyramid
+    // floor and scored (down to 1×1), not rejected — the typed pipeline
+    // now matches the opaque shim. `dimensions()` reports the logical size.
+    let mut z = Zensim::<Backend>::new(make_client!(), 4, 4).expect("4x4 must pad + construct");
+    assert_eq!(z.dimensions(), (4, 4));
+    let buf = vec![0_u8; 4 * 4 * 3];
+    let f = z.compute_features(&buf, &buf).expect("4x4 must score");
+    assert!(f.iter().all(|v| v.is_finite()), "4x4 features must be finite");
 }
 
 #[test]

@@ -151,6 +151,97 @@ pub fn reflect_pad<T: Copy>(
     out
 }
 
+/// Sub-minimum-image pad plan shared by the opaque **and** typed `*-gpu`
+/// entry points, so no public interface silently scores a degenerate
+/// sub-floor pyramid: a request below the pyramid floor is reflect-padded
+/// up to it and scored, returning a finite result down to 1×1.
+///
+/// Maps the caller's *logical* extent to the *padded* extent the pyramid
+/// needs (`max(dim, min)` per axis) and pads/crops buffers between them
+/// via [`reflect_pad`] / [`reflect_index`]. At ≥`min` on both axes it's a
+/// no-op (borrows, never copies). A 0-dim axis stays 0 — callers reject
+/// empty images before scoring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PadPlan {
+    logical_w: u32,
+    logical_h: u32,
+    padded_w: u32,
+    padded_h: u32,
+}
+
+impl PadPlan {
+    /// Pad each non-zero axis up to `min` (the pyramid floor).
+    pub fn to_min(width: u32, height: u32, min: u32) -> Self {
+        Self {
+            logical_w: width,
+            logical_h: height,
+            padded_w: if width == 0 { 0 } else { width.max(min) },
+            padded_h: if height == 0 { 0 } else { height.max(min) },
+        }
+    }
+
+    /// Caller-requested `(width, height)` — what `dims()` should report.
+    pub fn logical(&self) -> (u32, u32) {
+        (self.logical_w, self.logical_h)
+    }
+
+    /// Padded `(width, height)` the inner pipeline allocates buffers for.
+    pub fn padded(&self) -> (u32, u32) {
+        (self.padded_w, self.padded_h)
+    }
+
+    /// `true` when the padded extent exceeds the logical one (the input
+    /// must be reflect-padded). `false` is the zero-overhead fast path.
+    pub fn is_padded(&self) -> bool {
+        self.padded_w != self.logical_w || self.padded_h != self.logical_h
+    }
+
+    /// Expected packed length of a logical-extent buffer at `channels`
+    /// elements per pixel (callers validate inputs against this).
+    pub fn logical_len(&self, channels: usize) -> usize {
+        self.logical_w as usize * self.logical_h as usize * channels
+    }
+
+    /// Reflect-pad a packed `channels`-per-pixel buffer (RGB8 → 3, a
+    /// single linear plane → 1) from the logical extent up to the padded
+    /// extent. Borrows unchanged when [`is_padded`](Self::is_padded) is
+    /// false. Caller validates `src.len() == self.logical_len(channels)`.
+    pub fn pad<'a, T: Copy>(&self, src: &'a [T], channels: usize) -> std::borrow::Cow<'a, [T]> {
+        if !self.is_padded() {
+            return std::borrow::Cow::Borrowed(src);
+        }
+        std::borrow::Cow::Owned(reflect_pad(
+            src,
+            self.logical_w as usize,
+            self.logical_h as usize,
+            self.padded_w as usize,
+            self.padded_h as usize,
+            channels,
+        ))
+    }
+
+    /// Crop a padded-extent single-channel `f32` map (row-major, padded
+    /// width stride) back to the logical extent — the top-left
+    /// sub-rectangle, where the original pixels live after reflect-pad.
+    /// No-op when not padded.
+    pub fn crop_logical_plane(&self, buf: &mut Vec<f32>) {
+        if !self.is_padded() {
+            return;
+        }
+        let (lw, lh) = (self.logical_w as usize, self.logical_h as usize);
+        let pw = self.padded_w as usize;
+        if buf.len() < pw * lh {
+            return;
+        }
+        let mut out = Vec::with_capacity(lw * lh);
+        for y in 0..lh {
+            let row = y * pw;
+            out.extend_from_slice(&buf[row..row + lw]);
+        }
+        *buf = out;
+    }
+}
+
 // ───────────────────────── stream-bound session plumbing ─────────────────────
 //
 // Backs the umbrella `zenmetrics_api::MetricSession` (issue #17). Each helper

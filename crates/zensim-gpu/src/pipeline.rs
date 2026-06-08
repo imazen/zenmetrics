@@ -279,14 +279,31 @@ pub const STRIP_DEFAULT_HALO: u32 = 40;
 /// [`Zensim::new_strip_with_halo`].
 pub const STRIP_DEFAULT_BODY: u32 = 256;
 
+/// Minimum per-axis dimension the 4-scale pyramid needs (`8 · 2³`).
+/// Requests below this in either axis are reflect(mirror)-padded up to it
+/// (see [`Zensim`]'s `pad` field) so the typed pipeline — like the opaque
+/// shim — scores down to 1×1 instead of forming a degenerate sub-floor
+/// pyramid. NO-OP at ≥64px.
+pub const MIN_PAD_DIM: u32 = 64;
+
 /// One per-resolution zensim pipeline. Allocate once with
 /// [`Zensim::new`] for a (width, height); reuse across many image pairs
 /// of that resolution.
 pub struct Zensim<R: Runtime> {
     client: ComputeClient<R>,
+    /// Internal (padded) pipeline dimensions — `max(requested, MIN_PAD_DIM)`
+    /// per axis. All buffers/scales are built for these. The caller's
+    /// requested (logical) extent is in [`pad`](Self::pad); `dimensions()`
+    /// reports the logical extent and inputs are reflect-padded from
+    /// logical → these dims at the upload boundary.
     width: u32,
     height: u32,
-    pixels: usize,
+    /// Sub-minimum reflect-pad plan (logical ↔ padded). No-op at
+    /// ≥`MIN_PAD_DIM`; below it, inputs are reflect-padded so the typed
+    /// pipeline scores down to 1×1 instead of forming a degenerate
+    /// sub-floor pyramid. Shared with the opaque path via
+    /// [`zenmetrics_gpu_core::PadPlan`].
+    pad: zenmetrics_gpu_core::PadPlan,
 
     /// `Some(_)` when constructed via [`Zensim::new_strip`] — every
     /// per-scale buffer in `scales` is sized for `strip_alloc_h`
@@ -642,6 +659,17 @@ impl<R: Runtime> Zensim<R> {
         max_extended_plane_bytes: usize,
         strip: Option<StripState>,
     ) -> Result<Self> {
+        // Reflect-pad sub-MIN_PAD_DIM requests up to the pyramid floor so
+        // EVERY public entry (typed + opaque) scores small images down to
+        // 1×1 instead of building a degenerate sub-floor pyramid. The rest
+        // of this constructor builds for the PADDED dims; the upload
+        // boundary reflect-pads inputs from the logical extent and
+        // `dimensions()` reports the logical extent. 0-dim → padded 0 →
+        // rejected below. Sub-min never uses strip (the image is tiny — a
+        // single Full-mode pass is correct and cheaper).
+        let pad = zenmetrics_gpu_core::PadPlan::to_min(width, height, MIN_PAD_DIM);
+        let (width, height) = pad.padded();
+        let strip = if pad.is_padded() { None } else { strip };
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);
         }
@@ -766,7 +794,7 @@ impl<R: Runtime> Zensim<R> {
             client,
             width,
             height,
-            pixels,
+            pad,
             strip,
             cached_ref_strip_srgb: Vec::new(),
             ref_full_xyb: None,
@@ -847,7 +875,9 @@ impl<R: Runtime> Zensim<R> {
     }
 
     pub fn dimensions(&self) -> (u32, u32) {
-        (self.width, self.height)
+        // Caller-requested (logical) extent — `self.width/height` are the
+        // padded internal dims when the request was sub-MIN_PAD_DIM.
+        self.pad.logical()
     }
 
     pub fn n_scales(&self) -> usize {
@@ -941,11 +971,14 @@ impl<R: Runtime> Zensim<R> {
         // Mirror the reference into the diffmap state's warm cache so
         // sRGB-byte warm-ref-diffmap callers see the same reference
         // content the GPU side just uploaded.
+        let pad = self.pad;
         if let Some(state) = self.diffmap_state.as_mut() {
             let w = self.width as usize;
             let h = self.height as usize;
             let lut = srgb_lut_256();
-            srgb_u8_to_linear_planes_tight(ref_srgb, w, h, &mut state.ref_linear_planes, &lut);
+            // Reflect-pad the (logical) ref up to the padded extent w/h.
+            let ref_padded = pad.pad(ref_srgb, 3);
+            srgb_u8_to_linear_planes_tight(&ref_padded, w, h, &mut state.ref_linear_planes, &lut);
             let ref_views: [&[f32]; 3] = [
                 &state.ref_linear_planes[0],
                 &state.ref_linear_planes[1],
@@ -1015,11 +1048,14 @@ impl<R: Runtime> Zensim<R> {
         }
 
         // Mirror to diffmap state (same as set_reference).
+        let pad = self.pad;
         if let Some(state) = self.diffmap_state.as_mut() {
             let w = self.width as usize;
             let h = self.height as usize;
             let lut = srgb_lut_256();
-            srgb_u8_to_linear_planes_tight(ref_srgb, w, h, &mut state.ref_linear_planes, &lut);
+            // Reflect-pad the (logical) ref up to the padded extent w/h.
+            let ref_padded = pad.pad(ref_srgb, 3);
+            srgb_u8_to_linear_planes_tight(&ref_padded, w, h, &mut state.ref_linear_planes, &lut);
             let ref_views: [&[f32]; 3] = [
                 &state.ref_linear_planes[0],
                 &state.ref_linear_planes[1],
@@ -1674,7 +1710,10 @@ impl<R: Runtime> Zensim<R> {
     // ───────────────────────── helpers ─────────────────────────
 
     fn check_dims(&self, srgb: &[u8]) -> Result<()> {
-        let expected = self.pixels * 3;
+        // Validate against the LOGICAL extent — inputs arrive at the
+        // caller-requested size and are reflect-padded to `self.pixels`
+        // (the padded extent) in `upload_u8`.
+        let expected = self.pad.logical_len(3);
         if srgb.len() != expected {
             Err(Error::DimensionMismatch {
                 expected,
@@ -1694,7 +1733,29 @@ impl<R: Runtime> Zensim<R> {
         CubeDim::new_1d(256)
     }
 
+    /// Validate three logical-extent linear-RGB f32 planes and
+    /// reflect-pad each up to the padded extent the pipeline runs at.
+    /// No-op borrow at ≥`MIN_PAD_DIM`. Mirrors the byte path's
+    /// `check_dims` + `upload_u8` pad for the linear-planes entry points
+    /// so the typed API scores sub-min planar inputs too.
+    fn prep_planes<'a>(
+        &self,
+        r: &'a [f32],
+        g: &'a [f32],
+        b: &'a [f32],
+    ) -> Result<[std::borrow::Cow<'a, [f32]>; 3]> {
+        let (lw, lh) = self.pad.logical();
+        validate_linear_planes(r, g, b, lw as usize, lh as usize)?;
+        let plan = self.pad;
+        Ok([plan.pad(r, 1), plan.pad(g, 1), plan.pad(b, 1)])
+    }
+
     fn upload_u8(&mut self, is_a: bool, srgb: &[u8]) {
+        // Reflect-pad a sub-MIN_PAD_DIM logical input up to the padded
+        // extent `pack_scratch` is sized for (no-op borrow at ≥min).
+        let plan = self.pad;
+        let srgb = plan.pad(srgb, 3);
+        let srgb: &[u8] = &srgb;
         // T4.L (pre-dates this session): pack 3 u8 bytes into one u32
         // per pixel: R | G<<8 | B<<16. Kernel masks the bytes back
         // out; on-device math is unchanged. 3× H2D bandwidth saving
@@ -2309,6 +2370,16 @@ impl<R: Runtime> Zensim<R> {
         self.check_dims(ref_srgb)?;
         self.check_dims(dist_srgb)?;
 
+        // Reflect-pad sub-MIN_PAD_DIM inputs up to the padded extent the
+        // pipeline (and `w/h` below) is built for, so the per-pixel decode
+        // reads valid data; the diffmap is cropped back to the logical
+        // extent before return. No-op borrow at ≥min.
+        let plan = self.pad;
+        let ref_pad = plan.pad(ref_srgb, 3);
+        let dist_pad = plan.pad(dist_srgb, 3);
+        let ref_srgb: &[u8] = &ref_pad;
+        let dist_srgb: &[u8] = &dist_pad;
+
         let w = self.width as usize;
         let h = self.height as usize;
         let lut = srgb_lut_256();
@@ -2321,41 +2392,45 @@ impl<R: Runtime> Zensim<R> {
             srgb_u8_to_linear_planes_tight(dist_srgb, w, h, &mut state.dist_linear_planes, &lut);
         }
 
-        if !gpu_diffmap_enabled() {
+        let result = if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
-            return self.compute_diffmap_from_linear_planes_into(w, h, true, diffmap_out);
-        }
-
-        // Opt-in (ZENSIM_GPU_DIFFMAP=1): GPU diffmap + CPU score. Move
-        // the decoded linear planes out of the diffmap state into owned
-        // scratch so the borrow doesn't alias `self` during the GPU call.
-        let (rp, dp) = {
-            let state = self.diffmap_state.as_mut().expect("ensured");
-            (
-                [
-                    core::mem::take(&mut state.ref_linear_planes[0]),
-                    core::mem::take(&mut state.ref_linear_planes[1]),
-                    core::mem::take(&mut state.ref_linear_planes[2]),
-                ],
-                [
-                    core::mem::take(&mut state.dist_linear_planes[0]),
-                    core::mem::take(&mut state.dist_linear_planes[1]),
-                    core::mem::take(&mut state.dist_linear_planes[2]),
-                ],
-            )
+            self.compute_diffmap_from_linear_planes_into(w, h, true, diffmap_out)
+        } else {
+            // Opt-in (ZENSIM_GPU_DIFFMAP=1): GPU diffmap + CPU score. Move
+            // the decoded linear planes out of the diffmap state into owned
+            // scratch so the borrow doesn't alias `self` during the GPU call.
+            let (rp, dp) = {
+                let state = self.diffmap_state.as_mut().expect("ensured");
+                (
+                    [
+                        core::mem::take(&mut state.ref_linear_planes[0]),
+                        core::mem::take(&mut state.ref_linear_planes[1]),
+                        core::mem::take(&mut state.ref_linear_planes[2]),
+                    ],
+                    [
+                        core::mem::take(&mut state.dist_linear_planes[0]),
+                        core::mem::take(&mut state.dist_linear_planes[1]),
+                        core::mem::take(&mut state.dist_linear_planes[2]),
+                    ],
+                )
+            };
+            let score = self.gpu_diffmap_linear_into(
+                Some([&rp[0], &rp[1], &rp[2]]),
+                [&dp[0], &dp[1], &dp[2]],
+                true,
+                diffmap_out,
+            );
+            // Return the decoded planes to the state (reuse buffers).
+            if let Some(state) = self.diffmap_state.as_mut() {
+                state.ref_linear_planes = rp;
+                state.dist_linear_planes = dp;
+            }
+            score
         };
-        let score = self.gpu_diffmap_linear_into(
-            Some([&rp[0], &rp[1], &rp[2]]),
-            [&dp[0], &dp[1], &dp[2]],
-            true,
-            diffmap_out,
-        );
-        // Return the decoded planes to the state (reuse buffers).
-        if let Some(state) = self.diffmap_state.as_mut() {
-            state.ref_linear_planes = rp;
-            state.dist_linear_planes = dp;
+        if result.is_ok() {
+            plan.crop_logical_plane(diffmap_out);
         }
-        score
+        result
     }
 
     /// Warm-ref variant of [`Self::score_with_diffmap`]. Requires a
@@ -2380,6 +2455,12 @@ impl<R: Runtime> Zensim<R> {
     ) -> Result<f32> {
         self.check_dims(dist_srgb)?;
 
+        // Reflect-pad sub-MIN_PAD_DIM dist up to the padded extent; crop
+        // the diffmap back to logical before return (see score_with_diffmap).
+        let plan = self.pad;
+        let dist_pad = plan.pad(dist_srgb, 3);
+        let dist_srgb: &[u8] = &dist_pad;
+
         let w = self.width as usize;
         let h = self.height as usize;
         let lut = srgb_lut_256();
@@ -2395,7 +2476,11 @@ impl<R: Runtime> Zensim<R> {
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
-            return self.compute_diffmap_from_linear_planes_into(w, h, false, diffmap_out);
+            let r = self.compute_diffmap_from_linear_planes_into(w, h, false, diffmap_out);
+            if r.is_ok() {
+                plan.crop_logical_plane(diffmap_out);
+            }
+            return r;
         }
 
         // Opt-in: warm the GPU scratch reference (if not already) from
@@ -2436,6 +2521,9 @@ impl<R: Runtime> Zensim<R> {
         if let Some(state) = self.diffmap_state.as_mut() {
             state.dist_linear_planes = dp;
         }
+        if score.is_ok() {
+            plan.crop_logical_plane(diffmap_out);
+        }
         score
     }
 
@@ -2471,10 +2559,14 @@ impl<R: Runtime> Zensim<R> {
         dist_g: &[f32],
         dist_b: &[f32],
     ) -> Result<f32> {
+        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent the
+        // pipeline runs at (no-op borrow at ≥min).
+        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
+        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
+        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
+        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
-        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
-        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
         self.ensure_diffmap_state();
         let stride = w;
@@ -2515,10 +2607,15 @@ impl<R: Runtime> Zensim<R> {
         dist_b: &[f32],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
+        // Reflect-pad sub-MIN_PAD_DIM planes (no-op ≥min); crop the
+        // diffmap back to logical on return.
+        let plan = self.pad;
+        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
+        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
+        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
+        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
-        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
-        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
@@ -2541,16 +2638,22 @@ impl<R: Runtime> Zensim<R> {
                 )
                 .map_err(map_zensim_error)?;
             write_diffmap_into(diffmap_out, res.diffmap());
-            return Ok(normalize_zensim_score(res.score()));
+            let score = normalize_zensim_score(res.score());
+            plan.crop_logical_plane(diffmap_out);
+            return Ok(score);
         }
 
         // Opt-in: GPU diffmap + CPU canonical score.
-        self.gpu_diffmap_linear_into(
+        let r = self.gpu_diffmap_linear_into(
             Some([ref_r, ref_g, ref_b]),
             [dist_r, dist_g, dist_b],
             true,
             diffmap_out,
-        )
+        );
+        if r.is_ok() {
+            plan.crop_logical_plane(diffmap_out);
+        }
+        r
     }
 
     /// Warm the diffmap-state's `PrecomputedReference` from three
@@ -2575,9 +2678,11 @@ impl<R: Runtime> Zensim<R> {
         ref_g: &[f32],
         ref_b: &[f32],
     ) -> Result<()> {
+        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent.
+        let rp = self.prep_planes(ref_r, ref_g, ref_b)?;
+        let (ref_r, ref_g, ref_b): (&[f32], &[f32], &[f32]) = (&rp[0], &rp[1], &rp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
-        validate_linear_planes(ref_r, ref_g, ref_b, w, h)?;
 
         self.ensure_diffmap_state();
         let stride = w;
@@ -2616,9 +2721,11 @@ impl<R: Runtime> Zensim<R> {
         dist_g: &[f32],
         dist_b: &[f32],
     ) -> Result<f32> {
+        // Reflect-pad sub-MIN_PAD_DIM planes up to the padded extent.
+        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
+        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
-        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
         self.ensure_diffmap_state();
         let stride = w;
@@ -2647,9 +2754,13 @@ impl<R: Runtime> Zensim<R> {
         dist_b: &[f32],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
+        // Reflect-pad sub-MIN_PAD_DIM planes (no-op ≥min); crop the
+        // diffmap back to logical on return.
+        let plan = self.pad;
+        let dp = self.prep_planes(dist_r, dist_g, dist_b)?;
+        let (dist_r, dist_g, dist_b): (&[f32], &[f32], &[f32]) = (&dp[0], &dp[1], &dp[2]);
         let w = self.width as usize;
         let h = self.height as usize;
-        validate_linear_planes(dist_r, dist_g, dist_b, w, h)?;
 
         if !gpu_diffmap_enabled() {
             // Default: Phase 1 CPU score + CPU diffmap (zero regression).
@@ -2669,7 +2780,9 @@ impl<R: Runtime> Zensim<R> {
                 )
                 .map_err(map_zensim_error)?;
             write_diffmap_into(diffmap_out, res.diffmap());
-            return Ok(normalize_zensim_score(res.score()));
+            let score = normalize_zensim_score(res.score());
+            plan.crop_logical_plane(diffmap_out);
+            return Ok(score);
         }
 
         // Opt-in: GPU warm-ref diffmap + CPU canonical score. Requires
@@ -2683,7 +2796,11 @@ impl<R: Runtime> Zensim<R> {
         if !gpu_ref_warmed {
             return Err(Error::NoCachedReference);
         }
-        self.gpu_diffmap_linear_into(None, [dist_r, dist_g, dist_b], false, diffmap_out)
+        let r = self.gpu_diffmap_linear_into(None, [dist_r, dist_g, dist_b], false, diffmap_out);
+        if r.is_ok() {
+            plan.crop_logical_plane(diffmap_out);
+        }
+        r
     }
 
     // ─────────────────────── private helpers ───────────────────────
