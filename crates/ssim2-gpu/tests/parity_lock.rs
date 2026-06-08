@@ -290,10 +290,22 @@ fn batch_empty_input_returns_empty() {
 
 #[test]
 fn err_invalid_image_size() {
+    // Single-image Ssim2 reflect-pads sub-8 up to the pyramid floor and
+    // scores (down to 1×1); only a 0-dim axis is rejected.
     let client = Backend::client(&Default::default());
-    let r = Ssim2::<Backend>::new(client, 7, 7);
-    assert!(matches!(r, Err(Error::InvalidImageSize)));
+    let mut z = Ssim2::<Backend>::new(client, 7, 7).expect("7x7 pads + constructs");
+    assert_eq!(z.dimensions(), (7, 7), "dims() reports the logical size");
+    let buf = vec![0u8; 7 * 7 * 3];
+    assert!(z.compute(&buf, &buf).is_ok(), "7x7 must score");
 
+    let client = Backend::client(&Default::default());
+    assert!(matches!(
+        Ssim2::<Backend>::new(client, 0, 4),
+        Err(Error::InvalidImageSize)
+    ));
+
+    // Batch scoring is a throughput path; it rejects sub-8 (degenerate
+    // batch) rather than padding — use single-image Ssim2 for sub-8.
     let client = Backend::client(&Default::default());
     let r = Ssim2Batch::<Backend>::new(client, 7, 7, 4);
     assert!(matches!(r, Err(Error::InvalidImageSize)));

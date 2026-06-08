@@ -322,10 +322,23 @@ fn strip_rejects_dim_mismatch() {
 }
 
 #[test]
-fn strip_constructor_rejects_invalid_dims() {
+fn strip_constructor_sub_min_routes_to_padded_full() {
+    // Sub-MIN_PAD_DIM strip requests are routed to the Full constructor,
+    // which reflect-pads to the pyramid floor and scores (down to 1×1),
+    // rather than rejecting. `dimensions()` reports the logical size.
     let client = Backend::client(&Default::default());
-    let r = Ssim2::<Backend>::new_strip(client, 4, 4, 64);
-    assert!(matches!(r, Err(Error::InvalidImageSize)));
+    let mut z =
+        Ssim2::<Backend>::new_strip(client, 4, 4, 64).expect("4x4 strip routes to padded Full");
+    assert_eq!(z.dimensions(), (4, 4));
+    let buf = vec![0u8; 4 * 4 * 3];
+    assert!(z.compute(&buf, &buf).is_ok(), "4x4 must score");
+
+    // 0-dim is still rejected.
+    let client = Backend::client(&Default::default());
+    assert!(matches!(
+        Ssim2::<Backend>::new_strip(client, 0, 4, 64),
+        Err(Error::InvalidImageSize)
+    ));
 }
 
 #[test]

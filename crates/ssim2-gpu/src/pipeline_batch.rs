@@ -165,6 +165,14 @@ impl<R: Runtime> Ssim2Batch<R> {
         if batch_size == 0 {
             return Err(Error::InvalidBatchSize { got: 0, max: 0 });
         }
+        // Batch scoring is a throughput path for many same-size images;
+        // sub-8 batches are degenerate. Reject sub-MIN_PAD_DIM here
+        // (rather than reflect-pad like single-image Ssim2 / Ssim2Opaque,
+        // which score down to 1×1) so the per-image batch buffers stay
+        // consistent with the inner pyramid.
+        if width < crate::pipeline::MIN_PAD_DIM || height < crate::pipeline::MIN_PAD_DIM {
+            return Err(Error::InvalidImageSize);
+        }
         let inner = Ssim2::new(client.clone(), width, height)?;
 
         let bscales: Vec<BatchScale> = (0..inner.n_scales())
