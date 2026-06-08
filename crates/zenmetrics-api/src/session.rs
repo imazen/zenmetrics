@@ -753,7 +753,10 @@ fn build_session_scorer(
                 kind: "cvvdp",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Cvvdp(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Cvvdp(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[cfg(all(
             feature = "ssim2",
@@ -783,7 +786,10 @@ fn build_session_scorer(
                 kind: "ssim2",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Ssim2(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Ssim2(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[cfg(all(
             feature = "butter",
@@ -813,7 +819,10 @@ fn build_session_scorer(
                 kind: "butter",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Butter(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Butter(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[cfg(all(
             feature = "dssim",
@@ -843,7 +852,10 @@ fn build_session_scorer(
                 kind: "dssim",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Dssim(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Dssim(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[cfg(all(
             feature = "iwssim",
@@ -873,7 +885,10 @@ fn build_session_scorer(
                 kind: "iwssim",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Iwssim(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Iwssim(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[cfg(all(
             feature = "zensim",
@@ -903,7 +918,10 @@ fn build_session_scorer(
                 kind: "zensim",
                 message: e.to_string(),
             })?;
-            Ok(crate::metric::Metric::from_inner_with_peak(crate::metric::MetricInner::Zensim(opaque), crate::metric::SDR_REFERENCE_NITS))
+            Ok(crate::metric::Metric::from_inner_with_peak(
+                crate::metric::MetricInner::Zensim(opaque),
+                crate::metric::SDR_REFERENCE_NITS,
+            ))
         }
         #[allow(unreachable_patterns)]
         other => Err(Error::Metric {

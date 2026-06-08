@@ -288,7 +288,9 @@ fn invalid_image_size_surfaces_on_too_small_dims() {
 
     let check_pads_ok = |w: u32, h: u32, label: &str| {
         let cvvdp = Cvvdp::<Backend>::new(client.clone(), w, h, CvvdpParams::PLACEHOLDER)
-            .unwrap_or_else(|e| panic!("{label}: sub-8 must reflect-pad + construct, got Err({e:?})"));
+            .unwrap_or_else(|e| {
+                panic!("{label}: sub-8 must reflect-pad + construct, got Err({e:?})")
+            });
         assert_eq!(
             cvvdp.dimensions(),
             (w, h),

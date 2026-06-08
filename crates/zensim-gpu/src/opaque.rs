@@ -651,7 +651,12 @@ impl ZensimOpaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 3,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            3,
         )))
     }
 
@@ -671,7 +676,12 @@ impl ZensimOpaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 1,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            1,
         )))
     }
 
@@ -1142,8 +1152,7 @@ impl ZensimOpaque {
         let rr = self.pad_plane(ref_r)?;
         let rg = self.pad_plane(ref_g)?;
         let rb = self.pad_plane(ref_b)?;
-        self.inner
-            .warm_reference_from_linear_planes(&rr, &rg, &rb)
+        self.inner.warm_reference_from_linear_planes(&rr, &rg, &rb)
     }
 
     /// Mirror of [`crate::pipeline::Zensim::score_from_linear_planes_with_warm_ref`].
@@ -1173,9 +1182,12 @@ impl ZensimOpaque {
         let dr = self.pad_plane(dist_r)?;
         let dg = self.pad_plane(dist_g)?;
         let db = self.pad_plane(dist_b)?;
-        let score = self
-            .inner
-            .score_from_linear_planes_with_warm_ref_diffmap(&dr, &dg, &db, diffmap_out)?;
+        let score = self.inner.score_from_linear_planes_with_warm_ref_diffmap(
+            &dr,
+            &dg,
+            &db,
+            diffmap_out,
+        )?;
         self.crop_diffmap(diffmap_out);
         Ok(score)
     }

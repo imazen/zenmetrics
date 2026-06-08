@@ -289,7 +289,12 @@ impl Ssim2Opaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 3,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            3,
         )))
     }
 
@@ -307,8 +312,7 @@ impl Ssim2Opaque {
         let dis_buf = to_srgb_rgb8(&d, self.logical_w, self.logical_h)?;
         let rp = self.pad_rgb(&ref_buf)?;
         let dp = self.pad_rgb(&dis_buf)?;
-        self.inner
-            .compute_srgb_u8(&rp, &dp, self.params.mode)
+        self.inner.compute_srgb_u8(&rp, &dp, self.params.mode)
     }
 
     /// Score against pre-uploaded packed-u32 device handles —

@@ -369,8 +369,8 @@ impl HdrScorer {
         // Bake the peak into the metric's display model (cvvdp/butter) AND record
         // it as the metric's `display_peak`, so `Metric::compute_pixels` feeds HDR
         // at the same peak this scorer targets — the two stay in sync.
-        let metric = build_hdr_metric(kind, backend, width, height, peak_nits)?
-            .with_display_peak(peak_nits);
+        let metric =
+            build_hdr_metric(kind, backend, width, height, peak_nits)?.with_display_peak(peak_nits);
         Ok(Self {
             metric,
             kind,
@@ -483,7 +483,11 @@ impl HdrScorer {
 
 /// Convert a slice to packed sRGB8 (validating dims) for the native SDR path.
 #[cfg(feature = "pixels")]
-pub(crate) fn slice_to_srgb8(s: &zenpixels::PixelSlice<'_>, w: u32, h: u32) -> crate::Result<Vec<u8>> {
+pub(crate) fn slice_to_srgb8(
+    s: &zenpixels::PixelSlice<'_>,
+    w: u32,
+    h: u32,
+) -> crate::Result<Vec<u8>> {
     if s.width() != w || s.rows() != h {
         return Err(crate::Error::Metric {
             kind: "pixels",

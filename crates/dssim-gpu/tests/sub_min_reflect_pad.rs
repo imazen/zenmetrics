@@ -50,7 +50,10 @@ fn scores_every_size_down_to_1px() {
         let mut z = DssimOpaque::new(BACKEND_E, n, n, DssimParams::default()).expect("new");
         assert_eq!(z.dims(), (n, n), "dims() must report logical size at {n}px");
         let s = z.compute_srgb_u8(&r, &d).expect("score").value;
-        assert!(s.is_finite(), "dssim score at {n}px must be finite, got {s}");
+        assert!(
+            s.is_finite(),
+            "dssim score at {n}px must be finite, got {s}"
+        );
     }
 }
 
@@ -61,11 +64,21 @@ fn solid_color_diff_invariant_at_or_below_floor() {
     let sizes = [1u32, 2, 3, 4, 5, 6, 7, 8];
     let scores: Vec<f64> = sizes
         .iter()
-        .map(|&n| score(n, n, &solid(n, n, [100, 100, 100]), &solid(n, n, [120, 120, 120])))
+        .map(|&n| {
+            score(
+                n,
+                n,
+                &solid(n, n, [100, 100, 100]),
+                &solid(n, n, [120, 120, 120]),
+            )
+        })
         .collect();
     let lo = scores.iter().cloned().fold(f64::INFINITY, f64::min);
     let hi = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    eprintln!("dssim solid-diff ≤floor {sizes:?} = {scores:?} (spread {:.6})", hi - lo);
+    eprintln!(
+        "dssim solid-diff ≤floor {sizes:?} = {scores:?} (spread {:.6})",
+        hi - lo
+    );
     assert!(
         hi - lo < 1e-4,
         "dssim solid-colour difference must be invariant for sizes ≤ 8px floor; spread {:.6}",
@@ -76,7 +89,12 @@ fn solid_color_diff_invariant_at_or_below_floor() {
 #[test]
 fn nonsquare_sub8_scores_finite() {
     for (w, h) in [(2u32, 24u32), (24, 2), (1, 30), (30, 1), (5, 3)] {
-        let s = score(w, h, &solid(w, h, [40, 90, 200]), &solid(w, h, [60, 90, 200]));
+        let s = score(
+            w,
+            h,
+            &solid(w, h, [40, 90, 200]),
+            &solid(w, h, [60, 90, 200]),
+        );
         assert!(s.is_finite(), "dssim {w}x{h} score must be finite, got {s}");
     }
 }

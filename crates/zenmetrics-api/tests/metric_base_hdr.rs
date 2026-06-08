@@ -47,7 +47,14 @@ fn f32_bytes(vals: &[f32]) -> Vec<u8> {
 /// An interleaved-linear-f32 (`RGBF32_LINEAR`) `PixelSlice` over `b`. A `fn` (not
 /// a closure) so the borrow lifetime threads through cleanly.
 fn lin_slice(b: &[u8], w: u32, h: u32) -> PixelSlice<'_> {
-    PixelSlice::new(b, w, h, (w * 3 * 4) as usize, PixelDescriptor::RGBF32_LINEAR).unwrap()
+    PixelSlice::new(
+        b,
+        w,
+        h,
+        (w * 3 * 4) as usize,
+        PixelDescriptor::RGBF32_LINEAR,
+    )
+    .unwrap()
 }
 
 /// Base `Metric::compute_pixels` on an `RGB8_SRGB` slice is bit-identical to the

@@ -15,7 +15,7 @@
 //!
 //! Run: zen-metrics size-invariance [--corpus DIR] [--mode downsample-pair]
 
-use crate::decode::{decode_image_to_rgb8, Rgb8Image};
+use crate::decode::{Rgb8Image, decode_image_to_rgb8};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -68,7 +68,11 @@ fn refl(i: i64, n: i64) -> usize {
 fn apply_pad(img: &Rgb8Image, strat: Pad) -> Rgb8Image {
     let (w, h) = (img.width, img.height);
     if strat == Pad::Raw || (w >= MIN_DIM && h >= MIN_DIM) {
-        return Rgb8Image { pixels: img.pixels.clone(), width: w, height: h };
+        return Rgb8Image {
+            pixels: img.pixels.clone(),
+            width: w,
+            height: h,
+        };
     }
     let (bw, bh) = (w.max(MIN_DIM), h.max(MIN_DIM));
     let mut px = vec![0u8; (bw as usize) * (bh as usize) * 3];
@@ -84,7 +88,11 @@ fn apply_pad(img: &Rgb8Image, strat: Pad) -> Rgb8Image {
             px[di..di + 3].copy_from_slice(&img.pixels[si..si + 3]);
         }
     }
-    Rgb8Image { pixels: px, width: bw, height: bh }
+    Rgb8Image {
+        pixels: px,
+        width: bw,
+        height: bh,
+    }
 }
 
 /// Area-average downscale to `n×n` (n ≤ source min dim).
@@ -110,7 +118,11 @@ fn area_resize_sq(img: &Rgb8Image, n: u32) -> Rgb8Image {
             }
         }
     }
-    Rgb8Image { pixels: px, width: n as u32, height: n as u32 }
+    Rgb8Image {
+        pixels: px,
+        width: n as u32,
+        height: n as u32,
+    }
 }
 
 type Scorer = fn(&Rgb8Image, &Rgb8Image) -> Result<f64, Box<dyn std::error::Error>>;
@@ -183,8 +195,24 @@ pub fn run(args: &SizeInvarianceArgs) -> Result<(), Box<dyn std::error::Error>> 
                         if t > b {
                             continue;
                         }
-                        let rt = if t == b { Rgb8Image { pixels: rb.pixels.clone(), width: b, height: b } } else { area_resize_sq(&rb, t) };
-                        let dt = if t == b { Rgb8Image { pixels: db.pixels.clone(), width: b, height: b } } else { area_resize_sq(&db, t) };
+                        let rt = if t == b {
+                            Rgb8Image {
+                                pixels: rb.pixels.clone(),
+                                width: b,
+                                height: b,
+                            }
+                        } else {
+                            area_resize_sq(&rb, t)
+                        };
+                        let dt = if t == b {
+                            Rgb8Image {
+                                pixels: db.pixels.clone(),
+                                width: b,
+                                height: b,
+                            }
+                        } else {
+                            area_resize_sq(&db, t)
+                        };
                         pairs.push((t, rt, dt));
                     }
                 }
@@ -222,8 +250,11 @@ pub fn run(args: &SizeInvarianceArgs) -> Result<(), Box<dyn std::error::Error>> 
                             Err(_) => *errs.entry(key).or_insert(0) += 1,
                         }
                     }
-                    let inv: Vec<(u32, f64)> =
-                        series.iter().cloned().filter(|(m, _)| *m >= args.floor).collect();
+                    let inv: Vec<(u32, f64)> = series
+                        .iter()
+                        .cloned()
+                        .filter(|(m, _)| *m >= args.floor)
+                        .collect();
                     if !inv.is_empty() {
                         drift.entry(key).or_default().push(fluct(&inv));
                     }
@@ -234,24 +265,40 @@ pub fn run(args: &SizeInvarianceArgs) -> Result<(), Box<dyn std::error::Error>> 
 
     println!(
         "Size-invariance [{}] over {} ({} images). Drift = max-min score across sizes (min-dim ≥ {}px) per (image,distortion) series.\n",
-        if downsample { "downsample-pair (distortion FIXED — drift = metric artifact)" } else { "encode-per-size (drift conflates real quality change)" },
+        if downsample {
+            "downsample-pair (distortion FIXED — drift = metric artifact)"
+        } else {
+            "encode-per-size (drift conflates real quality change)"
+        },
         args.corpus.display(),
         images.len(),
         args.floor
     );
-    println!("{:<12} {:<8} {:>7} {:>9} {:>9} {:>9} {:>7}", "metric", "pad", "errors", "median", "p90", "worst", "min_px");
+    println!(
+        "{:<12} {:<8} {:>7} {:>9} {:>9} {:>9} {:>7}",
+        "metric", "pad", "errors", "median", "p90", "worst", "min_px"
+    );
     for (mname, _) in &metrics {
         for pad in &pads {
             let key = (*mname, pad.name());
             let mut ds = drift.get(&key).cloned().unwrap_or_default();
             ds.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let med = if ds.is_empty() { 0.0 } else { ds[ds.len() / 2] };
-            let p90 = if ds.is_empty() { 0.0 } else { ds[(ds.len() * 9 / 10).min(ds.len() - 1)] };
+            let p90 = if ds.is_empty() {
+                0.0
+            } else {
+                ds[(ds.len() * 9 / 10).min(ds.len() - 1)]
+            };
             let worst = ds.last().copied().unwrap_or(0.0);
             let mp = minpx.get(&key).copied().unwrap_or(0);
             println!(
                 "{:<12} {:<8} {:>7} {:>9.3} {:>9.3} {:>9.3} {:>7}",
-                mname, pad.name(), errs.get(&key).copied().unwrap_or(0), med, p90, worst,
+                mname,
+                pad.name(),
+                errs.get(&key).copied().unwrap_or(0),
+                med,
+                p90,
+                worst,
                 if mp == u32::MAX { 0 } else { mp }
             );
         }

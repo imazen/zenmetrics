@@ -9,8 +9,8 @@
 #![cfg(all(feature = "cubecl-types", feature = "cuda"))]
 
 use cubecl::Runtime;
-use zensim_gpu::Zensim;
 use zenmetrics_gpu_core::PadPlan;
+use zensim_gpu::Zensim;
 
 type Bt = cubecl::cuda::CudaRuntime;
 
@@ -32,7 +32,11 @@ fn img(w: u32, h: u32, s: u32) -> Vec<u8> {
 fn typed_new_accepts_sub64_and_reports_logical_dims() {
     let client = Bt::client(&Default::default());
     let z = Zensim::<Bt>::new(client, 32, 32).expect("typed new must accept sub-64 (pads)");
-    assert_eq!(z.dimensions(), (32, 32), "dims() must report the logical size");
+    assert_eq!(
+        z.dimensions(),
+        (32, 32),
+        "dims() must report the logical size"
+    );
 }
 
 #[test]
@@ -73,7 +77,12 @@ fn typed_scores_every_size_down_to_1px() {
         let mut z = Zensim::<Bt>::new(Bt::client(&Default::default()), n, n)
             .unwrap_or_else(|e| panic!("typed new at {n}px must succeed, got {e:?}"));
         assert_eq!(z.dimensions(), (n, n));
-        let f = z.compute_features(&r, &d).unwrap_or_else(|e| panic!("{n}px features: {e:?}"));
-        assert!(f.iter().all(|v| v.is_finite()), "{n}px features must be finite");
+        let f = z
+            .compute_features(&r, &d)
+            .unwrap_or_else(|e| panic!("{n}px features: {e:?}"));
+        assert!(
+            f.iter().all(|v| v.is_finite()),
+            "{n}px features must be finite"
+        );
     }
 }

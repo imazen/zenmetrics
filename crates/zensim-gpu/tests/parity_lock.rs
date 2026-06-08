@@ -183,7 +183,10 @@ fn sub_min_image_pads_and_scores() {
     assert_eq!(z.dimensions(), (4, 4));
     let buf = vec![0_u8; 4 * 4 * 3];
     let f = z.compute_features(&buf, &buf).expect("4x4 must score");
-    assert!(f.iter().all(|v| v.is_finite()), "4x4 features must be finite");
+    assert!(
+        f.iter().all(|v| v.is_finite()),
+        "4x4 features must be finite"
+    );
 }
 
 #[test]

@@ -290,7 +290,12 @@ impl DssimOpaque {
         }
         let (pw, ph) = self.inner.dims();
         Ok(std::borrow::Cow::Owned(zenmetrics_gpu_core::reflect_pad(
-            src, lw, lh, pw as usize, ph as usize, 3,
+            src,
+            lw,
+            lh,
+            pw as usize,
+            ph as usize,
+            3,
         )))
     }
 

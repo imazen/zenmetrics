@@ -68,16 +68,26 @@ fn typed_sub8_score_matches_manual_pad_to_8() {
     let r = img(w, h, 3);
     let d = img(w, h, 29);
 
-    let mut z = Cvvdp::<Bt>::new(Bt::client(&Default::default()), w, h, CvvdpParams::PLACEHOLDER)
-        .expect("sub-8 pads");
+    let mut z = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        w,
+        h,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("sub-8 pads");
     assert_eq!(z.dimensions(), (w, h), "dims() reports logical");
     let s_sub = z.score(&r, &d).expect("sub-8 score");
 
     let plan = PadPlan::to_min(w, h, MIN);
     let r8 = plan.pad(&r, 3).into_owned();
     let d8 = plan.pad(&d, 3).into_owned();
-    let mut z8 = Cvvdp::<Bt>::new(Bt::client(&Default::default()), MIN, MIN, CvvdpParams::PLACEHOLDER)
-        .expect("8 new");
+    let mut z8 = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        MIN,
+        MIN,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("8 new");
     let s8 = z8.score(&r8, &d8).expect("8 score");
 
     eprintln!(
@@ -97,8 +107,13 @@ fn typed_nonsquare_sub8_score_matches_manual_pad_to_8() {
     let r = img(w, h, 5);
     let d = img(w, h, 41);
 
-    let mut z = Cvvdp::<Bt>::new(Bt::client(&Default::default()), w, h, CvvdpParams::PLACEHOLDER)
-        .expect("sub-8 pads");
+    let mut z = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        w,
+        h,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("sub-8 pads");
     assert_eq!(z.dimensions(), (w, h));
     let s_sub = z.score(&r, &d).expect("sub score");
 
@@ -106,11 +121,19 @@ fn typed_nonsquare_sub8_score_matches_manual_pad_to_8() {
     let (pw, ph) = plan.padded();
     let rp = plan.pad(&r, 3).into_owned();
     let dp = plan.pad(&d, 3).into_owned();
-    let mut zp = Cvvdp::<Bt>::new(Bt::client(&Default::default()), pw, ph, CvvdpParams::PLACEHOLDER)
-        .expect("padded new");
+    let mut zp = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        pw,
+        ph,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("padded new");
     let sp = zp.score(&rp, &dp).expect("padded score");
 
-    eprintln!("cvvdp {w}x{h}: sub={s_sub} pad-{pw}x{ph}={sp} |Δ|={:.3e}", (s_sub - sp).abs());
+    eprintln!(
+        "cvvdp {w}x{h}: sub={s_sub} pad-{pw}x{ph}={sp} |Δ|={:.3e}",
+        (s_sub - sp).abs()
+    );
     assert!(
         (s_sub - sp).abs() < 1e-9,
         "typed {w}x{h} score must equal manually-padded-to-{pw}x{ph}: {s_sub} vs {sp}"
@@ -126,25 +149,42 @@ fn typed_sub8_diffmap_cropped_to_logical_and_score_matches() {
     let r = img(w, h, 11);
     let d = img(w, h, 200);
 
-    let mut z = Cvvdp::<Bt>::new(Bt::client(&Default::default()), w, h, CvvdpParams::PLACEHOLDER)
-        .expect("sub-8 pads");
+    let mut z = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        w,
+        h,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("sub-8 pads");
     let mut dm = Vec::new();
-    let s_sub = z.score_with_diffmap(&r, &d, &mut dm).expect("sub diffmap score");
+    let s_sub = z
+        .score_with_diffmap(&r, &d, &mut dm)
+        .expect("sub diffmap score");
     assert_eq!(
         dm.len(),
         (w * h) as usize,
         "diffmap must be cropped to the logical {w}x{h} extent, got {} elems",
         dm.len()
     );
-    assert!(dm.iter().all(|v| v.is_finite()), "diffmap values must be finite");
+    assert!(
+        dm.iter().all(|v| v.is_finite()),
+        "diffmap values must be finite"
+    );
 
     let plan = PadPlan::to_min(w, h, MIN);
     let r8 = plan.pad(&r, 3).into_owned();
     let d8 = plan.pad(&d, 3).into_owned();
-    let mut z8 = Cvvdp::<Bt>::new(Bt::client(&Default::default()), MIN, MIN, CvvdpParams::PLACEHOLDER)
-        .expect("8 new");
+    let mut z8 = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        MIN,
+        MIN,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("8 new");
     let mut dm8 = Vec::new();
-    let s8 = z8.score_with_diffmap(&r8, &d8, &mut dm8).expect("8 diffmap score");
+    let s8 = z8
+        .score_with_diffmap(&r8, &d8, &mut dm8)
+        .expect("8 diffmap score");
 
     eprintln!(
         "cvvdp sub-8 diffmap JOD={s_sub} pad-8 JOD={s8} |Δ|={:.3e} (dm8 padded len={})",
@@ -185,16 +225,26 @@ fn typed_sub8_linear_planes_matches_manual_pad_to_8() {
     let [rr, rg, rb] = to_linear_planes(&r, n);
     let [dr, dg, db] = to_linear_planes(&d, n);
 
-    let mut z = Cvvdp::<Bt>::new(Bt::client(&Default::default()), w, h, CvvdpParams::PLACEHOLDER)
-        .expect("sub-8 pads");
+    let mut z = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        w,
+        h,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("sub-8 pads");
     let s_sub = z
         .score_from_linear_planes(&rr, &rg, &rb, &dr, &dg, &db)
         .expect("sub linear-planes score");
 
     let plan = PadPlan::to_min(w, h, MIN);
     let p = |v: &[f32]| plan.pad(v, 1).into_owned();
-    let mut z8 = Cvvdp::<Bt>::new(Bt::client(&Default::default()), MIN, MIN, CvvdpParams::PLACEHOLDER)
-        .expect("8 new");
+    let mut z8 = Cvvdp::<Bt>::new(
+        Bt::client(&Default::default()),
+        MIN,
+        MIN,
+        CvvdpParams::PLACEHOLDER,
+    )
+    .expect("8 new");
     let s8 = z8
         .score_from_linear_planes(&p(&rr), &p(&rg), &p(&rb), &p(&dr), &p(&dg), &p(&db))
         .expect("8 linear-planes score");
@@ -215,8 +265,13 @@ fn typed_scores_down_to_1px() {
     for n in [1u32, 2, 4, 7, 8, 16] {
         let r = img(n, n, 0);
         let d = img(n, n, 7);
-        let mut z = Cvvdp::<Bt>::new(Bt::client(&Default::default()), n, n, CvvdpParams::PLACEHOLDER)
-            .unwrap_or_else(|e| panic!("cvvdp new at {n}px must pad+succeed: {e:?}"));
+        let mut z = Cvvdp::<Bt>::new(
+            Bt::client(&Default::default()),
+            n,
+            n,
+            CvvdpParams::PLACEHOLDER,
+        )
+        .unwrap_or_else(|e| panic!("cvvdp new at {n}px must pad+succeed: {e:?}"));
         assert_eq!(z.dimensions(), (n, n));
         let s = z
             .score(&r, &d)

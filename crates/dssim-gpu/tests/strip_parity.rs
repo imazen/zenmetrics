@@ -422,7 +422,10 @@ fn strip_constructor_sub_min_routes_to_padded_full() {
     let mut d =
         Dssim::<Backend>::new_strip(make_client!(), 4, 4, 64).expect("4x4 strip routes to Full");
     assert_eq!(d.dimensions(), (4, 4));
-    assert!(!d.is_strip_mode(), "sub-min reroute lands on the whole-image path");
+    assert!(
+        !d.is_strip_mode(),
+        "sub-min reroute lands on the whole-image path"
+    );
     let buf = vec![0_u8; 4 * 4 * 3];
     assert!(d.compute(&buf, &buf).is_ok(), "4x4 must score");
 

@@ -81,6 +81,8 @@ pub mod context;
 
 pub use error::Error;
 pub use memory_mode::{CachedRefStripPolicy, MemoryMode};
+#[doc(hidden)]
+pub use metric::MetricInner;
 /// Encoded-file (PNG/JPEG) score front door (task #159 phase 4c); requires `encoded`.
 #[cfg(feature = "encoded")]
 pub use metric::score_encoded;
@@ -88,8 +90,6 @@ pub use metric::{
     Backend, Metric, MetricKind, MetricParams, NamedScore, Priority, Reuse, SDR_REFERENCE_NITS,
     Score, Scores, reclaim_pooled_vram, resolve_memory_mode, score_pair,
 };
-#[doc(hidden)]
-pub use metric::MetricInner;
 /// PixelSlice score front doors (task #159 phase 4): one-shot [`score`] and
 /// warm [`warm_reference`] → [`Warm`]. Require the `pixels` feature.
 #[cfg(feature = "pixels")]

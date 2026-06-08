@@ -190,7 +190,10 @@ fn invalid_image_size_rejected() {
     let mut d = Dssim::<Backend>::new(make_client!(), 4, 4).expect("4x4 pads + constructs");
     assert_eq!(d.dimensions(), (4, 4), "dims() reports the logical size");
     let buf = vec![0_u8; 4 * 4 * 3];
-    assert!(d.compute(&buf, &buf).is_ok(), "4x4 must score after padding");
+    assert!(
+        d.compute(&buf, &buf).is_ok(),
+        "4x4 must score after padding"
+    );
 
     // A 0-dim axis still errors (padded extent stays 0).
     let r = Dssim::<Backend>::new(make_client!(), 0, 4);

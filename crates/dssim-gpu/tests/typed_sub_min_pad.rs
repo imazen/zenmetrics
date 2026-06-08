@@ -42,7 +42,10 @@ fn typed_sub8_score_matches_manual_pad_to_8() {
     let mut z8 = Dssim::<Bt>::new(Bt::client(&Default::default()), 8, 8).expect("8 new");
     let s8 = z8.compute(&r8, &d8).expect("8 score").score;
 
-    eprintln!("dssim typed sub-8={s_sub} manual-pad-8={s8} |Δ|={:.3e}", (s_sub - s8).abs());
+    eprintln!(
+        "dssim typed sub-8={s_sub} manual-pad-8={s8} |Δ|={:.3e}",
+        (s_sub - s8).abs()
+    );
     assert!(
         (s_sub - s8).abs() < 1e-9,
         "typed sub-8 score must equal manually-padded-to-8 score: {s_sub} vs {s8}"
@@ -57,7 +60,10 @@ fn typed_scores_down_to_1px() {
         let mut z = Dssim::<Bt>::new(Bt::client(&Default::default()), n, n)
             .unwrap_or_else(|e| panic!("dssim new at {n}px must pad+succeed: {e:?}"));
         assert_eq!(z.dimensions(), (n, n));
-        let s = z.compute(&r, &d).unwrap_or_else(|e| panic!("{n}px score: {e:?}")).score;
+        let s = z
+            .compute(&r, &d)
+            .unwrap_or_else(|e| panic!("{n}px score: {e:?}"))
+            .score;
         assert!(s.is_finite(), "{n}px score must be finite, got {s}");
     }
 }

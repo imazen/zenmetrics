@@ -951,45 +951,50 @@ impl MetricInner {
                     })
             }
             #[cfg(feature = "butter")]
-            MetricInner::Butter(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score_butter)
-                .map_err(|e| Error::Metric {
-                    kind: "butter",
-                    message: e.to_string(),
-                }),
+            MetricInner::Butter(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score_butter)
+                    .map_err(|e| Error::Metric {
+                        kind: "butter",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "ssim2")]
-            MetricInner::Ssim2(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score_ssim2)
-                .map_err(|e| Error::Metric {
-                    kind: "ssim2",
-                    message: e.to_string(),
-                }),
+            MetricInner::Ssim2(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score_ssim2)
+                    .map_err(|e| Error::Metric {
+                        kind: "ssim2",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "dssim")]
-            MetricInner::Dssim(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score_dssim)
-                .map_err(|e| Error::Metric {
-                    kind: "dssim",
-                    message: e.to_string(),
-                }),
+            MetricInner::Dssim(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score_dssim)
+                    .map_err(|e| Error::Metric {
+                        kind: "dssim",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "iwssim")]
-            MetricInner::Iwssim(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score_iwssim)
-                .map_err(|e| Error::Metric {
-                    kind: "iwssim",
-                    message: e.to_string(),
-                }),
+            MetricInner::Iwssim(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score_iwssim)
+                    .map_err(|e| Error::Metric {
+                        kind: "iwssim",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "zensim")]
-            MetricInner::Zensim(m) => m
-                .compute_srgb_u8(r, d)
-                .map(convert_score_zensim)
-                .map_err(|e| Error::Metric {
-                    kind: "zensim",
-                    message: e.to_string(),
-                }),
+            MetricInner::Zensim(m) => {
+                m.compute_srgb_u8(r, d)
+                    .map(convert_score_zensim)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    })
+            }
         }
     }
 
@@ -1345,13 +1350,14 @@ impl MetricInner {
         let dis_h = &pair.dist_handle;
         match self {
             #[cfg(feature = "cvvdp")]
-            MetricInner::Cvvdp(m) => m
-                .compute_handles(ref_h, dis_h)
-                .map(convert_score)
-                .map_err(|e| Error::Metric {
-                    kind: "cvvdp",
-                    message: e.to_string(),
-                }),
+            MetricInner::Cvvdp(m) => {
+                m.compute_handles(ref_h, dis_h)
+                    .map(convert_score)
+                    .map_err(|e| Error::Metric {
+                        kind: "cvvdp",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "butter")]
             MetricInner::Butter(m) => m
                 .compute_handles(ref_h, dis_h)
@@ -1552,13 +1558,14 @@ impl MetricInner {
                     })
             }
             #[cfg(feature = "butter")]
-            MetricInner::Butter(m) => m
-                .compute_pixels(r, d)
-                .map(convert_score_butter)
-                .map_err(|e| Error::Metric {
-                    kind: "butter",
-                    message: e.to_string(),
-                }),
+            MetricInner::Butter(m) => {
+                m.compute_pixels(r, d)
+                    .map(convert_score_butter)
+                    .map_err(|e| Error::Metric {
+                        kind: "butter",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "ssim2")]
             MetricInner::Ssim2(m) => m
                 .compute_pixels(r, d)
@@ -1576,21 +1583,23 @@ impl MetricInner {
                     message: e.to_string(),
                 }),
             #[cfg(feature = "iwssim")]
-            MetricInner::Iwssim(m) => m
-                .compute_pixels(r, d)
-                .map(convert_score_iwssim)
-                .map_err(|e| Error::Metric {
-                    kind: "iwssim",
-                    message: e.to_string(),
-                }),
+            MetricInner::Iwssim(m) => {
+                m.compute_pixels(r, d)
+                    .map(convert_score_iwssim)
+                    .map_err(|e| Error::Metric {
+                        kind: "iwssim",
+                        message: e.to_string(),
+                    })
+            }
             #[cfg(feature = "zensim")]
-            MetricInner::Zensim(m) => m
-                .compute_pixels(r, d)
-                .map(convert_score_zensim)
-                .map_err(|e| Error::Metric {
-                    kind: "zensim",
-                    message: e.to_string(),
-                }),
+            MetricInner::Zensim(m) => {
+                m.compute_pixels(r, d)
+                    .map(convert_score_zensim)
+                    .map_err(|e| Error::Metric {
+                        kind: "zensim",
+                        message: e.to_string(),
+                    })
+            }
         }
     }
 
