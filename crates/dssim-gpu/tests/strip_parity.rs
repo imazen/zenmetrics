@@ -19,7 +19,7 @@
 //!   reflect/clamp output between whole-image and strip paths.
 
 use cubecl::Runtime;
-use dssim_gpu::Dssim;
+use dssim_gpu::{Dssim, Error};
 
 #[cfg(feature = "cuda")]
 type Backend = cubecl::cuda::CudaRuntime;
@@ -411,4 +411,22 @@ fn whole_image_is_not_strip_mode() {
 fn strip_rejects_unaligned_body() {
     let r = Dssim::<Backend>::new_strip(make_client!(), 256, 256, 100);
     assert!(r.is_err(), "expected error for h_body=100 (not /16)");
+}
+
+#[test]
+fn strip_constructor_sub_min_routes_to_padded_full() {
+    // Sub-MIN_PAD_DIM strip requests route to the Full constructor,
+    // which reflect-pads to the pyramid floor and scores (down to 1×1),
+    // rather than rejecting. `dimensions()` reports the logical size and
+    // the instance is whole-image (not strip) after the reroute.
+    let mut d =
+        Dssim::<Backend>::new_strip(make_client!(), 4, 4, 64).expect("4x4 strip routes to Full");
+    assert_eq!(d.dimensions(), (4, 4));
+    assert!(!d.is_strip_mode(), "sub-min reroute lands on the whole-image path");
+    let buf = vec![0_u8; 4 * 4 * 3];
+    assert!(d.compute(&buf, &buf).is_ok(), "4x4 must score");
+
+    // 0-dim is still rejected.
+    let r = Dssim::<Backend>::new_strip(make_client!(), 0, 4, 64);
+    assert!(matches!(r, Err(Error::InvalidImageSize)));
 }

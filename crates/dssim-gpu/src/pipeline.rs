@@ -242,8 +242,15 @@ struct StripConfig {
 /// image pairs of that resolution.
 pub struct Dssim<R: Runtime> {
     client: ComputeClient<R>,
-    width: u32,
-    height: u32,
+    /// Sub-minimum reflect-pad plan: holds both the caller's logical
+    /// extent (reported by `dimensions()` in whole-image mode) and the
+    /// padded extent (`max(requested, MIN_PAD_DIM)` per axis) that all
+    /// buffers/scales build for. Inputs reflect-pad logical → padded at
+    /// the upload boundary. No-op at ≥8px (so the opaque shim's own pad,
+    /// which already builds the inner pipeline at ≥8px, stays the sole
+    /// padder when called through it).
+    pad: zenmetrics_gpu_core::PadPlan,
+    /// `n_pixels` at scale 0 (padded extent).
     n: usize,
 
     /// sRGB u8 staging (uploaded as u32 because WGSL has no `u8` type).
@@ -291,10 +298,23 @@ const NUM_SLOTS: usize = NUM_SCALES * 2; // 10
 const PARTIALS_LEN: usize = NUM_SLOTS * reduction::PARTIALS_PER_REDUCTION;
 const SUMS_LEN: usize = NUM_SLOTS;
 
+/// Minimum per-axis dimension DSSIM's 5-scale pyramid needs (the typed
+/// pipeline rejects `< 8×8`). Sub-`MIN_PAD_DIM` requests are
+/// reflect(mirror)-padded up to it (shared [`zenmetrics_gpu_core::PadPlan`]),
+/// so the typed `Dssim<R>` — like `DssimOpaque` — scores down to 1×1
+/// instead of erroring. NO-OP at ≥8px.
+pub const MIN_PAD_DIM: u32 = 8;
+
 impl<R: Runtime> Dssim<R> {
     /// Allocate every per-instance buffer for the given image size.
     /// Returns `Err(InvalidImageSize)` for images smaller than 8×8.
     pub fn new(client: ComputeClient<R>, width: u32, height: u32) -> Result<Self> {
+        // Reflect-pad sub-MIN_PAD_DIM up to the pyramid floor: build for
+        // the padded extent, store the plan, report logical via dims(),
+        // reflect-pad inputs at the upload boundary. 0-dim → padded 0 →
+        // rejected below. NO-OP at ≥8px.
+        let pad = zenmetrics_gpu_core::PadPlan::to_min(width, height, MIN_PAD_DIM);
+        let (width, height) = pad.padded();
         if width < 8 || height < 8 {
             return Err(Error::InvalidImageSize);
         }
@@ -333,8 +353,7 @@ impl<R: Runtime> Dssim<R> {
 
         Ok(Self {
             client,
-            width,
-            height,
+            pad,
             n,
             src_u8_a,
             src_u8_b,
@@ -417,6 +436,12 @@ impl<R: Runtime> Dssim<R> {
         image_h: u32,
         h_body: u32,
     ) -> Result<Self> {
+        // Sub-MIN_PAD_DIM: strip mode is meaningless on a tiny image —
+        // build the Full pipeline, which reflect-pads to the floor.
+        // (0-dim falls through to `new`'s rejection.)
+        if image_w < MIN_PAD_DIM || image_h < MIN_PAD_DIM {
+            return Self::new(client, image_w, image_h);
+        }
         if image_w < 8 || image_h < 8 {
             return Err(Error::InvalidImageSize);
         }
@@ -476,10 +501,11 @@ impl<R: Runtime> Dssim<R> {
 
         Ok(Self {
             client,
-            // `width` / `height` reflect the per-strip buffer size; the
-            // image-level dimensions live on `strip_config`.
-            width: image_w,
-            height: strip_h,
+            // ≥MIN here (sub-min routed to `new`): no-op plan whose
+            // logical = the image dims. Strip-mode `dimensions()` reads
+            // `strip_config` instead, so this is only carried for the
+            // `pack_srgb_into_packed_u32_handle` / upload validators.
+            pad: zenmetrics_gpu_core::PadPlan::to_min(image_w, image_h, MIN_PAD_DIM),
             n,
             src_u8_a,
             src_u8_b,
@@ -502,7 +528,10 @@ impl<R: Runtime> Dssim<R> {
     pub fn dimensions(&self) -> (u32, u32) {
         match &self.strip_config {
             Some(cfg) => (cfg.image_w, cfg.image_h),
-            None => (self.width, self.height),
+            // Caller-requested (logical) extent. For a sub-MIN_PAD_DIM
+            // whole-image instance this differs from the padded extent
+            // the buffers were built for; for ≥8px it's the same.
+            None => self.pad.logical(),
         }
     }
 
@@ -538,13 +567,19 @@ impl<R: Runtime> Dssim<R> {
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
     pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
-        let expected = self.n * 3;
+        // Validate the LOGICAL extent, then reflect-pad up to the padded
+        // extent so the packed handle matches the padded pipeline (and
+        // `compute_handles` works on it unchanged). No-op at ≥8px.
+        let expected = self.pad.logical_len(3);
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
                 got: srgb.len(),
             });
         }
+        let plan = self.pad;
+        let srgb = plan.pad(srgb, 3);
+        let srgb: &[u8] = &srgb;
         let pinned_len = self.n * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
         let mut bytes = staging.pop().expect("reserve_staging returned no buffers");
@@ -1504,7 +1539,11 @@ impl<R: Runtime> Dssim<R> {
     // ───────────────────────── helpers ─────────────────────────
 
     fn check_dims(&self, srgb: &[u8]) -> Result<()> {
-        let expected = self.n * 3;
+        // Validate against the LOGICAL extent — sub-MIN_PAD_DIM callers
+        // pass logical-sized buffers, which `upload_and_srgb_to_linear`
+        // reflect-pads up to the padded pipeline. No-op vs `self.n * 3`
+        // at ≥8px (logical == padded).
+        let expected = self.pad.logical_len(3);
         if srgb.len() != expected {
             Err(Error::DimensionMismatch {
                 expected,
@@ -1543,6 +1582,13 @@ impl<R: Runtime> Dssim<R> {
     }
 
     fn upload_and_srgb_to_linear(&mut self, is_a: bool, srgb: &[u8]) {
+        // Reflect-pad a sub-MIN_PAD_DIM logical input up to the padded
+        // pyramid floor before packing. Borrows unchanged at ≥8px
+        // (logical == padded). Callers validate the logical length via
+        // `check_dims` first.
+        let plan = self.pad;
+        let srgb = plan.pad(srgb, 3);
+        let srgb: &[u8] = &srgb;
         let n_bytes = self.n * 3;
         debug_assert_eq!(srgb.len(), n_bytes);
         // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
