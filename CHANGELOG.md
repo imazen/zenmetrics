@@ -131,8 +131,27 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **zensim-gpu / ssim2-gpu / dssim-gpu: typed `<Metric><R>` pipelines reflect-pad
+  sub-min inputs too** (`5cb76bc3`, `0e6ab8a3`, `81fc3a47`). The same typed-pad
+  pattern the cvvdp entry below describes, applied across the SSIM-family GPU
+  metrics. The shared `zenmetrics_gpu_core::PadPlan` (added in `5cb76bc3`) is the
+  single source of the reflect(mirror)-pad-to-floor logic: each typed pipeline
+  stores a `PadPlan`, builds buffers/geometry for the padded extent, reports the
+  logical extent from `dimensions()`, validates inputs against the logical extent,
+  reflect-pads at its sRGB-byte upload chokepoint (plus the linear-planes / packed
+  chokepoints where present), and crops diffmap outputs back to logical. Floors:
+  **zensim 64** (4-scale pyramid bake), **ssim2 / dssim 8**. Previously only the
+  `<Metric>Opaque` wrappers padded while the typed `<Metric><R>` returned
+  `InvalidImageSize` — now both pad, so no public interface does the wrong thing.
+  Only a 0-dim axis still errors; `Ssim2Batch` keeps its sub-8 reject (throughput
+  concat path). Verified RTX 5070: typed sub-min byte / diffmap / linear-planes
+  scores are bit-identical (|Δ| = 0.000e0) to the same image reflect-padded to the
+  floor and scored natively; scores to 1×1. New `tests/typed_sub_min_pad.rs` per
+  crate; sub-min reject pins updated to the pad contract. The `<Metric>Opaque`
+  wrappers are unchanged.
+
 - **cvvdp-gpu: the typed `Cvvdp<R>` pipeline reflect-pads sub-8px inputs too**
-  (`fbf9f15a`, branch `feat/typedpad-cvvdp`). Generalises the zensim-gpu / ssim2-gpu typed-pad
+  (`83bee15a`, branch `feat/typedpad-cvvdp`). Generalises the zensim-gpu / ssim2-gpu typed-pad
   pattern (`5cb76bc3`, `0e6ab8a3`) to cvvdp (floor `MIN_PAD_DIM = 2 ×
   PYRAMID_MIN_DIM = 8`). Previously only `CvvdpOpaque` reflect(mirror)-padded
   sub-8px requests while the typed `Cvvdp<R>` returned `InvalidImageSize` — now
