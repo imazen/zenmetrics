@@ -91,6 +91,35 @@ pub fn convert_to_srgb_rgb8(
     Ok(out)
 }
 
+// ───────────────────────── flagged GPU timing (CI diagnosis) ─────────────────
+//
+// macos-latest Metal CI is dominated by per-crate release *compilation* (each
+// `cargo test -p <crate>` rebuilds; 4–10 min each), but the runtime portion —
+// Metal shader compilation on first kernel dispatch, upload, readback — is worth
+// breaking down too. Set `ZENMETRICS_GPU_TIMING=1` and run with `--nocapture` to
+// `eprintln!` the wall-time of timed phases. Off by default (one env read, no
+// output), so it never affects normal runs or scores.
+
+/// `true` when `ZENMETRICS_GPU_TIMING=1` — enables [`time_phase`] output.
+pub fn gpu_timing_enabled() -> bool {
+    std::env::var("ZENMETRICS_GPU_TIMING").as_deref() == Ok("1")
+}
+
+/// Time `f` and, when [`gpu_timing_enabled`], `eprintln!` `[gpu-timing] label:
+/// <secs>s`. Returns `f`'s result unchanged. Zero-overhead (just the closure
+/// call + one env read) when the flag is off. Wrap GPU phases (client build,
+/// upload, dispatch, readback) to see where slow CI time goes — visible in test
+/// output only with `--nocapture`.
+pub fn time_phase<T>(label: &str, f: impl FnOnce() -> T) -> T {
+    if !gpu_timing_enabled() {
+        return f();
+    }
+    let t = std::time::Instant::now();
+    let out = f();
+    eprintln!("[gpu-timing] {label}: {:.3}s", t.elapsed().as_secs_f64());
+    out
+}
+
 // ───────────────────────── reflect-pad (sub-minimum images) ──────────────────
 //
 // Every `*-gpu` metric has a minimum image dimension below which its pyramid

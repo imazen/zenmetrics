@@ -20,6 +20,30 @@
 
 use zenmetrics_api::Backend;
 
+/// The GPU-less fallback `Auto` must resolve to, mirroring
+/// `capability::cpu_fallback_backend`: the optimized native [`Backend::Cpu`]
+/// when any `cpu-*` metric is compiled (it's the fast, non-panicking CPU path),
+/// else the cubecl-cpu reference [`Backend::CubeclCpu`]. Keeping this in lockstep
+/// with the library is why the assertion can't hard-code `CubeclCpu`.
+#[cfg(any(
+    feature = "cpu-ssim2",
+    feature = "cpu-cvvdp",
+    feature = "cpu-iwssim",
+    feature = "cpu-zensim",
+    feature = "cpu-dssim",
+    feature = "cpu-butter"
+))]
+const EXPECTED_NO_GPU: Backend = Backend::Cpu;
+#[cfg(not(any(
+    feature = "cpu-ssim2",
+    feature = "cpu-cvvdp",
+    feature = "cpu-iwssim",
+    feature = "cpu-zensim",
+    feature = "cpu-dssim",
+    feature = "cpu-butter"
+)))]
+const EXPECTED_NO_GPU: Backend = Backend::CubeclCpu;
+
 /// Probe `nvidia-smi` ourselves so the test can branch on ground truth
 /// instead of assuming a GPU. Mirrors the umbrella's internal probe but
 /// is independent of it (a real cross-check, not a tautology).
@@ -102,17 +126,19 @@ fn resolve_auto_host_and_force_no_gpu() {
             "CUDA GPU present + `cuda` feature → Auto must resolve to Cuda"
         );
     } else {
-        assert_eq!(
-            resolved,
-            Backend::CubeclCpu,
-            "no usable GPU backend → Auto must fall back to CubeclCpu in phase 1"
+        // No CUDA selection: the CPU fallback (`EXPECTED_NO_GPU`) — or `Wgpu`
+        // if a wgpu device is present and the `wgpu` backend is built.
+        assert!(
+            resolved == EXPECTED_NO_GPU || resolved == Backend::Wgpu,
+            "no CUDA selection → Auto must fall back to {EXPECTED_NO_GPU:?} \
+             (or Wgpu if a wgpu device is present), got {resolved:?}"
         );
     }
 
-    // forced-no-GPU assertion (host-independent).
+    // forced-no-GPU assertion (host-independent): every GPU probe is forced
+    // absent, so `Auto` resolves to the pure CPU fallback.
     assert_eq!(
-        resolved_forced,
-        Backend::CubeclCpu,
-        "ZENMETRICS_FORCE_NO_GPU=1 must force Auto to CubeclCpu"
+        resolved_forced, EXPECTED_NO_GPU,
+        "ZENMETRICS_FORCE_NO_GPU=1 must force Auto to the CPU fallback ({EXPECTED_NO_GPU:?})"
     );
 }

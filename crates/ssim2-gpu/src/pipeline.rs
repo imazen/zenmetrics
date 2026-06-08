@@ -756,6 +756,20 @@ impl<R: Runtime> Ssim2<R> {
         ref_srgb: &[u8],
         dist_srgb: &[u8],
     ) -> Result<GpuSsim2Result> {
+        // Flagged GPU timing (`ZENMETRICS_GPU_TIMING=1`, run with `--nocapture`):
+        // times the whole compute — strip + non-strip — so the macos-Metal CI
+        // runtime breakdown is visible. Zero-overhead when the flag is off.
+        zenmetrics_gpu_core::time_phase("ssim2.compute_with_mode", || {
+            self.compute_with_mode_inner(mode, ref_srgb, dist_srgb)
+        })
+    }
+
+    fn compute_with_mode_inner(
+        &mut self,
+        mode: Ssim2Mode,
+        ref_srgb: &[u8],
+        dist_srgb: &[u8],
+    ) -> Result<GpuSsim2Result> {
         if self.strip.is_some() {
             // Strip-mode instances allocate strip-sized scale-0 buffers
             // (image_w × (h_body + 2*halo)); they can't hold a full-frame

@@ -185,6 +185,23 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **`backend_resolve` test: no-GPU fallback assertion is now cfg-conditional.**
+  The `ZENMETRICS_FORCE_NO_GPU` + host-fallback asserts hard-coded `CubeclCpu`,
+  but `capability::cpu_fallback_backend` correctly resolves to the native
+  `Backend::Cpu` when any `cpu-*` metric is built — so `cargo test --features
+  cpu-metrics` failed the (correct) library behavior. The expected value now
+  mirrors the library: `Cpu` under any `cpu-*` feature, else `CubeclCpu`.
+
+- **Flagged GPU timing for CI diagnosis (`ZENMETRICS_GPU_TIMING`).** New
+  `zenmetrics_gpu_core::{gpu_timing_enabled, time_phase}` — `eprintln!` per-phase
+  wall-time when the env var is `1` (zero-overhead when off). `ssim2-gpu`'s
+  `compute_with_mode` is wrapped, and the Metal CI ssim2 step sets the env +
+  `--nocapture`, so the macos-Metal **runtime** breakdown (first-dispatch shader
+  compile vs steady-state — measured 0.190s vs 0.004s on CUDA) is visible. NB the
+  Metal job's bulk wall-time is per-crate release **compilation** (4–10 min each,
+  zensim-gpu 10m19s), not test execution — see `fix(ci)` for the clone-step fix
+  that first exposed these jobs.
+
 - **Descriptor-driven HDR folded into the base `Metric::compute_pixels` (display
   peak on `Metric`).** The umbrella's own `Metric::compute_pixels` /
   `compute_pixels_multi` (gated `pixels`, which now implies `hdr`) are

@@ -267,7 +267,16 @@ jobs:
         # `--tests` runs the parity test targets (lib unit + integration) and
         # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
         # compile under wgpu and aren't the parity surface this job validates.
-        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release --tests
+        #
+        # ZENMETRICS_GPU_TIMING=1 + `--nocapture`: surface the gpu-core
+        # `time_phase` breakdown (`ssim2.compute_with_mode`) so the macos-Metal
+        # *runtime* cost is visible in the log. NB the bulk of this job's wall
+        # time is per-crate release *compilation* (cargo's "Finished in Xm"
+        # lines, ~4–10 min each), not test execution — this flag diagnoses the
+        # runtime remainder on the slowest-at-runtime crate (ssim2).
+        env:
+          ZENMETRICS_GPU_TIMING: "1"
+        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release --tests -- --nocapture
       - name: dssim-gpu parity
         if: always()
         # `--tests` runs the parity test targets (lib unit + integration) and
