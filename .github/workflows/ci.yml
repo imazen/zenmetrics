@@ -59,7 +59,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout b2c2d482b9220732d38df60495f2de4bc23393b2
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cb0c3a193792d7562ffc92b06e332b1cd661ca36
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -197,7 +197,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout b2c2d482b9220732d38df60495f2de4bc23393b2
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cb0c3a193792d7562ffc92b06e332b1cd661ca36
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -331,7 +331,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout b2c2d482b9220732d38df60495f2de4bc23393b2
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cb0c3a193792d7562ffc92b06e332b1cd661ca36
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -429,7 +429,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout b2c2d482b9220732d38df60495f2de4bc23393b2
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cb0c3a193792d7562ffc92b06e332b1cd661ca36
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
@@ -524,7 +524,7 @@ jobs:
           git -C ../jxl-encoder sparse-checkout set '/*' '!/benchmarks/'
           # core.protectNTFS rejects the '>' index entries during checkout
           # before skip-worktree applies; disable it so sparse can skip them.
-          git -C ../jxl-encoder -c core.protectNTFS=false checkout b2c2d482b9220732d38df60495f2de4bc23393b2
+          git -C ../jxl-encoder -c core.protectNTFS=false checkout cb0c3a193792d7562ffc92b06e332b1cd661ca36
           # Workspace [patch.crates-io] entries point at local siblings
           # for every codec we ship (zenpng, zenwebp, zenavif,
           # zenjxl, zensim/zensim) and butteraugli. Cargo loads
