@@ -131,6 +131,28 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **cvvdp-gpu: the typed `Cvvdp<R>` pipeline reflect-pads sub-8px inputs too**
+  (`fbf9f15a`, branch `feat/typedpad-cvvdp`). Generalises the zensim-gpu / ssim2-gpu typed-pad
+  pattern (`5cb76bc3`, `0e6ab8a3`) to cvvdp (floor `MIN_PAD_DIM = 2 ×
+  PYRAMID_MIN_DIM = 8`). Previously only `CvvdpOpaque` reflect(mirror)-padded
+  sub-8px requests while the typed `Cvvdp<R>` returned `InvalidImageSize` — now
+  both pad, so no public interface does the wrong thing. The typed pipeline stores
+  a shared `zenmetrics_gpu_core::PadPlan`, builds buffers/geometry for the padded
+  extent, reports the logical extent from `dimensions()`, validates inputs against
+  the logical extent, reflect-pads at the single sRGB-byte upload chokepoint
+  (`_dispatch_dkl_planes_gpu`, covering score / warm_reference / diffmap / pyramid
+  paths), at `pack_srgb_into_packed_u32_handle`, and at the linear-planes chokepoint
+  (`_dispatch_dkl_planes_gpu_from_linear_planes`); diffmap outputs are cropped back
+  to the logical extent. `new_strip*` / `new_strip_pair*` route sub-8 requests to
+  the Full path (a strip walker is meaningless on a tiny image). Only a 0-dim axis
+  still errors. cvvdp is display-aware: the padded image is scored at the padded
+  resolution's PPD — the same deterministic-fallback assumption the opaque shim
+  already makes; geometry is unchanged. Verified RTX 5070: typed sub-8 byte /
+  non-square / diffmap / linear-planes scores are bit-identical (|Δ| = 0.000e0) to
+  the same image reflect-padded to 8 and scored natively; scores to 1×1; the full
+  cvvdp-gpu suite is green. New `tests/typed_sub_min_pad.rs`; the sub-8 reject pin
+  in `tests/pipeline_score.rs` updated to the pad contract. `CvvdpOpaque` unchanged.
+
 - **Cross-metric `<M>Opaque` API alignment (internal -gpu crates).** The six
   metric `-gpu` crates now expose an identical reference-reuse core after the
   surface reduction exposed three divergent vocabularies (`cached_reference` /

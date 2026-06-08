@@ -835,6 +835,15 @@ struct CachedReference {
 /// // `warm_reference` + `compute_dkl_jod_with_warm_ref`.
 /// # Ok::<(), cvvdp_gpu::Error>(())
 /// ```
+///
+/// Minimum per-axis dimension cvvdp's pyramid needs (the typed pipeline
+/// rejects below `2 × PYRAMID_MIN_DIM = 8`). Requests below this in
+/// either axis are reflect(mirror)-padded up to it (shared
+/// [`zenmetrics_gpu_core::PadPlan`]) so the typed `Cvvdp<R>` — like
+/// [`CvvdpOpaque`](crate::opaque::CvvdpOpaque) — scores down to 1×1
+/// instead of returning [`Error::InvalidImageSize`]. NO-OP at ≥8px.
+pub const MIN_PAD_DIM: u32 = PYRAMID_MIN_DIM * 2;
+
 pub struct Cvvdp<R: Runtime> {
     client: ComputeClient<R>,
     params: CvvdpParams,
@@ -842,8 +851,28 @@ pub struct Cvvdp<R: Runtime> {
     /// Independent of `width`/`height` (the image dimensions) since
     /// cvvdp's PPD is a display property, not an image one.
     geometry: crate::params::DisplayGeometry,
+    /// Internal (padded) pipeline width — `max(requested_w, MIN_PAD_DIM)`.
+    /// Every GPU buffer, pyramid level, and the viewing-geometry PPD are
+    /// built for this. The caller's requested (logical) extent lives in
+    /// [`pad`](Self::pad); [`dimensions()`](Self::dimensions) reports the
+    /// logical extent and inputs are reflect-padded from logical → this
+    /// at the upload boundary.
     width: u32,
+    /// Internal (padded) pipeline height — see [`width`](Self::width).
     height: u32,
+    /// Sub-minimum reflect-pad plan (logical ↔ padded). No-op at
+    /// ≥[`MIN_PAD_DIM`]; below it, sRGB-byte and linear-plane inputs are
+    /// reflect(mirror)-padded up to the floor so the typed `Cvvdp<R>` —
+    /// like [`CvvdpOpaque`](crate::opaque::CvvdpOpaque) — scores down to
+    /// 1×1 instead of forming a degenerate sub-floor pyramid. Shared with
+    /// the opaque path via [`zenmetrics_gpu_core::PadPlan`].
+    ///
+    /// cvvdp is display-aware: a padded image is scored at the PPD implied
+    /// by the *padded* resolution under the configured geometry — the same
+    /// deterministic-fallback assumption the opaque shim makes. It's a
+    /// finite score for an otherwise-unscoreable input, not a claim about
+    /// a 1×1 image's true perceptual quality.
+    pad: zenmetrics_gpu_core::PadPlan,
     n_levels: u32,
 
     /// sRGB byte upload scratch. The GPU helpers reuse this slot
@@ -1953,10 +1982,13 @@ impl<R: Runtime> Cvvdp<R> {
         }
     }
 
-    /// Configured image `(width, height)`. Matches the values passed
-    /// to [`Self::new`] / [`Self::new_with_geometry`].
+    /// Caller-requested (logical) image `(width, height)`. Matches the
+    /// values passed to [`Self::new`] / [`Self::new_with_geometry`]. For
+    /// a sub-[`MIN_PAD_DIM`] request this is smaller than the padded
+    /// internal `self.width/height` the buffers are built for — inputs
+    /// are reflect-padded logical → padded at the upload boundary.
     pub fn dimensions(&self) -> (u32, u32) {
-        (self.width, self.height)
+        self.pad.logical()
     }
 
     /// Internal accessor used by [`crate::opaque::CvvdpOpaque`] to
@@ -2106,6 +2138,18 @@ impl<R: Runtime> Cvvdp<R> {
         cap_levels: Option<u32>,
         strip_pair_h_body: Option<u32>,
     ) -> Result<Self> {
+        // Reflect-pad sub-MIN_PAD_DIM requests up to the pyramid floor so
+        // EVERY public entry (typed + opaque) scores small images down to
+        // 1×1 instead of building a degenerate sub-floor pyramid. The rest
+        // of this constructor (buffers, geometry PPD, n_levels) builds for
+        // the PADDED dims; the upload boundary reflect-pads inputs from the
+        // logical extent and `dimensions()` reports the logical extent.
+        // A 0-dim axis stays 0 → caught by the `< MIN_PAD_DIM` reject
+        // below. Sub-min strip pairs are routed to Full by the strip
+        // constructors (a tiny image needs no strip walker), so
+        // `strip_pair_h_body` is always `None` when padding here.
+        let pad = zenmetrics_gpu_core::PadPlan::to_min(width, height, MIN_PAD_DIM);
+        let (width, height) = pad.padded();
         if width < PYRAMID_MIN_DIM * 2 || height < PYRAMID_MIN_DIM * 2 {
             return Err(Error::InvalidImageSize);
         }
@@ -2364,6 +2408,7 @@ impl<R: Runtime> Cvvdp<R> {
             geometry,
             width,
             height,
+            pad,
             n_levels,
             src_ref,
             srgb_lut,
@@ -2453,6 +2498,13 @@ impl<R: Runtime> Cvvdp<R> {
         if !is_valid_strip_h_body(h_body) {
             return Err(Error::ModeUnsupported("Strip { h_body=invalid }"));
         }
+        // Sub-MIN_PAD_DIM: strip mode is meaningless on a tiny image —
+        // build the Full pipeline (which reflect-pads to the floor) and
+        // leave `strip_config` unset. (0-dim falls through to
+        // `new_with_geometry_inner`'s rejection.)
+        if width < MIN_PAD_DIM || height < MIN_PAD_DIM {
+            return Self::new_with_geometry(client, width, height, params, geometry);
+        }
         let mut this = Self::new_with_geometry(client, width, height, params, geometry)?;
         this.strip_config = Some(StripConfig {
             h_body,
@@ -2508,6 +2560,14 @@ impl<R: Runtime> Cvvdp<R> {
     ) -> Result<Self> {
         if !is_valid_strip_h_body(h_body) {
             return Err(Error::ModeUnsupported("StripPair { h_body=invalid }"));
+        }
+        // Sub-MIN_PAD_DIM: a strip-pair walker is meaningless on a tiny
+        // image — build the Full pipeline (which reflect-pads to the
+        // floor) and leave `strip_config` unset, so the score path takes
+        // the Full route instead of trying to strip-walk a padded
+        // sub-floor image. (0-dim falls through to the inner rejection.)
+        if width < MIN_PAD_DIM || height < MIN_PAD_DIM {
+            return Self::new_with_geometry(client, width, height, params, geometry);
         }
         // Route through `new_with_geometry_inner` with
         // `strip_pair_h_body = Some(h_body)` so the Phase 1b allocator
@@ -2736,13 +2796,22 @@ impl<R: Runtime> Cvvdp<R> {
     /// `compute_dkl_planes` and by downstream pipeline stages that
     /// only need the GPU handles (gauss pyramid, weber pyramid).
     fn _dispatch_dkl_planes_gpu(&mut self, srgb: &[u8]) -> Result<()> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate against the LOGICAL extent — every public sRGB-byte
+        // entry funnels here — then reflect-pad a sub-MIN_PAD_DIM input
+        // up to the padded extent the pack/upload below is sized for.
+        // No-op borrow at ≥MIN_PAD_DIM. This is the single sRGB-byte
+        // upload chokepoint, so padding here covers score / warm_reference
+        // / d_bands / gauss / weber / laplacian — every byte path.
+        let expected = self.pad.logical_len(3);
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
                 got: srgb.len(),
             });
         }
+        let plan = self.pad;
+        let srgb = plan.pad(srgb, 3);
+        let srgb: &[u8] = &srgb;
         let n0 = (self.width as usize) * (self.height as usize);
 
         // T_x.O (2026-05-17): pack u8×3 → u32 directly into the
@@ -2890,12 +2959,16 @@ impl<R: Runtime> Cvvdp<R> {
         self._launch_srgb_to_dkl_from_src_ref();
     }
 
-    /// Validate three planar `W × H` linear-RGB f32 buffers and return
-    /// the per-plane length. Used at the boundary of every
-    /// `from_linear_planes*` method to give the caller a precise
-    /// dimension-mismatch error if any plane is the wrong size.
+    /// Validate three planar `W × H` linear-RGB f32 buffers against the
+    /// caller-requested (LOGICAL) extent and return the logical per-plane
+    /// length. Used at the boundary of every `from_linear_planes*` method
+    /// to give the caller a precise dimension-mismatch error if any plane
+    /// is the wrong size. Inputs are reflect-padded up to the padded
+    /// extent at the dispatch chokepoint
+    /// ([`Self::_dispatch_dkl_planes_gpu_from_linear_planes`] via
+    /// [`Self::_prep_linear_planes`]).
     fn _validate_linear_planes(&self, r: &[f32], g: &[f32], b: &[f32]) -> Result<usize> {
-        let expected = (self.width as usize) * (self.height as usize);
+        let expected = self.pad.logical_len(1);
         for (label, plane) in [("r", r), ("g", g), ("b", b)] {
             if plane.len() != expected {
                 let _ = label; // surfaced via DimensionMismatch
@@ -2906,6 +2979,22 @@ impl<R: Runtime> Cvvdp<R> {
             }
         }
         Ok(expected)
+    }
+
+    /// Validate three logical-extent linear-RGB f32 planes and reflect-pad
+    /// each up to the padded extent the pipeline runs at. No-op borrow at
+    /// ≥[`MIN_PAD_DIM`]. Mirrors the byte path's `_dispatch_dkl_planes_gpu`
+    /// pad for the linear-planes entry points so the typed API scores
+    /// sub-min planar inputs too.
+    fn _prep_linear_planes<'a>(
+        &self,
+        r: &'a [f32],
+        g: &'a [f32],
+        b: &'a [f32],
+    ) -> Result<[std::borrow::Cow<'a, [f32]>; 3]> {
+        let _ = self._validate_linear_planes(r, g, b)?;
+        let plan = self.pad;
+        Ok([plan.pad(r, 1), plan.pad(g, 1), plan.pad(b, 1)])
     }
 
     /// Upload three planar `W × H` linear-RGB f32 buffers (unit-
@@ -2926,7 +3015,14 @@ impl<R: Runtime> Cvvdp<R> {
         g: &[f32],
         b: &[f32],
     ) -> Result<()> {
-        let n0 = self._validate_linear_planes(r, g, b)?;
+        // This is the single linear-plane upload chokepoint (the sRGB-byte
+        // sibling is `_dispatch_dkl_planes_gpu`). Validate logical, then
+        // reflect-pad each sub-MIN_PAD_DIM plane up to the padded extent
+        // the scratch/kernel are sized for (no-op borrow at ≥min). `n0`
+        // and `self.width/height` are the PADDED extent below.
+        let planes = self._prep_linear_planes(r, g, b)?;
+        let (r, g, b): (&[f32], &[f32], &[f32]) = (&planes[0], &planes[1], &planes[2]);
+        let n0 = (self.width as usize) * (self.height as usize);
         self._ensure_linear_planes_upload();
 
         // Upload R/G/B into the scratch buffers via the cubecl-
@@ -7073,13 +7169,19 @@ impl<R: Runtime> Cvvdp<R> {
     /// Returns `Err(DimensionMismatch)` if `srgb.len() != width *
     /// height * 3`.
     pub fn pack_srgb_into_packed_u32_handle(&self, srgb: &[u8]) -> Result<cubecl::server::Handle> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent, then reflect-pad up to the padded
+        // extent so the packed handle matches the padded pipeline (and
+        // `compute_handles` works on it unchanged). No-op at ≥MIN_PAD_DIM.
+        let expected = self.pad.logical_len(3);
         if srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
                 got: srgb.len(),
             });
         }
+        let plan = self.pad;
+        let srgb = plan.pad(srgb, 3);
+        let srgb: &[u8] = &srgb;
         let n0 = (self.width as usize) * (self.height as usize);
         let pinned_len = n0 * 4;
         let mut staging = self.client.reserve_staging(&[pinned_len]);
@@ -7290,7 +7392,9 @@ impl<R: Runtime> Cvvdp<R> {
         // Tick 248: validate dist length before checking warm state.
         // See compute_dkl_jod_with_warm_ref for the same ordering
         // rationale.
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if dist_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -7427,7 +7531,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// width × height × 3`, or [`Error::InvalidImageSize`] if a GPU
     /// readback / dispatch in the REF weber-pyramid pass fails.
     pub fn warm_reference(&mut self, ref_srgb: &[u8]) -> Result<()> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if ref_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -7667,7 +7773,9 @@ impl<R: Runtime> Cvvdp<R> {
         // of whether warm state is set. Pre-tick-248 ordering reported
         // NoWarmReference first, masking the dim mismatch until they
         // re-armed.
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if dist_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -8140,6 +8248,13 @@ impl<R: Runtime> Cvvdp<R> {
     fn _pool_and_finalize_jod_with_diffmap(&mut self, diffmap_out: &mut Vec<f32>) -> Result<f32> {
         let jod = self._pool_and_finalize_jod()?;
         self._compute_diffmap_into(diffmap_out)?;
+        // `_compute_diffmap_into` fills the PADDED extent (`width × height`,
+        // padded-width stride). Crop back to the caller's logical extent —
+        // the original pixels live in the top-left sub-rectangle after
+        // reflect-pad. No-op at ≥MIN_PAD_DIM. This is the single point all
+        // four `*_with_diffmap` public entries funnel through, so every
+        // diffmap output is logical-sized regardless of which path filled it.
+        self.pad.crop_logical_plane(diffmap_out);
         Ok(jod)
     }
 
@@ -8361,7 +8476,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// [`Error::InvalidImageSize`] if a GPU readback or dispatch
     /// fails inside the underlying [`Cvvdp::compute_dkl_jod`].
     pub fn score(&mut self, reference_srgb: &[u8], distorted_srgb: &[u8]) -> Result<f64> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if reference_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -8439,7 +8556,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// # Ok::<(), cvvdp_gpu::Error>(())
     /// ```
     pub fn set_reference(&mut self, reference_srgb: &[u8]) -> Result<()> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if reference_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -8505,7 +8624,9 @@ impl<R: Runtime> Cvvdp<R> {
     /// - [`Error::InvalidImageSize`] if the underlying
     ///   [`Cvvdp::compute_dkl_jod`] dispatch fails.
     pub fn score_with_reference(&mut self, distorted_srgb: &[u8]) -> Result<f64> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if distorted_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -8558,7 +8679,9 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if ref_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
@@ -8591,7 +8714,9 @@ impl<R: Runtime> Cvvdp<R> {
         dist_srgb: &[u8],
         diffmap_out: &mut Vec<f32>,
     ) -> Result<f32> {
-        let expected = (self.width as usize) * (self.height as usize) * 3;
+        // Validate the LOGICAL extent; sub-MIN_PAD_DIM inputs reflect-pad
+        // to the padded extent at the upload chokepoint (no-op at ≥min).
+        let expected = self.pad.logical_len(3);
         if dist_srgb.len() != expected {
             return Err(Error::DimensionMismatch {
                 expected,
