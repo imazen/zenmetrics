@@ -261,7 +261,7 @@ jobs:
         # `--tests` runs the parity test targets (lib unit + integration) and
         # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
         # compile under wgpu and aren't the parity surface this job validates.
-        run: cargo test -p butteraugli-gpu --no-default-features --features wgpu --release --tests
+        run: cargo test -p butteraugli-gpu --no-default-features --features wgpu --profile gpu-citest --tests
       - name: ssim2-gpu parity
         if: always()
         # `--tests` runs the parity test targets (lib unit + integration) and
@@ -276,19 +276,19 @@ jobs:
         # runtime remainder on the slowest-at-runtime crate (ssim2).
         env:
           ZENMETRICS_GPU_TIMING: "1"
-        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --release --tests -- --nocapture
+        run: cargo test -p ssim2-gpu --no-default-features --features wgpu --profile gpu-citest --tests -- --nocapture
       - name: dssim-gpu parity
         if: always()
         # `--tests` runs the parity test targets (lib unit + integration) and
         # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
         # compile under wgpu and aren't the parity surface this job validates.
-        run: cargo test -p dssim-gpu --no-default-features --features wgpu --release --tests
+        run: cargo test -p dssim-gpu --no-default-features --features wgpu --profile gpu-citest --tests
       - name: zensim-gpu parity
         if: always()
         # `--tests` runs the parity test targets (lib unit + integration) and
         # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
         # compile under wgpu and aren't the parity surface this job validates.
-        run: cargo test -p zensim-gpu --no-default-features --features wgpu --release --tests
+        run: cargo test -p zensim-gpu --no-default-features --features wgpu --profile gpu-citest --tests
       - name: iwssim-gpu parity
         # iwssim-gpu has no Atomic<f32> use in its hot path (audited
         # 2026-05-27 as part of Phase 8e.4 — see CUBECL_METAL_ATOMIC_FIX.md),
@@ -297,7 +297,7 @@ jobs:
         # `--tests` runs the parity test targets (lib unit + integration) and
         # skips examples — the cuda-only bench examples (`use cubecl::cuda`) don't
         # compile under wgpu and aren't the parity surface this job validates.
-        run: cargo test -p iwssim-gpu --no-default-features --features wgpu --release --tests
+        run: cargo test -p iwssim-gpu --no-default-features --features wgpu --profile gpu-citest --tests
       # cvvdp-gpu deliberately omitted from metal-tests until the upstream
       # cubecl-wgpu CAS-loop lowering lands. Its production
       # pool_band_3ch_lds_kernel uses Atomic<f32>::fetch_add (every band ×

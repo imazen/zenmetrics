@@ -175,6 +175,21 @@ debug = "line-tables-only"
 inherits = "release"
 debug = "full"
 
+# No-LTO profile for the GPU CI parity jobs (esp. macos-latest Metal). Those
+# jobs build one test executable per `tests/*.rs` across the six `-gpu` crates
+# (~129 link targets); under `[profile.release]`'s thin-LTO each of those links
+# re-optimizes the whole cubecl/wgpu graph, which dominates the job's wall time
+# (the deliberate `timeout-minutes: 40` is exceeded around cvvdp-gpu's 66 test
+# files). Test binaries are never shipped, so LTO buys nothing here. `opt-level`
+# stays 3 so host-side glue runs at a sane speed; `codegen-units = 256`
+# parallelizes codegen; `debug = false` shrinks the link. Use `--profile
+# gpu-citest`.
+[profile.gpu-citest]
+inherits = "release"
+lto = false
+codegen-units = 256
+debug = false
+
 [profile.bench]
 opt-level = 3
 lto = "fat"

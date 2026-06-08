@@ -185,6 +185,17 @@ Workspace conventions per the global rules:
 
 ### Changed
 
+- **`gpu-citest` no-LTO profile for the Metal CI parity jobs (link-time fix).**
+  The macos-Metal job builds one test executable per `tests/*.rs` across 5 `-gpu`
+  crates (62 link targets) and, under `[profile.release]`'s `lto = "thin"`, each
+  link re-optimized the whole cubecl/wgpu graph — ~36 min of linking that blew the
+  deliberate `timeout-minutes: 40`. New `[profile.gpu-citest]` (inherits release,
+  `lto = false`, `codegen-units = 256`, `debug = false`; `opt-level` stays 3 so
+  test *runtime* is unchanged — LTO buys nothing for unshipped test binaries). The
+  Metal job's 5 parity steps now use `--profile gpu-citest`. Measured on ssim2-gpu
+  (13 link targets, 7950X, wgpu): the per-crate **relink** (deps cached — the
+  CI-relevant path) drops **33s → 4s (8.3×)**; cold full build 50s → 28s.
+
 - **`backend_resolve` test: no-GPU fallback assertion is now cfg-conditional.**
   The `ZENMETRICS_FORCE_NO_GPU` + host-fallback asserts hard-coded `CubeclCpu`,
   but `capability::cpu_fallback_backend` correctly resolves to the native
